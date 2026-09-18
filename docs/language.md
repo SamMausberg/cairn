@@ -60,7 +60,7 @@ Every type has an all-zero value, so storage of any element type is zero-initial
 
 ## Effects and the foreign boundary
 
-Each function's row is the least fixed point of its local effects and its callees' rows with borrowed footprints renamed to the caller's arguments: `read:x`, `write:x`, `local_read`, `local_write`, `alloc`, `free`, `zero_init`, `stack_storage`, `gpu_alloc`, `gpu_free`, `transfer:h2d|d2h|d2d|h2h`, `par:host`, `par:device`, `indirect_call`, `ffi:symbol`, `io` (or any label an extern declares), `mmio`, `asm`, `trap`, `diverge`, `ffi_precondition`. A row says what may happen, never what is computed. `fn f(...) -> T pure { ... }` and `effects(read:x, trap)` are checked ceilings (`E-EFFECT-CEILING`).
+Each function's row is the least fixed point of its local effects and its callees' rows with borrowed footprints renamed to the caller's arguments: `read:x`, `write:x`, `local_read`, `local_write`, `alloc`, `free`, `zero_init`, `stack_storage`, `gpu_alloc`, `gpu_free`, `transfer:h2d|d2h|d2d|h2h`, `par:host`, `par:device`, `spawn`, `join`, `atomic`, `lock`, `indirect_call`, `dispatch`, `ffi:symbol`, `io` (or any label an extern declares), `mmio`, `asm`, `trap`, `diverge`, `ffi_precondition`. A row says what may happen, never what is computed. `fn f(...) -> T pure { ... }` and `effects(read:x, trap)` are checked ceilings (`E-EFFECT-CEILING`).
 
 ```cairn
 extern fn write(fd:i32, data:ro<u8>[n], n:usize) -> i64 effects(io);
@@ -80,6 +80,23 @@ fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@devic
 `parallel i in n { body }` runs one lane per index and completes before the next statement. A view's placement is part of its type: `@host` (default), `@pinned`, `@unified`, `@device`. If the body indexes a `@device` view it runs as CUDA lanes, otherwise on host threads created for that statement; the emitted lane body is the same lambda either way. Host code cannot index `@device` memory and device lanes cannot index host memory (`E-PLACEMENT`); `@unified` is visible to both. Lanes are race free by construction: whatever any lane writes may be touched only at element `[i]` (`E-PARALLEL-RACE`), shared scalars cannot be assigned (`E-PARALLEL-WRITE`, use `reduce`), lanes cannot return, nest or move outer owners, and a lane may call only functions whose rows are pure-like (host lanes may also allocate). `buffer d:f32[n]@device = zeroed;` is a scoped device owner; `transfer(dst, src)` is the only way elements cross a placement boundary.
 
 `let s = reduce add_wrap for i in n yield x[i];` combines with one of `add_wrap mul_wrap & | ^ min max` (integers) or `+ *` (floats). On the host it is an in-order fold; over device views it is a tree whose association order is unspecified, which is exact for the integer operators and explicitly not for floats. Checked integer `+` is not offered because its trap would depend on that order. The bounded collector over a `@device` output is stable stream compaction with the same contract. Thread start-up makes host regions pay off only for large `n`; evidence/v1_0/gpu/benchmark.json records measured break-even points.
+
+## Tasks and shared state
+
+```cairn
+let left  = spawn fill(mid, data[0..mid], 0);
+let right = spawn fill(n - mid, data[mid..n], 500);
+wait(left);
+wait(right);
+```
+
+`let t = spawn f(args);` runs a declared function on its own thread. Arguments are evaluated at the spawn and carried by value, so the task never reads the spawner's locals. `t` is a linear ticket bound to its scope: it must be consumed by `wait(t)`, which returns `f`'s result, on every path of the same function, and it cannot be stored, passed or returned. Until then every place lent to the task is **leased**: nobody may write what the task reads or touch what it writes (`E-LEASED`), including by moving the owner. Read-only lending is shared freely, and visibly disjoint parts of one array may be lent mutably to different tasks. A closure cannot follow a task to another thread.
+
+`Atomic[T]` (integers and `bool`) and `Mutex[T]` are declared in place, `let hits = Atomic[u64](0);`, and shared by `ro` borrow; they are the only interior mutability in the language and are never stored, passed by value or returned (`E-PINNED`). Every atomic access names its memory order: `hits.fetch_add(1, Order.relaxed)`, `load`, `store`, `swap`, `fetch_sub/and/or/xor`, `compare_exchange(expected, desired, Order.seq_cst, Order.seq_cst)`. A mutex has one operation, `m.with(|state:rw<T>| { ... })`, which may return a value; no guard object exists to escape. Lanes may use both. The effects are `spawn`, `join`, `atomic` and `lock`.
+
+## Dynamic interfaces
+
+`fn measure(s:ro<dyn Shape>) -> u64 = area(s) + 1;` takes any named place whose type implements the trait. The call site builds a two-word reference (object, static table); members called on it go through the table, add the `dispatch` effect, and contribute the effect rows of every implementation. A trait is dyn-compatible when only its receiver is a borrow or `Self`. Dynamic references are borrows, so they are never values: nothing is boxed and nothing escapes.
 
 ## Modules
 
