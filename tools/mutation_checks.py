@@ -7,13 +7,13 @@ score. Independent finite tests must detect all listed defects.
 from pathlib import Path
 import json,sys
 R=Path(__file__).resolve().parents[1]
-sys.path[:0]=[str(R/'compiler'),str(R/'tools')]
-from cairnc import compile_source
+sys.path[:0]=[str(R/'src'),str(R/'tools')]
+from cairn.cairnc import compile_source
 from task_eval import evaluate
-from agent_tools import digest
+from cairn.agent_tools import digest
 
 def main():
- tasks=json.loads((R/'curriculum/all_tasks_with_oracles.json').read_text())
+ tasks=json.loads((R/'training/source/all_tasks_with_oracles.json').read_text())
  muts={
  'affine':lambda s:s.replace('add_wrap(mul_wrap(x, 2), 1)','add_wrap(mul_wrap(x, 2), 2)'),
  'count_gt':lambda s:s.replace('x[i] > threshold','x[i] >= threshold'),

@@ -9,10 +9,10 @@ from __future__ import annotations
 import argparse,itertools,json,random,sys,time
 from pathlib import Path
 R=Path(__file__).resolve().parents[1]
-sys.path[:0]=[str(R/'compiler'),str(R/'tools')]
-from scalar_semantics import (Concrete,Formula,Symbolic,prepared,outcome_key,
+sys.path[:0]=[str(R/'src'),str(R/'tools')]
+from cairn.scalar_semantics import (Concrete,Formula,Symbolic,prepared,outcome_key,
                               constant,conj,disj,neg,same,bounds)
-from smt_bridge import Solver
+from cairn.smt_bridge import Solver
 from native_scalar import NativeScalar
 
 

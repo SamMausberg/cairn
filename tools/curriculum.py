@@ -10,10 +10,10 @@ import json
 import random
 import sys
 R=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(R/'compiler'))
-from cairnc import compile_source, Diagnostic
-from agent_tools import digest, stable_json, canonical_source, explain
-from teaching import CARDS, select_cards
+sys.path.insert(0,str(R/'src'))
+from cairn.cairnc import compile_source, Diagnostic
+from cairn.agent_tools import digest, stable_json, canonical_source, explain
+from cairn.teaching import CARDS, select_cards
 MASK=2**64-1
 VALUES=[[],[0],[1],[MASK],[0,1,2,3,MASK],[9,9,9],[5,1,8,0,2,7]]
 
@@ -95,7 +95,7 @@ CONTRASTS=[
 ]
 
 def main():
-    root=R/'curriculum';root.mkdir(exist_ok=True)
+    root=R/'training/source';root.mkdir(exist_ok=True)
     tasks=build();contrasts=[]
     for family,bad,good,code in CONTRASTS:
         compile_source(good)

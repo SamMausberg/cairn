@@ -12,9 +12,9 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'compiler'))
-from cairnc import compile_source, RUNTIME
-from scalar_semantics import prepared
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+from cairn.cairnc import compile_source, RUNTIME
+from cairn.scalar_semantics import prepared
 
 CT={'bool':ctypes.c_bool,'u8':ctypes.c_uint8,'u16':ctypes.c_uint16,
     'u32':ctypes.c_uint32,'u64':ctypes.c_uint64,'usize':ctypes.c_uint64,

@@ -12,9 +12,9 @@ requires an external sandbox. All shipped examples are public research data.
 from pathlib import Path
 import argparse,json,subprocess,sys,tempfile,time
 R=Path(__file__).resolve().parents[1]
-sys.path[:0]=[str(R/'compiler'),str(R/'tools')]
-from cairnc import Diagnostic
-from agent_tools import EditSession,stable_json,digest,load_json_strict,explain
+sys.path[:0]=[str(R/'src'),str(R/'tools')]
+from cairn.cairnc import Diagnostic
+from cairn.agent_tools import EditSession,stable_json,digest,load_json_strict,explain
 from task_eval import evaluate,validate_contract
 
 def run(source,contract,command,attempts=4,public_cases=3,adapter_kind='external-unverified'):

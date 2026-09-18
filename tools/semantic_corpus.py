@@ -9,8 +9,8 @@ from __future__ import annotations
 import hashlib,json,random,sys
 from pathlib import Path
 R=Path(__file__).resolve().parents[1]
-sys.path[:0]=[str(R/'compiler'),str(R/'tools')]
-from scalar_semantics import equivalent,Concrete,prepared,outcome_key
+sys.path[:0]=[str(R/'src'),str(R/'tools')]
+from cairn.scalar_semantics import equivalent,Concrete,prepared,outcome_key
 from native_scalar import NativeScalar
 
 def cases():
@@ -43,7 +43,7 @@ def cases():
     return rows
 
 def main():
-    root=R/'semantic_curriculum';root.mkdir(exist_ok=True);queries=root/'obligations';queries.mkdir(exist_ok=True)
+    root=R/'training/semantic';root.mkdir(exist_ok=True);queries=root/'obligations';queries.mkdir(exist_ok=True)
     rows=cases();source=[]
     for row in rows:
         for variant in ['reference','chosen','rejected']:

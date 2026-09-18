@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 import pytest
 R=Path(__file__).resolve().parents[1]
-sys.path[:0]=[str(R/'compiler'),str(R/'tools')]
+sys.path[:0]=[str(R/'src'),str(R/'tools')]
 from task_eval import validate_contract,evaluate
 
 SRC='fn f(x:u64)->u64 { return add_wrap(x,1); }'

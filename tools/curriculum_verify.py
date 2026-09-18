@@ -8,15 +8,15 @@ independent tasks. All answer keys are shipped for audit, not secret evaluation.
 from pathlib import Path
 import argparse,json,subprocess,sys,tempfile,time,shutil
 R=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(R/'compiler'));sys.path.insert(0,str(R/'tools'))
-from cairnc import compile_source,RUNTIME
-from agent_tools import stable_json,digest,load_json_strict
+sys.path.insert(0,str(R/'src'));sys.path.insert(0,str(R/'tools'))
+from cairn.cairnc import compile_source,RUNTIME
+from cairn.agent_tools import stable_json,digest,load_json_strict
 from task_eval import FLAGS,validate_contract
 
 def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--gcc',action='store_true');a=p.parse_args()
- source=(R/'curriculum/corpus.cairn').read_text()
- tasks=load_json_strict((R/'curriculum/all_tasks_with_oracles.json').read_text())
+ source=(R/'training/source/corpus.cairn').read_text()
+ tasks=load_json_strict((R/'training/source/all_tasks_with_oracles.json').read_text())
  generated,receipt=compile_source(source)
  outputs=[];started=time.monotonic()
  with tempfile.TemporaryDirectory(prefix='cairn-curriculum-') as tmp:

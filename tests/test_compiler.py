@@ -1,8 +1,8 @@
 from pathlib import Path
 import sys
 import pytest
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'compiler'))
-from cairnc import compile_source, Diagnostic
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+from cairn.cairnc import compile_source, Diagnostic
 
 BAD = [
  ('E-WRITE-LEASE','fn f(n:usize,x:ro<u64>[n]@host) { x[0]=1; }'),

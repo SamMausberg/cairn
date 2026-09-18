@@ -5,9 +5,9 @@ import random
 import sys
 import pytest
 R=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(R/'compiler'))
-from cairnc import compile_source, Diagnostic, Parser, Checker, specialize, derive_wire
-from agent_tools import *
+sys.path.insert(0,str(R/'src'))
+from cairn.cairnc import compile_source, Diagnostic, Parser, Checker, specialize, derive_wire
+from cairn.agent_tools import *
 
 S='fn step(x:u64)->u64 { return add_wrap(x,1); }\nfn caller(x:u64)->u64{return step(x);}\nfn other(x:u64)->u64{return mul_wrap(x,2);}\n'
 def request(s,body):return {'protocol':PROTOCOL,'session':s.session,'kind':'body','replacement':body}

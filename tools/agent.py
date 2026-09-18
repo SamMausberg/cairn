@@ -6,9 +6,9 @@ import json
 from pathlib import Path
 import sys
 R=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(R/'compiler'))
-from cairnc import Diagnostic, compile_source
-from agent_tools import EditSession, canonical_source, explain, load_json_strict
+sys.path.insert(0,str(R/'src'))
+from cairn.cairnc import Diagnostic, compile_source
+from cairn.agent_tools import EditSession, canonical_source, explain, load_json_strict
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)

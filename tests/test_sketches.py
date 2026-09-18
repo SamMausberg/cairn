@@ -2,10 +2,10 @@ import sys
 from pathlib import Path
 import copy
 import pytest
-R=Path(__file__).resolve().parents[1];sys.path.insert(0,str(R/'compiler'))
-from cairnc import Diagnostic,compile_source
-from sketches import Sketch,ScalarContract,solve_finite
-from agent_tools import stable_json
+R=Path(__file__).resolve().parents[1];sys.path.insert(0,str(R/'src'))
+from cairn.cairnc import Diagnostic,compile_source
+from cairn.sketches import Sketch,ScalarContract,solve_finite
+from cairn.agent_tools import stable_json
 
 BEFORE='// keep comment\nfn f(x:u64,y:u64)->u64 {return (x+y)/2;}\n// preserve this too\nfn other(x:u64)->u64{return x;}\n'
 REF=BEFORE.replace('(x+y)/2','(x/2)+(y/2)+((x&1)&(y&1))')
@@ -72,7 +72,7 @@ def test_exhausted_search_not_success():
     assert r['status']=='no-certified-candidate'
 
 def test_unknown_solver_not_success(monkeypatch):
-    import sketches
+    import cairn.sketches as sketches
     monkeypatch.setattr(sketches,'equivalent',lambda *a,**k:{'status':'unknown','reason':'forced test timeout'})
     r=solve_finite(sketch(),{'average':['(x&y)+shr(x^y,1)']})
     assert r['status']=='no-certified-candidate'

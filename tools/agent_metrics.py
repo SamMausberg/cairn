@@ -3,10 +3,10 @@
 from pathlib import Path
 import json,sys,time,statistics,hashlib
 R=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(R/'compiler'))
-from cairnc import compile_source,Parser
-from agent_tools import EditSession,canonical_source,stable_json,digest
-from teaching import CARDS
+sys.path.insert(0,str(R/'src'))
+from cairn.cairnc import compile_source,Parser
+from cairn.agent_tools import EditSession,canonical_source,stable_json,digest
+from cairn.teaching import CARDS
 
 def tokens(text):return len(text.encode('utf-8'))
 

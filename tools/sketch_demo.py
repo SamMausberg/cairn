@@ -2,9 +2,9 @@
 """Executable host-bound sketch demo. Deterministic search, not an AI trial."""
 from pathlib import Path
 import json,sys
-R=Path(__file__).resolve().parents[1];sys.path[:0]=[str(R/'compiler'),str(R/'tools')]
-from agent_tools import EditSession,stable_json
-from sketches import Sketch,ScalarContract,solve_finite
+R=Path(__file__).resolve().parents[1];sys.path[:0]=[str(R/'src'),str(R/'tools')]
+from cairn.agent_tools import EditSession,stable_json
+from cairn.sketches import Sketch,ScalarContract,solve_finite
 from task_eval import evaluate
 
 REFERENCE='''fn average(x:u64,y:u64)->u64 {

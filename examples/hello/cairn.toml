@@ -1,0 +1,8 @@
+[project]
+name = "hello"
+sources = ["src/math.cairn", "src/main.cairn"]
+tests = ["tests/average.json"]
+
+[build]
+kind = "exe"
+arch = "x86-64"

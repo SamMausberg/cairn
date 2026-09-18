@@ -3,9 +3,9 @@
 from pathlib import Path
 import json,sys
 R=Path(__file__).resolve().parents[1]
-sys.path[:0]=[str(R/'compiler'),str(R/'tools')]
-from cairnc import compile_source
-from agent_tools import EditSession,stable_json
+sys.path[:0]=[str(R/'src'),str(R/'tools')]
+from cairn.cairnc import compile_source
+from cairn.agent_tools import EditSession,stable_json
 from agent_loop import run
 
 def main():

@@ -10,8 +10,8 @@ import subprocess
 import sys
 import time
 ROOT=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(ROOT/'compiler'))
-from cairnc import compile_source, RUNTIME, Diagnostic
+sys.path.insert(0,str(ROOT/'src'))
+from cairn.cairnc import compile_source, RUNTIME, Diagnostic
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)

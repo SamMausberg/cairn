@@ -6,9 +6,9 @@ choice passes fresh semantic checking. The task and slot map do not change.
 """
 from pathlib import Path
 import json,sys
-R=Path(__file__).resolve().parents[1];sys.path[:0]=[str(R/'compiler')]
-from cairnc import Parser
-from sketches import Sketch,ScalarContract,public_feedback
+R=Path(__file__).resolve().parents[1];sys.path[:0]=[str(R/'src')]
+from cairn.cairnc import Parser
+from cairn.sketches import Sketch,ScalarContract,public_feedback
 
 def expression(source):
     f=Parser(source).parse().functions[0]
@@ -16,7 +16,7 @@ def expression(source):
     e=f.body[0].exprs[0];return source[e.start:e.end]
 
 def main():
-    root=R/'semantic_curriculum';rows=json.loads((root/'audit.json').read_text());lessons=[]
+    root=R/'training/semantic';rows=json.loads((root/'audit.json').read_text());lessons=[]
     for r in rows:
         yes,no=expression(r['chosen']),expression(r['rejected'])
         if yes is None or no is None:continue

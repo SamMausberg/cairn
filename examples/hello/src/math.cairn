@@ -1,0 +1,2 @@
+// Floor average without overflowing the intermediate sum.
+fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);

@@ -2,9 +2,9 @@ import sys
 from pathlib import Path
 import pytest
 R=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(R/'compiler'))
-from scalar_semantics import equivalent,prepared,Concrete,Formula,Symbolic,conj,same,neg,constant
-from smt_bridge import Solver
+sys.path.insert(0,str(R/'src'))
+from cairn.scalar_semantics import equivalent,prepared,Concrete,Formula,Symbolic,conj,same,neg,constant
+from cairn.smt_bridge import Solver
 
 
 def fn(body,params='x:u64',ret='u64'):

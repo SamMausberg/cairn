@@ -7,8 +7,8 @@ An exit 0 is not Lean verification or proof of native machine code.
 """
 from pathlib import Path
 import argparse,json,sys
-R=Path(__file__).resolve().parents[1];sys.path.insert(0,str(R/'compiler'))
-from scalar_semantics import equivalent
+R=Path(__file__).resolve().parents[1];sys.path.insert(0,str(R/'src'))
+from cairn.scalar_semantics import equivalent
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__)

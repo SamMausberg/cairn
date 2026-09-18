@@ -1,0 +1,29 @@
+name: Manual compiler checks
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.repository.private == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout without retained credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install explicit test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang g++ libz3-4 python3-venv
+          python3 -m venv .venv
+          .venv/bin/python -m pip install pytest==9.0.2 setuptools==82.0.1
+      - name: Unit and native example checks
+        run: |
+          .venv/bin/python -m pytest -q tests
+          .venv/bin/python bin/cairn run examples/hello
+          .venv/bin/python bin/cairn test examples/hello --cxx g++
+      - name: Scalar example check
+        run: |
+          .venv/bin/python bin/cairn verify examples/sketch/reference.cairn examples/hello/src/math.cairn --symbol average

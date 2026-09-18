@@ -13,8 +13,8 @@ from pathlib import Path
 import re
 import sys
 R=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(R/'compiler'))
-from cairnc import Parser,Emitter
+sys.path.insert(0,str(R/'src'))
+from cairn.cairnc import Parser,Emitter
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
@@ -53,7 +53,9 @@ def main():
     paths=['examples/native.cairn','examples/family.cairn','examples/wire.cairn',
            'bench/reference.cpp','bench/family_template.cpp',
            'results/native.cpp','results/family.cpp','results/wire.cpp','results/cairn_runtime.hpp',
-           'spec/AGENT_CARD.md','spec/GENERATOR_CONTRACTS.md','compiler/cairnc.py']
+           'docs/cards/AGENT_CARD.md','docs/cards/GENERATOR_CONTRACTS.md']
+    compiler_paths=sorted(str(p.relative_to(R)) for p in (R/'src/cairn').rglob('*') if p.suffix in {'.py','.hpp'})
+    paths += compiler_paths
     files={p:{'tokens':count((R/p).read_text()),'sha256':hashlib.sha256((R/p).read_bytes()).hexdigest()} for p in paths}
     def t(p):return files[p]['tokens']
     family={
@@ -62,21 +64,21 @@ def main():
       'cpp_template_tokens':t('bench/family_template.cpp'),
       'expansion_ratio':t('results/family.cpp')/t('examples/family.cairn'),
       'compact_cpp_template_over_cairn':t('bench/family_template.cpp')/t('examples/family.cairn'),
-      'cold_cairn_source_plus_card_plus_recipe':t('examples/family.cairn')+t('spec/AGENT_CARD.md')+t('spec/GENERATOR_CONTRACTS.md'),
-      'source_audit_cairn_plus_card_plus_recipe_plus_compiler':t('examples/family.cairn')+t('spec/AGENT_CARD.md')+t('spec/GENERATOR_CONTRACTS.md')+t('compiler/cairnc.py'),
+      'cold_cairn_source_plus_card_plus_recipe':t('examples/family.cairn')+t('docs/cards/AGENT_CARD.md')+t('docs/cards/GENERATOR_CONTRACTS.md'),
+      'source_audit_cairn_plus_card_plus_recipe_plus_compiler':t('examples/family.cairn')+t('docs/cards/AGENT_CARD.md')+t('docs/cards/GENERATOR_CONTRACTS.md')+sum(t(p) for p in compiler_paths),
       'cpp_template_plus_shared_runtime':t('bench/family_template.cpp')+t('results/cairn_runtime.hpp'),
       'limitation':'CAIRN exports 256 named entries; compact C++ uses one indexed entry and a function-pointer table. Different API; both tested over the same numerical family. Runtime header shared by both. No C++ language documentation charged; no universal cold-context advantage inferred.'}
     wire={'source_tokens':t('examples/wire.cairn'),'expanded_cpp_tokens':t('results/wire.cpp'),
       'expansion_ratio':t('results/wire.cpp')/t('examples/wire.cairn'),
-      'cold_source_plus_card_plus_recipe':t('examples/wire.cairn')+t('spec/AGENT_CARD.md')+t('spec/GENERATOR_CONTRACTS.md'),
+      'cold_source_plus_card_plus_recipe':t('examples/wire.cairn')+t('docs/cards/AGENT_CARD.md')+t('docs/cards/GENERATOR_CONTRACTS.md'),
       'limitation':'No independent compact C++ codec library baseline. Expansion ratio is not a language superiority comparison.'}
     result={'tokenizer':label,'whitespace_and_comments':'retained','special_tokens':'excluded',
-      'files':files,'algorithm_pairs':pairs,'aggregate_algorithms':{
+      'files':files,'compiler_audit_files':compiler_paths,'compiler_audit_tokens':sum(t(p) for p in compiler_paths),'algorithm_pairs':pairs,'aggregate_algorithms':{
         'cairn_tokens':sum(x['cairn_tokens'] for x in pairs),'cpp_tokens':sum(x['cpp_tokens'] for x in pairs),
         'cpp_over_cairn':sum(x['cpp_tokens'] for x in pairs)/sum(x['cairn_tokens'] for x in pairs)},
       'family':family,'wire':wire,
       'claims_excluded':['100x against well-factored C++','frontier BPE reduction','measured safe-edit context','fresh-model success','minimum instruction length'],
       'method':'Function slices include full signatures and bodies, one terminal newline; file counts include all exact bytes. Common runtime counted separately. Constructed cold packets, not actual interaction transcripts.'}
     args.output.write_text(json.dumps(result,indent=2)+'\n')
-    print(json.dumps({'tokenizer':label,'card_tokens':t('spec/AGENT_CARD.md'),'family':family,'wire':wire,'algorithms':result['aggregate_algorithms']},indent=2))
+    print(json.dumps({'tokenizer':label,'card_tokens':t('docs/cards/AGENT_CARD.md'),'family':family,'wire':wire,'algorithms':result['aggregate_algorithms']},indent=2))
 if __name__=='__main__':main()

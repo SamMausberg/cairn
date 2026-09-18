@@ -25,5 +25,5 @@ for name in ['saxpy','dot','sum_wrap','prefix','count_gt','histogram','compact_e
 result={'comparisons':rows,'compiler':run(['clang++','--version']),'flags':FLAGS,'commands':commands,
         'platform':platform.platform(),'native_timing_performed':False,
         'boundary':'Ordinary C++ reference algorithms with equal entry guards, not expert baselines or a native-correctness proof.'}
-(R/'results/codegen_04.json').write_text(json.dumps(result,indent=2)+'\n')
+(R/'results/codegen_05.json').write_text(json.dumps(result,indent=2)+'\n')
 print('Identical function sections and relocations:',sum(x['bytes_equal'] and x['relocations_equal'] for x in rows),'of',len(rows))
