@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 from functools import reduce
+from typing import Any
 
 from .syntax import MAX_FAMILY, MAX_FUNCTIONS, MAX_NODES, VOID, WIDTH, Arm, Expr, Function, Program, Stmt, Type, fail
 
@@ -58,7 +59,8 @@ def derive_wire(p: Program) -> Program:
 
 
 def node_count(f: Function) -> int:
-    total, todo = 0, list(f.body)
+    total = 0
+    todo: list[Any] = list(f.body)
     while todo:
         node = todo.pop()
         total += 1

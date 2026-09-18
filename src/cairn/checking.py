@@ -143,6 +143,24 @@ def overlaps(a: str, b: str) -> bool:
 
 
 class Checker:
+    # Declared for readers and type checkers; the values live in the current Scope (see __getattr__).
+    f: Function
+    tenv: dict[str, Any]
+    env: dict[str, Binding]
+    effects: set[str]
+    callset: set[str]
+    counts: dict[str, int]
+    moved: set[str]
+    deferred: set[str]
+    loop_depth: int
+    unsafe_depth: int
+    device_depth: int
+    module: str
+    lanes: Lanes | None
+    closure: tuple[Type, set[str]] | None
+    leases: dict[str, list[tuple[str, str]]]
+    spawning: str
+
     def __init__(self, program: Program, capture_sites: bool = False):
         self.p = program
         self.capture_sites = capture_sites
@@ -658,7 +676,8 @@ class Checker:
             self.moved = set(before)
             outcomes.append((run(), self.moved))
         live = [moved for returned, moved in outcomes if not returned]
-        for n in set().union(*live) - set.intersection(*live or [set()]):
+        everywhere: set[str] = set.intersection(*live) if live else set()
+        for n in set().union(*live) - everywhere:
             if n in self.env and self.kind(self.env[n].ty) == "linear":
                 fail("E-LINEAR-BRANCH", f"{n} is consumed on some paths only.", node)
         self.moved = set().union(before, *(moved for _, moved in outcomes))
@@ -721,7 +740,7 @@ class Checker:
         self.loop(s)
         del self.env[s.name]
 
-    def region(self, s: Stmt, exprs: list[Expr], run) -> str:
+    def region(self, s: Stmt, exprs: list[Expr], run) -> Any:
         """Check a lane body; the placement of the views it indexes decides where it runs."""
         if self.lanes:
             fail("E-PARALLEL-NEST", "A lane cannot start another parallel region.", s)
@@ -1400,8 +1419,8 @@ class Checker:
                 borrows.append((path(a), want.mode))
                 if want.mode == "rw" and self.env[root(a).val].ty.mode == "value":
                     self.effect("write:" + root(a).val)
-        for i, (a, m) in enumerate(borrows):
-            if any(overlaps(a, b) and "rw" in (m, k) for b, k in borrows[i + 1 :]):
+        for i, (place, m) in enumerate(borrows):
+            if any(overlaps(place, other) and "rw" in (m, k) for other, k in borrows[i + 1 :]):
                 fail("E-ALIAS", "A mutable view cannot be passed to overlapping call arguments.", e)
         self.call_edges[self.f.name].append((f.name, mapping))
         self.callset.add(f.name)

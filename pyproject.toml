@@ -21,7 +21,7 @@ cairn = "cairn.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-cairn = ["runtime/*.hpp", "std/*.cairn", "py.typed"]
+cairn = ["runtime/*.hpp", "std/*.cairn", "targets/*/*.S", "targets/*/*.ld", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -55,5 +55,6 @@ ignore = [
 python_version = "3.11"
 files = ["src/cairn"]
 check_untyped_defs = true
+strict_optional = false  # Tree annotations (Expr.ty, Expr.ref) are filled by the checker, not at parse time.
 warn_unused_ignores = true
 warn_redundant_casts = true

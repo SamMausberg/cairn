@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, NoReturn
 
 MAX_SOURCE = 2_000_000
 MAX_FAMILY = 1024
@@ -31,7 +31,7 @@ class Diagnostic(Exception):
         }
 
 
-def fail(code: str, message: str, node: Any = None, **details):
+def fail(code: str, message: str, node: Any = None, **details) -> NoReturn:
     raise Diagnostic(code, message, getattr(node, "line", 0), getattr(node, "col", 0), **details)
 
 
@@ -449,7 +449,7 @@ class Parser:
         self.i += 1
         if tag != "let" or (form == "compact" and typ not in (None, USIZE)):
             fail("E-COLLECT-BINDING", "Compaction binds an immutable usize result.", t)
-        at = {"line": t.line, "col": t.col}
+        at: dict[str, Any] = {"line": t.line, "col": t.col}
         if form == "compact":
             out = Expr("name", self.ident(), **at)
             binder, hi = self.generator()
@@ -470,7 +470,7 @@ class Parser:
 
     def stmt(self) -> Stmt:
         t = self.t
-        at = {"line": t.line, "col": t.col}
+        at: dict[str, Any] = {"line": t.line, "col": t.col}
         if t.s in {"buffer", "stack"}:
             self.i += 1
             n = self.ident()

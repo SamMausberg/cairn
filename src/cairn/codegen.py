@@ -31,7 +31,8 @@ def bare(condition: str) -> str:
 
 class Emitter:
     def __init__(self, p: Program, checker: Checker | None = None, origin: str = ""):
-        self.p, self.lines, self.ind, self.counter = p, [], 0, 0
+        self.p, self.ind, self.counter = p, 0, 0
+        self.lines: list[str] = []
         self.origin = origin  # A source name turns on #line directives: debuggers then step through CAIRN.
         self.loops: list[int] = []
         self.headers = ["cairn_runtime.hpp"]
@@ -483,7 +484,7 @@ class Emitter:
     s_unsafe = s_block
 
     def s_defer(self, s: Stmt, _: list[str]):
-        guard, _ = self.fresh("cr_defer_")
+        guard = self.fresh("cr_defer_")[0]
         self.need("cairn_owners.hpp")
         self.nest(f"const cr::Defer {guard}{{[&]() noexcept {{", lambda: self.block(s.body), "}};")
 
