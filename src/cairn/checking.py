@@ -202,6 +202,15 @@ class Checker:
             base = self.tenv[ty.name]
             if not isinstance(base, Type):
                 fail("E-TYPE", f"{ty.name} is a static natural, not a type.", node)
+        elif ty.name == "dyn":
+            trait = self.qualify(ty.args[0].name, self.p.traits, node=node)
+            if trait is None or ty.mode == "value" or ty.extent:
+                fail(
+                    "E-DYN",
+                    "Write ro<dyn Trait> or rw<dyn Trait>: a dynamic interface is a borrowed fat reference.",
+                    node,
+                )
+            return Type("dyn", ty.mode, args=(Type(trait),))
         else:
             args = tuple(self.static(a, node) for a in ty.args)
             name: str | None = ty.name
@@ -1175,6 +1184,8 @@ class Checker:
             name = self.qualify(n, self.fs, node=e) if home else None
         name = name or self.qualify(n, self.fs, node=e)
         f = self.fs[name] if name else self.trait_member(e, n, args)
+        if f is not None and isinstance(e.ref, tuple) and e.ref[0] == "dispatch":
+            return f.ret
         if f is None:
             fail("E-CALLEE", "Qualified calls are declared tagged-sum constructors, not methods." if "." in n
                  else f"Unknown callable {n}; arbitrary C++ names are not allowed.", e)  # fmt: skip
@@ -1189,11 +1200,49 @@ class Checker:
             for declared in members:
                 position = next((i for i, (_, t) in enumerate(declared.params) if t.name == "Self"), None)
                 if declared.name == short and position is not None and position < len(args):
+                    if self.peek(args[position]) == Type("dyn", args=(Type(trait),)):
+                        return self.dispatch(e, trait, declared, position, args)
                     found = self.implementation(trait, self.peek(args[position]).value)
                     if short in found:
                         return found[short]
                     fail("E-TRAIT-IMPL", f"{args[position].ty.display()} does not implement {trait}.", e)
         return None
+
+    def implementors(self, trait: str) -> dict[Type, dict[str, Function]]:
+        """Every concrete `impl trait for T`, with resolved signatures: what a dyn call may reach."""
+        found: dict[Type, dict[str, Function]] = {}
+        for f in list(self.fs.values()):
+            if f.owner and not f.generics:
+                with self.within(f.module):
+                    if self.qualify(f.owner[0], self.p.traits) == trait:
+                        self.signature(f)
+                        found.setdefault(self.resolve(f.owner[1]), {})[f.name.rsplit(".", 1)[1]] = f
+        return found
+
+    def dispatch(self, e: Expr, trait: str, member: Function, position: int, args: list[Expr]) -> Function:
+        """An indirect call through the vtable; its row is the join of every implementation's."""
+        if len(args) != len(member.params):
+            fail("E-ARITY", f"{member.name} expects {len(member.params)} arguments.", e)
+        with self.within(self.p.modules.get(trait, ""), {"Self": Type("dyn", args=(Type(trait),))}):
+            for i, (a, (_, declared)) in enumerate(zip(args, member.params, strict=True)):
+                if i != position:
+                    if declared.mode != "value" or declared.name == "Self":
+                        fail(
+                            "E-DYN",
+                            f"{trait}.{member.name} is not dyn-compatible: only its receiver may be a borrow or Self.",
+                            e,
+                        )
+                    self.expr(a, self.resolve(declared, a))
+            ret = self.resolve(member.ret, e)
+        receiver = root(args[position]).val
+        for members in self.implementors(trait).values():
+            target = members[member.name]
+            self.call_edges[self.f.name].append((target.name, {target.params[position][0]: receiver}))
+            self.callset.add(target.name)
+        self.effect("dispatch")
+        e.ref = ("dispatch", trait, [m.name for m in self.p.traits[trait]].index(member.name), position)
+        e.ty = ret
+        return Function("", [], ret, [])
 
     def implementation(self, trait: str, self_type: Type) -> dict[str, Function]:
         """The members of `impl trait for T` whose target pattern matches the concrete type."""
@@ -1293,6 +1342,20 @@ class Checker:
                 self.expr(a, want)
                 continue
             named = root(a).tag == "name" and root(a).val in self.env
+            if want.name == "dyn" and self.peek(a).name != "dyn":
+                members = self.implementors(want.args[0].name).get(self.peek(a).value)
+                if members is None or len(members) != len(self.p.traits[want.args[0].name]):
+                    fail("E-TRAIT-IMPL", f"{a.ty.display()} does not implement {want.args[0].name}.", a)
+                if not named or (want.mode == "rw" and not self.writable(a)):
+                    fail("E-WRITE-LEASE", "A dynamic reference borrows a named place (mutable for rw).", a)
+                inner = Expr(a.tag, a.val, a.args, a.line, a.col, a.ty, a.start, a.end, a.ref)
+                a.tag, a.args, a.ty = "coerce", [inner], want
+                a.ref = [members[m.name] for m in self.p.traits[want.args[0].name]]
+                self.early[id(a)] = a
+                self.leased(path(inner), want.mode, a)
+                borrows.append((path(inner), want.mode))
+                mapping[name] = root(inner).val
+                continue
             if not named and (want.mode == "rw" or (want.extent and a.tag != "str")):
                 fail("E-CALL-VIEW", "Only direct view parameters may be passed.", a)
             if want.extent:

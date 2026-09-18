@@ -208,3 +208,59 @@ def test_recursive_owner_through_buf():
 
 def test_pure_is_a_checked_ceiling():
     assert compile_source("fn f(n:usize, x:ro<u64>[n]) -> u64 pure = x[0] + 1;")
+
+
+DYNAMIC = """
+trait Shape { fn area(self:ro<Self>) -> u64; fn grow(self:rw<Self>, by:u64); }
+struct Square { side:u64; }
+struct Rect { w:u64; h:u64; }
+struct Dot { x:u64; }
+impl Shape for Square {
+  fn area(self:ro<Square>) -> u64 = self.side * self.side;
+  fn grow(self:rw<Square>, by:u64) { self.side = self.side + by; }
+}
+impl Shape for Rect {
+  fn area(self:ro<Rect>) -> u64 = self.w * self.h;
+  fn grow(self:rw<Rect>, by:u64) { self.w = self.w + by; }
+}
+fn measure(s:ro<dyn Shape>) -> u64 = area(s) + 1;
+fn enlarge(s:rw<dyn Shape>, by:u64) -> u64 { s.grow(by); return s.area(); }
+fn forward(s:ro<dyn Shape>) -> u64 = measure(s);
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_dynamic_interfaces_are_explicit_fat_references(tmp_path, cxx):
+    if not shutil.which(cxx):
+        pytest.skip("Native compiler unavailable")
+    main = (
+        "fn main() -> i32 { let mut sq = Square(3); let mut r = Rect(2, 5);"
+        " if measure(sq) != 10 || measure(r) != 11 { return 1; }"
+        " let bigger = enlarge(sq, 1); let wider = enlarge(r, 2);"
+        " if bigger != 16 || wider != 20 || forward(sq) != 17 { return 2; } return 0; }"
+    )
+    generated, receipt = compile_source(DYNAMIC + main)
+    (tmp_path / "p.cpp").write_text(generated + "int main() { return static_cast<int>(cf_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    subprocess.run([cxx, "-std=c++20", "-O2", "-Wall", "-Wextra", "-Werror", str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")],
+                   check=True, timeout=120)  # fmt: skip
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+    assert receipt["functions"]["enlarge"]["effects"] == ["dispatch", "read:s", "trap", "write:s"]
+    assert generated.count("static const cd_Shape_vt") == 2
+
+
+@pytest.mark.parametrize(
+    "code,tail",
+    [
+        ("E-DYN", "fn f(s:dyn Shape) -> u64 = 0;"),
+        ("E-DYN", "struct Holder { s:dyn Shape; }"),
+        ("E-TRAIT-IMPL", "fn f() -> u64 { let d = Dot(1); return measure(d); }"),
+        ("E-WRITE-LEASE", "fn f() -> u64 { let sq = Square(1); let a = enlarge(sq, 1); return a; }"),
+        ("E-WRITE-LEASE", "fn f() -> u64 = measure(Square(1));"),
+    ],
+)
+def test_dynamic_interface_rejections(code, tail):
+    with pytest.raises(Diagnostic) as e:
+        compile_source(DYNAMIC + tail)
+    assert e.value.data["code"] == code
