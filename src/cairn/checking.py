@@ -380,27 +380,10 @@ class Checker:
                     fail("E-UNINSTANTIATED", f"Static function {f.name} has no family; "
                          "unused templates are not silently ignored.")  # fmt: skip
                 self.unchecked.append(f.name)
-        for caller, parameters, trait, name, position, receiver, targets, callbacks, lane in self.dispatches:
-            for (owner, _), members in self.impls.items():
-                if owner == trait and members and not (members[name].generics and not members[name].bindings):
-                    target = members[name]
-                    targets.append(target.name)
-                    self.calls[caller].add(target.name)
-                    self.call_edges[caller].append((target.name, {target.params[position][0]: receiver}))
-                    self.lane_calls += [(target.name, False, lane)] if lane else []
-                    self.fn_sites += [(a, parameters, target.name, formal) for a, formal in callbacks]
+        self.connect_dispatches()
         effects = fixed_point(self)
         audit(self, effects)
-        for a, parameters, callee, formal in self.fn_sites:  # What a callee's lanes call is judged where it is written.
-            if "lane:" + formal in effects[callee] and not (a.tag == "name" and a.val in parameters):
-                closure = a.ref if a.tag == "lambda" else None
-                rows = [closure.row[0], *(effects[c] for c in closure.row[1])] if closure else [
-                    effects[a.ref.name] if a.tag == "function" else {"indirect_call"}]  # fmt: skip
-                wrong = {x for row in rows for x in row if x not in LANE_SAFE and not x.startswith(("read:", "write:"))}
-                wrong |= {"write:" + place for place, mode in (closure.captures if closure else []) if mode == "rw"}
-                if wrong:
-                    fail("E-PARALLEL-CALL", f"{callee} calls {formal} from parallel lanes, where it cannot "
-                         f"{', '.join(sorted(wrong))}.", a)  # fmt: skip
+        self.judge_lane_callbacks(effects)
         kernels = [(f.name, True, f) for f in self.p.functions if f.kernel]
         for callee, device, node in [*self.lane_calls, *kernels]:
             allowed = PURE if device else LANE_SAFE
@@ -427,6 +410,32 @@ class Checker:
             }
             for n in effects
         }
+
+    def connect_dispatches(self):
+        """Draw each dynamic call's edges once every implementation is known: a later coercion may add one."""
+        for caller, parameters, trait, name, position, receiver, targets, callbacks, lane in self.dispatches:
+            for (owner, _), members in self.impls.items():
+                if owner == trait and members and not (members[name].generics and not members[name].bindings):
+                    target = members[name]
+                    targets.append(target.name)
+                    self.calls[caller].add(target.name)
+                    self.call_edges[caller].append((target.name, {target.params[position][0]: receiver}))
+                    self.lane_calls += [(target.name, False, lane)] if lane else []
+                    self.fn_sites += [(a, parameters, target.name, formal) for a, formal in callbacks]
+
+    def judge_lane_callbacks(self, effects: dict[str, set[str]]):
+        """What a callee's lanes will call (`lane:f` in its row) is judged where it was written: a closure
+        may not write what it captured, and nothing it does may exceed what a lane may do."""
+        for a, parameters, callee, formal in self.fn_sites:
+            if "lane:" + formal in effects[callee] and not (a.tag == "name" and a.val in parameters):
+                closure = a.ref if a.tag == "lambda" else None
+                rows = [closure.row[0], *(effects[c] for c in closure.row[1])] if closure else [
+                    effects[a.ref.name] if a.tag == "function" else {"indirect_call"}]  # fmt: skip
+                wrong = {x for row in rows for x in row if x not in LANE_SAFE and not x.startswith(("read:", "write:"))}
+                wrong |= {"write:" + place for place, mode in (closure.captures if closure else []) if mode == "rw"}
+                if wrong:
+                    fail("E-PARALLEL-CALL", f"{callee} calls {formal} from parallel lanes, where it cannot "
+                         f"{', '.join(sorted(wrong))}.", a)  # fmt: skip
 
     def signature(self, f: Function):
         """Resolve a concrete signature in its own module, once, before any call site needs it."""
