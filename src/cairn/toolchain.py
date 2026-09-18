@@ -131,6 +131,13 @@ def command(
             "-Xcompiler", ",".join(host), source, "-o", artifact]  # fmt: skip
 
 
+def unit_commands(cxx: str, arch: str | None, kind: str) -> tuple[list[str], list[str]]:
+    """Per-module objects: the compile prefix (`... -c unit -o object`) and the link prefix (`... objects -o artifact`).
+    The flags are the single-unit ones; what is lost is inlining across modules, which is why this is opt-in."""
+    every = flags(arch, kind)
+    return [find(cxx), *(f for f in every if f != "-shared"), "-c"], [find(cxx), *every]
+
+
 def find(compiler: str) -> str:
     path = shutil.which(compiler)
     if not path:

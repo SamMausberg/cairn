@@ -34,7 +34,7 @@ from .version import VERSION
 __all__ = [
     "IDENT", "INT", "RESERVED", "RUNTIME", "RUNTIME_FILES", "SIGNED", "VERSION", "WIDTH", "Binding", "Checker",
     "Diagnostic", "Emitter", "Expr", "Function", "Parser", "Program", "Stmt", "Type", "compile_program",
-    "compile_source", "derive", "fail", "specialize",
+    "compile_source", "compile_units", "derive", "fail", "specialize",
 ]  # fmt: skip
 
 
@@ -60,12 +60,32 @@ def interfaces(p: Program, receipts: dict[str, Any]) -> dict[str, Any]:
             for m, fs in sorted(out.items())}  # fmt: skip
 
 
+def compile_units(source: str, origin: Any = "", roots: tuple[str, ...] = ()) -> tuple[dict[str, str], dict[str, Any]]:
+    """The same program as one object per module: `program.hpp` (what every unit shares) and `<module>.cpp`
+    files holding only bodies. A body-only change alters one file; a signature change alters the header."""
+    interface, bodies, manifest = generate(source, origin, roots)
+    shared = "\n".join(
+        ["#pragma once", *(line.replace("static const cdt_", "inline const cdt_") for line in interface)]
+    )
+    files = {"program.hpp": shared + "\n"}
+    for module, lines in bodies:
+        name = (module or "root").replace(".", "_") + ".cpp"
+        files[name] = files.get(name, '#include "program.hpp"\n') + "\n".join(lines) + "\n"
+    return files, manifest
+
+
 def compile_source(source: str, origin: Any = "", roots: tuple[str, ...] = ()) -> tuple[str, dict[str, Any]]:
     """Generated C++ and its receipt; `origin` names the source in #line directives for debug builds."""
+    interface, bodies, manifest = generate(source, origin, roots)
+    return "\n".join([*interface, *(line for _, lines in bodies for line in lines)]) + "\n", manifest
+
+
+def generate(source: str, origin: Any, roots: tuple[str, ...]) -> tuple[list[str], list[tuple[str, list[str]]], dict]:
     p, checker, receipts = compile_program(source)
     certificate = audit_collector()  # The collector's unchecked store is emitted only under this gate.
     emitter = Emitter(p, checker, origin, roots)
-    cpp = emitter.emit()
+    interface, bodies = emitter.units()
+    cpp = "\n".join([*interface, *(line for _, lines in bodies for line in lines)]) + "\n"
     manifest = {
         "compiler": VERSION,
         "source_sha256": hashlib.sha256(source.encode()).hexdigest(),
@@ -94,7 +114,7 @@ def compile_source(source: str, origin: Any = "", roots: tuple[str, ...] = ()) -
         "stated extent throughout the call; no concurrent external mutation.",
         "target_profile": "64-bit host, C++20, GCC/Clang overflow builtins, strict floating mode",
     }
-    return cpp, manifest
+    return interface, bodies, manifest
 
 
 def main() -> int:

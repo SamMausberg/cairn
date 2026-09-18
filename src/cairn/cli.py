@@ -77,6 +77,8 @@ def main(argv: list[str] | None = None) -> int:
             c.add_argument("--target", choices=sorted(TARGETS), help="Freestanding profile; default hosted.")
             c.add_argument("--timeout", type=int, default=60)
             c.add_argument("--debug", action="store_true", help="Debug symbols that point at the CAIRN source.")
+            c.add_argument("--incremental", action="store_true",
+                           help="One object per module, reused by content hash; gives up inlining across modules.")  # fmt: skip
         if name == "run":
             c.add_argument(
                 "--memory-mib", type=int, default=1024, help="Native address-space cap, 64..65536 MiB; not a sandbox."
@@ -215,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
             timeout=a.timeout,
             target=a.target,
             debug=a.debug,
+            incremental=a.incremental,
         )
         if a.command == "build" or result["status"] != "native-built":
             report(result)

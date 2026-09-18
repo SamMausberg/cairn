@@ -6,6 +6,8 @@
 
 - **Queued device work**: `let t = spawn transfer(dst, src);` and `let k = spawn parallel i in n after t { ... };` put device work on its own stream and return; the ticket leases what the work touches until `wait`, `after` orders work by device events without a host wait, and work queued after a ticket may share what that ticket holds. This exposes the runtime's stream tickets, which until now only its own tests used.
 
+- **Incremental builds**: `cairn build --incremental` compiles one object per module against a shared interface header and reuses an object only when everything that went into it hashes the same; a body-only edit recompiles one module. Opt-in, because it gives up inlining across modules; device programs and images stay one unit.
+
 ## 1.0.0
 
 The language grows from a checked CPU kernel language into a general systems language; the compiler core was rebuilt around one typed tree, and every addition arrived with native behavior tests, rejection tests and an application.

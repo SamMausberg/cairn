@@ -8,13 +8,47 @@ import re
 import subprocess
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from .cairnc import RUNTIME_FILES, Parser, compile_source
+from .cairnc import RUNTIME_FILES, Parser, compile_source, compile_units
 from .codegen import mangle
 from .project import Project, ProjectError
-from .toolchain import audit_effects, find, flags, profile
+from .toolchain import audit_effects, find, flags, profile, unit_commands
 from .toolchain import command as native_command
+
+
+def objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout) -> tuple[list[str], list]:
+    """One object per module, reused only when the unit, the shared interface, the command and the compiler
+    all hash to the same key, so nothing stale is ever linked. Missing objects compile concurrently."""
+    files, _ = compile_units(project.source, project.origin if debug else "", (entry,) if entry else ())
+    files["entry.cpp"] = '#include "program.hpp"\n' + stub
+    compile_prefix, link = unit_commands(cxx, arch or project.arch, kind)
+    compile_prefix += ["-g"] if debug else []
+    version = subprocess.run([compiler, "--version"], capture_output=True, text=True, timeout=5).stdout
+    cache = out.resolve() / "objects"
+    cache.mkdir(exist_ok=True)
+    for name, text in files.items():
+        (directory / name).write_text(text, encoding="utf-8")
+
+    def one(name: str) -> dict:
+        salt = "\0".join(
+            [files["program.hpp"], files[name], " ".join(compile_prefix), version, *RUNTIME_FILES.values()]
+        )
+        target = cache / (hashlib.sha256(salt.encode()).hexdigest()[:40] + ".o")
+        unit = {"unit": name, "object": str(target), "reused": target.exists()}
+        if not unit["reused"]:
+            fresh = directory / (name + ".o")
+            done = subprocess.run([*compile_prefix, str(directory / name), "-o", str(fresh)],
+                                  capture_output=True, text=True, timeout=timeout)  # fmt: skip
+            if done.returncode:
+                return unit | {"error": done}
+            fresh.replace(target)  # Atomic: a concurrent build sees a whole object or none.
+        return unit
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        units = list(pool.map(one, [n for n in files if n.endswith(".cpp")]))
+    return [*link, *(unit["object"] for unit in units)], units
 
 
 def build(
@@ -27,6 +61,7 @@ def build(
     timeout: int = 60,
     target: str | None = None,
     debug: bool = False,
+    incremental: bool = False,
 ) -> dict:
     kind = kind or project.kind
     target = target or project.target
@@ -48,6 +83,7 @@ def build(
     generated, receipt = compile_source(project.source, project.origin if debug else "", (entry,) if entry else ())
     if bare:  # No hosted runtime stands behind the image, so no effect may assume one.
         audit_effects(receipt["functions"])
+    generated += "\n// entry\n" if entry else ""
     if entry and (bare or entry != "main"):  # Start-up code calls cf_main, wherever main was written.
         generated += f'\nextern "C" std::int32_t cf_main() noexcept {{ return cf_{mangle(entry)}(); }}\n' * (
             entry != "main"
@@ -71,6 +107,11 @@ def build(
     )
     if debug:  # Symbols plus #line directives: a debugger steps through the .cairn files.
         command.insert(1, "-g")
+    units: list[dict] = []
+    if incremental and not bare and "cuda" not in receipt["requires"]:  # Device code and images stay one unit.
+        stub = generated[generated.rindex("\n// entry\n") :] if "\n// entry\n" in generated else ""
+        command, units = objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout)
+        command += ["-o", str(artifact)]
     started = time.monotonic()
     record = {
         "schema": "cairn.build/1",
@@ -82,6 +123,7 @@ def build(
         "target": target,
         "command": command,
         "generated_sha256": hashlib.sha256(generated.encode()).hexdigest(),
+        "units": [{k: v for k, v in unit.items() if k != "error"} for unit in units],
         "artifact": str(artifact),
         "directory": str(directory),
     }
@@ -89,7 +131,8 @@ def build(
         record["compiler_version"] = subprocess.run(
             [compiler, "--version"], check=True, capture_output=True, text=True, timeout=5
         ).stdout[:10000]
-        cp = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+        failed = next((unit["error"] for unit in units if unit.get("error")), None)
+        cp = failed or subprocess.run(command, capture_output=True, text=True, timeout=timeout)
         record.update(
             status="native-built" if cp.returncode == 0 else "native-build-failed",
             exit_code=cp.returncode,

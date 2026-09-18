@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -193,3 +194,52 @@ def test_output_symlink_rejected(tmp_path):
     with pytest.raises(ProjectError):
         build(load_project(root))
     assert list(elsewhere.iterdir()) == []
+
+
+MODULES = """
+module geometry;
+pub struct Rect { w:u64; h:u64; }
+pub trait Shape { fn area(self:ro<Self>) -> u64; }
+impl Shape for Rect { fn area(self:ro<Rect>) -> u64 = self.w * self.h; }
+pub fn scale(r:Rect, k:u64) -> Rect = Rect(r.w * k, r.h * k);
+
+module stats;
+pub fn total(n:usize, xs:ro<u64>[n]) -> u64 { let mut t:u64 = 0; for i in 0..n { t = t + xs[i]; } return t; }
+pub fn largest[T](a:T, b:T) -> T { if a < b { return b; } return a; }
+pub fn collect(k:usize) -> u64 { let mut v = Buf[u64](k); for i in 0..k { v[i] = u64(i); } return total(len(v), v); }
+
+module app;
+import geometry;
+import stats;
+fn measure(s:ro<dyn geometry.Shape>) -> u64 = area(s);
+pub fn main() -> i32 {
+  let r = geometry.scale(geometry.Rect(2, 3), 2);
+  let sum = stats.collect(5);
+  if measure(r) + stats.largest(sum, 3) != 24 + 10 { return 1; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_incremental_builds_relink_only_the_module_whose_body_changed(tmp_path, cxx):
+    """Objects are reused only by content: same unit, same shared interface, same command, same compiler."""
+    if not shutil.which(cxx):
+        pytest.skip(f"{cxx} unavailable")
+    path = tmp_path / "program.cairn"
+
+    def built(source):
+        path.write_text(source, encoding="utf-8")
+        record = build(load_project(path), kind="exe", cxx=cxx, timeout=180, incremental=True)
+        assert record["status"] == "native-built", record.get("stderr")
+        assert subprocess.run([record["artifact"]], timeout=30).returncode == 0
+        return {unit["unit"]: unit["reused"] for unit in record["units"]}
+
+    assert built(MODULES) == {"geometry.cpp": False, "stats.cpp": False, "app.cpp": False, "entry.cpp": False}
+    assert all(built(MODULES).values())  # Nothing changed: nothing compiles, everything links.
+    body = MODULES.replace("t = t + xs[i];", "t = add_wrap(t, xs[i]);")
+    assert built(body) == {"geometry.cpp": True, "stats.cpp": False, "app.cpp": True, "entry.cpp": True}
+    signature = MODULES.replace("k:u64) -> Rect", "k:u64, spare:u64) -> Rect").replace("3), 2);", "3), 2, 0);")
+    assert not any(built(signature).values())  # The shared interface changed, so every unit is rebuilt.
+    whole = build(load_project(path), kind="exe", cxx=cxx, timeout=180)
+    assert whole["units"] == [] and subprocess.run([whole["artifact"]], timeout=30).returncode == 0
