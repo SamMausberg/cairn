@@ -110,8 +110,11 @@ def path(e: Expr, stable=lambda name: False) -> str:
     if e.tag == "index":
         return path(e.args[0], stable) + "[]"
     if e.tag == "slice":
+        base = path(e.args[0], stable)
+        if e.args[0].tag == "slice":  # A part of a part is somewhere inside the outer part: no visible bounds.
+            return base.partition("[")[0] + "[?..?]"
         bounds = (a.val if a.tag == "int" or (a.tag == "name" and stable(a.val)) else "?" for a in e.args[1:])
-        return path(e.args[0], stable) + "[" + "..".join(bounds) + "]"
+        return base + "[" + "..".join(bounds) + "]"
     return e.val
 
 

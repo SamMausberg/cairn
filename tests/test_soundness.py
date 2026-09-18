@@ -319,6 +319,11 @@ REJECTED = {
         FILL + "fn main() -> i32 { let n:usize = 9; let a:usize = 3; let b:usize = 6; let mut d = Buf[u64](n);\n"
         "  let t1 = spawn fill(a, d[0..a], 1); let t3 = spawn fill(n - b, d[b..n], 3); wait(t1); wait(t3); return 0; }",
     ),
+    "two parts of parts of one array lent mutably (their bounds are not visible)": (
+        "E-ALIAS",
+        "fn two(n:usize, a:rw<u64>[n], m:usize, b:rw<u64>[m]) { a[0] = 1; b[0] = 2; }\n"
+        "fn main() -> i32 { let mut d = Buf[u64](16); two(2, d[0..8][0..2], 2, d[8..16][0..2]); return 0; }",
+    ),
     "a lane inside a closure returning from that closure": (
         "E-PARALLEL-CONTROL",
         "fn once(f:ro<fn(u64) -> u64>) -> u64 = f(0);\n"
