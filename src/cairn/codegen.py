@@ -217,11 +217,12 @@ class Emitter:
         table = f"cv_{mangle(trait)}_{mangle(e.args[0].ty.value.display())}"
         if table not in self.vtables:
             thunks = []
-            for f in e.ref:
-                rest = [(n, self.type(t)) for n, t in f.params if t.value != e.args[0].ty.value or t.mode == "value"]
-                ps = "".join(f", {t} {n}" for n, t in rest)
-                call = ", ".join(n if (n, t) in [(a, b) for a, b in rest] else f"*static_cast<{concrete}*>(self)"
-                                 for n, t in [(n, self.type(t)) for n, t in f.params])  # fmt: skip
+            for member, f in zip(self.p.traits[trait], e.ref, strict=True):  # One thunk per trait member.
+                at = next(i for i, (_, t) in enumerate(member.params) if t.name == "Self")
+                ps = "".join(f", {self.type(t)} v_{n}" for i, (n, t) in enumerate(f.params) if i != at)
+                call = ", ".join(
+                    f"*static_cast<{concrete}*>(self)" if i == at else "v_" + n for i, (n, _) in enumerate(f.params)
+                )
                 thunks.append(
                     f"[](void* self{ps}) noexcept -> {self.type(f.ret)} {{ return cf_{mangle(f.name)}({call}); }}"
                 )
