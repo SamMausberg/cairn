@@ -1,0 +1,26 @@
+$ cairn --version
+0.6.0
+
+$ clang++ --version
+Ubuntu clang version 15.0.7
+Target: aarch64-unknown-linux-gnu
+Thread model: posix
+InstalledDir: /usr/bin
+
+$ qemu-system-aarch64 --version
+QEMU emulator version 6.2.0 (Debian 1:6.2+dfsg-2ubuntu6.31)
+Copyright (c) 2003-2021 Fabrice Bellard and the QEMU Project developers
+
+$ ld --version
+GNU ld (GNU Binutils for Ubuntu) 2.38
+Copyright (C) 2022 Free Software Foundation, Inc.
+This program is free software; you may redistribute it under the terms of
+the GNU General Public License version 3 or (at your option) a later version.
+This program has absolutely no warranty.
+
+$ nm --version
+GNU nm (GNU Binutils for Ubuntu) 2.38
+Copyright (C) 2022 Free Software Foundation, Inc.
+This program is free software; you may redistribute it under the terms of
+the GNU General Public License version 3 or (at your option) any later version.
+This program has absolutely no warranty.

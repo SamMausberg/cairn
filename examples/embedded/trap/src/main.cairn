@@ -1,0 +1,27 @@
+// A deliberate guard violation on bare metal. There is no MMU and no operating system in this
+// image, so an out-of-range index would simply read whatever follows the array: nothing but the
+// language's own bounds check stands between this program and silent corruption. The guard must
+// still fire here, and it must stop the machine with a status no successful run can produce.
+const UART_DR:usize = 0x09000000;
+const UART_FR:usize = 0x09000018;
+
+fn putc(byte:u8) {
+  unsafe {
+    while (mmio_read[u32](UART_FR) & 32) != 0 {}
+    mmio_write[u32](UART_DR, u32(byte));
+  }
+}
+
+fn puts(n:usize, text:ro<u8>[n]) { for i in 0..n { putc(text[i]); } }
+
+fn main() -> i32 {
+  stack window:u8[4] = zeroed;
+  window[0] = 4;
+  let banner = "trap demo: reading window[4] of 4\n";
+  puts(len(banner), banner);
+  let index = usize(window[0]); // 4, read back from storage rather than written as a literal
+  let byte = window[index]; // the bounds guard stops the machine on this line
+  let after = "unreachable\n";
+  puts(len(after), after);
+  return i32(byte);
+}

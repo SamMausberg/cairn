@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from .syntax import MAX_SOURCE, Diagnostic
-from .toolchain import ARCHS, KINDS, ProjectError
+from .toolchain import ARCHS, KINDS, TARGETS, ProjectError
 
 
 def read_text(path: Path, limit: int) -> str:
@@ -56,6 +56,7 @@ class Project:
     contracts: tuple[str, ...] = ()
     kind: str = "library"
     arch: str = "baseline"
+    target: str = "hosted"
     manifest_sha256: str | None = None
 
     def locate(self, error: Diagnostic) -> dict:
@@ -100,7 +101,7 @@ def load_project(path: str | Path = ".") -> Project:
     project, build = data.get("project", {}), data.get("build", {})
     if not isinstance(project, dict) or not isinstance(build, dict):
         raise ProjectError("project and build must be tables.")
-    if set(project) - {"name", "sources", "tests"} or set(build) - {"kind", "arch"}:
+    if set(project) - {"name", "sources", "tests"} or set(build) - {"kind", "arch", "target"}:
         raise ProjectError("Unknown manifest option.")
     name = project.get("name")
     if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name):
@@ -114,6 +115,9 @@ def load_project(path: str | Path = ".") -> Project:
     kind, arch = build.get("kind", "library"), build.get("arch", "baseline")
     if not isinstance(kind, str) or not isinstance(arch, str) or kind not in KINDS or arch not in ARCHS:
         raise ProjectError("Unsupported build kind or explicit CPU architecture.")
+    machine = build.get("target", "hosted")
+    if not isinstance(machine, str) or machine not in TARGETS:
+        raise ProjectError(f"Unsupported build target; known targets are {', '.join(sorted(TARGETS))}.")
     units, text, line, byte_count = [], [], 1, 0
     for relative in sources:
         body = read_text(contained_file(root, relative, ".cairn"), MAX_SOURCE)
@@ -130,6 +134,5 @@ def load_project(path: str | Path = ".") -> Project:
         raise ProjectError("Combined project exceeds the 2 MB native source limit.")
     for relative in contracts:
         contained_file(root, relative, ".json")
-    return Project(
-        root, name, combined, tuple(units), tuple(contracts), kind, arch, hashlib.sha256(manifest.encode()).hexdigest()
-    )
+    digest = hashlib.sha256(manifest.encode()).hexdigest()
+    return Project(root, name, combined, tuple(units), tuple(contracts), kind, arch, machine, digest)

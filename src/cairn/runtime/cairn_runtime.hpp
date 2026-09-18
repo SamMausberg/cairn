@@ -5,7 +5,13 @@
 #include <new>
 #include <cstddef>
 #include <cstdint>
+#if defined(CAIRN_FREESTANDING)
+// A freestanding image links no C library and no C++ runtime, so the target's start-up code owns the
+// only way out: cr_exit(status) stops the machine with that status (src/cairn/targets/<name>/start.S).
+extern "C" [[noreturn]] void cr_exit(int status) noexcept;
+#else
 #include <cstdlib>
+#endif
 #include <limits>
 #include <type_traits>
 #include <utility>
@@ -27,6 +33,8 @@ namespace cr {
 #if defined(__CUDA_ARCH__)
   __trap();
   __builtin_unreachable();
+#elif defined(CAIRN_FREESTANDING)
+  cr_exit(134);  // The abort status a hosted shell reports for std::abort; no fn main() -> i32 ends this way.
 #else
   std::abort();
 #endif

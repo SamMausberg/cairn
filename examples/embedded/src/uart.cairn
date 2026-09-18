@@ -1,0 +1,32 @@
+// PL011 UART0 as the QEMU `virt` board wires it. QEMU brings the device out of reset ready to
+// transmit, so the driver only has to wait for the FIFO; on real silicon the same code would
+// first program the baud divisors and the line control register.
+const UART_DR:usize = 0x09000000; // data register: a write transmits the low byte
+const UART_FR:usize = 0x09000018; // flag register: bit 5 is "transmit FIFO full"
+
+fn putc(byte:u8) {
+  unsafe {
+    while (mmio_read[u32](UART_FR) & 32) != 0 {}
+    mmio_write[u32](UART_DR, u32(byte));
+  }
+}
+
+fn puts(n:usize, text:ro<u8>[n]) { for i in 0..n { putc(text[i]); } }
+
+// Decimal with no allocator anywhere: twenty digits is the widest u64, they come out backwards,
+// and every byte written is bounds checked against that fixed local storage.
+fn putu(value:u64) {
+  stack digits:u8[20] = zeroed;
+  let mut rest = value;
+  let mut used:usize = 0;
+  while rest != 0 {
+    digits[used] = u8(48 + (rest % 10));
+    rest = rest / 10;
+    used = used + 1;
+  }
+  if used == 0 { putc(48); }
+  while used != 0 {
+    used = used - 1;
+    putc(digits[used]);
+  }
+}

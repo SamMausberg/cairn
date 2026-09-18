@@ -1,0 +1,12 @@
+$ size /home/ubuntu/cairn/evidence/v1_0/embedded/build/embedded-leqqiuyb/embedded.elf
+text	   data	    bss	    dec	    hex	filename
+   5411	      0	      0	   5411	   1523	/home/ubuntu/cairn/evidence/v1_0/embedded/build/embedded-leqqiuyb/embedded.elf
+$ nm -u /home/ubuntu/cairn/evidence/v1_0/embedded/build/embedded-leqqiuyb/embedded.elf
+(none)
+
+$ size /home/ubuntu/cairn/evidence/v1_0/embedded/build/trapdemo-kr8wholl/trapdemo.elf
+text	   data	    bss	    dec	    hex	filename
+    403	      0	      0	    403	    193	/home/ubuntu/cairn/evidence/v1_0/embedded/build/trapdemo-kr8wholl/trapdemo.elf
+$ nm -u /home/ubuntu/cairn/evidence/v1_0/embedded/build/trapdemo-kr8wholl/trapdemo.elf
+(none)
+

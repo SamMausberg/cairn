@@ -1,0 +1,7 @@
+[project]
+name = "trapdemo"
+sources = ["src/main.cairn"]
+
+[build]
+kind = "exe"
+target = "aarch64-virt"

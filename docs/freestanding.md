@@ -60,6 +60,9 @@ cairn run   examples/embedded            # the same image, under the target's em
   not run, exactly as a hosted abort does not.
 * **Cross compilation is still not offered.** A target names a host family and is refused on any
   other host, rather than guessing at a sysroot.
+* **`cairn test` still runs on the host.** A task contract is a finite scalar comparison of one
+  symbol, so it builds a hosted shared library whatever `target` says. What runs on the machine is
+  `cairn run` and `tests/test_freestanding.py`.
 * **The backend is not verified.** `formal_status` stays `not-verified` here as everywhere else.
 
 ## The `aarch64-virt` target

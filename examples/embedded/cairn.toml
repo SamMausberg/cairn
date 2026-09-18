@@ -1,0 +1,7 @@
+[project]
+name = "embedded"
+sources = ["src/uart.cairn", "src/parse.cairn", "src/main.cairn"]
+
+[build]
+kind = "exe"
+target = "aarch64-virt"

@@ -12,8 +12,8 @@ from pathlib import Path
 
 from .cairnc import RUNTIME_FILES, Parser, compile_source
 from .project import Project, ProjectError
+from .toolchain import audit_effects, find, flags, profile
 from .toolchain import command as native_command
-from .toolchain import find, flags
 
 
 def build(
@@ -24,19 +24,27 @@ def build(
     arch: str | None = None,
     kind: str | None = None,
     timeout: int = 60,
+    target: str | None = None,
 ) -> dict:
     kind = kind or project.kind
-    options = flags(arch or project.arch, kind)
+    target = target or project.target
+    bare = bool(profile(target))
+    flags(arch or project.arch, kind, target)  # Reject an unknown kind, architecture or target before any work.
     if type(timeout) is not int or not 1 <= timeout <= 300:
         raise ProjectError("Build timeout must be 1..300 seconds.")
+    if bare and kind != "exe":
+        raise ProjectError(f'Target {target} builds one image: set kind = "exe".')
     compiler = find(cxx)
     generated, receipt = compile_source(project.source)
+    if bare:  # No hosted runtime stands behind the image, so no effect may assume one.
+        audit_effects(receipt["functions"])
     if kind == "exe":
         functions = {f.name: f for f in Parser(project.source).parse().functions}
         main = functions.get("main")
         if main is None or main.static or main.params or main.ret.name != "i32" or main.ret.mode != "value":
             raise ProjectError("An executable needs fn main() -> i32 with no arguments.")
-        generated += "\nint main() { return static_cast<int>(cf_main()); }\n"
+        if not bare:  # A freestanding image is entered by the target's start-up code, which calls cf_main.
+            generated += "\nint main() { return static_cast<int>(cf_main()); }\n"
     # No manifest can select a compiler executable, flags, build script, or output path.
     out = output or project.root / "build"
     if out.is_symlink():
@@ -48,8 +56,10 @@ def build(
     cpp.write_text(generated, encoding="utf-8")
     for header, text in RUNTIME_FILES.items():
         (directory / header).write_text(text, encoding="utf-8")
-    artifact = directory / ("lib" + name + ".so" if kind == "library" else name)
-    command = native_command(cxx, str(cpp), str(artifact), arch or project.arch, kind, "cuda" in receipt["requires"])
+    artifact = directory / (name + ".elf" if bare else "lib" + name + ".so" if kind == "library" else name)
+    command = native_command(
+        cxx, str(cpp), str(artifact), arch or project.arch, kind, "cuda" in receipt["requires"], target
+    )
     started = time.monotonic()
     record = {
         "schema": "cairn.build/1",
@@ -58,6 +68,7 @@ def build(
         "project": project.receipt(),
         "frontend": receipt,
         "kind": kind,
+        "target": target,
         "command": command,
         "generated_sha256": hashlib.sha256(generated.encode()).hexdigest(),
         "artifact": str(artifact),

@@ -1400,10 +1400,10 @@ class Checker:
             if want.extent:
                 actual = self.view_argument(a)
                 extent = want.extent if want.extent.isdigit() else self.extent_of(subst[want.extent])
+                if a.tag == "slice":  # A part is guarded dynamically, so its extent may be any expression.
+                    a.ref, extent = subst.get(want.extent, want.extent), actual.extent
                 if extent is None:
                     fail("E-CALL-SHAPE", "View extent must be a name, literal or len(view).", subst[want.extent])
-                if a.tag == "slice":  # A part carries a dynamic extent guard, not a static identity.
-                    a.ref, extent = subst.get(want.extent, want.extent), actual.extent
                 mode = "rw" if actual.mode == "rw" and want.mode == "ro" else want.mode
                 self.expect(actual, Type(want.name, mode, extent, want.args, want.place), a)
             else:

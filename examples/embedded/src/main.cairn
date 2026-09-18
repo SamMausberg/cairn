@@ -1,0 +1,102 @@
+// A sensor log arrives over a wire as comma-terminated decimal fields. Every field is scanned in
+// place as a part of the one input view, so nothing is copied and nothing is allocated; every
+// outcome is named by the sum type, so a malformed field is reported, not guessed at.
+fn ingest(n:usize, text:ro<u8>[n], k:usize, out:rw<u64>[k]) -> usize {
+  let mut used:usize = 0;
+  let mut start:usize = 0;
+  for i in 0..n {
+    if text[i] == 44 {
+      let count = i - start;
+      match decimal(count, text[start..i]) {
+        Reading.Value(value) => { if used < k { out[used] = value; used = used + 1; } }
+        Reading.Invalid(offset) => {
+          let m = "  bad digit at ";
+          puts(len(m), m);
+          putu(u64(start + offset));
+          putc(10);
+        }
+        Reading.Overflow(offset) => {
+          let m = "  too large at ";
+          puts(len(m), m);
+          putu(u64(start + offset));
+          putc(10);
+        }
+        Reading.Empty => {
+          let m = "  empty field at ";
+          puts(len(m), m);
+          putu(u64(start));
+          putc(10);
+        }
+      }
+      start = i + 1;
+    }
+  }
+  return used;
+}
+
+// A counting sort over a fixed histogram. The u8 conversion and the bucket index are both checked,
+// so a reading outside 0..63 traps here instead of quietly corrupting a neighbouring bucket.
+fn sort_small(k:usize, values:rw<u64>[k], used:usize) {
+  stack counts:usize[64] = zeroed;
+  for i in 0..used {
+    let bucket = usize(u8(values[i]));
+    counts[bucket] = counts[bucket] + 1;
+  }
+  let mut cursor:usize = 0;
+  for bucket in 0..64 {
+    for repeat in 0..counts[bucket] {
+      values[cursor] = u64(bucket);
+      cursor = cursor + 1;
+    }
+  }
+}
+
+fn main() -> i32 {
+  let banner = "cairn freestanding: qemu virt, pl011 uart\n";
+  puts(len(banner), banner);
+  let log = "23,19,31,7,42,19,x9,,99999999999999999999,";
+  let label = "log ";
+  puts(len(label), label);
+  puts(len(log), log);
+  putc(10);
+
+  stack readings:u64[8] = zeroed;
+  let used = ingest(len(log), log, 8, readings);
+
+  // Checked arithmetic: the total aborts the machine on overflow rather than wrapping silently,
+  // and the mean cannot divide by zero because an empty log leaves early.
+  let mut total:u64 = 0;
+  let mut peak:u64 = 0;
+  for i in 0..used {
+    total = total + readings[i];
+    peak = max(peak, readings[i]);
+  }
+  if used == 0 { return 1; }
+
+  let counted = "readings ";
+  puts(len(counted), counted);
+  putu(u64(used));
+  let summed = " total ";
+  puts(len(summed), summed);
+  putu(total);
+  let highest = " max ";
+  puts(len(highest), highest);
+  putu(peak);
+  let averaged = " mean ";
+  puts(len(averaged), averaged);
+  putu(total / u64(used));
+  putc(10);
+
+  sort_small(8, readings, used);
+  let ordered = "sorted";
+  puts(len(ordered), ordered);
+  for i in 0..used {
+    putc(32);
+    putu(readings[i]);
+  }
+  putc(10);
+
+  let done = "ok\n";
+  puts(len(done), done);
+  return 0;
+}
