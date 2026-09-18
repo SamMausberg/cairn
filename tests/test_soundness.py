@@ -24,6 +24,11 @@ COUNTER = (
     "impl Counter for C { fn tick(self:rw<C>, by:u64) -> u64 { self.n = add_wrap(self.n, by); return self.n; } }\n"
 )
 
+TWO_TRAITS = (
+    "trait A { fn go(self:ro<Self>) -> u64; }\ntrait B { fn go(self:ro<Self>) -> u64; }\nstruct S { v:u64; }\n"
+    "impl A for S { fn go(self:ro<S>) -> u64 = 1; }\nimpl B for S { fn go(self:ro<S>) -> u64 = 2; }\n"
+)
+
 REJECTED = {
     "a by-value move of an owner beside a view of it (use after free)": (
         "E-ALIAS",
@@ -210,6 +215,69 @@ REJECTED = {
         "enum Tree { Leaf(u64); Fork(Buf[Tree]); }\nfn eat(t:Tree) -> u64 = 1;\n"
         "fn main() -> i32 { let a = Tree.Fork(Buf[Tree](2)); let x = eat(a); let y = eat(a); return i32(x + y); }",
     ),
+    "a linear value hidden in a record that owns itself through a Buf": (
+        "E-LINEAR-STORAGE",
+        TOKEN + "struct Node { t:Token; kids:Buf[Node]; }\n"
+        "fn main() -> i32 { let n = Node(open(1), Buf[Node](0)); return 0; }",
+    ),
+    "an impl whose receiver is rw where its trait says ro (writes through ro<dyn>)": (
+        "E-TRAIT-IMPL",
+        "trait Shape { fn area(self:ro<Self>) -> u64; }\nstruct Square { side:u64; }\n"
+        "impl Shape for Square { fn area(self:rw<Square>) -> u64 { self.side = self.side + 1; return self.side; } }\n"
+        "fn measure(s:ro<dyn Shape>) -> u64 = area(s);",
+    ),
+    "an impl returning another type than its trait declares": (
+        "E-TRAIT-IMPL",
+        "trait Shape { fn area(self:ro<Self>) -> u64; }\nstruct Square { side:u64; }\n"
+        "impl Shape for Square { fn area(self:ro<Square>) -> u32 = 1; }",
+    ),
+    "an impl that defines a different member than its trait (compiler crash)": (
+        "E-TRAIT-IMPL",
+        "trait Shape { fn area(self:ro<Self>) -> u64; }\nstruct Square { side:u64; }\n"
+        "impl Shape for Square { fn unrelated(self:ro<Square>) -> u64 = self.side; }\n"
+        "fn measure(s:ro<dyn Shape>) -> u64 = area(s);",
+    ),
+    "a generic impl and a concrete impl both matching one type": (
+        "E-TRAIT-OVERLAP",
+        "trait Tag { fn tag(self:ro<Self>) -> u64; }\nstruct S { v:u64; }\n"
+        "impl Tag for S { fn tag(self:ro<S>) -> u64 = 1; }\nimpl[T] Tag for T { fn tag(self:ro<T>) -> u64 = 2; }\n"
+        "fn main() -> i32 { let s = S(0); return i32(tag(s)); }",
+    ),
+    "one member name declared by two traits the type implements": (
+        "E-TRAIT-AMBIGUOUS",
+        TWO_TRAITS + "fn main() -> i32 { let s = S(0); return i32(go(s)); }",
+    ),
+    "a dynamic call to a member that returns Self": (
+        "E-DYN",
+        "trait Shape { fn dup(self:ro<Self>) -> Self; }\nstruct Square { side:u64; }\n"
+        "impl Shape for Square { fn dup(self:ro<Square>) -> Square = Square(self.side); }\n"
+        "fn twice(s:ro<dyn Shape>) -> u64 { let d = dup(s); return 0; }",
+    ),
+    "a family over another module's private template": (
+        "E-PRIVATE",
+        "module lib;\nfn scale[K:nat](x:usize) -> usize = mul_wrap(x, K);\n"
+        "module app;\nfamily gain = lib.scale[1..3];\npub fn main() -> i32 { return i32(gain_2(10)); }",
+    ),
+    "a private family's instances called from another module": (
+        "E-PRIVATE",
+        "module lib;\npub fn scale[K:nat](x:usize) -> usize = mul_wrap(x, K);\n"
+        "module mid;\nimport lib;\nfamily gain = lib.scale[1..3];\n"
+        "module app;\nimport mid;\npub fn main() -> i32 { return i32(mid.gain_2(10)); }",
+    ),
+    "derive wire written outside the module that declares the record": (
+        "E-PRIVATE",
+        "module lib;\nstruct Secret { code:u32; }\nmodule app;\nimport lib;\nderive wire for lib.Secret;",
+    ),
+    "reading a field of another module's private record": (
+        "E-PRIVATE",
+        "module lib;\nstruct Secret { code:u32; }\npub fn make() -> Secret = Secret(7);\n"
+        "module app;\nimport lib;\npub fn main() -> i32 { let s = lib.make(); return i32(s.code); }",
+    ),
+    "an imported name silently hiding the importer's own declaration": (
+        "E-DUPLICATE",
+        "module lib;\npub const N:usize = 99;\nmodule app;\nimport lib (N);\nconst N:usize = 1;\n"
+        "pub fn main() -> i32 { return i32(N); }",
+    ),
     "a lane inside a closure returning from that closure": (
         "E-PARALLEL-CONTROL",
         "fn once(f:ro<fn(u64) -> u64>) -> u64 = f(0);\n"
@@ -330,3 +398,53 @@ def test_names_that_differ_only_by_underscores_stay_different_variables(tmp_path
         "fn main() -> i32 { return i32(pick(1, 2, 3) - 300); }"
     )
     assert run(tmp_path, source).returncode == 21
+
+
+BEHAVIOR = {
+    "a module's own take wins over the builtin inside that module": (
+        75,
+        "module m;\npub fn take(x:rw<usize>) -> usize = 7;\npub fn inside(x:rw<usize>) -> usize = take(x);\n"
+        "module app;\nimport m;\n"
+        "pub fn main() -> i32 { let mut a:usize = 5; let u = m.inside(a); return i32(add_wrap(mul_wrap(u, 10), a)); }",
+    ),
+    "a dynamic member that takes an owner by value moves it through the thunk": (
+        4,
+        "trait Sink { fn eat(self:ro<Self>, b:Buf[u64]) -> usize; }\nstruct S { v:u64; }\n"
+        "impl Sink for S { fn eat(self:ro<S>, b:Buf[u64]) -> usize = len(b); }\n"
+        "fn feed(s:ro<dyn Sink>, b:Buf[u64]) -> usize = eat(s, b);\n"
+        "fn main() -> i32 { let s = S(1); let b = Buf[u64](4); return i32(feed(s, b)); }",
+    ),
+    "a generic impl serves static calls, dyn borrows and owned Dyn values alike": (
+        6,
+        "trait Tag { fn tag(self:ro<Self>) -> u64; }\nstruct S { v:u64; }\n"
+        "impl[T] Tag for T { fn tag(self:ro<T>) -> u64 = 2; }\nfn dynamically(s:ro<dyn Tag>) -> u64 = tag(s);\n"
+        "fn main() -> i32 { let s = S(0); let d = Dyn[Tag](S(1));\n"
+        "  return i32(tag(s) + dynamically(s) + dynamically(d)); }",
+    ),
+    "a trait-qualified call picks between two traits, and the only implemented one needs no prefix": (
+        23,
+        TWO_TRAITS + "trait C { fn go3(self:ro<Self>) -> u64; }\nimpl C for S { fn go3(self:ro<S>) -> u64 = 3; }\n"
+        "fn main() -> i32 { let s = S(0); return i32(B.go(s) * 10 + go3(s)); }",
+    ),
+    "a public family over an imported public template belongs to the module that declares it": (
+        20,
+        "module lib;\npub fn scale[K:nat](x:usize) -> usize = mul_wrap(x, K);\n"
+        "module mid;\nimport lib as l;\npub family gain = l.scale[1..3];\n"
+        "module app;\nimport mid;\npub fn main() -> i32 { return i32(mid.gain_2(10)); }",
+    ),
+}
+
+
+@pytest.mark.skipif(not shutil.which("clang++"), reason="needs clang++")
+@pytest.mark.parametrize("name", BEHAVIOR)
+def test_what_the_second_audit_found_ambiguous_now_has_one_meaning(tmp_path, name):
+    status, source = BEHAVIOR[name]
+    entry = "cf_app_main" if "module app;" in source else "cf_main"
+    (tmp_path / "p.cpp").write_text(
+        compile_source(source)[0] + f"int main() {{ return static_cast<int>({entry}()); }}\n"
+    )
+    for header, text in RUNTIME_FILES.items():
+        (tmp_path / header).write_text(text)
+    flags = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=address,undefined"]
+    subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
+    assert subprocess.run([tmp_path / "p"], timeout=60).returncode == status

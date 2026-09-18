@@ -153,6 +153,11 @@ class Checker:
         for name in [*self.fs, *self.types, *program.consts, *program.traits]:
             if name in CPP or name in set(TABLE) - SOFT or name in INTRINSIC_TYPES:
                 fail("E-BUILTIN-NAME", f"Cannot redefine builtin {name}.")
+        for module, name in program.uses:  # An imported name may not hide one the module declares.
+            if f"{module}.{name}" in program.modules:
+                fail(
+                    "E-DUPLICATE", f"import ({name}) collides with {module}.{name}; drop one or use the qualified name."
+                )
         self.aliases: dict[str, dict[str, str]] = {}
         for importer, target, alias in program.imports:
             self.aliases.setdefault(importer, {})[alias] = target
@@ -169,6 +174,8 @@ class Checker:
         self.unchecked: list[str] = []
         self.lane_calls: list[tuple[str, bool, Expr]] = []
         self.fn_sites: list[tuple[Expr, set[str], str, str]] = []  # (argument, caller's parameters, callee, formal)
+        self.impls: dict[tuple[str, Type], dict[str, Function] | None] = {}
+        self.dispatches: list[tuple] = []
         self.borrowed: list[tuple[str, str]] = []
         self.device_functions: set[str] = set()
         self.address_taken: set[str] = set()
@@ -342,6 +349,11 @@ class Checker:
         concrete = [f for f in self.p.functions if not f.generics or f.bindings]
         for f in concrete:
             self.signature(f)
+        for f in [f for f in concrete if f.owner]:  # Every impl is held to its trait, used or not.
+            with self.within(f.module):
+                self.members(
+                    self.qualify(f.owner[0], self.p.traits, node=f) or f.owner[0], self.resolve(f.owner[1], f), f
+                )
         for f in concrete:  # Generic instances are appended, and checked, at their first use.
             self.function(f)
         instantiated = {f.source_name for f in self.p.functions if f.bindings}
@@ -352,6 +364,15 @@ class Checker:
                     fail("E-UNINSTANTIATED", f"Static function {f.name} has no family; "
                          "unused templates are not silently ignored.")  # fmt: skip
                 self.unchecked.append(f.name)
+        for caller, parameters, trait, name, position, receiver, targets, callbacks, lane in self.dispatches:
+            for (owner, _), members in self.impls.items():
+                if owner == trait and members and not (members[name].generics and not members[name].bindings):
+                    target = members[name]
+                    targets.append(target.name)
+                    self.calls[caller].add(target.name)
+                    self.call_edges[caller].append((target.name, {target.params[position][0]: receiver}))
+                    self.lane_calls += [(target.name, False, lane)] if lane else []
+                    self.fn_sites += [(a, parameters, target.name, formal) for a, formal in callbacks]
         effects = fixed_point(self)
         audit(self, effects)
         for a, parameters, callee, formal in self.fn_sites:  # What a callee's lanes call is judged where it is written.
@@ -994,6 +1015,8 @@ class Checker:
         layout = self.layouts.get(at)
         if at.mode != "value" or not isinstance(layout, list):
             fail("E-FIELD", "Field access requires a record.", e)
+        if self.p.modules.get(at.name, "") not in ("", self.module) and at.name not in self.p.public:
+            fail("E-PRIVATE", f"{at.name} is private to module {self.p.modules[at.name]}; so are its fields.", e)
         if e.val not in dict(layout):
             fail("E-FIELD", f"Unknown field {e.val}.", e)
         return dict(layout)[e.val]
@@ -1265,7 +1288,7 @@ class Checker:
             return self.invoke(e, self.fs[method], args, targs, expected)
         if n in self.env and self.env[n].ty.name == "fn":
             return self.indirect(e, self.env[n], args)
-        if n in TABLE and n not in self.fs:
+        if n in TABLE and not (n in SOFT and self.qualify(n, self.fs)):
             e.ref = ("builtin", targs)
             return TABLE[n][0](self, e, args, targs, expected)
         if n in INTRINSIC_TYPES:
@@ -1283,8 +1306,9 @@ class Checker:
         return self.invoke(e, f, args, targs, expected)
 
     def trait_member(self, e: Expr, n: str, args: list[Expr]) -> Function | None:
-        """Static dispatch of a trait member on the type of its Self argument."""
+        """A trait member called by name: dispatch is on the type of its Self argument, static unless that is dyn."""
         prefix, _, short = n.rpartition(".")
+        named, found = [], []
         for trait, members in self.p.traits.items():
             hidden = self.p.modules.get(trait, "") not in ("", self.module) and trait not in self.p.public
             if hidden or (prefix and self.qualify(prefix, self.p.traits) != trait):
@@ -1292,27 +1316,58 @@ class Checker:
             for declared in members:
                 position = next((i for i, (_, t) in enumerate(declared.params) if t.name == "Self"), None)
                 if declared.name == short and position is not None and position < len(args):
-                    if self.peek(args[position]).value in (
-                        Type("dyn", args=(Type(trait),)),
-                        Type("Dyn", args=(Type(trait),)),
-                    ):
-                        return self.dispatch(e, trait, declared, position, args)
-                    found = self.implementation(trait, self.peek(args[position]).value)
-                    if short in found:
-                        return found[short]
-                    fail("E-TRAIT-IMPL", f"{args[position].ty.display()} does not implement {trait}.", e)
-        return None
+                    receiver = self.peek(args[position]).value
+                    dynamic = receiver in (Type("dyn", args=(Type(trait),)), Type("Dyn", args=(Type(trait),)))
+                    named.append(trait)
+                    if dynamic or self.members(trait, receiver, e):
+                        found.append((trait, declared, position, dynamic))
+        if len(found) > 1:
+            fail("E-TRAIT-AMBIGUOUS", f"{short} is a member of {' and '.join(t for t, *_ in found)}; "
+                 f"write {found[0][0]}.{short}(...).", e)  # fmt: skip
+        if named and not found:
+            fail("E-TRAIT-IMPL", f"{args[0].ty.display() if args else n} does not implement {' or '.join(named)}.", e)
+        if not found:
+            return None
+        trait, declared, position, dynamic = found[0]
+        if dynamic:
+            return self.dispatch(e, trait, declared, position, args)
+        return self.members(trait, self.peek(args[position]).value, e)[short]
 
-    def implementors(self, trait: str) -> dict[Type, dict[str, Function]]:
-        """Every concrete `impl trait for T`, with resolved signatures: what a dyn call may reach."""
-        found: dict[Type, dict[str, Function]] = {}
-        for f in list(self.fs.values()):
-            if f.owner and not f.generics:
+    def members(self, trait: str, target: Type, node: Any = None) -> dict[str, Function] | None:
+        """The one implementation of a trait for a concrete type, or None: every declared member, conforming
+        to its declaration with Self := target. A generic impl is instantiated; two matching impls are an error."""
+        if (trait, target) not in self.impls:
+            self.impls[trait, target] = None  # A member that mentions its own trait sees it as not yet known.
+            found: dict[str, Function] = {}
+            for f in [f for f in list(self.fs.values()) if f.owner and not f.bindings]:
+                bound: dict[str, Any] = {}
                 with self.within(f.module):
-                    if self.qualify(f.owner[0], self.p.traits) == trait:
-                        self.signature(f)
-                        found.setdefault(self.resolve(f.owner[1]), {})[f.name.rsplit(".", 1)[1]] = f
-        return found
+                    if self.qualify(f.owner[0], self.p.traits) != trait:
+                        continue
+                    generics = {g for g, _ in f.generics}
+                    if not self.unify(f.owner[1], target, bound, generics):
+                        continue
+                short = f.name.rsplit(".", 1)[1]
+                if short in found:
+                    fail("E-TRAIT-OVERLAP", f"Two impls of {trait} match {target.display()}: one Self type means "
+                         "one implementation.", node)  # fmt: skip
+                found[short] = self.instantiate(f, bound, node) if f.generics and set(bound) == generics else f
+            declared = {m.name: m for m in self.p.traits[trait]}
+            if found and set(found) != set(declared):
+                fail("E-TRAIT-IMPL", f"impl {trait} for {target.display()} defines {', '.join(sorted(found))}; "
+                     f"the trait declares {', '.join(sorted(declared))}.", next(iter(found.values())))  # fmt: skip
+            for short, f in found.items():
+                if not f.generics or f.bindings:
+                    self.signature(f)
+                    rename = dict(zip((n for n, _ in f.params), (n for n, _ in declared[short].params), strict=False))
+                    got = [Type(t.name, t.mode, rename.get(t.extent, t.extent), t.args, t.place) for _, t in f.params]
+                    with self.within(self.p.modules.get(trait, ""), {"Self": target}):
+                        want = [self.resolve(t, f) for _, t in declared[short].params]
+                        if [*got, f.ret] != [*want, self.resolve(declared[short].ret, f)]:
+                            fail("E-TRAIT-IMPL", f"{f.name} does not match {trait}.{short}"
+                                 f"({', '.join(t.display() for t in want)}).", f)  # fmt: skip
+            self.impls[trait, target] = found or None
+        return self.impls[trait, target]
 
     def dispatch(self, e: Expr, trait: str, member: Function, position: int, args: list[Expr]) -> Function:
         """An indirect call through the vtable; its row is the join of every implementation's."""
@@ -1321,41 +1376,37 @@ class Checker:
             fail("E-ARITY", f"{member.name} expects {len(member.params)} arguments.", e)
         if member.params[position][1].mode == "rw" and not self.writable(args[position]):
             fail("E-WRITE-LEASE", f"{member.name} writes its receiver; it needs an rw<dyn {trait}> reference.", e)
+
+        def selfless(t: Any) -> bool:
+            return not isinstance(t, Type) or (t.name != "Self" and all(selfless(a) for a in t.args))
+
         receiver = self.lend(args[position], member.params[position][1].mode, [])  # Leases and lanes see it.
-        targets = [members[member.name] for members in self.implementors(trait).values()]
+        callbacks = []
         with self.within(self.p.modules.get(trait, ""), {"Self": Type("dyn", args=(Type(trait),))}):
             for i, (a, (formal, declared)) in enumerate(zip(args, member.params, strict=True)):
                 if i != position:
-                    if declared.mode != "value" or declared.name == "Self":
-                        fail(
-                            "E-DYN",
-                            f"{trait}.{member.name} is not dyn-compatible: only its receiver may be a borrow or Self.",
-                            e,
-                        )
-                    if self.expr(a, self.resolve(declared, a)).name == "fn":
-                        self.fn_sites += [(a, {n for n, _ in self.f.params}, t.name, formal) for t in targets]
+                    if declared.mode != "value" or not selfless(declared) or not selfless(member.ret):
+                        fail("E-DYN", f"{trait}.{member.name} is not dyn-compatible: only its receiver may be "
+                             "a borrow or mention Self.", e)  # fmt: skip
+                    callbacks += [(a, formal)] if self.expr(a, self.resolve(declared, a)).name == "fn" else []
+            if not selfless(member.ret):
+                fail("E-DYN", f"{trait}.{member.name} returns Self, which a dynamic reference cannot name.", e)
             ret = self.resolve(member.ret, e)
-        for target in targets:
-            self.call_edges[self.f.name].append((target.name, {target.params[position][0]: receiver}))
-            self.callset.add(target.name)
-            self.lane_calls += [(target.name, False, e)] if self.lanes else []
+        targets: list[str] = []  # Filled once every implementation is known: a later coercion may add one.
+        self.dispatches.append((self.f.name, {n for n, _ in self.f.params}, trait, member.name, position, receiver,
+                                targets, callbacks, e if self.lanes else None))  # fmt: skip
         self.effect("dispatch")
         index = [m.name for m in self.p.traits[trait]].index(member.name)
-        e.ref = ("dispatch", trait, index, position, [t.name for t in targets])
+        e.ref = ("dispatch", trait, index, position, targets)
         e.ty = ret
         return Function("", [], ret, [])
 
-    def implementation(self, trait: str, self_type: Type) -> dict[str, Function]:
-        """The members of `impl trait for T` whose target pattern matches the concrete type."""
-        found = {}
-        for f in list(self.fs.values()):
-            if f.owner and not f.bindings:
-                with self.within(f.module):
-                    if self.qualify(f.owner[0], self.p.traits) == trait and self.unify(
-                        f.owner[1], self_type, {}, {g for g, _ in f.generics}
-                    ):
-                        found[f.name.rsplit(".", 1)[1]] = f
-        return found
+    def vtable(self, trait: str, value: Type, node: Any) -> list[Function]:
+        """The members a value of this type puts behind `dyn trait`, in declaration order."""
+        members = self.members(trait, value, node)
+        if members is None or any(m.generics and not m.bindings for m in members.values()):
+            fail("E-TRAIT-IMPL", f"{value.display()} does not implement {trait} with concrete members.", node)
+        return [members[m.name] for m in self.p.traits[trait]]
 
     def unify(self, pattern: Any, actual: Any, bound: dict[str, Any], generics: set[str]) -> bool:
         """Bind generic names in `pattern` so that its value part equals `actual`."""
@@ -1395,7 +1446,7 @@ class Checker:
                 for wanted in constraint.split("+") if constraint not in {"nat", "type"} else []:
                     with self.within(template.module):
                         trait = self.qualify(wanted, self.p.traits, node=node)
-                    if trait is None or not self.implementation(trait, value):
+                    if trait is None or not self.members(trait, value, node):
                         fail("E-TRAIT-IMPL", f"{value.display()} does not implement {wanted}.", node)
             if len(self.p.functions) >= MAX_FUNCTIONS:
                 fail("E-EXPANSION-LIMIT", "Expanded program exceeds 2048 functions.", node)
@@ -1453,14 +1504,12 @@ class Checker:
             named = root(a).tag == "name" and root(a).val in self.env
             if want.name == "dyn" and self.peek(a).name != "dyn":
                 boxed = self.peek(a).value == Type("Dyn", args=want.args)
-                members = self.implementors(want.args[0].name).get(self.peek(a).value)
-                if not boxed and (members is None or len(members) != len(self.p.traits[want.args[0].name])):
-                    fail("E-TRAIT-IMPL", f"{a.ty.display()} does not implement {want.args[0].name}.", a)
+                table = None if boxed else self.vtable(want.args[0].name, self.peek(a).value, a)
                 if not named or (want.mode == "rw" and not self.writable(a)):
                     fail("E-WRITE-LEASE", "A dynamic reference borrows a named place (mutable for rw).", a)
                 inner = Expr(a.tag, a.val, a.args, a.line, a.col, a.ty, a.start, a.end, a.ref)
                 a.tag, a.args, a.ty = "coerce", [inner], want
-                a.ref = None if boxed else [members[m.name] for m in self.p.traits[want.args[0].name]]
+                a.ref = table
                 self.early[id(a)] = a
                 self.leased(self.where(inner), want.mode, a)
                 borrows.append((self.where(inner), want.mode))

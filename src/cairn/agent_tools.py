@@ -206,11 +206,9 @@ def canonical_source(source: str) -> str:
                 members.append(f)
             elif f is not None:
                 out.append(("pub " if f.public and module else "") + function_source(f))
-        out += [
-            f"derive wire for {local(name)};" for name in p.derivations if module and name.rpartition(".")[0] == module
-        ]
-    out += [f"family {pre} = {name}[{lo}..{hi}];" for pre, name, lo, hi in p.families]
-    out += [f"derive wire for {name};" for name in p.derivations if "." not in name]
+        out += [f"{'pub ' * (pre in p.public)}family {local(pre)} = {name}[{lo}..{hi}];"
+                for pre, name, lo, hi in p.families if p.modules[pre] == module]  # fmt: skip
+        out += [f"derive wire for {local(name)};" for name in p.derivations if name.rpartition(".")[0] == module]
     return "\n\n".join(out) + "\n"
 
 

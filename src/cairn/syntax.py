@@ -730,7 +730,10 @@ class Parser:
             elif self.eat("derive"):
                 self.need("wire", "for")
                 record = self.path()
-                p.derivations.append(f"{self.module}.{record}" if self.module and "." not in record else record)
+                record = f"{self.module}.{record}" if self.module and "." not in record else record
+                if "." in record and record.rpartition(".")[0] != self.module:
+                    fail("E-PRIVATE", "derive wire is written in the module that declares the record.", t)
+                p.derivations.append(record)
                 self.need(";")
             elif self.eat("family"):
                 pre = self.ident()
@@ -741,7 +744,7 @@ class Parser:
                 self.need("..")
                 hi = self.integer()
                 self.need("]", ";")
-                p.families.append((pre, base, lo, hi))
+                p.families.append((declare(pre, t), base, lo, hi))  # Its instances belong to this module.
             else:
                 fail(
                     "E-DECLARATION",

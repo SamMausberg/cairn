@@ -190,14 +190,11 @@ def check_dyn(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Typ
     """Dyn[Trait](value) moves a value of any implementing type to the heap."""
     ty = explicit(c, e, "Dyn", targs, expected, "Write Dyn[Trait](value).")
     arity(e, args, 1, "Dyn takes the value it will own.")
-    trait = ty.args[0].name
-    members = c.implementors(trait).get(c.expr(args[0]).value)
-    if members is None or len(members) != len(c.p.traits[trait]):
-        fail("E-TRAIT-IMPL", f"{args[0].ty.display()} does not implement {trait}.", e)
-    c.callset |= {member.name for member in members.values()}  # Whoever holds the value may dispatch to these.
+    members = c.vtable(ty.args[0].name, c.expr(args[0]).value, e)
+    c.callset |= {member.name for member in members}  # Whoever holds the value may dispatch to these.
     c.effects |= {"alloc", "free"}
     c.guard("allocation")
-    e.ref = ("builtin", [members[m.name] for m in c.p.traits[trait]])
+    e.ref = ("builtin", members)
     return ty
 
 

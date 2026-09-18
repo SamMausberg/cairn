@@ -232,7 +232,8 @@ class Emitter:
                 at = next(i for i, (_, t) in enumerate(member.params) if t.name == "Self")
                 ps = "".join(f", {self.type(t)} v_{n}" for i, (n, t) in enumerate(f.params) if i != at)
                 call = ", ".join(
-                    f"*static_cast<{concrete}*>(self)" if i == at else "v_" + n for i, (n, _) in enumerate(f.params)
+                    f"*static_cast<{concrete}*>(self)" if i == at else f"std::move(v_{n})"
+                    for i, (n, _) in enumerate(f.params)
                 )
                 thunks.append(
                     f"[](void* self{ps}) noexcept -> {self.type(f.ret)} {{ return cf_{mangle(f.name)}({call}); }}"

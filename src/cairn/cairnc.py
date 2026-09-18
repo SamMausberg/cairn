@@ -51,10 +51,11 @@ def interfaces(p: Program, receipts: dict[str, Any]) -> dict[str, Any]:
     """
     out: dict[str, Any] = {}
     for f in p.functions:
-        if f.module and (f.public or f.owner) and f.name in receipts:
+        home = p.modules.get(f.name, f.module)  # A family's instances are exported by the module that declared it.
+        if home and (f.public or f.owner) and f.name in receipts:
             params = [[n, t.display()] for n, t in f.params]
             entry = {"params": params, "returns": f.ret.display(), "effects": receipts[f.name]["effects"]}
-            out.setdefault(f.module, {})[f.name] = entry
+            out.setdefault(home, {})[f.name] = entry
     return {m: {"exports": sorted(fs), "interface_sha256": hashlib.sha256(json.dumps(fs, sort_keys=True).encode()).hexdigest()}
             for m, fs in sorted(out.items())}  # fmt: skip
 

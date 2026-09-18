@@ -86,9 +86,14 @@ def specialize(p: Program) -> Program:
     if estimated > MAX_NODES or len(concrete) > MAX_FUNCTIONS:
         fail("E-EXPANSION-LIMIT", "Program exceeds the pre-expansion budget.")
     for prefix, name, lo, hi in p.families:
-        base = templates.get(name)
+        home, (head, _, rest) = p.modules.get(prefix, ""), name.partition(".")
+        aliases = {alias: target for importer, target, alias in p.imports if importer == home}
+        written = [f"{aliases[head]}.{rest}"] if rest and head in aliases else []
+        base = next((templates[n] for n in [*written, f"{home}.{name}", name] if n in templates), None)
         if base is None or [k for _, k in base.generics] != ["nat"]:
             fail("E-FAMILY-TARGET", f"{name} is not a static function template.")
+        if base.module not in ("", home) and base.name not in p.public:
+            fail("E-PRIVATE", f"{base.name} is private to module {base.module}.")
         if not 0 <= lo < hi <= 2**32 or hi - lo > MAX_FAMILY:
             fail("E-FAMILY-LIMIT", "Family must be a nonempty half-open range, at most 1024 variants, below 2^32.")
         estimated += (hi - lo) * node_count(base)
@@ -100,6 +105,8 @@ def specialize(p: Program) -> Program:
             if f.name in names:
                 fail("E-DUPLICATE", f"Family emits duplicate name {f.name}.")
             names.add(f.name)
+            p.modules[f.name], f.public = home, prefix in p.public
+            p.public |= {f.name} if f.public else set()
             concrete.append(f)
     p.functions = [*concrete, *templates.values()]
     return p
