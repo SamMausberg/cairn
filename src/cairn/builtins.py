@@ -38,6 +38,7 @@ def check_len(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Typ
     ty = c.expr(args[0], consume=False)
     if not is_view(ty) and ty.name not in {"Buf", "Array"}:
         fail("E-LEN", "len requires an array view.", e)
+    c.capture(c.where(args[0]), "ro")  # A length never changes under a lease, but a closure still reads the owner.
     return USIZE
 
 
@@ -116,23 +117,28 @@ def lower_machine(g: Emitter, e: Expr) -> str:
 
 
 def check_transfer(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
-    """The only way elements cross a placement boundary; both extents agree by identity."""
+    """The only way elements cross a placement boundary; extents agree by identity, a part's by its guard."""
     arity(e, args, 2, "transfer takes a destination and a source view.")
     if c.lanes:
         fail("E-PARALLEL-NEST", "transfer moves a whole array; it cannot run inside a lane.", e)
     dst, src = (c.view_argument(a) for a in args)
     if not is_view(dst) or not is_view(src) or dst.mode != "rw" or root(args[0]).tag != "name":
         fail("E-WRITE-LEASE", "transfer needs an rw destination view and a source view.", e)
-    c.expect(Type(src.name, "rw", src.extent, src.args, dst.place), dst, e)
+    extent = dst.extent if "part" in (dst.extent, src.extent) else src.extent
+    c.expect(Type(src.name, "rw", extent, src.args, dst.place), dst, e)
+    borrows: list[tuple[str, str]] = []
+    written, read = c.lend(args[0], "rw", borrows), c.lend(args[1], "ro", borrows)
+    c.disjoint(borrows, e)
     ends = ["h" if t.place in HOST_VISIBLE else "d" for t in (src, dst)]
-    c.effects |= {f"transfer:{ends[0]}2{ends[1]}", "write:" + root(args[0]).val}
-    if root(args[1]).tag == "name":
-        c.effect("read:" + root(args[1]).val)
+    c.effects |= {f"transfer:{ends[0]}2{ends[1]}", "write:" + written} | ({"read:" + read} if read else set())
     return VOID
 
 
 def lower_transfer(g: Emitter, e: Expr) -> str:
-    (dst, count), (src, _) = g.pointer(e.args[0]), g.pointer(e.args[1])
+    sizes = [f"({g.expr(a.args[2])} - {g.expr(a.args[1])})" if a.tag == "slice" else g.pointer(a)[1] for a in e.args]
+    for a, peer in zip(e.args, reversed(sizes), strict=True):  # Each part is guarded against its peer's length.
+        a.ref = peer if a.tag == "slice" else a.ref
+    count, dst, src = sizes[0], g.pointer(e.args[0])[0], g.pointer(e.args[1])[0]
     ends = ["h" if a.ty.place in HOST_VISIBLE else "d" for a in (e.args[1], e.args[0])]
     if ends == ["h", "h"]:
         return f"std::copy_n({src}, {count}, {dst})"

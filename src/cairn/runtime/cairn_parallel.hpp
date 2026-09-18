@@ -64,6 +64,7 @@ public:
 template<class T> class Mutex final {
   T val_{};
   std::mutex m_;
+  std::atomic<std::thread::id> owner_{};
 public:
   Mutex() noexcept = default;
   explicit Mutex(T v) noexcept : val_(std::move(v)) {}
@@ -72,7 +73,10 @@ public:
   Mutex(Mutex&&) = delete;
   Mutex& operator=(Mutex&&) = delete;
   template<class F> decltype(auto) with(F&& f) noexcept {
+    if(owner_.load()==std::this_thread::get_id()) trap();  // Locking it again here would be undefined.
     std::lock_guard<std::mutex> hold(m_);
+    struct Held { std::atomic<std::thread::id>& o; ~Held() { o.store({}); } } held{owner_};
+    owner_.store(std::this_thread::get_id());
     return std::forward<F>(f)(val_);
   }
 };

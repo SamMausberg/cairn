@@ -14,10 +14,9 @@ if TYPE_CHECKING:
     from .checking import Checker
 
 PURE = {"trap", "diverge", "local_read", "local_write", "stack_storage", "zero_init", "ffi_precondition"}
-LANE_SAFE = PURE | {"alloc", "free"}  # What a function called from a parallel lane may do.
-EFFECTS = LANE_SAFE | {"gpu_alloc", "gpu_free", "indirect_call", "dispatch", "spawn", "join", "atomic", "lock",
-                       "io", "mmio", "asm"}  # fmt: skip
-EFFECT_FAMILIES = ("ffi:", "transfer:", "par:")  # With read:/write: of a borrow, the whole effect vocabulary.
+LANE_SAFE = PURE | {"alloc", "free", "atomic", "lock"}  # What a host lane, and whatever it calls, may do.
+EFFECTS = LANE_SAFE | {"gpu_alloc", "gpu_free", "indirect_call", "dispatch", "spawn", "join", "io", "mmio", "asm"}
+EFFECT_FAMILIES = ("ffi:", "transfer:", "par:")  # With read:/write:/lane: of a parameter, the whole vocabulary.
 
 
 def exposed(effect: str, borrowed: set[str]) -> str:
@@ -53,7 +52,7 @@ def fixed_point(c: Checker) -> dict[str, set[str]]:
             for callee, mapping in c.call_edges[n]:
                 for effect in tuple(effects[callee]):
                     kind, _, formal = effect.partition(":")
-                    if kind in {"read", "write"}:
+                    if kind in {"read", "write", "lane"}:  # Footprints of a parameter become the caller's argument.
                         if formal not in mapping:
                             fail("E-INTERNAL", "Unmapped callee memory footprint.")
                         if not mapping[formal]:
@@ -69,7 +68,9 @@ def fixed_point(c: Checker) -> dict[str, set[str]]:
         if f.effects is not None and not f.extern:
             allowed = set(f.effects) | (PURE if "pure" in f.effects else set())
             reads = "pure" in f.effects
-            excess = {e for e in effects[f.name] if e not in allowed and not (reads and e.startswith("read:"))}
+            excess = {
+                e for e in effects[f.name] if e not in allowed and not e.startswith(("read:",) * reads + ("lane:",))
+            }
             if excess:
                 fail("E-EFFECT-CEILING", f"{f.name} exceeds its declared effects.", f, added_effects=sorted(excess))
     return effects
@@ -110,13 +111,12 @@ def audit(c: Checker, effects: dict[str, set[str]]):
         for call in found:
             inside = {id(n) for n in names(call, [])}
             others = [n for n in names(e, []) if id(n) not in inside]
-            closure = any(a.tag == "lambda" for a in call.args) or (
-                call.ref[0] == "indirect" and call.ref[1].mode != "value"
-            )
+            written = {p.split(".")[0].split("[")[0] for a in call.args if a.tag == "lambda"
+                       for p, mode in a.ref.captures if mode == "rw"}  # fmt: skip
             if call.val == "take" and call.ref[0] == "builtin":
                 clash = any(n.val == root(call.args[0]).val for n in others)
-            else:  # A closure may write any mutable name it captured; a plain function value sees no locals.
-                clash = len(found) > 1 or (closure and any(n.ref == "mut" for n in others))
+            else:  # A closure writes what it captured rw; one received as a parameter reaches nothing named here.
+                clash = len(found) > 1 or any(n.val in written for n in others)
             if clash:
                 fail("E-EFFECT-ORDER", "Bind this call first: another operand here could observe its writes.", call)
 

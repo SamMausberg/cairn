@@ -196,6 +196,8 @@ class Function:
     owner: tuple[str, Type] | None = None  # (trait, Self) for an impl member.
     kernel: bool = False  # Runs on the device: callable only from device lanes and other kernels.
     symbol: str = ""  # The C symbol of an extern, when it differs from the CAIRN name.
+    captures: list[tuple[str, str]] = field(default_factory=list)  # A closure's (outer place, mode) accesses.
+    row: tuple[set, set] = field(default_factory=lambda: (set(), set()))  # A closure's own (effects, callees).
 
     @property
     def static(self) -> str | None:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import math
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -73,7 +74,7 @@ class Scope:
     device_depth: int = 0
     module: str = ""
     lanes: Lanes | None = None
-    closure: tuple[Type, set[str]] | None = None  # (return type, names bound outside the closure)
+    closure: tuple[Function, set[str]] | None = None  # (the closure, names bound outside it)
     leases: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # ticket -> [(place, mode)]
     spawning: str = ""  # The name a `let t = spawn ...` is about to bind.
 
@@ -84,6 +85,7 @@ class Lanes:
 
     binder: str
     outer: set[str]
+    home: Any = None  # The closure the region began in: `return` may leave a newer closure, never the lane.
     accesses: list[tuple[str, bool, bool, Expr]] = field(default_factory=list)  # root, at binder, write
 
 
@@ -137,7 +139,7 @@ class Checker:
     device_depth: int
     module: str
     lanes: Lanes | None
-    closure: tuple[Type, set[str]] | None
+    closure: tuple[Function, set[str]] | None
     leases: dict[str, list[tuple[str, str]]]
     spawning: str
 
@@ -166,6 +168,7 @@ class Checker:
         self.resources: dict[str, list[dict[str, Any]]] = {}
         self.unchecked: list[str] = []
         self.lane_calls: list[tuple[str, bool, Expr]] = []
+        self.fn_sites: list[tuple[Expr, set[str], str, str]] = []  # (argument, caller's parameters, callee, formal)
         self.borrowed: list[tuple[str, str]] = []
         self.device_functions: set[str] = set()
         self.address_taken: set[str] = set()
@@ -350,6 +353,16 @@ class Checker:
                 self.unchecked.append(f.name)
         effects = fixed_point(self)
         audit(self, effects)
+        for a, parameters, callee, formal in self.fn_sites:  # What a callee's lanes call is judged where it is written.
+            if "lane:" + formal in effects[callee] and not (a.tag == "name" and a.val in parameters):
+                closure = a.ref if a.tag == "lambda" else None
+                rows = [closure.row[0], *(effects[c] for c in closure.row[1])] if closure else [
+                    effects[a.ref.name] if a.tag == "function" else {"indirect_call"}]  # fmt: skip
+                wrong = {x for row in rows for x in row if x not in LANE_SAFE and not x.startswith(("read:", "write:"))}
+                wrong |= {"write:" + place for place, mode in (closure.captures if closure else []) if mode == "rw"}
+                if wrong:
+                    fail("E-PARALLEL-CALL", f"{callee} calls {formal} from parallel lanes, where it cannot "
+                         f"{', '.join(sorted(wrong))}.", a)  # fmt: skip
         kernels = [(f.name, True, f) for f in self.p.functions if f.kernel]
         for callee, device, node in [*self.lane_calls, *kernels]:
             allowed = PURE if device else LANE_SAFE
@@ -553,21 +566,23 @@ class Checker:
         self.expr(hi, USIZE)
         if self.extent_of(hi) != target.ty.extent:
             fail("E-COLLECT-CAPACITY", "Compaction requires iteration extent equal to output capacity.", hi)
-        s.ref = "device" if target.ty.place == "device" else "host"
-        outer, self.device_depth = self.device_depth, int(s.ref == "device")
-        self.env[s.binder] = Binding(USIZE)
-        self.expr(pred, BOOL)
-        self.expr(value, target.ty.value)
-        self.device_depth = outer
-        if s.ref == "device":
-            self.effect("par:device")
+        self.lend(out, "rw", [])
 
         def mentions(e: Expr) -> bool:
             return (e.tag == "name" and e.val == out.val) or any(mentions(x) for x in e.args)
 
+        def body():
+            self.expr(pred, BOOL)
+            self.expr(value, target.ty.value)
+
         if mentions(pred) or mentions(value):
             fail("E-COLLECT-SELF-READ", "Collector predicate/projection cannot read its output.", s)
-        del self.env[s.binder]
+        if target.ty.place == "device":  # The predicate and projection run as device lanes.
+            self.region(s, [], body, "device")
+        else:
+            self.env[s.binder], s.ref = Binding(USIZE), "host"
+            body()
+            del self.env[s.binder]
         self.env[s.name] = Binding(USIZE)
         self.effect("write:" + out.val)
         self.counts["bounded_collectors"] = self.counts.get("bounded_collectors", 0) + 1
@@ -583,10 +598,14 @@ class Checker:
 
     s_continue = s_break
 
+    def leaving(self, node: Any) -> tuple[Type, set[str]]:
+        """What `return` and `try` leave: the closure being written, else the function; never a lane."""
+        if self.lanes and self.closure is self.lanes.home:
+            fail("E-PARALLEL-CONTROL", "A lane cannot return from the enclosing function.", node)
+        return (self.closure[0].ret, self.closure[1]) if self.closure else (self.f.ret, set())
+
     def s_return(self, s: Stmt):
-        ret, outer = self.closure or (self.f.ret, set())
-        if self.lanes and not self.closure:
-            fail("E-PARALLEL-CONTROL", "A lane cannot return from the enclosing function.", s)
+        ret, outer = self.leaving(s)
         if ret == VOID:
             if s.exprs:
                 fail("E-RETURN", "Void function cannot return a value.", s)
@@ -670,7 +689,7 @@ class Checker:
         self.loop(s)
         del self.env[s.name]
 
-    def region(self, s: Stmt, exprs: list[Expr], run) -> Any:
+    def region(self, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any:
         """Check a lane body; the placement of the views it indexes decides where it runs."""
         if self.lanes or self.f.kernel:
             fail("E-PARALLEL-NEST", "A lane cannot start another parallel region.", s)
@@ -683,18 +702,25 @@ class Checker:
             found = set().union(*(places(e) for x in ss for e in x.exprs))
             return found.union(*(scan(x.body) | scan(x.other) | scan([b for a in x.arms for b in a.body]) for x in ss))
 
-        target = "device" if "device" in scan(s.body) | set().union(*(places(e) for e in exprs)) else "host"
+        found = scan(s.body) | set().union(*(places(e) for e in exprs))
+        target = target or ("device" if "device" in found else "host")
         self.bind(s.binder or s.name, Binding(USIZE), s)
         binder = s.binder or s.name
-        saved = self.lanes, self.device_depth, self.loop_depth, set(self.moved)
-        self.lanes, self.device_depth, self.loop_depth = (
-            Lanes(binder, set(self.env) - {binder}),
+        saved = self.lanes, self.device_depth, self.loop_depth, set(self.moved), self.effects
+        self.lanes, self.device_depth, self.loop_depth, self.effects = (
+            Lanes(binder, set(self.env) - {binder}, self.closure),
             int(target == "device"),
             0,
+            set(),
         )
         result = run()
         if (self.moved - saved[3]) & self.lanes.outer:
             fail("E-MOVE-IN-LOOP", "An outer owner would be moved once per lane.", s)
+        allowed = PURE if target == "device" else LANE_SAFE | {"indirect_call", "dispatch"}  # Judged at their calls.
+        excess = sorted(x for x in self.effects if x not in allowed and not x.startswith(("read:", "write:", "lane:")))
+        if excess:  # A lane's own row obeys the rule its callees obey.
+            fail("E-PARALLEL-CALL", f"A {target} lane cannot {', '.join(excess)}.", s)
+        saved[4].update(self.effects)
         written = {name for name, _, write, _ in self.lanes.accesses if write}
         for name, at_binder, _, node in self.lanes.accesses:
             if name in written and not at_binder:
@@ -703,7 +729,7 @@ class Checker:
                     f"{name} is written by lanes, so every lane may touch only {name}[{binder}].",
                     node,
                 )
-        self.lanes, self.device_depth, self.loop_depth = saved[:3]
+        self.lanes, self.device_depth, self.loop_depth, _, self.effects = saved
         del self.env[binder]
         if s.tag == "parallel" or target == "device":  # A host reduction is an ordinary in-order fold.
             self.effect("par:" + target)
@@ -852,10 +878,15 @@ class Checker:
         return self.identity(e.args[0]) + "." + e.val if e.tag == "field" else e.val
 
     def leased(self, place: str, mode: str, node: Any):
-        """While a task holds a borrow, nobody else may write it, or touch it if the task writes it."""
+        """Every access to a named place: a task's lease may forbid it, and a closure records what it captures."""
         for ticket, held in self.leases.items():
             if any(overlaps(place, p) and "rw" in (mode, m) for p, m in held):
                 fail("E-LEASED", f"{place} is lent to task {ticket} until wait({ticket}).", node)
+        self.capture(place, mode)
+
+    def capture(self, place: str, mode: str):
+        if self.closure and re.split(r"[.\[]", place)[0] in self.closure[1]:
+            self.closure[0].captures.append((place, mode))
 
     def consume(self, e: Expr):
         """An owner used as a value moves; its name is dead afterwards."""
@@ -894,6 +925,7 @@ class Checker:
         return BOOL
 
     def e_str(self, e: Expr, expected: Type | None) -> Type:
+        self.host_only(e, "A string literal is host memory")
         return Type("u8", "ro", str(len(e.val.encode("latin-1", "replace"))))
 
     def e_name(self, e: Expr, expected: Type | None) -> Type:
@@ -911,6 +943,8 @@ class Checker:
                 return self.resolve(self.p.consts[const][0], e)
         if e.val in self.moved:
             fail("E-MOVED", f"{e.val} was moved.", e)
+        if self.device_depth and self.lanes and e.val in self.lanes.outer and self.kind(b.ty.value) != "copy":
+            self.host_only(e, f"{e.val} owns host memory, and a lane copies the values it captures")
         if not is_view(b.ty) and b.ty.name not in {"Buf", "Array"}:  # Arrays are checked per element or part.
             self.leased(e.val, "ro", e)
         e.ref = "mut" if b.mutable or b.ty.mode == "rw" else b.constant
@@ -1008,18 +1042,23 @@ class Checker:
         f: Function = e.ref
         if expected is None or expected.name != "fn" or expected.mode != "ro" or self.device_depth:
             fail("E-CLOSURE", "A closure is written directly as an argument to a ro<fn(...)> parameter on the host.", e)
-        saved = dict(self.env), self.closure, self.loop_depth, set(self.moved)
+        saved = dict(self.env), self.closure, self.loop_depth, set(self.moved), self.effects, self.callset
         f.params = [(n, self.resolve(t, e)) for n, t in f.params]
         f.ret = self.resolve(f.ret, e)
         self.expect(Type("fn", "ro", args=(*(t for _, t in f.params), f.ret)), expected, e)
-        self.closure, self.loop_depth = (f.ret, set(self.env)), 0
+        f.captures, f.row = [], (set(), set())
+        self.closure, self.loop_depth, (self.effects, self.callset) = (f, set(self.env)), 0, f.row
         for n, t in f.params:
             self.bind(n, Binding(t), e)
         if not self.block(f.body) and f.ret != VOID:
             fail("E-RETURN", "Not all paths of the closure return.", e)
         if (self.moved - saved[3]) & set(saved[0]):
             fail("E-MOVE-IN-LOOP", "A closure may run many times; it cannot move an outer owner.", e)
-        self.env, self.closure, self.loop_depth = saved[:3]
+        self.env, self.closure, self.loop_depth, _, self.effects, self.callset = saved
+        self.effects |= f.row[0]
+        self.callset |= f.row[1]
+        for place, mode in f.captures:  # A closure written inside a closure captures for both.
+            self.capture(place, mode)
         return expected
 
     def function_value(self, e: Expr, want: Type) -> Type | None:
@@ -1056,9 +1095,12 @@ class Checker:
             self.lanes.accesses.append((root(a).val, False, mode == "rw", a))
         return root(a).val
 
-    def disjoint(self, borrows: list[tuple[str, str]], node: Any):
-        for i, (place, m) in enumerate(borrows):
-            if any(overlaps(place, other) and "rw" in (m, k) for other, k in borrows[i + 1 :]):
+    def disjoint(self, borrows: list[tuple[str, str]], node: Any, *closures: list[tuple[str, str]]):
+        """No argument of one call may write what another can reach; a closure reaches what it captured."""
+        groups = [[b] for b in borrows] + list(closures)
+        for i, group in enumerate(groups):
+            rest = [b for later in groups[i + 1 :] for b in later]
+            if any(overlaps(place, other) and "rw" in (m, k) for place, m in group for other, k in rest):
                 fail("E-ALIAS", "A mutable view cannot be passed to overlapping call arguments.", node)
 
     def indirect(self, e: Expr, target: Binding, args: list[Expr]) -> Type:
@@ -1077,7 +1119,13 @@ class Checker:
             lent = self.lend(a, want.mode, borrows)  # No callee row exists to rename: charge the caller now.
             self.effects |= {("write:" if want.mode == "rw" else "read:") + lent} if lent else set()
         self.disjoint(borrows, e)
-        self.effect("indirect_call")
+        if self.lanes and e.val not in {n for n, _ in self.f.params}:
+            fail(
+                "E-PARALLEL-CALL",
+                "A lane calls declared functions and fn parameters, which their writer answers for.",
+                e,
+            )
+        self.effects |= {"indirect_call"} | ({"lane:" + e.val} if self.lanes else set())
         if target.ty.mode == "value":
             self.guard("callable")
         e.ref = ("indirect", target.ty)
@@ -1092,6 +1140,7 @@ class Checker:
                 fail("E-CALLEE", "A mutex has one operation: m.with(|state:rw<T>| { ... }).", e)
             ret = self.resolve(args[0].ref.ret, e)
             self.expr(args[0], Type("fn", "ro", args=(Type(ty.args[0].name, "rw", args=ty.args[0].args), ret)))
+            self.disjoint([(self.where(e.args[0]), "rw")], e, args[0].ref.captures)  # Locking it again would trap.
             self.effect("lock")
             return ret
         order = Type(self.qualify("Order", self.p.enums) or "Order")
@@ -1119,7 +1168,7 @@ class Checker:
             fail("E-SPAWN", "Write `let t = spawn f(args);` in a function body; a task is always named.", e)
         self.spawning = ""
         result = self.expr(call)
-        if not isinstance(call.ref, Function) or any(a.tag == "lambda" for a in call.args):
+        if not isinstance(call.ref, Function) or any(t.name == "fn" and t.mode != "value" for _, t in call.ref.params):
             fail("E-SPAWN", "spawn runs a declared function, and a closure cannot follow it to another thread.", e)
         self.leases[name] = self.borrowed
         self.effect("spawn")
@@ -1128,9 +1177,7 @@ class Checker:
     def e_try(self, e: Expr, expected: Type | None) -> Type:
         """`try x` yields the success payload or returns the failure from the enclosing function."""
         ty = self.expr(e.args[0])
-        ret, outer = self.closure or (self.f.ret, set())
-        if self.lanes and not self.closure:
-            fail("E-PARALLEL-CONTROL", "A lane cannot return from the enclosing function.", e)
+        ret, outer = self.leaving(e)
         layout, target = self.layouts.get(ty), self.layouts.get(ret)
         if not isinstance(layout, dict) or len(layout) != 2 or ty.name in self.p.enums:
             fail("E-TRY", "try needs a sum of exactly two variants: success first, failure second.", e)
@@ -1273,8 +1320,10 @@ class Checker:
             fail("E-ARITY", f"{member.name} expects {len(member.params)} arguments.", e)
         if member.params[position][1].mode == "rw" and not self.writable(args[position]):
             fail("E-WRITE-LEASE", f"{member.name} writes its receiver; it needs an rw<dyn {trait}> reference.", e)
+        receiver = self.lend(args[position], member.params[position][1].mode, [])  # Leases and lanes see it.
+        targets = [members[member.name] for members in self.implementors(trait).values()]
         with self.within(self.p.modules.get(trait, ""), {"Self": Type("dyn", args=(Type(trait),))}):
-            for i, (a, (_, declared)) in enumerate(zip(args, member.params, strict=True)):
+            for i, (a, (formal, declared)) in enumerate(zip(args, member.params, strict=True)):
                 if i != position:
                     if declared.mode != "value" or declared.name == "Self":
                         fail(
@@ -1282,13 +1331,13 @@ class Checker:
                             f"{trait}.{member.name} is not dyn-compatible: only its receiver may be a borrow or Self.",
                             e,
                         )
-                    self.expr(a, self.resolve(declared, a))
+                    if self.expr(a, self.resolve(declared, a)).name == "fn":
+                        self.fn_sites += [(a, {n for n, _ in self.f.params}, t.name, formal) for t in targets]
             ret = self.resolve(member.ret, e)
-        receiver = root(args[position]).val
-        targets = [members[member.name] for members in self.implementors(trait).values()]
         for target in targets:
             self.call_edges[self.f.name].append((target.name, {target.params[position][0]: receiver}))
             self.callset.add(target.name)
+            self.lane_calls += [(target.name, False, e)] if self.lanes else []
         self.effect("dispatch")
         index = [m.name for m in self.p.traits[trait]].index(member.name)
         e.ref = ("dispatch", trait, index, position, [t.name for t in targets])
@@ -1385,15 +1434,20 @@ class Checker:
             f = self.instantiate(f, self.infer(f, args, targs, expected, e), e)
         subst = dict(zip((n for n, _ in f.params), args, strict=True))
         borrows: list[tuple[str, str]] = []
+        closures: list[list[tuple[str, str]]] = []
         mapping: dict[str, str] = {}
         for a, (name, want) in zip(args, f.params, strict=True):
+            if want.name == "fn":  # If the callee's lanes call it, what is written here is judged here.
+                self.fn_sites.append((a, {n for n, _ in self.f.params}, f.name, name))
             if want.name == "fn" and (a.tag == "lambda" or root(a).val not in self.env):
-                self.expr(a, want)  # A closure or a declared function: nothing of the caller is borrowed.
+                self.expr(a, want)  # A declared function borrows nothing; a closure borrows what it captures.
+                closures += [a.ref.captures] if a.tag == "lambda" else []
                 mapping[name] = ""
                 continue
             if want.mode == "value":
                 if self.kind(self.expr(a, want)) != "copy" and root(a).tag == "name":
                     borrows.append((self.where(a), "rw"))  # The callee may release it while a view is live.
+                mapping[name] = a.val if a.tag == "name" else ""
                 continue
             named = root(a).tag == "name" and root(a).val in self.env
             if want.name == "dyn" and self.peek(a).name != "dyn":
@@ -1430,7 +1484,7 @@ class Checker:
             mapping[name] = self.lend(a, want.mode, borrows)
             if named and want.mode == "rw" and self.env[root(a).val].ty.mode == "value":
                 self.effect("write:" + root(a).val)
-        self.disjoint(borrows, e)
+        self.disjoint(borrows, e, *closures)
         self.call_edges[self.f.name].append((f.name, mapping))
         self.callset.add(f.name)
         self.borrowed = borrows
