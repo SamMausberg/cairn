@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import ctypes.util
 import json
+import os
 import platform
 import shutil
 import subprocess
@@ -103,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     project = None
     try:
         if a.command == "doctor":
+            elan = os.pathsep.join([os.environ.get("PATH", ""), str(Path.home() / ".elan/bin")])
             report(
                 {
                     "version": __version__,
@@ -111,8 +113,9 @@ def main(argv: list[str] | None = None) -> int:
                     "clang++": shutil.which("clang++"),
                     "g++": shutil.which("g++"),
                     "z3": ctypes.util.find_library("z3"),
-                    "lean": shutil.which("lean"),
-                    "lake": shutil.which("lake"),
+                    "nvcc": shutil.which("nvcc"),  # builds programs that index @device views
+                    "lean": shutil.which("lean", path=elan),  # rebuilds proofs/
+                    "lake": shutil.which("lake", path=elan),
                     "qemu-system-aarch64": shutil.which("qemu-system-aarch64"),  # runs aarch64-virt images
                     "formal_status": "not-verified",
                     "native_platform": "Linux " + host_family(),
