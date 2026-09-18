@@ -591,7 +591,7 @@ class Checker:
             if self.kind(self.env[n].ty) == "linear" and n not in self.moved | self.deferred:
                 fail("E-LINEAR-LEAK", f"{n} is linear: consume it, or defer its consumer, on every path.", node)
 
-    def block(self, ss: list[Stmt]) -> bool:
+    def block(self, ss: list[Stmt]) -> Any:
         saved, deferred, returned = dict(self.env), set(self.deferred), False
         for s in ss:
             if returned:
@@ -604,11 +604,12 @@ class Checker:
         self.env, self.deferred = saved, deferred
         return returned
 
-    def stmt(self, s: Stmt) -> bool:
+    def stmt(self, s: Stmt) -> Any:
+        """False when control falls through, True after a return, "jump" after break or continue."""
         handler = getattr(self, "s_" + s.tag, None)
         if handler is None:
             fail("E-INTERNAL", f"Unknown statement {s.tag}.", s)
-        return bool(handler(s))
+        return handler(s) or False
 
     def s_buffer(self, s: Stmt):
         if s.name in self.env:
@@ -620,6 +621,8 @@ class Checker:
             fail("E-LINEAR-STORAGE", "Zeroed storage cannot hold linear values: a zero would be a forged one.", s)
         extent = s.exprs[0]
         self.expr(extent, USIZE)
+        if isinstance(extent.ref, Expr):  # A named constant is its literal, here and in the extent identity.
+            extent = s.exprs[0] = extent.ref
         if extent.tag not in {"name", "int"}:
             fail("E-OWNER-EXTENT", "Bind a computed capacity to an immutable usize first.", extent)
         if extent.tag == "name" and self.env[extent.val].mutable:
@@ -706,7 +709,7 @@ class Checker:
         if not self.loop_depth:
             fail("E-LOOP-CONTROL", s.tag + " requires an enclosing loop.", s)
         self.leaks((n for n, b in self.env.items() if b.depth >= self.loop_depth), s)
-        return True  # Ends this lexical block, not necessarily the function.
+        return "jump"  # Ends this lexical block but not the function: its moves still matter afterwards.
 
     s_continue = s_break
 
@@ -730,18 +733,20 @@ class Checker:
         for run in runs:
             self.moved = set(before)
             outcomes.append((run(), self.moved))
-        live = [moved for returned, moved in outcomes if not returned]
-        everywhere: set[str] = set.intersection(*live) if live else set()
-        for n in set().union(*live) - everywhere:
+        falls = [moved for ended, moved in outcomes if not ended]
+        everywhere: set[str] = set.intersection(*falls) if falls else set()
+        for n in set().union(*falls) - everywhere:
             if n in self.env and self.kind(self.env[n].ty) == "linear":
                 fail("E-LINEAR-BRANCH", f"{n} is consumed on some paths only.", node)
-        self.moved = set().union(before, *(moved for _, moved in outcomes))
-        return all(returned for returned, _ in outcomes)
+        # A branch that returned cannot reach what follows; one that jumped (break/continue) can.
+        self.moved = set().union(before, *(moved for ended, moved in outcomes if ended is not True))
+        ends = [ended for ended, _ in outcomes]
+        return all(ends) and (True if all(e is True for e in ends) else "jump")
 
     def s_if(self, s: Stmt):
         self.expr(s.exprs[0], BOOL)
         both = self.branches(s, [lambda: self.block(s.body), lambda: self.block(s.other)])
-        return bool(s.other) and both
+        return both if s.other else False
 
     def s_match(self, s: Stmt):
         ty = self.expr(s.exprs[0])
@@ -830,8 +835,9 @@ class Checker:
                 )
         self.lanes, self.device_depth, self.loop_depth = saved[:3]
         del self.env[binder]
-        self.effect("par:" + target)
-        self.counts["parallel_regions"] = self.counts.get("parallel_regions", 0) + 1
+        if s.tag == "parallel" or target == "device":  # A host reduction is an ordinary in-order fold.
+            self.effect("par:" + target)
+            self.counts["parallel_regions"] = self.counts.get("parallel_regions", 0) + 1
         s.ref = target
         return result
 
@@ -883,6 +889,9 @@ class Checker:
 
     def extent_of(self, e: Expr) -> str | None:
         """The name/literal identity of an extent expression, or None when it has none."""
+        if e.tag == "name" and e.val not in self.env:  # A named constant is its literal.
+            const = self.qualify(e.val, self.p.consts)
+            return self.p.consts[const][1].val if const else e.val
         if e.tag in {"name", "int"}:
             return e.val
         if e.tag == "call" and e.val == "len" and len(e.args) == 1 and root(e.args[0]).tag == "name":
@@ -991,7 +1000,7 @@ class Checker:
                 fail("E-MOVE-BORROW", f"{e.val} is borrowed; take() or swap() its contents instead.", e)
             self.moved.add(e.val)
             e.ref = "move"
-        elif e.tag in {"field", "index"}:
+        elif e.tag == "index" or (e.tag == "field" and not isinstance(e.ref, tuple)):  # Enum.None is a value.
             fail("E-PARTIAL-MOVE", "An owner cannot be moved out of a place; use take() or swap().", e)
 
     def e_int(self, e: Expr, expected: Type | None) -> Type:
@@ -1041,6 +1050,9 @@ class Checker:
         return b.ty
 
     def e_index(self, e: Expr, expected: Type | None, read: bool = True) -> Type:
+        value = self.function_value(e, expected) if expected and expected.name == "fn" else None
+        if value:
+            return value
         if len(e.args) != 2:
             fail("E-INDEX", "An index has exactly one position.", e)
         a, i = e.args
@@ -1142,12 +1154,21 @@ class Checker:
 
     def function_value(self, e: Expr, want: Type) -> Type | None:
         """A declared function named where a fn value is expected; it counts as called here."""
-        name = self.qualify(path(e), self.fs, node=e) if root(e).tag == "name" and root(e).val not in self.env else None
+        named, targs = (e.args[0], e.args[1:]) if e.tag == "index" else (e, [])
+        free = root(named).tag == "name" and root(named).val not in self.env
+        name = self.qualify(path(named), self.fs, node=e) if free else None
         if name is None:
             return None
         g = self.fs[name]
+        if targs and g.generics:  # ascending[u64]
+            bound = dict(
+                zip((n for n, _ in g.generics), (self.static(self.type_argument(a), e) for a in targs), strict=False)
+            )
+            g = self.instantiate(g, bound, e)
+            e.args = []
+        name = g.name
         self.signature(g)
-        if g.generics or g.extern or any(t.mode != "value" for _, t in g.params):
+        if (g.generics and not g.bindings) or g.extern or any(t.mode != "value" for _, t in g.params):
             fail("E-FN-TYPE", f"{name} cannot be a function value: only plain functions of values qualify.", e)
         self.call_edges[self.f.name].append((name, {}))
         self.callset.add(name)
@@ -1670,7 +1691,7 @@ class Checker:
         arity(2, f"{n} takes two arguments.")
         a, b = args
         shift = n in {"shl_wrap", "shr"}
-        if a.tag == "int" and b.tag != "int" and not shift and n in WRAPPING:
+        if a.tag == "int" and b.tag != "int" and not shift:
             t = self.expr(b, expected)
             self.expr(a, t)
         else:

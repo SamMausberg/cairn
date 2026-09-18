@@ -289,3 +289,56 @@ def test_multiple_bounds_and_take_operand_order():
     with pytest.raises(Diagnostic) as e:  # C++ leaves argument order open: which field would get the zero?
         compile_source(pair + "return P(take(x), take(x)); }")
     assert e.value.data["code"] == "E-EFFECT-ORDER"
+
+
+FIRST_USERS_FOUND = """
+import std.vec;
+import std.core (Option);
+const N:usize = 8;
+enum Maybe[T] { Some(T); None; }
+fn consume(b:Buf[u64]) -> usize = len(b);
+fn nothing() -> Maybe[Buf[u64]] { return Maybe.None; }
+fn either(flag:bool) -> usize { let b = Buf[u64](4); if flag { return consume(b); } return consume(b); }
+fn ascending[T](a:T, b:T) -> bool = a < b;
+fn pick(x:u64, y:u64, before:ro<fn(u64, u64) -> bool>) -> u64 { if before(x, y) { return x; } return y; }
+fn total(n:usize, xs:ro<u64>[n]) -> u64 pure { let s = reduce add_wrap for i in n yield xs[i]; return s; }
+fn main() -> i32 {
+  buffer a:u64[N] = zeroed;
+  stack s:u64[N] = zeroed;
+  let n:usize = 4;
+  if max(8, n) != 8 || min(2, n) != 2 || len(a) != 8 || len(s) != 8 { return 1; }
+  let four_again = either(true);
+  if four_again != 4 || pick(3, 9, ascending[u64]) != 3 || total(N, a) != 0 { return 2; }
+  match nothing() { Maybe.Some(b) => { return 3; } Maybe.None => {} }
+  let mut v = vec.new[Buf[u64]]();
+  let four = Buf[u64](4);
+  v.push(four);
+  match v.pop() { Option.Some(x) => { return i32(len(x)) - 4; } Option.None => { return 5; } }
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_what_the_first_real_users_tripped_over(tmp_path, cxx):
+    """Constant capacities, bare owner-sum variants, moves on returning branches, literal min/max,
+    instantiated generics as function values, a pure host reduce, and owner-carrying sums under g++."""
+    if not shutil.which(cxx):
+        pytest.skip("Native compiler unavailable")
+    generated, receipt = compile_source(FIRST_USERS_FOUND)
+    assert "par:host" not in receipt["functions"]["total"]["effects"]
+    (tmp_path / "p.cpp").write_text(generated + "int main() { return static_cast<int>(cf_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    flags = ["-std=c++20", "-O2", "-Wall", "-Wextra", "-Werror", "-Wno-unused-variable", "-Wno-unused-parameter"]
+    subprocess.run([cxx, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+
+
+def test_a_move_before_break_still_counts_after_the_loop():
+    source = (
+        "fn consume(b:Buf[u64]) {}\n"
+        "fn f(n:usize) -> usize { let b = Buf[u64](4); for i in 0..n { if i == 1 { consume(b); break; } } return len(b); }"
+    )
+    with pytest.raises(Diagnostic) as e:
+        compile_source(source)
+    assert e.value.data["code"] in {"E-MOVE-IN-LOOP", "E-MOVED"}

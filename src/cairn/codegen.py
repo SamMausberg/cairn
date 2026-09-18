@@ -104,7 +104,8 @@ class Emitter:
             elif ty.name in self.p.enums:
                 self.put(f"enum class {name} : std::uint32_t {{ {', '.join('v_' + v for v in layout)} }};")
             else:
-                members = [f"{self.type(t) if t else 'std::uint8_t'} v_{v};" for v, t in layout.items()]
+                zero = "" if self.trivial(ty) else "{}"  # Side-by-side payloads each start as their zero.
+                members = [f"{self.type(t) if t else 'std::uint8_t'} v_{v}{zero};" for v, t in layout.items()]
 
                 # One active scalar payload keeps the 0.6 C union; owners cannot share storage, so a sum
                 # that carries one stores its payloads side by side and the inactive ones stay zero.
