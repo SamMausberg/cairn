@@ -1,0 +1,52 @@
+// The pipeline end to end on 2^22 values, verified against the host stage for stage.
+import std.io;
+
+fn main() -> i32 {
+  let n:usize = 4194304;
+
+  buffer input:u64[n] = zeroed;
+  for i in 0..n { input[i] = u64(i) * 2654435761; }
+
+  buffer host_mapped:u64[n] = zeroed;
+  buffer host_kept:u64[n] = zeroed;
+  let h0 = io.monotonic_ns();
+  map_host(n, host_mapped, input);
+  let host_used = keep_host(n, host_kept, host_mapped);
+  let host_total = sum_host(host_used, host_kept[0..host_used]);
+  let h1 = io.monotonic_ns();
+
+  buffer dev_in:u64[n]@device = zeroed;
+  buffer dev_mapped:u64[n]@device = zeroed;
+  buffer dev_kept:u64[n]@device = zeroed;
+  let d0 = io.monotonic_ns();  // the first device allocation creates the CUDA context
+  transfer(dev_in, input);
+  let d1 = io.monotonic_ns();
+  map_device(n, dev_mapped, dev_in);
+  let d2 = io.monotonic_ns();
+  let dev_used = keep_device(n, dev_kept, dev_mapped);
+  let d3 = io.monotonic_ns();
+  let dev_total = sum_device(dev_used, dev_kept[0..dev_used]);
+  let d4 = io.monotonic_ns();
+  buffer back:u64[n] = zeroed;
+  transfer(back, dev_kept);
+  let d5 = io.monotonic_ns();
+
+  if dev_used != host_used { return 1; }
+  if dev_total != host_total { return 2; }
+  for i in 0..host_used { if back[i] != host_kept[i] { return 3; } }
+  if host_used == 0 || host_used >= n { return 4; }
+
+  let title = "gpu_pipeline: 4194304 values, kept ";
+  io.print(len(title), title);
+  io.print_u64(u64(dev_used));
+  io.newline();
+  report(30, "gpu_pipeline: host pipeline   ", h1 - h0);
+  report(30, "gpu_pipeline: upload          ", d1 - d0);
+  report(30, "gpu_pipeline: device map      ", d2 - d1);
+  report(30, "gpu_pipeline: device compact  ", d3 - d2);
+  report(30, "gpu_pipeline: device reduce   ", d4 - d3);
+  report(30, "gpu_pipeline: download        ", d5 - d4);
+  let agree = "gpu_pipeline: device result matches the host";
+  io.println(len(agree), agree);
+  return 0;
+}

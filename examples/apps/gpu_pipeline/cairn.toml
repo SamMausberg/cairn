@@ -1,0 +1,7 @@
+[project]
+name = "gpu_pipeline"
+sources = ["src/pipeline.cairn", "src/main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

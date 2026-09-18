@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .checking import COMPARISONS, HOST_VISIBLE, WRAPPING, Checker, is_view
-from .syntax import CPP, FLOAT, INT, NUMERIC, Expr, Function, Program, Stmt, Type
+from .syntax import CPP, FLOAT, INT, NUMERIC, Expr, Function, Program, Stmt, Type, fail
 from .version import VERSION
 
 RUNTIME_FILES = {
@@ -267,8 +267,9 @@ class Emitter:
             orders = {i for i, a in enumerate(e.args) if a.ty.name == "Order"}
             texts = [f"static_cast<cr::par::Order>({t})" if i in orders else t for i, t in enumerate(texts)]
             return f"{texts[0]}.{e.val}({', '.join(texts[1:])})"
-        if kind == "indirect":
-            return f"v_{e.val}({', '.join(self.expr(a) for a in e.args)})"
+        if kind == "indirect":  # A zeroed fn value is a valid value; calling it is a guard failure.
+            callee = f"v_{e.val}" if e.ref[1].mode != "value" else f"cr::callable(v_{e.val})"
+            return f"{callee}({', '.join(self.expr(a) for a in e.args)})"
         if kind == "variant":
             return self.variant(e, e.args)
         if kind == "record":
@@ -343,6 +344,13 @@ class Emitter:
         return out
 
     def emit(self) -> str:
+        symbols: dict[str, str] = {}
+        for name in [*(f.name for f in self.p.functions), *(t.display() for t in self.c.layouts)]:
+            if symbols.setdefault(mangle(name), name) != name:
+                fail(
+                    "E-MANGLE",
+                    f"{name} and {symbols[mangle(name)]} would share the C symbol {mangle(name)}; rename one.",
+                )
         self.layouts()
         types, self.lines = self.lines, []
         for f in self.p.functions:

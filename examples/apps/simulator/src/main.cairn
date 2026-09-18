@@ -1,0 +1,60 @@
+// Run the same stencil on three back ends and insist on bitwise agreement.
+// Each iteration does two sweeps, ping-ponging between two buffers, so no owner has to move
+// and the result always ends up in the first buffer.
+import std.io;
+
+fn main() -> i32 {
+  let n:usize = 1024;
+  let m = n * n;
+  let rounds:usize = 8;  // 16 sweeps
+
+  buffer loop_a:f64[m] = zeroed;
+  buffer loop_b:f64[m] = zeroed;
+  seed(m, loop_a, n);
+  let t0 = io.monotonic_ns();
+  for r in 0..rounds {
+    step_loop(m, loop_b, loop_a, n);
+    step_loop(m, loop_a, loop_b, n);
+  }
+  let t1 = io.monotonic_ns();
+
+  buffer par_a:f64[m] = zeroed;
+  buffer par_b:f64[m] = zeroed;
+  seed(m, par_a, n);
+  for r in 0..rounds {
+    step_threads(m, par_b, par_a, n);
+    step_threads(m, par_a, par_b, n);
+  }
+  let t2 = io.monotonic_ns();
+
+  buffer gpu_a:f64[m] = zeroed;
+  seed(m, gpu_a, n);
+  buffer dev_a:f64[m]@device = zeroed;
+  buffer dev_b:f64[m]@device = zeroed;
+  transfer(dev_a, gpu_a);
+  // The first device allocation also creates the CUDA context, so setup is reported apart.
+  let t3 = io.monotonic_ns();
+  for r in 0..rounds {
+    step_device(m, dev_b, dev_a, n);
+    step_device(m, dev_a, dev_b, n);
+  }
+  transfer(gpu_a, dev_a);
+  let t4 = io.monotonic_ns();
+
+  for i in 0..m {
+    if loop_a[i] != par_a[i] { return 1; }
+    if loop_a[i] != gpu_a[i] { return 2; }
+  }
+  let heat = reduce + for i in m yield loop_a[i];
+  if !(heat > 0.0) { return 3; }
+
+  let title = "simulator: 1024x1024 grid, 16 Jacobi sweeps";
+  io.println(len(title), title);
+  report(22, "simulator: sequential ", t1 - t0);
+  report(22, "simulator: threads    ", t2 - t1);
+  report(22, "simulator: device up  ", t3 - t2);
+  report(22, "simulator: device     ", t4 - t3);
+  let agree = "simulator: all three back ends agree bit for bit";
+  io.println(len(agree), agree);
+  return 0;
+}

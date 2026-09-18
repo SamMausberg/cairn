@@ -33,6 +33,7 @@ template<class F> Defer(F) -> Defer<F>;
 // ro<fn(A) -> R>: a borrowed callable. It points at a closure or function that outlives the call
 // it is passed to, which the source language guarantees by never letting it be stored or returned.
 template<class S> using FnPtr = S*;  // fn(A) -> R: a plain code pointer, freely copied.
+template<class S> inline S* callable(S* f) noexcept { if(!f) trap(); return f; }  // Zero storage holds no code.
 template<class S> class Fn;
 template<class R,class... A> class Fn<R(A...)> final {
   void* env_;

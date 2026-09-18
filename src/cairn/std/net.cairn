@@ -65,9 +65,8 @@ pub fn connect_to(ip:ro<u8>[4], port:u16) -> Result[Socket, IoError] {
 pub fn send(s:ro<Socket>, n:usize, data:ro<u8>[n]) -> Result[usize, IoError] {
   let mut done:usize = 0;
   while done < n {
-    let want = n - done;
     unsafe {
-      let sent = sys.send(s.fd, data[done..n], want, 0);
+      let sent = sys.send(s.fd, data[done..n], n - done, 0);
       if sent <= 0 { return error(); }
       done = done + usize(sent);
     }

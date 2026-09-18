@@ -364,9 +364,10 @@ fn round_trip(port:u16) -> Result[usize, IoError] {
 }
 
 fn main() -> i32 {
-  // The port is derived from the pid, so parallel test workers do not collide.
+  // The port is derived from the pid, below the ephemeral range (32768..60999 here), so
+  // parallel test workers collide neither with each other nor with a borrowed client port.
   unsafe {
-    let port = u16(u64(sys.getpid()) % 20000 + 40000);
+    let port = u16(u64(sys.getpid()) % 12000 + 20000);
     match round_trip(port) {
       Result.Ok(total) => { if total != 9 { return 1; } }
       Result.Err(e) => { return 2; }
@@ -582,3 +583,87 @@ def test_parallel_and_device_placement_are_separate_effects():
         """)
     assert "par:host" in functions["on_threads"]["effects"]
     assert "par:device" in functions["on_lanes"]["effects"]
+
+
+COVERAGE = """
+import std.core (Option);
+import std.arena (Arena, Handle);
+import std.map (Map);
+import std.mem;
+import std.sort;
+import std.vec (Vec);
+
+// Touch every generic the library declares: an instance, not its template, is what typechecks,
+// so anything left uninstantiated here would ship unchecked.
+fn main() -> i32 {
+  let mut v = vec.with_capacity[u8](4);
+  v.push('a');
+  v.reserve(16);
+  if v.capacity() < 16 { return 1; }
+  v.set(0, 'z');
+  if v.get(0) != 'z' { return 2; }
+  v.extend_from(3, "abc");
+  if v.len != 4 { return 3; }
+  v.truncate(2);
+  match v.pop() {
+    Option.Some(b) => { if b != 'a' { return 4; } }
+    Option.None => { return 5; }
+  }
+  v.clear();
+  if v.len != 0 { return 6; }
+
+  buffer xs:u64[4] = zeroed;
+  buffer ys:u64[4] = zeroed;
+  mem.fill(len(xs), xs, 3);
+  mem.copy(len(ys), ys, xs);
+  if !mem.equal(len(xs), xs, len(ys), ys) { return 7; }
+  sort.sort(len(xs), xs);
+  sort.sort_by(len(xs), xs, |a:ro<u64>, b:ro<u64>| -> bool { return a < b; });
+  let three:u64 = 3;
+  match sort.search(len(xs), xs, three) {
+    Option.Some(at) => {}
+    Option.None => { return 8; }
+  }
+
+  let mut m = map.new[u64, u64]();
+  for i in 0..32 { m.insert(u64(i), u64(i)); }
+  if m.count() != 32 || m.slots() < 32 { return 9; }
+  match m.find(three) {
+    Option.Some(slot) => { if !m.live(slot) { return 10; } }
+    Option.None => { return 11; }
+  }
+  match m.remove(three) {
+    Option.Some(value) => { if value != 3 { return 12; } }
+    Option.None => { return 13; }
+  }
+
+  let mut a = arena.new[u64]();
+  let mut last = a.insert(0);
+  for i in 0..32 { last = a.insert(u64(i)); }
+  if a.count() != 33 || a.slots() < 33 { return 14; }
+  if !a.alive(last.slot) { return 15; }
+  let same = a.handle(last.slot);
+  if same.generation != last.generation { return 16; }
+  match a.find(last) {
+    Option.Some(slot) => { if a.items[slot] != 31 { return 17; } }
+    Option.None => { return 18; }
+  }
+  match a.remove(last) {
+    Option.Some(value) => { if value != 31 { return 19; } }
+    Option.None => { return 20; }
+  }
+  match a.remove(last) {
+    Option.Some(value) => { return 21; }
+    Option.None => {}
+  }
+  let recycled = a.insert(7);
+  if recycled.slot != last.slot { return 22; }
+  return 0;
+}
+"""
+
+
+def test_every_generic_in_the_library_is_instantiated_and_runs(tmp_path):
+    receipt = compile_source(COVERAGE)[1]
+    assert receipt["uninstantiated_templates"] == []
+    native(tmp_path, COVERAGE)

@@ -50,8 +50,7 @@ pub fn read(f:ro<File>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] {
 pub fn read_full(f:ro<File>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] {
   let mut done:usize = 0;
   while done < n {
-    let want = n - done;
-    let got = try read(f, want, into[done..n]);
+    let got = try read(f, n - done, into[done..n]);
     if got == 0 { return Result.Ok(done); }
     done = done + got;
   }
@@ -62,9 +61,8 @@ pub fn read_full(f:ro<File>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] 
 pub fn write(f:ro<File>, n:usize, data:ro<u8>[n]) -> Result[usize, IoError] {
   let mut done:usize = 0;
   while done < n {
-    let want = n - done;
     unsafe {
-      let sent = sys.write(f.fd, data[done..n], want);
+      let sent = sys.write(f.fd, data[done..n], n - done);
       if sent <= 0 { return failed(); }
       done = done + usize(sent);
     }
@@ -135,9 +133,8 @@ pub fn read_file(n:usize, path:ro<u8>[n]) -> Result[Vec[u8], IoError] {
 fn put(fd:i32, n:usize, data:ro<u8>[n]) {
   let mut done:usize = 0;
   while done < n {
-    let want = n - done;
     unsafe {
-      let sent = sys.write(fd, data[done..n], want);
+      let sent = sys.write(fd, data[done..n], n - done);
       if sent <= 0 { return; }
       done = done + usize(sent);
     }

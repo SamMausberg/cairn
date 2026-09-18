@@ -121,15 +121,18 @@ def root(e: Expr) -> Expr:
     return e
 
 
-def path(e: Expr) -> str:
-    """A syntactic place identity for alias checks: a.b, a[], a[lo..hi]."""
+def path(e: Expr, stable=lambda name: False) -> str:
+    """A syntactic place identity for alias checks: a.b, a[], a[lo..hi].
+
+    A part bound counts only when it cannot change: a literal, or a name `stable` vouches for.
+    """
     if e.tag == "field":
-        return path(e.args[0]) + "." + e.val
+        return path(e.args[0], stable) + "." + e.val
     if e.tag == "index":
-        return path(e.args[0]) + "[]"
+        return path(e.args[0], stable) + "[]"
     if e.tag == "slice":
-        bounds = (a.val if a.tag in {"name", "int"} else "?" for a in e.args[1:])
-        return path(e.args[0]) + "[" + "..".join(bounds) + "]"
+        bounds = (a.val if a.tag == "int" or (a.tag == "name" and stable(a.val)) else "?" for a in e.args[1:])
+        return path(e.args[0], stable) + "[" + "..".join(bounds) + "]"
     return e.val
 
 
@@ -188,7 +191,8 @@ class Checker:
         self.lane_calls: list[tuple[str, bool, Expr]] = []
         self.borrowed: list[tuple[str, str]] = []
         self.device_functions: set[str] = set()
-        self.nodes = 0
+        self.address_taken: set[str] = set()
+        self.nodes = self.unique = 0
 
     def __getattr__(self, name: str):  # Per-function state lives in the current Scope.
         if name in SCOPED:
@@ -264,6 +268,10 @@ class Checker:
                 fail("E-FN-TYPE", "A function type carries values and single borrows, not array views.", node)
             base = Type(name, args=args)
             self.define(base, node)
+            if name in {"Buf", "Array"} and self.kind(args[0]) == "linear":
+                fail(
+                    "E-LINEAR-STORAGE", "Zeroed storage cannot hold linear values: a zero would be a forged one.", node
+                )
         if ty.mode == "value":
             return base
         if base == VOID:
@@ -470,6 +478,13 @@ class Checker:
             changed = False
             for n in effects:
                 before = len(effects[n])
+                if "indirect_call" in effects[n]:  # A function value may be any function whose address was taken.
+                    effects[n] |= {
+                        x
+                        for g in self.address_taken
+                        for x in effects[g]
+                        if x.partition(":")[0] not in {"read", "write"}
+                    }
                 for callee, mapping in self.call_edges[n]:
                     for effect in tuple(effects[callee]):
                         kind, _, formal = effect.partition(":")
@@ -495,39 +510,52 @@ class Checker:
         return effects
 
     def audit(self, effects: dict[str, set[str]]):
-        """Unspecified C++ operand order must not reorder observable writes or allocation."""
+        """C++ leaves operand order open, so one expression may not contain two operands that could
+        observe each other: a nested writing call, a nested take, or a nested opaque call (closure,
+        function value, dynamic dispatch) next to anything mutable. `&&` and `||` are sequenced."""
 
-        def expr(e: Expr, at_root: bool = True):
-            callee = e.ref.name if e.tag == "call" and isinstance(e.ref, Function) else None
-            writes = any(x.startswith("write:") or x in {"alloc", "free"} for x in effects.get(callee, ()))
-            if writes and not at_root:
-                fail("E-EFFECT-ORDER", "Bind a writing call to its own statement before using its result.", e)
+        def names(e: Expr, out: list[Expr]) -> list[Expr]:
+            out += [e] if e.tag == "name" else []
+            for child in e.args if e.tag != "lambda" else []:
+                names(child, out)
+            return out
+
+        def nested(e: Expr, at_root: bool, out: list[Expr]) -> list[Expr]:
+            if e.tag == "lambda":
+                block(e.ref.body)
+                return out
+            if e.tag == "call" and not at_root:
+                direct = isinstance(e.ref, Function) and effects.get(e.ref.name, set())
+                if direct and any(x.startswith("write:") or x in {"alloc", "free"} for x in direct):
+                    fail("E-EFFECT-ORDER", "Bind a writing call to its own statement before using its result.", e)
+                opaque = isinstance(e.ref, tuple) and e.ref[0] in {"indirect", "dispatch"}
+                if opaque or any(a.tag == "lambda" for a in e.args) or (e.val == "take" and isinstance(e.ref, tuple)):
+                    out.append(e)
             for child in e.args:  # `try f()` and `spawn f()` add no operand order: f stays a root.
-                expr(child, at_root and e.tag in {"try", "spawn"})
+                nested(child, at_root and e.tag in {"try", "spawn"}, out)
+            return out
 
-        def mentions(e: Expr, found: list[str]) -> list[str]:
-            found += [e.val] if e.tag == "name" else []
-            for child in e.args:
-                mentions(child, found)
-            return found
+        def unsequenced(e: Expr) -> list[Expr]:
+            return [g for a in e.args for g in unsequenced(a)] if e.tag == "binary" and e.val in {"&&", "||"} else [e]
 
-        def taken(e: Expr, at_root: bool, found: list[Expr]) -> list[Expr]:
-            found += [e] if e.tag == "call" and e.val == "take" and isinstance(e.ref, tuple) and not at_root else []
-            for child in e.args:
-                taken(child, False, found)
-            return found
+        def group(e: Expr, at_root: bool):
+            found = nested(e, at_root, [])
+            for call in found:
+                inside = {id(n) for n in names(call, [])}
+                others = [n for n in names(e, []) if id(n) not in inside]
+                if call.val == "take" and isinstance(call.ref, tuple):
+                    clash = any(n.val == root(call.args[0]).val for n in others)
+                else:  # Whatever the callee closes over or dispatches to might write any mutable name.
+                    clash = len(found) > 1 or any(n.ref == "mut" for n in others)
+                if clash:
+                    fail("E-EFFECT-ORDER", "Bind this call first: another operand here could observe its writes.", call)
 
         def block(ss: list[Stmt]):
             for s in ss:
-                names = [n for e in s.exprs for n in mentions(e, [])]
-                for take in [t for e in s.exprs for t in taken(e, True, [])]:
-                    place = root(take.args[0]).val  # C++ leaves operand order open: who would see the zero?
-                    if names.count(place) > mentions(take, []).count(place):
-                        fail(
-                            "E-EFFECT-ORDER", f"Bind take(...) of {place} first; this expression mentions it again.", s
-                        )
                 for i, e in enumerate(s.exprs):
-                    expr(e, s.tag != "compact" and not (s.tag == "assign" and i == 0))
+                    at_root = s.tag != "compact" and not (s.tag == "assign" and i == 0)
+                    for part in unsequenced(e):
+                        group(part, at_root and part is e)
                 block(s.body)
                 block(s.other)
                 for arm in s.arms:
@@ -571,6 +599,8 @@ class Checker:
             returned = self.stmt(s)
         if not returned:
             self.leaks(set(self.env) - set(saved), ss[-1] if ss else self.f)
+        self.moved |= (self.deferred - deferred) & set(saved)  # Its cleanup has now run: gone for good.
+        self.leases = {t: held for t, held in self.leases.items() if t in saved}
         self.env, self.deferred = saved, deferred
         return returned
 
@@ -586,6 +616,8 @@ class Checker:
         element = self.resolve(s.ty, s)
         if element == VOID:
             fail("E-OWNER-ELEMENT", "Local buffers hold values; void has none.", s)
+        if self.kind(element) == "linear":
+            fail("E-LINEAR-STORAGE", "Zeroed storage cannot hold linear values: a zero would be a forged one.", s)
         extent = s.exprs[0]
         self.expr(extent, USIZE)
         if extent.tag not in {"name", "int"}:
@@ -842,10 +874,10 @@ class Checker:
         self.host_only(s, "defer schedules a host call")
         if inner.tag != "expr" or inner.exprs[0].tag != "call":
             fail("E-DEFER", "defer schedules exactly one call.", s)
-        before = set(self.moved)
+        before, leases = set(self.moved), dict(self.leases)
         self.stmt(inner)
         self.deferred |= self.moved - before
-        self.moved = before
+        self.moved, self.leases = before, leases  # The call runs at block exit; until then nothing is returned.
 
     # Places and expressions --------------------------------------------------------------------
 
@@ -855,7 +887,7 @@ class Checker:
             return e.val
         if e.tag == "call" and e.val == "len" and len(e.args) == 1 and root(e.args[0]).tag == "name":
             ty = e.args[0].ty or self.expr(e.args[0], consume=False)
-            return ty.extent if is_view(ty) else f"len({path(e.args[0])})" if ty.name == "Buf" else None
+            return ty.extent if is_view(ty) else f"len({self.identity(e.args[0])})" if ty.name == "Buf" else None
         return None
 
     def writable(self, e: Expr) -> bool:
@@ -925,6 +957,21 @@ class Checker:
         if self.device_depth:
             fail("E-PLACEMENT", f"{what}; a device lane cannot use it.", node)
 
+    def stable(self, name: str) -> bool:
+        """A name whose value cannot change while it is in scope: a parameter, a let, a loop binder."""
+        return name in self.env and not self.env[name].mutable and self.env[name].ty.mode == "value"
+
+    def where(self, e: Expr) -> str:
+        return path(e, self.stable)
+
+    def identity(self, e: Expr) -> str:
+        """Which storage an extent belongs to: exact for a literal or stable index, unique otherwise."""
+        if e.tag == "index":
+            i, self.unique = e.args[1], self.unique + 1
+            key = i.val if i.tag == "int" or (i.tag == "name" and self.stable(i.val)) else f"?{self.unique}"
+            return f"{self.identity(e.args[0])}[{key}]"
+        return self.identity(e.args[0]) + "." + e.val if e.tag == "field" else e.val
+
     def leased(self, place: str, mode: str, node: Any):
         """While a task holds a borrow, nobody else may write it, or touch it if the task writes it."""
         for ticket, held in self.leases.items():
@@ -985,7 +1032,9 @@ class Checker:
                 return self.resolve(self.p.consts[const][0], e)
         if e.val in self.moved:
             fail("E-MOVED", f"{e.val} was moved.", e)
-        e.ref = b.constant
+        if not is_view(b.ty) and b.ty.name not in {"Buf", "Array"}:  # Arrays are checked per element or part.
+            self.leased(e.val, "ro", e)
+        e.ref = "mut" if b.mutable or b.ty.mode == "rw" else b.constant
         if b.ty.mode != "value" and not b.ty.extent:  # A single borrow reads through to its value.
             self.effect("read:" + e.val)
             return b.ty.value
@@ -1013,7 +1062,7 @@ class Checker:
         if self.lanes and root(a).val in self.lanes.outer:
             self.lanes.accesses.append((root(a).val, i.tag == "name" and i.val == self.lanes.binder, not read, e))
         if root(a).tag == "name":
-            self.leased(path(e), "ro" if read else "rw", e)
+            self.leased(self.where(e), "ro" if read else "rw", e)
         return ty.value if is_view(ty) else ty.args[0]
 
     def e_field(self, e: Expr, expected: Type | None) -> Type:
@@ -1102,22 +1151,44 @@ class Checker:
             fail("E-FN-TYPE", f"{name} cannot be a function value: only plain functions of values qualify.", e)
         self.call_edges[self.f.name].append((name, {}))
         self.callset.add(name)
+        self.address_taken.add(name)
         e.ref, e.tag = g, "function"
         return Type("fn", want.mode, args=(*(t for _, t in g.params), g.ret))
+
+    def lend(self, a: Expr, mode: str, borrows: list[tuple[str, str]]) -> str:
+        """A named place lent to a call: leased places and lanes object here; returns its root name."""
+        if root(a).tag != "name" or root(a).val not in self.env:
+            return ""
+        self.leased(self.where(a), mode, a)
+        borrows.append((self.where(a), mode))
+        if self.lanes and root(a).val in self.lanes.outer:
+            self.lanes.accesses.append((root(a).val, False, mode == "rw", a))
+        return root(a).val
+
+    def disjoint(self, borrows: list[tuple[str, str]], node: Any):
+        for i, (place, m) in enumerate(borrows):
+            if any(overlaps(place, other) and "rw" in (m, k) for other, k in borrows[i + 1 :]):
+                fail("E-ALIAS", "A mutable view cannot be passed to overlapping call arguments.", node)
 
     def indirect(self, e: Expr, target: Binding, args: list[Expr]) -> Type:
         self.host_only(e, "A function value is a host code pointer")
         *params, ret = target.ty.args
         if len(args) != len(params):
             fail("E-ARITY", f"{e.val} expects {len(params)} arguments.", e)
+        borrows: list[tuple[str, str]] = []
         for a, want in zip(args, params, strict=True):
             if want.mode == "value":
                 self.expr(a, want)
-            else:
-                if want.mode == "rw" and not self.writable(a):
-                    fail("E-WRITE-LEASE", "A mutable borrow needs a mutable local or an rw borrow.", a)
-                self.expect(self.expr(a, consume=False).value, want.value, a)
+                continue
+            if want.mode == "rw" and not self.writable(a):
+                fail("E-WRITE-LEASE", "A mutable borrow needs a mutable local or an rw borrow.", a)
+            self.expect(self.expr(a, consume=False).value, want.value, a)
+            lent = self.lend(a, want.mode, borrows)  # No callee row exists to rename: charge the caller now.
+            self.effects |= {("write:" if want.mode == "rw" else "read:") + lent} if lent else set()
+        self.disjoint(borrows, e)
         self.effect("indirect_call")
+        if target.ty.mode == "value":
+            self.guard("callable")
         e.ref = ("indirect", target.ty)
         return ret
 
@@ -1256,6 +1327,8 @@ class Checker:
         home = self.p.modules.get(self.peek(receiver).name, "") if receiver else ""
         with self.within(home or self.module):  # A method is found in its receiver's home module.
             name = self.qualify(n, self.fs, node=e) if home else None
+        if name and self.p.modules.get(name, "") not in ("", self.module) and name not in self.p.public:
+            fail("E-PRIVATE", f"{name} is private to module {self.p.modules[name]}.", e)
         name = name or self.qualify(n, self.fs, node=e)
         f = self.fs[name] if name else self.trait_member(e, n, args)
         if f is not None and isinstance(e.ref, tuple) and e.ref[0] == "dispatch":
@@ -1269,7 +1342,8 @@ class Checker:
         """Static dispatch of a trait member on the type of its Self argument."""
         prefix, _, short = n.rpartition(".")
         for trait, members in self.p.traits.items():
-            if prefix and self.qualify(prefix, self.p.traits) != trait:
+            hidden = self.p.modules.get(trait, "") not in ("", self.module) and trait not in self.p.public
+            if hidden or (prefix and self.qualify(prefix, self.p.traits) != trait):
                 continue
             for declared in members:
                 position = next((i for i, (_, t) in enumerate(declared.params) if t.name == "Self"), None)
@@ -1298,6 +1372,8 @@ class Checker:
         self.host_only(e, "A dynamic reference points at a host table")
         if len(args) != len(member.params):
             fail("E-ARITY", f"{member.name} expects {len(member.params)} arguments.", e)
+        if member.params[position][1].mode == "rw" and not self.writable(args[position]):
+            fail("E-WRITE-LEASE", f"{member.name} writes its receiver; it needs an rw<dyn {trait}> reference.", e)
         with self.within(self.p.modules.get(trait, ""), {"Self": Type("dyn", args=(Type(trait),))}):
             for i, (a, (_, declared)) in enumerate(zip(args, member.params, strict=True)):
                 if i != position:
@@ -1416,7 +1492,8 @@ class Checker:
                 mapping[name] = ""
                 continue
             if want.mode == "value":
-                self.expr(a, want)
+                if self.kind(self.expr(a, want)) != "copy" and root(a).tag == "name":
+                    borrows.append((self.where(a), "rw"))  # The callee may release it while a view is live.
                 continue
             named = root(a).tag == "name" and root(a).val in self.env
             if want.name == "dyn" and self.peek(a).name != "dyn":
@@ -1429,8 +1506,8 @@ class Checker:
                 a.tag, a.args, a.ty = "coerce", [inner], want
                 a.ref = [members[m.name] for m in self.p.traits[want.args[0].name]]
                 self.early[id(a)] = a
-                self.leased(path(inner), want.mode, a)
-                borrows.append((path(inner), want.mode))
+                self.leased(self.where(inner), want.mode, a)
+                borrows.append((self.where(inner), want.mode))
                 mapping[name] = root(inner).val
                 continue
             if not named and (want.mode == "rw" or (want.extent and a.tag != "str")):
@@ -1449,17 +1526,10 @@ class Checker:
                 if want.mode == "rw" and not self.writable(a):
                     fail("E-WRITE-LEASE", "A mutable borrow needs a mutable local or an rw borrow.", a)
                 self.expect(actual.value, want.value, a)
-            mapping[name] = root(a).val if named else ""
-            if named and self.lanes and root(a).val in self.lanes.outer:
-                self.lanes.accesses.append((root(a).val, False, want.mode == "rw", a))
-            if named:
-                self.leased(path(a), want.mode, a)
-                borrows.append((path(a), want.mode))
-                if want.mode == "rw" and self.env[root(a).val].ty.mode == "value":
-                    self.effect("write:" + root(a).val)
-        for i, (place, m) in enumerate(borrows):
-            if any(overlaps(place, other) and "rw" in (m, k) for other, k in borrows[i + 1 :]):
-                fail("E-ALIAS", "A mutable view cannot be passed to overlapping call arguments.", e)
+            mapping[name] = self.lend(a, want.mode, borrows)
+            if named and want.mode == "rw" and self.env[root(a).val].ty.mode == "value":
+                self.effect("write:" + root(a).val)
+        self.disjoint(borrows, e)
         self.call_edges[self.f.name].append((f.name, mapping))
         self.callset.add(f.name)
         self.borrowed = borrows
@@ -1482,7 +1552,7 @@ class Checker:
         if is_view(ty) or ty.name not in {"Buf", "Array"}:
             return ty
         mode = "rw" if self.writable(a) else "ro"
-        extent = f"len({path(a)})" if ty.name == "Buf" else str(ty.args[1])
+        extent = f"len({self.identity(a)})" if ty.name == "Buf" else str(ty.args[1])
         return Type(ty.args[0].name, mode, extent, ty.args[0].args)
 
     def construct(self, e: Expr, record: str, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
@@ -1579,6 +1649,8 @@ class Checker:
         if n in {"take", "swap"}:  # The only ways to move an owner out of a place.
             arity(1 if n == "take" else 2, f"{n} takes {'one place' if n == 'take' else 'two places'}.")
             types = [self.place(a, write=True) for a in args]
+            if n == "take" and self.kind(types[0]) == "linear":
+                fail("E-LINEAR-STORAGE", "take would leave a forged linear value behind; swap two places instead.", e)
             self.effects |= {"read:" + root(a).val for a in args}
             self.expect(types[-1], types[0], e)
             return types[0] if n == "take" else VOID

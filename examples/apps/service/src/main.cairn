@@ -1,0 +1,138 @@
+// A line protocol over TCP on the loopback address, one client at a time:
+//   put <key> <value>  ->  +ok          get <key>  ->  = <value>   or  -missing
+//   del <key>          ->  +ok/-missing quit       ->  +bye, and the service stops
+// Everything blocks: there is no thread, no poll and no timeout in the language yet, so the
+// shape of the program is exactly the shape of the protocol.
+import std.core (Option, Result);
+import std.io (IoError);
+import std.net (Socket);
+import std.text;
+import std.vec (Vec);
+
+const PORT:u16 = 39800;
+const LIMIT:usize = 4096;
+
+// The end of the word starting at `from`: the next space, or the end of the line.
+fn word_end(n:usize, line:ro<u8>[n], from:usize) -> usize {
+  match text.find_byte(n, line, ' ', from) {
+    Option.Some(at) => { return at; }
+    Option.None => { return n; }
+  }
+}
+
+fn say(c:ro<Socket>, n:usize, message:ro<u8>[n]) -> Result[usize, IoError] {
+  let body = try net.send(c, n, message);
+  let end = try net.send(c, 1, "\n");
+  return Result.Ok(body + end);
+}
+
+// One request. The answer goes back on `c`; `true` means the client asked the service to stop.
+fn respond(c:ro<Socket>, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, IoError] {
+  let verb = word_end(n, line, 0);
+  if text.equal(verb, line[0..verb], 4, "quit") {
+    let bye = try say(c, 4, "+bye");
+    return Result.Ok(true);
+  }
+  if verb >= n {
+    let bad = try say(c, 6, "-error");
+    return Result.Ok(false);
+  }
+  let key_lo = verb + 1;
+  let key_hi = word_end(n, line, key_lo);
+  let k = key_hi - key_lo;
+  if k == 0 {
+    let bad = try say(c, 6, "-error");
+    return Result.Ok(false);
+  }
+  if text.equal(verb, line[0..verb], 3, "put") && key_hi < n {
+    let value_lo = key_hi + 1;
+    let v = n - value_lo;
+    put(t, k, line[key_lo..key_hi], v, line[value_lo..n]);
+    let ok = try say(c, 3, "+ok");
+    return Result.Ok(false);
+  }
+  if text.equal(verb, line[0..verb], 3, "get") {
+    match find(t, k, line[key_lo..key_hi]) {
+      Option.Some(slot) => {
+        let mut out = vec.new[u8]();
+        out.push('=');
+        out.push(' ');
+        let v = t.index.vals[slot].value.len;
+        out.extend_from(v, t.index.vals[slot].value.data[0..v]);
+        let m = out.len;
+        let sent = try say(c, m, out.data[0..m]);
+      }
+      Option.None => { let missing = try say(c, 8, "-missing"); }
+    }
+    return Result.Ok(false);
+  }
+  if text.equal(verb, line[0..verb], 3, "del") {
+    if erase(t, k, line[key_lo..key_hi]) {
+      let ok = try say(c, 3, "+ok");
+    } else {
+      let missing = try say(c, 8, "-missing");
+    }
+    return Result.Ok(false);
+  }
+  let bad = try say(c, 6, "-error");
+  return Result.Ok(false);
+}
+
+// Serve one connection until the client closes it or asks the service to stop. The buffer holds
+// one pending line at most; a line longer than LIMIT is answered with an error and dropped.
+fn serve(c:ro<Socket>, t:rw<Table>) -> Result[bool, IoError] {
+  buffer input:u8[4096] = zeroed;
+  let mut have:usize = 0;
+  while true {
+    match text.find_byte(have, input[0..have], '\n', 0) {
+      Option.Some(at) => {
+        let stop = try respond(c, t, at, input[0..at]);
+        let rest = have - (at + 1);
+        for i in 0..rest { input[i] = input[at + 1 + i]; }
+        have = rest;
+        if stop { return Result.Ok(true); }
+      }
+      Option.None => {
+        if have == LIMIT {
+          let bad = try say(c, 6, "-error");
+          have = 0;
+        }
+        let got = try net.recv(c, LIMIT - have, input[have..LIMIT]);
+        if got == 0 { return Result.Ok(false); }
+        have = have + got;
+      }
+    }
+  }
+  return Result.Ok(false);
+}
+
+fn run() -> Result[usize, IoError] {
+  let server = try net.listen_on("\x7f\x00\x00\x01", PORT, 16);
+  defer net.close(server);
+  let mut t = new_table();
+  let ready = "service: listening on ";
+  io.print(len(ready), ready);
+  io.print_u64(u64(PORT));
+  io.newline();
+  let mut running = true;
+  while running {
+    let c = try net.accept(server);
+    defer net.close(c);
+    let stop = try serve(c, t);
+    if stop { running = false; }
+  }
+  return Result.Ok(0);
+}
+
+fn main() -> i32 {
+  match run() {
+    Result.Ok(code) => { return i32(code); }
+    Result.Err(e) => {
+      let failed = "service: io error ";
+      io.print(len(failed), failed);
+      io.print_u64(u64(e.code));
+      io.newline();
+      return 1;
+    }
+  }
+}

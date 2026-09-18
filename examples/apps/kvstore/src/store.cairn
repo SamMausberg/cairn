@@ -1,0 +1,150 @@
+// A log-structured key/value store. Every mutation is one appended, checksummed record; the
+// index in memory is rebuilt from the log on open. The index is keyed by the 64-bit FNV hash
+// of the key and stores the key bytes as well, so a lookup verifies the key it found.
+import std.core (Option, Result);
+import std.io (File, IoError);
+import std.map (Map);
+import std.text;
+import std.vec (Vec);
+
+// Fixed-width little-endian header, generated rather than hand rolled.
+struct Header { check:u32; kind:u32; key_len:u32; val_len:u32; }
+derive wire for Header;
+
+const PUT:u32 = 0;
+const ERASE:u32 = 1;
+const HEAD:usize = 16;
+
+struct Record { key:Vec[u8]; value:Vec[u8]; }
+// `end` is the offset one past the last record the log is known to hold whole.
+struct Store { index:Map[u64, Record]; end:u64; }
+
+fn new_store() -> Store {
+  let index = map.new[u64, Record]();
+  return Store(index, 0);
+}
+
+// FNV-1a, chained so the header, key and value form one digest.
+fn digest(seed:u64, n:usize, data:ro<u8>[n]) -> u64 {
+  let mut h = seed;
+  for i in 0..n { h = mul_wrap(h ^ u64(data[i]), 1099511628211); }
+  return h;
+}
+
+fn checksum(kind:u32, k:usize, key:ro<u8>[k], v:usize, value:ro<u8>[v]) -> u32 {
+  let start = mul_wrap(14695981039346656037 ^ u64(kind), 1099511628211);
+  let after_key = digest(start, k, key);
+  return u32(digest(after_key, v, value) & 4294967295);
+}
+
+// One record: header, key, value. The caller decides when to sync.
+fn append(f:ro<File>, kind:u32, k:usize, key:ro<u8>[k], v:usize, value:ro<u8>[v]) -> Result[u64, IoError] {
+  stack head:u8[16] = zeroed;
+  let sum = checksum(kind, k, key, v, value);
+  encode_Header(head, Header(sum, kind, u32(k), u32(v)));
+  let a = try io.write(f, len(head), head);
+  let b = try io.write(f, k, key);
+  let c = try io.write(f, v, value);
+  return Result.Ok(u64(a + b + c));
+}
+
+// Apply a decoded record to the index; both owners move in, and a tombstone drops them.
+fn apply(s:rw<Store>, kind:u32, key:Vec[u8], value:Vec[u8]) {
+  let k = key.len;
+  let id = text.hash_bytes(k, key.data[0..k]);
+  if kind == ERASE {
+    let gone = s.index.remove(id);
+  } else {
+    s.index.insert(id, Record(key, value));
+  }
+}
+
+fn owned(n:usize, data:ro<u8>[n]) -> Vec[u8] {
+  let mut copy = vec.with_capacity[u8](n);
+  copy.extend_from(n, data);
+  return copy;
+}
+
+pub fn put(s:rw<Store>, f:ro<File>, k:usize, key:ro<u8>[k], v:usize, value:ro<u8>[v]) -> Result[u64, IoError] {
+  let bytes = try append(f, PUT, k, key, v, value);
+  let flushed = try io.sync(f);
+  let stored_key = owned(k, key);
+  let stored_value = owned(v, value);
+  apply(s, PUT, stored_key, stored_value);
+  s.end = s.end + bytes;
+  return Result.Ok(bytes);
+}
+
+pub fn erase(s:rw<Store>, f:ro<File>, k:usize, key:ro<u8>[k]) -> Result[u64, IoError] {
+  let bytes = try append(f, ERASE, k, key, 0, "");
+  let flushed = try io.sync(f);
+  let id = text.hash_bytes(k, key);
+  let gone = s.index.remove(id);
+  s.end = s.end + bytes;
+  return Result.Ok(bytes);
+}
+
+// The slot holding `key`, verified byte for byte because the index is keyed by a hash.
+pub fn get(s:ro<Store>, k:usize, key:ro<u8>[k]) -> Option[usize] {
+  let id = text.hash_bytes(k, key);
+  match s.index.find(id) {
+    Option.Some(slot) => {
+      let stored = s.index.vals[slot].key.len;
+      if text.equal(stored, s.index.vals[slot].key.data[0..stored], k, key) { return Option.Some(slot); }
+      return Option.None;
+    }
+    Option.None => { return Option.None; }
+  }
+}
+
+// Rebuild the index from the log. The first record that is short, truncated or fails its
+// checksum ends the replay: the file is cut back to the last whole record, which is exactly
+// what a crash between two writes leaves behind.
+pub fn replay(s:rw<Store>, f:ro<File>) -> Result[u64, IoError] {
+  let total = try io.size(f);
+  let mut offset:u64 = 0;
+  stack head:u8[16] = zeroed;
+  while offset < total {
+    let got = try io.read_full(f, len(head), head);
+    if got < HEAD { break; }
+    let h = decode_Header(head);
+    let k = usize(h.key_len);
+    let v = usize(h.val_len);
+    if u64(k) + u64(v) + u64(HEAD) > total - offset { break; }
+    let mut key = vec.with_capacity[u8](k);
+    let mut value = vec.with_capacity[u8](v);
+    let read_key = try io.read_full(f, k, key.data[0..k]);
+    let read_value = try io.read_full(f, v, value.data[0..v]);
+    if read_key < k || read_value < v { break; }
+    key.len = k;
+    value.len = v;
+    if checksum(h.kind, k, key.data[0..k], v, value.data[0..v]) != h.check { break; }
+    apply(s, h.kind, key, value);
+    offset = offset + u64(HEAD) + u64(k) + u64(v);
+  }
+  let cut = try io.truncate(f, offset);
+  let resumed = try io.seek(f, i64(offset), io.SET);
+  s.end = offset;
+  return Result.Ok(offset);
+}
+
+// Write every live record to `temp` and rename it over `path`. The caller reopens afterwards:
+// the descriptor it still holds refers to the replaced file, not to the compacted one.
+pub fn compact_log(s:ro<Store>, n:usize, path:ro<u8>[n], m:usize, temp:ro<u8>[m]) -> Result[u64, IoError] {
+  let mut written:u64 = 0;
+  {
+    let f = try io.open(m, temp, io.TRUNCATE);
+    defer io.close(f);
+    for slot in 0..s.index.slots() {
+      if s.index.live(slot) {
+        let k = s.index.vals[slot].key.len;
+        let v = s.index.vals[slot].value.len;
+        let bytes = try append(f, PUT, k, s.index.vals[slot].key.data[0..k], v, s.index.vals[slot].value.data[0..v]);
+        written = written + bytes;
+      }
+    }
+    let flushed = try io.sync(f);
+  }
+  let moved = try io.rename(m, temp, n, path);
+  return Result.Ok(written);
+}

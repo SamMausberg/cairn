@@ -1,0 +1,7 @@
+[project]
+name = "kvstore"
+sources = ["src/store.cairn", "src/main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

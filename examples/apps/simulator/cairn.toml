@@ -1,0 +1,7 @@
+[project]
+name = "simulator"
+sources = ["src/stencil.cairn", "src/main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

@@ -1,0 +1,60 @@
+// One Jacobi sweep of a 2-D heat grid, written three times over: once as an ordinary loop,
+// once as host lanes, once as device lanes. Only the placement of the views differs; the
+// arithmetic lives in `blend`, which both the host and the device compile from one definition,
+// so the three back ends are the same floating-point program and must agree bit for bit.
+import std.io;
+
+fn interior(i:usize, n:usize) -> bool {
+  let row = i / n;
+  let col = i % n;
+  return row > 0 && col > 0 && row + 1 < n && col + 1 < n;
+}
+
+// The one arithmetic expression. The build forbids contraction and reassociation on both sides
+// (-ffp-contract=off, --fmad=false), so this order of operations is what actually executes.
+fn blend(up:f64, down:f64, left:f64, right:f64) -> f64 = 0.25 * (up + down + left + right);
+
+fn step_loop(m:usize, out:rw<f64>[m], src:ro<f64>[m], n:usize) {
+  for i in 0..m {
+    if interior(i, n) {
+      out[i] = blend(src[i - n], src[i + n], src[i - 1], src[i + 1]);
+    } else {
+      out[i] = src[i];
+    }
+  }
+}
+
+fn step_threads(m:usize, out:rw<f64>[m], src:ro<f64>[m], n:usize) {
+  parallel i in m {
+    if interior(i, n) {
+      out[i] = blend(src[i - n], src[i + n], src[i - 1], src[i + 1]);
+    } else {
+      out[i] = src[i];
+    }
+  }
+}
+
+// Identical body; the @device views are what turn the lanes into a kernel.
+fn step_device(m:usize, out:rw<f64>[m]@device, src:ro<f64>[m]@device, n:usize) {
+  parallel i in m {
+    if interior(i, n) {
+      out[i] = blend(src[i - n], src[i + n], src[i - 1], src[i + 1]);
+    } else {
+      out[i] = src[i];
+    }
+  }
+}
+
+// A hot top edge that the boundary rule keeps fixed, so the steady state is a known ramp.
+fn seed(m:usize, grid:rw<f64>[m], n:usize) {
+  for i in 0..m {
+    if i / n == 0 { grid[i] = 1.0; } else { grid[i] = 0.0; }
+  }
+}
+
+fn report(n:usize, label:ro<u8>[n], nanoseconds:u64) {
+  io.print(n, label);
+  io.print_u64(nanoseconds / 1000);
+  let unit = " us";
+  io.println(len(unit), unit);
+}
