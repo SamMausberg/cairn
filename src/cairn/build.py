@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from .cairnc import RUNTIME_FILES, Parser, compile_source
+from .codegen import mangle
 from .project import Project, ProjectError
 from .toolchain import audit_effects, find, flags, profile
 from .toolchain import command as native_command
@@ -36,16 +37,23 @@ def build(
     if bare and kind != "exe":
         raise ProjectError(f'Target {target} builds one image: set kind = "exe".')
     compiler = find(cxx)
-    generated, receipt = compile_source(project.source, project.origin if debug else "")
+    entry = ""
+    if kind == "exe":  # The entry point is `main` of the root module, else the only module-level `main`.
+        mains = [f for f in Parser(project.source).parse().functions if f.name.rsplit(".", 1)[-1] == "main"]
+        main = next((f for f in mains if f.name == "main"), mains[0] if len(mains) == 1 else None)
+        if main is None or main.static or main.params or main.ret.name != "i32" or main.ret.mode != "value":
+            raise ProjectError("An executable needs exactly one fn main() -> i32 with no arguments.")
+        entry = main.name
+    # A library exports everything; a program contains only what its entry point reaches.
+    generated, receipt = compile_source(project.source, project.origin if debug else "", (entry,) if entry else ())
     if bare:  # No hosted runtime stands behind the image, so no effect may assume one.
         audit_effects(receipt["functions"])
-    if kind == "exe":
-        functions = {f.name: f for f in Parser(project.source).parse().functions}
-        main = functions.get("main")
-        if main is None or main.static or main.params or main.ret.name != "i32" or main.ret.mode != "value":
-            raise ProjectError("An executable needs fn main() -> i32 with no arguments.")
-        if not bare:  # A freestanding image is entered by the target's start-up code, which calls cf_main.
-            generated += "\nint main() { return static_cast<int>(cf_main()); }\n"
+    if entry and (bare or entry != "main"):  # Start-up code calls cf_main, wherever main was written.
+        generated += f'\nextern "C" std::int32_t cf_main() noexcept {{ return cf_{mangle(entry)}(); }}\n' * (
+            entry != "main"
+        )
+    if entry and not bare:
+        generated += "\nint main() { return static_cast<int>(cf_" + mangle(entry) + "()); }\n"
     # No manifest can select a compiler executable, flags, build script, or output path.
     out = output or project.root / "build"
     if out.is_symlink():

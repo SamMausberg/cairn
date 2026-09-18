@@ -19,8 +19,9 @@ Typed, tested, SMT-equivalent and Lean-verified are different claims.""",
 every build. Unsigned add_wrap/sub_wrap/mul_wrap are modular. /,% trap on zero
 or signed min/-1; signed remainder truncates toward zero, unlike Python.
 shl_wrap(x,k),shr(x,k) require usize k below width. &,|,^,~ are unsigned;
-min/max are integer-only. Conversions are explicit, integer narrowing checked;
-float-to-integer is unsupported. Literals use expected type, else u64/f64.
+min/max are integer-only. Conversions are explicit and range checked: narrowing
+traps outside the target; float-to-integer truncates toward zero and traps on NaN
+or out of range. Literals use expected type, else u64/f64.
 x+1 and add_wrap(x,1) differ at u64 maximum. Never weaken arithmetic or the
 allowed trap/domain policy merely to pass a check.""",
     "views": """ro<T>[n] and rw<T>[n] borrow host storage; @host is optional, not a transfer.
@@ -44,7 +45,8 @@ do not specify its behavior. Effects substitute caller buffers, including recurs
 calls. Request context before calling an undisclosed dependency. Source/model
 acceptance does not establish the reference's intent or native performance.""",
     "floats": """f32/f64 use -ffp-contract=off -fno-fast-math. No implicit reassociation or FMA;
-floating min/max and float-to-integer casts are unsupported. Strict flags are not
+floating min/max are unsupported; u64(x) of a float truncates, trapping out of range.
+Strict flags are not
 a mechanized IEEE proof. Floating exception flags and NaN payloads are outside
 the current observation model; compiler/runtime/hardware remain trusted.""",
     "records": """struct Pair {x:u64; y:u64;} is a value record. Construct Pair(a,b), access p.x.

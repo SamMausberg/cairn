@@ -342,3 +342,61 @@ def test_a_move_before_break_still_counts_after_the_loop():
     with pytest.raises(Diagnostic) as e:
         compile_source(source)
     assert e.value.data["code"] in {"E-MOVE-IN-LOOP", "E-MOVED"}
+
+
+ERGONOMICS = """
+module shapes;
+pub struct Ring { items:Buf[u64]; used:usize; }
+pub fn ring(n:usize) -> Ring = Ring(Buf[u64](n), 0);
+pub fn len(r:ro<Ring>) -> usize = r.used;                 // a type may have its own len
+pub fn add(r:rw<Ring>, v:u64) { r.items[r.used] = v; r.used = r.used + 1; }
+module app;
+import shapes;
+enum Done[E] { Ok; Err(E); }
+enum Result[T, E] { Ok(T); Err(E); }
+extern "getpid" fn process_id() -> i32 effects(io);
+fn check(v:u64) -> Done[u8] { if v == 0 { return Done.Err(9); } return Done.Ok; }
+fn half(v:u64) -> Result[u64, u8] { try check(v); return Result.Ok(v / 2); }   // Done's failure fits Result
+fn unused_and_never_emitted() -> i32 { unsafe { return process_id(); } }
+fn main() -> i32 {
+  let mut r = shapes.ring(4);
+  r.add(7);
+  if r.len() != 1 || len(r.items) != 4 { return 1; }
+  match half(0) { Result.Ok(v) => { return 2; } Result.Err(code) => { if code != 9 { return 3; } } }
+  match half(10) { Result.Ok(v) => { if v != 5 { return 4; } } Result.Err(code) => { return 5; } }
+  let f:f64 = 1234.9;
+  let g:f32 = 0.0 - 7.5;
+  if u64(f) != 1234 || i32(g) != 0 - 7 || u8(f / 10.0) != 123 { return 6; }
+  return 0;
+}
+"""
+
+
+def test_ergonomics_the_first_library_author_asked_for(tmp_path):
+    """A type's own len, try across sum families, extern link names, checked float to integer, and
+    executables that contain only what main reaches."""
+    from cairn.build import build
+    from cairn.project import load_project
+
+    path = tmp_path / "app.cairn"
+    path.write_text(ERGONOMICS)
+    record = build(load_project(path), kind="exe", cxx="g++")
+    assert record["status"] == "native-built", record.get("stderr")
+    assert subprocess.run([record["artifact"]], timeout=30).returncode == 0
+    generated = (tmp_path / "build").glob("*/program.cpp").__next__().read_text()
+    assert "unused_and_never_emitted" not in generated and "getpid" not in generated
+    rows = record["frontend"]["functions"]
+    assert "ffi:getpid" in rows["app.unused_and_never_emitted"]["effects"]  # Checked and reported all the same.
+    assert '__asm__("getpid")' in compile_source(ERGONOMICS)[0]
+
+
+@pytest.mark.parametrize("value", ["0.0 / 0.0", "18446744073709551616.0", "0.0 - 1.0"])
+def test_float_to_integer_traps_outside_the_target(tmp_path, value):
+    source = f"fn main() -> i32 {{ let zero:f64 = 0.0; let x:f64 = {value} + zero; let y = u64(x); return i32(y); }}"
+    (tmp_path / "p.cpp").write_text(compile_source(source)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    subprocess.run(
+        ["g++", "-std=c++20", "-O2", str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120
+    )
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == -6

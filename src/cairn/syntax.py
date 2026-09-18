@@ -194,6 +194,7 @@ class Function:
     effects: tuple[str, ...] | None = None  # A declared ceiling; None infers.
     owner: tuple[str, Type] | None = None  # (trait, Self) for an impl member.
     kernel: bool = False  # Runs on the device: callable only from device lanes and other kernels.
+    symbol: str = ""  # The C symbol of an extern, when it differs from the CAIRN name.
 
     @property
     def static(self) -> str | None:
@@ -701,8 +702,10 @@ class Parser:
                     f.name = f.source_name = declare(f"{trait}.{target.display()}.{f.name}", start)
                     p.functions.append(f)
             elif self.eat("extern"):
+                symbol = unescape(self.t) if self.t.s[0] == '"' else ""  # extern "close" fn close_fd(...)
+                self.i += bool(symbol)
                 self.need("fn")
-                f = self.function(t, bodiless=True, extern=True, public=public)
+                f = self.function(t, bodiless=True, extern=True, public=public, symbol=symbol)
                 f.name = f.source_name = declare(f.name, t)
                 p.functions.append(f)
             elif self.t.s in {"fn", "kernel"}:

@@ -443,7 +443,7 @@ class Checker:
                     fail("E-DUPLICATE", "Static binder shadows a parameter.", f)
                 self.env[name] = Binding(USIZE, constant=value)
         if f.extern:
-            self.effects |= {"ffi:" + f.name.rsplit(".", 1)[-1], *(f.effects or ())}
+            self.effects |= {"ffi:" + (f.symbol or f.name.rsplit(".", 1)[-1]), *(f.effects or ())}
             self.effects |= {("write:" if t.mode == "rw" else "read:") + n for n, t in f.params if t.mode != "value"}
         elif not self.block(f.body) and f.ret != VOID:
             fail("E-RETURN", f"Not all paths of {f.name} return.", f)
@@ -1265,10 +1265,11 @@ class Checker:
         if not isinstance(layout, dict) or len(layout) != 2 or ty.name in self.p.enums:
             fail("E-TRY", "try needs a sum of exactly two variants: success first, failure second.", e)
         failure = list(layout.values())[1]
-        if ret.name != ty.name or list(target.values())[1] != failure:
+        fits = isinstance(target, dict) and len(target) == 2 and ret.name not in self.p.enums
+        if not fits or list(target.values())[1] != failure:
             fail("E-TRY", f"try returns the failure of {ty.display()}, which {ret.display()} cannot carry.", e)
         self.leaks(set(self.env) - outer, e)
-        e.ref = (*layout, ret)
+        e.ref = (*layout, ret, list(target)[1])
         return next(iter(layout.values())) or VOID
 
     def e_unary(self, e: Expr, expected: Type | None) -> Type:
@@ -1337,6 +1338,13 @@ class Checker:
         shared = self.peek(receiver) if receiver is not None else VOID
         if shared.name in {"Atomic", "Mutex"}:
             return self.shared(e, n, shared, args[1:])
+        home = self.p.modules.get(shared.name, "") if receiver is not None else ""
+        with self.within(home or self.module):  # A method is found in its receiver's home module first.
+            method = self.qualify(n, self.fs, node=e) if home else None
+        if method and self.p.modules.get(method, "") not in ("", self.module) and method not in self.p.public:
+            fail("E-PRIVATE", f"{method} is private to module {self.p.modules[method]}.", e)
+        if method:
+            return self.invoke(e, self.fs[method], args, targs, expected)
         if n in self.env and self.env[n].ty.name == "fn":
             return self.indirect(e, self.env[n], args)
         if (n in BUILTINS and n not in self.fs) or n in NUMERIC or n in INTRINSIC_TYPES:
@@ -1345,12 +1353,7 @@ class Checker:
         record = self.qualify(n, self.p.records, node=e)
         if record:
             return self.construct(e, record, args, targs, expected)
-        home = self.p.modules.get(self.peek(receiver).name, "") if receiver else ""
-        with self.within(home or self.module):  # A method is found in its receiver's home module.
-            name = self.qualify(n, self.fs, node=e) if home else None
-        if name and self.p.modules.get(name, "") not in ("", self.module) and name not in self.p.public:
-            fail("E-PRIVATE", f"{name} is private to module {self.p.modules[name]}.", e)
-        name = name or self.qualify(n, self.fs, node=e)
+        name = self.qualify(n, self.fs, node=e)
         f = self.fs[name] if name else self.trait_member(e, n, args)
         if f is not None and isinstance(e.ref, tuple) and e.ref[0] == "dispatch":
             return f.ret
@@ -1615,9 +1618,7 @@ class Checker:
             src = self.expr(args[0])
             if src.mode != "value" or src.name not in NUMERIC:
                 fail("E-CAST", "Conversion requires numeric scalar.", e)
-            if src.name in FLOAT and n in INT:
-                fail("E-CAST", "Float-to-integer conversion is not in the bootstrap subset.", e)
-            if src.name in INT and n in INT:
+            if n in INT:  # Narrowing, and float to integer (truncation toward zero), are range checked.
                 self.guard("conversion")
             return Type(n)
         if n in {"mmio_read", "mmio_write", "asm"}:  # Target access: audited, never silently safe.

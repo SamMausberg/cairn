@@ -52,7 +52,8 @@ def signature(f: Function) -> str:
     ret = "" if f.ret.name == "void" else " -> " + f.ret.display()
     ceiling = "" if f.effects is None else " pure" if f.effects == ("pure",) else f" effects({', '.join(f.effects)})"
     name = f.source_name.rsplit(".", 1)[-1] if f.owner else f.name.rsplit(".", 1)[-1] if f.module else f.name
-    return f"{'extern ' * f.extern}{'kernel ' * f.kernel}fn {name}{generics(f.generics if not f.bindings else [])}({ps}){ret}{ceiling}"
+    link = f'"{f.symbol}" ' if f.symbol else ""
+    return f"{'extern ' * f.extern}{link}{'kernel ' * f.kernel}fn {name}{generics(f.generics if not f.bindings else [])}({ps}){ret}{ceiling}"
 
 
 ESCAPES = {"\n": "\\n", "\t": "\\t", "\r": "\\r", "\0": "\\0", "\\": "\\\\", '"': '\\"'}

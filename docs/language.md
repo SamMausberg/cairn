@@ -10,7 +10,7 @@ ASCII identifiers, UTF-8 comments, braces, semicolons, `//` comments. No shadowi
 
 Scalars: `bool`, `u8 u16 u32 u64 usize` (64-bit), `i8 i16 i32 i64`, `f32 f64`. `const N:usize = 256;` declares one scalar literal. `fn inc(x:u64) -> u64 = add_wrap(x,1);` is one return; blocks need explicit returns and every nonvoid path must return.
 
-Ordinary integer `+ - *` abort on overflow in every build; `/ %` reject zero and signed minimum over -1; signed remainder truncates toward zero. `add_wrap sub_wrap mul_wrap` are modular; `shl_wrap shr` need a `usize` count below the width; `& | ^ ~` are unsigned; `min max` are integer-only. Conversions are explicit type calls, integer narrowing is range checked, float-to-integer is unsupported. A literal takes its expected type, else `u64`/`f64`. Floats compile with `-ffp-contract=off -fno-fast-math` (and `--fmad=false` on the device): no contraction or reassociation is ever authorized. A failed guard aborts; it does not unwind or roll back.
+Ordinary integer `+ - *` abort on overflow in every build; `/ %` reject zero and signed minimum over -1; signed remainder truncates toward zero. `add_wrap sub_wrap mul_wrap` are modular; `shl_wrap shr` need a `usize` count below the width; `& | ^ ~` are unsigned; `min max` are integer-only. Conversions are explicit type calls and integer targets are range checked: narrowing traps outside the target, and float-to-integer truncates toward zero and traps on NaN or an out-of-range value. A literal takes its expected type, else `u64`/`f64`. Floats compile with `-ffp-contract=off -fno-fast-math` (and `--fmad=false` on the device): no contraction or reassociation is ever authorized. A failed guard aborts; it does not unwind or roll back.
 
 ## Records, sums, generics
 

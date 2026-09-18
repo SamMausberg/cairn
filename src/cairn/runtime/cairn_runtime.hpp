@@ -97,6 +97,14 @@ template<class T,class S> CR_HD inline T convert(S x) noexcept {
   if(!std::in_range<T>(x)) trap();
   return static_cast<T>(x);
 }
+// Float to integer truncates toward zero and traps on NaN or a value outside T. 2^digits is exact
+// in every float format, and where low-1 is not (64-bit), comparing with low itself is.
+template<class T,class F> CR_HD inline T truncate(F x) noexcept {
+  constexpr F limit = static_cast<F>(std::uint64_t(1) << (std::numeric_limits<T>::digits - 1)) * F(2);
+  constexpr F low = std::is_signed_v<T> ? -limit : F(0);
+  if(!((x > low - F(1) || x >= low) && x < limit)) trap();
+  return static_cast<T>(x);
+}
 template<class T> CR_HD inline T& at(T* p,std::size_t i,std::size_t n) noexcept {
   if(i>=n) trap();
   return p[i];

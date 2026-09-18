@@ -32,7 +32,7 @@ BAD = [
     ("E-WRAP-TYPE", "fn f(x:i64)->i64 { return add_wrap(x,1); }"),
     ("E-OPERATOR", "fn f(x:u64)->u64 { return -x; }"),
     ("E-OPERATOR", "fn f(x:f64)->f64 { return x%2.0; }"),
-    ("E-CAST", "fn f(x:f64)->u64 { return u64(x); }"),
+    ("E-CAST", "fn f(x:bool)->u64 { return u64(x); }"),
     ("E-CALLEE", "fn f()->u64 { return system(1); }"),
     ("E-ARITY", "fn f(x:u64)->u64 { return add_wrap(x); }"),
     ("E-VIEW-ALIAS", "fn f(n:usize,x:ro<u64>[n]@host) { let y=x; }"),
