@@ -1,0 +1,74 @@
+enum Op { Push(u8); Add; Mul; Dup; Bad; }
+
+fn decode(n:usize, code:ro<u8>[n], i:usize) -> Op {
+    let b:u8 = code[i];
+    if b == 0 {
+        if i + 1 < n {
+            return Op.Push(code[i + 1]);
+        }
+        return Op.Bad;
+    }
+    if b == 1 {
+        return Op.Add;
+    }
+    if b == 2 {
+        return Op.Mul;
+    }
+    if b == 3 {
+        return Op.Dup;
+    }
+    return Op.Bad;
+}
+
+fn run(n:usize, code:ro<u8>[n]) -> i64 {
+    stack cells:i64[64] = zeroed;
+    let mut top:usize = 0;
+    let mut i:usize = 0;
+    while i < n {
+        let step:Op = decode(n, code, i);
+        match step {
+            Op.Push(v) => {
+                if top >= 64 {
+                    return -1;
+                }
+                cells[top] = i64(v);
+                top = top + 1;
+                i = i + 2;
+            }
+            Op.Add => {
+                if top < 2 {
+                    return -1;
+                }
+                cells[top - 2] = cells[top - 2] + cells[top - 1];
+                top = top - 1;
+                i = i + 1;
+            }
+            Op.Mul => {
+                if top < 2 {
+                    return -1;
+                }
+                cells[top - 2] = cells[top - 2] * cells[top - 1];
+                top = top - 1;
+                i = i + 1;
+            }
+            Op.Dup => {
+                if top == 0 {
+                    return -1;
+                }
+                if top >= 64 {
+                    return -1;
+                }
+                cells[top] = cells[top - 1];
+                top = top + 1;
+                i = i + 1;
+            }
+            Op.Bad => {
+                return -1;
+            }
+        }
+    }
+    if top == 0 {
+        return -1;
+    }
+    return cells[top - 1];
+}

@@ -1,0 +1,10 @@
+fn map_in_place(n:usize, xs:rw<i64>[n], f:ro<fn(i64) -> i64>) {
+    for i in 0..n {
+        let v = f(xs[i]);
+        xs[i] = v;
+    }
+}
+
+fn poly(n:usize, xs:rw<i64>[n], a:i64, b:i64) {
+    map_in_place(n, xs, |x:i64| -> i64 { return a * x + b; });
+}

@@ -1,0 +1,11 @@
+fn is_new(i:usize, n:usize, xs:ro<u64>[n]) -> bool {
+    if i == 0 {
+        return true;
+    }
+    return xs[i] != xs[i - 1];
+}
+
+fn dedupe(n:usize, xs:ro<u64>[n], out:rw<u64>[n]) -> usize {
+    let used = compact out for i in n where is_new(i, n, xs) yield xs[i];
+    return used;
+}

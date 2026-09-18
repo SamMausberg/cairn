@@ -1,0 +1,17 @@
+fn sum_range(m:usize, part:ro<u64>[m]) -> u64 {
+    let mut acc:u64 = 0;
+    for i in 0..m {
+        acc = add_wrap(acc, part[i]);
+    }
+    return acc;
+}
+
+fn halves(n:usize, xs:ro<u64>[n]) -> u64 {
+    let mid:usize = n / 2;
+    let rest:usize = n - mid;
+    let lo = spawn sum_range(mid, xs[0..mid]);
+    let hi = spawn sum_range(rest, xs[mid..n]);
+    let a = wait(lo);
+    let b = wait(hi);
+    return add_wrap(a, b);
+}

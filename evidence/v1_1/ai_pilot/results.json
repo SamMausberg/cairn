@@ -1,0 +1,108 @@
+{
+  "schema": "cairn.ai-pilot/1",
+  "compiler_commit": "4da80b5d1b6a9af518451ea0c4fbd7eb79862feb",
+  "subject_model": "claude-opus-5 (fresh subagent, empty context)",
+  "solved": 9,
+  "of": 9,
+  "tasks": {
+    "mean": {
+      "structure": "accepted",
+      "tests": "passed-finite-tests",
+      "solved": true,
+      "source_bytes": 1034,
+      "checker_runs": 2,
+      "tool_calls": 6,
+      "outside_sandbox": [],
+      "output_tokens": 7483,
+      "subject_remark": "most confusing: the cards never give the conversion syntax or operator precedence directly \u2014 `u64(x)` appears only as an aside in the floats card \u2014 so I had to guess the cast form and parenthesize defensively."
+    },
+    "machine": {
+      "structure": "accepted",
+      "tests": "passed-finite-tests",
+      "solved": true,
+      "source_bytes": 1753,
+      "checker_runs": 1,
+      "tool_calls": 4,
+      "outside_sandbox": [],
+      "output_tokens": 8785,
+      "subject_remark": "most confusing: whether a `stack`/`buffer` owner declared without `let mut` may be written element-wise, since the memory card never says so while the records card says only mutable locals or `rw` elements can change."
+    },
+    "dedupe": {
+      "structure": "accepted",
+      "tests": "passed-finite-tests",
+      "solved": true,
+      "source_bytes": 284,
+      "checker_runs": 1,
+      "tool_calls": 4,
+      "outside_sandbox": [],
+      "output_tokens": 3539,
+      "subject_remark": "most confusing: the cards never state whether boolean operators like `||` exist or short-circuit, so I could not tell if `i == 0 || xs[i] != xs[i-1]` would trap on the `i-1` underflow at i==0 and had to hoist the test into a helper function."
+    },
+    "score": {
+      "structure": "accepted",
+      "tests": "passed-finite-tests",
+      "solved": true,
+      "source_bytes": 559,
+      "checker_runs": 1,
+      "tool_calls": 4,
+      "outside_sandbox": [],
+      "output_tokens": 3556,
+      "subject_remark": "most confusing: whether a by-value record silently borrows into a `ro<Self>` self parameter \u2014 the cards say `value.f(a)` is `f(value, a)` but never state where that implicit borrow comes from."
+    },
+    "rotate": {
+      "structure": "accepted",
+      "tests": "passed-finite-tests",
+      "solved": true,
+      "source_bytes": 434,
+      "checker_runs": 1,
+      "tool_calls": 4,
+      "outside_sandbox": [],
+      "output_tokens": 4188,
+      "subject_remark": "e two unrelated-looking heap array forms \u2014 `buffer scratch:u64[n] = zeroed;` (memory card) and `let mut b = Buf[u64](n);` (owners card) \u2014 without saying how they relate or when each is required, and similarly `for i in n` appears in the compact/parallel cards while plain loops use `for i in lo..hi`."
+    },
+    "poly": {
+      "structure": "accepted",
+      "tests": "passed-finite-tests",
+      "solved": true,
+      "source_bytes": 251,
+      "checker_runs": 1,
+      "tool_calls": 4,
+      "outside_sandbox": [],
+      "output_tokens": 3489,
+      "subject_remark": "Most confusing: the cards show ordinary loops only as `for i in lo..hi` while `compact`, `parallel` and `reduce` all write `for i in n`, so it is unclear whether a bare count is a legal ordinary for-loop bound."
+    },
+    "dot": {
+      "structure": "accepted",
+      "tests": "passed-finite-tests",
+      "solved": true,
+      "source_bytes": 150,
+      "checker_runs": 1,
+      "tool_calls": 4,
+      "outside_sandbox": [],
+      "output_tokens": 2618,
+      "subject_remark": "most confusing: `reduce` is documented only inside the \"parallel\" card and only with the bare `for i in n` form, so it was unclear whether it is a parallel-only construct and whether the base card's `lo..hi` range form applies to it."
+    },
+    "halves": {
+      "structure": "accepted",
+      "tests": "passed-finite-tests",
+      "solved": true,
+      "source_bytes": 424,
+      "checker_runs": 1,
+      "tool_calls": 4,
+      "outside_sandbox": [],
+      "output_tokens": 3821,
+      "subject_remark": "ost confusing: the cards never state that `wait(t)` yields the spawned function's return value \u2014 they only call the ticket something that must be \"consumed\" \u2014 so the core of this task rested on an inference, and the `let name:Type = ...` annotation form is likewise never shown anywhere in the cards."
+    },
+    "recipe": {
+      "structure": "accepted",
+      "tests": "passed-finite-tests",
+      "solved": true,
+      "source_bytes": 464,
+      "checker_runs": 1,
+      "tool_calls": 4,
+      "outside_sandbox": [],
+      "output_tokens": 1144,
+      "subject_remark": "most confusing: the recipe card's static-fact syntax \u2014 whether a fact like `unsigned` applies to a field (`unsigned(f)`) or to its type (`unsigned(typeof(f))`), and whether the `|` in `fold | each ... { e }` is a literal operator or a placeholder."
+    }
+  }
+}

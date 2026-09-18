@@ -1,0 +1,19 @@
+fn rotate(n:usize, xs:rw<u64>[n], k:usize) {
+    if n > 0 {
+        let r = k % n;
+        if r > 0 {
+            let mut tmp = Buf[u64](n);
+            for i in 0..n {
+                tmp[i] = xs[i];
+            }
+            let mut j = r;
+            for i in 0..n {
+                xs[i] = tmp[j];
+                j = j + 1;
+                if j == n {
+                    j = 0;
+                }
+            }
+        }
+    }
+}

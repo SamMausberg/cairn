@@ -1,0 +1,31 @@
+trait Score {
+    fn score(self:ro<Self>) -> u64;
+}
+
+struct Pair {a:u64; b:u64;}
+
+struct Rect {w:u64; h:u64;}
+
+impl Score for Pair {
+    fn score(self:ro<Pair>) -> u64 {
+        return self.a + 2 * self.b;
+    }
+}
+
+impl Score for Rect {
+    fn score(self:ro<Rect>) -> u64 {
+        return self.w * self.h;
+    }
+}
+
+fn better[S: Score, T: Score](s:S, t:T) -> u64 {
+    let ls = s.score();
+    let rs = t.score();
+    return max(ls, rs);
+}
+
+fn best(a:u64, b:u64, w:u64, h:u64) -> u64 {
+    let p = Pair(a, b);
+    let r = Rect(w, h);
+    return better(p, r);
+}

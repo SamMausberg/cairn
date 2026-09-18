@@ -1,0 +1,25 @@
+// mean: floor of the arithmetic mean of xs, 0 when n is 0.
+//
+// The running total of n u32 values does not fit in u32, and for a large
+// enough n it would not fit in u64 either, so no total is kept. Instead the
+// invariant total_so_far == quotient * count + remainder, 0 <= remainder <
+// count, is maintained incrementally. quotient never exceeds the largest
+// element, so it stays inside u32, and remainder stays below count, so no
+// checked operation here can trap: count is at least 1 when the loop runs,
+// and the final narrowing is of a value bounded by the largest element.
+fn mean(n:usize, xs:ro<u32>[n]) -> u32 {
+    if n == 0 {
+        return 0;
+    }
+    let count:u64 = u64(n);
+    let mut quotient:u64 = 0;
+    let mut remainder:u64 = 0;
+    for i in 0..n {
+        let value:u64 = u64(xs[i]);
+        quotient = quotient + (value / count);
+        remainder = remainder + (value % count);
+        quotient = quotient + (remainder / count);
+        remainder = remainder % count;
+    }
+    return u32(quotient);
+}
