@@ -1,4 +1,4 @@
-"""Native compilation API and compatibility CLI."""
+"""The native compilation API: parse, expand, check, certify, emit."""
 
 from __future__ import annotations
 
@@ -10,19 +10,30 @@ from pathlib import Path
 from typing import Any
 
 from .checking import Binding, Checker
-from .codegen import RUNTIME, Emitter
+from .codegen import RUNTIME, RUNTIME_FILES, Emitter
 from .expansion import derive_wire, specialize
-from .syntax import *
+from .linear_certificates import audit_collector
+from .syntax import (
+    IDENT, INT, RESERVED, SIGNED, VERSION, WIDTH, Diagnostic, Expr, Function, Parser, Program, Stmt, Type, fail,
+)  # fmt: skip
+
+__all__ = [
+    "IDENT", "INT", "RESERVED", "RUNTIME", "RUNTIME_FILES", "SIGNED", "VERSION", "WIDTH", "Binding", "Checker",
+    "Diagnostic", "Emitter", "Expr", "Function", "Parser", "Program", "Stmt", "Type", "compile_program",
+    "compile_source", "derive_wire", "fail", "specialize",
+]  # fmt: skip
+
+
+def compile_program(source: str, capture_sites: bool = False) -> tuple[Program, Checker, dict[str, Any]]:
+    p = specialize(derive_wire(Parser(source).parse()))
+    checker = Checker(p, capture_sites)
+    return p, checker, checker.check()
 
 
 def compile_source(source: str) -> tuple[str, dict[str, Any]]:
-    p = specialize(derive_wire(Parser(source).parse()))
-    checker = Checker(p)
-    receipts = checker.check()
-    from .linear_certificates import audit_collector
-
-    certificate = audit_collector()
-    cpp = Emitter(p).emit()
+    p, checker, receipts = compile_program(source)
+    certificate = audit_collector()  # The collector's unchecked store is emitted only under this gate.
+    cpp = Emitter(p, checker).emit()
     manifest = {
         "compiler": VERSION,
         "source_sha256": hashlib.sha256(source.encode()).hexdigest(),
@@ -31,6 +42,7 @@ def compile_source(source: str) -> tuple[str, dict[str, Any]]:
         "function_count": len(p.functions),
         "families": [list(x) for x in p.families],
         "wire_derivations": p.derivations,
+        "uninstantiated_templates": checker.unchecked,
         "trusted_lowering_rules": [
             "bounded-collector/2",
             "unsigned-little-endian-wire/1",
@@ -38,65 +50,43 @@ def compile_source(source: str) -> tuple[str, dict[str, Any]]:
             "tagged-scalar-sums/1",
         ],
         "arithmetic_certificate": {
-            "status": certificate["status"],
-            "sha256": certificate["sha256"],
-            "certificate_count": certificate["certificate_count"],
-            "checker_sha256": certificate["checker_sha256"],
-            "lean_verified": False,
+            k: certificate[k] for k in ("status", "sha256", "certificate_count", "checker_sha256", "lean_verified")
         },
         "functions": receipts,
         "formal_status": "not-verified",
-        "ffi_requires": "Each nonempty view describes live, initialized, correctly typed storage for its stated extent throughout the call; no concurrent external mutation.",
+        "ffi_requires": "Each nonempty view describes live, initialized, correctly typed storage for its "
+        "stated extent throughout the call; no concurrent external mutation.",
         "target_profile": "64-bit host, C++20, GCC/Clang overflow builtins, strict floating mode",
     }
     return cpp, manifest
 
 
-def main():
+def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("source", type=Path)
     ap.add_argument("-o", "--output", type=Path)
-    ap.add_argument(
-        "--check", action="store_true", help="Check and report without writing generated files"
-    )
+    ap.add_argument("--check", action="store_true", help="Check and report without writing generated files")
     ap.add_argument("--receipt", type=Path)
     args = ap.parse_args()
     try:
-        source = args.source.read_text(encoding="utf-8")
-        cpp, receipt = compile_source(source)
+        cpp, receipt = compile_source(args.source.read_text(encoding="utf-8"))
         if args.output and not args.check:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(cpp)
-            (args.output.parent / "cairn_runtime.hpp").write_text(RUNTIME)
+            for name, text in RUNTIME_FILES.items():
+                (args.output.parent / name).write_text(text)
         if args.receipt:
             args.receipt.write_text(json.dumps(receipt, indent=2) + "\n")
         if not args.output or args.check:
-            print(
-                json.dumps(
-                    {
-                        "status": "accepted",
-                        "compiler": VERSION,
-                        "functions": receipt["function_count"],
-                        "formal_status": "not-verified",
-                    }
-                )
-            )
+            summary = {"status": "accepted", "compiler": VERSION, "functions": receipt["function_count"]}
+            print(json.dumps({**summary, "formal_status": "not-verified"}))
         return 0
     except Diagnostic as e:
         print(json.dumps(e.data), file=sys.stderr)
         return 1
     except (OSError, UnicodeError, RecursionError, ValueError, OverflowError) as e:
-        print(
-            json.dumps(
-                {
-                    "protocol": "cairn.diagnostic/1",
-                    "status": "unknown",
-                    "code": "E-RESOURCE-OR-IO",
-                    "message": str(e),
-                }
-            ),
-            file=sys.stderr,
-        )
+        unknown = {"protocol": "cairn.diagnostic/1", "status": "unknown", "code": "E-RESOURCE-OR-IO"}
+        print(json.dumps({**unknown, "message": str(e)}), file=sys.stderr)
         return 2
 
 

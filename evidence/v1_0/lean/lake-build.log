@@ -1,0 +1,56 @@
+# clean lake build of cairn/proofs (.lake and lake-manifest.json removed first)
+# host: Linux 6.8.0-1062-nvidia-64k aarch64 192-222-58-120
+# date: 2026-09-18T18:45:26Z
+# toolchain: leanprover/lean4:v4.34.0
+# command: cd proofs && lake build
+
+info: cairn-proofs: no previous manifest, creating one from scratch
+info: toolchain not updated; already up-to-date
+✔ [2/7] Built Cairn.Affine (386ms)
+✔ [3/7] Built Cairn.CollectorCertificates (444ms)
+✔ [4/7] Built Cairn.Collector (739ms)
+ℹ [5/7] Built Cairn.Audit (154ms)
+info: Cairn/Audit.lean:19:0: 'Cairn.check_sound' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:20:0: 'Cairn.check_sound'' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:21:0: 'Cairn.eval_combine_nonneg' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:22:0: 'Cairn.forall_mem_of_satisfies' depends on axioms: [propext]
+info: Cairn/Audit.lean:26:0: 'Cairn.Collector.all_checked' depends on axioms: [propext]
+info: Cairn/Audit.lean:27:0: 'Cairn.Collector.certificates_length' does not depend on any axioms
+info: Cairn/Audit.lean:31:0: 'Cairn.Collector.obligation_initial_nonnegative' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:32:0: 'Cairn.Collector.obligation_initial_cursor_before_input' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:33:0: 'Cairn.Collector.obligation_initial_input_before_capacity' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:34:0: 'Cairn.Collector.obligation_initial_capacity_representable' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:35:0: 'Cairn.Collector.obligation_store_nonnegative' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:36:0: 'Cairn.Collector.obligation_store_strictly_below_capacity' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:37:0: 'Cairn.Collector.obligation_emit_cursor_increment_fits' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:38:0: 'Cairn.Collector.obligation_step_input_increment_fits' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:39:0: 'Cairn.Collector.obligation_emit_invariant_0' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:40:0: 'Cairn.Collector.obligation_emit_invariant_1' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:41:0: 'Cairn.Collector.obligation_emit_invariant_2' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:42:0: 'Cairn.Collector.obligation_emit_invariant_3' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:43:0: 'Cairn.Collector.obligation_skip_invariant_0' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:44:0: 'Cairn.Collector.obligation_skip_invariant_1' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:45:0: 'Cairn.Collector.obligation_skip_invariant_2' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:46:0: 'Cairn.Collector.obligation_skip_invariant_3' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:47:0: 'Cairn.Collector.obligation_exit_output_count_bounded' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:51:0: 'Cairn.Collector.Inv.init' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:52:0: 'Cairn.Collector.Inv.emit' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:53:0: 'Cairn.Collector.Inv.skip' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:54:0: 'Cairn.Collector.Inv.store_nonneg' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:55:0: 'Cairn.Collector.Inv.store_lt_capacity' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:56:0: 'Cairn.Collector.Inv.emit_increment_fits' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:57:0: 'Cairn.Collector.Inv.step_increment_fits' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:58:0: 'Cairn.Collector.Inv.exit_le_capacity' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:62:0: 'Cairn.Collector.run_preserves_inv' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:63:0: 'Cairn.Collector.run_spec' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:64:0: 'Cairn.Collector.collect_spec' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:65:0: 'Cairn.Collector.store_index_lt_capacity' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:66:0: 'Cairn.Collector.store_index_lt_buffer_length' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:67:0: 'Cairn.Collector.increments_fit' depends on axioms: [propext, Quot.sound]
+✔ [6/7] Built Cairn (146ms)
+Build completed successfully (7 jobs).
+
+real 1.93 s
+user 2.89 s
+sys 0.30 s
+maxrss 1148544 KB

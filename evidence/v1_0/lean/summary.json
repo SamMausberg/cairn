@@ -1,0 +1,203 @@
+{
+  "axioms_used": [
+    "Quot.sound",
+    "propext"
+  ],
+  "certificate_count": 17,
+  "certificate_sha256": "5648cb8f06439f9ba5d87f3ffcfdc090803bed8ae7353940f83f10736afec1f2",
+  "clean_build_seconds": 1.93,
+  "commands": [
+    "cd proofs && lake build",
+    "cd proofs && lake env lean Cairn/Audit.lean",
+    ".venv/bin/python tools/export_lean_certificates.py --check",
+    ".venv/bin/python -m pytest -q tests/test_lean_proofs.py"
+  ],
+  "date": "2026-09-18T18:45:39Z",
+  "dependencies": [],
+  "elan_version": "4.2.4",
+  "generated_file_sha256": "49abc1a3f2ee7b9ec54924b708146a259e672d18f0dd6bbde04de4c680028dc5",
+  "headline_theorems": [
+    "Cairn.check_sound",
+    "Cairn.Collector.all_checked",
+    "Cairn.Collector.run_preserves_inv",
+    "Cairn.Collector.run_spec",
+    "Cairn.Collector.collect_spec",
+    "Cairn.Collector.store_index_lt_capacity",
+    "Cairn.Collector.store_index_lt_buffer_length",
+    "Cairn.Collector.increments_fit"
+  ],
+  "host": {
+    "hostname": "192-222-58-120",
+    "machine": "aarch64",
+    "release": "6.8.0-1062-nvidia-64k",
+    "system": "Linux"
+  },
+  "lake_version": "5.0.0-src+293d5d0",
+  "lean_commit": "293d5d0c0c3f3dded4688b3ccd6a33939ac5102b",
+  "lean_source_sha256": {
+    "proofs/Cairn.lean": "2d77f6916f1ac64e6e90a4c09c03f96128ac194e8f935281b660ffab8675b57f",
+    "proofs/Cairn/Affine.lean": "3563e9665532a4a52851507578afe7976f0bd32e7bb584d694c6c1d6aee9e365",
+    "proofs/Cairn/Audit.lean": "bb9e6e29b1cc648c9bbdc545eac01c761c37c150a9422552ffad2bbe9057bc4c",
+    "proofs/Cairn/Collector.lean": "ce5027187ba4aca0f0d75404dadf5c094cdd5c8407902daf442813e664b23a7e",
+    "proofs/Cairn/CollectorCertificates.lean": "49abc1a3f2ee7b9ec54924b708146a259e672d18f0dd6bbde04de4c680028dc5"
+  },
+  "lean_version": "4.34.0",
+  "mathlib": false,
+  "not_proved": [
+    "correspondence between this Lean model and the Python emitter",
+    "correspondence between the model and the generated C++ or native code",
+    "parser, typechecker, allocator, runtime, and target memory model",
+    "fixed-width machine arithmetic (the model uses mathematical integers)",
+    "alias, lifetime and initialization safety of the output buffer"
+  ],
+  "sorry_free": true,
+  "status": "lean-verified",
+  "subject": "bounded-collector/2",
+  "theorem_count": 37,
+  "theorems": {
+    "Cairn.Collector.Inv.emit": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.emit_increment_fits": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.exit_le_capacity": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.init": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.skip": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.step_increment_fits": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.store_lt_capacity": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.store_nonneg": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.all_checked": [
+      "propext"
+    ],
+    "Cairn.Collector.certificates_length": [],
+    "Cairn.Collector.collect_spec": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.increments_fit": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_emit_cursor_increment_fits": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_emit_invariant_0": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_emit_invariant_1": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_emit_invariant_2": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_emit_invariant_3": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_exit_output_count_bounded": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_initial_capacity_representable": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_initial_cursor_before_input": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_initial_input_before_capacity": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_initial_nonnegative": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_skip_invariant_0": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_skip_invariant_1": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_skip_invariant_2": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_skip_invariant_3": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_step_input_increment_fits": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_store_nonnegative": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_store_strictly_below_capacity": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.run_preserves_inv": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.run_spec": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.store_index_lt_buffer_length": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.store_index_lt_capacity": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.check_sound": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.check_sound'": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.eval_combine_nonneg": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.forall_mem_of_satisfies": [
+      "propext"
+    ]
+  },
+  "toolchain": "leanprover/lean4:v4.34.0"
+}

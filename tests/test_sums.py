@@ -129,7 +129,7 @@ def test_reject(decl, body, code):
         "enum R { Bad(void); }",
         "enum R { Bad(ro<u64>[1]); }",
         "enum R { Bad(R); }",
-        "struct S {x:u64;} enum R {Bad(S);}",
+        "enum R { Bad(rw<u64>); }",
     ],
 )
 def test_payload_restrictions(decl):
@@ -138,10 +138,13 @@ def test_payload_restrictions(decl):
     assert e.value.data["code"] == "E-SUM-PAYLOAD"
 
 
-def test_sum_view_rejected():
-    with pytest.raises(Diagnostic) as e:
-        compile_source("enum R {V(u64);} fn f(n:usize,x:ro<R>[n]){}")
-    assert e.value.data["code"] == "E-SUM-VIEW"
+def test_sums_compose_with_records_and_views():
+    """1.0: payloads are any value type and sums are ordinary array elements."""
+    source = (
+        "struct S {x:u64;} enum R {Good(S); Bad;} "
+        "fn f(n:usize,x:ro<R>[n])->u64 { match x[0] { R.Good(s)=>{return s.x;} R.Bad=>{return 0;} } }"
+    )
+    assert "ct_S v_Good;" in compile_source(source)[0]
 
 
 def test_nullary_constructor_and_copy():
