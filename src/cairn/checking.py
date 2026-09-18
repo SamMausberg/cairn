@@ -844,9 +844,12 @@ class Checker:
         declared = self.resolve(s.ty, s) if s.ty else None
         ty = self.region(s, [value], lambda: self.expr(value, declared))
         wanted = UNSIGNED if s.op in WRAPPING or s.op in {"&", "|", "^"} else INT if s.op in {"min", "max"} else FLOAT
+        if s.op == "+" and ty.name in UNSIGNED:  # No partial sum of naturals overflows unless the total does.
+            wanted = UNSIGNED
+            self.guard("overflow")
         if ty.mode != "value" or ty.name not in wanted:
             fail("E-REDUCE-OP", f"reduce {s.op} combines {sorted(wanted)[0]}-like scalars in an unspecified order; "
-                 "checked integer + has no order-independent trap.", s)  # fmt: skip
+                 "only unsigned + has an order-independent trap (signed + and integer * do not).", s)  # fmt: skip
         s.ty = ty
         self.bind(s.name, Binding(ty), s)
 

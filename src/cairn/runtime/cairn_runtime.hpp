@@ -82,6 +82,17 @@ template<class T> CR_HD inline T remainder(T a,T b) noexcept {
   if constexpr(std::is_signed_v<T>) if(a==std::numeric_limits<T>::min() && b==T(-1)) trap();
   return a%b;
 }
+// An unsigned sum that remembers whether it ever overflowed: associative and commutative, so a device
+// reduction may combine it in any order and the host still traps exactly when the true total does not fit.
+template<class T> struct Sum {
+  T v; bool over;
+  CR_HD Sum(T x = 0, bool o = false) noexcept : v(x), over(o) {}
+  CR_HD friend Sum operator+(Sum a, Sum b) noexcept {
+    const T s = static_cast<T>(a.v + b.v);
+    return Sum(s, a.over || b.over || s < a.v);
+  }
+  T checked() const noexcept { if(over) trap(); return v; }
+};
 template<class T> CR_HD inline T add_wrap(T a,T b) noexcept { return static_cast<T>(std::uint64_t(a)+std::uint64_t(b)); }
 template<class T> CR_HD inline T sub_wrap(T a,T b) noexcept { return static_cast<T>(std::uint64_t(a)-std::uint64_t(b)); }
 template<class T> CR_HD inline T mul_wrap(T a,T b) noexcept { return static_cast<T>(std::uint64_t(a)*std::uint64_t(b)); }

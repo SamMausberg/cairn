@@ -8,6 +8,7 @@
 
 - **Incremental builds**: `cairn build --incremental` compiles one object per module against a shared interface header and reuses an object only when everything that went into it hashes the same; a body-only edit recompiles one module. Opt-in, because it gives up inlining across modules; device programs and images stay one unit.
 
+- **Checked reduction**: `reduce +` is offered on unsigned integers, on the host and on the device, and traps exactly when the total does not fit, in any order.
 - **Evidence**: a preregistered fresh-model pilot (`evidence/v1_1/ai_pilot`): nine of nine tasks solved from the rule cards alone, eight on the first compile, every transcript audited. The cards were then revised with what the subjects had to guess.
 
 ## 1.0.0

@@ -134,7 +134,7 @@ device helper: it may index @device views, is callable only from device lanes an
 kernels, and cannot allocate, do I/O or start regions. buffer d:f32[n]@device = zeroed;
 is a scoped device owner; transfer(dst, src) is the only way across placements. reduce on
 the device combines in an unspecified order: exact for add_wrap mul_wrap & | ^ min max,
-not for float + and *; checked integer + is not offered.""",
+not for float + and *; reduce + is checked on unsigned integers, not offered on signed.""",
     "tasks": """let t = spawn f(args); runs a declared function on its own thread and gives a linear
 ticket that must be consumed by wait(t) in the same function; let r = wait(t); is f's
 result (wait(t); alone when f returns nothing). Until then every place

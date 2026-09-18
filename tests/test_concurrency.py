@@ -195,7 +195,7 @@ BODY = (
         ("E-PARALLEL-NEST", "buffer o:u64[n] = zeroed; parallel i in n { transfer(o, out); } return 0;"),
         ("E-PARALLEL-NEST", "parallel i in n { let s = reduce add_wrap for j in n yield out[j]; } return 0;"),
         ("E-LOOP-CONTROL", "for k in 0..2 { parallel i in n { break; } } return 0;"),
-        ("E-REDUCE-OP", "let s = reduce + for i in n yield out[i]; return 0;"),
+        ("E-REDUCE-OP", "let s = reduce + for i in n yield i64(out[i]); return 0;"),  # Unsigned + is checked and legal.
         ("E-REDUCE-OP", "let s = reduce min for i in n yield f32(out[i]); return 0;"),
         ("E-ARITY", "let a = Atomic[u64](0); let v = a.load(); return 0;"),
         ("E-INFER", "let a = Atomic[f64](0.0); return 0;"),
@@ -394,3 +394,36 @@ def test_queued_work_holds_what_it_touches_and_only_device_work_is_queued(code, 
     with pytest.raises(Diagnostic) as e:
         compile_source(DEVICE_HEAD + "  " + body)
     assert e.value.data["code"] == code, e.value.data["message"]
+
+
+CHECKED_SUM = """
+fn host_total(n:usize, xs:ro<u32>[n]) -> u32 { let s = reduce + for i in n yield xs[i]; return s; }
+fn main() -> i32 {
+  let n:usize = 100000;
+  buffer h:u32[n] = zeroed;
+  for i in 0..n { h[i] = u32(i % 7) * SCALE; }
+  buffer d:u32[n]@device = zeroed;
+  transfer(d, h);
+  let on_device = reduce + for i in n yield d[i];          // checked: the host traps if the total does not fit
+  let on_host = host_total(n, h);
+  if on_device != on_host || on_host != 299995 * SCALE { return 1; }
+  return 0;
+}
+"""
+
+
+def test_unsigned_reduce_plus_is_checked_in_any_order_on_host_and_device(tmp_path):
+    """No partial sum of naturals overflows unless the total does, so the trap cannot depend on the order."""
+    fits, overflows = "const SCALE:u32 = 1;\n" + CHECKED_SUM, "const SCALE:u32 = 100000;\n" + CHECKED_SUM
+    assert compile_source(fits)[1]["functions"]["host_total"]["syntactic_check_sites"]["overflow"] == 1
+    signed = "fn f(n:usize, xs:ro<i64>[n]) -> i64 { let s = reduce + for i in n yield xs[i]; return s; }"
+    product = "fn f(n:usize, xs:ro<u64>[n]) -> u64 { let s = reduce * for i in n yield xs[i]; return s; }"
+    for source in (signed, product):  # A partial signed sum, or a product later multiplied by zero, may overflow alone.
+        with pytest.raises(Diagnostic) as e:
+            compile_source(source)
+        assert e.value.data["code"] == "E-REDUCE-OP"
+    if not shutil.which("nvcc") or subprocess.run(["nvidia-smi"], capture_output=True).returncode != 0:
+        pytest.skip("No CUDA toolkit or device here")
+    for name, source, status in (("fits", fits, (0,)), ("overflows", overflows, (-6, 134))):
+        (tmp_path / name).mkdir()
+        assert build_and_run(tmp_path / name, source, "g++")[0] in status

@@ -8,7 +8,7 @@ from typing import Any
 
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import COMPARISONS, Checker
-from .syntax import CPP, FLOAT, Expr, Function, Program, Stmt, Type, fail, is_view
+from .syntax import CPP, FLOAT, UNSIGNED, Expr, Function, Program, Stmt, Type, fail, is_view
 from .version import VERSION
 
 RUNTIME_FILES = {
@@ -482,12 +482,16 @@ class Emitter:
             "min": f"{limits}::max()",
             "max": f"{limits}::lowest()",
         }.get(op, "0")
+        if op == "+" and s.ty.name in UNSIGNED:  # Checked: the total traps if it overflows, whatever the order.
+            combine, carried = ("a + b", f"cr::Sum<{ty}>") if s.ref == "device" else (f"cr::add<{ty}>(a, b)", ty)
+        else:
+            carried = ty
         if s.ref == "device":
             value = self.lane(s, lambda: self.put(f"return {self.expr(s.exprs[1])};"))
-            fold = f"[] CR_DEVICE({ty} a, {ty} b) {{ return {combine}; }}"
-            self.put(
-                f"const {ty} v_{s.name} = cr::gpu::reduce<{ty}>({es[0]}, static_cast<{ty}>({identity}), {fold}, {value});"
-            )
+            fold = f"[] CR_DEVICE({carried} a, {carried} b) {{ return {combine}; }}"
+            start = f"static_cast<{ty}>({identity})" if carried == ty else carried + "{}"
+            total = f"cr::gpu::reduce<{carried}>({es[0]}, {start}, {fold}, {value})"
+            self.put(f"const {ty} v_{s.name} = {total}{'' if carried == ty else '.checked()'};")
         else:  # On the host a reduction is an ordinary in-order fold: no threads, no hidden cost.
             self.put(f"{ty} v_{s.name} = static_cast<{ty}>({identity});")
             self.put(f"for (std::size_t v_{s.binder} = 0; v_{s.binder} < {es[0]}; ++v_{s.binder}) {{")

@@ -63,7 +63,7 @@ template<class T, Where W> class Owner final {
   T* p_ = nullptr;
 public:
   explicit Owner(std::size_t n) noexcept {
-    static_assert(std::is_arithmetic_v<T>);
+    static_assert(std::is_trivially_copyable_v<T>);  // Zeroed bytes are a value; scalars, and the runtime's Sum.
     const std::size_t b = bytes<T>(n);
     if(!b) return;
     void* q = nullptr;
