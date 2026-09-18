@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CAIRN edit request",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "session",
+        "kind",
+        "replacement"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "cairn.edit/1"
+        },
+        "session": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "kind": {
+          "const": "body"
+        },
+        "replacement": {
+          "type": "string",
+          "maxLength": 64000,
+          "description": "Compiler additionally enforces a 64000 UTF-8 byte maximum."
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "session",
+        "kind",
+        "replacement",
+        "site"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "cairn.edit/1"
+        },
+        "session": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "kind": {
+          "const": "expr"
+        },
+        "replacement": {
+          "type": "string",
+          "maxLength": 64000,
+          "description": "Compiler additionally enforces a 64000 UTF-8 byte maximum."
+        },
+        "site": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    }
+  ],
+  "description": "Structural convenience schema; the actual checker additionally validates stale IDs, parser closure, types, effects and source identity."
+}

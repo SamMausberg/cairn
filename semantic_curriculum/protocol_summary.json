@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "executed_protocol_lessons": 29,
+  "training_repair_targets": 20,
+  "evaluation_prompts": 9,
+  "algorithm_families": 10,
+  "wrong_turns_never_sft_targets": true,
+  "strict_production_choice_parser_used": true,
+  "fresh_semantic_checks": 58,
+  "model_or_training_run": false
+}

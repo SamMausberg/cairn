@@ -1,0 +1,5878 @@
+[
+  {
+    "id": "modular_increment_u8",
+    "family": "modular_increment",
+    "width": "u8",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return (x+1) modulo 2^8; do not trap.",
+    "reference": "fn task(x:u8)->u8 {if x==255 {return 0;} return x+1;}",
+    "chosen": "fn task(x:u8)->u8 {return add_wrap(x,1);}",
+    "rejected": "fn task(x:u8)->u8 {return x+1;}",
+    "split": "training",
+    "contract_sha256": "d6ba51c69e485b8635e8cb5190306f6812b1f1b01dd48c3f8d8a7d15e7a29b22",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "55ca6dadaf11e33a0877884ae7e121b8fab9b4fe96984cf4deb3d796b3e189f5",
+      "candidate_sha256": "e02c957f7e9964478240a1db7988c0770768ca7d59cdfbf1d4fd125593c5b353",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "ad8d7c3f14ad03b9ae2dc061ca5f20b8e5dd8eaaaeac3b9d75066a920ecaab74",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "8ff3a68008ead10194dde111bb89bbf400fcd9f7a2b14841bf9b909b87acf9b7",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "55ca6dadaf11e33a0877884ae7e121b8fab9b4fe96984cf4deb3d796b3e189f5",
+      "candidate_sha256": "94caa3b8b8be28bf579c58783278281f70817d8ab93b087b4fb4b220ee671388",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "e0bd9a697eeb72daad8af7863847ab9e90ac535f70eea098fcbd6400896d617f",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "740a56ff4b49f99f110af823fe68cfdfc3a288ece148c423d3bdb765794c39f8",
+          "status": "sat",
+          "values": {
+            "arg_0": 255
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 255
+      },
+      "expected": {
+        "defined": true,
+        "return": 0
+      },
+      "actual": {
+        "defined": false,
+        "trap": "integer-overflow-or-conversion"
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "minimum_u8",
+    "family": "minimum",
+    "width": "u8",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return the smaller input; do not trap.",
+    "reference": "fn task(x:u8,y:u8)->u8 {if x<y {return x;} return y;}",
+    "chosen": "fn task(x:u8,y:u8)->u8 {return min(x,y);}",
+    "rejected": "fn task(x:u8,y:u8)->u8 {return max(x,y);}",
+    "split": "training",
+    "contract_sha256": "0d69daa78facb357f9ca0a04800d9b0e9cb0461a370082a1a75587d524a14169",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "0c52dabddd92c78d724e8c047aa48bebdae9a40103f3e49ca3dff30671518322",
+      "candidate_sha256": "4599f5863eb2bc1a3b3c9076cc1384af1191f1fc2ffc9c655bddf74c7835bd43",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "7ab525867bea5af705557527770e17c618db6d7d95b8d093364a984840e82636",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "6805f299f5172c19e98417bc2b6965aa63683c4e2346a13846b25f60fc7ab268",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "0c52dabddd92c78d724e8c047aa48bebdae9a40103f3e49ca3dff30671518322",
+      "candidate_sha256": "0febfb4adfca066c4f59026289e4301fc8315c5cd41c8e9d16f1d116232a9484",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "bbc2fb9f6dd6e33531b8e5b7c3479ab7939b4f7d3c74072e31fc9318a8e00691",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "9e865f3f7513153ecf2991e2a6363b8f79c986a9012106a1997f3b294c62f9cf",
+          "status": "sat",
+          "values": {
+            "arg_0": 194,
+            "arg_1": 61
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 194,
+        "y": 61
+      },
+      "expected": {
+        "defined": true,
+        "return": 61
+      },
+      "actual": {
+        "defined": true,
+        "return": 194
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 61
+          },
+          "chosen": {
+            "defined": true,
+            "return": 61
+          },
+          "rejected": {
+            "defined": true,
+            "return": 194
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 61
+          },
+          "chosen": {
+            "defined": true,
+            "return": 61
+          },
+          "rejected": {
+            "defined": true,
+            "return": 194
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "maximum_u8",
+    "family": "maximum",
+    "width": "u8",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return the larger input; do not trap.",
+    "reference": "fn task(x:u8,y:u8)->u8 {if x>y {return x;} return y;}",
+    "chosen": "fn task(x:u8,y:u8)->u8 {return max(x,y);}",
+    "rejected": "fn task(x:u8,y:u8)->u8 {return min(x,y);}",
+    "split": "training",
+    "contract_sha256": "0bda62c852496fa846743a2d6563c581bb8cc6e108daf57e5b89eed1ef29c691",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "17190dd0971eb1e016038c49c730b1ab523bb0a17bed18df16c9b90d19899599",
+      "candidate_sha256": "0febfb4adfca066c4f59026289e4301fc8315c5cd41c8e9d16f1d116232a9484",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "c6b2987576465cfe9131a357a71386d3a9d26ad691f5ea3f146dd99e83d490a4",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "28f5ebee7996b034dc4bc50f42d6ae17da3c932f12c68dd4e07b75993795f7e4",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "17190dd0971eb1e016038c49c730b1ab523bb0a17bed18df16c9b90d19899599",
+      "candidate_sha256": "4599f5863eb2bc1a3b3c9076cc1384af1191f1fc2ffc9c655bddf74c7835bd43",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "8e000400df0e212d92feed850377bb9a5675c1b7c75f48759f43599ecde378c1",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "d8087dc3495dc0fb001ab0593b11c3677f1a5b36a9ff32fde0f4d6937fa59652",
+          "status": "sat",
+          "values": {
+            "arg_0": 255,
+            "arg_1": 0
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 255,
+        "y": 0
+      },
+      "expected": {
+        "defined": true,
+        "return": 255
+      },
+      "actual": {
+        "defined": true,
+        "return": 0
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 255
+          },
+          "chosen": {
+            "defined": true,
+            "return": 255
+          },
+          "rejected": {
+            "defined": true,
+            "return": 0
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 255
+          },
+          "chosen": {
+            "defined": true,
+            "return": 255
+          },
+          "rejected": {
+            "defined": true,
+            "return": 0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "absolute_difference_u8",
+    "family": "absolute_difference",
+    "width": "u8",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return the nonnegative absolute difference; do not trap.",
+    "reference": "fn task(x:u8,y:u8)->u8 {if x>=y {return x-y;} return y-x;}",
+    "chosen": "fn task(x:u8,y:u8)->u8 {return max(x,y)-min(x,y);}",
+    "rejected": "fn task(x:u8,y:u8)->u8 {return x-y;}",
+    "split": "training",
+    "contract_sha256": "dbb584243863a9b0db4062fc0b8277b6b8ae247aab08c3bfe827dbdd38921f7e",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "6e4ce1c61fca6ca6550e842725567311b020a73b21bc36f3879e0463183ccd6c",
+      "candidate_sha256": "26d1ec22f75ad0a2b9c7ea7652337910bfcbf1a7189fd754dff0f4f646c032c3",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "43cb51023f94b1088de208454f0ed45f2b3d0be123dc66665cc5240ba1b8da11",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "c87bb7372bfb19491eb5357741872f4b606af157bf2a6ed0a144d39d6ea7bc11",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "6e4ce1c61fca6ca6550e842725567311b020a73b21bc36f3879e0463183ccd6c",
+      "candidate_sha256": "60bf21e8521bded530ad1e20e56ce55c97be2e49c1c98658ee73ec514933508a",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "d0cfad3ea1b98cc72bcb61661112475c047321f933cbd1ae5e4ad933cbe90bab",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "77aae7592920fa70da47e730cb8c7c3d4b32c16c7d0c047c40943908171977b1",
+          "status": "sat",
+          "values": {
+            "arg_0": 120,
+            "arg_1": 160
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 120,
+        "y": 160
+      },
+      "expected": {
+        "defined": true,
+        "return": 40
+      },
+      "actual": {
+        "defined": false,
+        "trap": "integer-overflow-or-conversion"
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 40
+          },
+          "chosen": {
+            "defined": true,
+            "return": 40
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 40
+          },
+          "chosen": {
+            "defined": true,
+            "return": 40
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "saturating_add_u8",
+    "family": "saturating_add",
+    "width": "u8",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return min(x+y,255) over mathematical integers; do not trap.",
+    "reference": "fn task(x:u8,y:u8)->u8 {if y>255-x {return 255;} return x+y;}",
+    "chosen": "fn task(x:u8,y:u8)->u8 {let z=add_wrap(x,y); if z<x {return 255;} return z;}",
+    "rejected": "fn task(x:u8,y:u8)->u8 {return add_wrap(x,y);}",
+    "split": "evaluation",
+    "contract_sha256": "481b89c8b5caa6eb10d10b602b7d3ad74d061cb673d8fe11e7fac3992b31f31b",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "eb0a3b3473079c35842edaf227cd5d16e5163c913b696a6d6263d6ffb0037eef",
+      "candidate_sha256": "03d3f1efbd2abe46bbaebe6eaa9948a2b52572ae1ec10848ae5a1c8a145ecbf8",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "e4c137ab9495a6befcd63943f6a84d5e73e29b1edc4ed40016cd454152d7048d",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "89b375593511ac47ff0b4dc2cf89c7fc1fa906d5f497b4df1b27c24eeb7e993d",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "eb0a3b3473079c35842edaf227cd5d16e5163c913b696a6d6263d6ffb0037eef",
+      "candidate_sha256": "ca23577dc8a10767676efbab48b9424d81cc783e6fbf5666f8260f902aaf530c",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "56785497bc1316b34e721d1afbc69811dae1e4c1ac0ff8934d3cf80a5a12bcd7",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "b149c2107cb62ec565badd59744df75a81de2348fd7e0976e5accdfcee20d7d5",
+          "status": "sat",
+          "values": {
+            "arg_0": 84,
+            "arg_1": 229
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 84,
+        "y": 229
+      },
+      "expected": {
+        "defined": true,
+        "return": 255
+      },
+      "actual": {
+        "defined": true,
+        "return": 57
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 255
+          },
+          "chosen": {
+            "defined": true,
+            "return": 255
+          },
+          "rejected": {
+            "defined": true,
+            "return": 57
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 255
+          },
+          "chosen": {
+            "defined": true,
+            "return": 255
+          },
+          "rejected": {
+            "defined": true,
+            "return": 57
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "floor_average_u8",
+    "family": "floor_average",
+    "width": "u8",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return floor((x+y)/2) over mathematical integers for every input, without overflow or traps.",
+    "reference": "fn task(x:u8,y:u8)->u8 {return (x/2)+(y/2)+((x%2+y%2)/2);}",
+    "chosen": "fn task(x:u8,y:u8)->u8 {return (x&y)+shr(x^y,1);}",
+    "rejected": "fn task(x:u8,y:u8)->u8 {return add_wrap(x,y)/2;}",
+    "split": "evaluation",
+    "contract_sha256": "ae0516ea5e60dc4713f72ed18db0fc571420b3e314014b1c62dc3f5d156da3b7",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "1170505966b77302eb39feb0a3e5d9132ee71aa758ad3f565877a0772ccbea66",
+      "candidate_sha256": "9a25f636c9e0b25cf69a34ca9644bd29cfb35e22980b62af74ccfdb3cbfc13ca",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "299a53cfae5cce9749480fbf48eb282f9520948e3a05f7a76a3eda3b7572bd25",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "71ac7c0d52447ffb524858922232a2d47181fad7655747f1a2114406790f5724",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "1170505966b77302eb39feb0a3e5d9132ee71aa758ad3f565877a0772ccbea66",
+      "candidate_sha256": "615ba25c8ba4d601e3f22cd7635a5c417ae52438383ad2e1ddd2cc659bddb52d",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "d357d25cd90f2c2790f7c6deeacfeaa2ff9d1f0c090c21b40072625b96579288",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "4a7cfed4f12624554d627734bf9898853ddf1442aff53e7f69033821f1c05c7b",
+          "status": "sat",
+          "values": {
+            "arg_0": 158,
+            "arg_1": 148
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 158,
+        "y": 148
+      },
+      "expected": {
+        "defined": true,
+        "return": 153
+      },
+      "actual": {
+        "defined": true,
+        "return": 25
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 153
+          },
+          "chosen": {
+            "defined": true,
+            "return": 153
+          },
+          "rejected": {
+            "defined": true,
+            "return": 25
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 153
+          },
+          "chosen": {
+            "defined": true,
+            "return": 153
+          },
+          "rejected": {
+            "defined": true,
+            "return": 25
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "align_eight_u8",
+    "family": "align_eight",
+    "width": "u8",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Round x down to the greatest multiple of eight not exceeding x; do not trap.",
+    "reference": "fn task(x:u8)->u8 {return (x/8)*8;}",
+    "chosen": "fn task(x:u8)->u8 {return x & ~u8(7);}",
+    "rejected": "fn task(x:u8)->u8 {return x/8;}",
+    "split": "evaluation",
+    "contract_sha256": "65edd9199d29b6759a3eb34c90ed81274ac700f345aaaa958fe6f65d407a1460",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "ec2d97aa51a35e4d98726a58cea5f19bc01aae53c5c05b1b714b7a8d445f2944",
+      "candidate_sha256": "4d703d092781c82c9f11e6b4a41e7f6538c3e564c51c9516e5f9fad18b1ede1f",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "cf755f9346ce2af810d8c0a70f2f883bbb638d2e7582c38bfe889ef373434aa3",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "e806894f6206528f93f576314b97edb032520726769c0421974d498a62d8de87",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "ec2d97aa51a35e4d98726a58cea5f19bc01aae53c5c05b1b714b7a8d445f2944",
+      "candidate_sha256": "fe0880bcb35ffaa906d2ec5479fcd3caf4ffffeec00a9b6dbef7c2253bf92b32",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "799da4eaa545257696ba5f8295aca45ddff3a8179691fb28a15c18f9a6540a10",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "094ad5b1b883bd07fb7fb95d693547d234241f16ef8ec0908cd1e5688f717891",
+          "status": "sat",
+          "values": {
+            "arg_0": 128
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 128
+      },
+      "expected": {
+        "defined": true,
+        "return": 128
+      },
+      "actual": {
+        "defined": true,
+        "return": 16
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 128
+          },
+          "chosen": {
+            "defined": true,
+            "return": 128
+          },
+          "rejected": {
+            "defined": true,
+            "return": 16
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 128
+          },
+          "chosen": {
+            "defined": true,
+            "return": 128
+          },
+          "rejected": {
+            "defined": true,
+            "return": 16
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "clear_lowest_bit_u8",
+    "family": "clear_lowest_bit",
+    "width": "u8",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Clear the least significant set bit; zero stays zero; do not trap.",
+    "reference": "fn task(x:u8)->u8 {if x==0 {return 0;} return x&(x-1);}",
+    "chosen": "fn task(x:u8)->u8 {return x&sub_wrap(x,1);}",
+    "rejected": "fn task(x:u8)->u8 {return x^sub_wrap(x,1);}",
+    "split": "training",
+    "contract_sha256": "d50cf281857c67710d71ff29f08667c5972d133ec88235619811e3463905c71b",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "b2c3cd2c4fcc8af6f270251cf4002df6d7a954115368f40e62047e05c4b0414f",
+      "candidate_sha256": "07b1a8cc7a10ab103a64afc8e31626f0e6b9fca8bc332721d084ba17aca48922",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "8f0ff4d57f5421dc20cc745a8a2ac1e41fcb79622a8b707740cad0233b46d15e",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "2a4dd66a242abf69ae45f78e79a931e3847140474bd67445a8190e2daaa45ad1",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "b2c3cd2c4fcc8af6f270251cf4002df6d7a954115368f40e62047e05c4b0414f",
+      "candidate_sha256": "cc156447d2d28d708d6db0316e98877c22371216dcb18660e701954c8f46db48",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "f411743369effbdb9f5a07e27530f80f9dfef666e3082cabf8941ad9f7d03f34",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "0e47ff2bb4ce420c53890d154325746b135e34ec9089620b37b9db2489518950",
+          "status": "sat",
+          "values": {
+            "arg_0": 0
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 0
+      },
+      "expected": {
+        "defined": true,
+        "return": 0
+      },
+      "actual": {
+        "defined": true,
+        "return": 255
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": true,
+            "return": 255
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": true,
+            "return": 255
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "power_of_two_u8",
+    "family": "power_of_two",
+    "width": "u8",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return whether x is a positive power of two. Zero is false; do not trap.",
+    "reference": "fn task(x:u8)->bool {return x!=0 && (x&sub_wrap(x,1))==0;}",
+    "chosen": "fn task(x:u8)->bool {if x==0 {return false;} return (x&sub_wrap(x,1))==0;}",
+    "rejected": "fn task(x:u8)->bool {return (x&sub_wrap(x,1))==0;}",
+    "split": "training",
+    "contract_sha256": "a756c8eb5507c964b997b2d7a4a4391aa3dd8494d7647d62dc1bdceafc1737a3",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "a23ff9d23dafc8f5d29ac3613edbfa770e0166c0072aec715d4a9cb9a51b4d5e",
+      "candidate_sha256": "98519783bd9a1c74ed87bc805dc971c8db3f117a7d807984f61cb78bb877b8a6",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "2e6d0c61abc517dab354edefc7104c0587dc9e7116fd5f15ac9ddf1f7dbebe68",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "95dff0626090883b7490d3add4ae7ed4b598d0fcde4d9cc8c30699d2fc3667ce",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "a23ff9d23dafc8f5d29ac3613edbfa770e0166c0072aec715d4a9cb9a51b4d5e",
+      "candidate_sha256": "18417b760f6f7656ef7b0c66c1e85bb8ebeb159a0fb39627e609c6d594ff3bac",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "546e4230dc828384d6c038fc89bbc20c1001dfa19238607caee7eb80a92cac62",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "a4ce94971ffdfd68b5744ece4a953d76878c3ff281ae0c256e7bf9c967673d24",
+          "status": "sat",
+          "values": {
+            "arg_0": 0
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 0
+      },
+      "expected": {
+        "defined": true,
+        "return": false
+      },
+      "actual": {
+        "defined": true,
+        "return": true
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": false
+          },
+          "chosen": {
+            "defined": true,
+            "return": false
+          },
+          "rejected": {
+            "defined": true,
+            "return": true
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": false
+          },
+          "chosen": {
+            "defined": true,
+            "return": false
+          },
+          "rejected": {
+            "defined": true,
+            "return": true
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "ceiling_div_eight_u8",
+    "family": "ceiling_div_eight",
+    "width": "u8",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return ceil(x/8) over mathematical integers; do not trap.",
+    "reference": "fn task(x:u8)->u8 {let base=x/8; if x%8!=0 {return base+1;} return base;}",
+    "chosen": "fn task(x:u8)->u8 {return (x/8)+min(x%8,1);}",
+    "rejected": "fn task(x:u8)->u8 {return add_wrap(x,7)/8;}",
+    "split": "evaluation",
+    "contract_sha256": "8d003fe50434e6685d04b940408fbf7e6e6a7b2e7292439c7f853e78694a0b87",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "0ce167b119d57fe1bd37403e6aa59d281afcb556e12ea79912f53d1f16d8c14a",
+      "candidate_sha256": "388d2114b37a94d5a8041365ab017d2447836fe67d6d083d7ac29958fb79f806",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "eb7beb8670b621535026f43f30c963b97c06e14ee8af208d5857116f8caf223c",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "e20a5af5dd3e55917c03b86bd7a410b645e43714dc0067b934e15a0adb4381ec",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "0ce167b119d57fe1bd37403e6aa59d281afcb556e12ea79912f53d1f16d8c14a",
+      "candidate_sha256": "e30f432a89481a506d866750bf33ec9832fbdf8f5b8329d1bcec708f66ce9f02",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "5ae12838cb66836c0c764b5b163603827091115d59fad479975bdf78ccb94f47",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "3eb5456c39de46b16d1e8a7979b4f76b3f620bc250a5cf549ea4d451eeb8ac20",
+          "status": "sat",
+          "values": {
+            "arg_0": 251
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 251
+      },
+      "expected": {
+        "defined": true,
+        "return": 32
+      },
+      "actual": {
+        "defined": true,
+        "return": 0
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 32
+          },
+          "chosen": {
+            "defined": true,
+            "return": 32
+          },
+          "rejected": {
+            "defined": true,
+            "return": 0
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 32
+          },
+          "chosen": {
+            "defined": true,
+            "return": 32
+          },
+          "rejected": {
+            "defined": true,
+            "return": 0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "low_nibble_u8",
+    "family": "low_nibble",
+    "width": "u8",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return the low four bits of x; do not trap.",
+    "reference": "fn task(x:u8)->u8 {return x%16;}",
+    "chosen": "fn task(x:u8)->u8 {return x&15;}",
+    "rejected": "fn task(x:u8)->u8 {return x%15;}",
+    "split": "training",
+    "contract_sha256": "0ff19252577be83cb243093b463478826d7edd811cafadce04269b28845ed8e6",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "85575fbee469d3457e5e83e0b0b9f1dee6a7d6a6f383df7f5565db2712f4fb0c",
+      "candidate_sha256": "5d5e40083e07dc2d7cff20eba845aa1265b40a08c9da160e2048f7159b84f789",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "809e5f9db289386ef74ee9324f3b5a0c129ef41fcfe307133d571388af9b75a3",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "1f019b62348008b112ad27d364b392552e1b87258d971e181cb722b91c00c55d",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "85575fbee469d3457e5e83e0b0b9f1dee6a7d6a6f383df7f5565db2712f4fb0c",
+      "candidate_sha256": "e7b821adf5536607a2f4adb227c78d02c012f297615ab85da4084ccf2d1b4598",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "86abd9bfcf83f0ba71d69f25f54ef86d31629d0ef3150e53f6eb6e6cc74b35b3",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "79756c29a9cf58e62edc225b38e4c196fb3d7d1d43377c19ca4ab4062bce7c8b",
+          "status": "sat",
+          "values": {
+            "arg_0": 217
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 217
+      },
+      "expected": {
+        "defined": true,
+        "return": 9
+      },
+      "actual": {
+        "defined": true,
+        "return": 7
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 9
+          },
+          "chosen": {
+            "defined": true,
+            "return": 9
+          },
+          "rejected": {
+            "defined": true,
+            "return": 7
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 9
+          },
+          "chosen": {
+            "defined": true,
+            "return": 9
+          },
+          "rejected": {
+            "defined": true,
+            "return": 7
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "zero_safe_division_u8",
+    "family": "zero_safe_division",
+    "width": "u8",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return zero when y is zero, otherwise floor(x/y); do not trap.",
+    "reference": "fn task(x:u8,y:u8)->u8 {if y==0 {return 0;} return x/y;}",
+    "chosen": "fn task(x:u8,y:u8)->u8 {if y!=0 {return x/y;} return 0;}",
+    "rejected": "fn task(x:u8,y:u8)->u8 {return x/y;}",
+    "split": "training",
+    "contract_sha256": "25f72189d58bc425971e3346013fcb217686a65fc2d26d5ce68a8f4b6a7b4e09",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "31d8be6e48a87367e9b95c935f08d1909634328e54116a8f04f63452a8c6e837",
+      "candidate_sha256": "cd39af8954143949e142415771f74e6fd841c12bdfecfe320feb7aebc024d50e",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "3e562af4ac44a1c03052f04735afb78056523196d337470c9328d393047fa3f4",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "f821901d20b4785dcf0d9b5caeed60430b12b15d26061d613e147c59a0b8d084",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "31d8be6e48a87367e9b95c935f08d1909634328e54116a8f04f63452a8c6e837",
+      "candidate_sha256": "9d2375e3dbe213f26cd33dc762585c85082b5ffe98985a3b80c573c3b1b6b071",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "8a89669d17d6d4eb88dc5db41e4b79e210892da21949efa56c6dbd3d3d052b81",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "aa9a00e6aa481b077ecd302f3177626557b08c6f019dc02b4725b875810b9e4f",
+          "status": "sat",
+          "values": {
+            "arg_0": 0,
+            "arg_1": 0
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 0,
+        "y": 0
+      },
+      "expected": {
+        "defined": true,
+        "return": 0
+      },
+      "actual": {
+        "defined": false,
+        "trap": "invalid-division"
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "modular_increment_u32",
+    "family": "modular_increment",
+    "width": "u32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return (x+1) modulo 2^32; do not trap.",
+    "reference": "fn task(x:u32)->u32 {if x==4294967295 {return 0;} return x+1;}",
+    "chosen": "fn task(x:u32)->u32 {return add_wrap(x,1);}",
+    "rejected": "fn task(x:u32)->u32 {return x+1;}",
+    "split": "training",
+    "contract_sha256": "16e2edb2ca8079d1298f50f02a3784b273c6fa6c132e0c6d66732e977d6989ba",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "713a880ae33e30e93ed7feb671ef9dced41b618cc3531505f8e63d4e5c99004a",
+      "candidate_sha256": "98d165ca0bac05fcb5a9d43333deabc80e5cc6a255ec9533be7b0e5b84f84601",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "ab93d077c93b5f884cb38056e9b2c39bf472b90b22f21fc3731b7515402a162a",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "eced5d7e1e70508c9a74f7557b6b79b9342eb5c46530bcf5295aa2589bedcf78",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "713a880ae33e30e93ed7feb671ef9dced41b618cc3531505f8e63d4e5c99004a",
+      "candidate_sha256": "01fed62a9061c568007ac8dec535b781d9332ad18909a385894a89feaf88d232",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "9e5034c0b55b50a1f30bb57749ea5b3d3642bce9da500f0697abea901b205e25",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "509217dd95c00c7db4aca6b6c41ac8a49eb5a46f9f8b4cf33ff415dc27de4b8f",
+          "status": "sat",
+          "values": {
+            "arg_0": 4294967295
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 4294967295
+      },
+      "expected": {
+        "defined": true,
+        "return": 0
+      },
+      "actual": {
+        "defined": false,
+        "trap": "integer-overflow-or-conversion"
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "minimum_u32",
+    "family": "minimum",
+    "width": "u32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return the smaller input; do not trap.",
+    "reference": "fn task(x:u32,y:u32)->u32 {if x<y {return x;} return y;}",
+    "chosen": "fn task(x:u32,y:u32)->u32 {return min(x,y);}",
+    "rejected": "fn task(x:u32,y:u32)->u32 {return max(x,y);}",
+    "split": "training",
+    "contract_sha256": "1d68ae49797b185704039404d2acb91bd286cffad98b3fddc45bac541862f9e8",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "83ac56b0433f7223a22ca9b50467b88ec7464bd32250e7f18f9512c931d4b16e",
+      "candidate_sha256": "da544b3d07e2064e6da12c8e81d291c7aab132d503726b58ec83df97fb5ce356",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "65a32fdce34cf84fb1432a45c0a36cbbae4af8c931fcee0d3800c47818295a1d",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "a7986fc9b9a65b2317381d6547a38546713ef72554c9989b9ffcfc6ade9a68fb",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "83ac56b0433f7223a22ca9b50467b88ec7464bd32250e7f18f9512c931d4b16e",
+      "candidate_sha256": "08fcbad91386ebbcbbcaceb19107deeeafa4abe1538ad5d87625f80eb54ec91b",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "9b8160b2df07296d3c15a025890ab60d0ccae0d80f06ad2c7f6c9f9b94a65845",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "577c79738abb98fca630027360e25cd086e8ecaa18ad37f5f2a350ae8f1bbb59",
+          "status": "sat",
+          "values": {
+            "arg_0": 2684354560,
+            "arg_1": 1610612735
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 2684354560,
+        "y": 1610612735
+      },
+      "expected": {
+        "defined": true,
+        "return": 1610612735
+      },
+      "actual": {
+        "defined": true,
+        "return": 2684354560
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 1610612735
+          },
+          "chosen": {
+            "defined": true,
+            "return": 1610612735
+          },
+          "rejected": {
+            "defined": true,
+            "return": 2684354560
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 1610612735
+          },
+          "chosen": {
+            "defined": true,
+            "return": 1610612735
+          },
+          "rejected": {
+            "defined": true,
+            "return": 2684354560
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "maximum_u32",
+    "family": "maximum",
+    "width": "u32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return the larger input; do not trap.",
+    "reference": "fn task(x:u32,y:u32)->u32 {if x>y {return x;} return y;}",
+    "chosen": "fn task(x:u32,y:u32)->u32 {return max(x,y);}",
+    "rejected": "fn task(x:u32,y:u32)->u32 {return min(x,y);}",
+    "split": "training",
+    "contract_sha256": "bf54909c8659cfd95b80ca36e5c952a23b12634e082979388f75dd30842b9671",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "eaaab8bac3d692be7d407a37cf8bd77ddd0b72047d8fc57e33efcd5942fb76eb",
+      "candidate_sha256": "08fcbad91386ebbcbbcaceb19107deeeafa4abe1538ad5d87625f80eb54ec91b",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "a023fafb97f182fd948a8ab8f42ec3f5b6e41d7a68605f90122460ae46703baa",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "930317a62fc4863acbcd92e8440b237e15d2c884ed4af4063a939f8196744fb5",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "eaaab8bac3d692be7d407a37cf8bd77ddd0b72047d8fc57e33efcd5942fb76eb",
+      "candidate_sha256": "da544b3d07e2064e6da12c8e81d291c7aab132d503726b58ec83df97fb5ce356",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "ce6d9694629ee0573db2b1f5b5f8f0d734d80da7b77f34167acfb33cc3f9deaa",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "7b1f04dc9308367469e1e421c41f6f9514cb730b02d27ff55e84a8f1cd9e8480",
+          "status": "sat",
+          "values": {
+            "arg_0": 4294967038,
+            "arg_1": 257
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 4294967038,
+        "y": 257
+      },
+      "expected": {
+        "defined": true,
+        "return": 4294967038
+      },
+      "actual": {
+        "defined": true,
+        "return": 257
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 4294967038
+          },
+          "chosen": {
+            "defined": true,
+            "return": 4294967038
+          },
+          "rejected": {
+            "defined": true,
+            "return": 257
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 4294967038
+          },
+          "chosen": {
+            "defined": true,
+            "return": 4294967038
+          },
+          "rejected": {
+            "defined": true,
+            "return": 257
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "absolute_difference_u32",
+    "family": "absolute_difference",
+    "width": "u32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return the nonnegative absolute difference; do not trap.",
+    "reference": "fn task(x:u32,y:u32)->u32 {if x>=y {return x-y;} return y-x;}",
+    "chosen": "fn task(x:u32,y:u32)->u32 {return max(x,y)-min(x,y);}",
+    "rejected": "fn task(x:u32,y:u32)->u32 {return x-y;}",
+    "split": "training",
+    "contract_sha256": "91ac467a3cab7c33f442d6ba6e399503abf51396bcb66a5c072b358360b0daee",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "489394fa1e702c08bf86b5b0fc1e183bd0a507ce7b3a736844bd005c33ea8bbf",
+      "candidate_sha256": "0e11209b30c6ef68d1c52b86d7e5f60d2f1514cd4b66c686663b90009c2b7f1c",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "39346cdf51761f0c4e4f39319e82e117e7b8b6de7d1dab64b104d42bd7367a59",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "8fa5de4847755b23d156a6de614501eb49c6a90640cf7bb9a3338a0a88d380b6",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "489394fa1e702c08bf86b5b0fc1e183bd0a507ce7b3a736844bd005c33ea8bbf",
+      "candidate_sha256": "43b4bb95a95c9b189be69cbc242d5ea3b7a7cf66049f1570c790443bb92efd97",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "cea1acef11224e2c760e3cf3fd9a19b208a9b5635d6ba784712fe642f33ea044",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "6ba86b66f82d04debb273edee5009ed50ad2e97c8d076060a48bcc6b453470b1",
+          "status": "sat",
+          "values": {
+            "arg_0": 1577058304,
+            "arg_1": 2147483648
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 1577058304,
+        "y": 2147483648
+      },
+      "expected": {
+        "defined": true,
+        "return": 570425344
+      },
+      "actual": {
+        "defined": false,
+        "trap": "integer-overflow-or-conversion"
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 570425344
+          },
+          "chosen": {
+            "defined": true,
+            "return": 570425344
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 570425344
+          },
+          "chosen": {
+            "defined": true,
+            "return": 570425344
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "saturating_add_u32",
+    "family": "saturating_add",
+    "width": "u32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return min(x+y,4294967295) over mathematical integers; do not trap.",
+    "reference": "fn task(x:u32,y:u32)->u32 {if y>4294967295-x {return 4294967295;} return x+y;}",
+    "chosen": "fn task(x:u32,y:u32)->u32 {let z=add_wrap(x,y); if z<x {return 4294967295;} return z;}",
+    "rejected": "fn task(x:u32,y:u32)->u32 {return add_wrap(x,y);}",
+    "split": "evaluation",
+    "contract_sha256": "7e3f5801ab5fbfe8caaa5943c3dfa01d1ebd28cc356373a78aa4bc82c50a4119",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "7cff9f0539e90bb7798ecf7c333798d6dea3e356b3a7f199349a2b6ce6e61f6e",
+      "candidate_sha256": "996ccc886f3a20c189cdeb5ba9bfe6f14e2e1b499b4bf77136ab88c1269a8e4c",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "6c1233ef5136a802da3dde73b27847a2c210a9865c6147121daf4307ac1ece0d",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "30df8be983ec6c8fad94d2f257dbc68ae0ddc5aea83c2dba09263440bdcbb129",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "7cff9f0539e90bb7798ecf7c333798d6dea3e356b3a7f199349a2b6ce6e61f6e",
+      "candidate_sha256": "445fcfc18a7384ad4fcb4ea0ccb52578bc3984f1866586146960e041314bb171",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "78c0afb0c73727aaf6fb3551bbbad9d7bcd3316a76cc51a3ad900e0355ca0466",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "e4dced1605ec73b369b87bae19039fea60b4827a05ca72d753c676e36d7dbca4",
+          "status": "sat",
+          "values": {
+            "arg_0": 3181906112,
+            "arg_1": 2309221998
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 3181906112,
+        "y": 2309221998
+      },
+      "expected": {
+        "defined": true,
+        "return": 4294967295
+      },
+      "actual": {
+        "defined": true,
+        "return": 1196160814
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 4294967295
+          },
+          "chosen": {
+            "defined": true,
+            "return": 4294967295
+          },
+          "rejected": {
+            "defined": true,
+            "return": 1196160814
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 4294967295
+          },
+          "chosen": {
+            "defined": true,
+            "return": 4294967295
+          },
+          "rejected": {
+            "defined": true,
+            "return": 1196160814
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "floor_average_u32",
+    "family": "floor_average",
+    "width": "u32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return floor((x+y)/2) over mathematical integers for every input, without overflow or traps.",
+    "reference": "fn task(x:u32,y:u32)->u32 {return (x/2)+(y/2)+((x%2+y%2)/2);}",
+    "chosen": "fn task(x:u32,y:u32)->u32 {return (x&y)+shr(x^y,1);}",
+    "rejected": "fn task(x:u32,y:u32)->u32 {return add_wrap(x,y)/2;}",
+    "split": "evaluation",
+    "contract_sha256": "298ce902aaf1a0de3709da55ea36c934f7ceecc3f447a23f70af4bf68f26f55a",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "4416f131dd1aa66ffad78582a568e14e715a42c351205f609dfa6125f47f2d55",
+      "candidate_sha256": "be189dab3d13af03ed1c7b4fbb090ca4da68b22850e69877d8d1be9bf51139cd",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "201444649e4c9c9fb1c3b9ceb31386d965158bb166502d615154594980b13d43",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "bbd95f3b3eaa1bd1fa637079d550b4c5558e0e8fe2ef290f2e3e312201a5c9d4",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "4416f131dd1aa66ffad78582a568e14e715a42c351205f609dfa6125f47f2d55",
+      "candidate_sha256": "135e1bf345c5c045f0903085c2c9a83ecf86e8964466f62bc42fb10328296078",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "d10885c6d61878bea4e53a1276da14b38627cdd080f4205ee4231065d9ac79d7",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "8947f8dec9fa4fa3177d3d851506b060f42d3d7dbdd814b4c39d8bc3e046f9c0",
+          "status": "sat",
+          "values": {
+            "arg_0": 4294809592,
+            "arg_1": 2416076809
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 4294809592,
+        "y": 2416076809
+      },
+      "expected": {
+        "defined": true,
+        "return": 3355443200
+      },
+      "actual": {
+        "defined": true,
+        "return": 1207959552
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 3355443200
+          },
+          "chosen": {
+            "defined": true,
+            "return": 3355443200
+          },
+          "rejected": {
+            "defined": true,
+            "return": 1207959552
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 3355443200
+          },
+          "chosen": {
+            "defined": true,
+            "return": 3355443200
+          },
+          "rejected": {
+            "defined": true,
+            "return": 1207959552
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "align_eight_u32",
+    "family": "align_eight",
+    "width": "u32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Round x down to the greatest multiple of eight not exceeding x; do not trap.",
+    "reference": "fn task(x:u32)->u32 {return (x/8)*8;}",
+    "chosen": "fn task(x:u32)->u32 {return x & ~u32(7);}",
+    "rejected": "fn task(x:u32)->u32 {return x/8;}",
+    "split": "evaluation",
+    "contract_sha256": "cd83821e12aef6dfbee59907516abda0952e7934cdcfebe299b5df556cd7fa5b",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "490645bd984f38fe4562ee465d4b28e2da306e2dd39b8fae0238afc4b2e7000a",
+      "candidate_sha256": "5c40be33dcdeb65b6673ebd98942612507a7e97ea6277e390fd8130e18edb935",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "90ea8f39112ab6e0250ce3251a1b936124f664461a9f4118debb8c8206f9457c",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "6625064065addd86e36a85230b9589cf5d2c42bdef6f7f88aceaebc45484dc9d",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "490645bd984f38fe4562ee465d4b28e2da306e2dd39b8fae0238afc4b2e7000a",
+      "candidate_sha256": "b508d8326008a887cf82dadb031a7cd243e3c832b8c351369f22ecf7bb44ed6b",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "39a1d824ca030b76ebf0d107bd8df4e6efdc82c60471f4b94b012cfd4e4b7149",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "f2577e97ef66cb73f5e7c734ff4e8bbc9aebfcd34c6a8634945da062d4ee41e0",
+          "status": "sat",
+          "values": {
+            "arg_0": 268435456
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 268435456
+      },
+      "expected": {
+        "defined": true,
+        "return": 268435456
+      },
+      "actual": {
+        "defined": true,
+        "return": 33554432
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 268435456
+          },
+          "chosen": {
+            "defined": true,
+            "return": 268435456
+          },
+          "rejected": {
+            "defined": true,
+            "return": 33554432
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 268435456
+          },
+          "chosen": {
+            "defined": true,
+            "return": 268435456
+          },
+          "rejected": {
+            "defined": true,
+            "return": 33554432
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "clear_lowest_bit_u32",
+    "family": "clear_lowest_bit",
+    "width": "u32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Clear the least significant set bit; zero stays zero; do not trap.",
+    "reference": "fn task(x:u32)->u32 {if x==0 {return 0;} return x&(x-1);}",
+    "chosen": "fn task(x:u32)->u32 {return x&sub_wrap(x,1);}",
+    "rejected": "fn task(x:u32)->u32 {return x^sub_wrap(x,1);}",
+    "split": "training",
+    "contract_sha256": "0e35773d0e3398f96e86faebb3786a3081116c8ee5c1bf620ac63bb99d8ee6c6",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "c6267ce20628f2d8c00fcf921e618d9f7038e1f0e415975775073f3b372ca137",
+      "candidate_sha256": "a174ea78aeafb57a48c9bc1df266aa6d22ffa85ad5cc7733a7756ce950cbf958",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "9b40adc899a7ec0d5e2243dbb85474453963ad49d67818fa4d9de7ce6ac8c74c",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "99163667c8d4846a45abb5ccd8b26583df8975249e19ed5a6de9966cc1429e25",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "c6267ce20628f2d8c00fcf921e618d9f7038e1f0e415975775073f3b372ca137",
+      "candidate_sha256": "8cba358e6da7759605e644d478753a6018bc34471e2abf10b96bd8a373487aee",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "42f44eb669945d75f4b7e2138a51b79fe4597599d49bbfca712ce4d6be27aa5d",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "18f3ec03c5af38a6cecb65800ae6d04cc402251265350cf1bdb89bbca1091034",
+          "status": "sat",
+          "values": {
+            "arg_0": 0
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 0
+      },
+      "expected": {
+        "defined": true,
+        "return": 0
+      },
+      "actual": {
+        "defined": true,
+        "return": 4294967295
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": true,
+            "return": 4294967295
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": true,
+            "return": 4294967295
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "power_of_two_u32",
+    "family": "power_of_two",
+    "width": "u32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return whether x is a positive power of two. Zero is false; do not trap.",
+    "reference": "fn task(x:u32)->bool {return x!=0 && (x&sub_wrap(x,1))==0;}",
+    "chosen": "fn task(x:u32)->bool {if x==0 {return false;} return (x&sub_wrap(x,1))==0;}",
+    "rejected": "fn task(x:u32)->bool {return (x&sub_wrap(x,1))==0;}",
+    "split": "training",
+    "contract_sha256": "2718ec70de74cf3d4a7b5962ac797494bedb33e699e151cc906ac7587419d84b",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "7d023626acac1aa751d24564a0ceb94848b90ce95a46ac2b7b1ed9326904178c",
+      "candidate_sha256": "d1220ef8b95b14438640b0d6aa20887ad3b0b63ed210e2e82fc12e313e771484",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "9e6a3bab21352d5234f042a95f161b3745c41b7c85319d873a9a045c92ab1bd2",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "ad0f5251bedec5733b5feaac7708fa896582da0e7ac442d0f16feb4bbc9c2dd0",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "7d023626acac1aa751d24564a0ceb94848b90ce95a46ac2b7b1ed9326904178c",
+      "candidate_sha256": "5aae05eb96f54e103acb8383fbcf39f31732b39869135ea229803f774eff44a0",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "1c43daa5ff950f5085803eb406d458aa493bef6e7f09d3363cf8c55325f307f5",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "9db4eb41785b9a29bf229713bdd458722c23707b32a2d8409517002429685c80",
+          "status": "sat",
+          "values": {
+            "arg_0": 0
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 0
+      },
+      "expected": {
+        "defined": true,
+        "return": false
+      },
+      "actual": {
+        "defined": true,
+        "return": true
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": false
+          },
+          "chosen": {
+            "defined": true,
+            "return": false
+          },
+          "rejected": {
+            "defined": true,
+            "return": true
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": false
+          },
+          "chosen": {
+            "defined": true,
+            "return": false
+          },
+          "rejected": {
+            "defined": true,
+            "return": true
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "ceiling_div_eight_u32",
+    "family": "ceiling_div_eight",
+    "width": "u32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return ceil(x/8) over mathematical integers; do not trap.",
+    "reference": "fn task(x:u32)->u32 {let base=x/8; if x%8!=0 {return base+1;} return base;}",
+    "chosen": "fn task(x:u32)->u32 {return (x/8)+min(x%8,1);}",
+    "rejected": "fn task(x:u32)->u32 {return add_wrap(x,7)/8;}",
+    "split": "evaluation",
+    "contract_sha256": "97c71eae818584f67f72683505a4aef22b536c0686a9f34ad2b53d2310693347",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "d1dad0f65d96c3c1a6ce5d43cf4f1976506d77b6acc480542677f4d27d686c52",
+      "candidate_sha256": "be1cf0c3116f50aa29f392e6033c76ac296966de6ea0f1351ad858c0645a7967",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "29341750c17b71170f87a0fcaa8a91ee27c33e49da26f1e2997bb8db6ac8cf87",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "d10b918ef0e0a42951be9d57b266ba8100e44460c421ab2d8fc659f3d4fb514a",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "d1dad0f65d96c3c1a6ce5d43cf4f1976506d77b6acc480542677f4d27d686c52",
+      "candidate_sha256": "77a0c94b5a9bf569ffbfc9303fe10335c919ef95431852d10a45675366bf8165",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "9a44a2a15de520d0696e36403a3584e1f211bee5f5dc8d63017d0437cccefd45",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "67b3e416f4382967532484f971d6391fa4cd0c30d8f1259036b6846770474ad2",
+          "status": "sat",
+          "values": {
+            "arg_0": 4294967294
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 4294967294
+      },
+      "expected": {
+        "defined": true,
+        "return": 536870912
+      },
+      "actual": {
+        "defined": true,
+        "return": 0
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 536870912
+          },
+          "chosen": {
+            "defined": true,
+            "return": 536870912
+          },
+          "rejected": {
+            "defined": true,
+            "return": 0
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 536870912
+          },
+          "chosen": {
+            "defined": true,
+            "return": 536870912
+          },
+          "rejected": {
+            "defined": true,
+            "return": 0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "low_nibble_u32",
+    "family": "low_nibble",
+    "width": "u32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return the low four bits of x; do not trap.",
+    "reference": "fn task(x:u32)->u32 {return x%16;}",
+    "chosen": "fn task(x:u32)->u32 {return x&15;}",
+    "rejected": "fn task(x:u32)->u32 {return x%15;}",
+    "split": "training",
+    "contract_sha256": "200a30d0cca09fa7952696dc6c786fd016c0e09716975080e52512d8be7762ed",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "fcd61cc3009200dd981464ebffb96d9cdb522bb5a74ffda9ca7e118812ec0bb5",
+      "candidate_sha256": "cb039f844d5b21d00e9dad3460a573feea398c555242c1cfc25620bfe390a0fb",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "35c0332620512dd86c182b453fb8e183e91c13e44d5038cb5e54de5e25bd0f18",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "b3cc3ceb2a490bd8816f7f450a2994d44e32f93a793260734a166b8f2e5f1457",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "fcd61cc3009200dd981464ebffb96d9cdb522bb5a74ffda9ca7e118812ec0bb5",
+      "candidate_sha256": "d6574578757ad981a353990f5e8cd897bcc2f143e39b687e8a65a62839f9ac95",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "64a4a3de0a2aa31f8b3608829d22666ef0799afb14f75f6f08e6090b411b476e",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "77cd7c1c078d201bd1d89ff9953f18a50a34a4f53458830f61e6fb53d96a617b",
+          "status": "sat",
+          "values": {
+            "arg_0": 3145918351
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 3145918351
+      },
+      "expected": {
+        "defined": true,
+        "return": 15
+      },
+      "actual": {
+        "defined": true,
+        "return": 1
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 15
+          },
+          "chosen": {
+            "defined": true,
+            "return": 15
+          },
+          "rejected": {
+            "defined": true,
+            "return": 1
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 15
+          },
+          "chosen": {
+            "defined": true,
+            "return": 15
+          },
+          "rejected": {
+            "defined": true,
+            "return": 1
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "zero_safe_division_u32",
+    "family": "zero_safe_division",
+    "width": "u32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return zero when y is zero, otherwise floor(x/y); do not trap.",
+    "reference": "fn task(x:u32,y:u32)->u32 {if y==0 {return 0;} return x/y;}",
+    "chosen": "fn task(x:u32,y:u32)->u32 {if y!=0 {return x/y;} return 0;}",
+    "rejected": "fn task(x:u32,y:u32)->u32 {return x/y;}",
+    "split": "training",
+    "contract_sha256": "74e0d220f8371c8068b34f74b8d33b593e593747c59aeaa6602f6d897a077380",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "188a8046c40b5638babc547be153ef40c5034bc274108960c58e50ba373e7b7d",
+      "candidate_sha256": "6712ff736b9a8b1a940ec2f4d788dd20f296b66c19efcc2e0822048a45b7ca52",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "424d1d782324af9b48f3a5666d8763758613b6995a3aff5425c609d5c7d81041",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "ed45b4fb5c5dffaaba9ae3461255865f8593acd851b3ab6a0b9c44ca9f052358",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "188a8046c40b5638babc547be153ef40c5034bc274108960c58e50ba373e7b7d",
+      "candidate_sha256": "b170ab9e213fa367893196d8852971139027eb7f97f6c51f36b36f4410321eaf",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "3b1270b6c9c9935be094c359d89576384fbcb97fb7b27536e53c4d498b82f49e",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "1ea1ff1650361454315cf9c54fba7bed02535f83e06193bbbaf05d6bcf44271f",
+          "status": "sat",
+          "values": {
+            "arg_0": 0,
+            "arg_1": 0
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 0,
+        "y": 0
+      },
+      "expected": {
+        "defined": true,
+        "return": 0
+      },
+      "actual": {
+        "defined": false,
+        "trap": "invalid-division"
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "modular_increment_u64",
+    "family": "modular_increment",
+    "width": "u64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return (x+1) modulo 2^64; do not trap.",
+    "reference": "fn task(x:u64)->u64 {if x==18446744073709551615 {return 0;} return x+1;}",
+    "chosen": "fn task(x:u64)->u64 {return add_wrap(x,1);}",
+    "rejected": "fn task(x:u64)->u64 {return x+1;}",
+    "split": "training",
+    "contract_sha256": "032e68aa636308ef47e5448a2bab6df9736cb47568c655c74d4b6f3e8e66317a",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "020f6433504e7f88d42e5d4a9041df24815be421eb972e14c74f3aa84c1ab975",
+      "candidate_sha256": "a9dbda02a67d3dfaacb311f8a4653485bc43443fb8aef1c04ff16b90efcb62df",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "7c4ee13c0f772eed20a56e4aa7559ac68f92dbb7714cba6a045895748de35cf3",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "931cd6ba7176116ddeafa1847a39bae1db2f666c744df998bb0f7736fc0e057a",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "020f6433504e7f88d42e5d4a9041df24815be421eb972e14c74f3aa84c1ab975",
+      "candidate_sha256": "e87a28344d0aff4d1d1b1cec4c0adb1441f8109629cfe6b689cb15a068ed6fc1",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "d6f0cd062562665c53be75bcd75886b74ad81fc4a48d008920a7093eb2ce96d8",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "a293edefaece404a5ebe954375d9778e986f20e01eb69a653eb3a79454dc6f18",
+          "status": "sat",
+          "values": {
+            "arg_0": 18446744073709551615
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 18446744073709551615
+      },
+      "expected": {
+        "defined": true,
+        "return": 0
+      },
+      "actual": {
+        "defined": false,
+        "trap": "integer-overflow-or-conversion"
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "minimum_u64",
+    "family": "minimum",
+    "width": "u64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return the smaller input; do not trap.",
+    "reference": "fn task(x:u64,y:u64)->u64 {if x<y {return x;} return y;}",
+    "chosen": "fn task(x:u64,y:u64)->u64 {return min(x,y);}",
+    "rejected": "fn task(x:u64,y:u64)->u64 {return max(x,y);}",
+    "split": "training",
+    "contract_sha256": "0c2122d27f0734aa6803626231f4f13fb056eae1f7d3184ec1dc2ee34a71f990",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "5de27e85ccaa6f8ae459cc19d57d22e583abc51e614129b71e16e849a7f1cbb5",
+      "candidate_sha256": "7bee734d3ee21df0316c7a6f68e11c238ce60ba98402d8622a3a742b20f1e971",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "05a5b3f2b1637ec1db37c4d3fefb69510289345ec65516d04cfdae447f609a4b",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "5bc788e4aef02fbc9091261c9c2adfddff71a51ed1a4cbe966e156cd890e7214",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "5de27e85ccaa6f8ae459cc19d57d22e583abc51e614129b71e16e849a7f1cbb5",
+      "candidate_sha256": "ee980bf1e6fb28daf5ed4f7e866115f88e16a8ffdb140f2be6572f86c40e918e",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "4bc573063ebc7b6229f97f591aa5072e214dc4de3b442f9eeab8eb8a072c4f45",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "a078f2595c65a6142b2fb3cda8c558f1718b78398d462f4aea8441c8c1b6785d",
+          "status": "sat",
+          "values": {
+            "arg_0": 9223407221226864640,
+            "arg_1": 9223336852482686975
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 9223407221226864640,
+        "y": 9223336852482686975
+      },
+      "expected": {
+        "defined": true,
+        "return": 9223336852482686975
+      },
+      "actual": {
+        "defined": true,
+        "return": 9223407221226864640
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 9223336852482686975
+          },
+          "chosen": {
+            "defined": true,
+            "return": 9223336852482686975
+          },
+          "rejected": {
+            "defined": true,
+            "return": 9223407221226864640
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 9223336852482686975
+          },
+          "chosen": {
+            "defined": true,
+            "return": 9223336852482686975
+          },
+          "rejected": {
+            "defined": true,
+            "return": 9223407221226864640
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "maximum_u64",
+    "family": "maximum",
+    "width": "u64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return the larger input; do not trap.",
+    "reference": "fn task(x:u64,y:u64)->u64 {if x>y {return x;} return y;}",
+    "chosen": "fn task(x:u64,y:u64)->u64 {return max(x,y);}",
+    "rejected": "fn task(x:u64,y:u64)->u64 {return min(x,y);}",
+    "split": "training",
+    "contract_sha256": "02a6c458b49b87110eb54cb375f733502d3d83b75b49e235a716860eb7744e37",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "2ec51a843f8110b6ddfc50498edd57365a935b7f97750c637af92fd9cb8bc237",
+      "candidate_sha256": "ee980bf1e6fb28daf5ed4f7e866115f88e16a8ffdb140f2be6572f86c40e918e",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "65762c659b89b40c5b134004de5e1fb6564287ece35e7a6b76f667dc58a00575",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "351d1a3eca1a7aeb9aa3f34b89b8325bfc8969f7768f80e73a764ea566f1bc49",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "2ec51a843f8110b6ddfc50498edd57365a935b7f97750c637af92fd9cb8bc237",
+      "candidate_sha256": "7bee734d3ee21df0316c7a6f68e11c238ce60ba98402d8622a3a742b20f1e971",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "b8e8cddedf6d9fd63c1477c0896f40c85e287bdee02377b323dba99c6af0ce82",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "2097c8d1a37bca6e955bd50f0db5811f797a025c21b2cdcef8762f873231a5a3",
+          "status": "sat",
+          "values": {
+            "arg_0": 18446743936270598142,
+            "arg_1": 137438953473
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 18446743936270598142,
+        "y": 137438953473
+      },
+      "expected": {
+        "defined": true,
+        "return": 18446743936270598142
+      },
+      "actual": {
+        "defined": true,
+        "return": 137438953473
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 18446743936270598142
+          },
+          "chosen": {
+            "defined": true,
+            "return": 18446743936270598142
+          },
+          "rejected": {
+            "defined": true,
+            "return": 137438953473
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 18446743936270598142
+          },
+          "chosen": {
+            "defined": true,
+            "return": 18446743936270598142
+          },
+          "rejected": {
+            "defined": true,
+            "return": 137438953473
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "absolute_difference_u64",
+    "family": "absolute_difference",
+    "width": "u64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return the nonnegative absolute difference; do not trap.",
+    "reference": "fn task(x:u64,y:u64)->u64 {if x>=y {return x-y;} return y-x;}",
+    "chosen": "fn task(x:u64,y:u64)->u64 {return max(x,y)-min(x,y);}",
+    "rejected": "fn task(x:u64,y:u64)->u64 {return x-y;}",
+    "split": "training",
+    "contract_sha256": "1fd58a7abdd6b7bb4bee0d31b3bcaf9f5ad8c5af0bbfb28b463808c0cd18a478",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "5859dca330ff8574ecfd0fee552f58117d9e2e2683e3bbaad9825d7a1b923fd5",
+      "candidate_sha256": "4621712b9e230d238fac3a8dc7c4aa68d451514edc13caff745c5335fb655ab4",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "bf106d24d2c0837ccd6a1ecf5efc0ffe49feb3b4f1d28a0c4de95b15d1c43fd6",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "28c502a4585e169c9bb9f33b8be4ad814d73ec0ac6d6750b5427caf108d9f726",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "5859dca330ff8574ecfd0fee552f58117d9e2e2683e3bbaad9825d7a1b923fd5",
+      "candidate_sha256": "5fd55d899fe30f598781e54dba0d07012464a18a8d5ad057287689b1ae78f2c7",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "61825bcf12348a67d34ed941abfbf8371a5a601296f4530cbbb993e78b5c3223",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "6af74ff7323ef8659deb07d644912d5da12bd1d548e9e385ce7ebebafc5c4fbd",
+          "status": "sat",
+          "values": {
+            "arg_0": 6557805384781361358,
+            "arg_1": 12476237605211471872
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 6557805384781361358,
+        "y": 12476237605211471872
+      },
+      "expected": {
+        "defined": true,
+        "return": 5918432220430110514
+      },
+      "actual": {
+        "defined": false,
+        "trap": "integer-overflow-or-conversion"
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 5918432220430110514
+          },
+          "chosen": {
+            "defined": true,
+            "return": 5918432220430110514
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 5918432220430110514
+          },
+          "chosen": {
+            "defined": true,
+            "return": 5918432220430110514
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "saturating_add_u64",
+    "family": "saturating_add",
+    "width": "u64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return min(x+y,18446744073709551615) over mathematical integers; do not trap.",
+    "reference": "fn task(x:u64,y:u64)->u64 {if y>18446744073709551615-x {return 18446744073709551615;} return x+y;}",
+    "chosen": "fn task(x:u64,y:u64)->u64 {let z=add_wrap(x,y); if z<x {return 18446744073709551615;} return z;}",
+    "rejected": "fn task(x:u64,y:u64)->u64 {return add_wrap(x,y);}",
+    "split": "evaluation",
+    "contract_sha256": "8356c771a4a59db03aed26aeffa924b671c0cb7638366b3f15edc6562002dd8b",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "2bfccf68eeccad245f9cec608d0d497dd3fb3736dfaa78b29756f1bca05abf38",
+      "candidate_sha256": "33f41bde69b1338bee6d3839a8e47748f1c0275d04b7aed28911ccdb1a8ca79d",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "01f82eae86fcabb641e9f1531627a2b96290fafa0b19f1e341926331d1b96bb1",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "a372512802b2a1db5dd78b92e67af4c94796f3c6d4dd0c5bf3b37ea1833b6cf1",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "2bfccf68eeccad245f9cec608d0d497dd3fb3736dfaa78b29756f1bca05abf38",
+      "candidate_sha256": "49be97c280ce34154e063f0d85b2c75785acdd327c9d2966baa9eeb1a33e3b5b",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "7823edc485788c9eacbc8413450abf30d2ad1d7bfebcac4c097679ca1bc39e83",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "b32312ba3a4c9bf0c80731dfd894d0f1177c30f8c6e2aa352a1779d93b655212",
+          "status": "sat",
+          "values": {
+            "arg_0": 5404307406634423623,
+            "arg_1": 16735385570171097409
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 5404307406634423623,
+        "y": 16735385570171097409
+      },
+      "expected": {
+        "defined": true,
+        "return": 18446744073709551615
+      },
+      "actual": {
+        "defined": true,
+        "return": 3692948903095969416
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 18446744073709551615
+          },
+          "chosen": {
+            "defined": true,
+            "return": 18446744073709551615
+          },
+          "rejected": {
+            "defined": true,
+            "return": 3692948903095969416
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 18446744073709551615
+          },
+          "chosen": {
+            "defined": true,
+            "return": 18446744073709551615
+          },
+          "rejected": {
+            "defined": true,
+            "return": 3692948903095969416
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "floor_average_u64",
+    "family": "floor_average",
+    "width": "u64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return floor((x+y)/2) over mathematical integers for every input, without overflow or traps.",
+    "reference": "fn task(x:u64,y:u64)->u64 {return (x/2)+(y/2)+((x%2+y%2)/2);}",
+    "chosen": "fn task(x:u64,y:u64)->u64 {return (x&y)+shr(x^y,1);}",
+    "rejected": "fn task(x:u64,y:u64)->u64 {return add_wrap(x,y)/2;}",
+    "split": "evaluation",
+    "contract_sha256": "d34a38df03152fe347a61ff4acb6ee427795fc88b8d8d444e9aae6ec186916e1",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "35ff8be5ff388078137585347018a348554c5be7789f5fc253c52509548e51e0",
+      "candidate_sha256": "2687cf1b4c57997e01e226726e2e9515e5c99eec0b6b49669c1f5c9201b54d31",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "99ab9c54e9338e9de6f344ce266ee70478a1438fa428365c30764cae5db3c707",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "d5833c31f04a99952a9387022359320e6251c81704d58611b9ad0dc44189ccf4",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "35ff8be5ff388078137585347018a348554c5be7789f5fc253c52509548e51e0",
+      "candidate_sha256": "afd081ae00cd5a3848d84b04549c1183bc0794789fc851a7d8c4a8b0c4a5b94a",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "1ca240eb3c2ebe387d91809142f392216fcb954edf3fb2d558ed0690dd79fdb8",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "fc18e021d385a183a42843da94e0225c785937b52be848de1ad4fdd5ebeae91e",
+          "status": "sat",
+          "values": {
+            "arg_0": 7308178833988172137,
+            "arg_1": 17970725990567351593
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 7308178833988172137,
+        "y": 17970725990567351593
+      },
+      "expected": {
+        "defined": true,
+        "return": 12639452412277761865
+      },
+      "actual": {
+        "defined": true,
+        "return": 3416080375422986057
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 12639452412277761865
+          },
+          "chosen": {
+            "defined": true,
+            "return": 12639452412277761865
+          },
+          "rejected": {
+            "defined": true,
+            "return": 3416080375422986057
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 12639452412277761865
+          },
+          "chosen": {
+            "defined": true,
+            "return": 12639452412277761865
+          },
+          "rejected": {
+            "defined": true,
+            "return": 3416080375422986057
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "align_eight_u64",
+    "family": "align_eight",
+    "width": "u64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Round x down to the greatest multiple of eight not exceeding x; do not trap.",
+    "reference": "fn task(x:u64)->u64 {return (x/8)*8;}",
+    "chosen": "fn task(x:u64)->u64 {return x & ~u64(7);}",
+    "rejected": "fn task(x:u64)->u64 {return x/8;}",
+    "split": "evaluation",
+    "contract_sha256": "162e6f5c24d6c0ad83d9cfa04ae07db902356dc7d71d8afaac956c67742dce49",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "f50bce850e499faf5451de1ce54fb764d853ecce8f598c2e6f2537150339c4ee",
+      "candidate_sha256": "e3a6df49f335786f9d587a6e296c2521561ad77b1a12c3e9a1a2ca1578b60da6",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "537a14d4fc8c52184e0636d4c299456080e4f72820110b55abc4bdf971dd7cbf",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "1224abe3f375590510ba0ab27d90cc43c4e77d89326d73a50b1b63307ebc5ebc",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "f50bce850e499faf5451de1ce54fb764d853ecce8f598c2e6f2537150339c4ee",
+      "candidate_sha256": "237c9bfe511687e3c33248790868964a9a727c9c8a1eac2b475a92cb86d4d2b1",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "a2648775a4c80f6853ec015de030bed3e4f0e9adbd3eeb94b5f3874771e269ba",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "99194e9fd3d138d91b3722665ab84bee265e1219185552edee96435e17b3a753",
+          "status": "sat",
+          "values": {
+            "arg_0": 1152921504606846976
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 1152921504606846976
+      },
+      "expected": {
+        "defined": true,
+        "return": 1152921504606846976
+      },
+      "actual": {
+        "defined": true,
+        "return": 144115188075855872
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 1152921504606846976
+          },
+          "chosen": {
+            "defined": true,
+            "return": 1152921504606846976
+          },
+          "rejected": {
+            "defined": true,
+            "return": 144115188075855872
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 1152921504606846976
+          },
+          "chosen": {
+            "defined": true,
+            "return": 1152921504606846976
+          },
+          "rejected": {
+            "defined": true,
+            "return": 144115188075855872
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "clear_lowest_bit_u64",
+    "family": "clear_lowest_bit",
+    "width": "u64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Clear the least significant set bit; zero stays zero; do not trap.",
+    "reference": "fn task(x:u64)->u64 {if x==0 {return 0;} return x&(x-1);}",
+    "chosen": "fn task(x:u64)->u64 {return x&sub_wrap(x,1);}",
+    "rejected": "fn task(x:u64)->u64 {return x^sub_wrap(x,1);}",
+    "split": "training",
+    "contract_sha256": "e5b1c3496ce318c92cfe0840078e203c6d2a4570fbd36c99a9c699ca2fb50ab7",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "5f61653883a89ae86a7e4672e34eab5b9f036ec85680ad780b0ec1d679e2c166",
+      "candidate_sha256": "ee494b4285bd163823127c010f08504884339796560784aeccc21d7dc95edd38",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "397b9913ad60f94e794a9148ac35499d687389f9bca6be6fa99135c2666a3811",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "537515565b7b61bc1f1f6ba1bd3f95864c565b53b71af5d47dadd51dd86f8f26",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "5f61653883a89ae86a7e4672e34eab5b9f036ec85680ad780b0ec1d679e2c166",
+      "candidate_sha256": "11661a0d62dc07477887f8d81804002dc998f895a81dc015c785b13d88b2857f",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "ff3922f7ba0bc0645fb088b5040048df49638e22a1a422a81fb4df11cc5d1cf2",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "57ca1502e34f375253b09e3e80c7be42d70eb0f01ac7b4d16c4002b7469971db",
+          "status": "sat",
+          "values": {
+            "arg_0": 0
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 0
+      },
+      "expected": {
+        "defined": true,
+        "return": 0
+      },
+      "actual": {
+        "defined": true,
+        "return": 18446744073709551615
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": true,
+            "return": 18446744073709551615
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": true,
+            "return": 18446744073709551615
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "power_of_two_u64",
+    "family": "power_of_two",
+    "width": "u64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return whether x is a positive power of two. Zero is false; do not trap.",
+    "reference": "fn task(x:u64)->bool {return x!=0 && (x&sub_wrap(x,1))==0;}",
+    "chosen": "fn task(x:u64)->bool {if x==0 {return false;} return (x&sub_wrap(x,1))==0;}",
+    "rejected": "fn task(x:u64)->bool {return (x&sub_wrap(x,1))==0;}",
+    "split": "training",
+    "contract_sha256": "c6088a64555a791d52b3ec81f2b4369686a1859e380043cde8cf43e7650fb759",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "4c69098f40429a1b878fa885fb3cecba6827dc1cf8b08aff10162c4a8b4dbd30",
+      "candidate_sha256": "9490fe8963859128cc3ac49a96d7f7db8f0f5e76f6e2f3a67fdd2e99868c7ae8",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "fadaf0d5d8b3032af803e4685e0e2c566430cb809e73ce7d7865c15d20a2a46c",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "e41f5c5cddd890b99c362ac4003da896e1e711e1644664465df8c2539013cb87",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "4c69098f40429a1b878fa885fb3cecba6827dc1cf8b08aff10162c4a8b4dbd30",
+      "candidate_sha256": "236f5fd123d4e7888fd59208e960755490ab5d1228286c8fbfacd85cc9ca8aee",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "2d14d26e04181a036acf72c15d1b6c0e97d231062213ef564ae4abe9fdeb6ccd",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "0237486b7be9250fbb9aff6720b72c17b05f690063f24326df02955d32a9afef",
+          "status": "sat",
+          "values": {
+            "arg_0": 0
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 0
+      },
+      "expected": {
+        "defined": true,
+        "return": false
+      },
+      "actual": {
+        "defined": true,
+        "return": true
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": false
+          },
+          "chosen": {
+            "defined": true,
+            "return": false
+          },
+          "rejected": {
+            "defined": true,
+            "return": true
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": false
+          },
+          "chosen": {
+            "defined": true,
+            "return": false
+          },
+          "rejected": {
+            "defined": true,
+            "return": true
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "ceiling_div_eight_u64",
+    "family": "ceiling_div_eight",
+    "width": "u64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return ceil(x/8) over mathematical integers; do not trap.",
+    "reference": "fn task(x:u64)->u64 {let base=x/8; if x%8!=0 {return base+1;} return base;}",
+    "chosen": "fn task(x:u64)->u64 {return (x/8)+min(x%8,1);}",
+    "rejected": "fn task(x:u64)->u64 {return add_wrap(x,7)/8;}",
+    "split": "evaluation",
+    "contract_sha256": "f92988ef2ef4eb597c82b4a6e8203df3c725634df0fc9d4c3c66e25bb83eb28c",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "7bdd8ddd6a7de7caa49c250402ff267bfc27d6b483d33380b762bc9905528ede",
+      "candidate_sha256": "807dc506e1da14553603135bcd9218f8bf2f024d6c6983d4baa30bc515b282d6",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "c8913b86bac7ace0e0590a5477fd7cb2e99d2f01e24b4421c8e55926e330e549",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "021c877fd586e882afdc9a36a16d4512c7de80398b5c58ed68c7ca6085c68f66",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "7bdd8ddd6a7de7caa49c250402ff267bfc27d6b483d33380b762bc9905528ede",
+      "candidate_sha256": "f31e511e6542e2502cbb7f276c88938a283e4e4d8b6cf393819da14afaf0084a",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "1c8f2cdce437056f6b6aaa7d9aa05cd311bd0a052478ee766767ca6d2702f0d7",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "7c7d34dd805543d396a7a3a6a167449ac1526c08536701f55ede0018c68f139a",
+          "status": "sat",
+          "values": {
+            "arg_0": 18446744073709551609
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 18446744073709551609
+      },
+      "expected": {
+        "defined": true,
+        "return": 2305843009213693952
+      },
+      "actual": {
+        "defined": true,
+        "return": 0
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 2305843009213693952
+          },
+          "chosen": {
+            "defined": true,
+            "return": 2305843009213693952
+          },
+          "rejected": {
+            "defined": true,
+            "return": 0
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 2305843009213693952
+          },
+          "chosen": {
+            "defined": true,
+            "return": 2305843009213693952
+          },
+          "rejected": {
+            "defined": true,
+            "return": 0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "low_nibble_u64",
+    "family": "low_nibble",
+    "width": "u64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return the low four bits of x; do not trap.",
+    "reference": "fn task(x:u64)->u64 {return x%16;}",
+    "chosen": "fn task(x:u64)->u64 {return x&15;}",
+    "rejected": "fn task(x:u64)->u64 {return x%15;}",
+    "split": "training",
+    "contract_sha256": "c7553027943122a3ee3687c0193ac418477df30f3a5d134c414b22f0ae155078",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "5efe66b27ea471ede817e1d31cebe5a57b48706d8067b1173a2d15b8ff87a10b",
+      "candidate_sha256": "0e9f768340ed2efa06bf1d7da48b29901167143a2dbc09b24208bb8d626e5767",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "35559716a13ff52739813561b46b24c7c1a09131888af2e4a9fde57da1d1c7df",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "98fc84211f2ca2b21dd45c5309d3706241501b4861798f1c2299a706211b1e7f",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "5efe66b27ea471ede817e1d31cebe5a57b48706d8067b1173a2d15b8ff87a10b",
+      "candidate_sha256": "e6ab5a4d2d78f7454df51e6ca9e0c028a27c648452995505e323faea7a31971b",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "f13b5c02329d65e993635e4b755ef2d1af23ab3ca0fb29be264006dda3f96f43",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "0f80b9d8b863a40a520dc744cf83b521e4aa69e60ebad409f6d8a4a235f9bdc3",
+          "status": "sat",
+          "values": {
+            "arg_0": 13527028366678771951
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 13527028366678771951
+      },
+      "expected": {
+        "defined": true,
+        "return": 15
+      },
+      "actual": {
+        "defined": true,
+        "return": 1
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 15
+          },
+          "chosen": {
+            "defined": true,
+            "return": 15
+          },
+          "rejected": {
+            "defined": true,
+            "return": 1
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 15
+          },
+          "chosen": {
+            "defined": true,
+            "return": 15
+          },
+          "rejected": {
+            "defined": true,
+            "return": 1
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "zero_safe_division_u64",
+    "family": "zero_safe_division",
+    "width": "u64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return zero when y is zero, otherwise floor(x/y); do not trap.",
+    "reference": "fn task(x:u64,y:u64)->u64 {if y==0 {return 0;} return x/y;}",
+    "chosen": "fn task(x:u64,y:u64)->u64 {if y!=0 {return x/y;} return 0;}",
+    "rejected": "fn task(x:u64,y:u64)->u64 {return x/y;}",
+    "split": "training",
+    "contract_sha256": "5d920f56c7c3fbdda666a28e0ddca7ada105da3fd177249f5f534856efe64232",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "4387c637f05ed18be1e79fe46402c66af724fd3e6bcba7025a3c924461f62733",
+      "candidate_sha256": "1858b904230fad7c0ffc0ea469b44c16c44caa9b467517765e41528cb64b9844",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "95605c47d80f88af7233d3d8138fae7c4969a8d726364236cf19fb5752dd8d0e",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "05c2fd65bcb311805bb05bffe88f2f7c09fd4c58332cae268cbd9663a20b917c",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "4387c637f05ed18be1e79fe46402c66af724fd3e6bcba7025a3c924461f62733",
+      "candidate_sha256": "46b663655c7cd1b2430eaf76d5daac1bdf55d1f58848f6ddd15588c98d92fd3d",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "c1855d24dbbd9de3ba538d2538075d87ff349161eee71923b19d19b95d0d6ae7",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "f9b417701921f75f3f6c8197cb3c07ee005bff6acfb71ea84da90cdfa7475c78",
+          "status": "sat",
+          "values": {
+            "arg_0": 0,
+            "arg_1": 0
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 0,
+        "y": 0
+      },
+      "expected": {
+        "defined": true,
+        "return": 0
+      },
+      "actual": {
+        "defined": false,
+        "trap": "invalid-division"
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "signed_signum_i32",
+    "family": "signed_signum",
+    "width": "i32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return -1 for negative, 0 for zero, 1 for positive; do not trap.",
+    "reference": "fn task(x:i32)->i32 {if x<0 {return -1;} if x>0 {return 1;} return 0;}",
+    "chosen": "fn task(x:i32)->i32 {let mut z:i32=0; if x!=0 {z=1; if x<0 {z=-1;}} return z;}",
+    "rejected": "fn task(x:i32)->i32 {if x<=0 {return -1;} return 1;}",
+    "split": "training",
+    "contract_sha256": "7a92e8b47cfc8e4dded60528860080305807c9dda1f8395b9981271515ef4f07",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "bd1e2f76509c1e2bfa4e13c79e906d45f971d95bfa7ae8ad7d8bb0d792b1644a",
+      "candidate_sha256": "38844a6675d16e200018de88803bc7ad69375617ffe393ee7c9d948987a03320",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "61ec6de9f0b5af4fd093a4aba4cb1651e5ecd504f3909a787dbf36240a560653",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "04f88f3e52dfa56ff6855163d0d49afbf23c6f6fca2aec918cb46e8d9e8fca2d",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "bd1e2f76509c1e2bfa4e13c79e906d45f971d95bfa7ae8ad7d8bb0d792b1644a",
+      "candidate_sha256": "c61855898179e8e74d29c2c41490a3c15d4d7d66c8c76cc966530c5b2dc52f9b",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "4b25c959aa4fe7965b215652b7a1b761ea5877f556bc8bc6d846ceed63872dca",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "76d6ac2c77fb3191c8985caf152b3e517caf844d90bc17d1b0f58c1d5c71c17e",
+          "status": "sat",
+          "values": {
+            "arg_0": 0
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 0
+      },
+      "expected": {
+        "defined": true,
+        "return": 0
+      },
+      "actual": {
+        "defined": true,
+        "return": -1
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": true,
+            "return": -1
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": true,
+            "return": -1
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "signed_identity_i32",
+    "family": "signed_identity",
+    "width": "i32",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return x unchanged for every signed input, including the minimum; do not trap.",
+    "reference": "fn task(x:i32)->i32 {return x;}",
+    "chosen": "fn task(x:i32)->i32 {return x+0;}",
+    "rejected": "fn task(x:i32)->i32 {return -(-x);}",
+    "split": "training",
+    "contract_sha256": "1ed2be8a96b817bec337c504267eaf8253391787317b044a34bb807d219d171b",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "ee165ada06db5c9a3bfdbc1912c326a891ba89ee0eb713d2c3c24404bf8c4fd6",
+      "candidate_sha256": "f1e4c9760c7fbb7db0eb5c47ac1bcec8737428eacfffd542c061dbf61d097166",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "1ccecb7cb02813698abcf13aca6a83885c0a4687fda84beedeadc6332b50ab77",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "124b9e87281577b8b66a67e828b24605cf488134c6012eb3dab6d8a62bc6078c",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "ee165ada06db5c9a3bfdbc1912c326a891ba89ee0eb713d2c3c24404bf8c4fd6",
+      "candidate_sha256": "26566d124fd0e75c076b624c18ca83e5b80a27043bbb600d3d79b3ee947c14a5",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "627dec276587a4713b40c274a5b9926f172f3920bc16a1e56f7cd5bcbb1de045",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "134ec99ce788c9c2e41333b13ed25d385937ba4908975f71be8f952299f06c06",
+          "status": "sat",
+          "values": {
+            "arg_0": -2147483648
+          }
+        }
+      ],
+      "counterexample": {
+        "x": -2147483648
+      },
+      "expected": {
+        "defined": true,
+        "return": -2147483648
+      },
+      "actual": {
+        "defined": false,
+        "trap": "integer-overflow-or-conversion"
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": -2147483648
+          },
+          "chosen": {
+            "defined": true,
+            "return": -2147483648
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": -2147483648
+          },
+          "chosen": {
+            "defined": true,
+            "return": -2147483648
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "signed_signum_i64",
+    "family": "signed_signum",
+    "width": "i64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return -1 for negative, 0 for zero, 1 for positive; do not trap.",
+    "reference": "fn task(x:i64)->i64 {if x<0 {return -1;} if x>0 {return 1;} return 0;}",
+    "chosen": "fn task(x:i64)->i64 {let mut z:i64=0; if x!=0 {z=1; if x<0 {z=-1;}} return z;}",
+    "rejected": "fn task(x:i64)->i64 {if x<=0 {return -1;} return 1;}",
+    "split": "training",
+    "contract_sha256": "35953a73d2a62cfd2063bef0da8d9691d3e4ad8a0b9fa3aadc517db74294ed4c",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "69f45abfa4b205e169eed3689da385afef3f6e83ca1d509bacad44f2b3b5adc4",
+      "candidate_sha256": "5b8490fa69f6fc7bd24179bda37b89c57a83807f7ce107579b75b2f44c03d996",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "ff2886f21f2711ff75b4de31ec5132ed4f26a6a6d85f44f756aab1ec56d8eebb",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "6a81113785f8515f0fbfc3477335aea76ab64414e0f4c3d57bc44f041f1cf8f9",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "69f45abfa4b205e169eed3689da385afef3f6e83ca1d509bacad44f2b3b5adc4",
+      "candidate_sha256": "d469c0c9c2740ab1237a257789ec9d0c36d4de8b049d2b5f3fcc4d18dac0210e",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "9207696050d6abe43da14a93e18f3aa12cb57b4502be9c88781348b9964f994b",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "bceb64db3662c81badf15468f123adf0defc815cd720ad796e8309147737fa1d",
+          "status": "sat",
+          "values": {
+            "arg_0": 0
+          }
+        }
+      ],
+      "counterexample": {
+        "x": 0
+      },
+      "expected": {
+        "defined": true,
+        "return": 0
+      },
+      "actual": {
+        "defined": true,
+        "return": -1
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": true,
+            "return": -1
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": 0
+          },
+          "chosen": {
+            "defined": true,
+            "return": 0
+          },
+          "rejected": {
+            "defined": true,
+            "return": -1
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "signed_identity_i64",
+    "family": "signed_identity",
+    "width": "i64",
+    "symbol": "task",
+    "assume": "true",
+    "allow_reference_traps": false,
+    "task": "Return x unchanged for every signed input, including the minimum; do not trap.",
+    "reference": "fn task(x:i64)->i64 {return x;}",
+    "chosen": "fn task(x:i64)->i64 {return x+0;}",
+    "rejected": "fn task(x:i64)->i64 {return -(-x);}",
+    "split": "training",
+    "contract_sha256": "f0609d5bc33553f97df1f925a8dd0df2fb9246dd3d776b07412b2436c745456f",
+    "chosen_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "56ee2fdd4a7a3b907a16f3c42d88be9955908d13684981b156379a3aeac22ddf",
+      "candidate_sha256": "8e76c8b63c1e1a40c9cc25fb37ac9e3b5d298e6a2a72fa54c8a88650edd2a1b5",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "8a62947473d2b11eae44a3699366178ddd9f433d82019189c0e48424a9084741",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "1e69e0819455a63a0d78e7a72ede595c566b98107acbdea8fff833b00b132e9d",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "rejected_receipt": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "56ee2fdd4a7a3b907a16f3c42d88be9955908d13684981b156379a3aeac22ddf",
+      "candidate_sha256": "45a77b037b679122e82a721153e5eda5e5841d34eb042ff1861bc23c60ec07cd",
+      "symbol": "task",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "a0adbb0fba5c19a2805ef1d606fe3338e0eaf4451beae6f97220ebf6dcf8b59c",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "counterexample",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "a501dda49217f6acbc2fba58e889c0f849437db77213d2b3d55ae9bf418f19c8",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 10000,
+          "query_sha256": "39fd3e738bfa3382f848cdf0190493552e13fd5549f80570db357f3dc46988bb",
+          "status": "sat",
+          "values": {
+            "arg_0": -9223372036854775808
+          }
+        }
+      ],
+      "counterexample": {
+        "x": -9223372036854775808
+      },
+      "expected": {
+        "defined": true,
+        "return": -9223372036854775808
+      },
+      "actual": {
+        "defined": false,
+        "trap": "integer-overflow-or-conversion"
+      },
+      "concrete_replay": true,
+      "native_replay": "not-run"
+    },
+    "native_counterexample_replays": [
+      {
+        "compiler": "clang++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": -9223372036854775808
+          },
+          "chosen": {
+            "defined": true,
+            "return": -9223372036854775808
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      },
+      {
+        "compiler": "g++",
+        "outcomes": {
+          "reference": {
+            "defined": true,
+            "return": -9223372036854775808
+          },
+          "chosen": {
+            "defined": true,
+            "return": -9223372036854775808
+          },
+          "rejected": {
+            "defined": false,
+            "trap": "instrumented-native-trap"
+          }
+        }
+      }
+    ]
+  }
+]

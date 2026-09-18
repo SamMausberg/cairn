@@ -1,0 +1,238 @@
+{
+  "schema": "cairn.task/1",
+  "symbol": "select_gt",
+  "task": "Stably select values STRICTLY greater than threshold. Return selected count. Preserve the unwritten output tail. Do not mutate the input.",
+  "allowed_effects": [
+    "ffi_precondition",
+    "read:x",
+    "trap",
+    "write:out"
+  ],
+  "cases": [
+    {
+      "args": {
+        "n": 0,
+        "out": [],
+        "x": [],
+        "threshold": 2
+      },
+      "return": 0,
+      "after": {
+        "out": []
+      }
+    },
+    {
+      "args": {
+        "n": 1,
+        "out": [
+          123
+        ],
+        "x": [
+          2
+        ],
+        "threshold": 2
+      },
+      "return": 0,
+      "after": {
+        "out": [
+          123
+        ]
+      }
+    },
+    {
+      "args": {
+        "n": 5,
+        "out": [
+          123,
+          123,
+          123,
+          123,
+          123
+        ],
+        "x": [
+          0,
+          2,
+          3,
+          2,
+          9
+        ],
+        "threshold": 2
+      },
+      "return": 2,
+      "after": {
+        "out": [
+          3,
+          9,
+          123,
+          123,
+          123
+        ]
+      }
+    },
+    {
+      "args": {
+        "n": 3,
+        "out": [
+          123,
+          123,
+          123
+        ],
+        "x": [
+          2,
+          2,
+          2
+        ],
+        "threshold": 2
+      },
+      "return": 0,
+      "after": {
+        "out": [
+          123,
+          123,
+          123
+        ]
+      }
+    },
+    {
+      "args": {
+        "n": 2,
+        "out": [
+          123,
+          123
+        ],
+        "x": [
+          0,
+          1
+        ],
+        "threshold": 2
+      },
+      "return": 0,
+      "after": {
+        "out": [
+          123,
+          123
+        ]
+      }
+    },
+    {
+      "args": {
+        "n": 3,
+        "out": [
+          123,
+          123,
+          123
+        ],
+        "x": [
+          9,
+          8,
+          7
+        ],
+        "threshold": 2
+      },
+      "return": 3,
+      "after": {
+        "out": [
+          9,
+          8,
+          7
+        ]
+      }
+    },
+    {
+      "args": {
+        "n": 3,
+        "out": [
+          123,
+          123,
+          123
+        ],
+        "x": [
+          18446744073709551615,
+          0,
+          2
+        ],
+        "threshold": 2
+      },
+      "return": 1,
+      "after": {
+        "out": [
+          18446744073709551615,
+          123,
+          123
+        ]
+      }
+    },
+    {
+      "args": {
+        "n": 19,
+        "out": [
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123,
+          123
+        ],
+        "x": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18
+        ],
+        "threshold": 2
+      },
+      "return": 16,
+      "after": {
+        "out": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          123,
+          123,
+          123
+        ]
+      }
+    }
+  ]
+}

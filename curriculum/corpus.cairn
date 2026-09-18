@@ -1,0 +1,447 @@
+fn affine_0(x:u64) -> u64 {
+  return add_wrap(mul_wrap(x, 2), 1);
+}
+
+fn affine_1(x:u64) -> u64 {
+  return add_wrap(mul_wrap(x, 3), 4);
+}
+
+fn affine_2(x:u64) -> u64 {
+  return add_wrap(mul_wrap(x, 4), 7);
+}
+
+fn affine_3(x:u64) -> u64 {
+  return add_wrap(mul_wrap(x, 5), 10);
+}
+
+fn affine_4(x:u64) -> u64 {
+  return add_wrap(mul_wrap(x, 6), 13);
+}
+
+fn affine_5(x:u64) -> u64 {
+  return add_wrap(mul_wrap(x, 7), 16);
+}
+
+fn affine_6(x:u64) -> u64 {
+  return add_wrap(mul_wrap(x, 8), 19);
+}
+
+fn affine_7(x:u64) -> u64 {
+  return add_wrap(mul_wrap(x, 9), 22);
+}
+
+fn count_gt_0(n:usize, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if (x[i] > threshold) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn count_gt_1(n:usize, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if (x[i] > threshold) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn count_gt_2(n:usize, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if (x[i] > threshold) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn count_gt_3(n:usize, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if (x[i] > threshold) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn count_gt_4(n:usize, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if (x[i] > threshold) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn count_gt_5(n:usize, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if (x[i] > threshold) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn count_gt_6(n:usize, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if (x[i] > threshold) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn count_gt_7(n:usize, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if (x[i] > threshold) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn prefix_0(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  let mut total:u64 = 0;
+  for i in 0..n {
+    total = add_wrap(total, x[i]);
+    out[i] = total;
+  }
+}
+
+fn prefix_1(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  let mut total:u64 = 0;
+  for i in 0..n {
+    total = add_wrap(total, x[i]);
+    out[i] = total;
+  }
+}
+
+fn prefix_2(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  let mut total:u64 = 0;
+  for i in 0..n {
+    total = add_wrap(total, x[i]);
+    out[i] = total;
+  }
+}
+
+fn prefix_3(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  let mut total:u64 = 0;
+  for i in 0..n {
+    total = add_wrap(total, x[i]);
+    out[i] = total;
+  }
+}
+
+fn prefix_4(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  let mut total:u64 = 0;
+  for i in 0..n {
+    total = add_wrap(total, x[i]);
+    out[i] = total;
+  }
+}
+
+fn prefix_5(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  let mut total:u64 = 0;
+  for i in 0..n {
+    total = add_wrap(total, x[i]);
+    out[i] = total;
+  }
+}
+
+fn prefix_6(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  let mut total:u64 = 0;
+  for i in 0..n {
+    total = add_wrap(total, x[i]);
+    out[i] = total;
+  }
+}
+
+fn prefix_7(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  let mut total:u64 = 0;
+  for i in 0..n {
+    total = add_wrap(total, x[i]);
+    out[i] = total;
+  }
+}
+
+fn compact_gt_0(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let used = compact out for i in n where (x[i] > threshold) yield x[i];
+  return used;
+}
+
+fn compact_gt_1(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let used = compact out for i in n where (x[i] > threshold) yield x[i];
+  return used;
+}
+
+fn compact_gt_2(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let used = compact out for i in n where (x[i] > threshold) yield x[i];
+  return used;
+}
+
+fn compact_gt_3(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let used = compact out for i in n where (x[i] > threshold) yield x[i];
+  return used;
+}
+
+fn compact_gt_4(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let used = compact out for i in n where (x[i] > threshold) yield x[i];
+  return used;
+}
+
+fn compact_gt_5(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let used = compact out for i in n where (x[i] > threshold) yield x[i];
+  return used;
+}
+
+fn compact_gt_6(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let used = compact out for i in n where (x[i] > threshold) yield x[i];
+  return used;
+}
+
+fn compact_gt_7(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host, threshold:u64) -> usize {
+  let used = compact out for i in n where (x[i] > threshold) yield x[i];
+  return used;
+}
+
+fn clamp_0(x:u64) -> u64 {
+  return min(max(x, 2), 3);
+}
+
+fn clamp_1(x:u64) -> u64 {
+  return min(max(x, 3), 7);
+}
+
+fn clamp_2(x:u64) -> u64 {
+  return min(max(x, 4), 11);
+}
+
+fn clamp_3(x:u64) -> u64 {
+  return min(max(x, 5), 15);
+}
+
+fn clamp_4(x:u64) -> u64 {
+  return min(max(x, 6), 19);
+}
+
+fn clamp_5(x:u64) -> u64 {
+  return min(max(x, 7), 23);
+}
+
+fn clamp_6(x:u64) -> u64 {
+  return min(max(x, 8), 27);
+}
+
+fn clamp_7(x:u64) -> u64 {
+  return min(max(x, 9), 31);
+}
+
+fn interval_0(n:usize, x:ro<u64>[n]@host, lo:u64, hi:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if ((x[i] >= lo) && (x[i] < hi)) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn interval_1(n:usize, x:ro<u64>[n]@host, lo:u64, hi:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if ((x[i] >= lo) && (x[i] < hi)) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn interval_2(n:usize, x:ro<u64>[n]@host, lo:u64, hi:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if ((x[i] >= lo) && (x[i] < hi)) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn interval_3(n:usize, x:ro<u64>[n]@host, lo:u64, hi:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if ((x[i] >= lo) && (x[i] < hi)) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn interval_4(n:usize, x:ro<u64>[n]@host, lo:u64, hi:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if ((x[i] >= lo) && (x[i] < hi)) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn interval_5(n:usize, x:ro<u64>[n]@host, lo:u64, hi:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if ((x[i] >= lo) && (x[i] < hi)) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn interval_6(n:usize, x:ro<u64>[n]@host, lo:u64, hi:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if ((x[i] >= lo) && (x[i] < hi)) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn interval_7(n:usize, x:ro<u64>[n]@host, lo:u64, hi:u64) -> usize {
+  let mut total:usize = 0;
+  for i in 0..n {
+    if ((x[i] >= lo) && (x[i] < hi)) {
+      total = add_wrap(total, 1);
+    }
+  }
+  return total;
+}
+
+fn rotate_xor_0(x:u64, key:u64) -> u64 {
+  return ((shl_wrap(x, 1) | shr(x, 63)) ^ key);
+}
+
+fn rotate_xor_1(x:u64, key:u64) -> u64 {
+  return ((shl_wrap(x, 2) | shr(x, 62)) ^ key);
+}
+
+fn rotate_xor_2(x:u64, key:u64) -> u64 {
+  return ((shl_wrap(x, 3) | shr(x, 61)) ^ key);
+}
+
+fn rotate_xor_3(x:u64, key:u64) -> u64 {
+  return ((shl_wrap(x, 4) | shr(x, 60)) ^ key);
+}
+
+fn rotate_xor_4(x:u64, key:u64) -> u64 {
+  return ((shl_wrap(x, 5) | shr(x, 59)) ^ key);
+}
+
+fn rotate_xor_5(x:u64, key:u64) -> u64 {
+  return ((shl_wrap(x, 6) | shr(x, 58)) ^ key);
+}
+
+fn rotate_xor_6(x:u64, key:u64) -> u64 {
+  return ((shl_wrap(x, 7) | shr(x, 57)) ^ key);
+}
+
+fn rotate_xor_7(x:u64, key:u64) -> u64 {
+  return ((shl_wrap(x, 8) | shr(x, 56)) ^ key);
+}
+
+fn delta_0(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  for i in 0..n {
+    if (i == 0) {
+      out[i] = x[i];
+    }
+    else {
+      out[i] = sub_wrap(x[i], x[(i - 1)]);
+    }
+  }
+}
+
+fn delta_1(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  for i in 0..n {
+    if (i == 0) {
+      out[i] = x[i];
+    }
+    else {
+      out[i] = sub_wrap(x[i], x[(i - 1)]);
+    }
+  }
+}
+
+fn delta_2(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  for i in 0..n {
+    if (i == 0) {
+      out[i] = x[i];
+    }
+    else {
+      out[i] = sub_wrap(x[i], x[(i - 1)]);
+    }
+  }
+}
+
+fn delta_3(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  for i in 0..n {
+    if (i == 0) {
+      out[i] = x[i];
+    }
+    else {
+      out[i] = sub_wrap(x[i], x[(i - 1)]);
+    }
+  }
+}
+
+fn delta_4(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  for i in 0..n {
+    if (i == 0) {
+      out[i] = x[i];
+    }
+    else {
+      out[i] = sub_wrap(x[i], x[(i - 1)]);
+    }
+  }
+}
+
+fn delta_5(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  for i in 0..n {
+    if (i == 0) {
+      out[i] = x[i];
+    }
+    else {
+      out[i] = sub_wrap(x[i], x[(i - 1)]);
+    }
+  }
+}
+
+fn delta_6(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  for i in 0..n {
+    if (i == 0) {
+      out[i] = x[i];
+    }
+    else {
+      out[i] = sub_wrap(x[i], x[(i - 1)]);
+    }
+  }
+}
+
+fn delta_7(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host) {
+  for i in 0..n {
+    if (i == 0) {
+      out[i] = x[i];
+    }
+    else {
+      out[i] = sub_wrap(x[i], x[(i - 1)]);
+    }
+  }
+}

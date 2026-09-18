@@ -1,0 +1,12 @@
+// Stable little-endian encoding in field order. No padding on the wire.
+struct Packet {
+  sequence:u64;
+  source:u32;
+  destination:u32;
+  flags:u16;
+  kind:u8;
+  version:u8;
+  payload_bytes:u64;
+  timestamp:u64;
+}
+derive wire for Packet;

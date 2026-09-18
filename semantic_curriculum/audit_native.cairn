@@ -1,0 +1,239 @@
+fn modular_increment_u8_reference(x:u8)->u8 {if x==255 {return 0;} return x+1;}
+
+fn modular_increment_u8_chosen(x:u8)->u8 {return add_wrap(x,1);}
+
+fn modular_increment_u8_rejected(x:u8)->u8 {return x+1;}
+
+fn minimum_u8_reference(x:u8,y:u8)->u8 {if x<y {return x;} return y;}
+
+fn minimum_u8_chosen(x:u8,y:u8)->u8 {return min(x,y);}
+
+fn minimum_u8_rejected(x:u8,y:u8)->u8 {return max(x,y);}
+
+fn maximum_u8_reference(x:u8,y:u8)->u8 {if x>y {return x;} return y;}
+
+fn maximum_u8_chosen(x:u8,y:u8)->u8 {return max(x,y);}
+
+fn maximum_u8_rejected(x:u8,y:u8)->u8 {return min(x,y);}
+
+fn absolute_difference_u8_reference(x:u8,y:u8)->u8 {if x>=y {return x-y;} return y-x;}
+
+fn absolute_difference_u8_chosen(x:u8,y:u8)->u8 {return max(x,y)-min(x,y);}
+
+fn absolute_difference_u8_rejected(x:u8,y:u8)->u8 {return x-y;}
+
+fn saturating_add_u8_reference(x:u8,y:u8)->u8 {if y>255-x {return 255;} return x+y;}
+
+fn saturating_add_u8_chosen(x:u8,y:u8)->u8 {let z=add_wrap(x,y); if z<x {return 255;} return z;}
+
+fn saturating_add_u8_rejected(x:u8,y:u8)->u8 {return add_wrap(x,y);}
+
+fn floor_average_u8_reference(x:u8,y:u8)->u8 {return (x/2)+(y/2)+((x%2+y%2)/2);}
+
+fn floor_average_u8_chosen(x:u8,y:u8)->u8 {return (x&y)+shr(x^y,1);}
+
+fn floor_average_u8_rejected(x:u8,y:u8)->u8 {return add_wrap(x,y)/2;}
+
+fn align_eight_u8_reference(x:u8)->u8 {return (x/8)*8;}
+
+fn align_eight_u8_chosen(x:u8)->u8 {return x & ~u8(7);}
+
+fn align_eight_u8_rejected(x:u8)->u8 {return x/8;}
+
+fn clear_lowest_bit_u8_reference(x:u8)->u8 {if x==0 {return 0;} return x&(x-1);}
+
+fn clear_lowest_bit_u8_chosen(x:u8)->u8 {return x&sub_wrap(x,1);}
+
+fn clear_lowest_bit_u8_rejected(x:u8)->u8 {return x^sub_wrap(x,1);}
+
+fn power_of_two_u8_reference(x:u8)->bool {return x!=0 && (x&sub_wrap(x,1))==0;}
+
+fn power_of_two_u8_chosen(x:u8)->bool {if x==0 {return false;} return (x&sub_wrap(x,1))==0;}
+
+fn power_of_two_u8_rejected(x:u8)->bool {return (x&sub_wrap(x,1))==0;}
+
+fn ceiling_div_eight_u8_reference(x:u8)->u8 {let base=x/8; if x%8!=0 {return base+1;} return base;}
+
+fn ceiling_div_eight_u8_chosen(x:u8)->u8 {return (x/8)+min(x%8,1);}
+
+fn ceiling_div_eight_u8_rejected(x:u8)->u8 {return add_wrap(x,7)/8;}
+
+fn low_nibble_u8_reference(x:u8)->u8 {return x%16;}
+
+fn low_nibble_u8_chosen(x:u8)->u8 {return x&15;}
+
+fn low_nibble_u8_rejected(x:u8)->u8 {return x%15;}
+
+fn zero_safe_division_u8_reference(x:u8,y:u8)->u8 {if y==0 {return 0;} return x/y;}
+
+fn zero_safe_division_u8_chosen(x:u8,y:u8)->u8 {if y!=0 {return x/y;} return 0;}
+
+fn zero_safe_division_u8_rejected(x:u8,y:u8)->u8 {return x/y;}
+
+fn modular_increment_u32_reference(x:u32)->u32 {if x==4294967295 {return 0;} return x+1;}
+
+fn modular_increment_u32_chosen(x:u32)->u32 {return add_wrap(x,1);}
+
+fn modular_increment_u32_rejected(x:u32)->u32 {return x+1;}
+
+fn minimum_u32_reference(x:u32,y:u32)->u32 {if x<y {return x;} return y;}
+
+fn minimum_u32_chosen(x:u32,y:u32)->u32 {return min(x,y);}
+
+fn minimum_u32_rejected(x:u32,y:u32)->u32 {return max(x,y);}
+
+fn maximum_u32_reference(x:u32,y:u32)->u32 {if x>y {return x;} return y;}
+
+fn maximum_u32_chosen(x:u32,y:u32)->u32 {return max(x,y);}
+
+fn maximum_u32_rejected(x:u32,y:u32)->u32 {return min(x,y);}
+
+fn absolute_difference_u32_reference(x:u32,y:u32)->u32 {if x>=y {return x-y;} return y-x;}
+
+fn absolute_difference_u32_chosen(x:u32,y:u32)->u32 {return max(x,y)-min(x,y);}
+
+fn absolute_difference_u32_rejected(x:u32,y:u32)->u32 {return x-y;}
+
+fn saturating_add_u32_reference(x:u32,y:u32)->u32 {if y>4294967295-x {return 4294967295;} return x+y;}
+
+fn saturating_add_u32_chosen(x:u32,y:u32)->u32 {let z=add_wrap(x,y); if z<x {return 4294967295;} return z;}
+
+fn saturating_add_u32_rejected(x:u32,y:u32)->u32 {return add_wrap(x,y);}
+
+fn floor_average_u32_reference(x:u32,y:u32)->u32 {return (x/2)+(y/2)+((x%2+y%2)/2);}
+
+fn floor_average_u32_chosen(x:u32,y:u32)->u32 {return (x&y)+shr(x^y,1);}
+
+fn floor_average_u32_rejected(x:u32,y:u32)->u32 {return add_wrap(x,y)/2;}
+
+fn align_eight_u32_reference(x:u32)->u32 {return (x/8)*8;}
+
+fn align_eight_u32_chosen(x:u32)->u32 {return x & ~u32(7);}
+
+fn align_eight_u32_rejected(x:u32)->u32 {return x/8;}
+
+fn clear_lowest_bit_u32_reference(x:u32)->u32 {if x==0 {return 0;} return x&(x-1);}
+
+fn clear_lowest_bit_u32_chosen(x:u32)->u32 {return x&sub_wrap(x,1);}
+
+fn clear_lowest_bit_u32_rejected(x:u32)->u32 {return x^sub_wrap(x,1);}
+
+fn power_of_two_u32_reference(x:u32)->bool {return x!=0 && (x&sub_wrap(x,1))==0;}
+
+fn power_of_two_u32_chosen(x:u32)->bool {if x==0 {return false;} return (x&sub_wrap(x,1))==0;}
+
+fn power_of_two_u32_rejected(x:u32)->bool {return (x&sub_wrap(x,1))==0;}
+
+fn ceiling_div_eight_u32_reference(x:u32)->u32 {let base=x/8; if x%8!=0 {return base+1;} return base;}
+
+fn ceiling_div_eight_u32_chosen(x:u32)->u32 {return (x/8)+min(x%8,1);}
+
+fn ceiling_div_eight_u32_rejected(x:u32)->u32 {return add_wrap(x,7)/8;}
+
+fn low_nibble_u32_reference(x:u32)->u32 {return x%16;}
+
+fn low_nibble_u32_chosen(x:u32)->u32 {return x&15;}
+
+fn low_nibble_u32_rejected(x:u32)->u32 {return x%15;}
+
+fn zero_safe_division_u32_reference(x:u32,y:u32)->u32 {if y==0 {return 0;} return x/y;}
+
+fn zero_safe_division_u32_chosen(x:u32,y:u32)->u32 {if y!=0 {return x/y;} return 0;}
+
+fn zero_safe_division_u32_rejected(x:u32,y:u32)->u32 {return x/y;}
+
+fn modular_increment_u64_reference(x:u64)->u64 {if x==18446744073709551615 {return 0;} return x+1;}
+
+fn modular_increment_u64_chosen(x:u64)->u64 {return add_wrap(x,1);}
+
+fn modular_increment_u64_rejected(x:u64)->u64 {return x+1;}
+
+fn minimum_u64_reference(x:u64,y:u64)->u64 {if x<y {return x;} return y;}
+
+fn minimum_u64_chosen(x:u64,y:u64)->u64 {return min(x,y);}
+
+fn minimum_u64_rejected(x:u64,y:u64)->u64 {return max(x,y);}
+
+fn maximum_u64_reference(x:u64,y:u64)->u64 {if x>y {return x;} return y;}
+
+fn maximum_u64_chosen(x:u64,y:u64)->u64 {return max(x,y);}
+
+fn maximum_u64_rejected(x:u64,y:u64)->u64 {return min(x,y);}
+
+fn absolute_difference_u64_reference(x:u64,y:u64)->u64 {if x>=y {return x-y;} return y-x;}
+
+fn absolute_difference_u64_chosen(x:u64,y:u64)->u64 {return max(x,y)-min(x,y);}
+
+fn absolute_difference_u64_rejected(x:u64,y:u64)->u64 {return x-y;}
+
+fn saturating_add_u64_reference(x:u64,y:u64)->u64 {if y>18446744073709551615-x {return 18446744073709551615;} return x+y;}
+
+fn saturating_add_u64_chosen(x:u64,y:u64)->u64 {let z=add_wrap(x,y); if z<x {return 18446744073709551615;} return z;}
+
+fn saturating_add_u64_rejected(x:u64,y:u64)->u64 {return add_wrap(x,y);}
+
+fn floor_average_u64_reference(x:u64,y:u64)->u64 {return (x/2)+(y/2)+((x%2+y%2)/2);}
+
+fn floor_average_u64_chosen(x:u64,y:u64)->u64 {return (x&y)+shr(x^y,1);}
+
+fn floor_average_u64_rejected(x:u64,y:u64)->u64 {return add_wrap(x,y)/2;}
+
+fn align_eight_u64_reference(x:u64)->u64 {return (x/8)*8;}
+
+fn align_eight_u64_chosen(x:u64)->u64 {return x & ~u64(7);}
+
+fn align_eight_u64_rejected(x:u64)->u64 {return x/8;}
+
+fn clear_lowest_bit_u64_reference(x:u64)->u64 {if x==0 {return 0;} return x&(x-1);}
+
+fn clear_lowest_bit_u64_chosen(x:u64)->u64 {return x&sub_wrap(x,1);}
+
+fn clear_lowest_bit_u64_rejected(x:u64)->u64 {return x^sub_wrap(x,1);}
+
+fn power_of_two_u64_reference(x:u64)->bool {return x!=0 && (x&sub_wrap(x,1))==0;}
+
+fn power_of_two_u64_chosen(x:u64)->bool {if x==0 {return false;} return (x&sub_wrap(x,1))==0;}
+
+fn power_of_two_u64_rejected(x:u64)->bool {return (x&sub_wrap(x,1))==0;}
+
+fn ceiling_div_eight_u64_reference(x:u64)->u64 {let base=x/8; if x%8!=0 {return base+1;} return base;}
+
+fn ceiling_div_eight_u64_chosen(x:u64)->u64 {return (x/8)+min(x%8,1);}
+
+fn ceiling_div_eight_u64_rejected(x:u64)->u64 {return add_wrap(x,7)/8;}
+
+fn low_nibble_u64_reference(x:u64)->u64 {return x%16;}
+
+fn low_nibble_u64_chosen(x:u64)->u64 {return x&15;}
+
+fn low_nibble_u64_rejected(x:u64)->u64 {return x%15;}
+
+fn zero_safe_division_u64_reference(x:u64,y:u64)->u64 {if y==0 {return 0;} return x/y;}
+
+fn zero_safe_division_u64_chosen(x:u64,y:u64)->u64 {if y!=0 {return x/y;} return 0;}
+
+fn zero_safe_division_u64_rejected(x:u64,y:u64)->u64 {return x/y;}
+
+fn signed_signum_i32_reference(x:i32)->i32 {if x<0 {return -1;} if x>0 {return 1;} return 0;}
+
+fn signed_signum_i32_chosen(x:i32)->i32 {let mut z:i32=0; if x!=0 {z=1; if x<0 {z=-1;}} return z;}
+
+fn signed_signum_i32_rejected(x:i32)->i32 {if x<=0 {return -1;} return 1;}
+
+fn signed_identity_i32_reference(x:i32)->i32 {return x;}
+
+fn signed_identity_i32_chosen(x:i32)->i32 {return x+0;}
+
+fn signed_identity_i32_rejected(x:i32)->i32 {return -(-x);}
+
+fn signed_signum_i64_reference(x:i64)->i64 {if x<0 {return -1;} if x>0 {return 1;} return 0;}
+
+fn signed_signum_i64_chosen(x:i64)->i64 {let mut z:i64=0; if x!=0 {z=1; if x<0 {z=-1;}} return z;}
+
+fn signed_signum_i64_rejected(x:i64)->i64 {if x<=0 {return -1;} return 1;}
+
+fn signed_identity_i64_reference(x:i64)->i64 {return x;}
+
+fn signed_identity_i64_chosen(x:i64)->i64 {return x+0;}
+
+fn signed_identity_i64_rejected(x:i64)->i64 {return -(-x);}

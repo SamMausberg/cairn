@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""Validate all authored teaching programs against independent finite oracles.
+
+Build the combined corpus once per compiler, then run each contract in a child.
+No model is invoked, trained, or scored. Alpha-renamed variants are not new
+independent tasks. All answer keys are shipped for audit, not secret evaluation.
+"""
+from pathlib import Path
+import argparse,json,subprocess,sys,tempfile,time,shutil
+R=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(R/'compiler'));sys.path.insert(0,str(R/'tools'))
+from cairnc import compile_source,RUNTIME
+from agent_tools import stable_json,digest,load_json_strict
+from task_eval import FLAGS,validate_contract
+
+def main():
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--gcc',action='store_true');a=p.parse_args()
+ source=(R/'curriculum/corpus.cairn').read_text()
+ tasks=load_json_strict((R/'curriculum/all_tasks_with_oracles.json').read_text())
+ generated,receipt=compile_source(source)
+ outputs=[];started=time.monotonic()
+ with tempfile.TemporaryDirectory(prefix='cairn-curriculum-') as tmp:
+  t=Path(tmp);(t/'corpus.cpp').write_text(generated);(t/'source.cairn').write_text(source);(t/'cairn_runtime.hpp').write_text(RUNTIME)
+  for compiler_name in ['clang++']+(['g++'] if a.gcc else []):
+   compiler=shutil.which(compiler_name)
+   if compiler is None:raise RuntimeError('Requested compiler not installed: '+compiler_name)
+   version=subprocess.run([compiler,'--version'],text=True,capture_output=True,check=True).stdout
+   cmd=[compiler,*FLAGS,str(t/'corpus.cpp'),'-o',str(t/'libcorpus.so')]
+   cp=subprocess.run(cmd,text=True,capture_output=True,timeout=90)
+   if cp.returncode:raise RuntimeError(cp.stderr)
+   entries=[]
+   for task in tasks:
+    contract=task['contract'];validate_contract(source,contract)
+    (t/'contract.json').write_text(stable_json(contract))
+    cp=subprocess.run([sys.executable,str(R/'tools/task_eval.py'),'--child',str(t/'libcorpus.so'),str(t/'source.cairn'),str(t/'contract.json')],text=True,capture_output=True,timeout=10)
+    events=[json.loads(line) for line in cp.stdout.splitlines()]
+    verdict=next((x for x in reversed(events) if 'status' in x),{'status':'no-verdict'})
+    entry={'id':task['id'],'family':task['family'],'split':task['split'],**verdict,'exit_code':cp.returncode}
+    entries.append(entry)
+    if cp.returncode or verdict.get('status')!='passed-finite-tests':raise RuntimeError(str(entry)+'\n'+cp.stderr)
+   outputs.append({'compiler':compiler,'version':version,'flags':FLAGS,'entries':entries,
+                   'tasks':len(entries),'cases':sum(e['cases'] for e in entries)})
+ result={'source_sha256':digest(source),'answers_sha256':digest(stable_json(tasks)),'results':outputs,
+         'elapsed_seconds':time.monotonic()-started,'model_runs':0,'formal_status':'not-verified',
+         'status':'all finite teaching cases passed'}
+ (R/'results/curriculum_validation.json').write_text(json.dumps(result,indent=2)+'\n')
+ print(json.dumps({k:v for k,v in result.items() if k!='results'},indent=2))
+ print([(x['compiler'],x['tasks'],x['cases']) for x in outputs])
+if __name__=='__main__':main()

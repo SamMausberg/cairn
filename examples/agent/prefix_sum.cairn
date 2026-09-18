@@ -1,0 +1,8 @@
+fn prefix_sum(n:usize, out:rw<u64>[n]@host,
+              input:ro<u64>[n]@host) {
+  let mut total:u64 = 0;
+  for i in 0..n {
+    total = add_wrap(total,input[i]);
+    out[i] = total;
+  }
+}
