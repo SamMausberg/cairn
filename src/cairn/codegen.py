@@ -54,7 +54,11 @@ class Emitter:
 
     def type(self, t: Type) -> str:
         if t.name == "fn":
-            base = f"{self.type(t.args[-1])} (*)({', '.join(self.type(a) for a in t.args[:-1])})"
+            shape = f"{self.type(t.args[-1])}({', '.join(self.type(a) for a in t.args[:-1])})"
+            self.need("cairn_owners.hpp")
+            if t.mode != "value":  # A borrowed callable: two words, no allocation, cannot escape.
+                return f"cr::Fn<{shape}>"
+            base = f"cr::FnPtr<{shape}>"
         elif t.name == "Buf":
             self.need("cairn_owners.hpp")
             base = f"cr::Buf<{self.type(t.args[0])}>"
@@ -158,6 +162,18 @@ class Emitter:
         value = self.expr(args[0]) if args else "0"
         return f"{name}{{{index}, {{.v_{e.val.rsplit('.', 1)[-1]} = {value}}}}}"
 
+    def e_lambda(self, e: Expr) -> str:
+        f, start = e.ref, len(self.lines)
+        self.ind += 1
+        self.block(f.body)
+        self.ind -= 1
+        text, self.lines = self.lines[start:], self.lines[:start]
+        ps = ", ".join(f"{self.type(t)} v_{n}" for n, t in f.params)
+        return "\n".join([f"[&]({ps}) noexcept -> {self.type(f.ret)} {{", *text, "  " * self.ind + "}"])
+
+    def e_function(self, e: Expr) -> str:
+        return "cf_" + mangle(e.ref.name)
+
     def e_try(self, e: Expr) -> str:
         temp, _ = self.fresh("cr_try_")
         ok, err = e.ref
@@ -187,6 +203,8 @@ class Emitter:
         if isinstance(e.ref, Function):
             return self.invoke(e, e.ref)
         kind = e.ref[0]
+        if kind == "indirect":
+            return f"v_{e.val}({', '.join(self.expr(a) for a in e.args)})"
         if kind == "variant":
             return self.variant(e, e.args)
         if kind == "record":
@@ -202,6 +220,11 @@ class Emitter:
             return f"cr::{n}<{ty}>({texts[0]}, {texts[1]})"
         if n in {"min", "max"}:
             return f"std::{n}({texts[0]}, {texts[1]})"
+        if n == "asm":
+            return f'__asm__("{args[0].val}")'
+        if n in {"mmio_read", "mmio_write"}:  # One volatile access of exactly the stated width.
+            register = f"*reinterpret_cast<volatile {self.type(e.ref[1][0])}*>({self.expr(args[0])})"
+            return f"static_cast<{ty}>({register})" if n == "mmio_read" else f"({register} = {self.expr(args[1])})"
         if n == "transfer":
             (dst, count), (src, _) = self.pointer(args[0]), self.pointer(args[1])
             ends = ["h" if a.ty.place in HOST_VISIBLE else "d" for a in (args[1], args[0])]

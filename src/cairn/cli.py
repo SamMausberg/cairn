@@ -204,8 +204,9 @@ def main(argv: list[str] | None = None) -> int:
         def limits():
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
             resource.setrlimit(resource.RLIMIT_CPU, (a.timeout, a.timeout))
-            memory = a.memory_mib * 1024 * 1024
-            resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+            if "cuda" not in result["frontend"]["requires"]:  # Unified addressing reserves far more than it uses.
+                memory = a.memory_mib * 1024 * 1024
+                resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
 
         cp = subprocess.run([result["artifact"]], capture_output=True, text=True, timeout=a.timeout, preexec_fn=limits)
         report(

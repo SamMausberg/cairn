@@ -19,7 +19,7 @@ from .syntax import (
 )  # fmt: skip
 
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
-SOFT = {"take", "swap", "transfer"}  # New in 1.0: a program's own function of that name wins.
+SOFT = {"take", "swap", "transfer", "mmio_read", "mmio_write", "asm"}  # New in 1.0: a program's own function wins.
 BUILTINS = WRAPPING | SOFT | {"min", "max", "len"}
 INTRINSIC_TYPES = {"Buf": 1, "Array": 2, "fn": None, "dyn": 1}
 KINDS = ["copy", "affine", "linear"]
@@ -46,6 +46,7 @@ class Scope:
     device_depth: int = 0
     module: str = ""
     lanes: Lanes | None = None
+    closure: tuple[Type, set[str]] | None = None  # (return type, names bound outside the closure)
 
 
 @dataclass
@@ -188,6 +189,8 @@ class Checker:
                 arity = len(self.p.generics.get(name, []))
             if arity is not None and len(args) != arity:
                 fail("E-GENERIC-ARITY", f"{name} takes {arity} type arguments.", node)
+            if name == "fn" and any(is_view(a) for a in args):
+                fail("E-FN-TYPE", "A function type carries values and single borrows, not array views.", node)
             base = Type(name, args=args)
             self.define(base, node)
         if ty.mode == "value":
@@ -575,16 +578,17 @@ class Checker:
     s_continue = s_break
 
     def s_return(self, s: Stmt):
-        if self.lanes:
+        ret, outer = self.closure or (self.f.ret, set())
+        if self.lanes and not self.closure:
             fail("E-PARALLEL-CONTROL", "A lane cannot return from the enclosing function.", s)
-        if self.f.ret == VOID:
+        if ret == VOID:
             if s.exprs:
                 fail("E-RETURN", "Void function cannot return a value.", s)
         elif not s.exprs:
             fail("E-RETURN", "Missing return value.", s)
         else:
-            self.expr(s.exprs[0], self.f.ret)
-        self.leaks(self.env, s)
+            self.expr(s.exprs[0], ret)
+        self.leaks(set(self.env) - outer, s)
         return True
 
     def branches(self, node: Any, runs: list) -> bool:
@@ -851,6 +855,9 @@ class Checker:
         b = self.env.get(e.val)
         if b is None:
             const = self.qualify(e.val, self.p.consts, node=e)
+            value = self.function_value(e, expected) if const is None and expected and expected.name == "fn" else None
+            if value:
+                return value
             if const is None:
                 fail("E-UNBOUND", f"Unbound name {e.val}.", e, available_names=sorted(self.env),
                      expected_type=expected.display() if expected else None)  # fmt: skip
@@ -942,6 +949,54 @@ class Checker:
         e.ref = ("variant", list(variants).index(variant))
         return ty
 
+    def e_lambda(self, e: Expr, expected: Type | None) -> Type:
+        """A closure exists only as a `ro<fn(...)>` argument, so it can never outlive what it captures."""
+        f: Function = e.ref
+        if expected is None or expected.name != "fn" or expected.mode != "ro" or self.device_depth:
+            fail("E-CLOSURE", "A closure is written directly as an argument to a ro<fn(...)> parameter on the host.", e)
+        saved = dict(self.env), self.closure, self.loop_depth, set(self.moved)
+        f.params = [(n, self.resolve(t, e)) for n, t in f.params]
+        f.ret = self.resolve(f.ret, e)
+        self.expect(Type("fn", "ro", args=(*(t for _, t in f.params), f.ret)), expected, e)
+        self.closure, self.loop_depth = (f.ret, set(self.env)), 0
+        for n, t in f.params:
+            self.bind(n, Binding(t), e)
+        if not self.block(f.body) and f.ret != VOID:
+            fail("E-RETURN", "Not all paths of the closure return.", e)
+        if (self.moved - saved[3]) & set(saved[0]):
+            fail("E-MOVE-IN-LOOP", "A closure may run many times; it cannot move an outer owner.", e)
+        self.env, self.closure, self.loop_depth = saved[:3]
+        return expected
+
+    def function_value(self, e: Expr, want: Type) -> Type | None:
+        """A declared function named where a fn value is expected; it counts as called here."""
+        name = self.qualify(path(e), self.fs, node=e) if root(e).tag == "name" and root(e).val not in self.env else None
+        if name is None:
+            return None
+        g = self.fs[name]
+        self.signature(g)
+        if g.generics or g.extern or any(t.mode != "value" for _, t in g.params):
+            fail("E-FN-TYPE", f"{name} cannot be a function value: only plain functions of values qualify.", e)
+        self.call_edges[self.f.name].append((name, {}))
+        self.callset.add(name)
+        e.ref, e.tag = g, "function"
+        return Type("fn", want.mode, args=(*(t for _, t in g.params), g.ret))
+
+    def indirect(self, e: Expr, target: Binding, args: list[Expr]) -> Type:
+        *params, ret = target.ty.args
+        if len(args) != len(params):
+            fail("E-ARITY", f"{e.val} expects {len(params)} arguments.", e)
+        for a, want in zip(args, params, strict=True):
+            if want.mode == "value":
+                self.expr(a, want)
+            else:
+                if want.mode == "rw" and not self.writable(a):
+                    fail("E-WRITE-LEASE", "A mutable borrow needs a mutable local or an rw borrow.", a)
+                self.expect(self.expr(a, consume=False).value, want.value, a)
+        self.effect("indirect_call")
+        e.ref = ("indirect", target.ty)
+        return ret
+
     def e_try(self, e: Expr, expected: Type | None) -> Type:
         """`try x` yields the success payload or returns the failure from the enclosing function."""
         ty = self.expr(e.args[0])
@@ -1018,6 +1073,8 @@ class Checker:
             if enum:
                 return self.variant(Type(enum, args=targs), n.rsplit(".", 1)[1], args, e, expected)
         e.val = n
+        if n in self.env and self.env[n].ty.name == "fn":
+            return self.indirect(e, self.env[n], args)
         if (n in BUILTINS and n not in self.fs) or n in NUMERIC or n in INTRINSIC_TYPES:
             e.ref = ("builtin", targs)
             return self.builtin(e, n, args, targs, expected)
@@ -1139,6 +1196,10 @@ class Checker:
         borrows: list[tuple[str, str]] = []
         mapping: dict[str, str] = {}
         for a, (name, want) in zip(args, f.params, strict=True):
+            if want.name == "fn" and (a.tag == "lambda" or root(a).val not in self.env):
+                self.expr(a, want)  # A closure or a declared function: nothing of the caller is borrowed.
+                mapping[name] = ""
+                continue
             if want.mode == "value":
                 self.expr(a, want)
                 continue
@@ -1237,6 +1298,23 @@ class Checker:
             if src.name in INT and n in INT:
                 self.guard("conversion")
             return Type(n)
+        if n in {"mmio_read", "mmio_write", "asm"}:  # Target access: audited, never silently safe.
+            if not self.unsafe_depth:
+                fail("E-UNSAFE", f"{n} touches the machine directly; use it inside an unsafe block.", e)
+            self.effect("asm" if n == "asm" else "mmio")
+            if n == "asm":
+                if len(args) != 1 or args[0].tag != "str":
+                    fail("E-ARITY", "asm takes one string literal of target instructions.", e)
+                return VOID
+            ty = self.resolve(targs[0], e) if len(targs) == 1 else expected
+            if ty is None or ty.name not in UNSIGNED:
+                fail("E-INFER", f"Write {n}[u8|u16|u32|u64] with the register width.", e)
+            arity(1 + (n == "mmio_write"), f"{n} takes an address" + (" and a value." if n == "mmio_write" else "."))
+            self.expr(args[0], USIZE)
+            if n == "mmio_write":
+                self.expr(args[1], ty)
+            e.ref = ("builtin", (ty,))
+            return ty if n == "mmio_read" else VOID
         if n == "transfer":  # The only way elements cross a placement boundary; extents agree by identity.
             arity(2, "transfer takes a destination and a source view.")
             dst, src = (self.view_argument(a) for a in args)

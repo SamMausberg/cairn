@@ -30,6 +30,26 @@ template<class F> struct Defer final {
   ~Defer() noexcept { run(); }
 };
 template<class F> Defer(F) -> Defer<F>;
+// ro<fn(A) -> R>: a borrowed callable. It points at a closure or function that outlives the call
+// it is passed to, which the source language guarantees by never letting it be stored or returned.
+template<class S> using FnPtr = S*;  // fn(A) -> R: a plain code pointer, freely copied.
+template<class S> class Fn;
+template<class R,class... A> class Fn<R(A...)> final {
+  void* env_;
+  R (*call_)(void*,A...);
+public:
+  template<class F> Fn(F&& f) noexcept {
+    using D = std::decay_t<F>;
+    if constexpr(std::is_pointer_v<D>) {  // A declared function: the code pointer is the environment.
+      env_ = reinterpret_cast<void*>(static_cast<D>(f));
+      call_ = [](void* e,A... a) -> R { return reinterpret_cast<D>(e)(std::forward<A>(a)...); };
+    } else {
+      env_ = const_cast<void*>(static_cast<const void*>(&f));
+      call_ = [](void* e,A... a) -> R { return (*static_cast<std::remove_reference_t<F>*>(e))(std::forward<A>(a)...); };
+    }
+  }
+  R operator()(A... a) const { return call_(env_,std::forward<A>(a)...); }
+};
 // x[lo..hi] passed where the callee expects `want` elements: one guard, then a plain pointer.
 template<class T> inline T* part(T* p,std::size_t lo,std::size_t hi,std::size_t n,std::size_t want) noexcept {
   if(lo>hi || hi>n || hi-lo!=want) trap();
