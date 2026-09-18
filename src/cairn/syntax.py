@@ -59,6 +59,7 @@ RESERVED = set(  # One readable paragraph of words beats a wall of quoted string
 )
 ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "0": "\0", "\\": "\\", '"': '"', "'": "'"}
 PLACES = ("host", "device", "pinned", "unified")
+HOST_VISIBLE = {"host", "pinned", "unified"}
 
 
 def lex(text: str) -> list[Token]:
@@ -222,6 +223,10 @@ class Program:
     uses: dict[tuple[str, str], str] = field(default_factory=dict)  # (importer, bare name) -> full name
     sources: dict[str, str] = field(default_factory=dict)  # linked library module -> its text
     modules: dict[str, str] = field(default_factory=dict)  # declared name -> owning module
+
+
+def is_view(ty: Type) -> bool:
+    return ty.mode != "value" and ty.extent != ""
 
 
 def root(e: Expr) -> Expr:

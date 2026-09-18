@@ -6,8 +6,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .checking import COMPARISONS, HOST_VISIBLE, WRAPPING, Checker, is_view
-from .syntax import CPP, FLOAT, INT, NUMERIC, Expr, Function, Program, Stmt, Type, fail
+from .builtins import SHARED, TABLE, WRAPPING
+from .checking import COMPARISONS, Checker
+from .syntax import CPP, FLOAT, Expr, Function, Program, Stmt, Type, fail, is_view
 from .version import VERSION
 
 RUNTIME_FILES = {
@@ -15,7 +16,6 @@ RUNTIME_FILES = {
 }
 RUNTIME = RUNTIME_FILES["cairn_runtime.hpp"]
 CHECKED = {"+": "add", "-": "sub", "*": "mul", "/": "divide", "%": "remainder"}
-SHARED = {"Ticket": "Task", "Atomic": "Atomic", "Mutex": "Mutex"}
 
 
 def mangle(name: str) -> str:
@@ -285,44 +285,7 @@ class Emitter:
             return self.variant(e, e.args)
         if kind == "record":
             return self.type(e.ty) + "{" + ", ".join(self.expr(a) for a in e.args) + "}"
-        n, args, ty = e.val, e.args, self.type(e.ty)
-        if n == "len":
-            return self.lenof(args[0])
-        if n in NUMERIC:  # Integer targets are range checked; float targets are exact or rounding casts.
-            guard = "static_cast" if n in FLOAT else "cr::convert" if args[0].ty.name in INT else "cr::truncate"
-            return f"{guard}<{ty}>({self.expr(args[0])})"
-        texts = [self.expr(a) for a in args]
-        if n in WRAPPING:
-            return f"cr::{n}<{ty}>({texts[0]}, {texts[1]})"
-        if n in {"min", "max"}:
-            return f"std::{n}({texts[0]}, {texts[1]})"
-        if n == "asm":
-            return f'__asm__("{args[0].val}")'
-        if n in {"mmio_read", "mmio_write"}:  # One volatile access of exactly the stated width.
-            register = f"*reinterpret_cast<volatile {self.type(e.ref[1][0])}*>({self.expr(args[0])})"
-            return f"static_cast<{ty}>({register})" if n == "mmio_read" else f"({register} = {self.expr(args[1])})"
-        if n == "transfer":
-            (dst, count), (src, _) = self.pointer(args[0]), self.pointer(args[1])
-            ends = ["h" if a.ty.place in HOST_VISIBLE else "d" for a in (args[1], args[0])]
-            if ends == ["h", "h"]:
-                return f"std::copy_n({src}, {count}, {dst})"
-            self.need("cairn_gpu.hpp")
-            return f"cr::gpu::copy({dst}, {src}, {count}, cr::gpu::Dir::{ends[0]}2{ends[1]})"
-        if n == "wait":
-            return f"{self.expr(args[0])}.wait()"
-        if n in SHARED:
-            return f"{ty}({self.expr(args[0])})"
-        if n == "Dyn":
-            return f"{ty}::make({self.expr(args[0])}, &{self.vtable(e.ty.args[0].name, args[0].ty.value, e.ref[1])})"
-        if n == "take":
-            return f"std::exchange({texts[0]}, {{}})"
-        if n == "swap":
-            return f"std::swap({texts[0]}, {texts[1]})"
-        return f"{ty}({texts[0]})" if n == "Buf" else f"{ty}{{}}"
-
-    def lenof(self, a: Expr) -> str:
-        count = self.pointer(a)[1]
-        return f"static_cast<std::size_t>({count}ULL)" if count.isdigit() else count
+        return TABLE[e.val][1](self, e)
 
     def invoke(self, e: Expr, f: Function) -> str:
         args = []

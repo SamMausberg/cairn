@@ -13,6 +13,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
+from .builtins import SOFT, TABLE, WRAPPING
 from .effects import LANE_SAFE, PURE, audit, exposed, fixed_point
 from .syntax import (
     BOOL,
@@ -34,20 +35,10 @@ from .syntax import (
     Stmt,
     Type,
     fail,
+    is_view,
     root,
 )  # fmt: skip
 
-WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
-SOFT = {
-    "take",
-    "swap",
-    "transfer",
-    "mmio_read",
-    "mmio_write",
-    "asm",
-    "wait",
-}  # New in 1.0: a program's own function wins.
-BUILTINS = WRAPPING | SOFT | {"min", "max", "len"}
 INTRINSIC_TYPES = {"Buf": 1, "Array": 2, "fn": None, "dyn": 1, "Dyn": 1, "Ticket": 1, "Atomic": 1, "Mutex": 1}
 PINNED = {"Ticket", "Atomic", "Mutex"}  # Declared and borrowed in place; never stored, passed or returned.
 ORDERS = ["relaxed", "acquire", "release", "acquire_release", "seq_cst"]
@@ -63,7 +54,6 @@ ATOMIC_OPS = {
 }
 KINDS = ["copy", "affine", "linear"]
 COMPARISONS = {"==", "!=", "<", "<=", ">", ">="}
-HOST_VISIBLE = {"host", "pinned", "unified"}
 
 
 @dataclass
@@ -106,10 +96,6 @@ class Binding:
 
 
 SCOPED = frozenset(Scope.__dataclass_fields__)
-
-
-def is_view(ty: Type) -> bool:
-    return ty.mode != "value" and ty.extent != ""
 
 
 def path(e: Expr, stable=lambda name: False) -> str:
@@ -163,7 +149,7 @@ class Checker:
         program.enums.setdefault("Order", ORDERS)
         self.types = {**program.records, **program.enums, **program.sums}
         for name in [*self.fs, *self.types, *program.consts, *program.traits]:
-            if name in CPP or name in BUILTINS - SOFT or name in INTRINSIC_TYPES:
+            if name in CPP or name in set(TABLE) - SOFT or name in INTRINSIC_TYPES:
                 fail("E-BUILTIN-NAME", f"Cannot redefine builtin {name}.")
         self.aliases: dict[str, dict[str, str]] = {}
         for importer, target, alias in program.imports:
@@ -1231,9 +1217,11 @@ class Checker:
             return self.invoke(e, self.fs[method], args, targs, expected)
         if n in self.env and self.env[n].ty.name == "fn":
             return self.indirect(e, self.env[n], args)
-        if (n in BUILTINS and n not in self.fs) or n in NUMERIC or n in INTRINSIC_TYPES:
+        if n in TABLE and n not in self.fs:
             e.ref = ("builtin", targs)
-            return self.builtin(e, n, args, targs, expected)
+            return TABLE[n][0](self, e, args, targs, expected)
+        if n in INTRINSIC_TYPES:
+            fail("E-CALLEE", f"{n} is a type, not a callable.", e)
         record = self.qualify(n, self.p.records, node=e)
         if record:
             return self.construct(e, record, args, targs, expected)
@@ -1489,123 +1477,3 @@ class Checker:
         ty = self.resolve(Type(record, args=tuple(bound[g] for g in names)), e)
         e.ref = ("record", ty)
         return ty
-
-    def builtin(self, e: Expr, n: str, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
-        def arity(count: int, message: str):
-            if len(args) != count:
-                fail("E-ARITY", message, e)
-
-        if n == "len":
-            if len(args) != 1 or root(args[0]).tag != "name" or args[0].tag == "slice":
-                fail("E-LEN", "len takes one direct borrowed view or local buffer.", e)
-            ty = self.expr(args[0], consume=False)
-            if not is_view(ty) and ty.name not in {"Buf", "Array"}:
-                fail("E-LEN", "len requires an array view.", e)
-            return USIZE
-        if n in NUMERIC:
-            arity(1, "Scalar conversion takes one argument.")
-            src = self.expr(args[0])
-            if src.mode != "value" or src.name not in NUMERIC:
-                fail("E-CAST", "Conversion requires numeric scalar.", e)
-            if n in INT:  # Narrowing, and float to integer (truncation toward zero), are range checked.
-                self.guard("conversion")
-            return Type(n)
-        if n in {"mmio_read", "mmio_write", "asm"}:  # Target access: audited, never silently safe.
-            if not self.unsafe_depth:
-                fail("E-UNSAFE", f"{n} touches the machine directly; use it inside an unsafe block.", e)
-            self.effect("asm" if n == "asm" else "mmio")
-            if n == "asm":
-                if len(args) != 1 or args[0].tag != "str":
-                    fail("E-ARITY", "asm takes one string literal of target instructions.", e)
-                return VOID
-            ty = self.resolve(targs[0], e) if len(targs) == 1 else expected
-            if ty is None or ty.name not in UNSIGNED:
-                fail("E-INFER", f"Write {n}[u8|u16|u32|u64] with the register width.", e)
-            arity(1 + (n == "mmio_write"), f"{n} takes an address" + (" and a value." if n == "mmio_write" else "."))
-            self.expr(args[0], USIZE)
-            if n == "mmio_write":
-                self.expr(args[1], ty)
-            e.ref = ("builtin", (ty,))
-            return ty if n == "mmio_read" else VOID
-        if n == "transfer":  # The only way elements cross a placement boundary; extents agree by identity.
-            arity(2, "transfer takes a destination and a source view.")
-            if self.lanes:
-                fail("E-PARALLEL-NEST", "transfer moves a whole array; it cannot run inside a lane.", e)
-            dst, src = (self.view_argument(a) for a in args)
-            if not is_view(dst) or not is_view(src) or dst.mode != "rw" or root(args[0]).tag != "name":
-                fail("E-WRITE-LEASE", "transfer needs an rw destination view and a source view.", e)
-            self.expect(Type(src.name, "rw", src.extent, src.args, dst.place), dst, e)
-            ends = ["h" if t.place in HOST_VISIBLE else "d" for t in (src, dst)]
-            self.effects |= {f"transfer:{ends[0]}2{ends[1]}", "write:" + root(args[0]).val}
-            if root(args[1]).tag == "name":
-                self.effect("read:" + root(args[1]).val)
-            return VOID
-        if n == "wait":  # Completion is the only thing that returns a task's borrows.
-            arity(1, "wait takes one ticket.")
-            self.spawning = "<wait>"
-            ticket = self.expr(args[0])
-            self.spawning = ""
-            if ticket.name != "Ticket" or args[0].tag != "name":
-                fail("E-TYPE-MISMATCH", "wait takes the name of a ticket.", e)
-            self.leases.pop(args[0].val, None)
-            self.effect("join")
-            return ticket.args[0]
-        if n in {"Atomic", "Mutex"}:  # Shared state is declared in place and reached through ro borrows.
-            ty = self.resolve(Type(n, args=targs), e) if targs else expected
-            if ty is None or ty.name != n or (n == "Atomic" and ty.args[0].name not in INT | {"bool"}):
-                fail("E-INFER", f"Write {n}[T](initial); an atomic holds an integer or bool.", e)
-            arity(1, f"{n} takes its initial value.")
-            self.expr(args[0], ty.args[0])
-            return ty
-        if n in {"take", "swap"}:  # The only ways to move an owner out of a place.
-            arity(1 if n == "take" else 2, f"{n} takes {'one place' if n == 'take' else 'two places'}.")
-            types = [self.place(a, write=True) for a in args]
-            if n == "take" and self.kind(types[0]) == "linear":
-                fail("E-LINEAR-STORAGE", "take would leave a forged linear value behind; swap two places instead.", e)
-            self.effects |= {"read:" + root(a).val for a in args}
-            self.expect(types[-1], types[0], e)
-            return types[0] if n == "take" else VOID
-        if n == "Dyn":
-            ty = self.resolve(Type("Dyn", args=targs), e) if targs else expected
-            if ty is None or ty.name != "Dyn":
-                fail("E-INFER", "Write Dyn[Trait](value).", e)
-            arity(1, "Dyn takes the value it will own.")
-            members = self.implementors(ty.args[0].name).get(self.expr(args[0]).value)
-            if members is None or len(members) != len(self.p.traits[ty.args[0].name]):
-                fail("E-TRAIT-IMPL", f"{args[0].ty.display()} does not implement {ty.args[0].name}.", e)
-            for member in members.values():  # Whoever holds the value may dispatch to these.
-                self.callset.add(member.name)
-            self.effects |= {"alloc", "free"}
-            self.guard("allocation")
-            e.ref = ("builtin", [members[m.name] for m in self.p.traits[ty.args[0].name]])
-            return ty
-        if n in {"Buf", "Array"}:  # Zero-initialized owners: Buf[T](n) on the heap, Array[T, N]() inline.
-            ty = self.resolve(Type(n, args=targs), e) if targs else expected
-            if ty is None or ty.name != n:
-                fail("E-INFER", f"Write {n}[...] with its type arguments.", e)
-            arity(n == "Buf", f"{n} takes {'one capacity' if n == 'Buf' else 'no arguments'}.")
-            self.effect("zero_init")
-            if n == "Buf":
-                self.expr(args[0], USIZE)
-                self.effects |= {"alloc", "free"}
-                self.guard("allocation")
-            return ty
-        if n not in BUILTINS:
-            fail("E-CALLEE", f"{n} is a type, not a callable.", e)
-        arity(2, f"{n} takes two arguments.")
-        a, b = args
-        shift = n in {"shl_wrap", "shr"}
-        if a.tag == "int" and b.tag != "int" and not shift:
-            t = self.expr(b, expected)
-            self.expr(a, t)
-        else:
-            t = self.expr(a, expected)
-            self.expr(b, USIZE if shift else t)
-        if n in WRAPPING:
-            if t.mode != "value" or t.name not in UNSIGNED:
-                fail("E-WRAP-TYPE", "Wrapping/bit shift operations require unsigned integers.", e)
-            if shift:
-                self.guard("shift")
-        elif t.name not in INT or t.mode != "value":
-            fail("E-MINMAX", "Bootstrap min/max are integer-only; floating NaN semantics must be explicit.", e)
-        return t

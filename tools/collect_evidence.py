@@ -20,7 +20,7 @@ PYTHON = sys.executable
 GATES = {
     "format": [PYTHON, "-m", "ruff", "format", "--check", "."],
     "lint": [PYTHON, "-m", "ruff", "check", "."],
-    "types": [PYTHON, "-m", "mypy", *(f"src/cairn/{m}.py" for m in ("syntax", "checking", "effects", "codegen",
+    "types": [PYTHON, "-m", "mypy", *(f"src/cairn/{m}.py" for m in ("syntax", "checking", "effects", "builtins", "codegen",
                                                                     "modules", "expansion", "cairnc", "toolchain"))],
     "cairn_format": [PYTHON, "bin/cairn", "fmt", "--check", "examples", "src/cairn/std"],
     "tests": [PYTHON, "-m", "pytest", "-q", "tests", "-n", "16", "-rs"],
@@ -74,7 +74,7 @@ def main() -> int:
         "tests": {"passed": int(counted.group(1)) if counted else None, "skipped": int(counted.group(2) or 0) if counted else None},
         "source_lines": {
             "compiler_core": lines("src/cairn/syntax.py", "src/cairn/modules.py", "src/cairn/expansion.py",
-                                   "src/cairn/checking.py", "src/cairn/effects.py", "src/cairn/codegen.py",
+                                   "src/cairn/checking.py", "src/cairn/effects.py", "src/cairn/builtins.py", "src/cairn/codegen.py",
                                    "src/cairn/cairnc.py", "src/cairn/toolchain.py", "src/cairn/build.py", "src/cairn/project.py"),
             "compiler_package": lines("src/cairn/*.py"),
             "runtime_headers": lines("src/cairn/runtime/*.hpp"),
