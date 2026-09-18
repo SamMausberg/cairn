@@ -21,3 +21,10 @@ core.*
 *.zip
 *.bundle
 .DS_Store
+
+# Demo tools regenerate these beside their inputs; they pin session hashes of one compiler build.
+examples/agent/edit.json
+examples/agent/packet.json
+examples/agent/typed_receipt.json
+examples/sketch/packet.json
+examples/sketch/semantic_receipt.json
