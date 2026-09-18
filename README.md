@@ -63,7 +63,7 @@ src/cairn/          syntax, modules, expansion, checking, codegen, toolchain, bu
   std/              the standard library, written in CAIRN (core, vec, map, arena, text, sort, io, net, ...)
   targets/          start-up code and linker script of the freestanding AArch64 board
   agent_tools.py ...  edit sessions, sketches, rule cards, scalar SMT, certificates, verification
-proofs/             Lean 4: certificate checker soundness, the 17 certificates, the collector loop model
+proofs/             Lean 4: certificate checker soundness, the 17 certificates, the collector loop model, the ownership/lease calculus
 examples/           programs with fixed contracts; apps/ (storage engine, TCP service, simulator, GPU pipeline); embedded/
 tests/              rejection, native behavior under both compilers and sanitizers, device, QEMU, agent and tooling tests
 tools/ bench/       repeatable validation, context accounting, audit, publication, benchmarks
@@ -76,7 +76,7 @@ Start with [language](docs/language.md), then [std](docs/std.md), [architecture]
 
 ## What this does not establish
 
-The Lean result covers the certificate checker, its seventeen certificates and a model of the collector loop; it does not cover the Python that mirrors the checker, the emitter's correspondence to the model, or native code. Ownership, leases, lane race-freedom, placement and effects are implemented and tested, including under Address, Leak, UndefinedBehavior and Thread sanitizers and device death tests, but they are not mechanized, and generic code is checked per instance. SMT equivalence trusts its translator and Z3 and rejects memory, loops, sums and floats. The foreign boundary is as safe as its declarations are true.
+The Lean result covers the certificate checker, its seventeen certificates, a model of the collector loop, and a core ownership and lease calculus over whole places (no use-after-move, use-after-free, double free, leaked ticket, aliased call argument or race, and one release per cell, under any interleaving). It does not cover the Python that mirrors either checker, the emitter's correspondence to the model, or native code. Lane race-freedom, placement, effects, and the ownership rules for array parts, fields and closures are implemented and tested, including under Address, Leak, UndefinedBehavior and Thread sanitizers and device death tests, but they are not mechanized, and generic code is checked per instance. SMT equivalence trusts its translator and Z3 and rejects memory, loops, sums and floats. The foreign boundary is as safe as its declarations are true.
 
 The GPU and host-parallel numbers in `evidence/v1_0/gpu/` are one machine and three kernels: host regions lose to a sequential loop below roughly ten million cheap elements, and device wins depend on transfer cost. No claim is made against tuned C++ or CUDA. No model was trained or evaluated; context measurements count constructed packets, not model proficiency, and byte counts are not frontier tokenizer counts.
 

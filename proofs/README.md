@@ -1,7 +1,7 @@
-# Lean 4 proofs for the bounded collector
+# Lean 4 proofs for the bounded collector and the ownership calculus
 
-This is a machine-checked Lean 4 development about one construct: CAIRN's
-bounded collector,
+This is a machine-checked Lean 4 development about two things.  The first is one
+construct: CAIRN's bounded collector,
 
 ```
 let used = compact out for i in n where pred(i) yield proj(i);
@@ -20,6 +20,12 @@ store `out[k]` is emitted with **no** dynamic bounds check; what licenses that i
 the cursor invariant `0 <= k <= i <= n <= M`, where `M` is the largest
 representable cursor.
 
+The second is a small ownership-and-lease calculus (`Cairn/Ownership.lean`): a
+statement language over named places, an executable checker that mirrors the
+rules `src/cairn/checking.py` enforces, an interleaving small-step machine with
+explicit error states, and the theorem that an accepted program reaches none of
+them.  `docs/verification.md` states exactly what that model covers.
+
 It is not a whole-compiler proof.  Read "What is NOT proved" before quoting
 anything from here.
 
@@ -30,7 +36,8 @@ anything from here.
 | `Cairn/Affine.lean` | `Form`, `Form.eval`, `Rule`, `Certificate`, the computable `check`, and `check_sound`. |
 | `Cairn/CollectorCertificates.lean` | **Generated.** The 17 obligations and their certificates as Lean data, `all_checked`, and one corollary per obligation. |
 | `Cairn/Collector.lean` | Executable model of the loop; the invariant derived *from* the certificates; store-in-bounds, stable selection, and increment bounds. |
-| `Cairn/Audit.lean` | `#print axioms` for every headline theorem. |
+| `Cairn/Ownership.lean` | The ownership and lease calculus: syntax, the executable checker `accepts`, the interleaving machine, the preservation lemma `Ok_succ`, the soundness theorems, and the regression over the programs `tests/test_soundness.py` pins. |
+| `Cairn/Audit.lean` | `#print axioms` for every headline theorem, and the ownership regression line. |
 | `Cairn.lean` | Root module importing everything. |
 
 No dependencies.  Lean 4 core only (`omega`, `decide`, `simp`, `Int`/`Nat`/`List`
@@ -163,8 +170,16 @@ theorem increments_fit (pred : α → Bool) (proj : α → β)
 
 ## What is NOT proved
 
-This development proves things about a **model**.  Each of the following remains
+This development proves things about **models**.  Each of the following remains
 trusted, exactly as before:
+
+* **The ownership calculus is an abstraction written by hand.**  Places in it are
+  atomic names, so fields, array elements and the visibly disjoint parts that
+  license a K-way split are outside it, and so are `take`/`swap`, `defer`, loops,
+  `return`, closures, traits, generics, lanes, placement, atomics, mutexes and
+  effects.  Nothing extracts it from `checking.py` or compares the two.  It proves
+  safety, not progress: `Ownership.OpenGoal.Progress` names the missing theorem as
+  a `def ... : Prop` and leaves it unproved.
 
 * **The compiler-to-model correspondence.**  Nothing here relates
   `Cairn.Collector.step`/`run` to what `src/cairn` actually emits.  That the
@@ -227,17 +242,25 @@ clock on the host of record.
 
 ## Axiom audit result
 
-`Cairn/Audit.lean` runs `#print axioms` on 37 declarations: `check_sound`,
+`Cairn/Audit.lean` runs `#print axioms` on 50 declarations: `check_sound`,
 `check_sound'`, `eval_combine_nonneg`, `forall_mem_of_satisfies`, `all_checked`,
 `certificates_length`, all 17 `obligation_*` corollaries, the 8 `Inv.*`
-transition theorems, and `run_preserves_inv`, `run_spec`, `collect_spec`,
-`store_index_lt_capacity`, `store_index_lt_buffer_length`, `increments_fit`.
+transition theorems, `run_preserves_inv`, `run_spec`, `collect_spec`,
+`store_index_lt_capacity`, `store_index_lt_buffer_length`, `increments_fit`, and
+the 13 ownership declarations (`accepted_no_fault` and its six named faults,
+`accepted_frees_each_allocation_once`, `Ok_succ`, `Ok_start`, `checkBlock_mono`,
+`releaseAll_final`, `ownership_regression`).
 
-The result, captured verbatim in `evidence/v1_0/lean/print-axioms.txt`:
+The result:
 
 * `Cairn.Collector.certificates_length` — **does not depend on any axioms**.
-* `Cairn.forall_mem_of_satisfies` and `Cairn.Collector.all_checked` — `[propext]`.
+* `Cairn.forall_mem_of_satisfies`, `Cairn.Collector.all_checked`,
+  `Cairn.Ownership.Ok_start`, `Cairn.Ownership.releaseAll_final` and
+  `Cairn.Ownership.ownership_regression` — `[propext]`.
 * Every other declaration — `[propext, Quot.sound]`.
+
+(`evidence/v1_0/lean/print-axioms.txt` is the 1.0 capture and predates the
+ownership module; it is a dated record of that run, not of this tree.)
 
 So the only axioms anywhere in this development are `propext` and `Quot.sound`,
 both of which arrive through core-library lemmas and the `omega`/`simp`/`decide`

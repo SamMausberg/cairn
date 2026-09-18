@@ -1,0 +1,1931 @@
+/-
+A mechanized core of CAIRN's ownership and lease discipline.
+
+This file is a self-contained calculus: a first-order statement language over
+named places, an executable checker that mirrors the rules `src/cairn/checking.py`
+enforces (moved set, lease map, disjoint call arguments, branch joins, no live
+ticket at scope exit), and an interleaving small-step machine with explicit error
+states.  The theorems at the bottom say that the checker's acceptance rules out
+every one of those error states, and that every allocation is released exactly
+once on normal termination.
+
+The model is written by hand.  Nothing here is extracted from, or mechanically
+connected to, the Python compiler; `docs/verification.md` states exactly what is
+and is not covered.
+
+Design notes that matter for reading the theorems:
+
+* A place is an atomic name.  Fields, array elements and array parts -- and hence
+  the `overlaps` chain that licenses a K-way split of one buffer -- are NOT
+  modelled; two places overlap exactly when they are equal.
+* A task's body is abstracted to its *footprint*: while its ticket is live it may
+  touch any place it was lent, in the mode it was lent, at any point between any
+  two steps of the spawner, any number of times, and through a place it holds
+  `rw` it may replace the cell there, which is what `swap` through a lent owner
+  does.  That is the worst case the lease rule has to survive, so the race
+  theorem quantifies over real interleavings rather than over a sequential
+  approximation.  What a task's write does to a *value* is not modelled.
+* The dynamic semantics is deliberately undefensive: `copy` duplicates whatever
+  bits a place holds, assignment releases what the place held before, and a move
+  leaves a ghost mark that exists only so that a later use can be *named* an
+  error.  Nothing in the machine prevents a fault; only the checker does.
+-/
+
+namespace Cairn
+namespace Ownership
+
+/-! ## Syntax -/
+
+/-- A named place: a local of the scope under check. -/
+abbrev Place := Nat
+
+/-- The name a `let t = spawn f(...)` binds. -/
+abbrev Ticket := Nat
+
+/-- The identity of one heap cell. -/
+abbrev AllocId := Nat
+
+/-- Decidable case split, so that nothing below needs excluded middle. -/
+theorem nat_eq_or_ne (p q : Nat) : p = q ∨ p ≠ q :=
+  match Nat.decEq p q with
+  | isTrue h => Or.inl h
+  | isFalse h => Or.inr h
+
+/-- How a call borrows a place for its duration. -/
+inductive Mode where
+  | ro
+  | rw
+deriving DecidableEq, Repr, Inhabited
+
+/-- One borrow in an argument list: the place and the mode it is lent in. -/
+abbrev Borrow := Place × Mode
+
+/-- A live task: the ticket that must be waited, and the footprint it holds. -/
+abbrev Task := Ticket × List Borrow
+
+/-- Statements.  `call`/`spawn` take a borrow list rather than a callee: the
+callee's body is abstracted to the footprint it was handed, which is all the
+ownership and lease rules ever look at.  A read of a scalar is `call [(x, ro)]`
+and a write is `call [(x, rw)]`. -/
+inductive Stmt where
+  /-- `let x = Buf[T](n);` -- a fresh heap cell lands in `x`. -/
+  | alloc (x : Place)
+  /-- `let x = 0;` -- a copyable scalar lands in `x`. -/
+  | mkScalar (x : Place)
+  /-- `let y = x;` for a copyable `x`: the bits are duplicated. -/
+  | copy (y x : Place)
+  /-- `let y = x;` for an owner `x`: the cell moves and `x` is dead afterwards. -/
+  | move (y x : Place)
+  /-- The implicit release of `x` at the exit of an inner scope. -/
+  | drop (x : Place)
+  /-- `f(borrows...)`: the places are lent for the duration of the call. -/
+  | call (args : List Borrow)
+  /-- `let t = spawn f(borrows...);`: the places stay lent until `wait t`. -/
+  | spawn (t : Ticket) (args : List Borrow)
+  /-- `wait(t)`: the only thing that returns a task's borrows. -/
+  | wait (t : Ticket)
+  /-- `if c { thn } else { els }`: the condition is opaque, so both branches are
+  always reachable and the join is what makes a one-sided move dead. -/
+  | ite (thn els : List Stmt)
+deriving Repr, Inhabited
+
+/-- A scope: the places it declares and the statements it runs.  Every owner still
+held by one of `scope`'s places is released when the body falls off the end. -/
+structure Program where
+  scope : List Place
+  body : List Stmt
+deriving Repr, Inhabited
+
+/-! ## Overlap and conflict
+
+Two borrows conflict when they name the same place and at least one writes.  This
+is `overlaps(a, b) and "rw" in (m, k)` of `checking.py`, specialized to atomic
+places. -/
+
+/-- The two borrows cannot be held at once. -/
+def conflict (a b : Borrow) : Bool :=
+  a.1 == b.1 && (a.2 == Mode.rw || b.2 == Mode.rw)
+
+/-- `Nat.beq` is reflexive; proved here so that nothing reaches for the general
+`LawfulBEq` lemma, whose instance chain drags `Classical.choice` in. -/
+theorem beq_place_self (x : Place) : (x == x) = true := by
+  cases h : (x == x) with
+  | true => rfl
+  | false => exact absurd rfl (beq_eq_false_iff_ne.mp h)
+
+theorem beq_place_comm (p q : Place) : (p == q) = (q == p) := by
+  rcases nat_eq_or_ne p q with hpq | hpq
+  · rw [hpq]
+  · rw [beq_eq_false_iff_ne.mpr hpq, beq_eq_false_iff_ne.mpr fun hc => hpq hc.symm]
+
+theorem conflict_symm (a b : Borrow) : conflict a b = conflict b a := by
+  cases a with | mk p m => cases b with | mk q k =>
+  show ((p == q) && ((m == Mode.rw) || (k == Mode.rw)))
+     = ((q == p) && ((k == Mode.rw) || (m == Mode.rw)))
+  rw [beq_place_comm p q, Bool.or_comm]
+
+/-- `checking.py:leased` -- does any live task hold something that conflicts? -/
+def heldConflict (tasks : List Task) (x : Borrow) : Bool :=
+  tasks.any fun T => T.2.any fun y => conflict x y
+
+/-- `checking.py:disjoint` -- no argument of one call may write what another
+argument can reach. -/
+def argsDisjoint : List Borrow → Bool
+  | [] => true
+  | x :: rest => rest.all (fun y => !conflict x y) && argsDisjoint rest
+
+/-! ## The checker
+
+`CState` is the ownership state `checking.py` carries in its `Scope`: which places
+hold what, and the lease map from a ticket to the borrows it holds.  A place that
+appears in neither `scalars` nor `owners` is dead -- never bound, moved out, or
+killed by a branch join. -/
+
+structure CState where
+  scope : List Place
+  scalars : List Place
+  owners : List Place
+  leases : List Task
+deriving DecidableEq, Repr, Inhabited
+
+/-- Add a place to a tracked set. -/
+def add (l : List Place) (p : Place) : List Place := p :: l
+
+/-- Remove every occurrence of a place from a tracked set. -/
+def del (l : List Place) (p : Place) : List Place := l.filter fun q => !(q == p)
+
+/-- Keep only the places both branches still have: a place moved on one path is
+dead after the join. -/
+def keepIn (l m : List Place) : List Place := l.filter fun p => m.contains p
+
+@[simp] theorem mem_add {l : List Place} {p q : Place} : q ∈ add l p ↔ q = p ∨ q ∈ l := by
+  simp [add]
+
+@[simp] theorem mem_del {l : List Place} {p q : Place} : q ∈ del l p ↔ q ∈ l ∧ q ≠ p := by
+  simp [del]
+
+@[simp] theorem mem_keepIn {l m : List Place} {p : Place} : p ∈ keepIn l m ↔ p ∈ l ∧ p ∈ m := by
+  simp [keepIn]
+
+/-- A place is live when it holds something. -/
+def CState.livePlace (c : CState) (p : Place) : Bool :=
+  c.scalars.contains p || c.owners.contains p
+
+/-- No live ticket forbids this access. -/
+def CState.mayAccess (c : CState) (x : Borrow) : Bool :=
+  !heldConflict c.leases x
+
+/-- Writing a place: no lease at all may cover it. -/
+def CState.mayWrite (c : CState) (p : Place) : Bool :=
+  c.mayAccess (p, Mode.rw)
+
+/-- Every rule a straight-line statement must satisfy, as one Boolean.  These are
+the conditions `checking.py` raises `E-MOVED`, `E-LEASED`, `E-ALIAS`,
+`E-MOVE-BORROW` and `E-PINNED` for, specialized to atomic places. -/
+def guardOf (c : CState) : Stmt → Bool
+  | .alloc x => c.scope.contains x && c.mayWrite x
+  | .mkScalar x => c.scope.contains x && c.mayWrite x
+  | .copy y x =>
+      c.scope.contains y && !(y == x) && c.scalars.contains x
+        && c.mayAccess (x, Mode.ro) && c.mayWrite y
+  | .move y x =>
+      c.scope.contains y && !(y == x) && c.owners.contains x
+        && c.mayWrite x && c.mayWrite y
+  | .drop x => c.owners.contains x && c.mayWrite x
+  | .call args => argsDisjoint args && args.all fun x => c.livePlace x.1 && c.mayAccess x
+  | .spawn t args =>
+      argsDisjoint args && !(c.leases.any fun T => T.1 == t)
+        && args.all fun x => c.livePlace x.1 && c.mayAccess x
+  | .wait t => c.leases.any fun T => T.1 == t
+  | .ite _ _ => true
+
+/-- What a straight-line statement does to the ownership state. -/
+def effOf (c : CState) : Stmt → CState
+  | .alloc x => { c with scalars := del c.scalars x, owners := add c.owners x }
+  | .mkScalar x => { c with scalars := add c.scalars x, owners := del c.owners x }
+  | .copy y _ => { c with scalars := add c.scalars y, owners := del c.owners y }
+  | .move y x => { c with scalars := del c.scalars y, owners := add (del c.owners x) y }
+  | .drop x => { c with owners := del c.owners x }
+  | .call _ => c
+  | .spawn t args => { c with leases := (t, args) :: c.leases }
+  | .wait t => { c with leases := c.leases.filter fun T => !(T.1 == t) }
+  | .ite _ _ => c
+
+/-- The join of two branches: a place either branch killed is dead, and the two
+must agree on which tickets are still live. -/
+def joinOf (c c1 c2 : CState) : Option CState :=
+  if c1.leases == c2.leases then
+    some { scope := c.scope, scalars := keepIn c1.scalars c2.scalars,
+           owners := keepIn c1.owners c2.owners, leases := c1.leases }
+  else none
+
+mutual
+
+/-- One statement, checked.  `none` is rejection. -/
+def checkStmt (c : CState) : Stmt → Option CState
+  | .ite thn els =>
+      match checkBlock c thn, checkBlock c els with
+      | some c1, some c2 => joinOf c c1 c2
+      | _, _ => none
+  | s => if guardOf c s then some (effOf c s) else none
+
+/-- A block, checked left to right. -/
+def checkBlock (c : CState) : List Stmt → Option CState
+  | [] => some c
+  | s :: rest =>
+      match checkStmt c s with
+      | some c' => checkBlock c' rest
+      | none => none
+
+end
+
+@[simp] theorem checkStmt_alloc (c : CState) (x : Place) :
+    checkStmt c (.alloc x) = if guardOf c (.alloc x) then some (effOf c (.alloc x)) else none := rfl
+@[simp] theorem checkStmt_mkScalar (c : CState) (x : Place) :
+    checkStmt c (.mkScalar x) = if guardOf c (.mkScalar x) then some (effOf c (.mkScalar x)) else none := rfl
+@[simp] theorem checkStmt_copy (c : CState) (y x : Place) :
+    checkStmt c (.copy y x) = if guardOf c (.copy y x) then some (effOf c (.copy y x)) else none := rfl
+@[simp] theorem checkStmt_move (c : CState) (y x : Place) :
+    checkStmt c (.move y x) = if guardOf c (.move y x) then some (effOf c (.move y x)) else none := rfl
+@[simp] theorem checkStmt_drop (c : CState) (x : Place) :
+    checkStmt c (.drop x) = if guardOf c (.drop x) then some (effOf c (.drop x)) else none := rfl
+@[simp] theorem checkStmt_call (c : CState) (args : List Borrow) :
+    checkStmt c (.call args) = if guardOf c (.call args) then some (effOf c (.call args)) else none := rfl
+@[simp] theorem checkStmt_spawn (c : CState) (t : Ticket) (args : List Borrow) :
+    checkStmt c (.spawn t args) = if guardOf c (.spawn t args) then some (effOf c (.spawn t args)) else none := rfl
+@[simp] theorem checkStmt_wait (c : CState) (t : Ticket) :
+    checkStmt c (.wait t) = if guardOf c (.wait t) then some (effOf c (.wait t)) else none := rfl
+@[simp] theorem checkStmt_ite (c : CState) (thn els : List Stmt) :
+    checkStmt c (.ite thn els) =
+      match checkBlock c thn, checkBlock c els with
+      | some c1, some c2 => joinOf c c1 c2
+      | _, _ => none := rfl
+
+@[simp] theorem checkBlock_nil (c : CState) : checkBlock c [] = some c := rfl
+@[simp] theorem checkBlock_cons (c : CState) (s : Stmt) (rest : List Stmt) :
+    checkBlock c (s :: rest) =
+      match checkStmt c s with
+      | some c' => checkBlock c' rest
+      | none => none := rfl
+
+/-- The starting ownership state of a scope: nothing bound, nothing lent. -/
+def CState.start (p : Program) : CState :=
+  { scope := p.scope, scalars := [], owners := [], leases := [] }
+
+/-- **The checker**, as one executable Boolean: the body checks, and no ticket is
+still live where the scope ends. -/
+def accepts (p : Program) : Bool :=
+  match checkBlock (CState.start p) p.body with
+  | some c => c.leases.isEmpty
+  | none => false
+
+/-! ## Weakening
+
+A branch join throws places away, so after `if` the checker holds a *weaker* state
+than either branch produced.  Stepping into a branch therefore has to know that
+whatever checks from the join also checks from the branch. -/
+
+/-- `c` claims no more than `d` does. -/
+structure Le (c d : CState) : Prop where
+  scope_eq : c.scope = d.scope
+  scalars : ∀ p, p ∈ c.scalars → p ∈ d.scalars
+  owners : ∀ p, p ∈ c.owners → p ∈ d.owners
+  leases_eq : c.leases = d.leases
+
+theorem Le.refl (c : CState) : Le c c := ⟨rfl, fun _ h => h, fun _ h => h, rfl⟩
+
+@[simp] theorem contains_iff_mem {l : List Place} {p : Place} : l.contains p = true ↔ p ∈ l := by
+  simp
+
+theorem mayAccess_congr {c d : CState} (h : Le c d) (x : Borrow) :
+    d.mayAccess x = c.mayAccess x := by
+  simp [CState.mayAccess, h.leases_eq]
+
+theorem livePlace_mono {c d : CState} (h : Le c d) {p : Place} (hp : c.livePlace p = true) :
+    d.livePlace p = true := by
+  simp only [CState.livePlace, Bool.or_eq_true, contains_iff_mem] at hp ⊢
+  exact hp.imp (h.scalars p) (h.owners p)
+
+theorem guard_mono {c d : CState} (h : Le c d) {s : Stmt} (hs : guardOf c s = true) :
+    guardOf d s = true := by
+  have hsc : d.scope = c.scope := h.scope_eq.symm
+  have hlc : d.leases = c.leases := h.leases_eq.symm
+  have hmw : ∀ p, d.mayWrite p = c.mayWrite p := fun p => mayAccess_congr h _
+  have hma : ∀ x, d.mayAccess x = c.mayAccess x := mayAccess_congr h
+  have hargs : ∀ args : List Borrow,
+      (args.all fun x => c.livePlace x.1 && c.mayAccess x) = true →
+      (args.all fun x => d.livePlace x.1 && d.mayAccess x) = true := by
+    intro args ha
+    simp only [List.all_eq_true, Bool.and_eq_true] at ha ⊢
+    intro x hx
+    exact ⟨livePlace_mono h (ha x hx).1, by rw [hma]; exact (ha x hx).2⟩
+  cases s with
+  | alloc x => simpa only [guardOf, hsc, hmw] using hs
+  | mkScalar x => simpa only [guardOf, hsc, hmw] using hs
+  | copy y x =>
+      simp only [guardOf, Bool.and_eq_true, contains_iff_mem, hsc, hmw, hma] at hs ⊢
+      exact ⟨⟨⟨⟨hs.1.1.1.1, hs.1.1.1.2⟩, h.scalars x hs.1.1.2⟩, hs.1.2⟩, hs.2⟩
+  | move y x =>
+      simp only [guardOf, Bool.and_eq_true, contains_iff_mem, hsc, hmw] at hs ⊢
+      exact ⟨⟨⟨⟨hs.1.1.1.1, hs.1.1.1.2⟩, h.owners x hs.1.1.2⟩, hs.1.2⟩, hs.2⟩
+  | drop x =>
+      simp only [guardOf, Bool.and_eq_true, contains_iff_mem, hmw] at hs ⊢
+      exact ⟨h.owners x hs.1, hs.2⟩
+  | call args =>
+      simp only [guardOf, Bool.and_eq_true] at hs ⊢
+      exact ⟨hs.1, hargs args hs.2⟩
+  | spawn t args =>
+      simp only [guardOf, Bool.and_eq_true, hlc] at hs ⊢
+      exact ⟨⟨hs.1.1, hs.1.2⟩, hargs args hs.2⟩
+  | wait t => simpa only [guardOf, hlc] using hs
+  | ite thn els => rfl
+
+theorem eff_mono {c d : CState} (h : Le c d) (s : Stmt) : Le (effOf c s) (effOf d s) := by
+  have hs := h.scalars
+  have ho := h.owners
+  cases s <;> refine ⟨h.scope_eq, ?_, ?_, by simp [effOf, h.leases_eq]⟩ <;> intro p hp <;>
+    (try simp only [effOf, mem_del, mem_add] at hp ⊢) <;>
+    first
+      | exact hs p hp
+      | exact ho p hp
+      | exact ⟨hs p hp.1, hp.2⟩
+      | exact ⟨ho p hp.1, hp.2⟩
+      | exact hp.imp id (hs p)
+      | exact hp.imp id (ho p)
+      | exact hp.imp id (fun hq => ⟨ho p hq.1, hq.2⟩)
+
+mutual
+/-- A structural measure that does not depend on `sizeOf`'s exact shape. -/
+def stmtSize : Stmt → Nat
+  | .ite thn els => blockSize thn + blockSize els + 1
+  | _ => 1
+def blockSize : List Stmt → Nat
+  | [] => 0
+  | s :: rest => stmtSize s + blockSize rest + 1
+end
+
+@[simp] theorem blockSize_nil : blockSize [] = 0 := rfl
+@[simp] theorem blockSize_cons (s : Stmt) (rest : List Stmt) :
+    blockSize (s :: rest) = stmtSize s + blockSize rest + 1 := rfl
+@[simp] theorem stmtSize_ite (thn els : List Stmt) :
+    stmtSize (.ite thn els) = blockSize thn + blockSize els + 1 := rfl
+
+theorem joinOf_mono {c d c1 d1 c2 d2 j : CState} (h : Le c d) (h1 : Le c1 d1) (h2 : Le c2 d2)
+    (hj : joinOf c c1 c2 = some j) : ∃ k, joinOf d d1 d2 = some k ∧ Le j k := by
+  unfold joinOf at hj ⊢
+  split at hj
+  · next heq =>
+      have hd : d1.leases = d2.leases := by
+        rw [← h1.leases_eq, ← h2.leases_eq]
+        exact of_decide_eq_true (by simpa using heq)
+      rw [show (d1.leases == d2.leases) = true by simpa using hd]
+      refine ⟨_, rfl, ?_⟩
+      have hjv := Option.some.inj hj
+      rw [← hjv]
+      refine ⟨h.scope_eq, ?_, ?_, h1.leases_eq⟩
+      · intro p hp
+        simp only [mem_keepIn] at hp ⊢
+        exact ⟨h1.scalars p hp.1, h2.scalars p hp.2⟩
+      · intro p hp
+        simp only [mem_keepIn] at hp ⊢
+        exact ⟨h1.owners p hp.1, h2.owners p hp.2⟩
+  · exact absurd hj (by simp)
+
+/-- The straight-line half of weakening: a guard that passes in `c` passes in `d`. -/
+theorem guardAux {c d c1 : CState} {s : Stmt} (hle : Le c d)
+    (hc1 : (if guardOf c s then some (effOf c s) else none) = some c1) :
+    ∃ d1, (if guardOf d s then some (effOf d s) else none) = some d1 ∧ Le c1 d1
+      ∧ c1.scope = c.scope := by
+  split at hc1
+  · next hg =>
+      rw [guard_mono hle hg]
+      refine ⟨_, rfl, ?_, ?_⟩
+      · rw [← Option.some.inj hc1]; exact eff_mono hle s
+      · rw [← Option.some.inj hc1]; cases s <;> rfl
+  · exact absurd hc1 (by simp)
+
+/-- **Weakening.**  What checks from a weaker ownership state checks from a stronger
+one, and the result stays weaker. -/
+theorem checkBlock_mono : ∀ (n : Nat) (ss : List Stmt), blockSize ss < n →
+    ∀ {c d c' : CState}, Le c d → checkBlock c ss = some c' →
+      ∃ d', checkBlock d ss = some d' ∧ Le c' d' ∧ c'.scope = c.scope := by
+  intro n
+  induction n with
+  | zero => intro ss hss; exact absurd hss (Nat.not_lt_zero _)
+  | succ n ih =>
+      intro ss hss c d c' hle hs
+      cases ss with
+      | nil => exact ⟨d, rfl, by rw [← Option.some.inj hs]; exact hle, by rw [← Option.some.inj hs]⟩
+      | cons s rest =>
+          have hrest : blockSize rest < n := by simp only [blockSize_cons] at hss; omega
+          rw [checkBlock_cons] at hs
+          cases hc1 : checkStmt c s with
+          | none => rw [hc1] at hs; exact absurd hs (by simp)
+          | some c1 =>
+              rw [hc1] at hs
+              have hstep : ∃ d1, checkStmt d s = some d1 ∧ Le c1 d1 ∧ c1.scope = c.scope := by
+                cases s with
+                | ite thn els =>
+                    have hthn : blockSize thn < n := by
+                      simp only [blockSize_cons, stmtSize_ite] at hss; omega
+                    have hels : blockSize els < n := by
+                      simp only [blockSize_cons, stmtSize_ite] at hss; omega
+                    rw [checkStmt_ite] at hc1
+                    split at hc1
+                    · next a1 a2 h1 h2 =>
+                        obtain ⟨d1, hd1, hle1, _⟩ := ih thn hthn hle h1
+                        obtain ⟨d2, hd2, hle2, _⟩ := ih els hels hle h2
+                        obtain ⟨k, hk, hlek⟩ := joinOf_mono hle hle1 hle2 hc1
+                        refine ⟨k, by rw [checkStmt_ite, hd1, hd2]; exact hk, hlek, ?_⟩
+                        unfold joinOf at hc1
+                        split at hc1
+                        · rw [← Option.some.inj hc1]
+                        · exact absurd hc1 (by simp)
+                    · exact absurd hc1 (by simp)
+                | alloc x => exact guardAux hle hc1
+                | mkScalar x => exact guardAux hle hc1
+                | copy y x => exact guardAux hle hc1
+                | move y x => exact guardAux hle hc1
+                | drop x => exact guardAux hle hc1
+                | call args => exact guardAux hle hc1
+                | spawn t args => exact guardAux hle hc1
+                | wait t => exact guardAux hle hc1
+              obtain ⟨d1, hd1, hle1, hsc1⟩ := hstep
+              obtain ⟨d', hd', hled, hscd⟩ := ih rest hrest hle1 hs
+              exact ⟨d', by rw [checkBlock_cons, hd1]; exact hd', hled, by rw [hscd, hsc1]⟩
+
+theorem checkBlock_append (c : CState) : ∀ (l₁ l₂ : List Stmt),
+    checkBlock c (l₁ ++ l₂) =
+      match checkBlock c l₁ with
+      | some c' => checkBlock c' l₂
+      | none => none := by
+  intro l₁
+  induction l₁ generalizing c with
+  | nil => intro l₂; rfl
+  | cons s rest ih =>
+      intro l₂
+      rw [List.cons_append, checkBlock_cons, checkBlock_cons]
+      cases h : checkStmt c s with
+      | none => rfl
+      | some c' => exact ih c' l₂
+
+/-! ## Dynamic semantics
+
+The machine is undefensive on purpose.  `moved` is a ghost mark: it exists only so
+that a use of a moved place can be *named* `useAfterMove`, never to stop one.
+`copy` duplicates whatever the source place holds, which is how a mis-accepted
+copy of an owner would reach a double free.  Binding a place releases what it held
+before, which is what an assignment lowers to. -/
+
+/-- What a place holds.  `nil` is never bound, `moved` is the ghost left by a move
+or a release. -/
+inductive Val where
+  | nil
+  | moved
+  | scalar
+  | owner (a : AllocId)
+deriving DecidableEq, Repr, Inhabited
+
+/-- The faults the machine can reach. -/
+inductive Err where
+  | useAfterMove (p : Place)
+  | useAfterFree (a : AllocId)
+  | doubleFree (a : AllocId)
+  | leak (t : Ticket)
+  | race (p : Place)
+  | aliasedArgs
+deriving DecidableEq, Repr, Inhabited
+
+/-- The heap and the places.  `frees a` counts how often `a` has been released, so
+"released exactly once" is a statement about numbers rather than about a log. -/
+structure State where
+  env : Place → Val
+  live : AllocId → Bool
+  next : AllocId
+  frees : AllocId → Nat
+
+/-- Point update of a place map. -/
+def upd (f : Place → Val) (x : Place) (v : Val) : Place → Val :=
+  fun p => if p = x then v else f p
+
+/-- Point update of the liveness map. -/
+def updL (f : AllocId → Bool) (a : AllocId) (v : Bool) : AllocId → Bool :=
+  fun b => if b = a then v else f b
+
+/-- Point update of the release counter. -/
+def updN (f : AllocId → Nat) (a : AllocId) (v : Nat) : AllocId → Nat :=
+  fun b => if b = a then v else f b
+
+@[simp] theorem upd_same (f : Place → Val) (x : Place) (v : Val) : upd f x v x = v := by
+  simp [upd]
+
+@[simp] theorem upd_other {f : Place → Val} {x p : Place} {v : Val} (h : p ≠ x) :
+    upd f x v p = f p := by simp [upd, h]
+
+@[simp] theorem updL_same (f : AllocId → Bool) (a : AllocId) (v : Bool) : updL f a v a = v := by
+  simp [updL]
+
+@[simp] theorem updL_other {f : AllocId → Bool} {a b : AllocId} {v : Bool} (h : b ≠ a) :
+    updL f a v b = f b := by simp [updL, h]
+
+@[simp] theorem updN_same (f : AllocId → Nat) (a : AllocId) (v : Nat) : updN f a v a = v := by
+  simp [updN]
+
+@[simp] theorem updN_other {f : AllocId → Nat} {a b : AllocId} {v : Nat} (h : b ≠ a) :
+    updN f a v b = f b := by simp [updN, h]
+
+/-- Release whatever a place holds and leave the ghost mark.  Releasing a cell that
+is already gone is the double free the affine rule has to rule out. -/
+def release (x : Place) (st : State) : Except Err State :=
+  match st.env x with
+  | .owner a =>
+      if st.live a then
+        .ok { env := upd st.env x .moved, live := updL st.live a false,
+              next := st.next, frees := updN st.frees a (st.frees a + 1) }
+      else .error (.doubleFree a)
+  | .nil => .ok st
+  | .moved => .ok st
+  | .scalar => .ok st
+
+/-- Put a fresh cell in `x`, after releasing what `x` held: `let x = Buf[T](n);`
+and the replacement a task performs through an `rw` lease both do this. -/
+def reallocAt (x : Place) (st : State) : Except Err State :=
+  match release x st with
+  | .error e => .error e
+  | .ok st' =>
+      .ok { env := upd st'.env x (.owner st'.next), live := updL st'.live st'.next true,
+            next := st'.next + 1, frees := st'.frees }
+
+/-- Put `v` in `y`, after releasing what `y` held. -/
+def bindAt (y : Place) (v : Val) (st : State) : Except Err State :=
+  match release y st with
+  | .error e => .error e
+  | .ok st' => .ok { st' with env := upd st'.env y v }
+
+/-- Reading or writing a place that holds nothing, or a cell that is gone. -/
+def memErr (st : State) (p : Place) : Option Err :=
+  match st.env p with
+  | .nil => some (.useAfterMove p)
+  | .moved => some (.useAfterMove p)
+  | .scalar => none
+  | .owner a => if st.live a then none else some (.useAfterFree a)
+
+/-- Touching a place that some other thread holds in a conflicting mode. -/
+def raceErr (tasks : List Task) (x : Borrow) : Option Err :=
+  if heldConflict tasks x then some (.race x.1) else none
+
+/-- One access: the race check first, then the memory check. -/
+def accessErr (tasks : List Task) (st : State) (x : Borrow) : Option Err :=
+  match raceErr tasks x with
+  | some e => some e
+  | none => memErr st x.1
+
+/-- Every access of one call, left to right. -/
+def accessAll (tasks : List Task) (st : State) : List Borrow → Option Err
+  | [] => none
+  | x :: rest =>
+      match accessErr tasks st x with
+      | some e => some e
+      | none => accessAll tasks st rest
+
+/-- A machine configuration: the spawner's remaining statements, the tasks that are
+still live, and the state.  `done` is normal termination, `err` is a fault. -/
+inductive Cfg where
+  | run (code : List Stmt) (tasks : List Task) (st : State)
+  | done (st : State)
+  | err (e : Err)
+
+/-- The implicit release of a scope's places, in order. -/
+def releaseAll : List Place → State → Except Err State
+  | [], st => .ok st
+  | p :: rest, st =>
+      match release p st with
+      | .ok st' => releaseAll rest st'
+      | .error e => .error e
+
+/-- Every element of a list paired with the other elements, so that a task step can
+name the threads it is racing against without naming itself. -/
+def splits {α : Type} : List α → List (α × List α)
+  | [] => []
+  | a :: rest => (a, rest) :: (splits rest).map (fun x => (x.1, a :: x.2))
+
+/-- One step of the spawner. -/
+def stepStmt (s : Stmt) (rest : List Stmt) (tasks : List Task) (st : State) : List Cfg :=
+  match s with
+  | .alloc x =>
+      match raceErr tasks (x, .rw) with
+      | some e => [.err e]
+      | none =>
+          match reallocAt x st with
+          | .error e => [.err e]
+          | .ok st' => [.run rest tasks st']
+  | .mkScalar x =>
+      match raceErr tasks (x, .rw) with
+      | some e => [.err e]
+      | none =>
+          match bindAt x .scalar st with
+          | .error e => [.err e]
+          | .ok st' => [.run rest tasks st']
+  | .copy y x =>
+      match accessErr tasks st (x, .ro) with
+      | some e => [.err e]
+      | none =>
+          match raceErr tasks (y, .rw) with
+          | some e => [.err e]
+          | none =>
+              match bindAt y (st.env x) st with
+              | .error e => [.err e]
+              | .ok st' => [.run rest tasks st']
+  | .move y x =>
+      match accessErr tasks st (x, .rw) with
+      | some e => [.err e]
+      | none =>
+          match raceErr tasks (y, .rw) with
+          | some e => [.err e]
+          | none =>
+              match bindAt y (st.env x) st with
+              | .error e => [.err e]
+              | .ok st' => [.run rest tasks { st' with env := upd st'.env x .moved }]
+  | .drop x =>
+      match accessErr tasks st (x, .rw) with
+      | some e => [.err e]
+      | none =>
+          match release x st with
+          | .error e => [.err e]
+          | .ok st' => [.run rest tasks st']
+  | .call args =>
+      if !argsDisjoint args then [.err .aliasedArgs]
+      else
+        match accessAll tasks st args with
+        | some e => [.err e]
+        | none => [.run rest tasks st]
+  | .spawn t args =>
+      if !argsDisjoint args then [.err .aliasedArgs]
+      else
+        match accessAll tasks st args with
+        | some e => [.err e]
+        | none => [.run rest ((t, args) :: tasks) st]
+  | .wait t => [.run rest (tasks.filter fun T => !(T.1 == t)) st]
+  | .ite thn els => [.run (thn ++ rest) tasks st, .run (els ++ rest) tasks st]
+
+/-- What a task may do through a borrow it holds `rw`: nothing visible to this
+model if the place holds a scalar, or -- if the place holds a cell -- replace that
+cell, which is what `swap` through a lent owner does. -/
+def taskWrite (code : List Stmt) (tasks : List Task) (p : Place) (st : State) : List Cfg :=
+  match st.env p with
+  | .owner _ =>
+      match reallocAt p st with
+      | .error e => [.err e]
+      | .ok st' => [.run code tasks st, .run code tasks st']
+  | .nil => [.run code tasks st]
+  | .moved => [.run code tasks st]
+  | .scalar => [.run code tasks st]
+
+/-- One step of one live task: any borrow of its footprint, at any time. -/
+def stepTask (code : List Stmt) (tasks : List Task) (T : Task) (others : List Task)
+    (st : State) : List Cfg :=
+  T.2.flatMap fun x =>
+    match accessErr others st x with
+    | some e => [.err e]
+    | none =>
+        match x.2 with
+        | .rw => taskWrite code tasks x.1 st
+        | .ro => [.run code tasks st]
+
+/-- Every successor of a configuration: one spawner step interleaved with every
+access every live task might make. -/
+def succ (scope : List Place) : Cfg → List Cfg
+  | .done _ => []
+  | .err _ => []
+  | .run code tasks st =>
+      (match code with
+       | [] =>
+           match tasks with
+           | T :: _ => [.err (.leak T.1)]
+           | [] =>
+               match releaseAll scope st with
+               | .ok st' => [.done st']
+               | .error e => [.err e]
+       | s :: rest => stepStmt s rest tasks st)
+      ++ (splits tasks).flatMap fun x => stepTask code tasks x.1 x.2 st
+
+/-- The state a scope starts in: nothing bound, nothing allocated. -/
+def State.start : State :=
+  { env := fun _ => .nil, live := fun _ => false, next := 0, frees := fun _ => 0 }
+
+/-- The configuration a program starts in. -/
+def Cfg.start (p : Program) : Cfg := .run p.body [] State.start
+
+/-- Reachability under the interleaving semantics. -/
+inductive Reach (scope : List Place) : Cfg → Cfg → Prop where
+  | refl (c : Cfg) : Reach scope c c
+  | step {a b c : Cfg} : b ∈ succ scope a → Reach scope b c → Reach scope a c
+
+/-! ## The heap invariant
+
+None of this mentions the checker: it is what the machine keeps true by itself
+once no fault has happened. -/
+
+structure MemOk (st : State) (scope : List Place) : Prop where
+  /-- A place never holds a cell that has been released: no dangling pointer. -/
+  liveOfEnv : ∀ p a, st.env p = .owner a → st.live a = true
+  /-- Two places never hold the same cell: the affine core. -/
+  uniq : ∀ p q a, st.env p = .owner a → st.env q = .owner a → p = q
+  /-- Every live cell sits in a place the scope will release. -/
+  covered : ∀ a, st.live a = true → ∃ p, p ∈ scope ∧ st.env p = .owner a
+  /-- A live cell has not been released. -/
+  liveUnfreed : ∀ a, st.live a = true → st.frees a = 0
+  /-- Every allocated cell is live or has been released exactly once. -/
+  freedOnce : ∀ a, a < st.next → st.live a = true ∨ st.frees a = 1
+  /-- Nothing beyond the allocation frontier exists. -/
+  beyond : ∀ a, st.next ≤ a → st.live a = false ∧ st.frees a = 0
+
+theorem MemOk.lt_next {st : State} {scope} (h : MemOk st scope) {a : AllocId}
+    (ha : st.live a = true) : a < st.next := by
+  rcases Nat.lt_or_ge a st.next with hlt | hge
+  · exact hlt
+  · rw [(h.beyond a hge).1] at ha; exact Bool.noConfusion ha
+
+/-! ### Releasing -/
+
+/-- A successful release either found nothing to free, or freed exactly the cell the
+place held. -/
+theorem release_cases {st st' : State} {x : Place} (hr : release x st = .ok st') :
+    (st' = st ∧ ∀ a, st.env x ≠ .owner a) ∨
+    (∃ a, st.env x = .owner a ∧ st.live a = true ∧
+      st' = ⟨upd st.env x .moved, updL st.live a false, st.next,
+             updN st.frees a (st.frees a + 1)⟩) := by
+  revert hr
+  unfold release
+  split
+  · next a heq =>
+      split
+      · next hl => exact fun hr => Or.inr ⟨a, heq, hl, (Except.ok.inj hr).symm⟩
+      · exact fun hr => absurd hr (by simp)
+  · next heq =>
+      exact fun hr => Or.inl ⟨(Except.ok.inj hr).symm,
+        fun b hb => by rw [heq] at hb; exact Val.noConfusion hb⟩
+  · next heq =>
+      exact fun hr => Or.inl ⟨(Except.ok.inj hr).symm,
+        fun b hb => by rw [heq] at hb; exact Val.noConfusion hb⟩
+  · next heq =>
+      exact fun hr => Or.inl ⟨(Except.ok.inj hr).symm,
+        fun b hb => by rw [heq] at hb; exact Val.noConfusion hb⟩
+
+theorem release_ok {st : State} {scope} (h : MemOk st scope) (x : Place) :
+    ∃ st', release x st = .ok st' := by
+  unfold release
+  split
+  · next a heq => rw [h.liveOfEnv x a heq]; exact ⟨_, rfl⟩
+  · exact ⟨st, rfl⟩
+  · exact ⟨st, rfl⟩
+  · exact ⟨st, rfl⟩
+
+theorem release_next {st st' : State} {x : Place} (hr : release x st = .ok st') :
+    st'.next = st.next := by
+  rcases release_cases hr with ⟨he, _⟩ | ⟨a, _, _, he⟩ <;> rw [he]
+
+theorem release_env_ne {st st' : State} {x p : Place} (hr : release x st = .ok st')
+    (hne : p ≠ x) : st'.env p = st.env p := by
+  rcases release_cases hr with ⟨he, _⟩ | ⟨a, _, _, he⟩
+  · rw [he]
+  · rw [he]; exact upd_other hne
+
+theorem release_env_self {st st' : State} {x : Place} (hr : release x st = .ok st') :
+    ∀ a, st'.env x ≠ .owner a := by
+  rcases release_cases hr with ⟨he, hn⟩ | ⟨a, _, _, he⟩
+  · rw [he]; exact hn
+  · rw [he]; intro b; show upd st.env x .moved x ≠ _
+    rw [upd_same]; exact fun h => Val.noConfusion h
+
+theorem release_live_of {st st' : State} {x : Place} (hr : release x st = .ok st')
+    {a : AllocId} (ha : st'.live a = true) : st.live a = true := by
+  rcases release_cases hr with ⟨he, _⟩ | ⟨b, _, _, he⟩
+  · rw [he] at ha; exact ha
+  · rw [he] at ha
+    have ha' : updL st.live b false a = true := ha
+    rcases nat_eq_or_ne a b with hab | hab
+    · rw [hab, updL_same] at ha'; exact Bool.noConfusion ha'
+    · rw [updL_other hab] at ha'; exact ha'
+
+theorem memOk_release {st st' : State} {scope} {x : Place} (h : MemOk st scope)
+    (hr : release x st = .ok st') : MemOk st' scope := by
+  rcases release_cases hr with ⟨he, _⟩ | ⟨a, hx, ha, he⟩
+  · rw [he]; exact h
+  subst he
+  have henv : ∀ p, p ≠ x → (upd st.env x Val.moved) p = st.env p := fun p hp => upd_other hp
+  have hlive : ∀ b, b ≠ a → (updL st.live a false) b = st.live b := fun b hb => updL_other hb
+  have hfree : ∀ b, b ≠ a → (updN st.frees a (st.frees a + 1)) b = st.frees b :=
+    fun b hb => updN_other hb
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro p b hp0
+    have hp : (upd st.env x Val.moved) p = .owner b := hp0
+    rcases nat_eq_or_ne p x with hpx | hpx
+    · rw [hpx, upd_same] at hp; exact Val.noConfusion hp
+    rw [henv p hpx] at hp
+    have hne : b ≠ a := fun hba => hpx (h.uniq p x b hp (hba ▸ hx))
+    show (updL st.live a false) b = true
+    rw [hlive b hne]; exact h.liveOfEnv p b hp
+  · intro p q b hp0 hq0
+    have hp : (upd st.env x Val.moved) p = .owner b := hp0
+    have hq : (upd st.env x Val.moved) q = .owner b := hq0
+    rcases nat_eq_or_ne p x with hpx | hpx
+    · rw [hpx, upd_same] at hp; exact Val.noConfusion hp
+    rcases nat_eq_or_ne q x with hqx | hqx
+    · rw [hqx, upd_same] at hq; exact Val.noConfusion hq
+    rw [henv p hpx] at hp; rw [henv q hqx] at hq
+    exact h.uniq p q b hp hq
+  · intro b hb0
+    have hb : (updL st.live a false) b = true := hb0
+    have hne : b ≠ a := by
+      intro hba; rw [hba, updL_same] at hb; exact Bool.noConfusion hb
+    rw [hlive b hne] at hb
+    obtain ⟨p, hp, hpe⟩ := h.covered b hb
+    have hpx : p ≠ x := by
+      intro hc
+      refine hne (Val.owner.inj ?_)
+      rw [← hpe, hc, hx]
+    have hfin : (upd st.env x Val.moved) p = Val.owner b := by rw [henv p hpx]; exact hpe
+    exact ⟨p, hp, hfin⟩
+  · intro b hb0
+    have hb : (updL st.live a false) b = true := hb0
+    have hne : b ≠ a := by
+      intro hba; rw [hba, updL_same] at hb; exact Bool.noConfusion hb
+    rw [hlive b hne] at hb
+    show (updN st.frees a (st.frees a + 1)) b = 0
+    rw [hfree b hne]; exact h.liveUnfreed b hb
+  · intro b hb
+    rcases nat_eq_or_ne b a with hba | hba
+    · right
+      show (updN st.frees a (st.frees a + 1)) b = 1
+      rw [hba, updN_same, h.liveUnfreed a ha]
+    rcases h.freedOnce b hb with hl | hf
+    · left; show (updL st.live a false) b = true
+      rw [hlive b hba]; exact hl
+    · right; show (updN st.frees a (st.frees a + 1)) b = 1
+      rw [hfree b hba]; exact hf
+  · intro b hb
+    have hne : b ≠ a := fun hba =>
+      absurd (h.lt_next ha) (Nat.not_lt.mpr (hba ▸ hb))
+    exact ⟨by show (updL st.live a false) b = false
+              rw [hlive b hne]; exact (h.beyond b hb).1,
+           by show (updN st.frees a (st.frees a + 1)) b = 0
+              rw [hfree b hne]; exact (h.beyond b hb).2⟩
+
+theorem release_live_keep {st st' : State} {x : Place} (hr : release x st = .ok st')
+    {a : AllocId} (hne : st.env x ≠ .owner a) (ha : st.live a = true) : st'.live a = true := by
+  rcases release_cases hr with ⟨he, _⟩ | ⟨b, hx, _, he⟩
+  · rw [he]; exact ha
+  · rw [he]
+    have hab : a ≠ b := fun hc => hne (hc ▸ hx)
+    show updL st.live b false a = true
+    rw [updL_other hab]; exact ha
+
+/-- A place that holds no cell can be dropped from the coverage list. -/
+theorem memOk_tail {st : State} {p : Place} {rest : List Place}
+    (h : MemOk st (p :: rest)) (hp : ∀ a, st.env p ≠ .owner a) : MemOk st rest := by
+  refine ⟨h.liveOfEnv, h.uniq, ?_, h.liveUnfreed, h.freedOnce, h.beyond⟩
+  intro a ha
+  obtain ⟨q, hq, hqe⟩ := h.covered a ha
+  rcases List.mem_cons.mp hq with hqp | hqr
+  · exact absurd hqe (hqp ▸ hp a)
+  · exact ⟨q, hqr, hqe⟩
+
+/-! ### Fresh cells -/
+
+/-- Putting a brand new cell in a place that holds none. -/
+theorem memOk_fresh {st : State} {scope} {x : Place} (h : MemOk st scope) (hx : x ∈ scope)
+    (hnx : ∀ a, st.env x ≠ .owner a) :
+    MemOk ⟨upd st.env x (.owner st.next), updL st.live st.next true, st.next + 1, st.frees⟩
+      scope := by
+  have hnl : st.live st.next = false := (h.beyond st.next (Nat.le_refl _)).1
+  have hnf : st.frees st.next = 0 := (h.beyond st.next (Nat.le_refl _)).2
+  have hnotnext : ∀ b, st.live b = true → b ≠ st.next := by
+    intro b hb hc; rw [hc, hnl] at hb; exact Bool.noConfusion hb
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro p b hp0
+    have hp : (upd st.env x (Val.owner st.next)) p = .owner b := hp0
+    rcases nat_eq_or_ne p x with hpx | hpx
+    · rw [hpx, upd_same] at hp
+      have : st.next = b := Val.owner.inj hp
+      show updL st.live st.next true b = true
+      rw [← this, updL_same]
+    · rw [upd_other hpx] at hp
+      have hb := h.liveOfEnv p b hp
+      show updL st.live st.next true b = true
+      rw [updL_other (hnotnext b hb)]; exact hb
+  · intro p q b hp0 hq0
+    have hp : (upd st.env x (Val.owner st.next)) p = .owner b := hp0
+    have hq : (upd st.env x (Val.owner st.next)) q = .owner b := hq0
+    have key : ∀ r, (upd st.env x (Val.owner st.next)) r = .owner b → r = x ∨ st.env r = .owner b := by
+      intro r hr
+      rcases nat_eq_or_ne r x with hrx | hrx
+      · exact Or.inl hrx
+      · exact Or.inr (by rw [← upd_other (f := st.env) (v := Val.owner st.next) hrx]; exact hr)
+    have hnb : ∀ r, st.env r = .owner b → b ≠ st.next := by
+      intro r hr; exact hnotnext b (h.liveOfEnv r b hr)
+    rcases key p hp with hpx | hpe
+    · rcases key q hq with hqx | hqe
+      · rw [hpx, hqx]
+      · rw [hpx, upd_same] at hp
+        exact absurd (Val.owner.inj hp).symm (hnb q hqe)
+    · rcases key q hq with hqx | hqe
+      · rw [hqx, upd_same] at hq
+        exact absurd (Val.owner.inj hq).symm (hnb p hpe)
+      · exact h.uniq p q b hpe hqe
+  · intro b hb0
+    have hb : updL st.live st.next true b = true := hb0
+    rcases nat_eq_or_ne b st.next with hbn | hbn
+    · refine ⟨x, hx, ?_⟩
+      show upd st.env x (Val.owner st.next) x = Val.owner b
+      rw [hbn]; exact upd_same _ _ _
+    · rw [updL_other hbn] at hb
+      obtain ⟨p, hp, hpe⟩ := h.covered b hb
+      have hpx : p ≠ x := fun hc => hnx b (hc ▸ hpe)
+      refine ⟨p, hp, ?_⟩
+      show upd st.env x (Val.owner st.next) p = Val.owner b
+      rw [upd_other hpx]; exact hpe
+  · intro b hb0
+    have hb : updL st.live st.next true b = true := hb0
+    rcases nat_eq_or_ne b st.next with hbn | hbn
+    · show st.frees b = 0; rw [hbn]; exact hnf
+    · rw [updL_other hbn] at hb; exact h.liveUnfreed b hb
+  · intro b hb
+    rcases nat_eq_or_ne b st.next with hbn | hbn
+    · left; show updL st.live st.next true b = true; rw [hbn, updL_same]
+    · have hlt : b < st.next := by
+        rcases Nat.lt_or_ge b st.next with hh | hh
+        · exact hh
+        · exact absurd (Nat.le_antisymm (Nat.lt_succ_iff.mp hb) hh) hbn
+      rcases h.freedOnce b hlt with hl | hf
+      · left; show updL st.live st.next true b = true
+        rw [updL_other hbn]; exact hl
+      · exact Or.inr hf
+  · intro b hb
+    have hbn : b ≠ st.next := fun hc => by
+      rw [hc] at hb; exact absurd hb (Nat.not_le.mpr (Nat.lt_succ_self _))
+    have hge : st.next ≤ b := Nat.le_of_succ_le hb
+    exact ⟨by show updL st.live st.next true b = false
+              rw [updL_other hbn]; exact (h.beyond b hge).1,
+           (h.beyond b hge).2⟩
+
+theorem reallocAt_ok {st : State} {scope} (h : MemOk st scope) (x : Place) :
+    ∃ st', reallocAt x st = .ok st' := by
+  obtain ⟨st1, h1⟩ := release_ok h x
+  exact ⟨_, by unfold reallocAt; rw [h1]⟩
+
+theorem reallocAt_spec {st st' : State} {x : Place} (hr : reallocAt x st = .ok st') :
+    ∃ st1, release x st = .ok st1 ∧
+      st' = ⟨upd st1.env x (.owner st1.next), updL st1.live st1.next true,
+             st1.next + 1, st1.frees⟩ := by
+  unfold reallocAt at hr
+  split at hr
+  · exact absurd hr (by simp)
+  · next st1 h1 => exact ⟨st1, h1, (Except.ok.inj hr).symm⟩
+
+theorem memOk_reallocAt {st st' : State} {scope} {x : Place} (h : MemOk st scope)
+    (hx : x ∈ scope) (hr : reallocAt x st = .ok st') : MemOk st' scope := by
+  obtain ⟨st1, h1, he⟩ := reallocAt_spec hr
+  rw [he]
+  exact memOk_fresh (memOk_release h h1) hx (release_env_self h1)
+
+theorem reallocAt_env_ne {st st' : State} {x p : Place} (hr : reallocAt x st = .ok st')
+    (hne : p ≠ x) : st'.env p = st.env p := by
+  obtain ⟨st1, h1, he⟩ := reallocAt_spec hr
+  rw [he]
+  show upd st1.env x _ p = _
+  rw [upd_other hne]; exact release_env_ne h1 hne
+
+theorem reallocAt_env_self {st st' : State} {x : Place} (hr : reallocAt x st = .ok st') :
+    ∃ a, st'.env x = .owner a := by
+  obtain ⟨st1, h1, he⟩ := reallocAt_spec hr
+  exact ⟨st1.next, by rw [he]; exact upd_same _ _ _⟩
+
+/-! ### Binding a value -/
+
+theorem bindAt_ok {st : State} {scope} (h : MemOk st scope) (y : Place) (v : Val) :
+    ∃ st', bindAt y v st = .ok st' := by
+  obtain ⟨st1, h1⟩ := release_ok h y
+  exact ⟨_, by unfold bindAt; rw [h1]⟩
+
+theorem bindAt_spec {st st' : State} {y : Place} {v : Val} (hb : bindAt y v st = .ok st') :
+    ∃ st1, release y st = .ok st1 ∧ st' = ⟨upd st1.env y v, st1.live, st1.next, st1.frees⟩ := by
+  unfold bindAt at hb
+  split at hb
+  · exact absurd hb (by simp)
+  · next st1 h1 => exact ⟨st1, h1, (Except.ok.inj hb).symm⟩
+
+theorem bindAt_env_ne {st st' : State} {y p : Place} {v : Val} (hb : bindAt y v st = .ok st')
+    (hne : p ≠ y) : st'.env p = st.env p := by
+  obtain ⟨st1, h1, he⟩ := bindAt_spec hb
+  rw [he]
+  show upd st1.env y v p = _
+  rw [upd_other hne]; exact release_env_ne h1 hne
+
+theorem bindAt_env_self {st st' : State} {y : Place} {v : Val} (hb : bindAt y v st = .ok st') :
+    st'.env y = v := by
+  obtain ⟨st1, h1, he⟩ := bindAt_spec hb
+  rw [he]; exact upd_same _ _ _
+
+/-- Binding a value that is not a cell keeps the heap invariant. -/
+theorem memOk_bindAt {st st' : State} {scope} {y : Place} {v : Val} (h : MemOk st scope)
+    (hv : ∀ a, v ≠ .owner a) (hb : bindAt y v st = .ok st') : MemOk st' scope := by
+  obtain ⟨st1, h1, he⟩ := bindAt_spec hb
+  have h1' : MemOk st1 scope := memOk_release h h1
+  have hy : ∀ a, (upd st1.env y v) y ≠ .owner a := by
+    intro a; rw [upd_same]; exact hv a
+  have hother : ∀ p, p ≠ y → (upd st1.env y v) p = st1.env p := fun p hp => upd_other hp
+  rw [he]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro p b hp0
+    have hp : (upd st1.env y v) p = .owner b := hp0
+    rcases nat_eq_or_ne p y with hpy | hpy
+    · exact absurd hp (hpy ▸ hy b)
+    · rw [hother p hpy] at hp; exact h1'.liveOfEnv p b hp
+  · intro p q b hp0 hq0
+    have hp : (upd st1.env y v) p = .owner b := hp0
+    have hq : (upd st1.env y v) q = .owner b := hq0
+    rcases nat_eq_or_ne p y with hpy | hpy
+    · exact absurd hp (hpy ▸ hy b)
+    rcases nat_eq_or_ne q y with hqy | hqy
+    · exact absurd hq (hqy ▸ hy b)
+    rw [hother p hpy] at hp; rw [hother q hqy] at hq
+    exact h1'.uniq p q b hp hq
+  · intro b hb0
+    obtain ⟨p, hp, hpe⟩ := h1'.covered b hb0
+    have hpy : p ≠ y := fun hc => (release_env_self h1) b (hc ▸ hpe)
+    refine ⟨p, hp, ?_⟩
+    show upd st1.env y v p = Val.owner b
+    rw [hother p hpy]; exact hpe
+  · exact h1'.liveUnfreed
+  · exact h1'.freedOnce
+  · exact h1'.beyond
+
+/-- Moving a cell from `x` to `y`: the cell changes place, so it stays covered
+exactly once.  This is the one step where the intermediate state would break the
+invariant, which is why it is proved in one piece. -/
+theorem memOk_move {st st1 : State} {scope} {y x : Place} {a : AllocId} (h : MemOk st scope)
+    (hy : y ∈ scope) (hxy : y ≠ x) (hx : st.env x = .owner a)
+    (hb : bindAt y (st.env x) st = .ok st1) :
+    MemOk ⟨upd st1.env x .moved, st1.live, st1.next, st1.frees⟩ scope := by
+  obtain ⟨st2, h2r, he⟩ := bindAt_spec hb
+  have hxny : x ≠ y := fun hc => hxy hc.symm
+  have h2 : MemOk st2 scope := memOk_release h h2r
+  have h2x : st2.env x = .owner a := by rw [release_env_ne h2r hxny]; exact hx
+  have h2y : ∀ b, st2.env y ≠ .owner b := release_env_self h2r
+  have hex : ∀ p, p ≠ x → (upd st1.env x Val.moved) p = st1.env p := fun p hp => upd_other hp
+  have h1y : st1.env y = .owner a := by rw [he]; show upd st2.env y (st.env x) y = _
+                                        rw [upd_same]; exact hx
+  have h1o : ∀ p, p ≠ y → st1.env p = st2.env p := by
+    intro p hp; rw [he]; show upd st2.env y (st.env x) p = _; rw [upd_other hp]
+  have hey : (upd st1.env x Val.moved) y = .owner a := by rw [hex y hxy]; exact h1y
+  have hkey : ∀ p b, (upd st1.env x Val.moved) p = .owner b → p = y ∧ b = a ∨
+      (p ≠ x ∧ p ≠ y ∧ st2.env p = .owner b) := by
+    intro p b hp
+    rcases nat_eq_or_ne p x with hpx | hpx
+    · rw [hpx, upd_same] at hp; exact absurd hp (fun hc => Val.noConfusion hc)
+    rcases nat_eq_or_ne p y with hpy | hpy
+    · rw [hpy] at hp; rw [hey] at hp; exact Or.inl ⟨hpy, (Val.owner.inj hp).symm⟩
+    · rw [hex p hpx, h1o p hpy] at hp; exact Or.inr ⟨hpx, hpy, hp⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro p b hp0
+    have hlive1 : st1.live = st2.live := by rw [he]
+    rcases hkey p b hp0 with ⟨_, hba⟩ | ⟨_, _, hpe⟩
+    · show st1.live b = true
+      rw [hlive1, hba]; exact h2.liveOfEnv x a h2x
+    · show st1.live b = true
+      rw [hlive1]; exact h2.liveOfEnv p b hpe
+  · intro p q b hp0 hq0
+    rcases hkey p b hp0 with ⟨hpy, hba⟩ | ⟨hpx, hpy, hpe⟩
+    · rcases hkey q b hq0 with ⟨hqy, _⟩ | ⟨hqx, _, hqe⟩
+      · rw [hpy, hqy]
+      · exact absurd (h2.uniq q x b hqe (hba ▸ h2x)) hqx
+    · rcases hkey q b hq0 with ⟨_, hba⟩ | ⟨hqx, _, hqe⟩
+      · exact absurd (h2.uniq p x b hpe (hba ▸ h2x)) hpx
+      · exact h2.uniq p q b hpe hqe
+  · intro b hb0
+    have hb2 : st2.live b = true := by rw [he] at hb0; exact hb0
+    obtain ⟨p, hp, hpe⟩ := h2.covered b hb2
+    rcases nat_eq_or_ne p y with hpy | hpy
+    · exact absurd hpe (hpy ▸ h2y b)
+    rcases nat_eq_or_ne p x with hpx | hpx
+    · refine ⟨y, hy, ?_⟩
+      have hba : b = a := by
+        refine Val.owner.inj ?_
+        rw [← hpe, hpx, h2x]
+      show (upd st1.env x Val.moved) y = Val.owner b
+      rw [hba]; exact hey
+    · refine ⟨p, hp, ?_⟩
+      show (upd st1.env x Val.moved) p = Val.owner b
+      rw [hex p hpx, h1o p hpy]; exact hpe
+  · intro b hb0
+    have : st2.live b = true := by rw [he] at hb0; exact hb0
+    show st1.frees b = 0
+    rw [he]; exact h2.liveUnfreed b this
+  · intro b hb0
+    have hlt : b < st2.next := by rw [he] at hb0; exact hb0
+    rcases h2.freedOnce b hlt with hl | hf
+    · left; show st1.live b = true; rw [he]; exact hl
+    · right; show st1.frees b = 1; rw [he]; exact hf
+  · intro b hb0
+    have hge : st2.next ≤ b := by rw [he] at hb0; exact hb0
+    exact ⟨by show st1.live b = false; rw [he]; exact (h2.beyond b hge).1,
+           by show st1.frees b = 0; rw [he]; exact (h2.beyond b hge).2⟩
+
+/-! ### The implicit release at scope exit -/
+
+theorem releaseAll_sound : ∀ (scope : List Place) (st : State), MemOk st scope →
+    ∃ st', releaseAll scope st = .ok st' ∧ MemOk st' [] ∧ st'.next = st.next := by
+  intro scope
+  induction scope with
+  | nil => intro st h; exact ⟨st, rfl, h, rfl⟩
+  | cons p rest ih =>
+      intro st h
+      obtain ⟨st1, h1⟩ := release_ok h p
+      have h1' : MemOk st1 rest :=
+        memOk_tail (memOk_release h h1) (release_env_self h1)
+      obtain ⟨st', hr, hfin, hnext⟩ := ih st1 h1'
+      refine ⟨st', ?_, hfin, ?_⟩
+      · show (match release p st with
+              | .ok s => releaseAll rest s
+              | .error e => .error e) = .ok st'
+        rw [h1]; exact hr
+      · rw [hnext]; exact release_next h1
+
+theorem mem_scope_of_owner {st : State} {scope} (h : MemOk st scope) {p : Place} {a : AllocId}
+    (hp : st.env p = .owner a) : p ∈ scope := by
+  obtain ⟨q, hq, hqe⟩ := h.covered a (h.liveOfEnv p a hp)
+  rw [← h.uniq q p a hqe hp]; exact hq
+
+/-- After the implicit release nothing is live, and every cell the scope ever
+allocated has been released exactly once. -/
+theorem releaseAll_final {scope : List Place} {st st' : State} (h : MemOk st scope)
+    (hr : releaseAll scope st = .ok st') :
+    (∀ a, st'.live a = false) ∧ (∀ a, a < st'.next → st'.frees a = 1) := by
+  obtain ⟨st'', hr'', hfin, _⟩ := releaseAll_sound scope st h
+  have hst : st' = st'' := Except.ok.inj (hr.symm.trans hr'')
+  subst hst
+  have hdead : ∀ a, st'.live a = false := by
+    intro a
+    cases ha : st'.live a with
+    | false => rfl
+    | true =>
+        obtain ⟨p, hp, _⟩ := hfin.covered a ha
+        exact absurd hp (List.not_mem_nil)
+  refine ⟨hdead, fun a hlt => ?_⟩
+  rcases hfin.freedOnce a hlt with hl | hf
+  · rw [hdead a] at hl; exact Bool.noConfusion hl
+  · exact hf
+
+/-! ## Conflict bookkeeping -/
+
+theorem heldConflict_eq_false_iff {tasks : List Task} {x : Borrow} :
+    heldConflict tasks x = false ↔ ∀ T ∈ tasks, ∀ y ∈ T.2, conflict x y = false := by
+  constructor
+  · intro h T hT y hy
+    cases hc : conflict x y with
+    | false => rfl
+    | true =>
+        have hall : heldConflict tasks x = true := by
+          simp only [heldConflict, List.any_eq_true]
+          exact ⟨T, hT, y, hy, hc⟩
+        rw [hall] at h; exact Bool.noConfusion h
+  · intro h
+    cases hc : heldConflict tasks x with
+    | false => rfl
+    | true =>
+        simp only [heldConflict, List.any_eq_true] at hc
+        obtain ⟨T, hT, y, hy1, hy2⟩ := hc
+        rw [h T hT y hy1] at hy2; exact Bool.noConfusion hy2
+
+/-- A place nobody may write is a place no live task holds at all. -/
+theorem untouched_of_write_ok {tasks : List Task} {x : Place}
+    (h : heldConflict tasks (x, Mode.rw) = false) : ∀ T ∈ tasks, ∀ y ∈ T.2, y.1 ≠ x := by
+  intro T hT y hy hc
+  have hcf := heldConflict_eq_false_iff.mp h T hT y hy
+  have hone : conflict (x, Mode.rw) y = true := by
+    show ((x == y.1) && ((Mode.rw == Mode.rw) || (y.2 == Mode.rw))) = true
+    rw [hc, beq_place_self]
+    rfl
+  rw [hone] at hcf
+  exact Bool.noConfusion hcf
+
+theorem raceErr_none {tasks : List Task} {x : Borrow} (h : heldConflict tasks x = false) :
+    raceErr tasks x = none := by simp [raceErr, h]
+
+theorem memErr_none {st : State} {scope} {p : Place} (hm : MemOk st scope)
+    (h1 : st.env p ≠ .nil) (h2 : st.env p ≠ .moved) : memErr st p = none := by
+  unfold memErr
+  split
+  · next heq => exact absurd heq h1
+  · next heq => exact absurd heq h2
+  · rfl
+  · next a heq => rw [hm.liveOfEnv p a heq]; rfl
+
+theorem accessErr_none {tasks : List Task} {st : State} {x : Borrow}
+    (hr : raceErr tasks x = none) (hm : memErr st x.1 = none) :
+    accessErr tasks st x = none := by simp [accessErr, hr, hm]
+
+theorem accessAll_none {tasks : List Task} {st : State} : ∀ args : List Borrow,
+    (∀ x ∈ args, accessErr tasks st x = none) → accessAll tasks st args = none := by
+  intro args
+  induction args with
+  | nil => intro _; rfl
+  | cons x rest ih =>
+      intro h
+      rw [show accessAll tasks st (x :: rest) =
+            match accessErr tasks st x with
+            | some e => some e
+            | none => accessAll tasks st rest from rfl,
+          h x (List.mem_cons_self ..)]
+      exact ih fun y hy => h y (List.mem_cons_of_mem _ hy)
+
+/-! ## Splitting the task list -/
+
+theorem splits_mem {α : Type} : ∀ {l : List α} {a : α} {r : List α},
+    (a, r) ∈ splits l → a ∈ l ∧ ∀ b ∈ r, b ∈ l := by
+  intro l
+  induction l with
+  | nil => intro a r h; exact absurd h (by simp [splits])
+  | cons a0 rest ih =>
+      intro a r h
+      rw [show splits (a0 :: rest) = (a0, rest) :: (splits rest).map
+            (fun x => (x.1, a0 :: x.2)) from rfl] at h
+      rcases List.mem_cons.mp h with h1 | h2
+      · have ha : a = a0 := congrArg Prod.fst h1
+        have hr : r = rest := congrArg Prod.snd h1
+        exact ⟨by rw [ha]; exact List.mem_cons_self .., by
+          intro b hb; rw [hr] at hb; exact List.mem_cons_of_mem _ hb⟩
+      · obtain ⟨y, hy, hyeq⟩ := List.mem_map.mp h2
+        have ha : a = y.1 := (congrArg Prod.fst hyeq).symm
+        have hr : r = a0 :: y.2 := (congrArg Prod.snd hyeq).symm
+        obtain ⟨hy1, hy2⟩ := ih hy
+        refine ⟨by rw [ha]; exact List.mem_cons_of_mem _ hy1, ?_⟩
+        intro b hb
+        rw [hr] at hb
+        rcases List.mem_cons.mp hb with hb1 | hb2
+        · rw [hb1]; exact List.mem_cons_self ..
+        · exact List.mem_cons_of_mem _ (hy2 b hb2)
+
+theorem pairwise_splits {α : Type} {R : α → α → Prop} (hsym : ∀ a b, R a b → R b a) :
+    ∀ {l : List α}, l.Pairwise R → ∀ {a : α} {r : List α}, (a, r) ∈ splits l → ∀ b ∈ r, R a b := by
+  intro l
+  induction l with
+  | nil => intro _ a r h; exact absurd h (by simp [splits])
+  | cons a0 rest ih =>
+      intro hp a r h
+      rw [show splits (a0 :: rest) = (a0, rest) :: (splits rest).map
+            (fun x => (x.1, a0 :: x.2)) from rfl] at h
+      have hph := List.pairwise_cons.mp hp
+      rcases List.mem_cons.mp h with h1 | h2
+      · have ha : a = a0 := congrArg Prod.fst h1
+        have hr : r = rest := congrArg Prod.snd h1
+        intro b hb
+        rw [ha]; exact hph.1 b (hr ▸ hb)
+      · obtain ⟨y, hy, hyeq⟩ := List.mem_map.mp h2
+        have ha : a = y.1 := (congrArg Prod.fst hyeq).symm
+        have hr : r = a0 :: y.2 := (congrArg Prod.snd hyeq).symm
+        intro b hb
+        rw [hr] at hb
+        rcases List.mem_cons.mp hb with hb1 | hb2
+        · rw [ha, hb1]
+          exact hsym a0 y.1 (hph.1 y.1 (splits_mem hy).1)
+        · rw [ha]; exact ih hph.2 hy b hb2
+
+/-! ## The invariant
+
+`Agree` is where the checker meets the machine: everything the checker claims
+about a place is true of the state, and the lease map is exactly the list of live
+tasks. -/
+
+structure Agree (c : CState) (st : State) (tasks : List Task) : Prop where
+  scalars_ok : ∀ p ∈ c.scalars, st.env p = .scalar
+  owners_ok : ∀ p ∈ c.owners, ∃ a, st.env p = .owner a
+  leases_ok : c.leases = tasks
+
+theorem Agree.live_of_livePlace {c : CState} {st : State} {tasks} (h : Agree c st tasks)
+    {p : Place} (hp : c.livePlace p = true) : st.env p ≠ .nil ∧ st.env p ≠ .moved := by
+  simp only [CState.livePlace, Bool.or_eq_true, contains_iff_mem] at hp
+  rcases hp with hs | ho
+  · rw [h.scalars_ok p hs]; exact ⟨fun hc => Val.noConfusion hc, fun hc => Val.noConfusion hc⟩
+  · obtain ⟨a, ha⟩ := h.owners_ok p ho
+    rw [ha]; exact ⟨fun hc => Val.noConfusion hc, fun hc => Val.noConfusion hc⟩
+
+/-- Every place a live task holds still holds something. -/
+def TasksLive (tasks : List Task) (st : State) : Prop :=
+  ∀ T ∈ tasks, ∀ y ∈ T.2, st.env y.1 ≠ .nil ∧ st.env y.1 ≠ .moved
+
+/-- Two tasks that hold nothing in common that either writes. -/
+def NoConflictPair (T U : Task) : Prop := ∀ x ∈ T.2, ∀ y ∈ U.2, conflict x y = false
+
+theorem noConflictPair_symm (T U : Task) (h : NoConflictPair T U) : NoConflictPair U T := by
+  intro y hy x hx
+  rw [conflict_symm]; exact h x hx y hy
+
+/-- No two live tasks race with each other. -/
+def TasksOk (tasks : List Task) : Prop := tasks.Pairwise NoConflictPair
+
+/-- The invariant an accepted program keeps. -/
+def Ok (scope : List Place) : Cfg → Prop
+  | .run code tasks st =>
+      MemOk st scope ∧ TasksOk tasks ∧ TasksLive tasks st ∧
+      ∃ c, c.scope = scope ∧ Agree c st tasks ∧
+        ∃ d, checkBlock c code = some d ∧ d.leases = []
+  | .done st => (∀ a, st.live a = false) ∧ (∀ a, a < st.next → st.frees a = 1)
+  | .err _ => False
+
+theorem checkBlock_scope {c c' : CState} {ss : List Stmt} (h : checkBlock c ss = some c') :
+    c'.scope = c.scope := by
+  obtain ⟨_, _, _, hsc⟩ := checkBlock_mono (blockSize ss + 1) ss (Nat.lt_succ_self _) (Le.refl c) h
+  exact hsc
+
+theorem checkBlock_weaken {c d c' : CState} {ss : List Stmt} (hle : Le c d)
+    (h : checkBlock c ss = some c') : ∃ d', checkBlock d ss = some d' ∧ Le c' d' := by
+  obtain ⟨d', h1, h2, _⟩ := checkBlock_mono (blockSize ss + 1) ss (Nat.lt_succ_self _) hle h
+  exact ⟨d', h1, h2⟩
+
+theorem effOf_scope (c : CState) (s : Stmt) : (effOf c s).scope = c.scope := by
+  cases s <;> rfl
+
+theorem checkStmt_scope {c c1 : CState} {s : Stmt} (h : checkStmt c s = some c1) :
+    c1.scope = c.scope := by
+  refine checkBlock_scope (ss := [s]) ?_
+  rw [checkBlock_cons, h]; rfl
+
+/-! ## Preservation
+
+Every successor of a configuration that satisfies the invariant satisfies it too.
+Since `Ok` is `False` on error configurations, this is also what rules the faults
+out. -/
+
+theorem Ok_succ {scope : List Place} {cfg cfg' : Cfg} (h : Ok scope cfg)
+    (hs : cfg' ∈ succ scope cfg) : Ok scope cfg' := by
+  cases cfg with
+  | done st => exact absurd hs (by simp [succ])
+  | err e => exact absurd hs (by simp [succ])
+  | run code tasks st =>
+  simp only [Ok] at h
+  obtain ⟨hmem, htok, htlive, c, hscope, hag, d, hchk, hdl⟩ := h
+  rcases List.mem_append.mp hs with hmain | htask
+  · -- the spawner steps
+    cases code with
+    | nil =>
+        have hcd : c = d := Option.some.inj hchk
+        have htasks : tasks = [] := by rw [← hag.leases_ok, hcd, hdl]
+        subst htasks
+        obtain ⟨st', hrel, _, _⟩ := releaseAll_sound scope st hmem
+        simp only [hrel, List.mem_singleton] at hmain
+        rw [hmain]
+        exact releaseAll_final hmem hrel
+    | cons s rest =>
+    rw [checkBlock_cons] at hchk
+    cases hc1 : checkStmt c s with
+    | none => rw [hc1] at hchk; exact absurd hchk (by simp)
+    | some c1 =>
+    rw [hc1] at hchk
+    have hsc1 : c1.scope = scope := by rw [checkStmt_scope hc1]; exact hscope
+    -- the common shape of every straight-line step
+    cases s with
+    | alloc x =>
+        rw [checkStmt_alloc] at hc1
+        split at hc1
+        · next hg =>
+            have hc1v := Option.some.inj hc1
+            subst hc1v
+            simp only [guardOf, Bool.and_eq_true, contains_iff_mem, CState.mayWrite,
+              CState.mayAccess, Bool.not_eq_true'] at hg
+            have hx : x ∈ scope := hscope ▸ hg.1
+            have hw : heldConflict tasks (x, Mode.rw) = false := by
+              rw [← hag.leases_ok]; exact hg.2
+            obtain ⟨st', hre⟩ := reallocAt_ok hmem x
+            simp only [stepStmt, raceErr_none hw, hre, List.mem_singleton] at hmain
+            have hkeep : ∀ p, p ≠ x → st'.env p = st.env p := fun p hp => reallocAt_env_ne hre hp
+            have huntouched := untouched_of_write_ok hw
+            rw [hmain]
+            refine ⟨memOk_reallocAt hmem hx hre, htok, ?_, _, hsc1, ⟨?_, ?_, hag.leases_ok⟩,
+              d, hchk, hdl⟩
+            · intro T hT y hy
+              rw [hkeep y.1 (huntouched T hT y hy)]; exact htlive T hT y hy
+            · intro p hp
+              simp only [effOf, mem_del] at hp
+              rw [hkeep p hp.2]; exact hag.scalars_ok p hp.1
+            · intro p hp
+              simp only [effOf, mem_add] at hp
+              rcases nat_eq_or_ne p x with hpx | hpx
+              · rw [hpx]; exact reallocAt_env_self hre
+              · rw [hkeep p hpx]
+                exact hag.owners_ok p (hp.resolve_left hpx)
+        · exact absurd hc1 (by simp)
+    | mkScalar x =>
+        rw [checkStmt_mkScalar] at hc1
+        split at hc1
+        · next hg =>
+            have hc1v := Option.some.inj hc1
+            subst hc1v
+            simp only [guardOf, Bool.and_eq_true, contains_iff_mem, CState.mayWrite,
+              CState.mayAccess, Bool.not_eq_true'] at hg
+            have hw : heldConflict tasks (x, Mode.rw) = false := by
+              rw [← hag.leases_ok]; exact hg.2
+            obtain ⟨st', hbe⟩ := bindAt_ok hmem x Val.scalar
+            simp only [stepStmt, raceErr_none hw, hbe, List.mem_singleton] at hmain
+            have hkeep : ∀ p, p ≠ x → st'.env p = st.env p := fun p hp => bindAt_env_ne hbe hp
+            have huntouched := untouched_of_write_ok hw
+            rw [hmain]
+            refine ⟨memOk_bindAt hmem (fun a hc => Val.noConfusion hc) hbe, htok, ?_,
+              _, hsc1, ⟨?_, ?_, hag.leases_ok⟩,
+              d, hchk, hdl⟩
+            · intro T hT y hy
+              rw [hkeep y.1 (huntouched T hT y hy)]; exact htlive T hT y hy
+            · intro p hp
+              simp only [effOf, mem_add] at hp
+              rcases nat_eq_or_ne p x with hpx | hpx
+              · rw [hpx]; exact bindAt_env_self hbe
+              · rw [hkeep p hpx]; exact hag.scalars_ok p (hp.resolve_left hpx)
+            · intro p hp
+              simp only [effOf, mem_del] at hp
+              rw [hkeep p hp.2]; exact hag.owners_ok p hp.1
+        · exact absurd hc1 (by simp)
+    | copy y x =>
+        rw [checkStmt_copy] at hc1
+        split at hc1
+        · next hg =>
+            have hc1v := Option.some.inj hc1
+            subst hc1v
+            simp only [guardOf, Bool.and_eq_true, contains_iff_mem, CState.mayWrite,
+              CState.mayAccess, Bool.not_eq_true', beq_eq_false_iff_ne] at hg
+            have hyx : y ≠ x := hg.1.1.1.2
+            have hxs : st.env x = Val.scalar := hag.scalars_ok x hg.1.1.2
+            have hro : heldConflict tasks (x, Mode.ro) = false := by
+              rw [← hag.leases_ok]; exact hg.1.2
+            have hwy : heldConflict tasks (y, Mode.rw) = false := by
+              rw [← hag.leases_ok]; exact hg.2
+            have haccx : accessErr tasks st (x, Mode.ro) = none :=
+              accessErr_none (raceErr_none hro)
+                (memErr_none hmem (by rw [hxs]; exact fun hc => Val.noConfusion hc)
+                  (by rw [hxs]; exact fun hc => Val.noConfusion hc))
+            obtain ⟨st', hbe⟩ := bindAt_ok hmem y (st.env x)
+            simp only [stepStmt, haccx, raceErr_none hwy, hbe, List.mem_singleton] at hmain
+            have hkeep : ∀ p, p ≠ y → st'.env p = st.env p := fun p hp => bindAt_env_ne hbe hp
+            have huntouched := untouched_of_write_ok hwy
+            rw [hmain]
+            refine ⟨memOk_bindAt hmem (fun a hc => by rw [hxs] at hc; exact Val.noConfusion hc) hbe,
+              htok, ?_, _, hsc1, ⟨?_, ?_, hag.leases_ok⟩,
+              d, hchk, hdl⟩
+            · intro T hT z hz
+              rw [hkeep z.1 (huntouched T hT z hz)]; exact htlive T hT z hz
+            · intro p hp
+              simp only [effOf, mem_add] at hp
+              rcases nat_eq_or_ne p y with hpy | hpy
+              · rw [hpy, bindAt_env_self hbe]; exact hxs
+              · rw [hkeep p hpy]; exact hag.scalars_ok p (hp.resolve_left hpy)
+            · intro p hp
+              simp only [effOf, mem_del] at hp
+              rw [hkeep p hp.2]; exact hag.owners_ok p hp.1
+        · exact absurd hc1 (by simp)
+    | move y x =>
+        rw [checkStmt_move] at hc1
+        split at hc1
+        · next hg =>
+            have hc1v := Option.some.inj hc1
+            subst hc1v
+            simp only [guardOf, Bool.and_eq_true, contains_iff_mem, CState.mayWrite,
+              CState.mayAccess, Bool.not_eq_true', beq_eq_false_iff_ne] at hg
+            have hy : y ∈ scope := hscope ▸ hg.1.1.1.1
+            have hyx : y ≠ x := hg.1.1.1.2
+            obtain ⟨a, hxa⟩ := hag.owners_ok x hg.1.1.2
+            have hwx : heldConflict tasks (x, Mode.rw) = false := by
+              rw [← hag.leases_ok]; exact hg.1.2
+            have hwy : heldConflict tasks (y, Mode.rw) = false := by
+              rw [← hag.leases_ok]; exact hg.2
+            have haccx : accessErr tasks st (x, Mode.rw) = none :=
+              accessErr_none (raceErr_none hwx)
+                (memErr_none hmem (by rw [hxa]; exact fun hc => Val.noConfusion hc)
+                  (by rw [hxa]; exact fun hc => Val.noConfusion hc))
+            obtain ⟨st1, hbe⟩ := bindAt_ok hmem y (st.env x)
+            simp only [stepStmt, haccx, raceErr_none hwy, hbe, List.mem_singleton] at hmain
+            have h1y : st1.env y = Val.owner a := by rw [bindAt_env_self hbe]; exact hxa
+            have hey : (upd st1.env x Val.moved) y = Val.owner a := by
+              rw [upd_other hyx]; exact h1y
+            have hkeep : ∀ p, p ≠ x → p ≠ y → (upd st1.env x Val.moved) p = st.env p := by
+              intro p hpx hpy
+              rw [upd_other hpx, bindAt_env_ne hbe hpy]
+            have hux := untouched_of_write_ok hwx
+            have huy := untouched_of_write_ok hwy
+            rw [hmain]
+            refine ⟨memOk_move hmem hy hyx hxa hbe, htok, ?_, _, hsc1,
+              ⟨?_, ?_, hag.leases_ok⟩,
+              d, hchk, hdl⟩
+            · intro T hT z hz
+              have hzz : (upd st1.env x Val.moved) z.1 = st.env z.1 :=
+                hkeep z.1 (hux T hT z hz) (huy T hT z hz)
+              show (upd st1.env x Val.moved) z.1 ≠ Val.nil ∧
+                   (upd st1.env x Val.moved) z.1 ≠ Val.moved
+              rw [hzz]; exact htlive T hT z hz
+            · intro p hp
+              simp only [effOf, mem_del] at hp
+              have hps := hag.scalars_ok p hp.1
+              have hpx : p ≠ x := by
+                intro hc; rw [hc, hxa] at hps; exact Val.noConfusion hps
+              show (upd st1.env x Val.moved) p = Val.scalar
+              rw [hkeep p hpx hp.2]; exact hps
+            · intro p hp
+              simp only [effOf, mem_add, mem_del] at hp
+              rcases nat_eq_or_ne p y with hpy | hpy
+              · exact ⟨a, by rw [hpy]; exact hey⟩
+              · have hp' := hp.resolve_left hpy
+                obtain ⟨b, hb⟩ := hag.owners_ok p hp'.1
+                refine ⟨b, ?_⟩
+                show (upd st1.env x Val.moved) p = Val.owner b
+                rw [hkeep p hp'.2 hpy]; exact hb
+        · exact absurd hc1 (by simp)
+    | drop x =>
+        rw [checkStmt_drop] at hc1
+        split at hc1
+        · next hg =>
+            have hc1v := Option.some.inj hc1
+            subst hc1v
+            simp only [guardOf, Bool.and_eq_true, contains_iff_mem, CState.mayWrite,
+              CState.mayAccess, Bool.not_eq_true'] at hg
+            obtain ⟨a, hxa⟩ := hag.owners_ok x hg.1
+            have hw : heldConflict tasks (x, Mode.rw) = false := by
+              rw [← hag.leases_ok]; exact hg.2
+            have haccx : accessErr tasks st (x, Mode.rw) = none :=
+              accessErr_none (raceErr_none hw)
+                (memErr_none hmem (by rw [hxa]; exact fun hc => Val.noConfusion hc)
+                  (by rw [hxa]; exact fun hc => Val.noConfusion hc))
+            obtain ⟨st', hre⟩ := release_ok hmem x
+            simp only [stepStmt, haccx, hre, List.mem_singleton] at hmain
+            have hkeep : ∀ p, p ≠ x → st'.env p = st.env p := fun p hp => release_env_ne hre hp
+            have huntouched := untouched_of_write_ok hw
+            rw [hmain]
+            refine ⟨memOk_release hmem hre, htok, ?_, _, hsc1, ⟨?_, ?_, hag.leases_ok⟩,
+              d, hchk, hdl⟩
+            · intro T hT z hz
+              rw [hkeep z.1 (huntouched T hT z hz)]; exact htlive T hT z hz
+            · intro p hp
+              have hps := hag.scalars_ok p hp
+              have hpx : p ≠ x := by
+                intro hcc; rw [hcc, hxa] at hps; exact Val.noConfusion hps
+              rw [hkeep p hpx]; exact hps
+            · intro p hp
+              simp only [effOf, mem_del] at hp
+              rw [hkeep p hp.2]; exact hag.owners_ok p hp.1
+        · exact absurd hc1 (by simp)
+    | call args =>
+        rw [checkStmt_call] at hc1
+        split at hc1
+        · next hg =>
+            have hc1v := Option.some.inj hc1
+            subst hc1v
+            simp only [guardOf, Bool.and_eq_true, List.all_eq_true, CState.mayAccess,
+              Bool.not_eq_true'] at hg
+            have hacc : ∀ z ∈ args, accessErr tasks st z = none := by
+              intro z hz
+              have hz' := hg.2 z hz
+              refine accessErr_none (raceErr_none (by rw [← hag.leases_ok]; exact hz'.2)) ?_
+              obtain ⟨h1, h2⟩ := hag.live_of_livePlace hz'.1
+              exact memErr_none hmem h1 h2
+            simp only [stepStmt, hg.1, accessAll_none args hacc] at hmain
+            simp at hmain
+            rw [hmain]
+            exact ⟨hmem, htok, htlive, _, hsc1,
+              ⟨hag.scalars_ok, hag.owners_ok, hag.leases_ok⟩,
+              d, hchk, hdl⟩
+        · exact absurd hc1 (by simp)
+    | spawn t args =>
+        rw [checkStmt_spawn] at hc1
+        split at hc1
+        · next hg =>
+            have hc1v := Option.some.inj hc1
+            subst hc1v
+            simp only [guardOf, Bool.and_eq_true, List.all_eq_true, CState.mayAccess,
+              Bool.not_eq_true'] at hg
+            have hfree : ∀ z ∈ args, heldConflict tasks z = false := by
+              intro z hz
+              have hz' := hg.2 z hz
+              rw [← hag.leases_ok]; exact hz'.2
+            have hacc : ∀ z ∈ args, accessErr tasks st z = none := by
+              intro z hz
+              have hz' := hg.2 z hz
+              refine accessErr_none (raceErr_none (hfree z hz)) ?_
+              obtain ⟨h1, h2⟩ := hag.live_of_livePlace hz'.1
+              exact memErr_none hmem h1 h2
+            simp only [stepStmt, hg.1.1, accessAll_none args hacc] at hmain
+            simp at hmain
+            rw [hmain]
+            refine ⟨hmem, ?_, ?_, _, hsc1, ⟨hag.scalars_ok, hag.owners_ok, ?_⟩,
+              d, hchk, hdl⟩
+            · refine List.pairwise_cons.mpr ⟨?_, htok⟩
+              intro U hU z hz w hw
+              exact heldConflict_eq_false_iff.mp (hfree z hz) U hU w hw
+            · intro T hT z hz
+              rcases List.mem_cons.mp hT with hT1 | hT2
+              · have hz' := hg.2 z (by rw [hT1] at hz; exact hz)
+                exact hag.live_of_livePlace hz'.1
+              · exact htlive T hT2 z hz
+            · show (t, args) :: c.leases = (t, args) :: tasks
+              rw [hag.leases_ok]
+        · exact absurd hc1 (by simp)
+    | wait t =>
+        rw [checkStmt_wait] at hc1
+        split at hc1
+        · next hg =>
+            have hc1v := Option.some.inj hc1
+            subst hc1v
+            simp only [stepStmt, List.mem_singleton] at hmain
+            rw [hmain]
+            refine ⟨hmem, List.Pairwise.sublist List.filter_sublist htok, ?_,
+              _, hsc1, ⟨hag.scalars_ok, hag.owners_ok, ?_⟩,
+              d, hchk, hdl⟩
+            · intro T hT z hz
+              exact htlive T (List.mem_filter.mp hT).1 z hz
+            · show c.leases.filter _ = tasks.filter _
+              rw [hag.leases_ok]
+        · exact absurd hc1 (by simp)
+    | ite thn els =>
+        rw [checkStmt_ite] at hc1
+        split at hc1
+        · next a1 a2 h1 h2 =>
+            unfold joinOf at hc1
+            split at hc1
+            · next hleq =>
+                have hc1v := Option.some.inj hc1
+                have hle1 : Le c1 a1 := by
+                  refine ⟨?_, ?_, ?_, ?_⟩
+                  · rw [← hc1v]; exact (checkBlock_scope h1).symm
+                  · intro p hp; rw [← hc1v] at hp; exact (mem_keepIn.mp hp).1
+                  · intro p hp; rw [← hc1v] at hp; exact (mem_keepIn.mp hp).1
+                  · rw [← hc1v]
+                have hleases : a1.leases = a2.leases := of_decide_eq_true (by simpa using hleq)
+                have hle2 : Le c1 a2 := by
+                  refine ⟨?_, ?_, ?_, ?_⟩
+                  · rw [← hc1v]; exact (checkBlock_scope h2).symm
+                  · intro p hp; rw [← hc1v] at hp; exact (mem_keepIn.mp hp).2
+                  · intro p hp; rw [← hc1v] at hp; exact (mem_keepIn.mp hp).2
+                  · rw [← hc1v]; exact hleases
+                simp only [stepStmt, List.mem_cons, List.not_mem_nil, or_false] at hmain
+                have hbranch : ∀ (a : CState) (br : List Stmt), Le c1 a →
+                    checkBlock c br = some a →
+                    Ok scope (.run (br ++ rest) tasks st) := by
+                  intro a br hle hbr
+                  obtain ⟨d', hd', hled⟩ := checkBlock_weaken hle hchk
+                  exact ⟨hmem, htok, htlive, c, hscope, hag, d',
+                    by rw [checkBlock_append, hbr]; exact hd',
+                    by rw [← hled.leases_eq]; exact hdl⟩
+                rcases hmain with hm | hm
+                · rw [hm]; exact hbranch a1 thn hle1 h1
+                · rw [hm]; exact hbranch a2 els hle2 h2
+            · exact absurd hc1 (by simp)
+        · exact absurd hc1 (by simp)
+  · -- a task steps
+    simp only [List.mem_flatMap] at htask
+    obtain ⟨y, hy, hcfg⟩ := htask
+    obtain ⟨hT, hothers⟩ := splits_mem hy
+    simp only [stepTask, List.mem_flatMap] at hcfg
+    obtain ⟨z, hz, hcfg2⟩ := hcfg
+    have hnc : heldConflict y.2 z = false := by
+      rw [heldConflict_eq_false_iff]
+      intro U hU w hw
+      exact pairwise_splits noConflictPair_symm htok hy U hU z hz w hw
+    obtain ⟨hl1, hl2⟩ := htlive y.1 hT z hz
+    have hacc : accessErr y.2 st z = none :=
+      accessErr_none (raceErr_none hnc) (memErr_none hmem hl1 hl2)
+    simp only [hacc] at hcfg2
+    have hsame : Ok scope (Cfg.run code tasks st) :=
+      ⟨hmem, htok, htlive, c, hscope, hag, d, hchk, hdl⟩
+    cases hzm : z.2 with
+    | ro =>
+        simp only [hzm, List.mem_singleton] at hcfg2
+        rw [hcfg2]; exact hsame
+    | rw =>
+        simp only [hzm] at hcfg2
+        unfold taskWrite at hcfg2
+        split at hcfg2
+        · next a hea =>
+            have hsp : z.1 ∈ scope := mem_scope_of_owner hmem hea
+            obtain ⟨st', hre⟩ := reallocAt_ok hmem z.1
+            simp only [hre, List.mem_cons, List.not_mem_nil, or_false] at hcfg2
+            rcases hcfg2 with hm | hm
+            · rw [hm]; exact hsame
+            · rw [hm]
+              have hkeep : ∀ p, p ≠ z.1 → st'.env p = st.env p :=
+                fun p hp => reallocAt_env_ne hre hp
+              refine ⟨memOk_reallocAt hmem hsp hre, htok, ?_, c, hscope, ⟨?_, ?_, hag.leases_ok⟩,
+                d, hchk, hdl⟩
+              · intro U hU w hw
+                rcases nat_eq_or_ne w.1 z.1 with hwz | hwz
+                · obtain ⟨b, hb⟩ := reallocAt_env_self hre
+                  rw [hwz, hb]
+                  exact ⟨fun hc => Val.noConfusion hc, fun hc => Val.noConfusion hc⟩
+                · rw [hkeep w.1 hwz]; exact htlive U hU w hw
+              · intro p hp
+                have hps := hag.scalars_ok p hp
+                have hpz : p ≠ z.1 := by
+                  intro hcc; rw [hcc, hea] at hps; exact Val.noConfusion hps
+                rw [hkeep p hpz]; exact hps
+              · intro p hp
+                rcases nat_eq_or_ne p z.1 with hpz | hpz
+                · rw [hpz]; exact reallocAt_env_self hre
+                · rw [hkeep p hpz]; exact hag.owners_ok p hp
+        · next hea => rw [hea] at hl1; exact absurd rfl hl1
+        · next hea => rw [hea] at hl2; exact absurd rfl hl2
+        · next hea =>
+            simp only [List.mem_singleton] at hcfg2
+            rw [hcfg2]; exact hsame
+
+/-! ## Soundness -/
+
+theorem memOk_start (scope : List Place) : MemOk State.start scope := by
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro p a hp; exact Val.noConfusion hp
+  · intro p q a hp _; exact Val.noConfusion hp
+  · intro a ha; exact Bool.noConfusion ha
+  · intro a ha; exact Bool.noConfusion ha
+  · intro a ha; exact absurd ha (Nat.not_lt_zero _)
+  · intro a _; exact ⟨rfl, rfl⟩
+
+theorem Ok_start {p : Program} (h : accepts p = true) : Ok p.scope (Cfg.start p) := by
+  unfold accepts at h
+  split at h
+  · next c hc =>
+      refine ⟨memOk_start p.scope, List.Pairwise.nil, fun T hT => absurd hT List.not_mem_nil,
+        CState.start p, rfl, ⟨fun q hq => absurd hq List.not_mem_nil,
+          fun q hq => absurd hq List.not_mem_nil, rfl⟩, c, hc, ?_⟩
+      exact List.eq_nil_of_length_eq_zero (by simpa using h)
+  · exact Bool.noConfusion h
+
+theorem Ok_reach {scope : List Place} : ∀ {a b : Cfg}, Reach scope a b → Ok scope a → Ok scope b := by
+  intro a b hr
+  induction hr with
+  | refl c => exact fun h => h
+  | step hm _ ih => exact fun h => ih (Ok_succ h hm)
+
+/-- **Soundness.**  No execution of an accepted program, under any interleaving of
+the spawner with its tasks, reaches any fault: no use of a moved place, no use of a
+released cell, no double free, no leaked ticket, no data race and no aliased call
+arguments. -/
+theorem accepted_no_fault {p : Program} (hp : accepts p = true) {cfg : Cfg}
+    (hr : Reach p.scope (Cfg.start p) cfg) (e : Err) : cfg ≠ Cfg.err e := by
+  intro hc
+  have hok := Ok_reach hr (Ok_start hp)
+  rw [hc] at hok
+  exact hok
+
+/-- No reachable state uses a place whose owner has moved away. -/
+theorem accepted_no_use_after_move {p : Program} (hp : accepts p = true) {cfg : Cfg}
+    (hr : Reach p.scope (Cfg.start p) cfg) (q : Place) : cfg ≠ Cfg.err (.useAfterMove q) :=
+  accepted_no_fault hp hr _
+
+/-- No reachable state touches a cell that has been released. -/
+theorem accepted_no_use_after_free {p : Program} (hp : accepts p = true) {cfg : Cfg}
+    (hr : Reach p.scope (Cfg.start p) cfg) (a : AllocId) : cfg ≠ Cfg.err (.useAfterFree a) :=
+  accepted_no_fault hp hr _
+
+/-- No cell is released twice. -/
+theorem accepted_no_double_free {p : Program} (hp : accepts p = true) {cfg : Cfg}
+    (hr : Reach p.scope (Cfg.start p) cfg) (a : AllocId) : cfg ≠ Cfg.err (.doubleFree a) :=
+  accepted_no_fault hp hr _
+
+/-- **Race freedom**, over the full interleaving: no reachable state has the
+spawner and a task, or two tasks, touching one place with a write among them. -/
+theorem accepted_race_free {p : Program} (hp : accepts p = true) {cfg : Cfg}
+    (hr : Reach p.scope (Cfg.start p) cfg) (q : Place) : cfg ≠ Cfg.err (.race q) :=
+  accepted_no_fault hp hr _
+
+/-- No ticket is still live where the scope ends. -/
+theorem accepted_no_leaked_ticket {p : Program} (hp : accepts p = true) {cfg : Cfg}
+    (hr : Reach p.scope (Cfg.start p) cfg) (t : Ticket) : cfg ≠ Cfg.err (.leak t) :=
+  accepted_no_fault hp hr _
+
+/-- No call ever receives two overlapping borrows with a write among them. -/
+theorem accepted_no_aliased_args {p : Program} (hp : accepts p = true) {cfg : Cfg}
+    (hr : Reach p.scope (Cfg.start p) cfg) : cfg ≠ Cfg.err .aliasedArgs :=
+  accepted_no_fault hp hr _
+
+/-- **Every allocation is released exactly once.**  On normal termination nothing
+is still live and every cell the run ever allocated has been released once. -/
+theorem accepted_frees_each_allocation_once {p : Program} (hp : accepts p = true) {st : State}
+    (hr : Reach p.scope (Cfg.start p) (Cfg.done st)) :
+    (∀ a, st.live a = false) ∧ (∀ a, a < st.next → st.frees a = 1) :=
+  Ok_reach hr (Ok_start hp)
+
+/-! ## An explicitly open goal
+
+This is a definition, not an axiom and not a proof.  Nothing in this file proves
+it, and `docs/verification.md` lists it as open. -/
+
+/-- OPEN, UNPROVED: progress.  An accepted program never gets stuck: every
+reachable configuration is either finished or has a successor.  This file proves
+safety (no reachable fault), not progress. -/
+def OpenGoal.Progress : Prop :=
+  ∀ p : Program, accepts p = true → ∀ cfg, Reach p.scope (Cfg.start p) cfg →
+    (∃ st, cfg = Cfg.done st) ∨ succ p.scope cfg ≠ []
+
+/-! ## Regression: the checker on the programs the Python tests pin
+
+Place 0 is `data`, 1 and 2 are further locals, 3 is a second buffer; tickets are 0
+and 1.  Each line names the CAIRN program in `tests/test_soundness.py` or
+`tests/test_concurrency.py` that it encodes. -/
+
+namespace Regress
+
+open Stmt
+
+/-- `let mut b = Buf[u64](n); let y = b;` -- accepted. -/
+def moveOnce : Program := ⟨[0, 1], [alloc 0, move 1 0]⟩
+
+/-- `let x = eat(a); let y = eat(a);` -- E-MOVED, "used twice as if it were a copy". -/
+def doubleMove : Program := ⟨[0, 1, 2], [alloc 0, move 1 0, move 2 0]⟩
+
+/-- `let t = spawn fill(...); let x = data[0]; wait(t);` -- E-LEASED. -/
+def leasedRead : Program :=
+  ⟨[0], [alloc 0, spawn 0 [(0, Mode.rw)], call [(0, Mode.ro)], wait 0]⟩
+
+/-- `let t = spawn sum(len(data), data); let x = data[0]; ...` -- accepted:
+read-only lending is shared freely. -/
+def sharedRead : Program :=
+  ⟨[0], [alloc 0, spawn 0 [(0, Mode.ro)], call [(0, Mode.ro)], wait 0]⟩
+
+/-- `let t = spawn sum(len(data), data); let moved = data;` -- E-LEASED:
+a move beside a view the task still holds. -/
+def moveBesideView : Program :=
+  ⟨[0, 1], [alloc 0, spawn 0 [(0, Mode.ro)], move 1 0, wait 0]⟩
+
+/-- `let t = spawn sum(len(data), data); return 0;` -- E-LINEAR-LEAK. -/
+def unawaitedTicket : Program := ⟨[0], [alloc 0, spawn 0 [(0, Mode.rw)]]⟩
+
+/-- `f(len(b), b, b)` -- E-ALIAS: one call writing and reading the same place. -/
+def aliasedCall : Program := ⟨[0], [alloc 0, call [(0, Mode.rw), (0, Mode.ro)]]⟩
+
+/-- `if ... { let y = b; } use(b);` -- the join kills a place moved on one path. -/
+def movedOnOnePath : Program :=
+  ⟨[0, 1], [alloc 0, ite [move 1 0] [], call [(0, Mode.ro)]]⟩
+
+/-- Moving on both paths is fine, and the target is live after the join. -/
+def movedOnBothPaths : Program :=
+  ⟨[0, 1], [alloc 0, ite [move 1 0] [move 1 0], call [(1, Mode.ro)]]⟩
+
+/-- `let t = spawn sum(...); if n == 8 { wait(t); }` -- E-LINEAR-BRANCH:
+the branches disagree about which tickets are live. -/
+def ticketsDisagree : Program :=
+  ⟨[0], [alloc 0, ite [spawn 0 [(0, Mode.ro)]] [], wait 0]⟩
+
+/-- `let left = spawn fill(...); let right = spawn fill(...); wait; wait;`
+-- accepted: two tasks writing visibly disjoint places. -/
+def disjointSplit : Program :=
+  ⟨[0, 3], [alloc 0, alloc 3, spawn 0 [(0, Mode.rw)], spawn 1 [(3, Mode.rw)],
+            wait 0, wait 1]⟩
+
+/-- Two tasks writing the same place -- E-LEASED. -/
+def overlappingTasks : Program :=
+  ⟨[0], [alloc 0, spawn 0 [(0, Mode.rw)], spawn 1 [(0, Mode.rw)], wait 0, wait 1]⟩
+
+/-- Copying an owner is not a copy: rejected, because `copy` needs a scalar. -/
+def copyAnOwner : Program := ⟨[0, 1], [alloc 0, copy 1 0]⟩
+
+/-- Copying a scalar is fine. -/
+def copyAScalar : Program := ⟨[0, 1], [mkScalar 0, copy 1 0]⟩
+
+/-- Using a place after its implicit release -- E-MOVED. -/
+def useAfterDrop : Program := ⟨[0], [alloc 0, drop 0, call [(0, Mode.ro)]]⟩
+
+/-- A place the scope never declared. -/
+def outOfScope : Program := ⟨[1], [alloc 0]⟩
+
+/-- Every line of the regression, as one Boolean the build can print. -/
+def report : Bool :=
+  accepts moveOnce && !accepts doubleMove && !accepts leasedRead && accepts sharedRead
+    && !accepts moveBesideView && !accepts unawaitedTicket && !accepts aliasedCall
+    && !accepts movedOnOnePath && accepts movedOnBothPaths && !accepts ticketsDisagree
+    && accepts disjointSplit && !accepts overlappingTasks && !accepts copyAnOwner
+    && accepts copyAScalar && !accepts useAfterDrop && !accepts outOfScope
+
+/-- What the build prints, so the Python gate can assert on it. -/
+def line : String :=
+  if report then "ownership-regression: pass" else "ownership-regression: FAIL"
+
+end Regress
+
+/-- The Lean encodings of the pinned CAIRN programs are classified exactly as the
+Python checker classifies them. -/
+theorem ownership_regression : Regress.report = true := by decide
+
+/-! ### The individual pinned programs -/
+
+example : accepts Regress.moveBesideView = false := by decide
+example : accepts Regress.leasedRead = false := by decide
+example : accepts Regress.doubleMove = false := by decide
+example : accepts Regress.unawaitedTicket = false := by decide
+example : accepts Regress.aliasedCall = false := by decide
+example : accepts Regress.movedOnOnePath = false := by decide
+example : accepts Regress.ticketsDisagree = false := by decide
+example : accepts Regress.overlappingTasks = false := by decide
+example : accepts Regress.copyAnOwner = false := by decide
+example : accepts Regress.useAfterDrop = false := by decide
+example : accepts Regress.disjointSplit = true := by decide
+example : accepts Regress.sharedRead = true := by decide
+example : accepts Regress.movedOnBothPaths = true := by decide
+example : accepts Regress.copyAScalar = true := by decide
+
+end Ownership
+end Cairn

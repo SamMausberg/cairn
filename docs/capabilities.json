@@ -2,7 +2,7 @@
   "profile": "cairn-native/1.0.0",
   "complete_cpp_breadth": false,
   "entire_compiler_proved": false,
-  "lean_verified": "collector certificate checker, its 17 certificates and the collector loop model only",
+  "lean_verified": "collector certificate checker, its 17 certificates, the collector loop model, and a core ownership/lease calculus over whole places (hand-written, not extracted from checking.py)",
   "model_proficiency_measured": "pilot only: nine function-level tasks, one model family, rule cards and diagnostics as the only documentation, no comparison arm (evidence/v1_1/ai_pilot)",
   "implemented": {
     "native_cpu": "Linux x86-64 and AArch64, C++20 lowering, libraries and executables, clang++ and g++",
@@ -33,7 +33,7 @@
     "checking a generic once against its bounds rather than per instance",
     "SMT coverage of heap owners, view parameters, rw borrows, recursion, concurrency and unbounded loops",
     "emitter-to-model and native refinement proofs",
-    "ownership and lease calculus mechanization",
+    "mechanized ownership and lease rules for array parts, fields, lanes, closures and placement, a progress theorem, and any link from checking.py to the Lean calculus",
     "an equal-budget, multi-language, multi-model AI proficiency experiment with tokenizer accounting",
     "recipes over expression fragments, and replaying a checked theorem per recipe instance"
   ],

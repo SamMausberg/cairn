@@ -30,6 +30,20 @@ BANNED_SOURCE_TOKENS = ("sorry", "native_decide", "axiom ", "unsafe ", "implemen
 
 ELAN_BIN = Path.home() / ".elan" / "bin"
 
+# The ownership and lease calculus: these must exist, be audited and stay free of excluded middle.
+OWNERSHIP_THEOREMS = (
+    "Cairn.Ownership.accepted_no_fault",
+    "Cairn.Ownership.accepted_no_use_after_move",
+    "Cairn.Ownership.accepted_no_use_after_free",
+    "Cairn.Ownership.accepted_no_double_free",
+    "Cairn.Ownership.accepted_race_free",
+    "Cairn.Ownership.accepted_no_leaked_ticket",
+    "Cairn.Ownership.accepted_no_aliased_args",
+    "Cairn.Ownership.accepted_frees_each_allocation_once",
+    "Cairn.Ownership.Ok_succ",
+    "Cairn.Ownership.ownership_regression",
+)
+
 # `#print axioms` prints one line per declaration; names may end in a prime.
 AXIOM_LINE = re.compile(r"^'(?P<name>.+)' (?:depends on axioms: \[(?P<axioms>.*)\]|does not depend on any axioms)$")
 
@@ -146,8 +160,17 @@ def test_lake_build_succeeds_and_axioms_are_clean():
         "Cairn.Collector.store_index_lt_capacity",
         "Cairn.Collector.increments_fit",
         "Cairn.Collector.run_preserves_inv",
+        *OWNERSHIP_THEOREMS,
     ):
         assert headline in report, "audit does not mention " + headline
+
+    # The ownership calculus is proved without excluded middle; keep it that way.
+    for name in OWNERSHIP_THEOREMS:
+        assert "Classical.choice" not in reported.get(name, ()), name + " now needs Classical.choice"
+
+    # `Audit.lean` evaluates the Lean encodings of the programs `tests/test_soundness.py`
+    # pins; the checker must classify every one of them the way the Python checker does.
+    assert "ownership-regression: pass" in report, "the Lean ownership regression did not pass:\n" + report
 
 
 def test_recorded_evidence_matches_the_pinned_toolchain():

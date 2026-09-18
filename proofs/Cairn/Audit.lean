@@ -11,6 +11,7 @@ Build this file and read the log:
 import Cairn.Affine
 import Cairn.CollectorCertificates
 import Cairn.Collector
+import Cairn.Ownership
 
 namespace Cairn
 
@@ -65,5 +66,25 @@ namespace Cairn
 #print axioms Cairn.Collector.store_index_lt_capacity
 #print axioms Cairn.Collector.store_index_lt_buffer_length
 #print axioms Cairn.Collector.increments_fit
+
+/-! ### The ownership and lease calculus -/
+
+#print axioms Cairn.Ownership.accepted_no_fault
+#print axioms Cairn.Ownership.accepted_no_use_after_move
+#print axioms Cairn.Ownership.accepted_no_use_after_free
+#print axioms Cairn.Ownership.accepted_no_double_free
+#print axioms Cairn.Ownership.accepted_race_free
+#print axioms Cairn.Ownership.accepted_no_leaked_ticket
+#print axioms Cairn.Ownership.accepted_no_aliased_args
+#print axioms Cairn.Ownership.accepted_frees_each_allocation_once
+#print axioms Cairn.Ownership.Ok_succ
+#print axioms Cairn.Ownership.Ok_start
+#print axioms Cairn.Ownership.checkBlock_mono
+#print axioms Cairn.Ownership.releaseAll_final
+#print axioms Cairn.Ownership.ownership_regression
+
+/-! The executable regression the Python gate asserts on. -/
+
+#eval Cairn.Ownership.Regress.line
 
 end Cairn
