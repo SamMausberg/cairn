@@ -28,9 +28,9 @@
           "-shared",
           "-fPIC"
         ],
-        "compiler": "/usr/bin/g++"
+        "compiler": "/usr/local/swift/usr/bin/clang++"
       },
-      "elapsed_seconds": 0.26845795799999905
+      "elapsed_seconds": 0.86906623699997
     }
   ],
   "formal_status": "not-verified"

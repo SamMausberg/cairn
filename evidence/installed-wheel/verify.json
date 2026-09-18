@@ -6,7 +6,7 @@
   "symbol": "average",
   "assume": "true",
   "allow_reference_traps": false,
-  "implementation_sha256": "e16812cd61f1beb5eb946fe38d75205b81591ad33cdee765c2601eeaccb7d0d4",
+  "implementation_sha256": "b7b54fa85c05efd4ebf9e5bcd10e3085bf7bc1a50101b4ff842fcfda0ed243c8",
   "trust": [
     "CAIRN parser/typechecker",
     "scalar SMT translation",

@@ -1,0 +1,16 @@
+{
+  "status": "local-preflight-passed",
+  "remote_created": false,
+  "repository": "SamMausberg/cairn",
+  "head": "6a072ab1b9e286f7225642992fc22f2f40fd5b11",
+  "visibility_required": "private",
+  "audit": {
+    "status": "no-pattern-findings",
+    "commits": 2,
+    "distinct_blobs": 332,
+    "bytes_scanned": 1903247,
+    "findings": [],
+    "scope": "all reachable commits; finite credential patterns, not a guarantee"
+  },
+  "next_action": "Repeat with --execute after authenticating gh on your own machine."
+}
