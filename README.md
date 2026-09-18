@@ -31,7 +31,7 @@ Three rules explain most of it. **Costs are visible**: nothing allocates, synchr
 
 ## Build and run
 
-Linux on x86-64 or AArch64, Python 3.11+, Clang or GCC with C++20. Ordinary compilation has no third-party Python dependency. Optional local tools switch on further gates and are never downloaded: `libz3` (scalar equivalence), CUDA `nvcc` (device programs), Lean 4 (`proofs/`), `qemu-system-aarch64` (the freestanding target).
+Linux on x86-64 or AArch64, Python 3.11+, Clang or GCC with C++20. Ordinary compilation has no third-party Python dependency. Optional local tools switch on further gates and are never downloaded: `libz3` (source equivalence), CUDA `nvcc` (device programs), Lean 4 (`proofs/`), `qemu-system-aarch64` (the freestanding target).
 
 ```sh
 python3 bin/cairn doctor
@@ -51,7 +51,7 @@ python3 bin/cairn fmt --check examples && python3 bin/cairn new my_project
 | `build`, `run` | Fresh native build (`--debug` adds symbols that point at the `.cairn` files); explicit execution with process limits, under QEMU for a freestanding target. |
 | `test` | Independent finite task cases, with the child's exit status checked. |
 | `certificates` | Seventeen exact affine identities for the collector, checked here by trusted Python and in `proofs/` by Lean. |
-| `verify --symbol f` / `--all` | Fixed-reference scalar equivalence through Z3 on the typed tree, seeing through generics, traits and modules; unsupported entries block aggregate success. |
+| `verify --symbol f` / `--all` | Fixed-reference value equivalence through Z3 on the typed tree (scalars, IEEE floats, records, sums, fixed local arrays, bounded loops), seeing through generics, traits and modules; unsupported entries block aggregate success. |
 | `inspect --symbol f` | Source, scope, effects and feature-selected rule cards for an AI edit. |
 | `fmt`, `lsp` | Comment-preserving formatter that fails closed; a language server (diagnostics, hover types, symbols, formatting). |
 

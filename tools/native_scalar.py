@@ -36,7 +36,7 @@ CT = {
 
 class NativeScalar:
     def __init__(self, source: str, cxx="clang++"):
-        self.functions = prepared(source)  # Also enforces the scalar source limit.
+        self.functions = prepared(source).functions  # prepared() also enforces the scalar source limit.
         self.temp = tempfile.TemporaryDirectory(prefix="cairn_scalar_test_")
         self.root = Path(self.temp.name)
         program, checker, _ = compile_program(source)

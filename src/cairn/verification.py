@@ -1,4 +1,4 @@
-"""Whole-declaration coverage for restricted scalar equivalence.
+"""Whole-declaration coverage for restricted value equivalence.
 
 A module receipt must not inherit a selected function's successful result. This
 checks every entry and fails closed for missing, extra, unsupported or unknown
@@ -22,8 +22,8 @@ def verify_module(reference: str, candidate: str, timeout_ms: int = 3000) -> dic
         "status": "incomplete",
         "reference_sha256": hashlib.sha256(reference.encode()).hexdigest(),
         "candidate_sha256": hashlib.sha256(candidate.encode()).hexdigest(),
-        "domain": "all declared-width scalar inputs; reference must be total",
-        "scope": "all declared functions in the restricted scalar source model",
+        "domain": "all well-formed values of the declared parameter types; reference must be total",
+        "scope": "all declared functions in the restricted value source model",
         "native_proof": False,
         "lean_proof": False,
         "results": {},

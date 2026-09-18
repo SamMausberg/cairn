@@ -3,13 +3,11 @@
 ## Unreleased
 
 - **Recipes**: generators are library code. `recipe name[K:nat] for R { ... }` holds ordinary function and record declarations with static `each` (over a record's fields or a natural range, at declaration, statement, field-list and call-argument level), `fold`, `where` values, `$name` splices and `require` domains; `derive name[naturals] for Type;` expands it before checking into code of the deriving module. The closed Python generator behind `derive wire` is gone: `std.wire` is twelve lines of CAIRN and produces the same C++ byte for byte. Receipts pin each recipe by the hash of its tokens. `wire` is no longer a reserved word.
-
 - **Queued device work**: `let t = spawn transfer(dst, src);` and `let k = spawn parallel i in n after t { ... };` put device work on its own stream and return; the ticket leases what the work touches until `wait`, `after` orders work by device events without a host wait, and work queued after a ticket may share what that ticket holds. This exposes the runtime's stream tickets, which until now only its own tests used.
-
 - **Incremental builds**: `cairn build --incremental` compiles one object per module against a shared interface header and reuses an object only when everything that went into it hashes the same; a body-only edit recompiles one module. Opt-in, because it gives up inlining across modules; device programs and images stay one unit.
-
 - **Checked reduction**: `reduce +` is offered on unsigned integers, on the host and on the device, and traps exactly when the total does not fit, in any order.
 - **Evidence**: a preregistered fresh-model pilot (`evidence/v1_1/ai_pilot`): nine of nine tasks solved from the rule cards alone, eight on the first compile, every transcript audited. The cards were then revised with what the subjects had to guess.
+- **Source equivalence**: the SMT model now covers records, tag-only enums and payload sums with `match` and `try`, IEEE `f32`/`f64` under the compiler's strict floating contract, fixed local storage (`stack x:T[N]`, `Array[T, N]`) with its bounds guard, and `for`/`while` with `break`/`continue` unrolled within a sixteen-iteration budget. A value is compared component by component, a sum by its tag and active payload only, and inputs are quantified over well-formed tags. Exceeding the unrolling budget is a residual obligation the solver must refute, and a returned NaN — whose payload bits the theory's single NaN cannot speak about — is reported unknown rather than equal. Heap owners, view parameters, `rw` borrows, recursion, concurrency and void results stay unsupported with a precise reason.
 
 ## 1.0.0
 

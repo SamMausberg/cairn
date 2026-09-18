@@ -38,6 +38,29 @@ def test_owned_function_is_not_covered():
     assert r["status"] == "incomplete" and "scratch" in r["uncovered"]
 
 
+VALUES = (
+    "struct Pair { a:u64; b:u64; }\nenum Maybe { Some(u64); None; }\n"
+    "fn swapped(p:Pair)->Pair = Pair(p.b, p.a);\n"
+    "fn unwrap(m:Maybe)->u64 { match m { Maybe.Some(v) => { return v; } Maybe.None => { return 0; } } }\n"
+    "fn below(x:f64, y:f64)->bool = x < y;\n"
+    "fn window(x:u64)->u64 { stack a:u64[4]=zeroed; for i in 0..4 { a[i]=add_wrap(x,u64(i)); }\n"
+    "  let mut t:u64=0; for i in 0..4 { t=add_wrap(t,a[i]); } return t; }\n"
+)
+
+
+def test_records_sums_floats_and_bounded_loops_are_covered():
+    r = verify_module(VALUES, VALUES)
+    assert r["status"] == "smt-module-equivalent"
+    assert r["covered"] == ["below", "swapped", "unwrap", "window"] and not r["uncovered"]
+
+
+def test_one_uncovered_value_function_still_blocks_the_module():
+    src = VALUES + "fn drifting(x:f64)->f64 = x * 2.0;"  # A returned NaN is unknown, never equivalent.
+    r = verify_module(src, src)
+    assert r["status"] == "incomplete" and r["uncovered"] == ["drifting"]
+    assert r["results"]["drifting"]["status"] == "unknown"
+
+
 def test_empty_module_is_not_a_proof():
     assert verify_module("", "")["status"] == "incomplete"
 

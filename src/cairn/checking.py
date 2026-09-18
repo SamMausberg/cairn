@@ -161,6 +161,7 @@ class Checker:
     lanes: Lanes | None
     closure: tuple[Function, set[str]] | None
     leases: dict[str, list[tuple[str, str]]]
+    before: dict[str, set[str]]
     spawning: str
 
     def __init__(self, program: Program, capture_sites: bool = False):

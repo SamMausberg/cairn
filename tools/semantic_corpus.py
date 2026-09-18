@@ -244,7 +244,7 @@ def main():
                 assert outcome_key(out["reference"]) != outcome_key(out["rejected"])
                 row.setdefault("native_counterexample_replays", []).append({"compiler": compiler, "outcomes": out})
                 # Additional finite native sanity checks. Universal label still comes from SMT.
-                params = all_fns[row["id"] + "_reference"].params
+                params = all_fns.functions[row["id"] + "_reference"].params
                 width = int(row["width"][1:])
                 signed = row["width"][0] == "i"
                 lo = -(1 << (width - 1)) if signed else 0

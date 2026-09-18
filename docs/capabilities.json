@@ -25,13 +25,13 @@
     "editing": "host-bound body/expression choices over the whole language, lexical rule cards, effect ceilings",
     "tooling": "comment-preserving formatter, language server, editor grammar",
     "arithmetic_certificates": "17 exact affine implications, checked before every emission and proved in Lean",
-    "scalar_equivalence": "trusted translator and Z3, explicit per-function/module coverage"
+    "scalar_equivalence": "trusted translator and Z3 over values (scalars, IEEE f32/f64, records, enums and payload sums with match and try, fixed local arrays) and loops unrolled within a bounded budget, with explicit per-function/module coverage; a returned NaN, an unbounded trip count and anything unmodeled are unknown, never equivalent"
   },
   "not_implemented": [
     "completion-based (non-thread) asynchronous I/O, cancellation and device-loss recovery",
     "multi-device collectives",
     "checking a generic once against its bounds rather than per instance",
-    "SMT coverage of memory, loops, sums and floats",
+    "SMT coverage of heap owners, view parameters, rw borrows, recursion, concurrency and unbounded loops",
     "emitter-to-model and native refinement proofs",
     "ownership and lease calculus mechanization",
     "an equal-budget, multi-language, multi-model AI proficiency experiment with tokenizer accounting",

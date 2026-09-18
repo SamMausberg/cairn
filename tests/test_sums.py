@@ -191,8 +191,12 @@ def test_native(cxx, tmp_path):
         assert lib.cf_scoped(n) == 0
 
 
-def test_scalar_equivalence_excludes_sums():
+def test_value_equivalence_covers_sums_but_not_heap_storage():
     from cairn.scalar_semantics import equivalent
 
-    r = equivalent(SOURCE, SOURCE, "use")
-    assert r["status"] not in {"smt-equivalent", "passed"}
+    assert equivalent(SOURCE, SOURCE, "use")["status"] == "smt-equivalent"
+    assert equivalent(SOURCE, SOURCE, "decode")["status"] == "smt-equivalent"
+    assert equivalent(SOURCE, SOURCE, "parse")["status"] == "smt-equivalent"
+    wrong = equivalent(SOURCE, SOURCE.replace("return 42;", "return 43;"), "use")
+    assert wrong["status"] == "counterexample" and wrong["counterexample"]["b"] == 0
+    assert equivalent(SOURCE, SOURCE, "scoped")["status"] == "unknown"  # buffer: a heap owner

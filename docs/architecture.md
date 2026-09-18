@@ -16,7 +16,7 @@ Per-function state lives in one `Scope` object that the checker swaps when it ch
 
 `agent_tools.py` supplies typed source sites, the canonical read-only projection of the whole language, and sealed edit sessions whose effect ceiling spans the full effect vocabulary. `sketches.py` binds named choices to host-owned ranges and contracts. `teaching.py` selects short rule cards from lexical tokens. Source splicing preserves everything outside the authorized range and the complete linked module is rechecked, not just the displayed packet.
 
-`linear_certificates.py` checks exact affine implications; `proofs/` proves that checker sound in Lean, checks the same seventeen certificates there, and proves the collector loop model in bounds and stable. `scalar_semantics.py` and `smt_bridge.py` perform fixed-reference integer/Boolean source comparisons with concrete replay; `verification.py` owns aggregate coverage and cannot mark a module checked because one function passed.
+`linear_certificates.py` checks exact affine implications; `proofs/` proves that checker sound in Lean, checks the same seventeen certificates there, and proves the collector loop model in bounds and stable. `scalar_semantics.py` and `smt_bridge.py` perform fixed-reference source comparisons of values (scalars, floats, records, sums and fixed local arrays) over bounded loops, with concrete replay; `verification.py` owns aggregate coverage and cannot mark a module checked because one function passed.
 
 No agent, test generator or solver may rewrite the authority it is checked against. Effects do not specify functional behavior. Native libraries never import the agent tooling or Z3.
 
