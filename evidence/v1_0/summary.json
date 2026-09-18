@@ -1,6 +1,6 @@
 {
   "schema": "cairn.evidence/1",
-  "commit": "2d3c1a23a25172dcdf25a8d4fd5e1e5410fe10c5",
+  "commit": "855bea585b56efcf1c3d7c68bb277d9bc3aa6e79",
   "worktree_dirty": false,
   "host": {
     "version": "1.0.0",
@@ -31,7 +31,7 @@
       "exit_code": 0,
       "seconds": 0.0,
       "tail": [
-        "116 files already formatted"
+        "118 files already formatted"
       ]
     },
     "lint": {
@@ -57,6 +57,7 @@
         "src/cairn/syntax.py",
         "src/cairn/checking.py",
         "src/cairn/effects.py",
+        "src/cairn/builtins.py",
         "src/cairn/codegen.py",
         "src/cairn/modules.py",
         "src/cairn/expansion.py",
@@ -65,9 +66,9 @@
       ],
       "status": "passed",
       "exit_code": 0,
-      "seconds": 0.4,
+      "seconds": 0.1,
       "tail": [
-        "Success: no issues found in 8 source files"
+        "Success: no issues found in 9 source files"
       ]
     },
     "cairn_format": {
@@ -101,11 +102,11 @@
       ],
       "status": "passed",
       "exit_code": 0,
-      "seconds": 19.3,
+      "seconds": 22.5,
       "tail": [
         "........................................................................ [ 93%]",
-        "..............................................................           [100%]",
-        "998 passed in 19.10s"
+        "........................................................................ [100%]",
+        "1152 passed in 22.31s"
       ]
     },
     "certificates": {
@@ -156,16 +157,16 @@
     }
   },
   "tests": {
-    "passed": 998,
+    "passed": 1152,
     "skipped": 0
   },
   "source_lines": {
-    "compiler_core": 3756,
-    "compiler_package": 6974,
-    "runtime_headers": 565,
+    "compiler_core": 4086,
+    "compiler_package": 7306,
+    "runtime_headers": 569,
     "standard_library_cairn": 704,
     "lean_proofs": 1051,
-    "tests": 6080
+    "tests": 6601
   },
   "separately_recorded": [
     "lean/summary.json",
