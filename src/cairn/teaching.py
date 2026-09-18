@@ -109,8 +109,11 @@ the next statement. Placement is part of a view type: @host (default), @pinned, 
 @device. Indexing a @device view makes the region CUDA lanes, otherwise host threads; host
 code cannot index @device memory and lanes cannot index the other side. Whatever any lane
 writes may be touched only at [i]; shared scalars cannot be assigned (use let s = reduce
-add_wrap for i in n yield x[i];). Lanes cannot return, nest, move outer owners, or call
-functions that write, do I/O or (on the device) allocate. kernel fn at(...) -> f32 is a
+add_wrap for i in n yield x[i];). Lanes cannot return, nest or move outer owners, and
+neither a lane nor anything it calls may do I/O, spawn, touch the machine or (on the
+device) allocate or use strings and host owners. A lane may call a fn parameter f of its
+function (effect lane:f): whoever finally passes a closure must not write what it
+captures. kernel fn at(...) -> f32 is a
 device helper: it may index @device views, is callable only from device lanes and other
 kernels, and cannot allocate, do I/O or start regions. buffer d:f32[n]@device = zeroed;
 is a scoped device owner; transfer(dst, src) is the only way across placements. reduce on
@@ -127,7 +130,8 @@ into a mutex. Tickets, atomics and mutexes are never stored, passed by value or 
 ro<fn(u64) -> u64> is a borrowed callable: pass a declared function or write the closure
 in place, apply(n, xs, |x:u64| -> u64 { return x + bias; }). A closure captures its scope
 by reference, exists only as that argument, never allocates, and its effects belong to
-the function that wrote it. ro<dyn Shape> / rw<dyn Shape> parameters take any named place
+the function that wrote it. What it captures it borrows for that call (rw where it
+writes), so the same call cannot lend, move or write those places. ro<dyn Shape> / rw<dyn Shape> parameters take any named place
 whose type implements the trait; calls through them add the dispatch effect and the
 effects of every implementation. Dynamic references are never values; Dyn[Shape](value)
 is the owned form: an affine heap value (alloc, free) that dispatches and lends itself as dyn.""",
