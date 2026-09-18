@@ -1,0 +1,944 @@
+{
+  "status": "passed-finite-tests-and-exact-linear-certificates",
+  "seed": 18092026,
+  "compilers": {
+    "clang++": {
+      "version": "clang version 17.0.0 (https://github.com/swiftlang/llvm-project.git 10999b6d034fe318f3d56c83bddb6572593a8bb0)",
+      "flags": [
+        "-std=c++20",
+        "-O2",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+        "-fno-exceptions",
+        "-fno-rtti",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wno-unused-variable",
+        "-Wno-unused-parameter",
+        "-Wno-unused-but-set-variable"
+      ],
+      "parser_cases": 1114,
+      "sort_cases": 1154,
+      "sorted_filter_cases": 1154,
+      "source_preserved_in_all_cases": true
+    },
+    "g++": {
+      "version": "g++ (Debian 14.2.0-19) 14.2.0",
+      "flags": [
+        "-std=c++20",
+        "-O2",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+        "-fno-exceptions",
+        "-fno-rtti",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wno-unused-variable",
+        "-Wno-unused-parameter",
+        "-Wno-unused-but-set-variable"
+      ],
+      "parser_cases": 1114,
+      "sort_cases": 1154,
+      "sorted_filter_cases": 1154,
+      "source_preserved_in_all_cases": true
+    }
+  },
+  "finite_tests_only": true,
+  "source_sha256": "fd0c5591eb6d5031300a75143528ea41be6984ada1a489f3ac650743b88beda0",
+  "runtime_sha256": "7b9d44ec1a7bbbc69d7f7707252297c8522721a69d91e56426ea3fadd235e9cb",
+  "native_timing_performed": false,
+  "lean_verified": false,
+  "lifetime_observer": {
+    "clang++": {
+      "cases": 17,
+      "all_allocations_released": true,
+      "instrumented_O0_only": true
+    },
+    "g++": {
+      "cases": 17,
+      "all_allocations_released": true,
+      "instrumented_O0_only": true
+    }
+  },
+  "sanitizers": {
+    "compiler": "clang++",
+    "array_lengths": 1024,
+    "address": true,
+    "undefined": true,
+    "leak": true,
+    "normal_runtime": true,
+    "lifetime_loop_and_match_exits": true
+  },
+  "expected_aborts": {
+    "clang++": [
+      -6,
+      -6,
+      -6,
+      -6
+    ],
+    "g++": [
+      -6,
+      -6,
+      -6,
+      -6
+    ]
+  },
+  "new_expression_identity_edits": 214,
+  "arithmetic_certificates": {
+    "status": "linear-certificates-checked",
+    "rule": "bounded-collector/2",
+    "certificate_count": 17,
+    "sha256": "5648cb8f06439f9ba5d87f3ffcfdc090803bed8ae7353940f83f10736afec1f2",
+    "checker_sha256": "50abdc3ec08d4849466020c5c2b4ac9a3161f4d33df98bca9dcc18fe2c96b329",
+    "variables": [
+      "constant",
+      "emitted",
+      "visited",
+      "capacity",
+      "cursor_max"
+    ],
+    "interpretation": "Each affine form is nonnegative over mathematical integers.",
+    "obligations": [
+      {
+        "name": "initial.nonnegative",
+        "assumptions": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ]
+        ],
+        "conclusion": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "weights": [
+          0,
+          0
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "initial.cursor_before_input",
+        "assumptions": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ]
+        ],
+        "conclusion": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "weights": [
+          0,
+          0
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "initial.input_before_capacity",
+        "assumptions": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ]
+        ],
+        "conclusion": [
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "weights": [
+          1,
+          0
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "initial.capacity_representable",
+        "assumptions": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ]
+        ],
+        "conclusion": [
+          0,
+          0,
+          0,
+          -1,
+          1
+        ],
+        "weights": [
+          0,
+          1
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "store.nonnegative",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ],
+          [
+            -1,
+            0,
+            -1,
+            1,
+            0
+          ]
+        ],
+        "conclusion": [
+          0,
+          1,
+          0,
+          0,
+          0
+        ],
+        "weights": [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "store.strictly_below_capacity",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ],
+          [
+            -1,
+            0,
+            -1,
+            1,
+            0
+          ]
+        ],
+        "conclusion": [
+          -1,
+          -1,
+          0,
+          1,
+          0
+        ],
+        "weights": [
+          0,
+          1,
+          0,
+          0,
+          1
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "emit.cursor_increment_fits",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ],
+          [
+            -1,
+            0,
+            -1,
+            1,
+            0
+          ]
+        ],
+        "conclusion": [
+          -1,
+          -1,
+          0,
+          0,
+          1
+        ],
+        "weights": [
+          0,
+          1,
+          0,
+          1,
+          1
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "step.input_increment_fits",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ],
+          [
+            -1,
+            0,
+            -1,
+            1,
+            0
+          ]
+        ],
+        "conclusion": [
+          -1,
+          0,
+          -1,
+          0,
+          1
+        ],
+        "weights": [
+          0,
+          0,
+          0,
+          1,
+          1
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "emit.invariant.0",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ],
+          [
+            -1,
+            0,
+            -1,
+            1,
+            0
+          ]
+        ],
+        "conclusion": [
+          1,
+          1,
+          0,
+          0,
+          0
+        ],
+        "weights": [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        "nonnegative_constant": 1
+      },
+      {
+        "name": "emit.invariant.1",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ],
+          [
+            -1,
+            0,
+            -1,
+            1,
+            0
+          ]
+        ],
+        "conclusion": [
+          0,
+          -1,
+          1,
+          0,
+          0
+        ],
+        "weights": [
+          0,
+          1,
+          0,
+          0,
+          0
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "emit.invariant.2",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ],
+          [
+            -1,
+            0,
+            -1,
+            1,
+            0
+          ]
+        ],
+        "conclusion": [
+          -1,
+          0,
+          -1,
+          1,
+          0
+        ],
+        "weights": [
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "emit.invariant.3",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ],
+          [
+            -1,
+            0,
+            -1,
+            1,
+            0
+          ]
+        ],
+        "conclusion": [
+          0,
+          0,
+          0,
+          -1,
+          1
+        ],
+        "weights": [
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "skip.invariant.0",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ],
+          [
+            -1,
+            0,
+            -1,
+            1,
+            0
+          ]
+        ],
+        "conclusion": [
+          0,
+          1,
+          0,
+          0,
+          0
+        ],
+        "weights": [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "skip.invariant.1",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ],
+          [
+            -1,
+            0,
+            -1,
+            1,
+            0
+          ]
+        ],
+        "conclusion": [
+          1,
+          -1,
+          1,
+          0,
+          0
+        ],
+        "weights": [
+          0,
+          1,
+          0,
+          0,
+          0
+        ],
+        "nonnegative_constant": 1
+      },
+      {
+        "name": "skip.invariant.2",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ],
+          [
+            -1,
+            0,
+            -1,
+            1,
+            0
+          ]
+        ],
+        "conclusion": [
+          -1,
+          0,
+          -1,
+          1,
+          0
+        ],
+        "weights": [
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "skip.invariant.3",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ],
+          [
+            -1,
+            0,
+            -1,
+            1,
+            0
+          ]
+        ],
+        "conclusion": [
+          0,
+          0,
+          0,
+          -1,
+          1
+        ],
+        "weights": [
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "nonnegative_constant": 0
+      },
+      {
+        "name": "exit.output_count_bounded",
+        "assumptions": [
+          [
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            -1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            -1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            -1,
+            1
+          ]
+        ],
+        "conclusion": [
+          0,
+          -1,
+          0,
+          1,
+          0
+        ],
+        "weights": [
+          0,
+          1,
+          1,
+          0
+        ],
+        "nonnegative_constant": 0
+      }
+    ],
+    "trusted": [
+      "Python integer arithmetic",
+      "this checker",
+      "compiler/rule correspondence"
+    ],
+    "lean_verified": false,
+    "native_refinement_proved": false
+  }
+}

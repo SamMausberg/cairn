@@ -1,0 +1,151 @@
+{
+  "protocol": "cairn.verification-coverage/1",
+  "status": "smt-module-equivalent",
+  "reference_sha256": "9389bc780d442fb5a50165b6a8e1fee1fec0824936c914ac1324e84fb23ddcb6",
+  "candidate_sha256": "5187ab2dab089a4d155a66d085cddeb69fe14f672df22932d999a863baf7381c",
+  "domain": "all declared-width scalar inputs; reference must be total",
+  "scope": "all declared functions in the restricted scalar source model",
+  "native_proof": false,
+  "lean_proof": false,
+  "results": {
+    "average": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "9389bc780d442fb5a50165b6a8e1fee1fec0824936c914ac1324e84fb23ddcb6",
+      "candidate_sha256": "5187ab2dab089a4d155a66d085cddeb69fe14f672df22932d999a863baf7381c",
+      "symbol": "average",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "528053f146bde7b900d5572a922ec313f035170bc4e5fc4e5b829dc83d818d99",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 3000,
+          "query_sha256": "99ab9c54e9338e9de6f344ce266ee70478a1438fa428365c30764cae5db3c707",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 3000,
+          "query_sha256": "d5833c31f04a99952a9387022359320e6251c81704d58611b9ad0dc44189ccf4",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "smaller": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "9389bc780d442fb5a50165b6a8e1fee1fec0824936c914ac1324e84fb23ddcb6",
+      "candidate_sha256": "5187ab2dab089a4d155a66d085cddeb69fe14f672df22932d999a863baf7381c",
+      "symbol": "smaller",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "528053f146bde7b900d5572a922ec313f035170bc4e5fc4e5b829dc83d818d99",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 3000,
+          "query_sha256": "05a5b3f2b1637ec1db37c4d3fefb69510289345ec65516d04cfdae447f609a4b",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 3000,
+          "query_sha256": "5bc788e4aef02fbc9091261c9c2adfddff71a51ed1a4cbe966e156cd890e7214",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    },
+    "total": {
+      "protocol": "cairn.semantic/1",
+      "profile": "cairn-scalar-bv/1",
+      "reference_sha256": "9389bc780d442fb5a50165b6a8e1fee1fec0824936c914ac1324e84fb23ddcb6",
+      "candidate_sha256": "5187ab2dab089a4d155a66d085cddeb69fe14f672df22932d999a863baf7381c",
+      "symbol": "total",
+      "assume": "true",
+      "allow_reference_traps": false,
+      "implementation_sha256": "528053f146bde7b900d5572a922ec313f035170bc4e5fc4e5b829dc83d818d99",
+      "trust": [
+        "CAIRN parser/typechecker",
+        "scalar SMT translation",
+        "Z3 solver"
+      ],
+      "lean_verified": false,
+      "native_verified": false,
+      "status": "smt-equivalent",
+      "solver_version": "4.13.3.0",
+      "queries": [
+        {
+          "stage": "reference-totality",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 3000,
+          "query_sha256": "b9036306e6ac80e44f13db35c45e65c9d14b17b504ed280808c833c12a0e105a",
+          "status": "unsat"
+        },
+        {
+          "stage": "equivalence",
+          "solver": "Z3",
+          "version": "4.13.3.0",
+          "library": "libz3.so.4",
+          "timeout_ms": 3000,
+          "query_sha256": "bb1310889e69cdfccb6b405fc31731fc7a6e2fb62189e8ec87c07f7b35248285",
+          "status": "unsat"
+        }
+      ],
+      "quantification": "All declared-width scalar inputs satisfying the host precondition.",
+      "observation": "Return value, or one undifferentiated abort outcome; no memory/timing observation."
+    }
+  },
+  "coverage_checker_sha256": "d0b0d5c1901865f72b5400af2b335c98344ea1c07c4c3611389e7b4219b3a6d8",
+  "public_types_match": true,
+  "reference_intent_proved": false,
+  "expected": [
+    "average",
+    "smaller",
+    "total"
+  ],
+  "missing": [],
+  "extra": [],
+  "covered": [
+    "average",
+    "smaller",
+    "total"
+  ],
+  "uncovered": []
+}

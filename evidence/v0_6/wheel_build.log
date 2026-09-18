@@ -1,0 +1,10 @@
+WARNING: The directory '/home/oai/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+Processing /mnt/data/cairn_work_06/cairn
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: cairn-language
+  Building wheel for cairn-language (pyproject.toml): started
+  Building wheel for cairn-language (pyproject.toml): finished with status 'done'
+  Created wheel for cairn-language: filename=cairn_language-0.6.0-py3-none-any.whl size=62095 sha256=a820785843cbd55d42a384aa5002ac7fe0029e9bcc75ccd327fd85aa211b6d76
+  Stored in directory: /tmp/pip-ephem-wheel-cache-2wrmyhad/wheels/28/6d/39/d8190ca06f785564cb8137158824d1bcdd4f37b9116e26561f
+Successfully built cairn-language

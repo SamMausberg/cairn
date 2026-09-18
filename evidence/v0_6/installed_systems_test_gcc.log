@@ -1,0 +1,70 @@
+{
+  "status": "passed-finite-tests",
+  "tests": [
+    {
+      "contract": "decimal.json",
+      "source_sha256": "fd0c5591eb6d5031300a75143528ea41be6984ada1a489f3ac650743b88beda0",
+      "contract_sha256": "22b694fe264d5dbefef54186045cb3222c4159b17b3681b18aca1bb4fb4a225e",
+      "formal_status": "not-verified",
+      "security_sandbox": false,
+      "status": "passed-finite-tests",
+      "cases": 8,
+      "build": {
+        "exit_code": 0,
+        "flags": [
+          "-std=c++20",
+          "-O3",
+          "-march=x86-64",
+          "-ffp-contract=off",
+          "-fno-fast-math",
+          "-fno-exceptions",
+          "-fno-rtti",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wno-unused-parameter",
+          "-Wno-unused-variable",
+          "-Wno-unused-but-set-variable",
+          "-shared",
+          "-fPIC"
+        ],
+        "compiler": "/usr/bin/g++"
+      },
+      "execution_exit_code": 0,
+      "elapsed_seconds": 0.42810252199979004
+    },
+    {
+      "contract": "sorted_even.json",
+      "source_sha256": "fd0c5591eb6d5031300a75143528ea41be6984ada1a489f3ac650743b88beda0",
+      "contract_sha256": "7312a9d593f2f57ad7ba1c753f4af7d83bc134834a0fbfb2ed7e1e5a6f97c9cd",
+      "formal_status": "not-verified",
+      "security_sandbox": false,
+      "status": "passed-finite-tests",
+      "cases": 7,
+      "build": {
+        "exit_code": 0,
+        "flags": [
+          "-std=c++20",
+          "-O3",
+          "-march=x86-64",
+          "-ffp-contract=off",
+          "-fno-fast-math",
+          "-fno-exceptions",
+          "-fno-rtti",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wno-unused-parameter",
+          "-Wno-unused-variable",
+          "-Wno-unused-but-set-variable",
+          "-shared",
+          "-fPIC"
+        ],
+        "compiler": "/usr/bin/g++"
+      },
+      "execution_exit_code": 0,
+      "elapsed_seconds": 0.4446726410001247
+    }
+  ],
+  "formal_status": "not-verified"
+}

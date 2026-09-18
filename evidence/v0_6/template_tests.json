@@ -1,0 +1,5 @@
+{
+  "cpp_template_family_cases": 1280,
+  "all_passed": true,
+  "scope": "Same family values; indexed C++ entry versus named CAIRN entries. Not an ABI or performance equivalence test."
+}

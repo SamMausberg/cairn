@@ -1,0 +1,579 @@
+{
+  "status": "passed",
+  "seed": 1709202604,
+  "functions": 46,
+  "native": [
+    {
+      "compiler": "clang version 17.0.0 (https://github.com/swiftlang/llvm-project.git 10999b6d034fe318f3d56c83bddb6572593a8bb0)",
+      "cases": 472588,
+      "trap_cases": 132905,
+      "generated_sha256": "7b6f3fa639fa221fad5b875e9b836a88d32aff90485a1993c06394469c2fcf68",
+      "instrumented_runtime_sha256": "529ee966ce65fb4a3ed36fd6d576d2e58fb3fbeb9f80ced6c96b532994203a36"
+    },
+    {
+      "compiler": "g++ (Debian 14.2.0-19) 14.2.0",
+      "cases": 472588,
+      "trap_cases": 132905,
+      "generated_sha256": "7b6f3fa639fa221fad5b875e9b836a88d32aff90485a1993c06394469c2fcf68",
+      "instrumented_runtime_sha256": "529ee966ce65fb4a3ed36fd6d576d2e58fb3fbeb9f80ced6c96b532994203a36"
+    }
+  ],
+  "smt_pinned_cases": 6662,
+  "smt_checks": [
+    {
+      "function": "add_u8",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "62b90eff43e824ad790c995853cb64b80fc2eee8592d67dd8b4eed04134750b5",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "sub_u8",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "74e1232aec3600c6497360e43eb6234fa2e83c0dffc6d5af1ed7e5fdc3e9782c",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "mul_u8",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "d7d3aae61022fd919228f2971960a1d07b326986d9955e5f1d079ab983bb221b",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "div_u8",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "e7265c129e4ea6efb9d46c0bfcd094c0a425b6e26f84cd6f33b5f5fc7fdd14ac",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "rem_u8",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "08af3dda910f31cf3a364660087bc86b8aa34868bfce39aa04364785296c72d4",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "min_u8",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "583d680f228089c3a61b7184eb7e3a73a839957e445515fa638d0c507c4c15f0",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "wrap_u8",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "c682c47db9a80b237152e3d02f1df32d7eb43873a1e26d224e9b0a82f2dcb553",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "left_u8",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "5dadc3a6bcd8dc7baf7c6038fd9ffe6732ee2ce3c6b47797267988779a31e1e8",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "right_u8",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "e298bee389cf3675bb8e3b1c043b65aa73d89d1799cd0276416c2a65014709b5",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "add_u32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "a922da02ec95cbe3e3c78b8f50e765778455a7413728cfe377b580376316fdd7",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "sub_u32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "caa9f30fee7f11b8419061f593e4df010c57fa6bf3a29d8fed18290efa6e862f",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "mul_u32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "5a87cf898cd05851762a584f478ef276ddcb70521d4b12b916a254921428594e",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "div_u32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "2fe40e141efac825c6b5d07aed912ce275acda9c0c9da9bae88ff93ebad318f2",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "rem_u32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "69ab42d2e988bde1166b5b62f08f72b64e775b70b8adab60ca1c5338b2d4348c",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "min_u32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "6dd0ce0df7c73af6eb9ca5daa2b928dc55d4841f9838f3f409abd4e690bbadf5",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "wrap_u32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "5bab361c51c9a4b796e336460671ca1f0b91233f91bf1012b325c7de89fb2bdd",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "left_u32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "d2185b7cf32fc21cb6cdc8282c26972d38969efc87a8cac173d34fc66ffc8af4",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "right_u32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "c8bb9a40552bfc6da8febd328db6f5d658301a4260b1463b7b2c8643a0f1785b",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "add_u64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "c7c0cf71649cded46b89e5d85e1225002325f94986f89ad4f1f1368cc7237f3a",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "sub_u64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "c07b683bf76ba9b099b7337b59f3ea54d3c4528171b8359042b200e118f57da5",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "mul_u64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "a340012a984f19e3f99de575818afae293d11d1c0af0c112c1f1d56f7863760f",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "div_u64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "b72af8f4ea565f36bd1618d2660944b92d21b39aeaef14f2c6f80d85a963854c",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "rem_u64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "b8dbc9a4961a1fecb92c8ca9acc594fb2343f631a23499cc355c2d7102c08a00",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "min_u64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "6611fe2796ba8e6d65d963df0bea065744b9723de20c96c99d0a82afd795c244",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "wrap_u64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "efbb4c7b1bd6036f2c1664878d9a8e1789a8243c13d34435234b61640eb9ef8e",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "left_u64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "b8252f449902b37e3dd89752637d30b73bb900b00a68faa67c00fb12536685e2",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "right_u64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "518b72311dfa9efce6424e82318b25e4ac44b83d6265091586fe30cd7b4da24a",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "add_i32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "df512752783ee6152c991a50a5d671df33ccc3ea57b722aab97ca1c350cdc162",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "sub_i32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "5ed5136b00329e2403befb8c36a3f3322334132b0f221cfed9036a56bb33d7d7",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "mul_i32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "f3cb7556296f9e6d4a0e5bd78c0c5eb96b4cd231cb825534d63a0b6252dc3aa3",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "div_i32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "e841610fefb6aeff53647e7b99d7539e379d5665145650643001cd80fdd747f1",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "rem_i32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "4396e5987ce4aee498e9bc65200c8ad58f22cde8d2765eb7b9600560a310fc9e",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "min_i32",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "36a9b23a78f81388cfec760ab580d2a832937399ed3c35e54bc7c26f1343fea9",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "neg_i32",
+      "smt_pinned_cases": 120,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "00c079cefe696c6c392da6f4f52e6ac7dc20703d99a01faff3506bcf63bfd2f2",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "add_i64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "d406a756ff2a3c47723304ffb22ebf2b3cbe07f62de4a669df19aae3d34b594b",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "sub_i64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "b50b51059b08a63e072f28e1d125372a12f3bbf7f03d4f407bf7655b9763952f",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "mul_i64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "6412bb6abab9e158640da42eafb326f39c974f74a6be8a90673f5c37e408641d",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "div_i64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "88c8c14b3efd3a67d15bdf0621c8c32e19b7e3ff60c0cac64b5e9b1258cf16fa",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "rem_i64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "3975853808f43770cecf134dbfc310d24f403142202a179eb83afa00df0a58d5",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "min_i64",
+      "smt_pinned_cases": 150,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "e27280a0cf6a8afcda624af27b17ce57fe9073cb4eb7830b69100767251a5378",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "neg_i64",
+      "smt_pinned_cases": 120,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "250c5868f8d1d404cf23d0ccbf963efcb95503ac8eb943f324a1862200bd46e6",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "narrow",
+      "smt_pinned_cases": 116,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "aa3cba7cda8f657dba58ccae5eac474f18ef3492697399b7518868508c783c3b",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "signed_cast",
+      "smt_pinned_cases": 116,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "77e4d7fa1ff6910595e69c9d19ae4dbeaa7791e8edf74aedc6bdfd99474760da",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "unsigned_cast",
+      "smt_pinned_cases": 120,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "60be676a1809700c47d3032ea50f5f9ae1fa84188639b884b849c4daaa8325ce",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "lazy",
+      "smt_pinned_cases": 116,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "54998427b25ea42fb9e118f27d61d3eec9c3de39183836bc54f008ba1cc31ff8",
+        "status": "unsat"
+      }
+    },
+    {
+      "function": "bool_order",
+      "smt_pinned_cases": 104,
+      "solver": {
+        "solver": "Z3",
+        "version": "4.13.3.0",
+        "library": "libz3.so.4",
+        "timeout_ms": 10000,
+        "query_sha256": "269d4bda551ac06de83238c3ac749aa9c095a94f81bb0acbeb77aa94e752b12d",
+        "status": "unsat"
+      }
+    }
+  ],
+  "z3_version": "4.13.3.0",
+  "seconds": 19.641701549000118,
+  "boundary": "Finite differential tests. Native traps instrumented as exceptions only in this test. No universal translation/native/Lean proof."
+}

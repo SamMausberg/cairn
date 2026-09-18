@@ -1,0 +1,443 @@
+{
+  "aggregate": {
+    "after": 110237,
+    "before": 121111,
+    "packet_count": 23,
+    "saving_fraction": 0.08978540347284725
+  },
+  "baseline_card_source_sha256": "4d19fb46d0dee32ad62c43065a60927286f95dab4a01e60ca0c68c5bdb2246f6",
+  "current_card_source_sha256": "7e3cf8e9d8db506acd929679a3ae85614a3d9f38105377d7446f101750ee56d2",
+  "current_only": [
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "compact",
+        "records",
+        "memory",
+        "sums"
+      ],
+      "complete_packet_tokens": 10561,
+      "legacy_comparison": null,
+      "reason": "Scoped storage or tagged sums were not accepted in 0.5.",
+      "symbol": "decimal"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "compact",
+        "records",
+        "memory",
+        "sums"
+      ],
+      "complete_packet_tokens": 10669,
+      "legacy_comparison": null,
+      "reason": "Scoped storage or tagged sums were not accepted in 0.5.",
+      "symbol": "sort_bytes"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "compact",
+        "records",
+        "memory",
+        "sums"
+      ],
+      "complete_packet_tokens": 10705,
+      "legacy_comparison": null,
+      "reason": "Scoped storage or tagged sums were not accepted in 0.5.",
+      "symbol": "sorted_even"
+    }
+  ],
+  "full_card_text": {
+    "baseline": 4792,
+    "current": 5714
+  },
+  "legacy_source_sha256": "5039cfaacc2cb94846146e737976127f0ea15587ab2b1ad53fe00b7e3f1e4bf5",
+  "limitations": [
+    "Not a real edit transcript or model proficiency measurement.",
+    "Task/reference authorship, setup and repair history are not included in this single-packet comparison.",
+    "Broader current cards have different feature coverage; text savings are not a controlled semantic-information ablation.",
+    "New-feature packets retain the entire bidirectional call-graph component and can be much larger than source.",
+    "Default byte-level counts are not frontier-model BPE counts."
+  ],
+  "method": "Current complete JSON packet; only prior/current card texts varied; repeated packets counted in full.",
+  "model_trials": 0,
+  "rows": [
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "8cc6c5dc8c0b84a7b169de47cca221590123f1fa71af2253b9f68ea89d6a94de",
+      "current_packet_sha256": "655d49a486d2b9c04f537675120a963a8a3a92958266186deb1a5b73af23991f",
+      "current_packet_tokens": 5355,
+      "legacy_card_packet_tokens": 5914,
+      "saving_fraction": 0.09452147446736558,
+      "saving_tokens": 559,
+      "symbol": "saxpy"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "6a6b2d6d2bcfc7eb208597846a01b6cc211b9d4cce65fa2bf07d2d43dc4fddf3",
+      "current_packet_sha256": "a24af6b853597365ad202d6d02d23763f8ca992cca96a0f6f74097037a37c469",
+      "current_packet_tokens": 5595,
+      "legacy_card_packet_tokens": 6154,
+      "saving_fraction": 0.090835229119272,
+      "saving_tokens": 559,
+      "symbol": "dot"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "2503c1e2cf7a5542bfc76f946efe7b4812ffea9022ea63218ef6364e30214ae3",
+      "current_packet_sha256": "ff7617f42d14fc93a0b268d1446950052b9776278fad10f8ba9d15aeac96f2c1",
+      "current_packet_tokens": 4884,
+      "legacy_card_packet_tokens": 5395,
+      "saving_fraction": 0.09471733086190914,
+      "saving_tokens": 511,
+      "symbol": "sum_wrap"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "5fa83bba6fdebf6b5e776072aaae82a3475afcd979a6100f2d1439653e571383",
+      "current_packet_sha256": "64d96ead275fd4432fd1f009732da47a94592579b6543558c688c945bd23b56b",
+      "current_packet_tokens": 4951,
+      "legacy_card_packet_tokens": 5462,
+      "saving_fraction": 0.0935554741852801,
+      "saving_tokens": 511,
+      "symbol": "prefix"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "24b9a6fad75b1a082b969a3722d1f99c5984bc8d29ec13993b2a1eea8e60d3c1",
+      "current_packet_sha256": "716fd92d3746ae4e8d272969c75296afadbc9f792cff6b0f25f0746ec86df888",
+      "current_packet_tokens": 5292,
+      "legacy_card_packet_tokens": 5851,
+      "saving_fraction": 0.09553922406426252,
+      "saving_tokens": 559,
+      "symbol": "count_gt"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "128d767981f6e0acd0baa7fddf7933c20b349821ef9d39e50a7852ac8ed7c031",
+      "current_packet_sha256": "81038985eba16e111bd0d7f943f6c3c14a508e1c66622879ea768dd9f54546e1",
+      "current_packet_tokens": 5023,
+      "legacy_card_packet_tokens": 5534,
+      "saving_fraction": 0.09233827249728943,
+      "saving_tokens": 511,
+      "symbol": "histogram"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "compact",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "2e8440096b2a0242dbc2e9b4d0123b41f241c501bf8669f4c8ef9b2e0173b103",
+      "current_packet_sha256": "8851f97fbfad75860bec974db747713814a6915383340d8db8b91f25493090bb",
+      "current_packet_tokens": 5565,
+      "legacy_card_packet_tokens": 6141,
+      "saving_fraction": 0.09379579872984856,
+      "saving_tokens": 576,
+      "symbol": "compact_even"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "9d62698d42a439a58420bed07ef0d70700e4b90935581d7ecf5d67084118ada3",
+      "current_packet_sha256": "b8516f4df84c8b855a241f6ff0080af546af9119cec3e94798dc174d7c6a9074",
+      "current_packet_tokens": 5042,
+      "legacy_card_packet_tokens": 5553,
+      "saving_fraction": 0.09202233027192508,
+      "saving_tokens": 511,
+      "symbol": "lower_bound"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "bc81d2e78dbd6da126719d5a32f0bedfa95e8ad4993eacd230b5518814463137",
+      "current_packet_sha256": "1a5c698b589930f0c5b87849864f5de27d853091e5ea962cdeb7f19d984cf9c9",
+      "current_packet_tokens": 4178,
+      "legacy_card_packet_tokens": 4561,
+      "saving_fraction": 0.08397281297960979,
+      "saving_tokens": 383,
+      "symbol": "gcd"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "f282072de9c42ae45856ef1e2ba920271b9a383799a1836fdfb7d91807c2b3df",
+      "current_packet_sha256": "545fbc6288edbdd3c9a9feb8b705711733a15e82cbe36800262b67d98d9c170a",
+      "current_packet_tokens": 4187,
+      "legacy_card_packet_tokens": 4570,
+      "saving_fraction": 0.08380743982494532,
+      "saving_tokens": 383,
+      "symbol": "factorial_wrap"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "floats",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "d218f5c053f725e76562bd1592c2aab5fa8c1c8f68b252b4712bacf71bf7a806",
+      "current_packet_sha256": "643297671af9af6d832e464aac00ec3ae4ab83f4744d17c658d270f6e0d9d9fd",
+      "current_packet_tokens": 4491,
+      "legacy_card_packet_tokens": 4922,
+      "saving_fraction": 0.0875660300690776,
+      "saving_tokens": 431,
+      "symbol": "distance_sq"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "11b010299c11d17fb9cd2cc547f46035d4adbcc7884bae01c8ac1ba93ee400fb",
+      "current_packet_sha256": "cb3e7a91a2553fa857b57810c81eebfd218bbd7e3082dbe5e259237b90e20b8f",
+      "current_packet_tokens": 4176,
+      "legacy_card_packet_tokens": 4559,
+      "saving_fraction": 0.08400965123930682,
+      "saving_tokens": 383,
+      "symbol": "translated"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "06725ce43680c99de66033e8f7da01f66545eb7576010420b0605d9630de14e8",
+      "current_packet_sha256": "08f97c3f33545da574e0643ba1c725d00bd9987d8cb3b8ca2038dc676ae50c81",
+      "current_packet_tokens": 4192,
+      "legacy_card_packet_tokens": 4575,
+      "saving_fraction": 0.08371584699453549,
+      "saving_tokens": 383,
+      "symbol": "header_valid"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "d4eb7d17f1bf799b60305b85b6e298a87773a8032357c6d167c3f0c55bce0d0b",
+      "current_packet_sha256": "cc05901ef632afe3d754bf00ab9f0494106f66ee9577af6d2d285c9244e9b964",
+      "current_packet_tokens": 4149,
+      "legacy_card_packet_tokens": 4532,
+      "saving_fraction": 0.08451015004413065,
+      "saving_tokens": 383,
+      "symbol": "op_class"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "426a760b5b76b5db33e6c6834f2936832bb7461c5468375f02c07fb70529248f",
+      "current_packet_sha256": "9c67d711a33ec12143131806cc772154a1b74f214f2a08f308ff845614ecab10",
+      "current_packet_tokens": 5040,
+      "legacy_card_packet_tokens": 5551,
+      "saving_fraction": 0.09205548549810849,
+      "saving_tokens": 511,
+      "symbol": "decode_le32"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "e09900d7eaf222eaed6021cb9122cf88374d4e2b6aa1197e4579f0f0422df4de",
+      "current_packet_sha256": "c8801ddb82ba1605e5c9b73d6f378e3615f7cfec703dd44fec0d8c4671f9fc8d",
+      "current_packet_tokens": 5630,
+      "legacy_card_packet_tokens": 6189,
+      "saving_fraction": 0.09032153821295852,
+      "saving_tokens": 559,
+      "symbol": "copy_twice"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "d9573ae017f8c4cbda4c34a556ea4c8c64643aab4a552022247d8d1226ea6c71",
+      "current_packet_sha256": "8ff2efbb042d8fd67fa16f8d25620cfef1d78377af95c2813c113bc137f8d0d2",
+      "current_packet_tokens": 5628,
+      "legacy_card_packet_tokens": 6187,
+      "saving_fraction": 0.09035073541296268,
+      "saving_tokens": 559,
+      "symbol": "delegated"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "70cab136209d98116becdab5ff655c72b4b32ec51c422430ba2d150052d1d512",
+      "current_packet_sha256": "429c87db9cc1335e0f5e967003598546e66b9a4c451c70ce3f9dab46910a9bdf",
+      "current_packet_tokens": 4115,
+      "legacy_card_packet_tokens": 4498,
+      "saving_fraction": 0.08514895509115161,
+      "saving_tokens": 383,
+      "symbol": "checked_add"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "ddd804c6330c8bd905094a4f19824fab455c214ad43ae299528b885bd26945e8",
+      "current_packet_sha256": "5fc3b3c8bb3353661356aead1cf9eeaadfde75bd622b4b4df7bef335d6038f47",
+      "current_packet_tokens": 4115,
+      "legacy_card_packet_tokens": 4498,
+      "saving_fraction": 0.08514895509115161,
+      "saving_tokens": 383,
+      "symbol": "checked_div"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "6e732f8287fa0641c17712e2d9034370b88ae8d23084ded45783bf4bb3789976",
+      "current_packet_sha256": "1293d600bcc72e4847ff085370cb685feba5b6bd1aad2395146d14a45a1dab5a",
+      "current_packet_tokens": 4847,
+      "legacy_card_packet_tokens": 5358,
+      "saving_fraction": 0.09537140724150805,
+      "saving_tokens": 511,
+      "symbol": "checked_at"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "22e68c20350b6998e670ccd25504735565e480379bfb706cfdbb2028f40e5c44",
+      "current_packet_sha256": "96ee65d182329eca02ee6bfeeb94dc0828568fd58d5fa3add1726ca61678e4e1",
+      "current_packet_tokens": 4143,
+      "legacy_card_packet_tokens": 4526,
+      "saving_fraction": 0.08462218294299606,
+      "saving_tokens": 383,
+      "symbol": "checked_shift"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "b453c93dd9ec11e74721451104e00dd32f113ec162dfd1cb13db1bcd27a22d4a",
+      "current_packet_sha256": "a43c131d022afd21bc3d5d0dd29605421534f8afb4c98287986a471763583988",
+      "current_packet_tokens": 4063,
+      "legacy_card_packet_tokens": 4446,
+      "saving_fraction": 0.08614484930274402,
+      "saving_tokens": 383,
+      "symbol": "narrow"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "counterfactual_packet_sha256": "df079ab9d81fa1e7ca4d48f1cf2ed0919ba9789b1a101189672c49c11e1952f0",
+      "current_packet_sha256": "93eacaa362dd54c5986e4ec25c100e9c1a5055b738034f360ee4bd6f1e5f7b18",
+      "current_packet_tokens": 5576,
+      "legacy_card_packet_tokens": 6135,
+      "saving_fraction": 0.0911165444172779,
+      "saving_tokens": 559,
+      "symbol": "square_sum"
+    }
+  ],
+  "tokenizer": "ByT5 plain byte-token encoding; no special tokens"
+}

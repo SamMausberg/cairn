@@ -1,0 +1,1 @@
+1024 array lengths and 1000 codec cases passed with ASan+UBSan

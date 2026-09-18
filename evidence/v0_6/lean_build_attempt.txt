@@ -1,0 +1,4 @@
+$ lake build
+bash: line 1: lake: command not found
+
+exit_code=127
