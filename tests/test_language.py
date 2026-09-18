@@ -449,3 +449,23 @@ def test_an_empty_owned_dynamic_value_traps_when_lent(tmp_path):
         ["g++", "-std=c++20", "-O2", str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120
     )
     assert subprocess.run([tmp_path / "p"], timeout=30).returncode == -6
+
+
+def test_a_nat_parameter_is_a_static_extent_and_literals_take_the_expected_result_type(tmp_path):
+    """Two false rejections the second audit noted: `rw<u64>[K]` of a `[K:nat]` instance, and `let y:u32 = conv(3)`."""
+    source = (
+        "fn fill[K:nat](out:rw<u64>[K], v:u64) { for i in 0..K { out[i] = v; } }\n"
+        "family fill_n = fill[5..6];\nfn conv[T](x:T) -> T = x;\n"
+        "fn main() -> i32 { stack a:u64[4] = zeroed; stack b:u64[5] = zeroed; fill[4](a, 7); fill_n_5(b, 2);\n"
+        "  let y:u32 = conv(3); let z:u8 = conv(200);\n"
+        "  if a[3] != 7 || b[4] != 2 || y != 3 || z != 200 { return 1; }\n  return 0; }"
+    )
+    (tmp_path / "p.cpp").write_text(compile_source(source)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    build = ["clang++", "-std=c++20", "-O1", "-fsanitize=address,undefined", str(tmp_path / "p.cpp"), "-o"]
+    subprocess.run([*build, str(tmp_path / "p")], check=True, timeout=120)
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+    with pytest.raises(Diagnostic) as wrong_extent:
+        compile_source(source.replace("fill[4](a, 7)", "fill[8](a, 7)"))
+    assert wrong_extent.value.data["code"] == "E-TYPE-MISMATCH"

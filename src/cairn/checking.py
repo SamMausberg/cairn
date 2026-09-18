@@ -283,7 +283,8 @@ class Checker:
             return base
         if base == VOID:
             fail("E-TYPE", "A slice cannot contain void.", node)
-        return Type(base.name, ty.mode, ty.extent, base.args, ty.place)
+        bound = self.tenv.get(ty.extent)  # rw<u64>[K] of a [K:nat] instance is a static extent.
+        return Type(base.name, ty.mode, str(bound) if isinstance(bound, int) else ty.extent, base.args, ty.place)
 
     def static(self, argument: Any, node=None) -> Any:
         """A type argument: a natural (literal or bound static name) or a type."""
@@ -1488,7 +1489,9 @@ class Checker:
             if f.owner:
                 self.unify(f.owner[1], self.peek(args[0]), bound, generics)
             ordered = sorted(zip(args, f.params, strict=True), key=lambda x: x[0].tag in {"int", "float"})
-            for a, (_, declared) in ordered:  # Literals adapt after the other arguments bind generics.
+            for a, (_, declared) in ordered:  # Typed arguments bind first, then the expected result, then literals.
+                if expected and a.tag in {"int", "float"}:
+                    self.unify(f.ret, expected, bound, generics)
                 if self.open(declared, generics, bound):
                     actual = self.peek(root(a) if a.tag == "slice" else a)
                     element = actual if not declared.extent or is_view(actual) else actual.args[0]
