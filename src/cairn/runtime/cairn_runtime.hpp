@@ -1,6 +1,8 @@
-// CAIRN Native runtime: guarded values and views, no allocator or scheduler.
+// CAIRN Native runtime: guarded values/views and explicit scoped buffers; no scheduler.
 #pragma once
 #include <algorithm>
+#include <array>
+#include <new>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -53,4 +55,22 @@ template<class A,class B> inline void disjoint(A* a,std::size_t na,B* b,std::siz
   const auto x=reinterpret_cast<std::uintptr_t>(a), y=reinterpret_cast<std::uintptr_t>(b);
   if(x<y+nb*sizeof(B) && y<x+na*sizeof(A)) trap();
 }
+// A lexical owner cannot be copied, moved or returned by the source profile.
+// Zero initialization and scope release are part of the buffer constructor contract.
+// OOM and object-size violations trap; process abort does not promise cleanup.
+template<class T> class Buffer final {
+  T* p_ = nullptr;
+public:
+  explicit Buffer(std::size_t n) noexcept {
+    static_assert(std::is_arithmetic_v<T>);
+    if(n > static_cast<std::size_t>(std::numeric_limits<std::ptrdiff_t>::max()) / sizeof(T)) trap();
+    if(n) { p_ = new(std::nothrow) T[n](); if(!p_) trap(); }
+  }
+  ~Buffer() noexcept { delete[] p_; }
+  Buffer(const Buffer&) = delete;
+  Buffer& operator=(const Buffer&) = delete;
+  Buffer(Buffer&&) = delete;
+  Buffer& operator=(Buffer&&) = delete;
+  T* data() const noexcept { return p_; }
+};
 } // namespace cr

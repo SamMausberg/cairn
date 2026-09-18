@@ -11,3 +11,6 @@ Keep accepted, typed, native-built, tested, and SMT-equivalent outcomes distinct
 Add rejection tests, independent behavior tests, and any applicable scalar comparison. Run both compilers and sanitizers for runtime/lowering changes. Count whole compiler dependencies in source-audit density measurements, not just the API facade.
 
 Never commit credentials, binaries, generated build trees, or an unrelated user file. Never change repository visibility, force-push, delete remote resources, install a token, or run a publish step from a test. Publication tests use fakes. The private publisher is opt-in and creates only a new personal repository.
+
+
+Version 0.6: scoped buffer/stack owners cannot escape; scalar tagged sums require exhaustive match. Neither feature is supported by scalar equivalence. `verify --all` must leave unsupported entries uncovered. `certificates` checks collector arithmetic identities only, through a trusted Python checker; it does not prove the entire compiler. Keep private storage costs visible. Never accept a task if its child exits abnormally, even after printing a pass. Lexical feature cards must match accepted syntax, including whitespace variations.

@@ -22,8 +22,11 @@ for name in ['saxpy','dot','sum_wrap','prefix','count_gt','histogram','compact_e
  rows.append({'function':name,'cairn_bytes':len(data[0]),'cpp_bytes':len(data[1]),'bytes_equal':data[0]==data[1],
               'relocations_equal':rels[0]==rels[1],'cairn_sha256':hashlib.sha256(data[0]).hexdigest(),
               'cpp_sha256':hashlib.sha256(data[1]).hexdigest(),'relocations':rels})
-result={'comparisons':rows,'compiler':run(['clang++','--version']),'flags':FLAGS,'commands':commands,
+result={'generated_source_sha256':hashlib.sha256((R/'results/native.cpp').read_bytes()).hexdigest(),
+        'runtime_sha256':hashlib.sha256((R/'results/cairn_runtime.hpp').read_bytes()).hexdigest(),
+        'reference_sha256':hashlib.sha256((R/'bench/reference.cpp').read_bytes()).hexdigest(),
+        'comparisons':rows,'compiler':run(['clang++','--version']),'flags':FLAGS,'commands':commands,
         'platform':platform.platform(),'native_timing_performed':False,
         'boundary':'Ordinary C++ reference algorithms with equal entry guards, not expert baselines or a native-correctness proof.'}
-(R/'results/codegen_05.json').write_text(json.dumps(result,indent=2)+'\n')
+(R/'results/codegen.json').write_text(json.dumps(result,indent=2)+'\n')
 print('Identical function sections and relocations:',sum(x['bytes_equal'] and x['relocations_equal'] for x in rows),'of',len(rows))

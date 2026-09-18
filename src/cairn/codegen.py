@@ -5,7 +5,23 @@ from .syntax import *
 RUNTIME = (Path(__file__).parent / "runtime/cairn_runtime.hpp").read_text(encoding="utf-8")
 
 class Emitter:
-    def __init__(self,p:Program): self.p=p; self.lines=[]; self.ind=0; self.counter=0
+    def __init__(self,p:Program): self.p=p; self.lines=[]; self.ind=0; self.counter=0; self.loops=[]
+    def controls(self,ss):
+        found=set()
+        for s in ss:
+            if s.tag in {"break","continue"}: found.add(s.tag)
+            if s.tag not in {"for","while"}:
+                found |= self.controls(s.body) | self.controls(s.other)
+                for arm in s.arms: found |= self.controls(arm.body)
+        return found
+    def loop_body(self,ss,index):
+        controls=self.controls(ss); self.loops.append(index)
+        if controls:
+            self.put("{"); self.ind+=1; self.block(ss); self.ind-=1; self.put("}")
+            if "continue" in controls:self.put(f"cr_continue_{index}: ;")
+        else:self.block(ss)
+        self.loops.pop()
+        return controls
     def put(self,s=""): self.lines.append("  "*self.ind+s)
     def name(self,n): return "v_"+n
     def extent(self,t): return t.extent if t.extent.isdigit() else self.name(t.extent)
@@ -22,6 +38,11 @@ class Emitter:
             self.ind-=1; self.put("};")
         for n,vs in self.p.enums.items():
             self.put("enum class ct_"+n+" : std::uint32_t { "+", ".join(self.name(v) for v in vs)+" };")
+        for n,variants in self.p.sums.items():
+            self.put("struct ct_"+n+" {"); self.ind+=1
+            self.put("std::uint32_t tag;"); self.put("union {"); self.ind+=1
+            for v,t in variants: self.put((t.cpp() if t else "std::uint8_t")+" v_"+v+";")
+            self.ind-=1; self.put("} payload;"); self.ind-=1; self.put("};")
         for f in self.p.functions: self.put(self.signature(f)+";")
         for f in self.p.functions:
             self.put(); self.put(self.signature(f)+" {"); self.ind+=1
@@ -34,12 +55,22 @@ class Emitter:
             for n,t in f.params:
                 if t.name in self.p.enums and t.mode=="value":
                     self.put(f"if(static_cast<std::uint32_t>({self.name(n)}) >= {len(self.p.enums[t.name])}) cr::trap();")
+                if t.name in self.p.sums and t.mode=="value":
+                    self.put(f"if({self.name(n)}.tag >= {len(self.p.sums[t.name])}) cr::trap();")
             self.block(f.body); self.ind-=1; self.put("}")
         return "\n".join(self.lines)+"\n"
     def block(self,ss):
         for s in ss:
             es=s.exprs
-            if s.tag in {"let","reg"}:
+            if s.tag in {"buffer","stack"}:
+                self.counter+=1
+                owner="cr_owner_"+str(self.counter)
+                if s.tag=="buffer":
+                    self.put(f"cr::Buffer<{s.ty.cpp()}> {owner}({es[0].cpp});")
+                else:
+                    self.put(f"std::array<{s.ty.cpp()}, {es[0].val}> {owner}{{}};")
+                self.put(f"{s.ty.cpp()}* const {self.name(s.name)} = {owner}.data();")
+            elif s.tag in {"let","reg"}:
                 self.put(("const " if s.tag=="let" else "")+s.ty.cpp()+" "+self.name(s.name)+" = "+es[0].cpp+";")
             elif s.tag=="compact":
                 out,hi,pred,value = es
@@ -56,9 +87,36 @@ class Emitter:
                 self.ind-=1; self.put("}")
                 self.ind-=1; self.put("}")
             elif s.tag=="assign": self.put(es[0].cpp+" = "+es[1].cpp+";")
+            elif s.tag in {"break","continue"}:
+                self.put(f"goto cr_{s.tag}_{self.loops[-1]};")
             elif s.tag=="return": self.put("return"+(" "+es[0].cpp if es else "")+";")
             elif s.tag=="expr": self.put(es[0].cpp+";")
-            elif s.tag in {"if","while"}:
+            elif s.tag=="match":
+                self.counter+=1; temp="cr_match_"+str(self.counter)
+                ty=es[0].ty.name; tagged=ty in self.p.sums
+                variants=dict(self.p.sums[ty]) if tagged else {v:None for v in self.p.enums[ty]}
+                self.put("{"); self.ind+=1
+                self.put(f"const auto {temp} = {es[0].cpp};")
+                selector=temp+".tag" if tagged else f"static_cast<std::uint32_t>({temp})"
+                self.put(f"switch ({selector}) {{"); self.ind+=1
+                for arm in s.arms:
+                    variant=arm.variant.split(".")[1]; tag=list(variants).index(variant)
+                    self.put(f"case {tag}: {{"); self.ind+=1
+                    if arm.binder:
+                        self.put(f"const {variants[variant].cpp()} {self.name(arm.binder)} = {temp}.payload.v_{variant};")
+                    self.block(arm.body)
+                    self.put("break;"); self.ind-=1; self.put("}")
+                self.put("default: cr::trap();")
+                self.ind-=1; self.put("}"); self.ind-=1; self.put("}")
+            elif s.tag=="while":
+                self.counter+=1; index=self.counter
+                condition=es[0].cpp
+                if condition.startswith("(") and condition.endswith(")"): condition=condition[1:-1]
+                self.put("while ("+condition+") {"); self.ind+=1
+                controls=self.loop_body(s.body,index)
+                self.ind-=1; self.put("}")
+                if "break" in controls:self.put(f"cr_break_{index}: ;")
+            elif s.tag=="if":
                 condition = es[0].cpp
                 if condition.startswith("(") and condition.endswith(")"):
                     condition = condition[1:-1]
@@ -67,7 +125,7 @@ class Emitter:
                     self.put("} else {"); self.ind+=1; self.block(s.other); self.ind-=1
                 self.put("}")
             elif s.tag=="for":
-                self.counter+=1; lim="cr_limit_"+str(self.counter)
+                self.counter+=1; index=self.counter; lim="cr_limit_"+str(self.counter)
                 self.put("{"); self.ind+=1
                 # Source order is lower bound, upper bound, then iteration.
                 begin="cr_begin_"+str(self.counter)
@@ -75,5 +133,6 @@ class Emitter:
                 self.put(f"const std::size_t {lim} = {es[1].cpp};")
                 n=self.name(s.name)
                 self.put(f"for (std::size_t {n} = {begin}; {n} < {lim}; ++{n}) {{")
-                self.ind+=1; self.block(s.body); self.ind-=1; self.put("}")
+                self.ind+=1; controls=self.loop_body(s.body,index); self.ind-=1; self.put("}")
+                if "break" in controls:self.put(f"cr_break_{index}: ;")
                 self.ind-=1; self.put("}")

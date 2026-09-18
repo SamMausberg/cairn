@@ -1,0 +1,24 @@
+// Input/output borrows stay disjoint. The histogram has explicit local storage.
+fn sort_bytes(n:usize, out:rw<u8>[n], input:ro<u8>[n]) {
+  stack counts:usize[256] = zeroed;
+  for i in 0..n {
+    let bucket = usize(input[i]);
+    counts[bucket] = counts[bucket] + 1;
+  }
+  let mut cursor:usize = 0;
+  for bucket in 0..256 {
+    for repeat in 0..counts[bucket] {
+      out[cursor] = u8(bucket);
+      cursor = cursor + 1;
+    }
+  }
+}
+
+// One explicit temporary, no returned borrow, no implicit growth or parallelism.
+fn sorted_even(n:usize, out:rw<u8>[n], input:ro<u8>[n]) -> usize {
+  buffer scratch:u8[n] = zeroed;
+  sort_bytes(n,scratch,input);
+  let used = compact out for i in len(scratch)
+    where (scratch[i] & 1) == 0 yield scratch[i];
+  return used;
+}

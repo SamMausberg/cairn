@@ -1,0 +1,33 @@
+// Decimal parser with explicit, recoverable outcomes and first-failure offsets.
+enum Parsed { Value(u64); Invalid(usize); Overflow(usize); Empty; }
+
+fn decimal(n:usize, input:ro<u8>[n]) -> Parsed {
+  if n == 0 { return Parsed.Empty; }
+  let mut value:u64 = 0;
+  for i in 0..n {
+    let byte = input[i];
+    if byte < 48 || byte > 57 { return Parsed.Invalid(i); }
+    let digit = u64(byte - 48);
+    if value > (18446744073709551615 - digit) / 10 {
+      return Parsed.Overflow(i);
+    }
+    value = value * 10 + digit;
+  }
+  return Parsed.Value(value);
+}
+
+// An ordinary value record makes the foreign test interface explicit.
+struct ParseObservation { kind:u32; value:u64; offset:usize; }
+fn observe_decimal(n:usize, input:ro<u8>[n]) -> ParseObservation {
+  match decimal(n,input) {
+    Parsed.Value(value) => { return ParseObservation(0,value,0); }
+    Parsed.Invalid(offset) => { return ParseObservation(1,0,offset); }
+    Parsed.Overflow(offset) => { return ParseObservation(2,0,offset); }
+    Parsed.Empty => { return ParseObservation(3,0,0); }
+  }
+}
+
+fn decimal_kind(n:usize, input:ro<u8>[n]) -> u32 {
+  let result = observe_decimal(n,input);
+  return result.kind;
+}

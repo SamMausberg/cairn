@@ -17,8 +17,8 @@ class Checker:
         self.sites: list[dict[str, Any]] = []
         self.call_edges: dict[str, list[tuple[str, dict[str, str]]]] = {}
         self.fs = {f.name:f for f in program.functions}
-        builtin_names = set(CPP) | {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr", "min", "max"}
-        for name in set(self.fs) | set(program.records) | set(program.enums):
+        builtin_names = set(CPP) | {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr", "min", "max", "len"}
+        for name in set(self.fs) | set(program.records) | set(program.enums) | set(program.sums):
             if name in builtin_names:
                 fail("E-BUILTIN-NAME", f"Cannot redefine builtin {name}.")
         self.env: dict[str,Binding] = {}
@@ -30,10 +30,14 @@ class Checker:
         self.callset: set[str] = set()
         self.counts: dict[str,int] = {}
         self.nodes = 0
+        self.locals_by_function: dict[str, set[str]] = {}
+        self.resources: dict[str, list[dict[str, Any]]] = {}
     def type_ok(self, ty: Type, node=None):
-        if ty.name not in CPP and ty.name not in self.p.records and ty.name not in self.p.enums:
+        if ty.name not in CPP and ty.name not in self.p.records and ty.name not in self.p.enums and ty.name not in self.p.sums:
             fail("E-TYPE", f"Unknown type {ty.name}.",node)
         if ty.mode != "value" and ty.name == "void": fail("E-TYPE", "A slice cannot contain void.",node)
+        if ty.mode != "value" and ty.name in self.p.sums:
+            fail("E-SUM-VIEW", "Borrowed arrays of tagged payloads are not in this ABI profile.",node)
     def effect(self, name: str): self.effects.add(name)
     def guard(self, kind: str):
         self.effects.add("trap")
@@ -52,9 +56,18 @@ class Checker:
             seen.add(n)
         for n, variants in self.p.enums.items():
             if n in CPP or not variants or len(set(variants)) != len(variants): fail("E-ENUM", f"Invalid enum {n}.")
+        for n,variants in self.p.sums.items():
+            if n in CPP or not variants or len({v for v,_ in variants})!=len(variants):
+                fail("E-ENUM",f"Invalid sum {n}.")
+            for v,ty in variants:
+                if ty is not None and (ty.mode!="value" or ty.name not in NUMERIC|{"bool"}):
+                    fail("E-SUM-PAYLOAD", "Payloads currently require scalar value types, never borrows.")
         for f in self.p.functions:
             self.f = f; self.env = {}; self.effects = set(); self.callset=set(); self.counts={}
+            self.loop_depth = 0
             self.call_edges[f.name] = []
+            self.locals_by_function[f.name] = set()
+            self.resources[f.name] = []
             for n,ty in f.params:
                 self.type_ok(ty,f)
                 if n in self.env or ty.name == "void": fail("E-PARAM", f"Invalid or duplicate parameter {n}.",f)
@@ -78,6 +91,16 @@ class Checker:
             self.local_effects[f.name] = set(self.effects)
             self.calls[f.name] = self.callset
             self.checks[f.name] = self.counts
+        # Private local owners do not escape through interfaces. Their storage
+        # and read/write effects remain visible without exporting local names.
+        def exposed(function, effect):
+            if effect.startswith(("read:", "write:")):
+                kind, name = effect.split(":", 1)
+                if name in self.locals_by_function[function]:
+                    return "local_" + kind
+            return effect
+        self.local_effects = {f:{exposed(f,e) for e in es}
+                              for f,es in self.local_effects.items()}
         # Footprints are instantiated at each call site, not copied under the
         # callee's parameter names. A recursive argument permutation can require
         # more iterations than the number of functions.
@@ -101,7 +124,7 @@ class Checker:
                             kind, formal = effect.split(":",1)
                             if formal not in mapping:
                                 fail("E-INTERNAL", "Unmapped callee memory footprint.")
-                            effects[n].add(kind + ":" + mapping[formal])
+                            effects[n].add(exposed(n, kind + ":" + mapping[formal]))
                         else:
                             effects[n].add(effect)
                 changed |= len(effects[n]) != before
@@ -114,7 +137,7 @@ class Checker:
         # choosing an order that differs from the documented native semantics.
         def audit_expr(e: Expr, root: bool = True):
             if e.tag == "call" and e.val in effects and not root:
-                if any(x.startswith("write:") for x in effects[e.val]):
+                if any(x.startswith("write:") or x in {"alloc","free"} for x in effects[e.val]):
                     fail("E-EFFECT-ORDER", "Bind a writing call to its own statement before using its result.", e)
             for child in e.args: audit_expr(child, False)
         def audit_block(ss: list[Stmt]):
@@ -122,9 +145,12 @@ class Checker:
                 for i,e in enumerate(s.exprs):
                     audit_expr(e, s.tag != "compact" and not (s.tag == "assign" and i == 0))
                 audit_block(s.body); audit_block(s.other)
+                for arm in s.arms: audit_block(arm.body)
         for f in self.p.functions: audit_block(f.body)
         return {n:{"effects":sorted(effects[n]),"calls":sorted(self.calls[n]),
-                   "syntactic_check_sites":self.checks[n],"heap_allocations":0,
+                   "syntactic_check_sites":self.checks[n],"heap_allocations":sum(x["kind"]=="buffer" for x in self.resources[n]),
+                   "allocation_count_kind":"syntactic-sites-not-dynamic-bound",
+                   "local_storage":self.resources[n],
                    "implicit_synchronization":0,"status":"prototype-checked-not-proved"} for n in effects}
     def block(self, ss: list[Stmt]) -> bool:
         saved = dict(self.env); returned=False
@@ -134,7 +160,41 @@ class Checker:
         self.env = saved
         return returned
     def stmt(self, s: Stmt) -> bool:
-        if s.tag in {"let","reg"}:
+        if s.tag in {"buffer", "stack"}:
+            if s.name in self.env:
+                fail("E-SHADOW", "Local owner name is already bound.", s)
+            self.type_ok(s.ty,s)
+            if s.ty.mode != "value" or s.ty.name not in NUMERIC | {"bool"}:
+                fail("E-OWNER-ELEMENT", "Local buffers currently require scalar elements.", s)
+            extent=s.exprs[0]
+            self.expr(extent,Type("usize"))
+            if extent.tag not in {"name","int"}:
+                fail("E-OWNER-EXTENT", "Bind a computed capacity to an immutable usize first.", extent)
+            if extent.tag=="name" and self.env[extent.val].mutable:
+                fail("E-OWNER-EXTENT", "A buffer capacity must be immutable.", extent)
+            if s.tag=="stack":
+                if extent.tag!="int":
+                    fail("E-STACK-EXTENT", "Stack storage needs a literal capacity.",extent)
+                size=1 if s.ty.name=="bool" else WIDTH.get(s.ty.name,32 if s.ty.name=="f32" else 64)//8
+                prior=sum(x.get("bytes",0) for x in self.resources[self.f.name] if x["kind"]=="stack")
+                if prior+int(extent.val)*size>65536:
+                    fail("E-STACK-LIMIT", "Explicit stack declarations total at most 65536 bytes per function.",extent)
+            if extent.tag=="int" and int(extent.val)>2**63-1:
+                fail("E-OWNER-EXTENT", "Capacity exceeds the native object limit.",extent)
+            # Extent is a literal or immutable scalar, so this identity remains
+            # valid throughout the borrow. The C++ owner is never exposed as a value.
+            assert self.f is not None
+            self.env[s.name]=Binding(Type(s.ty.name,"rw",extent.val))
+            self.locals_by_function[self.f.name].add(s.name)
+            self.resources[self.f.name].append({"name":s.name,"kind":s.tag,
+                "element":s.ty.name,"capacity":extent.val,"initialization":"zeroed",
+                "release":"lexical-on-normal-exit","line":s.line})
+            if s.tag=="stack": self.resources[self.f.name][-1]["bytes"]=int(extent.val)*size
+            self.effect("zero_init")
+            if s.tag=="buffer":
+                self.effect("alloc"); self.effect("free"); self.guard("allocation")
+            else: self.effect("stack_storage")
+        elif s.tag in {"let","reg"}:
             if s.name in self.env: fail("E-SHADOW", f"{s.name} is already bound; shadowing is forbidden in this subset.",s)
             if s.ty: self.type_ok(s.ty,s)
             ty = self.expr(s.exprs[0],s.ty)
@@ -148,8 +208,11 @@ class Checker:
                 fail("E-WRITE-LEASE", "Compaction target must be a direct rw parameter.", out)
             t = self.env[out.val].ty
             self.expr(out); self.expr(hi, Type("usize"))
-            if hi.tag not in {"name","int"} or hi.val != t.extent:
-                fail("E-COLLECT-CAPACITY", "Bootstrap compaction requires iteration extent equal to output capacity.", hi)
+            known_extent = hi.val if hi.tag in {"name","int"} else None
+            if hi.tag=="call" and hi.val=="len" and len(hi.args)==1 and hi.args[0].tag=="name":
+                known_extent=self.env[hi.args[0].val].ty.extent
+            if known_extent != t.extent:
+                fail("E-COLLECT-CAPACITY", "Compaction requires iteration extent equal to output capacity.", hi)
             self.env[s.binder] = Binding(Type("usize"))
             self.expr(pred, Type("bool")); self.expr(value, Type(t.name))
             def mentions(e, name):
@@ -162,6 +225,9 @@ class Checker:
             self.counts["bounded_collectors"] = self.counts.get("bounded_collectors",0)+1
         elif s.tag == "assign":
             ty = self.lvalue(s.exprs[0]); self.expr(s.exprs[1],ty)
+        elif s.tag in {"break","continue"}:
+            if not self.loop_depth: fail("E-LOOP-CONTROL",s.tag+" requires an enclosing loop.",s)
+            return True # Stops this lexical block, not necessarily the function.
         elif s.tag == "return":
             assert self.f
             if self.f.ret.name == "void":
@@ -174,12 +240,38 @@ class Checker:
             self.expr(s.exprs[0],Type("bool"))
             a=self.block(s.body); b=self.block(s.other)
             return bool(s.other) and a and b
+        elif s.tag == "match":
+            ty=self.expr(s.exprs[0])
+            if ty.mode!="value" or ty.name not in self.p.enums and ty.name not in self.p.sums:
+                fail("E-MATCH-TYPE", "match requires a declared enum or tagged sum.",s)
+            variants=dict(self.p.sums[ty.name]) if ty.name in self.p.sums else {v:None for v in self.p.enums[ty.name]}
+            expected={ty.name+"."+v for v in variants}
+            given=[a.variant for a in s.arms]
+            if len(set(given))!=len(given): fail("E-MATCH-DUPLICATE","A variant may appear only once.",s)
+            if set(given)!=expected:
+                fail("E-MATCH-COVERAGE", "Every variant must have exactly one arm.",s,
+                     missing_variants=sorted(expected-set(given)),unknown_variants=sorted(set(given)-expected))
+            returns=[]
+            for arm in s.arms:
+                payload=variants[arm.variant.split(".")[1]]
+                if bool(arm.binder)!=(payload is not None):
+                    fail("E-MATCH-BINDING", "A payload arm binds exactly one value; a nullary arm binds none.",arm)
+                if arm.binder:
+                    if arm.binder in self.env: fail("E-SHADOW","Payload binder must be fresh.",arm)
+                    self.env[arm.binder]=Binding(payload)
+                returns.append(self.block(arm.body))
+                if arm.binder: del self.env[arm.binder]
+            self.guard("tag")
+            return all(returns)
         elif s.tag == "while":
-            self.expr(s.exprs[0],Type("bool")); self.effect("diverge"); self.block(s.body)
+            self.expr(s.exprs[0],Type("bool")); self.effect("diverge")
+            self.loop_depth+=1; self.block(s.body); self.loop_depth-=1
         elif s.tag == "for":
             self.expr(s.exprs[0],Type("usize")); self.expr(s.exprs[1],Type("usize"))
             if s.name in self.env: fail("E-SHADOW", f"Loop binder {s.name} already exists.",s)
-            self.env[s.name]=Binding(Type("usize")); self.block(s.body); del self.env[s.name]
+            self.env[s.name]=Binding(Type("usize"))
+            self.loop_depth+=1; self.block(s.body); self.loop_depth-=1
+            del self.env[s.name]
         elif s.tag == "expr":
             ty = self.expr(s.exprs[0])
             if s.exprs[0].tag != "call": fail("E-DISCARD", "Only calls may be used as discarded expression statements.",s)
@@ -238,7 +330,9 @@ class Checker:
             ty=self.index(e)
         elif tag == "field":
             a=e.args[0]
-            if a.tag=="name" and a.val in self.p.enums and a.val not in self.env:
+            if a.tag=="name" and a.val in self.p.sums and a.val not in self.env:
+                ty=self.constructor(a.val,e.val,[],e)
+            elif a.tag=="name" and a.val in self.p.enums and a.val not in self.env:
                 if e.val not in self.p.enums[a.val]: fail("E-ENUM-VARIANT", f"Unknown {a.val}.{e.val}.",e)
                 ty=Type(a.val); e.cpp="ct_"+a.val+"::v_"+e.val
             else:
@@ -297,8 +391,32 @@ class Checker:
                 "bindings":{n:{"type":b.ty.display(), "mutable":b.mutable,
                     "constant":b.constant} for n,b in self.env.items()}})
         return ty
+    def constructor(self, name: str, variant: str, args: list[Expr], e: Expr) -> Type:
+        variants=dict(self.p.sums[name])
+        if variant not in variants:
+            fail("E-ENUM-VARIANT", f"Unknown {name}.{variant}.",e,available_variants=list(variants))
+        payload=variants[variant]
+        if len(args)!=(1 if payload else 0):
+            fail("E-SUM-ARITY", "Constructor arguments must match the declared payload.",e)
+        if payload: self.expr(args[0],payload)
+        tag=list(variants).index(variant)
+        value=args[0].cpp if payload else "0"
+        e.cpp=f"ct_{name}{{{tag}, {{.v_{variant} = {value}}}}}"
+        return Type(name)
     def call(self,e:Expr,expected:Type|None)->Type:
         n=e.val; args=e.args
+        if "." in n:
+            name,variant=n.split(".",1)
+            if name not in self.p.sums or name in self.env:
+                fail("E-CALLEE","Qualified calls are declared tagged-sum constructors, not methods.",e)
+            return self.constructor(name,variant,args,e)
+        if n == "len":
+            if len(args)!=1 or args[0].tag!="name":
+                fail("E-LEN", "len takes one direct borrowed view or local buffer.",e)
+            t=self.expr(args[0])
+            if t.mode=="value": fail("E-LEN", "len requires an array view.",e)
+            e.cpp=("static_cast<std::size_t>("+t.extent+"ULL)" if t.extent.isdigit() else "v_"+t.extent)
+            return Type("usize")
         if n in NUMERIC:
             if len(args)!=1: fail("E-ARITY", "Scalar conversion takes one argument.",e)
             src=self.expr(args[0]); ty=Type(n)
@@ -341,8 +459,12 @@ class Checker:
                 ext=t.extent
                 if not ext.isdigit():
                     v=subst[ext]
-                    if v.tag not in {"name","int"}: fail("E-CALL-SHAPE", "View extent argument must be a name or literal.",v)
-                    ext=v.val
+                    if v.tag=="call" and v.val=="len" and len(v.args)==1 and v.args[0].tag=="name":
+                        view=self.env.get(v.args[0].val)
+                        if view is None or view.ty.mode=="value": fail("E-CALL-SHAPE", "len requires a known view.",v)
+                        ext=view.ty.extent
+                    elif v.tag in {"name","int"}: ext=v.val
+                    else: fail("E-CALL-SHAPE", "View extent must be a name, literal or len(view).",v)
                 want=Type(t.name,t.mode,ext)
                 if at.mode=="rw" and want.mode=="ro": want=Type(t.name,"rw",ext)
                 self.expect(at,want,a)

@@ -11,13 +11,17 @@ from .codegen import Emitter, RUNTIME
 def compile_source(source:str)->tuple[str,dict[str,Any]]:
     p=specialize(derive_wire(Parser(source).parse()))
     checker=Checker(p); receipts=checker.check()
+    from .linear_certificates import audit_collector
+    certificate=audit_collector()
     cpp=Emitter(p).emit()
     manifest={"compiler":VERSION,"source_sha256":hashlib.sha256(source.encode()).hexdigest(),
               "generated_sha256":hashlib.sha256(cpp.encode()).hexdigest(),
               "runtime_sha256":hashlib.sha256(RUNTIME.encode()).hexdigest(),
               "function_count":len(p.functions),"families":[list(x) for x in p.families],
               "wire_derivations":p.derivations,
-              "trusted_lowering_rules":["bounded-collector/1","unsigned-little-endian-wire/1"],
+              "trusted_lowering_rules":["bounded-collector/2","unsigned-little-endian-wire/1","scoped-scalar-storage/1","tagged-scalar-sums/1"],
+              "arithmetic_certificate":{"status":certificate["status"],"sha256":certificate["sha256"],
+                  "certificate_count":certificate["certificate_count"],"checker_sha256":certificate["checker_sha256"],"lean_verified":False},
               "functions":receipts,"formal_status":"not-verified",
               "ffi_requires":"Each nonempty view describes live, initialized, correctly typed storage for its stated extent throughout the call; no concurrent external mutation.",
               "target_profile":"64-bit host, C++20, GCC/Clang overflow builtins, strict floating mode"}

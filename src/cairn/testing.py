@@ -137,10 +137,11 @@ def evaluate(source: str, contract: dict, cxx='clang++') -> dict:
                 try:lines.append(json.loads(line))
                 except json.JSONDecodeError:pass
             verdict=next((x for x in reversed(lines) if 'status' in x),None)
-            if verdict is None:
+            if verdict is None or (cp.returncode!=0 and verdict.get('status')=='passed-finite-tests'):
                 verdict={'status':'native-trap-or-crash','exit_code':cp.returncode,
                          'last_case_started':lines[-1].get('index') if lines else None,'stderr':cp.stderr[:2000]}
-            return {**common,**verdict,'build':build,'elapsed_seconds':time.monotonic()-start}
+            return {**common,**verdict,'build':build,'execution_exit_code':cp.returncode,
+                    'elapsed_seconds':time.monotonic()-start}
         except subprocess.TimeoutExpired as e:
             return {**common,'status':'unknown','stage':'timeout','message':'The bounded build or execution did not complete.'}
 

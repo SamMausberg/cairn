@@ -1,0 +1,16 @@
+fn main() -> i32 {
+  stack text:u8[2] = zeroed;
+  text[0]=52; text[1]=50;
+  match decimal(len(text),text) {
+    Parsed.Value(value) => { if value != 42 { return 1; } }
+    Parsed.Invalid(offset) => { return 2; }
+    Parsed.Overflow(offset) => { return 3; }
+    Parsed.Empty => { return 4; }
+  }
+  buffer data:u8[4] = zeroed;
+  data[0]=9; data[1]=2; data[2]=8; data[3]=1;
+  buffer output:u8[4] = zeroed;
+  let used = sorted_even(len(data),output,data);
+  if used==2 && output[0]==2 && output[1]==8 { return 0; }
+  return 5;
+}

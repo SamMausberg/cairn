@@ -1,4 +1,4 @@
-> Retained interface guidance from 0.4. Use ../../AGENTS.md and ../language.md for current 0.5 syntax, CLI and paths. Historical invocation paths below may need migration.
+> Retained interface guidance from 0.4. Use ../../AGENTS.md and ../language.md for current 0.6 syntax, CLI and paths. Historical invocation paths below may need migration.
 
 # Closed generator contracts, Native 0.2
 

@@ -27,3 +27,10 @@ jobs:
       - name: Scalar example check
         run: |
           .venv/bin/python bin/cairn verify examples/sketch/reference.cairn examples/hello/src/math.cairn --symbol average
+
+      - name: Scoped memory, error results and certificates
+        run: |
+          .venv/bin/python bin/cairn run examples/systems
+          .venv/bin/python bin/cairn test examples/systems
+          .venv/bin/python bin/cairn certificates
+          .venv/bin/python bin/cairn verify examples/proof_scope/reference.cairn examples/proof_scope/candidate.cairn --all

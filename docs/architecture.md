@@ -1,27 +1,25 @@
-# Compiler and repository architecture
+# Compiler ownership and data flow
 
-## Production path
+## Native path
 
 `project.py -> syntax.py -> expansion.py -> checking.py -> codegen.py -> build.py`
 
-The project loader reads explicitly listed files, records their identity and maps source diagnostics. The parser owns tokens, source spans, types and AST construction. Closed expansion implements static families and wire schemas. Checking owns lexical environments, array rules and interprocedural effects. Code generation lowers the checked AST to readable C++ with explicit guards. The separately packaged runtime header defines those guards and view access. The builder chooses an explicit native compiler and records the native result.
+The project loader reads only manifest-listed inputs, hashes bytes and maps diagnostic locations. Syntax owns tokens, spans, AST nodes and source forms. Expansion owns closed families and wire codecs. Checking owns lexical scopes, types, owner restrictions, match coverage and the finite interprocedural effect fixed point. Code generation emits ordinary readable C++; runtime/cairn_runtime.hpp implements guards, views and scoped allocation. The builder chooses a trusted native toolchain, writes a fresh directory and hashes its output. The small cairnc.py facade invokes the exact collector arithmetic-certificate gate before emission, then delegates to these components.
 
-`cairnc.py` is a small compatibility facade for `compile_source`, AST types and existing research tools. The implementation is not duplicated behind it. Tests and tools import the installable `cairn` package. Source-audit measurements must count the transitive implementation, not only this facade.
+Owners are represented as lexical compiler bindings, not a general runtime object system. Private storage footprints are summarized as local_read/local_write at public boundaries; alloc/free/initialization/stack effects remain visible. Callee view effects are renamed to caller arguments before private footprints are hidden. A helper must not leak its local names into a caller's public effect row.
 
-`cli.py` is the command boundary. `project.py` never launches processes. The manifest cannot select a shell command or compiler executable. `build.py` does not execute the program; `run` is explicit. `testing.py` builds and executes supplied finite task cases in a limited child process. No component installs tools or authenticates to a network service implicitly.
+A tagged sum is a monomorphic scalar tag/payload value. Exhaustive source match lowers to a switch with valid-tag checks. Loop break/continue use compiler-owned labels only when necessary so switching does not retarget control flow. C++ scopes perform normal owner destruction at those exits. Neither C++ RAII nor finite lifetime tests are a mechanized ownership theorem.
 
-## AI path
+## Agent and proof paths
 
-`agent_tools.py` exposes source sites, canonical projection and sealed edit sessions. `sketches.py` binds named expression choices to fixed host-owned slots. `teaching.py` supplies relevant syntax and semantic-difference cards. `scalar_semantics.py` translates the restricted pure scalar fragment and independently replays distinguishing inputs; `smt_bridge.py` accesses a locally installed Z3 shared library.
+`agent_tools.py` supplies typed source sites, canonical read-only projection and sealed edit sessions. `sketches.py` binds named choices to host-owned ranges/contracts. `teaching.py` uses lexical features to select short semantic cards. Source splicing preserves material outside the authorized range. The full module is rechecked, not just the displayed packet.
 
-The agent is not a trusted source of contracts or permissions. A successful typecheck does not imply the task is correct. An SMT-equivalence result does not prove the native backend. The solver and model do not become runtime dependencies of generated native code.
+`linear_certificates.py` checks exact fixed affine implications. It has no solver, native execution or input-dependent advice. `scalar_semantics.py` and `smt_bridge.py` perform fixed-reference integer/Boolean source comparisons and concrete replay. `verification.py` owns aggregate function/type coverage and cannot mark a whole module checked merely because one function passed.
 
-## Packaging
+No agent, test generator or solver may rewrite the authority it is checked against. Effects do not specify functional behavior. A return type does not specify a reference's intent. Native libraries do not import the agent tooling or Z3 at runtime.
 
-`pyproject.toml` produces a small Python wheel containing only the compiler package, runtime header, entry point and metadata. Tests, training data, benchmarks and research history do not enter the installed runtime. The package requires no third-party Python library for ordinary compilation. Optional Z3 is a system-library dependency of scalar verification only. Packaging build tools and development tests have explicit versions.
+## Packaging and repository
 
-The repository contains the earlier research sources with provenance, but omits old generated binaries, nested archives, PDF reports and run caches. Historical specifications live under docs/history. Training artifacts retain their original claims and are explicitly labeled inherited; they are not fresh 0.5 results. Current results are generated into ignored results/ and selected evidence is retained under evidence/.
+The wheel contains the compiler package, C++ header, typed marker and CLI metadata only. Tests, benchmarks, training data, evidence and historical specifications stay out of the installed package. Ordinary native compilation has no third-party Python dependency. Z3 is an optional local system library; exact affine certificates use Python alone. Current evidence is versioned under evidence/v0_6, earlier evidence stays historical.
 
-## Limits of this structure
-
-Splitting files does not itself prove modularity or reduce the semantic work of a safe edit. There is still one frontend AST, one global source namespace and one C++ backend. General owning types, errors, standard libraries, concurrency and GPU semantics remain engineering and verification work. The layout gives those changes a named home without asserting they exist.
+The layout is not a namespaced module implementation, a separate linker, an application ecosystem or a complete standard library. Those remain named missing capabilities in capabilities.json. Small files and short cards reduce repeated context in some examples but do not reduce the semantic obligations of an actual edit by fiat.

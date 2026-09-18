@@ -5,7 +5,7 @@ from .syntax import *
 
 def derive_wire(p: Program) -> Program:
     """Closed AST-to-AST generator; field names cannot inject generated source."""
-    names = {f.name for f in p.functions} | set(p.records) | set(p.enums)
+    names = {f.name for f in p.functions} | set(p.records) | set(p.enums) | set(p.sums)
     def var(n): return Expr("name",n)
     def lit(n): return Expr("int",str(n))
     def call(n,*args): return Expr("call",n,list(args))
@@ -43,12 +43,13 @@ def derive_wire(p: Program) -> Program:
 def specialize(p: Program) -> Program:
     base = {f.name:f for f in p.functions if f.static}
     out = [f for f in p.functions if not f.static]
-    names = {f.name for f in out} | set(p.records) | set(p.enums)
+    names = {f.name for f in out} | set(p.records) | set(p.enums) | set(p.sums)
     def node_count(f):
         total = 0; todo = list(f.body)
         while todo:
             node = todo.pop(); total += 1
-            if isinstance(node, Stmt): todo.extend(node.body + node.other + node.exprs)
+            if isinstance(node, Stmt): todo.extend(node.body + node.other + node.exprs + node.arms)
+            elif isinstance(node, Arm): todo.extend(node.body)
             elif isinstance(node, Expr): todo.extend(node.args)
         return total
     estimated = sum(node_count(f) for f in out)

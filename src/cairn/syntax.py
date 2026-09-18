@@ -27,9 +27,9 @@ class Token:
     start: int = -1
     end: int = -1
 
-TOKEN = re.compile(r"//[^\n]*|\s+|(?:[0-9]+\.[0-9]+(?:[eE][+-]?[0-9]+)?|[0-9]+(?:[eE][+-]?[0-9]+))|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|->|\.\.|==|!=|<=|>=|&&|\|\||[{}()\[\],;:.@+*/%<>=!&|^~-]")
+TOKEN = re.compile(r"//[^\n]*|\s+|(?:[0-9]+\.[0-9]+(?:[eE][+-]?[0-9]+)?|[0-9]+(?:[eE][+-]?[0-9]+))|[0-9]+|[A-Za-z_][A-Za-z_0-9]*|=>|->|\.\.|==|!=|<=|>=|&&|\|\||[{}()\[\],;:.@+*/%<>=!&|^~-]")
 IDENT = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
-RESERVED = set("fn struct enum family let mut reg if else for each in while return true false ro rw host nat effects pure extern unsafe defer match kernel module import compact where yield derive wire".split())
+RESERVED = set("fn struct enum family let mut reg if else for each in while return true false ro rw host nat effects pure extern unsafe defer match kernel module import compact where yield derive wire buffer stack zeroed break continue".split())
 
 def lex(text: str) -> list[Token]:
     if len(text.encode()) > MAX_SOURCE:
@@ -95,6 +95,15 @@ class Stmt:
     line: int = 0
     col: int = 0
     binder: str = ""
+    arms: list[Arm] = field(default_factory=list)
+
+@dataclass
+class Arm:
+    variant: str
+    binder: str
+    body: list[Stmt]
+    line: int = 0
+    col: int = 0
 
 @dataclass
 class Function:
@@ -118,6 +127,7 @@ class Program:
     functions: list[Function] = field(default_factory=list)
     families: list[tuple[str, str, int, int]] = field(default_factory=list)
     derivations: list[str] = field(default_factory=list)
+    sums: dict[str, list[tuple[str, Type | None]]] = field(default_factory=dict)
 
 PREC = {"||":1,"&&":2,"|":3,"^":4,"&":5,"==":6,"!=":6,"<":7,"<=":7,">":7,">=":7,"+":8,"-":8,"*":9,"/":9,"%":9}
 
@@ -171,8 +181,11 @@ class Parser:
                     args.append(self.expr())
                     while self.eat(","): args.append(self.expr())
                     self.need(")")
-                if e.tag != "name": fail("E-CALL", "Only direct named calls are in the native subset.", e)
-                e = Expr("call", e.val, args, e.line, e.col)
+                if e.tag=="field" and e.args[0].tag=="name":
+                    callee=e.args[0].val+"."+e.val
+                elif e.tag=="name": callee=e.val
+                else: fail("E-CALL", "Only direct calls and qualified sum constructors are supported.",e)
+                e = Expr("call", callee, args, e.line, e.col)
             elif self.eat("["):
                 idx = self.expr(); self.need("]"); e = Expr("index", "", [e, idx], e.line, e.col)
             elif self.eat("."):
@@ -192,6 +205,12 @@ class Parser:
         return body
     def stmt(self) -> Stmt:
         t = self.t
+        if t.s in {"buffer", "stack"}:
+            self.i += 1
+            n = self.ident(); self.need(":"); typ = Type(self.ident())
+            self.need("["); extent = self.expr(); self.need("]")
+            self.need("="); self.need("zeroed"); self.need(";")
+            return Stmt(t.s, n, typ, [extent], line=t.line, col=t.col)
         if t.s in {"let", "reg"}:
             self.i += 1
             tag = "reg" if t.s == "let" and self.eat("mut") else t.s
@@ -208,6 +227,9 @@ class Parser:
                             line=t.line,col=t.col,binder=binder)
             e = self.expr(); self.need(";")
             return Stmt(tag, n, typ, [e], line=t.line, col=t.col)
+        if t.s in {"break","continue"}:
+            self.i+=1; self.need(";")
+            return Stmt(t.s,line=t.line,col=t.col)
         if self.eat("return"):
             es = [] if self.t.s == ";" else [self.expr()]; self.need(";")
             return Stmt("return", exprs=es, line=t.line, col=t.col)
@@ -216,6 +238,16 @@ class Parser:
             if self.eat("else"):
                 o = [self.stmt()] if self.t.s == "if" else self.block()
             return Stmt("if", exprs=[e], body=b, other=o, line=t.line, col=t.col)
+        if self.eat("match"):
+            scrutinee=self.expr(); self.need("{"); arms=[]
+            while not self.eat("}"):
+                a=self.t; name=self.ident(); self.need("."); name+="."+self.ident()
+                binder=""
+                if self.eat("("):
+                    binder=self.ident(); self.need(")")
+                self.need("=>"); body=self.block()
+                arms.append(Arm(name,binder,body,a.line,a.col))
+            return Stmt("match",exprs=[scrutinee],arms=arms,line=t.line,col=t.col)
         if self.eat("while"):
             e = self.expr(); b = self.block(); return Stmt("while", exprs=[e], body=b, line=t.line, col=t.col)
         if self.eat("for"):
@@ -241,9 +273,14 @@ class Parser:
             elif self.eat("enum"):
                 n = self.ident(); self.need("{"); vs = []
                 while not self.eat("}"):
-                    vs.append(self.ident()); self.need(";")
+                    variant=self.ident(); payload=None
+                    if self.eat("("):
+                        payload=self.ty(); self.need(")")
+                    vs.append((variant,payload)); self.need(";")
                 if n in names: fail("E-DUPLICATE", f"Duplicate declaration {n}.",t)
-                names.add(n); p.enums[n] = vs
+                names.add(n)
+                if any(ty is not None for _,ty in vs): p.sums[n]=vs
+                else: p.enums[n]=[v for v,_ in vs]
             elif self.eat("fn"):
                 n = self.ident(); static = None
                 if self.eat("["):

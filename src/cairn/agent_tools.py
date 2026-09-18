@@ -43,15 +43,23 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
     def put(s): lines.append('  '*(indent+1)+s)
     for s in ss:
         es=[format_expr(e) for e in s.exprs]
-        if s.tag in {'let','reg'}:
+        if s.tag in {'buffer','stack'}:
+            put(s.tag+' '+s.name+':'+s.ty.name+'['+es[0]+'] = zeroed;')
+        elif s.tag in {'let','reg'}:
             put(('let mut ' if s.tag=='reg' else 'let ')+s.name+
                 (':'+s.ty.display() if s.ty else '')+' = '+es[0]+';')
         elif s.tag=='compact':
             put('let '+s.name+' = compact '+es[0]+' for '+s.binder+' in '+es[1]+
                 ' where '+es[2]+' yield '+es[3]+';')
         elif s.tag=='assign': put(es[0]+' = '+es[1]+';')
+        elif s.tag in {'break','continue'}: put(s.tag+';')
         elif s.tag=='return': put('return'+(' '+es[0] if es else '')+';')
         elif s.tag=='expr': put(es[0]+';')
+        elif s.tag=='match':
+            put('match '+es[0]+' {')
+            for arm in s.arms:
+                put('  '+arm.variant+('('+arm.binder+')' if arm.binder else '')+' => '+format_block(arm.body,indent+2))
+            put('}')
         elif s.tag in {'if','while'}:
             put(s.tag+' '+es[0]+' '+format_block(s.body,indent+1))
             if s.other:
@@ -68,12 +76,14 @@ def type_declarations(p: Program) -> str:
     for n,fs in p.records.items():
         out.append('struct '+n+' { '+' '.join(k+':'+t.display()+';' for k,t in fs)+' }')
     for n,vs in p.enums.items(): out.append('enum '+n+' { '+' '.join(v+';' for v in vs)+' }')
+    for n,vs in p.sums.items():
+        out.append('enum '+n+' { '+' '.join(v+('('+t.display()+')' if t else '')+';' for v,t in vs)+' }')
     return '\n'.join(out)
 
 def canonical_source(source: str) -> str:
     """An inspectable AST projection. Comments are not copied. Not an in-place edit."""
     p=Parser(source).parse()
-    out=[type_declarations(p)] if p.records or p.enums else []
+    out=[type_declarations(p)] if p.records or p.enums or p.sums else []
     out += [signature(f)+' '+format_block(f.body) for f in p.functions]
     out += [f'family {pre} = {name}[{lo}..{hi}];' for pre,name,lo,hi in p.families]
     out += [f'derive wire for {name};' for name in p.derivations]
@@ -91,6 +101,11 @@ def semantic_ast(p: Program) -> Any:
     return erase(asdict(p))
 
 HINTS={
+    'E-MATCH-COVERAGE': 'Handle the listed missing variants exactly once. Do not delete variants or weaken the task to silence coverage.',
+    'E-MATCH-BINDING': 'Bind one fresh immutable value only for an arm that has a declared payload.',
+    'E-OWNER-EXTENT': 'Bind a computed capacity to an immutable usize before declaring the buffer.',
+    'E-STACK-LIMIT': 'Reduce explicit stack storage, or request an authorized heap-allocation effect. Do not hide the cost.',
+    'E-LOOP-CONTROL': 'break and continue require an enclosing for or while loop.',
     'E-TYPE-MISMATCH': 'Use the expected type. An explicit conversion may trap; do not change the function signature to hide a mismatch.',
     'E-UNBOUND': 'Choose a name from the supplied lexical environment, or introduce a local before this use.',
     'E-CALLEE': 'Only declared callables and listed primitives are legal. Request context for a dependency instead of inventing an API.',
@@ -149,7 +164,7 @@ class EditSession:
         allowed=self.contract.get('allowed_effects',effects)
         if not isinstance(allowed,list) or not all(isinstance(x,str) for x in allowed):
             fail('E-CONTRACT','allowed_effects must be a list of effect strings.')
-        legal={'trap','ffi_precondition','diverge'}|{m+':'+n for n,t in self.f.params if t.mode!='value' for m in (['read','write'] if t.mode=='rw' else ['read'])}
+        legal={'trap','ffi_precondition','diverge','alloc','free','zero_init','stack_storage','local_read','local_write'}|{m+':'+n for n,t in self.f.params if t.mode!='value' for m in (['read','write'] if t.mode=='rw' else ['read'])}
         if set(allowed)-legal:fail('E-CONTRACT','Unknown effect or inaccessible memory permission in contract.')
         if set(effects)-set(allowed):fail('E-CONTRACT','Baseline itself exceeds the supplied effect ceiling.')
         self.allowed_effects=set(allowed)
@@ -201,12 +216,12 @@ class EditSession:
            'types':type_declarations(self.parsed),'context':context,
            'rule_cards':select_cards('\n'.join(x['source'] for x in context),
                 any(t.mode!='value' for n in self.visible for _,t in names[n].params),
-                bool(self.parsed.records or self.parsed.enums)),
+                bool(self.parsed.records or self.parsed.enums),bool(self.parsed.sums)),
            'dependencies':{n:{'signature':signature(names[n]),'effects':self.receipt['functions'][n]['effects']}
                 for n in sorted(self.visible)},
            'draft_protocol':{'protocol':PROTOCOL,'session':self.session,'kind':'body','replacement':'{ ... }'},
            'limits':{'replacement_bytes':MAX_REPLACEMENT,'one_authored_function':True},
-           'scope':'Entire static call-graph component plus all record/enum definitions; full module rechecked.',
+           'scope':'Entire static call-graph component plus all record/enum/sum definitions; full module rechecked.',
            'boundaries':['No permission to change parameters, imports, target flags, tests or task contract.',
                 'Typed admission does not imply the requested behavior, termination, equivalence, or performance.',
                 'No fresh-model success rate has been measured.']}

@@ -1,76 +1,88 @@
-# CAIRN 0.5
+# CAIRN 0.6
 
-A runnable CPU language prototype with a checked frontend, a C++20 backend, and compiler-guided AI editing. This repository turns the 0.4 research artifact into an installable developer tool. It is not a full C++ replacement or a verified compiler.
+An executable CPU language prototype with explicit memory, typed error results, a C++20 backend, and compiler-guided AI edits. This release adds scoped heap/stack buffers, exhaustive matching, loop control, exact arithmetic certificates, and whole-module scalar-verification coverage. It is **not a full C++ replacement or an entirely proved compiler**.
 
 ```cairn
-fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
+enum Division { Value(u64); ZeroDivisor; }
 
-fn select_even(n:usize, out:rw<u64>[n], input:ro<u64>[n]) -> usize {
-  let used = compact out for i in n where (input[i] & 1) == 0 yield input[i];
+fn divide(x:u64, y:u64) -> Division {
+  if y == 0 { return Division.ZeroDivisor; }
+  return Division.Value(x / y);
+}
+
+fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
+```
+
+A returned error is data, not an abort. Match every variant explicitly. The arithmetic identity avoids intermediate overflow; the restricted scalar checker can compare it with a fixed reference. Neither its result nor a compiler typecheck proves the complete native toolchain.
+
+## Build and run
+
+Tested host: Linux x86-64, Python 3.11+, Clang 17 or GCC 14.2 with C++20. Ordinary compilation has no third-party Python runtime dependency. Scalar equivalence additionally needs a locally installed Z3 shared library. There are no automatic downloads, model endpoints, or credentials.
+
+```sh
+python3 bin/cairn doctor
+python3 bin/cairn run examples/systems
+python3 bin/cairn test examples/systems --cxx g++
+python3 bin/cairn certificates
+python3 bin/cairn verify examples/proof_scope/reference.cairn \
+  examples/proof_scope/candidate.cairn --all
+python3 bin/cairn new my_project
+```
+
+`examples/systems` is a real multi-file executable: a decimal parser returns typed error offsets, a byte sorter uses a fixed stack histogram, and a filtering pipeline uses one explicit heap buffer. It has independent expected outputs. It does not depend on an unimplemented language I/O library. Exit zero denotes the example's success.
+
+Install the supplied wheel with `python3 -m pip install --no-index --no-deps /path/to/cairn_language-0.6.0-py3-none-any.whl`. An installed `cairn` command exposes the same interface as `python3 bin/cairn`.
+
+## Explicit storage, compact source
+
+```cairn
+fn sorted_even(n:usize, out:rw<u8>[n], input:ro<u8>[n]) -> usize {
+  buffer scratch:u8[n] = zeroed;
+  sort_bytes(n,scratch,input);
+  let used = compact out for i in len(scratch)
+    where (scratch[i] & 1) == 0 yield scratch[i];
   return used;
 }
 ```
 
-`average` avoids intermediate overflow. `select_even` writes into caller-owned storage, allocates nothing, preserves order, and leaves the unused output tail unchanged. The shorter syntax uses the same checked AST and runtime as its explicit form.
+`sort_bytes` is implemented in `examples/systems/src/sort.cairn`, not an invented library call. `buffer` allocates and initializes storage; `stack counts:usize[256] = zeroed;` reserves fixed local storage. `len` reads extent metadata. Owners cannot escape, be copied, or be returned in this profile. Normal scope exit, return, break and continue release scoped heap storage. Aborts do not promise cleanup. All reads and writes retain the native checks; the collector's structurally bounded output store is the existing specialized exception.
 
-## Build and run now
+## Commands and evidence
 
-Requirements: Python 3.11 or newer, Linux x86-64, and Clang or GCC with C++20 support. The compiler has no third-party Python runtime dependencies. Optional scalar equivalence requires a locally installed Z3 shared library. Nothing downloads a compiler, solver, model, or dependency automatically.
-
-From a checkout, without installing Python packages:
-
-```sh
-python3 bin/cairn doctor
-python3 bin/cairn check examples/hello
-python3 bin/cairn run examples/hello
-python3 bin/cairn test examples/hello
-python3 bin/cairn new my_project
-```
-
-The example is a native executable whose exit code is zero on success. There is no language I/O library yet. `cairn new` refuses any existing destination, including an empty directory.
-
-To install the supplied wheel, use `python3 -m pip install --no-index --no-deps /path/to/cairn_language-0.5.0-py3-none-any.whl`. For editable development, with the pinned build tools already installed: `python3 -m pip install --no-build-isolation --no-deps -e .`. Both expose the `cairn` command; `python3 bin/cairn` remains available without installation.
-
-## One CLI
-
-| Command | Meaning |
+| Command | Actual acceptance boundary |
 |---|---|
-| `check [path]` | Parse and check a file or ordered project. Does not run it. |
-| `emit [path]` | Print readable C++ to stdout. Does not overwrite source. |
-| `build [path]` | Build a library or executable into a fresh directory. |
-| `run [path]` | Explicitly build and execute `fn main() -> i32`. |
-| `test [path]` | Build and run the manifest's independent JSON test contracts. |
-| `verify reference candidate --symbol name` | Scalar source equivalence through Z3; not a native proof. |
-| `inspect [path] --symbol name` | Compiler-generated context for an agent edit. |
+| `check`, `emit` | Native syntax/types/effects; C++ emission is inspectable. |
+| `build`, `run` | Fresh native library/executable; explicit execution with process limits. |
+| `test` | Independent finite task cases, with child exit status checked. |
+| `certificates` | Seventeen exact linear identities for bounded-collector arithmetic, checked by trusted Python. |
+| `verify ... --symbol f` | Selected pure integer/Boolean function, fixed-reference equivalence through Z3. |
+| `verify ... --all` | Every declared function and public type census must satisfy the scalar policy; unsupported entries block aggregate success. |
+| `inspect ... --symbol f` | Source, scope, effects, and feature-selected instructions for an AI edit. |
 
-Build receipts contain exact source and artifact hashes, compiler flags and identity, exit status, and the verification boundary. Baseline architecture is `x86-64`; `--arch x86-64-v3` is explicit. Use `--cxx g++` to select GCC. Failed builds never reuse a previous CLI artifact.
+Use `--cxx g++` for GCC. Baseline `x86-64` is the CLI default; `--arch x86-64-v3` is explicit. `run` defaults to a 1024 MiB virtual-address-space limit, configurable with `--memory-mib`. Limits are not a security sandbox. Shared-library users must impose their own execution limits.
 
-## Repository map
+## Repository
 
 ```
-src/cairn/       parser, checking, expansion, code generation, CLI, agent/SMT tools
-  runtime/      the explicit C++ runtime header, packaged with the compiler
-examples/       compilable programs, projects, and task contracts
-tests/          frontend, project, protocol, native and publication tests
-tools/          development, fixture generation, audit and private publication
-bench/          independent C++ references and measurement harnesses
-docs/           current language/architecture/security guides and historical specs
-training/       inherited, auditable teaching fixtures, not a trained model
-evidence/       this revision's executed checks and limitations
+src/cairn/       syntax, expansion, checking, emission, CLI, editing and scalar SMT
+  runtime/      guarded views, arithmetic and scoped storage
+examples/       programs and fixed behavioral test contracts
+tests/          rejection, independent behavior, protocol and distribution tests
+tools/          repeatable validation, context accounting, audit and publication
+bench/          ordinary C++ references; no expert-baseline label
+docs/           current language/verification guides and explicitly historical specs
+training/       inherited teaching fixtures; no trained model is shipped
+evidence/       versioned executed results and limitations
 ```
 
-The ordered project loader is not an import system or separate compiler/linker. The library still lacks owners, allocation, modules/namespaces, traits, closures, recoverable errors, OS libraries, CPU concurrency, and GPU code generation. Historical specifications describe proposals, not extra accepted syntax.
+Start with [language](docs/language.md), [verification](docs/verification.md), and [testing](docs/testing.md). [AGENTS.md](AGENTS.md) gives the edit rules. The capability ledger at [docs/capabilities.json](docs/capabilities.json) distinguishes implemented features from missing ones. `make test`, `make systems`, `make proof`, and `make native` are independent gates.
 
-## Develop and verify
+## Local and private
 
-Run `make test` for the fast suite and `make native` for native regressions, GCC, sanitizers and code-section comparisons. `make wheel` builds an offline wheel using the installed pinned setuptools. See [testing](docs/testing.md) for each acceptance level and [architecture](docs/architecture.md) for source ownership. Follow [AGENTS.md](AGENTS.md) before AI-assisted changes.
+All changes in this delivery remain local on `work/v0.6`; the previous `main` and `v0.5.0` are retained. No GitHub repository was created, no code was uploaded, and no remote workflow was run. The optional [private publisher](docs/private-publication.md) remains opt-in, private-only, and non-force. It is not invoked by tests or builds. No public fallback or license was selected.
 
-## Private GitHub publication
+## What this does not establish
 
-This delivery creates a local Git repository only. The connected GitHub interface could read repositories and write existing repository content, but could not create a repository; the environment had no authenticated GitHub CLI. No code was uploaded, no existing repository was changed, and no remote privacy claim is made.
+Exact arithmetic certificates do not establish parser/type soundness, lifetime safety, stable-selection correctness, or native refinement. SMT equivalence trusts its translator and solver and rejects memory, loops, sums, floating point, and concurrency. There is no successful Lean build or axiom audit. General owners/containers, generic results, namespaces/separate compilation, OS libraries, CPU concurrency and GPU lowering remain unimplemented.
 
-`tools/publish_private.py OWNER/REPO` performs a local-only preflight. With an already authenticated GitHub CLI, adding `--execute` creates a **new private personal repository**, checks identity and privacy before uploading, pushes without force, and checks the result. It refuses existing local remotes and name conflicts. Read [private publication](docs/private-publication.md) first. There is no public fallback, automatic authentication, release publication, or license selection.
-
-## Evidence boundary
-
-The native compiler and C++ toolchain remain trusted. Scalar `smt-equivalent` trusts its translator and Z3 and excludes memory, loops and floating point. No Lean theorem covers this compiler; historical Lean work remains unchecked. No new model training, model proficiency result, GPU speed claim, general 100x density result, or universal C++ performance claim is made.
+No model was trained or evaluated. Context measurements count complete constructed packets, not model proficiency. Byte-token counts are not frontier BPE counts; no general 100x compression is claimed. Native section equality is not a timing benchmark or universal C++ performance guarantee.

@@ -1,9 +1,9 @@
-# Next implementation gates
+# Remaining acceptance gates
 
-The next breadth work is real namespaced modules, separate compilation and stable public interfaces, followed by payload sums, Result values, owned storage and explicit cleanup. Each requires executable examples and rejection/behavior tests; a design entry alone is not completion.
+The CPU compiler now has scoped scalar storage and monomorphic tagged outcomes. These are not general owning containers or generic Result values. The next breadth gate is move/borrow-capable owners and containers, sum/record composition, real namespaces and separately compiled interfaces, then generic functions/traits and controlled foreign I/O. Each addition needs an actual application and rejection/behavior tests. OS libraries, atomics/locks, concurrency, asynchronous I/O, freestanding targets and GPU lowering remain absent.
 
-The next proof work is a checked translation theorem for the actual scalar bit-vector translator, then guarded-array and lifetime semantics. The historical fixed-arena Lean sources do not establish these results. Do not claim a proof until the pinned toolchain runs and axioms are audited.
+The immediate formal gate is a Lean-checked semantics and translation theorem for this actual bit-vector and scoped-storage implementation. The affine-implication checker is small enough to be one first verified component, followed by a collector induction and certified code correspondence. A statement that all arithmetic coefficients match does not prove lifetime safety, type soundness or compiler refinement. Source and native layers require separate statements and real toolchain/axiom audits.
 
-The next AI experiment compares fresh, equally budgeted agents using this workflow and equally capable C++/Rust tooling. Measure task correctness, total tokens including failed attempts, checking cost, regressions and native performance. Neither a corpus nor a scripted repair is that experiment.
+The AI gate is a fresh-model experiment with independent tasks, comparable C++/Rust editing and verification tools, equal total inference/checker/test budgets, real model tokenizer accounting and family-disjoint evaluation. Count failed attempts, caller regressions, task correctness, native speed and total context. No corpus or deterministic search substitutes for this experiment.
 
-The next GPU gate is a real target backend with explicit memory/collective semantics and asynchronous lifetimes. Do not infer GPU control or speed from a CPU C++ backend.
+GPU support needs a real backend, target memory/collective semantics, explicit asynchronous lifetimes and measurements. No CPU C++ backend or scalar proof confers GPU behavior. No communication-optimality or universal C++ performance result has been obtained.

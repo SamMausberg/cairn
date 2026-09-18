@@ -1,0 +1,8 @@
+[project]
+name = "systems"
+sources = ["src/parse.cairn", "src/sort.cairn", "src/main.cairn"]
+tests = ["tests/decimal.json", "tests/sorted_even.json"]
+
+[build]
+kind = "exe"
+arch = "x86-64"

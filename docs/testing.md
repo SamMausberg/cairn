@@ -1,42 +1,60 @@
-# Reproducing checks
+# Reproduce CAIRN 0.6 evidence
 
-The executable results for this revision are in evidence/. Do not promote old training labels or old report numbers to new measurements.
+Results for this release live in evidence/v0_6. Historical teaching labels and old benchmarks are not new tests. All commands below run locally and perform no publication or credential setup.
 
-## Fast development gate
+## Fast and example gates
 
 ```sh
 python3 -m pytest -q tests
-python3 bin/cairn check examples/hello
 python3 bin/cairn run examples/hello
 python3 bin/cairn test examples/hello
+python3 bin/cairn run examples/systems --memory-mib 1024
+python3 bin/cairn test examples/systems --cxx g++
 ```
 
-Tests exercise parse/type rejection, alias/effect restrictions, sealed edits, scalar comparison, project path validation, source mapping, fresh output directories, both native compilers, and fail-closed publication. Publication tests use fake GitHub responses and temporary local Git repositories, never a live remote.
+The fast suite covers native syntax, source spans, project validation, effect boundaries, local owners, exhaustive results, loop targeting, edits, scalar coverage, exact certificates and mocked private publication. `examples/systems` has a typed decimal parser and a stack/heap sorting/filter pipeline; its tests inspect meaningful outputs rather than successful compilation alone.
 
-## Native regression gate
+## Independent systems tests
+
+```sh
+python3 tools/validate_systems.py
+```
+
+This checks decimal values and first error offsets against a Python oracle, sorts against sorted(), filters against a list oracle, verifies unchanged inputs and output tails, and runs both compilers. A separate O0 observer counts allocation/release across returns, loops and match exits. Production-runtime sanitizer and SIGABRT fixtures are separate from that observer. It also verifies identity edits across the new syntax. It does not prove allocation/lifetime safety for arbitrary programs.
+
+## Existing native and arithmetic gates
 
 ```sh
 python3 tools/verify.py --gcc --sanitize
 python3 bench/codegen_only.py
-```
-
-This retained measurement harness deliberately writes generated fixtures under results/ and can overwrite those ignored results. It is separate from the normal fresh-directory CLI builder. It tests ordinary functions and families, abort cases, exhaustive short collectors, wire encoding/decoding, independent C++ template values, and ASan/UBSan. Code-section comparison includes relocation entries. Timing is optional and is not implied by byte equality.
-
-The aggregate harness can take longer than an interactive command limit. If a command is interrupted, record the successful completed children, run the remaining children explicitly, and never rewrite the interruption as a pass. evidence/RUN_NOTES.md records the actual continuation for this release.
-
-## Scalar verification gate
-
-```sh
-python3 bin/cairn verify examples/sketch/reference.cairn   examples/hello/src/math.cairn --symbol average
 python3 tools/validate_semantics.py --gcc
 ```
 
-The first query compares all declared-width scalar inputs under a fixed total reference. The larger arithmetic validator uses test-only trap instrumentation for repeated observation; it is not a proof of native abort behavior. Memory, loops and floating point are outside scalar equivalence. Missing solver or undecided obligations are unknown.
+The old native harness preserves equal boundary checks, strict floating flags, both compilers, independent codec/template cases and exhaustive small collectors. Code-section comparison counts instruction bytes and relocations; no fresh timing run is implied. Arithmetic validation uses a test-only trap observer, independent concrete arithmetic and input-pinned SMT checks. A trusted translator or oracle can still contain a bug. All harness-generated files under results/ are ignored and may be replaced on rerun.
 
-## Distribution gate
+## Certificate and coverage gates
 
-Build the wheel offline with installed build tools, install it in a fresh environment outside this checkout, and execute `cairn new`, `check`, `run`, `test` and `verify`. The wheel must include the runtime header. Clone the Git bundle into a fresh directory; verify its object database and repeat the fast gate. Source-tree tests alone do not establish that an installed package works.
+```sh
+python3 bin/cairn certificates
+python3 bin/cairn verify examples/proof_scope/reference.cairn \
+  examples/proof_scope/candidate.cairn --all
+python3 bin/cairn verify examples/proof_scope/mixed.cairn \
+  examples/proof_scope/mixed.cairn --all
+```
 
-## Meaning of results
+The first module comparison should succeed in the scalar source model. The second must return incomplete/nonzero, because unsupported memory cannot inherit a scalar pass. Both outcomes are recorded. No successful Lean build is implied by either gate. verification.md states the full boundaries.
 
-A typecheck checks the prototype's implemented static rules. A finite test observes supplied inputs only. A sanitizer run is dynamic checking, not unconditional memory safety. SMT equivalence trusts the translator and solver within its explicit fragment. Identical native sections under named flags are neither a benchmark nor proof of equivalence on a different target. No tested stage upgrades itself into a Lean proof or an AI proficiency result.
+## Context accounting
+
+```sh
+python3 tools/measure_context.py
+python3 tools/density.py
+```
+
+measure_context.py uses the same current full JSON packet for each legacy-profile function and changes only rule-card text to the preserved 0.5 text for its counterfactual. All other source, type/effect, task, hash and transport fields remain identical. It separately reports new-feature packets, which have no executable 0.5 comparison. The default tokenizer is exact plain ByT5 byte mapping with no special tokens. With a separately installed package/vocabulary, `--tiktoken o200k_base` measures that encoding instead. No such optional result is reported unless it ran. Packet sizes are not logged AI conversations, training gains or comprehension scores. Widening feature coverage can enlarge the full card even while common packets shrink.
+
+## Distribution, history and failure policy
+
+Build the wheel offline, install outside the source checkout, run native examples/independent contracts and both verification modes, and compare all packaged source/runtime bytes with the repository. Verify the Git bundle, extract the final ZIP and repeat unit/example gates. A worktree success is not an installed-package success.
+
+A failed, timed-out or interrupted command must be recorded as such. An unchanged rerun is a new result, not erasure of the failure. Task runners require a good child exit as well as their JSON result. Limits are not a sandbox. Whole-compiler correctness, native refinement, model proficiency, GPU performance and C++-breadth completeness each require evidence absent from these finite gates.

@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: check test native wheel audit demo
+.PHONY: check test native systems proof context wheel audit demo
 check:
 	$(PYTHON) bin/cairn check examples/hello
 
@@ -20,3 +20,15 @@ audit:
 demo:
 	$(PYTHON) bin/cairn run examples/hello
 	$(PYTHON) bin/cairn test examples/hello
+
+systems:
+	$(PYTHON) tools/validate_systems.py
+	$(PYTHON) bin/cairn run examples/systems
+	$(PYTHON) bin/cairn test examples/systems
+
+proof:
+	$(PYTHON) bin/cairn certificates
+	$(PYTHON) bin/cairn verify examples/proof_scope/reference.cairn examples/proof_scope/candidate.cairn --all
+
+context:
+	$(PYTHON) tools/measure_context.py

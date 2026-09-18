@@ -68,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
             c.add_argument('--out', type=Path)
             c.add_argument('--arch', choices=['x86-64', 'x86-64-v3'])
             c.add_argument('--timeout', type=int, default=60)
+        if name == 'run':
+            c.add_argument('--memory-mib',type=int,default=1024,help='Native address-space cap, 64..65536 MiB; not a sandbox.')
         if name == 'build':
             c.add_argument('--kind', choices=['library', 'exe'])
         if name == 'test':
@@ -77,8 +79,11 @@ def main(argv: list[str] | None = None) -> int:
     v = sub.add_parser('verify', help='SMT source equivalence, not native or Lean verification.')
     v.add_argument('reference', type=Path)
     v.add_argument('candidate', type=Path)
-    v.add_argument('--symbol', required=True)
+    mode=v.add_mutually_exclusive_group(required=True)
+    mode.add_argument('--symbol')
+    mode.add_argument('--all',action='store_true',help='Require scalar equivalence for every declared function.')
     v.add_argument('--timeout-ms', type=int, default=3000)
+    sub.add_parser('certificates',help='Check collector arithmetic certificates; not a Lean/compiler proof.')
     a = p.parse_args(argv)
     project = None
     try:
@@ -86,17 +91,28 @@ def main(argv: list[str] | None = None) -> int:
             report({'version': __version__, 'python': platform.python_version(),
                     'platform': platform.platform(), 'clang++': shutil.which('clang++'),
                     'g++': shutil.which('g++'), 'z3': ctypes.util.find_library('z3'),
+                    'lean':shutil.which('lean'),'lake':shutil.which('lake'),
                     'formal_status': 'not-verified', 'native_platform': 'Linux x86-64',
                     'network_access': False})
             return 0
+        if a.command == 'certificates':
+            from .linear_certificates import audit_collector
+            report(audit_collector()); return 0
         if a.command == 'new':
             report(create_project(a.directory)); return 0
+        if a.command == 'verify' and a.all:
+            from .verification import verify_module
+            result=verify_module(read_text(a.reference,64000),read_text(a.candidate,64000),a.timeout_ms)
+            report(result)
+            return 0 if result['status']=='smt-module-equivalent' else 2
         if a.command == 'verify':
             from .scalar_semantics import equivalent
             result = equivalent(read_text(a.reference, 64000), read_text(a.candidate, 64000),
                                 a.symbol, timeout_ms=a.timeout_ms)
             report(result)
             return 0 if result['status'] == 'smt-equivalent' else 1 if result['status'] in {'counterexample','rejected','invalid-contract','invalid-domain','invalid-reference'} else 2
+        if a.command=='run' and not 64<=a.memory_mib<=65536:
+            raise ProjectError('Native memory limit must be 64..65536 MiB.')
         project = load_project(a.path)
         if a.command in {'check', 'emit'}:
             generated, receipt = compile_source(project.source)
@@ -133,11 +149,13 @@ def main(argv: list[str] | None = None) -> int:
         def limits():
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
             resource.setrlimit(resource.RLIMIT_CPU, (a.timeout, a.timeout))
+            memory=a.memory_mib*1024*1024
+            resource.setrlimit(resource.RLIMIT_AS,(memory,memory))
         cp = subprocess.run([result['artifact']], capture_output=True, text=True,
                             timeout=a.timeout, preexec_fn=limits)
         report({'status': 'program-exited', 'exit_code': cp.returncode,
                 'stdout': cp.stdout, 'stderr': cp.stderr, 'build_directory': result['directory'],
-                'security_sandbox': False})
+                'security_sandbox': False,'memory_limit_mib':a.memory_mib})
         return 0 if cp.returncode == 0 else 1
     except Diagnostic as error:
         report(project.locate(error) if project else error.data); return 1

@@ -1,0 +1,35 @@
+{
+  "profile": "cairn-native/0.6.0",
+  "complete_cpp_breadth": false,
+  "entire_compiler_proved": false,
+  "lean_verified": false,
+  "model_proficiency_measured": false,
+  "implemented": {
+    "native_cpu": "Linux x86-64 C++20 lowering, libraries and executable main",
+    "scalars": "fixed integers, bool and restricted strict floating point",
+    "records": "copyable nonrecursive scalar/record fields",
+    "sums": "monomorphic tag plus optional scalar payload, exhaustive match",
+    "memory": "borrowed host views; nonescaping zeroed scoped scalar heap/stack arrays",
+    "control": "branches, loops, recursion, break/continue, expression bodies",
+    "generation": "bounded natural families, fixed unsigned wire codecs, collector",
+    "projects": "ordered files in one namespace; data-only manifests",
+    "editing": "host-bound body/expression choices, lexical feature cards and effects",
+    "arithmetic_certificates": "17 trusted-Python exact affine implications",
+    "scalar_equivalence": "trusted translator and Z3, explicit per-function/module coverage"
+  },
+  "not_implemented": [
+    "general move-capable owners",
+    "resizable owned containers",
+    "generic types/results/traits",
+    "closures",
+    "namespaced modules/separate compilation",
+    "general OS I/O library",
+    "concurrency/atomics/locks",
+    "GPU backend",
+    "asynchronous I/O",
+    "freestanding targets",
+    "native refinement proof",
+    "Lean kernel verification"
+  ],
+  "principle": "Implemented, finite-tested, exact-algebra-checked and SMT-equivalent are distinct scopes."
+}
