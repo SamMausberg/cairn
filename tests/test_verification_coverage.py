@@ -2,8 +2,6 @@
 
 import json
 
-import pytest
-
 from cairn.cli import main
 from cairn.verification import verify_module
 

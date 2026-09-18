@@ -1,15 +1,12 @@
-import copy
 import json
-import random
-import sys
 from pathlib import Path
 
 import pytest
 
+from cairn.agent_tools import PROTOCOL, EditSession, canonical_source, explain, load_json_strict, semantic_ast
+from cairn.cairnc import Diagnostic, Parser, compile_source
+
 R = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(R / "src"))
-from cairn.agent_tools import *
-from cairn.cairnc import Checker, Diagnostic, Parser, compile_source, derive_wire, specialize
 
 S = "fn step(x:u64)->u64 { return add_wrap(x,1); }\nfn caller(x:u64)->u64{return step(x);}\nfn other(x:u64)->u64{return mul_wrap(x,2);}\n"
 

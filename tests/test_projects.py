@@ -1,17 +1,15 @@
-import json
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 from cairn.agent_tools import PROTOCOL, EditSession, canonical_source
 from cairn.build import build
-from cairn.cairnc import Diagnostic, Parser, compile_source
+from cairn.cairnc import Diagnostic, compile_source
 from cairn.cli import create_project, main
 from cairn.project import ProjectError, load_project
 from cairn.scalar_semantics import equivalent
-from cairn.sketches import ScalarContract, Sketch
+from cairn.sketches import Sketch
 
 
 @pytest.mark.parametrize(

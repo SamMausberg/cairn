@@ -1,11 +1,6 @@
-import sys
-from pathlib import Path
-
 import pytest
 
-R = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(R / "src"))
-from cairn.scalar_semantics import Concrete, Formula, Symbolic, conj, constant, equivalent, neg, prepared, same
+from cairn.scalar_semantics import Concrete, equivalent, prepared
 from cairn.smt_bridge import Solver
 
 
@@ -24,7 +19,7 @@ def check(a, b, expected="smt-equivalent", **kw):
 def test_wrap_and_checked_boundary(ty):
     r = check(fn("return add_wrap(x,1);", f"x:{ty}", ty), fn("return x+1;", f"x:{ty}", ty), "counterexample")
     assert r["counterexample"]["x"] == (1 << ({"u8": 8, "u16": 16, "u32": 32}.get(ty, 64))) - 1
-    assert r["expected"]["return"] == 0 and r["actual"]["defined"] == False
+    assert r["expected"]["return"] == 0 and not r["actual"]["defined"]
 
 
 @pytest.mark.parametrize("ty", ["u8", "u16", "u32", "u64", "usize", "i32", "i64"])

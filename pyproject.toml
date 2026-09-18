@@ -48,7 +48,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B011", "E731", "E741"]
+"tests/*" = ["B011", "E731", "E741", "B905", "B007", "B023"]  # independent oracles stay as written
 "tools/*" = ["E402"]
 "bench/*" = ["E402"]
 

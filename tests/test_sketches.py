@@ -1,12 +1,5 @@
-import copy
-import sys
-from pathlib import Path
-
 import pytest
 
-R = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(R / "src"))
-from cairn.agent_tools import stable_json
 from cairn.cairnc import Diagnostic, compile_source
 from cairn.sketches import ScalarContract, Sketch, solve_finite
 

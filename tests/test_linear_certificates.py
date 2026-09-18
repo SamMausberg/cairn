@@ -6,7 +6,7 @@ from itertools import product
 import pytest
 
 from cairn.cairnc import compile_source
-from cairn.linear_certificates import Certificate, Rule, audit_collector, check, collector_rules
+from cairn.linear_certificates import Certificate, audit_collector, check, collector_rules
 
 
 def test_all_rules_and_compiler_gate():

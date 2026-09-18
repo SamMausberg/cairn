@@ -3,9 +3,9 @@
 from pathlib import Path
 
 import pytest
+
 import test_concurrency as concurrency
 import test_language as language
-
 from cairn.agent_tools import PROTOCOL, EditSession, canonical_source
 from cairn.cairnc import Diagnostic, compile_source
 from cairn.sketches import Sketch

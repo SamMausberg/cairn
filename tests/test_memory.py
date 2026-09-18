@@ -1,9 +1,7 @@
 """Scope-owned memory and its interfaces. Native checks are finite, not proofs."""
 
 import ctypes
-import json
 import subprocess
-from pathlib import Path
 
 import pytest
 

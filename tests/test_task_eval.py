@@ -1,12 +1,8 @@
 import copy
-import sys
-from pathlib import Path
 
 import pytest
 
-R = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(R / "src"), str(R / "tools")]
-from task_eval import evaluate, validate_contract
+from task_eval import evaluate
 
 SRC = "fn f(x:u64)->u64 { return add_wrap(x,1); }"
 TASK = {
