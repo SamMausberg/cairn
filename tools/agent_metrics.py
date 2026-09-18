@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Measure actual packets, patches and identity edits, not model performance."""
 
-import hashlib
 import json
 import statistics
 import sys
@@ -10,7 +9,7 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(R / "src"))
-from cairn.agent_tools import EditSession, canonical_source, digest, stable_json
+from cairn.agent_tools import EditSession, canonical_source, stable_json
 from cairn.cairnc import Parser, compile_source
 from cairn.teaching import CARDS
 
@@ -38,7 +37,7 @@ def main():
                 "replacement": info["source"],
             }
             start = time.perf_counter()
-            candidate, typed = s.check(req)
+            candidate, _ = s.check(req)
             durations.append(time.perf_counter() - start)
             assert compile_source(candidate)[0] == generated
             identity += 1
@@ -71,6 +70,7 @@ def main():
                 "note": "Constructed lexical packet, not model-read cost or measured comprehension.",
             }
         )
+    (R / "results").mkdir(exist_ok=True)
     (R / "results/agent_metrics.json").write_text(
         json.dumps(
             {

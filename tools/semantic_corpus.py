@@ -8,6 +8,7 @@ Python interpreter and BOTH instrumented native backends. No model is trained.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import random
@@ -192,8 +193,10 @@ def cases():
 
 
 def main():
-    root = R / "training/semantic"
-    root.mkdir(exist_ok=True)
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--root", type=Path, default=R / "training/semantic", help="Where the audited corpus is written.")
+    root = p.parse_args().root
+    root.mkdir(parents=True, exist_ok=True)
     queries = root / "obligations"
     queries.mkdir(exist_ok=True)
     rows = cases()
@@ -294,7 +297,7 @@ def main():
     summary = {
         "status": "passed",
         "tasks": len(rows),
-        "algorithm_families": len(set(r["family"] for r in rows)),
+        "algorithm_families": len({r["family"] for r in rows}),
         "training_pairs": len(training),
         "evaluation_prompts": len(heldout),
         "positive_smt_labels": len(rows),

@@ -48,7 +48,7 @@ SOFT = {
     "wait",
 }  # New in 1.0: a program's own function wins.
 BUILTINS = WRAPPING | SOFT | {"min", "max", "len"}
-INTRINSIC_TYPES = {"Buf": 1, "Array": 2, "fn": None, "dyn": 1, "Ticket": 1, "Atomic": 1, "Mutex": 1}
+INTRINSIC_TYPES = {"Buf": 1, "Array": 2, "fn": None, "dyn": 1, "Dyn": 1, "Ticket": 1, "Atomic": 1, "Mutex": 1}
 PINNED = {"Ticket", "Atomic", "Mutex"}  # Declared and borrowed in place; never stored, passed or returned.
 ORDERS = ["relaxed", "acquire", "release", "acquire_release", "seq_cst"]
 ATOMIC_OPS = {
@@ -235,6 +235,11 @@ class Checker:
             base = self.tenv[ty.name]
             if not isinstance(base, Type):
                 fail("E-TYPE", f"{ty.name} is a static natural, not a type.", node)
+        elif ty.name == "Dyn" and len(ty.args) == 1 and isinstance(ty.args[0], Type):
+            trait = self.qualify(ty.args[0].name, self.p.traits, node=node)
+            if trait is None:
+                fail("E-DYN", f"Dyn[...] owns a value behind a trait; {ty.args[0].name} is not a trait.", node)
+            return Type("Dyn", ty.mode, ty.extent, (Type(trait),), ty.place)
         elif ty.name == "dyn":
             trait = self.qualify(ty.args[0].name, self.p.traits, node=node)
             if trait is None or ty.mode == "value" or ty.extent:
@@ -318,7 +323,7 @@ class Checker:
             inline = parts or (ty.args[:1] if ty.name == "Array" else [])
             ranks = [KINDS.index(self.kind(t)) for t in inline]
             linear = "linear" in self.p.attributes.get(ty.name, ()) or ty.name == "Ticket"
-            own = 2 if linear else int(ty.name in {"Buf", "dyn", "Atomic", "Mutex"})
+            own = 2 if linear else int(ty.name in {"Buf", "dyn", "Dyn", "Atomic", "Mutex"})
             self.kinds[ty] = KINDS[max([own, *ranks])]
         return self.kinds[ty]
 
@@ -1199,7 +1204,7 @@ class Checker:
 
     def e_call(self, e: Expr, expected: Type | None) -> Type:
         n, args = e.val, e.args
-        targs = tuple(self.static(a, e) for a in e.ref or ())
+        targs = tuple(e.ref or ()) if n == "Dyn" else tuple(self.static(a, e) for a in e.ref or ())
         receiver = None
         if "." in n and n.split(".")[0] in self.env:  # value.method(...) on a named place
             *names, n = n.split(".")
@@ -1251,7 +1256,10 @@ class Checker:
             for declared in members:
                 position = next((i for i, (_, t) in enumerate(declared.params) if t.name == "Self"), None)
                 if declared.name == short and position is not None and position < len(args):
-                    if self.peek(args[position]) == Type("dyn", args=(Type(trait),)):
+                    if self.peek(args[position]).value in (
+                        Type("dyn", args=(Type(trait),)),
+                        Type("Dyn", args=(Type(trait),)),
+                    ):
                         return self.dispatch(e, trait, declared, position, args)
                     found = self.implementation(trait, self.peek(args[position]).value)
                     if short in found:
@@ -1289,12 +1297,13 @@ class Checker:
                     self.expr(a, self.resolve(declared, a))
             ret = self.resolve(member.ret, e)
         receiver = root(args[position]).val
-        for members in self.implementors(trait).values():
-            target = members[member.name]
+        targets = [members[member.name] for members in self.implementors(trait).values()]
+        for target in targets:
             self.call_edges[self.f.name].append((target.name, {target.params[position][0]: receiver}))
             self.callset.add(target.name)
         self.effect("dispatch")
-        e.ref = ("dispatch", trait, [m.name for m in self.p.traits[trait]].index(member.name), position)
+        index = [m.name for m in self.p.traits[trait]].index(member.name)
+        e.ref = ("dispatch", trait, index, position, [t.name for t in targets])
         e.ty = ret
         return Function("", [], ret, [])
 
@@ -1400,14 +1409,15 @@ class Checker:
                 continue
             named = root(a).tag == "name" and root(a).val in self.env
             if want.name == "dyn" and self.peek(a).name != "dyn":
+                boxed = self.peek(a).value == Type("Dyn", args=want.args)
                 members = self.implementors(want.args[0].name).get(self.peek(a).value)
-                if members is None or len(members) != len(self.p.traits[want.args[0].name]):
+                if not boxed and (members is None or len(members) != len(self.p.traits[want.args[0].name])):
                     fail("E-TRAIT-IMPL", f"{a.ty.display()} does not implement {want.args[0].name}.", a)
                 if not named or (want.mode == "rw" and not self.writable(a)):
                     fail("E-WRITE-LEASE", "A dynamic reference borrows a named place (mutable for rw).", a)
                 inner = Expr(a.tag, a.val, a.args, a.line, a.col, a.ty, a.start, a.end, a.ref)
                 a.tag, a.args, a.ty = "coerce", [inner], want
-                a.ref = [members[m.name] for m in self.p.traits[want.args[0].name]]
+                a.ref = None if boxed else [members[m.name] for m in self.p.traits[want.args[0].name]]
                 self.early[id(a)] = a
                 self.leased(self.where(inner), want.mode, a)
                 borrows.append((self.where(inner), want.mode))
@@ -1555,6 +1565,20 @@ class Checker:
             self.effects |= {"read:" + root(a).val for a in args}
             self.expect(types[-1], types[0], e)
             return types[0] if n == "take" else VOID
+        if n == "Dyn":
+            ty = self.resolve(Type("Dyn", args=targs), e) if targs else expected
+            if ty is None or ty.name != "Dyn":
+                fail("E-INFER", "Write Dyn[Trait](value).", e)
+            arity(1, "Dyn takes the value it will own.")
+            members = self.implementors(ty.args[0].name).get(self.expr(args[0]).value)
+            if members is None or len(members) != len(self.p.traits[ty.args[0].name]):
+                fail("E-TRAIT-IMPL", f"{args[0].ty.display()} does not implement {ty.args[0].name}.", e)
+            for member in members.values():  # Whoever holds the value may dispatch to these.
+                self.callset.add(member.name)
+            self.effects |= {"alloc", "free"}
+            self.guard("allocation")
+            e.ref = ("builtin", [members[m.name] for m in self.p.traits[ty.args[0].name]])
+            return ty
         if n in {"Buf", "Array"}:  # Zero-initialized owners: Buf[T](n) on the heap, Array[T, N]() inline.
             ty = self.resolve(Type(n, args=targs), e) if targs else expected
             if ty is None or ty.name != n:

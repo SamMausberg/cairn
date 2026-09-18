@@ -99,46 +99,22 @@ def fixtures():
     return rows
 
 
+EDGES = [-2, -1, 0, 1, 2, 7, 8, 31, 32, 63, 64, 127, 128, 255, 256]
+
+
 def inputs(row, rng, exhaustive=True):
     pars = row["params"]
     if exhaustive and pars == [("x", "u8"), ("y", "u8")]:
-        return [dict(zip(["x", "y"], v)) for v in itertools.product(range(256), repeat=2)]
+        return [dict(zip(["x", "y"], v, strict=True)) for v in itertools.product(range(256), repeat=2)]
     axes = []
-    for n, t in pars:
+    for _, t in pars:
         if t == "bool":
             vals = [False, True]
         else:
             lo, hi = bounds(t)
-            vals = sorted(
-                set(
-                    x
-                    for x in [
-                        lo,
-                        lo + 1,
-                        -2,
-                        -1,
-                        0,
-                        1,
-                        2,
-                        7,
-                        8,
-                        31,
-                        32,
-                        63,
-                        64,
-                        127,
-                        128,
-                        255,
-                        256,
-                        hi // 2,
-                        hi - 1,
-                        hi,
-                    ]
-                    if lo <= x <= hi
-                )
-            )
+            vals = sorted({x for x in [lo, lo + 1, *EDGES, hi // 2, hi - 1, hi] if lo <= x <= hi})
         axes.append(vals)
-    cases = [dict(zip([n for n, _ in pars], v)) for v in itertools.product(*axes)]
+    cases = [dict(zip([n for n, _ in pars], v, strict=True)) for v in itertools.product(*axes)]
     for _ in range(100):
         cases.append({n: bool(rng.randrange(2)) if t == "bool" else rng.randint(*bounds(t)) for n, t in pars})
     return cases

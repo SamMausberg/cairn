@@ -7,7 +7,6 @@ No network, model call or benchmark. Finite tests are not a compiler proof.
 from __future__ import annotations
 
 import ctypes as C
-import hashlib
 import importlib.util
 import json
 import os
@@ -19,11 +18,15 @@ import tempfile
 from pathlib import Path
 
 R = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(R / "src"))
+sys.path[:0] = [str(R / "src"), str(R / "tools")]
 from cairn.agent_tools import PROTOCOL, EditSession
-from cairn.cairnc import RUNTIME, compile_source
+from cairn.cairnc import compile_source
 from cairn.linear_certificates import audit_collector
 from cairn.project import load_project
+from support import best_profile, environment, profile_flags, runtime_headers
+
+COMPILERS = ["clang++", "g++"]
+SANITIZE = ["-O1", "-g", "-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
 
 
 def module(name):
@@ -94,27 +97,17 @@ def main():
             )
         return cp
 
+    arch = best_profile(*COMPILERS)
+    result["environment"] = environment(*COMPILERS, arch=arch)
     with tempfile.TemporaryDirectory(prefix="cairn-systems-") as directory:
         t = Path(directory)
         (t / "candidate.cpp").write_text(cpp)
-        (t / "cairn_runtime.hpp").write_text(RUNTIME)
-        flags = [
-            "-std=c++20",
-            "-O2",
-            "-ffp-contract=off",
-            "-fno-fast-math",
-            "-fno-exceptions",
-            "-fno-rtti",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-Wno-unused-variable",
-            "-Wno-unused-parameter",
-            "-Wno-unused-but-set-variable",
-        ]
-        for cxx in ["clang++", "g++"]:
+        runtime_headers(t)
+        # -O2 keeps this oracle run quick; every other flag is the shared native contract.
+        flags = profile_flags("library", arch, drop=("-O3",), add=["-O2"])
+        for cxx in COMPILERS:
             so = t / (cxx.replace("+", "p") + ".so")
-            execute([cxx, *flags, "-shared", "-fPIC", str(t / "candidate.cpp"), "-o", str(so)])
+            execute([cxx, *flags, str(t / "candidate.cpp"), "-o", str(so)])
             lib = C.CDLL(str(so))
             lib.cf_observe_decimal.argtypes = [C.c_size_t, C.POINTER(C.c_uint8)]
             lib.cf_observe_decimal.restype = Observation
@@ -170,7 +163,7 @@ int main(){
 """
         (t / "observer.cpp").write_text(observer)
         result["lifetime_observer"] = {}
-        for cxx in ["clang++", "g++"]:
+        for cxx in COMPILERS:
             exe = t / "observer"
             execute([cxx, "-std=c++20", "-O0", str(t / "observer.cpp"), "-o", str(exe)])
             execute([str(exe)])
@@ -203,19 +196,7 @@ int main(){
         # Both translation units include the same guarded header through #pragma once.
         (t / "sanitize.cpp").write_text(sanitizer)
         exe = t / "sanitize"
-        execute(
-            [
-                "clang++",
-                "-std=c++20",
-                "-O1",
-                "-g",
-                "-fsanitize=address,undefined",
-                "-fno-omit-frame-pointer",
-                str(t / "sanitize.cpp"),
-                "-o",
-                str(exe),
-            ]
-        )
+        execute(["clang++", *profile_flags("exe", arch, drop=("-O3",), add=SANITIZE), str(t / "sanitize.cpp"), "-o", str(exe)])  # fmt: skip
         execute([str(exe)], env={**os.environ, "ASAN_OPTIONS": "detect_leaks=1", "UBSAN_OPTIONS": "halt_on_error=1"})
         result["sanitizers"] = {
             "compiler": "clang++",
@@ -240,7 +221,7 @@ fn stack_load()->u64 {stack x:u64[0]=zeroed;return x[0];}"""
         def no_core():
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
-        for cxx in ["clang++", "g++"]:
+        for cxx in COMPILERS:
             exe = t / "traps"
             execute([cxx, "-std=c++20", "-O2", str(t / "trap_driver.cpp"), "-o", str(exe)])
             codes = []

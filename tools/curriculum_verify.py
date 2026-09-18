@@ -16,10 +16,10 @@ import time
 from pathlib import Path
 
 R = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(R / "src"))
-sys.path.insert(0, str(R / "tools"))
+sys.path[:0] = [str(R / "src"), str(R / "tools")]
 from cairn.agent_tools import digest, load_json_strict, stable_json
-from cairn.cairnc import RUNTIME, compile_source
+from cairn.cairnc import compile_source
+from support import environment, runtime_headers
 from task_eval import FLAGS, validate_contract
 
 
@@ -29,15 +29,16 @@ def main():
     a = p.parse_args()
     source = (R / "training/source/corpus.cairn").read_text()
     tasks = load_json_strict((R / "training/source/all_tasks_with_oracles.json").read_text())
-    generated, receipt = compile_source(source)
+    generated, _ = compile_source(source)
+    compilers = ["clang++"] + (["g++"] if a.gcc else [])
     outputs = []
     started = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="cairn-curriculum-") as tmp:
         t = Path(tmp)
         (t / "corpus.cpp").write_text(generated)
         (t / "source.cairn").write_text(source)
-        (t / "cairn_runtime.hpp").write_text(RUNTIME)
-        for compiler_name in ["clang++"] + (["g++"] if a.gcc else []):
+        runtime_headers(t)
+        for compiler_name in compilers:
             compiler = shutil.which(compiler_name)
             if compiler is None:
                 raise RuntimeError("Requested compiler not installed: " + compiler_name)
@@ -89,6 +90,7 @@ def main():
     result = {
         "source_sha256": digest(source),
         "answers_sha256": digest(stable_json(tasks)),
+        "environment": environment(*compilers),
         "results": outputs,
         "elapsed_seconds": time.monotonic() - started,
         "model_runs": 0,

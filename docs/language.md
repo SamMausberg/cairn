@@ -96,7 +96,7 @@ wait(right);
 
 ## Dynamic interfaces
 
-`fn measure(s:ro<dyn Shape>) -> u64 = area(s) + 1;` takes any named place whose type implements the trait. The call site builds a two-word reference (object, static table); members called on it go through the table, add the `dispatch` effect, and contribute the effect rows of every implementation. A trait is dyn-compatible when only its receiver is a borrow or `Self`. Dynamic references are borrows, so they are never values: nothing is boxed and nothing escapes.
+`fn measure(s:ro<dyn Shape>) -> u64 = area(s) + 1;` takes any named place whose type implements the trait. The call site builds a two-word reference (object, static table); members called on it go through the table, add the `dispatch` effect, and contribute the effect rows of every implementation. A trait is dyn-compatible when only its receiver is a borrow or `Self`. Dynamic references are borrows, so they are never values and nothing escapes through them. The owned form is explicit: `let d = Dyn[Shape](Square(3));` moves a value of any implementing type to the heap (`alloc`, `free`), `Dyn[Shape]` is an ordinary affine value that can live in a `Vec` or a record, members called on it dispatch, and it lends itself wherever a `dyn Shape` reference is expected. An empty one (moved from, or from zeroed storage) is a guard failure when lent, never a null call.
 
 ## Modules
 

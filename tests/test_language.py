@@ -400,3 +400,52 @@ def test_float_to_integer_traps_outside_the_target(tmp_path, value):
         ["g++", "-std=c++20", "-O2", str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120
     )
     assert subprocess.run([tmp_path / "p"], timeout=30).returncode == -6
+
+
+def test_owned_dynamic_values_hold_heterogeneous_owners(tmp_path):
+    """Vec[Dyn[Shape]]: explicit allocation, dispatch through the table, release through the drop word."""
+    from pathlib import Path
+
+    source = (Path(__file__).parent / "native/owned_dynamic.cairn").read_text()
+    generated, receipt = compile_source(source)
+    assert {"alloc", "free", "dispatch"} <= set(receipt["functions"]["main"]["effects"])
+    (tmp_path / "p.cpp").write_text(generated + "int main() { return static_cast<int>(cf_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    build = [
+        "clang++",
+        "-std=c++20",
+        "-O1",
+        "-g",
+        "-fno-exceptions",
+        "-fsanitize=address,undefined",
+        "-fno-sanitize-recover=all",
+    ]
+    subprocess.run([*build, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
+    assert subprocess.run([tmp_path / "p"], timeout=60, env={"ASAN_OPTIONS": "detect_leaks=1"}).returncode == 0
+
+
+@pytest.mark.parametrize(
+    "code,tail",
+    [
+        ("E-TRAIT-IMPL", "fn f() -> u64 { let d = Dyn[Shape](Dot(1)); return measure(d); }"),
+        ("E-DYN", "fn f() -> u64 { let d = Dyn[Dot](Dot(1)); return 0; }"),
+        ("E-MOVED", "fn f() -> u64 { let sq = Square(1); let d = Dyn[Shape](sq); let e = d; return measure(d); }"),
+        ("E-WRITE-LEASE", "fn f() -> u64 { let d = Dyn[Shape](Square(1)); d.grow(1); return 0; }"),
+    ],
+)
+def test_owned_dynamic_rejections(code, tail):
+    with pytest.raises(Diagnostic) as e:
+        compile_source(DYNAMIC + tail)
+    assert e.value.data["code"] == code
+
+
+def test_an_empty_owned_dynamic_value_traps_when_lent(tmp_path):
+    source = DYNAMIC + "fn main() -> i32 { let mut pair = Array[Dyn[Shape], 2](); return i32(measure(pair[0])); }"
+    (tmp_path / "p.cpp").write_text(compile_source(source)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    subprocess.run(
+        ["g++", "-std=c++20", "-O2", str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120
+    )
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == -6

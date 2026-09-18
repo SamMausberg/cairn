@@ -51,6 +51,32 @@ public:
   }
   R operator()(A... a) const { return call_(env_,std::forward<A>(a)...); }
 };
+// Dyn[Trait]: an owned value of some implementing type. R is the generated two-word reference
+// {object, table}; the third word is how to release the object. A moved-from or zeroed Dyn is
+// empty, and lending an empty one is a guard failure, not a null call.
+template<class R> class Dyn final {
+  R ref_{};
+  void (*drop_)(void*) noexcept = nullptr;
+public:
+  Dyn() noexcept = default;
+  template<class T,class V> static Dyn make(T value,const V* table) noexcept {
+    Dyn d;
+    T* object = new(std::nothrow) T(std::move(value));
+    if(!object) trap();
+    d.ref_ = R{object, table};
+    d.drop_ = [](void* p) noexcept { delete static_cast<T*>(p); };
+    return d;
+  }
+  ~Dyn() noexcept { if(drop_) drop_(ref_.self); }
+  Dyn(const Dyn&) = delete;
+  Dyn& operator=(const Dyn&) = delete;
+  Dyn(Dyn&& o) noexcept : ref_(std::exchange(o.ref_, R{})), drop_(std::exchange(o.drop_, nullptr)) {}
+  Dyn& operator=(Dyn&& o) noexcept {
+    if(this != &o) { if(drop_) drop_(ref_.self); ref_ = std::exchange(o.ref_, R{}); drop_ = std::exchange(o.drop_, nullptr); }
+    return *this;
+  }
+  R view() const noexcept { if(!ref_.self) trap(); return ref_; }
+};
 // x[lo..hi] passed where the callee expects `want` elements: one guard, then a plain pointer.
 template<class T> inline T* part(T* p,std::size_t lo,std::size_t hi,std::size_t n,std::size_t want) noexcept {
   if(lo>hi || hi>n || hi-lo!=want) trap();

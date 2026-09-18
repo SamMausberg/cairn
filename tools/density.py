@@ -16,8 +16,8 @@ import sys
 from pathlib import Path
 
 R = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(R / "src"))
-from cairn.cairnc import Emitter, Parser
+sys.path[:0] = [str(R / "src"), str(R / "tools")]
+from support import generate
 
 
 def main():
@@ -31,7 +31,7 @@ def main():
 
             enc = tiktoken.get_encoding(args.tiktoken)
         except Exception as exc:
-            raise SystemExit(f"No measurement: tiktoken package/vocabulary unavailable: {exc}")
+            raise SystemExit(f"No measurement: tiktoken package/vocabulary unavailable: {exc}") from exc
         encode = enc.encode
         label = "tiktoken/" + args.tiktoken
     else:
@@ -61,6 +61,9 @@ def main():
             end += 1
         return src[start:end] + "\n"
 
+    # Count exactly what this compiler emits today, without waiting for another harness to leave it behind.
+    for stem in ["native", "family", "wire"]:
+        generate(R / f"examples/{stem}.cairn", R / "results")
     native = (R / "examples/native.cairn").read_text()
     ref = (R / "bench/reference.cpp").read_text()
     pairs = []

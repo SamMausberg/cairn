@@ -23,7 +23,6 @@ ROOT = Path(__file__).resolve().parents[1]
 PY = sys.executable
 RESULTS = ROOT / "results"
 TOOLS = sorted((ROOT / "tools").glob("*.py")) + sorted((ROOT / "bench").glob("*.py"))
-sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]  # The tools import each other by plain name.
 needs_gcc = pytest.mark.skipif(not shutil.which("g++"), reason="g++ is not installed")
 needs_z3 = pytest.mark.skipif(not shutil.which("z3"), reason="the z3 solver is not installed")
 needs_clang = pytest.mark.skipif(not shutil.which("clang++"), reason="clang++ is not installed")
@@ -101,6 +100,7 @@ def test_build(tmp_path):
 
 @needs_clang
 @needs_gcc
+@pytest.mark.skipif(os.environ.get("CAIRN_VERIFY"), reason="this suite is already a child of tools/verify.py")
 def test_verify():
     """The whole native gate except the suite selection, which would otherwise re-enter this file."""
     with exclusive():

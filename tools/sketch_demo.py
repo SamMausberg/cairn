@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Executable host-bound sketch demo. Deterministic search, not an AI trial."""
 
+import argparse
 import json
 import sys
 from pathlib import Path
 
 R = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
-from cairn.agent_tools import EditSession, stable_json
+from cairn.agent_tools import EditSession
 from cairn.sketches import ScalarContract, Sketch, solve_finite
 from task_eval import evaluate
 
@@ -32,8 +33,10 @@ def make():
 
 
 def main():
-    folder = R / "examples/sketch"
-    folder.mkdir(exist_ok=True)
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--out", type=Path, default=R / "examples/sketch", help="Where the sketch artifacts are written.")
+    folder = p.parse_args().out
+    folder.mkdir(parents=True, exist_ok=True)
     results = R / "results"
     results.mkdir(exist_ok=True)
     sk = make()

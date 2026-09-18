@@ -1,0 +1,29 @@
+import std.vec;
+trait Shape { fn area(self:ro<Self>) -> u64; fn grow(self:rw<Self>, by:u64); }
+struct Square { side:u64; }
+struct Rect { w:u64; h:u64; pixels:Buf[u8]; }
+impl Shape for Square {
+  fn area(self:ro<Square>) -> u64 = self.side * self.side;
+  fn grow(self:rw<Square>, by:u64) { self.side = self.side + by; }
+}
+impl Shape for Rect {
+  fn area(self:ro<Rect>) -> u64 = self.w * self.h;
+  fn grow(self:rw<Rect>, by:u64) { self.w = self.w + by; }
+}
+fn measure(s:ro<dyn Shape>) -> u64 = area(s) + 1;
+fn main() -> i32 {
+  let mut shapes = vec.new[Dyn[Shape]]();
+  let sq = Dyn[Shape](Square(3));
+  let pixels = Buf[u8](16);
+  let rect = Dyn[Shape](Rect(2, 5, pixels));
+  shapes.push(sq);
+  shapes.push(rect);
+  let mut total:u64 = 0;
+  for i in 0..shapes.len {
+    shapes.data[i].grow(1);
+    total = total + shapes.data[i].area();
+  }
+  if total != 16 + 15 { return 1; }
+  if measure(shapes.data[1]) != 16 { return 2; }
+  return 0;
+}

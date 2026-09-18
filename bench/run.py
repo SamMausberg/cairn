@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""Paired CAIRN/C++ timing on one pinned core, plus the object-section comparison.
+
+Every number below was measured on the machine and CPU profile recorded in
+results/benchmark_environment.json. Ratios above one favour CAIRN. A ratio measured
+here says nothing about another host, another compiler or an expert hand-tuned baseline.
+"""
+
 import csv
 import hashlib
 import json
@@ -7,23 +14,18 @@ import platform
 import re
 import statistics
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
+from cairn.toolchain import find
+from support import best_profile, environment, generate, profile_flags
+
 os.chdir(ROOT)
-FLAGS = [
-    "-std=c++20",
-    "-O3",
-    "-march=x86-64-v3",
-    "-ffp-contract=off",
-    "-fno-fast-math",
-    "-fno-exceptions",
-    "-fno-rtti",
-    "-ffunction-sections",
-    "-Wall",
-    "-Wextra",
-    "-Werror",
-]
+KERNELS = ["saxpy", "dot", "sum_wrap", "prefix", "count_gt", "histogram", "compact_even", "lower_bound", "gcd"]
+ARCH = best_profile("clang++")
+FLAGS = profile_flags("exe", ARCH, add=["-ffunction-sections"])
 commands = []
 
 
@@ -32,13 +34,23 @@ def run(cmd, **kw):
     return subprocess.run(cmd, check=True, text=True, capture_output=True, **kw)
 
 
+def describe(cmd):
+    """A tool's report of this machine, or a note that it is unavailable here."""
+    try:
+        return subprocess.run(cmd, text=True, capture_output=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return f"{cmd[0]} unavailable on this host"
+
+
+generate(ROOT / "examples/native.cairn", ROOT / "results")
+clang = find("clang++")
 for file, out in [
     ("results/native.cpp", "results/native.o"),
     ("bench/reference.cpp", "results/reference.o"),
     ("bench/driver.cpp", "results/driver.o"),
 ]:
-    run(["clang++", *FLAGS, "-c", file, "-o", out])
-run(["clang++", "results/native.o", "results/reference.o", "results/driver.o", "-o", "results/benchmark"])
+    run([clang, *FLAGS, "-c", file, "-o", out])
+run([clang, "results/native.o", "results/reference.o", "results/driver.o", "-o", "results/benchmark"])
 avail = sorted(os.sched_getaffinity(0))
 os.sched_setaffinity(0, {avail[0]})
 raw = run(["results/benchmark"]).stdout
@@ -51,7 +63,7 @@ summary = []
 for (name, n, pattern), rr in groups.items():
     aa = [float(x["cairn_ns"]) for x in rr]
     bb = [float(x["cpp_ns"]) for x in rr]
-    ratios = [b / a for a, b in zip(aa, bb)]
+    ratios = [b / a for a, b in zip(aa, bb, strict=True)]
     summary.append(
         {
             "kernel": name,
@@ -68,7 +80,7 @@ for (name, n, pattern), rr in groups.items():
 (ROOT / "results/timing_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
 # Compare section bytes AND relocation targets/types/offsets, not disassembly text alone.
 equivalence = []
-for name in ["saxpy", "dot", "sum_wrap", "prefix", "count_gt", "histogram", "compact_even", "lower_bound", "gcd"]:
+for name in KERNELS:
     extracts = []
     rels = []
     for prefix, obj in [("cf", "native"), ("cc", "reference")]:
@@ -99,14 +111,14 @@ for name in ["saxpy", "dot", "sum_wrap", "prefix", "count_gt", "histogram", "com
 (ROOT / "results/benchmark_environment.json").write_text(
     json.dumps(
         {
-            "compiler": run(["clang++", "--version"]).stdout,
+            **environment("clang++", arch=ARCH),
             "flags": FLAGS,
             "pinned_cpu": avail[0],
             "available_cpus": avail,
             "platform": platform.platform(),
-            "cpu": run(["lscpu"]).stdout,
+            "cpu": describe(["lscpu"]),
             "commands": commands,
-            "limitations": "Shared virtualized CPU; no frequency or host-isolation control. 11 alternating paired rounds per case, no LTO. Two integer-input patterns: LCG low-bit alternating parity and high-bit-mixed parity. Same FFI entry checks; C++ inner operations rely on algorithm invariants. Ratios above one favor CAIRN. Not expert hand-tuned CPU/GPU baselines.",
+            "limitations": "Shared virtualized CPU; no frequency or host-isolation control. 11 alternating paired rounds per case, no LTO. Two integer-input patterns: LCG low-bit alternating parity and high-bit-mixed parity. Same FFI entry checks; C++ inner operations rely on algorithm invariants. Ratios above one favour CAIRN. Not expert hand-tuned CPU/GPU baselines. Timings and identical sections hold for this host and profile only.",
         },
         indent=2,
     )
@@ -118,4 +130,7 @@ print(
     sum(x["bytes_equal"] and x["relocations_equal"] for x in equivalence),
     "/",
     len(equivalence),
+    "on",
+    platform.machine(),
+    ARCH,
 )

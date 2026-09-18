@@ -15,9 +15,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from cairn.cairnc import RUNTIME, compile_source
+ROOT = Path(__file__).resolve().parents[1]
+sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
+from cairn.cairnc import Emitter, compile_program
+from cairn.codegen import mangle
 from cairn.scalar_semantics import prepared
+from support import best_profile, profile_flags, runtime_headers, version
 
 CT = {
     "bool": ctypes.c_bool,
@@ -33,46 +36,46 @@ CT = {
 
 class NativeScalar:
     def __init__(self, source: str, cxx="clang++"):
-        self.functions = prepared(source)
+        self.functions = prepared(source)  # Also enforces the scalar source limit.
         self.temp = tempfile.TemporaryDirectory(prefix="cairn_scalar_test_")
         self.root = Path(self.temp.name)
-        cpp, _ = compile_source(source)
-        assert RUNTIME.count("std::abort();") == 1
-        runtime = RUNTIME.replace(" noexcept", "").replace("std::abort();", "throw NativeTrap{};")
-        runtime = "struct NativeTrap {};\n" + runtime
+        program, checker, _ = compile_program(source)
+        emitter = Emitter(program, checker)
+        cpp = emitter.emit()
+        instrumented = [0]
+
+        def instrument(name: str, text: str) -> str:
+            """Only the header holding the one abort becomes throwing; the others are verbatim."""
+            if "std::abort();" not in text:
+                return text
+            assert text.count("std::abort();") == 1
+            instrumented[0] += 1
+            return "struct NativeTrap {};\n" + text.replace(" noexcept", "").replace(
+                "std::abort();", "throw NativeTrap{};"
+            )
+
         cpp = cpp.replace(" noexcept", "")
         for name, f in self.functions.items():
             if f.ret.name not in CT or any(t.name not in CT or t.mode != "value" for _, t in f.params):
                 raise ValueError("NativeScalar accepts scalar test fixtures only.")
-            params = ", ".join(t.cpp() + " " + n for n, t in f.params)
+            params = ", ".join(emitter.type(t) + " " + n for n, t in f.params)
             args = ", ".join(n for n, _ in f.params)
-            cpp += f'\nextern "C" bool observe_{name}({params}{", " if params else ""}{f.ret.cpp()}* result) {{\n'
-            cpp += f"  try {{ *result=cf_{name}({args}); return true; }} catch(NativeTrap&) {{ return false; }}\n}}\n"
-        (self.root / "cairn_runtime.hpp").write_text(runtime)
+            cpp += (
+                f'\nextern "C" bool observe_{name}({params}{", " if params else ""}{emitter.type(f.ret)}* result) {{\n'
+            )
+            cpp += f"  try {{ *result=cf_{mangle(name)}({args}); return true; }} catch(NativeTrap&) {{ return false; }}\n}}\n"
+        runtime_headers(self.root, instrument)
+        assert instrumented[0] == 1, "Exactly one runtime header carries the trap."
         (self.root / "scalar.cpp").write_text(cpp)
-        self.command = [
-            cxx,
-            "-std=c++20",
-            "-O2",
-            "-ffp-contract=off",
-            "-fno-fast-math",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-shared",
-            "-fPIC",
-            str(self.root / "scalar.cpp"),
-            "-o",
-            str(self.root / "scalar.so"),
-        ]
+        # Traps are observed as exceptions here, so this build alone drops -fno-exceptions/-fno-rtti.
+        flags = profile_flags("library", best_profile(cxx), drop=("-O3", "-fno-exceptions", "-fno-rtti"), add=["-O2"])
+        self.command = [cxx, *flags, str(self.root / "scalar.cpp"), "-o", str(self.root / "scalar.so")]
         cp = subprocess.run(self.command, capture_output=True, text=True, timeout=45)
         if cp.returncode:
             raise RuntimeError(cp.stderr)
-        self.compiler = subprocess.run(
-            [cxx, "--version"], capture_output=True, text=True, check=True
-        ).stdout.splitlines()[0]
+        self.compiler = version(cxx).splitlines()[0]
         self.generated_sha256 = hashlib.sha256(cpp.encode()).hexdigest()
-        self.runtime_sha256 = hashlib.sha256(runtime.encode()).hexdigest()
+        self.runtime_sha256 = hashlib.sha256((self.root / "cairn_runtime.hpp").read_bytes()).hexdigest()
         self.lib = ctypes.CDLL(str(self.root / "scalar.so"))
         for name, f in self.functions.items():
             fn = getattr(self.lib, "observe_" + name)

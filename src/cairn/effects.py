@@ -91,11 +91,12 @@ def audit(c: Checker, effects: dict[str, set[str]]):
             block(e.ref.body)
             return out
         if e.tag == "call" and not at_root:
-            direct = isinstance(e.ref, Function) and effects.get(e.ref.name, set())
-            if direct and any(x.startswith("write:") or x in {"alloc", "free"} for x in direct):
+            kind = e.ref[0] if isinstance(e.ref, tuple) else ""
+            known = [e.ref.name] if isinstance(e.ref, Function) else e.ref[4] if kind == "dispatch" else []
+            rows = set().union(*(effects.get(name, set()) for name in known))  # Dispatch: every implementor.
+            if any(x.startswith("write:") or x in {"alloc", "free"} for x in rows):
                 fail("E-EFFECT-ORDER", "Bind a writing call to its own statement before using its result.", e)
-            opaque = isinstance(e.ref, tuple) and e.ref[0] in {"indirect", "dispatch"}
-            if opaque or any(a.tag == "lambda" for a in e.args) or (e.val == "take" and isinstance(e.ref, tuple)):
+            if kind == "indirect" or any(a.tag == "lambda" for a in e.args) or (e.val == "take" and kind == "builtin"):
                 out.append(e)
         for child in e.args:  # `try f()` and `spawn f()` add no operand order: f stays a root.
             nested(child, at_root and e.tag in {"try", "spawn"}, out)
@@ -109,10 +110,13 @@ def audit(c: Checker, effects: dict[str, set[str]]):
         for call in found:
             inside = {id(n) for n in names(call, [])}
             others = [n for n in names(e, []) if id(n) not in inside]
-            if call.val == "take" and isinstance(call.ref, tuple):
+            closure = any(a.tag == "lambda" for a in call.args) or (
+                call.ref[0] == "indirect" and call.ref[1].mode != "value"
+            )
+            if call.val == "take" and call.ref[0] == "builtin":
                 clash = any(n.val == root(call.args[0]).val for n in others)
-            else:  # Whatever the callee closes over or dispatches to might write any mutable name.
-                clash = len(found) > 1 or any(n.ref == "mut" for n in others)
+            else:  # A closure may write any mutable name it captured; a plain function value sees no locals.
+                clash = len(found) > 1 or (closure and any(n.ref == "mut" for n in others))
             if clash:
                 fail("E-EFFECT-ORDER", "Bind this call first: another operand here could observe its writes.", call)
 

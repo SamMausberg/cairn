@@ -6,6 +6,7 @@ Python oracles, not CAIRN-generated C++. All answers are shipped for audit; a
 future evaluator must isolate held-out answers from the model's workspace.
 """
 
+import argparse
 import json
 import random
 import sys
@@ -13,7 +14,7 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(R / "src"))
-from cairn.agent_tools import canonical_source, digest, explain, stable_json
+from cairn.agent_tools import canonical_source, explain, stable_json
 from cairn.cairnc import Diagnostic, compile_source
 from cairn.teaching import CARDS, select_cards
 
@@ -136,7 +137,8 @@ CONTRASTS = [
         "fn f(n:usize,x:ro<u64>[n]@host)->u64{return x[0];}",
         "E-WRITE-LEASE",
     ),
-    ("no_float_narrow", "fn f(x:f64)->u64{return u64(x);}", "fn f(x:f64)->f64{return x;}", "E-CAST"),
+    # bool is not a number, so u64(x) is refused; a numeric conversion is checked, not refused.
+    ("no_bool_cast", "fn f(x:bool)->u64{return u64(x);}", "fn f(x:bool)->u64{if x {return 1;} return 0;}", "E-CAST"),
     (
         "no_alias",
         "fn use(n:usize,o:rw<u64>[n]@host,x:ro<u64>[n]@host){}fn f(n:usize,o:rw<u64>[n]@host){use(n,o,o);}",
@@ -155,8 +157,10 @@ CONTRASTS = [
 
 
 def main():
-    root = R / "training/source"
-    root.mkdir(exist_ok=True)
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--out", type=Path, default=R / "training/source", help="Where the teaching data is written.")
+    root = p.parse_args().out
+    root.mkdir(parents=True, exist_ok=True)
     tasks = build()
     contrasts = []
     for family, bad, good, code in CONTRASTS:
@@ -164,7 +168,8 @@ def main():
         try:
             compile_source(bad)
         except Diagnostic as e:
-            assert e.data["code"] == code
+            # A changed code means the language moved and this pair teaches the wrong lesson.
+            assert e.data["code"] == code, f"{family} is now {e.data['code']}, not {code}"
             contrasts.append(
                 {
                     "family": family,
@@ -175,7 +180,7 @@ def main():
                 }
             )
         else:
-            raise AssertionError("Negative teaching example compiled")
+            raise AssertionError(f"The {family} negative example compiles now; the pair is stale: {bad}")
     for split in ["train", "heldout"]:
         rows = []
         for t in tasks:

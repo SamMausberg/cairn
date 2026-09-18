@@ -129,7 +129,8 @@ in place, apply(n, xs, |x:u64| -> u64 { return x + bias; }). A closure captures 
 by reference, exists only as that argument, never allocates, and its effects belong to
 the function that wrote it. ro<dyn Shape> / rw<dyn Shape> parameters take any named place
 whose type implements the trait; calls through them add the dispatch effect and the
-effects of every implementation. Dynamic references are never values.""",
+effects of every implementation. Dynamic references are never values; Dyn[Shape](value)
+is the owned form: an affine heap value (alloc, free) that dispatches and lends itself as dyn.""",
     "modules": """module net.http; names the module of what follows; pub exports. import net.http; allows
 http.get(...); import a.b as c; renames; import std.core (Option, Result); also brings
 those names in unqualified. std.* ships with the compiler; nothing is downloaded. A

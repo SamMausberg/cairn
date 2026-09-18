@@ -75,6 +75,10 @@ class Emitter:
         elif t.name == "dyn":  # { object, vtable }: two words passed by value, whatever the borrow mode.
             self.dynamic.setdefault(t.args[0].name, None)
             return "cd_" + mangle(t.args[0].name)
+        elif t.name == "Dyn":  # The owned form: the same two words plus how to release the object.
+            self.dynamic.setdefault(t.args[0].name, None)
+            self.need("cairn_owners.hpp")
+            base = f"cr::Dyn<cd_{mangle(t.args[0].name)}>"
         elif t.name == "Buf":
             self.need("cairn_owners.hpp")
             base = f"cr::Buf<{self.type(t.args[0])}>"
@@ -215,11 +219,16 @@ class Emitter:
 
     def e_coerce(self, e: Expr) -> str:
         """A fat reference: the object's address and the static vtable of its implementation."""
-        trait, concrete = e.ty.args[0].name, self.type(e.args[0].ty.value)
-        table = f"cv_{mangle(trait)}_{mangle(e.args[0].ty.value.display())}"
+        if e.ref is None:  # An owned dynamic value already carries both words.
+            return f"{self.expr(e.args[0])}.view()"
+        table = self.vtable(e.ty.args[0].name, e.args[0].ty.value, e.ref)
+        return f"cd_{mangle(e.ty.args[0].name)}{{const_cast<void*>(static_cast<const void*>(&({self.expr(e.args[0])}))), &{table}}}"
+
+    def vtable(self, trait: str, ty: Type, members: list[Function]) -> str:
+        concrete, table = self.type(ty), f"cv_{mangle(trait)}_{mangle(ty.display())}"
         if table not in self.vtables:
             thunks = []
-            for member, f in zip(self.p.traits[trait], e.ref, strict=True):  # One thunk per trait member.
+            for member, f in zip(self.p.traits[trait], members, strict=True):  # One thunk per trait member.
                 at = next(i for i, (_, t) in enumerate(member.params) if t.name == "Self")
                 ps = "".join(f", {self.type(t)} v_{n}" for i, (n, t) in enumerate(f.params) if i != at)
                 call = ", ".join(
@@ -229,7 +238,7 @@ class Emitter:
                     f"[](void* self{ps}) noexcept -> {self.type(f.ret)} {{ return cf_{mangle(f.name)}({call}); }}"
                 )
             self.vtables[table] = f"static const cd_{mangle(trait)}_vt {table}{{{', '.join(thunks)}}};"
-        return f"cd_{mangle(trait)}{{const_cast<void*>(static_cast<const void*>(&({self.expr(e.args[0])}))), &{table}}}"
+        return table
 
     def e_try(self, e: Expr) -> str:
         temp, _ = self.fresh("cr_try_")
@@ -261,7 +270,7 @@ class Emitter:
             return self.invoke(e, e.ref)
         kind = e.ref[0]
         if kind == "dispatch":  # receiver.vt->member(receiver.self, the other arguments...)
-            receiver = self.expr(e.args[e.ref[3]])
+            receiver = self.expr(e.args[e.ref[3]]) + (".view()" if e.args[e.ref[3]].ty.name == "Dyn" else "")
             rest = [self.expr(a) for i, a in enumerate(e.args) if i != e.ref[3]]
             return f"{receiver}.vt->m{e.ref[2]}({', '.join([receiver + '.self', *rest])})"
         if kind == "shared":  # receiver.op(values..., memory orders...)
@@ -303,6 +312,8 @@ class Emitter:
             return f"{self.expr(args[0])}.wait()"
         if n in SHARED:
             return f"{ty}({self.expr(args[0])})"
+        if n == "Dyn":
+            return f"{ty}::make({self.expr(args[0])}, &{self.vtable(e.ty.args[0].name, args[0].ty.value, e.ref[1])})"
         if n == "take":
             return f"std::exchange({texts[0]}, {{}})"
         if n == "swap":
@@ -329,9 +340,10 @@ class Emitter:
         symbol = f' __asm__("{f.symbol or local(f.name)}")' if f.extern else ""  # Whatever header declares it.
         return f"{linkage}{device}{self.type(f.ret)} cf_{mangle(f.name)}({ps}) noexcept{symbol}"
 
-    def interfaces(self) -> list[str]:
-        """For each trait used behind dyn: a table of member thunks and the two-word reference."""
-        out = []
+    def interfaces(self) -> tuple[list[str], list[str]]:
+        """For each trait used behind dyn: the two-word reference (declared before any layout that
+        owns one) and its table of member thunks (defined after the layouts its members mention)."""
+        references, tables = [], []
         for trait in self.dynamic:
             members = []
             for i, m in enumerate(self.p.traits[trait]):
@@ -339,11 +351,9 @@ class Emitter:
                     rest = [self.type(self.c.resolve(t)) for _, t in m.params if t.name != "Self"]
                     members.append(f"{self.type(self.c.resolve(m.ret))} (*m{i})({', '.join(['void*', *rest])});")
             name = "cd_" + mangle(trait)
-            out += [
-                f"struct {name}_vt {{ {' '.join(members)} }};",
-                f"struct {name} {{ void* self; const {name}_vt* vt; }};",
-            ]
-        return out
+            references += [f"struct {name}_vt;", f"struct {name} {{ void* self; const {name}_vt* vt; }};"]
+            tables.append(f"struct {name}_vt {{ {' '.join(members)} }};")
+        return references, tables
 
     def emit(self) -> str:
         symbols: dict[str, str] = {}
@@ -369,7 +379,9 @@ class Emitter:
         head = ["// Generated by " + VERSION + ". Do not edit; edit the CAIRN source."]
         head += [f'#include "{header}"' for header in self.headers]
         prototypes = [self.signature(f) + ";" for f in functions]
-        return "\n".join([*head, *types, *self.interfaces(), *prototypes, *self.vtables.values(), *self.lines]) + "\n"
+        references, tables = self.interfaces()
+        parts = [*head, *references, *types, *tables, *prototypes, *self.vtables.values(), *self.lines]
+        return "\n".join(parts) + "\n"
 
     def function(self, f: Function):
         self.f = f

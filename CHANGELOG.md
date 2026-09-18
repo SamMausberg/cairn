@@ -5,7 +5,7 @@
 The language grows from a checked CPU kernel language into a general systems language; the compiler core was rebuilt around one typed tree, and every addition arrived with native behavior tests, rejection tests and an application.
 
 - **Types**: generic records, sums and functions with inference and on-demand monomorphization; payloads and fields of any value type; inline `Array[T, N]`; `i8`/`i16`; hex, character and string literals; `const`; layout attributes.
-- **Traits**: static dispatch on `Self`, bounds checked per instance, `value.method(...)` resolved in the receiver's module, and explicit `ro<dyn Trait>` fat references with a `dispatch` effect.
+- **Traits**: static dispatch on `Self`, bounds checked per instance, `value.method(...)` resolved in the receiver's module, explicit `ro<dyn Trait>` fat references with a `dispatch` effect, and owned `Dyn[Trait]` values for heterogeneous collections.
 - **Ownership**: second-class borrows of values and arrays, checked array parts with visibly-disjoint splitting, first-class zeroed `Buf[T]`, affine moves, `take`/`swap`, `linear struct`, `defer`. No lifetime annotations exist.
 - **Errors**: `try` propagates the failure of a two-variant sum; it is the only propagation form.
 - **Functions**: copyable code pointers and non-escaping closures passed as `ro<fn(...)>`.

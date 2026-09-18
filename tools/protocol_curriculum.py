@@ -5,6 +5,7 @@ The adapter actions here are authored fixtures, not model outputs. Every good
 choice passes fresh semantic checking. The task and slot map do not change.
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -24,7 +25,9 @@ def expression(source):
 
 
 def main():
-    root = R / "training/semantic"
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--root", type=Path, default=R / "training/semantic", help="Audited corpus in, lessons out.")
+    root = p.parse_args().root
     rows = json.loads((root / "audit.json").read_text())
     lessons = []
     for r in rows:
@@ -98,7 +101,7 @@ def main():
         "executed_protocol_lessons": len(lessons),
         "training_repair_targets": len(train),
         "evaluation_prompts": len(evaluation),
-        "algorithm_families": len(set(r["family"] for r in lessons)),
+        "algorithm_families": len({r["family"] for r in lessons}),
         "wrong_turns_never_sft_targets": True,
         "strict_production_choice_parser_used": True,
         "fresh_semantic_checks": 2 * len(lessons),

@@ -16,13 +16,15 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
+from support import best_profile, profile_flags
+
 RUNTIME = ROOT / "src/cairn/runtime"
 OUT = ROOT / "evidence/v1_0/gpu/benchmark.json"
 
 STRICT = ["-std=c++20", "-O3"]
-HOST = ["-ffp-contract=off", "-fno-fast-math", "-fno-exceptions", "-fno-rtti"]
-HOST += ["-Wall", "-Wextra", "-Werror"]
-HOST += ["-Wno-unused-parameter", "-Wno-unused-variable", "-Wno-unused-but-set-variable"]
+# nvcc owns -std/-O for both halves; the rest of the host contract is the compiler's own table.
+HOST = [f for f in profile_flags("exe", best_profile("g++")) if not f.startswith(("-std", "-O"))]
 DEVICE = ["--fmad=false", "-arch=sm_90", "--extended-lambda", "--expt-relaxed-constexpr"]
 DEVICE += ["-Werror", "all-warnings"]
 

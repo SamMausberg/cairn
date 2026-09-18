@@ -35,20 +35,37 @@ def main() -> int:
         import tiktoken
 
         encoding = tiktoken.get_encoding(args.tiktoken)
-        count = lambda s: len(encoding.encode(s))
         tokenizer = "tiktoken/" + args.tiktoken
+
+        def count(s: str) -> int:
+            return len(encoding.encode(s))
     else:
-        count = lambda s: len(s.encode("utf-8"))
         tokenizer = "ByT5 plain byte-token encoding; no special tokens"
+
+        def count(s: str) -> int:
+            return len(s.encode("utf-8"))
+
     prior = json.loads((ROOT / "bench/fixtures/cards_05.json").read_text())
     source = (ROOT / "examples/native.cairn").read_text()
     rows = []
+    current_only = []
     for function in Parser(source).parse().functions:
         if function.static:
             continue
         packet = EditSession(source, function.name).packet()
-        if set(packet["rule_cards"]) - set(prior["cards"]):
-            raise ValueError("New-feature packet must not be called a legacy comparison.")
+        new = sorted(set(packet["rule_cards"]) - set(prior["cards"]))
+        if new:
+            # A 1.0 feature card has no preserved 0.5 text, so this packet has no counterfactual at all.
+            current_only.append(
+                {
+                    "symbol": function.name,
+                    "complete_packet_tokens": count(text(packet)),
+                    "cards": list(packet["rule_cards"]),
+                    "legacy_comparison": None,
+                    "reason": "Cards absent from the 0.5 curriculum: " + ", ".join(new) + ".",
+                }
+            )
+            continue
         old = copy.deepcopy(packet)
         old["rule_cards"] = {name: prior["cards"][name] for name in packet["rule_cards"]}
         # Non-card source, task, type/effect metadata and all transport are equal.
@@ -68,7 +85,6 @@ def main() -> int:
                 "counterfactual_packet_sha256": hashlib.sha256(text(old).encode()).hexdigest(),
             }
         )
-    current_only = []
     systems = "\n".join(
         (ROOT / "examples/systems/src" / name).read_text() for name in ["parse.cairn", "sort.cairn", "main.cairn"]
     )
@@ -96,6 +112,7 @@ def main() -> int:
         "current_only": current_only,
         "aggregate": {
             "packet_count": len(rows),
+            "current_only_packet_count": len(current_only),
             "before": before,
             "after": after,
             "saving_fraction": 1 - after / before,
@@ -114,7 +131,13 @@ def main() -> int:
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text(result))
-    print(text({"aggregate": result["aggregate"], "full_card_text": result["full_card_text"], "tokenizer": tokenizer}))
+    summary = {
+        "aggregate": result["aggregate"],
+        "current_only": [{k: r[k] for k in ("symbol", "reason")} for r in current_only],
+        "full_card_text": result["full_card_text"],
+        "tokenizer": tokenizer,
+    }
+    print(text(summary))
     return 0
 
 
