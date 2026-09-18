@@ -7,11 +7,13 @@ CARDS = {
 braces, semicolons, explicit return; let is immutable, let mut is mutable.
 Parameters are immutable; shadowing and implicit conversions are forbidden.
 fn inc(x:u64)->u64 = add_wrap(x,1); is one return, not a closure.
-for i in lo..hi is sequential, half-open; evaluate bounds once, lower first.
+for i in lo..hi is sequential, half-open; evaluate bounds once, lower first;
+only compact/parallel/reduce write for i in n. let x:u32 = 7; annotates. Precedence
+rises || && | ^ & (== != < <= > >=) (+ -) (* / %); && and || stop early.
 if/else if/else and while use braces. break/continue target the nearest loop,
 including from match arms. while/recursion may diverge; no stack bound is proved.
 reg/each remain aliases; prefer let mut/for. Blocks have no implicit tail return.
-No inheritance, overloading, implicit conversion, exceptions or hidden allocation.
+No inheritance, overloading, exceptions or hidden allocation.
 Other features arrive as their own cards only when the source uses them.
 Ranges are not lists; indentation is insignificant. Preserve the fixed task.
 Typed, tested, SMT-equivalent and Lean-verified are different claims.""",
@@ -19,7 +21,7 @@ Typed, tested, SMT-equivalent and Lean-verified are different claims.""",
 every build. Unsigned add_wrap/sub_wrap/mul_wrap are modular. /,% trap on zero
 or signed min/-1; signed remainder truncates toward zero, unlike Python.
 shl_wrap(x,k),shr(x,k) require usize k below width. &,|,^,~ are unsigned;
-min/max are integer-only. Conversions are explicit and range checked: narrowing
+min/max are integer-only. Conversions are calls, u64(x); explicit, range checked: narrowing
 traps outside the target; float-to-integer truncates toward zero and traps on NaN
 or out of range. Literals use expected type, else u64/f64.
 x+1 and add_wrap(x,1) differ at u64 maximum. Never weaken arithmetic or the
@@ -64,9 +66,10 @@ contracts; large expansion is not a measured advantage over compact C++ template
 wire is a library recipe. recipe name[K:nat] for R { ... } holds ordinary fn and
 struct declarations plus static forms: each f in R { } (fields) or each k in lo..hi { }
 at declaration, statement, field-list or call-argument level (there it splices a
-list); fold | each ... { e }; where a = offset(f), t = typeof(f) names static values
-(facts: bytes bits offset index count typeof unsigned signed integer float scalar
-record); $name splices into identifiers (encode_$R, value.$f) or stands for the
+list); fold | each ... { e } joins the expansions with a real binary operator (| here;
++ or && work too); where a = offset(f), t = typeof(f) names static values (facts take a
+field or a type alike, unsigned(f) or bytes(R): bytes bits offset index count typeof
+unsigned signed integer float scalar record); $name splices into identifiers (encode_$R, value.$f) or stands for the
 natural/type; bare R is the type; require cond, "message"; states the domain.
 derive name[naturals] for Type; expands before checking into code of the deriving
 module, checked like any other.""",
@@ -76,6 +79,7 @@ storage. Elements are scalar; stack capacity is a literal, declarations total at
 most 65536 bytes per function (not a bound on recursion/spills/native stack).
 Bind computed heap capacity to an immutable usize first. The owner is neither
 copyable nor returnable; pass its borrow to helpers. len(scratch) is metadata.
+Elements are writable without mut. Buf[u64](n) (owners) is the same array as a movable value.
 Storage is released on normal scope exit, return, break and continue. Allocation
 failure/guards abort; abort does not promise cleanup. No manual free or escaping
 borrow exists. Receipts expose alloc/free/zero_init and private reads/writes.""",
@@ -98,7 +102,9 @@ checked as ordinary code; arguments are inferred from values, literals and the e
 type, or written f[u64](x), Pair[u8](1, 2), Option[u64].None. trait Shape {fn area(self:
 ro<Self>) -> u64;} with impl Shape for Square {...} dispatches statically on the Self
 argument; [S: Shape] is checked when the instance is made. value.f(a) is f(value, a),
-found first in the module of the receiver's type. No inheritance, no implicit boxing.""",
+found first in the module of the receiver's type. A ro<T> or rw<T> parameter borrows the
+named place you pass (a local, a field, another borrow): write area(sq), never &sq; rw
+needs a mutable place. No inheritance, no implicit boxing.""",
     "owners": """let mut b = Buf[u64](n); is a first-class zeroed heap array; Array[u64, 4]() is inline.
 Owners are affine: binding, passing by value or returning one moves it and the old name
 is dead. An owner never moves out of a place: take(place) moves it out leaving zero,
@@ -118,7 +124,8 @@ the next statement. Placement is part of a view type: @host (default), @pinned, 
 @device. Indexing a @device view makes the region CUDA lanes, otherwise host threads; host
 code cannot index @device memory and lanes cannot index the other side. Whatever any lane
 writes may be touched only at [i]; shared scalars cannot be assigned (use let s = reduce
-add_wrap for i in n yield x[i];). Lanes cannot return, nest or move outer owners, and
+add_wrap for i in n yield x[i];, which is also the ordinary fold outside any region: i
+runs over 0..n and the operator is one of add_wrap mul_wrap min max & | ^, or + * on floats). Lanes cannot return, nest or move outer owners, and
 neither a lane nor anything it calls may do I/O, spawn, touch the machine or (on the
 device) allocate or use strings and host owners. A lane may call a fn parameter f of its
 function (effect lane:f): whoever finally passes a closure must not write what it
@@ -129,7 +136,8 @@ is a scoped device owner; transfer(dst, src) is the only way across placements. 
 the device combines in an unspecified order: exact for add_wrap mul_wrap & | ^ min max,
 not for float + and *; checked integer + is not offered.""",
     "tasks": """let t = spawn f(args); runs a declared function on its own thread and gives a linear
-ticket that must be consumed by wait(t) in the same function. Until then every place
+ticket that must be consumed by wait(t) in the same function; let r = wait(t); is f's
+result (wait(t); alone when f returns nothing). Until then every place
 lent to the task is leased: nobody writes what it reads or touches what it writes;
 visibly disjoint parts (d[0..mid], d[mid..n]) may be lent mutably to different tasks.
 Atomic[u64] and Mutex[T] are declared in place and shared by ro borrow: a.fetch_add(1,
