@@ -272,6 +272,8 @@ def test_lane_local_storage_and_sums_run_on_the_device(tmp_path):
 
 
 DEVICE_PARTS = """
+struct Gain { k:f32; }
+fn scaled(p:ro<Gain>, x:f32) -> f32 = p.k * x;                             // a plain pure helper runs on either side
 kernel fn window(k:usize, g:ro<f32>[k]@device) -> f32 { let mut t:f32 = 0.0; for j in 0..k { t = t + g[j]; } return t; }
 fn main() -> i32 {
   let n:usize = 1024;
@@ -281,7 +283,8 @@ fn main() -> i32 {
   buffer x:f32[n]@device = zeroed;
   buffer out:f32[n]@device = zeroed;
   transfer(x, cpu);
-  parallel i in n { if i + w <= n { out[i] = window(w, x[i..i + w]); } }   // a guarded part inside a device lane
+  let gain = Gain(1.0);
+  parallel i in n { if i + w <= n { out[i] = scaled(gain, window(w, x[i..i + w])); } }   // a guarded part in a device lane
   transfer(cpu[0..n], out[0..n]);                                         // parts cross placements too
   let total = reduce add_wrap for i in n yield u64(out[i]);
   if cpu[0] != 4.0 || cpu[n - 1] != 0.0 || total != 4084 { return 1; }

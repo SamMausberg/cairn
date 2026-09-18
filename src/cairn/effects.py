@@ -68,9 +68,7 @@ def fixed_point(c: Checker) -> dict[str, set[str]]:
         if f.effects is not None and not f.extern:
             allowed = set(f.effects) | (PURE if "pure" in f.effects else set())
             reads = "pure" in f.effects
-            excess = {
-                e for e in effects[f.name] if e not in allowed and not e.startswith(("read:",) * reads + ("lane:",))
-            }
+            excess = {e for e in effects[f.name] if e not in allowed and not (reads and e.startswith("read:"))}
             if excess:
                 fail("E-EFFECT-CEILING", f"{f.name} exceeds its declared effects.", f, added_effects=sorted(excess))
     return effects

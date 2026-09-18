@@ -324,6 +324,57 @@ REJECTED = {
         "fn two(n:usize, a:rw<u64>[n], m:usize, b:rw<u64>[m]) { a[0] = 1; b[0] = 2; }\n"
         "fn main() -> i32 { let mut d = Buf[u64](16); two(2, d[0..8][0..2], 2, d[8..16][0..2]); return 0; }",
     ),
+    # Round three: the new rules attacked ------------------------------------------------------
+    "a host view reaching device code through a helper the lane calls": (
+        "E-PLACEMENT",
+        "fn peek(m:usize, h:ro<u64>[m]) -> u64 = h[0];\n"
+        "fn f(n:usize, d:rw<u64>[n]@device, m:usize, h:ro<u64>[m]) { parallel i in n { d[i] = peek(m, h); } }",
+    ),
+    "a string literal reaching device code through a helper": (
+        "E-PLACEMENT",
+        'fn hostish(x:u64) -> u64 { let s = "hi"; return x + u64(s[0]); }\n'
+        "fn f(n:usize, d:rw<u64>[n]@device) { parallel i in n { d[i] = hostish(u64(i)); } }",
+    ),
+    "a stored function value that performs I/O, called from lanes": (
+        "E-PARALLEL-CALL",
+        "extern fn getpid() -> i32 effects(io);\n"
+        "fn go(n:usize, out:rw<u64>[n], f:fn(u64) -> u64) { parallel i in n { out[i] = f(u64(i)); } }\n"
+        "fn noisy(x:u64) -> u64 { unsafe { return x + u64(getpid()); } }\n"
+        "fn mid(n:usize, out:rw<u64>[n]) { let g:fn(u64) -> u64 = noisy; go(n, out, g); }",
+    ),
+    "a closure handed on from inside a lane to a helper that calls it (data race)": (
+        "E-PARALLEL-CALL",
+        "fn helper(f:ro<fn(u64) -> u64>, x:u64) -> u64 = f(x);\n"
+        "fn go(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) { parallel i in n { out[i] = helper(f, u64(i)); } }\n"
+        "fn main() -> i32 { let n:usize = 64; buffer o:u64[n] = zeroed; let mut c:u64 = 0;\n"
+        "  go(n, o, |x:u64| -> u64 { c = c + 1; return c; }); return 0; }",
+    ),
+    "a lane-called closure dispatching to an implementation that performs I/O": (
+        "E-PARALLEL-CALL",
+        "extern fn getpid() -> i32 effects(io);\ntrait P { fn pid(self:ro<Self>) -> u64; }\nstruct C { n:u64; }\n"
+        "impl P for C { fn pid(self:ro<C>) -> u64 { unsafe { return u64(getpid()); } } }\n"
+        + MAP
+        + "fn go(n:usize, out:rw<u64>[n], c:ro<dyn P>) { map(n, out, |x:u64| -> u64 { return pid(c); }); }",
+    ),
+    "a trait with a Self-returning member coerced to dyn without ever calling it": (
+        "E-DYN",
+        "trait T { fn go(self:ro<Self>) -> Self; }\nstruct S { v:u64; }\nimpl T for S { fn go(self:ro<S>) -> S = S(1); }\n"
+        "fn use_it(d:ro<dyn T>) -> u64 = 0;\nfn main() -> i32 { let s = S(1); return i32(use_it(s)); }",
+    ),
+    "a record holding itself by value through an inline array": (
+        "E-RECORD-TYPE",
+        "struct N { kids:Array[N, 2]; v:u64; }",
+    ),
+    "a generic impl with a parameter its Self type does not determine": (
+        "E-TRAIT-IMPL",
+        "trait T { fn go(self:ro<Self>) -> u64; }\nstruct S { v:u64; }\n"
+        "impl[A] T for S { fn go(self:ro<S>, extra:A) -> A = extra; }",
+    ),
+    "a declared ceiling that hides that lanes call a parameter": (
+        "E-EFFECT-CEILING",
+        "fn map(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) effects(par:host, indirect_call, write:out, trap,\n"
+        "  ffi_precondition) { parallel i in n { out[i] = f(u64(i)); } }",
+    ),
     "a lane inside a closure returning from that closure": (
         "E-PARALLEL-CONTROL",
         "fn once(f:ro<fn(u64) -> u64>) -> u64 = f(0);\n"
@@ -523,6 +574,22 @@ BEHAVIOR = {
         "impl Size for u64 { fn size(self:ro<u64>) -> u64 = 8; }\n"
         "impl[T: Size] Size for Box[T] { fn size(self:ro<Box[T]>) -> u64 = 1 + size(self.v); }\n"
         "fn main() -> i32 { let s = S(0); let b = Box(Box(7)); return i32(depth(s, 5) + size(b)) - 15; }",
+    ),
+    "lanes reach function values and dynamic calls through helpers, locals and dyn members": (
+        0,
+        "trait P { fn pid(self:ro<Self>) -> u64; }\nstruct C { n:u64; }\nimpl P for C { fn pid(self:ro<C>) -> u64 = self.n; }\n"
+        "trait R { fn run(self:ro<Self>, f:fn(u64) -> u64) -> u64; }\n"
+        "impl R for C { fn run(self:ro<C>, f:fn(u64) -> u64) -> u64 { buffer o:u64[64] = zeroed;\n"
+        "  parallel i in 64 { o[i] = f(u64(i)); } return o[2]; } }\n"
+        "fn one(c:ro<dyn P>) -> u64 = pid(c);\nfn twice(x:u64) -> u64 = x * 2;\n"
+        "fn helper(f:ro<fn(u64) -> u64>, x:u64) -> u64 = f(x);\n"
+        "fn go(n:usize, out:rw<u64>[n], c:ro<dyn P>, f:ro<fn(u64) -> u64>, g:fn(u64) -> u64) effects(par:host, lane:f,\n"
+        "  lane:g, indirect_call, dispatch, read:c, read:f, write:out, trap, ffi_precondition) {\n"
+        "  parallel i in n { out[i] = one(c) + helper(f, u64(i)) + g(1); } }\n"
+        "fn via(d:ro<dyn R>) -> u64 = run(d, twice);\n"
+        "fn main() -> i32 { let n:usize = 8; buffer o:u64[n] = zeroed; let c = C(5); let k:u64 = 3;\n"
+        "  let stored:fn(u64) -> u64 = twice;\n  go(n, o, c, |x:u64| -> u64 { return x * k + pid(c); }, stored);\n"
+        "  let v = via(c);\n  if o[2] != 5 + 6 + 5 + 2 || v != 4 { return 1; }\n  return 0; }",
     ),
     "a public family over an imported public template belongs to the module that declares it": (
         20,

@@ -193,6 +193,7 @@ class Checker:
         self.lane_calls: list[tuple[str, bool, Expr]] = []
         self.fn_sites: list[tuple[Expr, set[str], str, str]] = []  # (argument, caller's parameters, callee, formal)
         self.impls: dict[tuple[str, Type], dict[str, Function] | None] = {}
+        self.hostish: dict[str, str] = {}  # function -> the first host-only construct in its body
         self.dispatches: list[tuple] = []
         self.borrowed: list[tuple[str, str]] = []
         self.device_functions: set[str] = set()
@@ -323,7 +324,10 @@ class Checker:
         ty = self.resolve(declared)
         if ty.name in PINNED:
             fail("E-PINNED", f"{ty.display()} lives where it is declared; share it by ro borrow.")
-        if ty in self.layouts and self.layouts[ty] is None:
+        inline = ty
+        while inline.name == "Array":
+            inline = inline.args[0]
+        if inline in self.layouts and self.layouts[inline] is None:
             fail(code, f"{what} cannot contain their own type by value; reach it through a Buf.")
         return ty
 
@@ -368,11 +372,7 @@ class Checker:
         concrete = [f for f in self.p.functions if not f.generics or f.bindings]
         for f in concrete:
             self.signature(f)
-        for f in [f for f in concrete if f.owner]:  # Every impl is held to its trait, used or not.
-            with self.within(f.module):
-                self.members(
-                    self.qualify(f.owner[0], self.p.traits, node=f) or f.owner[0], self.resolve(f.owner[1], f), f
-                )
+        self.hold_impls(concrete)
         for f in concrete:  # Generic instances are appended, and checked, at their first use.
             self.function(f)
         instantiated = {f.source_name for f in self.p.functions if f.bindings}
@@ -389,17 +389,23 @@ class Checker:
         self.judge_lane_callbacks(effects)
         kernels = [(f.name, True, f) for f in self.p.functions if f.kernel]
         for callee, device, node in [*self.lane_calls, *kernels]:
-            allowed = PURE if device else LANE_SAFE
+            allowed = (
+                PURE if device else LANE_SAFE | {"dispatch", "indirect_call"}
+            )  # Their targets' rows are joined in.
             reach = ("read:", "write:") if callee in {k for k, _, _ in kernels} else ("read:",)
             excess = sorted(x for x in effects[callee] if x not in allowed and not x.startswith(reach))
             if excess:
                 fail("E-PARALLEL-CALL", f"A lane cannot call {callee}: it may {', '.join(excess)}.", node)
             todo = [callee] if device else []
-            while todo:  # Everything a device lane reaches is compiled for the device as well.
+            while todo:  # Everything a device lane reaches is compiled for the device as well, so it is device code.
                 name = todo.pop()
                 if name not in self.device_functions:
                     self.device_functions.add(name)
                     todo += self.calls[name]
+                    views = [n for n, t in self.fs[name].params if is_view(t) and t.place in ("host", "pinned")]
+                    if name in self.hostish or views:
+                        fail("E-PLACEMENT", f"A device lane reaches {name}, where "
+                             f"{self.hostish.get(name) or views[0] + ' is a host view'}.", node)  # fmt: skip
         return {
             n: {
                 "effects": sorted(effects[n]),
@@ -414,17 +420,41 @@ class Checker:
             for n in effects
         }
 
+    def hold_impls(self, concrete: list[Function]):
+        """Every impl is held to its trait, used or not; a generic one must be determined by its Self type."""
+
+        def mentioned(t: Any) -> set[str]:
+            return {t.name}.union(*(mentioned(a) for a in t.args)) if isinstance(t, Type) else set()
+
+        for f in [f for f in self.p.functions if f.owner and f.generics and not f.bindings]:
+            with self.within(f.module):
+                trait = self.qualify(f.owner[0], self.p.traits, node=f)
+            stated = next((m for m in self.p.traits.get(trait, []) if m.name == f.name.rsplit(".", 1)[1]), None)
+            loose = (
+                {g for g, _ in f.generics} - mentioned(f.owner[1]) - {g for g, _ in (stated.generics if stated else [])}
+            )
+            if stated is None or loose:  # Its instances are made from the Self type alone.
+                fail("E-TRAIT-IMPL", f"{f.name}: a generic impl states its trait's members, and every generic "
+                     f"parameter appears in its Self type{' (not ' + ', '.join(sorted(loose)) + ')' if loose else ''}.", f)  # fmt: skip
+        for f in [f for f in concrete if f.owner]:
+            with self.within(f.module):
+                trait = self.qualify(f.owner[0], self.p.traits, node=f) or f.owner[0]
+                self.members(trait, self.resolve(f.owner[1], f), f)
+
     def connect_dispatches(self):
         """Draw each dynamic call's edges once every implementation is known: a later coercion may add one."""
-        for caller, parameters, trait, name, position, receiver, targets, callbacks, lane in self.dispatches:
+        for caller, parameters, trait, name, position, receiver, targets, callbacks, lane, row in self.dispatches:
             for (owner, _), members in self.impls.items():
                 if owner == trait and members and not (members[name].generics and not members[name].bindings):
                     target = members[name]
                     targets.append(target.name)
                     self.calls[caller].add(target.name)
-                    self.call_edges[caller].append((target.name, {target.params[position][0]: receiver}))
+                    row.add(target.name)  # Inside a closure this is the closure's own row.
+                    passed = {target.params[i][0]: a.val if a.tag == "name" and a.val in parameters else ""
+                              for a, i in callbacks}  # fmt: skip
+                    self.call_edges[caller].append((target.name, {target.params[position][0]: receiver, **passed}))
                     self.lane_calls += [(target.name, False, lane)] if lane else []
-                    self.fn_sites += [(a, parameters, target.name, formal) for a, formal in callbacks]
+                    self.fn_sites += [(a, parameters, target.name, target.params[i][0]) for a, i in callbacks]
 
     def judge_lane_callbacks(self, effects: dict[str, set[str]]):
         """What a callee's lanes will call (`lane:f` in its row) is judged where it was written: a closure
@@ -432,9 +462,20 @@ class Checker:
         for a, parameters, callee, formal in self.fn_sites:
             if "lane:" + formal in effects[callee] and not (a.tag == "name" and a.val in parameters):
                 closure = a.ref if a.tag == "lambda" else None
-                rows = [closure.row[0], *(effects[c] for c in closure.row[1])] if closure else [
-                    effects[a.ref.name] if a.tag == "function" else {"indirect_call"}]  # fmt: skip
-                wrong = {x for row in rows for x in row if x not in LANE_SAFE and not x.startswith(("read:", "write:"))}
+                known = (
+                    [a.ref.name]
+                    if a.tag == "function"
+                    else [  # A stored fn value is some function whose address was taken.
+                        g
+                        for g in self.address_taken
+                        if (*(t for _, t in self.fs[g].params), self.fs[g].ret) == a.ty.args
+                    ]
+                )
+                rows = (
+                    [closure.row[0], *(effects[c] for c in closure.row[1])] if closure else [effects[g] for g in known]
+                )
+                allowed = LANE_SAFE | {"dispatch"}  # A dispatch's targets are in the row beside it.
+                wrong = {x for row in rows for x in row if x not in allowed and not x.startswith(("read:", "write:"))}
                 wrong |= {"write:" + place for place, mode in (closure.captures if closure else []) if mode == "rw"}
                 if wrong:
                     fail("E-PARALLEL-CALL", f"{callee} calls {formal} from parallel lanes, where it cannot "
@@ -911,8 +952,10 @@ class Checker:
         return ty
 
     def host_only(self, node: Any, what: str):
+        """Refuse a host construct in device code, and remember it for functions a device lane turns out to reach."""
         if self.device_depth:
             fail("E-PLACEMENT", f"{what}; a device lane cannot use it.", node)
+        self.hostish.setdefault(self.f.name, what[0].lower() + what[1:])
 
     def stable(self, name: str) -> bool:
         """A name whose value cannot change while it is in scope: a parameter, a let, a loop binder."""
@@ -1178,17 +1221,23 @@ class Checker:
             lent = self.lend(a, want.mode, borrows)  # No callee row exists to rename: charge the caller now.
             self.effects |= {("write:" if want.mode == "rw" else "read:") + lent} if lent else set()
         self.disjoint(borrows, e)
-        if self.lanes and e.val not in {n for n, _ in self.f.params}:
+        if self.lanes:
+            self.lane_callee(e)
+        self.effect("indirect_call")
+        if target.ty.mode == "value":
+            self.guard("callable")
+        e.ref = ("indirect", target.ty)
+        return ret
+
+    def lane_callee(self, e: Expr):
+        """A function value used inside a lane must be a parameter: `lane:f` tells whoever passes it to answer for it."""
+        if e.val not in dict(self.f.params):
             fail(
                 "E-PARALLEL-CALL",
                 "A lane calls declared functions and fn parameters, which their writer answers for.",
                 e,
             )
-        self.effects |= {"indirect_call"} | ({"lane:" + e.val} if self.lanes else set())
-        if target.ty.mode == "value":
-            self.guard("callable")
-        e.ref = ("indirect", target.ty)
-        return ret
+        self.effect("lane:" + e.val)
 
     def shared(self, e: Expr, n: str, ty: Type, args: list[Expr]) -> Type:
         """Interior mutability, and only here: every atomic access names its memory order."""
@@ -1420,18 +1469,18 @@ class Checker:
         receiver = self.lend(args[position], member.params[position][1].mode, [])  # Leases and lanes see it.
         callbacks = []
         with self.within(self.p.modules.get(trait, ""), {"Self": Type("dyn", args=(Type(trait),))}):
-            for i, (a, (formal, declared)) in enumerate(zip(args, member.params, strict=True)):
+            for i, (a, (_, declared)) in enumerate(zip(args, member.params, strict=True)):
                 if i != position:
                     if declared.mode != "value" or not selfless(declared) or not selfless(member.ret):
                         fail("E-DYN", f"{trait}.{member.name} is not dyn-compatible: only its receiver may be "
                              "a borrow or mention Self.", e)  # fmt: skip
-                    callbacks += [(a, formal)] if self.expr(a, self.resolve(declared, a)).name == "fn" else []
+                    callbacks += [(a, i)] if self.expr(a, self.resolve(declared, a)).name == "fn" else []
             if not selfless(member.ret):
                 fail("E-DYN", f"{trait}.{member.name} returns Self, which a dynamic reference cannot name.", e)
             ret = self.resolve(member.ret, e)
         targets: list[str] = []  # Filled once every implementation is known: a later coercion may add one.
         self.dispatches.append((self.f.name, {n for n, _ in self.f.params}, trait, member.name, position, receiver,
-                                targets, callbacks, e if self.lanes else None))  # fmt: skip
+                                targets, callbacks, e if self.lanes else None, self.callset))  # fmt: skip
         self.effect("dispatch")
         index = [m.name for m in self.p.traits[trait]].index(member.name)
         e.ref = ("dispatch", trait, index, position, targets)
@@ -1443,6 +1492,16 @@ class Checker:
         members = self.members(trait, value, node)
         if members is None or any(m.generics and not m.bindings for m in members.values()):
             fail("E-TRAIT-IMPL", f"{value.display()} does not implement {trait} with concrete members.", node)
+
+        def selfless(t: Any) -> bool:
+            return not isinstance(t, Type) or (t.name != "Self" and all(selfless(a) for a in t.args))
+
+        for m in self.p.traits[trait]:  # The static table has a slot for every member, called or not.
+            receiver = next((i for i, (_, t) in enumerate(m.params) if t.name == "Self"), None)
+            rest = [t for i, (_, t) in enumerate(m.params) if i != receiver]
+            if receiver is None or not selfless(m.ret) or any(t.mode != "value" or not selfless(t) for t in rest):
+                fail("E-DYN", f"{trait}.{m.name} is not dyn-compatible: only its receiver may be a borrow or "
+                     "mention Self.", node)  # fmt: skip
         self.callset |= {m.name for m in members.values()}  # The static table reaches them, called here or not.
         return [members[m.name] for m in self.p.traits[trait]]
 
@@ -1531,6 +1590,8 @@ class Checker:
         for a, (name, want) in zip(args, f.params, strict=True):
             if want.name == "fn":  # If the callee's lanes call it, what is written here is judged here.
                 self.fn_sites.append((a, {n for n, _ in self.f.params}, f.name, name))
+                if self.lanes and a.tag == "name" and a.val in self.env:  # Handed on from a lane, it runs in that lane.
+                    self.lane_callee(a)
             if want.name == "fn" and (a.tag == "lambda" or root(a).val not in self.env):
                 self.expr(a, want)  # A declared function borrows nothing; a closure borrows what it captures.
                 closures += [a.ref.captures] if a.tag == "lambda" else []
@@ -1539,7 +1600,7 @@ class Checker:
             if want.mode == "value":
                 if self.kind(self.expr(a, want)) != "copy" and root(a).tag == "name":
                     borrows.append((self.where(a), "rw"))  # The callee may release it while a view is live.
-                mapping[name] = a.val if a.tag == "name" else ""
+                mapping[name] = a.val if a.tag == "name" and a.val in dict(self.f.params) else ""
                 continue
             named = root(a).tag == "name" and root(a).val in self.env
             if want.name == "dyn" and self.peek(a).name != "dyn":
