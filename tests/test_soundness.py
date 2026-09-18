@@ -514,6 +514,16 @@ BEHAVIOR = {
         4,
         "fn one(x:ro<u64>) -> u64 = x + 1;\nfn main() -> i32 { let t = spawn one(3); let r = wait(t); return i32(r); }",
     ),
+    "impls that use their own trait: recursively on the same type, and through a bounded generic wrapper": (
+        0,
+        "trait Depth { fn depth(self:ro<Self>, left:u64) -> u64; }\ntrait Size { fn size(self:ro<Self>) -> u64; }\n"
+        "struct S { v:u64; }\nstruct Box[T] { v:T; }\n"
+        "impl[T] Depth for T { fn depth(self:ro<T>, left:u64) -> u64 {\n"
+        "  if left == 0 { return 0; } return 1 + depth(self, left - 1); } }\n"
+        "impl Size for u64 { fn size(self:ro<u64>) -> u64 = 8; }\n"
+        "impl[T: Size] Size for Box[T] { fn size(self:ro<Box[T]>) -> u64 = 1 + size(self.v); }\n"
+        "fn main() -> i32 { let s = S(0); let b = Box(Box(7)); return i32(depth(s, 5) + size(b)) - 15; }",
+    ),
     "a public family over an imported public template belongs to the module that declares it": (
         20,
         "module lib;\npub fn scale[K:nat](x:usize) -> usize = mul_wrap(x, K);\n"

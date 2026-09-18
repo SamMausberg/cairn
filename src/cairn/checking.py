@@ -1372,21 +1372,23 @@ class Checker:
         """The one implementation of a trait for a concrete type, or None: every declared member, conforming
         to its declaration with Self := target. A generic impl is instantiated; two matching impls are an error."""
         if (trait, target) not in self.impls:
-            self.impls[trait, target] = None  # A member that mentions its own trait sees it as not yet known.
-            found: dict[str, Function] = {}
+            matches: dict[str, tuple[Function, dict[str, Any]]] = {}
             for f in [f for f in list(self.fs.values()) if f.owner and not f.bindings]:
                 bound: dict[str, Any] = {}
                 with self.within(f.module):
                     if self.qualify(f.owner[0], self.p.traits) != trait:
                         continue
-                    generics = {g for g, _ in f.generics}
-                    if not self.unify(f.owner[1], target, bound, generics):
+                    if not self.unify(f.owner[1], target, bound, {g for g, _ in f.generics}):
                         continue
                 short = f.name.rsplit(".", 1)[1]
-                if short in found:
+                if short in matches:
                     fail("E-TRAIT-OVERLAP", f"Two impls of {trait} match {target.display()}: one Self type means "
                          "one implementation.", node)  # fmt: skip
-                found[short] = self.instantiate(f, bound, node) if f.generics and set(bound) == generics else f
+                matches[short] = (f, bound)
+            # A member whose body uses its own trait on its own type finds the template while its instance is made.
+            self.impls[trait, target] = {short: f for short, (f, _) in matches.items()} or None
+            found = {short: self.instantiate(f, bound, node) if f.generics and set(bound) == {g for g, _ in f.generics}
+                     else f for short, (f, bound) in matches.items()}  # fmt: skip
             declared = {m.name: m for m in self.p.traits[trait]}
             if found and set(found) != set(declared):
                 fail("E-TRAIT-IMPL", f"impl {trait} for {target.display()} defines {', '.join(sorted(found))}; "
