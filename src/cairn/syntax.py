@@ -55,7 +55,7 @@ RESERVED = set(  # One readable paragraph of words beats a wall of quoted string
     "fn struct enum family let mut reg if else for each in while return true false ro rw host nat "
     "effects pure extern unsafe defer match kernel module import compact where yield derive wire "
     "buffer stack zeroed break continue trait impl dyn const pub linear parallel reduce spawn try "
-    "as type device pinned unified".split()
+    "as type device pinned unified".split()  # noqa: SIM905
 )
 ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "0": "\0", "\\": "\\", '"': '"', "'": "'"}
 PLACES = ("host", "device", "pinned", "unified")
@@ -222,6 +222,12 @@ class Program:
     uses: dict[tuple[str, str], str] = field(default_factory=dict)  # (importer, bare name) -> full name
     sources: dict[str, str] = field(default_factory=dict)  # linked library module -> its text
     modules: dict[str, str] = field(default_factory=dict)  # declared name -> owning module
+
+
+def root(e: Expr) -> Expr:
+    while e.tag in {"field", "index", "slice"}:
+        e = e.args[0]
+    return e
 
 
 PREC = {"||": 1, "&&": 2, "|": 3, "^": 4, "&": 5, "==": 6, "!=": 6, "<": 7, "<=": 7, ">": 7, ">=": 7}

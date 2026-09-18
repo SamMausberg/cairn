@@ -26,7 +26,7 @@ from .cairnc import (
     compile_source,
     fail,
 )
-from .checking import EFFECT_FAMILIES, EFFECTS
+from .effects import EFFECT_FAMILIES, EFFECTS
 from .teaching import select_cards
 
 PROTOCOL = "cairn.edit/1"
