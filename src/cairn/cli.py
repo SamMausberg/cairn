@@ -13,7 +13,7 @@ from pathlib import Path
 from . import __version__
 from .cairnc import Diagnostic, compile_source
 from .project import ProjectError, contained_file, load_project, read_text
-from .toolchain import ARCHS, host_family
+from .toolchain import ARCHS, TARGETS, emulator, host_family
 
 
 def report(value: dict) -> None:
@@ -73,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         if name in {"build", "run"}:
             c.add_argument("--out", type=Path)
             c.add_argument("--arch", choices=sorted(ARCHS))
+            c.add_argument("--target", choices=sorted(TARGETS), help="Freestanding profile; default hosted.")
             c.add_argument("--timeout", type=int, default=60)
         if name == "run":
             c.add_argument(
@@ -92,6 +93,11 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--all", action="store_true", help="Require scalar equivalence for every declared function.")
     v.add_argument("--timeout-ms", type=int, default=3000)
     sub.add_parser("certificates", help="Check collector arithmetic certificates; not a Lean/compiler proof.")
+    f = sub.add_parser("fmt", help="Format CAIRN sources in place; refuses any change to the token stream.")
+    f.add_argument("paths", nargs="+", type=Path, help="Files, or directories searched for *.cairn.")
+    f.add_argument("--check", action="store_true", help="Write nothing; exit 1 if any file would change.")
+    f.add_argument("--diff", action="store_true", help="Write nothing; print a unified diff of what would change.")
+    sub.add_parser("lsp", help="Speak the Language Server Protocol over stdin/stdout.")
     a = p.parse_args(argv)
     project = None
     try:
@@ -106,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
                     "z3": ctypes.util.find_library("z3"),
                     "lean": shutil.which("lean"),
                     "lake": shutil.which("lake"),
+                    "qemu-system-aarch64": shutil.which("qemu-system-aarch64"),  # runs aarch64-virt images
                     "formal_status": "not-verified",
                     "native_platform": "Linux " + host_family(),
                     "network_access": False,
@@ -120,6 +127,14 @@ def main(argv: list[str] | None = None) -> int:
         if a.command == "new":
             report(create_project(a.directory))
             return 0
+        if a.command == "fmt":
+            from .formatting import format_paths
+
+            return format_paths(a.paths, a.check, a.diff)
+        if a.command == "lsp":
+            from .lsp import serve
+
+            return serve()
         if a.command == "verify" and a.all:
             from .verification import verify_module
 
@@ -194,12 +209,16 @@ def main(argv: list[str] | None = None) -> int:
             arch=a.arch,
             kind="exe" if a.command == "run" else a.kind,
             timeout=a.timeout,
+            target=a.target,
         )
         if a.command == "build" or result["status"] != "native-built":
             report(result)
             return 0 if result["status"] == "native-built" else 2
         # Execution is explicit. Process timeout is not an OS security sandbox.
         from .testing import resource
+
+        # A freestanding image is not a host process: it runs in the emulator its target names.
+        machine = emulator(result["target"], result["artifact"])
 
         def limits():
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
@@ -208,7 +227,14 @@ def main(argv: list[str] | None = None) -> int:
                 memory = a.memory_mib * 1024 * 1024
                 resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
 
-        cp = subprocess.run([result["artifact"]], capture_output=True, text=True, timeout=a.timeout, preexec_fn=limits)
+        cp = subprocess.run(
+            machine or [result["artifact"]],
+            capture_output=True,
+            text=True,
+            timeout=a.timeout,
+            stdin=subprocess.DEVNULL if machine else None,
+            preexec_fn=None if machine else limits,
+        )
         report(
             {
                 "status": "program-exited",
@@ -217,7 +243,8 @@ def main(argv: list[str] | None = None) -> int:
                 "stderr": cp.stderr,
                 "build_directory": result["directory"],
                 "security_sandbox": False,
-                "memory_limit_mib": a.memory_mib,
+                "memory_limit_mib": None if machine else a.memory_mib,
+                "emulator": machine,
             }
         )
         return 0 if cp.returncode == 0 else 1

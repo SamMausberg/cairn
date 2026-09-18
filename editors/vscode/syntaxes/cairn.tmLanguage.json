@@ -1,0 +1,161 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "CAIRN",
+  "scopeName": "source.cairn",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#placements" },
+    { "include": "#effects" },
+    { "include": "#declarations" },
+    { "include": "#keywords" },
+    { "include": "#numbers" },
+    { "include": "#types" },
+    { "include": "#builtins" },
+    { "include": "#calls" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.cairn", "match": "//.*$" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.cairn",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.cairn", "match": "\\\\(?:x[0-9A-Fa-f]{2}|[ntr0\\\\\"'])" },
+            { "name": "invalid.illegal.escape.cairn", "match": "\\\\." }
+          ]
+        },
+        {
+          "name": "string.quoted.single.cairn",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            { "name": "constant.character.escape.cairn", "match": "\\\\(?:x[0-9A-Fa-f]{2}|[ntr0\\\\\"'])" },
+            { "name": "invalid.illegal.escape.cairn", "match": "\\\\." }
+          ]
+        }
+      ]
+    },
+    "placements": {
+      "patterns": [
+        { "name": "keyword.other.placement.cairn", "match": "@(?:host|device|pinned|unified)\\b" }
+      ]
+    },
+    "effects": {
+      "patterns": [
+        {
+          "begin": "\\b(effects)\\s*(\\()",
+          "beginCaptures": {
+            "1": { "name": "storage.modifier.cairn" },
+            "2": { "name": "punctuation.section.parens.begin.cairn" }
+          },
+          "end": "\\)",
+          "endCaptures": { "0": { "name": "punctuation.section.parens.end.cairn" } },
+          "patterns": [
+            { "name": "support.constant.effect.cairn", "match": "[A-Za-z_][A-Za-z_0-9]*(?::[A-Za-z_][A-Za-z_0-9]*)?" }
+          ]
+        }
+      ]
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z_0-9]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.cairn" },
+            "2": { "name": "entity.name.function.cairn" }
+          }
+        },
+        {
+          "match": "\\b(struct|enum|trait)\\s+([A-Za-z_][A-Za-z_0-9]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.cairn" },
+            "2": { "name": "entity.name.type.cairn" }
+          }
+        },
+        {
+          "match": "\\b(module|import)\\s+([A-Za-z_][A-Za-z_0-9.]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.cairn" },
+            "2": { "name": "entity.name.namespace.cairn" }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.cairn",
+          "match": "\\b(?:break|continue|defer|each|else|for|if|in|match|return|spawn|try|where|while|yield)\\b"
+        },
+        {
+          "name": "keyword.declaration.cairn",
+          "match": "\\b(?:const|derive|enum|extern|family|fn|impl|import|module|pub|struct|trait|wire)\\b"
+        },
+        {
+          "name": "storage.modifier.cairn",
+          "match": "\\b(?:as|dyn|effects|linear|mut|nat|pure|ro|rw|type|unsafe)\\b"
+        },
+        {
+          "name": "storage.type.cairn",
+          "match": "\\b(?:buffer|let|reg|stack)\\b"
+        },
+        {
+          "name": "keyword.other.parallel.cairn",
+          "match": "\\b(?:compact|kernel|parallel|reduce)\\b"
+        },
+        {
+          "name": "keyword.other.placement.cairn",
+          "match": "\\b(?:device|host|pinned|unified)\\b"
+        },
+        {
+          "name": "constant.language.cairn",
+          "match": "\\b(?:false|true|zeroed)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.hex.cairn", "match": "\\b0x[0-9A-Fa-f]+\\b" },
+        { "name": "constant.numeric.float.cairn", "match": "\\b[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)\\b" },
+        { "name": "constant.numeric.float.cairn", "match": "\\b[0-9]+\\.[0-9]+\\b" },
+        { "name": "constant.numeric.integer.cairn", "match": "\\b[0-9]+\\b" }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.cairn",
+          "match": "\\b(?:bool|u8|u16|u32|u64|usize|i8|i16|i32|i64|f32|f64|void|Self|Buf|Array|Ticket|Atomic|Mutex)\\b"
+        },
+        { "name": "entity.name.type.cairn", "match": "\\b[A-Z][A-Za-z_0-9]*\\b" }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.cairn",
+          "match": "\\b(?:add_wrap|sub_wrap|mul_wrap|shl_wrap|shr|min|max|len|take|swap|transfer|mmio_read|mmio_write|asm|wait)\\b"
+        }
+      ]
+    },
+    "calls": {
+      "patterns": [
+        { "name": "entity.name.function.call.cairn", "match": "\\b[A-Za-z_][A-Za-z_0-9]*(?=\\s*[\\[(])" }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        { "name": "keyword.operator.cairn", "match": "->|=>|\\.\\.|==|!=|<=|>=|&&|\\|\\||[+*/%<>=!&|^~-]" },
+        { "name": "punctuation.separator.cairn", "match": "[;,:.]" }
+      ]
+    }
+  }
+}

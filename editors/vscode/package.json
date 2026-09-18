@@ -1,0 +1,49 @@
+{
+  "name": "cairn",
+  "displayName": "CAIRN",
+  "description": "CAIRN syntax highlighting and language server client.",
+  "version": "1.0.0",
+  "publisher": "cairn-language",
+  "license": "SEE LICENSE IN ../../README.md",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages", "Formatters"],
+  "main": "./client.js",
+  "activationEvents": ["onLanguage:cairn"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "cairn",
+        "aliases": ["CAIRN", "cairn"],
+        "extensions": [".cairn"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "cairn",
+        "scopeName": "source.cairn",
+        "path": "./syntaxes/cairn.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "CAIRN",
+      "properties": {
+        "cairn.server.command": {
+          "type": "string",
+          "default": "cairn",
+          "description": "Executable that speaks the CAIRN language server protocol."
+        },
+        "cairn.server.arguments": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["lsp"],
+          "description": "Arguments passed to the server executable."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}
