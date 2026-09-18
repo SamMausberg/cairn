@@ -43,6 +43,10 @@ The API is `cairn.formatting.format_source(text) -> str`, which returns `text`
 unchanged when it refuses, and `format_report(text) -> (text, reason)` when the
 reason matters.
 
+## `cairn build --incremental`
+
+One object per module, compiled against a shared interface header (`program.hpp`: types, tables and prototypes) and cached under `build/objects/` by the hash of everything that went into it: the unit, the header, the command line, the runtime headers and the compiler version. Nothing stale can be linked, because a change to any of those is a different key; a body-only edit recompiles one module, a signature or layout change recompiles all. Missing objects compile concurrently. The build receipt lists every unit and whether it was reused. It is opt-in because separate objects give up inlining across modules; device programs and freestanding images are always one unit. The cache is safe to delete.
+
 ## `cairn lsp`
 
 ```sh
