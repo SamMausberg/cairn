@@ -23,6 +23,7 @@ from pathlib import Path
 
 from .agent_tools import digest, explain, load_json_strict, stable_json
 from .cairnc import RUNTIME_FILES, Diagnostic, Parser, compile_source
+from .toolchain import command as native_command
 from .toolchain import flags
 
 CTYPES = {
@@ -200,7 +201,8 @@ def evaluate(source: str, contract: dict, cxx="clang++") -> dict:
             (t / header).write_text(text)
         (t / "source.cairn").write_text(source)
         (t / "contract.json").write_text(stable_json(contract))
-        command = [compiler, *FLAGS, str(t / "candidate.cpp"), "-o", str(t / "libtask.so")]
+        cuda = "cuda" in receipt["requires"]
+        command = native_command(cxx, str(t / "candidate.cpp"), str(t / "libtask.so"), cuda=cuda)
         try:
             cp = subprocess.run(command, text=True, capture_output=True, timeout=30)
             build = {"exit_code": cp.returncode, "flags": FLAGS, "compiler": compiler}

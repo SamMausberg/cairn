@@ -6,6 +6,7 @@
 // cairn_gpu.hpp (this file needs no other flags).
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <vector>
 #include "cairn_gpu.hpp"
@@ -31,13 +32,14 @@ static std::size_t chunks(std::size_t n) {
   return t < n ? t : n;
 }
 static void report(const char* name, const char* type, std::size_t n, double seq, double par,
-                   double kernel, double e2e, bool ok) {
+                   double kernel, double e2e, bool ok, const char* note) {
   std::printf(
       "    {\"case\": \"%s\", \"type\": \"%s\", \"n\": %zu, \"host_sequential_ms\": %.3f,\n"
       "     \"host_parallel_ms\": %.3f, \"device_kernel_ms\": %.3f, \"device_end_to_end_ms\": %.3f,\n"
       "     \"speedup_par_over_seq\": %.2f, \"speedup_kernel_over_seq\": %.2f,\n"
-      "     \"speedup_end_to_end_over_seq\": %.2f, \"agrees_with_sequential\": %s}",
-      name, type, n, seq, par, kernel, e2e, seq / par, seq / kernel, seq / e2e, ok ? "true" : "false");
+      "     \"speedup_end_to_end_over_seq\": %.2f, \"results_agree\": %s, \"note\": \"%s\"}",
+      name, type, n, seq, par, kernel, e2e, seq / par, seq / kernel, seq / e2e, ok ? "true" : "false",
+      note);
 }
 
 static void saxpy(std::size_t n, bool last) {
@@ -69,7 +71,7 @@ static void saxpy(std::size_t n, bool last) {
     cr::gpu::copy(gp, dop, n, Dir::d2h);
   });
   ok = ok && got == want;
-  report("saxpy", "f32", n, seq, par, kernel, e2e, ok);
+  report("saxpy", "f32", n, seq, par, kernel, e2e, ok, "elementwise: all three agree bit for bit");
   std::printf(last ? "\n" : ",\n");
 }
 
@@ -104,7 +106,11 @@ static void dot(std::size_t n, bool last) {
     for(float v : partial) acc += v;
     got = acc;
   });
-  bool ok = std::abs(double(got) - double(want)) <= std::abs(double(want)) * 1e-4;
+  // A sequential f32 fold is the least accurate of the three: past 2^24 the accumulator stops
+  // growing. Correctness is judged against an f64 oracle, and the f32 fold's error is reported.
+  double exact = 0;
+  for(std::size_t i = 0; i < n; ++i) exact += double(xp[i]) * double(yp[i]);
+  bool ok = std::abs(double(got) - exact) <= std::abs(exact) * 1e-4;
   cr::gpu::Buffer<float> dx(n), dy(n);
   float* dxp = dx.data();
   float* dyp = dy.data();
@@ -119,9 +125,13 @@ static void dot(std::size_t n, bool last) {
     cr::gpu::copy(dyp, yp, n, Dir::h2d);
     device = cr::gpu::reduce<float>(n, 0.0f, plus, term);
   });
-  // Association order differs between a sequential f32 fold and a tree, so compare with tolerance.
-  ok = ok && std::abs(double(device) - double(want)) <= std::abs(double(want)) * 1e-4;
-  report("dot_reduce", "f32", n, seq, par, kernel, e2e, ok);
+  ok = ok && std::abs(double(device) - exact) <= std::abs(exact) * 1e-4;
+  char note[160];
+  std::snprintf(note, sizeof note,
+                "vs f64 oracle: sequential f32 fold off by %.2e, chunked host by %.2e, device by %.2e",
+                std::abs(double(want) - exact) / std::abs(exact), std::abs(double(got) - exact) / std::abs(exact),
+                std::abs(double(device) - exact) / std::abs(exact));
+  report("dot_reduce", "f32", n, seq, par, kernel, e2e, ok, note);
   std::printf(last ? "\n" : ",\n");
 }
 
@@ -183,7 +193,7 @@ static void compact(std::size_t n, bool last) {
     cr::gpu::copy(gp, dop, device, Dir::d2h);
   });
   ok = ok && device == kept && std::equal(got.begin(), got.begin() + std::ptrdiff_t(kept), want.begin());
-  report("compact_even", "u64", n, seq, par, kernel, e2e, ok);
+  report("compact_even", "u64", n, seq, par, kernel, e2e, ok, "stable: all three keep the input order");
   std::printf(last ? "\n" : ",\n");
 }
 

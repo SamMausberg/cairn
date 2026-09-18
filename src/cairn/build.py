@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .cairnc import RUNTIME_FILES, Parser, compile_source
 from .project import Project, ProjectError
+from .toolchain import command as native_command
 from .toolchain import find, flags
 
 
@@ -48,7 +49,7 @@ def build(
     for header, text in RUNTIME_FILES.items():
         (directory / header).write_text(text, encoding="utf-8")
     artifact = directory / ("lib" + name + ".so" if kind == "library" else name)
-    command = [compiler, *options, str(cpp), "-o", str(artifact)]
+    command = native_command(cxx, str(cpp), str(artifact), arch or project.arch, kind, "cuda" in receipt["requires"])
     started = time.monotonic()
     record = {
         "schema": "cairn.build/1",

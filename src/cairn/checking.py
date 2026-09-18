@@ -19,11 +19,14 @@ from .syntax import (
 )  # fmt: skip
 
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
-BUILTINS = WRAPPING | {"min", "max", "len", "take", "swap"}
+SOFT = {"take", "swap", "transfer"}  # New in 1.0: a program's own function of that name wins.
+BUILTINS = WRAPPING | SOFT | {"min", "max", "len"}
 INTRINSIC_TYPES = {"Buf": 1, "Array": 2, "fn": None, "dyn": 1}
 KINDS = ["copy", "affine", "linear"]
 PURE = {"trap", "diverge", "local_read", "local_write", "stack_storage", "zero_init", "ffi_precondition"}
 COMPARISONS = {"==", "!=", "<", "<=", ">", ">="}
+LANE_SAFE = PURE | {"alloc", "free"}  # What a function called from a parallel lane may do.
+HOST_VISIBLE = {"host", "pinned", "unified"}
 
 
 @dataclass
@@ -42,6 +45,16 @@ class Scope:
     unsafe_depth: int = 0
     device_depth: int = 0
     module: str = ""
+    lanes: Lanes | None = None
+
+
+@dataclass
+class Lanes:
+    """One data-parallel region: lanes may only touch element `binder` of what any lane writes."""
+
+    binder: str
+    outer: set[str]
+    accesses: list[tuple[str, bool, bool, Expr]] = field(default_factory=list)  # root, at binder, write
 
 
 @dataclass
@@ -94,7 +107,7 @@ class Checker:
         self.fs = {f.name: f for f in program.functions}
         self.types = {**program.records, **program.enums, **program.sums}
         for name in [*self.fs, *self.types, *program.consts, *program.traits]:
-            if name in CPP or name in BUILTINS or name in INTRINSIC_TYPES:
+            if name in CPP or name in BUILTINS - SOFT or name in INTRINSIC_TYPES:
                 fail("E-BUILTIN-NAME", f"Cannot redefine builtin {name}.")
         self.aliases: dict[str, dict[str, str]] = {}
         for importer, target, alias in program.imports:
@@ -110,6 +123,8 @@ class Checker:
         self.call_edges: dict[str, list[tuple[str, dict[str, str]]]] = {}
         self.resources: dict[str, list[dict[str, Any]]] = {}
         self.unchecked: list[str] = []
+        self.lane_calls: list[tuple[str, bool, Expr]] = []
+        self.device_functions: set[str] = set()
         self.nodes = 0
 
     def __getattr__(self, name: str):  # Per-function state lives in the current Scope.
@@ -131,6 +146,8 @@ class Checker:
         candidates = [f"{self.module}.{name}" if self.module else name, name]
         if rest and head in self.aliases.get(self.module, {}):
             candidates.insert(0, f"{self.aliases[self.module][head]}.{rest}")
+        if (self.module, head) in self.p.uses:
+            candidates.insert(0, self.p.uses[self.module, head] + ("." + rest if rest else ""))
         for candidate in candidates:
             if any(candidate in table for table in tables):
                 owner = self.p.modules.get(candidate, "")
@@ -265,6 +282,17 @@ class Checker:
                 self.unchecked.append(f.name)
         effects = self.fixed_point()
         self.audit(effects)
+        for callee, device, node in self.lane_calls:
+            allowed = PURE if device else LANE_SAFE
+            excess = sorted(x for x in effects[callee] if x not in allowed and not x.startswith("read:"))
+            if excess:
+                fail("E-PARALLEL-CALL", f"A lane cannot call {callee}: it may {', '.join(excess)}.", node)
+            todo = [callee] if device else []
+            while todo:  # Everything a device lane reaches is compiled for the device as well.
+                name = todo.pop()
+                if name not in self.device_functions:
+                    self.device_functions.add(name)
+                    todo += self.calls[name]
         return {
             n: {
                 "effects": sorted(effects[n]),
@@ -467,6 +495,8 @@ class Checker:
             fail("E-OWNER-EXTENT", "Capacity exceeds the native object limit.", extent)
         resource = {"name": s.name, "kind": s.tag, "element": element.display(), "capacity": extent.val,
                     "initialization": "zeroed", "release": "lexical-on-normal-exit", "line": s.line}  # fmt: skip
+        if s.ty.place != "host":
+            resource["placement"] = s.ty.place
         if s.tag == "stack":
             if extent.tag != "int":
                 fail("E-STACK-EXTENT", "Stack storage needs a literal capacity.", extent)
@@ -475,13 +505,17 @@ class Checker:
             if prior + resource["bytes"] > 65536:
                 fail("E-STACK-LIMIT", "Explicit stack declarations total at most 65536 bytes per function.", extent)
         # The extent is a literal or immutable scalar, so this identity holds for the whole borrow.
-        place = s.ty.place
+        place = s.ref = s.ty.place
         s.ty = element
         self.bind(s.name, Binding(Type(element.name, "rw", extent.val, element.args, place)), s)
         self.resources[self.f.name].append(resource)
         self.effect("zero_init")
+        if s.tag == "stack" and place != "host":
+            fail("E-PLACE", "Stack storage is host memory; use buffer ...@device.", s)
+        if s.tag == "buffer" and self.device_depth:
+            fail("E-PLACEMENT", "A device lane cannot allocate; declare the buffer outside the region.", s)
         if s.tag == "buffer":
-            self.effects |= {"alloc", "free"}
+            self.effects |= {"alloc", "free"} if place == "host" else {"gpu_alloc", "gpu_free"}
             self.guard("allocation")
         else:
             self.effect("stack_storage")
@@ -510,9 +544,14 @@ class Checker:
         self.expr(hi, USIZE)
         if self.extent_of(hi) != target.ty.extent:
             fail("E-COLLECT-CAPACITY", "Compaction requires iteration extent equal to output capacity.", hi)
+        s.ref = "device" if target.ty.place == "device" else "host"
+        outer, self.device_depth = self.device_depth, int(s.ref == "device")
         self.env[s.binder] = Binding(USIZE)
         self.expr(pred, BOOL)
         self.expr(value, target.ty.value)
+        self.device_depth = outer
+        if s.ref == "device":
+            self.effect("par:device")
 
         def mentions(e: Expr) -> bool:
             return (e.tag == "name" and e.val == out.val) or any(mentions(x) for x in e.args)
@@ -536,6 +575,8 @@ class Checker:
     s_continue = s_break
 
     def s_return(self, s: Stmt):
+        if self.lanes:
+            fail("E-PARALLEL-CONTROL", "A lane cannot return from the enclosing function.", s)
         if self.f.ret == VOID:
             if s.exprs:
                 fail("E-RETURN", "Void function cannot return a value.", s)
@@ -616,9 +657,65 @@ class Checker:
         self.loop(s)
         del self.env[s.name]
 
+    def region(self, s: Stmt, exprs: list[Expr], run) -> str:
+        """Check a lane body; the placement of the views it indexes decides where it runs."""
+        if self.lanes:
+            fail("E-PARALLEL-NEST", "A lane cannot start another parallel region.", s)
+
+        def places(e: Expr) -> set[str]:
+            mine = {self.env[root(e).val].ty.place} if e.tag == "index" and root(e).val in self.env else set()
+            return mine.union(*(places(a) for a in e.args))
+
+        def scan(ss: list[Stmt]) -> set[str]:
+            found = set().union(*(places(e) for x in ss for e in x.exprs))
+            return found.union(*(scan(x.body) | scan(x.other) | scan([b for a in x.arms for b in a.body]) for x in ss))
+
+        target = "device" if "device" in scan(s.body) | set().union(*(places(e) for e in exprs)) else "host"
+        self.bind(s.binder or s.name, Binding(USIZE), s)
+        binder = s.binder or s.name
+        saved = self.lanes, self.device_depth, self.loop_depth, set(self.moved)
+        self.lanes, self.device_depth, self.loop_depth = (
+            Lanes(binder, set(self.env) - {binder}),
+            int(target == "device"),
+            0,
+        )
+        result = run()
+        if (self.moved - saved[3]) & self.lanes.outer:
+            fail("E-MOVE-IN-LOOP", "An outer owner would be moved once per lane.", s)
+        written = {name for name, _, write, _ in self.lanes.accesses if write}
+        for name, at_binder, _, node in self.lanes.accesses:
+            if name in written and not at_binder:
+                fail(
+                    "E-PARALLEL-RACE",
+                    f"{name} is written by lanes, so every lane may touch only {name}[{binder}].",
+                    node,
+                )
+        self.lanes, self.device_depth, self.loop_depth = saved[:3]
+        del self.env[binder]
+        self.effect("par:" + target)
+        self.counts["parallel_regions"] = self.counts.get("parallel_regions", 0) + 1
+        s.ref = target
+        return result
+
+    def s_parallel(self, s: Stmt):
+        self.expr(s.exprs[0], USIZE)
+        self.region(s, [], lambda: self.block(s.body))
+
+    def s_reduce(self, s: Stmt):
+        hi, value = s.exprs
+        self.expr(hi, USIZE)
+        declared = self.resolve(s.ty, s) if s.ty else None
+        ty = self.region(s, [value], lambda: self.expr(value, declared))
+        wanted = UNSIGNED if s.op in WRAPPING or s.op in {"&", "|", "^"} else INT if s.op in {"min", "max"} else FLOAT
+        if ty.mode != "value" or ty.name not in wanted:
+            fail("E-REDUCE-OP", f"reduce {s.op} combines {sorted(wanted)[0]}-like scalars in an unspecified order; "
+                 "checked integer + has no order-independent trap.", s)  # fmt: skip
+        s.ty = ty
+        self.bind(s.name, Binding(ty), s)
+
     def s_expr(self, s: Stmt):
         ty = self.expr(s.exprs[0])
-        if s.exprs[0].tag != "call":
+        if s.exprs[0].tag not in {"call", "try"}:
             fail("E-DISCARD", "Only calls may be used as discarded expression statements.", s)
         if ty != VOID:
             fail("E-DISCARD", "Nonvoid result must be bound or returned.", s)
@@ -666,6 +763,12 @@ class Checker:
                 fail("E-IMMUTABLE", f"{e.val} is not a mutable local.", e)
             if write and b.ty.mode == "rw":
                 self.effect("write:" + e.val)
+            if write and self.lanes and e.val in self.lanes.outer:
+                fail(
+                    "E-PARALLEL-WRITE",
+                    f"Every lane would write {e.val}; write element [{self.lanes.binder}] or reduce.",
+                    e,
+                )
             return self.expr(e, consume=False)
         if e.tag == "index":
             if write and not self.writable(e):
@@ -779,6 +882,8 @@ class Checker:
         self.guard("bounds")
         if read and root(a).tag == "name":
             self.effect("read:" + root(a).val)
+        if self.lanes and root(a).val in self.lanes.outer:
+            self.lanes.accesses.append((root(a).val, i.tag == "name" and i.val == self.lanes.binder, not read, e))
         return ty.value if is_view(ty) else ty.args[0]
 
     def e_field(self, e: Expr, expected: Type | None) -> Type:
@@ -836,6 +941,19 @@ class Checker:
             self.expr(args[0], self.layouts[ty][variant])
         e.ref = ("variant", list(variants).index(variant))
         return ty
+
+    def e_try(self, e: Expr, expected: Type | None) -> Type:
+        """`try x` yields the success payload or returns the failure from the enclosing function."""
+        ty = self.expr(e.args[0])
+        layout, target = self.layouts.get(ty), self.layouts.get(self.f.ret)
+        if not isinstance(layout, dict) or len(layout) != 2 or ty.name in self.p.enums:
+            fail("E-TRY", "try needs a sum of exactly two variants: success first, failure second.", e)
+        failure = list(layout.values())[1]
+        if self.f.ret.name != ty.name or list(target.values())[1] != failure:
+            fail("E-TRY", f"try returns the failure of {ty.display()}, which {self.f.ret.display()} cannot carry.", e)
+        self.leaks(self.env, e)
+        e.ref = list(layout)
+        return list(layout.values())[0] or VOID
 
     def e_unary(self, e: Expr, expected: Type | None) -> Type:
         ty = self.expr(e.args[0], BOOL if e.val == "!" else expected)
@@ -900,7 +1018,7 @@ class Checker:
             if enum:
                 return self.variant(Type(enum, args=targs), n.rsplit(".", 1)[1], args, e, expected)
         e.val = n
-        if n in BUILTINS or n in NUMERIC or n in INTRINSIC_TYPES:
+        if (n in BUILTINS and n not in self.fs) or n in NUMERIC or n in INTRINSIC_TYPES:
             e.ref = ("builtin", targs)
             return self.builtin(e, n, args, targs, expected)
         record = self.qualify(n, self.p.records, node=e)
@@ -1042,6 +1160,8 @@ class Checker:
                     fail("E-WRITE-LEASE", "A mutable borrow needs a mutable local or an rw borrow.", a)
                 self.expect(actual.value, want.value, a)
             mapping[name] = root(a).val if named else ""
+            if named and self.lanes and root(a).val in self.lanes.outer:
+                self.lanes.accesses.append((root(a).val, False, want.mode == "rw", a))
             if named:
                 borrows.append((path(a), want.mode))
                 if want.mode == "rw" and self.env[root(a).val].ty.mode == "value":
@@ -1051,6 +1171,8 @@ class Checker:
                 fail("E-ALIAS", "A mutable view cannot be passed to overlapping call arguments.", e)
         self.call_edges[self.f.name].append((f.name, mapping))
         self.callset.add(f.name)
+        if self.lanes:
+            self.lane_calls.append((f.name, bool(self.device_depth), e))
         e.ref = f
         return f.ret
 
@@ -1115,6 +1237,17 @@ class Checker:
             if src.name in INT and n in INT:
                 self.guard("conversion")
             return Type(n)
+        if n == "transfer":  # The only way elements cross a placement boundary; extents agree by identity.
+            arity(2, "transfer takes a destination and a source view.")
+            dst, src = (self.view_argument(a) for a in args)
+            if not is_view(dst) or not is_view(src) or dst.mode != "rw" or root(args[0]).tag != "name":
+                fail("E-WRITE-LEASE", "transfer needs an rw destination view and a source view.", e)
+            self.expect(Type(src.name, "rw", src.extent, src.args, dst.place), dst, e)
+            ends = ["h" if t.place in HOST_VISIBLE else "d" for t in (src, dst)]
+            self.effects |= {f"transfer:{ends[0]}2{ends[1]}", "write:" + root(args[0]).val}
+            if root(args[1]).tag == "name":
+                self.effect("read:" + root(args[1]).val)
+            return VOID
         if n in {"take", "swap"}:  # The only ways to move an owner out of a place.
             arity(1 if n == "take" else 2, f"{n} takes {'one place' if n == 'take' else 'two places'}.")
             types = [self.place(a, write=True) for a in args]

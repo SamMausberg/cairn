@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .checking import COMPARISONS, WRAPPING, Checker, is_view
+from .checking import COMPARISONS, HOST_VISIBLE, WRAPPING, Checker, is_view
 from .syntax import CPP, FLOAT, INT, NUMERIC, VERSION, Expr, Function, Program, Stmt, Type
 
 RUNTIME_FILES = {
@@ -158,6 +158,15 @@ class Emitter:
         value = self.expr(args[0]) if args else "0"
         return f"{name}{{{index}, {{.v_{e.val.rsplit('.', 1)[-1]} = {value}}}}}"
 
+    def e_try(self, e: Expr) -> str:
+        temp, _ = self.fresh("cr_try_")
+        ok, err = e.ref
+        ret, move = self.type(self.f.ret), (lambda x: x) if self.trivial(e.args[0].ty) else "std::move({})".format
+        carried = move(f"{temp}.payload.v_{err}") if self.c.layouts[e.args[0].ty][err] else "0"
+        failure = f"if ({temp}.tag != 0) return {ret}{{1, {{.v_{err} = {carried}}}}};"
+        value = move(f"{temp}.payload.v_{ok}") + ";" if e.ty.name != "void" else ""
+        return f"({{ auto {temp} = {self.expr(e.args[0])}; {failure} {value} }})"
+
     def e_unary(self, e: Expr) -> str:
         a, ty = self.expr(e.args[0]), e.ty
         if e.val == "!":
@@ -193,6 +202,13 @@ class Emitter:
             return f"cr::{n}<{ty}>({texts[0]}, {texts[1]})"
         if n in {"min", "max"}:
             return f"std::{n}({texts[0]}, {texts[1]})"
+        if n == "transfer":
+            (dst, count), (src, _) = self.pointer(args[0]), self.pointer(args[1])
+            ends = ["h" if a.ty.place in HOST_VISIBLE else "d" for a in (args[1], args[0])]
+            if ends == ["h", "h"]:
+                return f"std::copy_n({src}, {count}, {dst})"
+            self.need("cairn_gpu.hpp")
+            return f"cr::gpu::copy({dst}, {src}, {count}, cr::gpu::Dir::{ends[0]}2{ends[1]})"
         if n == "take":
             return f"std::exchange({texts[0]}, {{}})"
         if n == "swap":
@@ -214,7 +230,8 @@ class Emitter:
     def signature(self, f: Function) -> str:
         ps = ", ".join(f"{self.type(t)} v_{n}" for n, t in f.params)
         exported = all(self.trivial(t.value) and t.name != "fn" for t in [f.ret, *(t for _, t in f.params)])
-        head = f"{'extern "C" ' if exported or f.extern else ''}{self.type(f.ret)} cf_{mangle(f.name)}({ps}) noexcept"
+        device = "CR_HD " if f.name in self.c.device_functions else ""
+        head = f"{'extern "C" ' if exported or f.extern else ''}{device}{self.type(f.ret)} cf_{mangle(f.name)}({ps}) noexcept"
         return head + (f' __asm__("{f.name.rsplit(".", 1)[-1]}")' if f.extern else "")
 
     def emit(self) -> str:
@@ -230,6 +247,7 @@ class Emitter:
         return "\n".join(head + self.lines) + "\n"
 
     def function(self, f: Function):
+        self.f = f
         arrays = [(n, t) for n, t in f.params if is_view(t)]
         for n, t in arrays:
             self.put(f"cr::view(v_{n}, {self.extent(t)});")
@@ -245,12 +263,17 @@ class Emitter:
 
     def block(self, ss: list[Stmt]):
         for s in ss:
-            getattr(self, "s_" + s.tag)(s, [self.expr(e) for e in s.exprs] if s.tag not in {"compact"} else [])
+            getattr(self, "s_" + s.tag)(s, [self.expr(e) for e in s.exprs] if s.tag != "compact" else [])
 
     def s_buffer(self, s: Stmt, es: list[str]):
         owner, _ = self.fresh("cr_owner_")
         ty = self.type(s.ty)
-        if s.tag == "buffer":
+        if s.tag == "buffer" and s.ref != "host":
+            self.need("cairn_gpu.hpp")
+            self.put(
+                f"cr::gpu::{ {'device': 'Buffer', 'pinned': 'Pinned', 'unified': 'Unified'}[s.ref] }<{ty}> {owner}({es[0]});"
+            )
+        elif s.tag == "buffer":
             self.put(f"cr::Buffer<{ty}> {owner}({es[0]});")
         else:
             self.put(f"std::array<{ty}, {s.exprs[0].val}> {owner}{{}};")
@@ -270,6 +293,10 @@ class Emitter:
     def s_compact(self, s: Stmt, _: list[str]):
         out, hi, pred, value = (self.expr(e) for e in s.exprs)
         used, i = "v_" + s.name, "v_" + s.binder
+        if s.ref == "device":
+            keep = self.lane(s, lambda: self.put(f"return {pred};"))
+            project = self.lane(s, lambda: self.put(f"return {value};"))
+            return self.put(f"const std::size_t {used} = cr::gpu::compact({out}, {hi}, {keep}, {project});")
 
         def selected():
             # The only unchecked store: induction gives used <= i < n (Lean: store_index_lt_capacity).
@@ -278,6 +305,54 @@ class Emitter:
 
         self.put(f"std::size_t {used} = 0;")
         self.nest(f"for (std::size_t {i}=0; {i}<{hi}; ++{i}) {{", lambda: self.nest(f"if ({pred}) {{", selected))
+
+    def lane(self, s: Stmt, body) -> str:
+        """The lambda every lane runs; its body is identical for host threads and device lanes."""
+        device = s.ref == "device"  # CUDA wants by-value capture and the annotation before the parameters.
+        self.need("cairn_gpu.hpp" if device else "cairn_parallel.hpp")
+        start = len(self.lines)
+        self.ind += 1
+        body()
+        self.ind -= 1
+        text, self.lines = self.lines[start:], self.lines[:start]
+        head = (
+            f"{'[=] CR_DEVICE' if device else '[&]'}(std::size_t v_{s.binder or s.name}){'' if device else ' noexcept'}"
+        )
+        return "\n".join([head + " {", *text, "  " * self.ind + "}"])
+
+    def s_parallel(self, s: Stmt, es: list[str]):
+        entry = "cr::gpu::launch" if s.ref == "device" else "cr::par::run"
+        self.put(f"{entry}({es[0]}, {self.lane(s, lambda: self.block(s.body))});")
+
+    def s_reduce(self, s: Stmt, es: list[str]):
+        ty, op = self.type(s.ty), s.op
+        combine = (
+            f"cr::{op}<{ty}>(a, b)"
+            if op in WRAPPING
+            else f"(a {'<' if op == 'min' else '>'} b ? a : b)"
+            if op in {"min", "max"}
+            else f"static_cast<{ty}>(a {op} b)"
+        )
+        limits = f"std::numeric_limits<{ty}>"
+        identity = {
+            "*": "1",
+            "mul_wrap": "1",
+            "&": f"{limits}::max()",
+            "min": f"{limits}::max()",
+            "max": f"{limits}::lowest()",
+        }.get(op, "0")
+        if s.ref == "device":
+            value = self.lane(s, lambda: self.put(f"return {self.expr(s.exprs[1])};"))
+            fold = f"[] CR_DEVICE({ty} a, {ty} b) {{ return {combine}; }}"
+            self.put(
+                f"const {ty} v_{s.name} = cr::gpu::reduce<{ty}>({es[0]}, static_cast<{ty}>({identity}), {fold}, {value});"
+            )
+        else:  # On the host a reduction is an ordinary in-order fold: no threads, no hidden cost.
+            self.put(f"{ty} v_{s.name} = static_cast<{ty}>({identity});")
+            self.put(f"for (std::size_t v_{s.binder} = 0; v_{s.binder} < {es[0]}; ++v_{s.binder}) {{")
+            self.put(f"  const {ty} a = v_{s.name}, b = {es[1]};")
+            self.put(f"  v_{s.name} = {combine};")
+            self.put("}")
 
     def s_assign(self, s: Stmt, es: list[str]):
         self.put(f"{es[0]} = {es[1]};")

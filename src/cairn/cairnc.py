@@ -13,6 +13,7 @@ from .checking import Binding, Checker
 from .codegen import RUNTIME, RUNTIME_FILES, Emitter
 from .expansion import derive_wire, specialize
 from .linear_certificates import audit_collector
+from .modules import link
 from .syntax import (
     IDENT, INT, RESERVED, SIGNED, VERSION, WIDTH, Diagnostic, Expr, Function, Parser, Program, Stmt, Type, fail,
 )  # fmt: skip
@@ -25,7 +26,7 @@ __all__ = [
 
 
 def compile_program(source: str, capture_sites: bool = False) -> tuple[Program, Checker, dict[str, Any]]:
-    p = specialize(derive_wire(Parser(source).parse()))
+    p = specialize(derive_wire(link(Parser(source).parse())))
     checker = Checker(p, capture_sites)
     return p, checker, checker.check()
 
@@ -33,7 +34,8 @@ def compile_program(source: str, capture_sites: bool = False) -> tuple[Program, 
 def compile_source(source: str) -> tuple[str, dict[str, Any]]:
     p, checker, receipts = compile_program(source)
     certificate = audit_collector()  # The collector's unchecked store is emitted only under this gate.
-    cpp = Emitter(p, checker).emit()
+    emitter = Emitter(p, checker)
+    cpp = emitter.emit()
     manifest = {
         "compiler": VERSION,
         "source_sha256": hashlib.sha256(source.encode()).hexdigest(),
@@ -43,6 +45,7 @@ def compile_source(source: str) -> tuple[str, dict[str, Any]]:
         "families": [list(x) for x in p.families],
         "wire_derivations": p.derivations,
         "uninstantiated_templates": checker.unchecked,
+        "requires": ["cuda"] if "cairn_gpu.hpp" in emitter.headers else [],
         "trusted_lowering_rules": [
             "bounded-collector/2",
             "unsigned-little-endian-wire/1",

@@ -50,6 +50,18 @@ def flags(arch: str | None = None, kind: str = "library") -> list[str]:
     return [*STRICT, *WARNINGS, "-march=" + resolve_arch(arch), *shared]
 
 
+def command(cxx: str, source: str, artifact: str, arch: str | None = None, kind: str = "library", cuda=False):
+    """The one native command line. Device programs go through nvcc with the same host contract."""
+    if not cuda:
+        return [find(cxx), *flags(arch, kind), source, "-o", artifact]
+    host = [f for f in flags(arch, kind) if not f.startswith(("-std", "-O", "-shared"))]
+    # --fmad=false is the device half of -ffp-contract=off; relaxed constexpr lets guards use <limits>.
+    device = ["-std=c++20", "-O3", "--fmad=false", "-arch=native", "--extended-lambda", "--expt-relaxed-constexpr"]
+    shared = ["-shared"] if kind == "library" else []
+    return [find("nvcc"), *device, "-Werror", "all-warnings", "-ccbin", find(cxx), "-x", "cu", *shared,
+            "-Xcompiler", ",".join(host), source, "-o", artifact]  # fmt: skip
+
+
 def find(compiler: str) -> str:
     path = shutil.which(compiler)
     if not path:

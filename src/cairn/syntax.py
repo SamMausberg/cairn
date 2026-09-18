@@ -219,6 +219,8 @@ class Program:
     consts: dict[str, tuple[Type, Expr]] = field(default_factory=dict)
     imports: list[tuple[str, str, str]] = field(default_factory=list)  # (importer, path, alias)
     public: set[str] = field(default_factory=set)
+    uses: dict[tuple[str, str], str] = field(default_factory=dict)  # (importer, bare name) -> full name
+    sources: dict[str, str] = field(default_factory=dict)  # linked library module -> its text
     modules: dict[str, str] = field(default_factory=dict)  # declared name -> owning module
 
 
@@ -627,6 +629,9 @@ class Parser:
                 path = self.path()
                 alias = self.ident() if self.eat("as") else path.rsplit(".", 1)[-1]
                 p.imports.append((self.module, path, alias))
+                if self.eat("("):  # import m (A, b); also brings those names in unqualified.
+                    for name in self.listed(")", self.ident):
+                        p.uses[self.module, name] = f"{path}.{name}"
                 self.need(";")
             elif self.eat("const"):
                 n = self.ident()
