@@ -1,0 +1,68 @@
+✔ [2/8] Built Cairn.Affine (388ms)
+✔ [3/8] Built Cairn.CollectorCertificates (441ms)
+✔ [4/8] Built Cairn.Collector (742ms)
+✔ [5/8] Built Cairn.Ownership (1.0s)
+ℹ [6/8] Built Cairn.Audit (161ms)
+info: Cairn/Audit.lean:20:0: 'Cairn.check_sound' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:21:0: 'Cairn.check_sound'' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:22:0: 'Cairn.eval_combine_nonneg' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:23:0: 'Cairn.forall_mem_of_satisfies' depends on axioms: [propext]
+info: Cairn/Audit.lean:27:0: 'Cairn.Collector.all_checked' depends on axioms: [propext]
+info: Cairn/Audit.lean:28:0: 'Cairn.Collector.certificates_length' does not depend on any axioms
+info: Cairn/Audit.lean:32:0: 'Cairn.Collector.obligation_initial_nonnegative' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:33:0: 'Cairn.Collector.obligation_initial_cursor_before_input' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:34:0: 'Cairn.Collector.obligation_initial_input_before_capacity' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:35:0: 'Cairn.Collector.obligation_initial_capacity_representable' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:36:0: 'Cairn.Collector.obligation_store_nonnegative' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:37:0: 'Cairn.Collector.obligation_store_strictly_below_capacity' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:38:0: 'Cairn.Collector.obligation_emit_cursor_increment_fits' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:39:0: 'Cairn.Collector.obligation_step_input_increment_fits' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:40:0: 'Cairn.Collector.obligation_emit_invariant_0' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:41:0: 'Cairn.Collector.obligation_emit_invariant_1' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:42:0: 'Cairn.Collector.obligation_emit_invariant_2' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:43:0: 'Cairn.Collector.obligation_emit_invariant_3' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:44:0: 'Cairn.Collector.obligation_skip_invariant_0' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:45:0: 'Cairn.Collector.obligation_skip_invariant_1' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:46:0: 'Cairn.Collector.obligation_skip_invariant_2' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:47:0: 'Cairn.Collector.obligation_skip_invariant_3' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:48:0: 'Cairn.Collector.obligation_exit_output_count_bounded' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:52:0: 'Cairn.Collector.Inv.init' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:53:0: 'Cairn.Collector.Inv.emit' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:54:0: 'Cairn.Collector.Inv.skip' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:55:0: 'Cairn.Collector.Inv.store_nonneg' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:56:0: 'Cairn.Collector.Inv.store_lt_capacity' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:57:0: 'Cairn.Collector.Inv.emit_increment_fits' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:58:0: 'Cairn.Collector.Inv.step_increment_fits' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:59:0: 'Cairn.Collector.Inv.exit_le_capacity' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:63:0: 'Cairn.Collector.run_preserves_inv' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:64:0: 'Cairn.Collector.run_spec' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:65:0: 'Cairn.Collector.collect_spec' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:66:0: 'Cairn.Collector.store_index_lt_capacity' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:67:0: 'Cairn.Collector.store_index_lt_buffer_length' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:68:0: 'Cairn.Collector.increments_fit' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:72:0: 'Cairn.Ownership.accepted_no_fault' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:73:0: 'Cairn.Ownership.accepted_no_use_after_move' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:74:0: 'Cairn.Ownership.accepted_no_use_after_free' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:75:0: 'Cairn.Ownership.accepted_no_double_free' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:76:0: 'Cairn.Ownership.accepted_race_free' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:77:0: 'Cairn.Ownership.accepted_no_leaked_ticket' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:78:0: 'Cairn.Ownership.accepted_no_aliased_args' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:79:0: 'Cairn.Ownership.accepted_frees_each_allocation_once' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:80:0: 'Cairn.Ownership.Ok_succ' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:81:0: 'Cairn.Ownership.Ok_start' depends on axioms: [propext]
+info: Cairn/Audit.lean:82:0: 'Cairn.Ownership.checkBlock_mono' depends on axioms: [propext, Quot.sound]
+info: Cairn/Audit.lean:83:0: 'Cairn.Ownership.releaseAll_final' depends on axioms: [propext]
+info: Cairn/Audit.lean:84:0: 'Cairn.Ownership.ownership_regression' depends on axioms: [propext]
+info: Cairn/Audit.lean:88:0: 'Cairn.Ownership.Regress.leasedRead_races' does not depend on any axioms
+info: Cairn/Audit.lean:89:0: 'Cairn.Ownership.Regress.overlappingTasks_races' does not depend on any axioms
+info: Cairn/Audit.lean:90:0: 'Cairn.Ownership.Regress.copyAnOwner_doubleFrees' does not depend on any axioms
+info: Cairn/Audit.lean:91:0: 'Cairn.Ownership.Regress.useAfterDrop_usesDeadPlace' does not depend on any axioms
+info: Cairn/Audit.lean:92:0: 'Cairn.Ownership.Regress.unawaitedTicket_leaks' does not depend on any axioms
+info: Cairn/Audit.lean:93:0: 'Cairn.Ownership.Regress.witnesses_are_rejected' depends on axioms: [propext]
+info: Cairn/Audit.lean:97:0: "ownership-regression: pass"
+✔ [7/8] Built Cairn (147ms)
+Build completed successfully (8 jobs).
+
+real	0m2.332s
+user	0m6.586s
+sys	0m0.439s

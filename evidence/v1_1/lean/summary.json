@@ -1,0 +1,32 @@
+{
+  "schema": "cairn.lean-evidence/1",
+  "commit": "0761ca5744e4a94d5469d94b85bfac141835dd65",
+  "build": "succeeded",
+  "wall_seconds": "2.332",
+  "declarations_audited": 56,
+  "axioms_used": [
+    "Quot.sound",
+    "propext"
+  ],
+  "ownership_theorems": [
+    "Cairn.Ownership.accepted_no_fault",
+    "Cairn.Ownership.accepted_no_use_after_move",
+    "Cairn.Ownership.accepted_no_use_after_free",
+    "Cairn.Ownership.accepted_no_double_free",
+    "Cairn.Ownership.accepted_race_free",
+    "Cairn.Ownership.accepted_no_leaked_ticket",
+    "Cairn.Ownership.accepted_no_aliased_args",
+    "Cairn.Ownership.accepted_frees_each_allocation_once"
+  ],
+  "non_vacuity_witnesses": [
+    "Cairn.Ownership.Regress.leasedRead_races",
+    "Cairn.Ownership.Regress.overlappingTasks_races",
+    "Cairn.Ownership.Regress.copyAnOwner_doubleFrees",
+    "Cairn.Ownership.Regress.useAfterDrop_usesDeadPlace",
+    "Cairn.Ownership.Regress.unawaitedTicket_leaks",
+    "Cairn.Ownership.Regress.witnesses_are_rejected"
+  ],
+  "scope": "collector certificate checker, its 17 certificates, the collector loop model, and a hand-written core ownership/lease calculus over whole places; nothing links the calculus to checking.py",
+  "sorryAx_in_audit": false,
+  "native_decide_in_audit": false
+}
