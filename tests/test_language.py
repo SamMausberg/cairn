@@ -275,3 +275,17 @@ def test_the_readme_example_is_real():
     receipt = compile_source(sample)[1]
     assert "par:device" in receipt["functions"]["saxpy"]["effects"]
     assert {"spawn", "join"} <= set(receipt["functions"]["halves"]["effects"])
+
+
+def test_multiple_bounds_and_take_operand_order():
+    bounded = (
+        "import std.core (Hash, Eq);"
+        "fn key[K: Hash + Eq](a:ro<K>, b:ro<K>) -> u64 { if same(a, b) { return hash(a); } return 0; }"
+        "fn f() -> u64 = key(1, 2);"
+    )
+    assert "key[u64]" in compile_source(bounded)[1]["functions"]
+    pair = "struct P { a:Buf[u64]; b:Buf[u64]; } fn f() -> P { let mut x = Buf[u64](1); let mut y = Buf[u64](2); "
+    assert compile_source(pair + "return P(take(x), take(y)); }")
+    with pytest.raises(Diagnostic) as e:  # C++ leaves argument order open: which field would get the zero?
+        compile_source(pair + "return P(take(x), take(x)); }")
+    assert e.value.data["code"] == "E-EFFECT-ORDER"

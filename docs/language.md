@@ -33,7 +33,7 @@ impl Shape for Square { fn area(self:ro<Square>) -> u64 = self.side * self.side;
 fn total[S: Shape](x:ro<S>, y:ro<S>) -> u64 = area(x) + area(y);
 ```
 
-Dispatch is static, on the type of the `Self` argument; a bound is checked when the instance is made. `value.f(args)` is `f(value, args)`, looked up first in the module that declares the receiver's type. There is no inheritance and no implicit boxing.
+Dispatch is static, on the type of the `Self` argument; a bound (`[K: Hash + Eq]`) is checked when the instance is made. `value.f(args)` is `f(value, args)`, looked up first in the module that declares the receiver's type. There is no inheritance and no implicit boxing.
 
 ## Borrows
 

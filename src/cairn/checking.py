@@ -505,8 +505,27 @@ class Checker:
             for child in e.args:  # `try f()` and `spawn f()` add no operand order: f stays a root.
                 expr(child, at_root and e.tag in {"try", "spawn"})
 
+        def mentions(e: Expr, found: list[str]) -> list[str]:
+            found += [e.val] if e.tag == "name" else []
+            for child in e.args:
+                mentions(child, found)
+            return found
+
+        def taken(e: Expr, at_root: bool, found: list[Expr]) -> list[Expr]:
+            found += [e] if e.tag == "call" and e.val == "take" and isinstance(e.ref, tuple) and not at_root else []
+            for child in e.args:
+                taken(child, False, found)
+            return found
+
         def block(ss: list[Stmt]):
             for s in ss:
+                names = [n for e in s.exprs for n in mentions(e, [])]
+                for take in [t for e in s.exprs for t in taken(e, True, [])]:
+                    place = root(take.args[0]).val  # C++ leaves operand order open: who would see the zero?
+                    if names.count(place) > mentions(take, []).count(place):
+                        fail(
+                            "E-EFFECT-ORDER", f"Bind take(...) of {place} first; this expression mentions it again.", s
+                        )
                 for i, e in enumerate(s.exprs):
                     expr(e, s.tag != "compact" and not (s.tag == "assign" and i == 0))
                 block(s.body)
@@ -1334,11 +1353,11 @@ class Checker:
                         f"{g} of {template.name} is a {'natural' if constraint == 'nat' else 'type'}.",
                         node,
                     )
-                if constraint not in {"nat", "type"}:
+                for bound in constraint.split("+") if constraint not in {"nat", "type"} else []:
                     with self.within(template.module):
-                        trait = self.qualify(constraint, self.p.traits, node=node)
+                        trait = self.qualify(bound, self.p.traits, node=node)
                     if trait is None or not self.implementation(trait, value):
-                        fail("E-TRAIT-IMPL", f"{value.display()} does not implement {constraint}.", node)
+                        fail("E-TRAIT-IMPL", f"{value.display()} does not implement {bound}.", node)
             if len(self.p.functions) >= MAX_FUNCTIONS:
                 fail("E-EXPANSION-LIMIT", "Expanded program exceeds 2048 functions.", node)
             f = copy.deepcopy(template)

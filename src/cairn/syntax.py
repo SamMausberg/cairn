@@ -320,7 +320,10 @@ class Parser:
             if self.t.s in {"nat", "type"}:
                 self.i += 1
                 return name, self.ts[self.i - 1].s
-            return name, self.path()
+            bounds = [self.path()]
+            while self.eat("+"):  # K: Hash + Eq
+                bounds.append(self.path())
+            return name, "+".join(bounds)
 
         return self.listed("]", parameter) if self.eat("[") else []
 

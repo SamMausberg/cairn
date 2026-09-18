@@ -42,7 +42,7 @@ def stable_json(value: Any) -> str:
 
 
 def generics(params: list[tuple[str, str]]) -> str:
-    shown = ", ".join(n if kind == "type" else f"{n}:{kind}" for n, kind in params)
+    shown = ", ".join(n if kind == "type" else f"{n}:{kind.replace('+', ' + ')}" for n, kind in params)
     return f"[{shown}]" if params else ""
 
 
