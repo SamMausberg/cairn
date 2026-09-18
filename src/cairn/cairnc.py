@@ -44,6 +44,21 @@ def compile_program(source: str, capture_sites: bool = False) -> tuple[Program, 
     return p, checker, checker.check()
 
 
+def interfaces(p: Program, receipts: dict[str, Any]) -> dict[str, Any]:
+    """Per module: what it exports and a digest of those signatures and effect rows.
+
+    A dependent's assumptions can only break when this digest changes; bodies may change freely.
+    """
+    out: dict[str, Any] = {}
+    for f in p.functions:
+        if f.module and (f.public or f.owner) and f.name in receipts:
+            params = [[n, t.display()] for n, t in f.params]
+            entry = {"params": params, "returns": f.ret.display(), "effects": receipts[f.name]["effects"]}
+            out.setdefault(f.module, {})[f.name] = entry
+    return {m: {"exports": sorted(fs), "interface_sha256": hashlib.sha256(json.dumps(fs, sort_keys=True).encode()).hexdigest()}
+            for m, fs in sorted(out.items())}  # fmt: skip
+
+
 def compile_source(source: str, origin: str = "") -> tuple[str, dict[str, Any]]:
     """Generated C++ and its receipt; `origin` names the source in #line directives for debug builds."""
     p, checker, receipts = compile_program(source)
@@ -59,6 +74,7 @@ def compile_source(source: str, origin: str = "") -> tuple[str, dict[str, Any]]:
         "families": [list(x) for x in p.families],
         "wire_derivations": p.derivations,
         "uninstantiated_templates": checker.unchecked,
+        "modules": interfaces(p, receipts),
         "requires": ["cuda"] if "cairn_gpu.hpp" in emitter.headers else [],
         "trusted_lowering_rules": [
             "bounded-collector/2",
