@@ -13,6 +13,7 @@ RUNTIME_FILES = {
 }
 RUNTIME = RUNTIME_FILES["cairn_runtime.hpp"]
 CHECKED = {"+": "add", "-": "sub", "*": "mul", "/": "divide", "%": "remainder"}
+SHARED = {"Ticket": "Task", "Atomic": "Atomic", "Mutex": "Mutex"}
 
 
 def mangle(name: str) -> str:
@@ -62,6 +63,10 @@ class Emitter:
         elif t.name == "Buf":
             self.need("cairn_owners.hpp")
             base = f"cr::Buf<{self.type(t.args[0])}>"
+        elif t.name in SHARED:  # Interior mutability: a ro borrow of shared state is still a plain reference.
+            self.need("cairn_parallel.hpp")
+            base = f"cr::par::{SHARED[t.name]}<{self.type(t.args[0])}>"
+            return base if t.mode == "value" else base + "&"
         elif t.name == "Array":
             base = f"std::array<{self.type(t.args[0])}, {t.args[1]}>"
         else:
@@ -174,6 +179,23 @@ class Emitter:
     def e_function(self, e: Expr) -> str:
         return "cf_" + mangle(e.ref.name)
 
+    def e_spawn(self, e: Expr) -> str:
+        """Arguments are evaluated now and carried by value, so the task never reads the spawner's locals."""
+        call, captures, passed = e.args[0], [], []
+        for k, (a, (_, want)) in enumerate(zip(call.args, call.ref.params, strict=True)):
+            single = want.mode != "value" and not want.extent
+            value = (
+                self.expr(a)
+                if want.mode == "value" or a.tag == "slice"
+                else self.pointer(a)[0]
+                if want.extent
+                else "&" + self.expr(a)
+            )
+            captures.append(f"a{k} = {value}")
+            passed.append(f"*a{k}" if single else f"a{k}" if self.trivial(want) else f"std::move(a{k})")
+        body = f"return cf_{mangle(call.ref.name)}({', '.join(passed)});"
+        return f"{self.type(e.ty)}::spawn([{', '.join(captures)}]() mutable noexcept {{ {body} }})"
+
     def e_try(self, e: Expr) -> str:
         temp, _ = self.fresh("cr_try_")
         ok, err = e.ref
@@ -203,6 +225,11 @@ class Emitter:
         if isinstance(e.ref, Function):
             return self.invoke(e, e.ref)
         kind = e.ref[0]
+        if kind == "shared":  # receiver.op(values..., memory orders...)
+            texts = [self.expr(a) for a in e.args]
+            orders = {i for i, a in enumerate(e.args) if a.ty.name == "Order"}
+            texts = [f"static_cast<cr::par::Order>({t})" if i in orders else t for i, t in enumerate(texts)]
+            return f"{texts[0]}.{e.val}({', '.join(texts[1:])})"
         if kind == "indirect":
             return f"v_{e.val}({', '.join(self.expr(a) for a in e.args)})"
         if kind == "variant":
@@ -232,6 +259,10 @@ class Emitter:
                 return f"std::copy_n({src}, {count}, {dst})"
             self.need("cairn_gpu.hpp")
             return f"cr::gpu::copy({dst}, {src}, {count}, cr::gpu::Dir::{ends[0]}2{ends[1]})"
+        if n == "wait":
+            return f"{self.expr(args[0])}.wait()"
+        if n in SHARED:
+            return f"{ty}({self.expr(args[0])})"
         if n == "take":
             return f"std::exchange({texts[0]}, {{}})"
         if n == "swap":
@@ -296,8 +327,10 @@ class Emitter:
             self.put(
                 f"cr::gpu::{ {'device': 'Buffer', 'pinned': 'Pinned', 'unified': 'Unified'}[s.ref] }<{ty}> {owner}({es[0]});"
             )
-        elif s.tag == "buffer":
-            self.put(f"cr::Buffer<{ty}> {owner}({es[0]});")
+        elif s.tag == "buffer":  # Scalars keep the 0.6 owner; any other element type needs a movable zero.
+            scalar = s.ty.name in CPP
+            self.need("cairn_runtime.hpp" if scalar else "cairn_owners.hpp")
+            self.put(f"cr::{'Buffer' if scalar else 'Buf'}<{ty}> {owner}({es[0]});")
         else:
             self.put(f"std::array<{ty}, {s.exprs[0].val}> {owner}{{}};")
         self.put(f"{ty}* const v_{s.name} = {owner}.data();")

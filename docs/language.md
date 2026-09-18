@@ -1,88 +1,98 @@
-# Native CAIRN 0.6 language profile
+# CAIRN 1.0 language profile
 
-This document specifies implemented native behavior. `docs/history/` records earlier proposals and must not be used to infer extra accepted features. The broader CPU/GPU language is a design goal, not completed by this version. Grammar and checks are implemented in `syntax.py`, `checking.py` and `expansion.py`; actual native behavior also depends on `codegen.py`, the runtime, the C++ compiler and platform.
+This document specifies implemented behavior. `docs/history/` records earlier proposals and must not be used to infer accepted features. Grammar lives in `syntax.py`; types, ownership and effects in `checking.py`; lowering in `codegen.py`; guards in `runtime/*.hpp`. Every construct below is executed natively by the test suite; none of it is a whole-compiler proof (see verification.md).
 
-## Values and conventional source
+Three rules explain most of the language. **Costs are visible**: nothing allocates, synchronizes, copies an owner, runs in parallel or crosses a memory boundary unless the source says so, and every function carries an inferred effect row. **Borrows are second class**: a borrow exists only as a parameter or a call argument, so there are no lifetime annotations and no dangling references. **Short forms are contracts**: `compact`, `reduce`, `parallel`, `family`, `derive wire` and `try` expand to ordinary inspectable code with their obligations attached to the expansion.
 
-Source uses ASCII identifiers, UTF-8 comments, braces, semicolons and `//` comments. There is no shadowing, implicit user conversion, operator overloading, or implicit block-tail return. Integers are decimal even with leading zeros. Floating literals contain a decimal point or exponent. Parameters and `let` locals are immutable; `let mut` declares a mutable initialized local. `reg` remains an alias. `each i in n` remains an alias for `for i in 0..n`.
+## Source and scalars
 
-Scalars are `bool`, `u8/u16/u32/u64`, `usize` (64-bit here), `i32/i64`, `f32/f64`. An expression-bodied nonvoid function `fn inc(x:u64)->u64 = add_wrap(x,1);` elaborates to a block with one return. Ordinary blocks still require explicit returns. Nonvoid control-flow paths must return under conservative structural checking. Recursion and `while` may diverge; stack exhaustion is not ruled out.
+ASCII identifiers, UTF-8 comments, braces, semicolons, `//` comments. No shadowing, no implicit conversion, no operator overloading, no implicit block-tail return. Literals: decimal and `0x` integers, floats with a point or exponent, `true`/`false`, `'c'` (one byte, a `u8`-compatible integer literal) and `"text"` (a static `ro<u8>[n]` view; escapes `\n \t \r \0 \\ \" \' \xNN`). Parameters and `let` locals are immutable; `let mut` is mutable. `reg` and `each i in n` remain aliases.
 
-Ordinary integer +, -, * abort on overflow in every configuration. Division/remainder reject zero and signed minimum/-1. Signed remainder truncates toward zero, not Python floor division. Unsigned `add_wrap/sub_wrap/mul_wrap` are modular; `shl_wrap/shr` require a `usize` count less than width. Bitwise operations are unsigned. Integer-only `min/max` avoid an implicit floating NaN choice. Conversions are explicit; integer narrowing checks range; float-to-integer conversion is unsupported. Expected types guide literals, otherwise defaults are `u64` and `f64`.
+Scalars: `bool`, `u8 u16 u32 u64 usize` (64-bit), `i8 i16 i32 i64`, `f32 f64`. `const N:usize = 256;` declares one scalar literal. `fn inc(x:u64) -> u64 = add_wrap(x,1);` is one return; blocks need explicit returns and every nonvoid path must return.
 
-Floating compilation requires `-ffp-contract=off -fno-fast-math`; no reassociation or implicit FMA is authorized. This is not a formal IEEE model. NaN payloads, dynamic rounding, floating flags, source trap identity and signal-handler observation are outside the declared model. Guards abort rather than roll back earlier writes or return typed error data.
+Ordinary integer `+ - *` abort on overflow in every build; `/ %` reject zero and signed minimum over -1; signed remainder truncates toward zero. `add_wrap sub_wrap mul_wrap` are modular; `shl_wrap shr` need a `usize` count below the width; `& | ^ ~` are unsigned; `min max` are integer-only. Conversions are explicit type calls, integer narrowing is range checked, float-to-integer is unsupported. A literal takes its expected type, else `u64`/`f64`. Floats compile with `-ffp-contract=off -fno-fast-math` (and `--fmad=false` on the device): no contraction or reassociation is ever authorized. A failed guard aborts; it does not unwind or roll back.
 
-## Records, enums and tagged outcomes
-
-`struct Pair {x:u64; y:u64;}` defines an ordinary copyable value; construct `Pair(a,b)` and access `.x`. Fields are nonempty, previously declared nonrecursive scalar/record values, not owners, borrows, enums or sums. There are no methods or structural inheritance. Copying a record can cost several instructions.
-
-`enum Op {Read; Write;}` retains tag-only semantics and zero-based tags. A declaration with at least one scalar payload defines a tagged sum:
+## Records, sums, generics
 
 ```cairn
-enum Parsed {Value(u64); Invalid(usize); Overflow(usize); Empty;}
-fn classify(value:Parsed)->u32 {
-  match value {
-    Parsed.Value(number) => { return 0; }
-    Parsed.Invalid(offset) => { return 1; }
-    Parsed.Overflow(offset) => { return 2; }
-    Parsed.Empty => { return 3; }
-  }
+struct Pair[T] { a:T; b:T; }                 // copyable when its fields are
+enum Option[T] { Some(T); None; }            // a tagged sum; zero or one payload per variant
+enum Op { Read; Write; }                     // tag-only enum: equality allowed
+struct Header packed { kind:u8; size:u32; }  // or align(64)
+```
+
+Fields and payloads are any value type (scalars, records, sums, owners), never a borrow or `void`, and never their own type by value (reach it through `Buf`). Construct `Pair(1, 2)`, `Option.Some(x)`, `Option[u64].None`; type arguments are inferred from arguments, literals and the expected type, or written explicitly. `match` evaluates its subject once and needs exactly one arm per variant with no wildcard; a payload arm binds one fresh immutable value, and matching an owner consumes it. `try e` takes a two-variant sum (success first, failure second), yields the success payload, and otherwise returns the failure from the enclosing function, whose return type must be the same sum family with the same failure payload. It is the only propagation form and it is always written out.
+
+Functions take type and natural parameters: `fn largest[T](a:T, b:T) -> T`, `fn scale[K:nat](...)`, called as `largest(3, 9)` or `scale[4](...)`. Every instance is monomorphized on demand and checked as ordinary code, so an instance, not its template, is what typechecks; never-instantiated templates are listed in the receipt (`uninstantiated_templates`) rather than silently trusted. `family gain = scale[1..257];` still names a bounded range of instances.
+
+## Traits and methods
+
+```cairn
+trait Shape { fn area(self:ro<Self>) -> u64; }
+impl Shape for Square { fn area(self:ro<Square>) -> u64 = self.side * self.side; }
+fn total[S: Shape](x:ro<S>, y:ro<S>) -> u64 = area(x) + area(y);
+```
+
+Dispatch is static, on the type of the `Self` argument; a bound is checked when the instance is made. `value.f(args)` is `f(value, args)`, looked up first in the module that declares the receiver's type. There is no inheritance and no implicit boxing.
+
+## Borrows
+
+`ro<T>[n]` and `rw<T>[n]` borrow `n` elements; `ro<T>` and `rw<T>` borrow one value. Arguments are passed by naming a place (`buf`, `v.data`, `grid`); an `ro<T>` parameter also accepts a temporary. Inside the callee a single borrow reads and assigns like the value itself. An array extent is a literal or an earlier immutable `usize` parameter (extern declarations may name a later one); `len(view)` reads that metadata; extents must agree by name/literal identity, and `len(v)` supplies the identity of `v`. A part `x[lo..hi]` may be passed wherever an array borrow is expected and carries one dynamic guard (`lo <= hi <= len` and `hi - lo` equals the callee's extent). Read-only borrows may alias. A mutable borrow must not overlap any other argument of the same call: distinct fields of one record are disjoint, and two parts of one array are disjoint only when they visibly share a boundary (`b[0..mid]`, `b[mid..n]`). Entry guards still check null, alignment, length and overlap numerically. Borrows cannot be stored, returned or bound to a local; the one exception is `let s = "text";`, whose storage is static.
+
+## Owners
+
+```cairn
+buffer scratch:u64[n] = zeroed;     // lexical heap array, extent identity n
+stack counts:usize[256] = zeroed;   // fixed local storage, 65536 bytes per function at most
+let mut b = Buf[u64](n);            // first-class, movable, zeroed heap array
+let mut grid = Array[u64, 4]();     // inline fixed array value
+```
+
+Every type has an all-zero value, so storage of any element type is zero-initialized. Owners are **affine**: using one as a value (binding, by-value argument, return, field initializer) moves it and its name is dead afterwards (`E-MOVED`); release at scope exit is implicit and visible as the `free` effect. An owner cannot be moved out of a place: `take(place)` moves the value out and leaves zero, `swap(a, b)` exchanges two places. An outer owner cannot be moved inside a loop, closure or lane. `linear struct Token { ... }` values must be consumed exactly once on every path (`E-LINEAR-LEAK`, `E-LINEAR-BRANCH`); `defer call(...);` schedules one visible call for every normal exit of its block and counts as that consumption. Aborts do not promise cleanup. Growth is library code: `std.vec` reallocates with `Buf`, `swap` and an assignment, so its allocation appears in every caller's effect row.
+
+## Control
+
+`for i in lo..hi` evaluates `lo` then `hi` once; empty and reversed ranges do nothing. `if / else if / else`, `while`, `break`, `continue` (nearest loop, also from a match arm), nested `{ }` blocks. Logical operators short-circuit. A call that writes through a borrow or allocates cannot be a nested operand (`E-EFFECT-ORDER`); bind it first. No loop implies parallelism.
+
+## Function values and closures
+
+`fn(u64) -> u64` is a copyable code pointer to a plain declared function of values; it can be stored in records. `ro<fn(u64) -> u64>` is a borrowed callable: pass a declared function or write a closure in place, `apply(n, xs, |x:u64| -> u64 { return x + bias; })`. A closure captures its enclosing scope by reference, exists only as that argument, and therefore never allocates or escapes; its effects belong to the function that wrote it, and the callee shows `indirect_call`. Function types carry values and single borrows, not array views.
+
+## Effects and the foreign boundary
+
+Each function's row is the least fixed point of its local effects and its callees' rows with borrowed footprints renamed to the caller's arguments: `read:x`, `write:x`, `local_read`, `local_write`, `alloc`, `free`, `zero_init`, `stack_storage`, `gpu_alloc`, `gpu_free`, `transfer:h2d|d2h|d2d|h2h`, `par:host`, `par:device`, `indirect_call`, `ffi:symbol`, `io` (or any label an extern declares), `mmio`, `asm`, `trap`, `diverge`, `ffi_precondition`. A row says what may happen, never what is computed. `fn f(...) -> T pure { ... }` and `effects(read:x, trap)` are checked ceilings (`E-EFFECT-CEILING`).
+
+```cairn
+extern fn write(fd:i32, data:ro<u8>[n], n:usize) -> i64 effects(io);
+fn say(n:usize, text:ro<u8>[n]) { unsafe { let sent = write(1, text, n); } }
+```
+
+An `extern` declares its C symbol, signature and effects; its body is invisible, so its effects are mandatory and `ffi:write` propagates to every transitive caller. Foreign calls, `mmio_read[u32](addr)`, `mmio_write[u32](addr, v)` and `asm("wfi")` are legal only inside `unsafe { }`, which is counted per function in the receipt. A caller must supply live, initialized, correctly typed storage for each borrow; numerical guards cannot establish provenance.
+
+## Parallel regions and placement
+
+```cairn
+fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
+  parallel i in n { out[i] = a * x[i] + y[i]; }
 }
 ```
 
-A variant has zero or one scalar payload. No generic type parameters, multiple/record/owner payloads, recursive sums or borrowed payloads exist. Constructors are `Parsed.Value(x)` and `Parsed.Empty`; a nullary tagged-sum constructor also accepts `Parsed.Empty()`. A sum is copyable, assignable through mutable locals, a parameter or return value. Arrays and record fields of sums are rejected. Equality and direct raw payload/tag projection on sums are rejected.
+`parallel i in n { body }` runs one lane per index and completes before the next statement. A view's placement is part of its type: `@host` (default), `@pinned`, `@unified`, `@device`. If the body indexes a `@device` view it runs as CUDA lanes, otherwise on host threads created for that statement; the emitted lane body is the same lambda either way. Host code cannot index `@device` memory and device lanes cannot index host memory (`E-PLACEMENT`); `@unified` is visible to both. Lanes are race free by construction: whatever any lane writes may be touched only at element `[i]` (`E-PARALLEL-RACE`), shared scalars cannot be assigned (`E-PARALLEL-WRITE`, use `reduce`), lanes cannot return, nest or move outer owners, and a lane may call only functions whose rows are pure-like (host lanes may also allocate). `buffer d:f32[n]@device = zeroed;` is a scoped device owner; `transfer(dst, src)` is the only way elements cross a placement boundary.
 
-`match` evaluates its scrutinee once and accepts tag-only enums or tagged sums. Every variant must occur once, with no wildcard. Duplicate, missing or foreign variants are rejected. Payload arms bind one fresh immutable scalar; nullary arms bind none. Bindings do not escape the arm. Return/loop control inside arms is preserved. The backend uses an explicit tag and union record; an invalid foreign tag aborts. A foreign caller must still initialize the matching active payload with the correct type. Numerical tag checking cannot establish lifetime, initialization or foreign ABI correctness.
+`let s = reduce add_wrap for i in n yield x[i];` combines with one of `add_wrap mul_wrap & | ^ min max` (integers) or `+ *` (floats). On the host it is an in-order fold; over device views it is a tree whose association order is unspecified, which is exact for the integer operators and explicitly not for floats. Checked integer `+` is not offered because its trap would depend on that order. The bounded collector over a `@device` output is stable stream compaction with the same contract. Thread start-up makes host regions pay off only for large `n`; evidence/v1_0/gpu/benchmark.json records measured break-even points.
 
-Typed errors are ordinary sum values. They do not insert allocation, exceptions, propagation, recovery policy or hidden unwrapping. `Division.Value`/`ZeroDivisor` is a concrete type, not a generic `Result<T,E>` library.
+## Modules
 
-## Borrowed memory
+`module net.http;` names the module of the declarations that follow; files without it share the root namespace. `pub` exports a declaration (impl members are always public). `import net.http;` lets you write `http.get(...)` and `http.Request`; `import a.b as c;` renames; `import std.core (Option, Result);` also brings those names in unqualified. A project's files are compiled together in manifest order; `std.*` modules ship inside the package and are linked on demand. Only project modules and `std.*` can be imported; nothing is downloaded.
 
-An array parameter is `n:usize, input:ro<u8>[n], out:rw<u8>[n]`; optional `@host` has the same CPU meaning. An interface extent is a literal or earlier immutable `usize` parameter. Indexes are `usize`. Read-only views may alias, but each mutable view must be disjoint from every other view in a call. Entry guards check non-null nonempty views, alignment, byte length, nonwrapping address intervals and overlap. Empty views may be null.
+## Contracted forms
 
-Callers must supply live, initialized, typed storage throughout each call and prevent conflicting external access. Guards do not prove provenance, allocation size, initialization or thread behavior. There are no arbitrary pointer casts, local aliases of borrowed views, view returns, callbacks retaining a view, or resizing.
+`let used = compact out for i in n where predicate yield value;` writes the stable selected prefix into existing storage of capacity exactly `n`, evaluates the predicate once per input and the projection only when selected, never reads its output, leaves the tail unchanged and allocates nothing. Its one unchecked store is justified by seventeen affine certificates that are checked before every emission and proved sound in Lean, together with in-bounds stores and stable selection for the loop model (verification.md). `derive wire for Packet;` emits fixed-width unsigned little-endian codecs in declaration order with no padding.
 
-`len(view)` accepts one direct view/buffer name and reads its extent metadata. It does not load all elements. Dynamic extents in helper calls must match by immutable name/literal identity; `len(view)` can supply that known identity. Algebraically equal but differently named extents can be conservatively rejected.
+## Projects
 
-## Scoped storage
-
-```cairn
-buffer scratch:u64[n] = zeroed;
-stack histogram:usize[256] = zeroed;
-```
-
-These statements allocate lexical owners of scalar arrays and expose only their mutable borrows inside the scope. Scalars, including floats and bool, are permitted; records, sums, borrows and nested owners are not. `buffer` capacity must be a literal or immutable `usize` binding; first bind a computed expression to such a local. `stack` requires a literal. Source declarations total at most 65536 bytes per function, even for disjoint branches. This bound excludes compiler locals, stack frames, spills, callees, recursion and ABI overhead.
-
-Storage is zero-initialized before any access. Heap allocation checks native object-size representability before allocating with the nonthrowing allocator; failure aborts. Zero-sized owners are legal but have no valid element access. Huge requests may still encounter OS overcommit/physical OOM; typechecking does not prevent those outcomes. The CLI `run` limits address space by default, not all shared-library callers.
-
-Owners are not first-class values: copying, moving, returning them, storing them in records or escaping a derived borrow is unsupported. A direct borrow can be passed to a helper and is valid for that synchronous call. Normal scope exit, function return, break and continue destroy the lexical heap owner once. Abort/device failure/asynchronous cancellation are not cleanup paths covered here. There is no manual free, general affine owner transfer, capacity growth, arena handle or OS resource owner. Backend RAII is tested, not mechanized.
-
-Receipts report storage names, element types, capacities, placement, zero-initialization and normal-scope release. `heap_allocations` counts syntactic declaration sites, not dynamic allocations in loops/recursion. Interprocedural effects include alloc/free/zero_init/stack_storage and private local reads/writes. No omitted explicit storage declaration is inferred.
-
-## Control and evaluation
-
-`for i in lo..hi` evaluates lo then hi once and visits increasing indices below hi; reversed/empty ranges do nothing. `if/else if/else` and `while` are ordinary blocks. No loop implies parallelism. `break`/`continue` target the nearest loop, including from inside a match. They are rejected outside loops. The native emitter uses internal labels when needed so a switch cannot intercept a loop break; there is no user `goto`.
-
-Logical operators short-circuit. Assignment follows RHS-before-place evaluation in generated C++20. Calls with external writes or heap allocation/free are forbidden as nested operands to avoid unspecified operand order; bind them at an allowed whole-expression root. A private stack-using helper can be permitted because its internal writes do not escape; its stack/initialization effects remain visible. No claim is made about observing trap-site order or floating environment state.
-
-## Compact forms and costs
-
-```cairn
-let used = compact out for i in n where predicate yield value;
-```
-
-The output is a mutable borrowed parameter or scoped buffer. Its capacity must match the iteration extent by the same name/literal identity; `len` is supported. Predicate is bool, projection has output element type. Neither may mention output or call an externally-writing or allocating/freeing helper. Predicate runs once per visited input; projection only when selected. The stable output prefix is written into existing storage, tail preserved, no temporary array or synchronization introduced. The private cursor never emits more than once per input. Arithmetic obligations are now checked by exact certificates as described in verification.md. Stable-selection semantics and correspondence to the emitted code remain trusted implementation obligations, not consequences of those identities alone.
-
-Families instantiate one static natural parameter over bounded concrete ranges, checking generated ASTs. `derive wire for Packet;` supports fixed-width unsigned fields, little endian, declaration order, no padding. It does not infer framing, authentication or field validity. There are no general macros, generic traits, closures or virtual dispatch. Generator contracts remain in docs/cards/GENERATOR_CONTRACTS.md.
-
-## Projects and edits
-
-A `cairn.toml` lists ordered relative source files and independent task files. Files form one namespace, not modules/imports or separate compilation. Traversal, symlinks, duplicates, unknown keys and executable hooks are rejected. Builds always use fresh directories. The host selects trusted native compilers; manifests do not select commands or arbitrary flags.
-
-Agent body/expression edits preserve signatures, tasks, effect ceilings, visible dependencies and unrelated source. Match/storage/loop sites are included. Whole-module checking runs after insertion. Canonical projection is read-only and may omit comments; edit splicing preserves comments outside authorized ranges. Rule cards are selected from lexical tokens, not substring guesses, so whitespace or code words inside comments cannot hide/add features.
-
-Diagnostics report the specific failure and usable local facts. `E-MATCH-COVERAGE` identifies missing/foreign variants. Storage errors explain capacity, element or stack constraints. These hints never authorize changing the task or permitted effects. No model-intelligence or training result is implied by the existence of diagnostics.
+`cairn.toml` lists ordered sources and independent task files; it is data, never a build script. `[build] kind = "exe" | "library"`, `arch = "baseline"` or a named profile of the host family (x86-64, AArch64). The host chooses trusted compilers (`clang++`, `g++`, and `nvcc` when a program uses the device); builds use fresh directories. Generated C++ is readable and keeps the C ABI for every function whose signature is C compatible.
 
 ## Scope of proof
 
-See verification.md. Local storage, sums, loops and their wrappers are native-implemented but unsupported by scalar equivalence. Module coverage reports each unchecked function, rather than inheriting one scalar success. There is no Lean-kernel acceptance, entire-compiler proof, weak-memory theorem, allocation/lifetime theorem, native refinement or C++-breadth completeness claim.
+Typed, native-built, finite-tested, SMT-equivalent and Lean-checked are distinct claims; see verification.md. Generic instances, owners, lanes and the foreign boundary are native-implemented and tested, not mechanized.

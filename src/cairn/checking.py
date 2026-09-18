@@ -19,9 +19,29 @@ from .syntax import (
 )  # fmt: skip
 
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
-SOFT = {"take", "swap", "transfer", "mmio_read", "mmio_write", "asm"}  # New in 1.0: a program's own function wins.
+SOFT = {
+    "take",
+    "swap",
+    "transfer",
+    "mmio_read",
+    "mmio_write",
+    "asm",
+    "wait",
+}  # New in 1.0: a program's own function wins.
 BUILTINS = WRAPPING | SOFT | {"min", "max", "len"}
-INTRINSIC_TYPES = {"Buf": 1, "Array": 2, "fn": None, "dyn": 1}
+INTRINSIC_TYPES = {"Buf": 1, "Array": 2, "fn": None, "dyn": 1, "Ticket": 1, "Atomic": 1, "Mutex": 1}
+PINNED = {"Ticket", "Atomic", "Mutex"}  # Declared and borrowed in place; never stored, passed or returned.
+ORDERS = ["relaxed", "acquire", "release", "acquire_release", "seq_cst"]
+ATOMIC_OPS = {
+    "load": 0,
+    "store": 1,
+    "swap": 1,
+    "fetch_add": 1,
+    "fetch_sub": 1,
+    "fetch_and": 1,
+    "fetch_or": 1,
+    "fetch_xor": 1,
+}
 KINDS = ["copy", "affine", "linear"]
 PURE = {"trap", "diverge", "local_read", "local_write", "stack_storage", "zero_init", "ffi_precondition"}
 COMPARISONS = {"==", "!=", "<", "<=", ">", ">="}
@@ -47,6 +67,8 @@ class Scope:
     module: str = ""
     lanes: Lanes | None = None
     closure: tuple[Type, set[str]] | None = None  # (return type, names bound outside the closure)
+    leases: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # ticket -> [(place, mode)]
+    spawning: str = ""  # The name a `let t = spawn ...` is about to bind.
 
 
 @dataclass
@@ -106,6 +128,7 @@ class Checker:
         self.capture_sites = capture_sites
         self.sites: list[dict[str, Any]] = []
         self.fs = {f.name: f for f in program.functions}
+        program.enums.setdefault("Order", ORDERS)
         self.types = {**program.records, **program.enums, **program.sums}
         for name in [*self.fs, *self.types, *program.consts, *program.traits]:
             if name in CPP or name in BUILTINS - SOFT or name in INTRINSIC_TYPES:
@@ -125,6 +148,7 @@ class Checker:
         self.resources: dict[str, list[dict[str, Any]]] = {}
         self.unchecked: list[str] = []
         self.lane_calls: list[tuple[str, bool, Expr]] = []
+        self.borrowed: list[tuple[str, str]] = []
         self.device_functions: set[str] = set()
         self.nodes = 0
 
@@ -231,6 +255,8 @@ class Checker:
         if declared.mode != "value" or declared == VOID:
             fail(code, f"{what} must be value types, never borrows or void.")
         ty = self.resolve(declared)
+        if ty.name in PINNED:
+            fail("E-PINNED", f"{ty.display()} lives where it is declared; share it by ro borrow.")
         if ty in self.layouts and self.layouts[ty] is None:
             fail(code, f"{what} cannot contain their own type by value; reach it through a Buf.")
         return ty
@@ -243,8 +269,10 @@ class Checker:
             self.kinds[ty] = "affine"  # A recursive owner is only reachable through a Buf.
             layout = self.layouts.get(ty) or {}
             parts = [t for _, t in layout] if isinstance(layout, list) else [t for t in layout.values() if t]
-            ranks = [KINDS.index(self.kind(t)) for t in (parts or ty.args[:1] if ty.name != "Buf" else [])]
-            own = 2 if "linear" in self.p.attributes.get(ty.name, ()) else int(ty.name in {"Buf", "dyn"})
+            inline = parts or (ty.args[:1] if ty.name == "Array" else [])
+            ranks = [KINDS.index(self.kind(t)) for t in inline]
+            linear = "linear" in self.p.attributes.get(ty.name, ()) or ty.name == "Ticket"
+            own = 2 if linear else int(ty.name in {"Buf", "dyn", "Atomic", "Mutex"})
             self.kinds[ty] = KINDS[max([own, *ranks])]
         return self.kinds[ty]
 
@@ -262,7 +290,7 @@ class Checker:
 
     def check(self) -> dict[str, Any]:
         for name in self.types:
-            if not self.p.generics.get(name):
+            if not self.p.generics.get(name) and (name != "Order" or "Order" in self.p.modules):
                 with self.within(self.p.modules.get(name, "")):
                     self.define(Type(name))
         for name, (declared, value) in self.p.consts.items():
@@ -332,6 +360,8 @@ class Checker:
                 seen[n] = ty
                 f.params[i] = (n, ty)
             f.ret = self.resolve(f.ret, f)
+        if any(t.name in PINNED and t.mode == "value" for t in [f.ret, *(t for _, t in f.params)]):
+            fail("E-PINNED", "Tickets, atomics and mutexes cannot be passed or returned by value; borrow them.", f)
         if f.ret.mode != "value":
             fail("E-ESCAPE", "Borrowed view returns are not in the native subset.", f)
         if f.extern and f.effects is None:
@@ -423,8 +453,8 @@ class Checker:
             if callee in effects and not at_root:
                 if any(x.startswith("write:") or x in {"alloc", "free"} for x in effects[callee]):
                     fail("E-EFFECT-ORDER", "Bind a writing call to its own statement before using its result.", e)
-            for child in e.args:
-                expr(child, False)
+            for child in e.args:  # `try f()` and `spawn f()` add no operand order: f stays a root.
+                expr(child, at_root and e.tag in {"try", "spawn"})
 
         def block(ss: list[Stmt]):
             for s in ss:
@@ -528,6 +558,7 @@ class Checker:
     def s_let(self, s: Stmt):
         if s.name in self.env:
             fail("E-SHADOW", f"{s.name} is already bound; shadowing is forbidden in this subset.", s)
+        self.spawning = s.name if s.exprs[0].tag == "spawn" else ""
         ty = self.expr(s.exprs[0], self.resolve(s.ty, s) if s.ty else None)
         if ty == VOID or (ty.mode != "value" and s.exprs[0].tag != "str"):
             fail("E-VIEW-ALIAS", "Local view aliases and void values are outside this subset.", s)
@@ -767,6 +798,8 @@ class Checker:
                 fail("E-IMMUTABLE", f"{e.val} is not a mutable local.", e)
             if write and b.ty.mode == "rw":
                 self.effect("write:" + e.val)
+            if write or (b is not None and not is_view(b.ty) and b.ty.name not in {"Buf", "Array"}):
+                self.leased(e.val, "rw" if write else "ro", e)
             if write and self.lanes and e.val in self.lanes.outer:
                 fail(
                     "E-PARALLEL-WRITE",
@@ -816,9 +849,19 @@ class Checker:
         self.early[id(e)] = e
         return ty
 
+    def leased(self, place: str, mode: str, node: Any):
+        """While a task holds a borrow, nobody else may write it, or touch it if the task writes it."""
+        for ticket, held in self.leases.items():
+            if any(overlaps(place, p) and "rw" in (mode, m) for p, m in held):
+                fail("E-LEASED", f"{place} is lent to task {ticket} until wait({ticket}).", node)
+
     def consume(self, e: Expr):
         """An owner used as a value moves; its name is dead afterwards."""
+        waited = e.ty.name == "Ticket" and self.spawning == "<wait>"
+        if e.tag in {"name", "field", "index"} and e.ty.name in PINNED and not waited:
+            fail("E-PINNED", f"{e.ty.display()} cannot move; wait() a ticket, borrow an atomic or mutex.", e)
         if e.tag == "name":
+            self.leased(e.val, "rw", e)
             if e.val in self.moved | self.deferred:
                 fail("E-MOVED", f"{e.val} was already moved or scheduled for cleanup.", e)
             if self.env[e.val].ty.mode != "value":
@@ -891,6 +934,8 @@ class Checker:
             self.effect("read:" + root(a).val)
         if self.lanes and root(a).val in self.lanes.outer:
             self.lanes.accesses.append((root(a).val, i.tag == "name" and i.val == self.lanes.binder, not read, e))
+        if root(a).tag == "name":
+            self.leased(path(e), "ro" if read else "rw", e)
         return ty.value if is_view(ty) else ty.args[0]
 
     def e_field(self, e: Expr, expected: Type | None) -> Type:
@@ -997,6 +1042,47 @@ class Checker:
         e.ref = ("indirect", target.ty)
         return ret
 
+    def shared(self, e: Expr, n: str, ty: Type, args: list[Expr]) -> Type:
+        """Interior mutability, and only here: every atomic access names its memory order."""
+        e.ref = ("shared", ty)
+        if ty.name == "Mutex":
+            if n != "with" or len(args) != 1 or args[0].tag != "lambda":
+                fail("E-CALLEE", "A mutex has one operation: m.with(|state:rw<T>| { ... }).", e)
+            ret = self.resolve(args[0].ref.ret, e)
+            self.expr(args[0], Type("fn", "ro", args=(Type(ty.args[0].name, "rw", args=ty.args[0].args), ret)))
+            self.effect("lock")
+            return ret
+        order = Type(self.qualify("Order", self.p.enums) or "Order")
+        if n == "compare_exchange":
+            wanted = [ty.args[0], ty.args[0], order, order]
+        elif n in ATOMIC_OPS:
+            wanted = [ty.args[0]] * ATOMIC_OPS[n] + [order]
+        else:
+            fail("E-CALLEE", f"An atomic offers {', '.join(ATOMIC_OPS)} and compare_exchange.", e)
+        if len(args) != len(wanted):
+            fail("E-ARITY", f"{n} takes {len(wanted) - 1} value(s) and an explicit memory order.", e)
+        if n == "compare_exchange" and not self.writable(args[0]):
+            fail("E-WRITE-LEASE", "compare_exchange updates its expected value; pass a mutable local.", args[0])
+        for a, want in zip(args, wanted, strict=True):
+            self.expect(self.place(a, write=True), want, a) if n == "compare_exchange" and a is args[0] else self.expr(
+                a, want
+            )
+        self.effect("atomic")
+        return BOOL if n == "compare_exchange" else VOID if n == "store" else ty.args[0]
+
+    def e_spawn(self, e: Expr, expected: Type | None) -> Type:
+        """`let t = spawn f(args);` runs f on its own thread; t lends f's borrows until wait(t)."""
+        call, name = e.args[0], self.spawning
+        if name in ("", "<wait>") or call.tag != "call" or self.lanes or self.closure:
+            fail("E-SPAWN", "Write `let t = spawn f(args);` in a function body; a task is always named.", e)
+        self.spawning = ""
+        result = self.expr(call)
+        if not isinstance(call.ref, Function) or any(a.tag == "lambda" for a in call.args):
+            fail("E-SPAWN", "spawn runs a declared function, and a closure cannot follow it to another thread.", e)
+        self.leases[name] = self.borrowed
+        self.effect("spawn")
+        return Type("Ticket", args=(result,))
+
     def e_try(self, e: Expr, expected: Type | None) -> Type:
         """`try x` yields the success payload or returns the failure from the enclosing function."""
         ty = self.expr(e.args[0])
@@ -1073,6 +1159,9 @@ class Checker:
             if enum:
                 return self.variant(Type(enum, args=targs), n.rsplit(".", 1)[1], args, e, expected)
         e.val = n
+        shared = self.peek(receiver) if receiver is not None else VOID
+        if shared.name in {"Atomic", "Mutex"}:
+            return self.shared(e, n, shared, args[1:])
         if n in self.env and self.env[n].ty.name == "fn":
             return self.indirect(e, self.env[n], args)
         if (n in BUILTINS and n not in self.fs) or n in NUMERIC or n in INTRINSIC_TYPES:
@@ -1224,6 +1313,7 @@ class Checker:
             if named and self.lanes and root(a).val in self.lanes.outer:
                 self.lanes.accesses.append((root(a).val, False, want.mode == "rw", a))
             if named:
+                self.leased(path(a), want.mode, a)
                 borrows.append((path(a), want.mode))
                 if want.mode == "rw" and self.env[root(a).val].ty.mode == "value":
                     self.effect("write:" + root(a).val)
@@ -1232,6 +1322,7 @@ class Checker:
                 fail("E-ALIAS", "A mutable view cannot be passed to overlapping call arguments.", e)
         self.call_edges[self.f.name].append((f.name, mapping))
         self.callset.add(f.name)
+        self.borrowed = borrows
         if self.lanes:
             self.lane_calls.append((f.name, bool(self.device_depth), e))
         e.ref = f
@@ -1326,6 +1417,23 @@ class Checker:
             if root(args[1]).tag == "name":
                 self.effect("read:" + root(args[1]).val)
             return VOID
+        if n == "wait":  # Completion is the only thing that returns a task's borrows.
+            arity(1, "wait takes one ticket.")
+            self.spawning = "<wait>"
+            ticket = self.expr(args[0])
+            self.spawning = ""
+            if ticket.name != "Ticket" or args[0].tag != "name":
+                fail("E-TYPE-MISMATCH", "wait takes the name of a ticket.", e)
+            self.leases.pop(args[0].val, None)
+            self.effect("join")
+            return ticket.args[0]
+        if n in {"Atomic", "Mutex"}:  # Shared state is declared in place and reached through ro borrows.
+            ty = self.resolve(Type(n, args=targs), e) if targs else expected
+            if ty is None or ty.name != n or (n == "Atomic" and ty.args[0].name not in INT | {"bool"}):
+                fail("E-INFER", f"Write {n}[T](initial); an atomic holds an integer or bool.", e)
+            arity(1, f"{n} takes its initial value.")
+            self.expr(args[0], ty.args[0])
+            return ty
         if n in {"take", "swap"}:  # The only ways to move an owner out of a place.
             arity(1 if n == "take" else 2, f"{n} takes {'one place' if n == 'take' else 'two places'}.")
             types = [self.place(a, write=True) for a in args]
