@@ -31,10 +31,11 @@ def compile_program(source: str, capture_sites: bool = False) -> tuple[Program, 
     return p, checker, checker.check()
 
 
-def compile_source(source: str) -> tuple[str, dict[str, Any]]:
+def compile_source(source: str, origin: str = "") -> tuple[str, dict[str, Any]]:
+    """Generated C++ and its receipt; `origin` names the source in #line directives for debug builds."""
     p, checker, receipts = compile_program(source)
     certificate = audit_collector()  # The collector's unchecked store is emitted only under this gate.
-    emitter = Emitter(p, checker)
+    emitter = Emitter(p, checker, origin)
     cpp = emitter.emit()
     manifest = {
         "compiler": VERSION,

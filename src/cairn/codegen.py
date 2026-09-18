@@ -29,8 +29,9 @@ def bare(condition: str) -> str:
 
 
 class Emitter:
-    def __init__(self, p: Program, checker: Checker | None = None):
+    def __init__(self, p: Program, checker: Checker | None = None, origin: str = ""):
         self.p, self.lines, self.ind, self.counter = p, [], 0, 0
+        self.origin = origin  # A source name turns on #line directives: debuggers then step through CAIRN.
         self.loops: list[int] = []
         self.headers = ["cairn_runtime.hpp"]
         self.dynamic: dict[str, None] = {}  # Traits used behind dyn, in first-use order.
@@ -364,6 +365,8 @@ class Emitter:
 
     def block(self, ss: list[Stmt]):
         for s in ss:
+            if self.origin and s.line:
+                self.put(f'#line {s.line} "{self.origin}"')
             getattr(self, "s_" + s.tag)(s, [self.expr(e) for e in s.exprs] if s.tag != "compact" else [])
 
     def s_buffer(self, s: Stmt, es: list[str]):
