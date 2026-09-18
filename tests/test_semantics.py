@@ -190,3 +190,19 @@ def test_malformed_source_fails_closed(bad):
 def test_precondition_cannot_inject_a_declaration():
     r = equivalent(fn("return x;"), fn("return x;"), "f", assume="true); } fn injected()->bool {return true;")
     assert r["status"] == "rejected"
+
+
+def test_equivalence_sees_through_generics_traits_modules_families_and_constants():
+    """1.0: the scalar model runs on the typed, linked, monomorphized tree, so resolved calls are ordinary calls."""
+    reference = "fn f(x:u64, y:u64) -> u64 { if x < y { return y; } return x; }"
+    candidate = (
+        "import std.core (Ord);\nconst BIAS:u64 = 0;\n"
+        "fn pick[T: Ord](a:T, b:T) -> T { if less(a, b) { return b; } return a; }\n"
+        "fn scaled[K:nat](v:u64) -> u64 = v * u64(K);\nfamily times = scaled[1..3];\n"
+        "fn f(x:u64, y:u64) -> u64 = times_1(pick(x, y)) + BIAS;"
+    )
+    assert equivalent(reference, candidate, "f")["status"] == "smt-equivalent"
+    wrong = equivalent(reference, candidate.replace("return b; } return a;", "return a; } return b;"), "f")
+    assert wrong["status"] == "counterexample" and wrong["concrete_replay"] is True
+    doubled = equivalent(reference, candidate.replace("times_1", "times_2"), "f")
+    assert doubled["status"] == "counterexample"

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .cairnc import INT, SIGNED, WIDTH, Checker, Diagnostic, Expr, Function, Parser, Stmt, Type
+from .cairnc import INT, SIGNED, WIDTH, Diagnostic, Expr, Function, Parser, Stmt, Type, compile_program
 from .smt_bridge import Solver, SolverUnavailable
 
 PROFILE = "cairn-scalar-bv/1"
@@ -148,6 +148,8 @@ class Symbolic:
         if e.ty is None or e.ty.mode != "value" or e.ty.name not in INT | {"bool"}:
             raise Unsupported("Expression is outside the scalar integer/Boolean fragment.")
         ty = e.ty.name
+        if e.tag == "name" and isinstance(e.ref, int | Expr):  # A static natural or a module constant.
+            e = Expr("int", str(e.ref), ty=e.ty) if isinstance(e.ref, int) else e.ref
         if e.tag == "name":
             return env[e.val]
         if e.tag == "int":
@@ -230,6 +232,7 @@ class Symbolic:
                 a, b = args
                 cmp = f"(bv{'s' if ty in SIGNED else 'u'}le {a.value} {b.value})"
                 return self.q.term(ty, ite(cmp, a.value, b.value) if n == "min" else ite(cmp, b.value, a.value), ok)
+            n = e.ref.name if isinstance(e.ref, Function) else n  # The callee the checker resolved.
             if n in self.functions:
                 value = self.invoke(n, [Term(a.ty, a.value) for a in args], stack)
                 return self.q.term(value.ty, value.value, conj(ok, value.defined))
@@ -255,8 +258,8 @@ class Symbolic:
         f = self.functions[name]
         if f.static or f.ret.mode != "value" or f.ret.name not in INT | {"bool"}:
             raise Unsupported("Return types/static parameters are outside the scalar fragment.")
-        if any(t.mode != "value" or t.name not in INT | {"bool"} for _, t in f.params):
-            raise Unsupported("Callee has a nonscalar signature.")
+        if any(t.mode == "rw" or t.extent or t.name not in INT | {"bool"} for _, t in f.params):
+            raise Unsupported("Callee has a nonscalar signature.")  # A read-only scalar borrow reads as its value.
         env = {n: a for (n, _), a in zip(f.params, args)}
         returns = []
         remaining = self.block(f.body, [("true", env)], stack + (name,), returns)
@@ -319,6 +322,8 @@ class Concrete:
         return value
 
     def expr(self, e, env, stack):
+        if e.tag == "name" and isinstance(e.ref, int | Expr):
+            e = Expr("int", str(e.ref), ty=e.ty) if isinstance(e.ref, int) else e.ref
         if e.tag == "name":
             return env[e.val]
         if e.tag == "int":
@@ -389,6 +394,7 @@ class Concrete:
                 if not 0 <= b < WIDTH[ty]:
                     raise ConcreteTrap("invalid-shift")
                 return ((a << b) % (1 << WIDTH[ty])) if n == "shl_wrap" else (a >> b)
+            n = e.ref.name if isinstance(e.ref, Function) else n
             if n in self.functions:
                 return self.invoke(n, xs, stack)
         raise Unsupported("Concrete replay encountered unsupported expression.")
@@ -442,11 +448,8 @@ class Concrete:
 def prepared(source: str):
     if len(source.encode()) > MAX_SOURCE_BYTES:
         raise Unsupported("Scalar source limit exceeded.")
-    p = Parser(source).parse()
-    if p.families or p.derivations or any(f.static for f in p.functions):
-        raise Unsupported("Static generation is outside the scalar proof interface.")
-    Checker(p).check()
-    return {f.name: f for f in p.functions}
+    program, _, _ = compile_program(source)  # Linked, monomorphized and typed: instances are plain functions.
+    return {f.name: f for f in program.functions}
 
 
 def outcome_key(outcome):
@@ -466,6 +469,7 @@ def implementation_hash():
                 "checking.py",
                 "expansion.py",
                 "codegen.py",
+                "modules.py",
                 "version.py",
             ]
         )
