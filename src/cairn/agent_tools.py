@@ -47,15 +47,7 @@ def stable_json(value: Any) -> str:
 def signature(f: Function) -> str:
     static = "[" + f.static + ":nat]" if f.static else ""
     ps = ", ".join(n + ":" + t.display() for n, t in f.params)
-    return (
-        "fn "
-        + f.name
-        + static
-        + "("
-        + ps
-        + ")"
-        + ("" if f.ret.name == "void" else " -> " + f.ret.display())
-    )
+    return "fn " + f.name + static + "(" + ps + ")" + ("" if f.ret.name == "void" else " -> " + f.ret.display())
 
 
 def format_expr(e: Expr) -> str:
@@ -134,16 +126,7 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
                 # An explicit newline is cosmetic; the parser ignores it.
                 put("else " + format_block(s.other, indent + 1))
         elif s.tag == "for":
-            put(
-                "for "
-                + s.name
-                + " in "
-                + es[0]
-                + ".."
-                + es[1]
-                + " "
-                + format_block(s.body, indent + 1)
-            )
+            put("for " + s.name + " in " + es[0] + ".." + es[1] + " " + format_block(s.body, indent + 1))
         else:
             fail("E-PROJECTION", "Cannot project unknown statement kind.")
     lines.append("  " * indent + "}")
@@ -153,18 +136,12 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
 def type_declarations(p: Program) -> str:
     out = []
     for n, fs in p.records.items():
-        out.append(
-            "struct " + n + " { " + " ".join(k + ":" + t.display() + ";" for k, t in fs) + " }"
-        )
+        out.append("struct " + n + " { " + " ".join(k + ":" + t.display() + ";" for k, t in fs) + " }")
     for n, vs in p.enums.items():
         out.append("enum " + n + " { " + " ".join(v + ";" for v in vs) + " }")
     for n, vs in p.sums.items():
         out.append(
-            "enum "
-            + n
-            + " { "
-            + " ".join(v + ("(" + t.display() + ")" if t else "") + ";" for v, t in vs)
-            + " }"
+            "enum " + n + " { " + " ".join(v + ("(" + t.display() + ")" if t else "") + ";" for v, t in vs) + " }"
         )
     return "\n".join(out)
 
@@ -222,9 +199,7 @@ HINTS = {
 
 def explain(error: Diagnostic, source: str = "") -> dict[str, Any]:
     d = dict(error.data)
-    d["repair_hint"] = HINTS.get(
-        d["code"], "Repair the stated obligation without weakening the host-owned contract."
-    )
+    d["repair_hint"] = HINTS.get(d["code"], "Repair the stated obligation without weakening the host-owned contract.")
     d["automatic_edit"] = False
     line = d.get("line", 0)
     if 1 <= line <= len(source.splitlines()):
@@ -244,22 +219,14 @@ def load_json_strict(text: str) -> Any:
 
     try:
         return json.loads(
-            text,
-            object_pairs_hook=pairs,
-            parse_constant=lambda s: fail("E-REQUEST", "Nonfinite JSON value"),
+            text, object_pairs_hook=pairs, parse_constant=lambda s: fail("E-REQUEST", "Nonfinite JSON value")
         )
     except (json.JSONDecodeError, RecursionError) as e:
         fail("E-REQUEST", str(e))
 
 
 class EditSession:
-    def __init__(
-        self,
-        source: str,
-        symbol: str,
-        contract: dict[str, Any] | None = None,
-        include: tuple[str, ...] = (),
-    ):
+    def __init__(self, source: str, symbol: str, contract: dict[str, Any] | None = None, include: tuple[str, ...] = ()):
         self.source = source
         self.symbol = symbol
         self.contract = {} if contract is None else copy.deepcopy(contract)
@@ -273,10 +240,7 @@ class EditSession:
             fail("E-SYMBOL", "Edit an authored function, not a generated entry.")
         self.f = authored[symbol]
         if self.f.static:
-            fail(
-                "E-EDIT-PROFILE",
-                "Template-body editing is not implemented; edit ordinary functions.",
-            )
+            fail("E-EDIT-PROFILE", "Template-body editing is not implemented; edit ordinary functions.")
         self.cpp, self.receipt = compile_source(source)
         p = specialize(derive_wire(Parser(source).parse()))
         checker = Checker(p, capture_sites=True)
@@ -333,13 +297,9 @@ class EditSession:
         from pathlib import Path
 
         files = sorted(
-            p
-            for p in Path(__file__).parent.rglob("*")
-            if p.suffix in {".py", ".hpp"} and "__pycache__" not in p.parts
+            p for p in Path(__file__).parent.rglob("*") if p.suffix in {".py", ".hpp"} and "__pycache__" not in p.parts
         )
-        self.implementation_hash = digest(
-            b"".join(f.name.encode() + b"\0" + f.read_bytes() + b"\0" for f in files)
-        )
+        self.implementation_hash = digest(b"".join(f.name.encode() + b"\0" + f.read_bytes() + b"\0" for f in files))
         self.session = digest(
             stable_json(
                 {
@@ -362,9 +322,7 @@ class EditSession:
                 context.append({"symbol": f.name, "source": self.source[f.start : f.end]})
         for prefix, base, lo, hi in self.parsed.families:
             if base in origins:
-                context.append(
-                    {"family": prefix, "source": f"family {prefix} = {base}[{lo}..{hi}];"}
-                )
+                context.append({"family": prefix, "source": f"family {prefix} = {base}[{lo}..{hi}];"})
         for record in self.parsed.derivations:
             if "derive wire for " + record in origins:
                 context.append({"wire": record, "source": f"derive wire for {record};"})
@@ -374,9 +332,7 @@ class EditSession:
             "symbol": self.symbol,
             "signature": signature(self.f),
             "profile": VERSION,
-            "task": self.contract.get(
-                "task", "No behavioral task contract supplied; do not infer one."
-            ),
+            "task": self.contract.get("task", "No behavioral task contract supplied; do not infer one."),
             "contract_sha256": digest(stable_json(self.contract)),
             "source_sha256": digest(self.source),
             "implementation_sha256": self.implementation_hash,
@@ -390,18 +346,10 @@ class EditSession:
                 bool(self.parsed.sums),
             ),
             "dependencies": {
-                n: {
-                    "signature": signature(names[n]),
-                    "effects": self.receipt["functions"][n]["effects"],
-                }
+                n: {"signature": signature(names[n]), "effects": self.receipt["functions"][n]["effects"]}
                 for n in sorted(self.visible)
             },
-            "draft_protocol": {
-                "protocol": PROTOCOL,
-                "session": self.session,
-                "kind": "body",
-                "replacement": "{ ... }",
-            },
+            "draft_protocol": {"protocol": PROTOCOL, "session": self.session, "kind": "body", "replacement": "{ ... }"},
             "limits": {"replacement_bytes": MAX_REPLACEMENT, "one_authored_function": True},
             "scope": "Entire static call-graph component plus all record/enum/sum definitions; full module rechecked.",
             "boundaries": [
@@ -428,9 +376,7 @@ class EditSession:
         if not isinstance(request, dict):
             fail("E-REQUEST", "Edit request must be an object.")
         kind = request.get("kind")
-        keys = {"protocol", "session", "kind", "replacement"} | (
-            {"site"} if kind == "expr" else set()
-        )
+        keys = {"protocol", "session", "kind", "replacement"} | ({"site"} if kind == "expr" else set())
         if set(request) != keys:
             fail("E-REQUEST", "Missing or unknown edit fields.", fields=sorted(set(request) ^ keys))
         if request.get("protocol") != PROTOCOL:
@@ -475,18 +421,10 @@ class EditSession:
             fail("E-DECLARATION", "Declaration set changed.")
         additions = set(receipt["functions"][self.symbol]["effects"]) - self.allowed_effects
         if additions:
-            fail(
-                "E-EFFECT-EXPANSION",
-                "Candidate exceeds its effect ceiling.",
-                added_effects=sorted(additions),
-            )
+            fail("E-EFFECT-EXPANSION", "Candidate exceeds its effect ceiling.", added_effects=sorted(additions))
         unknown = set(receipt["functions"][self.symbol]["calls"]) - self.visible
         if unknown:
-            fail(
-                "E-CONTEXT-CLOSURE",
-                "Candidate introduces an undisclosed callee.",
-                symbols=sorted(unknown),
-            )
+            fail("E-CONTEXT-CLOSURE", "Candidate introduces an undisclosed callee.", symbols=sorted(unknown))
         for name, r in receipt["functions"].items():
             if name != self.symbol:
                 delta = set(r["effects"]) - set(self.receipt["functions"][name]["effects"])
@@ -521,18 +459,10 @@ class EditSession:
             fail("E-REQUEST", "At most 128 candidates per query.")
         results = []
         for expr in expressions:
-            r = {
-                "protocol": PROTOCOL,
-                "session": self.session,
-                "kind": "expr",
-                "site": site,
-                "replacement": expr,
-            }
+            r = {"protocol": PROTOCOL, "session": self.session, "kind": "expr", "site": site, "replacement": expr}
             try:
                 _, receipt = self.check(r)
-                results.append(
-                    {"expression": expr, "status": "typed", "effects": receipt["effects"]}
-                )
+                results.append({"expression": expr, "status": "typed", "effects": receipt["effects"]})
             except Diagnostic as e:
                 results.append({"expression": expr, **explain(e)})
         return results

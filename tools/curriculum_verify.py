@@ -41,9 +41,7 @@ def main():
             compiler = shutil.which(compiler_name)
             if compiler is None:
                 raise RuntimeError("Requested compiler not installed: " + compiler_name)
-            version = subprocess.run(
-                [compiler, "--version"], text=True, capture_output=True, check=True
-            ).stdout
+            version = subprocess.run([compiler, "--version"], text=True, capture_output=True, check=True).stdout
             cmd = [compiler, *FLAGS, str(t / "corpus.cpp"), "-o", str(t / "libcorpus.so")]
             cp = subprocess.run(cmd, text=True, capture_output=True, timeout=90)
             if cp.returncode:
@@ -67,9 +65,7 @@ def main():
                     timeout=10,
                 )
                 events = [json.loads(line) for line in cp.stdout.splitlines()]
-                verdict = next(
-                    (x for x in reversed(events) if "status" in x), {"status": "no-verdict"}
-                )
+                verdict = next((x for x in reversed(events) if "status" in x), {"status": "no-verdict"})
                 entry = {
                     "id": task["id"],
                     "family": task["family"],

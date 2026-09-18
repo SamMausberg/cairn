@@ -44,26 +44,19 @@ def verify_module(reference: str, candidate: str, timeout_ms: int = 3000) -> dic
     result["reference_intent_proved"] = False
     names = set(ref["functions"])
     present = set(cand["functions"])
-    result.update(
-        expected=sorted(names), missing=sorted(names - present), extra=sorted(present - names)
-    )
+    result.update(expected=sorted(names), missing=sorted(names - present), extra=sorted(present - names))
     if not names or len(names | present) > 128:
         return {**result, "reason": "Coverage requires 1..128 declared functions."}
     deadline = time.monotonic() + 30
     for name in sorted(names & present):
         remaining = int((deadline - time.monotonic()) * 1000)
         if remaining < 4:
-            result["results"][name] = {
-                "status": "unknown",
-                "reason": "Whole-module solver budget exhausted.",
-            }
+            result["results"][name] = {"status": "unknown", "reason": "Whole-module solver budget exhausted."}
         else:
             # A scalar comparison has several obligations; reserve its share for all.
             allowance = min(timeout_ms, max(1, remaining // 4))
             result["results"][name] = equivalent(reference, candidate, name, timeout_ms=allowance)
-    result["covered"] = [
-        name for name, r in result["results"].items() if r["status"] == "smt-equivalent"
-    ]
+    result["covered"] = [name for name, r in result["results"].items() if r["status"] == "smt-equivalent"]
     result["uncovered"] = sorted((names | present) - set(result["covered"]))
     if result["public_types_match"] and names == present and len(result["covered"]) == len(names):
         result["status"] = "smt-module-equivalent"

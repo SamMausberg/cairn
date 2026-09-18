@@ -10,7 +10,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from .cairnc import RUNTIME, Parser, compile_source
+from .cairnc import RUNTIME_FILES, Parser, compile_source
 from .project import Project, ProjectError
 from .toolchain import find, flags
 
@@ -33,13 +33,7 @@ def build(
     if kind == "exe":
         functions = {f.name: f for f in Parser(project.source).parse().functions}
         main = functions.get("main")
-        if (
-            main is None
-            or main.static
-            or main.params
-            or main.ret.name != "i32"
-            or main.ret.mode != "value"
-        ):
+        if main is None or main.static or main.params or main.ret.name != "i32" or main.ret.mode != "value":
             raise ProjectError("An executable needs fn main() -> i32 with no arguments.")
         generated += "\nint main() { return static_cast<int>(cf_main()); }\n"
     # No manifest can select a compiler executable, flags, build script, or output path.
@@ -51,7 +45,8 @@ def build(
     directory = Path(tempfile.mkdtemp(prefix=name + "-", dir=out.resolve()))
     cpp = directory / "program.cpp"
     cpp.write_text(generated, encoding="utf-8")
-    (directory / "cairn_runtime.hpp").write_text(RUNTIME, encoding="utf-8")
+    for header, text in RUNTIME_FILES.items():
+        (directory / header).write_text(text, encoding="utf-8")
     artifact = directory / ("lib" + name + ".so" if kind == "library" else name)
     command = [compiler, *options, str(cpp), "-o", str(artifact)]
     started = time.monotonic()

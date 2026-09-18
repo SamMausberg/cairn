@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import copy
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .syntax import (
@@ -22,8 +22,26 @@ WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
 BUILTINS = WRAPPING | {"min", "max", "len", "take", "swap"}
 INTRINSIC_TYPES = {"Buf": 1, "Array": 2, "fn": None, "dyn": 1}
 KINDS = ["copy", "affine", "linear"]
-PURE = {"trap", "diverge", "local_read", "local_write", "stack_storage", "zero_init"}
+PURE = {"trap", "diverge", "local_read", "local_write", "stack_storage", "zero_init", "ffi_precondition"}
 COMPARISONS = {"==", "!=", "<", "<=", ">", ">="}
+
+
+@dataclass
+class Scope:
+    """Everything the checker knows about the function it is inside."""
+
+    f: Function
+    tenv: dict[str, Any] = field(default_factory=dict)
+    env: dict[str, Binding] = field(default_factory=dict)
+    effects: set[str] = field(default_factory=set)
+    callset: set[str] = field(default_factory=set)
+    counts: dict[str, int] = field(default_factory=dict)
+    moved: set[str] = field(default_factory=set)
+    deferred: set[str] = field(default_factory=set)
+    loop_depth: int = 0
+    unsafe_depth: int = 0
+    device_depth: int = 0
+    module: str = ""
 
 
 @dataclass
@@ -32,6 +50,9 @@ class Binding:
     mutable: bool = False
     constant: int | None = None
     depth: int = 0  # Loop depth at declaration: an outer owner cannot be moved inside a loop.
+
+
+SCOPED = frozenset(Scope.__dataclass_fields__)
 
 
 def is_view(ty: Type) -> bool:
@@ -80,23 +101,27 @@ class Checker:
             self.aliases.setdefault(importer, {})[alias] = target
         self.layouts: dict[Type, Any] = {}  # Concrete records and sums, dependencies first.
         self.kinds: dict[Type, str] = {}
-        self.early: set[int] = set()  # Arguments typed ahead of their call for dispatch.
-        self.env: dict[str, Binding] = {}
-        self.tenv: dict[str, Any] = {}
-        self.f = Function("", [], VOID, [])
-        self.module = ""
+        self.early: dict[int, Expr] = {}  # Arguments typed ahead of their call for dispatch.
+        self.s = Scope(Function("", [], VOID, []))
+        self.signed: set[str] = set()
         self.local_effects: dict[str, set[str]] = {}
         self.calls: dict[str, set[str]] = {}
         self.checks: dict[str, dict[str, int]] = {}
         self.call_edges: dict[str, list[tuple[str, dict[str, str]]]] = {}
         self.resources: dict[str, list[dict[str, Any]]] = {}
         self.unchecked: list[str] = []
-        self.effects: set[str] = set()
-        self.callset: set[str] = set()
-        self.counts: dict[str, int] = {}
-        self.moved: set[str] = set()
-        self.deferred: set[str] = set()
-        self.nodes = self.loop_depth = self.unsafe_depth = self.device_depth = 0
+        self.nodes = 0
+
+    def __getattr__(self, name: str):  # Per-function state lives in the current Scope.
+        if name in SCOPED:
+            return getattr(self.s, name)
+        raise AttributeError(name)
+
+    def __setattr__(self, name: str, value: Any):
+        if name in SCOPED:
+            setattr(self.s, name, value)
+        else:
+            object.__setattr__(self, name, value)
 
     # Names and types ---------------------------------------------------------------------------
 
@@ -225,9 +250,11 @@ class Checker:
                 ty = self.expr(value, self.resolve(declared, value))
             if ty.name not in CPP or value.tag not in {"int", "float", "bool"}:
                 fail("E-CONST", "A constant is one scalar literal.", value)
-        for f in self.p.functions:  # Instances are appended while this loop runs.
-            if not f.generics or f.bindings:
-                self.function(f)
+        concrete = [f for f in self.p.functions if not f.generics or f.bindings]
+        for f in concrete:
+            self.signature(f)
+        for f in concrete:  # Generic instances are appended, and checked, at their first use.
+            self.function(f)
         instantiated = {f.source_name for f in self.p.functions if f.bindings}
         for f in [f for f in self.p.functions if f.generics and not f.bindings]:
             self.p.functions.remove(f)
@@ -252,32 +279,44 @@ class Checker:
             for n in effects
         }
 
+    def signature(self, f: Function):
+        """Resolve a concrete signature in its own module, once, before any call site needs it."""
+        if f.name in self.signed:
+            return
+        self.signed.add(f.name)
+        tenv = dict(f.bindings)
+        with self.within(f.module, tenv):
+            if f.owner:
+                tenv["Self"] = self.resolve(f.owner[1], f)
+            seen: dict[str, Type] = {}
+            for i, (n, declared) in enumerate(f.params):
+                ty = self.resolve(declared, f)
+                if n in seen or ty == VOID:
+                    fail("E-PARAM", f"Invalid or duplicate parameter {n}.", f)
+                if is_view(ty) and ty.extent.isdigit() and int(ty.extent) > 2**63 - 1:
+                    fail("E-EXTENT", "Static extent exceeds bootstrap bound.", f)
+                later = f.extern and (ty.extent, USIZE) in f.params  # C puts the length where it likes.
+                if is_view(ty) and not ty.extent.isdigit() and not later and seen.get(ty.extent) != USIZE:
+                    fail("E-EXTENT", "Dynamic extent must name an earlier immutable usize parameter.", f)
+                seen[n] = ty
+                f.params[i] = (n, ty)
+            f.ret = self.resolve(f.ret, f)
+        if f.ret.mode != "value":
+            fail("E-ESCAPE", "Borrowed view returns are not in the native subset.", f)
+        if f.extern and f.effects is None:
+            fail("E-EXTERN-EFFECTS", "An extern declaration states its effects; its body is not visible.", f)
+
     def function(self, f: Function):
-        state = (self.f, self.module, self.tenv, self.env, self.effects, self.callset, self.counts,
-                 self.moved, self.deferred, self.loop_depth, self.unsafe_depth)  # fmt: skip
-        self.f, self.module = f, f.module
-        self.tenv = {k: v for k, v in f.bindings.items()}
-        self.env, self.effects, self.callset, self.counts = {}, set(), set(), {}
-        self.moved, self.deferred, self.loop_depth, self.unsafe_depth = set(), set(), 0, 0
+        self.signature(f)
+        outer, self.s = self.s, Scope(f, dict(f.bindings), module=f.module)
         self.call_edges[f.name], self.resources[f.name] = [], []
         if f.owner:
             self.tenv["Self"] = self.resolve(f.owner[1], f)
-        for i, (n, declared) in enumerate(f.params):
-            ty = self.resolve(declared, f)
-            if n in self.env or ty == VOID:
-                fail("E-PARAM", f"Invalid or duplicate parameter {n}.", f)
+        for n, ty in f.params:
+            self.env[n] = Binding(ty)
             if is_view(ty):
-                if ty.extent.isdigit():
-                    if int(ty.extent) > 2**63 - 1:
-                        fail("E-EXTENT", "Static extent exceeds bootstrap bound.", f)
-                elif not (f.extern and (ty.extent, USIZE) in f.params) and (
-                    ty.extent not in self.env or self.env[ty.extent].ty != USIZE
-                ):
-                    fail("E-EXTENT", "Dynamic extent must name an earlier immutable usize parameter.", f)
                 self.effects.add("ffi_precondition")
                 self.guard("view_entry")
-            self.env[n] = Binding(ty)
-            f.params[i] = (n, ty)
             if ty.name in self.p.enums and ty.mode == "value":
                 self.guard("enum_entry")
         for name, value in f.bindings.items():
@@ -285,21 +324,15 @@ class Checker:
                 if name in self.env:
                     fail("E-DUPLICATE", "Static binder shadows a parameter.", f)
                 self.env[name] = Binding(USIZE, constant=value)
-        f.ret = self.resolve(f.ret, f)
-        if f.ret.mode != "value":
-            fail("E-ESCAPE", "Borrowed view returns are not in the native subset.", f)
         if f.extern:
-            if f.effects is None:
-                fail("E-EXTERN-EFFECTS", "An extern declaration states its effects; its body is not visible.", f)
-            self.effects |= {"ffi:" + f.name.rsplit(".", 1)[-1], *f.effects}
+            self.effects |= {"ffi:" + f.name.rsplit(".", 1)[-1], *(f.effects or ())}
             self.effects |= {("write:" if t.mode == "rw" else "read:") + n for n, t in f.params if t.mode != "value"}
         elif not self.block(f.body) and f.ret != VOID:
             fail("E-RETURN", f"Not all paths of {f.name} return.", f)
         borrowed = {n for n, t in f.params if t.mode != "value"}
         self.local_effects[f.name] = {self.exposed(e, borrowed) for e in self.effects}
         self.calls[f.name], self.checks[f.name] = self.callset, self.counts
-        (self.f, self.module, self.tenv, self.env, self.effects, self.callset, self.counts,
-         self.moved, self.deferred, self.loop_depth, self.unsafe_depth) = state  # fmt: skip
+        self.s = outer
 
     @staticmethod
     def exposed(effect: str, borrowed: set[str]) -> str:
@@ -673,7 +706,7 @@ class Checker:
     def peek(self, e: Expr) -> Type:
         """Type an argument before its call is resolved; the call will not evaluate it again."""
         ty = self.expr(e, consume=False)
-        self.early.add(id(e))
+        self.early[id(e)] = e
         return ty
 
     def consume(self, e: Expr):
@@ -737,7 +770,11 @@ class Checker:
         if not is_view(ty) and ty.name not in {"Buf", "Array"}:
             fail("E-INDEX", "Only views can be indexed.", e)
         if (ty.place == "device") != bool(self.device_depth) and ty.place != "unified":
-            fail("E-PLACEMENT", f"{ty.place} memory is not addressable from {'device' if self.device_depth else 'host'} code.", e)
+            fail(
+                "E-PLACEMENT",
+                f"{ty.place} memory is not addressable from {'device' if self.device_depth else 'host'} code.",
+                e,
+            )
         self.expr(i, USIZE)
         self.guard("bounds")
         if read and root(a).tag == "name":
@@ -936,7 +973,11 @@ class Checker:
         if name not in self.fs:
             for (g, constraint), value in zip(template.generics, values, strict=True):
                 if (constraint == "nat") != isinstance(value, int):
-                    fail("E-GENERIC-KIND", f"{g} of {template.name} is a {'natural' if constraint == 'nat' else 'type'}.", node)
+                    fail(
+                        "E-GENERIC-KIND",
+                        f"{g} of {template.name} is a {'natural' if constraint == 'nat' else 'type'}.",
+                        node,
+                    )
                 if constraint not in {"nat", "type"}:
                     with self.within(template.module):
                         trait = self.qualify(constraint, self.p.traits, node=node)
@@ -945,43 +986,49 @@ class Checker:
             if len(self.p.functions) >= MAX_FUNCTIONS:
                 fail("E-EXPANSION-LIMIT", "Expanded program exceeds 2048 functions.", node)
             f = copy.deepcopy(template)
-            f.name, f.bindings = name, dict(zip((g for g, _ in template.generics), values, strict=True))
+            f.name, f.bindings = (name, dict(zip((g for g, _ in template.generics), values, strict=True)))
             self.fs[name] = f
             self.p.functions.append(f)
             self.function(f)
         return self.fs[name]
+
+    def infer(self, f: Function, args: list[Expr], targs: tuple, expected: Type | None, node: Any) -> dict:
+        """Bind a template's generics from explicit arguments, Self, argument types, then the result."""
+        names = [g for g, _ in f.generics]
+        generics, bound = set(names), dict(zip(names, targs, strict=False))
+        with self.within(f.module, {}):
+            if f.owner:
+                self.unify(f.owner[1], self.peek(args[0]), bound, generics)
+            ordered = sorted(zip(args, f.params, strict=True), key=lambda x: x[0].tag in {"int", "float"})
+            for a, (_, declared) in ordered:  # Literals adapt after the other arguments bind generics.
+                if self.open(declared, generics, bound):
+                    actual = self.peek(root(a) if a.tag == "slice" else a)
+                    element = actual if not declared.extent or is_view(actual) else actual.args[0]
+                    if not self.unify(declared, element, bound, generics):
+                        fail("E-TYPE-MISMATCH", f"{actual.display()} does not fit {declared.display()}.", a)
+            if expected:
+                self.unify(f.ret, expected, bound, generics)
+        return bound
 
     def invoke(self, e: Expr, f: Function, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
         if len(args) != len(f.params):
             fail("E-ARITY", f"{e.val} expects {len(f.params)} arguments.", e)
         if f.extern and not self.unsafe_depth:
             fail("E-UNSAFE", f"{f.name} is foreign; call it inside an unsafe block.", e)
-        template = bool(f.generics) and not f.bindings
-        generics = {g for g, _ in f.generics} if template else set()
-        bound: dict[str, Any] = dict(zip((g for g, _ in f.generics), targs, strict=False))
-        tenv = lambda: {**bound, **({"Self": self.resolve(f.owner[1])} if f.owner and not template else {})}  # noqa: E731
-        if template and f.owner:  # An impl member binds its generics through Self.
-            with self.within(f.module):
-                self.unify(f.owner[1], self.peek(args[0]), bound, generics)
+        if f.generics and not f.bindings:
+            f = self.instantiate(f, self.infer(f, args, targs, expected, e), e)
         subst = dict(zip((n for n, _ in f.params), args, strict=True))
         borrows: list[tuple[str, str]] = []
         mapping: dict[str, str] = {}
-        ordered = sorted(zip(args, f.params, strict=True), key=lambda x: x[0].tag in {"int", "float"} and template)
-        for a, (name, declared) in ordered:  # Literals adapt after the other arguments bind generics.
-            unresolved = self.open(declared, generics, bound)
-            with self.within(f.module, tenv()):
-                want = None if unresolved else self.resolve(declared, a) if template else declared
-            if declared.mode == "value":
-                actual = self.expr(a, want)
-                if unresolved and not self.unify(declared, actual, bound, generics):
-                    fail("E-TYPE-MISMATCH", f"{actual.display()} does not fit {declared.display()}.", a)
+        for a, (name, want) in zip(args, f.params, strict=True):
+            if want.mode == "value":
+                self.expr(a, want)
                 continue
-            actual = self.view_argument(a, declared.mode) if declared.extent else self.expr(a, consume=False)
-            if unresolved:
-                if not self.unify(declared, actual, bound, generics):
-                    fail("E-TYPE-MISMATCH", f"{actual.display()} does not fit {declared.display()}.", a)
-                want = Type(actual.name, declared.mode, declared.extent, actual.args, declared.place)
-            if declared.extent:
+            named = root(a).tag == "name" and root(a).val in self.env
+            if not named and (want.mode == "rw" or (want.extent and a.tag != "str")):
+                fail("E-CALL-VIEW", "Only direct view parameters may be passed.", a)
+            if want.extent:
+                actual = self.view_argument(a)
                 extent = want.extent if want.extent.isdigit() else self.extent_of(subst[want.extent])
                 if extent is None:
                     fail("E-CALL-SHAPE", "View extent must be a name, literal or len(view).", subst[want.extent])
@@ -990,21 +1037,15 @@ class Checker:
                 mode = "rw" if actual.mode == "rw" and want.mode == "ro" else want.mode
                 self.expect(actual, Type(want.name, mode, extent, want.args, want.place), a)
             else:
-                if declared.mode == "rw" and not self.writable(a):
+                actual = self.expr(a, consume=False)
+                if want.mode == "rw" and not self.writable(a):
                     fail("E-WRITE-LEASE", "A mutable borrow needs a mutable local or an rw borrow.", a)
                 self.expect(actual.value, want.value, a)
-            named = root(a).tag == "name" and root(a).val in self.env
-            if not named and (declared.mode == "rw" or (declared.extent and a.tag != "str")):
-                fail("E-CALL-VIEW", "Only direct view parameters may be passed.", a)
             mapping[name] = root(a).val if named else ""
             if named:
-                borrows.append((path(a), declared.mode))
-                if declared.mode == "rw" and self.env[root(a).val].ty.mode == "value":
+                borrows.append((path(a), want.mode))
+                if want.mode == "rw" and self.env[root(a).val].ty.mode == "value":
                     self.effect("write:" + root(a).val)
-        if template:
-            if f.ret.name in generics and f.ret.name not in bound and expected:
-                bound[f.ret.name] = expected
-            f = self.instantiate(f, bound, e)
         for i, (a, m) in enumerate(borrows):
             if any(overlaps(a, b) and "rw" in (m, k) for b, k in borrows[i + 1 :]):
                 fail("E-ALIAS", "A mutable view cannot be passed to overlapping call arguments.", e)
@@ -1013,11 +1054,11 @@ class Checker:
         e.ref = f
         return f.ret
 
-    def view_argument(self, a: Expr, mode: str) -> Type:
+    def view_argument(self, a: Expr) -> Type:
         """A view, local owner, Buf, Array, part or string passed where an array borrow is expected."""
         if a.tag == "slice":
             base, lo, hi = a.args
-            ty = self.view_argument(base, mode)
+            ty = self.view_argument(base)
             self.expr(lo, USIZE)
             self.expr(hi, USIZE)
             self.guard("bounds")
@@ -1038,13 +1079,14 @@ class Checker:
         bound: dict[str, Any] = dict(zip(names, targs, strict=False))
         if names and not bound and expected and expected.name == record:
             bound = dict(zip(names, expected.args, strict=True))
+        home = self.p.modules.get(record, "")
+        ordered = sorted(zip(args, fields, strict=True), key=lambda x: x[0].tag in {"int", "float"})
+        for a, (_, declared) in ordered:  # Literals adapt after the other fields bind generics.
+            with self.within(home, {}):
+                if self.open(declared, set(names), bound) and not self.unify(declared, self.peek(a), bound, set(names)):
+                    fail("E-INFER", f"Cannot infer the type arguments of {record}; write {record}[...](...).", a)
         for a, (_, declared) in zip(args, fields, strict=True):
-            if self.open(declared, set(names), bound):
-                with self.within(self.p.modules.get(record, "")):
-                    actual = self.peek(a) if a.tag not in {"int", "float"} else None
-                    if actual is None or not self.unify(declared, actual, bound, set(names)):
-                        fail("E-INFER", f"Cannot infer the type arguments of {record}; write {record}[...](...).", a)
-            with self.within(self.p.modules.get(record, ""), dict(bound)):
+            with self.within(home, dict(bound)):
                 want = self.resolve(declared, a)
             self.expr(a, want)
         ty = self.resolve(Type(record, args=tuple(bound[g] for g in names)), e)
@@ -1076,6 +1118,7 @@ class Checker:
         if n in {"take", "swap"}:  # The only ways to move an owner out of a place.
             arity(1 if n == "take" else 2, f"{n} takes {'one place' if n == 'take' else 'two places'}.")
             types = [self.place(a, write=True) for a in args]
+            self.effects |= {"read:" + root(a).val for a in args}
             self.expect(types[-1], types[0], e)
             return types[0] if n == "take" else VOID
         if n in {"Buf", "Array"}:  # Zero-initialized owners: Buf[T](n) on the heap, Array[T, N]() inline.

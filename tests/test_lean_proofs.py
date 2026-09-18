@@ -31,9 +31,7 @@ BANNED_SOURCE_TOKENS = ("sorry", "native_decide", "axiom ", "unsafe ", "implemen
 ELAN_BIN = Path.home() / ".elan" / "bin"
 
 # `#print axioms` prints one line per declaration; names may end in a prime.
-AXIOM_LINE = re.compile(
-    r"^'(?P<name>.+)' (?:depends on axioms: \[(?P<axioms>.*)\]|does not depend on any axioms)$"
-)
+AXIOM_LINE = re.compile(r"^'(?P<name>.+)' (?:depends on axioms: \[(?P<axioms>.*)\]|does not depend on any axioms)$")
 
 
 def find_lake() -> str | None:
@@ -64,11 +62,7 @@ def lean_sources() -> list[Path]:
 
 def test_generated_lean_file_matches_python_rules():
     result = subprocess.run(
-        [sys.executable, str(EXPORTER), "--check"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        timeout=120,
+        [sys.executable, str(EXPORTER), "--check"], cwd=ROOT, capture_output=True, text=True, timeout=120
     )
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -117,14 +111,7 @@ def test_lake_build_succeeds_and_axioms_are_clean():
             "--default-toolchain none"
         )
     environment = lake_environment()
-    build = subprocess.run(
-        [lake, "build"],
-        cwd=PROOFS,
-        capture_output=True,
-        text=True,
-        env=environment,
-        timeout=3600,
-    )
+    build = subprocess.run([lake, "build"], cwd=PROOFS, capture_output=True, text=True, env=environment, timeout=3600)
     output = build.stdout + build.stderr
     assert build.returncode == 0, output
     assert "error:" not in output, output
@@ -147,9 +134,7 @@ def test_lake_build_succeeds_and_axioms_are_clean():
         match = AXIOM_LINE.match(line.strip())
         if match is None or match.group("axioms") is None:
             continue
-        reported[match.group("name")] = [
-            part.strip() for part in match.group("axioms").split(",") if part.strip()
-        ]
+        reported[match.group("name")] = [part.strip() for part in match.group("axioms").split(",") if part.strip()]
     assert reported, "audit produced no '#print axioms' lines:\n" + report
     for name, axioms in reported.items():
         for axiom in axioms:

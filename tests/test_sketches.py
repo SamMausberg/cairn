@@ -10,16 +10,15 @@ from cairn.agent_tools import stable_json
 from cairn.cairnc import Diagnostic, compile_source
 from cairn.sketches import ScalarContract, Sketch, solve_finite
 
-BEFORE = "// keep comment\nfn f(x:u64,y:u64)->u64 {return (x+y)/2;}\n// preserve this too\nfn other(x:u64)->u64{return x;}\n"
+BEFORE = (
+    "// keep comment\nfn f(x:u64,y:u64)->u64 {return (x+y)/2;}\n// preserve this too\nfn other(x:u64)->u64{return x;}\n"
+)
 REF = BEFORE.replace("(x+y)/2", "(x/2)+(y/2)+((x&1)&(y&1))")
 
 
 def sketch():
     return Sketch(
-        BEFORE,
-        "f",
-        task={"task": "Floor average; no traps on valid u64 inputs."},
-        semantic=ScalarContract(REF, "f"),
+        BEFORE, "f", task={"task": "Floor average; no traps on valid u64 inputs."}, semantic=ScalarContract(REF, "f")
     ).hole("average", "(x+y)/2")
 
 
@@ -123,11 +122,7 @@ def test_exhausted_search_not_success():
 def test_unknown_solver_not_success(monkeypatch):
     import cairn.sketches as sketches
 
-    monkeypatch.setattr(
-        sketches,
-        "equivalent",
-        lambda *a, **k: {"status": "unknown", "reason": "forced test timeout"},
-    )
+    monkeypatch.setattr(sketches, "equivalent", lambda *a, **k: {"status": "unknown", "reason": "forced test timeout"})
     r = solve_finite(sketch(), {"average": ["(x&y)+shr(x^y,1)"]})
     assert r["status"] == "no-certified-candidate"
 

@@ -48,9 +48,7 @@ fn zero_float()->f64 { stack x:f64[8] = zeroed; return x[7]; }
 def test_effects_and_projection():
     cpp, r = compile_source(SOURCE)
     assert r["functions"]["sum"]["heap_allocations"] == 1
-    assert {"alloc", "free", "zero_init", "local_read", "local_write"} <= set(
-        r["functions"]["sum"]["effects"]
-    )
+    assert {"alloc", "free", "zero_init", "local_read", "local_write"} <= set(r["functions"]["sum"]["effects"])
     assert not any(x.startswith(("read:", "write:")) for x in r["functions"]["sum"]["effects"])
     assert r["functions"]["fixed"]["local_storage"][0]["bytes"] == 32
     assert compile_source(canonical_source(SOURCE))[0] == cpp
@@ -85,9 +83,7 @@ def test_reject(body, code):
 
 def test_owners_cannot_alias_in_calls():
     with pytest.raises(Diagnostic) as e:
-        compile_source(
-            "fn copy(n:usize,x:rw<u64>[n],y:ro<u64>[n]){} fn f(){buffer b:u64[4] = zeroed;copy(4,b,b);}"
-        )
+        compile_source("fn copy(n:usize,x:rw<u64>[n],y:ro<u64>[n]){} fn f(){buffer b:u64[4] = zeroed;copy(4,b,b);}")
     assert e.value.data["code"] == "E-ALIAS"
 
 
@@ -100,9 +96,7 @@ def test_allocating_call_cannot_be_hidden_in_expression():
 def test_shape_identity_is_immutable():
     # Equal values with different names are deliberately not inferred equal.
     with pytest.raises(Diagnostic):
-        compile_source(
-            "fn g(n:usize,b:rw<u64>[n]){} fn f(n:usize){let m:usize=n;buffer b:u64[m]=zeroed;g(n,b);}"
-        )
+        compile_source("fn g(n:usize,b:rw<u64>[n]){} fn f(n:usize){let m:usize=n;buffer b:u64[m]=zeroed;g(n,b);}")
 
 
 def test_local_name_collision_does_not_hide_parameter_effect():
@@ -141,9 +135,7 @@ def test_native(cxx, tmp_path):
         f.argtypes = [ctypes.c_size_t]
         f.restype = ctypes.c_uint64
         for n in [0, 1, 2, 3, 4, 7, 8, 17, 64, 257]:
-            expected = (
-                n * (n - 1) // 2 if name == "sum" else (n + 1) // 2 if name == "local_select" else 0
-            )
+            expected = n * (n - 1) // 2 if name == "sum" else (n + 1) // 2 if name == "local_select" else 0
             assert f(n) == expected
     lib.cf_fixed.restype = ctypes.c_uint64
     assert lib.cf_fixed() == 2

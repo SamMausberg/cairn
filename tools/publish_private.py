@@ -27,9 +27,7 @@ def command(argv: list[str], *, cwd: Path) -> str:
     result = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=120)
     if result.returncode:
         # Do not echo arbitrary native/credential-helper output into a receipt.
-        raise PublishError(
-            f"{argv[0]} command failed with exit {result.returncode}. No retry or force push attempted."
-        )
+        raise PublishError(f"{argv[0]} command failed with exit {result.returncode}. No retry or force push attempted.")
     return result.stdout.strip()
 
 
@@ -43,17 +41,11 @@ def validate_private(record: dict, owner: str, name: str) -> None:
         or record.get("owner", {}).get("type") != "User"
         or record.get("fork") is not False
     ):
-        raise PublishError(
-            "Repository identity/privacy verification failed. No further upload is allowed."
-        )
+        raise PublishError("Repository identity/privacy verification failed. No further upload is allowed.")
 
 
-def publish(
-    root: Path, repository: str, *, execute: bool = False, run=command, audit_fn=audit
-) -> dict:
-    if not re.fullmatch(
-        r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", repository
-    ):
+def publish(root: Path, repository: str, *, execute: bool = False, run=command, audit_fn=audit) -> dict:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", repository):
         raise PublishError("Use an explicit personal OWNER/REPOSITORY.")
     owner, name = repository.split("/")
     root = root.resolve()
@@ -71,18 +63,14 @@ def publish(
     if git("branch", "--show-current") != "main":
         raise PublishError("The initial branch must be main; no checkout is performed.")
     if git("remote"):
-        raise PublishError(
-            "This first-publication tool refuses a repository with any existing remote."
-        )
+        raise PublishError("This first-publication tool refuses a repository with any existing remote.")
     head = git("rev-parse", "HEAD")
     if not re.fullmatch(r"[0-9a-f]{40}", head):
         raise PublishError("Invalid commit identity.")
     git("fsck", "--strict")
     scan = audit_fn(root)
     if scan["findings"]:
-        raise PublishError(
-            "Tracked-history scan blocked publication. Inspect audit_repository.py output."
-        )
+        raise PublishError("Tracked-history scan blocked publication. Inspect audit_repository.py output.")
     if not execute:
         return {
             "status": "local-preflight-passed",
@@ -162,18 +150,11 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("repository", help="Personal OWNER/REPO, for example SamMausberg/cairn")
     p.add_argument(
-        "--execute",
-        action="store_true",
-        help="Actually create and push; default performs local checks only.",
+        "--execute", action="store_true", help="Actually create and push; default performs local checks only."
     )
     a = p.parse_args()
     try:
-        print(
-            json.dumps(
-                publish(Path(__file__).resolve().parents[1], a.repository, execute=a.execute),
-                indent=2,
-            )
-        )
+        print(json.dumps(publish(Path(__file__).resolve().parents[1], a.repository, execute=a.execute), indent=2))
         return 0
     except (OSError, ValueError, PublishError, subprocess.SubprocessError) as error:
         print(

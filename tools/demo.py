@@ -16,16 +16,7 @@ def main():
     base = R / "examples/agent"
     source = (base / "selection_before.cairn").read_text()
     _, receipt = compile_source(source)
-    values = [
-        [],
-        [2],
-        [0, 2, 3, 2, 9],
-        [2, 2, 2],
-        [0, 1],
-        [9, 8, 7],
-        [2**64 - 1, 0, 2],
-        list(range(19)),
-    ]
+    values = [[], [2], [0, 2, 3, 2, 9], [2, 2, 2], [0, 1], [9, 8, 7], [2**64 - 1, 0, 2], list(range(19))]
     cases = []
     for x in values:
         selected = [v for v in x if v > 2]
@@ -56,9 +47,7 @@ def main():
     (base / "edit.json").write_text(json.dumps(edit, indent=2) + "\n")
     (base / "selection_after.cairn").write_text(candidate)
     (base / "typed_receipt.json").write_text(json.dumps(typed, indent=2) + "\n")
-    actual, trace = run(
-        source, task, [sys.executable, str(base / "scripted_adapter.py")], 3, 3, "scripted-fixture"
-    )
+    actual, trace = run(source, task, [sys.executable, str(base / "scripted_adapter.py")], 3, 3, "scripted-fixture")
     assert actual == candidate
     assert trace["status"] == "passed-reserved-finite-tests" and trace["attempts"] == 3
     assert trace["trace"][0]["feedback"]["code"] == "E-TYPE-MISMATCH"

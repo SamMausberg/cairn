@@ -64,9 +64,7 @@ def main():
         "stdout": result.stdout,
         "stderr": result.stderr,
         "elapsed_seconds": time.monotonic() - start,
-        "compiler_version": subprocess.run(
-            [cxx, "--version"], text=True, capture_output=True, check=True
-        ).stdout,
+        "compiler_version": subprocess.run([cxx, "--version"], text=True, capture_output=True, check=True).stdout,
     }
     if result.returncode == 0:
         receipt["native_build"]["library_sha256"] = hashlib.sha256(lib.read_bytes()).hexdigest()
@@ -74,11 +72,7 @@ def main():
     if result.returncode:
         print(result.stderr, file=sys.stderr)
         return 1
-    print(
-        json.dumps(
-            {"status": "built", "library": str(lib.resolve()), "formal_status": "not-verified"}
-        )
-    )
+    print(json.dumps({"status": "built", "library": str(lib.resolve()), "formal_status": "not-verified"}))
     return 0
 
 

@@ -59,13 +59,7 @@ def test_all_output_tail_is_checked():
     t = {
         "schema": "cairn.task/1",
         "symbol": "f",
-        "cases": [
-            {
-                "args": {"n": 3, "out": [99, 99, 99], "x": [1, 3, 2]},
-                "return": 1,
-                "after": {"out": [3, 99, 99]},
-            }
-        ],
+        "cases": [{"args": {"n": 3, "out": [99, 99, 99], "x": [1, 3, 2]}, "return": 1, "after": {"out": [3, 99, 99]}}],
     }
     assert evaluate(s, t)["status"] == "passed-finite-tests"
     t["cases"][0]["after"]["out"] = [3, 0, 0]

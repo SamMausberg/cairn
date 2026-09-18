@@ -39,9 +39,7 @@ tests = ["tests/average.json"]
 kind = "exe"
 arch = "baseline"
 ''')
-    (
-        destination / "src/math.cairn"
-    ).write_text("""// Floor average without overflowing the intermediate sum.
+    (destination / "src/math.cairn").write_text("""// Floor average without overflowing the intermediate sum.
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
 """)
     (destination / "src/main.cairn").write_text("""fn main() -> i32 {
@@ -53,9 +51,7 @@ fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
     contract = {
         "schema": "cairn.task/1",
         "symbol": "average",
-        "cases": [
-            {"args": {"x": x, "y": y}, "return": (x + y) // 2} for x in values for y in values
-        ],
+        "cases": [{"args": {"x": x, "y": y}, "return": (x + y) // 2} for x in values for y in values],
     }
     (destination / "tests/average.json").write_text(json.dumps(contract, indent=2) + "\n")
     (destination / ".gitignore").write_text("build/\n")
@@ -80,10 +76,7 @@ def main(argv: list[str] | None = None) -> int:
             c.add_argument("--timeout", type=int, default=60)
         if name == "run":
             c.add_argument(
-                "--memory-mib",
-                type=int,
-                default=1024,
-                help="Native address-space cap, 64..65536 MiB; not a sandbox.",
+                "--memory-mib", type=int, default=1024, help="Native address-space cap, 64..65536 MiB; not a sandbox."
             )
         if name == "build":
             c.add_argument("--kind", choices=["library", "exe"])
@@ -96,13 +89,9 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("candidate", type=Path)
     mode = v.add_mutually_exclusive_group(required=True)
     mode.add_argument("--symbol")
-    mode.add_argument(
-        "--all", action="store_true", help="Require scalar equivalence for every declared function."
-    )
+    mode.add_argument("--all", action="store_true", help="Require scalar equivalence for every declared function.")
     v.add_argument("--timeout-ms", type=int, default=3000)
-    sub.add_parser(
-        "certificates", help="Check collector arithmetic certificates; not a Lean/compiler proof."
-    )
+    sub.add_parser("certificates", help="Check collector arithmetic certificates; not a Lean/compiler proof.")
     a = p.parse_args(argv)
     project = None
     try:
@@ -134,19 +123,14 @@ def main(argv: list[str] | None = None) -> int:
         if a.command == "verify" and a.all:
             from .verification import verify_module
 
-            result = verify_module(
-                read_text(a.reference, 64000), read_text(a.candidate, 64000), a.timeout_ms
-            )
+            result = verify_module(read_text(a.reference, 64000), read_text(a.candidate, 64000), a.timeout_ms)
             report(result)
             return 0 if result["status"] == "smt-module-equivalent" else 2
         if a.command == "verify":
             from .scalar_semantics import equivalent
 
             result = equivalent(
-                read_text(a.reference, 64000),
-                read_text(a.candidate, 64000),
-                a.symbol,
-                timeout_ms=a.timeout_ms,
+                read_text(a.reference, 64000), read_text(a.candidate, 64000), a.symbol, timeout_ms=a.timeout_ms
             )
             report(result)
             return (
@@ -154,13 +138,7 @@ def main(argv: list[str] | None = None) -> int:
                 if result["status"] == "smt-equivalent"
                 else 1
                 if result["status"]
-                in {
-                    "counterexample",
-                    "rejected",
-                    "invalid-contract",
-                    "invalid-domain",
-                    "invalid-reference",
-                }
+                in {"counterexample", "rejected", "invalid-contract", "invalid-domain", "invalid-reference"}
                 else 2
             )
         if a.command == "run" and not 64 <= a.memory_mib <= 65536:
@@ -190,17 +168,13 @@ def main(argv: list[str] | None = None) -> int:
             from .testing import evaluate
 
             paths = (
-                [a.contract]
-                if a.contract
-                else [contained_file(project.root, x, ".json") for x in project.contracts]
+                [a.contract] if a.contract else [contained_file(project.root, x, ".json") for x in project.contracts]
             )
             if not paths:
                 raise ProjectError("No test contracts. Add project.tests or supply --contract.")
             results = []
             for path in paths:
-                result = evaluate(
-                    project.source, load_json_strict(read_text(path, 2_000_000)), a.cxx
-                )
+                result = evaluate(project.source, load_json_strict(read_text(path, 2_000_000)), a.cxx)
                 results.append({"contract": path.name, **result})
             passed = all(x["status"] == "passed-finite-tests" for x in results)
             report(
@@ -233,13 +207,7 @@ def main(argv: list[str] | None = None) -> int:
             memory = a.memory_mib * 1024 * 1024
             resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
 
-        cp = subprocess.run(
-            [result["artifact"]],
-            capture_output=True,
-            text=True,
-            timeout=a.timeout,
-            preexec_fn=limits,
-        )
+        cp = subprocess.run([result["artifact"]], capture_output=True, text=True, timeout=a.timeout, preexec_fn=limits)
         report(
             {
                 "status": "program-exited",

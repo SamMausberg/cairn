@@ -90,14 +90,7 @@ def main():
         cp = subprocess.run(args, text=True, capture_output=True, timeout=90, **kw)
         if cp.returncode:
             raise RuntimeError(
-                json.dumps(
-                    {
-                        "command": args,
-                        "returncode": cp.returncode,
-                        "stdout": cp.stdout,
-                        "stderr": cp.stderr,
-                    }
-                )
+                json.dumps({"command": args, "returncode": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr})
             )
         return cp
 
@@ -143,11 +136,7 @@ def main():
                 out = (C.c_uint8 * n)(*([173] * n))
                 count = lib.cf_sorted_even(n, out, inp)
                 expected = sorted(x for x in raw if x % 2 == 0)
-                assert (
-                    count == len(expected)
-                    and list(out) == expected + [173] * (n - count)
-                    and bytes(inp) == raw
-                )
+                assert count == len(expected) and list(out) == expected + [173] * (n - count) and bytes(inp) == raw
             result["compilers"][cxx] = {
                 "version": execute([cxx, "--version"]).stdout.splitlines()[0],
                 "flags": flags,
@@ -227,14 +216,7 @@ int main(){
                 str(exe),
             ]
         )
-        execute(
-            [str(exe)],
-            env={
-                **os.environ,
-                "ASAN_OPTIONS": "detect_leaks=1",
-                "UBSAN_OPTIONS": "halt_on_error=1",
-            },
-        )
+        execute([str(exe)], env={**os.environ, "ASAN_OPTIONS": "detect_leaks=1", "UBSAN_OPTIONS": "halt_on_error=1"})
         result["sanitizers"] = {
             "compiler": "clang++",
             "array_lengths": 1024,
@@ -263,19 +245,13 @@ fn stack_load()->u64 {stack x:u64[0]=zeroed;return x[0];}"""
             execute([cxx, "-std=c++20", "-O2", str(t / "trap_driver.cpp"), "-o", str(exe)])
             codes = []
             for name in ["a", "b", "c", "d"]:
-                cp = subprocess.run(
-                    [str(exe), name], text=True, capture_output=True, timeout=5, preexec_fn=no_core
-                )
+                cp = subprocess.run([str(exe), name], text=True, capture_output=True, timeout=5, preexec_fn=no_core)
                 assert cp.returncode == -6, (name, cp.returncode, cp.stderr)
                 codes.append(cp.returncode)
             result["expected_aborts"][cxx] = codes
     # Every inspected expression in new constructs survives identity replacement.
     identity_count = 0
-    for source in [
-        module("test_memory").SOURCE,
-        module("test_sums").SOURCE,
-        module("test_loop_control").SOURCE,
-    ]:
+    for source in [module("test_memory").SOURCE, module("test_sums").SOURCE, module("test_loop_control").SOURCE]:
         before, receipt = compile_source(source)
         for name in receipt["functions"]:
             session = EditSession(source, name)

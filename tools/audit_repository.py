@@ -16,37 +16,13 @@ RULES = {
     "provider-key": re.compile(rb"sk-(?:proj-|ant-)?[A-Za-z0-9_-]{32,}"),
     "slack-token": re.compile(rb"xox[baprs]-[0-9A-Za-z-]{20,}"),
 }
-BAD_NAMES = {
-    ".env",
-    ".netrc",
-    ".npmrc",
-    ".pypirc",
-    "credentials.json",
-    "id_rsa",
-    "id_ed25519",
-    "hosts.yml",
-}
-BAD_SUFFIXES = {
-    ".key",
-    ".pem",
-    ".p12",
-    ".pfx",
-    ".so",
-    ".o",
-    ".a",
-    ".dll",
-    ".exe",
-    ".zip",
-    ".whl",
-    ".bundle",
-}
+BAD_NAMES = {".env", ".netrc", ".npmrc", ".pypirc", "credentials.json", "id_rsa", "id_ed25519", "hosts.yml"}
+BAD_SUFFIXES = {".key", ".pem", ".p12", ".pfx", ".so", ".o", ".a", ".dll", ".exe", ".zip", ".whl", ".bundle"}
 
 
 def audit(root: Path) -> dict:
     def git(*args: str) -> bytes:
-        return subprocess.run(
-            ["git", "-C", str(root), *args], check=True, capture_output=True, timeout=30
-        ).stdout
+        return subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=30).stdout
 
     commits = git("rev-list", "--all").decode().splitlines()
     if len(commits) > 1000:
@@ -60,12 +36,7 @@ def audit(root: Path) -> dict:
             mode, kind, oid = metadata.decode().split()
             name = raw.decode("utf-8")
             p = Path(name)
-            if (
-                "\n" in name
-                or p.name in BAD_NAMES
-                or p.name.startswith(".env.")
-                or p.suffix in BAD_SUFFIXES
-            ):
+            if "\n" in name or p.name in BAD_NAMES or p.name.startswith(".env.") or p.suffix in BAD_SUFFIXES:
                 findings.append({"path": name, "rule": "excluded-path", "commit": commit})
             if mode not in {"100644", "100755"} or kind != "blob":
                 findings.append({"path": name, "rule": "symlink-or-submodule", "commit": commit})

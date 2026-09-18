@@ -74,10 +74,7 @@ def render(pairs: tuple[tuple[Rule, object], ...], digest: str) -> str:
         out("")
     out("/-- Every exported (rule, certificate) pair, in `collector_rules()` order. -/")
     out("def certificates : List (Rule × Certificate) :=")
-    entries = [
-        "    (rule_" + identifier(rule.name) + ", cert_" + identifier(rule.name) + ")"
-        for rule, _ in pairs
-    ]
+    entries = ["    (rule_" + identifier(rule.name) + ", cert_" + identifier(rule.name) + ")" for rule, _ in pairs]
     out("  [\n" + ",\n".join(entries) + "\n  ]")
     out("")
     out("/-- The exported bundle has the expected size; a dropped rule fails here. -/")
@@ -116,9 +113,7 @@ def generate() -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--check",
-        action="store_true",
-        help="exit nonzero when the file on disk differs from the generated text",
+        "--check", action="store_true", help="exit nonzero when the file on disk differs from the generated text"
     )
     parser.add_argument("--output", type=Path, default=TARGET, help="destination Lean file")
     arguments = parser.parse_args(argv)

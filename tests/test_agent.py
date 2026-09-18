@@ -20,13 +20,7 @@ def request(s, body):
 
 def expression(s, old, new):
     key = next(k for k, v in s.sites.items() if v["source"] == old)
-    return {
-        "protocol": PROTOCOL,
-        "session": s.session,
-        "kind": "expr",
-        "site": key,
-        "replacement": new,
-    }
+    return {"protocol": PROTOCOL, "session": s.session, "kind": "expr", "site": key, "replacement": new}
 
 
 def rejected(code, s, r):
@@ -35,9 +29,7 @@ def rejected(code, s, r):
     assert e.value.data["code"] == code
 
 
-@pytest.mark.parametrize(
-    "path", ["examples/native.cairn", "examples/family.cairn", "examples/wire.cairn"]
-)
+@pytest.mark.parametrize("path", ["examples/native.cairn", "examples/family.cairn", "examples/wire.cairn"])
 def test_projection(path):
     original = (R / path).read_text()
     view = canonical_source(original)
@@ -54,19 +46,16 @@ def test_familiar_mutability():
 def test_named_parameters_remapped():
     source = "fn fill(n:usize,dest:rw<u64>[n]@host,src:ro<u64>[n]@host){each i in n {dest[i]=src[i];}} fn top(n:usize,output:rw<u64>[n]@host,input:ro<u64>[n]@host){fill(n,output,input);}"
     _, r = compile_source(source)
-    assert r["functions"]["top"]["effects"] == [
-        "ffi_precondition",
-        "read:input",
-        "trap",
-        "write:output",
-    ]
+    assert r["functions"]["top"]["effects"] == ["ffi_precondition", "read:input", "trap", "write:output"]
 
 
 @pytest.mark.parametrize("count", range(2, 13))
 def test_recursive_permutations_reach_fixed_point(count):
     ns = [f"a{i}" for i in range(count)]
     params = ",".join(n + ":ro<u64>[n]@host" for n in ns)
-    source = f"fn rotate(n:usize,{params})->u64 {{let x=a0[0]; return add_wrap(x,rotate(n,{','.join(ns[1:] + ns[:1])}));}}"
+    source = (
+        f"fn rotate(n:usize,{params})->u64 {{let x=a0[0]; return add_wrap(x,rotate(n,{','.join(ns[1:] + ns[:1])}));}}"
+    )
     _, r = compile_source(source)
     assert {"read:" + n for n in ns} <= set(r["functions"]["rotate"]["effects"])
     assert "diverge" in r["functions"]["rotate"]["effects"]
@@ -224,13 +213,7 @@ def test_every_site_identity_substitution(source):
     s = EditSession(source, "f")
     before = compile_source(source)[0]
     for k, v in s.sites.items():
-        r = {
-            "protocol": PROTOCOL,
-            "session": s.session,
-            "kind": "expr",
-            "site": k,
-            "replacement": v["source"],
-        }
+        r = {"protocol": PROTOCOL, "session": s.session, "kind": "expr", "site": k, "replacement": v["source"]}
         after, _ = s.check(r)
         assert compile_source(after)[0] == before
 

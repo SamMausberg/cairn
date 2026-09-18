@@ -75,9 +75,7 @@ def test_cli(tmp_path, capsys):
 def test_unknown_solver_cannot_cover(monkeypatch):
     import cairn.verification as v
 
-    monkeypatch.setattr(
-        v, "equivalent", lambda *a, **k: {"status": "unknown", "reason": "solver unavailable"}
-    )
+    monkeypatch.setattr(v, "equivalent", lambda *a, **k: {"status": "unknown", "reason": "solver unavailable"})
     r = v.verify_module(REF, REF)
     assert r["status"] == "incomplete" and not r["covered"]
 

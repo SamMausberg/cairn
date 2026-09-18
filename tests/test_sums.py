@@ -93,21 +93,13 @@ def test_projection_and_agent_scopes():
             "let v:u64=0;match R.Bad {R.Good(v)=>{return R.Good(v);} R.Bad=>{return R.Bad;}}",
             "E-SHADOW",
         ),
-        (
-            "enum R { Good(u64); Bad; }",
-            "match R.Bad {R.Good(v)=>{} R.Bad=>{}} return R.Good(v);",
-            "E-UNBOUND",
-        ),
+        ("enum R { Good(u64); Bad; }", "match R.Bad {R.Good(v)=>{} R.Bad=>{}} return R.Good(v);", "E-UNBOUND"),
         (
             "enum R { Good(u64); Bad; }",
             "match 1 {R.Good(v)=>{return R.Good(v);} R.Bad=>{return R.Bad;}}",
             "E-MATCH-TYPE",
         ),
-        (
-            "enum R { Good(u64); Bad; }",
-            "match R.Bad {R.Good(v)=>{return R.Good(v);} R.Bad=>{}}",
-            "E-RETURN",
-        ),
+        ("enum R { Good(u64); Bad; }", "match R.Bad {R.Good(v)=>{return R.Good(v);} R.Bad=>{}}", "E-RETURN"),
         ("enum R { Good(u64); Bad; }", "let x=R.Bad; return x.fake();", "E-CALLEE"),
         ("enum R { Good(u64); Bad; }", "let x=R.Bad;let b=x==x;return R.Bad;", "E-OPERATOR"),
         (
@@ -124,13 +116,7 @@ def test_reject(decl, body, code):
 
 
 @pytest.mark.parametrize(
-    "decl",
-    [
-        "enum R { Bad(void); }",
-        "enum R { Bad(ro<u64>[1]); }",
-        "enum R { Bad(R); }",
-        "enum R { Bad(rw<u64>); }",
-    ],
+    "decl", ["enum R { Bad(void); }", "enum R { Bad(ro<u64>[1]); }", "enum R { Bad(R); }", "enum R { Bad(rw<u64>); }"]
 )
 def test_payload_restrictions(decl):
     with pytest.raises(Diagnostic) as e:

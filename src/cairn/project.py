@@ -89,11 +89,7 @@ def load_project(path: str | Path = ".") -> Project:
             root,
             target.stem,
             body,
-            (
-                Unit(
-                    target.name, 1, body.count("\n") + 1, hashlib.sha256(body.encode()).hexdigest()
-                ),
-            ),
+            (Unit(target.name, 1, body.count("\n") + 1, hashlib.sha256(body.encode()).hexdigest()),),
         )
     if target.name != "cairn.toml":
         raise ProjectError("Pass a .cairn file, a project directory, or cairn.toml.")
@@ -116,22 +112,13 @@ def load_project(path: str | Path = ".") -> Project:
         if not all(isinstance(v, str) for v in values) or len(values) != len(set(values)):
             raise ProjectError(f"{label} contains duplicate or non-string paths.")
     kind, arch = build.get("kind", "library"), build.get("arch", "baseline")
-    if (
-        not isinstance(kind, str)
-        or not isinstance(arch, str)
-        or kind not in KINDS
-        or arch not in ARCHS
-    ):
+    if not isinstance(kind, str) or not isinstance(arch, str) or kind not in KINDS or arch not in ARCHS:
         raise ProjectError("Unsupported build kind or explicit CPU architecture.")
     units, text, line, byte_count = [], [], 1, 0
     for relative in sources:
         body = read_text(contained_file(root, relative, ".cairn"), MAX_SOURCE)
         header = "// source: " + relative + "\n"
-        units.append(
-            Unit(
-                relative, line + 1, body.count("\n") + 1, hashlib.sha256(body.encode()).hexdigest()
-            )
-        )
+        units.append(Unit(relative, line + 1, body.count("\n") + 1, hashlib.sha256(body.encode()).hexdigest()))
         fragment = header + body + "\n"
         byte_count += len(fragment.encode())
         if byte_count > MAX_SOURCE:
@@ -144,12 +131,5 @@ def load_project(path: str | Path = ".") -> Project:
     for relative in contracts:
         contained_file(root, relative, ".json")
     return Project(
-        root,
-        name,
-        combined,
-        tuple(units),
-        tuple(contracts),
-        kind,
-        arch,
-        hashlib.sha256(manifest.encode()).hexdigest(),
+        root, name, combined, tuple(units), tuple(contracts), kind, arch, hashlib.sha256(manifest.encode()).hexdigest()
     )

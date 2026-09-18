@@ -25,21 +25,8 @@ def build():
     tasks = []
     rng = random.Random(17092603)
     xs = VALUES + [[rng.randrange(40) for _ in range(n)] for n in [2, 5, 8, 17]]
-    for family in [
-        "affine",
-        "count_gt",
-        "prefix",
-        "compact_gt",
-        "clamp",
-        "interval",
-        "rotate_xor",
-        "delta",
-    ]:
-        split = (
-            "train"
-            if family in {"affine", "count_gt", "prefix", "compact_gt", "clamp"}
-            else "heldout"
-        )
+    for family in ["affine", "count_gt", "prefix", "compact_gt", "clamp", "interval", "rotate_xor", "delta"]:
+        split = "train" if family in {"affine", "count_gt", "prefix", "compact_gt", "clamp"} else "heldout"
         for k in range(8):
             symbol = f"{family}_{k}"
             cases = []
@@ -48,27 +35,13 @@ def build():
             if family == "affine":
                 text = f"fn {symbol}(x:u64)->u64{{return add_wrap(mul_wrap(x,{A}),{B});}}"
                 desc = f"Return ({A}*x+{B}) modulo 2^64. No trap or writes."
-                for x in [
-                    0,
-                    1,
-                    2,
-                    17,
-                    MASK,
-                    MASK - 1,
-                    2**63,
-                    *[rng.getrandbits(64) for _ in range(7)],
-                ]:
+                for x in [0, 1, 2, 17, MASK, MASK - 1, 2**63, *[rng.getrandbits(64) for _ in range(7)]]:
                     cases.append({"args": {"x": x}, "return": (A * x + B) & MASK})
             elif family == "count_gt":
                 text = f"fn {symbol}(n:usize,x:ro<u64>[n]@host,threshold:u64)->usize{{let mut total:usize=0;for i in 0..n{{if x[i]>threshold{{total=add_wrap(total,1);}}}}return total;}}"
                 desc = "Count values strictly greater than threshold. Empty input returns zero."
                 for x in xs:
-                    cases.append(
-                        {
-                            "args": {"n": len(x), "x": x, "threshold": B},
-                            "return": sum(v > B for v in x),
-                        }
-                    )
+                    cases.append({"args": {"n": len(x), "x": x, "threshold": B}, "return": sum(v > B for v in x)})
             elif family == "prefix":
                 text = f"fn {symbol}(n:usize,out:rw<u64>[n]@host,x:ro<u64>[n]@host){{let mut total:u64=0;for i in 0..n{{total=add_wrap(total,x[i]);out[i]=total;}}}}"
                 desc = "Write inclusive prefix sums modulo 2^64; inputs and outputs are disjoint."
@@ -78,12 +51,7 @@ def build():
                     for v in x:
                         acc = (acc + v) & MASK
                         out.append(acc)
-                    cases.append(
-                        {
-                            "args": {"n": len(x), "out": [123] * len(x), "x": x},
-                            "after": {"out": out},
-                        }
-                    )
+                    cases.append({"args": {"n": len(x), "out": [123] * len(x), "x": x}, "after": {"out": out}})
             elif family == "compact_gt":
                 text = f"fn {symbol}(n:usize,out:rw<u64>[n]@host,x:ro<u64>[n]@host,threshold:u64)->usize{{let used=compact out for i in n where x[i]>threshold yield x[i];return used;}}"
                 desc = "Stably select values strictly greater than threshold, return selected length, preserve the unwritten output tail."
@@ -108,10 +76,7 @@ def build():
                 for x in xs:
                     for lo, hi in [(0, A), (A, A), (A + B, A), (A, A + B)]:
                         cases.append(
-                            {
-                                "args": {"n": len(x), "x": x, "lo": lo, "hi": hi},
-                                "return": sum(lo <= v < hi for v in x),
-                            }
+                            {"args": {"n": len(x), "x": x, "lo": lo, "hi": hi}, "return": sum(lo <= v < hi for v in x)}
                         )
             elif family == "rotate_xor":
                 shift = k + 1
@@ -120,24 +85,14 @@ def build():
                 for x in [0, 1, MASK, 2**63, *[rng.getrandbits(64) for _ in range(12)]]:
                     key = rng.getrandbits(64)
                     cases.append(
-                        {
-                            "args": {"x": x, "key": key},
-                            "return": (((x << shift) & MASK) | (x >> (64 - shift))) ^ key,
-                        }
+                        {"args": {"x": x, "key": key}, "return": (((x << shift) & MASK) | (x >> (64 - shift))) ^ key}
                     )
             else:
                 text = f"fn {symbol}(n:usize,out:rw<u64>[n]@host,x:ro<u64>[n]@host){{for i in 0..n{{if i==0{{out[i]=x[i];}}else{{out[i]=sub_wrap(x[i],x[i-1]);}}}}}}"
                 desc = "For nonempty input, copy the first value and then write each adjacent difference modulo 2^64. Empty input writes nothing."
                 for x in xs:
-                    out = (
-                        ([x[0]] + [(x[i] - x[i - 1]) & MASK for i in range(1, len(x))]) if x else []
-                    )
-                    cases.append(
-                        {
-                            "args": {"n": len(x), "out": [123] * len(x), "x": x},
-                            "after": {"out": out},
-                        }
-                    )
+                    out = ([x[0]] + [(x[i] - x[i - 1]) & MASK for i in range(1, len(x))]) if x else []
+                    cases.append({"args": {"n": len(x), "out": [123] * len(x), "x": x}, "after": {"out": out}})
             text = canonical_source(text)
             _, receipt = compile_source(text)
             tasks.append(
@@ -167,12 +122,7 @@ CONTRASTS = [
     ),
     ("explicit_return", "fn f(x:u64)->u64{x;}", "fn f(x:u64)->u64{return x;}", "E-DISCARD"),
     ("literal_width", "fn f()->u8{return 256;}", "fn f()->u16{return 256;}", "E-LITERAL-RANGE"),
-    (
-        "numeric_cast",
-        "fn f(x:u32)->u64{return x;}",
-        "fn f(x:u32)->u64{return u64(x);}",
-        "E-TYPE-MISMATCH",
-    ),
+    ("numeric_cast", "fn f(x:u32)->u64{return x;}", "fn f(x:u32)->u64{return u64(x);}", "E-TYPE-MISMATCH"),
     ("unbound_name", "fn f(x:u64)->u64{return input;}", "fn f(x:u64)->u64{return x;}", "E-UNBOUND"),
     (
         "view_extent_order",
@@ -186,30 +136,15 @@ CONTRASTS = [
         "fn f(n:usize,x:ro<u64>[n]@host)->u64{return x[0];}",
         "E-WRITE-LEASE",
     ),
-    (
-        "no_float_narrow",
-        "fn f(x:f64)->u64{return u64(x);}",
-        "fn f(x:f64)->f64{return x;}",
-        "E-CAST",
-    ),
+    ("no_float_narrow", "fn f(x:f64)->u64{return u64(x);}", "fn f(x:f64)->f64{return x;}", "E-CAST"),
     (
         "no_alias",
         "fn use(n:usize,o:rw<u64>[n]@host,x:ro<u64>[n]@host){}fn f(n:usize,o:rw<u64>[n]@host){use(n,o,o);}",
         "fn use(n:usize,o:rw<u64>[n]@host,x:ro<u64>[n]@host){}fn f(n:usize,o:rw<u64>[n]@host,x:ro<u64>[n]@host){use(n,o,x);}",
         "E-ALIAS",
     ),
-    (
-        "unsigned_wrap",
-        "fn f(x:i64)->i64{return add_wrap(x,1);}",
-        "fn f(x:i64)->i64{return x+1;}",
-        "E-WRAP-TYPE",
-    ),
-    (
-        "integer_min",
-        "fn f(x:f64)->f64{return min(x,x);}",
-        "fn f(x:f64)->f64{return x;}",
-        "E-MINMAX",
-    ),
+    ("unsigned_wrap", "fn f(x:i64)->i64{return add_wrap(x,1);}", "fn f(x:i64)->i64{return x+1;}", "E-WRAP-TYPE"),
+    ("integer_min", "fn f(x:f64)->f64{return min(x,x);}", "fn f(x:f64)->f64{return x;}", "E-MINMAX"),
     (
         "collector_capacity",
         "fn f(n:usize,m:usize,o:rw<u64>[n]@host)->usize{let used=compact o for i in m where true yield u64(i);return used;}",
@@ -253,15 +188,11 @@ def main():
                 "messages": [
                     {
                         "role": "system",
-                        "content": "\n\n".join(
-                            select_cards(t["source"], has_views="@host" in t["source"]).values()
-                        ),
+                        "content": "\n\n".join(select_cards(t["source"], has_views="@host" in t["source"]).values()),
                     },
                     {
                         "role": "user",
-                        "content": t["contract"]["task"]
-                        + "\nRequired signature: "
-                        + t["source"].split("{")[0].strip(),
+                        "content": t["contract"]["task"] + "\nRequired signature: " + t["source"].split("{")[0].strip(),
                     },
                 ],
             }

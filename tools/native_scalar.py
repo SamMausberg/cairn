@@ -42,9 +42,7 @@ class NativeScalar:
         runtime = "struct NativeTrap {};\n" + runtime
         cpp = cpp.replace(" noexcept", "")
         for name, f in self.functions.items():
-            if f.ret.name not in CT or any(
-                t.name not in CT or t.mode != "value" for _, t in f.params
-            ):
+            if f.ret.name not in CT or any(t.name not in CT or t.mode != "value" for _, t in f.params):
                 raise ValueError("NativeScalar accepts scalar test fixtures only.")
             params = ", ".join(t.cpp() + " " + n for n, t in f.params)
             args = ", ".join(n for n, _ in f.params)
@@ -84,13 +82,9 @@ class NativeScalar:
     def outcome(self, name, args):
         f = self.functions[name]
         value = CT[f.ret.name]()
-        ok = getattr(self.lib, "observe_" + name)(
-            *[args[n] for n, _ in f.params], ctypes.byref(value)
-        )
+        ok = getattr(self.lib, "observe_" + name)(*[args[n] for n, _ in f.params], ctypes.byref(value))
         return (
-            {"defined": True, "return": value.value}
-            if ok
-            else {"defined": False, "trap": "instrumented-native-trap"}
+            {"defined": True, "return": value.value} if ok else {"defined": False, "trap": "instrumented-native-trap"}
         )
 
     def close(self):

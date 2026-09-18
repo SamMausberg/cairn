@@ -47,8 +47,7 @@ def main():
         ("small_demo", (R / "examples/agent/selection_before.cairn").read_text(), "select_gt"),
         (
             "constructed_100_independent_functions",
-            "\n".join(f"fn unit_{i}(x:u64)->u64{{return add_wrap(x,{i});}}" for i in range(100))
-            + "\n",
+            "\n".join(f"fn unit_{i}(x:u64)->u64{{return add_wrap(x,{i});}}" for i in range(100)) + "\n",
             "unit_0",
         ),
     ]:
@@ -81,9 +80,7 @@ def main():
                 "packet_comparisons": rows,
                 "teaching_cards_tokens": {k: tokens(v) for k, v in CARDS.items()},
                 "full_teaching_cards_tokens": tokens("\n\n".join(CARDS.values())),
-                "canonical_projection_tokens": tokens(
-                    canonical_source((R / "examples/native.cairn").read_text())
-                ),
+                "canonical_projection_tokens": tokens(canonical_source((R / "examples/native.cairn").read_text())),
                 "identity_expression_edits": identity,
                 "all_identity_edits_preserve_generated_cpp": True,
                 "check_seconds_median": statistics.median(durations),

@@ -28,9 +28,7 @@ CHOICES = {"value": ["x+y", "(x+y)/2", "add_wrap(x,y)/2", "(x&y)+shr(x^y,1)"]}
 
 
 def make():
-    return Sketch(SOURCE, "average", task=TASK, semantic=ScalarContract(REFERENCE, "average")).hole(
-        "value", "(x+y)/2"
-    )
+    return Sketch(SOURCE, "average", task=TASK, semantic=ScalarContract(REFERENCE, "average")).hole("value", "(x+y)/2")
 
 
 def main():
@@ -68,9 +66,7 @@ def main():
     if native["status"] != "passed-finite-tests":
         raise AssertionError(native)
     (folder / "finite_task.json").write_text(json.dumps(task, indent=2) + "\n")
-    (results / "sketch_search.json").write_text(
-        json.dumps({"runs": outputs, "native": native}, indent=2) + "\n"
-    )
+    (results / "sketch_search.json").write_text(json.dumps({"runs": outputs, "native": native}, indent=2) + "\n")
     # Same scalar task, same source context/rule cards, different transport.
     old = EditSession(SOURCE, "average", TASK)
     site = next(k for k, v in old.sites.items() if v["source"] == "(x+y)/2")
@@ -85,11 +81,7 @@ def main():
     }
 
     def tokens(x):
-        return len(
-            (
-                json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n"
-            ).encode("utf-8")
-        )
+        return len((json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8"))
 
     density = {
         "tokenizer": "ByT5 plain UTF-8 byte encoding; no special tokens; not frontier BPE",
@@ -98,8 +90,7 @@ def main():
         "named_choices_packet": tokens(packet),
         "old_expression_reply": tokens(oldreply),
         "named_choices_reply": tokens(outputs[-1]["choices"]),
-        "same_visible_source": packet["source"]
-        == "\n\n".join(x["source"] for x in oldpacket["context"]),
+        "same_visible_source": packet["source"] == "\n\n".join(x["source"] for x in oldpacket["context"]),
         "same_rule_cards": packet["rule_cards"] == oldpacket["rule_cards"],
         "same_semantic_contract": packet["semantic_contract"] == oldpacket["semantic_contract"],
         "baseline_augmentation": "The expression protocol receives the same new reference/domain capsule for equal-information comparison.",

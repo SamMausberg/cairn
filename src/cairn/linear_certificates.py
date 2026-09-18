@@ -40,9 +40,7 @@ def check(rule: Rule, certificate: Certificate) -> bool:
     if not 0 <= len(rule.assumptions) <= 64:
         return False
     if any(
-        type(f) is not tuple
-        or len(f) != 5
-        or any(type(x) is not int or x.bit_length() > 4096 for x in f)
+        type(f) is not tuple or len(f) != 5 or any(type(x) is not int or x.bit_length() > 4096 for x in f)
         for f in forms
     ):
         return False

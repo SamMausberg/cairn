@@ -106,9 +106,7 @@ class Formula:
         self.variables = {}
         for i, (name, ty) in enumerate(params):
             if ty.mode != "value" or ty.name not in INT | {"bool"}:
-                raise Unsupported(
-                    "Only Boolean and fixed-width integer scalar parameters are supported."
-                )
+                raise Unsupported("Only Boolean and fixed-width integer scalar parameters are supported.")
             n = f"arg_{i}"
             self.declarations.append(f"(declare-const {n} {sort(ty.name)})")
             self.inputs[name] = Term(ty.name, n)
@@ -131,17 +129,7 @@ class Formula:
         return Term(ty, self.bind(value, ty), self.bind(defined, "bool"))
 
     def text(self, assertion: str) -> str:
-        return (
-            "\n".join(
-                [
-                    "(set-logic QF_BV)",
-                    *self.declarations,
-                    *self.definitions,
-                    f"(assert {assertion})",
-                ]
-            )
-            + "\n"
-        )
+        return "\n".join(["(set-logic QF_BV)", *self.declarations, *self.definitions, f"(assert {assertion})"]) + "\n"
 
 
 class Symbolic:
@@ -182,13 +170,9 @@ class Symbolic:
             op = e.val
             both = conj(a.defined, b.defined)
             if op == "&&":
-                return self.q.term(
-                    "bool", conj(a.value, b.value), conj(a.defined, ite(a.value, b.defined, "true"))
-                )
+                return self.q.term("bool", conj(a.value, b.value), conj(a.defined, ite(a.value, b.defined, "true")))
             if op == "||":
-                return self.q.term(
-                    "bool", disj(a.value, b.value), conj(a.defined, ite(a.value, "true", b.defined))
-                )
+                return self.q.term("bool", disj(a.value, b.value), conj(a.defined, ite(a.value, "true", b.defined)))
             if op in {"==", "!="}:
                 v = same(a.value, b.value)
                 return self.q.term("bool", v if op == "==" else neg(v), both)
@@ -214,19 +198,9 @@ class Symbolic:
                 ok = neg(same(b.value, constant(0, ty)))
                 if ty in SIGNED:
                     ok = conj(
-                        ok,
-                        neg(
-                            conj(
-                                same(a.value, constant(bounds(ty)[0], ty)),
-                                same(b.value, constant(-1, ty)),
-                            )
-                        ),
+                        ok, neg(conj(same(a.value, constant(bounds(ty)[0], ty)), same(b.value, constant(-1, ty))))
                     )
-                fn = (
-                    ("bvsdiv" if ty in SIGNED else "bvudiv")
-                    if op == "/"
-                    else ("bvsrem" if ty in SIGNED else "bvurem")
-                )
+                fn = ("bvsdiv" if ty in SIGNED else "bvudiv") if op == "/" else ("bvsrem" if ty in SIGNED else "bvurem")
                 return self.q.term(ty, f"({fn} {a.value} {b.value})", conj(both, ok))
             raise Unsupported("Unsupported binary operator.")
         if e.tag == "call":
@@ -243,25 +217,19 @@ class Symbolic:
                 after = extend(v, wt, common, n in SIGNED)
                 return self.q.term(n, v, conj(ok, same(before, after)))
             if n in {"add_wrap", "sub_wrap", "mul_wrap"}:
-                return self.arithmetic(
-                    ty, {"add_wrap": "+", "sub_wrap": "-", "mul_wrap": "*"}[n], *args, checked=False
-                )
+                return self.arithmetic(ty, {"add_wrap": "+", "sub_wrap": "-", "mul_wrap": "*"}[n], *args, checked=False)
             if n in {"shl_wrap", "shr"}:
                 a, b = args
                 width = WIDTH[ty]
                 limit = f"(bvult {b.value} {constant(width, b.ty)})"
                 shift = extend(b.value, WIDTH[b.ty], width, False)
                 return self.q.term(
-                    ty,
-                    f"({'bvshl' if n == 'shl_wrap' else 'bvlshr'} {a.value} {shift})",
-                    conj(ok, limit),
+                    ty, f"({'bvshl' if n == 'shl_wrap' else 'bvlshr'} {a.value} {shift})", conj(ok, limit)
                 )
             if n in {"min", "max"}:
                 a, b = args
                 cmp = f"(bv{'s' if ty in SIGNED else 'u'}le {a.value} {b.value})"
-                return self.q.term(
-                    ty, ite(cmp, a.value, b.value) if n == "min" else ite(cmp, b.value, a.value), ok
-                )
+                return self.q.term(ty, ite(cmp, a.value, b.value) if n == "min" else ite(cmp, b.value, a.value), ok)
             if n in self.functions:
                 value = self.invoke(n, [Term(a.ty, a.value) for a in args], stack)
                 return self.q.term(value.ty, value.value, conj(ok, value.defined))
@@ -324,12 +292,8 @@ class Symbolic:
                 elif s.tag == "if":
                     c = self.expr(s.exprs[0], env, stack)
                     p = conj(path, c.defined)
-                    next_states.extend(
-                        self.block(s.body, [(conj(p, c.value), dict(env))], stack, returns)
-                    )
-                    next_states.extend(
-                        self.block(s.other, [(conj(p, neg(c.value)), dict(env))], stack, returns)
-                    )
+                    next_states.extend(self.block(s.body, [(conj(p, c.value), dict(env))], stack, returns))
+                    next_states.extend(self.block(s.other, [(conj(p, neg(c.value)), dict(env))], stack, returns))
                 else:
                     raise Unsupported(
                         "Only scalar locals, assignment, if/else and value returns are modeled; no loops."
@@ -584,9 +548,7 @@ def equivalent(
                 result = solver.check(text, q.variables)
                 query_summaries.append({"stage": stage, **result})
                 if query_log is not None:
-                    query_log.append(
-                        {"stage": stage, "smt2": text + "(check-sat)\n", "result": result}
-                    )
+                    query_log.append({"stage": stage, "smt2": text + "(check-sat)\n", "result": result})
                 return result
 
             def finish(status, **fields):
@@ -604,17 +566,14 @@ def equivalent(
             if domain.defined != "true":
                 r = run("domain-totality", neg(domain.defined))
                 if r["status"] == "sat":
-                    return finish(
-                        "invalid-domain", reason="Precondition may trap.", counterexample=inputs(r)
-                    )
+                    return finish("invalid-domain", reason="Precondition may trap.", counterexample=inputs(r))
                 if r["status"] != "unsat":
                     return finish("unknown", reason="Domain totality was not established.")
             if domain.value != "true":
                 r = run("domain-nonempty", domain.value)
                 if r["status"] == "unsat":
                     return finish(
-                        "invalid-domain",
-                        reason="Precondition admits no inputs; vacuous acceptance rejected.",
+                        "invalid-domain", reason="Precondition admits no inputs; vacuous acceptance rejected."
                     )
                 if r["status"] != "sat":
                     return finish("unknown", reason="Nonempty domain was not established.")
@@ -622,9 +581,7 @@ def equivalent(
                 r = run("reference-totality", conj(domain.value, neg(left.defined)))
                 if r["status"] == "sat":
                     return finish(
-                        "invalid-reference",
-                        reason="Reference traps on an admitted input.",
-                        counterexample=inputs(r),
+                        "invalid-reference", reason="Reference traps on an admitted input.", counterexample=inputs(r)
                     )
                 if r["status"] != "unsat":
                     return finish("unknown", reason="Reference totality was not established.")
@@ -647,11 +604,7 @@ def equivalent(
             if assume != "true":
                 observed = Concrete(domains).outcome(dn, args)
                 if not observed["defined"] or not observed["return"]:
-                    return finish(
-                        "unknown",
-                        reason="Solver/concrete precondition disagreement.",
-                        counterexample=args,
-                    )
+                    return finish("unknown", reason="Solver/concrete precondition disagreement.", counterexample=args)
             if outcome_key(expected) == outcome_key(actual):
                 return finish(
                     "unknown",

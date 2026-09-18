@@ -22,9 +22,7 @@ def main():
     ap.add_argument("candidate", type=Path)
     ap.add_argument("--symbol", required=True)
     ap.add_argument(
-        "--assume",
-        default="true",
-        help="Semantic input restriction, not an automatically emitted runtime guard.",
+        "--assume", default="true", help="Semantic input restriction, not an automatically emitted runtime guard."
     )
     ap.add_argument("--allow-reference-traps", action="store_true")
     ap.add_argument("--timeout-ms", type=int, default=3000)

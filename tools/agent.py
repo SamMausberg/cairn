@@ -16,9 +16,7 @@ from cairn.cairnc import Diagnostic, compile_source
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument(
-        "command", choices=["check", "project", "packet", "sites", "apply", "candidates"]
-    )
+    p.add_argument("command", choices=["check", "project", "packet", "sites", "apply", "candidates"])
     p.add_argument("source", type=Path)
     p.add_argument("--symbol")
     p.add_argument("--contract", type=Path)
@@ -71,10 +69,7 @@ def main():
         print(json.dumps(explain(e, source), indent=2), file=sys.stderr)
         return 1
     except (OSError, UnicodeError, RecursionError, ValueError) as e:
-        print(
-            json.dumps({"status": "unknown", "code": "E-RESOURCE-OR-IO", "message": str(e)}),
-            file=sys.stderr,
-        )
+        print(json.dumps({"status": "unknown", "code": "E-RESOURCE-OR-IO", "message": str(e)}), file=sys.stderr)
         return 2
 
 

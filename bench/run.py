@@ -38,16 +38,7 @@ for file, out in [
     ("bench/driver.cpp", "results/driver.o"),
 ]:
     run(["clang++", *FLAGS, "-c", file, "-o", out])
-run(
-    [
-        "clang++",
-        "results/native.o",
-        "results/reference.o",
-        "results/driver.o",
-        "-o",
-        "results/benchmark",
-    ]
-)
+run(["clang++", "results/native.o", "results/reference.o", "results/driver.o", "-o", "results/benchmark"])
 avail = sorted(os.sched_getaffinity(0))
 os.sched_setaffinity(0, {avail[0]})
 raw = run(["results/benchmark"]).stdout
@@ -77,17 +68,7 @@ for (name, n, pattern), rr in groups.items():
 (ROOT / "results/timing_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
 # Compare section bytes AND relocation targets/types/offsets, not disassembly text alone.
 equivalence = []
-for name in [
-    "saxpy",
-    "dot",
-    "sum_wrap",
-    "prefix",
-    "count_gt",
-    "histogram",
-    "compact_even",
-    "lower_bound",
-    "gcd",
-]:
+for name in ["saxpy", "dot", "sum_wrap", "prefix", "count_gt", "histogram", "compact_even", "lower_bound", "gcd"]:
     extracts = []
     rels = []
     for prefix, obj in [("cf", "native"), ("cc", "reference")]:
@@ -100,9 +81,7 @@ for name in [
         for line in r.splitlines():
             m = re.match(r"^([0-9a-f]+)\s+(R_\S+)\s+(\S+)", line)
             if m:
-                rel.append(
-                    tuple(x.replace("cf_", "FUNC_").replace("cc_", "FUNC_") for x in m.groups())
-                )
+                rel.append(tuple(x.replace("cf_", "FUNC_").replace("cc_", "FUNC_") for x in m.groups()))
         rels.append(rel)
     equivalence.append(
         {

@@ -77,9 +77,7 @@ def test_expression_sketch_retains_comments_and_checks_whole_module():
 
 def test_body_edit_can_replace_expression_body():
     s = EditSession("fn f(x:u64)->u64=add_wrap(x,1);", "f")
-    new, _ = s.check(
-        {"protocol": PROTOCOL, "session": s.session, "kind": "body", "replacement": "{return x;}"}
-    )
+    new, _ = s.check({"protocol": PROTOCOL, "session": s.session, "kind": "body", "replacement": "{return x;}"})
     assert new == "fn f(x:u64)->u64{return x;}"
 
 

@@ -28,12 +28,16 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py311"
 src = ["src", "tests", "tools", "bench"]
 
+[tool.ruff.format]
+skip-magic-trailing-comma = true
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "PIE", "SIM", "RUF"]
+isort.split-on-trailing-comma = false
 ignore = [
     "E501",   # the formatter owns line length; long diagnostics stay on one line
     "SIM108", # ternaries are not always clearer in a checker

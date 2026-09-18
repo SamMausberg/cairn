@@ -46,17 +46,7 @@ def main():
     def count(t):
         return len(encode(t))
 
-    names = [
-        "saxpy",
-        "dot",
-        "sum_wrap",
-        "prefix",
-        "count_gt",
-        "histogram",
-        "compact_even",
-        "lower_bound",
-        "gcd",
-    ]
+    names = ["saxpy", "dot", "sum_wrap", "prefix", "count_gt", "histogram", "compact_even", "lower_bound", "gcd"]
 
     def extract(src, pattern):
         m = re.search(pattern, src)
@@ -100,15 +90,10 @@ def main():
         "docs/cards/AGENT_CARD.md",
         "docs/cards/GENERATOR_CONTRACTS.md",
     ]
-    compiler_paths = sorted(
-        str(p.relative_to(R)) for p in (R / "src/cairn").rglob("*") if p.suffix in {".py", ".hpp"}
-    )
+    compiler_paths = sorted(str(p.relative_to(R)) for p in (R / "src/cairn").rglob("*") if p.suffix in {".py", ".hpp"})
     paths += compiler_paths
     files = {
-        p: {
-            "tokens": count((R / p).read_text()),
-            "sha256": hashlib.sha256((R / p).read_bytes()).hexdigest(),
-        }
+        p: {"tokens": count((R / p).read_text()), "sha256": hashlib.sha256((R / p).read_bytes()).hexdigest()}
         for p in paths
     }
 
@@ -120,8 +105,7 @@ def main():
         "expanded_cpp_tokens": t("results/family.cpp"),
         "cpp_template_tokens": t("bench/family_template.cpp"),
         "expansion_ratio": t("results/family.cpp") / t("examples/family.cairn"),
-        "compact_cpp_template_over_cairn": t("bench/family_template.cpp")
-        / t("examples/family.cairn"),
+        "compact_cpp_template_over_cairn": t("bench/family_template.cpp") / t("examples/family.cairn"),
         "cold_cairn_source_plus_card_plus_recipe": t("examples/family.cairn")
         + t("docs/cards/AGENT_CARD.md")
         + t("docs/cards/GENERATOR_CONTRACTS.md"),
@@ -129,8 +113,7 @@ def main():
         + t("docs/cards/AGENT_CARD.md")
         + t("docs/cards/GENERATOR_CONTRACTS.md")
         + sum(t(p) for p in compiler_paths),
-        "cpp_template_plus_shared_runtime": t("bench/family_template.cpp")
-        + t("results/cairn_runtime.hpp"),
+        "cpp_template_plus_shared_runtime": t("bench/family_template.cpp") + t("results/cairn_runtime.hpp"),
         "limitation": "CAIRN exports 256 named entries; compact C++ uses one indexed entry and a function-pointer table. Different API; both tested over the same numerical family. Runtime header shared by both. No C++ language documentation charged; no universal cold-context advantage inferred.",
     }
     wire = {
@@ -153,8 +136,7 @@ def main():
         "aggregate_algorithms": {
             "cairn_tokens": sum(x["cairn_tokens"] for x in pairs),
             "cpp_tokens": sum(x["cpp_tokens"] for x in pairs),
-            "cpp_over_cairn": sum(x["cpp_tokens"] for x in pairs)
-            / sum(x["cairn_tokens"] for x in pairs),
+            "cpp_over_cairn": sum(x["cpp_tokens"] for x in pairs) / sum(x["cairn_tokens"] for x in pairs),
         },
         "family": family,
         "wire": wire,

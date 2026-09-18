@@ -34,9 +34,7 @@ class Fake:
         if args[0] == "git":
             return ""
         if args[-1] == "user":
-            return json.dumps(
-                {"login": "Other" if self.change == "owner" else "TestOwner", "type": "User"}
-            )
+            return json.dumps({"login": "Other" if self.change == "owner" else "TestOwner", "type": "User"})
         if "POST" in args and self.change == "collision":
             raise PublishError("Name conflict")
         if args[-1].endswith("/git/ref/heads/main"):
@@ -86,9 +84,7 @@ def test_publication_order_private_before_push(tmp_path):
     assert runner.calls[-1][:3] == ["git", "remote", "add"]
 
 
-@pytest.mark.parametrize(
-    "target", ["x", "../repo", "owner/repo;echo", "owner/a b", "owner/", "/repo", "owner/a/b"]
-)
+@pytest.mark.parametrize("target", ["x", "../repo", "owner/repo;echo", "owner/a b", "owner/", "/repo", "owner/a/b"])
 def test_bad_target_has_no_actions(tmp_path, target):
     runner = Fake(tmp_path)
     with pytest.raises(PublishError):
@@ -104,13 +100,7 @@ def test_private_flag_must_be_boolean_true():
 def test_secret_found_stops_before_github(tmp_path):
     runner = Fake(tmp_path)
     with pytest.raises(PublishError):
-        publish(
-            tmp_path,
-            "TestOwner/cairn",
-            execute=True,
-            run=runner,
-            audit_fn=lambda p: {"findings": ["secret"]},
-        )
+        publish(tmp_path, "TestOwner/cairn", execute=True, run=runner, audit_fn=lambda p: {"findings": ["secret"]})
     assert all(c[0] == "git" for c in runner.calls)
 
 

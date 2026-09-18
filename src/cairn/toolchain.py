@@ -10,23 +10,13 @@ from __future__ import annotations
 import platform
 import shutil
 
-FAMILIES = {
-    "x86-64": ("x86-64", "x86-64-v2", "x86-64-v3", "x86-64-v4"),
-    "armv8-a": ("armv8-a", "armv8.2-a", "armv9-a"),
-}
+FAMILIES = {"x86-64": ("x86-64", "x86-64-v2", "x86-64-v3", "x86-64-v4"), "armv8-a": ("armv8-a", "armv8.2-a", "armv9-a")}
 MACHINES = {"x86_64": "x86-64", "AMD64": "x86-64", "aarch64": "armv8-a", "arm64": "armv8-a"}
 ARCHS = {"baseline", *(arch for family in FAMILIES.values() for arch in family)}
 KINDS = {"library", "exe"}
 
 # Strict floating point and no unwinding are part of the language contract.
-STRICT = [
-    "-std=c++20",
-    "-O3",
-    "-ffp-contract=off",
-    "-fno-fast-math",
-    "-fno-exceptions",
-    "-fno-rtti",
-]
+STRICT = ["-std=c++20", "-O3", "-ffp-contract=off", "-fno-fast-math", "-fno-exceptions", "-fno-rtti"]
 WARNINGS = ["-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-unused-variable"]
 WARNINGS += ["-Wno-unused-but-set-variable"]
 

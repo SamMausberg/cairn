@@ -32,23 +32,10 @@ def run(cmd):
     return subprocess.run(cmd, check=True, text=True, capture_output=True).stdout
 
 
-for src, out in [
-    ("results/native.cpp", "results/native.o"),
-    ("bench/reference.cpp", "results/reference.o"),
-]:
+for src, out in [("results/native.cpp", "results/native.o"), ("bench/reference.cpp", "results/reference.o")]:
     run(["clang++", *FLAGS, "-c", src, "-o", out])
 rows = []
-for name in [
-    "saxpy",
-    "dot",
-    "sum_wrap",
-    "prefix",
-    "count_gt",
-    "histogram",
-    "compact_even",
-    "lower_bound",
-    "gcd",
-]:
+for name in ["saxpy", "dot", "sum_wrap", "prefix", "count_gt", "histogram", "compact_even", "lower_bound", "gcd"]:
     data = []
     rels = []
     for prefix, obj in [("cf", "native"), ("cc", "reference")]:
@@ -60,9 +47,7 @@ for name in [
         for line in run(["objdump", "-r", "-j", sec, f"results/{obj}.o"]).splitlines():
             m = re.match(r"^([0-9a-f]+)\s+(R_\S+)\s+(\S+)", line)
             if m:
-                entries.append(
-                    tuple(x.replace("cf_", "FUNC_").replace("cc_", "FUNC_") for x in m.groups())
-                )
+                entries.append(tuple(x.replace("cf_", "FUNC_").replace("cc_", "FUNC_") for x in m.groups()))
         rels.append(entries)
     rows.append(
         {

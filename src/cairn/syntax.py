@@ -125,21 +125,8 @@ class Type:
         return f"{self.mode}<{inner}>" + (f"[{self.extent}]@{self.place}" if self.extent else "")
 
 
-BITS = {
-    "u8": 8,
-    "u16": 16,
-    "u32": 32,
-    "u64": 64,
-    "usize": 64,
-    "i8": 8,
-    "i16": 16,
-    "i32": 32,
-    "i64": 64,
-}
-CPP = {
-    n: "std::size_t" if n == "usize" else f"std::{'u' * (n[0] == 'u')}int{w}_t"
-    for n, w in BITS.items()
-}
+BITS = {"u8": 8, "u16": 16, "u32": 32, "u64": 64, "usize": 64, "i8": 8, "i16": 16, "i32": 32, "i64": 64}
+CPP = {n: "std::size_t" if n == "usize" else f"std::{'u' * (n[0] == 'u')}int{w}_t" for n, w in BITS.items()}
 CPP |= {"bool": "bool", "f32": "float", "f64": "double", "void": "void"}
 UNSIGNED = {n for n in BITS if n[0] == "u"}
 SIGNED = set(BITS) - UNSIGNED
@@ -235,19 +222,7 @@ class Program:
     modules: dict[str, str] = field(default_factory=dict)  # declared name -> owning module
 
 
-PREC = {
-    "||": 1,
-    "&&": 2,
-    "|": 3,
-    "^": 4,
-    "&": 5,
-    "==": 6,
-    "!=": 6,
-    "<": 7,
-    "<=": 7,
-    ">": 7,
-    ">=": 7,
-}
+PREC = {"||": 1, "&&": 2, "|": 3, "^": 4, "&": 5, "==": 6, "!=": 6, "<": 7, "<=": 7, ">": 7, ">=": 7}
 PREC |= {"+": 8, "-": 8, "*": 9, "/": 9, "%": 9}
 REDUCERS = {"+", "*", "&", "|", "^", "add_wrap", "mul_wrap", "min", "max"}
 
@@ -386,11 +361,7 @@ class Parser:
             text = unescape(t)
             if t.s[0] == "'" and len(text.encode("latin-1", "replace")) != 1:
                 fail("E-LEX", "A character literal is exactly one byte.", t)
-            e = (
-                Expr("str", text, [], *at)
-                if t.s[0] == '"'
-                else Expr("int", str(ord(text)), [], *at)
-            )
+            e = Expr("str", text, [], *at) if t.s[0] == '"' else Expr("int", str(ord(text)), [], *at)
         else:
             e = Expr("name", self.ident(), [], *at)
         e.start, e.end = self.ts[start].start, self.ts[self.i - 1].end
@@ -430,9 +401,7 @@ class Parser:
             return Expr("call", name, args, callee.line, callee.col, ref=targs)
         if callee.tag == "field":  # A method on an arbitrary receiver: f(receiver, ...).
             return Expr("call", "." + callee.val, [callee.args[0], *args], callee.line, callee.col)
-        fail(
-            "E-CALL", "Only direct calls, methods and qualified constructors are supported.", callee
-        )
+        fail("E-CALL", "Only direct calls, methods and qualified constructors are supported.", callee)
 
     def dotted(self, e: Expr) -> str | None:
         if e.tag == "name":
@@ -444,9 +413,7 @@ class Parser:
         if e.tag == "int":
             return int(e.val)
         if e.tag == "index":
-            return Type(
-                self.as_type(e.args[0]).name, args=tuple(self.as_type(a) for a in e.args[1:])
-            )
+            return Type(self.as_type(e.args[0]).name, args=tuple(self.as_type(a) for a in e.args[1:]))
         name = self.dotted(e)
         if name is None:
             fail("E-TYPE", "Expected a type argument.", e)
@@ -618,11 +585,7 @@ class Parser:
             self.need(";")
         elif self.eat("="):
             if ret == VOID:
-                fail(
-                    "E-EXPRESSION-BODY",
-                    "An expression body needs an explicit nonvoid return type.",
-                    t,
-                )
+                fail("E-EXPRESSION-BODY", "An expression body needs an explicit nonvoid return type.", t)
             value = self.expr()
             self.need(";")
             body = [Stmt("return", exprs=[value], line=value.line, col=value.col)]

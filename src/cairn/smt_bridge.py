@@ -115,20 +115,10 @@ class Solver:
         try:
             z.Z3_solver_from_string(self.ctx, solver, text.encode())
             if self.errors:
-                return {
-                    **common,
-                    "status": "unknown",
-                    "reason": "SMT parse/API error",
-                    "errors": list(self.errors),
-                }
+                return {**common, "status": "unknown", "reason": "SMT parse/API error", "errors": list(self.errors)}
             status = z.Z3_solver_check(self.ctx, solver)
             if self.errors:
-                return {
-                    **common,
-                    "status": "unknown",
-                    "reason": "SMT API error",
-                    "errors": list(self.errors),
-                }
+                return {**common, "status": "unknown", "reason": "SMT API error", "errors": list(self.errors)}
             if status == -1:
                 return {**common, "status": "unsat"}
             if status == 0:
@@ -163,12 +153,7 @@ class Solver:
                         value -= 1 << bits
                     values[name] = value
             if self.errors:
-                return {
-                    **common,
-                    "status": "unknown",
-                    "reason": "Model API error",
-                    "errors": list(self.errors),
-                }
+                return {**common, "status": "unknown", "reason": "Model API error", "errors": list(self.errors)}
             return {**common, "status": "sat", "values": values}
         finally:
             if model:

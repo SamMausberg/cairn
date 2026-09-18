@@ -57,19 +57,13 @@ def run(source, contract, command, attempts=4, public_cases=3, adapter_kind="ext
         # is separate from the parser's bounded edit request.
         try:
             with tempfile.TemporaryDirectory(prefix="cairn-adapter-") as tmp:
-                cp = subprocess.run(
-                    command, input=encoded, text=True, capture_output=True, cwd=tmp, timeout=120
-                )
+                cp = subprocess.run(command, input=encoded, text=True, capture_output=True, cwd=tmp, timeout=120)
             raw = cp.stdout
             response_bytes += len(raw.encode())
             if len(raw.encode()) > 1000000:
                 raise ValueError("Adapter reply exceeds 1 MB.")
             if cp.returncode:
-                feedback = {
-                    "status": "adapter-failed",
-                    "exit_code": cp.returncode,
-                    "stderr": cp.stderr[:2000],
-                }
+                feedback = {"status": "adapter-failed", "exit_code": cp.returncode, "stderr": cp.stderr[:2000]}
             else:
                 try:
                     edit = load_json_strict(raw)
@@ -84,9 +78,7 @@ def run(source, contract, command, attempts=4, public_cases=3, adapter_kind="ext
                             if hidden["status"] == "passed-finite-tests"
                             else "reserved-tests-not-passed"
                         )
-                        final_source = (
-                            candidate if status == "passed-reserved-finite-tests" else None
-                        )
+                        final_source = candidate if status == "passed-reserved-finite-tests" else None
                         log.append(
                             {
                                 "attempt": i,
@@ -136,11 +128,7 @@ def main():
     p.add_argument("--contract", type=Path, required=True)
     p.add_argument("--attempts", type=int, default=4)
     p.add_argument("--public-cases", type=int, default=3)
-    p.add_argument(
-        "--adapter-kind",
-        choices=["external-unverified", "scripted-fixture"],
-        default="external-unverified",
-    )
+    p.add_argument("--adapter-kind", choices=["external-unverified", "scripted-fixture"], default="external-unverified")
     p.add_argument("--out-dir", type=Path, required=True)
     p.add_argument("--adapter", nargs=argparse.REMAINDER, required=True)
     a = p.parse_args()

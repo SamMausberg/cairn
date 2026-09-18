@@ -22,8 +22,7 @@ def main():
         "affine": lambda s: s.replace("add_wrap(mul_wrap(x, 2), 1)", "add_wrap(mul_wrap(x, 2), 2)"),
         "count_gt": lambda s: s.replace("x[i] > threshold", "x[i] >= threshold"),
         "prefix": lambda s: s.replace(
-            "total = add_wrap(total, x[i]);\n    out[i] = total;",
-            "out[i] = total;\n    total = add_wrap(total, x[i]);",
+            "total = add_wrap(total, x[i]);\n    out[i] = total;", "out[i] = total;\n    total = add_wrap(total, x[i]);"
         ),
         "compact_gt": lambda s: s.replace("x[i] > threshold", "x[i] >= threshold"),
         "clamp": lambda s: s.replace("min(max(x, 2), 3)", "min(max(x, 2), 4)"),
@@ -42,15 +41,7 @@ def main():
         r = evaluate(new, task["contract"])
         if r["status"] != "failed-tests":
             raise AssertionError(str(r))
-        rows.append(
-            {
-                "family": family,
-                "source": new,
-                "source_sha256": digest(new),
-                "frontend": "typed",
-                "verdict": r,
-            }
-        )
+        rows.append({"family": family, "source": new, "source_sha256": digest(new), "frontend": "typed", "verdict": r})
     result = {
         "cases": len(rows),
         "detected": len(rows),

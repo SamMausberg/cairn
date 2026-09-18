@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 from .agent_tools import digest, explain, load_json_strict, stable_json
-from .cairnc import RUNTIME, Diagnostic, Parser, compile_source
+from .cairnc import RUNTIME_FILES, Diagnostic, Parser, compile_source
 from .toolchain import flags
 
 CTYPES = {
@@ -60,11 +60,7 @@ def scalar(name, value):
         lo, hi = LIMITS[name]
         if type(value) is not int or not lo <= value <= hi:
             raise ValueError("Integer outside declared range.")
-    elif (
-        type(value) not in {int, float}
-        or not math.isfinite(value)
-        or not math.isfinite(CTYPES[name](value).value)
-    ):
+    elif type(value) not in {int, float} or not math.isfinite(value) or not math.isfinite(CTYPES[name](value).value):
         raise ValueError("Floating argument must fit its finite storage format.")
     return CTYPES[name](value).value
 
@@ -122,9 +118,7 @@ def diagnostic_value(value):
     # JSON has no NaN/Infinity values. Preserve the failure without mistaking
     # diagnostic serialization for a native crash.
     if isinstance(value, float) and not math.isfinite(value):
-        return {
-            "nonfinite": "nan" if math.isnan(value) else ("+infinity" if value > 0 else "-infinity")
-        }
+        return {"nonfinite": "nan" if math.isnan(value) else ("+infinity" if value > 0 else "-infinity")}
     if isinstance(value, list):
         return [diagnostic_value(x) for x in value]
     if isinstance(value, dict):
@@ -139,9 +133,7 @@ def child(library, source, contract):
     f = validate_contract(source, contract)
     lib = C.CDLL(str(library))
     native = getattr(lib, "cf_" + f.name)
-    native.argtypes = [
-        CTYPES[t.name] if t.mode == "value" else C.POINTER(CTYPES[t.name]) for _, t in f.params
-    ]
+    native.argtypes = [CTYPES[t.name] if t.mode == "value" else C.POINTER(CTYPES[t.name]) for _, t in f.params]
     native.restype = None if f.ret.name == "void" else CTYPES[f.ret.name]
     for i, case in enumerate(contract["cases"]):
         print(json.dumps({"stage": "case", "index": i}), flush=True)
@@ -158,9 +150,7 @@ def child(library, source, contract):
         actual = native(*args)
         expected = None if f.ret.name == "void" else scalar(f.ret.name, case["return"])
         after = {n: list(storage[n]) for n, t in f.params if t.mode == "rw"}
-        expected_after = {
-            n: [scalar(t.name, v) for v in case["after"][n]] for n, t in f.params if t.mode == "rw"
-        }
+        expected_after = {n: [scalar(t.name, v) for v in case["after"][n]] for n, t in f.params if t.mode == "rw"}
         # Strict scalar equality; tasks use finite integer values in this release.
         if actual != expected or after != expected_after:
             print(
@@ -181,9 +171,7 @@ def child(library, source, contract):
                 flush=True,
             )
             return 1
-    print(
-        json.dumps({"status": "passed-finite-tests", "cases": len(contract["cases"])}), flush=True
-    )
+    print(json.dumps({"status": "passed-finite-tests", "cases": len(contract["cases"])}), flush=True)
     return 0
 
 
@@ -208,7 +196,8 @@ def evaluate(source: str, contract: dict, cxx="clang++") -> dict:
     with tempfile.TemporaryDirectory(prefix="cairn-task-") as tmp:
         t = Path(tmp)
         (t / "candidate.cpp").write_text(generated)
-        (t / "cairn_runtime.hpp").write_text(RUNTIME)
+        for header, text in RUNTIME_FILES.items():
+            (t / header).write_text(text)
         (t / "source.cairn").write_text(source)
         (t / "contract.json").write_text(stable_json(contract))
         command = [compiler, *FLAGS, str(t / "candidate.cpp"), "-o", str(t / "libtask.so")]
@@ -216,12 +205,7 @@ def evaluate(source: str, contract: dict, cxx="clang++") -> dict:
             cp = subprocess.run(command, text=True, capture_output=True, timeout=30)
             build = {"exit_code": cp.returncode, "flags": FLAGS, "compiler": compiler}
             if cp.returncode:
-                return {
-                    **common,
-                    "status": "native-build-failed",
-                    "build": build,
-                    "stderr": cp.stderr[:8000],
-                }
+                return {**common, "status": "native-build-failed", "build": build, "stderr": cp.stderr[:8000]}
             cmd = [
                 sys.executable,
                 "-m",
@@ -245,9 +229,7 @@ def evaluate(source: str, contract: dict, cxx="clang++") -> dict:
                 except json.JSONDecodeError:
                     pass
             verdict = next((x for x in reversed(lines) if "status" in x), None)
-            if verdict is None or (
-                cp.returncode != 0 and verdict.get("status") == "passed-finite-tests"
-            ):
+            if verdict is None or (cp.returncode != 0 and verdict.get("status") == "passed-finite-tests"):
                 verdict = {
                     "status": "native-trap-or-crash",
                     "exit_code": cp.returncode,

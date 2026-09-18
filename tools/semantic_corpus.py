@@ -203,8 +203,7 @@ def main():
             source.append(row[variant].replace("fn task(", f"fn {row['id']}_{variant}("))
         row["contract_sha256"] = hashlib.sha256(
             json.dumps(
-                {k: row[k] for k in ["task", "reference", "assume", "allow_reference_traps"]},
-                sort_keys=True,
+                {k: row[k] for k in ["task", "reference", "assume", "allow_reference_traps"]}, sort_keys=True
             ).encode()
         ).hexdigest()
         for variant in ["chosen", "rejected"]:
@@ -240,9 +239,7 @@ def main():
                     replay_count += 1
                 assert outcome_key(out["reference"]) == outcome_key(out["chosen"])
                 assert outcome_key(out["reference"]) != outcome_key(out["rejected"])
-                row.setdefault("native_counterexample_replays", []).append(
-                    {"compiler": compiler, "outcomes": out}
-                )
+                row.setdefault("native_counterexample_replays", []).append({"compiler": compiler, "outcomes": out})
                 # Additional finite native sanity checks. Universal label still comes from SMT.
                 params = all_fns[row["id"] + "_reference"].params
                 width = int(row["width"][1:])
@@ -277,10 +274,7 @@ def main():
                     "prompt": row["task"] + "\nFixed reference:\n" + row["reference"],
                     "chosen": row["chosen"],
                     "rejected": row["rejected"],
-                    "feedback": {
-                        k: row["rejected_receipt"][k]
-                        for k in ["counterexample", "expected", "actual"]
-                    },
+                    "feedback": {k: row["rejected_receipt"][k] for k in ["counterexample", "expected", "actual"]},
                     "label": "same-contract-smt-equivalence-and-native-replayed-inequivalence",
                     "trust": "translator-and-Z3-trusted; no Lean proof; no model training",
                 }

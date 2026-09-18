@@ -81,8 +81,7 @@ class Sketch:
         if name in self._holes or len(self._holes) >= MAX_HOLES:
             fail("E-SKETCH-NAME", "Slot name duplicates a slot or exceeds the 16-slot budget.")
         found = sorted(
-            (s for s in self._session.sites.values() if s["source"] == original),
-            key=lambda x: (x["start"], x["end"]),
+            (s for s in self._session.sites.values() if s["source"] == original), key=lambda x: (x["start"], x["end"])
         )
         if occurrence is None:
             if len(found) != 1:
@@ -98,9 +97,7 @@ class Sketch:
             selected = found[occurrence]
         for h in self._holes.values():
             if max(h["start"], selected["start"]) < min(h["end"], selected["end"]):
-                fail(
-                    "E-SKETCH-OVERLAP", "Nested/overlapping slots cannot be changed independently."
-                )
+                fail("E-SKETCH-OVERLAP", "Nested/overlapping slots cannot be changed independently.")
         self._holes[name] = copy.deepcopy(selected)
         return self
 
@@ -123,14 +120,9 @@ class Sketch:
     def _fresh(self):
         # Host state is private by convention, not Python security. Recompute the
         # complete session binding so accidental task/compiler changes are stale.
-        fresh = EditSession(
-            self.source, self.symbol, self._session.contract, tuple(self._session.visible)
-        )
+        fresh = EditSession(self.source, self.symbol, self._session.contract, tuple(self._session.visible))
         if fresh.session != self._session.session:
-            fail(
-                "E-SESSION",
-                "Source, host contract, context or compiler changed; create a new sketch.",
-            )
+            fail("E-SESSION", "Source, host contract, context or compiler changed; create a new sketch.")
         check = digest(
             stable_json(
                 {
@@ -169,12 +161,7 @@ class Sketch:
             a, b = h["start"] - f.body_start, h["end"] - f.body_start
             body = body[:a] + "(" + choices[name] + ")" + body[b:]
         text, receipt = self._session.check(
-            {
-                "protocol": PROTOCOL,
-                "session": self._session.session,
-                "kind": "body",
-                "replacement": body,
-            }
+            {"protocol": PROTOCOL, "session": self._session.session, "kind": "body", "replacement": body}
         )
         receipt = {
             **receipt,
@@ -188,10 +175,7 @@ class Sketch:
     def fill_json(self, text: str) -> Candidate:
         """Strict data-only adapter boundary; never evaluates model Python."""
         if not isinstance(text, str) or len(text.encode()) > 128000:
-            fail(
-                "E-SKETCH-CHOICES",
-                "Reply must be a JSON object within the 128000-byte transport budget.",
-            )
+            fail("E-SKETCH-CHOICES", "Reply must be a JSON object within the 128000-byte transport budget.")
         choices = load_json_strict(text)
         if not isinstance(choices, dict):
             fail("E-SKETCH-CHOICES", "Reply must be a slot-to-expression JSON object.")
@@ -206,15 +190,9 @@ class Sketch:
         """
         self.seal()
         old = self._session.packet()
-        source = "\n\n".join(
-            ([old["types"]] if old["types"] else []) + [x["source"] for x in old["context"]]
-        )
+        source = "\n\n".join(([old["types"]] if old["types"] else []) + [x["source"] for x in old["context"]])
         slots = {
-            n: {
-                "original": h["source"],
-                "expected_type": h["expected_type"] or h["type"],
-                "bindings": h["bindings"],
-            }
+            n: {"original": h["source"], "expected_type": h["expected_type"] or h["type"], "bindings": h["bindings"]}
             for n, h in self._holes.items()
         }
         return {
@@ -244,9 +222,7 @@ class Sketch:
             "identity_binding": "The host binds this reply to its sealed Sketch instance; standalone choice JSON is not an authorized edit.",
         }
 
-    def check_semantics(
-        self, candidate: Candidate, *, query_log: list | None = None, timeout_ms: int = 3000
-    ) -> dict:
+    def check_semantics(self, candidate: Candidate, *, query_log: list | None = None, timeout_ms: int = 3000) -> dict:
         self.seal()
         self._fresh()
         if candidate.receipt.get("sketch_sha256") != self._identity or digest(
@@ -269,19 +245,9 @@ class Sketch:
 
 def public_feedback(result: dict) -> dict:
     """A concise semantic witness; excludes repeated reference source and raw SMT."""
-    keys = {
-        "status",
-        "reason",
-        "counterexample",
-        "expected",
-        "actual",
-        "concrete_replay",
-        "unsupported_profile",
-    }
+    keys = {"status", "reason", "counterexample", "expected", "actual", "concrete_replay", "unsupported_profile"}
     answer = {k: v for k, v in result.items() if k in keys}
-    answer["boundary"] = (
-        "Scalar SMT model only; solver/translator trusted; no native, Lean, or performance proof."
-    )
+    answer["boundary"] = "Scalar SMT model only; solver/translator trusted; no native, Lean, or performance proof."
     return answer
 
 
@@ -308,17 +274,10 @@ def solve_finite(
     total = 1
     for xs in choices.values():
         if not isinstance(xs, list) or not xs or not all(isinstance(x, str) for x in xs):
-            fail(
-                "E-SKETCH-CHOICES",
-                "Each search dimension needs a nonempty list of expression strings.",
-            )
+            fail("E-SKETCH-CHOICES", "Each search dimension needs a nonempty list of expression strings.")
         total *= len(xs)
     if total > limit:
-        fail(
-            "E-SKETCH-BUDGET",
-            "Candidate product exceeds the explicit search budget.",
-            candidates=total,
-        )
+        fail("E-SKETCH-BUDGET", "Candidate product exceeds the explicit search budget.", candidates=total)
     contract = sketch.semantic
     reference = Concrete(prepared(contract.reference))
     witnesses = []
@@ -353,13 +312,7 @@ def solve_finite(
                 pass  # An unsupported replay never becomes acceptance.
         if cached:
             cache_rejections += 1
-            attempts.append(
-                {
-                    "choices": proposal,
-                    "stage": "cached-counterexample",
-                    "result": public_feedback(cached),
-                }
-            )
+            attempts.append({"choices": proposal, "stage": "cached-counterexample", "result": public_feedback(cached)})
             continue
         solver_calls += 1
         result = sketch.check_semantics(candidate, timeout_ms=timeout_ms)

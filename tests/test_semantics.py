@@ -5,17 +5,7 @@ import pytest
 
 R = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(R / "src"))
-from cairn.scalar_semantics import (
-    Concrete,
-    Formula,
-    Symbolic,
-    conj,
-    constant,
-    equivalent,
-    neg,
-    prepared,
-    same,
-)
+from cairn.scalar_semantics import Concrete, Formula, Symbolic, conj, constant, equivalent, neg, prepared, same
 from cairn.smt_bridge import Solver
 
 
@@ -32,21 +22,14 @@ def check(a, b, expected="smt-equivalent", **kw):
 
 @pytest.mark.parametrize("ty", ["u8", "u16", "u32", "u64", "usize"])
 def test_wrap_and_checked_boundary(ty):
-    r = check(
-        fn("return add_wrap(x,1);", f"x:{ty}", ty),
-        fn("return x+1;", f"x:{ty}", ty),
-        "counterexample",
-    )
+    r = check(fn("return add_wrap(x,1);", f"x:{ty}", ty), fn("return x+1;", f"x:{ty}", ty), "counterexample")
     assert r["counterexample"]["x"] == (1 << ({"u8": 8, "u16": 16, "u32": 32}.get(ty, 64))) - 1
     assert r["expected"]["return"] == 0 and r["actual"]["defined"] == False
 
 
 @pytest.mark.parametrize("ty", ["u8", "u16", "u32", "u64", "usize", "i32", "i64"])
 def test_min_branch(ty):
-    check(
-        fn("if x<y{return x;}else{return y;}", f"x:{ty},y:{ty}", ty),
-        fn("return min(x,y);", f"x:{ty},y:{ty}", ty),
-    )
+    check(fn("if x<y{return x;}else{return y;}", f"x:{ty},y:{ty}", ty), fn("return min(x,y);", f"x:{ty},y:{ty}", ty))
 
 
 @pytest.mark.parametrize("ty", ["u8", "u16", "u32", "u64"])
@@ -97,11 +80,7 @@ def test_short_circuit(expr, correct):
 
 
 def test_eager_condition_is_not_lazy():
-    check(
-        fn("return x==0 || x/x==1;", ret="bool"),
-        fn("return x/x==1 || x==0;", ret="bool"),
-        "counterexample",
-    )
+    check(fn("return x==0 || x/x==1;", ret="bool"), fn("return x/x==1 || x==0;", ret="bool"), "counterexample")
 
 
 @pytest.mark.parametrize("src,dst", [("u8", "u32"), ("u8", "i32"), ("i32", "i64"), ("u32", "i64")])
@@ -200,9 +179,7 @@ def test_signed_unsigned_conversion_guard():
 def test_solver_obligation_saved():
     logs = []
     r = equivalent(fn("return x;"), fn("return add_wrap(x,0);"), "f", query_log=logs)
-    assert (
-        r["status"] == "smt-equivalent" and logs and all("(check-sat)" in x["smt2"] for x in logs)
-    )
+    assert r["status"] == "smt-equivalent" and logs and all("(check-sat)" in x["smt2"] for x in logs)
 
 
 @pytest.mark.parametrize("bad", [None, {}, 15, False])
@@ -211,7 +188,5 @@ def test_malformed_source_fails_closed(bad):
 
 
 def test_precondition_cannot_inject_a_declaration():
-    r = equivalent(
-        fn("return x;"), fn("return x;"), "f", assume="true); } fn injected()->bool {return true;"
-    )
+    r = equivalent(fn("return x;"), fn("return x;"), "f", assume="true); } fn injected()->bool {return true;")
     assert r["status"] == "rejected"

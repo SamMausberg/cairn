@@ -43,9 +43,7 @@ def fixtures():
         rows.append(
             {
                 "name": name,
-                "source": f"fn {name}("
-                + ",".join(n + ":" + t for n, t in pars)
-                + f")->{ret or ty} {{return {expr};}}",
+                "source": f"fn {name}(" + ",".join(n + ":" + t for n, t in pars) + f")->{ret or ty} {{return {expr};}}",
                 "params": pars,
                 "ret": ret or ty,
                 "oracle": oracle,
@@ -73,12 +71,7 @@ def fixtures():
             ("-", "sub", lambda x, y: x - y),
             ("*", "mul", lambda x, y: x * y),
         ]:
-            add(
-                label + "_" + ty,
-                ty,
-                f"x{op}y",
-                lambda a, t=ty, f=fun: checked(f(a["x"], a["y"]), t),
-            )
+            add(label + "_" + ty, ty, f"x{op}y", lambda a, t=ty, f=fun: checked(f(a["x"], a["y"]), t))
         add("div_" + ty, ty, "x/y", lambda a, t=ty: division(a["x"], a["y"], t))
         add("rem_" + ty, ty, "x%y", lambda a, t=ty: division(a["x"], a["y"], t, True))
         add("min_" + ty, ty, "min(x,y)", lambda a, t=ty: checked(min(a.values()), t))
@@ -93,9 +86,7 @@ def fixtures():
                     label + "_" + ty,
                     ty,
                     expr,
-                    lambda a, w=w, t=ty, f=fun: (
-                        wrapped(f(a["x"], a["k"]), t) if a["k"] < w else {"defined": False}
-                    ),
+                    lambda a, w=w, t=ty, f=fun: wrapped(f(a["x"], a["k"]), t) if a["k"] < w else {"defined": False},
                     [("x", ty), ("k", "usize")],
                 )
         else:
@@ -103,21 +94,8 @@ def fixtures():
     add("narrow", "u64", "u8(x)", lambda a: checked(a["x"], "u8"), [("x", "u64")], "u8")
     add("signed_cast", "u64", "i64(x)", lambda a: checked(a["x"], "i64"), [("x", "u64")], "i64")
     add("unsigned_cast", "i64", "u64(x)", lambda a: checked(a["x"], "u64"), [("x", "i64")], "u64")
-    add(
-        "lazy",
-        "u64",
-        "x==0 || x/x==1",
-        lambda a: {"defined": True, "return": True},
-        [("x", "u64")],
-        "bool",
-    )
-    add(
-        "bool_order",
-        "bool",
-        "x<y",
-        lambda a: {"defined": True, "return": not a["x"] and a["y"]},
-        ret="bool",
-    )
+    add("lazy", "u64", "x==0 || x/x==1", lambda a: {"defined": True, "return": True}, [("x", "u64")], "bool")
+    add("bool_order", "bool", "x<y", lambda a: {"defined": True, "return": not a["x"] and a["y"]}, ret="bool")
     return rows
 
 
@@ -162,9 +140,7 @@ def inputs(row, rng, exhaustive=True):
         axes.append(vals)
     cases = [dict(zip([n for n, _ in pars], v)) for v in itertools.product(*axes)]
     for _ in range(100):
-        cases.append(
-            {n: bool(rng.randrange(2)) if t == "bool" else rng.randint(*bounds(t)) for n, t in pars}
-        )
+        cases.append({n: bool(rng.randrange(2)) if t == "bool" else rng.randint(*bounds(t)) for n, t in pars})
     return cases
 
 
@@ -187,9 +163,7 @@ def main():
             name = r["name"]
             all_inputs = cases[name]
             selected = (
-                all_inputs
-                if len(all_inputs) < 150
-                else all_inputs[:30] + random.Random(42).sample(all_inputs, 120)
+                all_inputs if len(all_inputs) < 150 else all_inputs[:30] + random.Random(42).sample(all_inputs, 120)
             )
             q = Formula(refs[name].params)
             sym = Symbolic(q, refs).invoke(name, list(q.inputs.values()))
@@ -199,10 +173,7 @@ def main():
                 equal_inputs = conj(
                     *(
                         same(
-                            q.inputs[n].value,
-                            ("true" if args[n] else "false")
-                            if t == "bool"
-                            else constant(args[n], t),
+                            q.inputs[n].value, ("true" if args[n] else "false") if t == "bool" else constant(args[n], t)
                         )
                         for n, t in r["params"]
                     )

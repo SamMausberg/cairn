@@ -70,8 +70,7 @@ def main() -> int:
         )
     current_only = []
     systems = "\n".join(
-        (ROOT / "examples/systems/src" / name).read_text()
-        for name in ["parse.cairn", "sort.cairn", "main.cairn"]
+        (ROOT / "examples/systems/src" / name).read_text() for name in ["parse.cairn", "sort.cairn", "main.cairn"]
     )
     for symbol in ["decimal", "sort_bytes", "sorted_even"]:
         packet = EditSession(systems, symbol).packet()
@@ -91,9 +90,7 @@ def main() -> int:
         "model_trials": 0,
         "method": "Current complete JSON packet; only prior/current card texts varied; repeated packets counted in full.",
         "baseline_card_source_sha256": prior["source_sha256"],
-        "current_card_source_sha256": hashlib.sha256(
-            (ROOT / "src/cairn/teaching.py").read_bytes()
-        ).hexdigest(),
+        "current_card_source_sha256": hashlib.sha256((ROOT / "src/cairn/teaching.py").read_bytes()).hexdigest(),
         "legacy_source_sha256": hashlib.sha256(source.encode()).hexdigest(),
         "rows": rows,
         "current_only": current_only,
@@ -117,15 +114,7 @@ def main() -> int:
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text(result))
-    print(
-        text(
-            {
-                "aggregate": result["aggregate"],
-                "full_card_text": result["full_card_text"],
-                "tokenizer": tokenizer,
-            }
-        )
-    )
+    print(text({"aggregate": result["aggregate"], "full_card_text": result["full_card_text"], "tokenizer": tokenizer}))
     return 0
 
 

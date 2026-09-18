@@ -55,10 +55,7 @@ def main():
                 "messages": [
                     {"role": "user", "content": json.dumps(packet, separators=(",", ":"))},
                     {"role": "assistant", "content": bad},
-                    {
-                        "role": "tool",
-                        "content": json.dumps(public_feedback(bad_receipt), separators=(",", ":")),
-                    },
+                    {"role": "tool", "content": json.dumps(public_feedback(bad_receipt), separators=(",", ":"))},
                     {"role": "assistant", "content": good},
                 ],
                 "immutable_contract_sha256": r["contract_sha256"],
@@ -92,8 +89,7 @@ def main():
     (root / "train_repair_sft.jsonl").write_text("".join(json.dumps(r) + "\n" for r in sft))
     (root / "protocol_evaluation_prompts.jsonl").write_text(
         "".join(
-            json.dumps({"id": r["id"], "family": r["family"], "messages": [r["messages"][0]]})
-            + "\n"
+            json.dumps({"id": r["id"], "family": r["family"], "messages": [r["messages"][0]]}) + "\n"
             for r in evaluation
         )
     )

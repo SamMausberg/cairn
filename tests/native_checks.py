@@ -99,9 +99,7 @@ def trap_case(name):
         "bounds": lambda: l.cf_checked_at(2, a, 2),
         "null": lambda: l.cf_checked_at(1, None, 0),
         "alias": lambda: l.cf_copy_twice(2, b, b),
-        "partial_alias": lambda: l.cf_copy_twice(
-            2, b, C.cast(C.byref(b, C.sizeof(F32)), C.POINTER(F32))
-        ),
+        "partial_alias": lambda: l.cf_copy_twice(2, b, C.cast(C.byref(b, C.sizeof(F32)), C.POINTER(F32))),
         "unaligned": lambda: l.cf_checked_at(1, C.cast(C.byref(a, 1), C.POINTER(U64)), 0),
         "extent_overflow": lambda: l.cf_checked_at(MASK, a, 0),
         "narrow": lambda: l.cf_narrow(256),
@@ -203,9 +201,7 @@ def run(libpath=None):
         count["translated"] += 1
         h = Header(r.randrange(3), r.randrange(8), r.randrange(128))
         avail = r.randrange(128)
-        assert l.cf_header_valid(h, avail) == (
-            h.version == 1 and h.length <= avail and h.flags & 0xFFFFFFFC == 0
-        )
+        assert l.cf_header_valid(h, avail) == (h.version == 1 and h.length <= avail and h.flags & 0xFFFFFFFC == 0)
         count["header_valid"] += 1
         op = r.randrange(3)
         assert l.cf_op_class(op) == (op + 1) * 10
@@ -269,9 +265,7 @@ def run(libpath=None):
         env = dict(os.environ)
         if libpath:
             env["CAIRN_NATIVE_LIB"] = str(libpath.resolve())
-        proc = subprocess.run(
-            [sys.executable, __file__, "--trap", name], capture_output=True, env=env
-        )
+        proc = subprocess.run([sys.executable, __file__, "--trap", name], capture_output=True, env=env)
         assert proc.returncode == -signal.SIGABRT, (name, proc.returncode, proc.stderr)
     return {
         "seed": 20260917,

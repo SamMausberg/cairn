@@ -29,14 +29,7 @@ def main():
 
     def run(command, output=None, env=None):
         cp = subprocess.run(command, text=True, capture_output=True, env=env)
-        log.append(
-            {
-                "command": command,
-                "exit_code": cp.returncode,
-                "stdout": cp.stdout,
-                "stderr": cp.stderr,
-            }
-        )
+        log.append({"command": command, "exit_code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr})
         if output:
             (R / output).write_text(cp.stdout + (cp.stderr if cp.returncode else ""))
         (R / "results/verification_run.json").write_text(json.dumps(log, indent=2) + "\n")
@@ -90,11 +83,7 @@ def main():
                 ]
             )
         env = dict(os.environ, CAIRN_FAMILY_LIB=str(R / "results/libfamily_gcc.so"))
-        run(
-            [py, "tests/native_checks.py", str(R / "results/libnative_gcc.so")],
-            "results/gcc_native_tests.json",
-            env,
-        )
+        run([py, "tests/native_checks.py", str(R / "results/libnative_gcc.so")], "results/gcc_native_tests.json", env)
     if a.sanitize:
         run(
             [
@@ -116,15 +105,7 @@ def main():
     if a.bench:
         run([py, "bench/run.py"], "results/benchmark_run.txt")
     run([py, "tools/density.py"], "results/density_run.txt")
-    print(
-        json.dumps(
-            {
-                "status": "all requested checks passed",
-                "commands": len(log),
-                "formal_status": "not-verified",
-            }
-        )
-    )
+    print(json.dumps({"status": "all requested checks passed", "commands": len(log), "formal_status": "not-verified"}))
 
 
 if __name__ == "__main__":
