@@ -1,6 +1,6 @@
 # The CAIRN standard library
 
-Ten small modules, written in CAIRN, shipped inside the package and linked on demand:
+Eleven small modules, written in CAIRN, shipped inside the package and linked on demand:
 `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. Nothing is
 downloaded and nothing is implicit — a module you do not import is not in your program, and
 every module you do import is compiled whole (there is no dead-code elimination yet).
@@ -281,6 +281,16 @@ pub extern fn open(path:ro<u8>[1], flags:i32, mode:u32) -> i32 effects(io);
 address inside `unsafe`. It is the only place in the library that needs the `mmio` effect.
 
 ---
+
+## std.wire
+
+One recipe, and the first piece of the compiler to become library code. `derive wire for Packet;`
+(no import needed: a bare recipe name falls back to `std.<name>`) generates `encode_Packet(out,
+value)`, `decode_Packet(input)` and `wire_size_Packet()` for a record of fixed-width unsigned
+fields: little-endian, declaration order, no padding, extents known statically. It infers no
+framing, authentication or validation. Read `src/cairn/std/wire.cairn` as the worked example of
+`each`, `where`, `fold` and `$` splices; its output is pinned byte for byte against the closed
+generator it replaced.
 
 ## Known sharp edges
 

@@ -104,7 +104,23 @@ wait(right);
 
 ## Contracted forms
 
-`let used = compact out for i in n where predicate yield value;` writes the stable selected prefix into existing storage of capacity exactly `n`, evaluates the predicate once per input and the projection only when selected, never reads its output, leaves the tail unchanged and allocates nothing on the host (on a `@device` output it is a stable stream compaction whose scan needs device scratch, shown as `gpu_alloc`, `gpu_free`; device `reduce` likewise). Its one unchecked store is justified by seventeen affine certificates that are checked before every emission and proved sound in Lean, together with in-bounds stores and stable selection for the loop model (verification.md). `derive wire for Packet;` emits fixed-width unsigned little-endian codecs in declaration order with no padding.
+`let used = compact out for i in n where predicate yield value;` writes the stable selected prefix into existing storage of capacity exactly `n`, evaluates the predicate once per input and the projection only when selected, never reads its output, leaves the tail unchanged and allocates nothing on the host (on a `@device` output it is a stable stream compaction whose scan needs device scratch, shown as `gpu_alloc`, `gpu_free`; device `reduce` likewise). Its one unchecked store is justified by seventeen affine certificates that are checked before every emission and proved sound in Lean, together with in-bounds stores and stable selection for the loop model (verification.md). `derive wire for Packet;` emits fixed-width unsigned little-endian codecs in declaration order with no padding; it is no longer compiler code but the packaged recipe `std.wire`.
+
+## Recipes
+
+```cairn
+pub recipe columns for R {                                  // R: the record it is derived for
+  each f in R { require scalar(f), "columns holds scalar fields."; }
+  pub struct $R_columns { each f in R where t = typeof(f) { $f:Buf[$t]; } }
+  pub fn $R_get(c:ro<$R_columns>, i:usize) -> R = R(each f in R { c.$f[i] });
+  pub fn $R_set(c:rw<$R_columns>, i:usize, row:R) { each f in R { c.$f[i] = row.$f; } }
+}
+derive columns for Particle;                                // Particle_columns, Particle_get, Particle_set
+```
+
+A recipe is a generator written as library code: ordinary declarations (functions and records) over a record schema (`for R`) and naturals (`recipe tiles[W:nat, H:nat]`), applied by `derive name[naturals] for Type;`. Inside it, `each x in R { ... }` iterates statically over a record's fields and `each k in lo..hi { ... }` over a natural range, at declaration level, statement level, in a record's field list, or among the arguments of a call (where it splices a list); `fold | each ... { e }` joins the expansions with one operator. `where a = offset(f), t = typeof(f)` names static values, computed from naturals, comparisons and the facts `bytes bits offset index count typeof unsigned signed integer float scalar record`; `$name` splices one into an identifier (`encode_$R`, `value.$f`, `shift_$k`; the longest static name wins, so `$R_columns` is `$R` then `_columns`), and a whole `$name` is that natural or that type. The bare parameter `R` is the type itself. `require condition, "message";` states the admissible inputs (`E-DERIVE-DOMAIN`, or the code the message opens with).
+
+Expansion happens before checking and reads nothing but the recipe and the schema, so it is a function of its inputs; what it generates is ordinary code of the deriving module, checked like any other: a recipe's signatures and effect ceilings are its contract, privacy is judged where `derive` is written (a recipe reaches its own module's helpers by their public path), a generated name that already exists is `E-DERIVE-COLLISION`, static iteration is bounded (`E-EXPANSION-LIMIT`), and the receipt pins every recipe by the hash of its tokens (`recipes`) beside the list of `derivations`. A bare recipe name that the program does not declare falls back to the packaged `std.<name>`. Recipes take types and naturals, not expressions: behavior is passed to generated functions as `fn` values or closures.
 
 ## Projects
 

@@ -269,7 +269,7 @@ def test_trailing_whitespace_and_carriage_returns_are_normalised():
 
 
 def test_unlexable_input_is_returned_unchanged():
-    source = "fn f() { let x = $broken; }\n"
+    source = "fn f() { let x = #broken; }\n"
     out, error = format_report(source)
     assert out == source
     assert "Unexpected character" in error
@@ -327,10 +327,10 @@ def test_fmt_diff_prints_a_patch_and_writes_nothing(tmp_path, capsys):
 
 
 def test_fmt_never_touches_a_file_that_does_not_lex(tmp_path, capsys):
-    broken = write(tmp_path, "broken.cairn", "fn f() { let x = $; }\n")
+    broken = write(tmp_path, "broken.cairn", "fn f() { let x = #; }\n")
     good = write(tmp_path, "good.cairn", "fn g(a:u64)->u64{return a;}\n")
     assert main(["fmt", str(tmp_path)]) == 1
-    assert broken.read_text() == "fn f() { let x = $; }\n"
+    assert broken.read_text() == "fn f() { let x = #; }\n"
     assert good.read_text() == "fn g(a:u64) -> u64 { return a; }\n"
     result = json.loads(capsys.readouterr().out)
     assert [x["file"] for x in result["not_formatted"]] == [str(broken)]

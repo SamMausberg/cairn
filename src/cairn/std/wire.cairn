@@ -1,0 +1,18 @@
+module std.wire;
+
+// wire/1: fixed-width unsigned fields, little-endian, in declaration order, no padding.
+// `derive wire for Packet;` gives encode_Packet, decode_Packet and wire_size_Packet.
+pub recipe wire for R where size = bytes(R) {
+  each f in R {
+    require unsigned(f), "E-DERIVE-FIELD: wire/1 supports only fixed-width unsigned scalar fields.";
+  }
+  pub fn encode_$R(out:rw<u8>[$size], value:R) {
+    each f in R where at = offset(f) {
+      each b in 0..bytes(f) { out[$at + $b] = u8(shr(value.$f, 8 * $b) & 255); }
+    }
+  }
+  pub fn decode_$R(input:ro<u8>[$size]) -> R = R(each f in R where at = offset(f), t = typeof(f) {
+    fold | each b in 0..bytes(f) { shl_wrap($t(input[$at + $b]), 8 * $b) }
+  });
+  pub fn wire_size_$R() -> usize = $size;
+}

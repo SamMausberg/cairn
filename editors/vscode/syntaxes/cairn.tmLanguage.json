@@ -97,7 +97,7 @@
         },
         {
           "name": "keyword.declaration.cairn",
-          "match": "\\b(?:const|derive|enum|extern|family|fn|impl|import|module|pub|struct|trait|wire)\\b"
+          "match": "\\b(?:const|derive|enum|extern|family|fn|impl|import|module|pub|struct|trait)\\b"
         },
         {
           "name": "storage.modifier.cairn",

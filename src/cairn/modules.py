@@ -23,6 +23,8 @@ def link(p: Program) -> Program:
     """Merge every imported module that the program does not define itself, transitively."""
     defined = set(p.modules.values())
     pending = [target for _, target, _ in p.imports]
+    pending += [f"std.{r}" for _, r, _, _, _ in p.derivations if "." not in r and library_source(f"std.{r}")
+                and not any(name.rsplit(".", 1)[-1] == r for name in p.recipes)]  # fmt: skip
     while pending:
         module = pending.pop()
         if module in defined:

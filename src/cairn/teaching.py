@@ -60,7 +60,16 @@ Do not append a semicolon after a function block.
 derive wire for Packet; accepts fixed-width unsigned fields and creates little-
 endian, declaration-order, no-padding codecs. No framing/authentication/validation
 is inferred. Generated entries are not direct edit targets. Read generator
-contracts; large expansion is not a measured advantage over compact C++ templates.""",
+contracts; large expansion is not a measured advantage over compact C++ templates.
+wire is a library recipe. recipe name[K:nat] for R { ... } holds ordinary fn and
+struct declarations plus static forms: each f in R { } (fields) or each k in lo..hi { }
+at declaration, statement, field-list or call-argument level (there it splices a
+list); fold | each ... { e }; where a = offset(f), t = typeof(f) names static values
+(facts: bytes bits offset index count typeof unsigned signed integer float scalar
+record); $name splices into identifiers (encode_$R, value.$f) or stands for the
+natural/type; bare R is the type; require cond, "message"; states the domain.
+derive name[naturals] for Type; expands before checking into code of the deriving
+module, checked like any other.""",
     "memory": """buffer scratch:u64[n] = zeroed; explicitly allocates and zero-initializes heap
 storage. stack scratch:u64[32] = zeroed; explicitly reserves initialized stack
 storage. Elements are scalar; stack capacity is a literal, declarations total at
@@ -152,7 +161,7 @@ def select_cards(
         "compact": "compact" in words,
         "floats": words & {"f32", "f64"},
         "records": has_records,
-        "generators": words & {"family", "derive"},
+        "generators": words & {"family", "derive", "recipe"},
         "memory": words & {"buffer", "stack"},
         "sums": has_sums or words & {"match", "try"},
         "generics": words & {"trait", "impl"} or has_generic_brackets(source),

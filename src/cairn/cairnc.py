@@ -11,7 +11,7 @@ from typing import Any
 
 from .checking import Binding, Checker
 from .codegen import RUNTIME, RUNTIME_FILES, Emitter
-from .expansion import derive_wire, specialize
+from .expansion import derive, specialize
 from .linear_certificates import audit_collector
 from .modules import link
 from .syntax import (
@@ -34,12 +34,12 @@ from .version import VERSION
 __all__ = [
     "IDENT", "INT", "RESERVED", "RUNTIME", "RUNTIME_FILES", "SIGNED", "VERSION", "WIDTH", "Binding", "Checker",
     "Diagnostic", "Emitter", "Expr", "Function", "Parser", "Program", "Stmt", "Type", "compile_program",
-    "compile_source", "derive_wire", "fail", "specialize",
+    "compile_source", "derive", "fail", "specialize",
 ]  # fmt: skip
 
 
 def compile_program(source: str, capture_sites: bool = False) -> tuple[Program, Checker, dict[str, Any]]:
-    p = specialize(derive_wire(link(Parser(source).parse())))
+    p = specialize(derive(link(Parser(source).parse())))
     checker = Checker(p, capture_sites)
     return p, checker, checker.check()
 
@@ -73,7 +73,9 @@ def compile_source(source: str, origin: Any = "", roots: tuple[str, ...] = ()) -
         "runtime_sha256": hashlib.sha256(RUNTIME.encode()).hexdigest(),
         "function_count": len(p.functions),
         "families": [list(x) for x in p.families],
-        "wire_derivations": p.derivations,
+        "wire_derivations": [f"{m}.{t}" if m and "." not in t else t for m, r, _, t, _ in p.derivations if r == "wire"],
+        "derivations": [{"module": m, "recipe": r, "naturals": list(n), "for": t} for m, r, n, t, _ in p.derivations],
+        "recipes": {name: recipe.digest for name, recipe in sorted(p.recipes.items())},
         "uninstantiated_templates": checker.unchecked,
         "modules": interfaces(p, receipts),
         "requires": ["cuda"] if "cairn_gpu.hpp" in emitter.headers else [],

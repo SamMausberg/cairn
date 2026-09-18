@@ -20,7 +20,7 @@
     "placement": "host, pinned, unified and device views in the type; transfer is the only crossing",
     "modules": "namespaces, pub, imports with aliases and name lists, a packaged std written in CAIRN",
     "targets": "hosted, CUDA through nvcc, and a freestanding AArch64 profile with MMIO and inline target instructions",
-    "generation": "bounded natural families, fixed unsigned wire codecs, the bounded collector",
+    "generation": "library-defined typed recipes over record schemas and naturals (static each/where/require/fold, $ splices, generated records and functions, domains, budgets, content hashes); the packaged std.wire recipe; static families; the certified bounded collector",
     "projects": "ordered files, data-only manifests, fresh build directories",
     "editing": "host-bound body/expression choices over the whole language, lexical rule cards, effect ceilings",
     "tooling": "comment-preserving formatter, language server, editor grammar",
@@ -28,7 +28,6 @@
     "scalar_equivalence": "trusted translator and Z3, explicit per-function/module coverage"
   },
   "not_implemented": [
-    "library-defined typed recipes (general contracted expansion)",
     "asynchronous I/O with completion tickets",
     "multi-device collectives",
     "checking a generic once against its bounds rather than per instance",
@@ -36,7 +35,8 @@
     "SMT coverage of memory, loops, sums and floats",
     "emitter-to-model and native refinement proofs",
     "ownership and lease calculus mechanization",
-    "measured AI proficiency"
+    "measured AI proficiency",
+    "recipes over expression fragments, and replaying a checked theorem per recipe instance"
   ],
   "principle": "Implemented, finite-tested, sanitizer-clean, exact-algebra-checked, SMT-equivalent and Lean-checked are distinct scopes."
 }

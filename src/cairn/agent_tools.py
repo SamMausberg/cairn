@@ -176,6 +176,11 @@ def function_source(f: Function) -> str:
     return signature(f) + " " + format_block(f.body, 1 if f.owner else 0)
 
 
+def derivation(recipe: str, naturals: tuple, target: str) -> str:
+    arguments = f"[{', '.join(map(str, naturals))}]" if naturals else ""
+    return f"derive {recipe}{arguments}" + (f" for {target}" if target else "") + ";"
+
+
 def canonical_source(source: str) -> str:
     """An inspectable AST projection. Comments are not copied. Not an in-place edit."""
     p = Parser(source).parse()
@@ -208,7 +213,8 @@ def canonical_source(source: str) -> str:
                 out.append(("pub " if f.public and module else "") + function_source(f))
         out += [f"{'pub ' * (pre in p.public)}family {local(pre)} = {name}[{lo}..{hi}];"
                 for pre, name, lo, hi in p.families if p.modules[pre] == module]  # fmt: skip
-        out += [f"derive wire for {local(name)};" for name in p.derivations if name.rpartition(".")[0] == module]
+        out += [source[r.start : r.end] for r in p.recipes.values() if r.module == module]  # A recipe is its own text.
+        out += [derivation(r, naturals, target) for m, r, naturals, target, _ in p.derivations if m == module]
     return "\n\n".join(out) + "\n"
 
 
@@ -364,9 +370,12 @@ class EditSession:
         for prefix, base, lo, hi in self.parsed.families:
             if base in origins:
                 context.append({"family": prefix, "source": f"family {prefix} = {base}[{lo}..{hi}];"})
-        for record in self.parsed.derivations:
-            if "derive wire for " + record in origins:
-                context.append({"wire": record, "source": f"derive wire for {record};"})
+        for module, recipe, naturals, target, _ in self.parsed.derivations:
+            full = f"{module}.{target}" if module and target and "." not in target else target
+            if f"derive {recipe}" + (f" for {full}" if target else "") in origins:
+                context.append(
+                    {"wire" if recipe == "wire" else "derive": full, "source": derivation(recipe, naturals, target)}
+                )
         p = {
             "protocol": "cairn.packet/1",
             "session": self.session,

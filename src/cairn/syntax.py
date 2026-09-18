@@ -6,6 +6,7 @@ resolved, typed and given effects by checking.py; nothing here evaluates source.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 from typing import Any, NoReturn
@@ -47,13 +48,13 @@ class Token:
 TOKEN = re.compile(
     r"//[^\n]*|\s+|\"(?:[^\"\\\n]|\\.)*\"|'(?:[^'\\\n]|\\.)+'|0x[0-9A-Fa-f]+"
     r"|(?:[0-9]+\.[0-9]+(?:[eE][+-]?[0-9]+)?|[0-9]+(?:[eE][+-]?[0-9]+))|[0-9]+"
-    r"|[A-Za-z_][A-Za-z_0-9]*|=>|->|\.\.|==|!=|<=|>=|&&|\|\||[{}()\[\],;:.@+*/%<>=!&|^~-]"
+    r"|[A-Za-z_$][A-Za-z_0-9$]*|=>|->|\.\.|==|!=|<=|>=|&&|\|\||[{}()\[\],;:.@+*/%<>=!&|^~-]"
 )
-IDENT = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
+IDENT = re.compile(r"[A-Za-z_$][A-Za-z_0-9$]*\Z")
 NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\Z")
 RESERVED = set(  # One readable paragraph of words beats a wall of quoted strings.
     "fn struct enum family let mut reg if else for each in while return true false ro rw host nat "
-    "effects pure extern unsafe defer match kernel module import compact where yield derive wire "
+    "effects pure extern unsafe defer match kernel module import compact where yield derive "
     "buffer stack zeroed break continue trait impl dyn const pub linear parallel reduce spawn try "
     "as type device pinned unified".split()
 )
@@ -209,12 +210,52 @@ class Function:
 
 
 @dataclass
+class Each:
+    """Static iteration in a recipe, over a record's fields or a natural range; `where` names static values."""
+
+    binder: str
+    seq: list[Expr]
+    where: list[tuple[str, Expr]]
+    items: list[Any]  # Declarations, statements or one expression, by where it is written.
+
+
+@dataclass
+class Shape:
+    """A record that a recipe generates; its field list may iterate."""
+
+    name: str
+    fields: list[Any]  # (name, Type) or Each of them
+    public: bool = False
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
+class Recipe:
+    """A library-defined generator: declarations with `$name` splices, expanded per `derive` before checking."""
+
+    name: str
+    nats: list[str]
+    param: str
+    where: list[tuple[str, Expr]]
+    items: list[Any]
+    module: str = ""
+    public: bool = False
+    line: int = 0
+    col: int = 0
+    start: int = -1
+    end: int = -1
+    digest: str = ""  # sha256 of its tokens: what a derived function's receipt pins.
+
+
+@dataclass
 class Program:
     records: dict[str, list[tuple[str, Type]]] = field(default_factory=dict)
     enums: dict[str, list[str]] = field(default_factory=dict)
     functions: list[Function] = field(default_factory=list)
     families: list[tuple[str, str, int, int]] = field(default_factory=list)
-    derivations: list[str] = field(default_factory=list)
+    derivations: list[tuple] = field(default_factory=list)  # (module, recipe as written, naturals, target, token)
+    recipes: dict[str, Recipe] = field(default_factory=dict)
     sums: dict[str, list[tuple[str, Type | None]]] = field(default_factory=dict)
     generics: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # generic types
     attributes: dict[str, set[str]] = field(default_factory=dict)  # linear, packed, align(n)
@@ -247,6 +288,7 @@ class Parser:
         self.ts = lex(source)
         self.i = self.depth = 0
         self.module = ""
+        self.recipe = False  # Inside a recipe: `$` splices, each, where, require and fold are syntax.
 
     @property
     def t(self) -> Token:
@@ -265,6 +307,8 @@ class Parser:
 
     def ident(self) -> str:
         t = self.t
+        if "$" in t.s and not self.recipe:  # `$` splices exist only inside a recipe.
+            fail("E-LEX", "Unexpected character '$'.", t)
         if not IDENT.fullmatch(t.s) or t.s in RESERVED:
             fail("E-NAME", f"Expected an identifier, found {t.s!r}.", t)
         self.i += 1
@@ -367,6 +411,11 @@ class Parser:
             e = Expr(t.s, "", [self.expr(10)], *at)
         elif t.s in {"|", "||"}:
             e = self.closure()
+        elif self.recipe and t.s == "fold" and self.ts[self.i + 1].s in PREC:
+            self.i += 2
+            e = Expr("fold", self.ts[self.i - 1].s, [self.expr(10)], *at)
+        elif self.recipe and t.s == "each":
+            e = Expr("each", "", [], *at, ref=self.each(lambda: [self.braced(self.expr)]))
         elif self.eat("true") or self.eat("false"):
             e = Expr("bool", t.s, [], *at)
         elif NUMBER.match(t.s):
@@ -487,9 +536,75 @@ class Parser:
         self.need(";")
         return Stmt(form, name, typ, es, binder=binder, op=op, **at)
 
+    def braced(self, item):
+        self.need("{")
+        value = item()
+        self.need("}")
+        return value
+
+    def each(self, items) -> Each:
+        """`each f in R where at = offset(f) { ... }` or `each b in 0..bytes(f) { ... }`."""
+        self.need("each")
+        binder = self.ident()
+        self.need("in")
+        seq = [self.expr()] + ([self.expr()] if self.eat("..") else [])
+        return Each(binder, seq, self.where(), items())
+
+    def where(self) -> list[tuple[str, Expr]]:
+        named: list[tuple[str, Expr]] = []
+        while self.eat("where") or (named and self.eat(",")):
+            name = self.ident()
+            self.need("=")
+            named.append((name, self.expr()))
+        return named
+
+    def require(self, t: Token) -> Stmt:
+        """`require unsigned(f), "message";` states a recipe's admissible inputs."""
+        self.need("require")
+        condition = self.expr()
+        self.need(",")
+        if self.t.s[0] != '"':
+            fail("E-PARSE", 'require states its message: require condition, "why";', self.t)
+        self.i += 1
+        self.need(";")
+        return Stmt("require", unescape(self.ts[self.i - 2]), exprs=[condition], line=t.line, col=t.col)
+
+    def items(self) -> list[Any]:
+        """The declarations of a recipe (or of an `each` inside one)."""
+        self.need("{")
+        found: list[Any] = []
+        while not self.eat("}"):
+            t = self.t
+            public = self.eat("pub")
+            if self.t.s == "each":
+                found.append(self.each(self.items))
+            elif self.t.s == "require":
+                found.append(self.require(t))
+            elif self.eat("struct"):
+                found.append(Shape(self.ident(), self.shape(), public, t.line, t.col))
+            else:
+                self.need("fn")
+                found.append(self.function(t, public=public))
+        return found
+
+    def shape(self) -> list[Any]:
+        self.need("{")
+        fields: list[Any] = []
+        while not self.eat("}"):
+            if self.t.s == "each":
+                fields.append(self.each(self.shape))
+            else:
+                fields.append(self.parameter())
+                self.need(";")
+        return fields
+
     def stmt(self) -> Stmt:
         t = self.t
         at: dict[str, Any] = {"line": t.line, "col": t.col}
+        if self.recipe and t.s == "each":
+            return Stmt("each", ref=self.each(self.block), **at)
+        if self.recipe and t.s == "require":
+            return self.require(t)
         if t.s in {"buffer", "stack"}:
             self.i += 1
             n = self.ident()
@@ -732,13 +847,28 @@ class Parser:
                 f = self.function(t, public=public, kernel=kernel)
                 f.name = f.source_name = declare(f.name, t)
                 p.functions.append(f)
+            elif self.t.s == "recipe" and IDENT.fullmatch(self.ts[self.i + 1].s):
+                self.i += 1
+                name, first, self.recipe = declare(self.ident(), t), self.i - 2 - public, True
+                kinds = self.generic_parameters()
+                if any(kind != "nat" for _, kind in kinds):
+                    fail(
+                        "E-RECIPE",
+                        "A recipe's bracket parameters are naturals; the type it is derived for follows `for`.",
+                        t,
+                    )
+                nats, param = [n for n, _ in kinds], self.ident() if self.eat("for") else ""
+                recipe = Recipe(name, nats, param, self.where(), self.items(), self.module, public, t.line, t.col)
+                recipe.start, recipe.end, self.recipe = self.ts[first].start, self.ts[self.i - 1].end, False
+                text = " ".join(x.s for x in self.ts[first : self.i])
+                recipe.digest = hashlib.sha256(text.encode()).hexdigest()
+                p.recipes[name] = recipe
             elif self.eat("derive"):
-                self.need("wire", "for")
-                record = self.path()
-                record = f"{self.module}.{record}" if self.module and "." not in record else record
-                if "." in record and record.rpartition(".")[0] != self.module:
-                    fail("E-PRIVATE", "derive wire is written in the module that declares the record.", t)
-                p.derivations.append(record)
+                written, naturals = self.path(), []
+                if self.eat("["):
+                    naturals = self.listed("]", self.integer)
+                onto = self.path() if self.eat("for") else ""
+                p.derivations.append((self.module, written, tuple(naturals), onto, t))
                 self.need(";")
             elif self.eat("family"):
                 pre = self.ident()
