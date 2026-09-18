@@ -713,7 +713,8 @@ class Parser:
                 p.functions.append(f)
             elif self.eat("derive"):
                 self.need("wire", "for")
-                p.derivations.append(self.path())
+                record = self.path()
+                p.derivations.append(f"{self.module}.{record}" if self.module and "." not in record else record)
                 self.need(";")
             elif self.eat("family"):
                 pre = self.ident()

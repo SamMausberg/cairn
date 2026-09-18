@@ -44,16 +44,20 @@ def derive_wire(p: Program) -> Program:
                 offset += 1
             decoded.append(reduce(lambda a, b: Expr("binary", "|", [a, b]), parts))
         size = str(offset)
+        module, _, short = record.rpartition(".")
+        prefix = module + "." if module else ""
         for f in [
-            Function("encode_" + record, [("out", Type("u8", "rw", size)), ("value", Type(record))], VOID, encode),
-            Function("decode_" + record, [("input", Type("u8", "ro", size))], Type(record),
+            Function(f"{prefix}encode_{short}", [("out", Type("u8", "rw", size)), ("value", Type(record))], VOID, encode),
+            Function(f"{prefix}decode_{short}", [("input", Type("u8", "ro", size))], Type(record),
                      [Stmt("return", exprs=[call(record, *decoded)])]),
-            Function("wire_size_" + record, [], Type("usize"), [Stmt("return", exprs=[lit(offset)])]),
+            Function(f"{prefix}wire_size_{short}", [], Type("usize"), [Stmt("return", exprs=[lit(offset)])]),
         ]:  # fmt: skip
             if f.name in names:
                 fail("E-DERIVE-COLLISION", f"Derived name {f.name} already exists.")
-            f.source_name = "derive wire for " + record
+            f.source_name, f.module, f.public = "derive wire for " + record, module, True
             names.add(f.name)
+            p.modules[f.name] = module
+            p.public.add(f.name)
             p.functions.append(f)
     return p
 

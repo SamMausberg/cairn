@@ -90,3 +90,24 @@ def test_every_card_is_reachable_from_tokens():
         "family q = h[1..2]; derive wire for P;"
     )
     assert set(select_cards(sample, has_views=True, has_records=True, has_sums=True)) == set(CARDS)
+
+
+def test_wire_codecs_belong_to_the_module_that_derives_them(tmp_path):
+    source = (
+        "module net;\npub struct Packet { seq:u32; kind:u8; }\nderive wire for Packet;\n"
+        "pub fn size() -> usize = wire_size_Packet();\nmodule app;\nimport net;\n"
+        "fn main() -> i32 {\n  stack bytes:u8[5] = zeroed;\n  net.encode_Packet(bytes, net.Packet(258, 7));\n"
+        "  let back = net.decode_Packet(bytes);\n"
+        "  if back.seq != 258 || back.kind != 7 || bytes[0] != 2 || bytes[1] != 1 || net.size() != 5 { return 1; }\n"
+        "  return 0;\n}\n"
+    )
+    generated, receipt = compile_source(source)
+    assert {"net.encode_Packet", "net.decode_Packet", "net.wire_size_Packet"} <= set(receipt["functions"])
+    assert receipt["modules"]["net"]["exports"] == [
+        "net.decode_Packet",
+        "net.encode_Packet",
+        "net.size",
+        "net.wire_size_Packet",
+    ]
+    canonical = canonical_source(source)
+    assert "pub struct Packet" in canonical and compile_source(canonical)[0] == generated

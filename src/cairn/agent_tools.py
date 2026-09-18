@@ -144,21 +144,24 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
 
 def type_declarations(p: Program) -> str:
     out = []
+
+    def pub(name: str) -> str:
+        return "pub " if name in p.public else ""
+
     for n, fs in p.records.items():
         marks = p.attributes.get(n, set())
         layout = "".join(" " + a for a in sorted(marks - {"linear"}))
         fields = " ".join(f"{k}:{t.display()};" for k, t in fs)
-        out.append(
-            f"{'linear ' * ('linear' in marks)}struct {local(n)}{generics(p.generics.get(n, []))}{layout} {{ {fields} }}"
-        )
+        linear = "linear " * ("linear" in marks)
+        out.append(f"{pub(n)}{linear}struct {local(n)}{generics(p.generics.get(n, []))}{layout} {{ {fields} }}")
     for n, vs in p.enums.items():
-        out.append(f"enum {local(n)} {{ {' '.join(v + ';' for v in vs)} }}")
+        out.append(f"{pub(n)}enum {local(n)} {{ {' '.join(v + ';' for v in vs)} }}")
     for n, vs in p.sums.items():
         variants = " ".join(v + (f"({t.display()})" if t else "") + ";" for v, t in vs)
-        out.append(f"enum {local(n)}{generics(p.generics.get(n, []))} {{ {variants} }}")
+        out.append(f"{pub(n)}enum {local(n)}{generics(p.generics.get(n, []))} {{ {variants} }}")
     for n, members in p.traits.items():
-        out.append(f"trait {local(n)} {{ {' '.join(signature(m) + ';' for m in members)} }}")
-    out += [f"const {local(n)}:{t.display()} = {format_expr(e)};" for n, (t, e) in p.consts.items()]
+        out.append(f"{pub(n)}trait {local(n)} {{ {' '.join(signature(m) + ';' for m in members)} }}")
+    out += [f"{pub(n)}const {local(n)}:{t.display()} = {format_expr(e)};" for n, (t, e) in p.consts.items()]
     return "\n".join(out)
 
 
@@ -188,7 +191,7 @@ def canonical_source(source: str) -> str:
                 if importer == module
                 else []
             )
-        declared = type_declarations(Program(**tables, generics=p.generics, attributes=p.attributes))
+        declared = type_declarations(Program(**tables, generics=p.generics, attributes=p.attributes, public=p.public))
         out += [declared] if declared else []
         members: list[Function] = []
         for f in [*(f for f in p.functions if f.module == module), None]:
@@ -202,8 +205,11 @@ def canonical_source(source: str) -> str:
                 members.append(f)
             elif f is not None:
                 out.append(("pub " if f.public and module else "") + function_source(f))
+        out += [
+            f"derive wire for {local(name)};" for name in p.derivations if module and name.rpartition(".")[0] == module
+        ]
     out += [f"family {pre} = {name}[{lo}..{hi}];" for pre, name, lo, hi in p.families]
-    out += [f"derive wire for {name};" for name in p.derivations]
+    out += [f"derive wire for {name};" for name in p.derivations if "." not in name]
     return "\n\n".join(out) + "\n"
 
 
