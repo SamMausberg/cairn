@@ -264,3 +264,14 @@ def test_dynamic_interface_rejections(code, tail):
     with pytest.raises(Diagnostic) as e:
         compile_source(DYNAMIC + tail)
     assert e.value.data["code"] == code
+
+
+def test_the_readme_example_is_real():
+    """Documentation that does not compile is a claim nobody checked."""
+    from pathlib import Path
+
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text()
+    sample = readme.split("```cairn\n", 1)[1].split("```", 1)[0]
+    receipt = compile_source(sample)[1]
+    assert "par:device" in receipt["functions"]["saxpy"]["effects"]
+    assert {"spawn", "join"} <= set(receipt["functions"]["halves"]["effects"])

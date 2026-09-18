@@ -1,88 +1,85 @@
-# CAIRN 0.6
+# CAIRN 1.0
 
-An executable CPU language prototype with explicit memory, typed error results, a C++20 backend, and compiler-guided AI edits. This release adds scoped heap/stack buffers, exhaustive matching, loop control, exact arithmetic certificates, and whole-module scalar-verification coverage. It is **not a full C++ replacement or an entirely proved compiler**.
+A systems language in which every cost is visible, borrows cannot dangle, and an AI agent's edit is admitted by the compiler rather than trusted. It compiles to readable, guarded C++20 for CPUs, to CUDA for GPUs from the same source, and to a freestanding image for bare metal. It is **not an entirely proved compiler**; what is proved, tested and merely implemented is kept apart everywhere below.
 
 ```cairn
-enum Division { Value(u64); ZeroDivisor; }
+import std.core (Option, Ord);
 
-fn divide(x:u64, y:u64) -> Division {
-  if y == 0 { return Division.ZeroDivisor; }
-  return Division.Value(x / y);
+fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
+  parallel i in n { out[i] = a * x[i] + y[i]; }   // CUDA lanes here; host threads if the views are @host
 }
 
-fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
+fn largest[T: Ord](n:usize, xs:ro<T>[n]) -> Option[usize] {
+  if n == 0 { return Option.None; }
+  let mut best:usize = 0;
+  for i in 1..n { if less(xs[best], xs[i]) { best = i; } }
+  return Option.Some(best);
+}
+
+fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
+
+fn halves(n:usize, data:rw<u64>[n]) {
+  let mid = n / 2;
+  let left = spawn fill(mid, data[0..mid], 0);        // each task leases its half until wait
+  let right = spawn fill(n - mid, data[mid..n], 500);
+  wait(left);
+  wait(right);
+}
 ```
 
-A returned error is data, not an abort. Match every variant explicitly. The arithmetic identity avoids intermediate overflow; the restricted scalar checker can compare it with a fixed reference. Neither its result nor a compiler typecheck proves the complete native toolchain.
+Three rules explain most of it. **Costs are visible**: nothing allocates, synchronizes, moves an owner, runs in parallel or crosses a memory boundary unless the source says so, and every function carries an inferred effect row (`alloc`, `write:out`, `par:device`, `ffi:write`, ...) that `pure` and `effects(...)` can cap. **Borrows are second class**: they exist only as parameters and arguments, so there are no lifetime annotations; owners are affine, `linear` values must be consumed exactly once, a task leases what it borrows until `wait`, and a parallel lane may touch only element `[i]` of anything a lane writes. **Short forms are contracts**: `compact`, `reduce`, `parallel`, `try`, `family` and `derive wire` expand to inspectable code whose obligations travel with the expansion; the collector's one unchecked store is justified by certificates that are checked before every emission and proved sound in Lean.
 
 ## Build and run
 
-Tested host: Linux x86-64, Python 3.11+, Clang 17 or GCC 14.2 with C++20. Ordinary compilation has no third-party Python runtime dependency. Scalar equivalence additionally needs a locally installed Z3 shared library. There are no automatic downloads, model endpoints, or credentials.
+Linux on x86-64 or AArch64, Python 3.11+, Clang or GCC with C++20. Ordinary compilation has no third-party Python dependency. Optional local tools switch on further gates and are never downloaded: `libz3` (scalar equivalence), CUDA `nvcc` (device programs), Lean 4 (`proofs/`), `qemu-system-aarch64` (the freestanding target).
 
 ```sh
 python3 bin/cairn doctor
-python3 bin/cairn run examples/systems
-python3 bin/cairn test examples/systems --cxx g++
-python3 bin/cairn certificates
-python3 bin/cairn verify examples/proof_scope/reference.cairn \
-  examples/proof_scope/candidate.cairn --all
-python3 bin/cairn new my_project
+python3 bin/cairn run examples/systems                 # typed-error parser, stack sort, heap pipeline
+python3 bin/cairn test examples/systems --cxx g++      # independent finite task contracts
+python3 bin/cairn run examples/apps/kvstore            # a storage engine written in CAIRN
+python3 bin/cairn run examples/apps/gpu_pipeline       # transfer, lanes, device compaction and reduction
+python3 bin/cairn run examples/embedded                # bare-metal AArch64 under QEMU, UART over MMIO
+python3 bin/cairn verify examples/proof_scope/reference.cairn examples/proof_scope/candidate.cairn --all
+python3 bin/cairn certificates && (cd proofs && lake build)
+python3 bin/cairn fmt --check examples && python3 bin/cairn new my_project
 ```
-
-`examples/systems` is a real multi-file executable: a decimal parser returns typed error offsets, a byte sorter uses a fixed stack histogram, and a filtering pipeline uses one explicit heap buffer. It has independent expected outputs. It does not depend on an unimplemented language I/O library. Exit zero denotes the example's success.
-
-Install the supplied wheel with `python3 -m pip install --no-index --no-deps /path/to/cairn_language-0.6.0-py3-none-any.whl`. An installed `cairn` command exposes the same interface as `python3 bin/cairn`.
-
-## Explicit storage, compact source
-
-```cairn
-fn sorted_even(n:usize, out:rw<u8>[n], input:ro<u8>[n]) -> usize {
-  buffer scratch:u8[n] = zeroed;
-  sort_bytes(n,scratch,input);
-  let used = compact out for i in len(scratch)
-    where (scratch[i] & 1) == 0 yield scratch[i];
-  return used;
-}
-```
-
-`sort_bytes` is implemented in `examples/systems/src/sort.cairn`, not an invented library call. `buffer` allocates and initializes storage; `stack counts:usize[256] = zeroed;` reserves fixed local storage. `len` reads extent metadata. Owners cannot escape, be copied, or be returned in this profile. Normal scope exit, return, break and continue release scoped heap storage. Aborts do not promise cleanup. All reads and writes retain the native checks; the collector's structurally bounded output store is the existing specialized exception.
-
-## Commands and evidence
 
 | Command | Actual acceptance boundary |
 |---|---|
-| `check`, `emit` | Native syntax/types/effects; C++ emission is inspectable. |
-| `build`, `run` | Fresh native library/executable; explicit execution with process limits. |
-| `test` | Independent finite task cases, with child exit status checked. |
-| `certificates` | Seventeen exact linear identities for bounded-collector arithmetic, checked by trusted Python. |
-| `verify ... --symbol f` | Selected pure integer/Boolean function, fixed-reference equivalence through Z3. |
-| `verify ... --all` | Every declared function and public type census must satisfy the scalar policy; unsupported entries block aggregate success. |
-| `inspect ... --symbol f` | Source, scope, effects, and feature-selected instructions for an AI edit. |
-
-Use `--cxx g++` for GCC. Baseline `x86-64` is the CLI default; `--arch x86-64-v3` is explicit. `run` defaults to a 1024 MiB virtual-address-space limit, configurable with `--memory-mib`. Limits are not a security sandbox. Shared-library users must impose their own execution limits.
+| `check`, `emit` | Syntax, types, ownership, leases, lanes, placement and effects; the C++ is inspectable. |
+| `build`, `run` | Fresh native build (`--debug` adds symbols that point at the `.cairn` files); explicit execution with process limits, under QEMU for a freestanding target. |
+| `test` | Independent finite task cases, with the child's exit status checked. |
+| `certificates` | Seventeen exact affine identities for the collector, checked here by trusted Python and in `proofs/` by Lean. |
+| `verify --symbol f` / `--all` | Fixed-reference scalar equivalence through Z3 on the typed tree, seeing through generics, traits and modules; unsupported entries block aggregate success. |
+| `inspect --symbol f` | Source, scope, effects and feature-selected rule cards for an AI edit. |
+| `fmt`, `lsp` | Comment-preserving formatter that fails closed; a language server (diagnostics, hover types, symbols, formatting). |
 
 ## Repository
 
 ```
-src/cairn/       syntax, expansion, checking, emission, CLI, editing and scalar SMT
-  runtime/      guarded views, arithmetic and scoped storage
-examples/       programs and fixed behavioral test contracts
-tests/          rejection, independent behavior, protocol and distribution tests
-tools/          repeatable validation, context accounting, audit and publication
-bench/          ordinary C++ references; no expert-baseline label
-docs/           current language/verification guides and explicitly historical specs
-training/       inherited teaching fixtures; no trained model is shipped
-evidence/       versioned executed results and limitations
+src/cairn/          syntax, modules, expansion, checking, codegen, toolchain, build, CLI
+  runtime/          guards, owners, threads/tasks/atomics, CUDA lanes and collectives (C++ headers)
+  std/              the standard library, written in CAIRN (core, vec, map, arena, text, sort, io, net, ...)
+  targets/          start-up code and linker script of the freestanding AArch64 board
+  agent_tools.py ...  edit sessions, sketches, rule cards, scalar SMT, certificates, verification
+proofs/             Lean 4: certificate checker soundness, the 17 certificates, the collector loop model
+examples/           programs with fixed contracts; apps/ (storage engine, TCP service, simulator, GPU pipeline); embedded/
+tests/              rejection, native behavior under both compilers and sanitizers, device, QEMU, agent and tooling tests
+tools/ bench/       repeatable validation, context accounting, audit, publication, benchmarks
+editors/            VS Code / Cursor extension (grammar + language client)
+docs/               language, std, architecture, verification, freestanding, tooling, security, roadmap, history
+evidence/           versioned executed results and their limits
 ```
 
-Start with [language](docs/language.md), [verification](docs/verification.md), and [testing](docs/testing.md). [AGENTS.md](AGENTS.md) gives the edit rules. The capability ledger at [docs/capabilities.json](docs/capabilities.json) distinguishes implemented features from missing ones. `make test`, `make systems`, `make proof`, and `make native` are independent gates.
-
-## Local and private
-
-All changes in this delivery remain local on `work/v0.6`; the previous `main` and `v0.5.0` are retained. No GitHub repository was created, no code was uploaded, and no remote workflow was run. The optional [private publisher](docs/private-publication.md) remains opt-in, private-only, and non-force. It is not invoked by tests or builds. No public fallback or license was selected.
+Start with [language](docs/language.md), then [std](docs/std.md), [architecture](docs/architecture.md) and [verification](docs/verification.md). [AGENTS.md](AGENTS.md) gives the edit rules; [capabilities.json](docs/capabilities.json) separates what is implemented from what is missing; [roadmap](docs/roadmap.md) states the remaining gates. `make lint test proof` are the everyday gates; `make gpu embedded` need the hardware and emulator.
 
 ## What this does not establish
 
-Exact arithmetic certificates do not establish parser/type soundness, lifetime safety, stable-selection correctness, or native refinement. SMT equivalence trusts its translator and solver and rejects memory, loops, sums, floating point, and concurrency. There is no successful Lean build or axiom audit. General owners/containers, generic results, namespaces/separate compilation, OS libraries, CPU concurrency and GPU lowering remain unimplemented.
+The Lean result covers the certificate checker, its seventeen certificates and a model of the collector loop; it does not cover the Python that mirrors the checker, the emitter's correspondence to the model, or native code. Ownership, leases, lane race-freedom, placement and effects are implemented and tested, including under Address, Leak, UndefinedBehavior and Thread sanitizers and device death tests, but they are not mechanized, and generic code is checked per instance. SMT equivalence trusts its translator and Z3 and rejects memory, loops, sums and floats. The foreign boundary is as safe as its declarations are true.
 
-No model was trained or evaluated. Context measurements count complete constructed packets, not model proficiency. Byte-token counts are not frontier BPE counts; no general 100x compression is claimed. Native section equality is not a timing benchmark or universal C++ performance guarantee.
+The GPU and host-parallel numbers in `evidence/v1_0/gpu/` are one machine and three kernels: host regions lose to a sequential loop below roughly ten million cheap elements, and device wins depend on transfer cost. No claim is made against tuned C++ or CUDA. No model was trained or evaluated; context measurements count constructed packets, not model proficiency, and byte counts are not frontier tokenizer counts.
+
+## Private by default
+
+No license has been selected and nothing here is published for reuse. The optional [private publisher](docs/private-publication.md) stays opt-in, private-only and non-force, and is never invoked by tests or builds.
