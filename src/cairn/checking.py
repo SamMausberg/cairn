@@ -115,12 +115,27 @@ def path(e: Expr, stable=lambda name: False) -> str:
     return e.val
 
 
-def overlaps(a: str, b: str) -> bool:
-    """Two parts of one array are disjoint only when they visibly share a boundary."""
+def overlaps(a: str, b: str, others: Any = ()) -> bool:
+    """Two parts of one array are disjoint only when one visibly ends at or before the other begins.
+
+    Every part in play was guarded `lo <= hi`, so the bounds of `others` (parts of the same array that
+    are lent alongside) chain: d[0..a], d[a..b] and d[b..n] are pairwise disjoint."""
     (base_a, _, part_a), (base_b, _, part_b) = a.partition("["), b.partition("[")
     if base_a == base_b and ".." in part_a and ".." in part_b:
+        known = [
+            p.partition("[")[2][:-1].split("..") for p in (a, b, *others) if p.startswith(base_a + "[") and ".." in p
+        ]
+        edges = [(lo, hi) for lo, hi in known if "?" not in (lo, hi)]
+
+        def reaches(x: str, goal: str, seen: set[str]) -> bool:
+            before = x == goal or (x.isdigit() and goal.isdigit() and int(x) <= int(goal))
+            return before or any(
+                reaches(hi, goal, seen | {x}) for lo, hi in edges
+                if hi not in seen and (lo == x or (lo.isdigit() and x.isdigit() and int(x) <= int(lo)))
+            )  # fmt: skip
+
         (lo_a, hi_a), (lo_b, hi_b) = part_a[:-1].split(".."), part_b[:-1].split("..")
-        return "?" in (lo_a, hi_a, lo_b, hi_b) or not (hi_a == lo_b or hi_b == lo_a)
+        return "?" in (lo_a, hi_a, lo_b, hi_b) or not (reaches(hi_a, lo_b, set()) or reaches(hi_b, lo_a, set()))
     return base_a == base_b or base_a.startswith(base_b + ".") or base_b.startswith(base_a + ".")
 
 
@@ -753,6 +768,8 @@ class Checker:
                 )
         self.lanes, self.device_depth, self.loop_depth, _, self.effects = saved
         del self.env[binder]
+        if s.tag != "parallel" and target == "device":  # The runtime's scan and reduction need device scratch.
+            self.effects |= {"gpu_alloc", "gpu_free"}
         if s.tag == "parallel" or target == "device":  # A host reduction is an ordinary in-order fold.
             self.effect("par:" + target)
             self.counts["parallel_regions"] = self.counts.get("parallel_regions", 0) + 1
@@ -899,10 +916,12 @@ class Checker:
             return f"{self.identity(e.args[0])}[{key}]"
         return self.identity(e.args[0]) + "." + e.val if e.tag == "field" else e.val
 
-    def leased(self, place: str, mode: str, node: Any):
-        """Every access to a named place: a task's lease may forbid it, and a closure records what it captures."""
+    def leased(self, place: str, mode: str, node: Any, elements: bool = True):
+        """Every access to a named place: a task's lease may forbid it, and a closure records what it captures.
+        `elements=False` is a read of an owner's length, which a lease on its elements cannot change."""
+        lent = [p for held in self.leases.values() for p, _ in held]
         for ticket, held in self.leases.items():
-            if any(overlaps(place, p) and "rw" in (mode, m) for p, m in held):
+            if any(overlaps(place, p, lent) and "rw" in (mode, m) and (elements or "[" not in p) for p, m in held):
                 fail("E-LEASED", f"{place} is lent to task {ticket} until wait({ticket}).", node)
         self.capture(place, mode)
 
@@ -1101,20 +1120,22 @@ class Checker:
             e.args = []
         name = g.name
         self.signature(g)
-        if (g.generics and not g.bindings) or g.extern or any(t.mode != "value" for _, t in g.params):
-            fail("E-FN-TYPE", f"{name} cannot be a function value: only plain functions of values qualify.", e)
+        if (g.generics and not g.bindings) or g.extern or g.kernel or any(t.mode != "value" for _, t in g.params):
+            fail("E-FN-TYPE", f"{name} cannot be a function value: only plain host functions of values qualify.", e)
         self.call_edges[self.f.name].append((name, {}))
         self.callset.add(name)
         self.address_taken.add(name)
         e.ref, e.tag = g, "function"
         return Type("fn", want.mode, args=(*(t for _, t in g.params), g.ret))
 
-    def lend(self, a: Expr, mode: str, borrows: list[tuple[str, str]]) -> str:
-        """A named place lent to a call: leased places and lanes object here; returns its root name."""
+    def lend(self, a: Expr, mode: str, borrows: list[tuple[str, str]], elements: bool = False) -> str:
+        """A named place lent to a call: leased places and lanes object here; returns its root name.
+        An array view lends the elements (`x[]`), which leaves the owner's length readable."""
         if root(a).tag != "name" or root(a).val not in self.env:
             return ""
-        self.leased(self.where(a), mode, a)
-        borrows.append((self.where(a), mode))
+        place = self.where(a) + "[]" * (elements and a.tag != "slice")
+        self.leased(place, mode, a)
+        borrows.append((place, mode))
         if self.lanes and root(a).val in self.lanes.outer:
             self.lanes.accesses.append((root(a).val, False, mode == "rw", a))
         return root(a).val
@@ -1122,9 +1143,10 @@ class Checker:
     def disjoint(self, borrows: list[tuple[str, str]], node: Any, *closures: list[tuple[str, str]]):
         """No argument of one call may write what another can reach; a closure reaches what it captured."""
         groups = [[b] for b in borrows] + list(closures)
+        lent = [place for place, _ in borrows]
         for i, group in enumerate(groups):
             rest = [b for later in groups[i + 1 :] for b in later]
-            if any(overlaps(place, other) and "rw" in (m, k) for place, m in group for other, k in rest):
+            if any(overlaps(place, other, lent) and "rw" in (m, k) for place, m in group for other, k in rest):
                 fail("E-ALIAS", "A mutable view cannot be passed to overlapping call arguments.", node)
 
     def indirect(self, e: Expr, target: Binding, args: list[Expr]) -> Type:
@@ -1532,7 +1554,7 @@ class Checker:
                 if want.mode == "rw" and not self.writable(a):
                     fail("E-WRITE-LEASE", "A mutable borrow needs a mutable local or an rw borrow.", a)
                 self.expect(actual.value, want.value, a)
-            mapping[name] = self.lend(a, want.mode, borrows)
+            mapping[name] = self.lend(a, want.mode, borrows, bool(want.extent))
             if named and want.mode == "rw" and self.env[root(a).val].ty.mode == "value":
                 self.effect("write:" + root(a).val)
         self.disjoint(borrows, e, *closures)

@@ -294,6 +294,31 @@ REJECTED = {
         "E-EXTERN",
         'extern "close\\"); int evil(" fn close_fd(fd:i32) -> i32 effects(io);',
     ),
+    "a try leaving from the middle of an expression that already took an owner (leak)": (
+        "E-EFFECT-ORDER",
+        "enum R { Ok(usize); Err(u8); }\nstruct P { a:Buf[u64]; b:usize; }\n"
+        "fn may(v:u64) -> R { if v == 0 { return R.Err(1); } return R.Ok(2); }\n"
+        "fn build(v:u64, x:rw<Buf[u64]>) -> R { let p = P(take(x), try may(v)); return R.Ok(p.b + len(p.a)); }",
+    ),
+    "reading the length of an owner a task may replace (data race)": (
+        "E-LEASED",
+        "fn repl(v:rw<Buf[u64]>, rounds:usize) { let mut n = Buf[u64](64); for i in 0..rounds { swap(n, v); } }\n"
+        "fn main() -> i32 { let mut b = Buf[u64](4); let t = spawn repl(b, 10); let k = len(b); wait(t); return i32(k); }",
+    ),
+    "an atomic declared inside a device lane": (
+        "E-PLACEMENT",
+        "fn f(n:usize, d:rw<u64>[n]@device) { parallel i in n { let a = Atomic[u64](0); d[i] = u64(i); } }",
+    ),
+    "a kernel reaching host code as a function value": (
+        "E-FN-TYPE",
+        "kernel fn k(x:u64) -> u64 = mul_wrap(x, 3);\nfn call(f:ro<fn(u64) -> u64>) -> u64 = f(7);\n"
+        "fn main() -> i32 { return i32(call(k)); }",
+    ),
+    "two parts with nothing lent between them to order their bounds": (
+        "E-LEASED",
+        FILL + "fn main() -> i32 { let n:usize = 9; let a:usize = 3; let b:usize = 6; let mut d = Buf[u64](n);\n"
+        "  let t1 = spawn fill(a, d[0..a], 1); let t3 = spawn fill(n - b, d[b..n], 3); wait(t1); wait(t3); return 0; }",
+    ),
     "a lane inside a closure returning from that closure": (
         "E-PARALLEL-CONTROL",
         "fn once(f:ro<fn(u64) -> u64>) -> u64 = f(0);\n"
@@ -472,6 +497,18 @@ BEHAVIOR = {
         "impl Flag for F { fn get(self:ro<F>) -> bool = self.on; }\nstruct Box { d:Dyn[Flag]; }\n"
         "fn main() -> i32 { let b = Box(Dyn[Flag](F(true)));\n  if get(b.d) { return 0; }\n  return 1; }",
     ),
+    "a three-way chunk split: each lent part's guard orders the next part's bounds": (
+        6,
+        "fn fill(n:usize, out:rw<u64>[n], s:u64) { for i in 0..n { out[i] = s; } }\n"
+        "fn main() -> i32 { let n:usize = 9; let a:usize = 3; let b:usize = 6; let mut d = Buf[u64](n);\n"
+        "  let t1 = spawn fill(a, d[0..a], 1); let t2 = spawn fill(b - a, d[a..b], 2);\n"
+        "  let t3 = spawn fill(n - b, d[b..n], 3); let whole = len(d);\n"
+        "  wait(t1); wait(t2); wait(t3); return i32(d[0] + d[4] + d[8]) + i32(whole) - 9; }",
+    ),
+    "a task carries a temporary it was given for a single borrow": (
+        4,
+        "fn one(x:ro<u64>) -> u64 = x + 1;\nfn main() -> i32 { let t = spawn one(3); let r = wait(t); return i32(r); }",
+    ),
     "a public family over an imported public template belongs to the module that declares it": (
         20,
         "module lib;\npub fn scale[K:nat](x:usize) -> usize = mul_wrap(x, K);\n"
@@ -491,6 +528,6 @@ def test_what_the_second_audit_found_ambiguous_now_has_one_meaning(tmp_path, nam
     (tmp_path / "p.cpp").write_text(cpp + start)
     for header, text in RUNTIME_FILES.items():
         (tmp_path / header).write_text(text)
-    flags = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=address,undefined"]
+    flags = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-pthread", "-fsanitize=address,undefined"]
     subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
     assert subprocess.run([tmp_path / "p"], timeout=60).returncode == status

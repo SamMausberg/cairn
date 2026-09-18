@@ -220,16 +220,14 @@ class Emitter:
         """Arguments are evaluated now and carried by value, so the task never reads the spawner's locals."""
         call, captures, passed = e.args[0], [], []
         for k, (a, (_, want)) in enumerate(zip(call.args, call.ref.params, strict=True)):
-            single = want.mode != "value" and not want.extent
-            value = (
-                self.expr(a)
-                if want.mode == "value" or a.tag == "slice"
-                else self.pointer(a)[0]
-                if want.extent
-                else "&" + self.expr(a)
+            place = want.mode != "value" and not want.extent and a.tag in {"name", "field", "index"}
+            carried = want.mode == "value" or a.tag == "slice" or not (place or want.extent)  # A temporary rides along.
+            captures.append(
+                f"a{k} = {self.expr(a) if carried else '&' + self.expr(a) if place else self.pointer(a)[0]}"
             )
-            captures.append(f"a{k} = {value}")
-            passed.append(f"*a{k}" if single else f"a{k}" if self.trivial(want) else f"std::move(a{k})")
+            passed.append(
+                f"*a{k}" if place else f"a{k}" if self.trivial(want) or want.mode != "value" else f"std::move(a{k})"
+            )
         body = f"return cf_{mangle(call.ref.name)}({', '.join(passed)});"
         return f"{self.type(e.ty)}::spawn([{', '.join(captures)}]() mutable noexcept {{ {body} }})"
 

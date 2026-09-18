@@ -78,8 +78,9 @@ def fixed_point(c: Checker) -> dict[str, set[str]]:
 
 def audit(c: Checker, effects: dict[str, set[str]]):
     """C++ leaves operand order open, so one expression may not contain two operands that could
-    observe each other: a nested writing call, a nested take, or a nested opaque call (closure,
-    function value, dynamic dispatch) next to anything mutable. `&&` and `||` are sequenced."""
+    observe each other: a nested writing call, a nested take, a nested closure call next to what
+    it writes, or a nested `try` next to an operand that already owns something. `&&` and `||`
+    are sequenced."""
 
     def names(e: Expr, out: list[Expr]) -> list[Expr]:
         out += [e] if e.tag == "name" else []
@@ -103,10 +104,30 @@ def audit(c: Checker, effects: dict[str, set[str]]):
             nested(child, at_root and e.tag in {"try", "spawn"}, out)
         return out
 
+    def tries(e: Expr, at_root: bool, out: list[Expr]) -> list[Expr]:
+        out += [e] if e.tag == "try" and not at_root else []
+        for child in e.args if e.tag != "lambda" else []:
+            tries(child, at_root and e.tag in {"try", "spawn"}, out)
+        return out
+
+    def within(e: Expr, node: Expr) -> bool:
+        return e is node or any(within(a, node) for a in e.args)
+
+    def abandons(e: Expr, leaving: Expr) -> bool:
+        """Would a return from `leaving` drop an owner that an operand beside it already holds?"""
+        if e is leaving or e.tag == "lambda":
+            return False
+        holds = e.ty is not None and c.kind(e.ty) != "copy" and (e.tag in {"call", "try"} or e.ref == "move")
+        return (holds and not within(e, leaving)) or any(abandons(a, leaving) for a in e.args)
+
     def unsequenced(e: Expr) -> list[Expr]:
         return [g for a in e.args for g in unsequenced(a)] if e.tag == "binary" and e.val in {"&&", "||"} else [e]
 
     def group(e: Expr, at_root: bool):
+        for leaving in tries(e, at_root, []):
+            if abandons(e, leaving):
+                fail("E-EFFECT-ORDER", "Bind this try first: leaving from here would abandon an owner that another "
+                     "operand already holds.", leaving)  # fmt: skip
         found = nested(e, at_root, [])
         for call in found:
             inside = {id(n) for n in names(call, [])}

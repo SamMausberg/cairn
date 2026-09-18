@@ -38,7 +38,7 @@ def check_len(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Typ
     ty = c.expr(args[0], consume=False)
     if not is_view(ty) and ty.name not in {"Buf", "Array"}:
         fail("E-LEN", "len requires an array view.", e)
-    c.capture(c.where(args[0]), "ro")  # A length never changes under a lease, but a closure still reads the owner.
+    c.leased(c.where(args[0]), "ro", e, elements=False)  # Lent elements keep their count; a lent owner may not.
     return USIZE
 
 
@@ -161,6 +161,7 @@ def check_wait(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Ty
 
 def check_shared(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
     """Atomic[T](v) and Mutex[T](v) are declared in place and reached through ro borrows."""
+    c.host_only(e, "Atomics and mutexes are host objects")
     ty = explicit(c, e, e.val, targs, expected, f"Write {e.val}[T](initial).")
     if e.val == "Atomic" and ty.args[0].name not in INT | {"bool"}:
         fail("E-INFER", "An atomic holds an integer or bool.", e)

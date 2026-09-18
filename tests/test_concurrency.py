@@ -271,6 +271,33 @@ def test_lane_local_storage_and_sums_run_on_the_device(tmp_path):
     assert build_and_run(tmp_path, LANE_LOCAL, "g++")[0] == 0
 
 
+DEVICE_PARTS = """
+kernel fn window(k:usize, g:ro<f32>[k]@device) -> f32 { let mut t:f32 = 0.0; for j in 0..k { t = t + g[j]; } return t; }
+fn main() -> i32 {
+  let n:usize = 1024;
+  let w:usize = 4;
+  buffer cpu:f32[n] = zeroed;
+  for i in 0..n { cpu[i] = 1.0; }
+  buffer x:f32[n]@device = zeroed;
+  buffer out:f32[n]@device = zeroed;
+  transfer(x, cpu);
+  parallel i in n { if i + w <= n { out[i] = window(w, x[i..i + w]); } }   // a guarded part inside a device lane
+  transfer(cpu[0..n], out[0..n]);                                         // parts cross placements too
+  let total = reduce add_wrap for i in n yield u64(out[i]);
+  if cpu[0] != 4.0 || cpu[n - 1] != 0.0 || total != 4084 { return 1; }
+  return 0;
+}
+"""
+
+
+def test_parts_are_guarded_inside_device_lanes_and_device_scratch_is_in_the_row(tmp_path):
+    rows = compile_source(DEVICE_PARTS)[1]["functions"]["main"]["effects"]
+    assert {"gpu_alloc", "gpu_free", "par:device", "transfer:h2d", "transfer:d2h"} <= set(rows)
+    if not shutil.which("nvcc") or subprocess.run(["nvidia-smi"], capture_output=True).returncode != 0:
+        pytest.skip("No CUDA toolkit or device here")
+    assert build_and_run(tmp_path, DEVICE_PARTS, "g++")[0] == 0
+
+
 def test_try_returns_from_the_closure_it_is_written_in(tmp_path):
     source = (
         "enum R { Ok(u64); Err(u8); }"

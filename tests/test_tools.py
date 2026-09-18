@@ -307,6 +307,8 @@ def test_task_eval():
 
 
 def test_audit_repository():
+    if not (ROOT / ".git").exists():
+        pytest.skip("the history audit needs a git checkout, not an exported tree")
     done = subprocess.run([PY, "tools/audit_repository.py"], cwd=ROOT, text=True, capture_output=True, timeout=300)
     result = parsed(done.stdout)
     assert done.returncode == (1 if result["findings"] else 0)

@@ -78,7 +78,7 @@ public:
   R view() const noexcept { if(!ref_.self) trap(); return ref_; }
 };
 // x[lo..hi] passed where the callee expects `want` elements: one guard, then a plain pointer.
-template<class T> inline T* part(T* p,std::size_t lo,std::size_t hi,std::size_t n,std::size_t want) noexcept {
+template<class T> CR_HD inline T* part(T* p,std::size_t lo,std::size_t hi,std::size_t n,std::size_t want) noexcept {
   if(lo>hi || hi>n || hi-lo!=want) trap();
   return p+lo;
 }
