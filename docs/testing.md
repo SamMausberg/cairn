@@ -1,6 +1,17 @@
-# Reproduce CAIRN 0.6 evidence
+# Reproduce CAIRN 1.0 evidence
 
-Results for this release live in evidence/v0_6. Historical teaching labels and old benchmarks are not new tests. All commands below run locally and perform no publication or credential setup.
+Results for this release live in evidence/v1_0; evidence/v0_6 and earlier are historical. Historical teaching labels and old benchmarks are not new tests. All commands below run locally and perform no publication or credential setup.
+
+## Everyday gates
+
+```sh
+make lint          # ruff format --check, ruff check, cairn fmt --check
+make test          # the whole suite in parallel; hardware- and tool-dependent parts skip with a reason
+make proof         # certificates, scalar module equivalence, export drift check and `lake build`
+make gpu embedded  # CUDA runtime/lanes and the QEMU board, where available
+```
+
+The suite runs every accepted 1.0 construct natively under clang++ and g++, the ownership program under Address/Leak/UndefinedBehavior sanitizers, the task program under ThreadSanitizer, the runtime headers' own self-checking binaries (including death tests: a guard that fires inside a CUDA lane must abort the host, an unawaited ticket must trap), the freestanding image under QEMU with an exact UART transcript, the formatter over every `.cairn` file plus randomized whitespace/comment fuzz, and a real `cairn lsp` subprocess. Every safety rule has a rejection test naming its diagnostic code. The canonical projection must round-trip every sample and `std` module to identical native code.
 
 ## Fast and example gates
 
