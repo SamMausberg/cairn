@@ -75,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
             c.add_argument("--arch", choices=sorted(ARCHS))
             c.add_argument("--target", choices=sorted(TARGETS), help="Freestanding profile; default hosted.")
             c.add_argument("--timeout", type=int, default=60)
+            c.add_argument("--debug", action="store_true", help="Debug symbols that point at the CAIRN source.")
         if name == "run":
             c.add_argument(
                 "--memory-mib", type=int, default=1024, help="Native address-space cap, 64..65536 MiB; not a sandbox."
@@ -210,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
             kind="exe" if a.command == "run" else a.kind,
             timeout=a.timeout,
             target=a.target,
+            debug=a.debug,
         )
         if a.command == "build" or result["status"] != "native-built":
             report(result)

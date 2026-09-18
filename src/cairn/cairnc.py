@@ -59,7 +59,7 @@ def interfaces(p: Program, receipts: dict[str, Any]) -> dict[str, Any]:
             for m, fs in sorted(out.items())}  # fmt: skip
 
 
-def compile_source(source: str, origin: str = "") -> tuple[str, dict[str, Any]]:
+def compile_source(source: str, origin: Any = "") -> tuple[str, dict[str, Any]]:
     """Generated C++ and its receipt; `origin` names the source in #line directives for debug builds."""
     p, checker, receipts = compile_program(source)
     certificate = audit_collector()  # The collector's unchecked store is emitted only under this gate.

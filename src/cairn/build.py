@@ -25,6 +25,7 @@ def build(
     kind: str | None = None,
     timeout: int = 60,
     target: str | None = None,
+    debug: bool = False,
 ) -> dict:
     kind = kind or project.kind
     target = target or project.target
@@ -35,7 +36,7 @@ def build(
     if bare and kind != "exe":
         raise ProjectError(f'Target {target} builds one image: set kind = "exe".')
     compiler = find(cxx)
-    generated, receipt = compile_source(project.source)
+    generated, receipt = compile_source(project.source, project.origin if debug else "")
     if bare:  # No hosted runtime stands behind the image, so no effect may assume one.
         audit_effects(receipt["functions"])
     if kind == "exe":
@@ -60,6 +61,8 @@ def build(
     command = native_command(
         cxx, str(cpp), str(artifact), arch or project.arch, kind, "cuda" in receipt["requires"], target
     )
+    if debug:  # Symbols plus #line directives: a debugger steps through the .cairn files.
+        command.insert(1, "-g")
     started = time.monotonic()
     record = {
         "schema": "cairn.build/1",

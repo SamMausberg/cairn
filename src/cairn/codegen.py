@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 from .checking import COMPARISONS, HOST_VISIBLE, WRAPPING, Checker, is_view
 from .syntax import CPP, FLOAT, INT, NUMERIC, Expr, Function, Program, Stmt, Type
@@ -30,10 +31,11 @@ def bare(condition: str) -> str:
 
 
 class Emitter:
-    def __init__(self, p: Program, checker: Checker | None = None, origin: str = ""):
+    def __init__(self, p: Program, checker: Checker | None = None, origin: Any = ""):
         self.p, self.ind, self.counter = p, 0, 0
         self.lines: list[str] = []
-        self.origin = origin  # A source name turns on #line directives: debuggers then step through CAIRN.
+        # A source name, or a function from a line to (file, line), turns on #line directives.
+        self.origin = (lambda line: (origin, line)) if isinstance(origin, str) and origin else origin
         self.loops: list[int] = []
         self.headers = ["cairn_runtime.hpp"]
         self.dynamic: dict[str, None] = {}  # Traits used behind dyn, in first-use order.
@@ -369,7 +371,7 @@ class Emitter:
     def block(self, ss: list[Stmt]):
         for s in ss:
             if self.origin and s.line:
-                self.put(f'#line {s.line} "{self.origin}"')
+                self.put('#line {1} "{0}"'.format(*self.origin(s.line)))
             getattr(self, "s_" + s.tag)(s, [self.expr(e) for e in s.exprs] if s.tag != "compact" else [])
 
     def s_buffer(self, s: Stmt, es: list[str]):

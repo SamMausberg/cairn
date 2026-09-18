@@ -59,6 +59,13 @@ class Project:
     target: str = "hosted"
     manifest_sha256: str | None = None
 
+    def origin(self, line: int) -> tuple[str, int]:
+        """The authored file and line behind a line of the combined source."""
+        for unit in self.units:
+            if unit.first_line <= line < unit.first_line + unit.lines:
+                return str(self.root / unit.path), line - unit.first_line + 1
+        return self.name, line
+
     def locate(self, error: Diagnostic) -> dict:
         result = dict(error.data)
         line = result.get("line", 0)
