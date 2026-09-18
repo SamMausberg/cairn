@@ -21,7 +21,7 @@ enum Op { Read; Write; }                     // tag-only enum: equality allowed
 struct Header packed { kind:u8; size:u32; }  // or align(64)
 ```
 
-Fields and payloads are any value type (scalars, records, sums, owners), never a borrow or `void`, and never their own type by value (reach it through `Buf`). Construct `Pair(1, 2)`, `Option.Some(x)`, `Option[u64].None`; type arguments are inferred from arguments, literals and the expected type, or written explicitly. `match` evaluates its subject once and needs exactly one arm per variant with no wildcard; a payload arm binds one fresh immutable value, and matching an owner consumes it. `try e` takes a two-variant sum (success first, failure second), yields the success payload, and otherwise returns the failure from the enclosing function, whose return type must be the same sum family with the same failure payload. It is the only propagation form and it is always written out.
+Fields and payloads are any value type (scalars, records, sums, owners), never a borrow or `void`, and never their own type by value (reach it through `Buf`). Construct `Pair(1, 2)`, `Option.Some(x)`, `Option[u64].None`; type arguments are inferred from arguments, literals and the expected type, or written explicitly. `match` evaluates its subject once and needs exactly one arm per variant with no wildcard; a payload arm binds one fresh immutable value, and matching an owner consumes it. `try e` takes a two-variant sum (success first, failure second), yields the success payload, and otherwise returns the failure from the enclosing function (or closure), whose return type must be a two-variant sum with the same failure payload; the families may differ, so a `Done[E]` failure propagates out of a function returning `Result[T, E]`. It is the only propagation form and it is always written out.
 
 Functions take type and natural parameters: `fn largest[T](a:T, b:T) -> T`, `fn scale[K:nat](...)`, called as `largest(3, 9)` or `scale[4](...)`. Every instance is monomorphized on demand and checked as ordinary code, so an instance, not its template, is what typechecks; never-instantiated templates are listed in the receipt (`uninstantiated_templates`) rather than silently trusted. `family gain = scale[1..257];` still names a bounded range of instances.
 
@@ -33,7 +33,7 @@ impl Shape for Square { fn area(self:ro<Square>) -> u64 = self.side * self.side;
 fn total[S: Shape](x:ro<S>, y:ro<S>) -> u64 = area(x) + area(y);
 ```
 
-Dispatch is static, on the type of the `Self` argument; a bound (`[K: Hash + Eq]`) is checked when the instance is made. `value.f(args)` is `f(value, args)`, looked up first in the module that declares the receiver's type. There is no inheritance and no implicit boxing.
+Dispatch is static, on the type of the `Self` argument; a bound (`[K: Hash + Eq]`) is checked when the instance is made. `value.f(args)` is `f(value, args)`, looked up first in the module that declares the receiver's type and before the builtins, so a type may have its own `len`; privacy is still judged from where the call is written. There is no inheritance and no implicit boxing.
 
 ## Borrows
 
@@ -56,7 +56,7 @@ Every type has an all-zero value, so storage of any element type is zero-initial
 
 ## Function values and closures
 
-`fn(u64) -> u64` is a copyable code pointer to a plain declared function of values; it can be stored in records. `ro<fn(u64) -> u64>` is a borrowed callable: pass a declared function or write a closure in place, `apply(n, xs, |x:u64| -> u64 { return x + bias; })`. A closure captures its enclosing scope by reference, exists only as that argument, and therefore never allocates or escapes; its effects belong to the function that wrote it, and the callee shows `indirect_call`. Function types carry values and single borrows, not array views.
+`fn(u64) -> u64` is a copyable code pointer to a plain declared function of values (an instantiated generic such as `ascending[u64]` qualifies); it can be stored in records, its zero value is legal and calling it is a guard failure, and whoever calls through one inherits the effects of every function whose address is taken. `ro<fn(u64) -> u64>` is a borrowed callable: pass a declared function or write a closure in place, `apply(n, xs, |x:u64| -> u64 { return x + bias; })`. A closure captures its enclosing scope by reference, exists only as that argument, and therefore never allocates or escapes; its effects belong to the function that wrote it, and the callee shows `indirect_call`. Function types carry values and single borrows, not array views.
 
 ## Effects and the foreign boundary
 
@@ -67,7 +67,7 @@ extern fn write(fd:i32, data:ro<u8>[n], n:usize) -> i64 effects(io);
 fn say(n:usize, text:ro<u8>[n]) { unsafe { let sent = write(1, text, n); } }
 ```
 
-An `extern` declares its C symbol, signature and effects; its body is invisible, so its effects are mandatory and `ffi:write` propagates to every transitive caller. Foreign calls, `mmio_read[u32](addr)`, `mmio_write[u32](addr, v)` and `asm("wfi")` are legal only inside `unsafe { }`, which is counted per function in the receipt. A caller must supply live, initialized, correctly typed storage for each borrow; numerical guards cannot establish provenance.
+An `extern` declares its C symbol (`extern "close" fn close_fd(fd:i32) -> i32 effects(io);` binds it under another name), signature and effects; its body is invisible, so its effects are mandatory and `ffi:write` propagates to every transitive caller. Foreign calls, `mmio_read[u32](addr)`, `mmio_write[u32](addr, v)` and `asm("wfi")` are legal only inside `unsafe { }`, which is counted per function in the receipt. A caller must supply live, initialized, correctly typed storage for each borrow; numerical guards cannot establish provenance.
 
 ## Parallel regions and placement
 
@@ -108,7 +108,7 @@ wait(right);
 
 ## Projects
 
-`cairn.toml` lists ordered sources and independent task files; it is data, never a build script. `[build] kind = "exe" | "library"`, `arch = "baseline"` or a named profile of the host family (x86-64, AArch64), `target = "hosted"` or a freestanding board such as `"aarch64-virt"`, which refuses any program whose effect rows need a hosted runtime (docs/freestanding.md). The host chooses trusted compilers (`clang++`, `g++`, and `nvcc` when a program uses the device); builds use fresh directories. Generated C++ is readable and keeps the C ABI for every function whose signature is C compatible.
+`cairn.toml` lists ordered sources and independent task files; it is data, never a build script. `[build] kind = "exe" | "library"`, `arch = "baseline"` or a named profile of the host family (x86-64, AArch64), `target = "hosted"` or a freestanding board such as `"aarch64-virt"`, which refuses any program whose effect rows need a hosted runtime (docs/freestanding.md). The host chooses trusted compilers (`clang++`, `g++`, and `nvcc` when a program uses the device); builds use fresh directories. Generated C++ is readable and keeps the C ABI for every function whose signature is C compatible. A library exports every function; an executable contains only what its `main` reaches (`main` may live in a module), while the receipt still covers everything that was checked. `--debug` adds symbols and `#line` maps to the authored files.
 
 ## Scope of proof
 

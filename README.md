@@ -72,7 +72,7 @@ docs/               language, std, architecture, verification, freestanding, too
 evidence/           versioned executed results and their limits
 ```
 
-Start with [language](docs/language.md), then [std](docs/std.md), [architecture](docs/architecture.md) and [verification](docs/verification.md). [AGENTS.md](AGENTS.md) gives the edit rules; [capabilities.json](docs/capabilities.json) separates what is implemented from what is missing; [roadmap](docs/roadmap.md) states the remaining gates. `make lint test proof` are the everyday gates; `make gpu embedded` need the hardware and emulator.
+Start with [language](docs/language.md), then [std](docs/std.md), [architecture](docs/architecture.md) and [verification](docs/verification.md); [tooling](docs/tooling.md) covers `fmt`, `lsp` and the editor extension, [freestanding](docs/freestanding.md) the bare-metal target. [AGENTS.md](AGENTS.md) gives the edit rules; [capabilities.json](docs/capabilities.json) separates what is implemented from what is missing; [roadmap](docs/roadmap.md) states the remaining gates. `make lint test proof` are the everyday gates; `make gpu embedded` need the hardware and emulator.
 
 ## What this does not establish
 
