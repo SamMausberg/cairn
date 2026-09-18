@@ -163,7 +163,7 @@ class Emitter:
             return self.expr(e.ref)
         if isinstance(e.ref, int):
             return self.literal(e.ref, e.ty)
-        name = "v_" + mangle(e.val)
+        name = "v_" + e.val
         return f"std::move({name})" if e.ref == "move" else name
 
     def e_index(self, e: Expr) -> str:
@@ -320,7 +320,7 @@ class Emitter:
 
     def emit(self) -> str:
         symbols: dict[str, str] = {}
-        for name in [*(f.name for f in self.p.functions), *(t.display() for t in self.c.layouts)]:
+        for name in [*(f.name for f in self.p.functions), *(t.display() for t in self.c.layouts), *self.p.traits]:
             if symbols.setdefault(mangle(name), name) != name:
                 fail(
                     "E-MANGLE",
@@ -468,7 +468,7 @@ class Emitter:
 
     def s_return(self, s: Stmt, es: list[str]):
         local = s.exprs and s.exprs[0].ref == "move"  # C++ already moves a returned local.
-        self.put("return" + (" v_" + mangle(s.exprs[0].val) if local else " " + es[0] if es else "") + ";")
+        self.put("return" + (" v_" + s.exprs[0].val if local else " " + es[0] if es else "") + ";")
 
     def s_expr(self, s: Stmt, es: list[str]):
         self.put(es[0] + ";")

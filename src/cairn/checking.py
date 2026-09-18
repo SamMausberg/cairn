@@ -306,14 +306,15 @@ class Checker:
         if ty.mode != "value" or ty.name in CPP or ty.name == "fn" or ty.name in self.p.enums:
             return "copy"
         if ty not in self.kinds:
-            self.kinds[ty] = "affine"  # A recursive owner is only reachable through a Buf.
-            layout = self.layouts.get(ty) or {}
-            parts = [t for _, t in layout] if isinstance(layout, list) else [t for t in layout.values() if t]
-            inline = parts or (ty.args[:1] if ty.name == "Array" else [])
-            ranks = [KINDS.index(self.kind(t)) for t in inline]
             linear = "linear" in self.p.attributes.get(ty.name, ()) or ty.name == "Ticket"
             own = 2 if linear else int(ty.name in {"Buf", "dyn", "Dyn", "Atomic", "Mutex"})
-            self.kinds[ty] = KINDS[max([own, *ranks])]
+            layout = self.layouts.get(ty, {} if ty.name in INTRINSIC_TYPES else None)
+            if layout is None:  # Asked while its own definition is open: it reaches itself through a Buf.
+                return KINDS[max(own, 1)]
+            self.kinds[ty] = "affine"
+            parts = [t for _, t in layout] if isinstance(layout, list) else [t for t in layout.values() if t]
+            inline = parts or (ty.args[:1] if ty.name == "Array" else [])
+            self.kinds[ty] = KINDS[max([own, *(KINDS.index(self.kind(t)) for t in inline)])]
         return self.kinds[ty]
 
     def sizeof(self, ty: Type) -> int:

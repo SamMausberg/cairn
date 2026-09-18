@@ -200,6 +200,16 @@ REJECTED = {
         "E-ALIAS",
         "fn main() -> i32 { let m = Mutex[u64](0); m.with(|s:rw<u64>| { m.with(|t:rw<u64>| { t = 1; }); }); return 0; }",
     ),
+    "a record that owns itself through a Buf, used twice as if it were a copy (double free)": (
+        "E-MOVED",
+        "struct Node { kids:Buf[Node]; v:u64; }\nfn eat(n:Node) -> u64 = n.v;\n"
+        "fn main() -> i32 { let a = Node(Buf[Node](2), 7); let x = eat(a); let y = eat(a); return i32(x + y); }",
+    ),
+    "a sum that owns itself through a Buf, used twice": (
+        "E-MOVED",
+        "enum Tree { Leaf(u64); Fork(Buf[Tree]); }\nfn eat(t:Tree) -> u64 = 1;\n"
+        "fn main() -> i32 { let a = Tree.Fork(Buf[Tree](2)); let x = eat(a); let y = eat(a); return i32(x + y); }",
+    ),
     "a lane inside a closure returning from that closure": (
         "E-PARALLEL-CONTROL",
         "fn once(f:ro<fn(u64) -> u64>) -> u64 = f(0);\n"
@@ -311,3 +321,12 @@ def test_a_mutex_reached_twice_through_two_borrows_traps_instead_of_relocking(tm
         "fn main() -> i32 { let m = Mutex[u64](0); both(m, m); return 0; }"
     )
     assert run(tmp_path, source, ["-pthread"]).returncode == -6
+
+
+@pytest.mark.skipif(not shutil.which("clang++"), reason="needs clang++")
+def test_names_that_differ_only_by_underscores_stay_different_variables(tmp_path):
+    source = (
+        "fn pick(x:u64, x_:u64, _x:u64) -> u64 { let x__ = x_ * 10; return x + x__ + _x * 100; }\n"
+        "fn main() -> i32 { return i32(pick(1, 2, 3) - 300); }"
+    )
+    assert run(tmp_path, source).returncode == 21
