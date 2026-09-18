@@ -469,3 +469,36 @@ def test_a_nat_parameter_is_a_static_extent_and_literals_take_the_expected_resul
     with pytest.raises(Diagnostic) as wrong_extent:
         compile_source(source.replace("fill[4](a, 7)", "fill[8](a, 7)"))
     assert wrong_extent.value.data["code"] == "E-TYPE-MISMATCH"
+
+
+GENERIC_BOUNDS = """
+import std.core (Ord, Option);
+trait Score { fn score(self:ro<Self>) -> u64; }
+fn larger[T: Score, U: Score](x:ro<T>, y:ro<U>) -> u64 = max(score(x), score(y));
+fn biggest[T: Ord](n:usize, xs:ro<T>[n]) -> Option[usize] {
+  if n == 0 { return Option.None; }
+  let mut best:usize = 0;
+  for i in 1..n { if less(xs[best], xs[i]) { best = i; } }
+  return Option.Some(best);
+}
+fn pass[T](x:T) -> T = x;
+fn largest[T](a:T, b:T) -> T { if a < b { return b; } return a; }
+fn twice[T](x:T) -> u64 { let a = x; let b = x; return 0; }
+fn ignore[T](x:T) -> u64 = 0;
+fn keep[T](x:T) -> u64 = ignore(pass(x));
+fn scale[K:nat](x:usize) -> usize = mul_wrap(x, K);
+family s = scale[1..3];
+"""
+
+
+def test_a_template_is_certified_once_when_its_body_needs_only_its_bounds():
+    """Witness types offer exactly the bounds and must be consumed exactly once, so "ok" holds for every instance."""
+    from cairn.cairnc import certify_templates
+
+    verdicts = certify_templates(GENERIC_BOUNDS)
+    assert {n for n, v in verdicts.items() if v == "ok"} == {"larger", "biggest", "pass"}
+    assert verdicts["largest"].startswith("E-OPERATOR")  # `<` is not something a bare T promises.
+    assert verdicts["twice"].startswith("E-MOVED")  # A T may be an owner.
+    assert verdicts["ignore"].startswith("E-LINEAR-LEAK") and verdicts["keep"].startswith("E-LINEAR-LEAK")  # Or linear.
+    assert "natural" in verdicts["scale"]
+    assert compile_source(GENERIC_BOUNDS)  # None of this changes what is accepted: instances are still checked.

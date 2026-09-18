@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 
 from . import __version__
-from .cairnc import Diagnostic, compile_source
+from .cairnc import Diagnostic, certify_templates, compile_source
 from .project import ProjectError, contained_file, load_project, read_text
 from .toolchain import ARCHS, TARGETS, emulator, host_family
 
@@ -71,6 +71,9 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument("path", nargs="?", default=".")
         if name in {"build", "run", "test"}:
             c.add_argument("--cxx", default="clang++")
+        if name == "check":
+            c.add_argument("--generics", action="store_true",
+                           help="Also check each generic function once against its bounds; fail if one needs more.")  # fmt: skip
         if name in {"build", "run"}:
             c.add_argument("--out", type=Path)
             c.add_argument("--arch", choices=sorted(ARCHS))
@@ -169,16 +172,18 @@ def main(argv: list[str] | None = None) -> int:
             generated, receipt = compile_source(project.source)
             if a.command == "emit":
                 print(generated, end="")
-            else:
-                report(
-                    {
-                        "status": "typed",
-                        "functions": receipt["function_count"],
-                        "formal_status": "not-verified",
-                        "project": project.receipt(),
-                    }
-                )
-            return 0
+                return 0
+            result = {"status": "typed", "functions": receipt["function_count"], "formal_status": "not-verified",
+                      "project": project.receipt()}  # fmt: skip
+            if (
+                a.generics
+            ):  # "ok": every instance that satisfies the bounds checks; else what the body needed beyond them.
+                linked = tuple(module + "." for module in receipt["modules"] if module.startswith("std."))
+                result["generics"] = {
+                    n: v for n, v in certify_templates(project.source).items() if not n.startswith(linked)
+                }
+            report(result)
+            return 1 if any(v != "ok" for v in result.get("generics", {}).values()) else 0
         if a.command == "inspect":
             from .agent_tools import EditSession
 

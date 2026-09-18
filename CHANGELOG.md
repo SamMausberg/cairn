@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Generics**: `cairn check --generics` checks each template once at opaque witness types that offer only its bounds and must be consumed exactly once; `ok` means every instance satisfying the bounds checks. Acceptance is unchanged: instances are still checked.
+
 ## 1.1.0
 
 - **Recipes**: generators are library code. `recipe name[K:nat] for R { ... }` holds ordinary function and record declarations with static `each` (over a record's fields or a natural range, at declaration, statement, field-list and call-argument level), `fold`, `where` values, `$name` splices and `require` domains; `derive name[naturals] for Type;` expands it before checking into code of the deriving module. The closed Python generator behind `derive wire` is gone: `std.wire` is twelve lines of CAIRN and produces the same C++ byte for byte. Receipts pin each recipe by the hash of its tokens. `wire` is no longer a reserved word.

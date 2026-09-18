@@ -32,9 +32,31 @@ from .syntax import (
 from .version import VERSION
 
 __all__ = [
-    "IDENT", "INT", "RESERVED", "RUNTIME", "RUNTIME_FILES", "SIGNED", "VERSION", "WIDTH", "Binding", "Checker",
-    "Diagnostic", "Emitter", "Expr", "Function", "Parser", "Program", "Stmt", "Type", "compile_program",
-    "compile_source", "compile_units", "derive", "fail", "specialize",
+    "IDENT",
+    "INT",
+    "RESERVED",
+    "RUNTIME",
+    "RUNTIME_FILES",
+    "SIGNED",
+    "VERSION",
+    "WIDTH",
+    "Binding",
+    "Checker",
+    "Diagnostic",
+    "Emitter",
+    "Expr",
+    "Function",
+    "Parser",
+    "Program",
+    "Stmt",
+    "Type",
+    "certify_templates",
+    "compile_program",
+    "compile_source",
+    "compile_units",
+    "derive",
+    "fail",
+    "specialize",
 ]  # fmt: skip
 
 
@@ -58,6 +80,12 @@ def interfaces(p: Program, receipts: dict[str, Any]) -> dict[str, Any]:
             out.setdefault(home, {})[f.name] = entry
     return {m: {"exports": sorted(fs), "interface_sha256": hashlib.sha256(json.dumps(fs, sort_keys=True).encode()).hexdigest()}
             for m, fs in sorted(out.items())}  # fmt: skip
+
+
+def certify_templates(source: str) -> dict[str, str]:
+    """For each generic function of the program's own modules: "ok" if its body needs only its bounds."""
+    p = specialize(derive(link(Parser(source).parse())))
+    return Checker(p).certify()
 
 
 def compile_units(source: str, origin: Any = "", roots: tuple[str, ...] = ()) -> tuple[dict[str, str], dict[str, Any]]:

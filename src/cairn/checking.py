@@ -31,6 +31,7 @@ from .syntax import (
     USIZE,
     VOID,
     WIDTH,
+    Diagnostic,
     Expr,
     Function,
     Program,
@@ -197,6 +198,7 @@ class Checker:
         self.fn_sites: list[tuple[Expr, set[str], str, str]] = []  # (argument, caller's parameters, callee, formal)
         self.impls: dict[tuple[str, Type], dict[str, Function] | None] = {}
         self.hostish: dict[str, str] = {}  # function -> the first host-only construct in its body
+        self.bounds: dict[str, list[str]] = {}  # witness type -> the traits its template's bounds promise
         self.dispatches: list[tuple] = []
         self.borrowed: list[tuple[str, str]] = []
         self.device_functions: set[str] = set()
@@ -362,7 +364,8 @@ class Checker:
 
     # Whole program -----------------------------------------------------------------------------
 
-    def check(self) -> dict[str, Any]:
+    def prepare(self) -> list[Function]:
+        """Types, constants and every concrete signature: what any body needs before it can be checked."""
         for name in self.types:
             if not self.p.generics.get(name) and (name != "Order" or "Order" in self.p.modules):
                 with self.within(self.p.modules.get(name, "")):
@@ -376,7 +379,38 @@ class Checker:
         for f in concrete:
             self.signature(f)
         self.hold_impls(concrete)
-        for f in concrete:  # Generic instances are appended, and checked, at their first use.
+        return concrete
+
+    def certify(self) -> dict[str, str]:
+        """Check each generic function once, at opaque witness types that offer only what its bounds promise
+        and must be consumed exactly once (the strictest kind). "ok" means every instance whose arguments
+        satisfy the bounds checks too; otherwise the entry names the first thing the body needed beyond its
+        bounds, and that template is still checked per instance, as before. Run on a copy: nothing is emitted."""
+        self.prepare()
+        verdicts: dict[str, str] = {}
+        for f in [f for f in self.p.functions if f.generics and not f.bindings]:
+            if any(kind == "nat" for _, kind in f.generics):
+                verdicts[f.name] = "a natural parameter has no single witness"
+                continue
+            bound = {}
+            for g, constraint in f.generics:
+                witness = Type(f"?{f.name}.{g}")
+                self.p.attributes[witness.name] = {"linear"}
+                with self.within(f.module):
+                    wanted = (
+                        [self.qualify(t, self.p.traits) for t in constraint.split("+")] if constraint != "type" else []
+                    )
+                self.bounds[witness.name] = [t for t in wanted if t]
+                bound[g] = witness
+            try:
+                self.instantiate(f, bound, f)
+                verdicts[f.name] = "ok"
+            except Diagnostic as e:
+                verdicts[f.name] = f"{e.data['code']}: {e.data['message']}"
+        return verdicts
+
+    def check(self) -> dict[str, Any]:
+        for f in self.prepare():  # Generic instances are appended, and checked, at their first use.
             self.function(f)
         instantiated = {f.source_name for f in self.p.functions if f.bindings}
         for f in [f for f in self.p.functions if f.generics and not f.bindings]:
@@ -1462,6 +1496,15 @@ class Checker:
     def members(self, trait: str, target: Type, node: Any = None) -> dict[str, Function] | None:
         """The one implementation of a trait for a concrete type, or None: every declared member, conforming
         to its declaration with Self := target. A generic impl is instantiated; two matching impls are an error."""
+        if (trait, target) not in self.impls and trait in self.bounds.get(target.name, ()):
+            promised = {}
+            for m in self.p.traits[trait]:
+                with self.within(self.p.modules.get(trait, ""), {"Self": target}):
+                    params = [(n, self.resolve(t, m)) for n, t in m.params]
+                    promised[m.name] = Function(f"{trait}.{target.name}.{m.name}", params, self.resolve(m.ret, m), [])
+                self.fs[promised[m.name].name] = promised[m.name]
+                self.signed.add(promised[m.name].name)
+            self.impls[trait, target] = promised
         if (trait, target) not in self.impls:
             matches: dict[str, tuple[Function, dict[str, Any]]] = {}
             for f in [f for f in list(self.fs.values()) if f.owner and not f.bindings]:
