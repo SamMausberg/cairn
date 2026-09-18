@@ -10,26 +10,23 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import re
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from typing import Any
 
 from .cairnc import (
     VERSION,
-    Checker,
     Diagnostic,
-    Emitter,
     Expr,
     Function,
     Parser,
     Program,
     Stmt,
     Type,
+    compile_program,
     compile_source,
-    derive_wire,
     fail,
-    specialize,
 )
+from .checking import EFFECT_FAMILIES, EFFECTS
 from .teaching import select_cards
 
 PROTOCOL = "cairn.edit/1"
@@ -44,91 +41,103 @@ def stable_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
+def generics(params: list[tuple[str, str]]) -> str:
+    shown = ", ".join(n if kind == "type" else f"{n}:{kind}" for n, kind in params)
+    return f"[{shown}]" if params else ""
+
+
 def signature(f: Function) -> str:
-    static = "[" + f.static + ":nat]" if f.static else ""
+    """The declared interface, exactly as an edit must preserve it."""
     ps = ", ".join(n + ":" + t.display() for n, t in f.params)
-    return "fn " + f.name + static + "(" + ps + ")" + ("" if f.ret.name == "void" else " -> " + f.ret.display())
+    ret = "" if f.ret.name == "void" else " -> " + f.ret.display()
+    ceiling = "" if f.effects is None else " pure" if f.effects == ("pure",) else f" effects({', '.join(f.effects)})"
+    name = f.source_name.rsplit(".", 1)[-1] if f.owner else f.name.rsplit(".", 1)[-1] if f.module else f.name
+    return f"{'extern ' * f.extern}fn {name}{generics(f.generics if not f.bindings else [])}({ps}){ret}{ceiling}"
+
+
+ESCAPES = {"\n": "\\n", "\t": "\\t", "\r": "\\r", "\0": "\\0", "\\": "\\\\", '"': '\\"'}
 
 
 def format_expr(e: Expr) -> str:
-    if e.tag in {"name", "int", "float", "bool"}:
+    args = [format_expr(a) for a in e.args] if e.tag != "lambda" else []
+    if e.tag in {"name", "int", "float", "bool", "function"}:
         return e.val
+    if e.tag == "str":
+        return '"' + "".join(ESCAPES.get(c, c if 32 <= ord(c) < 127 else f"\\x{ord(c):02x}") for c in e.val) + '"'
     if e.tag == "call":
-        return e.val + "(" + ", ".join(map(format_expr, e.args)) + ")"
+        targs = e.ref if isinstance(e.ref, tuple) and all(isinstance(t, Type | int) for t in e.ref) else ()
+        shown = "[" + ", ".join(t.display() if isinstance(t, Type) else str(t) for t in targs) + "]" if targs else ""
+        if e.val.startswith("."):
+            return f"{args[0]}{e.val}{shown}({', '.join(args[1:])})"
+        return f"{e.val}{shown}({', '.join(args)})"
     if e.tag == "index":
-        return format_expr(e.args[0]) + "[" + format_expr(e.args[1]) + "]"
+        return f"{args[0]}[{', '.join(args[1:])}]"
+    if e.tag == "slice":
+        return f"{args[0]}[{args[1]}..{args[2]}]"
     if e.tag == "field":
-        return format_expr(e.args[0]) + "." + e.val
+        return f"{args[0]}.{e.val}"
+    if e.tag in {"try", "spawn"}:
+        return f"{e.tag} {args[0]}"
+    if e.tag == "coerce":
+        return args[0]
     if e.tag == "unary":
-        return "(" + e.val + format_expr(e.args[0]) + ")"
+        return f"({e.val}{args[0]})"
     if e.tag == "binary":
-        return "(" + format_expr(e.args[0]) + " " + e.val + " " + format_expr(e.args[1]) + ")"
+        return f"({args[0]} {e.val} {args[1]})"
+    if e.tag == "lambda":
+        f = e.ref
+        ps = ", ".join(n + ":" + t.display() for n, t in f.params)
+        return f"|{ps}|" + ("" if f.ret.name == "void" else " -> " + f.ret.display()) + " " + format_block(f.body)
     fail("E-PROJECTION", "Cannot project unknown expression kind.")
 
 
 def format_block(ss: list[Stmt], indent: int = 0) -> str:
     lines = ["{"]
+    pad = "  " * (indent + 1)
 
-    def put(s):
-        lines.append("  " * (indent + 1) + s)
+    def nested(body: list[Stmt]) -> str:
+        return format_block(body, indent + 1)
 
     for s in ss:
         es = [format_expr(e) for e in s.exprs]
         if s.tag in {"buffer", "stack"}:
-            put(s.tag + " " + s.name + ":" + s.ty.name + "[" + es[0] + "] = zeroed;")
+            place = "" if s.ty.place == "host" else "@" + s.ty.place
+            line = f"{s.tag} {s.name}:{s.ty.value.display()}[{es[0]}]{place} = zeroed;"
         elif s.tag in {"let", "reg"}:
-            put(
-                ("let mut " if s.tag == "reg" else "let ")
-                + s.name
-                + (":" + s.ty.display() if s.ty else "")
-                + " = "
-                + es[0]
-                + ";"
-            )
+            declared = ":" + s.ty.display() if s.ty else ""
+            line = f"{'let mut' if s.tag == 'reg' else 'let'} {s.name}{declared} = {es[0]};"
         elif s.tag == "compact":
-            put(
-                "let "
-                + s.name
-                + " = compact "
-                + es[0]
-                + " for "
-                + s.binder
-                + " in "
-                + es[1]
-                + " where "
-                + es[2]
-                + " yield "
-                + es[3]
-                + ";"
-            )
+            line = f"let {s.name} = compact {es[0]} for {s.binder} in {es[1]} where {es[2]} yield {es[3]};"
+        elif s.tag == "reduce":
+            declared = ":" + s.ty.display() if s.ty else ""
+            line = f"let {s.name}{declared} = reduce {s.op} for {s.binder} in {es[0]} yield {es[1]};"
         elif s.tag == "assign":
-            put(es[0] + " = " + es[1] + ";")
+            line = f"{es[0]} = {es[1]};"
         elif s.tag in {"break", "continue"}:
-            put(s.tag + ";")
+            line = s.tag + ";"
         elif s.tag == "return":
-            put("return" + (" " + es[0] if es else "") + ";")
+            line = "return" + (" " + es[0] if es else "") + ";"
         elif s.tag == "expr":
-            put(es[0] + ";")
+            line = es[0] + ";"
         elif s.tag == "match":
-            put("match " + es[0] + " {")
-            for arm in s.arms:
-                put(
-                    "  "
-                    + arm.variant
-                    + ("(" + arm.binder + ")" if arm.binder else "")
-                    + " => "
-                    + format_block(arm.body, indent + 2)
-                )
-            put("}")
+            arms = [
+                f"{pad}  {a.variant}{f'({a.binder})' if a.binder else ''} => {format_block(a.body, indent + 2)}"
+                for a in s.arms
+            ]
+            line = "\n".join([f"match {es[0]} {{", *arms, pad + "}"])
         elif s.tag in {"if", "while"}:
-            put(s.tag + " " + es[0] + " " + format_block(s.body, indent + 1))
-            if s.other:
-                # An explicit newline is cosmetic; the parser ignores it.
-                put("else " + format_block(s.other, indent + 1))
+            line = f"{s.tag} {es[0]} {nested(s.body)}" + (f"\n{pad}else {nested(s.other)}" if s.other else "")
         elif s.tag == "for":
-            put("for " + s.name + " in " + es[0] + ".." + es[1] + " " + format_block(s.body, indent + 1))
+            line = f"for {s.name} in {es[0]}..{es[1]} {nested(s.body)}"
+        elif s.tag == "parallel":
+            line = f"parallel {s.name} in {es[0]} {nested(s.body)}"
+        elif s.tag == "defer":
+            line = "defer " + format_block(s.body, indent).split("\n", 2)[1].strip()
+        elif s.tag in {"unsafe", "block"}:
+            line = ("unsafe " if s.tag == "unsafe" else "") + nested(s.body)
         else:
             fail("E-PROJECTION", "Cannot project unknown statement kind.")
+        lines.append(pad + line)
     lines.append("  " * indent + "}")
     return "\n".join(lines)
 
@@ -136,21 +145,63 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
 def type_declarations(p: Program) -> str:
     out = []
     for n, fs in p.records.items():
-        out.append("struct " + n + " { " + " ".join(k + ":" + t.display() + ";" for k, t in fs) + " }")
-    for n, vs in p.enums.items():
-        out.append("enum " + n + " { " + " ".join(v + ";" for v in vs) + " }")
-    for n, vs in p.sums.items():
+        marks = p.attributes.get(n, set())
+        layout = "".join(" " + a for a in sorted(marks - {"linear"}))
+        fields = " ".join(f"{k}:{t.display()};" for k, t in fs)
         out.append(
-            "enum " + n + " { " + " ".join(v + ("(" + t.display() + ")" if t else "") + ";" for v, t in vs) + " }"
+            f"{'linear ' * ('linear' in marks)}struct {local(n)}{generics(p.generics.get(n, []))}{layout} {{ {fields} }}"
         )
+    for n, vs in p.enums.items():
+        out.append(f"enum {local(n)} {{ {' '.join(v + ';' for v in vs)} }}")
+    for n, vs in p.sums.items():
+        variants = " ".join(v + (f"({t.display()})" if t else "") + ";" for v, t in vs)
+        out.append(f"enum {local(n)}{generics(p.generics.get(n, []))} {{ {variants} }}")
+    for n, members in p.traits.items():
+        out.append(f"trait {local(n)} {{ {' '.join(signature(m) + ';' for m in members)} }}")
+    out += [f"const {local(n)}:{t.display()} = {format_expr(e)};" for n, (t, e) in p.consts.items()]
     return "\n".join(out)
+
+
+def local(name: str) -> str:
+    return name.rsplit(".", 1)[-1]
+
+
+def function_source(f: Function) -> str:
+    if f.extern:
+        return signature(f) + ";"
+    return signature(f) + " " + format_block(f.body, 1 if f.owner else 0)
 
 
 def canonical_source(source: str) -> str:
     """An inspectable AST projection. Comments are not copied. Not an in-place edit."""
     p = Parser(source).parse()
-    out = [type_declarations(p)] if p.records or p.enums or p.sums else []
-    out += [signature(f) + " " + format_block(f.body) for f in p.functions]
+    out = []
+    for module in dict.fromkeys(p.modules.values()):
+        tables = {k: {n: v for n, v in getattr(p, k).items() if p.modules.get(n, "") == module}
+                  for k in ("records", "enums", "sums", "traits", "consts")}  # fmt: skip
+        out += [f"module {module};"] if module else []
+        for importer, target, alias in p.imports:
+            names = [n for (m, n), full in p.uses.items() if m == module and full == f"{target}.{n}"]
+            renamed = f" as {alias}" if alias != local(target) else ""
+            out += (
+                [f"import {target}{renamed}{' (' + ', '.join(names) + ')' if names else ''};"]
+                if importer == module
+                else []
+            )
+        declared = type_declarations(Program(**tables, generics=p.generics, attributes=p.attributes))
+        out += [declared] if declared else []
+        members: list[Function] = []
+        for f in [*(f for f in p.functions if f.module == module), None]:
+            if members and (f is None or f.owner != members[0].owner):  # Close the impl block in its place.
+                shared = [g for g in members[0].generics if all(g in m.generics for m in members)]
+                bodies = ["  " + function_source(replace(m, generics=m.generics[len(shared) :])) for m in members]
+                trait, target = members[0].owner
+                out.append(f"impl{generics(shared)} {trait} for {target.display()} {{\n" + "\n".join(bodies) + "\n}")
+                members = []
+            if f is not None and f.owner:
+                members.append(f)
+            elif f is not None:
+                out.append(("pub " if f.public and module else "") + function_source(f))
     out += [f"family {pre} = {name}[{lo}..{hi}];" for pre, name, lo, hi in p.families]
     out += [f"derive wire for {name};" for name in p.derivations]
     return "\n\n".join(out) + "\n"
@@ -242,30 +293,14 @@ class EditSession:
         if self.f.static:
             fail("E-EDIT-PROFILE", "Template-body editing is not implemented; edit ordinary functions.")
         self.cpp, self.receipt = compile_source(source)
-        p = specialize(derive_wire(Parser(source).parse()))
-        checker = Checker(p, capture_sites=True)
-        checker.check()
-        self.expanded = p
+        self.expanded, checker, _ = compile_program(source, capture_sites=True)
         effects = self.receipt["functions"][symbol]["effects"]
         allowed = self.contract.get("allowed_effects", effects)
         if not isinstance(allowed, list) or not all(isinstance(x, str) for x in allowed):
             fail("E-CONTRACT", "allowed_effects must be a list of effect strings.")
-        legal = {
-            "trap",
-            "ffi_precondition",
-            "diverge",
-            "alloc",
-            "free",
-            "zero_init",
-            "stack_storage",
-            "local_read",
-            "local_write",
-        } | {
-            m + ":" + n
-            for n, t in self.f.params
-            if t.mode != "value"
-            for m in (["read", "write"] if t.mode == "rw" else ["read"])
-        }
+        borrows = {n: t.mode for n, t in self.f.params if t.mode != "value"}
+        permitted = {"read:" + n for n in borrows} | {"write:" + n for n, mode in borrows.items() if mode == "rw"}
+        legal = {x for x in allowed if x in EFFECTS or x.startswith(EFFECT_FAMILIES)} | permitted
         if set(allowed) - legal:
             fail("E-CONTRACT", "Unknown effect or inaccessible memory permission in contract.")
         if set(effects) - set(allowed):
@@ -297,7 +332,9 @@ class EditSession:
         from pathlib import Path
 
         files = sorted(
-            p for p in Path(__file__).parent.rglob("*") if p.suffix in {".py", ".hpp"} and "__pycache__" not in p.parts
+            p
+            for p in Path(__file__).parent.rglob("*")
+            if p.suffix in {".py", ".hpp", ".cairn"} and "__pycache__" not in p.parts
         )
         self.implementation_hash = digest(b"".join(f.name.encode() + b"\0" + f.read_bytes() + b"\0" for f in files))
         self.session = digest(

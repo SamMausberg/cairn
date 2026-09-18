@@ -46,6 +46,9 @@ KINDS = ["copy", "affine", "linear"]
 PURE = {"trap", "diverge", "local_read", "local_write", "stack_storage", "zero_init", "ffi_precondition"}
 COMPARISONS = {"==", "!=", "<", "<=", ">", ">="}
 LANE_SAFE = PURE | {"alloc", "free"}  # What a function called from a parallel lane may do.
+EFFECTS = LANE_SAFE | {"gpu_alloc", "gpu_free", "indirect_call", "dispatch", "spawn", "join", "atomic", "lock",
+                       "io", "mmio", "asm"}  # fmt: skip
+EFFECT_FAMILIES = ("ffi:", "transfer:", "par:")  # With read:/write: of a borrow, the whole effect vocabulary.
 HOST_VISIBLE = {"host", "pinned", "unified"}
 
 

@@ -3,7 +3,7 @@
 from .syntax import lex
 
 CARDS = {
-    "base": """CAIRN 0.6 is a checked CPU prototype, not Rust/Python. Use fn, typed interfaces,
+    "base": """CAIRN 1.0 is a checked systems language, not Rust/Python. Use fn, typed interfaces,
 braces, semicolons, explicit return; let is immutable, let mut is mutable.
 Parameters are immutable; shadowing and implicit conversions are forbidden.
 fn inc(x:u64)->u64 = add_wrap(x,1); is one return, not a closure.
@@ -11,7 +11,8 @@ for i in lo..hi is sequential, half-open; evaluate bounds once, lower first.
 if/else if/else and while use braces. break/continue target the nearest loop,
 including from match arms. while/recursion may diverge; no stack bound is proved.
 reg/each remain aliases; prefer let mut/for. Blocks have no implicit tail return.
-No methods, traits, closures, general modules, GPU execution or concurrency.
+No inheritance, overloading, implicit conversion, exceptions or hidden allocation.
+Other features arrive as their own cards only when the source uses them.
 Ranges are not lists; indentation is insignificant. Preserve the fixed task.
 Typed, tested, SMT-equivalent and Lean-verified are different claims.""",
     "integers": """Types: bool, u8/u16/u32/u64, usize(64-bit), i32/i64. +,-,* trap on overflow in
@@ -76,7 +77,59 @@ Every variant has exactly one arm; payload binders are fresh, immutable and loca
 to that arm. Match evaluates its subject once. Result values can be copied or
 returned with no heap allocation. No implicit propagation/unwrapping. Foreign
 callers must supply the valid tag and its initialized active payload. Scalar SMT
-verification currently rejects tagged sums, even when their wrappers return integers.""",
+verification currently rejects tagged sums, even when their wrappers return integers.
+Payloads may be any value type. try x on a two-variant sum (success first) yields the
+success payload or returns the failure from the enclosing function, which must return
+the same sum family with the same failure payload. It is the only propagation form.""",
+    "generics": """fn largest[T](a:T, b:T) -> T and struct Pair[T] {a:T; b:T;} take type parameters;
+[K:nat] is a static natural. Instances are monomorphized on demand and each instance is
+checked as ordinary code; arguments are inferred from values, literals and the expected
+type, or written f[u64](x), Pair[u8](1, 2), Option[u64].None. trait Shape {fn area(self:
+ro<Self>) -> u64;} with impl Shape for Square {...} dispatches statically on the Self
+argument; [S: Shape] is checked when the instance is made. value.f(a) is f(value, a),
+found first in the module of the receiver's type. No inheritance, no implicit boxing.""",
+    "owners": """let mut b = Buf[u64](n); is a first-class zeroed heap array; Array[u64, 4]() is inline.
+Owners are affine: binding, passing by value or returning one moves it and the old name
+is dead. An owner never moves out of a place: take(place) moves it out leaving zero,
+swap(a, b) exchanges places. An outer owner cannot be moved inside a loop, closure or
+lane. linear struct values must be consumed exactly once on every path; defer call(x);
+schedules that one visible call for every normal exit of its block. ro<T> and rw<T>
+borrow one value and read/assign like the value; x[lo..hi] passes a part of an array with
+one dynamic guard; two parts are disjoint only if they visibly share a boundary.""",
+    "effects": """Every function has an inferred effect row; pure and effects(read:x, trap) after the
+return type are checked ceilings, never wishes. extern fn write(fd:i32, data:ro<u8>[n],
+n:usize) -> i64 effects(io); declares a C symbol whose effects are mandatory because its
+body is invisible; ffi:write then appears in every transitive caller. Foreign calls,
+mmio_read[u32](addr), mmio_write[u32](addr, v) and asm("wfi") are legal only inside
+unsafe { }. Do not widen a ceiling or add unsafe to make an edit pass.""",
+    "parallel": """parallel i in n { out[i] = a * x[i] + y[i]; } runs one lane per index and finishes before
+the next statement. Placement is part of a view type: @host (default), @pinned, @unified,
+@device. Indexing a @device view makes the region CUDA lanes, otherwise host threads; host
+code cannot index @device memory and lanes cannot index the other side. Whatever any lane
+writes may be touched only at [i]; shared scalars cannot be assigned (use let s = reduce
+add_wrap for i in n yield x[i];). Lanes cannot return, nest, move outer owners, or call
+functions that write, do I/O or (on the device) allocate. buffer d:f32[n]@device = zeroed;
+is a scoped device owner; transfer(dst, src) is the only way across placements. reduce on
+the device combines in an unspecified order: exact for add_wrap mul_wrap & | ^ min max,
+not for float + and *; checked integer + is not offered.""",
+    "tasks": """let t = spawn f(args); runs a declared function on its own thread and gives a linear
+ticket that must be consumed by wait(t) in the same function. Until then every place
+lent to the task is leased: nobody writes what it reads or touches what it writes;
+visibly disjoint parts (d[0..mid], d[mid..n]) may be lent mutably to different tasks.
+Atomic[u64] and Mutex[T] are declared in place and shared by ro borrow: a.fetch_add(1,
+Order.relaxed) always names its memory order; m.with(|s:rw<T>| { ... }) is the only way
+into a mutex. Tickets, atomics and mutexes are never stored, passed by value or returned.""",
+    "closures": """fn(u64) -> u64 is a copyable code pointer to a plain declared function of values.
+ro<fn(u64) -> u64> is a borrowed callable: pass a declared function or write the closure
+in place, apply(n, xs, |x:u64| -> u64 { return x + bias; }). A closure captures its scope
+by reference, exists only as that argument, never allocates, and its effects belong to
+the function that wrote it. ro<dyn Shape> / rw<dyn Shape> parameters take any named place
+whose type implements the trait; calls through them add the dispatch effect and the
+effects of every implementation. Dynamic references are never values.""",
+    "modules": """module net.http; names the module of what follows; pub exports. import net.http; allows
+http.get(...); import a.b as c; renames; import std.core (Option, Result); also brings
+those names in unqualified. std.* ships with the compiler; nothing is downloaded. A
+private name of another module is not callable; request context instead of guessing.""",
 }
 
 
@@ -85,19 +138,26 @@ def select_cards(
 ) -> dict[str, str]:
     # Actual tokens prevent comments/spacing from silently choosing the curriculum.
     words = {token.s for token in lex(source)}
-    selected = ["base", "integers", "calls"]
-    if has_views or words & {"buffer", "stack", "len"}:
-        selected.append("views")
-    if "compact" in words:
-        selected.append("compact")
-    if words & {"f32", "f64"}:
-        selected.append("floats")
-    if has_records:
-        selected.append("records")
-    if words & {"family", "derive"}:
-        selected.append("generators")
-    if words & {"buffer", "stack"}:
-        selected.append("memory")
-    if has_sums or "match" in words:
-        selected.append("sums")
-    return {name: CARDS[name] for name in selected}
+    wanted = {
+        "views": has_views or words & {"buffer", "stack", "len"},
+        "compact": "compact" in words,
+        "floats": words & {"f32", "f64"},
+        "records": has_records,
+        "generators": words & {"family", "derive"},
+        "memory": words & {"buffer", "stack"},
+        "sums": has_sums or words & {"match", "try"},
+        "generics": words & {"trait", "impl"} or has_generic_brackets(source),
+        "owners": words & {"Buf", "Array", "take", "swap", "defer", "linear"},
+        "effects": words & {"extern", "unsafe", "pure", "effects"},
+        "parallel": words & {"parallel", "reduce", "transfer", "device", "pinned", "unified"},
+        "tasks": words & {"spawn", "wait", "Atomic", "Mutex"},
+        "closures": words & {"|", "||", "dyn"} and ("dyn" in words or "fn" in words),
+        "modules": words & {"module", "import", "pub"},
+    }
+    return {name: CARDS[name] for name in ["base", "integers", "calls", *(n for n, on in wanted.items() if on)]}
+
+
+def has_generic_brackets(source: str) -> bool:
+    """`fn f[T]`, `struct S[T]` or `enum E[T]`: a declaration keyword, a name, then `[`."""
+    tokens = [t.s for t in lex(source)]
+    return any(a in {"fn", "struct", "enum"} and c == "[" for a, c in zip(tokens, tokens[2:], strict=False))

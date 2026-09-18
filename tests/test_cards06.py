@@ -23,4 +23,4 @@ def test_sum_card_without_match():
 def test_memory_source_and_cards_are_consistent():
     packet = EditSession("fn f()->usize{buffer x:u64[0]=zeroed;return len(x);}", "f").packet()
     assert "memory" in packet["rule_cards"]
-    assert "No methods" in packet["rule_cards"]["base"]
+    assert "No inheritance" in packet["rule_cards"]["base"]
