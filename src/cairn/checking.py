@@ -710,19 +710,23 @@ class Checker:
         return True
 
     def branches(self, node: Any, runs: list) -> Any:
-        """Alternatives start from one ownership state; a linear value must agree across them."""
-        before, outcomes = set(self.moved), []
+        """Alternatives start from one ownership state; a linear value must agree across them. What a path
+        that returns did (a move, a wait that ended a lease) says nothing about the paths that go on."""
+        before, held, outcomes = set(self.moved), (self.leases, self.before), []
         for run in runs:
-            self.moved = set(before)
-            outcomes.append((run(), self.moved))
-        falls = [moved for ended, moved in outcomes if not ended]
+            self.moved, self.leases, self.before = set(before), dict(held[0]), dict(held[1])
+            outcomes.append((run(), self.moved, self.leases, self.before))
+        falls = [moved for ended, moved, *_ in outcomes if not ended]
         everywhere: set[str] = set.intersection(*falls) if falls else set()
         for n in set().union(*falls) - everywhere:
             if n in self.env and self.kind(self.env[n].ty) == "linear":
                 fail("E-LINEAR-BRANCH", f"{n} is consumed on some paths only.", node)
         # A branch that returned cannot reach what follows; one that jumped (break/continue) can.
-        self.moved = set().union(before, *(moved for ended, moved in outcomes if ended is not True))
-        ends = [ended for ended, _ in outcomes]
+        onward = [o for o in outcomes if o[0] is not True]
+        self.moved = set().union(before, *(moved for _, moved, *_ in onward))
+        self.leases = {t: places for o in onward for t, places in o[2].items()} if onward else held[0]
+        self.before = {t: earlier for o in onward for t, earlier in o[3].items()} if onward else held[1]
+        ends = [ended for ended, *_ in outcomes]
         return all(ends) and (True if all(e is True for e in ends) else "jump")
 
     def s_if(self, s: Stmt):

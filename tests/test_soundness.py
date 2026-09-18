@@ -375,6 +375,17 @@ REJECTED = {
         "fn map(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) effects(par:host, indirect_call, write:out, trap,\n"
         "  ffi_precondition) { parallel i in n { out[i] = f(u64(i)); } }",
     ),
+    # Found by the maintainer while reviewing queued work; it predates it and three audits missed it.
+    "a wait on a path that returns ending the lease on the path that goes on (data race)": (
+        "E-LEASED",
+        FILL + "fn f(early:bool) -> i32 { let mut d = Buf[u64](8); let t = spawn fill(len(d), d, 1);\n"
+        "  if early { wait(t); return 1; }\n  d[0] = 99;\n  wait(t); return 0; }",
+    ),
+    "the same through a match arm that returns": (
+        "E-LEASED",
+        FILL + "enum E { A; B; }\nfn f(e:E) -> i32 { let mut d = Buf[u64](8); let t = spawn fill(len(d), d, 1);\n"
+        "  match e { E.A => { wait(t); return 1; } E.B => {} }\n  d[0] = 99;\n  wait(t); return 0; }",
+    ),
     "a lane inside a closure returning from that closure": (
         "E-PARALLEL-CONTROL",
         "fn once(f:ro<fn(u64) -> u64>) -> u64 = f(0);\n"
@@ -613,3 +624,11 @@ def test_what_the_second_audit_found_ambiguous_now_has_one_meaning(tmp_path, nam
     flags = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-pthread", "-fsanitize=address,undefined"]
     subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
     assert subprocess.run([tmp_path / "p"], timeout=60).returncode == status
+
+
+def test_a_wait_on_every_path_ends_the_lease_for_what_follows():
+    source = FILL + (
+        "fn f(early:bool) -> i32 { let mut d = Buf[u64](8); let t = spawn fill(len(d), d, 1);\n"
+        "  if early { wait(t); } else { wait(t); }\n  d[0] = 99; return 0; }"
+    )
+    assert compile_source(source)

@@ -227,6 +227,12 @@ class Deriver:
                 out.append((prefix + self.text(item.name, env, item), self.shape(item.fields, env), item.public))
             else:
                 out.append(self.function(item, env, prefix))
+            if len(out) > MAX_FUNCTIONS:  # Refused while it is still small, not after a million declarations.
+                fail(
+                    "E-EXPANSION-LIMIT",
+                    f"Recipe {self.recipe.name} generates more than {MAX_FUNCTIONS} declarations.",
+                    item,
+                )
         return out
 
 
