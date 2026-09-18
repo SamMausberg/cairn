@@ -1,0 +1,183 @@
+{
+  "schema": "cairn.evidence/1",
+  "commit": "c161d5eff05733307e3afb420b7571e83fecb883",
+  "worktree_dirty": true,
+  "host": {
+    "version": "1.1.0",
+    "python": "3.13.15",
+    "platform": "Linux-6.8.0-1062-nvidia-64k-aarch64-with-glibc2.35",
+    "clang++": "/usr/bin/clang++",
+    "g++": "/usr/bin/g++",
+    "z3": "libz3.so.4",
+    "nvcc": "/usr/bin/nvcc",
+    "lean": "/home/ubuntu/.elan/bin/lean",
+    "lake": "/home/ubuntu/.elan/bin/lake",
+    "qemu-system-aarch64": "/usr/bin/qemu-system-aarch64",
+    "formal_status": "not-verified",
+    "native_platform": "Linux armv8-a",
+    "network_access": false
+  },
+  "gates": {
+    "format": {
+      "command": [
+        "python",
+        "-m",
+        "ruff",
+        "format",
+        "--check",
+        "."
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.0,
+      "tail": [
+        "123 files already formatted"
+      ]
+    },
+    "lint": {
+      "command": [
+        "python",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.0,
+      "tail": [
+        "All checks passed!"
+      ]
+    },
+    "types": {
+      "command": [
+        "python",
+        "-m",
+        "mypy",
+        "src/cairn/syntax.py",
+        "src/cairn/checking.py",
+        "src/cairn/effects.py",
+        "src/cairn/builtins.py",
+        "src/cairn/codegen.py",
+        "src/cairn/modules.py",
+        "src/cairn/expansion.py",
+        "src/cairn/cairnc.py",
+        "src/cairn/toolchain.py",
+        "src/cairn/scalar_semantics.py"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.1,
+      "tail": [
+        "Success: no issues found in 10 source files"
+      ]
+    },
+    "cairn_format": {
+      "command": [
+        "python",
+        "bin/cairn",
+        "fmt",
+        "--check",
+        "examples",
+        "src/cairn/std"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.1,
+      "tail": [
+        "  \"changed\": [],",
+        "  \"not_formatted\": []",
+        "}"
+      ]
+    },
+    "tests": {
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests",
+        "-n",
+        "16",
+        "-rs"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 25.0,
+      "tail": [
+        "........................................................................ [ 98%]",
+        "..............                                                           [100%]",
+        "1382 passed in 24.83s"
+      ]
+    },
+    "certificates": {
+      "command": [
+        "python",
+        "bin/cairn",
+        "certificates"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.1,
+      "tail": [
+        "  \"lean_scope\": \"checker soundness, these certificates, in-bounds stores and stable selection of the loop model (proofs/, Lean 4, axioms propext and Quot.sound); not this Python file, the emitter or native code\",",
+        "  \"native_refinement_proved\": false",
+        "}"
+      ]
+    },
+    "lean_in_sync": {
+      "command": [
+        "python",
+        "tools/export_lean_certificates.py",
+        "--check"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.0,
+      "tail": [
+        "up to date: /home/ubuntu/cairn/proofs/Cairn/CollectorCertificates.lean"
+      ]
+    },
+    "module_equivalence": {
+      "command": [
+        "python",
+        "bin/cairn",
+        "verify",
+        "examples/proof_scope/reference.cairn",
+        "examples/proof_scope/candidate.cairn",
+        "--all"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.2,
+      "tail": [
+        "  ],",
+        "  \"uncovered\": []",
+        "}"
+      ]
+    }
+  },
+  "tests": {
+    "passed": 1382,
+    "skipped": 0
+  },
+  "source_lines": {
+    "compiler_core": 4595,
+    "compiler_package": 8515,
+    "runtime_headers": 585,
+    "standard_library_cairn": 722,
+    "lean_proofs": 3070,
+    "tests": 7428
+  },
+  "separately_recorded": [
+    "lean/summary.json",
+    "gpu/benchmark.json",
+    "embedded/summary.json"
+  ],
+  "claims_not_made": [
+    "whole-compiler proof",
+    "native refinement",
+    "tuned-baseline performance",
+    "AI proficiency"
+  ]
+}
