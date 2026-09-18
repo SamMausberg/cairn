@@ -104,7 +104,7 @@ wait(right);
 
 ## Contracted forms
 
-`let used = compact out for i in n where predicate yield value;` writes the stable selected prefix into existing storage of capacity exactly `n`, evaluates the predicate once per input and the projection only when selected, never reads its output, leaves the tail unchanged and allocates nothing. Its one unchecked store is justified by seventeen affine certificates that are checked before every emission and proved sound in Lean, together with in-bounds stores and stable selection for the loop model (verification.md). `derive wire for Packet;` emits fixed-width unsigned little-endian codecs in declaration order with no padding.
+`let used = compact out for i in n where predicate yield value;` writes the stable selected prefix into existing storage of capacity exactly `n`, evaluates the predicate once per input and the projection only when selected, never reads its output, leaves the tail unchanged and allocates nothing on the host (on a `@device` output it is a stable stream compaction whose scan needs device scratch, shown as `gpu_alloc`, `gpu_free`; device `reduce` likewise). Its one unchecked store is justified by seventeen affine certificates that are checked before every emission and proved sound in Lean, together with in-bounds stores and stable selection for the loop model (verification.md). `derive wire for Packet;` emits fixed-width unsigned little-endian codecs in declaration order with no padding.
 
 ## Projects
 
