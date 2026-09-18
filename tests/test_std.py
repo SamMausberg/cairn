@@ -9,6 +9,7 @@ a designated initializer that g++ rejects under -Werror=missing-field-initialize
 docs/std.md and the issue list), so those programs are built with clang++ only.
 """
 
+import pathlib
 import shutil
 import subprocess
 
@@ -667,3 +668,13 @@ def test_every_generic_in_the_library_is_instantiated_and_runs(tmp_path):
     receipt = compile_source(COVERAGE)[1]
     assert receipt["uninstantiated_templates"] == []
     native(tmp_path, COVERAGE)
+
+
+def test_no_packaged_source_is_hidden_from_version_control():
+    """`core.*` once ignored std/core.cairn: the suite was green here and broken in every fresh checkout."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    files = [str(p) for p in (root / "src").rglob("*") if p.is_file() and "__pycache__" not in p.parts]
+    done = subprocess.run(["git", "check-ignore", *files], cwd=root, capture_output=True, text=True)
+    if done.returncode == 128:
+        pytest.skip("not a git checkout")
+    assert done.stdout == ""

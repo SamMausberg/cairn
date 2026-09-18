@@ -1,0 +1,28 @@
+// The vocabulary every other module shares. Importing a name is explicit: import std.core (Option);
+module std.core;
+
+pub enum Option[T] { Some(T); None; }
+pub enum Result[T, E] { Ok(T); Err(E); }
+
+// Laws are documentation here, not proof obligations: less is a strict weak order, same an equivalence.
+pub trait Ord { fn less(a:ro<Self>, b:ro<Self>) -> bool; }
+pub trait Eq { fn same(a:ro<Self>, b:ro<Self>) -> bool; }
+pub trait Hash { fn hash(value:ro<Self>) -> u64; }
+
+impl Ord for u8 { fn less(a:ro<u8>, b:ro<u8>) -> bool = a < b; }
+impl Ord for u32 { fn less(a:ro<u32>, b:ro<u32>) -> bool = a < b; }
+impl Ord for u64 { fn less(a:ro<u64>, b:ro<u64>) -> bool = a < b; }
+impl Ord for usize { fn less(a:ro<usize>, b:ro<usize>) -> bool = a < b; }
+impl Ord for i32 { fn less(a:ro<i32>, b:ro<i32>) -> bool = a < b; }
+impl Ord for i64 { fn less(a:ro<i64>, b:ro<i64>) -> bool = a < b; }
+impl Eq for u8 { fn same(a:ro<u8>, b:ro<u8>) -> bool = a == b; }
+impl Eq for u32 { fn same(a:ro<u32>, b:ro<u32>) -> bool = a == b; }
+impl Eq for u64 { fn same(a:ro<u64>, b:ro<u64>) -> bool = a == b; }
+impl Eq for usize { fn same(a:ro<usize>, b:ro<usize>) -> bool = a == b; }
+
+// Fibonacci hashing: one wrapping multiply, high bits carry the mix.
+impl Hash for u64 { fn hash(value:ro<u64>) -> u64 = mul_wrap(value, 11400714819323198485); }
+impl Hash for usize {
+  fn hash(value:ro<usize>) -> u64 = mul_wrap(u64(value), 11400714819323198485);
+}
+impl Hash for u32 { fn hash(value:ro<u32>) -> u64 = mul_wrap(u64(value), 11400714819323198485); }
