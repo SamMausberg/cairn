@@ -9,7 +9,6 @@ from __future__ import annotations
 import ctypes as C
 import ctypes.util
 import hashlib
-from pathlib import Path
 from typing import Any
 
 P = C.c_void_p

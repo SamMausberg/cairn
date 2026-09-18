@@ -11,7 +11,6 @@ verification of the C++ backend. Unsupported syntax returns unknown.
 from __future__ import annotations
 
 import hashlib
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -260,9 +259,9 @@ class Symbolic:
             raise Unsupported("Return types/static parameters are outside the scalar fragment.")
         if any(t.mode == "rw" or t.extent or t.name not in INT | {"bool"} for _, t in f.params):
             raise Unsupported("Callee has a nonscalar signature.")  # A read-only scalar borrow reads as its value.
-        env = {n: a for (n, _), a in zip(f.params, args)}
+        env = {n: a for (n, _), a in zip(f.params, args, strict=True)}
         returns = []
-        remaining = self.block(f.body, [("true", env)], stack + (name,), returns)
+        remaining = self.block(f.body, [("true", env)], (*stack, name), returns)
         if remaining:
             raise Unsupported("A scalar function fell through without returning.")
         default = "false" if f.ret.name == "bool" else constant(0, f.ret.name)
@@ -403,8 +402,8 @@ class Concrete:
         if name in stack:
             raise Unsupported("Concrete replay does not recurse.")
         f = self.functions[name]
-        env = {n: a for (n, _), a in zip(f.params, args)}
-        ret, value = self.block(f.body, env, stack + (name,))
+        env = {n: a for (n, _), a in zip(f.params, args, strict=True)}
+        ret, value = self.block(f.body, env, (*stack, name))
         if not ret:
             raise Unsupported("Concrete scalar function did not return.")
         return value

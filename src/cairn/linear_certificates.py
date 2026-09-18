@@ -53,7 +53,7 @@ def check(rule: Rule, certificate: Certificate) -> bool:
     if any(type(x) is not int or x < 0 or x.bit_length() > 4096 for x in values):
         return False
     derived = [certificate.nonnegative_constant, 0, 0, 0, 0]
-    for coefficient, assumption in zip(certificate.weights, rule.assumptions):
+    for coefficient, assumption in zip(certificate.weights, rule.assumptions, strict=True):
         for j, value in enumerate(assumption):
             derived[j] += coefficient * value
     return tuple(derived) == rule.conclusion

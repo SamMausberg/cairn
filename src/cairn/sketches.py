@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import copy
 import itertools
-import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -146,7 +145,7 @@ class Sketch:
                 extra=sorted(set(choices) - set(self._holes)),
             )
         total = 0
-        for name, text in choices.items():
+        for text in choices.values():
             if not isinstance(text, str):
                 fail("E-SKETCH-CHOICES", "Every slot value must be an expression string.")
             total += len(text.encode())
@@ -286,7 +285,7 @@ def solve_finite(
     smt_queries = 0
     cache_rejections = 0
     for combination in itertools.product(*choices.values()):
-        proposal = dict(zip(choices, combination))
+        proposal = dict(zip(choices, combination, strict=True))
         try:
             candidate = sketch.fill(**proposal)
         except Diagnostic as e:

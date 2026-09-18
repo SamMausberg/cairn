@@ -55,7 +55,7 @@ RESERVED = set(  # One readable paragraph of words beats a wall of quoted string
     "fn struct enum family let mut reg if else for each in while return true false ro rw host nat "
     "effects pure extern unsafe defer match kernel module import compact where yield derive wire "
     "buffer stack zeroed break continue trait impl dyn const pub linear parallel reduce spawn try "
-    "as type device pinned unified".split()  # noqa: SIM905
+    "as type device pinned unified".split()
 )
 ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "0": "\0", "\\": "\\", '"': '"', "'": "'"}
 PLACES = ("host", "device", "pinned", "unified")

@@ -9,6 +9,7 @@ hostile code and compiler toolchains. No model-supplied commands are executed.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import ctypes as C
 import json
 import math
@@ -226,10 +227,8 @@ def evaluate(source: str, contract: dict, cxx="clang++") -> dict:
             )
             lines = []
             for line in cp.stdout.splitlines():
-                try:
+                with contextlib.suppress(json.JSONDecodeError):  # Stray native output is not a verdict.
                     lines.append(json.loads(line))
-                except json.JSONDecodeError:
-                    pass
             verdict = next((x for x in reversed(lines) if "status" in x), None)
             if verdict is None or (cp.returncode != 0 and verdict.get("status") == "passed-finite-tests"):
                 verdict = {
@@ -245,7 +244,7 @@ def evaluate(source: str, contract: dict, cxx="clang++") -> dict:
                 "execution_exit_code": cp.returncode,
                 "elapsed_seconds": time.monotonic() - start,
             }
-        except subprocess.TimeoutExpired as e:
+        except subprocess.TimeoutExpired:
             return {
                 **common,
                 "status": "unknown",

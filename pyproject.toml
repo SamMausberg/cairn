@@ -41,6 +41,7 @@ isort.split-on-trailing-comma = false
 ignore = [
     "E501",   # the formatter owns line length; long diagnostics stay on one line
     "SIM108", # ternaries are not always clearer in a checker
+    "SIM905", # a paragraph of reserved words reads better than a wall of quoted strings
     "RUF001", # mathematical symbols in documentation strings are intentional
     "RUF002",
     "RUF003",
