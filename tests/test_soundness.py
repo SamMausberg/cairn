@@ -632,3 +632,23 @@ def test_a_wait_on_every_path_ends_the_lease_for_what_follows():
         "  if early { wait(t); } else { wait(t); }\n  d[0] = 99; return 0; }"
     )
     assert compile_source(source)
+
+
+@pytest.mark.skipif(not shutil.which("clang++"), reason="needs clang++")
+def test_a_backwards_part_used_to_order_two_others_aborts_at_its_spawn(tmp_path):
+    """Chaining part bounds assumes every lent part was guarded `lo <= hi` before its task began. Here d[6..3]
+    would order d[0..6] before d[3..9], which overlap: the guard must fire at the first spawn, on this thread,
+    before either overlapping task exists. If part guards ever move into the task, this becomes a race."""
+    source = FILL + (
+        "fn main() -> i32 { let n:usize = 9; let a:usize = 6; let b:usize = 3; let z:usize = 0;\n"
+        "  let mut d = Buf[u64](n);\n  let t2 = spawn fill(z, d[a..b], 2);\n"
+        "  let t1 = spawn fill(a, d[0..a], 1);\n  let t3 = spawn fill(a, d[b..n], 3);\n"
+        "  wait(t1); wait(t2); wait(t3); return 0; }"
+    )
+    assert run(tmp_path, source, ["-pthread", "-fsanitize=thread"]).returncode == -6
+    late = source.replace("  let t2 = spawn fill(z, d[a..b], 2);\n", "").replace(
+        "  wait(t1);", "  let t2 = spawn fill(z, d[a..b], 2);\n  wait(t1);"
+    )
+    with pytest.raises(Diagnostic) as e:  # Without the earlier guard there is no fact to chain through.
+        compile_source(late)
+    assert e.value.data["code"] == "E-LEASED"
