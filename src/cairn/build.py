@@ -22,7 +22,7 @@ def objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, st
     """One object per module, reused only when the unit, the shared interface, the command and the compiler
     all hash to the same key, so nothing stale is ever linked. Missing objects compile concurrently."""
     files, _ = compile_units(project.source, project.origin if debug else "", (entry,) if entry else ())
-    files["entry.cpp"] = '#include "program.hpp"\n' + stub
+    files["0start.cpp"] = '#include "program.hpp"\n' + stub  # No module's unit can be named with a leading digit.
     compile_prefix, link = unit_commands(cxx, arch or project.arch, kind)
     compile_prefix += ["-g"] if debug else []
     version = subprocess.run([compiler, "--version"], capture_output=True, text=True, timeout=5).stdout

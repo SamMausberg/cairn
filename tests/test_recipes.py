@@ -153,6 +153,28 @@ REJECTED = {
         "struct P { x:u32; }\nderive leaky for P;",
     ),
     "a type parameter other than the one after `for`": ("E-RECIPE", "recipe r[T] { }"),
+    # Found by the fourth review ------------------------------------------------------------------
+    "a static division by zero (was a Python traceback)": (
+        "E-RECIPE-STATIC",
+        "recipe d[N:nat] where q = 8 / N { pub fn g() -> usize = $q; }\nderive d[0];",
+    ),
+    "static arithmetic on a type (was a Python traceback)": (
+        "E-RECIPE-STATIC",
+        "recipe c for R where n = 0 - typeof(R) { pub fn g_$R() -> usize = $n; }\nstruct P { a:u32; }\nderive c for P;",
+    ),
+    "a static range bounded by a type (was a Python traceback)": (
+        "E-RECIPE-STATIC",
+        "recipe c for R { each k in 0..typeof(R) { pub fn g_$k() -> usize = 1; } }\nstruct P { a:u32; }\nderive c for P;",
+    ),
+    "a negative static, which would have become a huge unsigned literal": (
+        "E-RECIPE-STATIC",
+        "recipe d[N:nat] where q = N - 5 { pub fn g() -> u64 = u64($q); }\nderive d[1];",
+    ),
+    "nested iteration over nothing (the compiler used to hang)": (
+        "E-EXPANSION-LIMIT",
+        "recipe bomb { pub fn f() -> usize { each a in 0..1024 { each b in 0..1024 { each c in 0..1024 { } } }\n"
+        "  return 0; } }\nderive bomb;",
+    ),
     "splices outside a recipe are not syntax": ("E-LEX", "fn f() -> usize = $n;"),
 }
 
@@ -171,3 +193,36 @@ def test_the_projection_and_the_formatter_keep_recipes_and_derivations():
     assert compile_source(projected)[0] == compile_source(APP)[0]
     formatted = format_source(APP)
     assert format_source(formatted) == formatted and compile_source(formatted)[0] == compile_source(APP)[0]
+
+
+HYGIENE = """
+module lib;
+recipe wire for R { pub fn zz_$R() -> usize = 1; }                                        // private and unrelated
+module app;
+fn t(x:u32) -> u32 = x + 100;
+recipe cap for R { each f in R where t = typeof(f) { pub fn g_$f(y:$t) -> $t = t(y); } }   // t the function, $t the type
+recipe mk for R { pub struct $R_box { v:u32; n:u16; } }
+struct P { a:u32; }
+derive wire for P_box;                                                                     // generated two lines below
+derive cap for P;
+derive mk for P;
+pub fn main() -> i32 {
+  if g_a(1) != 101 { return 1; }
+  if wire_size_P_box() != 6 { return 2; }
+  return 0;
+}
+"""
+
+
+def test_only_dollar_splices_are_rewritten_and_derivations_wait_for_what_they_need(tmp_path):
+    """A `where` name once rewrote the ordinary identifier `t`; a private `wire` elsewhere once hid std.wire."""
+    if not shutil.which("clang++"):
+        pytest.skip("clang++ unavailable")
+    cpp = compile_source(HYGIENE, roots=("app.main",))[0]
+    assert "cf_app_t(" in cpp
+    (tmp_path / "p.cpp").write_text(cpp + "int main() { return static_cast<int>(cf_app_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    flags = ["-std=c++20", "-O1", "-fno-exceptions", "-fsanitize=address,undefined"]
+    subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=180)
+    assert subprocess.run([tmp_path / "p"], timeout=60).returncode == 0

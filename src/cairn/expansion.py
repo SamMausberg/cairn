@@ -79,11 +79,21 @@ class Deriver:
             if isinstance(value, tuple):
                 value = env[e.val.lstrip("$")] = self.static(*value)
             return value
-        if e.tag == "unary" and e.val in {"!", "-"}:
-            value = self.static(e.args[0], env)
-            return not value if e.val == "!" else -value
+        if e.tag == "unary" and e.val == "!" and isinstance(self.static(e.args[0], env), bool):
+            return not self.static(e.args[0], env)
         if e.tag == "binary" and e.val in OPERATORS:
-            return OPERATORS[e.val](*(self.static(a, env) for a in e.args))
+            a, b = (self.static(x, env) for x in e.args)
+            wanted = bool if e.val in {"&&", "||"} else int
+            if type(a) is not wanted or type(b) is not wanted or (e.val in {"/", "%"} and b == 0):
+                fail(
+                    "E-RECIPE-STATIC",
+                    f"`{e.val}` takes two naturals (two booleans for && and ||) and never divides by zero.",
+                    e,
+                )
+            value = OPERATORS[e.val](a, b)
+            if value < 0:
+                fail("E-RECIPE-STATIC", "A static value is a natural; this one would be negative.", e)
+            return value
         if e.tag == "call" and len(e.args) == 1:
             x = self.static(e.args[0], env)
             ty = x.ty if isinstance(x, Field) else x
@@ -107,10 +117,15 @@ class Deriver:
     def each(self, each: Each, env: dict[str, Any]):
         """The environments of one static iteration, in order."""
         bounds = [self.static(e, env) for e in each.seq]
+        if len(bounds) == 2 and not all(type(b) is int for b in bounds):
+            fail("E-RECIPE-STATIC", "A static range runs between two naturals.", each.seq[0])
         values = range(*bounds) if len(bounds) == 2 else self.fields(bounds[0], each.seq[0])
         if len(values) > MAX_FAMILY:
             fail("E-EXPANSION-LIMIT", f"A static iteration has at most {MAX_FAMILY} steps.", each.seq[0])
-        for value in values:
+        for value in values:  # Every step is charged, so nested iteration over nothing still ends.
+            self.nodes += 1
+            if self.nodes > MAX_NODES:
+                fail("E-EXPANSION-LIMIT", f"Recipe {self.recipe.name} exceeds the expansion budget.", each.seq[0])
             yield self.scope({**env, each.binder: value}, each.where)
 
     def text(self, written: str, env: dict[str, Any], node: Any) -> str:
@@ -127,17 +142,15 @@ class Deriver:
             return shown + m.group(1)[len(name) :]
 
         head, dot, rest = written.partition(".")
-        whole = env.get(head)  # The bare type parameter is the type itself: R, R.Variant.
-        return (
-            whole.name + dot + rest
-            if isinstance(whole, Type)
-            else re.sub(r"\$([A-Za-z_][A-Za-z_0-9]*)", spliced, written)
-        )
+        if head and head == self.recipe.param:  # Only the `for` parameter is a type when written bare: R, R.Variant.
+            return env[head].name + dot + rest
+        return re.sub(r"\$([A-Za-z_][A-Za-z_0-9]*)", spliced, written)
 
     def type(self, t: Any, env: dict[str, Any], node: Any) -> Any:
         if not isinstance(t, Type):
             return t
-        value = self.static(Expr("name", t.name), env) if t.name.lstrip("$") in env else None
+        named = t.name == self.recipe.param or (t.name.startswith("$") and t.name[1:] in env)
+        value = self.static(Expr("name", t.name), env) if named else None
         base = value if isinstance(value, Type) else Type(self.text(t.name, env, node))
         args = base.args or tuple(self.type(a, env, node) for a in t.args)
         return Type(base.name, t.mode, self.text(t.extent, env, node), args, t.place)
@@ -237,32 +250,37 @@ class Deriver:
 
 
 def derive(p: Program) -> Program:
-    """Apply every `derive recipe[naturals] for Type;`. The generated functions are ordinary code of the
-    deriving module, checked like any other; a bare recipe name falls back to the packaged std.<name>."""
-    names = declared(p)
-    for module, written, naturals, target, at in p.derivations:
-        found = visible(p, module, written, p.recipes) or f"std.{written}.{written}"
-        recipe = p.recipes.get(found)
-        if recipe is None or len(naturals) != len(recipe.nats) or bool(target) != bool(recipe.param):
-            fail("E-DERIVE-RECIPE", f"No recipe {written} takes these arguments; write "
-                 "`derive name[naturals] for Type;` as the recipe declares.", at)  # fmt: skip
-        full = visible(p, module, target, {**p.records, **p.sums, **p.enums}) if target else ""
-        if target and full is None:
-            fail("E-DERIVE-TYPE", f"Unknown record {target}.", at)
-        statics = dict(zip(recipe.nats, naturals, strict=True)) | ({recipe.param: Type(full)} if target else {})
-        deriver = Deriver(p, recipe, statics)
-        for made in deriver.items(recipe.items, deriver.root, module + "." if module else ""):
-            name, public = (made.name, made.public) if isinstance(made, Function) else (made[0], made[2])
-            if name in names or name in p.modules:
-                fail("E-DERIVE-COLLISION", f"Derived name {name} already exists.", at)
-            names.add(name)
-            p.modules[name] = module
-            p.public |= {name} if public else set()
-            if isinstance(made, Function):
-                made.source_name, made.module = f"derive {written}" + (f" for {full}" if target else ""), module
-                p.functions.append(made)
-            else:
-                p.records[name], p.generics[name], p.attributes[name] = made[1], [], set()
+    """Apply every `derive recipe[naturals] for Type;`. The generated declarations are ordinary code of the
+    deriving module, checked like any other; a bare recipe name falls back to the packaged std.<name>.
+    A derivation for a record that another derivation generates waits for it, whatever the source order."""
+    names, waiting = declared(p), list(p.derivations)
+    while waiting:
+        known = {**p.records, **p.sums, **p.enums}
+        ready = [d for d in waiting if not d[3] or visible(p, d[0], d[3], known)] or waiting[:1]  # Else report it.
+        waiting = [d for d in waiting if d not in ready]
+        for module, written, naturals, target, at in ready:
+            found = visible(p, module, written, p.recipes) or f"std.{written}.{written}"
+            recipe = p.recipes.get(found)
+            if recipe is None or len(naturals) != len(recipe.nats) or bool(target) != bool(recipe.param):
+                fail("E-DERIVE-RECIPE", f"No recipe {written} takes these arguments; write "
+                     "`derive name[naturals] for Type;` as the recipe declares.", at)  # fmt: skip
+            full = visible(p, module, target, {**p.records, **p.sums, **p.enums}) if target else ""
+            if target and full is None:
+                fail("E-DERIVE-TYPE", f"Unknown record {target}.", at)
+            statics = dict(zip(recipe.nats, naturals, strict=True)) | ({recipe.param: Type(full)} if target else {})
+            deriver = Deriver(p, recipe, statics)
+            for made in deriver.items(recipe.items, deriver.root, module + "." if module else ""):
+                name, public = (made.name, made.public) if isinstance(made, Function) else (made[0], made[2])
+                if name in names or name in p.modules:
+                    fail("E-DERIVE-COLLISION", f"Derived name {name} already exists.", at)
+                names.add(name)
+                p.modules[name] = module
+                p.public |= {name} if public else set()
+                if isinstance(made, Function):
+                    made.source_name, made.module = f"derive {written}" + (f" for {full}" if target else ""), module
+                    p.functions.append(made)
+                else:
+                    p.records[name], p.generics[name], p.attributes[name] = made[1], [], set()
     return p
 
 

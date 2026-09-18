@@ -235,11 +235,16 @@ def test_incremental_builds_relink_only_the_module_whose_body_changed(tmp_path, 
         assert subprocess.run([record["artifact"]], timeout=30).returncode == 0
         return {unit["unit"]: unit["reused"] for unit in record["units"]}
 
-    assert built(MODULES) == {"geometry.cpp": False, "stats.cpp": False, "app.cpp": False, "entry.cpp": False}
+    assert built(MODULES) == {"geometry.cpp": False, "stats.cpp": False, "app.cpp": False, "0start.cpp": False}
     assert all(built(MODULES).values())  # Nothing changed: nothing compiles, everything links.
     body = MODULES.replace("t = t + xs[i];", "t = add_wrap(t, xs[i]);")
-    assert built(body) == {"geometry.cpp": True, "stats.cpp": False, "app.cpp": True, "entry.cpp": True}
+    assert built(body) == {"geometry.cpp": True, "stats.cpp": False, "app.cpp": True, "0start.cpp": True}
     signature = MODULES.replace("k:u64) -> Rect", "k:u64, spare:u64) -> Rect").replace("3), 2);", "3), 2, 0);")
     assert not any(built(signature).values())  # The shared interface changed, so every unit is rebuilt.
     whole = build(load_project(path), kind="exe", cxx=cxx, timeout=180)
     assert whole["units"] == [] and subprocess.run([whole["artifact"]], timeout=30).returncode == 0
+    # A module may be called `entry`: the start-up unit's file name is not one a module can have.
+    named = "module entry;\npub fn helper() -> u64 = 41;\nmodule app;\nimport entry;\n"
+    path.write_text(named + "pub fn main() -> i32 { if entry.helper() != 41 { return 1; } return 0; }\n")
+    record = build(load_project(path), kind="exe", cxx=cxx, timeout=180, incremental=True)
+    assert record["status"] == "native-built" and subprocess.run([record["artifact"]], timeout=30).returncode == 0
