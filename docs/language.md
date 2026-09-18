@@ -1,4 +1,4 @@
-# CAIRN 1.0 language profile
+# CAIRN 1.1 language profile
 
 This document specifies implemented behavior. `docs/history/` records earlier proposals and must not be used to infer accepted features. Grammar lives in `syntax.py`; types, ownership and effects in `checking.py`; lowering in `codegen.py`; guards in `runtime/*.hpp`. Every construct below is executed natively by the test suite; none of it is a whole-compiler proof (see verification.md).
 

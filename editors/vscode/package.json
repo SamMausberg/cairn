@@ -2,7 +2,7 @@
   "name": "cairn",
   "displayName": "CAIRN",
   "description": "CAIRN syntax highlighting and language server client.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "cairn-language",
   "license": "SEE LICENSE IN ../../README.md",
   "engines": { "vscode": "^1.75.0" },

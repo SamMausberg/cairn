@@ -1,4 +1,4 @@
-# CAIRN 1.0
+# CAIRN 1.1
 
 A systems language in which every cost is visible, borrows cannot dangle, and an AI agent's edit is admitted by the compiler rather than trusted. It compiles to readable, guarded C++20 for CPUs, to CUDA for GPUs from the same source, and to a freestanding image for bare metal. It is **not an entirely proved compiler**; what is proved, tested and merely implemented is kept apart everywhere below.
 
