@@ -244,9 +244,10 @@ class Parser:
             return True
         return False
 
-    def need(self, s: str):
-        if not self.eat(s):
-            fail("E-PARSE", f"Expected {s!r}, found {self.t.s!r}.", self.t)
+    def need(self, *expected: str):
+        for s in expected:
+            if not self.eat(s):
+                fail("E-PARSE", f"Expected {s!r}, found {self.t.s!r}.", self.t)
 
     def ident(self) -> str:
         t = self.t
@@ -492,9 +493,7 @@ class Parser:
             extent = self.expr()
             self.need("]")
             place = self.place()
-            self.need("=")
-            self.need("zeroed")
-            self.need(";")
+            self.need("=", "zeroed", ";")
             return Stmt(t.s, n, Type(element.name, args=element.args, place=place), [extent], **at)
         if t.s in {"let", "reg"}:
             self.i += 1
@@ -713,8 +712,7 @@ class Parser:
                 f.name = f.source_name = declare(f.name, t)
                 p.functions.append(f)
             elif self.eat("derive"):
-                self.need("wire")
-                self.need("for")
+                self.need("wire", "for")
                 p.derivations.append(self.path())
                 self.need(";")
             elif self.eat("family"):
@@ -725,8 +723,7 @@ class Parser:
                 lo = self.integer()
                 self.need("..")
                 hi = self.integer()
-                self.need("]")
-                self.need(";")
+                self.need("]", ";")
                 p.families.append((pre, base, lo, hi))
             else:
                 fail(
