@@ -20,6 +20,10 @@ def mangle(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]+", "_", name).strip("_")
 
 
+def local(name: str) -> str:
+    return name.rsplit(".", 1)[-1]
+
+
 def bare(condition: str) -> str:
     return condition[1:-1] if condition.startswith("(") and condition.endswith(")") else condition
 
@@ -310,9 +314,10 @@ class Emitter:
     def signature(self, f: Function) -> str:
         ps = ", ".join(f"{self.type(t)} v_{n}" for n, t in f.params)
         exported = all(self.trivial(t.value) and t.name != "fn" for t in [f.ret, *(t for _, t in f.params)])
+        linkage = 'extern "C" ' if exported or f.extern else ""
         device = "CR_HD " if f.name in self.c.device_functions else ""
-        head = f"{'extern "C" ' if exported or f.extern else ''}{device}{self.type(f.ret)} cf_{mangle(f.name)}({ps}) noexcept"
-        return head + (f' __asm__("{f.name.rsplit(".", 1)[-1]}")' if f.extern else "")
+        symbol = f' __asm__("{local(f.name)}")' if f.extern else ""  # The C symbol, whatever header declares it.
+        return f"{linkage}{device}{self.type(f.ret)} cf_{mangle(f.name)}({ps}) noexcept{symbol}"
 
     def interfaces(self) -> list[str]:
         """For each trait used behind dyn: a table of member thunks and the two-word reference."""

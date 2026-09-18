@@ -12,6 +12,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+# The certificate bundle (sha256 below) that proofs/Cairn/CollectorCertificates.lean was generated from.
+LEAN_CHECKED_BUNDLE = "5648cb8f06439f9ba5d87f3ffcfdc090803bed8ae7353940f83f10736afec1f2"
+
 # An affine form c + k*K + i*I + n*N + m*M, interpreted as form >= 0.
 Form = tuple[int, int, int, int, int]
 ZERO: Form = (0, 0, 0, 0, 0)
@@ -103,16 +106,21 @@ def audit_collector() -> dict:
             }
         )
     serial = json.dumps(rows, sort_keys=True, separators=(",", ":"))
+    bundle = hashlib.sha256(serial.encode()).hexdigest()
     return {
         "status": "linear-certificates-checked",
         "rule": "bounded-collector/2",
         "certificate_count": len(rows),
-        "sha256": hashlib.sha256(serial.encode()).hexdigest(),
+        "sha256": bundle,
         "checker_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "variables": ["constant", "emitted", "visited", "capacity", "cursor_max"],
         "interpretation": "Each affine form is nonnegative over mathematical integers.",
         "obligations": rows,
         "trusted": ["Python integer arithmetic", "this checker", "compiler/rule correspondence"],
-        "lean_verified": False,
+        # True only for the exact bundle that proofs/ checked; any edit to a rule turns it off until
+        # tools/export_lean_certificates.py regenerates the Lean file and `lake build` passes again.
+        "lean_verified": bundle == LEAN_CHECKED_BUNDLE,
+        "lean_scope": "checker soundness, these certificates, in-bounds stores and stable selection of the loop "
+        "model (proofs/, Lean 4, axioms propext and Quot.sound); not this Python file, the emitter or native code",
         "native_refinement_proved": False,
     }

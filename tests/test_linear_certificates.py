@@ -11,7 +11,7 @@ from cairn.linear_certificates import Certificate, Rule, audit_collector, check,
 
 def test_all_rules_and_compiler_gate():
     a = audit_collector()
-    assert a["certificate_count"] == 17 and a["lean_verified"] is False
+    assert a["certificate_count"] == 17 and a["lean_verified"] is True and "not this Python file" in a["lean_scope"]
     _, r = compile_source("fn id(x:u64)->u64=x;")
     assert r["arithmetic_certificate"]["sha256"] == a["sha256"]
 
@@ -60,3 +60,12 @@ def test_independent_finite_sanity():
             eval_form = lambda f: sum(a * b for a, b in zip(f, env))
             if all(eval_form(f) >= 0 for f in rule.assumptions):
                 assert eval_form(rule.conclusion) >= 0
+
+
+def test_lean_status_follows_the_exact_bundle(monkeypatch):
+    """A changed rule is no longer the bundle Lean checked, however valid it still is."""
+    import cairn.linear_certificates as lc
+
+    rules = lc.collector_rules()
+    monkeypatch.setattr(lc, "collector_rules", lambda: rules[1:])
+    assert lc.audit_collector()["lean_verified"] is False

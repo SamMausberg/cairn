@@ -1,10 +1,14 @@
 # Verification boundaries and exact arithmetic certificates
 
-## There is no whole-compiler proof
+## What is proved, and what is not
 
-No successful `lake build` or `#print axioms` output exists for this release. Lean/Lake were absent. Direct toolchain retrieval failed; an official CI binary exceeded the connector's 512 MiB limit. A smaller third-party WASM link kit was downloaded and hash-checked but contained neither a runnable prover nor its required compiled libraries. It was not used to certify source and is not bundled here. No remote checker received this private repository; no remote workflow was triggered. The retrieval record is in evidence/v0_6/lean_attempt.json.
+There is still no whole-compiler proof. There is now one real Lean result. `proofs/` is a dependency-free Lean 4 project (toolchain pinned in `proofs/lean-toolchain`; no Mathlib) that `lake build` checks in about two seconds. It proves, with no `sorry`, no `native_decide` and no added axioms (the audit in `evidence/v1_0/lean/print-axioms.txt` shows only `propext` and `Quot.sound`):
 
-The exact algebra checker below is working code, not a relabeled Lean development. SMT results similarly trust their translator and Z3. Proving one relation does not confer correctness on the parser, typechecker, allocator, compiler, native instruction stream, foreign callers or operating system.
+- `Cairn.check_sound`: if the certificate checker accepts a rule, the rule's conclusion is nonnegative for every integer assignment that satisfies its assumptions.
+- `Cairn.Collector.all_checked`: all seventeen collector certificates pass that checker inside Lean, and each named obligation is a Lean theorem obtained by applying its certificate.
+- For an executable model of the collector loop: the invariant `0 <= k <= i <= n` is preserved by emit and skip steps (using the certified inequalities), every store index is below the capacity (`store_index_lt_capacity`), both increments stay representable (`increments_fit`), and the result is stable selection: the written prefix equals `(inputs.filter pred).map proj`, its length is returned, and the tail is unchanged (`collect_spec`).
+
+The Lean file of certificates is generated from the Python rules by `tools/export_lean_certificates.py`; a test fails if they drift, and the compiler receipt reports `lean_verified: true` only while the live bundle hashes to the bundle Lean checked. What this does **not** establish: that the Python checker implements the Lean `check` (it is a transliteration, reviewed, not extracted), that the emitter's C++ corresponds to the loop model, or anything about the parser, type checker, ownership, lanes, tasks, the C++ compiler or the machine. SMT results still trust their translator and Z3. Proving one relation does not confer correctness on the rest.
 
 ## Bounded collector: checked affine implications
 
@@ -64,6 +68,10 @@ Unit tests, independent Python behavior oracles, both native compilers, instrume
 
 Runtime address-space/CPU limits are protections against some runaway executions, not isolation. Native section equality is code-identity evidence under one compiler/flag profile, not a universal correctness or latency theorem. A new implementation may typecheck, pass examples and still be incorrect or slower on untested inputs.
 
+## Tested, not proved: ownership, lanes, tasks and placement
+
+The 1.0 rules for affine and linear values, second-class borrows, leases, race-free lanes, placement and the effect fixed point are implemented in `checking.py` and exercised by acceptance and rejection tests. Accepted programs run natively under both compilers and under AddressSanitizer, UndefinedBehaviorSanitizer, LeakSanitizer and ThreadSanitizer; device guards are exercised by death tests that must abort the host. These are finite executions, not theorems: a sanitizer-clean run shows the absence of those faults on those inputs only. Generic code is checked per instance, so an uninstantiated template is unchecked and is listed in the receipt rather than trusted.
+
 ## Formal completion gate
 
-The requested stronger result needs a small executable core matching this actual integer/view/lifetime model, progress/preservation or equivalent safety theorems, certified elaboration and model translation, then native refinement including the runtime and relevant target memory model. Only a real pinned Lean build with audited axioms can be called Lean verification. The official Lean axiom reference describes `#print axioms` and the distinction between accepted declarations and their assumptions: https://lean-lang.org/doc/reference/latest/Axioms/ . No theorem is claimed here merely because a proof script exists elsewhere.
+The next formal step is to connect the two halves that are now each real: prove that the emitted collector loop refines the Lean model (or generate it from the model), and extend the mechanized core from the collector to the ownership and lease rules, where a small calculus with progress and preservation is the natural statement. Only a pinned Lean build with audited axioms may be called Lean verification; the receipt field above is the single place the compiler says so, and it is scoped to the certificate bundle.
