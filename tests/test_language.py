@@ -247,7 +247,7 @@ def test_dynamic_interfaces_are_explicit_fat_references(tmp_path, cxx):
                    check=True, timeout=120)  # fmt: skip
     assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
     assert receipt["functions"]["enlarge"]["effects"] == ["dispatch", "read:s", "trap", "write:s"]
-    assert generated.count("static const cd_Shape_vt") == 2
+    assert generated.count("static const cdt_Shape") == 2
 
 
 @pytest.mark.parametrize(

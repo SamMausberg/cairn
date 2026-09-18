@@ -24,6 +24,9 @@ COUNTER = (
     "impl Counter for C { fn tick(self:rw<C>, by:u64) -> u64 { self.n = add_wrap(self.n, by); return self.n; } }\n"
 )
 
+SUM = (
+    "fn sum(n:usize, xs:ro<u64>[n]) -> u64 { let mut t:u64 = 0; for i in 0..n { t = add_wrap(t, xs[i]); } return t; }\n"
+)
 TWO_TRAITS = (
     "trait A { fn go(self:ro<Self>) -> u64; }\ntrait B { fn go(self:ro<Self>) -> u64; }\nstruct S { v:u64; }\n"
     "impl A for S { fn go(self:ro<S>) -> u64 = 1; }\nimpl B for S { fn go(self:ro<S>) -> u64 = 2; }\n"
@@ -278,6 +281,19 @@ REJECTED = {
         "module lib;\npub const N:usize = 99;\nmodule app;\nimport lib (N);\nconst N:usize = 1;\n"
         "pub fn main() -> i32 { return i32(N); }",
     ),
+    "an alignment no compiler agrees on": ("E-ALIGN", "struct A align(3) { x:u64; }"),
+    "two trait and type pairs that would share one vtable symbol": (
+        "E-MANGLE",
+        "trait A { fn f(self:ro<Self>) -> u64; }\ntrait A_B { fn f2(self:ro<Self>) -> u64; }\n"
+        "struct B_C { v:u64; }\nstruct C { v:u64; }\n"
+        "impl A for B_C { fn f(self:ro<B_C>) -> u64 = 1; }\nimpl A_B for C { fn f2(self:ro<C>) -> u64 = 2; }\n"
+        "fn g(x:ro<dyn A>) -> u64 = f(x);\nfn h(x:ro<dyn A_B>) -> u64 = f2(x);\n"
+        "fn main() -> i32 { let a = B_C(0); let c = C(0); return i32(g(a) + h(c)); }",
+    ),
+    "an extern link name that is not a C symbol": (
+        "E-EXTERN",
+        'extern "close\\"); int evil(" fn close_fd(fd:i32) -> i32 effects(io);',
+    ),
     "a lane inside a closure returning from that closure": (
         "E-PARALLEL-CONTROL",
         "fn once(f:ro<fn(u64) -> u64>) -> u64 = f(0);\n"
@@ -426,6 +442,36 @@ BEHAVIOR = {
         TWO_TRAITS + "trait C { fn go3(self:ro<Self>) -> u64; }\nimpl C for S { fn go3(self:ro<S>) -> u64 = 3; }\n"
         "fn main() -> i32 { let s = S(0); return i32(B.go(s) * 10 + go3(s)); }",
     ),
+    "an executable keeps every member its static tables name, dispatched or not": (
+        0,
+        "trait Shape { fn area(self:ro<Self>) -> u64; fn peri(self:ro<Self>) -> u64; }\nstruct Square { side:u64; }\n"
+        "impl Shape for Square { fn area(self:ro<Square>) -> u64 = self.side * self.side;\n"
+        "  fn peri(self:ro<Square>) -> u64 = self.side * 4; }\n"
+        "fn measure(s:ro<dyn Shape>) -> u64 = area(s);\nfn unused(s:ro<dyn Shape>) -> u64 = 7;\n"
+        "fn main() -> i32 { let sq = Square(3); return i32(measure(sq)) - 9; }",
+    ),
+    "a part of a part carries one guard per level": (
+        7,
+        SUM + "fn main() -> i32 { let mut b = Buf[u64](8); b[3] = 7; return i32(sum(2, b[1..5][1..3])); }",
+    ),
+    "a part of a part that leaves the inner part traps": (
+        -6,
+        SUM + "fn main() -> i32 { let mut b = Buf[u64](8); return i32(sum(4, b[1..3][0..4])); }",
+    ),
+    "a trait whose name ends in _vt beside the trait it would have shadowed": (
+        21,
+        "trait Shape { fn area(self:ro<Self>) -> u64; }\ntrait Shape_vt { fn peri(self:ro<Self>) -> u64; }\n"
+        "struct Sq { s:u64; }\nimpl Shape for Sq { fn area(self:ro<Sq>) -> u64 = self.s * self.s; }\n"
+        "impl Shape_vt for Sq { fn peri(self:ro<Sq>) -> u64 = self.s * 4; }\n"
+        "fn m1(x:ro<dyn Shape>) -> u64 = area(x);\nfn m2(x:ro<dyn Shape_vt>) -> u64 = peri(x);\n"
+        "fn main() -> i32 { let q = Sq(3); return i32(add_wrap(m1(q), m2(q))); }",
+    ),
+    "a dispatch on a field place as a whole condition": (
+        0,
+        "trait Flag { fn get(self:ro<Self>) -> bool; }\nstruct F { on:bool; }\n"
+        "impl Flag for F { fn get(self:ro<F>) -> bool = self.on; }\nstruct Box { d:Dyn[Flag]; }\n"
+        "fn main() -> i32 { let b = Box(Dyn[Flag](F(true)));\n  if get(b.d) { return 0; }\n  return 1; }",
+    ),
     "a public family over an imported public template belongs to the module that declares it": (
         20,
         "module lib;\npub fn scale[K:nat](x:usize) -> usize = mul_wrap(x, K);\n"
@@ -439,10 +485,10 @@ BEHAVIOR = {
 @pytest.mark.parametrize("name", BEHAVIOR)
 def test_what_the_second_audit_found_ambiguous_now_has_one_meaning(tmp_path, name):
     status, source = BEHAVIOR[name]
-    entry = "cf_app_main" if "module app;" in source else "cf_main"
-    (tmp_path / "p.cpp").write_text(
-        compile_source(source)[0] + f"int main() {{ return static_cast<int>({entry}()); }}\n"
-    )
+    entry = "app.main" if "module app;" in source else "main"
+    cpp = compile_source(source, roots=(entry,))[0]  # As `cairn build` does: only what main reaches is emitted.
+    start = f"int main() {{ return static_cast<int>(cf_{entry.replace('.', '_')}()); }}\n"
+    (tmp_path / "p.cpp").write_text(cpp + start)
     for header, text in RUNTIME_FILES.items():
         (tmp_path / header).write_text(text)
     flags = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=address,undefined"]

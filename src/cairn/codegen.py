@@ -27,7 +27,13 @@ def local(name: str) -> str:
 
 
 def bare(condition: str) -> str:
-    return condition[1:-1] if condition.startswith("(") and condition.endswith(")") else condition
+    """Drop one redundant outer pair of parentheses, only when the first really closes at the end."""
+    depth = 0
+    for i, c in enumerate(condition):
+        depth += (c == "(") - (c == ")")
+        if depth == 0:
+            return condition[1:-1] if i == len(condition) - 1 and condition.startswith("(") else condition
+    return condition
 
 
 class Emitter:
@@ -41,6 +47,7 @@ class Emitter:
         self.roots = roots  # An executable emits only what its entry points reach.
         self.dynamic: dict[str, None] = {}  # Traits used behind dyn, in first-use order.
         self.vtables: dict[str, str] = {}
+        self.tables: dict[str, tuple[str, Type]] = {}  # Which (trait, type) owns each vtable symbol.
         self.c = checker or Checker(p)
         if checker is None:
             self.c.check()
@@ -137,6 +144,8 @@ class Emitter:
         ty, text = e.ty, self.expr(e)
         if e.tag == "str":
             return text, str(len(e.val.encode("latin-1", "replace")))
+        if e.tag == "slice":
+            return text, self.span(e)
         if is_view(ty):
             return text, self.extent(ty)
         return text + ".data()", (str(ty.args[1]) if ty.name == "Array" else text + ".size()")
@@ -153,10 +162,14 @@ class Emitter:
     def e_bool(self, e: Expr) -> str:
         return e.val
 
+    @staticmethod
+    def quoted(text: str) -> str:
+        """A C++ string literal that cannot end early: everything unusual is an octal escape."""
+        data = text.encode("latin-1", "replace")
+        return '"' + "".join(chr(b) if 32 <= b < 127 and chr(b) not in '"\\?' else f"\\{b:03o}" for b in data) + '"'
+
     def e_str(self, e: Expr) -> str:
-        body = "".join(chr(b) if 32 <= b < 127 and chr(b) not in '"\\?' else f"\\{b:03o}"
-                       for b in e.val.encode("latin-1", "replace"))  # fmt: skip
-        return f'reinterpret_cast<const std::uint8_t*>("{body}")'
+        return f"reinterpret_cast<const std::uint8_t*>({self.quoted(e.val)})"
 
     def e_name(self, e: Expr) -> str:
         if isinstance(e.ref, Expr):
@@ -170,9 +183,12 @@ class Emitter:
         data, count = self.pointer(e.args[0])
         return f"cr::at({data}, {self.expr(e.args[1])}, {count})"
 
+    def span(self, e: Expr) -> str:
+        return f"({self.expr(e.args[2])} - {self.expr(e.args[1])})"
+
     def e_slice(self, e: Expr) -> str:
         data, count = self.pointer(e.args[0])
-        want = self.expr(e.ref) if isinstance(e.ref, Expr) else str(e.ref)
+        want = self.expr(e.ref) if isinstance(e.ref, Expr) else str(e.ref or self.span(e))
         self.need("cairn_owners.hpp")
         return f"cr::part({data}, {self.expr(e.args[1])}, {self.expr(e.args[2])}, {count}, {want})"
 
@@ -238,7 +254,10 @@ class Emitter:
                 thunks.append(
                     f"[](void* self{ps}) noexcept -> {self.type(f.ret)} {{ return cf_{mangle(f.name)}({call}); }}"
                 )
-            self.vtables[table] = f"static const cd_{mangle(trait)}_vt {table}{{{', '.join(thunks)}}};"
+            self.vtables[table] = f"static const cdt_{mangle(trait)} {table}{{{', '.join(thunks)}}};"
+        if self.tables.setdefault(table, (trait, ty)) != (trait, ty):
+            fail("E-MANGLE", f"{trait} for {ty.display()} and {self.tables[table][0]} for "
+                 f"{self.tables[table][1].display()} would share the C symbol {table}; rename one.")  # fmt: skip
         return table
 
     def e_try(self, e: Expr) -> str:
@@ -314,9 +333,9 @@ class Emitter:
                 with self.c.within(self.p.modules.get(trait, ""), {"Self": Type("dyn", args=(Type(trait),))}):
                     rest = [self.type(self.c.resolve(t)) for _, t in m.params if t.name != "Self"]
                     members.append(f"{self.type(self.c.resolve(m.ret))} (*m{i})({', '.join(['void*', *rest])});")
-            name = "cd_" + mangle(trait)
-            references += [f"struct {name}_vt;", f"struct {name} {{ void* self; const {name}_vt* vt; }};"]
-            tables.append(f"struct {name}_vt {{ {' '.join(members)} }};")
+            name, table = "cd_" + mangle(trait), "cdt_" + mangle(trait)
+            references += [f"struct {table};", f"struct {name} {{ void* self; const {table}* vt; }};"]
+            tables.append(f"struct {table} {{ {' '.join(members)} }};")
         return references, tables
 
     def emit(self) -> str:

@@ -664,7 +664,10 @@ class Parser:
                     attributes.add("packed")
                 elif self.eat("align"):
                     self.need("(")
-                    attributes.add(f"align({self.integer()})")
+                    boundary = self.integer()
+                    if boundary & (boundary - 1) or not 8 <= boundary <= 65536:
+                        fail("E-ALIGN", "align(n) raises a record's alignment: a power of two from 8 to 65536.", t)
+                    attributes.add(f"align({boundary})")
                     self.need(")")
                 self.need("{")
                 fs = []
@@ -716,6 +719,8 @@ class Parser:
                     p.functions.append(f)
             elif self.eat("extern"):
                 symbol = unescape(self.t) if self.t.s[0] == '"' else ""  # extern "close" fn close_fd(...)
+                if symbol and not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9$.@]*", symbol):
+                    fail("E-EXTERN", "An extern's link name is one C symbol.", self.t)
                 self.i += bool(symbol)
                 self.need("fn")
                 f = self.function(t, bodiless=True, extern=True, public=public, symbol=symbol)

@@ -1406,6 +1406,7 @@ class Checker:
         members = self.members(trait, value, node)
         if members is None or any(m.generics and not m.bindings for m in members.values()):
             fail("E-TRAIT-IMPL", f"{value.display()} does not implement {trait} with concrete members.", node)
+        self.callset |= {m.name for m in members.values()}  # The static table reaches them, called here or not.
         return [members[m.name] for m in self.p.traits[trait]]
 
     def unify(self, pattern: Any, actual: Any, bound: dict[str, Any], generics: set[str]) -> bool:

@@ -111,7 +111,7 @@ def check_machine(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected:
 
 def lower_machine(g: Emitter, e: Expr) -> str:
     if e.val == "asm":
-        return f'__asm__("{e.args[0].val}")'
+        return f"__asm__({g.quoted(e.args[0].val)})"
     register = f"*reinterpret_cast<volatile {g.type(e.ref[1])}*>({g.expr(e.args[0])})"  # One access, exact width.
     return f"static_cast<{g.type(e.ty)}>({register})" if e.val == "mmio_read" else f"({register} = {g.expr(e.args[1])})"
 
@@ -135,7 +135,7 @@ def check_transfer(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected
 
 
 def lower_transfer(g: Emitter, e: Expr) -> str:
-    sizes = [f"({g.expr(a.args[2])} - {g.expr(a.args[1])})" if a.tag == "slice" else g.pointer(a)[1] for a in e.args]
+    sizes = [g.span(a) if a.tag == "slice" else g.pointer(a)[1] for a in e.args]
     for a, peer in zip(e.args, reversed(sizes), strict=True):  # Each part is guarded against its peer's length.
         a.ref = peer if a.tag == "slice" else a.ref
     count, dst, src = sizes[0], g.pointer(e.args[0])[0], g.pointer(e.args[1])[0]
@@ -191,7 +191,6 @@ def check_dyn(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Typ
     ty = explicit(c, e, "Dyn", targs, expected, "Write Dyn[Trait](value).")
     arity(e, args, 1, "Dyn takes the value it will own.")
     members = c.vtable(ty.args[0].name, c.expr(args[0]).value, e)
-    c.callset |= {member.name for member in members}  # Whoever holds the value may dispatch to these.
     c.effects |= {"alloc", "free"}
     c.guard("allocation")
     e.ref = ("builtin", members)
