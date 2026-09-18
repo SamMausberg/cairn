@@ -231,8 +231,8 @@ class Emitter:
 
     def e_try(self, e: Expr) -> str:
         temp, _ = self.fresh("cr_try_")
-        ok, err = e.ref
-        ret, move = self.type(self.f.ret), (lambda x: x) if self.trivial(e.args[0].ty) else "std::move({})".format
+        ok, err, target = e.ref
+        ret, move = self.type(target), (lambda x: x) if self.trivial(e.args[0].ty) else "std::move({})".format
         carried = move(f"{temp}.payload.v_{err}") if self.c.layouts[e.args[0].ty][err] else "0"
         failure = f"if ({temp}.tag != 0) return {ret}{{1, {{.v_{err} = {carried}}}}};"
         value = move(f"{temp}.payload.v_{ok}") + ";" if e.ty.name != "void" else ""

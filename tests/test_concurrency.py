@@ -239,3 +239,70 @@ def test_placement_and_sharing_rejections(code, source):
 def test_readers_may_share_what_a_task_reads():
     body = "let t = spawn sum(len(data), data); let x = data[0]; let u = spawn sum(len(data), data);"
     assert compile_source(HELPERS + "fn main() -> i32 {" + BODY + body + " return i32(wait(t) + wait(u) + x); }")
+
+
+LANE_LOCAL = """
+enum Kind { Even(u64); Odd; }
+kernel fn classify(v:u64) -> Kind { if (v & 1) == 0 { return Kind.Even(v); } return Kind.Odd; }
+fn main() -> i32 {
+  let n:usize = 4096;
+  buffer out:u64[n]@device = zeroed;
+  parallel i in n {
+    stack window:u64[4] = zeroed;              // lane-private storage lives where the lane runs
+    for k in 0..4 { window[k] = u64(i) + u64(k); }
+    let mut best:u64 = 0;
+    for k in 0..4 { best = max(best, window[k]); }
+    match classify(best) {
+      Kind.Even(v) => { out[i] = v; }
+      Kind.Odd => { out[i] = 1; }
+    }
+  }
+  buffer back:u64[n] = zeroed;
+  transfer(back, out);
+  if back[0] != 1 || back[1] != 4 || back[4095] != 4098 { return 1; }
+  return 0;
+}
+"""
+
+
+def test_lane_local_storage_and_sums_run_on_the_device(tmp_path):
+    if not shutil.which("nvcc") or subprocess.run(["nvidia-smi"], capture_output=True).returncode != 0:
+        pytest.skip("No CUDA toolkit or device here")
+    assert build_and_run(tmp_path, LANE_LOCAL, "g++")[0] == 0
+
+
+def test_try_returns_from_the_closure_it_is_written_in(tmp_path):
+    source = (
+        "enum R { Ok(u64); Err(u8); }"
+        "fn half(x:u64) -> R { if (x & 1) == 1 { return R.Err(7); } return R.Ok(x / 2); }"
+        "fn twice(f:ro<fn(u64) -> R>, x:u64) -> R { let once = try f(x); return f(once); }"
+        "fn main() -> i32 {"
+        " match twice(|v:u64| -> R { let h = try half(v); return R.Ok(h + 1); }, 6) {"
+        "   R.Ok(v) => { if v != 3 { return 1; } } R.Err(code) => { return 2; } }"
+        " match twice(|v:u64| -> R { let h = try half(v); return R.Ok(h + 1); }, 4) {"
+        "   R.Ok(v) => { return 3; } R.Err(code) => { if code != 7 { return 4; } } }"
+        " return 0; }"
+    )
+    assert build_and_run(tmp_path, source, "g++")[0] == 0
+
+
+@pytest.mark.parametrize(
+    "lane",
+    [
+        "d[i] = hits.fetch_add(1, Order.relaxed);",
+        "d[i] = f(d[i]);",
+        "d[i] = area(shape);",
+        "defer note(d[i]);",
+        "let r = try parse(d[i]);",
+    ],
+)
+def test_device_lanes_refuse_host_only_constructs(lane):
+    source = (
+        "trait Shape { fn area(self:ro<Self>) -> u64; } enum R { Ok(u64); Err(u8); }"
+        "fn parse(v:u64) -> R pure = R.Ok(v); fn note(v:u64) pure {}"
+        "fn go(n:usize, d:rw<u64>[n]@device, hits:ro<Atomic[u64]>, f:ro<fn(u64) -> u64>, shape:ro<dyn Shape>) -> R {"
+        f" parallel i in n {{ {lane} }} return R.Ok(0); }}"
+    )
+    with pytest.raises(Diagnostic) as e:
+        compile_source(source)
+    assert e.value.data["code"] in {"E-PLACEMENT", "E-PARALLEL-CONTROL"}

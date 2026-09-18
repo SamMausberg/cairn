@@ -612,7 +612,7 @@ class Checker:
         self.resources[self.f.name].append(resource)
         self.effect("zero_init")
         if s.tag == "stack" and place != "host":
-            fail("E-PLACE", "Stack storage is host memory; use buffer ...@device.", s)
+            fail("E-PLACE", "Stack storage lives where its code runs; it takes no placement.", s)
         if s.tag == "buffer" and self.device_depth:
             fail("E-PLACEMENT", "A device lane cannot allocate; declare the buffer outside the region.", s)
         if s.tag == "buffer":
@@ -839,6 +839,7 @@ class Checker:
     def s_defer(self, s: Stmt):
         """A visible cleanup: checked here, run at every normal exit of the enclosing block."""
         inner = s.body[0]
+        self.host_only(s, "defer schedules a host call")
         if inner.tag != "expr" or inner.exprs[0].tag != "call":
             fail("E-DEFER", "defer schedules exactly one call.", s)
         before = set(self.moved)
@@ -920,6 +921,10 @@ class Checker:
         self.early[id(e)] = e
         return ty
 
+    def host_only(self, node: Any, what: str):
+        if self.device_depth:
+            fail("E-PLACEMENT", f"{what}; a device lane cannot use it.", node)
+
     def leased(self, place: str, mode: str, node: Any):
         """While a task holds a borrow, nobody else may write it, or touch it if the task writes it."""
         for ticket, held in self.leases.items():
@@ -993,7 +998,9 @@ class Checker:
         ty = self.expr(a, consume=False)
         if not is_view(ty) and ty.name not in {"Buf", "Array"}:
             fail("E-INDEX", "Only views can be indexed.", e)
-        if (ty.place == "device") != bool(self.device_depth) and ty.place != "unified":
+        outer = self.lanes.outer if self.lanes else {n for n, _ in self.f.params}
+        private = self.device_depth and root(a).tag == "name" and root(a).val not in outer
+        if (ty.place == "device") != bool(self.device_depth) and ty.place != "unified" and not private:
             fail(
                 "E-PLACEMENT",
                 f"{ty.place} memory is not addressable from {'device' if self.device_depth else 'host'} code.",
@@ -1099,6 +1106,7 @@ class Checker:
         return Type("fn", want.mode, args=(*(t for _, t in g.params), g.ret))
 
     def indirect(self, e: Expr, target: Binding, args: list[Expr]) -> Type:
+        self.host_only(e, "A function value is a host code pointer")
         *params, ret = target.ty.args
         if len(args) != len(params):
             fail("E-ARITY", f"{e.val} expects {len(params)} arguments.", e)
@@ -1115,6 +1123,7 @@ class Checker:
 
     def shared(self, e: Expr, n: str, ty: Type, args: list[Expr]) -> Type:
         """Interior mutability, and only here: every atomic access names its memory order."""
+        self.host_only(e, "Atomics and mutexes are host objects")
         e.ref = ("shared", ty)
         if ty.name == "Mutex":
             if n != "with" or len(args) != 1 or args[0].tag != "lambda":
@@ -1157,14 +1166,17 @@ class Checker:
     def e_try(self, e: Expr, expected: Type | None) -> Type:
         """`try x` yields the success payload or returns the failure from the enclosing function."""
         ty = self.expr(e.args[0])
-        layout, target = self.layouts.get(ty), self.layouts.get(self.f.ret)
+        ret, outer = self.closure or (self.f.ret, set())
+        if self.lanes and not self.closure:
+            fail("E-PARALLEL-CONTROL", "A lane cannot return from the enclosing function.", e)
+        layout, target = self.layouts.get(ty), self.layouts.get(ret)
         if not isinstance(layout, dict) or len(layout) != 2 or ty.name in self.p.enums:
             fail("E-TRY", "try needs a sum of exactly two variants: success first, failure second.", e)
         failure = list(layout.values())[1]
-        if self.f.ret.name != ty.name or list(target.values())[1] != failure:
-            fail("E-TRY", f"try returns the failure of {ty.display()}, which {self.f.ret.display()} cannot carry.", e)
-        self.leaks(self.env, e)
-        e.ref = list(layout)
+        if ret.name != ty.name or list(target.values())[1] != failure:
+            fail("E-TRY", f"try returns the failure of {ty.display()}, which {ret.display()} cannot carry.", e)
+        self.leaks(set(self.env) - outer, e)
+        e.ref = (*layout, ret)
         return next(iter(layout.values())) or VOID
 
     def e_unary(self, e: Expr, expected: Type | None) -> Type:
@@ -1283,6 +1295,7 @@ class Checker:
 
     def dispatch(self, e: Expr, trait: str, member: Function, position: int, args: list[Expr]) -> Function:
         """An indirect call through the vtable; its row is the join of every implementation's."""
+        self.host_only(e, "A dynamic reference points at a host table")
         if len(args) != len(member.params):
             fail("E-ARITY", f"{member.name} expects {len(member.params)} arguments.", e)
         with self.within(self.p.modules.get(trait, ""), {"Self": Type("dyn", args=(Type(trait),))}):
