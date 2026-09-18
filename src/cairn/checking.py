@@ -838,7 +838,9 @@ class Checker:
         s.ref = target
         return result
 
-    def s_parallel(self, s: Stmt):
+    def s_parallel(self, s: Stmt, queued: bool = False):
+        if s.other_names and not queued:
+            fail("E-SPAWN", "after orders queued work: write `let t = spawn parallel ... after ... { }`.", s)
         self.expr(s.exprs[0], USIZE)
         self.region(s, [], lambda: self.block(s.body))
 
@@ -1296,7 +1298,7 @@ class Checker:
         held, self.leases = self.leases, {t: places for t, places in self.leases.items() if t not in earlier}
         queued = region is not None or (call.val == "transfer" and self.qualify("transfer", self.fs) is None)
         if region is not None:
-            self.s_parallel(region)
+            self.s_parallel(region, queued=True)
         result = VOID if region is not None else self.expr(call)
         self.leases = held
         if queued:

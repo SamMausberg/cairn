@@ -388,6 +388,7 @@ DEVICE_HEAD = "fn main() -> i32 { let n:usize = 64; buffer a:f32[n]@pinned = zer
          "  let j = spawn parallel i in n after k { x[i] = 2.0; }; wait(j); return 0; }"),
         ("E-SPAWN", "buffer b:f32[n]@pinned = zeroed; let t = spawn transfer(b, a); wait(t); return 0; }"),
         ("E-LINEAR-LEAK", "let k = spawn parallel i in n { x[i] = 1.0; }; return 0; }"),
+        ("E-SPAWN", "let k = spawn parallel i in n { x[i] = 1.0; }; parallel i in n after k { x[i] = 2.0; } wait(k); return 0; }"),
     ],
 )  # fmt: skip
 def test_queued_work_holds_what_it_touches_and_only_device_work_is_queued(code, body):
