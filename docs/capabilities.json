@@ -17,7 +17,7 @@
     "effects": "interprocedural rows with renamed footprints, pure/effects ceilings, mandatory extern effects, unsafe gate",
     "concurrency": "scoped tasks with linear tickets and borrow leases (K-way visibly disjoint parts), atomics with explicit orders, closure-entered mutexes that trap on re-entry",
     "parallel": "race-free lane regions on host threads and CUDA lanes from one body, kernel functions, reductions, device collector; lanes may call fn parameters, judged where the closure is written (lane:f footprint)",
-    "placement": "host, pinned, unified and device views in the type; transfer is the only crossing",
+    "placement": "host, pinned, unified and device views in the type; transfer is the only crossing; queued device regions and transfers as linear stream tickets ordered with `after`",
     "modules": "namespaces, pub, imports with aliases and name lists, a packaged std written in CAIRN",
     "targets": "hosted, CUDA through nvcc, and a freestanding AArch64 profile with MMIO and inline target instructions",
     "generation": "library-defined typed recipes over record schemas and naturals (static each/where/require/fold, $ splices, generated records and functions, domains, budgets, content hashes); the packaged std.wire recipe; static families; the certified bounded collector",
@@ -28,7 +28,7 @@
     "scalar_equivalence": "trusted translator and Z3, explicit per-function/module coverage"
   },
   "not_implemented": [
-    "asynchronous I/O with completion tickets",
+    "completion-based (non-thread) asynchronous I/O, cancellation and device-loss recovery",
     "multi-device collectives",
     "checking a generic once against its bounds rather than per instance",
     "per-module objects with interface digests",

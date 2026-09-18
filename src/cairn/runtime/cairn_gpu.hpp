@@ -140,6 +140,7 @@ public:
     check(cudaEventRecord(dep.e_, dep.s_));
     check(cudaStreamWaitEvent(s_, dep.e_, 0));
   }
+  void wait() && noexcept { finish(); }
   void finish() noexcept {
     check(cudaStreamSynchronize(s_));
     check(cudaEventDestroy(e_));
@@ -149,8 +150,10 @@ public:
   }
 };
 inline void wait(Ticket&& t) noexcept { t.finish(); }
-template<class F> inline Ticket launch_async(std::size_t n, F body) noexcept {
+// Work queued on a stream of its own, after the work of every ticket in `after...`.
+template<class F, class... After> inline Ticket launch_async(std::size_t n, F body, const After&... after) noexcept {
   Ticket t;
+  (t.follow(after), ...);
   fire(n, body, t.stream());
   return t;
 }
@@ -160,8 +163,10 @@ template<class F> inline Ticket launch_after(const Ticket& dep, std::size_t n, F
   fire(n, body, t.stream());
   return t;
 }
-template<class T> inline Ticket copy_async(T* dst, const T* src, std::size_t n, Dir d) noexcept {
+template<class T, class... After>
+inline Ticket copy_async(T* dst, const T* src, std::size_t n, Dir d, const After&... after) noexcept {
   Ticket t;
+  (t.follow(after), ...);
   if(n) check(cudaMemcpyAsync(dst, src, bytes<T>(n), kind(d), t.stream()));
   return t;
 }

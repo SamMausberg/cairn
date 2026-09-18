@@ -77,8 +77,11 @@ def format_expr(e: Expr) -> str:
         return f"{args[0]}[{args[1]}..{args[2]}]"
     if e.tag == "field":
         return f"{args[0]}.{e.val}"
+    if e.tag == "spawn" and isinstance(e.ref, Stmt):  # Queued device work: the region is the operand.
+        inner = format_block([e.ref], -1).split("\n")[1:-1]  # The region's own lines, without a block around them.
+        return "spawn " + "\n".join(inner).strip()
     if e.tag in {"try", "spawn"}:
-        return f"{e.tag} {args[0]}"
+        return f"{e.tag} {args[0]}" + (" after " + ", ".join(args[1:]) if args[1:] else "")
     if e.tag == "coerce":
         return args[0]
     if e.tag == "unary":
@@ -131,7 +134,8 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
         elif s.tag == "for":
             line = f"for {s.name} in {es[0]}..{es[1]} {nested(s.body)}"
         elif s.tag == "parallel":
-            line = f"parallel {s.name} in {es[0]} {nested(s.body)}"
+            order = " after " + ", ".join(t.val for t in s.other_names) if s.other_names else ""
+            line = f"parallel {s.name} in {es[0]}{order} {nested(s.body)}"
         elif s.tag == "defer":
             line = "defer " + format_block(s.body, indent).split("\n", 2)[1].strip()
         elif s.tag in {"unsafe", "block"}:

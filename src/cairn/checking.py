@@ -20,6 +20,7 @@ from .syntax import (
     BOOL,
     CPP,
     FLOAT,
+    HOST_VISIBLE,
     INT,
     MAX_FUNCTIONS,
     MAX_NODES,
@@ -76,6 +77,7 @@ class Scope:
     lanes: Lanes | None = None
     closure: tuple[Function, set[str]] | None = None  # (the closure, names bound outside it)
     leases: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # ticket -> [(place, mode)]
+    before: dict[str, set[str]] = field(default_factory=dict)  # device ticket -> tickets its work is queued after
     spawning: str = ""  # The name a `let t = spawn ...` is about to bind.
 
 
@@ -813,6 +815,8 @@ class Checker:
             fail("E-PARALLEL-CALL", f"A {target} lane cannot {', '.join(excess)}.", s)
         saved[4].update(self.effects)
         written = {name for name, _, write, _ in self.lanes.accesses if write}
+        touched = sorted({name for name, *_ in self.lanes.accesses})  # What a queued region holds until its wait.
+        self.borrowed = [(name + "[]", "rw" if name in written else "ro") for name in touched]
         for name, at_binder, _, node in self.lanes.accesses:
             if name in written and not at_binder:
                 fail(
@@ -978,7 +982,7 @@ class Checker:
         lent = [p for held in self.leases.values() for p, _ in held]
         for ticket, held in self.leases.items():
             if any(overlaps(place, p, lent) and "rw" in (mode, m) and (elements or "[" not in p) for p, m in held):
-                fail("E-LEASED", f"{place} is lent to task {ticket} until wait({ticket}).", node)
+                fail("E-LEASED", f"{place.removesuffix('[]')} is lent to {ticket} until wait({ticket}).", node)
         self.capture(place, mode)
 
     def capture(self, place: str, mode: str):
@@ -1270,17 +1274,45 @@ class Checker:
         return BOOL if n == "compare_exchange" else VOID if n == "store" else ty.args[0]
 
     def e_spawn(self, e: Expr, expected: Type | None) -> Type:
-        """`let t = spawn f(args);` runs f on its own thread; t lends f's borrows until wait(t)."""
-        call, name = e.args[0], self.spawning
-        if name in ("", "<wait>") or call.tag != "call" or self.lanes or self.closure:
+        """`let t = spawn f(args);` runs f on its own thread; `spawn parallel ...` and `spawn transfer(...)` queue
+        device work on a stream of their own. Either way t lends what the work borrows until wait(t)."""
+        region, name = e.ref if isinstance(e.ref, Stmt) else None, self.spawning
+        call, after = (None, e.args) if region else (e.args[0], e.args[1:])
+        if name in ("", "<wait>") or (call is not None and call.tag != "call") or self.lanes or self.closure:
             fail("E-SPAWN", "Write `let t = spawn f(args);` in a function body; a task is always named.", e)
         self.spawning = ""
-        result = self.expr(call)
-        if not isinstance(call.ref, Function) or any(t.name == "fn" and t.mode != "value" for _, t in call.ref.params):
-            fail("E-SPAWN", "spawn runs a declared function, and a closure cannot follow it to another thread.", e)
+        earlier: set[str] = set()
+        for ticket in after:  # Work queued after a ticket's work may touch what that ticket holds.
+            if self.before.get(ticket.val) is None or ticket.val in self.moved:
+                fail("E-SPAWN", f"after names live tickets of queued device work; {ticket.val} is not one.", ticket)
+            earlier |= {ticket.val} | self.before[ticket.val]
+        held, self.leases = self.leases, {t: places for t, places in self.leases.items() if t not in earlier}
+        queued = region is not None or (call.val == "transfer" and self.qualify("transfer", self.fs) is None)
+        if region is not None:
+            self.s_parallel(region)
+        result = VOID if region is not None else self.expr(call)
+        self.leases = held
+        if queued:
+            on_device = region.ref == "device" if region is not None else "transfer:h2h" not in self.effects_of(call)
+            if not on_device:
+                fail("E-SPAWN", "Only device work is queued; spawn a function to run host work as a task.", e)
+            self.before[name] = earlier
+        elif (
+            after
+            or not isinstance(call.ref, Function)
+            or any(t.name == "fn" and t.mode != "value" for _, t in call.ref.params)
+        ):
+            fail("E-SPAWN", "spawn runs a declared function (a closure cannot follow it to another thread); "
+                 "only queued device work is ordered with after.", e)  # fmt: skip
         self.leases[name] = self.borrowed
         self.effect("spawn")
-        return Type("Ticket", args=(result,))
+        e.val = "queue" if queued else ""
+        return Type("Ticket", args=(result,), place="device" if queued else "host")
+
+    def effects_of(self, call: Expr) -> set[str]:
+        """The transfer directions a just-checked `transfer(dst, src)` call crosses."""
+        ends = ["h" if a.ty.place in HOST_VISIBLE else "d" for a in (call.args[1], call.args[0])]
+        return {f"transfer:{ends[0]}2{ends[1]}"}
 
     def e_try(self, e: Expr, expected: Type | None) -> Type:
         """`try x` yields the success payload or returns the failure from the enclosing function."""

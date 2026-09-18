@@ -8,6 +8,7 @@ import subprocess
 
 import pytest
 
+from cairn.agent_tools import canonical_source
 from cairn.cairnc import RUNTIME_FILES, Diagnostic, compile_source
 from cairn.toolchain import command
 
@@ -336,3 +337,60 @@ def test_device_lanes_refuse_host_only_constructs(lane):
     with pytest.raises(Diagnostic) as e:
         compile_source(source)
     assert e.value.data["code"] in {"E-PLACEMENT", "E-PARALLEL-CONTROL"}
+
+
+QUEUED = """
+fn main() -> i32 {
+  let n:usize = 1048576;
+  buffer a:f32[n]@pinned = zeroed;
+  buffer b:f32[n]@pinned = zeroed;
+  for i in 0..n { a[i] = f32(i % 1000); }
+  buffer x:f32[n]@device = zeroed;
+  buffer y:f32[n]@device = zeroed;
+  let up = spawn transfer(x, a);                                     // queued on a stream of its own: the host goes on
+  let scale = spawn parallel i in n after up { y[i] = 2.0 * x[i] + 1.0; };
+  let down = spawn transfer(b[0..n], y[0..n]) after scale;           // parts are guarded when the work is queued
+  let mut busy:u64 = 0;
+  for i in 0..1000 { busy = add_wrap(busy, u64(i)); }                // host work overlaps the device pipeline
+  wait(up);
+  wait(down);
+  wait(scale);
+  if busy != 499500 || b[0] != 1.0 || b[999] != 1999.0 || b[n - 1] != 2.0 * f32((n - 1) % 1000) + 1.0 { return 1; }
+  return 0;
+}
+"""
+
+
+def test_queued_device_work_is_ordered_by_tickets_and_overlaps_the_host(tmp_path):
+    generated, receipt = compile_source(QUEUED)
+    assert generated.count("cr::gpu::launch_async(") == 1 and "cr::gpu::Dir::d2h, v_scale)" in generated
+    assert {"spawn", "join", "par:device", "transfer:h2d", "transfer:d2h"} <= set(
+        receipt["functions"]["main"]["effects"]
+    )
+    assert compile_source(canonical_source(QUEUED))[0] == generated
+    if not shutil.which("nvcc") or subprocess.run(["nvidia-smi"], capture_output=True).returncode != 0:
+        pytest.skip("No CUDA toolkit or device here")
+    assert build_and_run(tmp_path, QUEUED, "g++")[0] == 0
+
+
+DEVICE_HEAD = "fn main() -> i32 { let n:usize = 64; buffer a:f32[n]@pinned = zeroed; buffer x:f32[n]@device = zeroed;\n"
+
+
+@pytest.mark.parametrize(
+    ("code", "body"),
+    [
+        ("E-LEASED", "let up = spawn transfer(x, a); a[0] = 1.0; wait(up); return 0; }"),
+        ("E-LEASED", "let up = spawn transfer(x, a); let k = spawn parallel i in n { x[i] = 1.0; }; wait(up); wait(k); return 0; }"),
+        ("E-LEASED", "let u = spawn transfer(x, a); let j = spawn parallel i in n after u { x[i] = 1.0; };\n"
+         "  let k = spawn parallel i in n after u { x[i] = 2.0; }; wait(u); wait(j); wait(k); return 0; }"),
+        ("E-SPAWN", "let k = spawn parallel i in n { a[i] = 1.0; }; wait(k); return 0; }"),
+        ("E-SPAWN", "let k = spawn parallel i in n { x[i] = 1.0; }; wait(k);\n"
+         "  let j = spawn parallel i in n after k { x[i] = 2.0; }; wait(j); return 0; }"),
+        ("E-SPAWN", "buffer b:f32[n]@pinned = zeroed; let t = spawn transfer(b, a); wait(t); return 0; }"),
+        ("E-LINEAR-LEAK", "let k = spawn parallel i in n { x[i] = 1.0; }; return 0; }"),
+    ],
+)  # fmt: skip
+def test_queued_work_holds_what_it_touches_and_only_device_work_is_queued(code, body):
+    with pytest.raises(Diagnostic) as e:
+        compile_source(DEVICE_HEAD + "  " + body)
+    assert e.value.data["code"] == code, e.value.data["message"]

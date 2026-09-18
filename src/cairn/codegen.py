@@ -89,6 +89,9 @@ class Emitter:
         elif t.name == "Buf":
             self.need("cairn_owners.hpp")
             base = f"cr::Buf<{self.type(t.args[0])}>"
+        elif t.name == "Ticket" and t.place == "device":  # Queued device work owns a stream, not a thread.
+            self.need("cairn_gpu.hpp")
+            base = "cr::gpu::Ticket"
         elif t.name in SHARED:  # Interior mutability: a ro borrow of shared state is still a plain reference.
             self.need("cairn_parallel.hpp")
             base = f"cr::par::{SHARED[t.name]}<{self.type(t.args[0])}>"
@@ -218,6 +221,13 @@ class Emitter:
 
     def e_spawn(self, e: Expr) -> str:
         """Arguments are evaluated now and carried by value, so the task never reads the spawner's locals."""
+        if e.val == "queue":  # Device work on its own stream, ordered after the tickets it names by device events.
+            region = e.ref if isinstance(e.ref, Stmt) else None
+            order = "".join(f", v_{t.val}" for t in (e.args if region else e.args[1:]))
+            if region is None:
+                return TABLE["transfer"][1](self, e.args[0], order)
+            lanes = self.lane(region, lambda: self.block(region.body))
+            return f"cr::gpu::launch_async({self.expr(region.exprs[0])}, {lanes}{order})"
         call, captures, passed = e.args[0], [], []
         for k, (a, (_, want)) in enumerate(zip(call.args, call.ref.params, strict=True)):
             place = want.mode != "value" and not want.extent and a.tag in {"name", "field", "index"}

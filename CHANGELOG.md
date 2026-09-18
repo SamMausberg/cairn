@@ -4,6 +4,8 @@
 
 - **Recipes**: generators are library code. `recipe name[K:nat] for R { ... }` holds ordinary function and record declarations with static `each` (over a record's fields or a natural range, at declaration, statement, field-list and call-argument level), `fold`, `where` values, `$name` splices and `require` domains; `derive name[naturals] for Type;` expands it before checking into code of the deriving module. The closed Python generator behind `derive wire` is gone: `std.wire` is twelve lines of CAIRN and produces the same C++ byte for byte. Receipts pin each recipe by the hash of its tokens. `wire` is no longer a reserved word.
 
+- **Queued device work**: `let t = spawn transfer(dst, src);` and `let k = spawn parallel i in n after t { ... };` put device work on its own stream and return; the ticket leases what the work touches until `wait`, `after` orders work by device events without a host wait, and work queued after a ticket may share what that ticket holds. This exposes the runtime's stream tickets, which until now only its own tests used.
+
 ## 1.0.0
 
 The language grows from a checked CPU kernel language into a general systems language; the compiler core was rebuilt around one typed tree, and every addition arrived with native behavior tests, rejection tests and an application.

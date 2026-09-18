@@ -134,7 +134,11 @@ lent to the task is leased: nobody writes what it reads or touches what it write
 visibly disjoint parts (d[0..mid], d[mid..n]) may be lent mutably to different tasks.
 Atomic[u64] and Mutex[T] are declared in place and shared by ro borrow: a.fetch_add(1,
 Order.relaxed) always names its memory order; m.with(|s:rw<T>| { ... }) is the only way
-into a mutex. Tickets, atomics and mutexes are never stored, passed by value or returned.""",
+into a mutex. Tickets, atomics and mutexes are never stored, passed by value or returned.
+Device work can be queued: let up = spawn transfer(x, a); let k = spawn parallel i in n
+after up { y[i] = x[i]; }; each returns at once with a linear ticket that leases the
+views it touches until wait; after orders it behind live tickets on the device and lets
+it share what they hold. Only device regions and transfers are queued.""",
     "closures": """fn(u64) -> u64 is a copyable code pointer to a plain declared function of values.
 ro<fn(u64) -> u64> is a borrowed callable: pass a declared function or write the closure
 in place, apply(n, xs, |x:u64| -> u64 { return x + bias; }). A closure captures its scope

@@ -174,6 +174,7 @@ class Stmt:
     arms: list[Arm] = field(default_factory=list)
     op: str = ""
     ref: Any = None
+    other_names: list[Expr] = field(default_factory=list)  # `after a, b` on a spawned region.
 
 
 @dataclass
@@ -408,7 +409,12 @@ class Parser:
             e = Expr("unary", t.s, [self.expr(10)], *at)
         elif t.s in {"try", "spawn"}:
             self.i += 1
-            e = Expr(t.s, "", [self.expr(10)], *at)
+            if t.s == "spawn" and self.t.s == "parallel":  # Queued device work: the region itself is the operand.
+                region = self.stmt()
+                e = Expr("spawn", "", region.other_names, *at, ref=region)
+            else:
+                e = Expr(t.s, "", [self.expr(10)], *at)
+                e.args += self.after() if t.s == "spawn" else []
         elif t.s in {"|", "||"}:
             e = self.closure()
         elif self.recipe and t.s == "fold" and self.ts[self.i + 1].s in PREC:
@@ -535,6 +541,16 @@ class Parser:
             es = [hi, self.expr()]
         self.need(";")
         return Stmt(form, name, typ, es, binder=binder, op=op, **at)
+
+    def after(self) -> list[Expr]:
+        """`after a, b`: tickets whose queued work runs first. A word only here, not a reserved one."""
+        names: list[Expr] = []
+        if self.t.s == "after" and self.ts[self.i + 1].s not in {"=", ".", "(", "["}:
+            self.i += 1
+            names.append(Expr("name", self.ident(), [], self.t.line, self.t.col))
+            while self.eat(","):
+                names.append(Expr("name", self.ident(), [], self.t.line, self.t.col))
+        return names
 
     def braced(self, item):
         self.need("{")
@@ -675,7 +691,10 @@ class Parser:
             self.need("in")
             lo = self.expr()
             if t.s == "parallel":
-                return Stmt("parallel", n, exprs=[lo], body=self.block(), **at)
+                region = Stmt("parallel", n, exprs=[lo], **at)
+                region.other_names = self.after()  # Only `spawn parallel ... after t { }` may order itself.
+                region.body = self.block()
+                return region
             self.need("..")
             return Stmt("for", n, exprs=[lo, self.expr()], body=self.block(), **at)
         if self.eat("each"):

@@ -129,12 +129,13 @@ def check_transfer(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected
     borrows: list[tuple[str, str]] = []
     written, read = c.lend(args[0], "rw", borrows), c.lend(args[1], "ro", borrows)
     c.disjoint(borrows, e)
+    c.borrowed = borrows  # What a queued transfer holds until its wait.
     ends = ["h" if t.place in HOST_VISIBLE else "d" for t in (src, dst)]
     c.effects |= {f"transfer:{ends[0]}2{ends[1]}", "write:" + written} | ({"read:" + read} if read else set())
     return VOID
 
 
-def lower_transfer(g: Emitter, e: Expr) -> str:
+def lower_transfer(g: Emitter, e: Expr, queued: str | None = None) -> str:
     sizes = [g.span(a) if a.tag == "slice" else g.pointer(a)[1] for a in e.args]
     for a, peer in zip(e.args, reversed(sizes), strict=True):  # Each part is guarded against its peer's length.
         a.ref = peer if a.tag == "slice" else a.ref
@@ -143,7 +144,8 @@ def lower_transfer(g: Emitter, e: Expr) -> str:
     if ends == ["h", "h"]:
         return f"std::copy_n({src}, {count}, {dst})"
     g.need("cairn_gpu.hpp")
-    return f"cr::gpu::copy({dst}, {src}, {count}, cr::gpu::Dir::{ends[0]}2{ends[1]})"
+    entry, order = ("copy", "") if queued is None else ("copy_async", queued)  # Queued on a stream of its own.
+    return f"cr::gpu::{entry}({dst}, {src}, {count}, cr::gpu::Dir::{ends[0]}2{ends[1]}{order})"
 
 
 def check_wait(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
@@ -155,6 +157,7 @@ def check_wait(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Ty
     if ticket.name != "Ticket" or args[0].tag != "name":
         fail("E-TYPE-MISMATCH", "wait takes the name of a ticket.", e)
     c.leases.pop(args[0].val, None)
+    c.before.pop(args[0].val, None)
     c.effect("join")
     return ticket.args[0]
 
