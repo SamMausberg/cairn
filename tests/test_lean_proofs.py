@@ -42,6 +42,13 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Ownership.accepted_frees_each_allocation_once",
     "Cairn.Ownership.Ok_succ",
     "Cairn.Ownership.ownership_regression",
+    # Non-vacuity: without these the safety theorems would also hold of a machine that never faults.
+    "Cairn.Ownership.Regress.leasedRead_races",
+    "Cairn.Ownership.Regress.overlappingTasks_races",
+    "Cairn.Ownership.Regress.copyAnOwner_doubleFrees",
+    "Cairn.Ownership.Regress.useAfterDrop_usesDeadPlace",
+    "Cairn.Ownership.Regress.unawaitedTicket_leaks",
+    "Cairn.Ownership.Regress.witnesses_are_rejected",
 )
 
 # `#print axioms` prints one line per declaration; names may end in a prime.

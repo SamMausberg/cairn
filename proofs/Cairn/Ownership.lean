@@ -1904,6 +1904,63 @@ def report : Bool :=
 def line : String :=
   if report then "ownership-regression: pass" else "ownership-regression: FAIL"
 
+/-! ### The faults are reachable
+
+Every theorem above has the shape "accepted implies no reachable fault", which
+would be vacuous if the machine could never fault at all.  `report` rules out the
+other vacuity -- the checker is not simply always `false`.  These witnesses rule
+out this one: each names a program the checker REJECTS and exhibits the step
+sequence that drives the machine into the fault the rule exists to prevent.  The
+proofs are the raw `Reach` derivations; `List.Mem.head`/`.tail` pick which
+successor of the computed `succ` list the execution takes, so nothing is hidden
+behind a tactic. -/
+
+/-- **A data race is reachable.**  The spawner reads a place a live task writes:
+`let t = spawn bump(c, 4); let seen = c;` in `tests/test_soundness.py`. -/
+theorem leasedRead_races :
+    Reach leasedRead.scope (Cfg.start leasedRead) (Cfg.err (Err.race 0)) :=
+  Reach.step (List.Mem.head _)
+    (Reach.step (List.Mem.head _)
+      (Reach.step (List.Mem.head _) (Reach.refl _)))
+
+/-- **A data race is reachable** the other way: a second task would write what a
+live task already writes, so spawning it is the race. -/
+theorem overlappingTasks_races :
+    Reach overlappingTasks.scope (Cfg.start overlappingTasks) (Cfg.err (Err.race 0)) :=
+  Reach.step (List.Mem.head _)
+    (Reach.step (List.Mem.head _)
+      (Reach.step (List.Mem.head _) (Reach.refl _)))
+
+/-- **A double free is reachable.**  Copying an owner duplicates the cell, and the
+implicit release at scope exit then frees it twice. -/
+theorem copyAnOwner_doubleFrees :
+    Reach copyAnOwner.scope (Cfg.start copyAnOwner) (Cfg.err (Err.doubleFree 0)) :=
+  Reach.step (List.Mem.head _)
+    (Reach.step (List.Mem.head _)
+      (Reach.step (List.Mem.head _) (Reach.refl _)))
+
+/-- **A use after the cell is gone is reachable.**  Touching a place after its
+implicit release is exactly what the moved set forbids. -/
+theorem useAfterDrop_usesDeadPlace :
+    Reach useAfterDrop.scope (Cfg.start useAfterDrop) (Cfg.err (Err.useAfterMove 0)) :=
+  Reach.step (List.Mem.head _)
+    (Reach.step (List.Mem.head _)
+      (Reach.step (List.Mem.head _) (Reach.refl _)))
+
+/-- **A leaked ticket is reachable.**  The scope ends while a task is still
+running: `let t = spawn sum(len(data), data); return 0;`. -/
+theorem unawaitedTicket_leaks :
+    Reach unawaitedTicket.scope (Cfg.start unawaitedTicket) (Cfg.err (Err.leak 0)) :=
+  Reach.step (List.Mem.head _)
+    (Reach.step (List.Mem.head _)
+      (Reach.step (List.Mem.head _) (Reach.refl _)))
+
+/-- None of the five witnesses above is about an accepted program: each is
+rejected, which is what makes them consistent with the soundness theorems. -/
+theorem witnesses_are_rejected :
+    (accepts leasedRead || accepts overlappingTasks || accepts copyAnOwner
+      || accepts useAfterDrop || accepts unawaitedTicket) = false := by decide
+
 end Regress
 
 /-- The Lean encodings of the pinned CAIRN programs are classified exactly as the

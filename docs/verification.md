@@ -91,6 +91,8 @@ The race theorem is proved for the whole calculus, not for a fragment. It rests 
 
 `ownership_regression` is the executable sanity check: the Lean encodings of the CAIRN programs pinned in `tests/test_soundness.py` and `tests/test_concurrency.py` are classified the way the Python checker classifies them — a move beside a view a task still holds, a leased read, a double move, an unawaited ticket, two arguments of one call overlapping with a write, a place moved on one path only, branches that disagree about live tickets, two tasks writing one place, a copy of an owner and a use after the implicit release are all **rejected**; the disjoint two-task split, shared read-only lending, a move on both paths and a scalar copy are **accepted**. The build prints `ownership-regression: pass`, and the Python gate asserts on that line.
 
+The safety theorems would be vacuous if the machine could never fault, so each fault is also shown *reachable* for a program the checker rejects: `leasedRead_races` and `overlappingTasks_races` drive the machine to `Race`, `copyAnOwner_doubleFrees` to `DoubleFree`, `useAfterDrop_usesDeadPlace` to `UseAfterMove` and `unawaitedTicket_leaks` to `Leak`, each by exhibiting the step sequence rather than by a tactic, and `witnesses_are_rejected` confirms the checker rejects all five. Together with `ownership_regression`, which rules out a checker that simply says no, that pins the result from both sides.
+
 ### What this does NOT cover
 
 * **Any connection to `checking.py`.** The Lean checker is a hand-written abstraction of the Python rules. It is not extracted from them, not compared against them by a test, and the Python checker does many things this model does not.

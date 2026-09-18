@@ -83,6 +83,15 @@ namespace Cairn
 #print axioms Cairn.Ownership.releaseAll_final
 #print axioms Cairn.Ownership.ownership_regression
 
+/-! ### Non-vacuity: the faults are reachable for rejected programs -/
+
+#print axioms Cairn.Ownership.Regress.leasedRead_races
+#print axioms Cairn.Ownership.Regress.overlappingTasks_races
+#print axioms Cairn.Ownership.Regress.copyAnOwner_doubleFrees
+#print axioms Cairn.Ownership.Regress.useAfterDrop_usesDeadPlace
+#print axioms Cairn.Ownership.Regress.unawaitedTicket_leaks
+#print axioms Cairn.Ownership.Regress.witnesses_are_rejected
+
 /-! The executable regression the Python gate asserts on. -/
 
 #eval Cairn.Ownership.Regress.line
