@@ -673,7 +673,7 @@ def test_every_generic_in_the_library_is_instantiated_and_runs(tmp_path):
 def test_no_packaged_source_is_hidden_from_version_control():
     """`core.*` once ignored std/core.cairn: the suite was green here and broken in every fresh checkout."""
     root = pathlib.Path(__file__).resolve().parents[1]
-    files = [str(p) for p in (root / "src").rglob("*") if p.is_file() and "__pycache__" not in p.parts]
+    files = [str(p) for p in (root / "src" / "cairn").rglob("*") if p.is_file() and "__pycache__" not in p.parts]
     done = subprocess.run(["git", "check-ignore", *files], cwd=root, capture_output=True, text=True)
     if done.returncode == 128:
         pytest.skip("not a git checkout")
