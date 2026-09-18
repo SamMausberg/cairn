@@ -13,10 +13,10 @@ pub struct IoError { code:i32; }
 pub linear struct File { fd:i32; }
 
 // open flags and lseek origins, exactly as Linux defines them.
-pub const READ:i32 = 0;         // O_RDONLY
-pub const WRITE:i32 = 66;       // O_RDWR|O_CREAT
-pub const APPEND:i32 = 1090;    // O_RDWR|O_CREAT|O_APPEND
-pub const TRUNCATE:i32 = 578;   // O_RDWR|O_CREAT|O_TRUNC
+pub const READ:i32 = 0; // O_RDONLY
+pub const WRITE:i32 = 66; // O_RDWR|O_CREAT
+pub const APPEND:i32 = 1090; // O_RDWR|O_CREAT|O_APPEND
+pub const TRUNCATE:i32 = 578; // O_RDWR|O_CREAT|O_TRUNC
 pub const SET:i32 = 0;
 pub const CUR:i32 = 1;
 pub const END:i32 = 2;

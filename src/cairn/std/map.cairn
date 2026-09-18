@@ -17,7 +17,7 @@ pub fn live[K, V](m:ro<Map[K, V]>, slot:usize) -> bool = m.state[slot] == 1;
 
 // The slot holding `key`, else the first slot its probe path may reuse. Capacity is a power of
 // two and never full, so the walk always ends.
-fn probe[K: Hash + Eq, V](m:ro<Map[K, V]>, key:ro<K>) -> usize {
+fn probe[K:Hash + Eq, V](m:ro<Map[K, V]>, key:ro<K>) -> usize {
   let mask = len(m.state) - 1;
   let mut i = usize(hash(key)) & mask;
   let mut free = len(m.state);
@@ -34,7 +34,7 @@ fn probe[K: Hash + Eq, V](m:ro<Map[K, V]>, key:ro<K>) -> usize {
 fn place[K, V](m:rw<Map[K, V]>, key:K, value:V) {
   let slot = probe(m, key);
   if m.state[slot] == 1 {
-    let replaced = take(m.vals[slot]);  // released here, so the caller sees no old value
+    let replaced = take(m.vals[slot]); // released here, so the caller sees no old value
   } else {
     if m.state[slot] == 0 { m.fill = m.fill + 1; }
     m.state[slot] = 1;
@@ -60,19 +60,19 @@ fn grow[K, V](m:rw<Map[K, V]>) {
   }
 }
 
-pub fn insert[K: Hash + Eq, V](m:rw<Map[K, V]>, key:K, value:V) {
+pub fn insert[K:Hash + Eq, V](m:rw<Map[K, V]>, key:K, value:V) {
   if (m.fill + 1) * 4 > len(m.state) * 3 { grow(m); }
   place(m, key, value);
 }
 
-pub fn find[K: Hash + Eq, V](m:ro<Map[K, V]>, key:ro<K>) -> Option[usize] {
+pub fn find[K:Hash + Eq, V](m:ro<Map[K, V]>, key:ro<K>) -> Option[usize] {
   if len(m.state) == 0 { return Option.None; }
   let slot = probe(m, key);
   if m.state[slot] == 1 { return Option.Some(slot); }
   return Option.None;
 }
 
-pub fn remove[K: Hash + Eq, V](m:rw<Map[K, V]>, key:ro<K>) -> Option[V] {
+pub fn remove[K:Hash + Eq, V](m:rw<Map[K, V]>, key:ro<K>) -> Option[V] {
   match find(m, key) {
     Option.Some(slot) => {
       let erased = take(m.keys[slot]);

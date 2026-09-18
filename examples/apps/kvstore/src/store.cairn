@@ -38,7 +38,9 @@ fn checksum(kind:u32, k:usize, key:ro<u8>[k], v:usize, value:ro<u8>[v]) -> u32 {
 }
 
 // One record: header, key, value. The caller decides when to sync.
-fn append(f:ro<File>, kind:u32, k:usize, key:ro<u8>[k], v:usize, value:ro<u8>[v]) -> Result[u64, IoError] {
+fn append(
+  f:ro<File>, kind:u32, k:usize, key:ro<u8>[k], v:usize, value:ro<u8>[v]
+) -> Result[u64, IoError] {
   stack head:u8[16] = zeroed;
   let sum = checksum(kind, k, key, v, value);
   encode_Header(head, Header(sum, kind, u32(k), u32(v)));
@@ -65,7 +67,9 @@ fn owned(n:usize, data:ro<u8>[n]) -> Vec[u8] {
   return copy;
 }
 
-pub fn put(s:rw<Store>, f:ro<File>, k:usize, key:ro<u8>[k], v:usize, value:ro<u8>[v]) -> Result[u64, IoError] {
+pub fn put(
+  s:rw<Store>, f:ro<File>, k:usize, key:ro<u8>[k], v:usize, value:ro<u8>[v]
+) -> Result[u64, IoError] {
   let bytes = try append(f, PUT, k, key, v, value);
   let flushed = try io.sync(f);
   let stored_key = owned(k, key);
@@ -90,7 +94,9 @@ pub fn get(s:ro<Store>, k:usize, key:ro<u8>[k]) -> Option[usize] {
   match s.index.find(id) {
     Option.Some(slot) => {
       let stored = s.index.vals[slot].key.len;
-      if text.equal(stored, s.index.vals[slot].key.data[0..stored], k, key) { return Option.Some(slot); }
+      if text.equal(stored, s.index.vals[slot].key.data[0..stored], k, key) {
+        return Option.Some(slot);
+      }
       return Option.None;
     }
     Option.None => { return Option.None; }
@@ -130,7 +136,9 @@ pub fn replay(s:rw<Store>, f:ro<File>) -> Result[u64, IoError] {
 
 // Write every live record to `temp` and rename it over `path`. The caller reopens afterwards:
 // the descriptor it still holds refers to the replaced file, not to the compacted one.
-pub fn compact_log(s:ro<Store>, n:usize, path:ro<u8>[n], m:usize, temp:ro<u8>[m]) -> Result[u64, IoError] {
+pub fn compact_log(
+  s:ro<Store>, n:usize, path:ro<u8>[n], m:usize, temp:ro<u8>[m]
+) -> Result[u64, IoError] {
   let mut written:u64 = 0;
   {
     let f = try io.open(m, temp, io.TRUNCATE);
@@ -139,7 +147,9 @@ pub fn compact_log(s:ro<Store>, n:usize, path:ro<u8>[n], m:usize, temp:ro<u8>[m]
       if s.index.live(slot) {
         let k = s.index.vals[slot].key.len;
         let v = s.index.vals[slot].value.len;
-        let bytes = try append(f, PUT, k, s.index.vals[slot].key.data[0..k], v, s.index.vals[slot].value.data[0..v]);
+        let bytes = try append(
+          f, PUT, k, s.index.vals[slot].key.data[0..k], v, s.index.vals[slot].value.data[0..v]
+        );
         written = written + bytes;
       }
     }

@@ -1,0 +1,31 @@
+{
+  "protocol": "cairn.admission/1",
+  "status": "typed",
+  "session": "ee4f1a6ca8ae715d84082348e15fe7c5ee7454d53c38546c30eb6a83d87d4649",
+  "symbol": "select_gt",
+  "candidate_sha256": "0a6a91c33deff7cff4aa61fb16a91ea2ab1d1fceddf10f11fe48a1567f33f4c8",
+  "effects": [
+    "ffi_precondition",
+    "read:x",
+    "trap",
+    "write:out"
+  ],
+  "check_sites": {
+    "view_entry": 2,
+    "bounds": 2,
+    "bounded_collectors": 1
+  },
+  "check_sites_before": {
+    "view_entry": 2,
+    "bounds": 2,
+    "bounded_collectors": 1
+  },
+  "runtime_cost": "unmeasured; guard-site counts are static, not execution costs",
+  "source_outside_edit_unchanged": true,
+  "contract_unchanged": true,
+  "full_module_rechecked": true,
+  "native_build": "not-run",
+  "behavioral_tests": "not-run",
+  "equivalence": "not-proved",
+  "formal_status": "not-verified"
+}

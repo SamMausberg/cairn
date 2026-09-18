@@ -1,11 +1,10 @@
 // Task: copy values strictly greater than threshold, preserving order and tail.
-fn select_gt(n:usize, out:rw<u64>[n]@host,
-             x:ro<u64>[n]@host, threshold:u64) -> usize {
+fn select_gt(n:usize, out:rw<u64>[n]@host, x:ro<u64>[n]@host, threshold:u64) -> usize {
   let used = compact out for i in n where x[i] >= threshold yield x[i];
   return used;
 }
 
 // Unrelated routine: a local repair must preserve this source byte for byte.
 fn unrelated(x:u64) -> u64 {
-  return add_wrap(x,7);
+  return add_wrap(x, 7);
 }

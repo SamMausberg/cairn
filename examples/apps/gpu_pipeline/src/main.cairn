@@ -18,7 +18,7 @@ fn main() -> i32 {
   buffer dev_in:u64[n]@device = zeroed;
   buffer dev_mapped:u64[n]@device = zeroed;
   buffer dev_kept:u64[n]@device = zeroed;
-  let d0 = io.monotonic_ns();  // the first device allocation creates the CUDA context
+  let d0 = io.monotonic_ns(); // the first device allocation creates the CUDA context
   transfer(dev_in, input);
   let d1 = io.monotonic_ns();
   map_device(n, dev_mapped, dev_in);

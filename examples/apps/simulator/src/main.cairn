@@ -6,7 +6,7 @@ import std.io;
 fn main() -> i32 {
   let n:usize = 1024;
   let m = n * n;
-  let rounds:usize = 8;  // 16 sweeps
+  let rounds:usize = 8; // 16 sweeps
 
   buffer loop_a:f64[m] = zeroed;
   buffer loop_b:f64[m] = zeroed;

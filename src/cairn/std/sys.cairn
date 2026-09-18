@@ -29,7 +29,11 @@ pub extern fn accept(fd:i32, addr:rw<u8>[16], length:rw<u32>) -> i32 effects(io)
 pub extern fn connect(fd:i32, addr:ro<u8>[16], length:u32) -> i32 effects(io);
 pub extern fn send(fd:i32, data:ro<u8>[n], n:usize, flags:i32) -> i64 effects(io);
 pub extern fn recv(fd:i32, data:rw<u8>[n], n:usize, flags:i32) -> i64 effects(io);
-pub extern fn setsockopt(fd:i32, level:i32, option:i32, value:ro<u8>[4], length:u32) -> i32 effects(io);
+pub extern fn setsockopt(
+  fd:i32, level:i32, option:i32, value:ro<u8>[4], length:u32
+) -> i32 effects(io);
 
 // The last error the C library recorded: one volatile 32-bit load of errno's address.
-pub fn errno() -> i32 { unsafe { let slot = __errno_location(); return i32(mmio_read[u32](slot)); } }
+pub fn errno() -> i32 {
+  unsafe { let slot = __errno_location(); return i32(mmio_read[u32](slot)); }
+}

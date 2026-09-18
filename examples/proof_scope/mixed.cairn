@@ -1,4 +1,4 @@
-fn average(x:u64,y:u64)->u64 = (x&y)+shr(x^y,1);
-fn smaller(x:u64,y:u64)->u64 = min(x,y);
-fn total(x:u64,y:u64)->u64 = add_wrap(y,x);
-fn scratch(n:usize)->u64 {buffer data:u64[n]=zeroed;if n==0{return 0;}return data[0];}
+fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
+fn smaller(x:u64, y:u64) -> u64 = min(x, y);
+fn total(x:u64, y:u64) -> u64 = add_wrap(y, x);
+fn scratch(n:usize) -> u64 { buffer data:u64[n] = zeroed; if n == 0 { return 0; } return data[0]; }

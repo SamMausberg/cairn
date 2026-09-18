@@ -1,0 +1,6 @@
+{
+  "protocol": "cairn.edit/1",
+  "session": "ee4f1a6ca8ae715d84082348e15fe7c5ee7454d53c38546c30eb6a83d87d4649",
+  "kind": "body",
+  "replacement": "{ let used=compact out for i in n where x[i]>threshold yield x[i]; return used; }"
+}

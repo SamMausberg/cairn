@@ -1,3 +1,3 @@
-fn average(x:u64,y:u64)->u64 {
-  return (x/2)+(y/2)+((x%2+y%2)/2);
+fn average(x:u64, y:u64) -> u64 {
+  return (x / 2) + (y / 2) + ((x % 2 + y % 2) / 2);
 }

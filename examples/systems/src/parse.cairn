@@ -19,15 +19,15 @@ fn decimal(n:usize, input:ro<u8>[n]) -> Parsed {
 // An ordinary value record makes the foreign test interface explicit.
 struct ParseObservation { kind:u32; value:u64; offset:usize; }
 fn observe_decimal(n:usize, input:ro<u8>[n]) -> ParseObservation {
-  match decimal(n,input) {
-    Parsed.Value(value) => { return ParseObservation(0,value,0); }
-    Parsed.Invalid(offset) => { return ParseObservation(1,0,offset); }
-    Parsed.Overflow(offset) => { return ParseObservation(2,0,offset); }
-    Parsed.Empty => { return ParseObservation(3,0,0); }
+  match decimal(n, input) {
+    Parsed.Value(value) => { return ParseObservation(0, value, 0); }
+    Parsed.Invalid(offset) => { return ParseObservation(1, 0, offset); }
+    Parsed.Overflow(offset) => { return ParseObservation(2, 0, offset); }
+    Parsed.Empty => { return ParseObservation(3, 0, 0); }
   }
 }
 
 fn decimal_kind(n:usize, input:ro<u8>[n]) -> u32 {
-  let result = observe_decimal(n,input);
+  let result = observe_decimal(n, input);
   return result.kind;
 }

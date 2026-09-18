@@ -9,10 +9,17 @@ import std.core (Option);
 import std.vec (Vec);
 
 pub struct Handle { slot:usize; generation:u64; }
-pub struct Arena[T] { items:Buf[T]; gen:Buf[u64]; live:Buf[u8]; free:Vec[usize]; used:usize; count:usize; }
+pub struct Arena[T] {
+  items:Buf[T];
+  gen:Buf[u64];
+  live:Buf[u8];
+  free:Vec[usize];
+  used:usize;
+  count:usize;
+}
 
 pub fn new[T]() -> Arena[T] {
-  let free = vec.new[usize]();  // a call that allocates cannot be a nested operand
+  let free = vec.new[usize](); // a call that allocates cannot be a nested operand
   return Arena(Buf[T](0), Buf[u64](0), Buf[u8](0), free, 0, 0);
 }
 pub fn count[T](a:ro<Arena[T]>) -> usize = a.count;
@@ -63,7 +70,7 @@ pub fn remove[T](a:rw<Arena[T]>, h:Handle) -> Option[T] {
   match find(a, h) {
     Option.Some(slot) => {
       a.live[slot] = 0;
-      a.gen[slot] = a.gen[slot] + 1;  // every existing handle to this slot is now stale
+      a.gen[slot] = a.gen[slot] + 1; // every existing handle to this slot is now stale
       a.count = a.count - 1;
       vec.push(a.free, slot);
       return Option.Some(take(a.items[slot]));

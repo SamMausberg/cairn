@@ -32,7 +32,9 @@ fn find(t:ro<Table>, k:usize, key:ro<u8>[k]) -> Option[usize] {
   match t.index.find(id) {
     Option.Some(slot) => {
       let stored = t.index.vals[slot].key.len;
-      if text.equal(stored, t.index.vals[slot].key.data[0..stored], k, key) { return Option.Some(slot); }
+      if text.equal(stored, t.index.vals[slot].key.data[0..stored], k, key) {
+        return Option.Some(slot);
+      }
       return Option.None;
     }
     Option.None => { return Option.None; }
