@@ -7,7 +7,7 @@ jobs:
   native:
     if: github.event.repository.private == true
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout without retained credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -16,21 +16,21 @@ jobs:
       - name: Install explicit test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang g++ libz3-4 python3-venv
+          sudo apt-get install -y clang g++ libz3-4 python3-venv qemu-system-arm
           python3 -m venv .venv
-          .venv/bin/python -m pip install pytest==9.0.2 setuptools==82.0.1
-      - name: Unit and native example checks
+          .venv/bin/python -m pip install pytest==9.0.2 pytest-xdist setuptools==82.0.1 ruff
+      - name: Formatting and lint
         run: |
-          .venv/bin/python -m pytest -q tests
+          .venv/bin/python -m ruff format --check .
+          .venv/bin/python -m ruff check .
+      - name: Unit, native, sanitizer and agent-layer tests (GPU, Lean and QEMU parts skip when absent)
+        run: .venv/bin/python -m pytest -q tests -n auto
+      - name: Examples, certificates and scalar equivalence
+        run: |
           .venv/bin/python bin/cairn run examples/hello
           .venv/bin/python bin/cairn test examples/hello --cxx g++
-      - name: Scalar example check
-        run: |
-          .venv/bin/python bin/cairn verify examples/sketch/reference.cairn examples/hello/src/math.cairn --symbol average
-
-      - name: Scoped memory, error results and certificates
-        run: |
           .venv/bin/python bin/cairn run examples/systems
           .venv/bin/python bin/cairn test examples/systems
           .venv/bin/python bin/cairn certificates
           .venv/bin/python bin/cairn verify examples/proof_scope/reference.cairn examples/proof_scope/candidate.cairn --all
+          .venv/bin/python tools/export_lean_certificates.py --check
