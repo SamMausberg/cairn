@@ -12,7 +12,7 @@ dependencies = []
 classifiers = ["Development Status :: 3 - Alpha", "Private :: Do Not Upload"]
 
 [project.optional-dependencies]
-dev = ["pytest==9.0.2"]
+dev = ["pytest==9.0.2", "pytest-xdist", "ruff", "mypy"]
 
 [project.scripts]
 cairn = "cairn.cli:main"
@@ -21,8 +21,35 @@ cairn = "cairn.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-cairn = ["runtime/*.hpp", "py.typed"]
+cairn = ["runtime/*.hpp", "std/*.cairn", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "tools", "bench"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "PIE", "SIM", "RUF"]
+ignore = [
+    "E501",   # the formatter owns line length; long diagnostics stay on one line
+    "SIM108", # ternaries are not always clearer in a checker
+    "RUF001", # mathematical symbols in documentation strings are intentional
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011", "E731", "E741"]
+"tools/*" = ["E402"]
+"bench/*" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/cairn"]
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true

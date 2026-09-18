@@ -5,4 +5,4 @@ tests = ["tests/decimal.json", "tests/sorted_even.json"]
 
 [build]
 kind = "exe"
-arch = "x86-64"
+arch = "baseline"

@@ -31,7 +31,8 @@ reference = """fn average(x:u64,y:u64)->u64 {
   return (x/2)+(y/2)+((x%2+y%2)/2);
 }"""
 sketch = Sketch(
-    source, "average",
+    source,
+    "average",
     task={"task": "Return floor((x+y)/2) for all u64 inputs, without traps."},
     semantic=ScalarContract(reference, "average"),
 ).hole("value", "(x+y)/2")
