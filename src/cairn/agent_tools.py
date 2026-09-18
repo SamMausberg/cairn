@@ -351,7 +351,6 @@ class EditSession:
 
     def packet(self, site: str | None = None) -> dict[str, Any]:
         names = {f.name: f for f in self.expanded.functions}
-        authored = {f.name: f for f in self.parsed.functions}
         origins = {names[n].source_name for n in self.visible}
         context = []
         for f in self.parsed.functions:
@@ -449,7 +448,7 @@ class EditSession:
             fail("E-REQUEST", "Expected body or expr edit kind.")
         candidate = self.source[:start] + text + self.source[end:]
         # Exact source surgery preserves every byte outside the authorized span.
-        cpp, receipt = compile_source(candidate)
+        receipt = compile_source(candidate)[1]
         parsed = Parser(candidate).parse()
         f = next(f for f in parsed.functions if f.name == self.symbol)
         if signature(f) != signature(self.f):

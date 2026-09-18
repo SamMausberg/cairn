@@ -15,8 +15,21 @@ from .expansion import derive_wire, specialize
 from .linear_certificates import audit_collector
 from .modules import link
 from .syntax import (
-    IDENT, INT, RESERVED, SIGNED, VERSION, WIDTH, Diagnostic, Expr, Function, Parser, Program, Stmt, Type, fail,
+    IDENT,
+    INT,
+    RESERVED,
+    SIGNED,
+    WIDTH,
+    Diagnostic,
+    Expr,
+    Function,
+    Parser,
+    Program,
+    Stmt,
+    Type,
+    fail,
 )  # fmt: skip
+from .version import VERSION
 
 __all__ = [
     "IDENT", "INT", "RESERVED", "RUNTIME", "RUNTIME_FILES", "SIGNED", "VERSION", "WIDTH", "Binding", "Checker",

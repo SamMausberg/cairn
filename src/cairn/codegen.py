@@ -6,7 +6,8 @@ import re
 from pathlib import Path
 
 from .checking import COMPARISONS, HOST_VISIBLE, WRAPPING, Checker, is_view
-from .syntax import CPP, FLOAT, INT, NUMERIC, VERSION, Expr, Function, Program, Stmt, Type
+from .syntax import CPP, FLOAT, INT, NUMERIC, Expr, Function, Program, Stmt, Type
+from .version import VERSION
 
 RUNTIME_FILES = {
     p.name: p.read_text(encoding="utf-8") for p in sorted((Path(__file__).parent / "runtime").glob("*.hpp"))
@@ -102,12 +103,13 @@ class Emitter:
             else:
                 members = [f"{self.type(t) if t else 'std::uint8_t'} v_{v};" for v, t in layout.items()]
 
-                def body(members=members, plain=self.trivial(ty)):
+                # One active scalar payload keeps the 0.6 C union; owners cannot share storage, so a sum
+                # that carries one stores its payloads side by side and the inactive ones stay zero.
+                storage = "union {" if self.trivial(ty) else "struct {"
+
+                def body(members=members, storage=storage):
                     self.put("std::uint32_t tag;")
-                    if plain:  # One active scalar payload: the 0.6 C layout.
-                        self.nest("union {", lambda: [self.put(m) for m in members], "} payload;")
-                    else:  # Owners cannot share storage; inactive payloads stay zero.
-                        self.nest("struct {", lambda: [self.put(m) for m in members], "} payload;")
+                    self.nest(storage, lambda: [self.put(m) for m in members], "} payload;")
 
                 self.nest(f"struct {name} {{", body, "};")
 

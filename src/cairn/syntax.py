@@ -10,8 +10,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .version import VERSION
-
 MAX_SOURCE = 2_000_000
 MAX_FAMILY = 1024
 MAX_FUNCTIONS = 2048
@@ -53,7 +51,7 @@ TOKEN = re.compile(
 )
 IDENT = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
 NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\Z")
-RESERVED = set(
+RESERVED = set(  # One readable paragraph of words beats a wall of quoted strings.
     "fn struct enum family let mut reg if else for each in while return true false ro rw host nat "
     "effects pure extern unsafe defer match kernel module import compact where yield derive wire "
     "buffer stack zeroed break continue trait impl dyn const pub linear parallel reduce spawn try "

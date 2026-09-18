@@ -14,8 +14,25 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .syntax import (
-    BOOL, CPP, FLOAT, INT, MAX_FUNCTIONS, MAX_NODES, NUMERIC, SCALAR, SIGNED, UNSIGNED, USIZE, VOID,
-    WIDTH, Expr, Function, Program, Stmt, Type, fail,
+    BOOL,
+    CPP,
+    FLOAT,
+    INT,
+    MAX_FUNCTIONS,
+    MAX_NODES,
+    NUMERIC,
+    SCALAR,
+    SIGNED,
+    UNSIGNED,
+    USIZE,
+    VOID,
+    WIDTH,
+    Expr,
+    Function,
+    Program,
+    Stmt,
+    Type,
+    fail,
 )  # fmt: skip
 
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
@@ -462,9 +479,9 @@ class Checker:
 
         def expr(e: Expr, at_root: bool = True):
             callee = e.ref.name if e.tag == "call" and isinstance(e.ref, Function) else None
-            if callee in effects and not at_root:
-                if any(x.startswith("write:") or x in {"alloc", "free"} for x in effects[callee]):
-                    fail("E-EFFECT-ORDER", "Bind a writing call to its own statement before using its result.", e)
+            writes = any(x.startswith("write:") or x in {"alloc", "free"} for x in effects.get(callee, ()))
+            if writes and not at_root:
+                fail("E-EFFECT-ORDER", "Bind a writing call to its own statement before using its result.", e)
             for child in e.args:  # `try f()` and `spawn f()` add no operand order: f stays a root.
                 expr(child, at_root and e.tag in {"try", "spawn"})
 
@@ -1106,7 +1123,7 @@ class Checker:
             fail("E-TRY", f"try returns the failure of {ty.display()}, which {self.f.ret.display()} cannot carry.", e)
         self.leaks(self.env, e)
         e.ref = list(layout)
-        return list(layout.values())[0] or VOID
+        return next(iter(layout.values())) or VOID
 
     def e_unary(self, e: Expr, expected: Type | None) -> Type:
         ty = self.expr(e.args[0], BOOL if e.val == "!" else expected)
