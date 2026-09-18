@@ -1,0 +1,35 @@
+// The C library, declared exactly once: every other module borrows these names instead of
+// redeclaring them, because an extern's C symbol *is* its CAIRN name and two declarations of
+// one symbol collide in the emitted program. Prefer std.io and std.net; these are raw.
+// Cost: one syscall per call, no buffering, and `io` plus `ffi:<symbol>` in every caller's row.
+module std.sys;
+
+// An extent may name a later parameter, which is how C orders (pointer, length).
+pub extern fn read(fd:i32, data:rw<u8>[n], n:usize) -> i64 effects(io);
+pub extern fn write(fd:i32, data:ro<u8>[n], n:usize) -> i64 effects(io);
+// A C string is a pointer, not a view: pass path[0..1] and keep the NUL inside the storage.
+pub extern fn open(path:ro<u8>[1], flags:i32, mode:u32) -> i32 effects(io);
+pub extern fn close(fd:i32) -> i32 effects(io);
+pub extern fn lseek(fd:i32, offset:i64, whence:i32) -> i64 effects(io);
+pub extern fn fsync(fd:i32) -> i32 effects(io);
+pub extern fn ftruncate(fd:i32, length:i64) -> i32 effects(io);
+pub extern fn unlink(path:ro<u8>[1]) -> i32 effects(io);
+pub extern fn rename(from:ro<u8>[1], to:ro<u8>[1]) -> i32 effects(io);
+// struct timespec is two 64-bit words on every supported target.
+pub extern fn clock_gettime(clock:i32, ts:rw<i64>[2]) -> i32 effects(io);
+// errno is a macro over a thread-local int*, so its address arrives as an integer.
+pub extern fn __errno_location() -> usize effects(io);
+
+pub extern fn getpid() -> i32 effects(io);
+
+pub extern fn socket(domain:i32, kind:i32, protocol:i32) -> i32 effects(io);
+pub extern fn bind(fd:i32, addr:ro<u8>[16], length:u32) -> i32 effects(io);
+pub extern fn listen(fd:i32, backlog:i32) -> i32 effects(io);
+pub extern fn accept(fd:i32, addr:rw<u8>[16], length:rw<u32>) -> i32 effects(io);
+pub extern fn connect(fd:i32, addr:ro<u8>[16], length:u32) -> i32 effects(io);
+pub extern fn send(fd:i32, data:ro<u8>[n], n:usize, flags:i32) -> i64 effects(io);
+pub extern fn recv(fd:i32, data:rw<u8>[n], n:usize, flags:i32) -> i64 effects(io);
+pub extern fn setsockopt(fd:i32, level:i32, option:i32, value:ro<u8>[4], length:u32) -> i32 effects(io);
+
+// The last error the C library recorded: one volatile 32-bit load of errno's address.
+pub fn errno() -> i32 { unsafe { let slot = __errno_location(); return i32(mmio_read[u32](slot)); } }

@@ -1,0 +1,166 @@
+// Files and standard streams. A File is linear: the type system, not a convention, is what
+// closes a descriptor, and `defer close(f)` is the one idiom that survives an early `try`.
+// Errors are errno in an IoError, because CAIRN cannot express `int*` and the C library keeps
+// its error behind one. Cost: one syscall per call except `write` and `read_full`, which loop
+// until the kernel is done; nothing here buffers, so n bytes written is n bytes of syscall.
+module std.io;
+import std.core (Result, Option);
+import std.sys;
+import std.text;
+import std.vec (Vec);
+
+pub struct IoError { code:i32; }
+pub linear struct File { fd:i32; }
+
+// open flags and lseek origins, exactly as Linux defines them.
+pub const READ:i32 = 0;         // O_RDONLY
+pub const WRITE:i32 = 66;       // O_RDWR|O_CREAT
+pub const APPEND:i32 = 1090;    // O_RDWR|O_CREAT|O_APPEND
+pub const TRUNCATE:i32 = 578;   // O_RDWR|O_CREAT|O_TRUNC
+pub const SET:i32 = 0;
+pub const CUR:i32 = 1;
+pub const END:i32 = 2;
+
+// One generic failure constructor: the success type comes from the caller's return type.
+fn failed[T]() -> Result[T, IoError] = Result.Err(IoError(sys.errno()));
+
+// `path` must end in a NUL byte, since C reads a pointer and not a length.
+pub fn open(n:usize, path:ro<u8>[n], flags:i32) -> Result[File, IoError] {
+  if n == 0 || path[n - 1] != 0 { return Result.Err(IoError(22)); }
+  unsafe {
+    let fd = sys.open(path[0..1], flags, 420);
+    if fd < 0 { return failed(); }
+    return Result.Ok(File(fd));
+  }
+}
+
+// The consumer of the linear value. It cannot report a status: a function that returns one
+// has a `return` statement, and a `return` demands that every linear value be consumed first.
+pub fn close(f:File) { unsafe { let closed = sys.close(f.fd); } }
+
+pub fn read(f:ro<File>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] {
+  unsafe {
+    let got = sys.read(f.fd, into, n);
+    if got < 0 { return failed(); }
+    return Result.Ok(usize(got));
+  }
+}
+
+// Fills `into` unless the file ends first; the returned count says which happened.
+pub fn read_full(f:ro<File>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] {
+  let mut done:usize = 0;
+  while done < n {
+    let want = n - done;
+    let got = try read(f, want, into[done..n]);
+    if got == 0 { return Result.Ok(done); }
+    done = done + got;
+  }
+  return Result.Ok(done);
+}
+
+// A short write is not an error to the kernel; it is here, so callers never lose a tail.
+pub fn write(f:ro<File>, n:usize, data:ro<u8>[n]) -> Result[usize, IoError] {
+  let mut done:usize = 0;
+  while done < n {
+    let want = n - done;
+    unsafe {
+      let sent = sys.write(f.fd, data[done..n], want);
+      if sent <= 0 { return failed(); }
+      done = done + usize(sent);
+    }
+  }
+  return Result.Ok(done);
+}
+
+pub fn seek(f:ro<File>, offset:i64, whence:i32) -> Result[u64, IoError] {
+  unsafe {
+    let where_at = sys.lseek(f.fd, offset, whence);
+    if where_at < 0 { return failed(); }
+    return Result.Ok(u64(where_at));
+  }
+}
+
+pub fn size(f:ro<File>) -> Result[u64, IoError] {
+  let end = try seek(f, 0, END);
+  let back = try seek(f, 0, SET);
+  return Result.Ok(end);
+}
+
+// Durability is a syscall, never a side effect of closing.
+pub fn sync(f:ro<File>) -> Result[usize, IoError] {
+  unsafe {
+    if sys.fsync(f.fd) < 0 { return failed(); }
+    return Result.Ok(0);
+  }
+}
+
+// Cut a torn tail off a log: the offset becomes the new end of file.
+pub fn truncate(f:ro<File>, length:u64) -> Result[usize, IoError] {
+  unsafe {
+    if sys.ftruncate(f.fd, i64(length)) < 0 { return failed(); }
+    return Result.Ok(0);
+  }
+}
+
+pub fn remove(n:usize, path:ro<u8>[n]) -> Result[usize, IoError] {
+  if n == 0 || path[n - 1] != 0 { return Result.Err(IoError(22)); }
+  unsafe {
+    if sys.unlink(path[0..1]) < 0 { return failed(); }
+    return Result.Ok(0);
+  }
+}
+
+// One atomic replacement, which is how a compacted file becomes the live one.
+pub fn rename(n:usize, from:ro<u8>[n], m:usize, to:ro<u8>[m]) -> Result[usize, IoError] {
+  if n == 0 || m == 0 || from[n - 1] != 0 || to[m - 1] != 0 { return Result.Err(IoError(22)); }
+  unsafe {
+    if sys.rename(from[0..1], to[0..1]) < 0 { return failed(); }
+    return Result.Ok(0);
+  }
+}
+
+// The whole file, sized once and read in one pass; the Vec is exactly as large as the file.
+pub fn read_file(n:usize, path:ro<u8>[n]) -> Result[Vec[u8], IoError] {
+  let f = try open(n, path, READ);
+  defer close(f);
+  let bytes = try size(f);
+  let total = usize(bytes);
+  let mut out = vec.with_capacity[u8](total);
+  let got = try read_full(f, total, out.data[0..total]);
+  out.len = got;
+  return Result.Ok(out);
+}
+
+// Best effort output: a Result at every logging call site buys nothing a program acts on.
+fn put(fd:i32, n:usize, data:ro<u8>[n]) {
+  let mut done:usize = 0;
+  while done < n {
+    let want = n - done;
+    unsafe {
+      let sent = sys.write(fd, data[done..n], want);
+      if sent <= 0 { return; }
+      done = done + usize(sent);
+    }
+  }
+}
+
+pub fn print(n:usize, data:ro<u8>[n]) { put(1, n, data); }
+pub fn println(n:usize, data:ro<u8>[n]) { put(1, n, data); put(1, 1, "\n"); }
+pub fn eprintln(n:usize, data:ro<u8>[n]) { put(2, n, data); put(2, 1, "\n"); }
+pub fn newline() { put(1, 1, "\n"); }
+
+pub fn print_u64(value:u64) {
+  stack digits:u8[20] = zeroed;
+  let used = text.write_u64(len(digits), digits, value);
+  put(1, used, digits[0..used]);
+}
+
+// CLOCK_MONOTONIC in nanoseconds: the only clock a measurement should trust.
+pub fn monotonic_ns() -> u64 {
+  stack ts:i64[2] = zeroed;
+  unsafe {
+    let status = sys.clock_gettime(1, ts);
+    if status != 0 { return 0; }
+  }
+  return u64(ts[0]) * 1000000000 + u64(ts[1]);
+}

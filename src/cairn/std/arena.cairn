@@ -1,0 +1,73 @@
+// A generational arena: values live in one owned array and are named by a copyable Handle
+// instead of a borrow, which is how CAIRN expresses graphs and cycles. Removing a value bumps
+// its slot's generation, so every handle to it stops resolving - a use-after-free becomes a
+// None instead of a dangling pointer.
+// Cost: insert is amortized O(1) and reuses removed slots; find and remove are O(1). Growth
+// reallocates and moves elements with `swap`, so `alloc` and `free` are in the caller's row.
+module std.arena;
+import std.core (Option);
+import std.vec (Vec);
+
+pub struct Handle { slot:usize; generation:u64; }
+pub struct Arena[T] { items:Buf[T]; gen:Buf[u64]; live:Buf[u8]; free:Vec[usize]; used:usize; count:usize; }
+
+pub fn new[T]() -> Arena[T] {
+  let free = vec.new[usize]();  // a call that allocates cannot be a nested operand
+  return Arena(Buf[T](0), Buf[u64](0), Buf[u8](0), free, 0, 0);
+}
+pub fn count[T](a:ro<Arena[T]>) -> usize = a.count;
+pub fn slots[T](a:ro<Arena[T]>) -> usize = a.used;
+pub fn alive[T](a:ro<Arena[T]>, slot:usize) -> bool = a.live[slot] == 1;
+
+// The handle a live slot currently answers to; pairs with `slots` to iterate an arena.
+pub fn handle[T](a:ro<Arena[T]>, slot:usize) -> Handle = Handle(slot, a.gen[slot]);
+
+fn grow[T](a:rw<Arena[T]>) {
+  let cap = max(len(a.live) * 2, 8);
+  let mut items = Buf[T](cap);
+  let mut gen = Buf[u64](cap);
+  let mut live = Buf[u8](cap);
+  for i in 0..len(a.live) {
+    swap(items[i], a.items[i]);
+    gen[i] = a.gen[i];
+    live[i] = a.live[i];
+  }
+  swap(a.items, items);
+  swap(a.gen, gen);
+  swap(a.live, live);
+}
+
+pub fn insert[T](a:rw<Arena[T]>, value:T) -> Handle {
+  let mut slot = a.used;
+  match vec.pop(a.free) {
+    Option.Some(reused) => { slot = reused; }
+    Option.None => {
+      if a.used == len(a.live) { grow(a); }
+      a.used = a.used + 1;
+    }
+  }
+  a.items[slot] = value;
+  a.live[slot] = 1;
+  a.count = a.count + 1;
+  return Handle(slot, a.gen[slot]);
+}
+
+// None when the handle is stale: wrong slot, removed value, or an older generation.
+pub fn find[T](a:ro<Arena[T]>, h:Handle) -> Option[usize] {
+  if h.slot >= a.used { return Option.None; }
+  if a.live[h.slot] != 1 || a.gen[h.slot] != h.generation { return Option.None; }
+  return Option.Some(h.slot);
+}
+
+pub fn remove[T](a:rw<Arena[T]>, h:Handle) -> Option[T] {
+  match find(a, h) {
+    Option.Some(slot) => {
+      a.live[slot] = 0;
+      a.gen[slot] = a.gen[slot] + 1;  // every existing handle to this slot is now stale
+      a.count = a.count - 1;
+      vec.push(a.free, slot);
+      return Option.Some(take(a.items[slot]));
+    }
+    Option.None => { return Option.None(); }
+  }
+}

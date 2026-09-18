@@ -1,0 +1,49 @@
+// In-place ordering. Heapsort, because it is the one O(n log n) algorithm that needs no
+// recursion (no `diverge` in the effect row), no scratch buffer (no `alloc`) and moves
+// elements only with `swap`, so it sorts owners as happily as scalars.
+// Cost: O(n log n) comparisons and swaps, no allocation; the order of equal elements is not kept.
+module std.sort;
+import std.core (Option, Ord);
+
+// Restore the heap property below `start` within the prefix of length `count`.
+fn sift[T](n:usize, xs:rw<T>[n], start:usize, count:usize, less:ro<fn(ro<T>, ro<T>) -> bool>) {
+  let mut root = start;
+  while root * 2 + 1 < count {
+    let mut child = root * 2 + 1;
+    if child + 1 < count && less(xs[child], xs[child + 1]) { child = child + 1; }
+    if !less(xs[root], xs[child]) { return; }
+    swap(xs[root], xs[child]);
+    root = child;
+  }
+}
+
+pub fn sort_by[T](n:usize, xs:rw<T>[n], less:ro<fn(ro<T>, ro<T>) -> bool>) {
+  if n < 2 { return; }
+  let mut i = n / 2;
+  while i > 0 {
+    i = i - 1;
+    sift(n, xs, i, n, less);
+  }
+  let mut end = n;
+  while end > 1 {
+    end = end - 1;
+    swap(xs[0], xs[end]);
+    sift(n, xs, 0, end, less);
+  }
+}
+
+pub fn sort[T:Ord](n:usize, xs:rw<T>[n]) {
+  sort_by(n, xs, |a:ro<T>, b:ro<T>| -> bool { return less(a, b); });
+}
+
+// The index of a value equal to `key` in an already sorted view, if one is there.
+pub fn search[T:Ord](n:usize, xs:ro<T>[n], key:ro<T>) -> Option[usize] {
+  let mut lo:usize = 0;
+  let mut hi = n;
+  while lo < hi {
+    let mid = lo + (hi - lo) / 2;
+    if less(xs[mid], key) { lo = mid + 1; } else { hi = mid; }
+  }
+  if lo < n && !less(key, xs[lo]) { return Option.Some(lo); }
+  return Option.None;
+}

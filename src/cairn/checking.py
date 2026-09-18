@@ -360,9 +360,11 @@ class Checker:
                 self.unchecked.append(f.name)
         effects = self.fixed_point()
         self.audit(effects)
-        for callee, device, node in self.lane_calls:
+        kernels = [(f.name, True, f) for f in self.p.functions if f.kernel]
+        for callee, device, node in [*self.lane_calls, *kernels]:
             allowed = PURE if device else LANE_SAFE
-            excess = sorted(x for x in effects[callee] if x not in allowed and not x.startswith("read:"))
+            reach = ("read:", "write:") if callee in {k for k, _, _ in kernels} else ("read:",)
+            excess = sorted(x for x in effects[callee] if x not in allowed and not x.startswith(reach))
             if excess:
                 fail("E-PARALLEL-CALL", f"A lane cannot call {callee}: it may {', '.join(excess)}.", node)
             todo = [callee] if device else []
@@ -416,7 +418,7 @@ class Checker:
 
     def function(self, f: Function):
         self.signature(f)
-        outer, self.s = self.s, Scope(f, dict(f.bindings), module=f.module)
+        outer, self.s = self.s, Scope(f, dict(f.bindings), module=f.module, device_depth=int(f.kernel))
         self.call_edges[f.name], self.resources[f.name] = [], []
         if f.owner:
             self.tenv["Self"] = self.resolve(f.owner[1], f)
@@ -744,7 +746,7 @@ class Checker:
 
     def region(self, s: Stmt, exprs: list[Expr], run) -> Any:
         """Check a lane body; the placement of the views it indexes decides where it runs."""
-        if self.lanes:
+        if self.lanes or self.f.kernel:
             fail("E-PARALLEL-NEST", "A lane cannot start another parallel region.", s)
 
         def places(e: Expr) -> set[str]:
@@ -1369,6 +1371,8 @@ class Checker:
             fail("E-ARITY", f"{e.val} expects {len(f.params)} arguments.", e)
         if f.extern and not self.unsafe_depth:
             fail("E-UNSAFE", f"{f.name} is foreign; call it inside an unsafe block.", e)
+        if f.kernel and not self.device_depth:
+            fail("E-PLACEMENT", f"{f.name} is a kernel: it runs in device lanes, not in host code.", e)
         if f.generics and not f.bindings:
             f = self.instantiate(f, self.infer(f, args, targs, expected, e), e)
         subst = dict(zip((n for n, _ in f.params), args, strict=True))
@@ -1427,7 +1431,7 @@ class Checker:
         self.call_edges[self.f.name].append((f.name, mapping))
         self.callset.add(f.name)
         self.borrowed = borrows
-        if self.lanes:
+        if self.lanes or self.f.kernel:
             self.lane_calls.append((f.name, bool(self.device_depth), e))
         e.ref = f
         return f.ret

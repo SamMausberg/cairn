@@ -320,7 +320,7 @@ class Emitter:
     def signature(self, f: Function) -> str:
         ps = ", ".join(f"{self.type(t)} v_{n}" for n, t in f.params)
         exported = all(self.trivial(t.value) and t.name != "fn" for t in [f.ret, *(t for _, t in f.params)])
-        linkage = 'extern "C" ' if exported or f.extern else ""
+        linkage = "inline " if f.kernel else 'extern "C" ' if exported or f.extern else ""
         device = "CR_HD " if f.name in self.c.device_functions else ""
         symbol = f' __asm__("{local(f.name)}")' if f.extern else ""  # The C symbol, whatever header declares it.
         return f"{linkage}{device}{self.type(f.ret)} cf_{mangle(f.name)}({ps}) noexcept{symbol}"

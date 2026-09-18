@@ -1,0 +1,92 @@
+// Numbers to bytes and back, and the searching a line protocol needs. A substring cannot be
+// returned (a borrow is second class), so every search answers with an index into the input
+// and the caller passes the part `s[lo..hi]` onwards.
+// Cost: one pass per call; the write_* forms touch only the caller's storage and return the
+// number of bytes used, or 0 when the value does not fit. The push_* forms grow a Vec.
+module std.text;
+import std.core (Option, Result);
+import std.vec (Vec);
+
+pub enum ParseError { Empty; Invalid(usize); Overflow(usize); }
+
+pub fn parse_u64(n:usize, s:ro<u8>[n]) -> Result[u64, ParseError] {
+  if n == 0 { return Result.Err(ParseError.Empty); }
+  let mut value:u64 = 0;
+  for i in 0..n {
+    let byte = s[i];
+    if byte < 48 || byte > 57 { return Result.Err(ParseError.Invalid(i)); }
+    let digit = u64(byte - 48);
+    if value > (18446744073709551615 - digit) / 10 { return Result.Err(ParseError.Overflow(i)); }
+    value = value * 10 + digit;
+  }
+  return Result.Ok(value);
+}
+
+// Decimal, most significant digit first. The digits are produced backwards into fixed storage,
+// so the caller's buffer is written once and never partially.
+pub fn write_u64(n:usize, out:rw<u8>[n], value:u64) -> usize {
+  stack digits:u8[20] = zeroed;
+  let mut rest = value;
+  let mut used:usize = 0;
+  while used == 0 || rest > 0 {
+    digits[used] = u8(rest % 10 + 48);
+    rest = rest / 10;
+    used = used + 1;
+  }
+  if used > n { return 0; }
+  for i in 0..used { out[i] = digits[used - 1 - i]; }
+  return used;
+}
+
+// Exactly `width` lowercase hex digits, high nibble first; the high bits above `width` are lost.
+pub fn write_hex(n:usize, out:rw<u8>[n], value:u64, width:usize) -> usize {
+  if width == 0 || width > 16 || width > n { return 0; }
+  for i in 0..width {
+    let nibble = u8(shr(value, (width - 1 - i) * 4) & 15);
+    if nibble < 10 { out[i] = nibble + 48; } else { out[i] = nibble + 87; }
+  }
+  return width;
+}
+
+pub fn push_u64(v:rw<Vec[u8]>, value:u64) {
+  stack digits:u8[20] = zeroed;
+  let used = write_u64(len(digits), digits, value);
+  vec.extend_from(v, used, digits[0..used]);
+}
+
+// Lexicographic order on bytes, shorter first on a common prefix: -1, 0 or 1.
+pub fn compare(n:usize, a:ro<u8>[n], m:usize, b:ro<u8>[m]) -> i32 {
+  let mut i:usize = 0;
+  while i < n && i < m {
+    if a[i] != b[i] { if a[i] < b[i] { return -1; } return 1; }
+    i = i + 1;
+  }
+  if n < m { return -1; }
+  if n > m { return 1; }
+  return 0;
+}
+
+pub fn equal(n:usize, a:ro<u8>[n], m:usize, b:ro<u8>[m]) -> bool = compare(n, a, m, b) == 0;
+
+pub fn find_byte(n:usize, s:ro<u8>[n], byte:u8, from:usize) -> Option[usize] {
+  for i in from..n { if s[i] == byte { return Option.Some(i); } }
+  return Option.None;
+}
+
+// The first index where `needle` starts. Naive, because a line protocol's needles are short.
+pub fn find(n:usize, s:ro<u8>[n], m:usize, needle:ro<u8>[m]) -> Option[usize] {
+  if m == 0 || m > n { return Option.None; }
+  for start in 0..(n - m + 1) {
+    let mut matched:usize = 0;
+    while matched < m && s[start + matched] == needle[matched] { matched = matched + 1; }
+    if matched == m { return Option.Some(start); }
+  }
+  return Option.None;
+}
+
+// FNV-1a: no table, no allocation, good enough to key a map or checksum a record.
+pub fn hash_bytes(n:usize, s:ro<u8>[n]) -> u64 {
+  let mut h:u64 = 14695981039346656037;
+  for i in 0..n { h = mul_wrap(h ^ u64(s[i]), 1099511628211); }
+  return h;
+}

@@ -1,0 +1,86 @@
+// An open-addressed hash table with linear probing and tombstones. The map owns its keys and
+// values, so Map[u64, Vec[u8]] is ordinary. A lookup answers with a *slot index* rather than
+// the value: a borrow cannot be returned, so the caller reads m.vals[slot] itself, and the
+// same index is what iteration uses.
+// Cost: expected O(1) per operation; insert reallocates and rehashes past three quarters full,
+// so `alloc`, `free` and `zero_init` appear in every caller's row.
+module std.map;
+import std.core (Option, Hash, Eq);
+
+// state: 0 never used, 1 live, 2 erased. An erased slot still routes probes past it.
+pub struct Map[K, V] { keys:Buf[K]; vals:Buf[V]; state:Buf[u8]; count:usize; fill:usize; }
+
+pub fn new[K, V]() -> Map[K, V] = Map(Buf[K](0), Buf[V](0), Buf[u8](0), 0, 0);
+pub fn count[K, V](m:ro<Map[K, V]>) -> usize = m.count;
+pub fn slots[K, V](m:ro<Map[K, V]>) -> usize = len(m.state);
+pub fn live[K, V](m:ro<Map[K, V]>, slot:usize) -> bool = m.state[slot] == 1;
+
+// The slot holding `key`, else the first slot its probe path may reuse. Capacity is a power of
+// two and never full, so the walk always ends.
+fn probe[K, V](m:ro<Map[K, V]>, key:ro<K>) -> usize {
+  let mask = len(m.state) - 1;
+  let mut i = usize(hash(key)) & mask;
+  let mut free = len(m.state);
+  while m.state[i] != 0 {
+    if m.state[i] == 1 && same(m.keys[i], key) { return i; }
+    if m.state[i] == 2 && free == len(m.state) { free = i; }
+    i = (i + 1) & mask;
+  }
+  if free != len(m.state) { return free; }
+  return i;
+}
+
+// Store without considering growth: the caller guarantees a free slot.
+fn place[K, V](m:rw<Map[K, V]>, key:K, value:V) {
+  let slot = probe(m, key);
+  if m.state[slot] == 1 {
+    let replaced = take(m.vals[slot]);  // released here, so the caller sees no old value
+  } else {
+    if m.state[slot] == 0 { m.fill = m.fill + 1; }
+    m.state[slot] = 1;
+    m.keys[slot] = key;
+    m.count = m.count + 1;
+  }
+  m.vals[slot] = value;
+}
+
+// Rehash into fresh storage; `swap` hands the old arrays to locals that release at exit.
+fn grow[K, V](m:rw<Map[K, V]>) {
+  let cap = max(len(m.state) * 2, 8);
+  let mut keys = Buf[K](cap);
+  let mut vals = Buf[V](cap);
+  let mut state = Buf[u8](cap);
+  swap(m.keys, keys);
+  swap(m.vals, vals);
+  swap(m.state, state);
+  m.count = 0;
+  m.fill = 0;
+  for i in 0..len(state) {
+    if state[i] == 1 { place(m, take(keys[i]), take(vals[i])); }
+  }
+}
+
+// K needs Hash and Eq; CAIRN has no multi-bound syntax, so Eq is checked where `same` is called.
+pub fn insert[K:Hash, V](m:rw<Map[K, V]>, key:K, value:V) {
+  if (m.fill + 1) * 4 > len(m.state) * 3 { grow(m); }
+  place(m, key, value);
+}
+
+pub fn find[K:Hash, V](m:ro<Map[K, V]>, key:ro<K>) -> Option[usize] {
+  if len(m.state) == 0 { return Option.None; }
+  let slot = probe(m, key);
+  if m.state[slot] == 1 { return Option.Some(slot); }
+  return Option.None;
+}
+
+pub fn remove[K:Hash, V](m:rw<Map[K, V]>, key:ro<K>) -> Option[V] {
+  match find(m, key) {
+    Option.Some(slot) => {
+      let erased = take(m.keys[slot]);
+      m.state[slot] = 2;
+      m.count = m.count - 1;
+      return Option.Some(take(m.vals[slot]));
+    }
+    Option.None => { return Option.None(); }
+  }
+}

@@ -193,6 +193,7 @@ class Function:
     extern: bool = False
     effects: tuple[str, ...] | None = None  # A declared ceiling; None infers.
     owner: tuple[str, Type] | None = None  # (trait, Self) for an impl member.
+    kernel: bool = False  # Runs on the device: callable only from device lanes and other kernels.
 
     @property
     def static(self) -> str | None:
@@ -702,8 +703,10 @@ class Parser:
                 f = self.function(t, bodiless=True, extern=True, public=public)
                 f.name = f.source_name = declare(f.name, t)
                 p.functions.append(f)
-            elif self.eat("fn"):
-                f = self.function(t, public=public)
+            elif self.t.s in {"fn", "kernel"}:
+                kernel = self.eat("kernel")
+                self.need("fn")
+                f = self.function(t, public=public, kernel=kernel)
                 f.name = f.source_name = declare(f.name, t)
                 p.functions.append(f)
             elif self.eat("derive"):

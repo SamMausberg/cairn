@@ -79,6 +79,13 @@ fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@devic
   parallel i in n { out[i] = a * x[i] + y[i]; }
 }
 fn scale(v:u64) -> u64 = mul_wrap(v, 3);
+kernel fn at(w:usize, n:usize, grid:ro<f32>[n]@device, x:usize, y:usize) -> f32 = grid[y * w + x];
+fn blur(w:usize, n:usize, out:rw<f32>[n]@device, grid:ro<f32>[n]@device) {
+  parallel i in n {
+    let x = i % w;
+    if x > 0 && x + 1 < w { out[i] = (at(w, n, grid, x - 1, i / w) + at(w, n, grid, x + 1, i / w)) * 0.5; }
+  }
+}
 fn main() -> i32 {
   let n:usize = 1000000;
   buffer x:f32[n] = zeroed;
@@ -103,6 +110,9 @@ fn main() -> i32 {
   buffer host_evens:u64[n] = zeroed;
   transfer(host_evens, evens);
   if host_evens[0] != 0 || host_evens[1] != 6 || host_evens[499999] != 2999994 { return 4; }
+  blur(1000, n, dout, dx);
+  transfer(out, dout);
+  if out[1] != 1.0 || out[1500] != 500.0 { return 5; }
   return 0;
 }
 """
@@ -150,7 +160,7 @@ def test_the_same_lane_body_runs_on_the_device(tmp_path):
     assert code == 0 and receipt["requires"] == ["cuda"]
     effects = set(receipt["functions"]["main"]["effects"])
     assert {"par:device", "gpu_alloc", "gpu_free", "transfer:h2d", "transfer:d2h"} <= effects
-    host = DEVICE.replace("@device", "")
+    host = DEVICE.replace("@device", "").replace("kernel fn", "fn")  # The same program, on host threads.
     assert "cr::par::run" in compile_source(host)[0] and "cr::gpu::launch" in compile_source(DEVICE)[0]
 
 
@@ -211,6 +221,11 @@ def test_rejections(code, body):
         ("E-TYPE-MISMATCH", "fn f(n:usize, d:rw<u64>[n]@device, h:ro<u32>[n]) { transfer(d, h); }"),
         ("E-PARALLEL-CALL", "extern fn getpid() -> i32 effects(io); fn pid() -> i32 { unsafe { return getpid(); } }"
          "fn f(n:usize, out:rw<i32>[n]) { parallel i in n { out[i] = pid(); } }"),
+        ("E-PLACEMENT", "kernel fn k(n:usize, d:ro<u64>[n]@device) -> u64 = d[0]; fn f(n:usize, d:ro<u64>[n]@device) -> u64 = k(n, d);"),
+        ("E-PLACEMENT", "kernel fn k(n:usize, h:ro<u64>[n]) -> u64 = h[0];"),
+        ("E-PLACEMENT", "kernel fn k(n:usize) -> u64 { buffer b:u64[n] = zeroed; return b[0]; }"),
+        ("E-PARALLEL-NEST", "kernel fn k(n:usize, d:rw<u64>[n]@device) { parallel i in n { d[i] = 1; } }"),
+        ("E-PARALLEL-CALL", "extern fn getpid() -> i32 effects(io); kernel fn k() -> i32 { unsafe { return getpid(); } }"),
         ("E-PINNED", "struct S { hits:Atomic[u64]; }"),
         ("E-PINNED", "fn f() -> Atomic[u64] = Atomic[u64](0);"),
     ],

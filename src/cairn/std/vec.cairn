@@ -23,7 +23,9 @@ pub fn push[T](v:rw<Vec[T]>, item:T) {
 }
 
 pub fn pop[T](v:rw<Vec[T]>) -> Option[T] {
-  if v.len == 0 { return Option.None; }
+  // Option.None() and not Option.None: a bare variant is a place, and a place holding an owner
+  // cannot be moved. The call spelling is the only one that compiles for every T.
+  if v.len == 0 { return Option.None(); }
   v.len = v.len - 1;
   return Option.Some(take(v.data[v.len]));
 }
@@ -41,4 +43,19 @@ pub fn set[T](v:rw<Vec[T]>, i:usize, item:T) {
 pub fn clear[T](v:rw<Vec[T]>) {
   for i in 0..v.len { let dropped = take(v.data[i]); }
   v.len = 0;
+}
+
+// Append a view. Copying elements, so it instantiates only for copyable ones; an owner would
+// have to be moved out of the source view, which no borrow allows.
+pub fn extend_from[T](v:rw<Vec[T]>, n:usize, src:ro<T>[n]) {
+  reserve(v, v.len + n);
+  for i in 0..n { v.data[v.len + i] = src[i]; }
+  v.len = v.len + n;
+}
+
+// Release the tail now instead of at the owner's scope exit; capacity is kept.
+pub fn truncate[T](v:rw<Vec[T]>, count:usize) {
+  if count >= v.len { return; }
+  for i in count..v.len { let dropped = take(v.data[i]); }
+  v.len = count;
 }

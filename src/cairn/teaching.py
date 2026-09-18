@@ -108,7 +108,9 @@ the next statement. Placement is part of a view type: @host (default), @pinned, 
 code cannot index @device memory and lanes cannot index the other side. Whatever any lane
 writes may be touched only at [i]; shared scalars cannot be assigned (use let s = reduce
 add_wrap for i in n yield x[i];). Lanes cannot return, nest, move outer owners, or call
-functions that write, do I/O or (on the device) allocate. buffer d:f32[n]@device = zeroed;
+functions that write, do I/O or (on the device) allocate. kernel fn at(...) -> f32 is a
+device helper: it may index @device views, is callable only from device lanes and other
+kernels, and cannot allocate, do I/O or start regions. buffer d:f32[n]@device = zeroed;
 is a scoped device owner; transfer(dst, src) is the only way across placements. reduce on
 the device combines in an unspecified order: exact for add_wrap mul_wrap & | ^ min max,
 not for float + and *; checked integer + is not offered.""",
