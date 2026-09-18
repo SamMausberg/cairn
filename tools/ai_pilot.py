@@ -19,10 +19,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cairn.cairnc import Diagnostic, Parser, compile_source  # noqa: E402
-from cairn.syntax import lex  # noqa: E402
-from cairn.teaching import CARDS  # noqa: E402
-from cairn.testing import evaluate  # noqa: E402
+from cairn.cairnc import Diagnostic, Parser, compile_source
+from cairn.syntax import lex
+from cairn.teaching import CARDS
+from cairn.testing import evaluate
 
 MASK = 2**64 - 1
 CHECKS = 6
@@ -49,7 +49,7 @@ def machine(code: list[int]) -> int:
 
 def programs(r: random.Random) -> list[int]:
     good = [0, r.randrange(9), 0, r.randrange(9), r.choice([1, 2]), 3, 1] * r.randrange(1, 4)
-    return good if r.random() < 0.6 else good[: r.randrange(len(good))] + [r.choice([1, 2, 3, 7, 0])]
+    return good if r.random() < 0.6 else [*good[: r.randrange(len(good))], r.choice([1, 2, 3, 7, 0])]
 
 
 def views(r: random.Random, bits: int, most: int = 12) -> list[int]:
