@@ -619,6 +619,8 @@ class Checker:
         if s.name in self.env or s.binder in self.env or s.name == s.binder:
             fail("E-SHADOW", "Collector names must be fresh and distinct.", s)
         target = self.env.get(out.val)
+        if self.lanes:  # Every lane would fill the same prefix.
+            fail("E-PARALLEL-NEST", "A collector is a whole-array form; it cannot run inside a lane.", s)
         if target is None or not is_view(target.ty) or target.ty.mode != "rw":
             fail("E-WRITE-LEASE", "Compaction target must be a direct rw parameter.", out)
         self.expr(out, consume=False)
@@ -1510,6 +1512,8 @@ class Checker:
             return ty if n == "mmio_read" else VOID
         if n == "transfer":  # The only way elements cross a placement boundary; extents agree by identity.
             arity(2, "transfer takes a destination and a source view.")
+            if self.lanes:
+                fail("E-PARALLEL-NEST", "transfer moves a whole array; it cannot run inside a lane.", e)
             dst, src = (self.view_argument(a) for a in args)
             if not is_view(dst) or not is_view(src) or dst.mode != "rw" or root(args[0]).tag != "name":
                 fail("E-WRITE-LEASE", "transfer needs an rw destination view and a source view.", e)
