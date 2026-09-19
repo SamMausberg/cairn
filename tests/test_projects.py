@@ -1,3 +1,4 @@
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -260,6 +261,93 @@ def test_incremental_builds_relink_only_the_module_whose_body_changed(tmp_path, 
     assert record["status"] == "native-built" and subprocess.run([record["artifact"]], timeout=30).returncode == 0
 
 
+SMALL = "module lib;\npub fn f() -> i32 = 0;\nmodule app;\nimport lib;\npub fn main() -> i32 = lib.f();\n"
+
+
+def incremental(path: Path, source: str | None = None) -> dict:
+    """One tiny three-unit program, built with the object cache."""
+    if source is not None:
+        path.write_text(source, encoding="utf-8")
+    return build(load_project(path), kind="exe", cxx="clang++", timeout=120, incremental=True)
+
+
+def test_a_cached_object_is_reused_only_while_its_bytes_still_match_its_key(tmp_path):
+    """A name in the cache is not evidence: an object is linked only under the digest stored beside it, so a
+    replaced, truncated or half-written file is compiled again."""
+    if not shutil.which("clang++"):
+        pytest.skip("clang++ unavailable")
+    path = tmp_path / "program.cairn"
+    first = incremental(path, SMALL)
+    assert first["status"] == "native-built" and not any(unit["reused"] for unit in first["units"])
+    forged = Path(next(unit["object"] for unit in incremental(path, SMALL.replace("= 0;", "= 42;"))["units"]))
+    cached = Path(next(unit["object"] for unit in first["units"] if unit["unit"] == "lib.cpp"))
+    digest = cached.with_suffix(".sha256")
+    assert digest.is_file() and all(unit["reused"] for unit in incremental(path, SMALL)["units"])
+    cached.write_bytes(forged.read_bytes())  # The object of another program, under this program's key.
+    record = incremental(path, SMALL)
+    assert {unit["unit"]: unit["reused"] for unit in record["units"]}["lib.cpp"] is False
+    assert record["status"] == "native-built"
+    assert subprocess.run([record["artifact"]], timeout=30).returncode == 0  # what a clean build does, not 42
+    cached.write_bytes(cached.read_bytes()[:64])  # A half object from an interrupted build is not linked either.
+    assert incremental(path)["status"] == "native-built"
+    digest.unlink()
+    assert {unit["unit"]: unit["reused"] for unit in incremental(path)["units"]}["lib.cpp"] is False
+    cached.unlink()
+    cached.symlink_to(forged)
+    with pytest.raises(ProjectError, match="plain files"):
+        incremental(path)
+
+
+def test_the_object_cache_stays_inside_the_project_build_directory(tmp_path):
+    """`build/objects` is refused as a symbolic link or a file, exactly as the build directory itself is."""
+    if not shutil.which("clang++"):
+        pytest.skip("clang++ unavailable")
+    path = tmp_path / "program.cairn"
+    path.write_text(SMALL, encoding="utf-8")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (tmp_path / "build").mkdir()
+    (tmp_path / "build/objects").symlink_to(elsewhere, target_is_directory=True)
+    with pytest.raises(ProjectError, match="object cache"):
+        incremental(path)
+    assert list(elsewhere.iterdir()) == []
+    (tmp_path / "build/objects").unlink()
+    (tmp_path / "build/objects").write_text("not a directory")
+    with pytest.raises(ProjectError, match="object cache"):
+        incremental(path)
+
+
+def test_a_unit_that_times_out_or_is_killed_records_the_same_build_as_one_unit_does(tmp_path, monkeypatch):
+    """The record is the build's answer, under `--incremental` as for a whole program; no object is left behind."""
+    if not shutil.which("clang++"):
+        pytest.skip("clang++ unavailable")
+    path = tmp_path / "program.cairn"
+    path.write_text(SMALL, encoding="utf-8")
+    ran = subprocess.run
+
+    def compiling(command):
+        return any(str(argument).endswith(".cpp") for argument in command)
+
+    def expires(command, **kw):
+        if compiling(command):
+            raise subprocess.TimeoutExpired(command, kw.get("timeout", 1))
+        return ran(command, **kw)
+
+    def killed(command, **kw):
+        return subprocess.CompletedProcess(command, -9, "", "Killed") if compiling(command) else ran(command, **kw)
+
+    monkeypatch.setattr(subprocess, "run", expires)
+    for flag in (False, True):  # The whole-program path and the object cache answer a timeout the same way.
+        record = build(load_project(path), kind="exe", timeout=5, incremental=flag)
+        assert (record["schema"], record["status"]) == ("cairn.build/1", "unknown") and record["message"]
+        assert json.loads((Path(record["directory"]) / "receipt.json").read_text())["status"] == "unknown"
+    assert list((tmp_path / "build/objects").iterdir()) == []  # A timed-out unit leaves no object under its key.
+    monkeypatch.setattr(subprocess, "run", killed)
+    record = build(load_project(path), kind="exe", timeout=5, incremental=True)
+    assert record["status"] == "native-build-failed" and record["exit_code"] == -9
+    assert list((tmp_path / "build/objects").iterdir()) == []
+
+
 def vendored(root: Path) -> Path:
     """app -> deps/geometry -> deps/geometry/deps/units, all inside the application's root."""
     files = {
@@ -301,13 +389,34 @@ def test_vendored_dependencies_load_first_stay_private_and_are_pinned(tmp_path):
     [
         (("cairn.toml", 'geometry = "deps/geometry"', 'geometry = "../elsewhere"'), "inside the project"),
         (("cairn.toml", 'geometry = "deps/geometry"', 'shapes = "deps/geometry"'), "another name"),
+        (("cairn.toml", 'geometry = "deps/geometry"', 'geometry = "deps/./geometry"'), "inside the project"),
+        # One directory is one project under one name: a second name for it is not skipped as a diamond.
+        (
+            ("cairn.toml", 'geometry = "deps/geometry"\n', 'geometry = "deps/geometry"\nshapes = "deps/geometry"\n'),
+            "another name",
+        ),
         (("deps/geometry/src/shapes.cairn", "module geometry.shapes;\n", ""), "modules only"),
         (("cairn.toml", "[dependencies]", "[hooks]\npre = 1\n[dependencies]"), "Unknown manifest tables"),
+        # A dependency's manifest is read by the same checker as the root's: tables, options and build values.
+        (("deps/geometry/cairn.toml", "[dependencies]", '[hooks]\npre = "rm -rf /"\n[dependencies]'), "hooks"),
+        (("deps/geometry/cairn.toml", "[dependencies]", '[build]\narch = "nonsense"\n[dependencies]'), "architecture"),
+        (("deps/geometry/cairn.toml", "[dependencies]", '[build]\ntarget = "nonsense"\n[dependencies]'), "target"),
+        (("deps/geometry/cairn.toml", 'name = "geometry"', 'name = "geometry"\nwhatever = 1'), "Unknown manifest"),
+        (("deps/geometry/cairn.toml", "[dependencies]", 'tests = ["../t.json"]\n[dependencies]'), "Noncanonical"),
+        # No project source declares a module of the packaged library, whoever wrote it.
+        (("deps/geometry/deps/units/units.cairn", "module units;", "module std.core;"), "packaged library"),
+        (("src/main.cairn", "module app;", "module std.core;"), "packaged library"),
+        # A module belongs to one project of the build: neither side may reopen the other's.
+        (("deps/geometry/src/shapes.cairn", "module geometry.shapes;", "module app;"), "belongs to geometry"),
+        (("deps/geometry/src/shapes.cairn", "module geometry.shapes;", "module units;"), "belongs to units"),
+        # Sources are concatenated, so a file with no header would declare into the last dependency's module.
+        (("src/main.cairn", "module app;\n", ""), "belongs to geometry"),
     ],
 )
 def test_a_dependency_is_data_inside_the_root_and_nothing_else(tmp_path, change, why):
     relative, old, new = change
     path = vendored(tmp_path) / relative
+    assert old in path.read_text()
     path.write_text(path.read_text().replace(old, new))
     with pytest.raises(ProjectError, match=why):
         load_project(tmp_path)
@@ -321,3 +430,37 @@ def test_a_symbolic_link_is_not_a_dependency(tmp_path):
     (root / "deps/geometry").symlink_to(tmp_path / "outside/geometry")
     with pytest.raises(ProjectError, match="symbolic links"):
         load_project(root)
+
+
+def test_one_name_is_one_project_of_the_build(tmp_path):
+    """A name pins one project in the receipt, so no dependency may take the root's name or another's."""
+    root = vendored(tmp_path)
+    manifest = root / "cairn.toml"
+    second = root / "deps/other/cairn.toml"
+    second.parent.mkdir(parents=True)
+    second.write_text('[project]\nname = "units"\nsources = ["u.cairn"]\n')
+    (root / "deps/other/u.cairn").write_text("module other;\npub fn one() -> u64 = 1;\n")
+    manifest.write_text(manifest.read_text() + 'units = "deps/other"\n')  # units is already vendored elsewhere
+    with pytest.raises(ProjectError, match="named units"):
+        load_project(root)
+    second.write_text('[project]\nname = "app"\nsources = ["u.cairn"]\n')
+    manifest.write_text(manifest.read_text().replace('units = "deps/other"', 'app = "deps/other"'))
+    with pytest.raises(ProjectError, match="named app"):  # not even the root project's own name
+        load_project(root)
+
+
+def test_the_entry_point_is_the_root_project_s_own(tmp_path):
+    """A dependency is a library: it neither supplies an executable's `main` nor denies the project its own."""
+    if not shutil.which("clang++"):
+        pytest.skip("clang++ unavailable")
+    root = vendored(tmp_path)
+    shapes = root / "deps/geometry/src/shapes.cairn"
+    shapes.write_text(shapes.read_text() + "pub fn main() -> i32 = 42;\n")
+    own = (root / "src/main.cairn").read_text()
+    (root / "src/main.cairn").write_text("module app;\npub fn helper() -> i32 = 1;\n")
+    with pytest.raises(ProjectError, match="exactly one fn main"):  # never the dependency's, which would exit 42
+        build(load_project(root), cxx="clang++", timeout=120)
+    (root / "src/main.cairn").write_text(own)
+    record = build(load_project(root), cxx="clang++", timeout=120)
+    assert record["status"] == "native-built", record.get("stderr")
+    assert subprocess.run([record["artifact"]], timeout=30).returncode == 0  # the project's main, not the library's

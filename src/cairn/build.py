@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -18,15 +19,38 @@ from .toolchain import audit_effects, find, flags, profile, unit_commands
 from .toolchain import command as native_command
 
 
+def intact(target: Path, digest: Path) -> bool:
+    """A cached object is what was compiled under its key only while the digest written beside it still matches its
+    bytes; a truncated, half-written or replaced file is not reused, it is compiled again."""
+    if not target.is_file() or not digest.is_file() or digest.stat().st_size != 64:
+        return False
+    return digest.read_bytes() == hashlib.sha256(target.read_bytes()).hexdigest().encode()
+
+
+def store(target: Path, digest: Path, fresh: Path) -> None:
+    """Publish an object under its key: a rename, then its digest by a rename, so an interrupted build leaves an
+    object without a digest, which is compiled again, and never a half object under a valid key."""
+    recorded = hashlib.sha256(fresh.read_bytes()).hexdigest().encode()
+    digest.unlink(missing_ok=True)  # No object is ever trusted under a digest of the bytes it replaced.
+    fresh.replace(target)  # Atomic: a concurrent build sees a whole object or none.
+    temporary = digest.with_name(f"{digest.name}.{os.getpid()}")
+    temporary.write_bytes(recorded)
+    temporary.replace(digest)
+
+
 def objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout) -> tuple[list[str], list]:
-    """One object per module, reused only when the unit, the shared interface, the command and the compiler
-    all hash to the same key, so nothing stale is ever linked. Missing objects compile concurrently."""
+    """One object per module, reused only when the unit, the shared interface, the command and the compiler all hash
+    to the same key and the stored bytes still match the digest beside them, so nothing stale, truncated or replaced
+    is ever linked. The cache is a directory of the project's own build output, never a link out of it. Missing
+    objects compile concurrently."""
     files, _ = compile_units(project.source, project.origin if debug else "", (entry,) if entry else ())
     files["0start.cpp"] = '#include "program.hpp"\n' + stub  # No module's unit can be named with a leading digit.
     compile_prefix, link = unit_commands(cxx, arch or project.arch, kind)
     compile_prefix += ["-g"] if debug else []
     version = subprocess.run([compiler, "--version"], capture_output=True, text=True, timeout=5).stdout
     cache = out.resolve() / "objects"
+    if cache.is_symlink() or (cache.exists() and not cache.is_dir()):
+        raise ProjectError("The object cache build/objects must be a directory and not a symbolic link.")
     cache.mkdir(exist_ok=True)
     for name, text in files.items():
         (directory / name).write_text(text, encoding="utf-8")
@@ -35,15 +59,18 @@ def objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, st
         salt = "\0".join(
             [files["program.hpp"], files[name], " ".join(compile_prefix), version, *RUNTIME_FILES.values()]
         )
-        target = cache / (hashlib.sha256(salt.encode()).hexdigest()[:40] + ".o")
-        unit = {"unit": name, "object": str(target), "reused": target.exists()}
+        key = hashlib.sha256(salt.encode()).hexdigest()[:40]
+        target, digest = cache / (key + ".o"), cache / (key + ".sha256")
+        if any(path.is_symlink() or path.is_dir() for path in (target, digest)):
+            raise ProjectError(f"A cached object and its digest are plain files of the cache: {target.name} is not.")
+        unit = {"unit": name, "object": str(target), "reused": intact(target, digest)}
         if not unit["reused"]:
             fresh = directory / (name + ".o")
             done = subprocess.run([*compile_prefix, str(directory / name), "-o", str(fresh)],
                                   capture_output=True, text=True, timeout=timeout)  # fmt: skip
             if done.returncode:
                 return unit | {"error": done}
-            fresh.replace(target)  # Atomic: a concurrent build sees a whole object or none.
+            store(target, digest, fresh)
         return unit
 
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -74,7 +101,9 @@ def build(
     compiler = find(cxx)
     entry = ""
     if kind == "exe":  # The entry point is `main` of the root module, else the only module-level `main`.
-        mains = [f for f in Parser(project.source).parse().functions if f.name.rsplit(".", 1)[-1] == "main"]
+        # A vendored dependency is a library: it neither supplies the program's entry point nor denies it one.
+        written = Parser(project.source).parse().functions
+        mains = [f for f in written if f.name.rsplit(".", 1)[-1] == "main" and project.wrote(f.line)]
         main = next((f for f in mains if f.name == "main"), mains[0] if len(mains) == 1 else None)
         if main is None or main.static or main.params or main.ret.name != "i32" or main.ret.mode != "value":
             raise ProjectError("An executable needs exactly one fn main() -> i32 with no arguments.")
@@ -108,10 +137,6 @@ def build(
     if debug:  # Symbols plus #line directives: a debugger steps through the .cairn files.
         command.insert(1, "-g")
     units: list[dict] = []
-    if incremental and not bare and "cuda" not in receipt["requires"]:  # Device code and images stay one unit.
-        stub = generated[generated.rindex("\n// entry\n") :] if "\n// entry\n" in generated else ""
-        command, units = objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout)
-        command += ["-o", str(artifact)]
     started = time.monotonic()
     record = {
         "schema": "cairn.build/1",
@@ -123,7 +148,7 @@ def build(
         "target": target,
         "command": command,
         "generated_sha256": hashlib.sha256(generated.encode()).hexdigest(),
-        "units": [{k: v for k, v in unit.items() if k != "error"} for unit in units],
+        "units": [],
         "artifact": str(artifact),
         "directory": str(directory),
     }
@@ -131,6 +156,12 @@ def build(
         record["compiler_version"] = subprocess.run(
             [compiler, "--version"], check=True, capture_output=True, text=True, timeout=5
         ).stdout[:10000]
+        if incremental and not bare and "cuda" not in receipt["requires"]:  # Device code and images stay one unit.
+            stub = generated[generated.rindex("\n// entry\n") :] if "\n// entry\n" in generated else ""
+            command, units = objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout)
+            command += ["-o", str(artifact)]
+            record["command"] = command
+            record["units"] = [{k: v for k, v in unit.items() if k != "error"} for unit in units]
         failed = next((unit["error"] for unit in units if unit.get("error")), None)
         cp = failed or subprocess.run(command, capture_output=True, text=True, timeout=timeout)
         record.update(
