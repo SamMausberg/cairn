@@ -32,7 +32,7 @@ There is no `buffer`, no `Buf`, no `parallel` and no `extern` anywhere, and ther
 
 ## The guard violation
 
-`trap/` is the same machine and the same driver, reading one element past a four-element array with an index that comes from storage rather than from a literal. There is no MMU here, so the read would simply succeed and return whatever follows the array; the language's own bounds check is the only thing that stops it.
+`trap/` is the same machine and the same driver, reading one element past a four-element array with an index that comes from storage rather than from a literal. There is no MMU here, so the read would succeed and return whatever follows the array. The language's own bounds check is the only thing that stops it.
 
 ```sh
 cairn run examples/embedded/trap

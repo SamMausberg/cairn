@@ -22,7 +22,7 @@ A linear `File` beside the state, not inside it. `Store` holds only the index an
 
 Recovery that is a loop, not a promise. `replay` stops at the first record that is short, truncated or fails its checksum, `ftruncate`s the file back to the last whole record and leaves the descriptor there. The scenario tears the log twice, nine bytes of a header and then a complete record with a wrong checksum, and expects both to vanish.
 
-## The design, in two paragraphs
+## How the store is laid out
 
 The index is keyed by the 64-bit FNV digest of the key and also stores the key bytes, so every hit is verified byte for byte and a digest collision is a miss rather than a wrong answer. Values live in memory; the log is the durability layer, replayed on open and rewritten by compaction.
 
