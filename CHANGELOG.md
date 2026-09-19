@@ -4,6 +4,8 @@
 
 - **Generics**: bounds may now promise a kind (`[T: copy]`, `[T: affine]`) or a closed scalar class (`integer unsigned signed float numeric scalar`) as well as traits, on functions and on generic records, and are checked at the call (`E-BOUND`). `cairn check --generics` checks each template once against its bounds, at opaque witnesses that are as owning as the bounds allow or at every type of a scalar class; every template of `std` now certifies, so misuse of a container is reported in the caller's terms. Unbounded templates are still accepted per instance.
 
+- **`cairn doc`**: an API reference generated from the checked program (signatures, bounds, comments, inferred effect rows; a template's row is the one at its witnesses). `docs/std_api.md` is its output for the packaged library and a test keeps it current.
+
 ## 1.1.0
 
 - **Recipes**: generators are library code. `recipe name[K:nat] for R { ... }` holds ordinary function and record declarations with static `each` (over a record's fields or a natural range, at declaration, statement, field-list and call-argument level), `fold`, `where` values, `$name` splices and `require` domains; `derive name[naturals] for Type;` expands it before checking into code of the deriving module. The closed Python generator behind `derive wire` is gone: `std.wire` is twelve lines of CAIRN and produces the same C++ byte for byte. Receipts pin each recipe by the hash of its tokens. `wire` is no longer a reserved word.

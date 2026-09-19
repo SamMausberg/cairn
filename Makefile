@@ -1,7 +1,7 @@
 PYTHON ?= python3
 CAIRN = $(PYTHON) bin/cairn
 
-.PHONY: all check lint format test native systems proof lean gpu embedded context wheel audit demo
+.PHONY: docs all check lint format test native systems proof lean gpu embedded context wheel audit demo
 all: lint test proof
 
 check:
@@ -42,6 +42,9 @@ gpu:
 
 embedded:
 	$(PYTHON) -m pytest -q tests/test_freestanding.py
+
+docs:
+	$(CAIRN) doc --std > docs/std_api.md
 
 context:
 	$(PYTHON) tools/measure_context.py

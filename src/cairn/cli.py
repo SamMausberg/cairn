@@ -66,11 +66,16 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("doctor", help="Report local tools; never downloads them.")
     new = sub.add_parser("new", help="Create a data-only example project.")
     new.add_argument("directory", type=Path)
-    for name in ["check", "emit", "build", "run", "test", "inspect"]:
+    for name in ["check", "emit", "build", "run", "test", "inspect", "doc"]:
         c = sub.add_parser(name)
         c.add_argument("path", nargs="?", default=".")
         if name in {"build", "run", "test"}:
             c.add_argument("--cxx", default="clang++")
+        if name == "doc":
+            c.add_argument(
+                "--module", action="append", help="Document this module (repeatable); default: the project's own."
+            )
+            c.add_argument("--std", action="store_true", help="Document the packaged standard library instead.")
         if name == "check":
             c.add_argument("--generics", action="store_true",
                            help="Also check each generic function once against its bounds; fail if one needs more.")  # fmt: skip
@@ -167,6 +172,11 @@ def main(argv: list[str] | None = None) -> int:
             )
         if a.command == "run" and not 64 <= a.memory_mib <= 65536:
             raise ProjectError("Native memory limit must be 64..65536 MiB.")
+        if a.command == "doc" and a.std:  # The packaged library needs no project.
+            from .docs import standard_library
+
+            print(standard_library(), end="")
+            return 0
         project = load_project(a.path)
         if a.command in {"check", "emit"}:
             generated, receipt = compile_source(project.source)
@@ -184,6 +194,11 @@ def main(argv: list[str] | None = None) -> int:
                 }
             report(result)
             return 1 if any(v != "ok" for v in result.get("generics", {}).values()) else 0
+        if a.command == "doc":
+            from .docs import document
+
+            print(document(project.source, a.module), end="")
+            return 0
         if a.command == "inspect":
             from .agent_tools import EditSession
 

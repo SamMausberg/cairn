@@ -434,6 +434,18 @@ class Checker:
                 verdicts[f.name] = f"{e.data['code']}: {e.data['message']}"
         return verdicts
 
+    def described(self) -> tuple[dict[str, str], dict[str, set[str]]]:
+        """Verdicts as `certify`, and the effect row of every function: a concrete one's own, a template's at
+        its witnesses (what it may do for any arguments within its bounds, besides what their members do)."""
+        verdicts = self.certify()
+        for f in [f for f in self.p.functions if (not f.generics or f.bindings) and f.name not in self.local_effects]:
+            self.function(f)
+        rows = fixed_point(self)
+        for f in [f for f in self.p.functions if f.generics and not f.bindings and verdicts.get(f.name) == "ok"]:
+            witnessed = [rows[n] for n in rows if n.startswith(f.name + "[")]
+            rows[f.name] = set().union(*witnessed) if witnessed else set()
+        return verdicts, rows
+
     def check(self) -> dict[str, Any]:
         for f in self.prepare():  # Generic instances are appended, and checked, at their first use.
             self.function(f)
@@ -1527,8 +1539,14 @@ class Checker:
                 with self.within(self.p.modules.get(trait, ""), {"Self": target}):
                     params = [(n, self.resolve(t, m)) for n, t in m.params]
                     promised[m.name] = Function(f"{trait}.{target.name}.{m.name}", params, self.resolve(m.ret, m), [])
-                self.fs[promised[m.name].name] = promised[m.name]
-                self.signed.add(promised[m.name].name)
+                name = promised[m.name].name
+                self.fs[name], self.local_effects[name], self.calls[name], self.call_edges[name] = (
+                    promised[m.name],
+                    set(),
+                    set(),
+                    [],
+                )
+                self.signed.add(name)
             self.impls[trait, target] = promised
         if (trait, target) not in self.impls:
             matches: dict[str, tuple[Function, dict[str, Any]]] = {}
