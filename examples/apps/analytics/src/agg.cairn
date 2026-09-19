@@ -1,0 +1,81 @@
+// Pluggable aggregators and one generic container of my own. A query plan picks its
+// aggregators at run time, so they are owned `Dyn[Aggregator]` values in a Vec; the hot loops
+// take them by static bound instead, and the program checks that the two answer alike.
+module analytics.agg;
+import std.core (Option, Ord);
+import std.vec (Vec);
+
+pub trait Aggregator {
+  fn absorb(self:rw<Self>, value:u64);
+  fn total(self:ro<Self>) -> u64;
+}
+
+pub struct SumAgg { acc:u64; }
+pub struct MaxAgg { best:u64; }
+pub struct CountAgg { seen:u64; }
+
+impl Aggregator for SumAgg {
+  fn absorb(self:rw<SumAgg>, value:u64) { self.acc = add_wrap(self.acc, value); }
+  fn total(self:ro<SumAgg>) -> u64 = self.acc;
+}
+
+impl Aggregator for MaxAgg {
+  fn absorb(self:rw<MaxAgg>, value:u64) { self.best = max(self.best, value); }
+  fn total(self:ro<MaxAgg>) -> u64 = self.best;
+}
+
+impl Aggregator for CountAgg {
+  fn absorb(self:rw<CountAgg>, value:u64) { self.seen = add_wrap(self.seen, 1); }
+  fn total(self:ro<CountAgg>) -> u64 = self.seen;
+}
+
+// Static dispatch: one instance of this loop per aggregator type, nothing indirect in it.
+pub fn run_static[A:Aggregator](a:rw<A>, n:usize, xs:ro<u64>[n]) -> u64 {
+  for i in 0..n { a.absorb(xs[i]); }
+  return a.total();
+}
+
+// The same loop through a fat reference; `dispatch` is what it costs.
+pub fn run_dyn(a:rw<dyn Aggregator>, n:usize, xs:ro<u64>[n]) -> u64 {
+  for i in 0..n { a.absorb(xs[i]); }
+  return a.total();
+}
+
+// A plan is a heterogeneous list of owned aggregators.
+pub fn run_plan(plan:rw<Vec[Dyn[Aggregator]]>, n:usize, xs:ro<u64>[n], out:rw<u64>[4]) -> usize {
+  let mut used:usize = 0;
+  for p in 0..plan.len {
+    if used < 4 {
+      let answer = run_dyn(plan.data[p], n, xs);
+      out[used] = answer;
+      used = used + 1;
+    }
+  }
+  return used;
+}
+
+// A generic container of mine: ordered bin edges and their counts. `T: Ord` is the only thing
+// the bins know about their keys, and the only thing they need.
+pub struct Bins[T] { edges:Buf[T]; counts:Buf[u64]; }
+
+pub fn bins_new[T](k:usize) -> Bins[T] = Bins(Buf[T](k), Buf[u64](k + 1));
+
+// The first bin whose edge is not below `value`; the last count is the overflow bin.
+pub fn bins_slot[T:Ord](b:ro<Bins[T]>, value:ro<T>) -> usize {
+  let k = len(b.edges);
+  for i in 0..k { if less(value, b.edges[i]) { return i; } }
+  return k;
+}
+
+pub fn bins_tally[T:Ord](b:rw<Bins[T]>, n:usize, xs:ro<T>[n]) {
+  for i in 0..n {
+    let slot = bins_slot(b, xs[i]);
+    b.counts[slot] = add_wrap(b.counts[slot], 1);
+  }
+}
+
+pub fn bins_total[T](b:ro<Bins[T]>) -> u64 {
+  let mut total:u64 = 0;
+  for i in 0..len(b.counts) { total = add_wrap(total, b.counts[i]); }
+  return total;
+}

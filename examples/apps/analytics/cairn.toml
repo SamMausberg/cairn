@@ -1,0 +1,16 @@
+[project]
+name = "analytics"
+sources = [
+  "src/cols.cairn",
+  "src/sensor.cairn",
+  "src/schema.cairn",
+  "src/agg.cairn",
+  "src/query.cairn",
+  "src/table.cairn",
+  "src/report.cairn",
+  "src/main.cairn",
+]
+
+[build]
+kind = "exe"
+arch = "baseline"

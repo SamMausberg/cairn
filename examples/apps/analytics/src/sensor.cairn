@@ -1,0 +1,7 @@
+// A second schema, declared in a module of its own, so that the generators are exercised
+// across a module boundary as well as inside one.
+module analytics.sensor;
+
+pub struct Reading { station:u32; celsius:u32; }
+
+derive wire for Reading;

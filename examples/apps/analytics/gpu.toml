@@ -1,0 +1,24 @@
+# The device configuration. It is the host project with src/main.cairn replaced by the device
+# entry, because any @device view sends the whole program through nvcc and the host-only
+# build must stay buildable where there is no GPU. Copy it over cairn.toml to use it:
+#
+#   cp examples/apps/analytics/gpu.toml examples/apps/analytics/cairn.toml
+#
+# tests/test_app_analytics.py does exactly that in a private copy of the directory.
+[project]
+name = "analytics-gpu"
+sources = [
+  "src/cols.cairn",
+  "src/sensor.cairn",
+  "src/schema.cairn",
+  "src/agg.cairn",
+  "src/query.cairn",
+  "src/table.cairn",
+  "src/report.cairn",
+  "src/gpu.cairn",
+  "src/gpu_main.cairn",
+]
+
+[build]
+kind = "exe"
+arch = "baseline"

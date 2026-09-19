@@ -1,0 +1,18 @@
+// Printing, kept apart from the queries so that an edit to a query body recompiles one unit.
+module analytics.report;
+import std.io;
+
+pub fn line(n:usize, label:ro<u8>[n], value:u64) {
+  io.print(n, label);
+  io.print_u64(value);
+  io.newline();
+}
+
+pub fn micros(n:usize, label:ro<u8>[n], nanoseconds:u64) {
+  io.print(n, label);
+  io.print_u64(nanoseconds / 1000);
+  let unit = " us";
+  io.println(len(unit), unit);
+}
+
+pub fn say(n:usize, text:ro<u8>[n]) { io.println(n, text); }

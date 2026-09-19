@@ -1,0 +1,27 @@
+// The tables. Every name below the `derive` lines is generated: Trade_table, Trade_get,
+// Trade_summarize, Trade_unrolled_price, and the same list again for a record that belongs to
+// another module. The generated declarations are this module's, so callers write
+// `schema.Trade_table` for them exactly as for anything else here.
+module analytics.schema;
+import std.core (Eq, Ord);
+import analytics.cols;
+import analytics.sensor;
+
+pub struct Trade { id:u64; price:u64; qty:u32; venue:u8; }
+
+derive wire for Trade;
+derive cols.columns for Trade;
+derive cols.stats for Trade;
+derive cols.unrolled[4] for Trade;
+
+// The same three generators over another module's public record.
+derive cols.columns for sensor.Reading;
+derive cols.stats for sensor.Reading;
+derive cols.unrolled[8] for sensor.Reading;
+
+// The impls a recipe may not write, forwarding to the two functions it generated. Without
+// these a generated row could not be sorted or searched by the standard library.
+impl Eq for Trade { fn same(a:ro<Trade>, b:ro<Trade>) -> bool = Trade_same(a, b); }
+impl Ord for Trade { fn less(a:ro<Trade>, b:ro<Trade>) -> bool = Trade_less(a, b); }
+
+pub const VENUES:usize = 8;

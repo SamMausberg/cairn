@@ -1,0 +1,77 @@
+// Ingest: a file of wire-encoded rows in, columns out. The codecs are generated (`derive wire`),
+// the file handling is std.io, and every failure is a value.
+module analytics.table;
+import std.core (Result);
+import std.io (File, IoError);
+import std.sys;
+import std.text;
+import std.vec (Vec);
+import analytics.schema (Trade);
+
+// A failure family of our own. `try` crosses families as long as the failure payload matches,
+// so an io.IoError raised three calls down leaves this one as `Failed`.
+pub enum Loaded[T] { Done(T); Failed(IoError); }
+
+pub const ROW:usize = 21; // bytes(Trade); schema.Trade_row_bytes() reports the same number
+pub const BATCH:usize = 4096;
+
+// The dataset is a function of the row index alone, so the file is reproducible and the
+// program can check a decoded row against the generator that wrote it.
+pub fn synth(i:usize) -> Trade {
+  let seed = mul_wrap(u64(i) + 1, 6364136223846793005);
+  let price = 1000 + shr(seed, 40);
+  let qty = u32(shr(seed, 20) & 1023) + 1;
+  let venue = u8(seed & 7);
+  return Trade(u64(i), price, qty, venue);
+}
+
+// One batch buffer, refilled and written; nothing here holds the whole dataset in memory.
+pub fn write_dataset(n:usize, path:ro<u8>[n], rows:usize) -> Result[u64, IoError] {
+  let f = try io.open(n, path, io.TRUNCATE);
+  defer io.close(f);
+  let span = ROW * BATCH;
+  let mut block = Buf[u8](span);
+  let mut done:usize = 0;
+  let mut written:u64 = 0;
+  while done < rows {
+    let mut fill:usize = 0;
+    while fill < BATCH && done + fill < rows {
+      let at = fill * ROW;
+      schema.encode_Trade(block[at..at + ROW], synth(done + fill));
+      fill = fill + 1;
+    }
+    let bytes = fill * ROW;
+    let sent = try io.write(f, bytes, block[0..bytes]);
+    written = written + u64(sent);
+    done = done + fill;
+  }
+  let flushed = try io.sync(f);
+  return Result.Ok(written);
+}
+
+// Read the file once and decode it column-wise. `try` on a Result[Vec[u8], IoError] leaves
+// this function as Loaded.Failed: different family, same failure payload.
+pub fn load_dataset(
+  n:usize, path:ro<u8>[n], rows:usize, c:rw<schema.Trade_table>
+) -> Loaded[usize] {
+  let mut bytes = try io.read_file(n, path);
+  let have = bytes.len / ROW;
+  let count = min(have, rows);
+  for i in 0..count {
+    let at = i * ROW;
+    let row = schema.decode_Trade(bytes.data[at..at + ROW]);
+    schema.Trade_set(c, i, row);
+  }
+  return Loaded.Done(count);
+}
+
+// A path no other process in this test run shares; there is no argv, so the pid is the handle.
+pub fn temp_path(n:usize, tail:ro<u8>[n]) -> Vec[u8] {
+  let mut p = vec.new[u8]();
+  let prefix = "/tmp/cairn-analytics-";
+  p.extend_from(len(prefix), prefix);
+  unsafe { text.push_u64(p, u64(sys.getpid())); }
+  p.extend_from(n, tail);
+  p.push(0); // C reads a pointer, so the terminator lives in the storage
+  return p;
+}

@@ -1,0 +1,201 @@
+// The host self-check: write a million rows, read them back column-wise, and answer every
+// query twice so the program can disagree with itself. It returns 0 only if row-wise agrees
+// with column-wise, sequential with parallel, the loop with the contracted form, and the
+// generated statistics with the hand-written ones.
+module analytics.main;
+import std.core (Option, Result);
+import std.io (IoError);
+import std.sort;
+import std.vec (Vec);
+import analytics.agg (Aggregator, Bins, CountAgg, MaxAgg, SumAgg);
+import analytics.query;
+import analytics.report;
+import analytics.schema (Trade);
+import analytics.sensor (Reading);
+import analytics.table (Loaded);
+
+const ROWS:usize = 1000000;
+const LIMIT:u64 = 8000000;
+
+// The io-heavy half: one file written, one file read, both failures carried as values.
+fn ingest(rows:usize, c:rw<schema.Trade_table>) -> Result[usize, IoError] {
+  let mut path = table.temp_path(7, ".trades");
+  let n = path.len;
+  let bytes = try table.write_dataset(n, path.data[0..n], rows);
+  match table.load_dataset(n, path.data[0..n], rows, c) {
+    Loaded.Done(count) => {
+      let gone = io.remove(n, path.data[0..n]);
+      return Result.Ok(count);
+    }
+    Loaded.Failed(e) => { return Result.Err(e); }
+  }
+}
+
+pub fn main() -> i32 {
+  let rows:usize = ROWS;
+  let t0 = io.monotonic_ns();
+  let mut c = schema.Trade_table_new(rows);
+  match ingest(rows, c) {
+    Result.Ok(count) => { if count != rows { return 1; } }
+    Result.Err(e) => {
+      let why = "analytics: the dataset could not be written or read";
+      report.say(len(why), why);
+      return 2;
+    }
+  }
+  let t1 = io.monotonic_ns();
+
+  // Row-wise against column-wise: every row rebuilt from the columns must equal the row the
+  // generator wrote, and the two totals must agree.
+  let mut wrong:usize = rows;
+  let mut row_total:u64 = 0;
+  let mut row_digest:u64 = 0;
+  for i in 0..rows {
+    let row = schema.Trade_get(c, i);
+    let want = table.synth(i);
+    let agrees = schema.Trade_same(row, want);
+    if !agrees && wrong == rows { wrong = i; }
+    row_total = add_wrap(row_total, row.price);
+    row_digest = row_digest ^ schema.Trade_key(row);
+  }
+  if wrong != rows { return 3; }
+  let col_total = query.wrapping_total(rows, c.price[0..rows]);
+  if row_total != col_total { return 4; }
+  let t2 = io.monotonic_ns();
+
+  // The generated statistics against the hand-written totals. sum_price is a checked `+`:
+  // it traps rather than wrapping, so its agreement with the wrapping total is a fact about
+  // this dataset, not a coincidence of modular arithmetic.
+  let stats = schema.Trade_summarize(rows, c);
+  if stats.rows != rows { return 5; }
+  if stats.min_qty < 1 || stats.max_qty > 1024 { return 6; }
+  if stats.sum_price != col_total { return 7; }
+  let checked_qty = query.checked_total(rows, c.qty[0..rows]);
+  if stats.sum_qty != checked_qty { return 8; }
+  let unrolled = schema.Trade_unrolled_price(rows, c);
+  let wrapping = schema.Trade_wrapping_price(rows, c);
+  if unrolled != col_total || wrapping != col_total { return 9; }
+  if schema.Trade_unroll_factor() != 4 { return 10; }
+  let t3 = io.monotonic_ns();
+
+  // The contracted collector against the loop that means the same thing.
+  let mut kept = Buf[u64](rows);
+  let mut kept_loop = Buf[u64](rows);
+  let used = query.above(rows, kept[0..rows], c.price[0..rows], LIMIT);
+  let used_loop = query.above_loop(rows, kept_loop[0..rows], c.price[0..rows], LIMIT);
+  if used != used_loop || used == 0 || used >= rows { return 11; }
+  for i in 0..used { if kept[i] != kept_loop[i] { return 12; } }
+  let kept_total = query.wrapping_total(used, kept[0..used]);
+  let t4 = io.monotonic_ns();
+
+  // Sequential against host lanes, and a closure whose body the lanes run.
+  let mut seq_col = Buf[u64](rows);
+  let mut par_col = Buf[u64](rows);
+  query.notional_loop(rows, seq_col[0..rows], c.price[0..rows], c.qty[0..rows]);
+  query.notional_par(rows, par_col[0..rows], c.price[0..rows], c.qty[0..rows]);
+  for i in 0..rows { if seq_col[i] != par_col[i] { return 13; } }
+  let factor:u64 = 3;
+  let mut mapped = Buf[u64](rows);
+  // The column goes in whole, with len() for its extent: a part of a record's Buf field
+  // crashes the checker when the callee is generic (see the report, bug 1).
+  query.map_par(len(c.price), mapped[0..rows], c.price, |x:u64| -> u64 {
+    return mul_wrap(x, factor);
+  });
+  let mut mapped_loop = Buf[u64](rows);
+  query.map_loop(len(c.price), mapped_loop[0..rows], c.price, |x:u64| -> u64 {
+    return mul_wrap(x, factor);
+  });
+  for i in 0..rows {
+    if mapped[i] != mul_wrap(c.price[i], factor) { return 14; }
+    if mapped_loop[i] != mapped[i] { return 28; }
+  }
+  let t5 = io.monotonic_ns();
+
+  // Group by venue: one pass, then four tasks over four disjoint row ranges.
+  stack seq_bins:u64[8] = zeroed;
+  stack task_bins:u64[8] = zeroed;
+  query.venue_sums(rows, c.venue[0..rows], c.price[0..rows], len(seq_bins), seq_bins);
+  query.venue_sums_tasks(rows, c.venue[0..rows], c.price[0..rows], len(task_bins), task_bins);
+  let mut bin_total:u64 = 0;
+  for b in 0..len(seq_bins) {
+    if seq_bins[b] != task_bins[b] { return 15; }
+    bin_total = add_wrap(bin_total, seq_bins[b]);
+  }
+  if bin_total != col_total { return 16; }
+  let t6 = io.monotonic_ns();
+
+  // Aggregators: a bound in the hot loop, a table lookup for a plan chosen at run time.
+  let mut sum_agg = SumAgg(0);
+  let by_bound = agg.run_static(sum_agg, len(c.price), c.price);
+  if by_bound != col_total { return 17; }
+  let mut max_agg = MaxAgg(0);
+  let by_table = agg.run_dyn(max_agg, rows, c.price[0..rows]);
+  if by_table != stats.max_price { return 18; }
+  let mut plan = vec.new[Dyn[Aggregator]]();
+  plan.push(Dyn[Aggregator](SumAgg(0)));
+  plan.push(Dyn[Aggregator](MaxAgg(0)));
+  plan.push(Dyn[Aggregator](CountAgg(0)));
+  stack answers:u64[4] = zeroed;
+  let answered = agg.run_plan(plan, rows, c.price[0..rows], answers);
+  if answered != 3 { return 19; }
+  if answers[0] != col_total || answers[1] != stats.max_price || answers[2] != u64(rows) {
+    return 20;
+  }
+
+  // The generic container: three edges, four counts, every row in exactly one of them.
+  let mut bins = agg.bins_new[u64](3);
+  bins.edges[0] = 4000000;
+  bins.edges[1] = LIMIT;
+  bins.edges[2] = 12000000;
+  agg.bins_tally(bins, len(c.price), c.price);
+  let counted = agg.bins_total(bins);
+  if counted != u64(rows) { return 21; }
+  if add_wrap(bins.counts[2], bins.counts[3]) != u64(used) { return 22; }
+
+  // Top by price over a sample of whole rows: a closure for the order the query wants, and
+  // the generated lexicographic order behind the Ord impl the schema forwards to it.
+  let taken:usize = 1024;
+  let step = rows / taken;
+  buffer sample_rows:Trade[taken] = zeroed;
+  for i in 0..taken { sample_rows[i] = schema.Trade_get(c, i * step); }
+  sort.sort_by(taken, sample_rows, |a:ro<Trade>, b:ro<Trade>| -> bool {
+    return a.price > b.price;
+  });
+  for i in 1..taken { if sample_rows[i - 1].price < sample_rows[i].price { return 29; } }
+  sort.sort(taken, sample_rows);
+  for i in 1..taken { if schema.Trade_less(sample_rows[i], sample_rows[i - 1]) { return 30; } }
+  if !same(sample_rows[0], schema.Trade_get(c, 0)) { return 31; }
+
+  // The second schema, declared in another module and derived here all the same.
+  let readings:usize = 4096;
+  let mut sensors = schema.Reading_table_new(readings);
+  for i in 0..readings { schema.Reading_set(sensors, i, Reading(u32(i % 7), 200 + u32(i % 50))); }
+  let weather = schema.Reading_summarize(readings, sensors);
+  if weather.min_station != 0 || weather.max_station != 6 { return 23; }
+  let celsius = schema.Reading_unrolled_celsius(readings, sensors);
+  if celsius != weather.sum_celsius { return 24; }
+
+  // The codecs the file was written with, on one row, in isolation.
+  stack raw:u8[21] = zeroed;
+  let sample = table.synth(12345);
+  schema.encode_Trade(raw, sample);
+  let back = schema.decode_Trade(raw);
+  if back.id != sample.id || back.price != sample.price || back.qty != sample.qty { return 25; }
+  if schema.Trade_row_bytes() != table.ROW || schema.Trade_arity() != 4 { return 26; }
+  if row_digest == 0 { return 27; }
+
+  report.line(29, "analytics: rows ingested     ", u64(rows));
+  report.line(29, "analytics: rows above limit  ", u64(used));
+  report.line(29, "analytics: price total       ", col_total);
+  report.line(29, "analytics: kept total        ", kept_total);
+  report.line(29, "analytics: distinct venues   ", u64(len(seq_bins)));
+  report.micros(29, "analytics: ingest            ", t1 - t0);
+  report.micros(29, "analytics: row vs column     ", t2 - t1);
+  report.micros(29, "analytics: statistics        ", t3 - t2);
+  report.micros(29, "analytics: filter            ", t4 - t3);
+  report.micros(29, "analytics: derived columns   ", t5 - t4);
+  report.micros(29, "analytics: group by venue    ", t6 - t5);
+  let done = "analytics: every cross-check passed on the host";
+  report.say(len(done), done);
+  return 0;
+}
