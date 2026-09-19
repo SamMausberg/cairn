@@ -32,6 +32,7 @@ from .syntax import (
     VISIBLE_AS,
     VOID,
     WIDTH,
+    Diagnostic,
     Expr,
     Function,
     Program,
@@ -408,7 +409,11 @@ class Checker:
 
     def check(self) -> dict[str, Any]:
         for f in self.prepare():  # Generic instances are appended, and checked, at their first use.
-            self.function(f)
+            try:
+                self.function(f)
+            except Diagnostic as error:  # The position is the recipe's: say which derivation this copy came from.
+                error.data.update({"derived": f.source_name} if f.source_name.startswith("derive ") else {})
+                raise
         instantiated = {f.source_name for f in self.p.functions if f.bindings}
         for f in [f for f in self.p.functions if f.generics and not f.bindings]:
             self.p.functions.remove(f)

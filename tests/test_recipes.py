@@ -230,6 +230,13 @@ def test_the_projection_and_the_formatter_keep_recipes_and_derivations():
     assert format_source(formatted) == formatted and compile_source(formatted)[0] == compile_source(APP)[0]
 
 
+def test_a_diagnostic_inside_generated_code_names_its_derivation():
+    source = "recipe bad for R {\n  fn total_$R(v:R) -> u64 = fold + each f in R { v.$f };\n}\nstruct P { a:u32; b:u64; }\n"
+    with pytest.raises(Diagnostic) as e:
+        compile_source(source + "struct Q { a:u64; }\nderive bad for Q;\nderive bad for P;\n")
+    assert (e.value.data["line"], e.value.data["derived"]) == (2, "derive bad for P")  # The recipe's line, P's copy.
+
+
 def test_expand_shows_what_the_derivations_generated_as_source():
     shown = expanded_source(APP)
     assert (

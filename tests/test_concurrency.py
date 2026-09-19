@@ -352,6 +352,40 @@ def test_a_view_is_lent_as_what_its_memory_also_is(tmp_path):
     assert build_and_run(tmp_path, LENT_PLACEMENTS, "g++")[0] == 0
 
 
+BACKWARDS_PART = """
+import std.io as io;
+fn work(n:usize, out:rw<u64>[n]) { io.println(len("task ran"), "task ran"); }
+fn main() -> i32 {
+  let lo:usize = 6;
+  let hi:usize = 3;
+  let mut d = Buf[u64](8);
+  io.println(len("spawning"), "spawning");
+  let t = spawn work(0, d[lo..hi]);
+  io.println(len("spawned"), "spawned");
+  wait(t);
+  return 0;
+}
+"""
+
+
+def test_a_part_is_guarded_by_the_spawner_before_its_task_exists(tmp_path):
+    """What the Lean calculus assumes of the emitter (`TasksGuarded`): the `lo <= hi` of a lent part has run, on
+    the spawning thread, before the task starts, so every fact the disjointness chain uses is true."""
+    cpp = compile_source(BACKWARDS_PART)[0]
+    spawn = next(line for line in cpp.splitlines() if "::spawn(" in line)
+    captures, body = spawn.split("]() mutable noexcept {")  # Capture initializers run where the lambda is written.
+    assert "cr::part(" in captures and "cr::part(" not in body
+    if not shutil.which("clang++"):
+        pytest.skip("Native compiler unavailable")
+    (tmp_path / "p.cpp").write_text(cpp + "int main() { return static_cast<int>(cf_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    line = command("clang++", str(tmp_path / "p.cpp"), str(tmp_path / "p"), kind="exe")
+    subprocess.run(line, check=True, timeout=240)
+    done = subprocess.run([tmp_path / "p"], capture_output=True, text=True, timeout=60)
+    assert done.returncode == -6 and done.stdout == "spawning\n"  # Aborted at the slice: no task, no next statement.
+
+
 def test_try_returns_from_the_closure_it_is_written_in(tmp_path):
     source = (
         "enum R { Ok(u64); Err(u8); }"
