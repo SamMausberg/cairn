@@ -51,7 +51,8 @@ def signature(f: Function) -> str:
     ps = ", ".join(n + ":" + t.display() for n, t in f.params)
     ret = "" if f.ret.name == "void" else " -> " + f.ret.display()
     ceiling = "" if f.effects is None else " pure" if f.effects == ("pure",) else f" effects({', '.join(f.effects)})"
-    name = f.source_name.rsplit(".", 1)[-1] if f.owner else f.name.rsplit(".", 1)[-1] if f.module else f.name
+    written = f.name if f.source_name.startswith("derive ") else f.source_name  # A derived impl keeps its origin there.
+    name = written.rsplit(".", 1)[-1] if f.owner else f.name.rsplit(".", 1)[-1] if f.module else f.name
     link = f'"{f.symbol}" ' if f.symbol else ""
     return f"{'extern ' * f.extern}{link}{'kernel ' * f.kernel}fn {name}{generics(f.generics if not f.bindings else [])}({ps}){ret}{ceiling}"
 

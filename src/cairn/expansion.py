@@ -242,7 +242,7 @@ class Deriver:
                 target = self.type(item.target, env, None)
                 for member in item.members:
                     made = self.function(member, env, f"{prefix}{item.trait}.{target.display()}.")
-                    made.owner, made.source_name = (item.trait, target), made.name
+                    made.owner = (item.trait, target)
                     out.append(made)
             else:
                 out.append(self.function(item, env, prefix))
@@ -284,9 +284,7 @@ def derive(p: Program) -> Program:
                 p.public |= {name} if public else set()
                 if isinstance(made, Function):
                     made.module = module
-                    made.source_name = (
-                        made.source_name if made.owner else f"derive {written}" + (f" for {full}" if target else "")
-                    )
+                    made.source_name = f"derive {written}" + (f" for {full}" if target else "")
                     p.functions.append(made)
                 else:
                     p.records[name], p.generics[name], p.attributes[name] = made[1], [], set()
