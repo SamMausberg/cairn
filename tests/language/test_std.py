@@ -576,6 +576,30 @@ def test_map_growth_is_visible_in_the_callers_row():
     assert {"alloc", "free"} <= set(functions["main"]["effects"])
 
 
+def test_a_release_charges_free_without_charging_alloc():
+    """A map of owning values releases the value it replaces, which `place` says and never allocates for."""
+    functions = rows("""
+        import std.map (Map);
+        import std.vec (Vec);
+        fn drops(v:Vec[u8]) {}
+        fn main() -> i32 {
+          let mut m = map.new[u64, Vec[u8]]();
+          let mut first = vec.new[u8]();
+          first.push(1);
+          m.insert(7, first);
+          let mut second = vec.new[u8]();
+          m.insert(7, second);
+          let mut third = vec.new[u8]();
+          drops(third);
+          return 0;
+        }
+        """)
+    place = set(functions["std.map.place[u64, std.vec.Vec[u8]]"]["effects"])
+    assert "free" in place and "alloc" not in place
+    assert functions["drops"]["effects"] == ["free"]  # A function that only drops what it was given.
+    assert {"alloc", "free"} <= set(functions["std.map.insert[u64, std.vec.Vec[u8]]"]["effects"])
+
+
 def test_parallel_and_device_placement_are_separate_effects():
     functions = rows("""
         fn on_threads(n:usize, out:rw<u64>[n], src:ro<u64>[n]) { parallel i in n { out[i] = src[i] + 1; } }

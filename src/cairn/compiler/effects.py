@@ -89,7 +89,11 @@ def audit(c: Checker, effects: dict[str, set[str]]):
     writes through a borrow or allocates is never a nested operand; a nested call may not move, take or (as a
     closure) write a place that another operand names; a call the outside world can observe (I/O, the machine,
     shared state, a function value) may not sit beside another call; and a nested `try` may not sit beside an
-    operand that already owns something. `&&` and `||` are sequenced, and so are a call and its arguments."""
+    operand that already owns something. `&&` and `||` are sequenced, and so are a call and its arguments.
+
+    Acquiring storage is the order-sensitive half, so `alloc` is on that list and `free` is not: a release runs
+    where a scope ends, which C++ sequences itself, and it writes no place another operand can name. A function
+    that only drops an owner it was given carries `free` alone, and stays an ordinary nested operand."""
 
     def mentioned(e: Expr, out: list[tuple[int, str]]) -> list[tuple[int, str]]:
         """Every place an operand names, a closure's captures included, with the node that names it."""
@@ -161,7 +165,7 @@ def audit(c: Checker, effects: dict[str, set[str]]):
         calls, everything = nested(e, at_root, []), mentioned(e, [])
         for call in calls:
             changed, row = footprint(call)
-            if any(x.startswith("write:") or x in {"alloc", "free"} for x in row):  # Syntactic on purpose.
+            if any(x.startswith("write:") or x == "alloc" for x in row):  # Syntactic on purpose.
                 fail("E-EFFECT-ORDER", "Bind a writing call to its own statement before using its result.", call)
             mine = {node for node, _ in mentioned(call, [])}
             if any(place in changed for node, place in everything if node not in mine):

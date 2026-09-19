@@ -41,7 +41,8 @@ unused tail is unchanged. No temporary allocation or synchronization. The privat
 cursor emits at most once per input. Its arithmetic certificates do not prove
 the entire compiler, lifetime system, or native backend.""",
     "calls": """Call declared functions, not invented libraries. Calls with external writes or
-allocation/free must be whole expressions at statement/condition roots, not nested operands.
+allocation must be whole expressions at statement/condition roots, not nested operands; a call
+that only releases may be nested, since a drop runs where C++ ends the scope.
 Read the included callee implementation/contract: its name, types and effect row
 do not specify its behavior. Effects substitute caller buffers, including recursive
 calls. Request context before calling an undisclosed dependency. Source/model
@@ -118,11 +119,17 @@ every field (the way out for a linear field). An outer owner cannot be moved ins
 lane. linear struct values must be consumed exactly once on every path; defer call(x);
 schedules that one visible call for every normal exit of its block. ro<T> and rw<T>
 borrow one value and read/assign like the value; x[lo..hi] passes a part of an array with
-one dynamic guard; two parts are disjoint only if they visibly share a boundary.""",
+one dynamic guard; two parts are disjoint only if they visibly share a boundary. Letting an
+owner go charges free where the release is: the end of the block or match arm holding it, a
+return that leaves while it is still held, a function handed one that passes it on to nobody,
+and the place a new value is assigned over. A linear value need not own storage, so consuming
+one charges nothing on its own.""",
     "effects": """Every function has an inferred effect row; pure and effects(read:x, trap) after the
 return type are checked ceilings, never wishes. extern fn write(fd:i32, data:ro<u8>[n],
 n:usize) -> i64 effects(io); declares a C symbol whose effects are mandatory because its
-body is invisible; ffi:write then appears in every transitive caller. Foreign calls,
+body is invisible; ffi:write then appears in every transitive caller. alloc is charged where
+storage is taken and free where it goes back, so fn sink(b:Buf[u64]) {} has the row free and
+a ceiling that leaves free out is rejected as E-EFFECT-CEILING. Foreign calls,
 mmio_read[u32](addr), mmio_write[u32](addr, v) and asm("wfi") are legal only inside
 unsafe { }. Do not widen a ceiling or add unsafe to make an edit pass.""",
     "parallel": """parallel i in n { out[i] = a * x[i] + y[i]; } runs one lane per index and finishes before

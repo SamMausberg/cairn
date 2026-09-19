@@ -455,6 +455,27 @@ REJECTED = {
         FILL + "fn two() -> usize = 2;\n"
         "fn main() -> i32 { let mut b = Buf[u64](4); let t = spawn fill(two(), b[0..2], 1); wait(t); return 0; }",
     ),
+    # Round six: what 1.3 added -------------------------------------------------------------------
+    "a ceiling that hides the release of an owner the function was handed": (
+        "E-EFFECT-CEILING",
+        "fn sink(b:Buf[u64]) pure {}\n",
+    ),
+    "the same through a record field": (
+        "E-EFFECT-CEILING",
+        "struct Frame { pixels:Buf[u64]; id:u64; }\nfn scrap(f:Frame) -> u64 effects(trap) = f.id;\n",
+    ),
+    "the same where a new value lands on an owner a borrow reaches": (
+        "E-EFFECT-CEILING",
+        "struct Frame { pixels:Buf[u64]; id:u64; }\n"
+        "fn recycle(v:rw<Frame>, fresh:Buf[u64]) effects(read:v, write:v) { v.pixels = fresh; }\n",
+    ),
+    # The path that leaves early drops what the path that goes on hands away, so the move set alone hides it.
+    "the same on the path that returns early": (
+        "E-EFFECT-CEILING",
+        "struct Holder { slots:Array[Buf[u64], 2]; }\n"
+        "fn zeros() -> Holder = Holder(Array[Buf[u64], 2]());\n"
+        "fn eat(x:Holder, c:bool) -> Holder pure { if c { return zeros(); } return x; }\n",
+    ),
 }
 
 
@@ -464,6 +485,14 @@ def test_the_hole_stays_closed(name):
     with pytest.raises(Diagnostic) as e:
         compile_source(source)
     assert e.value.data["code"] == code, e.value.data["message"]
+
+
+def test_a_dropped_owner_names_free_as_the_effect_the_ceiling_is_missing():
+    """The diagnostic says which effect was added, so `pure` on a drop-only function names `free`."""
+    with pytest.raises(Diagnostic) as e:
+        compile_source("fn sink(b:Buf[u64]) pure {}\n")
+    assert e.value.data["code"] == "E-EFFECT-CEILING"
+    assert e.value.data["added_effects"] == ["free"]
 
 
 def run(tmp_path, source, flags=()):

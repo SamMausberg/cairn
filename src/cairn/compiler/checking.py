@@ -197,6 +197,7 @@ class Checker:
             self.aliases.setdefault(importer, {})[alias] = target
         self.layouts: dict[Type, Any] = {}  # Concrete records and sums, dependencies first.
         self.kinds: dict[Type, str] = {}
+        self.frees: dict[Type, bool] = {}
         self.early: dict[int, Expr] = {}  # Arguments typed ahead of their call for dispatch.
         self.s = Scope(Function("", [], VOID, []))
         self.signed: set[str] = set()
@@ -389,6 +390,26 @@ class Checker:
             self.kinds[ty] = KINDS[max([own, *(KINDS.index(self.kind(t)) for t in inline)])]
         return self.kinds[ty]
 
+    def releases(self, ty: Type) -> bool:
+        """Does dropping a value of this type hand storage back? `Buf` and `Dyn` do, and so does anything
+        holding one by value. This is not `kind`: `linear struct Lease { id:u64 }` moves and is consumed
+        exactly once, and releases nothing."""
+        if ty.mode != "value" or ty.name in CPP or ty.name == "fn" or ty.name in self.p.enums:
+            return False
+        if ty.name in {"Buf", "Dyn"}:
+            return True
+        if ty.name in self.bounds:  # A witness stands for every argument its bounds allow; only a copy owns nothing.
+            return self.bounds[ty.name][1] != "copy"
+        if ty not in self.frees:
+            layout = self.layouts.get(ty, {} if ty.name in INTRINSIC_TYPES else None)
+            if layout is None:  # Asked while its own definition is open: it reaches itself through a Buf.
+                return True
+            self.frees[ty] = False
+            parts = [t for _, t in layout] if isinstance(layout, list) else [t for t in layout.values() if t]
+            inline = parts or (ty.args[:1] if ty.name in {"Array", "Mutex"} else [])
+            self.frees[ty] = any(self.releases(t) for t in inline)
+        return self.frees[ty]
+
     def sizeof(self, ty: Type) -> int:
         """A conservative byte size (8-byte alignment) for the explicit stack budget."""
         if ty.name in CPP:
@@ -554,6 +575,8 @@ class Checker:
             self.effects |= {("write:" if t.mode == "rw" else "read:") + n for n, t in f.params if t.mode != "value"}
         elif not self.block(f.body) and f.ret != VOID:
             fail("E-RETURN", f"Not all paths of {f.name} return.", f)
+        if not f.extern:  # An owner it was given, and did not pass on, is released where the function ends.
+            self.released([n for n, t in f.params if t.mode == "value"])
         borrowed = {n for n, t in f.params if t.mode != "value"}
         self.local_effects[f.name] = {exposed(e, borrowed) for e in self.effects}
         self.calls[f.name], self.checks[f.name] = self.callset, self.counts
@@ -587,6 +610,11 @@ class Checker:
             if self.kind(self.env[n].ty) == "linear" and n not in self.moved | self.deferred:
                 fail("E-LINEAR-LEAK", f"{n} is linear: consume it, or defer its consumer, on every path.", node)
 
+    def released(self, names):
+        """Charge `free` where storage goes back: the scope still holding an owner runs its release."""
+        if any(n not in self.moved | self.deferred and self.releases(self.env[n].ty) for n in names):
+            self.effect("free")
+
     def block(self, ss: list[Stmt]) -> Any:
         saved, deferred, returned = dict(self.env), set(self.deferred), False
         for s in ss:
@@ -595,6 +623,7 @@ class Checker:
             returned = self.stmt(s)
         if not returned:
             self.leaks(set(self.env) - set(saved), ss[-1] if ss else self.f)
+        self.released(set(self.env) - set(saved))
         self.moved |= (self.deferred - deferred) & set(saved)  # Its cleanup has now run: gone for good.
         self.leases = {t: held for t, held in self.leases.items() if t in saved}
         self.env, self.deferred = saved, deferred
@@ -717,7 +746,10 @@ class Checker:
         self.counts["bounded_collectors"] = self.counts.get("bounded_collectors", 0) + 1
 
     def s_assign(self, s: Stmt):
-        self.expr(s.exprs[1], self.place(s.exprs[0], write=True))
+        ty = self.place(s.exprs[0], write=True)
+        if self.releases(ty):  # Whatever the place held is released where the new value lands.
+            self.effect("free")
+        self.expr(s.exprs[1], ty)
 
     def s_break(self, s: Stmt):
         if not self.loop_depth:
@@ -743,6 +775,7 @@ class Checker:
         else:
             self.expr(s.exprs[0], ret)
         self.leaks(set(self.env) - outer, s)
+        self.released(set(self.env) - outer)  # Leaving here drops everything this scope still holds.
         return True
 
     def branches(self, node: Any, runs: list) -> Any:
@@ -799,6 +832,7 @@ class Checker:
             if arm.binder:
                 if not returned:
                     self.leaks([arm.binder], arm)
+                self.released([arm.binder])
                 del self.env[arm.binder]
             return returned
 
@@ -1211,6 +1245,7 @@ class Checker:
             self.bind(n, Binding(t), e)
         if not self.block(f.body) and f.ret != VOID:
             fail("E-RETURN", "Not all paths of the closure return.", e)
+        self.released([n for n, _ in f.params])
         if (self.moved - saved[3]) & set(saved[0]):
             fail("E-MOVE-IN-LOOP", "A closure may run many times; it cannot move an outer owner.", e)
         self.env, self.closure, self.loop_depth, _, self.effects, self.callset = saved

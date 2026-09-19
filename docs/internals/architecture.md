@@ -24,7 +24,7 @@ Checking is one pass per function over one typed tree, and a generic instance is
 |---|---|---|
 | Names, types, generic instances | `compiler/checking.py` | `Checker.resolve`, `Checker.expr` |
 | Places, second-class borrows | `compiler/checking.py` | `Checker.place` |
-| Affine moves and linear values | `compiler/checking.py` | `Checker.consume`, `Checker.leaks`, `Checker.branches` |
+| Affine moves, releases and linear values | `compiler/checking.py` | `Checker.consume`, `Checker.leaks`, `Checker.releases`, `Checker.released`, `Checker.branches` |
 | Task leases | `compiler/checking.py` | `Checker.leased` |
 | Lane race freedom | `compiler/checking.py` | `Checker.region`, `Checker.judge_lane_callbacks` |
 | Placement | `compiler/checking.py` | `Checker.host_only`, `Checker.judge` |

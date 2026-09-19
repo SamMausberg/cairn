@@ -299,7 +299,7 @@ Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local
 ```cairn
 pub fn remove[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:ro<K>) -> Option[V]
 ```
-Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local_read`, `local_write`, `read:key`, `read:m`, `stack_storage`, `trap`, `write:m`, `zero_init`.
+Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `free`, `local_read`, `local_write`, `read:key`, `read:m`, `stack_storage`, `trap`, `write:m`, `zero_init`.
 
 # std.mem
 
@@ -599,12 +599,12 @@ Effects (any arguments within its bounds): `read:v`, `trap`.
 ```cairn
 pub fn set[T:affine](v:rw<Vec[T]>, i:usize, item:T)
 ```
-Effects (any arguments within its bounds): `read:v`, `trap`, `write:v`.
+Effects (any arguments within its bounds): `free`, `read:v`, `trap`, `write:v`.
 
 ```cairn
 pub fn clear[T:affine](v:rw<Vec[T]>)
 ```
-Effects (any arguments within its bounds): `read:v`, `trap`, `write:v`.
+Effects (any arguments within its bounds): `free`, `read:v`, `trap`, `write:v`.
 
 ```cairn
 pub fn extend_from[T:copy](v:rw<Vec[T]>, n:usize, src:ro<T>[n]@host)
@@ -616,7 +616,7 @@ Effects (any arguments within its bounds): `alloc`, `ffi_precondition`, `free`, 
 pub fn truncate[T:affine](v:rw<Vec[T]>, count:usize)
 ```
 Release the tail now instead of at the owner's scope exit; capacity is kept.
-Effects (any arguments within its bounds): `read:v`, `trap`, `write:v`.
+Effects (any arguments within its bounds): `free`, `read:v`, `trap`, `write:v`.
 
 # std.wire
 

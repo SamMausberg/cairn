@@ -287,7 +287,21 @@ fn main() -> i32 {
 }
 ```
 
-Owners are affine. Using one as a value (binding it, passing it by value, returning it, putting it in a field) moves it, and its name is dead afterwards (`E-MOVED`). Release at scope exit is implicit. The `free` effect is charged where the owner is made, together with `alloc`, so a function that only drops an owner it was given has no `free` in its row. An outer owner cannot be moved inside a loop (`E-MOVE-IN-LOOP`), a closure or a lane.
+Owners are affine. Using one as a value (binding it, passing it by value, returning it, putting it in a field) moves it, and its name is dead afterwards (`E-MOVED`). Release at scope exit is implicit, and the `free` effect is charged where that release runs: the end of a block or match arm that still holds the owner, a `return` that leaves while it is still held, a function that was handed one by value and passed it on to nobody, and the place a new value is assigned over. A function that only drops an owner it was given carries `free` alone; one that hands the same owner on carries neither `free` nor `alloc`. An outer owner cannot be moved inside a loop (`E-MOVE-IN-LOOP`), a closure or a lane.
+
+```cairn
+fn sink(b:Buf[u8]) {}                                  // its row is free
+fn hand_on(b:Buf[u8]) -> Buf[u8] = b;                  // its row is empty
+
+fn main() -> i32 {
+  let first = Buf[u8](4);
+  sink(first);
+  let second = Buf[u8](4);
+  let same = hand_on(second);
+  sink(same);
+  return 0;
+}
+```
 
 ```cairn rejects E-MOVED
 fn send(body:Buf[u8]) -> usize = len(body);
@@ -676,7 +690,8 @@ Every function carries a row, the least fixed point of its own local effects and
 | --- | --- |
 | `read:x`, `write:x` | the borrow `x` is read, written |
 | `local_read`, `local_write` | the function's own storage is read, written |
-| `alloc`, `free`, `zero_init` | heap storage is taken, released, zeroed |
+| `alloc`, `zero_init` | heap storage is taken, is zeroed |
+| `free` | a release runs: a scope ends holding an owner, or a value lands on one |
 | `stack_storage` | a `stack` array is declared |
 | `gpu_alloc`, `gpu_free` | device scratch is taken, released |
 | `transfer:h2d`, `d2h`, `d2d`, `h2h` | elements cross a placement boundary |
@@ -715,7 +730,7 @@ fill exceeds its declared effects.
 
 ## Operand order
 
-A call that writes through a borrow or allocates cannot be a nested operand (`E-EFFECT-ORDER`). Bind it to a name first, so the cost is a statement of its own.
+A call that writes through a borrow or allocates cannot be a nested operand (`E-EFFECT-ORDER`). Bind it to a name first, so the cost is a statement of its own. A call that only releases stays an ordinary operand: a drop runs where C++ ends the scope, and it writes no place another operand can name.
 
 ```cairn rejects E-EFFECT-ORDER
 fn fill(n:usize, out:rw<u8>[n], value:u8) -> usize { for i in 0..n { out[i] = value; } return n; }
