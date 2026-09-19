@@ -23,8 +23,9 @@ def link(p: Program) -> Program:
     """Merge every imported module that the program does not define itself, transitively."""
     defined = set(p.modules.values())
     pending = [target for _, target, _ in p.imports]
-    pending += [f"std.{r}" for m, r, _, _, _ in p.derivations if "." not in r and library_source(f"std.{r}")
-                and not {f"{m}.{r}", r} & set(p.recipes)]  # fmt: skip
+    for m, r, _, _, _ in p.derivations:  # A bare recipe the deriving module cannot see is a packaged one.
+        if "." not in r and not {f"{m}.{r}", r} & set(p.recipes):
+            pending.append(f"std.{r}" if library_source(f"std.{r}") else "std.derived")
     while pending:
         module = pending.pop()
         if module in defined:

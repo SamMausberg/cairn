@@ -232,6 +232,15 @@ class Shape:
 
 
 @dataclass
+class Impl:
+    """A trait implementation that a recipe generates for the type it is derived for."""
+
+    trait: str
+    target: Type
+    members: list[Function]
+
+
+@dataclass
 class Recipe:
     """A library-defined generator: declarations with `$name` splices, expanded per `derive` before checking."""
 
@@ -598,6 +607,15 @@ class Parser:
                 found.append(self.require(t))
             elif self.eat("struct"):
                 found.append(Shape(self.ident(), self.shape(), public, t.line, t.col))
+            elif self.eat("impl"):
+                trait = self.path()
+                self.need("for")
+                found.append(Impl(trait, self.ty(), []))
+                self.need("{")
+                while not self.eat("}"):
+                    start = self.t
+                    self.need("fn")
+                    found[-1].members.append(self.function(start, public=True))
             else:
                 self.need("fn")
                 found.append(self.function(t, public=public))

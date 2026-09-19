@@ -1549,6 +1549,7 @@ class Checker:
                 self.signed.add(name)
             self.impls[trait, target] = promised
         if (trait, target) not in self.impls:
+            self.impls[trait, target] = None  # While this is decided, a bound that asks the same question hears "no".
             matches: dict[str, tuple[Function, dict[str, Any]]] = {}
             for f in [f for f in list(self.fs.values()) if f.owner and not f.bindings]:
                 bound: dict[str, Any] = {}
@@ -1557,6 +1558,14 @@ class Checker:
                         continue
                     if not self.unify(f.owner[1], target, bound, {g for g, _ in f.generics}):
                         continue
+                promises = [
+                    (bound[g], w)
+                    for g, c in f.generics
+                    if g in bound and c not in {"nat", "type"}
+                    for w in c.split("+")
+                ]
+                if any(self.satisfies(value, wanted, f.module, node) for value, wanted in promises):
+                    continue  # `impl[T: integer] Ord for T` is an impl for the integers, not for everything.
                 short = f.name.rsplit(".", 1)[1]
                 if short in matches:
                     fail("E-TRAIT-OVERLAP", f"Two impls of {trait} match {target.display()}: one Self type means "

@@ -226,3 +226,81 @@ def test_only_dollar_splices_are_rewritten_and_derivations_wait_for_what_they_ne
     flags = ["-std=c++20", "-O1", "-fno-exceptions", "-fsanitize=address,undefined"]
     subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=180)
     assert subprocess.run([tmp_path / "p"], timeout=60).returncode == 0
+
+
+DERIVED = """
+import std.core (Ord, Eq, Hash, Option);
+import std.map as map;
+import std.sort as sort;
+
+struct Key { shard:u16; id:i64; }
+struct Tagged { key:Key; tag:u8; live:bool; }                 // a derived impl serves the next one
+derive eq for Key;
+derive ord for Key;
+derive eq for Tagged;
+struct Name { a:u32; b:u64; }
+derive eq for Name;
+derive hash for Name;
+
+fn main() -> i32 {
+  let a = Key(1, -9);
+  let b = Key(1, 10);
+  if same(a, b) || !same(a, a) || !less(a, b) || less(b, a) { return 1; }
+  if !same(Tagged(a, 1, true), Tagged(a, 1, true)) || same(Tagged(a, 1, true), Tagged(a, 1, false)) { return 2; }
+  let mut keys = Buf[Key](3);
+  keys[0] = Key(2, 1);
+  keys[1] = Key(1, 7);
+  keys[2] = Key(1, -3);
+  sort.sort(len(keys), keys);                      // std.sort asks for [T: Ord]
+  if keys[0].id != -3 || keys[2].shard != 2 { return 3; }
+  let mut seen = map.new[Name, u64]();             // std.map asks for [K: Hash + Eq + affine]
+  map.insert(seen, Name(1, 7), 70);
+  match map.find(seen, Name(1, 7)) {
+    Option.Some(slot) => { if seen.vals[slot] != 70 { return 4; } }
+    Option.None => { return 5; }
+  }
+  if hash(Name(1, 7)) == hash(Name(7, 1)) { return 6; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_derived_implementations_serve_generic_library_code(tmp_path, cxx):
+    """`derive eq|ord|hash` are recipes in std.derived that generate impls; std.core's own impls are one bounded
+    blanket impl per class of scalars, which applies exactly where its bound holds."""
+    if not shutil.which(cxx):
+        pytest.skip(f"{cxx} unavailable")
+    cpp = compile_source(DERIVED, roots=("main",))[0]
+    (tmp_path / "p.cpp").write_text(cpp + "int main() { return static_cast<int>(cf_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    flags = [
+        "-std=c++20",
+        "-O1",
+        "-fno-exceptions",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wno-unused-parameter",
+        "-Wno-unused-variable",
+    ]
+    flags += ["-fsanitize=address,undefined"] if cxx == "clang++" else []
+    subprocess.run([cxx, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=180)
+    assert subprocess.run([tmp_path / "p"], timeout=60).returncode == 0
+
+
+@pytest.mark.parametrize(
+    ("code", "source"),
+    [
+        ("E-TRAIT-IMPL", "struct P { x:f32; }\nderive eq for P;"),  # No Eq for floats: NaN is not equal to itself.
+        ("E-TRAIT-IMPL", "struct P { x:i64; }\nderive hash for P;"),  # Hash is offered for unsigned scalars.
+        ("E-TRAIT-OVERLAP", "import std.core (Eq);\nstruct P { x:u32; }\nderive eq for P;\n"
+         "impl Eq for P { fn same(a:ro<P>, b:ro<P>) -> bool = true; }\nfn main() -> i32 { if same(P(1), P(1)) { return 0; } return 1; }"),
+        ("E-TRAIT-IMPL", "import std.core (Ord);\nstruct P { x:u32; }\nfn main() -> i32 { if less(P(1), P(2)) { return 0; } return 1; }"),
+    ],
+)  # fmt: skip
+def test_a_derived_impl_is_checked_like_a_written_one(code, source):
+    with pytest.raises(Diagnostic) as e:
+        compile_source(source)
+    assert e.value.data["code"] == code, e.value.data["message"]

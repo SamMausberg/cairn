@@ -1,6 +1,6 @@
 # The CAIRN standard library
 
-Eleven small modules, written in CAIRN, shipped inside the package and linked on demand:
+Twelve small modules, written in CAIRN, shipped inside the package and linked on demand:
 `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. Nothing is
 downloaded and nothing is implicit — a module you do not import is not in your program, and
 every module you do import is compiled whole (there is no dead-code elimination yet).
@@ -291,6 +291,10 @@ fields: little-endian, declaration order, no padding, extents known statically. 
 framing, authentication or validation. Read `src/cairn/std/wire.cairn` as the worked example of
 `each`, `where`, `fold` and `$` splices; its output is pinned byte for byte against the closed
 generator it replaced.
+
+## std.derived
+
+Three recipes that generate trait implementations: `derive eq for P;` (field-wise `same`), `derive ord for P;` (lexicographic `less`, declaration order) and `derive hash for P;` (FNV-1a over the fields' hashes). Each is an ordinary `impl` of the `std.core` trait for the record, so the record then satisfies `[T: Ord]` for `std.sort` or `[K: Hash + Eq + affine]` for `std.map`. A field whose type lacks the trait is reported as such (`bool does not implement std.core.Ord`); `std.core` itself implements `Ord` and `Eq` for every integer type, `Eq` for `bool`, and `Hash` for the unsigned integers, with one bounded impl per class.
 
 ## Known sharp edges
 

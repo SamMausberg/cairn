@@ -495,7 +495,7 @@ def test_a_template_is_certified_once_when_its_body_needs_only_its_bounds():
     """Witness types offer exactly the bounds and must be consumed exactly once, so "ok" holds for every instance."""
     from cairn.cairnc import certify_templates
 
-    verdicts = certify_templates(GENERIC_BOUNDS)
+    verdicts = {n: v for n, v in certify_templates(GENERIC_BOUNDS).items() if not n.startswith("std.")}
     assert {n for n, v in verdicts.items() if v == "ok"} == {"larger", "biggest", "pass", "scale"}
     assert verdicts["largest"].startswith("E-OPERATOR")  # `<` is not something a bare T promises.
     assert verdicts["twice"].startswith("E-MOVED")  # A T may be an owner.

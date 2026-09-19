@@ -80,69 +80,42 @@ pub trait Hash { fn hash(value:ro<Self>) -> u64; }
 ```
 
 ```cairn
-impl Ord for u8: fn less(a:ro<u8>, b:ro<u8>) -> bool
+impl Eq for bool: fn same(a:ro<bool>, b:ro<bool>) -> bool
 ```
 Effects: `read:a`, `read:b`.
 
 ```cairn
-impl Ord for u32: fn less(a:ro<u32>, b:ro<u32>) -> bool
+impl Ord for T: fn less[T:integer](a:ro<T>, b:ro<T>) -> bool
 ```
-Effects: `read:a`, `read:b`.
+Effects (any arguments within its bounds): `read:a`, `read:b`.
 
 ```cairn
-impl Ord for u64: fn less(a:ro<u64>, b:ro<u64>) -> bool
+impl Eq for T: fn same[T:integer](a:ro<T>, b:ro<T>) -> bool
 ```
-Effects: `read:a`, `read:b`.
+Effects (any arguments within its bounds): `read:a`, `read:b`.
 
 ```cairn
-impl Ord for usize: fn less(a:ro<usize>, b:ro<usize>) -> bool
+impl Hash for T: fn hash[T:unsigned](value:ro<T>) -> u64
 ```
-Effects: `read:a`, `read:b`.
+Effects (any arguments within its bounds): `read:value`, `trap`.
+
+# std.derived
+
 
 ```cairn
-impl Ord for i32: fn less(a:ro<i32>, b:ro<i32>) -> bool
+pub recipe eq for R
 ```
-Effects: `read:a`, `read:b`.
+Field-wise equality.
 
 ```cairn
-impl Ord for i64: fn less(a:ro<i64>, b:ro<i64>) -> bool
+pub recipe ord for R
 ```
-Effects: `read:a`, `read:b`.
+Lexicographic order over the fields, in declaration order.
 
 ```cairn
-impl Eq for u8: fn same(a:ro<u8>, b:ro<u8>) -> bool
+pub recipe hash for R
 ```
-Effects: `read:a`, `read:b`.
-
-```cairn
-impl Eq for u32: fn same(a:ro<u32>, b:ro<u32>) -> bool
-```
-Effects: `read:a`, `read:b`.
-
-```cairn
-impl Eq for u64: fn same(a:ro<u64>, b:ro<u64>) -> bool
-```
-Effects: `read:a`, `read:b`.
-
-```cairn
-impl Eq for usize: fn same(a:ro<usize>, b:ro<usize>) -> bool
-```
-Effects: `read:a`, `read:b`.
-
-```cairn
-impl Hash for u64: fn hash(value:ro<u64>) -> u64
-```
-Effects: `read:value`.
-
-```cairn
-impl Hash for usize: fn hash(value:ro<usize>) -> u64
-```
-Effects: `read:value`, `trap`.
-
-```cairn
-impl Hash for u32: fn hash(value:ro<u32>) -> u64
-```
-Effects: `read:value`, `trap`.
+FNV-1a over the fields' own hashes.
 
 # std.io
 

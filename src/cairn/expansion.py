@@ -11,7 +11,7 @@ from typing import Any
 
 from .syntax import (  # isort: skip
     FLOAT, INT, MAX_FAMILY, MAX_FUNCTIONS, MAX_NODES, SCALAR, SIGNED, UNSIGNED, WIDTH, Arm, Each, Expr, Function,
-    Program, Recipe, Shape, Stmt, Type, fail,
+    Impl, Program, Recipe, Shape, Stmt, Type, fail,
 )  # fmt: skip
 
 OPERATORS = {"+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.floordiv, "%": operator.mod,
@@ -238,6 +238,12 @@ class Deriver:
                 self.require(item, env)
             elif isinstance(item, Shape):
                 out.append((prefix + self.text(item.name, env, item), self.shape(item.fields, env), item.public))
+            elif isinstance(item, Impl):  # `impl Trait for R { ... }`: members named and owned as a written impl's are.
+                target = self.type(item.target, env, None)
+                for member in item.members:
+                    made = self.function(member, env, f"{prefix}{item.trait}.{target.display()}.")
+                    made.owner, made.source_name = (item.trait, target), made.name
+                    out.append(made)
             else:
                 out.append(self.function(item, env, prefix))
             if len(out) > MAX_FUNCTIONS:  # Refused while it is still small, not after a million declarations.
@@ -259,8 +265,8 @@ def derive(p: Program) -> Program:
         ready = [d for d in waiting if not d[3] or visible(p, d[0], d[3], known)] or waiting[:1]  # Else report it.
         waiting = [d for d in waiting if d not in ready]
         for module, written, naturals, target, at in ready:
-            found = visible(p, module, written, p.recipes) or f"std.{written}.{written}"
-            recipe = p.recipes.get(found)
+            found = visible(p, module, written, p.recipes)
+            recipe = p.recipes.get(found or f"std.{written}.{written}") or p.recipes.get(f"std.derived.{written}")
             if recipe is None or len(naturals) != len(recipe.nats) or bool(target) != bool(recipe.param):
                 fail("E-DERIVE-RECIPE", f"No recipe {written} takes these arguments; write "
                      "`derive name[naturals] for Type;` as the recipe declares.", at)  # fmt: skip
@@ -277,7 +283,10 @@ def derive(p: Program) -> Program:
                 p.modules[name] = module
                 p.public |= {name} if public else set()
                 if isinstance(made, Function):
-                    made.source_name, made.module = f"derive {written}" + (f" for {full}" if target else ""), module
+                    made.module = module
+                    made.source_name = (
+                        made.source_name if made.owner else f"derive {written}" + (f" for {full}" if target else "")
+                    )
                     p.functions.append(made)
                 else:
                     p.records[name], p.generics[name], p.attributes[name] = made[1], [], set()

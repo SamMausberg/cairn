@@ -1,0 +1,36 @@
+module std.derived;
+import std.core;
+
+// Implementations written once for any record whose fields already have them:
+// `derive eq for Point;`, `derive ord for Point;`, `derive hash for Point;`.
+
+// Field-wise equality.
+pub recipe eq for R {
+  impl std.core.Eq for R {
+    fn same(a:ro<R>, b:ro<R>) -> bool = fold && each f in R { std.core.Eq.same(a.$f, b.$f) };
+  }
+}
+
+// Lexicographic order over the fields, in declaration order.
+pub recipe ord for R {
+  impl std.core.Ord for R {
+    fn less(a:ro<R>, b:ro<R>) -> bool {
+      each f in R {
+        if std.core.Ord.less(a.$f, b.$f) { return true; }
+        if std.core.Ord.less(b.$f, a.$f) { return false; }
+      }
+      return false;
+    }
+  }
+}
+
+// FNV-1a over the fields' own hashes.
+pub recipe hash for R {
+  impl std.core.Hash for R {
+    fn hash(value:ro<R>) -> u64 {
+      let mut h:u64 = 14695981039346656037;
+      each f in R { h = mul_wrap(h ^ std.core.Hash.hash(value.$f), 1099511628211); }
+      return h;
+    }
+  }
+}
