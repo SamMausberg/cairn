@@ -1,0 +1,6 @@
+// Two flops over twelve bytes: a large region is bound by memory bandwidth, so this kernel prices
+// the region itself rather than the arithmetic in it. The body is the one bench/cpu/reference.cpp
+// and evidence/v1_2/host_regions already use, so the numbers chain.
+fn saxpy_f32(n:usize, out:rw<f32>[n], x:ro<f32>[n], y:ro<f32>[n], a:f32) {
+  parallel i in n { out[i] = a * x[i] + y[i]; }
+}

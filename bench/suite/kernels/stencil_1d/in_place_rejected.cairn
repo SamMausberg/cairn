@@ -1,0 +1,21 @@
+// The in place 3 point stencil, which this suite keeps because the compiler must refuse it.
+//
+// It establishes one half of the asymmetry kernel.cairn reports. The out of place stencil beside it
+// is accepted in a parallel region, because a lane writes only out[i] and reads a ro view; this
+// function writes x[i] and reads x[i-1] and x[i+1] in the same region, so a lane touches a written
+// array away from its own index and src/cairn/compiler/checking.py rejects it with E-PARALLEL-RACE,
+// saying "x is written by lanes, so every lane may touch only x[i]." The same program written in
+// C++ with an OpenMP parallel for compiles without a word under -Wall -Wextra -Werror and runs as a
+// data race whose answer depends on the schedule.
+//
+// The harness compiles this file and requires exactly that code. It is a rejected program and it is
+// still a formatting fixed point, so `cairn fmt --check` passes on it too.
+fn blend3(l:f32, c:f32, r:f32) -> f32 = 0.25 * l + 0.5 * c + 0.25 * r;
+
+fn stencil_1d_in_place(n:usize, x:rw<f32>[n]) {
+  parallel i in n {
+    if i > 0 && i + 1 < n {
+      x[i] = blend3(x[i - 1], x[i], x[i + 1]);
+    }
+  }
+}

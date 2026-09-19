@@ -48,17 +48,20 @@ A native behaviour table maps a sentence to an expected process exit status and 
 python tools/checks/verify.py --gcc --sanitize
 python tools/checks/validate_systems.py
 python tools/checks/validate_semantics.py --gcc
+make bench                                  # the preregistered CPU baseline suite, hours; --smoke takes seconds
 ```
 
-| Script under `tools/checks/` | What it checks |
+| Script | What it checks |
 |---|---|
-| `verify.py` | rebuilds the native artifacts and drives the oracles in `tests/checks/`: equal boundary checks, strict floating flags, both compilers, independent codec and template cases, exhaustive small collectors |
-| `validate_systems.py` | decimal values and first error offsets, sorts, filters, unchanged inputs, output tails and identity edits against Python oracles under both compilers, plus an O0 observer counting allocation and release across returns, loops and match exits |
-| `validate_semantics.py` | the translator and trap-aware interpreter against Python arithmetic, the concrete interpreter, instrumented clang and gcc, and input-pinned SMT |
-| `semantic_check.py`, `semantic_corpus.py` | two scalar implementations against one immutable reference; same-contract pairs, every label decided and replayed |
-| `curriculum_verify.py`, `mutation_checks.py` | teaching programs against independent finite oracles; one hand-authored defect per algorithm family, all of which the finite tests must catch |
-| `check_compact_forms.py`, `native_scalar.py` | complete definitions, not generated expansions; a test-only trap observer that is not the production runtime |
-| `density.py`, `export_lean_certificates.py` | lexical density accounting; `--check` fails when `collector_rules()` and `proofs/` have drifted |
+| `tools/checks/verify.py` | rebuilds the native artifacts and drives the oracles in `tests/checks/`: equal boundary checks, strict floating flags, both compilers, independent codec and template cases, exhaustive small collectors |
+| `tools/checks/validate_systems.py` | decimal values and first error offsets, sorts, filters, unchanged inputs, output tails and identity edits against Python oracles under both compilers, plus an O0 observer counting allocation and release across returns, loops and match exits |
+| `tools/checks/validate_semantics.py` | the translator and trap-aware interpreter against Python arithmetic, the concrete interpreter, instrumented clang and gcc, and input-pinned SMT |
+| `tools/checks/semantic_check.py`, `semantic_corpus.py` | two scalar implementations against one immutable reference; same-contract pairs, every label decided and replayed |
+| `tools/checks/curriculum_verify.py`, `mutation_checks.py` | teaching programs against independent finite oracles; one hand-authored defect per algorithm family, all of which the finite tests must catch |
+| `tools/checks/check_compact_forms.py`, `native_scalar.py` | complete definitions, not generated expansions; a test-only trap observer that is not the production runtime |
+| `tools/checks/density.py`, `export_lean_certificates.py` | lexical density accounting; `--check` fails when `collector_rules()` and `proofs/` have drifted |
+| `bench/suite/harness.py` | the eight kernels of [bench/suite/PREREGISTRATION.md](../../bench/suite/PREREGISTRATION.md), every arm built under both compilers with the project's own flags, each baseline once guarded and once not, safety boundaries counted against the build receipt, equal worker counts, and no result written when a case disagrees with its sequential or Python oracle |
+| `bench/suite/report.py` | reads one of those runs and prints its tables, applying the preregistered acceptance rule; it measures nothing and prints losses beside wins |
 
 Production sanitizer and SIGABRT fixtures are separate from that O0 observer, `validate_systems.py` proves nothing about allocation or lifetime safety for arbitrary programs, and a trusted translator or oracle can still hold a bug. `bench/cpu/codegen_only.py` compares code sections by instruction bytes and relocations and implies no fresh timing run. These harnesses write under `results/`, which is ignored and may be replaced on rerun.
 
