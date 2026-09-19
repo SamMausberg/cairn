@@ -386,6 +386,11 @@ REJECTED = {
         FILL + "enum E { A; B; }\nfn f(e:E) -> i32 { let mut d = Buf[u64](8); let t = spawn fill(len(d), d, 1);\n"
         "  match e { E.A => { wait(t); return 1; } E.B => {} }\n  d[0] = 99;\n  wait(t); return 0; }",
     ),
+    "two calls the outside world can observe, side by side in one expression": (
+        "E-EFFECT-ORDER",
+        "extern fn putchar(c:i32) -> i32 effects(io);\nfn say(c:i32) -> i32 { unsafe { return putchar(c); } }\n"
+        "fn main() -> i32 { return say(65) + say(66) - 131; }",
+    ),
     "a lane inside a closure returning from that closure": (
         "E-PARALLEL-CONTROL",
         "fn once(f:ro<fn(u64) -> u64>) -> u64 = f(0);\n"
@@ -596,7 +601,7 @@ BEHAVIOR = {
         "fn helper(f:ro<fn(u64) -> u64>, x:u64) -> u64 = f(x);\n"
         "fn go(n:usize, out:rw<u64>[n], c:ro<dyn P>, f:ro<fn(u64) -> u64>, g:fn(u64) -> u64) effects(par:host, lane:f,\n"
         "  lane:g, indirect_call, dispatch, read:c, read:f, write:out, trap, ffi_precondition) {\n"
-        "  parallel i in n { out[i] = one(c) + helper(f, u64(i)) + g(1); } }\n"
+        "  parallel i in n { let a = one(c); let b = helper(f, u64(i)); let d = g(1); out[i] = a + b + d; } }\n"
         "fn via(d:ro<dyn R>) -> u64 = run(d, twice);\n"
         "fn main() -> i32 { let n:usize = 8; buffer o:u64[n] = zeroed; let c = C(5); let k:u64 = 3;\n"
         "  let stored:fn(u64) -> u64 = twice;\n  go(n, o, c, |x:u64| -> u64 { return x * k + pid(c); }, stored);\n"

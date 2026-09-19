@@ -52,7 +52,7 @@ Every type has an all-zero value, so storage of any element type is zero-initial
 
 ## Control
 
-`for i in lo..hi` evaluates `lo` then `hi` once; empty and reversed ranges do nothing. `if / else if / else`, `while`, `break`, `continue` (nearest loop, also from a match arm), nested `{ }` blocks. Logical operators short-circuit. A call that writes through a borrow or allocates cannot be a nested operand (`E-EFFECT-ORDER`); bind it first. No loop implies parallelism.
+`for i in lo..hi` evaluates `lo` then `hi` once; empty and reversed ranges do nothing. `if / else if / else`, `while`, `break`, `continue` (nearest loop, also from a match arm), nested `{ }` blocks. Logical operators short-circuit. A call that writes through a borrow or allocates cannot be a nested operand (`E-EFFECT-ORDER`); bind it first, so the cost is a statement of its own. For the same code, a call that the outside world can observe (I/O, the machine, atomics and locks, a function value) cannot sit beside another call in one expression, because C++ leaves the order of operands open; `&&`, `||` and a call's own arguments are sequenced. No loop implies parallelism.
 
 ## Function values and closures
 

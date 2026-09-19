@@ -74,30 +74,47 @@ def fixed_point(c: Checker) -> dict[str, set[str]]:
     return effects
 
 
-def audit(c: Checker, effects: dict[str, set[str]]):
-    """C++ leaves operand order open, so one expression may not contain two operands that could
-    observe each other: a nested writing call, a nested take, a nested closure call next to what
-    it writes, or a nested `try` next to an operand that already owns something. `&&` and `||`
-    are sequenced."""
+OBSERVABLE = {"io", "mmio", "asm", "atomic", "lock", "spawn", "join", "indirect_call", "gpu_alloc", "gpu_free"}
 
-    def names(e: Expr, out: list[Expr]) -> list[Expr]:
-        out += [e] if e.tag == "name" else []
-        for child in e.args if e.tag != "lambda" else []:
-            names(child, out)
+
+def audit(c: Checker, effects: dict[str, set[str]]):
+    """Costs stay visible and operands cannot tell which ran first (C++ leaves their order open): a call that
+    writes through a borrow or allocates is never a nested operand; a nested call may not move, take or (as a
+    closure) write a place that another operand names; a call the outside world can observe (I/O, the machine,
+    shared state, a function value) may not sit beside another call; and a nested `try` may not sit beside an
+    operand that already owns something. `&&` and `||` are sequenced, and so are a call and its arguments."""
+
+    def mentioned(e: Expr, out: list[tuple[int, str]]) -> list[tuple[int, str]]:
+        """Every place an operand names, a closure's captures included, with the node that names it."""
+        out += [(id(e), e.val)] if e.tag == "name" else []
+        out += [(id(e), p.split(".")[0].split("[")[0]) for p, _ in e.ref.captures] if e.tag == "lambda" else []
+        for child in e.args:
+            mentioned(child, out)
         return out
+
+    def footprint(call: Expr) -> tuple[set[str], set[str]]:
+        """(the caller's places this call may change besides what its row says, the row it is judged by)."""
+        kind = call.ref[0] if isinstance(call.ref, tuple) else ""
+        named = [root(a).val if root(a).tag == "name" else "" for a in call.args]
+        captured = [x for a in call.args if a.tag == "lambda" for x in a.ref.captures]
+        changed = {place.split(".")[0].split("[")[0] for place, mode in captured if mode == "rw"}
+        changed |= {a.val for a in call.args if a.tag == "name" and a.ref == "move"}  # A moved owner is gone.
+        if isinstance(call.ref, Function):
+            return changed, effects.get(call.ref.name, set())
+        if kind == "dispatch":  # Judged by every implementation.
+            return changed, set().union(*(effects.get(t, set()) for t in call.ref[4]))
+        if kind == "indirect":
+            return changed, {"indirect_call"}
+        if kind == "builtin" and call.val in {"take", "swap"}:
+            return changed | set(named), set()
+        machine = kind == "builtin" and call.val in {"transfer", "mmio_read", "mmio_write", "asm"}
+        return changed, {"atomic"} if kind == "shared" else {"io"} if machine else set()
 
     def nested(e: Expr, at_root: bool, out: list[Expr]) -> list[Expr]:
         if e.tag == "lambda":
             block(e.ref.body)
             return out
-        if e.tag == "call" and not at_root:
-            kind = e.ref[0] if isinstance(e.ref, tuple) else ""
-            known = [e.ref.name] if isinstance(e.ref, Function) else e.ref[4] if kind == "dispatch" else []
-            rows = set().union(*(effects.get(name, set()) for name in known))  # Dispatch: every implementor.
-            if any(x.startswith("write:") or x in {"alloc", "free"} for x in rows):
-                fail("E-EFFECT-ORDER", "Bind a writing call to its own statement before using its result.", e)
-            if kind == "indirect" or any(a.tag == "lambda" for a in e.args) or (e.val == "take" and kind == "builtin"):
-                out.append(e)
+        out += [e] if e.tag == "call" and not at_root else []
         for child in e.args:  # `try f()` and `spawn f()` add no operand order: f stays a root.
             nested(child, at_root and e.tag in {"try", "spawn"}, out)
         return out
@@ -126,18 +143,19 @@ def audit(c: Checker, effects: dict[str, set[str]]):
             if abandons(e, leaving):
                 fail("E-EFFECT-ORDER", "Bind this try first: leaving from here would abandon an owner that another "
                      "operand already holds.", leaving)  # fmt: skip
-        found = nested(e, at_root, [])
-        for call in found:
-            inside = {id(n) for n in names(call, [])}
-            others = [n for n in names(e, []) if id(n) not in inside]
-            written = {p.split(".")[0].split("[")[0] for a in call.args if a.tag == "lambda"
-                       for p, mode in a.ref.captures if mode == "rw"}  # fmt: skip
-            if call.val == "take" and call.ref[0] == "builtin":
-                clash = any(n.val == root(call.args[0]).val for n in others)
-            else:  # A closure writes what it captured rw; one received as a parameter reaches nothing named here.
-                clash = len(found) > 1 or any(n.val in written for n in others)
-            if clash:
+        calls, everything = nested(e, at_root, []), mentioned(e, [])
+        for call in calls:
+            changed, row = footprint(call)
+            if any(x.startswith("write:") or x in {"alloc", "free"} for x in row):  # Syntactic on purpose.
+                fail("E-EFFECT-ORDER", "Bind a writing call to its own statement before using its result.", call)
+            mine = {node for node, _ in mentioned(call, [])}
+            if any(place in changed for node, place in everything if node not in mine):
                 fail("E-EFFECT-ORDER", "Bind this call first: another operand here could observe its writes.", call)
+            beside = [d for d in calls if d is not call and not within(call, d) and not within(d, call)]
+            beside = [d for d in beside if not (isinstance(d.ref, tuple) and d.ref[0] in {"record", "variant"})]
+            if beside and any(x in OBSERVABLE or x.startswith(("ffi:", "transfer:", "par:")) for x in row):
+                fail("E-EFFECT-ORDER", "Bind this call first: it can be observed from outside, and the call beside "
+                     "it could run before or after it.", call)  # fmt: skip
 
     def block(ss: list[Stmt]):
         for s in ss:
