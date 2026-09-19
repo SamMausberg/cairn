@@ -3,7 +3,7 @@ A mechanized core of CAIRN's ownership and lease discipline.
 
 This file is a self-contained calculus: a first-order statement language over
 named locals and the places borrowed out of them, an executable checker that
-mirrors the rules `src/cairn/checking.py` enforces (moved set, lease map, visibly
+mirrors the rules `src/cairn/compiler/checking.py` enforces (moved set, lease map, visibly
 disjoint array parts, disjoint call arguments, branch joins, no live ticket at
 scope exit), and an interleaving small-step machine with explicit error states.
 The theorems at the bottom say that the checker's acceptance rules out every one of
@@ -11,7 +11,7 @@ those error states -- under every valuation of the immutable part bounds -- and 
 every allocation is released exactly once on normal termination.
 
 The model is written by hand.  Nothing here is extracted from, or mechanically
-connected to, the Python compiler; `docs/verification.md` states exactly what is
+connected to, the Python compiler; `docs/internals/verification.md` states exactly what is
 and is not covered.
 
 Design notes that matter for reading the theorems:
@@ -1953,8 +1953,8 @@ theorem accepted_progress : Progress := by
 
 Local 0 is `data`, 1 and 2 are further locals, 3 is a second buffer; tickets are 0,
 1 and 2; the bound names 0, 1 and 2 are the immutable `a`, `b` and `n` of the source
-programs.  Each line names the CAIRN program in `tests/test_soundness.py` or
-`tests/test_concurrency.py` that it encodes. -/
+programs.  Each line names the CAIRN program in `tests/soundness/test_soundness.py` or
+`tests/soundness/test_concurrency.py` that it encodes. -/
 
 namespace Regress
 
@@ -2025,7 +2025,7 @@ def kwaySplit : Program :=
          wait 0, wait 1, wait 2]⟩
 
 /-- The same two ends with nothing lent between them to order their bounds -- E-LEASED
-(`tests/test_soundness.py`: "two parts with nothing lent between them to order their
+(`tests/soundness/test_soundness.py`: "two parts with nothing lent between them to order their
 bounds"). -/
 def partsWithoutMiddle : Program :=
   ⟨[0], [alloc 0, spawn 0 [(.part 0 (.lit 0) a, Mode.rw)],
@@ -2113,7 +2113,7 @@ which `d[a..b]` is backwards and `d[0..a]` and `d[b..n]` overlap. -/
 def badVal : Valuation := fun v => if v = 0 then 6 else if v = 1 then 3 else 9
 
 /-- **A data race is reachable.**  The spawner reads a place a live task writes:
-`let t = spawn bump(c, 4); let seen = c;` in `tests/test_soundness.py`. -/
+`let t = spawn bump(c, 4); let seen = c;` in `tests/soundness/test_soundness.py`. -/
 theorem leasedRead_races :
     Reach anyVal leasedRead.scope (Cfg.start leasedRead) (Cfg.err (Err.race 0)) :=
   Reach.step (List.Mem.head _)
@@ -2140,7 +2140,7 @@ theorem overlappingParts_races :
 /-- **The backwards part traps, and does not race.**  `backwardsPart` is ACCEPTED,
 and under the valuation it is written for the machine aborts at the guard of
 `d[6..3]` -- on the spawner's thread, before either of the two tasks that overlap
-has been started.  This is the execution `tests/test_soundness.py` observes as
+has been started.  This is the execution `tests/soundness/test_soundness.py` observes as
 SIGABRT under ThreadSanitizer. -/
 theorem backwardsPart_traps :
     Reach badVal backwardsPart.scope (Cfg.start backwardsPart) Cfg.trap :=

@@ -20,11 +20,11 @@ test:
 	$(PYTHON) -m pytest -q tests -n auto
 
 native:
-	$(PYTHON) tools/verify.py --gcc --sanitize
-	$(PYTHON) bench/codegen_only.py
+	$(PYTHON) tools/checks/verify.py --gcc --sanitize
+	$(PYTHON) bench/cpu/codegen_only.py
 
 systems:
-	$(PYTHON) tools/validate_systems.py
+	$(PYTHON) tools/checks/validate_systems.py
 	$(CAIRN) run examples/systems
 	$(CAIRN) test examples/systems
 
@@ -33,27 +33,27 @@ proof: lean
 	$(CAIRN) verify examples/proof_scope/reference.cairn examples/proof_scope/candidate.cairn --all
 
 lean:
-	$(PYTHON) tools/export_lean_certificates.py --check
+	$(PYTHON) tools/checks/export_lean_certificates.py --check
 	cd proofs && lake build
 
 gpu:
-	$(PYTHON) -m pytest -q tests/test_native_runtime.py tests/test_concurrency.py
-	$(PYTHON) bench/parallel_gpu.py
+	$(PYTHON) -m pytest -q tests/runtime/test_native_runtime.py tests/soundness/test_concurrency.py
+	$(PYTHON) bench/gpu/parallel_gpu.py
 
 embedded:
-	$(PYTHON) -m pytest -q tests/test_freestanding.py
+	$(PYTHON) -m pytest -q tests/projects/test_freestanding.py
 
 docs:
-	$(CAIRN) doc --std > docs/std_api.md
+	$(CAIRN) doc --std > docs/guide/std_api.md
 
 context:
-	$(PYTHON) tools/measure_context.py
+	$(PYTHON) tools/ai/measure_context.py
 
 wheel:
 	$(PYTHON) -m pip wheel --no-index --no-deps --no-build-isolation --wheel-dir dist .
 
 audit:
-	$(PYTHON) tools/audit_repository.py
+	$(PYTHON) tools/release/audit_repository.py
 
 demo:
 	$(CAIRN) run examples/hello

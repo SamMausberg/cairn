@@ -43,7 +43,7 @@ The image exits with `fn main()`'s return value: 0 here.
 
 There is no `buffer`, no `Buf`, no `parallel` and no `extern` anywhere, and there could not be: the
 freestanding build reads the effect row of every function and refuses the program by name if one of
-them needs something a hosted runtime would have to provide. See `docs/freestanding.md`.
+them needs something a hosted runtime would have to provide. See `docs/guide/freestanding.md`.
 
 ## The trap demo
 

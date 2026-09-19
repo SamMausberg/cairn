@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from cairn.build import build  # noqa: E402
 from cairn.project import load_project  # noqa: E402
 from cairn.toolchain import emulator  # noqa: E402
+
 from cairn.version import VERSION  # noqa: E402
 
 

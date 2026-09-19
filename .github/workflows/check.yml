@@ -33,4 +33,4 @@ jobs:
           .venv/bin/python bin/cairn test examples/systems
           .venv/bin/python bin/cairn certificates
           .venv/bin/python bin/cairn verify examples/proof_scope/reference.cairn examples/proof_scope/candidate.cairn --all
-          .venv/bin/python tools/export_lean_certificates.py --check
+          .venv/bin/python tools/checks/export_lean_certificates.py --check

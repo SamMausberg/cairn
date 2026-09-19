@@ -16,7 +16,7 @@ cd /home/ubuntu/cairn && .venv/bin/python bin/cairn run examples/apps/service   
 printf 'put a hello\nget a\nquit\n' | nc 127.0.0.1 39800
 ```
 
-The port is `const PORT:u16` in `src/main.cairn`; `tests/test_apps.py` copies the project and
+The port is `const PORT:u16` in `src/main.cairn`; `tests/projects/test_apps.py` copies the project and
 rewrites it with a free port so parallel test workers never collide.
 
 ## What it demonstrates

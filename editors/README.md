@@ -50,8 +50,8 @@ completion (fields, methods, module members, variants, locals and words),
 signature help, go to definition inside the open file and into the packaged
 `std`, references and rename within the file, and `Format Document` (the same
 formatter as `cairn fmt`). The client negotiates all of it from the server, so
-nothing here changes when the server learns something new. See `docs/tooling.md`
+nothing here changes when the server learns something new. See `docs/guide/tooling.md`
 for what each of those covers and what it does not.
 
 The grammar's keyword lists are checked against the compiler's `RESERVED` set by
-`tests/test_lsp.py`, so a new keyword fails the suite until the grammar learns it.
+`tests/tooling/test_lsp.py`, so a new keyword fails the suite until the grammar learns it.

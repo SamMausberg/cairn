@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Shared host helpers for the tools and benchmarks: one owner for flags and headers.
 
-Every command line here comes from cairn.toolchain; no script carries its own copy.
+Every command line here comes from cairn.projects.toolchain; no script carries its own copy.
 The harnesses historically pinned -march=x86-64-v3. `best_profile` keeps that intent
 without the architecture: it is the richest profile of THIS host family that the named
 compilers accept and this CPU actually executes, and callers record which one ran.
@@ -20,8 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from cairn.cairnc import RUNTIME_FILES, compile_source
-from cairn.toolchain import FAMILIES, command, find, flags, host_family
+from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
+from cairn.projects.toolchain import FAMILIES, command, find, flags, host_family
 
 FAMILY = host_family()
 ARCHS = ("baseline", *FAMILIES[FAMILY])

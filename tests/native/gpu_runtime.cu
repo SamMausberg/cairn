@@ -1,5 +1,5 @@
 // Self-checking test for cr::gpu: exit 0 is a pass. With an argument it runs one death case,
-// which must abort the host process; tests/test_native_runtime.py drives those as subprocesses.
+// which must abort the host process; tests/runtime/test_native_runtime.py drives those as subprocesses.
 // The build line is documented at the top of cairn_gpu.hpp.
 #include <cstdio>
 #include <cstring>

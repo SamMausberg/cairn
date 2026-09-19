@@ -59,21 +59,26 @@ python3 bin/cairn fmt --check examples && python3 bin/cairn new my_project
 ## Repository
 
 ```
-src/cairn/          syntax, modules, expansion, checking, codegen, toolchain, build, CLI
-  runtime/          guards, owners, threads/tasks/atomics, CUDA lanes and collectives (C++ headers)
-  std/              the standard library, written in CAIRN (core, vec, map, arena, text, sort, io, net, ...)
+src/cairn/
+  compiler/         syntax, modules, recipes, the checker and its rules (traits, constants, effects, builtins), the emitter
+  projects/         manifests and vendored dependencies, native builds and their object cache, the toolchain table
+  verify/           finite task tests, SMT source equivalence, coverage, collector certificates
+  agent/            projections, edit sessions and packets, rule cards, sketches
+  editor/           formatter, language server, API reference generator
+  runtime/          guards, owners, threads, tasks, atomics, the lane pool, CUDA lanes (C++ headers)
+  std/              the standard library, written in CAIRN
   targets/          start-up code and linker script of the freestanding AArch64 board
-  agent_tools.py ...  edit sessions, sketches, rule cards, scalar SMT, certificates, verification
-proofs/             Lean 4: certificate checker soundness, the 17 certificates, the collector loop model, the ownership/lease/array-part calculus
-examples/           programs with fixed contracts; apps/ (storage engine, TCP service, simulator, GPU pipeline); embedded/
-tests/              rejection, native behavior under both compilers and sanitizers, device, QEMU, agent and tooling tests
-tools/ bench/       repeatable validation, context accounting, audit, publication, benchmarks
-editors/            VS Code / Cursor extension (grammar + language client)
-docs/               language, std, architecture, verification, freestanding, tooling, security, roadmap, history
-evidence/           versioned executed results and their limits
+proofs/             Lean 4: certificate checker, collector loop model, ownership and lease calculus
+examples/           basics/, hello/, systems/, apps/ (storage engine, TCP service, simulator, GPU pipeline, analytics), embedded/
+tests/              language/ soundness/ verification/ projects/ runtime/ tooling/ agent/, native/ fixtures, checks/ scripts
+tools/              checks/ (repeatable validation), ai/ (agent loop, pilot, context accounting), release/ (evidence, audit, publication)
+bench/              cpu/ gpu/ host_regions/
+editors/            VS Code / Cursor extension (grammar and language client)
+docs/               guide/ internals/ project/ cards/ history/
+evidence/           executed results by release, v0_5 to v1_2, and their limits
 ```
 
-Start with the [tour](docs/tour.md) (twelve programs that the test suite compiles and runs), then [language](docs/language.md), [std](docs/std.md) with its generated [API reference](docs/std_api.md), [architecture](docs/architecture.md) and [verification](docs/verification.md); [tooling](docs/tooling.md) covers `fmt`, `lsp` and the editor extension, [freestanding](docs/freestanding.md) the bare-metal target. [AGENTS.md](AGENTS.md) gives the edit rules; [capabilities.json](docs/capabilities.json) separates what is implemented from what is missing; [roadmap](docs/roadmap.md) states the remaining gates. `make lint test proof` are the everyday gates; `make gpu embedded` need the hardware and emulator.
+Start with the [tour](docs/guide/tour.md) (twelve programs that the test suite compiles and runs), then [language](docs/guide/language.md), [std](docs/guide/std.md) with its generated [API reference](docs/guide/std_api.md), [architecture](docs/internals/architecture.md) and [verification](docs/internals/verification.md); [tooling](docs/guide/tooling.md) covers `fmt`, `lsp` and the editor extension, [freestanding](docs/guide/freestanding.md) the bare-metal target. [AGENTS.md](AGENTS.md) gives the edit rules; [capabilities.json](docs/project/capabilities.json) separates what is implemented from what is missing; [roadmap](docs/project/roadmap.md) states the remaining gates. `make lint test proof` are the everyday gates; `make gpu embedded` need the hardware and emulator.
 
 ## What this does not establish
 
@@ -83,4 +88,4 @@ The GPU numbers in `evidence/v1_0/gpu/` are one machine and three kernels, and d
 
 ## Private by default
 
-No license has been selected and nothing here is published for reuse. The optional [private publisher](docs/private-publication.md) stays opt-in, private-only and non-force, and is never invoked by tests or builds.
+No license has been selected and nothing here is published for reuse. The optional [private publisher](docs/project/private-publication.md) stays opt-in, private-only and non-force, and is never invoked by tests or builds.

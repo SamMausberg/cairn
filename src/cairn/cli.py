@@ -12,9 +12,9 @@ import subprocess
 from pathlib import Path
 
 from . import __version__
-from .cairnc import Diagnostic, certify_templates, compile_source
-from .project import ProjectError, contained_file, load_project, read_text
-from .toolchain import ARCHS, TARGETS, emulator, host_family
+from .compiler.cairnc import Diagnostic, certify_templates, compile_source
+from .projects.project import ProjectError, contained_file, load_project, read_text
+from .projects.toolchain import ARCHS, TARGETS, emulator, host_family
 
 
 def report(value: dict) -> None:
@@ -134,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         if a.command == "certificates":
-            from .linear_certificates import audit_collector
+            from .verify.linear_certificates import audit_collector
 
             report(audit_collector())
             return 0
@@ -142,21 +142,21 @@ def main(argv: list[str] | None = None) -> int:
             report(create_project(a.directory))
             return 0
         if a.command == "fmt":
-            from .formatting import format_paths
+            from .editor.formatting import format_paths
 
             return format_paths(a.paths, a.check, a.diff)
         if a.command == "lsp":
-            from .lsp import serve
+            from .editor.lsp import serve
 
             return serve()
         if a.command == "verify" and a.all:
-            from .verification import verify_module
+            from .verify.verification import verify_module
 
             result = verify_module(read_text(a.reference, 64000), read_text(a.candidate, 64000), a.timeout_ms)
             report(result)
             return 0 if result["status"] == "smt-module-equivalent" else 2
         if a.command == "verify":
-            from .scalar_semantics import equivalent
+            from .verify.scalar_semantics import equivalent
 
             result = equivalent(
                 read_text(a.reference, 64000), read_text(a.candidate, 64000), a.symbol, timeout_ms=a.timeout_ms
@@ -173,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.command == "run" and not 64 <= a.memory_mib <= 65536:
             raise ProjectError("Native memory limit must be 64..65536 MiB.")
         if a.command == "doc" and a.std:  # The packaged library needs no project.
-            from .docs import standard_library
+            from .editor.docs import standard_library
 
             print(standard_library(), end="")
             return 0
@@ -195,23 +195,23 @@ def main(argv: list[str] | None = None) -> int:
             report(result)
             return 1 if any(v != "ok" for v in result.get("generics", {}).values()) else 0
         if a.command == "expand":  # What the derivations generated, as source.
-            from .agent_tools import expanded_source
+            from .agent.agent_tools import expanded_source
 
             print(expanded_source(project.source), end="")
             return 0
         if a.command == "doc":
-            from .docs import document
+            from .editor.docs import document
 
             print(document(project.source, a.module), end="")
             return 0
         if a.command == "inspect":
-            from .agent_tools import EditSession
+            from .agent.agent_tools import EditSession
 
             report(EditSession(project.source, a.symbol).packet())
             return 0
         if a.command == "test":
-            from .agent_tools import load_json_strict
-            from .testing import evaluate
+            from .agent.agent_tools import load_json_strict
+            from .verify.testing import evaluate
 
             paths = (
                 [a.contract] if a.contract else [contained_file(project.root, x, ".json") for x in project.contracts]
@@ -231,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
             return 0 if passed else 1
-        from .build import build
+        from .projects.build import build
 
         result = build(
             project,
@@ -248,7 +248,7 @@ def main(argv: list[str] | None = None) -> int:
             report(result)
             return 0 if result["status"] == "native-built" else 2
         # Execution is explicit. Process timeout is not an OS security sandbox.
-        from .testing import resource
+        from .verify.testing import resource
 
         # A freestanding image is not a host process: it runs in the emulator its target names.
         machine = emulator(result["target"], result["artifact"])

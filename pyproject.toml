@@ -25,7 +25,7 @@ cairn = ["runtime/*.hpp", "std/*.cairn", "targets/*/*.S", "targets/*/*.ld", "py.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "tests/language", "tests/soundness"]  # The agent-layer tests reuse those programs.
 
 [tool.ruff]
 extend-exclude = [".claude"]  # Agent worktrees are whole copies of the repository.
@@ -49,9 +49,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B011", "E731", "E741", "B905", "B007", "B023"]  # independent oracles stay as written
-"tools/*" = ["E402"]
-"bench/*" = ["E402"]
+"tests/**" = ["B011", "E731", "E741", "B905", "B007", "B023"]  # independent oracles stay as written
+"tools/**" = ["E402"]
+"bench/**" = ["E402"]
 
 [tool.mypy]
 python_version = "3.11"

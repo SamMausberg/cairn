@@ -2,11 +2,11 @@
 GENERATED FILE - DO NOT EDIT BY HAND.
 
 Regenerate with:
-    .venv/bin/python tools/export_lean_certificates.py
+    .venv/bin/python tools/checks/export_lean_certificates.py
 Check for drift with:
-    .venv/bin/python tools/export_lean_certificates.py --check
+    .venv/bin/python tools/checks/export_lean_certificates.py --check
 
-Source of truth: `collector_rules()` in `src/cairn/linear_certificates.py`.
+Source of truth: `collector_rules()` in `src/cairn/verify/linear_certificates.py`.
 SHA-256 of the exported obligation table (as `cairn certificates` reports it):
     5648cb8f06439f9ba5d87f3ffcfdc090803bed8ae7353940f83f10736afec1f2
 -/

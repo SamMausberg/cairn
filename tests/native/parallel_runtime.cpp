@@ -1,5 +1,5 @@
 // Self-checking test for cr::par: exit 0 is a pass. With an argument it runs one death case,
-// which must abort the process; tests/test_native_runtime.py drives those as subprocesses.
+// which must abort the process; tests/runtime/test_native_runtime.py drives those as subprocesses.
 // Built with the language contract flags, so this file also proves the runtime headers still
 // compile without CUDA present. The lane pool is what most of this exercises: coverage and
 // exactly-once at many sizes, regions started at once from several threads, thousands of tiny

@@ -93,10 +93,10 @@ search is deterministic test plumbing, not an AI success rate. A solver's choice
 of witness can change the savings. No optimal candidate-ranking rule is claimed.
 
 ```sh
-python3 tools/sketch_demo.py
-python3 tools/semantic_check.py examples/sketch/reference.cairn \
+python3 tools/ai/sketch_demo.py
+python3 tools/checks/semantic_check.py examples/sketch/reference.cairn \
   examples/sketch/after.cairn --symbol average --obligations build/obligations
-python3 tools/build.py examples/sketch/after.cairn
+python3 tools/release/build.py examples/sketch/after.cairn
 ```
 
 The semantic status is `smt-equivalent`, not `Lean-verified`, `native-verified`,

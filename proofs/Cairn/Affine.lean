@@ -1,5 +1,5 @@
 /-
-Exact affine-implication certificates, mirroring `src/cairn/linear_certificates.py`.
+Exact affine-implication certificates, mirroring `src/cairn/verify/linear_certificates.py`.
 
 An affine form is five exact integer coefficients `(c, ck, ci, cn, cm)` denoting
 `c + ck*K + ci*I + cn*N + cm*M`, asserted to be `>= 0`.  A rule is a list of
