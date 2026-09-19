@@ -77,6 +77,7 @@ namespace Cairn
 #print axioms Cairn.Ownership.accepted_no_use_after_free
 #print axioms Cairn.Ownership.accepted_no_double_free
 #print axioms Cairn.Ownership.accepted_race_free
+#print axioms Cairn.Ownership.accepted_threads_disjoint
 #print axioms Cairn.Ownership.accepted_no_leaked_ticket
 #print axioms Cairn.Ownership.accepted_no_aliased_args
 #print axioms Cairn.Ownership.accepted_frees_each_allocation_once
@@ -85,6 +86,9 @@ namespace Cairn
 #print axioms Cairn.Ownership.Ok_start
 #print axioms Cairn.Ownership.checkBlock_mono
 #print axioms Cairn.Ownership.releaseAll_final
+#print axioms Cairn.Ownership.lanesOf_pairwise
+#print axioms Cairn.Ownership.lane_borrows_dont_race
+#print axioms Cairn.Ownership.races_borrow_of_lease
 #print axioms Cairn.Ownership.ownership_regression
 
 /-! ### Non-vacuity: the faults are reachable for rejected programs -/
@@ -92,6 +96,11 @@ namespace Cairn
 #print axioms Cairn.Ownership.Regress.leasedRead_races
 #print axioms Cairn.Ownership.Regress.overlappingTasks_races
 #print axioms Cairn.Ownership.Regress.overlappingParts_races
+#print axioms Cairn.Ownership.Regress.fieldsToTwoTasks_races
+#print axioms Cairn.Ownership.Regress.fieldPartsOverlapInOneCall_aliases
+#print axioms Cairn.Ownership.Regress.laneWritesFixedIndex_races
+#print axioms Cairn.Ownership.Regress.laneWritesShared_races
+#print axioms Cairn.Ownership.Regress.laneReadsOther_races
 #print axioms Cairn.Ownership.Regress.backwardsPart_traps
 #print axioms Cairn.Ownership.Regress.copyAnOwner_doubleFrees
 #print axioms Cairn.Ownership.Regress.useAfterDrop_usesDeadPlace

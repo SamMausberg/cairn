@@ -22,13 +22,16 @@ representable cursor.
 
 The second is a small ownership-and-lease calculus (`Cairn/Places.lean` and
 `Cairn/Ownership.lean`): a statement language over named locals and the places
-borrowed out of them -- whole owners, their header (`len`), their elements and
-array parts `d[lo..hi]` whose bounds are literals or immutable names -- an
-executable checker that mirrors the rules `src/cairn/compiler/checking.py` enforces
+borrowed out of them -- whole owners, their header (`len`), their elements, array
+parts `d[lo..hi]` whose bounds are literals or immutable names, field paths of record
+locals (`r.a`, `r.xs[lo..hi]`) and `parallel i in n` regions -- an executable
+checker that mirrors the rules `src/cairn/compiler/checking.py` enforces
 (`overlaps`, `leased`, `disjoint`, the branch join, the linear ticket), an
-interleaving small-step machine with explicit error states and a trap, and the
-theorems that an accepted program reaches no error state and never gets stuck,
-for **every** valuation of those bounds.  `docs/internals/verification.md` states exactly
+interleaving small-step machine with explicit error states and a trap, in which a
+region forks one lane per index and blocks the spawner until they are done, and the
+theorems that an accepted program reaches no error state -- no race between two
+lanes, between a lane and a live task, or between two tasks -- and never gets stuck,
+for **every** valuation of those bounds and of the lane count.  `docs/internals/verification.md` states exactly
 what that model covers.
 
 It is not a whole-compiler proof.  Read "What is NOT proved" before quoting
@@ -41,8 +44,8 @@ anything from here.
 | `Cairn/Affine.lean` | `Form`, `Form.eval`, `Rule`, `Certificate`, the computable `check`, and `check_sound`. |
 | `Cairn/CollectorCertificates.lean` | **Generated.** The 17 obligations and their certificates as Lean data, `all_checked`, and one corollary per obligation. |
 | `Cairn/Collector.lean` | Executable model of the loop; the invariant derived *from* the certificates; store-in-bounds, stable selection, and increment bounds. |
-| `Cairn/Places.lean` | What a borrow names: bounds, valuations, the chain of guarded `lo <= hi` facts (`reaches`), the checker's syntactic overlap (`ovl`, mirroring `checking.py:overlaps`), the real footprints under a valuation (`meets`), and the bridge `ovl_sound`. |
-| `Cairn/Ownership.lean` | The ownership and lease calculus: syntax, the executable checker `accepts`, the interleaving machine, the preservation lemma `Ok_succ`, the soundness and progress theorems, and the regression over the programs `tests/soundness/test_soundness.py` pins. |
+| `Cairn/Places.lean` | What a borrow names: roots (a local and a field path), bounds, valuations, the chain of guarded `lo <= hi` facts (`reaches`), the checker's syntactic overlap (`ovl`, mirroring `checking.py:overlaps`), the real footprints under a valuation (`meets`), and the bridge `ovl_sound`. |
+| `Cairn/Ownership.lean` | The ownership and lease calculus: syntax (`Touch` is one lane access), the executable checker `accepts`, the interleaving machine over tasks and lanes, the preservation lemma `Ok_succ`, the soundness and progress theorems, and the regression over the programs `tests/soundness/test_soundness.py` pins. |
 | `Cairn/Audit.lean` | `#print axioms` for every headline theorem, and the ownership regression line. |
 | `Cairn.lean` | Root module importing everything. |
 
@@ -181,14 +184,16 @@ This development proves things about **models**.  Each of the following remains
 trusted, exactly as before:
 
 * **The ownership calculus is an abstraction written by hand.**  It covers whole
-  owners, headers, elements and array parts whose bounds are visible, including
-  the chain that licenses a K-way split; fields, single elements, parts of parts,
-  bounds `path` writes as `?`, `take`/`swap`, `defer`, loops, `return`, closures,
-  traits, generics, lanes, placement, atomics, mutexes and effects are outside
-  it.  Nothing extracts it from `checking.py` or compares the two.  Its treatment
+  owners, headers, elements, array parts whose bounds are visible (including the
+  chain that licenses a K-way split), record field paths and parallel regions;
+  single elements, parts of parts, bounds `path` writes as `?`, `take`/`swap`,
+  `defer`, loops, `return`, closures, `lane:f` callbacks, traits, generics,
+  placement, `reduce`/`compact`, queued device work, atomics, mutexes and effects
+  are outside it.  Nothing extracts it from `checking.py` or compares the two.  Its treatment
   of array parts assumes of the emitter what `cr::part` does and no proof states:
   that a part's `lo <= hi` guard runs on the spawning thread before the task that
-  borrows it starts.
+  borrows it starts, and that a region joins every lane before the next statement
+  runs.
 
 * **The compiler-to-model correspondence.**  Nothing here relates
   `Cairn.Collector.step`/`run` to what `src/cairn` actually emits.  That the
@@ -257,9 +262,11 @@ clock on the host of record.
 transition theorems, `run_preserves_inv`, `run_spec`, `collect_spec`,
 `store_index_lt_capacity`, `store_index_lt_buffer_length`, `increments_fit`, and
 the ownership declarations (`reaches_sound`, `ovl_sound`, `accepted_no_fault`
-and its six named faults, `accepted_frees_each_allocation_once`,
-`accepted_progress`, `Ok_succ`, `Ok_start`, `checkBlock_mono`, `releaseAll_final`,
-`ownership_regression`) and the seven non-vacuity witnesses.
+and its six named faults, `accepted_threads_disjoint`, `lanesOf_pairwise`,
+`lane_borrows_dont_race`, `races_borrow_of_lease`,
+`accepted_frees_each_allocation_once`, `accepted_progress`, `Ok_succ`, `Ok_start`,
+`checkBlock_mono`, `releaseAll_final`, `ownership_regression`) and the eleven
+non-vacuity witnesses.
 
 The result:
 

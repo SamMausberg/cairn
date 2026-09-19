@@ -50,6 +50,94 @@ namespace Ownership
 /-- The identity of one heap cell. -/
 abbrev AllocId := Nat
 
+/-! ### What one lane does
+
+`parallel i in n { body }` runs one lane per index `i < n`.  `checking.py:region`
+abstracts the body to one list, `Lanes.accesses`: for every place of the enclosing
+scope the body touches, the root local, whether the index written there is the binder
+itself, and whether it writes.  `Touch` is that list, with the place kept, so that the
+leases of the enclosing scope can still be asked about each access.
+
+The things a lane cannot do are not rules here but absences: the body is a list of
+accesses, so a region cannot nest, `return`, move an outer owner or run a collector,
+and a local the body declares is not a place of the enclosing scope and simply does
+not appear. -/
+
+/-- One access a lane makes to a place of the enclosing scope.
+
+* `elem r m` is `x[i]`, or `r.xs[i]`, at the lane's own index -- the only shape
+  `checking.py` allows on anything lanes write (`i.tag == "name" and i.val == binder`,
+  exactly that name as the whole index);
+* `other r m` is every other way of naming elements: `x[j]`, `x[i + 1]`, `x[0]`, or a
+  part or whole view lent on to a call.  Its footprint is modelled as EVERY element,
+  the worst case, since nothing here bounds where the index lands;
+* `whole r m` is the place itself -- a shared scalar read or assigned, or a single
+  borrow lent on;
+* `len r` is `len(x)`: the header alone, which `check_len` checks with
+  `leased(..., elements = False)` and which `region` does not record at all. -/
+inductive Touch where
+  | elem (r : Root) (m : Mode)
+  | other (r : Root) (m : Mode)
+  | whole (r : Root) (m : Mode)
+  | len (r : Root)
+deriving DecidableEq, Repr, Inhabited
+
+/-- The storage the access names. -/
+def Touch.root : Touch → Root
+  | .elem r _ => r
+  | .other r _ => r
+  | .whole r _ => r
+  | .len r => r
+
+/-- The mode it is touched in.  A `len` read is a read. -/
+def Touch.mode : Touch → Mode
+  | .elem _ m => m
+  | .other _ m => m
+  | .whole _ m => m
+  | .len _ => Mode.ro
+
+/-- Is the index the lane's own binder?  This is the `at_binder` flag
+`checking.py:e_index` records. -/
+def Touch.atBinder : Touch → Bool
+  | .elem _ _ => true
+  | _ => false
+
+/-- Does `checking.py:region` see this access at all?  `e_index` and `lend` record;
+`len` does not, and needs no rule, since the header is not an element. -/
+def Touch.recorded : Touch → Bool
+  | .len _ => false
+  | _ => true
+
+/-- The place the region's lease check names: what `checking.py:where` writes, where
+any index of `x` is `x[]`, whatever the index is. -/
+def Touch.lease : Touch → Borrow
+  | .elem r m => (.elems r, m)
+  | .other r m => (.elems r, m)
+  | .whole r m => (.whole r, m)
+  | .len r => (.hdr r, Mode.ro)
+
+/-- What the lane with index `k` really touches: its own element where the binder is
+the index, and the worst case everywhere else. -/
+def Touch.borrow (k : Nat) : Touch → Borrow
+  | .elem r m => (.part r (.lit k) (.lit (k + 1)), m)
+  | .other r m => (.elems r, m)
+  | .whole r m => (.whole r, m)
+  | .len r => (.hdr r, Mode.ro)
+
+/-- Some access of the body writes this local.  `checking.py` calls this set
+`written`, and keys it on the root local name, not on the field path. -/
+def writesVar (body : List Touch) (x : Var) : Bool :=
+  body.any fun c => c.mode == Mode.rw && c.root.var == x
+
+/-- **The region rule.**  Whatever any lane writes may be touched, by any lane, only
+at the lane's own index: `checking.py:region` computes `written` and raises
+`E-PARALLEL-RACE` for every recorded access to a written local that is not `x[i]`.
+Assigning a shared scalar of the enclosing scope is the case reported as
+`E-PARALLEL-WRITE`; it fails here too, because such an access writes its local and is
+not at the binder. -/
+def laneRule (body : List Touch) : Bool :=
+  body.all fun a => !a.recorded || !writesVar body a.root.var || a.atBinder
+
 /-- Statements.  `call`/`spawn` take a borrow list rather than a callee: the
 callee's body is abstracted to the footprint it was handed, which is all the
 ownership and lease rules ever look at.  A read of a scalar is
@@ -75,6 +163,10 @@ inductive Stmt where
   /-- `if c { thn } else { els }`: the condition is opaque, so both branches are
   always reachable and the join is what makes a one-sided move dead. -/
   | ite (thn els : List Stmt)
+  /-- `parallel i in n { body }`: one lane per index below `n`, all of them at once,
+  and the spawner blocked until every one is done.  `n` is read from the valuation,
+  exactly as a part bound is. -/
+  | parallel (n : Bound) (body : List Touch)
 deriving Repr, Inhabited
 
 /-- A scope: the locals it declares and the statements it runs.  Every owner still
@@ -83,6 +175,170 @@ structure Program where
   scope : List Var
   body : List Stmt
 deriving Repr, Inhabited
+
+/-! ### The lanes a region forks
+
+A lane has exactly the shape of a task -- a name and a footprint -- so the machine
+races them against each other with the same machinery.  What differs is only where
+the footprint comes from: a task is handed one at its spawn, a lane computes one from
+its own index. -/
+
+/-- One lane per index below `n`, holding what the body touches at that index. -/
+def lanesOf (n : Nat) (body : List Touch) : List Task :=
+  match n with
+  | 0 => []
+  | k + 1 => (k, body.map (Touch.borrow k)) :: lanesOf k body
+
+@[simp] theorem Touch.borrow_root (a : Touch) (k : Nat) : (a.borrow k).1.root = a.root := by
+  cases a <;> rfl
+
+@[simp] theorem Touch.borrow_mode (a : Touch) (k : Nat) : (a.borrow k).2 = a.mode := by
+  cases a <;> rfl
+
+@[simp] theorem Touch.lease_root (a : Touch) : a.lease.1.root = a.root := by cases a <;> rfl
+
+@[simp] theorem Touch.lease_base (a : Touch) : a.lease.1.base = a.root.var := by cases a <;> rfl
+
+@[simp] theorem Touch.borrow_base (a : Touch) (k : Nat) : (a.borrow k).1.base = a.root.var := by
+  cases a <;> rfl
+
+/-- Every place a region names is guarded: a lane's own element is `[k, k+1)`, and
+nothing else carries bounds at all.  So a region never traps. -/
+@[simp] theorem Touch.lease_guard (ρ : Valuation) (a : Touch) : a.lease.1.guard ρ = true := by
+  cases a <;> rfl
+
+@[simp] theorem Touch.borrow_guard (ρ : Valuation) (a : Touch) (k : Nat) :
+    (a.borrow k).1.guard ρ = true := by
+  cases a
+  · exact decide_eq_true (Nat.le_succ k)
+  · rfl
+  · rfl
+  · rfl
+
+/-- The lease check a region runs names `x[]`; a lane holds only its own element, so
+it inherits the answer. -/
+theorem races_borrow_of_lease {ρ : Valuation} {a : Touch} {k : Nat} {y : Borrow}
+    (h : races ρ a.lease y = false) : races ρ (a.borrow k) y = false := by
+  cases a with
+  | other r m => exact h
+  | whole r m => exact h
+  | len r => exact h
+  | elem r m =>
+      show (meets ρ (.part r (.lit k) (.lit (k + 1))) y.1 && ((m == Mode.rw) || (y.2 == Mode.rw)))
+        = false
+      cases hm : meets ρ (Place.part r (.lit k) (.lit (k + 1))) y.1 with
+      | false => rfl
+      | true =>
+          have hlease : (meets ρ (Place.elems r) y.1 && ((m == Mode.rw) || (y.2 == Mode.rw)))
+              = false := h
+          rw [meets_elems_of_part hm, Bool.true_and] at hlease
+          rw [Bool.true_and]
+          exact hlease
+
+/-- An access that writes puts its local in `written`. -/
+theorem writesVar_of_mem {body : List Touch} {a : Touch} (ha : a ∈ body) (hm : a.mode = Mode.rw) :
+    writesVar body a.root.var = true := by
+  simp only [writesVar, List.any_eq_true]
+  refine ⟨a, ha, ?_⟩
+  have h1 : (a.mode == Mode.rw) = true := by rw [hm]; rfl
+  rw [h1, beq_place_self, Bool.and_self]
+
+/-- **Under the region rule a lane holds only its own element, or the header.**  A
+write is always the lane's own element; a `len` read is the header; nothing else
+survives on a local the lanes write. -/
+theorem borrow_shape {body : List Touch} (h : laneRule body = true) {a : Touch} (ha : a ∈ body)
+    (hw : writesVar body a.root.var = true) (k : Nat) :
+    a.borrow k = (.part a.root (.lit k) (.lit (k + 1)), a.mode) ∨
+      a.borrow k = (.hdr a.root, Mode.ro) := by
+  have hall := (List.all_eq_true.mp h) a ha
+  cases a with
+  | elem r m => exact Or.inl rfl
+  | len r => exact Or.inr rfl
+  | other r m =>
+      have h2 : (!writesVar body r.var || false) = true := hall
+      rw [show writesVar body r.var = true from hw] at h2
+      exact Bool.noConfusion h2
+  | whole r m =>
+      have h2 : (!writesVar body r.var || false) = true := hall
+      rw [show writesVar body r.var = true from hw] at h2
+      exact Bool.noConfusion h2
+
+/-- **Two lanes of an accepted region never race.**  If their borrows met with a write
+among them they would be two writes, or a write and a read, of one local; the rule
+then makes both of them the lane's own element, and the indices differ. -/
+theorem lane_borrows_dont_race {ρ : Valuation} {body : List Touch} (h : laneRule body = true)
+    {k l : Nat} (hkl : k ≠ l) {a b : Touch} (ha : a ∈ body) (hb : b ∈ body) :
+    races ρ (a.borrow k) (b.borrow l) = false := by
+  cases hr : races ρ (a.borrow k) (b.borrow l) with
+  | false => rfl
+  | true =>
+      exfalso
+      obtain ⟨hmeet, hmode⟩ := and_parts hr
+      have hvar : a.root.var = b.root.var := by
+        have ht : (a.borrow k).1.root.touches (b.borrow l).1.root = true :=
+          (and_parts hmeet).1
+        rw [Touch.borrow_root, Touch.borrow_root] at ht
+        exact eq_of_beq (and_parts ht).1
+      have hw : writesVar body a.root.var = true := by
+        rcases Bool.or_eq_true_iff.mp hmode with hm | hm
+        · rw [Touch.borrow_mode] at hm; exact writesVar_of_mem ha (eq_of_beq hm)
+        · rw [Touch.borrow_mode] at hm
+          rw [hvar]; exact writesVar_of_mem hb (eq_of_beq hm)
+      have hwb : writesVar body b.root.var = true := by rw [← hvar]; exact hw
+      rcases borrow_shape h ha hw k with hab | hab <;>
+        rcases borrow_shape h hb hwb l with hbb | hbb <;>
+        rw [hab, hbb] at hmeet hmode
+      · rw [meets_own_element hkl] at hmeet; exact Bool.noConfusion hmeet
+      · rw [meets_part_hdr] at hmeet; exact Bool.noConfusion hmeet
+      · rw [meets_symm, meets_part_hdr] at hmeet; exact Bool.noConfusion hmeet
+      · exact Bool.noConfusion hmode
+
+/-- Every lane carries an index below `n`, so two of them never share one. -/
+theorem lanesOf_index_lt : ∀ (n : Nat) {body : List Touch} {T : Task},
+    T ∈ lanesOf n body → T.1 < n := by
+  intro n
+  induction n with
+  | zero => intro body T hT; exact absurd hT List.not_mem_nil
+  | succ k ih =>
+      intro body T hT
+      rcases List.mem_cons.mp hT with h1 | h2
+      · rw [h1]; exact Nat.lt_succ_self k
+      · exact Nat.lt_succ_of_lt (ih h2)
+
+/-- Every borrow of a lane comes from an access of the body, taken at that lane's own
+index. -/
+theorem mem_lanesOf : ∀ (n : Nat) {body : List Touch} {T : Task}, T ∈ lanesOf n body →
+    ∀ {y : Borrow}, y ∈ T.2 → ∃ a ∈ body, y = a.borrow T.1 := by
+  intro n
+  induction n with
+  | zero => intro body T hT; exact absurd hT List.not_mem_nil
+  | succ k ih =>
+      intro body T hT y hy
+      rcases List.mem_cons.mp hT with h1 | h2
+      · subst h1
+        obtain ⟨a, haa, hae⟩ := List.mem_map.mp hy
+        exact ⟨a, haa, hae.symm⟩
+      · exact ih h2 hy
+
+/-- **The lanes of an accepted region are pairwise compatible.** -/
+theorem lanesOf_pairwise (ρ : Valuation) : ∀ (n : Nat) {body : List Touch},
+    laneRule body = true → (lanesOf n body).Pairwise (NoRacePair ρ) := by
+  intro n
+  induction n with
+  | zero => intro body _; exact List.Pairwise.nil
+  | succ k ih =>
+      intro body h
+      refine List.pairwise_cons.mpr ⟨?_, ih h⟩
+      intro U hU x hx w hw
+      have hlt : U.1 < k := lanesOf_index_lt k hU
+      have hne : k ≠ U.1 := by
+        intro hc
+        rw [hc] at hlt
+        exact Nat.lt_irrefl U.1 hlt
+      obtain ⟨a, ha, hae⟩ := List.mem_map.mp hx
+      obtain ⟨b, hb, hbe⟩ := mem_lanesOf k hU hw
+      rw [← hae, hbe]
+      exact lane_borrows_dont_race h hne ha hb
 
 /-! ## Disjoint arguments
 
@@ -179,7 +435,7 @@ def CState.mayAccess (c : CState) (x : Borrow) : Bool :=
 every place of `p`, so this is the rule that stops a move, a drop or a rebinding
 while any view of it is lent. -/
 def CState.mayWrite (c : CState) (p : Var) : Bool :=
-  c.mayAccess (.whole p, Mode.rw)
+  c.mayAccess (.whole ⟨p, []⟩, Mode.rw)
 
 /-- Every rule a straight-line statement must satisfy, as one Boolean.  These are
 the conditions `checking.py` raises `E-MOVED`, `E-LEASED`, `E-ALIAS`,
@@ -189,7 +445,7 @@ def guardOf (c : CState) : Stmt → Bool
   | .mkScalar x => c.scope.contains x && c.mayWrite x
   | .copy y x =>
       c.scope.contains y && !(y == x) && c.scalars.contains x
-        && c.mayAccess (.whole x, Mode.ro) && c.mayWrite y
+        && c.mayAccess (.whole ⟨x, []⟩, Mode.ro) && c.mayWrite y
   | .move y x =>
       c.scope.contains y && !(y == x) && c.owners.contains x
         && c.mayWrite x && c.mayWrite y
@@ -200,6 +456,8 @@ def guardOf (c : CState) : Stmt → Bool
         && args.all fun x => c.livePlace x.1.base && c.mayAccess x
   | .wait t => c.leases.any fun T => T.1 == t
   | .ite _ _ => true
+  | .parallel _ body =>
+      laneRule body && body.all fun a => c.livePlace a.root.var && c.mayAccess a.lease
 
 /-- What a straight-line statement does to the ownership state. -/
 def effOf (c : CState) : Stmt → CState
@@ -212,6 +470,7 @@ def effOf (c : CState) : Stmt → CState
   | .spawn t args => { c with leases := (t, args) :: c.leases }
   | .wait t => { c with leases := c.leases.filter fun T => !(T.1 == t) }
   | .ite _ _ => c
+  | .parallel _ _ => c
 
 /-- The join of two branches: a local either branch killed is dead, and the two
 must agree on which tickets are still live. -/
@@ -257,6 +516,9 @@ end
     checkStmt c (.spawn t args) = if guardOf c (.spawn t args) then some (effOf c (.spawn t args)) else none := rfl
 @[simp] theorem checkStmt_wait (c : CState) (t : Ticket) :
     checkStmt c (.wait t) = if guardOf c (.wait t) then some (effOf c (.wait t)) else none := rfl
+@[simp] theorem checkStmt_parallel (c : CState) (nb : Bound) (body : List Touch) :
+    checkStmt c (.parallel nb body) =
+      if guardOf c (.parallel nb body) then some (effOf c (.parallel nb body)) else none := rfl
 @[simp] theorem checkStmt_ite (c : CState) (thn els : List Stmt) :
     checkStmt c (.ite thn els) =
       match checkBlock c thn, checkBlock c els with
@@ -341,6 +603,10 @@ theorem guard_mono {c d : CState} (h : Le c d) {s : Stmt} (hs : guardOf c s = tr
       exact ⟨⟨hs.1.1, hs.1.2⟩, hargs args hs.2⟩
   | wait t => simpa only [guardOf, hlc] using hs
   | ite thn els => rfl
+  | parallel nb body =>
+      simp only [guardOf, Bool.and_eq_true, List.all_eq_true] at hs ⊢
+      refine ⟨hs.1, fun a ha => ?_⟩
+      exact ⟨livePlace_mono h (hs.2 a ha).1, by rw [hma]; exact (hs.2 a ha).2⟩
 
 theorem eff_mono {c d : CState} (h : Le c d) (s : Stmt) : Le (effOf c s) (effOf d s) := by
   have hs := h.scalars
@@ -452,6 +718,7 @@ theorem checkBlock_mono : ∀ (n : Nat) (ss : List Stmt), blockSize ss < n →
                 | call args => exact guardAux hle hc1
                 | spawn t args => exact guardAux hle hc1
                 | wait t => exact guardAux hle hc1
+                | parallel nb body => exact guardAux hle hc1
               obtain ⟨d1, hd1, hle1, hsc1⟩ := hstep
               obtain ⟨d', hd', hled, hscd⟩ := ih rest hrest hle1 hs
               exact ⟨d', by rw [checkBlock_cons, hd1]; exact hd', hled, by rw [hscd, hsc1]⟩
@@ -593,10 +860,11 @@ def accessAll (ρ : Valuation) (tasks : List Task) (st : State) : List Borrow �
       | none => accessAll ρ tasks st rest
 
 /-- A machine configuration: the spawner's remaining statements, the tasks that are
-still live, and the state.  `done` is normal termination, `err` is a fault, and
-`trap` is the defined abort a failed `lo <= hi` guard performs. -/
+still live, the lanes of the region that is running -- empty unless one is -- and the
+state.  `done` is normal termination, `err` is a fault, and `trap` is the defined
+abort a failed `lo <= hi` guard performs. -/
 inductive Cfg where
-  | run (code : List Stmt) (tasks : List Task) (st : State)
+  | run (code : List Stmt) (tasks lanes : List Task) (st : State)
   | done (st : State)
   | trap
   | err (e : Err)
@@ -620,98 +888,103 @@ thread, before the call is made or the task is started. -/
 def argsGuarded (ρ : Valuation) (args : List Borrow) : Bool :=
   args.all fun x => x.1.guard ρ
 
-/-- One step of the spawner. -/
+/-- One step of the spawner.  It runs only while no region is live, so every
+configuration it produces has no lanes -- except the one a region starts, which forks
+one lane per index below `n` and leaves the spawner blocked until they are done. -/
 def stepStmt (ρ : Valuation) (s : Stmt) (rest : List Stmt) (tasks : List Task)
     (st : State) : List Cfg :=
   match s with
   | .alloc x =>
-      match raceErr ρ tasks (.whole x, .rw) with
+      match raceErr ρ tasks (.whole ⟨x, []⟩, .rw) with
       | some e => [.err e]
       | none =>
           match reallocAt x st with
           | .error e => [.err e]
-          | .ok st' => [.run rest tasks st']
+          | .ok st' => [.run rest tasks [] st']
   | .mkScalar x =>
-      match raceErr ρ tasks (.whole x, .rw) with
+      match raceErr ρ tasks (.whole ⟨x, []⟩, .rw) with
       | some e => [.err e]
       | none =>
           match bindAt x .scalar st with
           | .error e => [.err e]
-          | .ok st' => [.run rest tasks st']
+          | .ok st' => [.run rest tasks [] st']
   | .copy y x =>
-      match accessErr ρ tasks st (.whole x, .ro) with
+      match accessErr ρ tasks st (.whole ⟨x, []⟩, .ro) with
       | some e => [.err e]
       | none =>
-          match raceErr ρ tasks (.whole y, .rw) with
+          match raceErr ρ tasks (.whole ⟨y, []⟩, .rw) with
           | some e => [.err e]
           | none =>
               match bindAt y (st.env x) st with
               | .error e => [.err e]
-              | .ok st' => [.run rest tasks st']
+              | .ok st' => [.run rest tasks [] st']
   | .move y x =>
-      match accessErr ρ tasks st (.whole x, .rw) with
+      match accessErr ρ tasks st (.whole ⟨x, []⟩, .rw) with
       | some e => [.err e]
       | none =>
-          match raceErr ρ tasks (.whole y, .rw) with
+          match raceErr ρ tasks (.whole ⟨y, []⟩, .rw) with
           | some e => [.err e]
           | none =>
               match bindAt y (st.env x) st with
               | .error e => [.err e]
-              | .ok st' => [.run rest tasks { st' with env := upd st'.env x .moved }]
+              | .ok st' => [.run rest tasks [] { st' with env := upd st'.env x .moved }]
   | .drop x =>
-      match accessErr ρ tasks st (.whole x, .rw) with
+      match accessErr ρ tasks st (.whole ⟨x, []⟩, .rw) with
       | some e => [.err e]
       | none =>
           match release x st with
           | .error e => [.err e]
-          | .ok st' => [.run rest tasks st']
+          | .ok st' => [.run rest tasks [] st']
   | .call args =>
       if !argsGuarded ρ args then [.trap]
       else if !pairsOkAt ρ args then [.err .aliasedArgs]
       else
         match accessAll ρ tasks st args with
         | some e => [.err e]
-        | none => [.run rest tasks st]
+        | none => [.run rest tasks [] st]
   | .spawn t args =>
       if !argsGuarded ρ args then [.trap]
       else if !pairsOkAt ρ args then [.err .aliasedArgs]
       else
         match accessAll ρ tasks st args with
         | some e => [.err e]
-        | none => [.run rest ((t, args) :: tasks) st]
-  | .wait t => [.run rest (tasks.filter fun T => !(T.1 == t)) st]
-  | .ite thn els => [.run (thn ++ rest) tasks st, .run (els ++ rest) tasks st]
+        | none => [.run rest ((t, args) :: tasks) [] st]
+  | .wait t => [.run rest (tasks.filter fun T => !(T.1 == t)) [] st]
+  | .ite thn els => [.run (thn ++ rest) tasks [] st, .run (els ++ rest) tasks [] st]
+  | .parallel nb body => [.run rest tasks (lanesOf (nb.eval ρ) body) st]
 
-/-- What a task may do through a borrow it holds `rw`: replace the cell, if what it
+/-- What a thread may do through a borrow it holds `rw`: replace the cell, if what it
 holds is the whole owner and the owner holds a cell -- that is what `swap` through a
 lent owner does -- and otherwise nothing this model can see, since a view cannot
 replace the storage it views and values are not modelled. -/
-def taskWrite (code : List Stmt) (tasks : List Task) (r : Place)
+def taskWrite (code : List Stmt) (tasks lanes : List Task) (r : Place)
     (st : State) : List Cfg :=
   match r with
-  | .whole p =>
+  | .whole ⟨p, []⟩ =>
       match st.env p with
       | .owner _ =>
           match reallocAt p st with
           | .error e => [.err e]
-          | .ok st' => [.run code tasks st, .run code tasks st']
-      | .nil => [.run code tasks st]
-      | .moved => [.run code tasks st]
-      | .scalar => [.run code tasks st]
-  | .hdr _ => [.run code tasks st]
-  | .elems _ => [.run code tasks st]
-  | .part _ _ _ => [.run code tasks st]
+          | .ok st' => [.run code tasks lanes st, .run code tasks lanes st']
+      | .nil => [.run code tasks lanes st]
+      | .moved => [.run code tasks lanes st]
+      | .scalar => [.run code tasks lanes st]
+  | .whole ⟨_, _ :: _⟩ => [.run code tasks lanes st]
+  | .hdr _ => [.run code tasks lanes st]
+  | .elems _ => [.run code tasks lanes st]
+  | .part _ _ _ => [.run code tasks lanes st]
 
-/-- One step of one live task: any borrow of its footprint, at any time. -/
-def stepTask (ρ : Valuation) (code : List Stmt) (tasks : List Task) (T : Task)
+/-- One step of one live thread -- a task or a lane, which the machine treats alike:
+any borrow of its footprint, at any time, racing against every other live thread. -/
+def stepThread (ρ : Valuation) (code : List Stmt) (tasks lanes : List Task) (T : Task)
     (others : List Task) (st : State) : List Cfg :=
   T.2.flatMap fun x =>
     match accessErr ρ others st x with
     | some e => [.err e]
     | none =>
         match x.2 with
-        | .rw => taskWrite code tasks x.1 st
-        | .ro => [.run code tasks st]
+        | .rw => taskWrite code tasks lanes x.1 st
+        | .ro => [.run code tasks lanes st]
 
 /-- What the spawner does next: the next statement, or -- at the end of the body --
 the leak check and the implicit release of the scope. -/
@@ -727,22 +1000,32 @@ def stepMain (ρ : Valuation) (scope : List Var) (code : List Stmt) (tasks : Lis
           | .error e => [.err e]
   | s :: rest => stepStmt ρ s rest tasks st
 
-/-- Every successor of a configuration: one spawner step interleaved with every
-access every live task might make.  `done`, `trap` and `err` are final. -/
+/-- The main thread's own step, which a running region BLOCKS: `parallel` completes
+before the next statement, so while any lane is live the only thing the main thread
+can do is end the region.  Tasks spawned earlier keep running throughout. -/
+def stepHost (ρ : Valuation) (scope : List Var) (code : List Stmt) (tasks lanes : List Task)
+    (st : State) : List Cfg :=
+  match lanes with
+  | [] => stepMain ρ scope code tasks st
+  | _ :: _ => [.run code tasks [] st]
+
+/-- Every successor of a configuration: one main-thread step interleaved with every
+access every live thread -- task or lane -- might make.  `done`, `trap` and `err` are
+final. -/
 def succ (ρ : Valuation) (scope : List Var) : Cfg → List Cfg
   | .done _ => []
   | .trap => []
   | .err _ => []
-  | .run code tasks st =>
-      stepMain ρ scope code tasks st
-      ++ (splits tasks).flatMap fun x => stepTask ρ code tasks x.1 x.2 st
+  | .run code tasks lanes st =>
+      stepHost ρ scope code tasks lanes st
+      ++ (splits (tasks ++ lanes)).flatMap fun x => stepThread ρ code tasks lanes x.1 x.2 st
 
 /-- The state a scope starts in: nothing bound, nothing allocated. -/
 def State.start : State :=
   { env := fun _ => .nil, live := fun _ => false, next := 0, frees := fun _ => 0 }
 
 /-- The configuration a program starts in. -/
-def Cfg.start (p : Program) : Cfg := .run p.body [] State.start
+def Cfg.start (p : Program) : Cfg := .run p.body [] [] State.start
 
 /-- Reachability under the interleaving semantics, at one valuation of the
 immutable bounds. -/
@@ -1322,28 +1605,33 @@ performs the guard before it starts the task. -/
 def TasksGuarded (ρ : Valuation) (tasks : List Task) : Prop :=
   ∀ T ∈ tasks, ∀ y ∈ T.2, y.1.guard ρ = true
 
-/-- Two tasks that hold nothing in common that either writes. -/
-def NoRacePair (ρ : Valuation) (T U : Task) : Prop :=
-  ∀ x ∈ T.2, ∀ y ∈ U.2, races ρ x y = false
-
-theorem noRacePair_symm (ρ : Valuation) (T U : Task) (h : NoRacePair ρ T U) :
-    NoRacePair ρ U T := by
-  intro y hy x hx
-  rw [races_symm]; exact h x hx y hy
-
-/-- No two live tasks race with each other. -/
+/-- No two live threads race with each other. -/
 def TasksOk (ρ : Valuation) (tasks : List Task) : Prop := tasks.Pairwise (NoRacePair ρ)
 
-/-- The invariant an accepted program keeps.  A trap satisfies it vacuously: it is
-a defined abort, so nothing is claimed about the cells it leaves behind. -/
+/-- The invariant an accepted program keeps.  The three clauses about live threads
+range over the tasks AND the lanes together, which is the single statement that no
+two of them conflict -- two tasks, a task and a lane, or two lanes.  A trap satisfies
+the invariant vacuously: it is a defined abort, so nothing is claimed about the cells
+it leaves behind. -/
 def Ok (ρ : Valuation) (scope : List Var) : Cfg → Prop
-  | .run code tasks st =>
-      MemOk st scope ∧ TasksOk ρ tasks ∧ TasksLive tasks st ∧ TasksGuarded ρ tasks ∧
+  | .run code tasks lanes st =>
+      MemOk st scope ∧ TasksOk ρ (tasks ++ lanes) ∧ TasksLive (tasks ++ lanes) st ∧
+      TasksGuarded ρ (tasks ++ lanes) ∧
       ∃ c, c.scope = scope ∧ Agree c st tasks ∧
         ∃ d, checkBlock c code = some d ∧ d.leases = []
   | .done st => (∀ a, st.live a = false) ∧ (∀ a, a < st.next → st.frees a = 1)
   | .trap => True
   | .err _ => False
+
+/-- The invariant of a configuration with no region running, spelled without the
+empty tail: this is the shape every straight-line step produces. -/
+theorem Ok_run_nil {ρ : Valuation} {scope : List Var} {code : List Stmt} {tasks : List Task}
+    {st : State} :
+    Ok ρ scope (.run code tasks [] st) ↔
+      (MemOk st scope ∧ TasksOk ρ tasks ∧ TasksLive tasks st ∧ TasksGuarded ρ tasks ∧
+        ∃ c, c.scope = scope ∧ Agree c st tasks ∧
+          ∃ d, checkBlock c code = some d ∧ d.leases = []) := by
+  simp only [Ok, List.append_nil]
 
 /-- The guards of everything in play for one access: the lent parts by the
 invariant, and the accessed place itself by the guard the machine just ran. -/
@@ -1399,12 +1687,12 @@ task holds any place of that local, so nothing races with the write and nothing 
 task holds moves under it. -/
 theorem write_ok {ρ : Valuation} {c : CState} {tasks : List Task} {x : Var}
     (hleases : c.leases = tasks) (hg : TasksGuarded ρ tasks) (h : c.mayWrite x = true) :
-    heldRace ρ tasks (.whole x, Mode.rw) = false ∧
+    heldRace ρ tasks (.whole ⟨x, []⟩, Mode.rw) = false ∧
       ∀ T ∈ tasks, ∀ y ∈ T.2, y.1.base ≠ x := by
-  have hfalse : heldConflict (c.inPlay (.whole x, Mode.rw)) c.leases (.whole x, Mode.rw)
-      = false := by
+  have hfalse : heldConflict (c.inPlay (.whole ⟨x, []⟩, Mode.rw)) c.leases
+      (.whole ⟨x, []⟩, Mode.rw) = false := by
     simpa [CState.mayWrite, CState.mayAccess] using h
-  have hguards := inPlay_guarded (x := (Place.whole x, Mode.rw)) hleases hg rfl
+  have hguards := inPlay_guarded (x := (Place.whole ⟨x, []⟩, Mode.rw)) hleases hg rfl
   rw [hleases] at hfalse
   exact ⟨heldRace_of_heldConflict hguards hfalse, untouched_of_write_ok hfalse⟩
 
@@ -1414,11 +1702,23 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
   | done st => exact absurd hs (by simp [succ])
   | trap => exact absurd hs (by simp [succ])
   | err e => exact absurd hs (by simp [succ])
-  | run code tasks st =>
+  | run code tasks lanes st =>
   simp only [Ok] at h
   obtain ⟨hmem, htok, htlive, htg, c, hscope, hag, d, hchk, hdl⟩ := h
   rcases List.mem_append.mp hs with hmain | htask
-  · -- the spawner steps
+  · -- the main thread steps, which a running region blocks
+    cases lanes with
+    | cons L others =>
+        -- the region completes; the lanes are gone and the spawner may go on
+        simp only [stepHost, List.mem_singleton] at hmain
+        rw [hmain]
+        refine Ok_run_nil.mpr ⟨hmem, (List.pairwise_append.mp htok).1, ?_, ?_,
+          c, hscope, hag, d, hchk, hdl⟩
+        · intro T hT z hz; exact htlive T (List.mem_append_left _ hT) z hz
+        · intro T hT z hz; exact htg T (List.mem_append_left _ hT) z hz
+    | nil =>
+    simp only [stepHost] at hmain
+    rw [List.append_nil] at htok htlive htg
     cases code with
     | nil =>
         have hcd : c = d := Option.some.inj hchk
@@ -1451,7 +1751,7 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
             simp only [stepStmt, raceErr_none hw, hre, List.mem_singleton] at hmain
             have hkeep : ∀ p, p ≠ x → st'.env p = st.env p := fun p hp => reallocAt_env_ne hre hp
             rw [hmain]
-            refine ⟨memOk_reallocAt hmem hx hre, htok, ?_, htg, _, hsc1,
+            refine Ok_run_nil.mpr ⟨memOk_reallocAt hmem hx hre, htok, ?_, htg, _, hsc1,
               ⟨?_, ?_, hag.leases_ok⟩, d, hchk, hdl⟩
             · intro T hT y hy
               rw [hkeep y.1.base (huntouched T hT y hy)]; exact htlive T hT y hy
@@ -1477,8 +1777,8 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
             simp only [stepStmt, raceErr_none hw, hbe, List.mem_singleton] at hmain
             have hkeep : ∀ p, p ≠ x → st'.env p = st.env p := fun p hp => bindAt_env_ne hbe hp
             rw [hmain]
-            refine ⟨memOk_bindAt hmem (fun a hc => Val.noConfusion hc) hbe, htok, ?_, htg,
-              _, hsc1, ⟨?_, ?_, hag.leases_ok⟩, d, hchk, hdl⟩
+            refine Ok_run_nil.mpr ⟨memOk_bindAt hmem (fun a hc => Val.noConfusion hc) hbe, htok,
+              ?_, htg, _, hsc1, ⟨?_, ?_, hag.leases_ok⟩, d, hchk, hdl⟩
             · intro T hT y hy
               rw [hkeep y.1.base (huntouched T hT y hy)]; exact htlive T hT y hy
             · intro p hp
@@ -1500,10 +1800,10 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
               beq_eq_false_iff_ne] at hg
             have hyx : y ≠ x := hg.1.1.1.2
             have hxs : st.env x = Val.scalar := hag.scalars_ok x hg.1.1.2
-            have hro : heldRace ρ tasks (.whole x, Mode.ro) = false :=
+            have hro : heldRace ρ tasks (.whole ⟨x, []⟩, Mode.ro) = false :=
               heldRace_none hag.leases_ok htg rfl hg.1.2
             obtain ⟨hwy, huntouched⟩ := write_ok hag.leases_ok htg hg.2
-            have haccx : accessErr ρ tasks st (.whole x, Mode.ro) = none :=
+            have haccx : accessErr ρ tasks st (.whole ⟨x, []⟩, Mode.ro) = none :=
               accessErr_none (raceErr_none hro)
                 (memErr_none hmem
                   (by show st.env x ≠ Val.nil; rw [hxs]; exact fun hc => Val.noConfusion hc)
@@ -1512,8 +1812,9 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
             simp only [stepStmt, haccx, raceErr_none hwy, hbe, List.mem_singleton] at hmain
             have hkeep : ∀ p, p ≠ y → st'.env p = st.env p := fun p hp => bindAt_env_ne hbe hp
             rw [hmain]
-            refine ⟨memOk_bindAt hmem (fun a hc => by rw [hxs] at hc; exact Val.noConfusion hc) hbe,
-              htok, ?_, htg, _, hsc1, ⟨?_, ?_, hag.leases_ok⟩, d, hchk, hdl⟩
+            refine Ok_run_nil.mpr
+              ⟨memOk_bindAt hmem (fun a hc => by rw [hxs] at hc; exact Val.noConfusion hc) hbe,
+               htok, ?_, htg, _, hsc1, ⟨?_, ?_, hag.leases_ok⟩, d, hchk, hdl⟩
             · intro T hT z hz
               rw [hkeep z.1.base (huntouched T hT z hz)]; exact htlive T hT z hz
             · intro p hp
@@ -1538,7 +1839,7 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
             obtain ⟨a, hxa⟩ := hag.owners_ok x hg.1.1.2
             obtain ⟨hwx, hux⟩ := write_ok hag.leases_ok htg hg.1.2
             obtain ⟨hwy, huy⟩ := write_ok hag.leases_ok htg hg.2
-            have haccx : accessErr ρ tasks st (.whole x, Mode.rw) = none :=
+            have haccx : accessErr ρ tasks st (.whole ⟨x, []⟩, Mode.rw) = none :=
               accessErr_none (raceErr_none hwx)
                 (memErr_none hmem
                   (by show st.env x ≠ Val.nil; rw [hxa]; exact fun hc => Val.noConfusion hc)
@@ -1552,7 +1853,7 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
               intro p hpx hpy
               rw [upd_other hpx, bindAt_env_ne hbe hpy]
             rw [hmain]
-            refine ⟨memOk_move hmem hy hyx hxa hbe, htok, ?_, htg, _, hsc1,
+            refine Ok_run_nil.mpr ⟨memOk_move hmem hy hyx hxa hbe, htok, ?_, htg, _, hsc1,
               ⟨?_, ?_, hag.leases_ok⟩, d, hchk, hdl⟩
             · intro T hT z hz
               have hzz : (upd st1.env x Val.moved) z.1.base = st.env z.1.base :=
@@ -1586,7 +1887,7 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
             simp only [guardOf, Bool.and_eq_true, contains_iff_mem] at hg
             obtain ⟨a, hxa⟩ := hag.owners_ok x hg.1
             obtain ⟨hw, huntouched⟩ := write_ok hag.leases_ok htg hg.2
-            have haccx : accessErr ρ tasks st (.whole x, Mode.rw) = none :=
+            have haccx : accessErr ρ tasks st (.whole ⟨x, []⟩, Mode.rw) = none :=
               accessErr_none (raceErr_none hw)
                 (memErr_none hmem
                   (by show st.env x ≠ Val.nil; rw [hxa]; exact fun hc => Val.noConfusion hc)
@@ -1595,7 +1896,7 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
             simp only [stepStmt, haccx, hre, List.mem_singleton] at hmain
             have hkeep : ∀ p, p ≠ x → st'.env p = st.env p := fun p hp => release_env_ne hre hp
             rw [hmain]
-            refine ⟨memOk_release hmem hre, htok, ?_, htg, _, hsc1,
+            refine Ok_run_nil.mpr ⟨memOk_release hmem hre, htok, ?_, htg, _, hsc1,
               ⟨?_, ?_, hag.leases_ok⟩, d, hchk, hdl⟩
             · intro T hT z hz
               rw [hkeep z.1.base (huntouched T hT z hz)]; exact htlive T hT z hz
@@ -1640,7 +1941,7 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
                 simp only [stepStmt, hguard, hpairs, accessAll_none args hacc] at hmain
                 simp at hmain
                 rw [hmain]
-                exact ⟨hmem, htok, htlive, htg, _, hsc1,
+                exact Ok_run_nil.mpr ⟨hmem, htok, htlive, htg, _, hsc1,
                   ⟨hag.scalars_ok, hag.owners_ok, hag.leases_ok⟩, d, hchk, hdl⟩
         · exact absurd hc1 (by simp)
     | spawn t args =>
@@ -1676,8 +1977,8 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
                 simp only [stepStmt, hguard, hpairs, accessAll_none args hacc] at hmain
                 simp at hmain
                 rw [hmain]
-                refine ⟨hmem, ?_, ?_, ?_, _, hsc1, ⟨hag.scalars_ok, hag.owners_ok, ?_⟩,
-                  d, hchk, hdl⟩
+                refine Ok_run_nil.mpr ⟨hmem, ?_, ?_, ?_, _, hsc1,
+                  ⟨hag.scalars_ok, hag.owners_ok, ?_⟩, d, hchk, hdl⟩
                 · refine List.pairwise_cons.mpr ⟨?_, htok⟩
                   intro U hU z hz w hw
                   exact heldRace_eq_false_iff.mp (hfree z hz) U hU w hw
@@ -1701,7 +2002,7 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
             subst hc1v
             simp only [stepStmt, List.mem_singleton] at hmain
             rw [hmain]
-            refine ⟨hmem, List.Pairwise.sublist List.filter_sublist htok, ?_, ?_,
+            refine Ok_run_nil.mpr ⟨hmem, List.Pairwise.sublist List.filter_sublist htok, ?_, ?_,
               _, hsc1, ⟨hag.scalars_ok, hag.owners_ok, ?_⟩, d, hchk, hdl⟩
             · intro T hT z hz
               exact htlive T (List.mem_filter.mp hT).1 z hz
@@ -1734,10 +2035,10 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
                 simp only [stepStmt, List.mem_cons, List.not_mem_nil, or_false] at hmain
                 have hbranch : ∀ (a : CState) (br : List Stmt), Le c1 a →
                     checkBlock c br = some a →
-                    Ok ρ scope (.run (br ++ rest) tasks st) := by
+                    Ok ρ scope (.run (br ++ rest) tasks [] st) := by
                   intro a br hle hbr
                   obtain ⟨d', hd', hled⟩ := checkBlock_weaken hle hchk
-                  exact ⟨hmem, htok, htlive, htg, c, hscope, hag, d',
+                  exact Ok_run_nil.mpr ⟨hmem, htok, htlive, htg, c, hscope, hag, d',
                     by rw [checkBlock_append, hbr]; exact hd',
                     by rw [← hled.leases_eq]; exact hdl⟩
                 rcases hmain with hm | hm
@@ -1745,11 +2046,45 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
                 · rw [hm]; exact hbranch a2 els hle2 h2
             · exact absurd hc1 (by simp)
         · exact absurd hc1 (by simp)
-  · -- a task steps
+    | parallel nb body =>
+        rw [checkStmt_parallel] at hc1
+        split at hc1
+        · next hg =>
+            have hc1v := Option.some.inj hc1
+            subst hc1v
+            simp only [guardOf, Bool.and_eq_true, List.all_eq_true] at hg
+            simp only [stepStmt, List.mem_singleton] at hmain
+            have hbody : ∀ a ∈ body, c.livePlace a.root.var = true ∧ c.mayAccess a.lease = true :=
+              hg.2
+            have hfree : ∀ a ∈ body, heldRace ρ tasks a.lease = false := fun a ha =>
+              heldRace_none hag.leases_ok htg (Touch.lease_guard ρ a) (hbody a ha).2
+            rw [hmain]
+            refine ⟨hmem, ?_, ?_, ?_, _, hsc1,
+              ⟨hag.scalars_ok, hag.owners_ok, hag.leases_ok⟩, d, hchk, hdl⟩
+            · refine List.pairwise_append.mpr ⟨htok, lanesOf_pairwise ρ _ hg.1, ?_⟩
+              intro T hT L hL x hx w hw
+              obtain ⟨a, ha, hae⟩ := mem_lanesOf _ hL hw
+              rw [hae, races_symm]
+              exact races_borrow_of_lease
+                (heldRace_eq_false_iff.mp (hfree a ha) T hT x hx)
+            · intro T hT w hw
+              rcases List.mem_append.mp hT with h1 | h2
+              · exact htlive T h1 w hw
+              · obtain ⟨a, ha, hae⟩ := mem_lanesOf _ h2 hw
+                rw [hae, Touch.borrow_base]
+                exact hag.live_of_livePlace (hbody a ha).1
+            · intro T hT w hw
+              rcases List.mem_append.mp hT with h1 | h2
+              · exact htg T h1 w hw
+              · obtain ⟨a, ha, hae⟩ := mem_lanesOf _ h2 hw
+                rw [hae]
+                exact Touch.borrow_guard ρ a T.1
+        · exact absurd hc1 (by simp)
+  · -- one live thread steps: a task, or a lane of the region that is running
     simp only [List.mem_flatMap] at htask
     obtain ⟨y, hy, hcfg⟩ := htask
     obtain ⟨hT, hothers⟩ := splits_mem hy
-    simp only [stepTask, List.mem_flatMap] at hcfg
+    simp only [stepThread, List.mem_flatMap] at hcfg
     obtain ⟨z, hz, hcfg2⟩ := hcfg
     have hnc : heldRace ρ y.2 z = false := by
       rw [heldRace_eq_false_iff]
@@ -1759,7 +2094,7 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
     have hacc : accessErr ρ y.2 st z = none :=
       accessErr_none (raceErr_none hnc) (memErr_none hmem hl1 hl2)
     simp only [hacc] at hcfg2
-    have hsame : Ok ρ scope (Cfg.run code tasks st) :=
+    have hsame : Ok ρ scope (Cfg.run code tasks lanes st) :=
       ⟨hmem, htok, htlive, htg, c, hscope, hag, d, hchk, hdl⟩
     cases hzm : z.2 with
     | ro =>
@@ -1770,7 +2105,7 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
         unfold taskWrite at hcfg2
         split at hcfg2
         · next p hp =>
-            -- the borrow is the whole owner: the task may replace the cell
+            -- the borrow is the whole owner: the thread may replace the cell
             rw [hp] at hl1 hl2
             split at hcfg2
             · next a hea =>
@@ -1800,12 +2135,14 @@ theorem Ok_succ {ρ : Valuation} {scope : List Var} {cfg cfg' : Cfg} (h : Ok ρ 
                     · rw [hqp]; exact reallocAt_env_self hre
                     · rw [hkeep q hqp]; exact hag.owners_ok q hq
             · next hea =>
-                exact absurd (show st.env (Place.whole p).base = Val.nil from hea) hl1
+                exact absurd (show st.env (Place.whole ⟨p, []⟩).base = Val.nil from hea) hl1
             · next hea =>
-                exact absurd (show st.env (Place.whole p).base = Val.moved from hea) hl2
+                exact absurd (show st.env (Place.whole ⟨p, []⟩).base = Val.moved from hea) hl2
             · next hea =>
                 simp only [List.mem_singleton] at hcfg2
                 rw [hcfg2]; exact hsame
+        · simp only [List.mem_singleton] at hcfg2
+          rw [hcfg2]; exact hsame
         · simp only [List.mem_singleton] at hcfg2
           rw [hcfg2]; exact hsame
         · simp only [List.mem_singleton] at hcfg2
@@ -1896,6 +2233,18 @@ theorem accepted_no_aliased_args {p : Program} (hp : accepts p = true) {ρ : Val
     {cfg : Cfg} (hr : Reach ρ p.scope (Cfg.start p) cfg) : cfg ≠ Cfg.err .aliasedArgs :=
   accepted_no_fault hp hr _
 
+/-- **The live threads never conflict.**  In every reachable configuration of an
+accepted program, the tasks and the lanes of a running region are pairwise
+compatible: no two of them -- two tasks, a task and a lane, or two lanes -- hold
+borrows that touch a common location with a write among them, under every
+interleaving and every valuation.  `accepted_race_free` is what happens when one of
+them tries; this is the standing property that makes it impossible. -/
+theorem accepted_threads_disjoint {p : Program} (hp : accepts p = true) {ρ : Valuation}
+    {code : List Stmt} {tasks lanes : List Task} {st : State}
+    (hr : Reach ρ p.scope (Cfg.start p) (.run code tasks lanes st)) :
+    (tasks ++ lanes).Pairwise (NoRacePair ρ) :=
+  (Ok_reach hr (Ok_start hp)).2.1
+
 /-- **Every allocation is released exactly once.**  On normal termination nothing
 is still live and every cell the run ever allocated has been released once.  A run
 that traps makes no such claim: the process aborted. -/
@@ -1924,11 +2273,18 @@ theorem stepMain_ne_nil (ρ : Valuation) (scope : List Var) (code : List Stmt)
     · split <;> exact List.cons_ne_nil _ _
   · exact stepStmt_ne_nil ρ _ _ tasks st
 
+theorem stepHost_ne_nil (ρ : Valuation) (scope : List Var) (code : List Stmt)
+    (tasks lanes : List Task) (st : State) : stepHost ρ scope code tasks lanes st ≠ [] := by
+  unfold stepHost
+  split
+  · exact stepMain_ne_nil ρ scope code tasks st
+  · exact List.cons_ne_nil _ _
+
 theorem succ_run_ne_nil (ρ : Valuation) (scope : List Var) (code : List Stmt)
-    (tasks : List Task) (st : State) : succ ρ scope (.run code tasks st) ≠ [] := by
-  show (stepMain ρ scope code tasks st ++ _) ≠ []
-  cases hm : stepMain ρ scope code tasks st with
-  | nil => exact absurd hm (stepMain_ne_nil ρ scope code tasks st)
+    (tasks lanes : List Task) (st : State) : succ ρ scope (.run code tasks lanes st) ≠ [] := by
+  show (stepHost ρ scope code tasks lanes st ++ _) ≠ []
+  cases hm : stepHost ρ scope code tasks lanes st with
+  | nil => exact absurd hm (stepHost_ne_nil ρ scope code tasks lanes st)
   | cons a l => rw [List.cons_append]; exact List.cons_ne_nil _ _
 
 /-- Progress: an accepted program never gets stuck.  Every reachable configuration
@@ -1947,14 +2303,17 @@ theorem accepted_progress : Progress := by
   | done st => exact Or.inl ⟨st, rfl⟩
   | trap => exact Or.inr (Or.inl rfl)
   | err e => exact absurd rfl (accepted_no_fault hp hr e)
-  | run code tasks st => exact Or.inr (Or.inr (succ_run_ne_nil ρ p.scope code tasks st))
+  | run code tasks lanes st =>
+      exact Or.inr (Or.inr (succ_run_ne_nil ρ p.scope code tasks lanes st))
 
 /-! ## Regression: the checker on the programs the Python tests pin
 
-Local 0 is `data`, 1 and 2 are further locals, 3 is a second buffer; tickets are 0,
-1 and 2; the bound names 0, 1 and 2 are the immutable `a`, `b` and `n` of the source
-programs.  Each line names the CAIRN program in `tests/soundness/test_soundness.py` or
-`tests/soundness/test_concurrency.py` that it encodes. -/
+Local 0 is `data`, 1 and 2 are further locals, 3 is a second buffer, 4 is a record
+with the fields 0, 1 and 2 (`box.a`, `box.b`, `box.xs`); tickets are 0, 1 and 2; the
+bound names 0, 1 and 2 are the immutable `a`, `b` and `n` of the source programs.
+Each line names the CAIRN program in `tests/soundness/test_soundness.py` or
+`tests/soundness/test_concurrency.py` that it encodes, and every classification below was
+re-checked against the Python checker on that source. -/
 
 namespace Regress
 
@@ -1965,6 +2324,17 @@ def a : Bound := .nm 0
 def b : Bound := .nm 1
 def n : Bound := .nm 2
 
+/-- The roots the programs name: three plain locals, a second buffer, and a record
+local with three fields. -/
+def data : Root := ⟨0, []⟩
+def snd : Root := ⟨1, []⟩
+def thd : Root := ⟨2, []⟩
+def other : Root := ⟨3, []⟩
+def box : Root := ⟨4, []⟩
+def boxA : Root := ⟨4, [0]⟩
+def boxB : Root := ⟨4, [1]⟩
+def boxXs : Root := ⟨4, [2]⟩
+
 /-- `let mut b = Buf[u64](n); let y = b;` -- accepted. -/
 def moveOnce : Program := ⟨[0, 1], [alloc 0, move 1 0]⟩
 
@@ -1973,74 +2343,75 @@ def doubleMove : Program := ⟨[0, 1, 2], [alloc 0, move 1 0, move 2 0]⟩
 
 /-- `let t = spawn bump(c, 4); let seen = c;` -- E-LEASED. -/
 def leasedRead : Program :=
-  ⟨[0], [alloc 0, spawn 0 [(.whole 0, Mode.rw)], call [(.whole 0, Mode.ro)], wait 0]⟩
+  ⟨[0], [alloc 0, spawn 0 [(.whole data, Mode.rw)], call [(.whole data, Mode.ro)], wait 0]⟩
 
 /-- `let t = spawn sum(len(data), data); let x = data[0]; ...` -- accepted:
 read-only lending is shared freely. -/
 def sharedRead : Program :=
-  ⟨[0], [alloc 0, spawn 0 [(.elems 0, Mode.ro)], call [(.elems 0, Mode.ro)], wait 0]⟩
+  ⟨[0], [alloc 0, spawn 0 [(.elems data, Mode.ro)], call [(.elems data, Mode.ro)], wait 0]⟩
 
 /-- `let t = spawn sum(len(data), data); let moved = data;` -- E-LEASED:
 a move beside a view the task still holds. -/
 def moveBesideView : Program :=
-  ⟨[0, 1], [alloc 0, spawn 0 [(.elems 0, Mode.ro)], move 1 0, wait 0]⟩
+  ⟨[0, 1], [alloc 0, spawn 0 [(.elems data, Mode.ro)], move 1 0, wait 0]⟩
 
 /-- `let t = spawn sum(len(data), data); return 0;` -- E-LINEAR-LEAK. -/
-def unawaitedTicket : Program := ⟨[0], [alloc 0, spawn 0 [(.elems 0, Mode.rw)]]⟩
+def unawaitedTicket : Program := ⟨[0], [alloc 0, spawn 0 [(.elems data, Mode.rw)]]⟩
 
 /-- `f(len(b), b, b)` -- E-ALIAS: one call writing and reading the same place. -/
-def aliasedCall : Program := ⟨[0], [alloc 0, call [(.elems 0, Mode.rw), (.elems 0, Mode.ro)]]⟩
+def aliasedCall : Program :=
+  ⟨[0], [alloc 0, call [(.elems data, Mode.rw), (.elems data, Mode.ro)]]⟩
 
 /-- `if ... { let y = b; } use(b);` -- the join kills a place moved on one path. -/
 def movedOnOnePath : Program :=
-  ⟨[0, 1], [alloc 0, ite [move 1 0] [], call [(.whole 0, Mode.ro)]]⟩
+  ⟨[0, 1], [alloc 0, ite [move 1 0] [], call [(.whole data, Mode.ro)]]⟩
 
 /-- Moving on both paths is fine, and the target is live after the join. -/
 def movedOnBothPaths : Program :=
-  ⟨[0, 1], [alloc 0, ite [move 1 0] [move 1 0], call [(.whole 1, Mode.ro)]]⟩
+  ⟨[0, 1], [alloc 0, ite [move 1 0] [move 1 0], call [(.whole snd, Mode.ro)]]⟩
 
 /-- `let t = spawn sum(...); if n == 8 { wait(t); }` -- E-LINEAR-BRANCH:
 the branches disagree about which tickets are live. -/
 def ticketsDisagree : Program :=
-  ⟨[0], [alloc 0, ite [spawn 0 [(.elems 0, Mode.ro)]] [], wait 0]⟩
+  ⟨[0], [alloc 0, ite [spawn 0 [(.elems data, Mode.ro)]] [], wait 0]⟩
 
 /-- Two tasks writing two whole buffers -- accepted. -/
 def twoOwners : Program :=
-  ⟨[0, 3], [alloc 0, alloc 3, spawn 0 [(.elems 0, Mode.rw)], spawn 1 [(.elems 3, Mode.rw)],
-            wait 0, wait 1]⟩
+  ⟨[0, 3], [alloc 0, alloc 3, spawn 0 [(.elems data, Mode.rw)],
+            spawn 1 [(.elems other, Mode.rw)], wait 0, wait 1]⟩
 
 /-- `let a = spawn fill(mid, data[0..mid], 0); let b = spawn fill(n - mid, data[mid..n], 7);`
 -- accepted: two parts of one buffer that visibly meet at `mid`
 (`test_visibly_disjoint_parts_with_stable_bounds_are_still_lent_together`). -/
 def disjointSplit : Program :=
-  ⟨[0], [alloc 0, spawn 0 [(.part 0 (.lit 0) a, Mode.rw)],
-         spawn 1 [(.part 0 a n, Mode.rw)], wait 0, wait 1]⟩
+  ⟨[0], [alloc 0, spawn 0 [(.part data (.lit 0) a, Mode.rw)],
+         spawn 1 [(.part data a n, Mode.rw)], wait 0, wait 1]⟩
 
 /-- The K-way split `checking.py:overlaps` licenses: `d[0..a]`, `d[a..b]`, `d[b..n]`
 are pairwise disjoint, the last pair only by chaining `a <= b` through the middle
 part.  Accepted. -/
 def kwaySplit : Program :=
-  ⟨[0], [alloc 0, spawn 0 [(.part 0 (.lit 0) a, Mode.rw)],
-         spawn 1 [(.part 0 a b, Mode.rw)], spawn 2 [(.part 0 b n, Mode.rw)],
+  ⟨[0], [alloc 0, spawn 0 [(.part data (.lit 0) a, Mode.rw)],
+         spawn 1 [(.part data a b, Mode.rw)], spawn 2 [(.part data b n, Mode.rw)],
          wait 0, wait 1, wait 2]⟩
 
 /-- The same two ends with nothing lent between them to order their bounds -- E-LEASED
 (`tests/soundness/test_soundness.py`: "two parts with nothing lent between them to order their
 bounds"). -/
 def partsWithoutMiddle : Program :=
-  ⟨[0], [alloc 0, spawn 0 [(.part 0 (.lit 0) a, Mode.rw)],
-         spawn 1 [(.part 0 b n, Mode.rw)], wait 0, wait 1]⟩
+  ⟨[0], [alloc 0, spawn 0 [(.part data (.lit 0) a, Mode.rw)],
+         spawn 1 [(.part data b n, Mode.rw)], wait 0, wait 1]⟩
 
 /-- Two parts of one array that really overlap: `d[0..6]` and `d[3..9]` -- E-LEASED. -/
 def overlappingParts : Program :=
-  ⟨[0], [alloc 0, spawn 0 [(.part 0 (.lit 0) (.lit 6), Mode.rw)],
-         spawn 1 [(.part 0 (.lit 3) (.lit 9), Mode.rw)], wait 0, wait 1]⟩
+  ⟨[0], [alloc 0, spawn 0 [(.part data (.lit 0) (.lit 6), Mode.rw)],
+         spawn 1 [(.part data (.lit 3) (.lit 9), Mode.rw)], wait 0, wait 1]⟩
 
 /-- One call handed two parts that really overlap -- E-ALIAS
 (`transfer(a[0..4], a[2..6])`). -/
 def overlappingArgs : Program :=
-  ⟨[0], [alloc 0, call [(.part 0 (.lit 0) (.lit 4), Mode.rw),
-                        (.part 0 (.lit 2) (.lit 6), Mode.ro)]]⟩
+  ⟨[0], [alloc 0, call [(.part data (.lit 0) (.lit 4), Mode.rw),
+                        (.part data (.lit 2) (.lit 6), Mode.ro)]]⟩
 
 /-- **The backwards part.**  `d[a..b]` is lent first and orders `d[0..a]` before
 `d[b..n]`, which overlap whenever `a > b`.  The checker ACCEPTS this, exactly as
@@ -2048,23 +2419,23 @@ def overlappingArgs : Program :=
 `lo <= hi` guard on this thread before either overlapping task exists
 (`test_a_backwards_part_used_to_order_two_others_aborts_at_its_spawn`). -/
 def backwardsPart : Program :=
-  ⟨[0], [alloc 0, spawn 0 [(.part 0 a b, Mode.rw)],
-         spawn 1 [(.part 0 (.lit 0) a, Mode.rw)], spawn 2 [(.part 0 b n, Mode.rw)],
+  ⟨[0], [alloc 0, spawn 0 [(.part data a b, Mode.rw)],
+         spawn 1 [(.part data (.lit 0) a, Mode.rw)], spawn 2 [(.part data b n, Mode.rw)],
          wait 0, wait 1, wait 2]⟩
 
 /-- `let t = spawn fill(len(d), d, 1); let k = len(d);` -- accepted: the task holds
 the elements, and the owner's length is not one of them. -/
 def lenUnderElementLease : Program :=
-  ⟨[0], [alloc 0, spawn 0 [(.elems 0, Mode.rw)], call [(.hdr 0, Mode.ro)], wait 0]⟩
+  ⟨[0], [alloc 0, spawn 0 [(.elems data, Mode.rw)], call [(.hdr data, Mode.ro)], wait 0]⟩
 
 /-- `let t = spawn repl(b, 10); let k = len(b);` -- E-LEASED: the task holds the
 owner itself and may `swap` the cell, so the length can change under the read. -/
 def lenUnderOwnerLease : Program :=
-  ⟨[0], [alloc 0, spawn 0 [(.whole 0, Mode.rw)], call [(.hdr 0, Mode.ro)], wait 0]⟩
+  ⟨[0], [alloc 0, spawn 0 [(.whole data, Mode.rw)], call [(.hdr data, Mode.ro)], wait 0]⟩
 
 /-- Two tasks writing one whole place -- E-LEASED. -/
 def overlappingTasks : Program :=
-  ⟨[0], [alloc 0, spawn 0 [(.whole 0, Mode.rw)], spawn 1 [(.whole 0, Mode.rw)],
+  ⟨[0], [alloc 0, spawn 0 [(.whole data, Mode.rw)], spawn 1 [(.whole data, Mode.rw)],
          wait 0, wait 1]⟩
 
 /-- Copying an owner is not a copy: rejected, because `copy` needs a scalar. -/
@@ -2074,10 +2445,139 @@ def copyAnOwner : Program := ⟨[0, 1], [alloc 0, copy 1 0]⟩
 def copyAScalar : Program := ⟨[0, 1], [mkScalar 0, copy 1 0]⟩
 
 /-- Using a place after its implicit release -- E-MOVED. -/
-def useAfterDrop : Program := ⟨[0], [alloc 0, drop 0, call [(.whole 0, Mode.ro)]]⟩
+def useAfterDrop : Program := ⟨[0], [alloc 0, drop 0, call [(.whole data, Mode.ro)]]⟩
 
 /-- A local the scope never declared. -/
 def outOfScope : Program := ⟨[1], [alloc 0]⟩
+
+/-! ### Fields
+
+`checking.py:path` writes a field path `r.a`, and `overlaps` compares two bases by
+dotted prefix: two fields of one record are apart, a field and its record are not,
+and a part of an array held in a field chains exactly as one of a plain local.
+
+Reaching a field, though, READS the record: `checking.py:e_name` runs
+`leased(box, "ro")` on the base local before `overlaps` ever sees `box.a`.  So the
+disjointness of two fields only ever bites inside ONE argument list, where no base
+read intervenes; across a live task lease, naming any field of a record one field of
+which is lent is `E-LEASED`.  `readBase` below is that read, written out, and it is
+why `fieldsToTwoTasks` is rejected although `box.a` and `box.b` are disjoint. -/
+
+/-- The read of the base local that naming any field of `box` performs. -/
+def readBase : Stmt := call [(.whole box, Mode.ro)]
+
+/-- `let t = spawn fill(len(box.a), box.a, 0); wait(t);` -- accepted. -/
+def oneFieldToATask : Program :=
+  ⟨[4], [alloc 4, readBase, spawn 0 [(.elems boxA, Mode.rw)], wait 0]⟩
+
+/-- `let l = spawn fill(..., box.a, 0); let r = spawn fill(..., box.b, 1);` --
+E-LEASED, and NOT because the two fields overlap: naming `box.b` reads `box`, which
+is lent. -/
+def fieldsToTwoTasks : Program :=
+  ⟨[4], [alloc 4, readBase, spawn 0 [(.elems boxA, Mode.rw)],
+         readBase, spawn 1 [(.elems boxB, Mode.rw)], wait 0, wait 1]⟩
+
+/-- `both(6, box.xs[0..6], box.a[3..9])` -- accepted: inside one argument list two
+fields really are disjoint, whatever their bounds. -/
+def partsOfTwoFieldsInOneCall : Program :=
+  ⟨[4], [alloc 4, readBase, call [(.part boxXs (.lit 0) (.lit 6), Mode.rw),
+                                  (.part boxA (.lit 3) (.lit 9), Mode.ro)]]⟩
+
+/-- `both(4, box.xs[0..4], box.xs[4..8])` -- accepted: the part chain works inside a
+field exactly as it does on a local. -/
+def fieldPartsSplitInOneCall : Program :=
+  ⟨[4], [alloc 4, readBase, call [(.part boxXs (.lit 0) (.lit 4), Mode.rw),
+                                  (.part boxXs (.lit 4) (.lit 8), Mode.ro)]]⟩
+
+/-- `both(6, box.xs[0..6], box.xs[3..9])` -- E-ALIAS: they really overlap. -/
+def fieldPartsOverlapInOneCall : Program :=
+  ⟨[4], [alloc 4, readBase, call [(.part boxXs (.lit 0) (.lit 6), Mode.rw),
+                                  (.part boxXs (.lit 3) (.lit 9), Mode.ro)]]⟩
+
+/-- `both(len(box.a), box.a, box.a)` -- E-ALIAS: one field is not two. -/
+def sameFieldTwiceInOneCall : Program :=
+  ⟨[4], [alloc 4, readBase, call [(.elems boxA, Mode.rw), (.elems boxA, Mode.ro)]]⟩
+
+/-- `let t = spawn fill(..., box.a, 0); let moved = box;` -- E-LEASED: a field is
+inside its record, so a lease on the field pins the record. -/
+def fieldMoveUnderLease : Program :=
+  ⟨[1, 4], [alloc 4, readBase, spawn 0 [(.elems boxA, Mode.rw)], move 1 4, wait 0]⟩
+
+/-- `let t = spawn bump(box); let s = sum(len(box.a), box.a);` -- E-LEASED the other
+way: the record is lent whole, so every field of it is. -/
+def fieldReadUnderRecordLease : Program :=
+  ⟨[4], [alloc 4, spawn 0 [(.whole box, Mode.rw)], readBase,
+         call [(.elems boxA, Mode.ro)], wait 0]⟩
+
+/-- `let t = spawn bump(box); let k = len(box.xs);` -- E-LEASED. -/
+def lenOfFieldUnderRecordLease : Program :=
+  ⟨[4], [alloc 4, spawn 0 [(.whole box, Mode.rw)], readBase,
+         call [(.hdr boxXs, Mode.ro)], wait 0]⟩
+
+/-- `let t = spawn fill(len(box.xs), box.xs, 1); let k = len(box.xs);` -- E-LEASED,
+again by the base read: the header of a field is not one of its elements, but
+naming the field reads the record the task's view lives in. -/
+def lenOfFieldUnderElementLease : Program :=
+  ⟨[4], [alloc 4, readBase, spawn 0 [(.elems boxXs, Mode.rw)], readBase,
+         call [(.hdr boxXs, Mode.ro)], wait 0]⟩
+
+/-! ### Parallel regions
+
+`checking.py:region` records one triple per access -- root local, at the binder,
+writes -- and refuses any recorded access to a written local that is not at the
+binder.  The bodies below are the lane bodies of `tests/soundness/test_concurrency.py`. -/
+
+/-- `parallel i in n { out[i] = x[i]; }` -- accepted: the saxpy shape. -/
+def laneMap : Program :=
+  ⟨[0, 1], [alloc 0, alloc 1, parallel n [.elem data Mode.rw, .elem snd Mode.ro]]⟩
+
+/-- `parallel i in n { out[i] = k; }` for a shared scalar `k` -- accepted: lanes read
+what the enclosing scope holds. -/
+def laneReadsShared : Program :=
+  ⟨[0, 2], [alloc 0, mkScalar 2, parallel n [.elem data Mode.rw, .whole thd Mode.ro]]⟩
+
+/-- `parallel i in n { let m = len(out); out[i] = m; }` -- accepted: `len` is the
+header, which no lane's element touches, and `region` does not record it. -/
+def laneLenAndWrite : Program :=
+  ⟨[0], [alloc 0, parallel n [.len data, .elem data Mode.rw]]⟩
+
+/-- `parallel i in n { out[0] = 1; }`, and equally `parallel i in n { poke(n, out); }`
+-- E-PARALLEL-RACE: every lane writes the same element. -/
+def laneWritesFixedIndex : Program :=
+  ⟨[0], [alloc 0, parallel n [.other data Mode.rw]]⟩
+
+/-- `parallel i in n { total = total + out[i]; }` -- E-PARALLEL-WRITE: a shared
+scalar of the enclosing scope cannot be assigned. -/
+def laneWritesShared : Program :=
+  ⟨[0, 2], [alloc 0, mkScalar 2, parallel n [.whole thd Mode.rw, .elem data Mode.ro]]⟩
+
+/-- `parallel i in n { out[i] = out[0]; }` -- E-PARALLEL-RACE: a lane reads at an
+index that is not its own, of an array the lanes write. -/
+def laneReadsOther : Program :=
+  ⟨[0], [alloc 0, parallel n [.elem data Mode.rw, .other data Mode.ro]]⟩
+
+/-- A region beside a live task that holds another buffer -- accepted. -/
+def laneBesideTask : Program :=
+  ⟨[0, 3], [alloc 0, alloc 3, spawn 0 [(.elems other, Mode.rw)],
+            parallel n [.elem data Mode.rw], wait 0]⟩
+
+/-- A region touching what a live task writes -- E-LEASED: a lane is checked against
+the leases of the enclosing scope like any other access. -/
+def laneUnderLease : Program :=
+  ⟨[0], [alloc 0, spawn 0 [(.elems data, Mode.rw)],
+         parallel n [.elem data Mode.ro], wait 0]⟩
+
+/-- The same against a *part* a live task holds -- also E-LEASED, because the lease
+check names `x[]` for any index, whatever the lane's own index would be.  That is
+conservative, and it is what `checking.py:where` does. -/
+def laneUnderPartLease : Program :=
+  ⟨[0], [alloc 0, spawn 0 [(.part data (.lit 0) a, Mode.rw)],
+         parallel n [.elem data Mode.rw], wait 0]⟩
+
+/-- Two regions, one after the other, over one buffer -- accepted: a region completes
+before the next statement. -/
+def twoRegions : Program :=
+  ⟨[0], [alloc 0, parallel n [.elem data Mode.rw], parallel n [.elem data Mode.rw]]⟩
 
 /-- Every line of the regression, as one Boolean the build can print. -/
 def report : Bool :=
@@ -2089,6 +2589,15 @@ def report : Bool :=
     && accepts backwardsPart && accepts lenUnderElementLease && !accepts lenUnderOwnerLease
     && !accepts overlappingTasks && !accepts copyAnOwner
     && accepts copyAScalar && !accepts useAfterDrop && !accepts outOfScope
+    && accepts oneFieldToATask && !accepts fieldsToTwoTasks
+    && accepts partsOfTwoFieldsInOneCall && accepts fieldPartsSplitInOneCall
+    && !accepts fieldPartsOverlapInOneCall && !accepts sameFieldTwiceInOneCall
+    && !accepts fieldMoveUnderLease && !accepts fieldReadUnderRecordLease
+    && !accepts lenOfFieldUnderElementLease && !accepts lenOfFieldUnderRecordLease
+    && accepts laneMap && accepts laneReadsShared && accepts laneLenAndWrite
+    && !accepts laneWritesFixedIndex && !accepts laneWritesShared && !accepts laneReadsOther
+    && accepts laneBesideTask && !accepts laneUnderLease && !accepts laneUnderPartLease
+    && accepts twoRegions
 
 /-- What the build prints, so the Python gate can assert on it. -/
 def line : String :=
@@ -2111,6 +2620,9 @@ def anyVal : Valuation := fun _ => 0
 /-- `a = 6`, `b = 3`, `n = 9`: the valuation `backwardsPart` is written for, under
 which `d[a..b]` is backwards and `d[0..a]` and `d[b..n]` overlap. -/
 def badVal : Valuation := fun v => if v = 0 then 6 else if v = 1 then 3 else 9
+
+/-- `n = 2`: two lanes, the smallest region in which lanes can race at all. -/
+def twoLanes : Valuation := fun _ => 2
 
 /-- **A data race is reachable.**  The spawner reads a place a live task writes:
 `let t = spawn bump(c, 4); let seen = c;` in `tests/soundness/test_soundness.py`. -/
@@ -2137,6 +2649,26 @@ theorem overlappingParts_races :
     (Reach.step (List.Mem.head _)
       (Reach.step (List.Mem.head _) (Reach.refl _)))
 
+/-- **Naming a second field under a lease really races.**  `box.a` is lent to a
+task; the read of `box` that reaching `box.b` performs touches the same storage the
+task writes.  That is exactly what `checking.py` reports as `E-LEASED`, and it is why
+the field rule alone would not have been enough. -/
+theorem fieldsToTwoTasks_races :
+    Reach anyVal fieldsToTwoTasks.scope (Cfg.start fieldsToTwoTasks) (Cfg.err (Err.race 4)) :=
+  Reach.step (List.Mem.head _)
+    (Reach.step (List.Mem.head _)
+      (Reach.step (List.Mem.head _)
+        (Reach.step (List.Mem.head _) (Reach.refl _))))
+
+/-- **Two overlapping parts of one field alias.**  `box.xs[0..6]` and `box.xs[3..9]`
+handed to one call reach the `AliasedArgs` configuration. -/
+theorem fieldPartsOverlapInOneCall_aliases :
+    Reach anyVal fieldPartsOverlapInOneCall.scope (Cfg.start fieldPartsOverlapInOneCall)
+      (Cfg.err Err.aliasedArgs) :=
+  Reach.step (List.Mem.head _)
+    (Reach.step (List.Mem.head _)
+      (Reach.step (List.Mem.head _) (Reach.refl _)))
+
 /-- **The backwards part traps, and does not race.**  `backwardsPart` is ACCEPTED,
 and under the valuation it is written for the machine aborts at the guard of
 `d[6..3]` -- on the spawner's thread, before either of the two tasks that overlap
@@ -2146,6 +2678,33 @@ theorem backwardsPart_traps :
     Reach badVal backwardsPart.scope (Cfg.start backwardsPart) Cfg.trap :=
   Reach.step (List.Mem.head _)
     (Reach.step (List.Mem.head _) (Reach.refl _))
+
+/-- **Two lanes writing one element really race.**  `parallel i in n { out[0] = 1; }`
+forks two lanes that both hold every element of `out` for writing; the first lane to
+step finds the other one there. -/
+theorem laneWritesFixedIndex_races :
+    Reach twoLanes laneWritesFixedIndex.scope (Cfg.start laneWritesFixedIndex)
+      (Cfg.err (Err.race 0)) :=
+  Reach.step (List.Mem.head _)
+    (Reach.step (List.Mem.head _)
+      (Reach.step (List.Mem.tail _ (List.Mem.head _)) (Reach.refl _)))
+
+/-- **A lane writing a shared scalar really races.**  Every lane of
+`parallel i in n { total = total + out[i]; }` holds `total` for writing. -/
+theorem laneWritesShared_races :
+    Reach twoLanes laneWritesShared.scope (Cfg.start laneWritesShared) (Cfg.err (Err.race 2)) :=
+  Reach.step (List.Mem.head _)
+    (Reach.step (List.Mem.head _)
+      (Reach.step (List.Mem.head _)
+        (Reach.step (List.Mem.tail _ (List.Mem.head _)) (Reach.refl _))))
+
+/-- **A lane reading at another index really races** with the lane that writes there:
+lane 0 holds every element of `out` to read, lane 1 holds element 1 to write. -/
+theorem laneReadsOther_races :
+    Reach twoLanes laneReadsOther.scope (Cfg.start laneReadsOther) (Cfg.err (Err.race 0)) :=
+  Reach.step (List.Mem.head _)
+    (Reach.step (List.Mem.head _)
+      (Reach.step (List.Mem.tail _ (List.Mem.head _)) (Reach.refl _)))
 
 /-- **A double free is reachable.**  Copying an owner duplicates the cell, and the
 implicit release at scope exit then frees it twice. -/
@@ -2171,12 +2730,15 @@ theorem unawaitedTicket_leaks :
     (Reach.step (List.Mem.head _)
       (Reach.step (List.Mem.head _) (Reach.refl _)))
 
-/-- None of the six fault witnesses above is about an accepted program: each is
-rejected, which is what makes them consistent with the soundness theorems.  The
-seventh, `backwardsPart`, IS accepted -- and it reaches a trap, not a fault. -/
+/-- None of the fault witnesses above is about an accepted program: each is
+rejected, which is what makes them consistent with the soundness theorems.  The one
+exception, `backwardsPart`, IS accepted -- and it reaches a trap, not a fault. -/
 theorem witnesses_are_rejected :
     (accepts leasedRead || accepts overlappingTasks || accepts overlappingParts
-      || accepts copyAnOwner || accepts useAfterDrop || accepts unawaitedTicket) = false
+      || accepts copyAnOwner || accepts useAfterDrop || accepts unawaitedTicket
+      || accepts fieldsToTwoTasks || accepts fieldPartsOverlapInOneCall
+      || accepts laneWritesFixedIndex
+      || accepts laneWritesShared || accepts laneReadsOther) = false
       ∧ accepts backwardsPart = true := by
   constructor <;> decide
 
@@ -2202,6 +2764,18 @@ example : accepts Regress.partsWithoutMiddle = false := by decide
 example : accepts Regress.overlappingParts = false := by decide
 example : accepts Regress.overlappingArgs = false := by decide
 example : accepts Regress.lenUnderOwnerLease = false := by decide
+example : accepts Regress.fieldsToTwoTasks = false := by decide
+example : accepts Regress.fieldMoveUnderLease = false := by decide
+example : accepts Regress.fieldReadUnderRecordLease = false := by decide
+example : accepts Regress.fieldPartsOverlapInOneCall = false := by decide
+example : accepts Regress.sameFieldTwiceInOneCall = false := by decide
+example : accepts Regress.lenOfFieldUnderElementLease = false := by decide
+example : accepts Regress.lenOfFieldUnderRecordLease = false := by decide
+example : accepts Regress.laneWritesFixedIndex = false := by decide
+example : accepts Regress.laneWritesShared = false := by decide
+example : accepts Regress.laneReadsOther = false := by decide
+example : accepts Regress.laneUnderLease = false := by decide
+example : accepts Regress.laneUnderPartLease = false := by decide
 example : accepts Regress.twoOwners = true := by decide
 example : accepts Regress.disjointSplit = true := by decide
 example : accepts Regress.kwaySplit = true := by decide
@@ -2210,6 +2784,14 @@ example : accepts Regress.lenUnderElementLease = true := by decide
 example : accepts Regress.sharedRead = true := by decide
 example : accepts Regress.movedOnBothPaths = true := by decide
 example : accepts Regress.copyAScalar = true := by decide
+example : accepts Regress.oneFieldToATask = true := by decide
+example : accepts Regress.fieldPartsSplitInOneCall = true := by decide
+example : accepts Regress.partsOfTwoFieldsInOneCall = true := by decide
+example : accepts Regress.laneMap = true := by decide
+example : accepts Regress.laneReadsShared = true := by decide
+example : accepts Regress.laneLenAndWrite = true := by decide
+example : accepts Regress.laneBesideTask = true := by decide
+example : accepts Regress.twoRegions = true := by decide
 
 /-- The two rules chain through different facts, exactly as `checking.py` does.  The
 lease check (`leased`) may use the bounds of every part the live tasks hold; the
@@ -2218,13 +2800,16 @@ looking at.  So handing ONE call the two ends of a split is rejected even while 
 middle part is lent to a live task -- there is no fact in that argument list to
 order `a` before `b` -- although spawning the same two ends one at a time is
 accepted.  This is conservative, not unsound, and it is what the Python rule does. -/
-example : accepts ⟨[0], [Stmt.alloc 0, Stmt.spawn 0 [(.part 0 Regress.a Regress.b, Mode.rw)],
-    Stmt.call [(.part 0 (.lit 0) Regress.a, Mode.rw), (.part 0 Regress.b Regress.n, Mode.rw)],
+example : accepts ⟨[0], [Stmt.alloc 0,
+    Stmt.spawn 0 [(.part Regress.data Regress.a Regress.b, Mode.rw)],
+    Stmt.call [(.part Regress.data (.lit 0) Regress.a, Mode.rw),
+               (.part Regress.data Regress.b Regress.n, Mode.rw)],
     Stmt.wait 0]⟩ = false := by decide
 
-example : accepts ⟨[0], [Stmt.alloc 0, Stmt.spawn 0 [(.part 0 Regress.a Regress.b, Mode.rw)],
-    Stmt.spawn 1 [(.part 0 (.lit 0) Regress.a, Mode.rw)],
-    Stmt.spawn 2 [(.part 0 Regress.b Regress.n, Mode.rw)],
+example : accepts ⟨[0], [Stmt.alloc 0,
+    Stmt.spawn 0 [(.part Regress.data Regress.a Regress.b, Mode.rw)],
+    Stmt.spawn 1 [(.part Regress.data (.lit 0) Regress.a, Mode.rw)],
+    Stmt.spawn 2 [(.part Regress.data Regress.b Regress.n, Mode.rw)],
     Stmt.wait 0, Stmt.wait 1, Stmt.wait 2]⟩ = true := by decide
 
 end Ownership

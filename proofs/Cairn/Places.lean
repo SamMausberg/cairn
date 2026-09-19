@@ -4,16 +4,20 @@ Places, bounds and visible disjointness.
 This file is the part of the ownership calculus that talks about *what one borrow
 names*.  It is the mechanization of `checking.py:path` and `checking.py:overlaps`:
 
-* `path` turns an expression into a syntactic place identity: `d` for the owner,
-  `d[]` for its elements, `d[lo..hi]` for a part.  A bound survives only when it
-  cannot change -- an integer literal, or the name of an immutable value -- and
-  anything else becomes `?`.  `Place` below has one constructor per shape, and the
-  `?` shape is deliberately absent: parts whose bounds are not visible (a mutable
-  bound, or a part of a part) are outside this model.
+* `path` turns an expression into a syntactic place identity: `r.a` for a field,
+  `d` for the owner, `d[]` for its elements, `d[lo..hi]` for a part.  A bound
+  survives only when it cannot change -- an integer literal, or the name of an
+  immutable value -- and anything else becomes `?`.  `Place` below is a `Root` (a
+  local and a field path) plus one constructor per shape, and the `?` shape is
+  deliberately absent: parts whose bounds are not visible (a mutable bound, or a
+  part of a part) are outside this model.
 * `overlaps` decides disjointness of two parts of one array *syntactically*: they
   are disjoint only when one visibly ends at or before the other begins, where the
   order of two bounds may be derived by chaining the `lo <= hi` facts of every other
-  part in play.  `ovl` below is that decision; `reaches` is the chain.
+  part in play.  `ovl` below is that decision; `reaches` is the chain.  Outside the
+  parts it is the dotted-prefix test of the two bases: places of different locals
+  never overlap, distinct fields of one record never overlap, and a field overlaps
+  its record.
 * Beside the syntactic decision there is the real one: under a valuation of the
   immutable names, each place denotes a set of indices (and possibly the header),
   and two accesses really collide when those sets meet.  `meets` is that relation.
@@ -38,6 +42,11 @@ theorem nat_eq_or_ne (p q : Nat) : p = q ∨ p ≠ q :=
   match Nat.decEq p q with
   | isTrue h => Or.inl h
   | isFalse h => Or.inr h
+
+/-- The same case split for anything with decidable equality, which is every type in
+this development. -/
+theorem dec_eq_or_ne {α : Type} [DecidableEq α] (p q : α) : p = q ∨ p ≠ q :=
+  if h : p = q then Or.inl h else Or.inr h
 
 /-- `Nat.beq` is reflexive; proved here so that nothing reaches for the general
 `LawfulBEq` lemma, whose instance chain drags `Classical.choice` in. -/
@@ -172,31 +181,89 @@ theorem reaches_sound {ρ : Valuation} {facts : List Fact} (hf : FactsTrue ρ fa
   reachesFuel_sound hf _ [x] goal (x.eval ρ)
     (fun u hu => by rw [List.eq_of_mem_singleton hu]; exact Nat.le_refl _) h
 
-/-! ## Places -/
+/-! ## Roots: the local, and the field path into it -/
 
-/-- What one borrow names.  These are the shapes `checking.py:path` produces, and
-`checking.py:lend` chooses between the first three by the parameter it is filling:
+/-- The name of a record field. -/
+abbrev FName := Nat
 
-* `whole x` is the owner itself (`d`), header and elements: what `rw<Buf[T]>` lends,
-  and the only borrow through which a task can replace the cell (`swap`);
-* `hdr x` is the header alone -- the length and the identity of the cell -- which is
-  what `len(d)` reads (`leased(..., elements = False)`);
-* `elems x` is every element (`d[]`): what an array view `rw<T>[n]` of a whole owner
-  lends, which leaves the owner's length readable;
-* `part x lo hi` is the elements `[lo, hi)` (`d[lo..hi]`). -/
-inductive Place where
-  | whole (x : Var)
-  | hdr (x : Var)
-  | elems (x : Var)
-  | part (x : Var) (lo hi : Bound)
+/-- The storage a borrow is rooted at: a local, and the field path into it that
+`checking.py:path` writes as `r.a.b`.  The empty path is the local itself. -/
+structure Root where
+  var : Var
+  fields : List FName
 deriving DecidableEq, Repr, Inhabited
 
-/-- The local a place is rooted at. -/
-def Place.base : Place → Var
-  | .whole x => x
-  | .hdr x => x
-  | .elems x => x
-  | .part x _ _ => x
+/-- One field path is a prefix of the other, so the two name storage that meets.
+This is the dotted-prefix test `checking.py:overlaps` falls back on
+(`base_a == base_b or base_a.startswith(base_b + ".")`): `r.a` is inside `r`, and
+`r.a` and `r.b` are apart. -/
+def nested : List FName → List FName → Bool
+  | [], _ => true
+  | _ :: _, [] => true
+  | f :: fs, g :: gs => f == g && nested fs gs
+
+theorem nested_symm : ∀ l m : List FName, nested l m = nested m l := by
+  intro l
+  induction l with
+  | nil => intro m; cases m <;> rfl
+  | cons f fs ih =>
+      intro m
+      cases m with
+      | nil => rfl
+      | cons g gs => simp only [nested, ih gs, beq_place_comm f g]
+
+/-- **Two roots name overlapping storage**: the same local, and one field path inside
+the other.  A field path is exact -- nothing about it is approximated -- so the
+checker and the machine ask the root exactly the same question. -/
+def Root.touches (r s : Root) : Bool := (r.var == s.var) && nested r.fields s.fields
+
+theorem Root.touches_symm (r s : Root) : r.touches s = s.touches r := by
+  simp only [Root.touches, beq_place_comm r.var s.var, nested_symm r.fields s.fields]
+
+/-- The local itself overlaps every root inside it, whatever field path that root
+names. -/
+theorem Root.touches_var {x : Var} {s : Root} (h : s.var = x) :
+    Root.touches ⟨x, []⟩ s = true := by
+  simp only [Root.touches, h, beq_place_self, nested, Bool.and_true]
+
+/-! ## Places -/
+
+/-- What one borrow names: a root, and one of the shapes `checking.py:path` produces.
+`checking.py:lend` chooses between the first three by the parameter it is filling:
+
+* `whole r` is the storage itself (`d`, `r.a`), header and elements: what
+  `rw<Buf[T]>` lends, and the only borrow through which a task can replace the cell
+  (`swap`);
+* `hdr r` is the header alone -- the length and the identity of the cell -- which is
+  what `len(d)` reads (`leased(..., elements = False)`);
+* `elems r` is every element (`d[]`, `r.xs[]`): what an array view `rw<T>[n]` of a
+  whole owner lends, which leaves the owner's length readable;
+* `part r lo hi` is the elements `[lo, hi)` (`d[lo..hi]`, `r.xs[lo..hi]`). -/
+inductive Place where
+  | whole (r : Root)
+  | hdr (r : Root)
+  | elems (r : Root)
+  | part (r : Root) (lo hi : Bound)
+deriving DecidableEq, Repr, Inhabited
+
+/-- The storage a place is rooted at. -/
+def Place.root : Place → Root
+  | .whole r => r
+  | .hdr r => r
+  | .elems r => r
+  | .part r _ _ => r
+
+/-- The local a place is rooted at: the unit of ownership, whatever field path the
+place names inside it. -/
+def Place.base (p : Place) : Var := p.root.var
+
+/-- Does the place name elements -- does `path` write a `[` for it?  This is the
+`"[" not in p` of `checking.py:leased(..., elements = False)`: a `len` read is
+disturbed by a lease of the owner, never by one of its elements or of a part. -/
+def Place.overElements : Place → Bool
+  | .elems _ => true
+  | .part _ _ _ => true
+  | _ => false
 
 /-- The fact a place contributes to the chain: a part was guarded `lo <= hi`. -/
 def Place.range : Place → Option Fact
@@ -211,13 +278,14 @@ def Place.guard (ρ : Valuation) : Place → Bool
   | _ => true
 
 /-- The facts of the parts of one array that are in play.  `checking.py:overlaps`
-collects exactly these: the places of `others` that share the base and carry two
-visible bounds, plus the two places being compared. -/
-def factsFor (x : Var) (inPlay : List Place) : List Fact :=
-  inPlay.filterMap fun p => if p.base = x then p.range else none
+collects exactly these: the places of `others` whose base is the same *string* --
+the same local and the same field path -- and that carry two visible bounds, plus
+the two places being compared. -/
+def factsFor (r : Root) (inPlay : List Place) : List Fact :=
+  inPlay.filterMap fun p => if p.root = r then p.range else none
 
-theorem factsFor_true {ρ : Valuation} {x : Var} {inPlay : List Place}
-    (hg : ∀ p ∈ inPlay, p.guard ρ = true) : FactsTrue ρ (factsFor x inPlay) := by
+theorem factsFor_true {ρ : Valuation} {r : Root} {inPlay : List Place}
+    (hg : ∀ p ∈ inPlay, p.guard ρ = true) : FactsTrue ρ (factsFor r inPlay) := by
   intro f hf
   obtain ⟨p, hp, hpe⟩ := List.mem_filterMap.mp hf
   have hrange : p.range = some f := by
@@ -244,17 +312,19 @@ Symmetric by construction. -/
 def visiblyDisjoint (facts : List Fact) (lo1 hi1 lo2 hi2 : Bound) : Bool :=
   reaches facts hi1 lo2 || reaches facts hi2 lo1
 
-/-- **The checker's overlap test.**  Two places of different locals never overlap.
-Two parts of one local are disjoint exactly when they are visibly disjoint.  The
-header and the elements do not overlap, which is why `len(d)` stays readable while
-a view of `d`'s elements is lent.  Everything else overlaps: in particular
-`whole x` overlaps every place of `x`, since replacing the cell disturbs all of
-them, and `elems x` overlaps every part (its bounds are not visible). -/
+/-- **The checker's overlap test.**  Two places whose roots do not touch never
+overlap: different locals, or distinct fields of one record.  Two parts of one root
+are disjoint exactly when they are visibly disjoint.  The header and the elements do
+not overlap, which is why `len(d)` stays readable while a view of `d`'s elements is
+lent.  Everything else overlaps: in particular `whole r` overlaps every place of `r`,
+since replacing the cell disturbs all of them, `elems r` overlaps every part (its
+bounds are not visible), and two parts of *different* roots that touch -- a part of a
+field of a part -- overlap, which `path` never produces but the fallback covers. -/
 def ovl (inPlay : List Place) (r s : Place) : Bool :=
-  (r.base == s.base) &&
+  r.root.touches s.root &&
     (match r, s with
-      | .part x lo1 hi1, .part _ lo2 hi2 =>
-          !visiblyDisjoint (factsFor x inPlay) lo1 hi1 lo2 hi2
+      | .part x lo1 hi1, .part y lo2 hi2 =>
+          if x = y then !visiblyDisjoint (factsFor x inPlay) lo1 hi1 lo2 hi2 else true
       | .hdr _, .part _ _ _ => false
       | .part _ _ _, .hdr _ => false
       | .hdr _, .elems _ => false
@@ -262,21 +332,29 @@ def ovl (inPlay : List Place) (r s : Place) : Bool :=
       | _, _ => true)
 
 theorem ovl_symm (inPlay : List Place) (r s : Place) : ovl inPlay r s = ovl inPlay s r := by
-  cases r <;> cases s <;>
+  cases r <;> cases s <;> simp only [ovl, Place.root, Root.touches_symm] <;>
     first
+      | rfl
       | (rename_i x lo1 hi1 y lo2 hi2
-         rcases nat_eq_or_ne x y with h | h
-         · subst h; simp only [ovl, Place.base, visiblyDisjoint, Bool.or_comm]
-         · simp only [ovl, Place.base, beq_eq_false_iff_ne.mpr h,
-             beq_eq_false_iff_ne.mpr (fun hc => h hc.symm), Bool.false_and])
-      | (simp only [ovl, Place.base]; rw [beq_place_comm])
+         rcases dec_eq_or_ne x y with h | h
+         · subst h; simp only [visiblyDisjoint, Bool.or_comm]
+         · split
+           · next hc => exact absurd hc h
+           · split
+             · next hc => exact absurd hc.symm h
+             · rfl)
 
-/-- `whole x` overlaps every place of `x`: this is what makes a lease of any part
-block a move, a drop or a rebinding of the owner. -/
+/-- `whole x` touches the root of every place of the local `x`, field path and all. -/
+theorem touches_base {x : Var} {p : Place} (h : p.base = x) :
+    Root.touches ⟨x, []⟩ p.root = true :=
+  Root.touches_var h
+
+/-- `whole x` overlaps every place of the local `x`: this is what makes a lease of
+any part, or of any field, block a move, a drop or a rebinding of the owner. -/
 theorem ovl_whole (inPlay : List Place) (x : Var) (r : Place) (h : r.base = x) :
-    ovl inPlay (.whole x) r = true := by
-  subst h
-  cases r <;> simp only [ovl, Place.base, beq_place_self, Bool.and_true]
+    ovl inPlay (.whole ⟨x, []⟩) r = true := by
+  have ht : Root.touches ⟨x, []⟩ r.root = true := touches_base h
+  cases r <;> simp only [Place.root] at ht <;> simp only [ovl, Place.root, ht, Bool.true_and]
 
 /-! ## The real relation
 
@@ -308,6 +386,18 @@ theorem Ext.meets_symm (a b : Ext) : a.meets b = b.meets a := by
          exact ⟨fun h => ⟨h.2.1, h.1, h.2.2.2, h.2.2.1⟩,
                 fun h => ⟨h.2.1, h.1, h.2.2.2, h.2.2.1⟩⟩)
 
+/-- Every index a range touches, the whole extent touches.  This is what lets a lane
+be checked against `x[]` -- what `where` writes for an index -- and then run holding
+only its own element. -/
+theorem Ext.meets_all_of_rng {lo hi : Nat} :
+    ∀ {e : Ext}, (Ext.rng lo hi).meets e = true → Ext.all.meets e = true := by
+  intro e h
+  cases e with
+  | all => rfl
+  | rng l h' =>
+      simp only [Ext.meets] at h ⊢
+      exact decide_eq_true (of_decide_eq_true h).2.1
+
 def Place.ext (ρ : Valuation) : Place → Ext
   | .whole _ => .all
   | .elems _ => .all
@@ -320,13 +410,13 @@ def Place.header : Place → Bool
   | .hdr _ => true
   | _ => false
 
-/-- **The real overlap.**  Two accesses to one local collide when both touch its
+/-- **The real overlap.**  Two accesses whose roots meet collide when both touch the
 header or their element ranges share an index. -/
 def meets (ρ : Valuation) (r s : Place) : Bool :=
-  (r.base == s.base) && ((r.header && s.header) || (r.ext ρ).meets (s.ext ρ))
+  r.root.touches s.root && ((r.header && s.header) || (r.ext ρ).meets (s.ext ρ))
 
 theorem meets_symm (ρ : Valuation) (r s : Place) : meets ρ r s = meets ρ s r := by
-  simp only [meets, beq_place_comm r.base s.base, Bool.and_comm (r.header) (s.header),
+  simp only [meets, Root.touches_symm r.root s.root, Bool.and_comm (r.header) (s.header),
     Ext.meets_symm (r.ext ρ) (s.ext ρ)]
 
 /-- **The bridge.**  What the checker decides syntactically is true of the numbers,
@@ -336,7 +426,7 @@ theorem ovl_sound {ρ : Valuation} {inPlay : List Place}
     (h : ovl inPlay r s = false) : meets ρ r s = false := by
   unfold ovl at h
   unfold meets
-  cases hbase : (r.base == s.base) with
+  cases hbase : r.root.touches s.root with
   | false => simp
   | true =>
       rw [hbase] at h
@@ -347,19 +437,49 @@ theorem ovl_sound {ρ : Valuation} {inPlay : List Place}
         first
           | exact absurd h (fun hc => Bool.noConfusion hc)
           | (rw [decide_eq_false_iff_not]; omega)
-          | (rename_i x lo1 hi1 _ lo2 hi2
-             have h' : (!visiblyDisjoint (factsFor x inPlay) lo1 hi1 lo2 hi2) = false := h
-             have hvd : visiblyDisjoint (factsFor x inPlay) lo1 hi1 lo2 hi2 = true := by
-               cases hv : visiblyDisjoint (factsFor x inPlay) lo1 hi1 lo2 hi2 with
-               | true => rfl
-               | false => rw [hv] at h'; exact absurd h' (fun hc => Bool.noConfusion hc)
-             have hft : FactsTrue ρ (factsFor x inPlay) := factsFor_true hg
-             rw [decide_eq_false_iff_not]
-             rcases Bool.or_eq_true_iff.mp hvd with h1 | h2
-             · have := reaches_sound hft h1
-               omega
-             · have := reaches_sound hft h2
-               omega)
+          | (rename_i x lo1 hi1 y lo2 hi2
+             have h' : (if x = y then !visiblyDisjoint (factsFor x inPlay) lo1 hi1 lo2 hi2
+                        else true) = false := h
+             split at h'
+             · have hvd : visiblyDisjoint (factsFor x inPlay) lo1 hi1 lo2 hi2 = true := by
+                 cases hv : visiblyDisjoint (factsFor x inPlay) lo1 hi1 lo2 hi2 with
+                 | true => rfl
+                 | false => rw [hv] at h'; exact absurd h' (fun hc => Bool.noConfusion hc)
+               have hft : FactsTrue ρ (factsFor x inPlay) := factsFor_true hg
+               rw [decide_eq_false_iff_not]
+               rcases Bool.or_eq_true_iff.mp hvd with h1 | h2
+               · have := reaches_sound hft h1
+                 omega
+               · have := reaches_sound hft h2
+                 omega
+             · exact absurd h' (fun hc => Bool.noConfusion hc))
+
+/-- **A lane's own element sits inside the elements.**  The lease check a region runs
+names `x[]` -- what `where` writes for an index -- while a lane holds only element
+`[i]`, so whatever does not meet the elements does not meet one of them either. -/
+theorem meets_elems_of_part {ρ : Valuation} {r : Root} {lo hi : Bound} {q : Place}
+    (h : meets ρ (.part r lo hi) q = true) : meets ρ (.elems r) q = true := by
+  simp only [meets, Place.root, Place.header, Place.ext, Bool.false_and, Bool.false_or,
+    Bool.and_eq_true] at h ⊢
+  exact ⟨h.1, Ext.meets_all_of_rng h.2⟩
+
+/-- **Two lanes never touch the same element.**  Their indices differ, and each holds
+the single element at its own index. -/
+theorem meets_own_element {ρ : Valuation} {r s : Root} {k l : Nat} (h : k ≠ l) :
+    meets ρ (.part r (.lit k) (.lit (k + 1))) (.part s (.lit l) (.lit (l + 1))) = false := by
+  simp only [meets, Place.header, Place.ext, Bound.eval, Bool.false_and, Bool.false_or,
+    Ext.meets, Bool.and_eq_false_iff, decide_eq_false_iff_not]
+  right; omega
+
+/-- The header's extent is empty, so nothing meets it. -/
+theorem Ext.meets_hdr : ∀ e : Ext, e.meets (.rng 0 0) = false := by
+  intro e; cases e <;> simp [Ext.meets]
+
+/-- **The header is not an element.**  A `len` read never meets a lane's element. -/
+theorem meets_part_hdr {ρ : Valuation} {r s : Root} {lo hi : Bound} :
+    meets ρ (.part r lo hi) (.hdr s) = false := by
+  simp only [meets, Place.header, Place.ext, Bool.false_and, Bool.false_or,
+    Ext.meets_hdr, Bool.and_false]
 
 /-! ## Borrows and conflicts -/
 
@@ -407,6 +527,23 @@ theorem conflict_sound {ρ : Valuation} {inPlay : List Place}
         rw [hm, Bool.true_and] at h; exact h
       show (meets ρ a.1 b.1 && _) = false
       rw [hmode, Bool.and_false]
+
+/-- Both halves of a conjunction that holds, without reaching for a `simp` lemma. -/
+theorem and_parts {a b : Bool} (h : (a && b) = true) : a = true ∧ b = true := by
+  cases a
+  · exact absurd h (fun hc => Bool.noConfusion hc)
+  · cases b
+    · exact absurd h (fun hc => Bool.noConfusion hc)
+    · exact ⟨rfl, rfl⟩
+
+/-- Two threads that hold nothing in common that either writes. -/
+def NoRacePair (ρ : Valuation) (T U : Task) : Prop :=
+  ∀ x ∈ T.2, ∀ y ∈ U.2, races ρ x y = false
+
+theorem noRacePair_symm (ρ : Valuation) (T U : Task) (h : NoRacePair ρ T U) :
+    NoRacePair ρ U T := by
+  intro y hy x hx
+  rw [races_symm]; exact h x hx y hy
 
 /-- Every place the live tasks hold: the `lent` list of `checking.py:leased`. -/
 def lentPlaces (tasks : List Task) : List Place :=
@@ -475,14 +612,14 @@ theorem heldRace_of_heldConflict {ρ : Valuation} {tasks : List Task} {x : Borro
   exact conflict_sound hg (heldConflict_eq_false_iff.mp h T hT y hy)
 
 /-- A place nobody may write is a place no live task holds at all: `whole x`
-overlaps every place of `x`. -/
+overlaps every place of `x`, field paths and parts included. -/
 theorem untouched_of_write_ok {inPlay : List Place} {tasks : List Task} {x : Var}
-    (h : heldConflict inPlay tasks (.whole x, Mode.rw) = false) :
+    (h : heldConflict inPlay tasks (.whole ⟨x, []⟩, Mode.rw) = false) :
     ∀ T ∈ tasks, ∀ y ∈ T.2, y.1.base ≠ x := by
   intro T hT y hy hc
   have hcf := heldConflict_eq_false_iff.mp h T hT y hy
-  have hone : conflict inPlay (.whole x, Mode.rw) y = true := by
-    show (ovl inPlay (.whole x) y.1 && ((Mode.rw == Mode.rw) || (y.2 == Mode.rw))) = true
+  have hone : conflict inPlay (.whole ⟨x, []⟩, Mode.rw) y = true := by
+    show (ovl inPlay (.whole ⟨x, []⟩) y.1 && ((Mode.rw == Mode.rw) || (y.2 == Mode.rw))) = true
     rw [ovl_whole inPlay x y.1 hc]
     rfl
   rw [hone] at hcf

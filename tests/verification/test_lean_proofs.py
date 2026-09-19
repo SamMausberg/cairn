@@ -41,6 +41,12 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Ownership.accepted_no_use_after_free",
     "Cairn.Ownership.accepted_no_double_free",
     "Cairn.Ownership.accepted_race_free",
+    # Lanes: a region forks one lane per index, and the lanes of an accepted region --
+    # together with every task still live -- are pairwise compatible.
+    "Cairn.Ownership.accepted_threads_disjoint",
+    "Cairn.Ownership.lanesOf_pairwise",
+    "Cairn.Ownership.lane_borrows_dont_race",
+    "Cairn.Ownership.races_borrow_of_lease",
     "Cairn.Ownership.accepted_no_leaked_ticket",
     "Cairn.Ownership.accepted_no_aliased_args",
     "Cairn.Ownership.accepted_frees_each_allocation_once",
@@ -51,6 +57,11 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Ownership.Regress.leasedRead_races",
     "Cairn.Ownership.Regress.overlappingTasks_races",
     "Cairn.Ownership.Regress.overlappingParts_races",
+    "Cairn.Ownership.Regress.fieldsToTwoTasks_races",
+    "Cairn.Ownership.Regress.fieldPartsOverlapInOneCall_aliases",
+    "Cairn.Ownership.Regress.laneWritesFixedIndex_races",
+    "Cairn.Ownership.Regress.laneWritesShared_races",
+    "Cairn.Ownership.Regress.laneReadsOther_races",
     # An accepted program whose parts are ordered by a backwards one aborts at that guard.
     "Cairn.Ownership.Regress.backwardsPart_traps",
     "Cairn.Ownership.Regress.copyAnOwner_doubleFrees",
