@@ -785,8 +785,9 @@ class Checker:
         if len(set(given)) != len(given):
             fail("E-MATCH-DUPLICATE", "A variant may appear only once.", s)
         if set(given) != set(layout):
-            fail("E-MATCH-COVERAGE", "Every variant must have exactly one arm.", s,
-                 missing_variants=sorted(f"{ty.name}.{v}" for v in set(layout) - set(given)),
+            missing = sorted(f"{ty.name}.{v}" for v in set(layout) - set(given))
+            fail("E-MATCH-COVERAGE", "Every variant must have exactly one arm" +
+                 (f"; missing {', '.join(missing)}." if missing else "."), s, missing_variants=missing,
                  unknown_variants=sorted(v if "." in v else f"{ty.name}.{v}" for v in set(given) - set(layout)))  # fmt: skip
 
         def arm_body(arm, payload):

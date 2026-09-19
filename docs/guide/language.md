@@ -1,6 +1,6 @@
-# CAIRN 1.1 language profile
+# CAIRN 1.2 language reference
 
-This document states implemented behavior. `docs/history/` records earlier proposals and must not be used to infer accepted features. Grammar lives in `syntax.py`, types, ownership and effects in `checking.py`, lowering in `codegen.py`, guards in `runtime/*.hpp`. Every construct below is executed natively by the test suite; none of it is a whole-compiler proof ([verification.md](../internals/verification.md)).
+This document states implemented behavior. `docs/history/` records earlier proposals and must not be used to infer accepted features. Under `src/cairn/`, grammar lives in `compiler/syntax.py`, types, ownership and effects in `compiler/checking.py`, lowering in `compiler/codegen.py`, guards in `runtime/*.hpp`. Every construct below is executed natively by the test suite; none of it is a whole-compiler proof ([verification.md](../internals/verification.md)).
 
 Three rules explain most of the language.
 
@@ -140,7 +140,7 @@ fn cost(op:Op) -> u64 { match op { Op.Read => { return 1; } Op.Write => { return
 ```
 
 ```text
-Every variant must have exactly one arm.
+Every variant must have exactly one arm; missing Op.Flush.
 ```
 
 `try e` takes a two-variant sum, success first and failure second. It yields the success payload, or returns the failure from the enclosing function or closure, whose return type must be a two-variant sum with the same failure payload. The families may differ, so a `Done[E]` failure propagates out of a function returning `Result[T, E]`. It is the only propagation form, and it is always written out.
@@ -287,7 +287,7 @@ fn main() -> i32 {
 }
 ```
 
-Owners are affine. Using one as a value (binding it, passing it by value, returning it, putting it in a field) moves it, and its name is dead afterwards (`E-MOVED`). Release at scope exit is implicit and shows in the row as `free`. An outer owner cannot be moved inside a loop (`E-MOVE-IN-LOOP`), a closure or a lane.
+Owners are affine. Using one as a value (binding it, passing it by value, returning it, putting it in a field) moves it, and its name is dead afterwards (`E-MOVED`). Release at scope exit is implicit. The `free` effect is charged where the owner is made, together with `alloc`, so a function that only drops an owner it was given has no `free` in its row. An outer owner cannot be moved inside a loop (`E-MOVE-IN-LOOP`), a closure or a lane.
 
 ```cairn rejects E-MOVED
 fn send(body:Buf[u8]) -> usize = len(body);
