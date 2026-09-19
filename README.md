@@ -54,7 +54,7 @@ python3 bin/cairn fmt --check examples && python3 bin/cairn new my_project
 | `certificates` | Seventeen exact affine identities for the collector, checked here by trusted Python and in `proofs/` by Lean. |
 | `verify --symbol f` / `--all` | Fixed-reference value equivalence through Z3 on the typed tree (scalars, IEEE floats, records, sums, local arrays, array views and their parts, `rw` borrows, local heap scratch, `compact`, host `reduce`, bounded loops), seeing through generics, traits and modules; unsupported entries block aggregate success. |
 | `inspect --symbol f` | Source, scope, effects and feature-selected rule cards for an AI edit. |
-| `fmt`, `lsp` | Comment-preserving formatter that fails closed; a language server (diagnostics, hover types, symbols, formatting). |
+| `fmt`, `lsp` | Comment-preserving formatter that fails closed; a language server (diagnostics, hover types, symbols, completion, signature help, definition into `std`, references, rename, formatting). |
 
 ## Repository
 

@@ -67,25 +67,76 @@ Supported: `initialize`, `initialized`, `shutdown`, `exit`; full-text
 | Request | What it answers |
 | --- | --- |
 | `publishDiagnostics` | the compiler's diagnostic for the buffer: its code, its message, the `repair_hint` from `agent_tools.explain`, and the exact token range |
-| `textDocument/hover` | the smallest checked expression covering the position — its type, the type expected of it, and for a name whether the binding is mutable |
+| `textDocument/hover` | the smallest checked expression covering the position — its type, the type expected of it, and for a name whether the binding is mutable; on the name of a function, its signature and its inferred effect row |
 | `textDocument/documentSymbol` | functions, structs, enums, traits, consts and impls with ranges; trait and impl members nest as children |
-| `textDocument/definition` | a declaration of the identifier under the cursor, in the same document |
+| `textDocument/definition` | a declaration of the name under the cursor: this document, or the packaged `src/cairn/std/*.cairn` file the name comes from (`vec.push` and a name brought in by `import std.core (Option);` alike) |
+| `textDocument/completion` | see below; the trigger character is `.` and the client filters by the prefix already typed |
+| `textDocument/signatureHelp` | the innermost call still open before the cursor: its signature, its parameters and the index of the one being written (commas at depth zero; method syntax counts the receiver). Triggers are `(` and `,` |
+| `textDocument/references` | every place in **this document** that names what the cursor stands on, under the rule below |
+| `textDocument/prepareRename`, `textDocument/rename` | the same set as one `WorkspaceEdit`, or a refusal |
 | `textDocument/formatting` | one whole-document edit from `cairn fmt`, or no edit when the buffer is already formatted |
 
 Positions are UTF-16 code units, as the protocol requires, so non-ASCII comments
 and astral characters do not shift a range.
 
+**The last good analysis.** A buffer being typed usually does not compile, so
+each feature takes its *context* from the current tokens — which always exist,
+the scan never fails — and its *meaning* from the last analysis that did compile,
+matching the two by name rather than by position: the old analysis' offsets are
+stale after an edit, but the name of the enclosing function and of its locals is
+not. So after `let y = p.` the fields of `p` are still offered, and the locals on
+offer are those the last good analysis saw in this function *plus* the names the
+current tokens bind before the cursor (`let`, `let mut`, `reg`, `for`, `each`,
+`parallel`, `buffer`, `stack`, parameters, closure parameters and `match` payload
+binders), so a binding typed one edit ago completes too. A buffer that has never
+compiled still completes its own keywords, builtins, types, declarations and
+token-visible locals; it is never renamed.
+
+Completion offers, after `name.`: the fields of the record `name` holds (through
+`ro<>`/`rw<>`, and with a generic container's arguments substituted, so
+`Vec[u64]` has `data:Buf[u64]`) together with every function `name.f(...)`
+resolves to — those of the receiver type's module and the members implementing a
+trait you can see for it, both taking the receiver first; or the variants of an
+enum or sum named `name`; or the public declarations of the module an import
+alias or module path denotes. Otherwise it offers the locals with their types,
+the declarations visible in the cursor's module (its own, imported names, import
+aliases), the builtins the checker knows, the intrinsic and scalar types, and the
+reserved words. After `import ` it offers the packaged modules and the document's
+own; after `derive ` the recipes it can reach; inside a generic bound after `:`
+the traits in scope, the kinds and the scalar classes. A private name of another
+module is never offered.
+
+**References and rename answer only what one document can prove.** A top-level
+declaration: every identifier token equal to its name, unless that name is ever
+written after a `.` or after `import` — a field, a method, a variant or a module
+path, which a single document cannot tell apart — or a local of that name is
+bound somewhere, or two declarations share it; another declaration's own name is
+never touched. A local: the identifiers from its binder to the end of its
+declaration, provided it is bound exactly once there (blocks are scopes, so a
+name may be bound again in a sibling block) and is not also a declaration, an
+import alias or an imported name; inside that range nothing can shadow it,
+because CAIRN rejects shadowing (`E-SHADOW`). Where the rule does not hold,
+`references` answers nothing and `prepareRename` answers null. A rename is
+further refused for a reserved word, a builtin, a name of another module, a
+buffer with no good analysis, and a new name that is not a free identifier of
+this document; the suite applies the returned edit and recompiles, so an edit
+that would break a program that compiled is a test failure.
+
 The server analyses the open buffer; `std.*` imports are linked by the compiler
 itself, and sites from a linked module are not offered as hovers of the file you
 are editing. A buffer that does not compile still gets its outline, and any
 compiler failure becomes a diagnostic rather than an exception: the server
-answers every request it accepted and keeps running.
+answers every request it accepted and keeps running. Every handler answers an
+empty list or null for any position in any buffer, and costs far less than the
+analysis it reads from.
 
 Known limits: only one document is analysed at a time, so a name declared in a
-sibling file of the same project is neither hovered nor jumped to; there is no
-completion, rename, references or workspace symbol support; the first declaration
-with a matching name wins in `definition`, and `Enum.Variant` resolves to the
-enum; diagnostics stop at the first compiler error, because the compiler does.
+sibling file of the same project is neither hovered, completed nor jumped to, and
+references and rename stop at the edge of the buffer; the first declaration with
+a matching name wins in `definition`, and `Enum.Variant` resolves to the enum;
+completion after `derive ` lists the recipes the program already links; there is
+no workspace symbol, code action or formatting-on-type support; diagnostics stop
+at the first compiler error, because the compiler does.
 
 ## Editor extension
 

@@ -45,9 +45,13 @@ to that interpreter and the arguments to `["/path/to/cairn/bin/cairn", "lsp"]`.
 
 ## What the extension gives you
 
-Diagnostics as you type, hover types, a document outline, go to definition inside
-the open file, and `Format Document` (the same formatter as `cairn fmt`). See
-`docs/tooling.md` for what each of those covers and what it does not.
+Diagnostics as you type, hover types and effect rows, a document outline,
+completion (fields, methods, module members, variants, locals and words),
+signature help, go to definition inside the open file and into the packaged
+`std`, references and rename within the file, and `Format Document` (the same
+formatter as `cairn fmt`). The client negotiates all of it from the server, so
+nothing here changes when the server learns something new. See `docs/tooling.md`
+for what each of those covers and what it does not.
 
 The grammar's keyword lists are checked against the compiler's `RESERVED` set by
 `tests/test_lsp.py`, so a new keyword fails the suite until the grammar learns it.

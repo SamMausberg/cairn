@@ -23,7 +23,7 @@
     "generation": "library-defined typed recipes over record schemas and naturals (static each/where/require/fold, $ splices, generated records and functions, domains, budgets, content hashes); the packaged std.wire recipe; static families; the certified bounded collector",
     "projects": "ordered files, data-only manifests, fresh build directories; opt-in per-module objects reused by content hash; vendored path dependencies pinned by hash",
     "editing": "host-bound body/expression choices over the whole language, lexical rule cards, effect ceilings",
-    "tooling": "comment-preserving formatter, language server, editor grammar",
+    "tooling": "comment-preserving formatter, editor grammar, and a language server with diagnostics, hover types and effect rows, outline, completion, signature help, definition into the packaged std, and single-document references and rename",
     "arithmetic_certificates": "17 exact affine implications, checked before every emission and proved in Lean",
     "scalar_equivalence": "trusted translator and Z3 over values (scalars, IEEE f32/f64, records, enums and payload sums with match and try, fixed local arrays), over array views, their parts, rw borrows and function-local heap scratch as SMT arrays with symbolic extents, and over compact, host reduce and loops unrolled within a bounded budget; the observation is the result plus the final contents of every rw parameter, the admitted inputs are the ones the cr::view and cr::disjoint entry guards admit, and explicit per-function/module coverage is required; an observed NaN, a tag inside a view, two views of one array in one call, an owner that moves, an unbounded trip count and anything unmodeled are unknown, never equivalent"
   },
