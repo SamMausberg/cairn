@@ -143,8 +143,10 @@ def test_native(cxx, tmp_path):
     assert lib.cf_zero_float() == 0.0
 
 
-def test_semantics_rejects_owned_memory():
+def test_semantics_models_scratch_storage_but_not_a_moved_owner():
     from cairn.scalar_semantics import equivalent
 
-    r = equivalent("fn f()->u64=0;", "fn f()->u64 { buffer b:u64[4]=zeroed;return b[0]; }", "f")
-    assert r["status"] not in {"smt-equivalent", "passed"}
+    zeroed = equivalent("fn f()->u64=0;", "fn f()->u64 { buffer b:u64[4]=zeroed;return b[0]; }", "f")
+    assert zeroed["status"] == "smt-equivalent"  # Zeroed scratch; a failed allocation is outside the model.
+    moved = "fn f(n:usize)->usize { let mut b=Buf[u64](n); let c=take(b); return len(c); }"
+    assert equivalent(moved, moved, "f")["status"] == "unknown"

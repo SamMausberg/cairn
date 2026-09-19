@@ -38,6 +38,7 @@ class Solver:
             self._bind("Z3_set_error_handler", None, [P, ERROR_CB])
             self._bind("Z3_get_error_msg", S, [P, U])
             self._bind("Z3_mk_solver", P, [P])
+            self._bind("Z3_mk_solver_for_logic", P, [P, P])
             self._bind("Z3_solver_inc_ref", None, [P, P])
             self._bind("Z3_solver_dec_ref", None, [P, P])
             self._bind("Z3_solver_from_string", None, [P, P, S])
@@ -89,11 +90,12 @@ class Solver:
     def __exit__(self, *unused):
         self.close()
 
-    def check(self, text: str, variables: dict[str, str]) -> dict[str, Any]:
+    def check(self, text: str, variables: dict[str, str], logic: str | None = None) -> dict[str, Any]:
         """Check generated SMT assertions and read complete scalar assignments.
 
         Input SMT is host-generated, not an untrusted model command channel.
         Each call uses a fresh solver. Constants have the supplied stable names.
+        A named logic picks the solver for that fragment; the default is general.
         """
         if not self.ctx:
             raise RuntimeError("Solver context is closed.")
@@ -101,13 +103,17 @@ class Solver:
             return {"status": "unknown", "reason": "SMT text exceeds the 8 MB limit."}
         self.errors.clear()
         z = self.lib
-        solver = z.Z3_mk_solver(self.ctx)
+        if logic is None:
+            solver = z.Z3_mk_solver(self.ctx)
+        else:
+            solver = z.Z3_mk_solver_for_logic(self.ctx, z.Z3_mk_string_symbol(self.ctx, logic.encode()))
         z.Z3_solver_inc_ref(self.ctx, solver)
         model = None
         common = {
             "solver": "Z3",
             "version": self.version,
             "library": self.library,
+            "logic": logic or "general",
             "timeout_ms": self.timeout_ms,
             "query_sha256": hashlib.sha256(text.encode()).hexdigest(),
         }

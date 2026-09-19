@@ -1,12 +1,13 @@
 """Exact-width value semantics and solver-backed equivalence for a source fragment.
 
 Supported: bool, fixed integers, f32/f64, records, tag-only enums and payload
-sums with match and try, fixed local arrays (`stack x:T[N]`, `Array[T, N]`),
-locals, assignment to a name/field/element, if/else, bounded for/while with
-break/continue, early returns, acyclic calls of value parameters (a `ro` single
-borrow reads as its value), checked/wrapping arithmetic and checked conversions.
-Excluded: heap owners, views as parameters, `rw` borrows, recursion, tasks,
-lanes, closures, dyn, atomics, FFI and void results.
+sums with match and try, array views (`ro<T>[n]`, `rw<T>[n]`) and their parts,
+single borrows of values, fixed local storage (`stack x:T[N]`, `Array[T, N]`),
+function-local heap owners (`buffer x:T[n]`, `Buf[T](n)`), `compact`, host
+`reduce`, locals, assignment to a name/field/element, if/else, bounded for/while
+with break/continue, early returns and acyclic calls. Excluded: owners that move
+(`take`, `swap`, a returned or stored owner), recursion, tasks, lanes, device
+placement, closures, dyn, atomics and FFI.
 
 A value is flattened into its scalar components: a record is its fields, a sum
 is the emitted u32 tag beside every variant payload, an array is its elements.
@@ -14,17 +15,27 @@ Only a sum's active payload is compared, so inactive storage is not observed,
 and inputs are quantified over well-formed values -- every tag names a declared
 variant, which is what the emitted entry guard admits.
 
+Storage behind a view is one SMT array per component of its element, read and
+written at `offset + i` while `i` is below the extent the signature gives it; a
+part shifts that window. What a call observes is its result together with the
+final contents of every `rw` parameter, element by element over the whole
+extent. The admitted inputs are the ones the emitted entry guards admit
+(`cr::view`, and `cr::disjoint` between an `rw` view and every other view), so
+storage behind two `rw` parameters is distinct while read-only views may alias,
+which is why they are modeled as independent arrays of equal contents.
+
 Every guard aborts and every abort is one observation, so "both trap" is equal
 behaviour. Floats use Z3's FloatingPoint theory: one round-to-nearest-even per
 operation, matching the `-ffp-contract=off -fno-fast-math` contract, IEEE
 comparison predicates, and `cr::truncate` modeled as the header writes it. A
 result is compared as an IEEE datum, so +0.0 and -0.0 differ; but the theory has
-a single NaN, so a reachable NaN result is reported unknown rather than equal,
-and a caller who does not care excludes NaN with a precondition.
+a single NaN, so a reachable NaN observation is reported unknown rather than
+equal, and a caller who does not care excludes NaN with a precondition.
 
-Loops are unrolled to MAX_UNROLL iterations; whatever would still be running is
-a residual obligation the solver must refute, so exceeding the budget is
-unknown, never success.
+Loops, `compact` and `reduce` are unrolled to MAX_UNROLL iterations; whatever
+would still be running is a residual obligation the solver must refute, so
+exceeding the budget is unknown, never success. An extent is symbolic, so a pass
+over `0..n` needs a precondition that bounds `n` within that budget.
 
 This translator and Z3 are trusted. No result is a Lean-kernel proof or a
 verification of the C++ backend. Unsupported syntax returns unknown.
@@ -41,14 +52,15 @@ from typing import Any
 
 from .cairnc import SIGNED, WIDTH, Diagnostic, Expr, Function, Parser, Stmt, Type, compile_program
 from .smt_bridge import Solver, SolverUnavailable
-from .syntax import BOOL, FLOAT, NUMERIC, VOID
+from .syntax import BOOL, FLOAT, NUMERIC, USIZE, VOID, is_view
 
-PROFILE = "cairn-value-bv-fp/2"
+PROFILE = "cairn-value-bv-fp-array/3"
 MAX_PATHS = 256
 MAX_TERMS = 12000
 MAX_SOURCE_BYTES = 64000
 MAX_UNROLL = 16  # Iterations of one loop; a path that would need more is a residual obligation.
 MAX_LEAVES = 64  # Scalar components of one value.
+MAX_REPLAY = 16  # Elements of one view a counterexample may carry into the concrete replay.
 TAG = Type("u32")  # The emitted discriminant of an enum or sum.
 FORMATS = {"f32": (8, 24, "<f", "<I"), "f64": (11, 53, "<d", "<Q")}
 
@@ -130,9 +142,20 @@ def sort(ty: Type) -> str:
     return f"(_ BitVec {WIDTH[ty.name]})"
 
 
+def arrayed(ty: Type) -> str:
+    """The sort of the storage one component of a view's element lives in."""
+    return f"(Array {sort(USIZE)} {sort(ty)})"
+
+
 def declared(ty: Type) -> str:
     """The sort an input is declared with: a float arrives as the bit pattern its model reports."""
     return f"(_ BitVec {sum(FORMATS[ty.name][:2])})" if ty.name in FLOAT else sort(ty)
+
+
+def lifted(name: str, ty: Type) -> str:
+    """A declared constant read as its value: a float is the datum its bit pattern encodes."""
+    eb, sb = FORMATS[ty.name][:2] if ty.name in FLOAT else (0, 0)
+    return f"((_ to_fp {eb} {sb}) {name})" if ty.name in FLOAT else name
 
 
 def conj(*parts: str) -> str:
@@ -175,13 +198,47 @@ def extend(value: str, source_width: int, dest_width: int, signed: bool) -> str:
     return f"((_ {'sign_extend' if signed else 'zero_extend'} {dest_width - source_width}) {value})"
 
 
+ZERO = constant(0, "usize")
+
+
+def numeral(term: str) -> int | None:
+    """What `(_ bvN w)` denotes, or None: a literal index keeps a read of storage a lookup."""
+    digits = term[5:-1].split(" ")[0] if term.startswith("(_ bv") and term.endswith(")") else ""
+    return int(digits) if digits.isdigit() else None
+
+
+def shifted(offset: str, index: str) -> str:
+    a, b = numeral(offset), numeral(index)
+    if a is not None and b is not None:
+        return constant(a + b, "usize")
+    return index if offset == ZERO else f"(bvadd {offset} {index})"
+
+
+@dataclass(frozen=True)
+class Window:
+    """Where a view's elements live: element i is `offset + i` of the arrays the term carries.
+
+    `root` names the storage itself, so two views of one array are recognised
+    however they were narrowed.
+    """
+
+    offset: str
+    extent: str
+    root: int
+
+
 @dataclass(frozen=True)
 class Term:
-    """A value: one SMT term per scalar component, and whether evaluation continued."""
+    """A value: one SMT term per scalar component, and whether evaluation continued.
+
+    A view carries one SMT array per component of its element instead, read
+    through its window.
+    """
 
     ty: Type
     parts: tuple[str, ...]
     defined: str = "true"
+    window: Window | None = None
 
     @property
     def value(self) -> str:
@@ -196,9 +253,10 @@ class Frame:
     returns: list
     path: str = "true"
     top: bool = False  # A `try` is modeled only as the whole right-hand side of a statement.
+    outs: tuple[str, ...] = ()  # The rw parameters whose final value leaves the function.
 
     def at(self, path: str, top: bool = False) -> Frame:
-        return Frame(self.stack, self.returns, path, top)
+        return Frame(self.stack, self.returns, path, top, self.outs)
 
 
 class Loop:
@@ -224,15 +282,32 @@ class Source:
         return self.types.get(ty.value if ty.mode != "value" else ty)
 
     def elements(self, ty: Type) -> tuple[Type, int] | None:
-        """(element type, count) of an inline array: a fixed local view or an Array value."""
-        if ty.mode != "value" and ty.extent.isdigit():
-            return (ty.value, int(ty.extent)) if ty.place == "host" else None
-        if ty.mode == "value" and ty.name == "Array":
-            return ty.args[0], ty.args[1]
-        return None
+        """(element type, count) of an inline array value."""
+        return (ty.args[0], ty.args[1]) if ty.mode == "value" and ty.name == "Array" else None
+
+    def item(self, ty: Type) -> Type:
+        """The element type of a view, of fixed local storage or of an owned array."""
+        if ty.mode == "value" and ty.name in {"Buf", "Array"}:
+            return ty.args[0]
+        if is_view(ty):
+            return ty.value
+        raise Unsupported(f"{ty.display()} holds no elements.")
+
+    def tagged(self, ty: Type) -> bool:
+        """Does a value of this type carry a tag an entry guard would have to check?"""
+        array = self.elements(ty)
+        layout = self.layout(ty)
+        if array is not None:
+            return self.tagged(array[0])
+        if isinstance(layout, dict):
+            return True
+        return isinstance(layout, list) and any(self.tagged(t) for _, t in layout)
 
     def leaves(self, ty: Type) -> tuple[Type, ...]:
-        """The scalar components of a value, in the order the model stores them."""
+        """The scalar components of a value, in the order the model stores them.
+
+        A view has the components of its element, each held in storage of its own.
+        """
         if ty in self.cache:
             return self.cache[ty]
         if ty == VOID:
@@ -244,8 +319,10 @@ class Source:
             if len(inner) * array[1] > MAX_LEAVES:
                 raise Unsupported("Value layout exceeds the modeled component budget.")
             found = inner * array[1]
-        elif ty.mode != "value" and ty.extent:
-            raise Unsupported("Array views other than fixed local storage are not modeled.")
+        elif is_view(ty):
+            if ty.place != "host":
+                raise Unsupported(f"{ty.place} memory is not modeled.")
+            found = self.leaves(ty.value)
         elif ty.name in NUMERIC | {"bool"}:
             found = (ty.value,)
         elif isinstance(layout, list):
@@ -289,6 +366,16 @@ class Source:
             kind = "enum" if ty.value.name in self.enums else "sum"
             return kind + "(" + ", ".join(f"{n}: {self.shape(t) if t else '-'}" for n, t in layout.items()) + ")"
         return ty.value.display()
+
+
+def components(src: Source, t: Term) -> tuple[Type, ...]:
+    """The scalar components of a term: a view's are its element's, one array each."""
+    return src.leaves(src.item(t.ty) if t.window else t.ty)
+
+
+def kinds(src: Source, t: Term) -> tuple[str, ...]:
+    """The SMT sort each component of a term is bound at."""
+    return tuple(arrayed(x) if t.window else sort(x) for x in components(src, t))
 
 
 def observed(src: Source, ty: Type, a: tuple[str, ...], b: tuple[str, ...]) -> str:
@@ -365,6 +452,8 @@ def admissible(src: Source, ty: Type, value: Any) -> bool:
     """Is a caller-supplied input a value of this type? Malformed inputs are refused, not guessed."""
     array = src.elements(ty)
     layout = src.layout(ty)
+    if is_view(ty):  # Storage behind a view arrives as its elements; `outcome` holds it to the extent.
+        return isinstance(value, list) and all(admissible(src, ty.value, v) for v in value)
     if array is not None:
         return isinstance(value, list) and len(value) == array[1] and all(admissible(src, array[0], v) for v in value)
     if isinstance(layout, list):
@@ -388,6 +477,8 @@ def identical(src: Source, ty: Type, a: Any, b: Any) -> bool:
     """Concrete observation equality; floats compare by bit pattern, so +0 and -0 differ and NaNs do not tie."""
     array = src.elements(ty)
     layout = src.layout(ty)
+    if is_view(ty):
+        return len(a) == len(b) and all(identical(src, ty.value, x, y) for x, y in zip(a, b, strict=True))
     if array is not None:
         return all(identical(src, array[0], x, y) for x, y in zip(a, b, strict=True))
     if isinstance(layout, list):
@@ -402,6 +493,16 @@ def identical(src: Source, ty: Type, a: Any, b: Any) -> bool:
     return a == b
 
 
+def extent_of(env: dict[str, Term], ty: Type) -> str:
+    """The element count a view was declared with: a literal, or the usize name that stands for it."""
+    if ty.extent.isdigit():
+        return constant(int(ty.extent), "usize")
+    bound = env.get(ty.extent)
+    if bound is None or bound.ty != USIZE or bound.window is not None:
+        raise Unsupported("A view extent must be a literal or a usize parameter of the same function.")
+    return bound.value
+
+
 class Formula:
     def __init__(self, params: list[tuple[str, Type]], source: Source):
         self.source = source
@@ -410,48 +511,64 @@ class Formula:
         self.cache: dict[tuple[str, str], str] = {}
         self.inputs: dict[str, Term] = {}
         self.variables: dict[str, str] = {}  # The solver reads a float input as its bit pattern.
-        self.floating = False
+        self.floating = self.arrays = False
+        self.storages = 0
         for i, (name, ty) in enumerate(params):
-            if ty.mode != "value":
-                raise Unsupported("Only by-value parameters are modeled; borrows and views are not.")
+            if is_view(ty) and source.tagged(ty.value):
+                raise Unsupported("A tag inside a view has no entry guard, so its inputs are not admitted.")
             parts = []
             for j, leaf in enumerate(source.leaves(ty)):
                 n = f"arg_{i}_{j}"
+                if is_view(ty):  # Storage the caller lends: one array per component of its element.
+                    self.declarations.append(f"(declare-const {n} {arrayed(leaf)})")
+                    parts.append(n)
+                    continue
                 self.declarations.append(f"(declare-const {n} {declared(leaf)})")
                 self.variables[n] = leaf.name
-                eb, sb = FORMATS[leaf.name][:2] if leaf.name in FLOAT else (0, 0)
-                parts.append(self.bind(f"((_ to_fp {eb} {sb}) {n})", leaf) if leaf.name in FLOAT else n)
+                parts.append(self.bind(lifted(n, leaf), sort(leaf)) if leaf.name in FLOAT else n)
             self.track(ty)
-            self.inputs[name] = Term(ty, tuple(parts))
+            self.arrays = self.arrays or is_view(ty)
+            window = Window(ZERO, extent_of(self.inputs, ty), self.storage()) if is_view(ty) else None
+            self.inputs[name] = Term(ty, tuple(parts), window=window)
+
+    def storage(self) -> int:
+        """A fresh identity for one array: a parameter lends one, and every local owner is its own."""
+        self.storages += 1
+        return self.storages
 
     def track(self, ty: Type):
         """Remember that a float exists, so the query names a logic whose theory has one."""
         self.floating = self.floating or any(leaf.name in FLOAT for leaf in self.source.leaves(ty))
 
-    def bind(self, expression: str, ty: Type) -> str:
+    def bind(self, expression: str, kind: str) -> str:
         if expression in {"true", "false"}:
             return expression
-        key = (sort(ty), expression)
+        key = (kind, expression)
         if key in self.cache:
             return self.cache[key]
         if len(self.definitions) >= MAX_TERMS:
             raise Unsupported("Symbolic term budget exceeded.")
         n = f"term_{len(self.definitions)}"
-        self.definitions.append(f"(define-fun {n} () {sort(ty)} {expression})")
+        self.definitions.append(f"(define-fun {n} () {kind} {expression})")
         self.cache[key] = n
         return n
 
     def term(self, ty: Type, value: str, defined: str = "true") -> Term:
         self.track(ty)
-        return Term(ty, (self.bind(value, ty),), self.bind(defined, BOOL))
+        return Term(ty, (self.bind(value, sort(ty)),), self.bind(defined, "Bool"))
 
-    def make(self, ty: Type, parts: tuple[str, ...], defined: str = "true") -> Term:
+    def make(self, ty: Type, parts: tuple[str, ...], defined: str = "true", window: Window | None = None) -> Term:
         self.track(ty)
-        return Term(ty, parts, self.bind(defined, BOOL))
+        return Term(ty, parts, self.bind(defined, "Bool"), window)
+
+    @property
+    def logic(self) -> str | None:
+        """The solver to build: storage needs the array-aware bit-blaster, floats the general one."""
+        return None if self.floating else "QF_AUFBV" if self.arrays else None
 
     def text(self, assertion: str) -> str:
-        logic = "ALL" if self.floating else "QF_BV"
-        head = [f"(set-logic {logic})", *self.declarations, *self.definitions]
+        declared_logic = "ALL" if self.floating or self.arrays else "QF_BV"
+        head = [f"(set-logic {declared_logic})", *self.declarations, *self.definitions]
         return "\n".join([*head, f"(assert {assertion})"]) + "\n"
 
 
@@ -475,12 +592,23 @@ class Symbolic:
             for t in self.source.leaves(ty)
         )
 
+    def empty(self, item: Type) -> tuple[str, ...]:
+        """Zero-initialized storage of `item` elements: one constant array per component."""
+        self.q.arrays = True
+        return tuple(f"((as const {arrayed(t)}) {z})"
+                     for t, z in zip(self.source.leaves(item), self.zeros(item), strict=True))  # fmt: skip
+
+    def at(self, base: Term, index: str) -> tuple[str, ...]:
+        """The components of the element storage holds at `index` of a view's window."""
+        return tuple(f"(select {p} {shifted(base.window.offset, index)})" for p in base.parts)
+
     def expr(self, e: Expr, env: dict[str, Term], frame: Frame) -> Term:
         self.tick()
         if e.ty is None:
             raise Unsupported("An untyped expression cannot be modeled.")
         ty = e.ty
-        self.source.leaves(ty)  # Refuse an unmodeled type before anything is built from it.
+        if ty.name != "Buf":  # An owner is storage, not a value: `leaves` refuses it wherever one is stored.
+            self.source.leaves(ty)  # Refuse an unmodeled type before anything is built from it.
         inner = frame.at(frame.path)  # A `try` is only itself, never an operand of something larger.
         if e.tag == "name" and isinstance(e.ref, int | Expr):  # A static natural or a module constant.
             return self.expr(Expr("int", str(e.ref), ty=ty) if isinstance(e.ref, int) else e.ref, env, inner)
@@ -500,6 +628,8 @@ class Symbolic:
             return self.q.make(ty, base.parts[slice(*self.source.span(base.ty, e.val))], base.defined)
         if e.tag == "index":
             return self.element(e, env, inner)
+        if e.tag == "slice":
+            return self.part(e, env, inner)
         if e.tag == "try":
             if not frame.top:
                 raise Unsupported("A try inside a larger expression is not modeled; bind it first.")
@@ -629,13 +759,43 @@ class Symbolic:
             a, b = args
             cmp = f"(bv{'s' if e.ty.name in SIGNED else 'u'}le {a.value} {b.value})"
             return self.q.term(e.ty, ite(cmp, a.value, b.value) if n == "min" else ite(cmp, b.value, a.value), ok)
-        if n == "Array":  # Inline zeroed storage; the heap owners Buf and Dyn are not modeled.
+        if n == "Array":  # An inline array is a value; `Buf` and `stack` are storage.
             return self.q.make(e.ty, self.zeros(e.ty))
+        if n == "len":
+            return self.q.term(USIZE, self.hold(args[0]).extent, ok)
+        if n == "Buf":  # Zeroed heap storage; allocation failure is outside this model.
+            window = Window(ZERO, args[0].value, self.q.storage())
+            return Term(e.ty, self.empty(e.ty.args[0]), self.q.bind(ok, "Bool"), window)
         n = e.ref.name if isinstance(e.ref, Function) else n  # The callee the checker resolved.
         if n in self.source.functions:
-            value = self.invoke(n, [Term(a.ty, a.parts) for a in args], frame.stack)
-            return self.q.make(value.ty, value.parts, conj(ok, value.defined))
+            return self.apply(n, e, args, env, frame, ok)
         raise Unsupported("Call is outside the supported value fragment.")
+
+    def hold(self, base: Term) -> Window:
+        """Where a term's elements live, or a refusal: an inline array value is not storage."""
+        if base.window is None:
+            raise Unsupported("Only views and local storage are lent, sliced and measured in this model.")
+        return base.window
+
+    def counted(self, base: Term) -> int:
+        """How many elements an inline array value holds."""
+        array = self.source.elements(base.ty)
+        if array is None:
+            raise Unsupported("Only views, local storage and inline arrays hold elements in this model.")
+        return array[1]
+
+    def apply(self, name: str, e: Expr, args: list[Term], env: dict[str, Term], frame: Frame, ok: str) -> Term:
+        """A call, with what it wrote through each rw parameter stored back into the place that lent it."""
+        f = self.source.functions[name]
+        lent = [a.window.root for a in args if a.window is not None]
+        shared = (a for a, (_, t) in zip(args, f.params, strict=True) if a.window and t.mode == "rw")
+        if any(lent.count(a.window.root) > 1 for a in shared):
+            raise Unsupported("Two views of one array passed to one call are not modeled.")
+        places = [a for a, (_, t) in zip(e.args, f.params, strict=True) if t.mode == "rw"]
+        value, written = self.invoke(name, args, frame.stack, conj(frame.path, ok))
+        for a, final in zip(places, written, strict=True):
+            ok = conj(ok, self.store(a, env, frame, final))
+        return self.q.make(value.ty, value.parts, conj(ok, value.defined))
 
     def compose(self, ty: Type, index: int, payload: Term | None) -> Term:
         """A sum value: the tag beside every payload, the inactive ones zeroed as the emitter zeroes them."""
@@ -647,22 +807,41 @@ class Symbolic:
         return self.q.make(ty, tuple(parts), payload.defined if payload else "true")
 
     def element(self, e: Expr, env: dict[str, Term], frame: Frame) -> Term:
-        """A guarded read of one element of fixed local storage."""
+        """A guarded read of one element of storage or of an inline array."""
         base = self.expr(e.args[0], env, frame)
-        array = self.source.elements(base.ty)
-        if array is None or len(e.args) != 2:
-            raise Unsupported("Only fixed local arrays are indexed in this model.")
-        item, count = array
+        if len(e.args) != 2:
+            raise Unsupported("An index has exactly one position in this model.")
         index = self.expr(e.args[1], env, frame)
+        item = self.source.item(base.ty)
         leaves = self.source.leaves(item)
+        if base.window is not None:
+            inside = f"(bvult {index.value} {base.window.extent})"
+            parts = tuple(self.q.bind(x, sort(t)) for x, t in zip(self.at(base, index.value), leaves, strict=True))
+            return self.q.make(item, parts, conj(base.defined, index.defined, inside))
+        count = self.counted(base)
         inside = f"(bvult {index.value} {constant(count, index.ty.name)})" if count else "false"
-        parts = []
+        picked = []
         for k, leaf in enumerate(leaves):
             chosen = base.parts[max(count - 1, 0) * len(leaves) + k] if count else self.zeros(item)[k]
             for i in reversed(range(count - 1)):
                 chosen = ite(same(index.value, constant(i, index.ty.name)), base.parts[i * len(leaves) + k], chosen)
-            parts.append(self.q.bind(chosen, leaf))
-        return self.q.make(item, tuple(parts), conj(base.defined, index.defined, inside))
+            picked.append(self.q.bind(chosen, sort(leaf)))
+        return self.q.make(item, tuple(picked), conj(base.defined, index.defined, inside))
+
+    def part(self, e: Expr, env: dict[str, Term], frame: Frame) -> Term:
+        """`x[lo..hi]` passed to a callee: one guard (lo <= hi <= len, and hi - lo is the extent it wants)."""
+        base = self.expr(e.args[0], env, frame)
+        window = self.hold(base)
+        lo, hi = (self.expr(a, env, frame) for a in e.args[1:])
+        span = self.q.bind(f"(bvsub {hi.value} {lo.value})", sort(USIZE))
+        guard = conj(f"(bvule {lo.value} {hi.value})", f"(bvule {hi.value} {window.extent})")
+        if isinstance(e.ref, Expr):  # The extent the callee declares, as the caller's argument reads it.
+            guard = conj(guard, same(span, self.expr(e.ref, env, frame).value))
+        elif str(e.ref).isdigit():
+            guard = conj(guard, same(span, constant(int(e.ref), "usize")))
+        defined = conj(base.defined, lo.defined, hi.defined, guard)
+        shift = self.q.bind(shifted(window.offset, lo.value), sort(USIZE))
+        return Term(e.ty, base.parts, self.q.bind(defined, "Bool"), Window(shift, span, window.root))
 
     def propagate(self, e: Expr, env: dict[str, Term], frame: Frame) -> Term:
         """`try x`: the success payload, or a return of the failure the enclosing result carries."""
@@ -672,58 +851,85 @@ class Symbolic:
         failed = neg(same(inner.parts[0], constant(0, TAG.name)))
         payload = layout[err] and self.q.make(layout[err], inner.parts[slice(*self.source.span(inner.ty, err))])
         index = list(self.source.layout(target)).index(carrier)
-        frame.returns.append((conj(frame.path, inner.defined, failed), self.compose(target, index, payload)))
+        failure = (conj(frame.path, inner.defined, failed), self.compose(target, index, payload), self.outs(env, frame))
+        frame.returns.append(failure)
         good = inner.parts[slice(*self.source.span(inner.ty, ok))] if layout[ok] else ()
         return self.q.make(e.ty, good, conj(inner.defined, neg(failed)))
 
-    def invoke(self, name: str, args: list[Term], stack: tuple[str, ...] = ()) -> Term:
+    def outs(self, env: dict[str, Term], frame: Frame) -> tuple[Term, ...]:
+        """What the rw parameters hold where a path leaves the function."""
+        return tuple(env[n] for n in frame.outs)
+
+    def invoke(self, name: str, args: list[Term], stack: tuple[str, ...] = (), path: str = "true") -> tuple:
+        """A call: the value it returns, and what each rw parameter holds when it does.
+
+        The caller's path enters the body, so a callee's loop is bounded by what reaches it.
+        """
         if name in stack:
             raise Unsupported("Recursive functions are not modeled.")
         if len(stack) > 24:
             raise Unsupported("Call-depth limit exceeded.")
         f = self.source.functions[name]
-        if f.static or f.ret == VOID:
-            raise Unsupported("Static parameters and void results are outside the modeled fragment.")
+        if f.static:
+            raise Unsupported("Static parameters are outside the modeled fragment.")
         self.source.leaves(f.ret)
-        if any(t.mode == "rw" or t.extent for _, t in f.params):
-            raise Unsupported("Callee has a nonscalar signature.")  # A read-only borrow reads as its value.
-        env = {n: Term(t.value, a.parts) for (n, t), a in zip(f.params, args, strict=True)}
-        frame = Frame((*stack, name), [])
-        if self.block(f.body, [("true", env)], frame, None):
+        env = {n: Term(t.value, a.parts) for (n, t), a in zip(f.params, args, strict=True) if not is_view(t)}
+        for (n, t), a in zip(f.params, args, strict=True):  # A view is bounded by the extent its callee declares.
+            if is_view(t):
+                lends = self.hold(a)
+                env[n] = Term(t, a.parts, window=Window(lends.offset, extent_of(env, t), lends.root))
+        frame = Frame((*stack, name), [], outs=tuple(n for n, t in f.params if t.mode == "rw"))
+        rest = self.block(f.body, [(path, env)], frame, None)
+        if rest and f.ret != VOID:
             raise Unsupported("A function fell through without returning.")
+        for reached, inside in rest:  # A void function returns by reaching its end.
+            frame.returns.append((reached, self.q.make(VOID, ()), self.outs(inside, frame)))
         value = self.zeros(f.ret)
-        for path, v in reversed(frame.returns):
+        finals = [list(x.parts) for x in self.outs(env, frame)]
+        for path, v, written in reversed(frame.returns):
             value = tuple(ite(path, x, y) for x, y in zip(v.parts, value, strict=True))
-        leaves = self.source.leaves(f.ret)
-        parts = tuple(self.q.bind(x, t) for x, t in zip(value, leaves, strict=True))
-        return self.q.make(f.ret, parts, self.q.bind(disj(*(path for path, _ in frame.returns)), BOOL))
+            for k, out in enumerate(written):
+                finals[k] = [ite(path, x, y) for x, y in zip(out.parts, finals[k], strict=True)]
+        parts = tuple(self.q.bind(x, sort(t)) for x, t in zip(value, self.source.leaves(f.ret), strict=True))
+        held = []
+        for seed, final in zip(self.outs(env, frame), finals, strict=True):
+            joined = tuple(self.q.bind(x, k) for x, k in zip(final, kinds(self.source, seed), strict=True))
+            held.append(Term(seed.ty, joined, window=seed.window))
+        reached = self.q.bind(disj(*(path for path, _, _ in frame.returns)), "Bool")
+        return self.q.make(f.ret, parts, reached), tuple(held)
 
     def store(self, target: Expr, env: dict[str, Term], frame: Frame, value: Term) -> str:
-        """Assign into a local place; returns what the assignment needs in order to happen."""
+        """Assign into a place; returns what the assignment needs in order to happen."""
         if target.tag == "name":
-            env[target.val] = Term(env[target.val].ty, value.parts)
+            held = env[target.val]
+            env[target.val] = Term(held.ty, value.parts, window=held.window)
             return "true"
         base = self.expr(target.args[0], env, frame)
+        if target.tag == "slice":  # Writing through a part writes the storage it narrows.
+            return conj(base.defined, self.store(target.args[0], env, frame, Term(base.ty, value.parts)))
         if target.tag == "field":
             lo, hi = self.source.span(base.ty, target.val)
             whole = Term(base.ty, base.parts[:lo] + value.parts + base.parts[hi:])
             return conj(base.defined, self.store(target.args[0], env, frame, whole))
         if target.tag != "index":
-            raise Unsupported("Only names, fields and fixed array elements are assigned in this model.")
-        array = self.source.elements(base.ty)
-        if array is None:
-            raise Unsupported("Only fixed local arrays are assigned element-wise in this model.")
-        item, count = array
+            raise Unsupported("Only names, fields and array elements are assigned in this model.")
         index = self.expr(target.args[1], env, frame)
-        leaves = self.source.leaves(item)
-        parts = list(base.parts)
+        leaves = self.source.leaves(self.source.item(base.ty))
+        if base.window is not None:
+            place = shifted(base.window.offset, index.value)
+            parts = tuple(self.q.bind(f"(store {p} {place} {x})", arrayed(t))
+                          for p, x, t in zip(base.parts, value.parts, leaves, strict=True))  # fmt: skip
+            inside = conj(base.defined, index.defined, f"(bvult {index.value} {base.window.extent})")
+            return conj(inside, self.store(target.args[0], env, frame, Term(base.ty, parts, window=base.window)))
+        count = self.counted(base)
+        updated = list(base.parts)
         for i in range(count):
             hit = same(index.value, constant(i, index.ty.name))
             for k, leaf in enumerate(leaves):
                 at = i * len(leaves) + k
-                parts[at] = self.q.bind(ite(hit, value.parts[k], base.parts[at]), leaf)
+                updated[at] = self.q.bind(ite(hit, value.parts[k], base.parts[at]), sort(leaf))
         inside = conj(base.defined, index.defined, f"(bvult {index.value} {constant(count, index.ty.name)})")
-        return conj(inside, self.store(target.args[0], env, frame, Term(base.ty, tuple(parts))))
+        return conj(inside, self.store(target.args[0], env, frame, Term(base.ty, tuple(updated))))
 
     def block(self, body: list[Stmt], states: list, frame: Frame, loop: Loop | None) -> list:
         initial = set(states[0][1]) if states else set()
@@ -737,19 +943,25 @@ class Symbolic:
                 here = frame.at(path, top=True)
                 if s.tag in {"let", "reg"}:
                     v = self.expr(s.exprs[0], env, here)
-                    env[s.name] = Term(v.ty, v.parts)
+                    env[s.name] = Term(v.ty, v.parts, window=v.window)
                     next_states.append((conj(path, v.defined), env))
                 elif s.tag == "assign":
                     v = self.expr(s.exprs[1], env, here)
                     guard = self.store(s.exprs[0], env, frame.at(path), v)
                     next_states.append((conj(path, v.defined, guard), env))
-                elif s.tag == "stack" and s.ref == "host" and s.exprs[0].tag == "int":
-                    view = Type(s.ty.name, "rw", s.exprs[0].val, s.ty.args, "host")
-                    env[s.name] = Term(view, self.zeros(view))
-                    next_states.append((path, env))
+                elif s.tag in {"stack", "buffer"} and s.ref == "host":
+                    count = self.expr(s.exprs[0], env, here)  # Zeroed; a failed allocation is outside this model.
+                    held = Type(s.ty.name, "rw", s.exprs[0].val, s.ty.args, "host")
+                    where = Window(ZERO, count.value, self.q.storage())
+                    env[s.name] = Term(held, self.empty(s.ty), window=where)
+                    next_states.append((conj(path, count.defined), env))
                 elif s.tag == "return" and len(s.exprs) == 1:
                     v = self.expr(s.exprs[0], env, here)
-                    frame.returns.append((conj(path, v.defined), v))
+                    frame.returns.append((conj(path, v.defined), v, self.outs(env, frame)))
+                elif s.tag == "return":
+                    frame.returns.append((path, self.q.make(VOID, ()), self.outs(env, frame)))
+                elif s.tag in {"compact", "reduce"}:
+                    next_states.extend(self.fold(s, path, env, frame))
                 elif s.tag == "expr":
                     next_states.append((conj(path, self.expr(s.exprs[0], env, here).defined), env))
                 elif s.tag == "block":
@@ -792,13 +1004,14 @@ class Symbolic:
             return states
         env = {}
         for n in states[0][1]:
-            ty = states[0][1][n].ty
+            held = states[0][1][n]
             parts = list(states[-1][1][n].parts)
             for p, inside in reversed(states[:-1]):
                 parts = [ite(p, a, b) for a, b in zip(inside[n].parts, parts, strict=True)]
-            leaves = self.source.leaves(ty)
-            env[n] = Term(ty, tuple(self.q.bind(x, t) for x, t in zip(parts, leaves, strict=True)))
-        return [(self.q.bind(disj(*(p for p, _ in states)), BOOL), env)]
+            sorts = kinds(self.source, held)
+            joined = tuple(self.q.bind(x, k) for x, k in zip(parts, sorts, strict=True))
+            env[n] = Term(held.ty, joined, window=held.window)
+        return [(self.q.bind(disj(*(p for p, _ in states)), "Bool"), env)]
 
     def repeat(self, s: Stmt, path: str, env: dict[str, Term], frame: Frame) -> list:
         """Unroll a loop; a path that would iterate past the budget becomes a residual obligation."""
@@ -817,8 +1030,8 @@ class Symbolic:
                 else:
                     c = self.expr(s.exprs[0], inside, frame.at(p))
                 held = conj(p, c.defined)  # Bound, or an unrolled path doubles in size every iteration.
-                survivors.append((self.q.bind(conj(held, neg(c.value)), BOOL), inside))
-                entering.append((self.q.bind(conj(held, c.value), BOOL), dict(inside)))
+                survivors.append((self.q.bind(conj(held, neg(c.value)), "Bool"), inside))
+                entering.append((self.q.bind(conj(held, c.value), "Bool"), dict(inside)))
             if step == MAX_UNROLL:
                 self.residual = disj(self.residual, *(p for p, _ in entering))
                 break
@@ -827,9 +1040,93 @@ class Symbolic:
             survivors += loop.breaks
             if s.tag == "for":
                 for _, inside in states:
-                    i = inside[binder]
-                    inside[binder] = Term(i.ty, (self.q.bind(f"(bvadd {i.value} {constant(1, i.ty.name)})", i.ty),))
+                    i, whole = inside[binder], numeral(inside[binder].value)
+                    up = f"(bvadd {i.value} {constant(1, i.ty.name)})"
+                    inside[binder] = Term(i.ty, (constant(whole + 1, i.ty.name) if whole is not None else up,))
         return self.merge(survivors, keep - {binder})
+
+    def reduction(self, op: str, ty: Type, a: Term, b: Term) -> Term:
+        """One step of the emitted host fold. Every operator offered here is order independent."""
+        if op in {"+", "add_wrap", "mul_wrap"}:
+            kept = {"+": "+", "add_wrap": "+", "mul_wrap": "*"}[op]
+            return self.arithmetic(ty, kept, a, b, checked=op == "+")
+        both = conj(a.defined, b.defined)
+        if op in {"&", "|", "^"}:
+            return self.q.term(ty, f"({ {'&': 'bvand', '|': 'bvor', '^': 'bvxor'}[op] } {a.value} {b.value})", both)
+        if op in {"min", "max"}:
+            cmp = f"(bv{'s' if ty.name in SIGNED else 'u'}le {a.value} {b.value})"
+            return self.q.term(ty, ite(cmp, a.value, b.value) if op == "min" else ite(cmp, b.value, a.value), both)
+        raise Unsupported(f"reduce {op} is not modeled.")
+
+    def seeded(self, op: str, ty: Type) -> Term:
+        """What the emitted fold starts from; a float total would depend on the order it is taken in."""
+        if ty.name in FLOAT:
+            raise Unsupported("A float reduction combines in an unspecified order; it is not modeled.")
+        lo, hi = bounds(ty.name)
+        return self.q.term(ty, constant({"mul_wrap": 1, "&": hi, "min": hi, "max": lo}.get(op, 0), ty.name))
+
+    def fold(self, s: Stmt, path: str, env: dict[str, Term], frame: Frame) -> list:
+        """`reduce` and `compact`: one in-order pass over 0..hi, unrolled under the loop budget."""
+        if s.ref != "host":
+            raise Unsupported("Only host reductions and collectors are modeled.")
+        collect = s.tag == "compact"
+        count = self.expr(s.exprs[1] if collect else s.exprs[0], env, frame.at(path))
+        ok = conj(path, count.defined)
+        target = self.expr(s.exprs[0], env, frame.at(ok)) if collect else None
+        acc = self.q.term(USIZE, ZERO) if collect else self.seeded(s.op, s.ty)
+        for step in range(MAX_UNROLL):
+            live = self.q.bind(conj(ok, f"(bvult {constant(step, 'usize')} {count.value})"), "Bool")
+            inner = {**env, s.binder: self.q.term(USIZE, constant(step, "usize"))}
+            if not collect:
+                v = self.expr(s.exprs[1], inner, frame.at(live))
+                total = self.reduction(s.op, s.ty, acc, v)
+                ok = conj(ok, ite(live, conj(v.defined, total.defined), "true"))
+                acc = self.q.term(s.ty, ite(live, total.value, acc.value))
+                continue
+            keep = self.expr(s.exprs[2], inner, frame.at(live))
+            taken = self.q.bind(conj(live, keep.value), "Bool")
+            v = self.expr(s.exprs[3], inner, frame.at(taken))  # The projection runs only where it is selected.
+            ok = conj(ok, ite(live, keep.defined, "true"), ite(taken, v.defined, "true"))
+            # The store is the emitter's one unchecked write: used <= step < count, and count is the capacity.
+            place = shifted(self.hold(target).offset, acc.value)
+            parts = tuple(
+                self.q.bind(ite(taken, f"(store {p} {place} {x})", p), arrayed(t))
+                for p, x, t in zip(target.parts, v.parts, components(self.source, target), strict=True)
+            )
+            target = Term(target.ty, parts, window=target.window)
+            acc = self.q.term(USIZE, ite(taken, f"(bvadd {acc.value} {constant(1, 'usize')})", acc.value))
+        self.residual = disj(self.residual, conj(ok, f"(bvult {constant(MAX_UNROLL, 'usize')} {count.value})"))
+        env = dict(env)
+        env[s.name] = acc
+        return [(conj(ok, self.store(s.exprs[0], env, frame.at(ok), target) if collect else "true"), env)]
+
+
+class Region:
+    """Concrete storage a view denotes: a window into one list, so a write is seen through every view of it."""
+
+    data: list
+    offset: int
+    extent: int
+
+    def __init__(self, data: list | Region, offset: int = 0, extent: int | None = None):
+        self.data = data.data if isinstance(data, Region) else data
+        self.offset = offset + (data.offset if isinstance(data, Region) else 0)
+        self.extent = len(self.data) - self.offset if extent is None else extent
+
+    def part(self, lo: int, extent: int) -> Region:
+        return Region(self, lo, extent)
+
+    def contents(self) -> list:
+        return [self.data[self.offset + i] for i in range(self.extent)]
+
+    def __len__(self) -> int:
+        return self.extent
+
+    def __getitem__(self, i: int):
+        return self.data[self.offset + i]
+
+    def __setitem__(self, i: int, value):
+        self.data[self.offset + i] = value
 
 
 class Concrete:
@@ -902,6 +1199,12 @@ class Concrete:
             if not 0 <= i < len(base):
                 raise ConcreteTrap("out-of-bounds")
             return base[i]
+        if e.tag == "slice":
+            base, lo, hi = (self.expr(a, env, stack) for a in e.args)
+            want = self.expr(e.ref, env, stack) if isinstance(e.ref, Expr) else e.ref
+            if lo > hi or hi > len(base) or (str(want).isdigit() and hi - lo != int(want)):
+                raise ConcreteTrap("invalid-part")
+            return Region(base).part(lo, hi - lo)
         if e.tag == "try":
             return self.attempt(e, env, stack)
         if e.tag == "unary":
@@ -967,9 +1270,18 @@ class Concrete:
             return ((a << b) % (1 << WIDTH[e.ty.name])) if n == "shl_wrap" else (a >> b)
         if n == "Array":
             return self.zeros(e.ty)
+        if n == "len":
+            return len(xs[0])
+        if n == "Buf":
+            return Region([self.zeros(e.ty.args[0]) for _ in range(xs[0])])
         n = e.ref.name if isinstance(e.ref, Function) else n
         if n in self.functions:
-            return self.invoke(n, xs, stack)
+            value, written = self.invoke(n, xs, stack)
+            lent = [(a, t) for a, (_, t) in zip(e.args, self.functions[n].params, strict=True) if t.mode == "rw"]
+            for (a, t), final in zip(lent, written, strict=True):
+                if not is_view(t):  # A view wrote through its storage; a borrowed value is written back.
+                    self.store(a, env, stack, final)
+            return value
         raise Unsupported("Concrete replay encountered an unsupported call.")
 
     def attempt(self, e, env, stack):
@@ -980,6 +1292,7 @@ class Concrete:
         raise Propagate({"variant": carrier, **({"value": value["value"]} if "value" in value else {})})
 
     def invoke(self, name, args, stack=()):
+        """(returned value, what each rw parameter holds afterwards)."""
         if name in stack:
             raise Unsupported("Concrete replay does not recurse.")
         f = self.functions[name]
@@ -987,23 +1300,28 @@ class Concrete:
         try:
             signal, value = self.block(f.body, env, (*stack, name))
         except Propagate as p:
-            return p.value
-        if signal != "return":
+            signal, value = "return", p.value
+        if signal != "return" and f.ret != VOID:
             raise Unsupported("Concrete function did not return.")
-        return value
+        return value, [env[n] for n, t in f.params if t.mode == "rw"]
 
     def store(self, target, env, stack, value):
         if target.tag == "name":
             env[target.val] = value
             return
         base = self.expr(target.args[0], env, stack)
+        if target.tag == "slice":
+            return  # A part is a window: what was written through it is already in that storage.
         if target.tag == "field":
             self.store(target.args[0], env, stack, {**base, target.val: value})
             return
         i = self.expr(target.args[1], env, stack)
         if not 0 <= i < len(base):
             raise ConcreteTrap("out-of-bounds")
-        self.store(target.args[0], env, stack, [value if k == i else x for k, x in enumerate(base)])
+        if isinstance(base, Region):  # Shared storage: the write is seen through every view of it.
+            base[i] = value
+        else:
+            self.store(target.args[0], env, stack, [value if k == i else x for k, x in enumerate(base)])
 
     def block(self, body, env, stack):
         """("return", value), ("break"|"continue", None) or (None, None) when control falls through."""
@@ -1014,12 +1332,14 @@ class Concrete:
                 env[s.name] = self.expr(s.exprs[0], env, stack)
             elif s.tag == "assign":
                 self.store(s.exprs[0], env, stack, self.expr(s.exprs[1], env, stack))
-            elif s.tag == "stack":
-                env[s.name] = [self.zeros(s.ty) for _ in range(int(s.exprs[0].val))]
+            elif s.tag in {"stack", "buffer"}:
+                env[s.name] = Region([self.zeros(s.ty) for _ in range(self.expr(s.exprs[0], env, stack))])
+            elif s.tag in {"compact", "reduce"}:
+                self.fold(s, env, stack)
             elif s.tag == "expr":
                 self.expr(s.exprs[0], env, stack)
             elif s.tag == "return":
-                return "return", self.expr(s.exprs[0], env, stack)
+                return "return", (self.expr(s.exprs[0], env, stack) if s.exprs else None)
             elif s.tag in {"break", "continue"}:
                 return s.tag, None
             elif s.tag == "block":
@@ -1067,6 +1387,34 @@ class Concrete:
             del env[s.name]
         return None, None
 
+    def fold(self, s, env, stack):
+        """`reduce` and `compact` as the host emits them: one in-order pass, within the same budget."""
+        collect = s.tag == "compact"
+        count = self.expr(s.exprs[1] if collect else s.exprs[0], env, stack)
+        if count > MAX_UNROLL:
+            raise Unsupported("Concrete replay exceeded the loop unrolling budget.")
+        out = self.expr(s.exprs[0], env, stack) if collect else None
+        lo, hi = bounds(s.ty.name)
+        used = 0 if collect else {"mul_wrap": 1, "&": hi, "min": hi, "max": lo}.get(s.op, 0)
+        for i in range(count):
+            env[s.binder] = i
+            if collect:
+                if self.expr(s.exprs[2], env, stack):
+                    out[used] = self.expr(s.exprs[3], env, stack)
+                    used += 1
+            else:
+                v = self.expr(s.exprs[1], env, stack)
+                if s.op == "+":
+                    used = self.checked(used + v, s.ty.name)
+                elif s.op in {"add_wrap", "mul_wrap"}:
+                    used = (used + v if s.op == "add_wrap" else used * v) % (1 << WIDTH[s.ty.name])
+                elif s.op in {"&", "|", "^"}:
+                    used = {"&": used & v, "|": used | v, "^": used ^ v}[s.op]
+                else:
+                    used = (min if s.op == "min" else max)(used, v)
+        env.pop(s.binder, None)  # An empty pass never binds it.
+        env[s.name] = used
+
     def outcome(self, name, args: dict[str, Any]):
         f = self.functions[name]
         if set(args) != {n for n, _ in f.params}:
@@ -1074,10 +1422,16 @@ class Concrete:
         for n, t in f.params:
             if not admissible(self.source, t, args[n]):
                 raise ValueError(f"Input {n} is not a value of {t.display()}.")
+            if is_view(t) and len(args[n]) != (int(t.extent) if t.extent.isdigit() else args.get(t.extent)):
+                raise ValueError(f"Input {n} does not hold the {t.extent} elements its view lends.")
+        held = {n: Region(list(args[n])) if is_view(t) else args[n] for n, t in f.params}
         try:
-            return {"defined": True, "return": self.invoke(name, [args[n] for n, _ in f.params])}
+            value, written = self.invoke(name, [held[n] for n, _ in f.params])
         except ConcreteTrap as e:
             return {"defined": False, "trap": str(e)}
+        rw = [n for n, t in f.params if t.mode == "rw"]
+        final = {n: x.contents() if isinstance(x, Region) else x for n, x in zip(rw, written, strict=True)}
+        return {"defined": True, "return": value, "written": final}
 
 
 def prepared(source: str) -> Source:
@@ -1170,9 +1524,25 @@ def equivalent(
         q = Formula(rf.params, refs)
         left = Symbolic(q, refs)
         right = Symbolic(q, cands)
-        lv = left.invoke(symbol, list(q.inputs.values()))
-        rv = right.invoke(symbol, list(q.inputs.values()))
-        formed = conj(*(wellformed(refs, t, q.inputs[n].parts) for n, t in rf.params))
+        lv, lw = left.invoke(symbol, list(q.inputs.values()))
+        rv, rw = right.invoke(symbol, list(q.inputs.values()))
+        lent = [q.inputs[n] for n, t in rf.params if t.mode == "rw"]
+        probe = "probe"  # One index: where the final contents of two rw views may differ.
+        if any(x.window for x in lent):
+            q.declarations.append(f"(declare-const {probe} {sort(USIZE)})")
+        named, limits = [], []
+        for i, (n, t) in enumerate(rf.params):  # Name the leading elements, so a model carries its storage.
+            if not is_view(t):
+                continue
+            limits.append(f"(bvule {q.inputs[n].window.extent} {constant(MAX_REPLAY, 'usize')})")
+            for j, leaf in enumerate(refs.leaves(t)):
+                for k in range(MAX_REPLAY):
+                    at = f"elem_{i}_{j}_{k}"
+                    q.declarations.append(f"(declare-const {at} {declared(leaf)})")
+                    q.variables[at] = leaf.name
+                    named.append(same(f"(select arg_{i}_{j} {constant(k, 'usize')})", lifted(at, leaf)))
+        small = conj(*limits)
+        formed = conj(*(wellformed(refs, t, q.inputs[n].parts) for n, t in rf.params if not is_view(t)), *named)
         domain = Term(BOOL, ("true",))
         if assume != "true":
             dn = "cairn_domain"
@@ -1181,17 +1551,37 @@ def equivalent(
             sig = ", ".join(n + ":" + t.display() for n, t in rf.params)
             ds = reference + f"\nfn {dn}({sig})->bool {{return ({assume});}}"
             domains = prepared(ds)
-            domain = Symbolic(q, domains).invoke(dn, list(q.inputs.values()))
+            domain = Symbolic(q, domains).invoke(dn, list(q.inputs.values()))[0]
         admitted = conj(formed, domain.value)
+
+        def seen(held: Term, a: Term, b: Term) -> str:
+            """Does what two runs left in one rw parameter look the same? A view is read at the probe."""
+            if held.window is None:
+                return observed(refs, a.ty, a.parts, b.parts)
+            item = refs.item(held.ty)
+            inside = f"(bvult {probe} {held.window.extent})"
+            return disj(neg(inside), observed(refs, item, left.at(a, probe), right.at(b, probe)))
+
+        def nan(held: Term, a: Term) -> str:
+            """Could this rw parameter hold a NaN, whose payload bits the model does not track?"""
+            if held.window is None:
+                return undecided(refs, a.ty, a.parts)
+            inside = f"(bvult {probe} {held.window.extent})"
+            return conj(inside, undecided(refs, refs.item(held.ty), left.at(a, probe)))
+
         query_summaries = []
         with Solver(timeout_ms) as solver:
 
             def run(stage, assertion):
+                """Ask the solver for this fragment; a goal it reports incomplete goes to the general one."""
                 text = q.text(assertion)
-                result = solver.check(text, q.variables)
-                query_summaries.append({"stage": stage, **result})
-                if query_log is not None:
-                    query_log.append({"stage": stage, "smt2": text + "(check-sat)\n", "result": result})
+                for logic in [q.logic, None] if q.logic else [None]:
+                    result = solver.check(text, q.variables, logic)
+                    query_summaries.append({"stage": stage, **result})
+                    if query_log is not None:
+                        query_log.append({"stage": stage, "smt2": text + "(check-sat)\n", "result": result})
+                    if result["status"] != "unknown" or "incomplete" not in result.get("reason", ""):
+                        break
                 return result
 
             def finish(status, **fields):
@@ -1206,14 +1596,32 @@ def equivalent(
             def inputs(result):
                 out = {}
                 for i, (n, t) in enumerate(rf.params):
-                    values = [result["values"][f"arg_{i}_{j}"] for j in range(len(refs.leaves(t)))]
-                    out[n] = rebuild(refs, t, values)
+                    width = len(refs.leaves(t))
+                    if not is_view(t):
+                        out[n] = rebuild(refs, t, [result["values"][f"arg_{i}_{j}"] for j in range(width)])
+                        continue
+                    size = int(t.extent) if t.extent.isdigit() else out[t.extent]
+                    if not 0 <= size <= MAX_REPLAY:
+                        raise Unsupported(f"An extent past {MAX_REPLAY} elements cannot be replayed.")
+                    read = [[result["values"][f"elem_{i}_{j}_{k}"] for j in range(width)] for k in range(size)]
+                    out[n] = [rebuild(refs, t.value, x) for x in read]
                 return out
 
+            def shown(stage, assertion, result):
+                """Inputs a caller can rerun: with storage in play, ask again within the replay budget."""
+                if small != "true":
+                    result = run(stage + "-storage", conj(assertion, small))
+                    if result["status"] != "sat":
+                        return None
+                return inputs(result)
+
             if domain.defined != "true":
-                r = run("domain-totality", conj(formed, neg(domain.defined)))
+                trapping = conj(formed, neg(domain.defined))
+                r = run("domain-totality", trapping)
                 if r["status"] == "sat":
-                    return finish("invalid-domain", reason="Precondition may trap.", counterexample=inputs(r))
+                    witness = shown("domain-totality", trapping, r)
+                    shape = {"counterexample": witness} if witness is not None else {}
+                    return finish("invalid-domain", reason="Precondition may trap.", **shape)
                 if r["status"] != "unsat":
                     return finish("unknown", reason="Domain totality was not established.")
             if admitted != "true":
@@ -1230,47 +1638,66 @@ def equivalent(
                 if r["status"] != "unsat":
                     return finish("unknown", reason=f"A loop may run past the {MAX_UNROLL}-iteration unrolling budget.")
             if not allow_reference_traps:
-                r = run("reference-totality", conj(admitted, neg(lv.defined)))
+                partial = conj(admitted, neg(lv.defined))
+                r = run("reference-totality", partial)
                 if r["status"] == "sat":
-                    return finish(
-                        "invalid-reference", reason="Reference traps on an admitted input.", counterexample=inputs(r)
-                    )
+                    witness = shown("reference-totality", partial, r)
+                    shape = {"counterexample": witness} if witness is not None else {}
+                    return finish("invalid-reference", reason="Reference traps on an admitted input.", **shape)
                 if r["status"] != "unsat":
                     return finish("unknown", reason="Reference totality was not established.")
+            differs = [neg(seen(held, a, b)) for held, a, b in zip(lent, lw, rw, strict=True)]
             mismatch = disj(
                 neg(same(lv.defined, rv.defined)),
-                conj(lv.defined, rv.defined, neg(observed(refs, rf.ret, lv.parts, rv.parts))),
+                conj(lv.defined, rv.defined, disj(neg(observed(refs, rf.ret, lv.parts, rv.parts)), *differs)),
             )
             r = run("equivalence", conj(admitted, mismatch))
             if r["status"] == "unsat":
-                nan = conj(admitted, lv.defined, undecided(refs, rf.ret, lv.parts))
-                if nan != "false":
-                    n = run("nan-observation", nan)
+                unsure = (nan(held, a) for held, a in zip(lent, lw, strict=True))
+                floats = disj(undecided(refs, rf.ret, lv.parts), *unsure)
+                unspoken = conj(admitted, lv.defined, floats)
+                if unspoken != "false":
+                    n = run("nan-observation", unspoken)
                     if n["status"] != "unsat":
+                        witness = shown("nan-observation", unspoken, n) if n["status"] == "sat" else None
                         return finish(
                             "unknown",
-                            reason="A returned float may be NaN, whose payload bits this model does not track.",
-                            **({"counterexample": inputs(n)} if n["status"] == "sat" else {}),
+                            reason="An observed float may be NaN, whose payload bits this model does not track.",
+                            **({"counterexample": witness} if witness is not None else {}),
                         )
+                watched = [*(["the result"] if rf.ret != VOID else []), *(n for n, t in rf.params if t.mode == "rw")]
+                visible = ", ".join(watched) or "no value"
                 return finish(
                     "smt-equivalent",
                     quantification="All well-formed values of the declared parameter types satisfying the host "
-                    "precondition; every tag names a declared variant.",
-                    observation="Return value, or one undifferentiated abort outcome; a sum shows its tag and "
-                    "active payload only; no memory/timing observation.",
+                    "precondition; every tag names a declared variant; storage the entry guards admit, with "
+                    "distinct storage behind every rw view.",
+                    observation=f"{visible}, or one undifferentiated abort outcome; an rw view is compared element "
+                    "by element over its whole extent; a sum shows its tag and active payload only; no "
+                    "memory/timing observation.",
                 )
             if r["status"] != "sat":
                 return finish("unknown", reason="Equivalence solver did not decide the obligation.")
-            args = inputs(r)
+            args = shown("equivalence", conj(admitted, mismatch), r)
+            if args is None:
+                return finish("unknown", reason=f"No counterexample lends {MAX_REPLAY} elements or fewer.")
             expected = Concrete(refs).outcome(symbol, args)
             actual = Concrete(cands).outcome(symbol, args)
             if assume != "true":
                 observation = Concrete(domains).outcome(dn, args)
                 if not observation["defined"] or not observation["return"]:
                     return finish("unknown", reason="Solver/concrete precondition disagreement.", counterexample=args)
-            agree = expected["defined"] == actual["defined"] and (
-                not expected["defined"] or identical(refs, rf.ret, expected["return"], actual["return"])
-            )
+
+            def alike(x, y) -> bool:
+                if x["defined"] != y["defined"]:
+                    return False
+                lend = ((t, n) for n, t in rf.params if t.mode == "rw")
+                return not x["defined"] or (
+                    identical(refs, rf.ret, x["return"], y["return"])
+                    and all(identical(refs, t, x["written"][n], y["written"][n]) for t, n in lend)
+                )
+
+            agree = alike(expected, actual)
             if agree:
                 return finish(
                     "unknown",

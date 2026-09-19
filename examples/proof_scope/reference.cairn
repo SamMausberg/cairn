@@ -3,3 +3,7 @@ fn average(x:u64, y:u64) -> u64 {
 }
 fn smaller(x:u64, y:u64) -> u64 { if x < y { return x; } return y; }
 fn total(x:u64, y:u64) -> u64 = add_wrap(x, y);
+fn extent(n:usize, xs:ro<u64>[n]) -> usize = len(xs);
+fn shifted(xs:ro<u8>[8], out:rw<u8>[8], by:u8) {
+  for i in 0..8 { out[i] = add_wrap(xs[i], by); }
+}

@@ -32,10 +32,11 @@ def test_wrong_unused_function_cannot_hide():
     assert r["results"]["twice"]["status"] == "counterexample"
 
 
-def test_owned_function_is_not_covered():
-    src = REF + " fn scratch()->u64 {buffer x:u64[4]=zeroed;return x[0];}"
+def test_moved_owner_function_is_not_covered():
+    src = REF + " fn moved(n:usize)->usize {let mut b=Buf[u64](n);let c=take(b);return len(c);}"
     r = verify_module(src, src)
-    assert r["status"] == "incomplete" and "scratch" in r["uncovered"]
+    assert r["status"] == "incomplete" and "moved" in r["uncovered"]
+    assert r["results"]["moved"]["status"] == "unknown"
 
 
 VALUES = (
@@ -46,12 +47,31 @@ VALUES = (
     "fn window(x:u64)->u64 { stack a:u64[4]=zeroed; for i in 0..4 { a[i]=add_wrap(x,u64(i)); }\n"
     "  let mut t:u64=0; for i in 0..4 { t=add_wrap(t,a[i]); } return t; }\n"
 )
+VIEWS = (
+    "fn first(n:usize, xs:ro<u64>[n])->u64 { if n == 0 { return 0; } return xs[0]; }\n"
+    "fn extent(n:usize, xs:ro<u64>[n])->usize = len(xs);\n"
+    "fn bump(p:rw<u64>) { p = add_wrap(p, 1); }\n"
+    "fn head(xs:ro<u8>[4], out:rw<u8>[4]) { for i in 0..4 { out[i] = add_wrap(xs[i], 1); } }\n"
+)
 
 
 def test_records_sums_floats_and_bounded_loops_are_covered():
     r = verify_module(VALUES, VALUES)
     assert r["status"] == "smt-module-equivalent"
     assert r["covered"] == ["below", "swapped", "unwrap", "window"] and not r["uncovered"]
+
+
+def test_views_and_borrows_are_covered():
+    r = verify_module(VIEWS, VIEWS)
+    assert r["status"] == "smt-module-equivalent"
+    assert r["covered"] == ["bump", "extent", "first", "head"] and not r["uncovered"]
+
+
+def test_a_symbolic_pass_over_a_view_is_not_covered_without_a_bound():
+    src = VIEWS + "fn total(n:usize, xs:ro<u8>[n])->u8 { let mut t:u8=0; for i in 0..n { t=add_wrap(t,xs[i]); } return t; }"  # fmt: skip
+    r = verify_module(src, src)
+    assert r["status"] == "incomplete" and r["uncovered"] == ["total"]
+    assert "unrolling budget" in r["results"]["total"]["reason"]
 
 
 def test_one_uncovered_value_function_still_blocks_the_module():

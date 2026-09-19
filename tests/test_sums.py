@@ -199,4 +199,6 @@ def test_value_equivalence_covers_sums_but_not_heap_storage():
     assert equivalent(SOURCE, SOURCE, "parse")["status"] == "smt-equivalent"
     wrong = equivalent(SOURCE, SOURCE.replace("return 42;", "return 43;"), "use")
     assert wrong["status"] == "counterexample" and wrong["counterexample"]["b"] == 0
-    assert equivalent(SOURCE, SOURCE, "scoped")["status"] == "unknown"  # buffer: a heap owner
+    assert equivalent(SOURCE, SOURCE, "scoped")["status"] == "smt-equivalent"  # A local buffer is zeroed scratch.
+    moved = "fn scoped(n:usize)->u64 { let mut b=Buf[u64](n); let c=take(b); return u64(len(c)); }"
+    assert equivalent(moved, moved, "scoped")["status"] == "unknown"  # An owner that moves is not modeled.

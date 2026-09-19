@@ -142,7 +142,7 @@ def main():
                 all_inputs if len(all_inputs) < 150 else all_inputs[:30] + random.Random(42).sample(all_inputs, 120)
             )
             q = Formula(refs.functions[name].params, refs)
-            sym = Symbolic(q, refs).invoke(name, list(q.inputs.values()))
+            sym, _ = Symbolic(q, refs).invoke(name, list(q.inputs.values()))  # No fixture lends storage.
             mismatches = []
             for args in selected:
                 expected = r["oracle"](args)

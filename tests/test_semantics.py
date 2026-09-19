@@ -7,7 +7,7 @@ import pytest
 from cairn.cairnc import RUNTIME_FILES, compile_source
 from cairn.scalar_semantics import Concrete, bounds, decoded, encoded, equivalent, identical, prepared, rounded
 from cairn.smt_bridge import Solver
-from cairn.syntax import CPP
+from cairn.syntax import CPP, VOID, is_view
 
 
 def fn(body, params="x:u64", ret="u64"):
@@ -21,17 +21,26 @@ def check(a, b, expected="smt-equivalent", **kw):
     return r
 
 
+def agree(src, f, p, q):
+    """Two outcomes a caller cannot tell apart: one abort, or the same result and the same rw contents."""
+    if p["defined"] != q["defined"]:
+        return False
+    if not p["defined"]:
+        return True
+    return (f.ret == VOID or identical(src, f.ret, p["return"], q["return"])) and all(
+        identical(src, t, p["written"][n], q["written"][n]) for n, t in f.params if t.mode == "rw"
+    )
+
+
 def refute(a, b, **kw):
     """A rejection counts only when the reported input, replayed independently, really separates the two."""
     r = check(a, b, "counterexample", **kw)
-    src, ret = prepared(a), prepared(a).functions["f"].ret
+    src = prepared(a)
+    f = src.functions["f"]
     x = Concrete(src).outcome("f", r["counterexample"])
     y = Concrete(prepared(b)).outcome("f", r["counterexample"])
-
-    def agrees(p, q):
-        return p["defined"] == q["defined"] and (not p["defined"] or identical(src, ret, p["return"], q["return"]))
-
-    assert agrees(x, r["expected"]) and agrees(y, r["actual"]) and not agrees(x, y), (r, x, y)
+    assert agree(src, f, x, r["expected"]) and agree(src, f, y, r["actual"]), (r, x, y)
+    assert not agree(src, f, x, y), (r, x, y)
     return r
 
 
@@ -130,11 +139,16 @@ def test_user_call_and_early_return():
     [
         fn("let mut a=x;while a>0{a=a-1;}return a;"),  # An unbounded trip count.
         fn("return f(x);"),
-        "fn f(n:usize,x:ro<u64>[n]@host)->u64{return x[0];}",
-        "fn f(x:u64){return;}",
-        fn("buffer a:u64[4]=zeroed;return a[0];"),
-        fn("let mut b=Buf[u64](4);return b[0];"),
-        "struct P{a:u64;}\nfn g(p:rw<P>)->u64{p.a=1;return p.a;}\nfn f(x:u64)->u64{let mut p=P(x);return g(p);}",
+        "fn f(n:usize,xs:ro<u64>[n]@device,out:rw<u64>[n])->usize{return n;}",
+        "fn f(n:usize)->usize{let mut b=Buf[u64](n);let c=take(b);return len(c);}",  # An owner that moves.
+        "fn g(b:Buf[u64])->usize=len(b);\nfn f(n:usize)->usize{let b=Buf[u64](n);return g(b);}",
+        "struct V{d:Buf[u64];k:usize;}\nfn f(n:usize)->usize{let v=V(Buf[u64](n),n);return v.k;}",
+        "fn f(n:usize,xs:ro<f64>[n])->f64{let s=reduce + for i in n yield xs[i];return s;}",  # An unspecified order.
+        "fn f(n:usize,xs:ro<u64>[n],out:rw<u64>[n]){parallel i in n{out[i]=xs[i];}}",
+        "fn g(n:usize,o:rw<u64>[n]){o[0]=1;}\nfn f(n:usize,out:rw<u64>[n])->usize{let t=spawn g(n,out);wait(t);return n;}",
+        "enum M{S(u64);N;}\nfn f(n:usize,ms:ro<M>[n])->u64{match ms[0]{M.S(v)=>{return v;} M.N=>{return 0;}}}",
+        "fn g(a:usize,xs:rw<u64>[a],b:usize,ys:rw<u64>[b]){xs[0]=1;ys[0]=2;}\n"  # Two parts of one array.
+        "fn f(n:usize,zs:rw<u64>[n],mid:usize){if mid>n{return;}g(mid,zs[0..mid],n-mid,zs[mid..n]);}",
         "enum Box{Full(Buf[u64]);Empty;}\n"
         + fn("let b=Box.Full(Buf[u64](4));match b{Box.Full(v)=>{return len(v);} Box.Empty=>{return 0;}}", ret="usize"),
         fn("let mut t:u64=0;for i in 0..40{t=add_wrap(t,u64(i));}return t;"),  # Past the unrolling budget.
@@ -354,6 +368,190 @@ def test_records_and_sums_inside_fixed_storage():
           src + fn("return add_wrap(x,x);"))  # fmt: skip
 
 
+# Array views ---------------------------------------------------------------------------------
+
+SUM = "fn f(n:usize, xs:ro<u8>[n]) -> u8 { let mut t:u8=0; for i in 0..n { t=add_wrap(t,xs[i]); } return t; }"
+FILL = "fn f(n:usize, xs:ro<u8>[n], out:rw<u8>[n]) { for i in 0..n { out[i]=add_wrap(xs[i],1); } }"
+
+
+def test_a_view_reads_the_elements_its_extent_lends():
+    check(SUM, "fn f(n:usize, xs:ro<u8>[n]) -> u8 { let mut t:u8=0; for i in 0..n { t=add_wrap(xs[i],t); } return t; }",
+          assume="n<=4")  # fmt: skip
+    check("fn f(n:usize, xs:ro<u64>[n]) -> usize = len(xs);", "fn f(n:usize, xs:ro<u64>[n]) -> usize = n;")
+    check("fn f(xs:ro<u8>[16]) -> u8 { let mut t:u8=0; for i in 0..16 { t=add_wrap(t,xs[i]); } return t; }",
+          "fn f(xs:ro<u8>[16]) -> u8 { let mut t:u8=0; for i in 0..16 { t=add_wrap(xs[i],t); } return t; }")  # fmt: skip
+
+
+def test_view_near_miss_separates_at_one_element():
+    r = refute(SUM, SUM.replace("t=add_wrap(t,xs[i]);", "t=add_wrap(t,add_wrap(xs[i],1));"), assume="n>=1 && n<=3")
+    assert len(r["counterexample"]["xs"]) == r["counterexample"]["n"] >= 1
+    r = refute("fn f(n:usize, xs:ro<u64>[n]) -> usize = len(xs);", "fn f(n:usize, xs:ro<u64>[n]) -> usize = n+1;")
+    assert r["expected"]["return"] == r["counterexample"]["n"] == len(r["counterexample"]["xs"])
+
+
+def test_an_index_outside_the_extent_traps():
+    a = "fn f(n:usize, xs:ro<u64>[n], i:usize) -> u64 = xs[i];"
+    check(a, a, "invalid-reference")
+    check(a, a, allow_reference_traps=True)
+    b = "fn f(n:usize, xs:ro<u64>[n], i:usize) -> u64 { if i<n { return xs[i]; } return 0; }"
+    r = refute(a, b, allow_reference_traps=True)
+    assert r["counterexample"]["i"] >= r["counterexample"]["n"] and not r["expected"]["defined"]
+    check(a, b, assume="i<n")
+
+
+def test_the_final_contents_of_an_rw_view_are_observed():
+    check(FILL, "fn f(n:usize, xs:ro<u8>[n], out:rw<u8>[n]) { for i in 0..n { out[i]=add_wrap(1,xs[i]); } }",
+          assume="n<=4")  # fmt: skip
+    r = refute(FILL, "fn f(n:usize, xs:ro<u8>[n], out:rw<u8>[n]) { for i in 0..n { out[i]=add_wrap(xs[i],2); } }",
+               assume="n>=1 && n<=3")  # fmt: skip
+    assert r["expected"]["return"] is None and r["expected"]["written"]["out"] != r["actual"]["written"]["out"]
+    kept = "fn f(n:usize, xs:ro<u8>[n], out:rw<u8>[n]) { if n<2 { return; } out[0]=add_wrap(xs[0],1); }"
+    r = refute(kept, kept.replace("if n<2 { return; }", "if n<2 { return; } out[1]=xs[1];"), assume="n<=2")
+    assert r["expected"]["written"]["out"][1] != r["actual"]["written"]["out"][1]
+
+
+def test_an_untouched_rw_view_keeps_what_the_caller_lent():
+    check("fn f(n:usize, out:rw<u8>[n]) -> usize { return n; }", "fn f(n:usize, out:rw<u8>[n]) -> usize = len(out);")
+    refute("fn f(n:usize, out:rw<u8>[n]) -> usize { return n; }",
+           "fn f(n:usize, out:rw<u8>[n]) -> usize { if n>0 { out[0]=0; } return n; }", assume="n<=2")  # fmt: skip
+
+
+def test_a_loop_over_a_symbolic_extent_needs_a_bound():
+    r = check(SUM, SUM.replace("t=add_wrap(t,xs[i]);", "t=add_wrap(xs[i],t);"), "unknown")
+    assert "unrolling budget" in r["reason"]
+
+
+def test_read_only_views_may_alias_so_the_model_takes_them_apart():
+    """Two ro views are independent arrays: that admits the aliased case and more."""
+    a = "fn f(n:usize, xs:ro<u8>[n], ys:ro<u8>[n]) -> u8 { if n==0 { return 0; } return add_wrap(xs[0],ys[0]); }"
+    b = "fn f(n:usize, xs:ro<u8>[n], ys:ro<u8>[n]) -> u8 { if n==0 { return 0; } return add_wrap(ys[0],xs[0]); }"
+    check(a, b)
+    refute(a, "fn f(n:usize, xs:ro<u8>[n], ys:ro<u8>[n]) -> u8 { if n==0 { return 0; } return add_wrap(xs[0],xs[0]); }")
+
+
+# Parts, single borrows, collectors, reductions and local owners --------------------------------
+
+TOTAL = "fn total(m:usize, ys:ro<u8>[m]) -> u8 { let mut t:u8=0; for i in 0..m { t=add_wrap(t,ys[i]); } return t; }\n"
+SPLIT = TOTAL + (
+    "fn f(n:usize, xs:ro<u8>[n], mid:usize) -> u8 {\n"
+    "  if mid > n { return 0; }\n"
+    "  return add_wrap(total(mid, xs[0..mid]), total(n-mid, xs[mid..n]));\n}"
+)
+
+
+def test_a_part_is_the_window_its_guard_admits():
+    check(SPLIT, TOTAL + "fn f(n:usize, xs:ro<u8>[n], mid:usize) -> u8 { if mid>n { return 0; } return total(n,xs); }",
+          assume="n<=3")  # fmt: skip
+    r = refute(SPLIT, TOTAL + "fn f(n:usize, xs:ro<u8>[n], mid:usize) -> u8 = total(n, xs);", assume="n<=2")
+    assert r["counterexample"]["mid"] > r["counterexample"]["n"]
+
+
+def test_a_part_that_does_not_fit_its_callee_traps():
+    a = TOTAL + "fn f(n:usize, xs:ro<u8>[n], k:usize) -> u8 = total(k, xs[0..k]);"
+    guarded = TOTAL + "fn f(n:usize, xs:ro<u8>[n], k:usize) -> u8 { if k>n { return 0; } return total(k,xs[0..k]); }"
+    check(a, a, "invalid-reference", assume="k<=3")
+    check(a, a, assume="k<=3", allow_reference_traps=True)
+    r = refute(a, guarded, assume="k<=3", allow_reference_traps=True)
+    assert r["counterexample"]["k"] > r["counterexample"]["n"] and not r["expected"]["defined"]
+    check(a, guarded, assume="k<=3 && k<=n")
+
+
+def test_an_rw_single_borrow_is_written_back():
+    p = "struct P{a:u64;b:u64;}\n"
+    g = p + "fn g(q:rw<P>)->u64{q.a=add_wrap(q.a,q.b);return q.a;}\n"
+    check(g + "fn f(r:P)->P{let mut s=r;let v=g(s);return P(s.a,v);}",
+          g + "fn f(r:P)->P{let a=add_wrap(r.a,r.b);return P(a,a);}")  # fmt: skip
+    check(p + "fn f(q:rw<P>){q.a=q.b;}", p + "fn f(q:rw<P>){q.a=q.b;q.b=q.b;}")
+    r = refute(p + "fn f(q:rw<P>){q.a=q.b;}", p + "fn f(q:rw<P>){q.b=q.a;}")
+    assert r["counterexample"]["q"]["a"] != r["counterexample"]["q"]["b"]
+
+
+COMPACT = (
+    "fn f(n:usize, xs:ro<u8>[n], out:rw<u8>[n]) -> usize {\n"
+    "  let used = compact out for i in n where xs[i] > 3 yield xs[i];\n  return used;\n}"
+)
+BYHAND = (
+    "fn f(n:usize, xs:ro<u8>[n], out:rw<u8>[n]) -> usize {\n"
+    "  let mut k:usize = 0;\n"
+    "  for i in 0..n { if xs[i] > 3 { out[k] = xs[i]; k = k + 1; } }\n  return k;\n}"
+)
+
+
+def test_compact_is_the_stable_selected_prefix():
+    check(COMPACT, BYHAND, assume="n<=3")
+    r = refute(COMPACT, BYHAND.replace("xs[i] > 3", "xs[i] >= 3"), assume="n<=2")
+    assert r["expected"]["written"]["out"] != r["actual"]["written"]["out"] or r["expected"]["return"] != r["actual"]["return"]  # fmt: skip
+    refute(COMPACT, BYHAND.replace("out[k] = xs[i];", "out[k] = add_wrap(xs[i],1);"), assume="n>=1 && n<=2")
+
+
+def test_compact_leaves_the_tail_alone():
+    nothing = COMPACT.replace("xs[i] > 3", "false")
+    check(nothing, "fn f(n:usize, xs:ro<u8>[n], out:rw<u8>[n]) -> usize { return 0; }", assume="n<=3")
+    cleared = COMPACT.replace("return used;", "for i in 0..n { if i >= used { out[i] = 0; } }\n  return used;")
+    r = refute(COMPACT, cleared, assume="n<=2")
+    assert r["expected"]["written"]["out"] != r["actual"]["written"]["out"]
+
+
+def test_a_collector_over_a_symbolic_extent_needs_a_bound():
+    r = check(COMPACT, BYHAND, "unknown")
+    assert "unrolling budget" in r["reason"]
+
+
+REDUCE = "fn f(n:usize, xs:ro<u8>[n]) -> u8 { let s = reduce OP for i in n yield xs[i]; return s; }"
+FOLD = "fn f(n:usize, xs:ro<u8>[n]) -> u8 { let mut s:u8=SEED; for i in 0..n { s=STEP; } return s; }"
+
+
+@pytest.mark.parametrize(
+    "op,seed,step",
+    [
+        ("add_wrap", "0", "add_wrap(s,xs[i])"),
+        ("mul_wrap", "1", "mul_wrap(s,xs[i])"),
+        ("min", "255", "min(s,xs[i])"),
+        ("max", "0", "max(s,xs[i])"),
+        ("&", "255", "s&xs[i]"),
+        ("|", "0", "s|xs[i]"),
+        ("^", "0", "s^xs[i]"),
+    ],
+)
+def test_reduce_is_the_fold_the_host_emits(op, seed, step):
+    check(REDUCE.replace("OP", op), FOLD.replace("SEED", seed).replace("STEP", step), assume="n<=2")
+
+
+def test_checked_reduce_traps_exactly_when_the_total_does_not_fit():
+    checked = REDUCE.replace("OP", "+")
+    wrapping = FOLD.replace("SEED", "0").replace("STEP", "add_wrap(s,xs[i])")
+    check(checked, wrapping, "invalid-reference", assume="n<=3")
+    r = refute(checked, wrapping, assume="n<=3", allow_reference_traps=True)
+    assert sum(r["counterexample"]["xs"]) > 255 and not r["expected"]["defined"]
+    check(checked, wrapping, assume="n<=1")  # One u8 always fits, so neither the total nor a prefix traps.
+
+
+SCRATCH = (
+    "fn f(n:usize, xs:ro<u8>[n]) -> u8 {\n"
+    "  buffer tmp:u8[n] = zeroed;\n"
+    "  for i in 0..n { tmp[i] = add_wrap(xs[i], 1); }\n"
+    "  let mut t:u8 = 0;\n"
+    "  for i in 0..n { t = add_wrap(t, tmp[i]); }\n  return t;\n}"
+)
+DIRECT = "fn f(n:usize, xs:ro<u8>[n]) -> u8 { let mut t:u8=0; for i in 0..n { t=add_wrap(t,add_wrap(xs[i],1)); } return t; }"  # fmt: skip
+
+
+def test_a_local_heap_owner_is_zeroed_scratch():
+    check(SCRATCH, DIRECT, assume="n<=3")
+    check(SCRATCH.replace("buffer tmp:u8[n] = zeroed;", "let mut tmp = Buf[u8](n);"), DIRECT, assume="n<=3")
+    check("fn f(n:usize) -> u8 { buffer tmp:u8[n] = zeroed; if n==0 { return 0; } return tmp[0]; }",
+          "fn f(n:usize) -> u8 { return 0; }")  # fmt: skip
+    refute(SCRATCH, DIRECT.replace("add_wrap(xs[i],1)", "add_wrap(xs[i],2)"), assume="n>=1 && n<=2")
+
+
+def test_a_local_owner_is_bounded_by_its_own_extent():
+    a = "fn f(n:usize, k:usize) -> u8 { buffer tmp:u8[n] = zeroed; return tmp[k]; }"
+    check(a, a, "invalid-reference")
+    check(a, a, assume="k<n")
+    refute(a, "fn f(n:usize, k:usize) -> u8 { buffer tmp:u8[n] = zeroed; if k<n { return tmp[k]; } return 1; }",
+           allow_reference_traps=True)  # fmt: skip
+
+
 # The model against the machine ----------------------------------------------------------------
 
 NATIVE = """
@@ -377,6 +575,25 @@ fn window(x:u64) -> u64 {
 fn scaled(x:f64) -> u32 { let p = Pair(1, 2); return u32((x * 2.0) + f64(p.b)); }
 fn narrow(x:f64, y:f64) -> f32 { return f32(x) / f32(y); }
 fn guarded(x:f32, n:u64) -> f32 { if n == 0 { return x; } return x + f32(n); }
+fn element(n:usize, xs:ro<u64>[n], i:usize) -> u64 { return xs[i]; }
+fn stretch(n:usize, xs:ro<u8>[n], out:rw<u8>[n], k:u8) { for i in 0..n { out[i] = mul_wrap(xs[i], k); } }
+fn picked(n:usize, xs:ro<u8>[n], out:rw<u8>[n]) -> usize {
+  let used = compact out for i in n where xs[i] > 3 yield xs[i];
+  return used;
+}
+fn summed(n:usize, xs:ro<u8>[n]) -> u8 { let s = reduce + for i in n yield xs[i]; return s; }
+fn total(m:usize, ys:ro<u8>[m]) -> u8 { let mut t:u8 = 0; for i in 0..m { t = add_wrap(t, ys[i]); } return t; }
+fn halves(n:usize, xs:ro<u8>[n], mid:usize) -> u8 {
+  return add_wrap(total(mid, xs[0..mid]), total(n-mid, xs[mid..n]));
+}
+fn bumped(p:rw<u64>, k:u64) -> u64 { p = add_wrap(p, k); return p; }
+fn scratch(n:usize, xs:ro<u8>[n]) -> u8 {
+  buffer tmp:u8[n] = zeroed;
+  for i in 0..n { tmp[i] = add_wrap(xs[i], 1); }
+  let mut t:u8 = 0;
+  for i in 0..n { t = add_wrap(t, tmp[i]); }
+  return t;
+}
 """
 POOL = [0.0, -0.0, 1.0, -1.0, 0.5, -0.5, 2.0, 255.5, -255.5, 4294967295.5, 1e18, 1e308, -1e308, 2.0**53 + 1]
 POOL += [float("inf"), float("-inf"), float("nan"), 1.1754943508222875e-38, 3.4028234663852886e38]
@@ -430,12 +647,66 @@ int main(int argc, char** argv) {
 
 
 PERTURBED = [
-    ("magnitude", "Sign.Neg(v) => { return v; }", "Sign.Neg(v) => { return add_wrap(v, 1); }"),
-    ("window", "if (i & 1) == 1 { continue; }", "if (i & 1) == 0 { continue; }"),
-    ("scaled", "f64(p.b)", "f64(p.a)"),
-    ("narrow", "return f32(x) / f32(y);", "return f32(x / y);"),
-    ("guarded", "if n == 0 { return x; }", "if n == 1 { return x; }"),
+    ("magnitude", "Sign.Neg(v) => { return v; }", "Sign.Neg(v) => { return add_wrap(v, 1); }", "true"),
+    ("window", "if (i & 1) == 1 { continue; }", "if (i & 1) == 0 { continue; }", "true"),
+    ("scaled", "f64(p.b)", "f64(p.a)", "true"),
+    ("narrow", "return f32(x) / f32(y);", "return f32(x / y);", "true"),
+    ("guarded", "if n == 0 { return x; }", "if n == 1 { return x; }", "true"),
+    ("element", "return xs[i];", "if i < n { return xs[i]; } return 0;", "true"),
+    ("stretch", "out[i] = mul_wrap(xs[i], k);", "out[i] = add_wrap(xs[i], k);", "n<=3"),
+    ("picked", "where xs[i] > 3", "where xs[i] >= 3", "n<=2"),
+    ("summed", "reduce + for", "reduce add_wrap for", "n<=3"),
+    ("halves", "total(n-mid, xs[mid..n])", "total(n-mid, xs[0..n-mid])", "n<=3"),
+    ("bumped", "p = add_wrap(p, k);", "p = add_wrap(k, 1);", "true"),
+    ("scratch", "tmp[i] = add_wrap(xs[i], 1);", "tmp[i] = add_wrap(xs[i], 2);", "n<=2"),
 ]
+
+
+def drawn(f, rng):
+    """One input the entry guards admit: an extent, then storage holding exactly that many elements."""
+    extents = {t.extent for _, t in f.params if is_view(t)}
+    args: dict = {}
+    for n, t in f.params:
+        if is_view(t):
+            args[n] = [sampled(t.name, rng) for _ in range(int(t.extent) if t.extent.isdigit() else args[t.extent])]
+        elif n in extents or (t.name == "usize" and rng.random() < 0.5):
+            args[n] = rng.choice([0, 1, 2, 3])  # A small extent, or an index that is often inside one.
+        else:
+            args[n] = sampled(t.name, rng)
+    return args
+
+
+def arm(k, f, name, args):
+    """The switch arm that lends this input to the native function and prints what a caller observes."""
+    lines, passed, shown = [], [], []
+    for i, (n, t) in enumerate(f.params):
+        held = f"s{i}"
+        if is_view(t):
+            items = ", ".join(literal(v, t.name) for v in args[n]) or literal(0, t.name)
+            lines.append(f"{CPP[t.name]} {held}[] = {{{items}}};")  # Never empty: the pointer must be valid.
+            passed.append(held)
+            shown += [f"{held}[{j}]" for j in range(len(args[n]))] if t.mode == "rw" else []
+        elif t.mode == "rw":
+            lines.append(f"{CPP[t.name]} {held} = {literal(args[n], t.name)};")
+            passed += [held]
+            shown += [held]
+        else:
+            passed.append(literal(args[n], t.name))
+    call = f"cf_{name}({', '.join(passed)})"
+    lines.append(f"{call};" if f.ret == VOID else f'std::printf("%llu ", word({call}));')
+    lines += [f'std::printf("%llu ", word({x}));' for x in shown]
+    return f"    case {k}: {{ " + " ".join(lines) + ' std::printf("\\n"); break; }'
+
+
+def expected_words(src, f, outcome):
+    """What the harness prints for an outcome that returned: the result, then every rw parameter."""
+    words = [] if f.ret == VOID else [word(outcome["return"], f.ret.name)]
+    for n, t in f.params:
+        if t.mode != "rw":
+            continue
+        held = outcome["written"][n]
+        words += [word(v, t.name) for v in held] if is_view(t) else [word(held, t.name)]
+    return words
 
 
 @pytest.mark.skipif(not shutil.which("clang++"), reason="needs clang++")
@@ -444,19 +715,15 @@ def test_the_model_agrees_with_the_machine(tmp_path):
     src = prepared(NATIVE)
     rng = random.Random(20260918)
     cases = []
-    for name, before, after in PERTURBED:  # Every solver counterexample is also run on the machine.
-        r = equivalent(NATIVE, NATIVE.replace(before, after), name, allow_reference_traps=True, timeout_ms=20000)
+    for name, before, after, assume in PERTURBED:  # Every solver counterexample is also run on the machine.
+        r = equivalent(NATIVE, NATIVE.replace(before, after), name, assume=assume,
+                       allow_reference_traps=True, timeout_ms=20000)  # fmt: skip
         assert r["status"] == "counterexample", r
         cases.append((name, r["counterexample"]))
-    for name in [n for n, _, _ in PERTURBED]:
-        f = src.functions[name]
-        for _ in range(12):
-            cases.append((name, {n: sampled(t.name, rng) for n, t in f.params}))
-    arms = []
-    for k, (name, args) in enumerate(cases):
-        f = src.functions[name]
-        passed = ", ".join(literal(args[n], t.name) for n, t in f.params)
-        arms.append(f'    case {k}: std::printf("%llu\\n", word(cf_{name}({passed}))); break;')
+    for name in [n for n, _, _, _ in PERTURBED]:
+        for _ in range(10):
+            cases.append((name, drawn(src.functions[name], rng)))
+    arms = [arm(k, src.functions[name], name, args) for k, (name, args) in enumerate(cases)]
     (tmp_path / "p.cpp").write_text(compile_source(NATIVE)[0] + HARNESS % "\n".join(arms))
     for header, text in RUNTIME_FILES.items():
         (tmp_path / header).write_text(text)
@@ -471,9 +738,9 @@ def test_the_model_agrees_with_the_machine(tmp_path):
             assert native.returncode == -6, (name, args, native)
             continue
         assert native.returncode == 0, (name, args, native.stderr)
-        expected = word(model["return"], src.functions[name].ret.name)
-        assert int(native.stdout.split()[0]) == expected, (name, args, model, native.stdout)
-    assert traps >= 5, "The sample must exercise the guards, not only the total cases."
+        expected = expected_words(src, src.functions[name], model)
+        assert [int(w) for w in native.stdout.split()] == expected, (name, args, model, native.stdout)
+    assert traps >= 10, "The sample must exercise the guards, not only the total cases."
 
 
 def test_domain_totality_shortcircuit():

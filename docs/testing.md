@@ -53,7 +53,7 @@ python3 bin/cairn verify examples/proof_scope/mixed.cairn \
   examples/proof_scope/mixed.cairn --all
 ```
 
-The first module comparison should succeed in the scalar source model. The second must return incomplete/nonzero, because unsupported memory cannot inherit a scalar pass. Both outcomes are recorded. No successful Lean build is implied by either gate. verification.md states the full boundaries.
+The first module comparison should succeed in the scalar source model, views and all. The second must return incomplete/nonzero, because a function that moves an owner cannot inherit a scalar pass. Both outcomes are recorded. No successful Lean build is implied by either gate. verification.md states the full boundaries.
 
 ## Context accounting
 

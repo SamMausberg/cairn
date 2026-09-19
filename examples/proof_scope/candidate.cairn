@@ -1,3 +1,7 @@
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
 fn smaller(x:u64, y:u64) -> u64 = min(x, y);
 fn total(x:u64, y:u64) -> u64 = add_wrap(y, x);
+fn extent(n:usize, xs:ro<u64>[n]) -> usize = n;
+fn shifted(xs:ro<u8>[8], out:rw<u8>[8], by:u8) {
+  for i in 0..8 { out[i] = add_wrap(by, xs[i]); }
+}
