@@ -373,6 +373,15 @@ def test_completion_reaches_fields_through_a_borrowed_parameter():
     assert labels(doc, PROGRAM, "p.a = ", 2) == {"a", "b", "area", "scale"}
 
 
+def test_completion_shows_a_declared_field_extent():
+    """`price` holds `rows` elements, so the extent belongs in what the field offers."""
+    source = "struct Chart { rows:usize; price:Buf[f64][rows]; }\nfn go(c:ro<Chart>) -> usize { return c.rows; }\n"
+    doc = Document(source)
+    assert doc.diagnostics == []
+    offered = {i["label"]: i["detail"] for i in completion(doc, source.index("c.rows") + 2)}
+    assert offered["price"] == "Buf[f64][rows]" and offered["rows"] == "usize"
+
+
 def test_completion_instantiates_a_generic_library_container():
     doc = Document(PROGRAM)
     offered = {i["label"]: i["detail"] for i in completion(doc, PROGRAM.index("v.capacity") + 2)}

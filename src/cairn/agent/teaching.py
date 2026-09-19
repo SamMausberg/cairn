@@ -26,13 +26,13 @@ traps outside the target; float-to-integer truncates toward zero and traps on Na
 or out of range. Literals use expected type, else u64/f64.
 x+1 and add_wrap(x,1) differ at u64 maximum. Never weaken arithmetic or the
 allowed trap/domain policy merely to pass a check.""",
-    "views": """ro<T>[n] and rw<T>[n] borrow host storage; @host is optional, not a transfer.
-An interface extent is a literal or earlier immutable usize parameter. Indexes
-are usize; indexing checks bounds. len(view) reads extent metadata, not elements.
-Read-only views may alias. Each rw view must be disjoint from every other view
-in a call. Entry checks cover numerical null/alignment/overflow/overlap only;
-caller supplies live initialized typed storage without conflicting external access.
-No arbitrary view aliases, view returns, resizing or implicit copies/parallelism.""",
+    "views": """ro<T>[n] and rw<T>[n] borrow host storage; @host is optional, not a transfer. An interface
+extent is a literal or earlier immutable usize parameter. Indexes are usize; indexing checks bounds.
+len(view) reads extent metadata, not elements. Read-only views may alias. Each rw view must be
+disjoint from every other view in a call. Entry checks cover numerical null/alignment/overflow/overlap
+only; the caller supplies live initialized typed storage with no conflicting access. A declared field
+extent gives len(c.price) the identity c.rows: no part. No arbitrary view aliases, view returns,
+resizing or implicit copies/parallelism.""",
     "compact": """let used = compact out for i in n where predicate yield value;
 out is an rw borrow or scoped buffer of capacity exactly n (len(out) also works).
 Predicate is bool; projection has the element type. Neither may read out or
@@ -53,10 +53,10 @@ Strict flags are not
 a mechanized IEEE proof. Floating exception flags and NaN payloads are outside
 the current observation model; compiler/runtime/hardware remain trusted.""",
     "records": """struct Pair {x:u64; y:u64;} is a value record. Construct Pair(a,b), access p.x.
-Only mutable locals/rw elements can change. Fields are previously declared,
-nonrecursive value types, not views, enums or sums. Copying a record costs work.
-Tag-only enum Op {Read; Write;} uses Op.Read; equality is allowed. Tagged sums
-have a separate card. Neither construct is a dynamic object or allocation.""",
+Only mutable locals/rw elements can change. Fields are nonrecursive value types, never a
+borrow or void. Copying a record costs work. A Buf field may name an earlier usize field
+as its extent: price:Buf[f64][rows]. Tag-only enum Op {Read; Write;} uses Op.Read;
+equality is allowed. Sums have their own card. Neither is a dynamic object or allocation.""",
     "generators": """A function may declare one [K:nat] parameter. family gain=scale[1..257];
 instantiates gain_1..gain_256 with bounded expansion, no runtime dispatcher.
 Do not append a semicolon after a function block.
@@ -123,7 +123,13 @@ one dynamic guard; two parts are disjoint only if they visibly share a boundary.
 owner go charges free where the release is: the end of the block or match arm holding it, a
 return that leaves while it is still held, a function handed one that passes it on to nobody,
 and the place a new value is assigned over. A linear value need not own storage, so consuming
-one charges nothing on its own.""",
+one charges nothing on its own. A record may declare one Buf field's extent, struct Chart
+{rows:usize; price:Buf[f64][rows];}: the name is an earlier usize field of that record
+(E-EXTENT) and len(c.price)==c.rows then holds of every value, so total(c.rows, c.price)
+passes the field whole and pays no part guard. Nothing checks it at run time, so
+Chart(n, Buf[f64](n)) writes the Buf inline on the same n as rows, and neither half is
+assigned, taken, swapped or lent rw alone (E-EXTENT-FIELD). Moving, take, swap and zeroed
+storage carry the record whole and keep it.""",
     "effects": """Every function has an inferred effect row; pure and effects(read:x, trap) after the
 return type are checked ceilings, never wishes. extern fn write(fd:i32, data:ro<u8>[n],
 n:usize) -> i64 effects(io); declares a C symbol whose effects are mandatory because its

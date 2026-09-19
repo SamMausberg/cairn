@@ -144,6 +144,10 @@ GOLDEN = {
         "fn f(n:usize) -> Vec[u64] { let mut b = Buf [u64] (n); return b; }\n",
         "fn f(n:usize) -> Vec[u64] { let mut b = Buf[u64](n); return b; }\n",
     ),
+    "a declared field extent hugs its field type": (
+        "struct Chart{rows:usize;price : Buf[f64] [rows] ;qty:Buf[f64][rows];}\n",
+        "struct Chart { rows:usize; price:Buf[f64][rows]; qty:Buf[f64][rows]; }\n",
+    ),
     "effect rows and externs": (
         "extern fn write(fd:i32,data:ro<u8>[n],n:usize)->i64 effects(io);\n",
         "extern fn write(fd:i32, data:ro<u8>[n], n:usize) -> i64 effects(io);\n",

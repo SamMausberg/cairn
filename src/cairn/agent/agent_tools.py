@@ -161,7 +161,8 @@ def type_declarations(p: Program) -> str:
     for n, fs in p.records.items():
         marks = p.attributes.get(n, set())
         layout = "".join(" " + a for a in sorted(marks - {"linear"}))
-        fields = " ".join(f"{k}:{t.display()};" for k, t in fs)
+        carried = p.field_extents.get(n, {})
+        fields = " ".join(f"{k}:{t.display()}{'[' + carried[k] + ']' if k in carried else ''};" for k, t in fs)
         linear = "linear " * ("linear" in marks)
         out.append(f"{pub(n)}{linear}struct {local(n)}{generics(p.generics.get(n, []))}{layout} {{ {fields} }}")
     for n, vs in p.enums.items():
@@ -203,7 +204,17 @@ def expanded_source(source: str) -> str:
     records = {n: fields for n, fields in p.records.items() if n not in written}
     made = [f for f in p.functions if f.name not in written]
     modules = {n: p.modules[n] for n in [*records, *(f.name for f in made)]}
-    return projection(Program(records, functions=made, generics=p.generics, public=p.public, modules=modules), source)
+    return projection(
+        Program(
+            records,
+            functions=made,
+            generics=p.generics,
+            public=p.public,
+            modules=modules,
+            field_extents=p.field_extents,
+        ),
+        source,
+    )
 
 
 def projection(p: Program, source: str) -> str:
@@ -220,7 +231,11 @@ def projection(p: Program, source: str) -> str:
                 if importer == module
                 else []
             )
-        declared = type_declarations(Program(**tables, generics=p.generics, attributes=p.attributes, public=p.public))
+        declared = type_declarations(
+            Program(
+                **tables, generics=p.generics, attributes=p.attributes, public=p.public, field_extents=p.field_extents
+            )
+        )
         out += [declared] if declared else []
         members: list[Function] = []
         for f in [*(f for f in p.functions if f.module == module), None]:

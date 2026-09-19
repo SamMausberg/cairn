@@ -290,6 +290,7 @@ class Program:
     uses: dict[tuple[str, str], str] = field(default_factory=dict)  # (importer, bare name) -> full name
     sources: dict[str, str] = field(default_factory=dict)  # linked library module -> its text
     modules: dict[str, str] = field(default_factory=dict)  # declared name -> owning module
+    field_extents: dict[str, dict[str, str]] = field(default_factory=dict)  # record -> Buf field -> extent field
 
 
 def is_view(ty: Type) -> bool:
@@ -851,12 +852,17 @@ class Parser:
                     attributes.add(f"align({boundary})")
                     self.need(")")
                 self.need("{")
-                fs = []
+                fs, carried = [], {}
                 while not self.eat("}"):
                     fs.append(self.parameter())
+                    if self.eat("["):  # `price:Buf[f64][rows]`: this field holds as many elements as `rows` says.
+                        carried[fs[-1][0]] = self.ident()
+                        self.need("]")
                     self.need(";")
                 full = declare(n, t)
                 p.records[full], p.generics[full], p.attributes[full] = fs, generics, attributes
+                if carried:
+                    p.field_extents[full] = carried
             elif self.eat("enum"):
                 n = self.ident()
                 generics = self.generic_parameters()

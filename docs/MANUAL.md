@@ -424,6 +424,50 @@ struct Frame { head:u8; next:Frame; }
 Record fields cannot contain their own type by value; reach it through a Buf.
 ```
 
+A `Buf` field may name an earlier `usize` field of the same record as its extent, which makes `len(c.price)` and `c.rows` one identity and lets a column go to a call whole. The name must be an earlier field and it must be `usize` (`E-EXTENT`); the field that declares it must be a `Buf`.
+
+```cairn
+struct Chart { rows:usize; price:Buf[f64][rows]; qty:Buf[f64][rows]; }
+
+fn both(n:usize, xs:ro<f64>[n], ys:ro<f64>[n]) -> f64 {
+  let mut sum:f64 = 0.0;
+  for i in 0..n { sum = sum + xs[i] * ys[i]; }
+  return sum;
+}
+
+fn main() -> i32 {
+  let n:usize = 4;
+  let mut c = Chart(n, Buf[f64](n), Buf[f64](n));
+  c.price[0] = 2.0;
+  c.qty[0] = 3.0;
+  if both(c.rows, c.price, c.qty) != 6.0 { return 1; }     // no part, no guard
+  if both(len(c.price), c.price, c.qty) != 6.0 { return 2; }
+  return 0;
+}
+```
+
+Nothing checks the relation at run time, so it is established once and never broken. A constructor writes the carrier inline as `Buf[T](n)` on the same expression the extent field is given; anything else is `E-EXTENT-FIELD`. Neither the extent field nor a carrier is assigned on its own, moved out by `take` or `swap`, or lent as a whole `rw` place, for the same reason. Moving the record, `take`, `swap` and zeroed storage all carry both halves together and cost nothing.
+
+```cairn rejects E-EXTENT-FIELD
+struct Chart { rows:usize; price:Buf[f64][rows]; }
+fn main() -> i32 { let b = Buf[f64](4); let c = Chart(4, b); return 0; }
+```
+
+```text
+price holds rows elements: build it here as Buf[T](n) on the same n that rows is given.
+```
+
+```cairn rejects E-EXTENT-FIELD
+struct Chart { rows:usize; price:Buf[f64][rows]; }
+fn main() -> i32 { let mut c = Chart(4, Buf[f64](4)); c.rows = 0; return 0; }
+```
+
+```text
+rows takes part in the declared extent of Chart.price; assign, take or swap the whole record.
+```
+
+The identity is a field path on a local, so a nested record carries it too (`box.chart.price` has the extent `box.chart.rows`). An element of an array of records does not: `cs[0].price` is passed as a part, like any other `Buf`.
+
 ### match and try
 
 `match` evaluates its subject once and needs exactly one arm per variant. There is no wildcard. A payload arm binds one fresh immutable value, and matching an owner consumes it.
@@ -518,7 +562,7 @@ fn main() -> i32 {
 }
 ```
 
-Extents agree by name and literal identity, not by value, and `len(v)` supplies the identity of `v`. `len("ready")` is the literal's byte count, so nothing is counted by hand.
+Extents agree by name and literal identity, not by value, and `len(v)` supplies the identity of `v`. `len("ready")` is the literal's byte count, so nothing is counted by hand. A record may give one of its `Buf` fields the identity of an earlier `usize` field of its own (`struct Chart { rows:usize; price:Buf[f64][rows]; }`), and then `c.price` has the extent `c.rows` and goes to a call whole; [records and sums](#records-and-sums) states the rule and what keeps it true.
 
 ```cairn rejects E-TYPE-MISMATCH
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 = u32(bytes[0]);
@@ -3042,6 +3086,7 @@ CAIRN_DIFFERENTIAL_N=5000 python -m pytest -q tests/verification/test_differenti
 * That a region really completes before the next statement. The machine blocks the spawner while lanes are live. That the emitted `cr::par::run`, or a CUDA launch and its synchronize, joins every lane before returning is asserted by `src/cairn/compiler/codegen.py` and the runtime, and tested, not proved. It is the same kind of assumption as the part guard.
 * Closure captures. `checking.py:disjoint` also compares a closure's captured places against the call's arguments, and a captured part contributes its own bounds to the chain before its slice has been formed. Closures are not modelled at all, so that case is neither proved nor refuted here.
 * Device streams. `e_spawn` hides the leases of tickets named in `after`, because queued device work runs after them on one stream. There are no streams in this model, so that exemption is absent: the calculus would reject those programs.
+* Extents. A bound is a symbol the valuation reads, and the calculus never asks whether two views are as long as each other. A declared field extent (`price:Buf[f64][rows]`) is therefore invisible here: whether `len(c.price)` really is `c.rows` is a typing rule of `checking.py`, held by `E-EXTENT-FIELD` at every place that could break it, and tested natively; nothing about it is proved.
 * Linear values other than tickets, `defer`, `take` and `swap` as statements, loops, `return`, `break` and `continue`, closures, traits, generics, placement, atomics, mutexes, effects and the foreign boundary. None of them appear.
 * Callee bodies. A call is its footprint. `AliasedArgs` is detected, not caused: the model does not say what a callee would do with two overlapping views, only that the checker never hands it any.
 * Value-level behaviour. A task's write does not change the abstract value at a place; only a replacement of the cell does. The race result is the absence of conflicting concurrent access, not determinism of results.

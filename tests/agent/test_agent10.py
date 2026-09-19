@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 import test_concurrency as concurrency
 import test_language as language
+import test_memory as memory
 
 from cairn.agent.agent_tools import PROTOCOL, EditSession, canonical_source
 from cairn.agent.sketches import Sketch
@@ -17,6 +18,7 @@ PROGRAMS = {
     "dynamic": language.DYNAMIC,
     "tasks": concurrency.HELPERS + concurrency.TASKS,
     "device": concurrency.DEVICE,
+    "extents": memory.EXTENTS,
     **{"std." + p.stem: p.read_text() for p in sorted(STD.glob("*.cairn"))},
 }
 KERNEL = """

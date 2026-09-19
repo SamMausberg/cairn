@@ -362,6 +362,7 @@ class Checker:
                 if len({x for x, _ in fields}) != len(fields):
                     fail("E-DUPLICATE", f"Duplicate field in {ty.name}.", node)
                 layout: Any = [(n, self.member(t, "E-RECORD-TYPE", "Record fields")) for n, t in fields]
+                self.carriers(ty.name, layout, node)
             else:
                 variants = self.p.sums.get(ty.name) or [(v, None) for v in self.p.enums[ty.name]]
                 if not variants or len({v for v, _ in variants}) != len(variants):
@@ -369,6 +370,27 @@ class Checker:
                 layout = {v: t and self.member(t, "E-SUM-PAYLOAD", "Payloads") for v, t in variants}
         del self.layouts[ty]
         self.layouts[ty] = layout
+
+    def carriers(self, record: str, layout: list[tuple[str, Type]], node=None):
+        """`struct Chart { rows:usize; price:Buf[f64][rows]; }` declares that `price` holds `rows` elements.
+
+        The name is an earlier `usize` field of the same record, and the field that declares it is a `Buf`,
+        so every value of the record answers `len(c.price)` with `c.rows` and a call needs no part."""
+        order, held = [n for n, _ in layout], dict(layout)
+        for carrier, extent in self.p.field_extents.get(record, {}).items():
+            if held[carrier].name != "Buf":
+                fail("E-EXTENT", f"A declared extent belongs to a Buf field; {carrier} is "
+                     f"{held[carrier].display()}.", node)  # fmt: skip
+            if extent not in held or order.index(extent) >= order.index(carrier):
+                fail("E-EXTENT", f"{carrier} names {extent} as its extent; that is not an earlier field "
+                     f"of {record}.", node)  # fmt: skip
+            if held[extent] != USIZE:
+                fail("E-EXTENT", f"A field extent is a usize field; {extent} is {held[extent].display()}.", node)
+
+    def participates(self, ty: Type, name: str) -> str:
+        """Which declared field extent of `ty` the field `name` takes part in: its carrier, or the empty string."""
+        declared = self.p.field_extents.get(ty.name, {}) if ty.mode == "value" else {}
+        return name if name in declared else next((c for c, e in declared.items() if e == name), "")
 
     def member(self, declared: Type, code: str, what: str) -> Type:
         if declared.mode != "value" or declared == VOID:
@@ -987,10 +1009,23 @@ class Checker:
             return self.p.consts[const][1].val if const else e.val
         if e.tag in {"name", "int"}:
             return e.val
+        if e.tag == "field" and field_path(e) and root(e).val in self.env:
+            ty = e.ty or self.peek(e)  # An extern may name its length after the view it measures.
+            return self.identity(e) if ty == USIZE else None
         if e.tag == "call" and e.val == "len" and len(e.args) == 1 and root(e.args[0]).tag in {"name", "str"}:
             ty = e.args[0].ty or self.expr(e.args[0], consume=False)
-            return ty.extent if is_view(ty) else f"len({self.identity(e.args[0])})" if ty.name == "Buf" else None
+            if is_view(ty):
+                return ty.extent
+            if ty.name == "Buf":  # A declared field extent answers for the field, so both spellings agree.
+                return self.declared_extent(e.args[0]) or f"len({self.identity(e.args[0])})"
         return None
+
+    def declared_extent(self, e: Expr) -> str:
+        """The extent identity a record gives one of its own Buf fields: `c.price` is `c.rows` elements long."""
+        if e.tag != "field" or not field_path(e) or e.args[0].ty is None:
+            return ""
+        named = self.p.field_extents.get(e.args[0].ty.name, {}) if e.args[0].ty.mode == "value" else {}
+        return self.identity(e.args[0]) + "." + named[e.val] if e.val in named else ""
 
     def writable(self, e: Expr) -> bool:
         b = self.env.get(root(e).val) if root(e).tag == "name" else None
@@ -1024,7 +1059,11 @@ class Checker:
         if e.tag == "field":
             outer, reached = not self.reaching, field_path(e) and root(e).val in self.env
             self.reaching += reached
-            self.place(e.args[0], write)
+            at = self.place(e.args[0], write)
+            carrier = self.participates(at, e.val) if write else ""
+            if carrier:  # len(c.price) == c.rows holds of every value, so neither half moves on its own.
+                fail("E-EXTENT-FIELD", f"{e.val} takes part in the declared extent of {at.name}.{carrier}; "
+                     "assign, take or swap the whole record.", e)  # fmt: skip
             ty = self.expr(e, consume=False)
             self.reaching -= reached
             if reached and outer:  # A new value in this cell replaces what a lease of its elements holds.
@@ -1304,9 +1343,20 @@ class Checker:
         e.ref, e.tag = g, "function"
         return Type("fn", want.mode, args=(*(t for _, t in g.params), g.ret))
 
+    def intact(self, a: Expr, mode: str, elements: bool):
+        """A field in a declared extent is never lent as a whole mutable place: a callee assigns an `rw<T>`
+        borrow by name, and the record's invariant would leave with it. An `rw<T>[n]` view writes elements."""
+        if mode != "rw" or elements or a.tag != "field" or a.args[0].ty is None:
+            return
+        carrier = self.participates(a.args[0].ty, a.val)
+        if carrier:
+            fail("E-EXTENT-FIELD", f"{a.val} takes part in the declared extent of {a.args[0].ty.name}.{carrier}; "
+                 "it is not lent as a whole rw place.", a)  # fmt: skip
+
     def lend(self, a: Expr, mode: str, borrows: list[tuple[str, str]], elements: bool = False) -> str:
         """A named place lent to a call: leased places and lanes object here; returns its root name.
         An array view lends the elements (`x[]`), which leaves the owner's length readable."""
+        self.intact(a, mode, elements)
         if root(a).tag != "name" or root(a).val not in self.env:
             return ""
         place = self.where(a) + "[]" * (elements and a.tag != "slice")
@@ -1575,6 +1625,7 @@ class Checker:
                 if not named or (want.mode == "rw" and not self.writable(a)):
                     fail("E-WRITE-LEASE", "A dynamic reference borrows a named place (mutable for rw).", a)
                 inner = Expr(a.tag, a.val, a.args, a.line, a.col, a.ty, a.start, a.end, a.ref)
+                self.intact(inner, want.mode, False)
                 a.tag, a.args, a.ty = "coerce", [inner], want
                 a.ref = table
                 self.early[id(a)] = a
@@ -1640,7 +1691,7 @@ class Checker:
         if is_view(ty) or ty.name not in {"Buf", "Array"}:
             return ty
         mode = "rw" if self.writable(a) else "ro"
-        extent = f"len({self.identity(a)})" if ty.name == "Buf" else str(ty.args[1])
+        extent = self.declared_extent(a) or (f"len({self.identity(a)})" if ty.name == "Buf" else str(ty.args[1]))
         return Type(ty.args[0].name, mode, extent, ty.args[0].args)
 
     def construct(self, e: Expr, record: str, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
@@ -1663,6 +1714,20 @@ class Checker:
             with self.within(home, dict(bound)):
                 want = self.resolve(declared, a)
             self.expr(a, want)
+        self.establish(record, args, fields)
         ty = self.resolve(Type(record, args=tuple(bound[g] for g in names)), e)
         e.ref = ("record", ty)
         return ty
+
+    def establish(self, record: str, args: list[Expr], fields: list[tuple[str, Type]]):
+        """A declared field extent holds of every value ever built, and nothing checks it at run time, so a
+        constructor writes the carrier inline as `Buf[T](e)` with the extent identity the extent field is given.
+        Every other way to a record preserves it: a move copies both halves, `take` and `swap` exchange whole
+        places, and zeroed storage is `rows` of zero beside an empty `Buf`."""
+        at = {n: i for i, (n, _) in enumerate(fields)}
+        for carrier, extent in self.p.field_extents.get(record, {}).items():
+            a, size = args[at[carrier]], self.extent_of(args[at[extent]])
+            inline = a.tag == "call" and a.val == "Buf" and len(a.args) == 1
+            if size is None or not inline or self.extent_of(a.args[0]) != size:
+                fail("E-EXTENT-FIELD", f"{carrier} holds {extent} elements: build it here as Buf[T](n) on "
+                     f"the same n that {extent} is given.", a)  # fmt: skip

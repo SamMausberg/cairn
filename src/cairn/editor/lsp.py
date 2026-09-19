@@ -386,7 +386,9 @@ def fields(p: Program, module: str, shown: str) -> list[tuple[str, str]]:
     if name not in p.records or (p.modules.get(name, "") not in ("", module) and name not in p.public):
         return []
     put = dict(zip((g for g, _ in p.generics.get(name, [])), args, strict=False))
-    return [(n, re.sub(r"[\w.]+", lambda m: put.get(m.group(), m.group()), t.display())) for n, t in p.records[name]]
+    carried = p.field_extents.get(name, {})  # `price:Buf[f64][rows]`: the extent is part of what the field says.
+    shown = ((n, re.sub(r"[\w.]+", lambda m: put.get(m.group(), m.group()), t.display())) for n, t in p.records[name])
+    return [(n, t + (f"[{carried[n]}]" if n in carried else "")) for n, t in shown]
 
 
 def methods(p: Program, module: str, shown: str) -> list[Function]:
