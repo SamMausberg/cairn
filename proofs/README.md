@@ -1,4 +1,4 @@
-# Lean 4 proofs for the bounded collector and the ownership calculus
+# Lean 4 proofs for the bounded collector and the ownership/lease calculus
 
 This is a machine-checked Lean 4 development about two things.  The first is one
 construct: CAIRN's bounded collector,
@@ -20,11 +20,16 @@ store `out[k]` is emitted with **no** dynamic bounds check; what licenses that i
 the cursor invariant `0 <= k <= i <= n <= M`, where `M` is the largest
 representable cursor.
 
-The second is a small ownership-and-lease calculus (`Cairn/Ownership.lean`): a
-statement language over named places, an executable checker that mirrors the
-rules `src/cairn/checking.py` enforces, an interleaving small-step machine with
-explicit error states, and the theorem that an accepted program reaches none of
-them.  `docs/verification.md` states exactly what that model covers.
+The second is a small ownership-and-lease calculus (`Cairn/Places.lean` and
+`Cairn/Ownership.lean`): a statement language over named locals and the places
+borrowed out of them -- whole owners, their header (`len`), their elements and
+array parts `d[lo..hi]` whose bounds are literals or immutable names -- an
+executable checker that mirrors the rules `src/cairn/checking.py` enforces
+(`overlaps`, `leased`, `disjoint`, the branch join, the linear ticket), an
+interleaving small-step machine with explicit error states and a trap, and the
+theorems that an accepted program reaches no error state and never gets stuck,
+for **every** valuation of those bounds.  `docs/verification.md` states exactly
+what that model covers.
 
 It is not a whole-compiler proof.  Read "What is NOT proved" before quoting
 anything from here.
@@ -36,13 +41,15 @@ anything from here.
 | `Cairn/Affine.lean` | `Form`, `Form.eval`, `Rule`, `Certificate`, the computable `check`, and `check_sound`. |
 | `Cairn/CollectorCertificates.lean` | **Generated.** The 17 obligations and their certificates as Lean data, `all_checked`, and one corollary per obligation. |
 | `Cairn/Collector.lean` | Executable model of the loop; the invariant derived *from* the certificates; store-in-bounds, stable selection, and increment bounds. |
-| `Cairn/Ownership.lean` | The ownership and lease calculus: syntax, the executable checker `accepts`, the interleaving machine, the preservation lemma `Ok_succ`, the soundness theorems, and the regression over the programs `tests/test_soundness.py` pins. |
+| `Cairn/Places.lean` | What a borrow names: bounds, valuations, the chain of guarded `lo <= hi` facts (`reaches`), the checker's syntactic overlap (`ovl`, mirroring `checking.py:overlaps`), the real footprints under a valuation (`meets`), and the bridge `ovl_sound`. |
+| `Cairn/Ownership.lean` | The ownership and lease calculus: syntax, the executable checker `accepts`, the interleaving machine, the preservation lemma `Ok_succ`, the soundness and progress theorems, and the regression over the programs `tests/test_soundness.py` pins. |
 | `Cairn/Audit.lean` | `#print axioms` for every headline theorem, and the ownership regression line. |
 | `Cairn.lean` | Root module importing everything. |
 
 No dependencies.  Lean 4 core only (`omega`, `decide`, `simp`, `Int`/`Nat`/`List`
 lemmas); **Mathlib is deliberately not used**, so the trusted base is the pinned
-Lean toolchain and nothing else, and the whole thing builds in about two seconds.
+Lean toolchain and nothing else, and the whole thing builds from scratch in about
+four seconds.
 
 ## What is proved
 
@@ -173,13 +180,15 @@ theorem increments_fit (pred : α → Bool) (proj : α → β)
 This development proves things about **models**.  Each of the following remains
 trusted, exactly as before:
 
-* **The ownership calculus is an abstraction written by hand.**  Places in it are
-  atomic names, so fields, array elements and the visibly disjoint parts that
-  license a K-way split are outside it, and so are `take`/`swap`, `defer`, loops,
-  `return`, closures, traits, generics, lanes, placement, atomics, mutexes and
-  effects.  Nothing extracts it from `checking.py` or compares the two.  It proves
-  safety, not progress: `Ownership.OpenGoal.Progress` names the missing theorem as
-  a `def ... : Prop` and leaves it unproved.
+* **The ownership calculus is an abstraction written by hand.**  It covers whole
+  owners, headers, elements and array parts whose bounds are visible, including
+  the chain that licenses a K-way split; fields, single elements, parts of parts,
+  bounds `path` writes as `?`, `take`/`swap`, `defer`, loops, `return`, closures,
+  traits, generics, lanes, placement, atomics, mutexes and effects are outside
+  it.  Nothing extracts it from `checking.py` or compares the two.  Its treatment
+  of array parts assumes of the emitter what `cr::part` does and no proof states:
+  that a part's `lo <= hi` guard runs on the spawning thread before the task that
+  borrows it starts.
 
 * **The compiler-to-model correspondence.**  Nothing here relates
   `Cairn.Collector.step`/`run` to what `src/cairn` actually emits.  That the
@@ -237,19 +246,20 @@ cd proofs && lake env lean Cairn/Audit.lean
 | Dependencies | none (`lake-manifest.json` lists no packages; no Mathlib) |
 | Host of record | Linux aarch64 (GH200) |
 
-A clean `lake build` (after `rm -rf .lake/build`) takes about **1.9 s** wall
+A clean `lake build` (after `rm -rf .lake/build`) takes about **3.5 s** wall
 clock on the host of record.
 
 ## Axiom audit result
 
-`Cairn/Audit.lean` runs `#print axioms` on 50 declarations: `check_sound`,
+`Cairn/Audit.lean` runs `#print axioms` on every headline declaration: `check_sound`,
 `check_sound'`, `eval_combine_nonneg`, `forall_mem_of_satisfies`, `all_checked`,
 `certificates_length`, all 17 `obligation_*` corollaries, the 8 `Inv.*`
 transition theorems, `run_preserves_inv`, `run_spec`, `collect_spec`,
 `store_index_lt_capacity`, `store_index_lt_buffer_length`, `increments_fit`, and
-the 13 ownership declarations (`accepted_no_fault` and its six named faults,
-`accepted_frees_each_allocation_once`, `Ok_succ`, `Ok_start`, `checkBlock_mono`,
-`releaseAll_final`, `ownership_regression`).
+the ownership declarations (`reaches_sound`, `ovl_sound`, `accepted_no_fault`
+and its six named faults, `accepted_frees_each_allocation_once`,
+`accepted_progress`, `Ok_succ`, `Ok_start`, `checkBlock_mono`, `releaseAll_final`,
+`ownership_regression`) and the seven non-vacuity witnesses.
 
 The result:
 

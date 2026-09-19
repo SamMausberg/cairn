@@ -32,6 +32,10 @@ ELAN_BIN = Path.home() / ".elan" / "bin"
 
 # The ownership and lease calculus: these must exist, be audited and stay free of excluded middle.
 OWNERSHIP_THEOREMS = (
+    # Array parts: the chain of guarded bounds, and the bridge from the checker's syntactic
+    # disjointness to the real footprints under a valuation.
+    "Cairn.Ownership.reaches_sound",
+    "Cairn.Ownership.ovl_sound",
     "Cairn.Ownership.accepted_no_fault",
     "Cairn.Ownership.accepted_no_use_after_move",
     "Cairn.Ownership.accepted_no_use_after_free",
@@ -40,11 +44,15 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Ownership.accepted_no_leaked_ticket",
     "Cairn.Ownership.accepted_no_aliased_args",
     "Cairn.Ownership.accepted_frees_each_allocation_once",
+    "Cairn.Ownership.accepted_progress",
     "Cairn.Ownership.Ok_succ",
     "Cairn.Ownership.ownership_regression",
     # Non-vacuity: without these the safety theorems would also hold of a machine that never faults.
     "Cairn.Ownership.Regress.leasedRead_races",
     "Cairn.Ownership.Regress.overlappingTasks_races",
+    "Cairn.Ownership.Regress.overlappingParts_races",
+    # An accepted program whose parts are ordered by a backwards one aborts at that guard.
+    "Cairn.Ownership.Regress.backwardsPart_traps",
     "Cairn.Ownership.Regress.copyAnOwner_doubleFrees",
     "Cairn.Ownership.Regress.useAfterDrop_usesDeadPlace",
     "Cairn.Ownership.Regress.unawaitedTicket_leaks",

@@ -9,6 +9,7 @@ Build this file and read the log:
     lake env lean Cairn/Audit.lean
 -/
 import Cairn.Affine
+import Cairn.Places
 import Cairn.CollectorCertificates
 import Cairn.Collector
 import Cairn.Ownership
@@ -69,6 +70,8 @@ namespace Cairn
 
 /-! ### The ownership and lease calculus -/
 
+#print axioms Cairn.Ownership.reaches_sound
+#print axioms Cairn.Ownership.ovl_sound
 #print axioms Cairn.Ownership.accepted_no_fault
 #print axioms Cairn.Ownership.accepted_no_use_after_move
 #print axioms Cairn.Ownership.accepted_no_use_after_free
@@ -77,6 +80,7 @@ namespace Cairn
 #print axioms Cairn.Ownership.accepted_no_leaked_ticket
 #print axioms Cairn.Ownership.accepted_no_aliased_args
 #print axioms Cairn.Ownership.accepted_frees_each_allocation_once
+#print axioms Cairn.Ownership.accepted_progress
 #print axioms Cairn.Ownership.Ok_succ
 #print axioms Cairn.Ownership.Ok_start
 #print axioms Cairn.Ownership.checkBlock_mono
@@ -87,6 +91,8 @@ namespace Cairn
 
 #print axioms Cairn.Ownership.Regress.leasedRead_races
 #print axioms Cairn.Ownership.Regress.overlappingTasks_races
+#print axioms Cairn.Ownership.Regress.overlappingParts_races
+#print axioms Cairn.Ownership.Regress.backwardsPart_traps
 #print axioms Cairn.Ownership.Regress.copyAnOwner_doubleFrees
 #print axioms Cairn.Ownership.Regress.useAfterDrop_usesDeadPlace
 #print axioms Cairn.Ownership.Regress.unawaitedTicket_leaks

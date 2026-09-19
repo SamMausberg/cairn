@@ -2,14 +2,14 @@
 
 ## What is proved, and what is not
 
-There is still no whole-compiler proof. There are now two real Lean results. `proofs/` is a dependency-free Lean 4 project (toolchain pinned in `proofs/lean-toolchain`; no Mathlib) that `lake build` checks in about two seconds. It proves, with no `sorry`, no `native_decide` and no added axioms (every audited declaration depends on `propext` and `Quot.sound` only; the ownership calculus does not even use `Classical.choice`):
+There is still no whole-compiler proof. There are now two real Lean results. `proofs/` is a dependency-free Lean 4 project (toolchain pinned in `proofs/lean-toolchain`; no Mathlib) that `lake build` checks from scratch in about four seconds. It proves, with no `sorry`, no `native_decide` and no added axioms (every audited declaration depends on `propext` and `Quot.sound` only; the ownership calculus does not even use `Classical.choice`):
 
 - `Cairn.check_sound`: if the certificate checker accepts a rule, the rule's conclusion is nonnegative for every integer assignment that satisfies its assumptions.
 - `Cairn.Collector.all_checked`: all seventeen collector certificates pass that checker inside Lean, and each named obligation is a Lean theorem obtained by applying its certificate.
 - For an executable model of the collector loop: the invariant `0 <= k <= i <= n` is preserved by emit and skip steps (using the certified inequalities), every store index is below the capacity (`store_index_lt_capacity`), both increments stay representable (`increments_fit`), and the result is stable selection: the written prefix equals `(inputs.filter pred).map proj`, its length is returned, and the tail is unchanged (`collect_spec`).
-- For a hand-written core calculus of ownership and leases over whole places: if the Lean checker accepts a program, then under every interleaving of the spawner with its tasks no execution reaches a use-after-move, a use-after-free, a double free, a leaked ticket, an aliased call argument or a data race, and on normal termination every cell the run allocated has been released exactly once. The section "Ownership and leases" below states exactly what that model contains and what it leaves out.
+- For a hand-written core calculus of ownership and leases over locals, whole owners, their headers, their elements and array parts with literal or immutable bounds: if the Lean checker accepts a program, then under every interleaving of the spawner with its tasks, and for **every** valuation of those bounds, no execution reaches a use-after-move, a use-after-free, a double free, a leaked ticket, an aliased call argument or a data race; every reachable configuration has finished, has aborted at a bounds guard or has a successor; and on normal termination every cell the run allocated has been released exactly once. The section "Ownership and leases" below states exactly what that model contains and what it leaves out.
 
-The Lean file of certificates is generated from the Python rules by `tools/export_lean_certificates.py`; a test fails if they drift, and the compiler receipt reports `lean_verified: true` only while the live bundle hashes to the bundle Lean checked. What this does **not** establish: that the Python checker implements the Lean `check` (it is a transliteration, reviewed, not extracted), that the emitter's C++ corresponds to the loop model, that `checking.py` implements the Lean ownership calculus (that model is written by hand and nothing connects the two mechanically), or anything about the parser, type checker, lanes, placement, effects, the C++ compiler or the machine. SMT results still trust their translator and Z3. Proving one relation does not confer correctness on the rest.
+The Lean file of certificates is generated from the Python rules by `tools/export_lean_certificates.py`; a test fails if they drift, and the compiler receipt reports `lean_verified: true` only while the live bundle hashes to the bundle Lean checked. What this does **not** establish: that the Python checker implements the Lean `check` (it is a transliteration, reviewed, not extracted), that the emitter's C++ corresponds to the loop model, that `checking.py` implements the Lean ownership calculus (that model is written by hand and nothing connects the two mechanically), that the emitter really runs a part's `lo <= hi` guard before the task that borrows it starts (the calculus assumes it; `cr::part` and a sanitizer test are the evidence), or anything about the parser, type checker, lanes, placement, effects, the C++ compiler or the machine. SMT results still trust their translator and Z3. Proving one relation does not confer correctness on the rest.
 
 ## Bounded collector: checked affine implications
 
@@ -42,66 +42,103 @@ python3 -m pytest -q tests/test_linear_certificates.py
 
 ## Ownership and leases: a mechanized core calculus
 
-`proofs/Cairn/Ownership.lean` is a second, independent Lean development: a small ownership-and-lease calculus with an executable checker, an interleaving small-step machine with explicit error states, and a checked soundness theorem. It is written by hand. Nothing extracts it from `src/cairn/checking.py` and nothing mechanically relates the two; it is a statement about the calculus below, offered as evidence that the *rules* hang together, not that the implementation obeys them.
+`proofs/Cairn/Places.lean` and `proofs/Cairn/Ownership.lean` are a second, independent Lean development: a small ownership-and-lease calculus with an executable checker, an interleaving small-step machine with explicit error states, and checked safety and progress theorems. It is written by hand. Nothing extracts it from `src/cairn/checking.py` and nothing mechanically relates the two; it is a statement about the calculus below, offered as evidence that the *rules* hang together, not that the implementation obeys them.
 
 ### What is modelled
 
-**Places are atomic names.** Two places overlap exactly when they are equal. Fields, array elements, array parts and the `overlaps` chain in `checking.py` that licenses a K-way split of one buffer (`d[0..a]`, `d[a..b]`, `d[b..n]`) are **not** modelled; in the Lean model the split appears as two different places.
+**Locals and places.** A *local* is the unit of ownership: it is allocated, moved, dropped and released. A *place* is what one borrow names, with one constructor per shape `checking.py:path` produces and one per case `checking.py:lend` chooses between:
 
-**Syntax.** A program is one scope: a list of declared places plus a body. Statements are `alloc x` (a fresh heap cell lands in `x`), `mkScalar x` (a copyable scalar), `copy y x`, `move y x`, `drop x` (the implicit release at the exit of an inner scope), `call args` where `args` is a list of `(place, ro|rw)` borrows lent for the duration of the call, `spawn t args` (the borrows stay lent until `wait t`), `wait t`, and `ite thn els` with both branches. A read of a place is `call [(x, ro)]` and a write is `call [(x, rw)]`; borrows are second class by construction, since a borrow exists only as an entry in one argument list.
+| Lean | source | what it is |
+| --- | --- | --- |
+| `whole x` | `d` | the owner itself, header and elements: what an `rw<Buf[T]>` parameter lends, and the only borrow through which a task can replace the cell (`swap`) |
+| `hdr x` | the `len(d)` read | the header alone: the length and the identity of the cell (`leased(..., elements=False)`) |
+| `elems x` | `d[]` | every element: what an array view `rw<T>[n]` of a whole owner lends |
+| `part x lo hi` | `d[lo..hi]` | those elements |
 
-**The checker** (`Ownership.accepts`) is an executable Lean function, not a relation, and its decisions can be evaluated. It carries the state `checking.py` carries in its `Scope`: which places hold a scalar, which hold an owner, which are dead, and a lease map from a ticket to the borrows it holds. It enforces: only declared places; no use of a dead place (moved, dropped, or killed by a join); `copy` only of a scalar; no move, drop or rebinding of a leased place; no read of what a live task writes and no write of what a live task reads or writes; no two overlapping borrows with an `rw` among the arguments of one call; a fresh ticket per `spawn`; at a branch join, a place moved on one path is dead afterwards and both branches must agree on which tickets are live; and no live ticket where the scope ends.
+A bound is an integer literal or the name of an immutable natural, which is what `path` keeps; anything else becomes `?` there and is **not** modelled. The names are read by an arbitrary valuation, and every theorem below quantifies over **every** valuation, so no result depends on the numbers. Fields (`a.b`), single elements (`a[i]`) and parts of parts are not modelled.
 
-**The machine** is a small-step semantics over a heap of allocation ids, a liveness map and a per-cell release counter. It is deliberately undefensive, so that the faults are actually reachable for programs the checker rejects: `copy` duplicates whatever bits a place holds (which is how a mis-accepted copy of an owner reaches a double free), binding a place releases what it held before, and a move leaves a ghost mark whose only purpose is to let a later use be *named* `UseAfterMove`. Nothing in the machine prevents a fault; only the checker does. The error configurations are `UseAfterMove`, `UseAfterFree`, `DoubleFree`, `Leak` (a live ticket where the scope ends), `Race` and `AliasedArgs`.
+**Disjointness, decided twice.** The checker decides overlap *syntactically*, as `checking.py:overlaps` does: places of different locals never overlap; the header and the elements do not overlap (which is why `len(d)` stays readable while a view of `d`'s elements is lent, and does not while `d` itself is lent); two parts of one local are disjoint exactly when one visibly ends at or before the other begins; everything else overlaps, `whole x` with every place of `x`. "Visibly ends at or before" is `reaches`: the same bound, a literal comparison, or a chain through the `lo <= hi` facts of the parts in play — the reflexive-transitive closure `checking.py` searches depth-first, saturated one round at a time here. The machine decides overlap *under the valuation*: two accesses collide when both touch the header or their index ranges meet. `Ownership.ovl_sound` is the bridge, and it is what the whole part story rests on.
 
-**Concurrency is modelled as interleaving, not as a sequential approximation.** A task's body is abstracted to its footprint: while its ticket is live it may touch any place it was lent, in the mode it was lent, between any two steps of the spawner, any number of times. A task that holds a place `rw` may also replace the cell in it, which is what `swap` through a lent owner does. `Race` is an error configuration reached when the spawner and a live task, or two live tasks, touch one place with a write among them. `if` has an opaque condition, so both branches are always reachable and the join is what makes a one-sided move dead.
+**The guard, and the trap.** A slice is formed by `cr::part(p, lo, hi, n, want)`, which traps unless `lo <= hi` (the real guard also checks `hi <= n` and the length the callee declared; only `lo <= hi` matters to the alias rules, so only it is modelled). The machine performs that guard for every part a statement names, on the spawner's thread, before the call is made or the task is started. A failed guard is a **trap**: a fourth configuration beside running, finished and faulted — a defined abort of the whole configuration, live tasks included, which is what `cr::trap()` does to the process. It is not a fault and not a race. The invariant `TasksGuarded` states that every part a live task holds was guarded, and `inPlay_guarded` adds the place being touched, whose slice is formed now. That is the explicit form of "every chaining fact corresponds to a guard that has already run", and it is exactly what makes `d[6..3]` safe to accept: it orders `d[0..6]` before `d[3..9]`, which overlap, and the program aborts at its spawn before either of those tasks exists (`test_a_backwards_part_used_to_order_two_others_aborts_at_its_spawn`).
+
+**Which facts each rule may chain.** The two Python rules use different fact sets, and the model keeps them apart. `leased` chains through every part the live tasks hold, plus the place being touched. `disjoint` chains through the parts of the one argument list it is looking at. So handing a *single call* `d[0..a]` and `d[b..n]` is rejected even while `d[a..b]` is lent to a live task — that argument list contains nothing to order `a` before `b` — while spawning the same two ends one at a time is accepted. Both the Lean checker and `checking.py` behave that way; it is conservative, not unsound.
+
+**Syntax.** A program is one scope: a list of declared locals plus a body. Statements are `alloc x` (a fresh heap cell lands in `x`), `mkScalar x` (a copyable scalar), `copy y x`, `move y x`, `drop x` (the implicit release at the exit of an inner scope), `call args` where `args` is a list of `(place, ro|rw)` borrows lent for the duration of the call, `spawn t args` (the borrows stay lent until `wait t`), `wait t`, and `ite thn els` with both branches. A read of a scalar is `call [(whole x, ro)]`, a write of a part is `call [(part x lo hi, rw)]`, and `let k = len(x);` is `call [(hdr x, ro)]`; borrows are second class by construction, since a borrow exists only as an entry in one argument list.
+
+**The checker** (`Ownership.accepts`) is an executable Lean function, not a relation, and its decisions can be evaluated. It carries the state `checking.py` carries in its `Scope`: which locals hold a scalar, which hold an owner, which are dead, and a lease map from a ticket to the borrows it holds. It enforces: only declared locals; no use of a dead local (moved, dropped, or killed by a join); `copy` only of a scalar; no move, drop or rebinding of a local any of whose places is leased; no read of what a live task writes and no write of what a live task reads or writes, *overlap decided by the rule above*; no two overlapping borrows with an `rw` among the arguments of one call; a fresh ticket per `spawn`; at a branch join, a local moved on one path is dead afterwards and both branches must agree on which tickets are live; and no live ticket where the scope ends.
+
+**The machine** is a small-step semantics over a heap of allocation ids, a liveness map and a per-cell release counter. It is deliberately undefensive, so that the faults are actually reachable for programs the checker rejects: `copy` duplicates whatever bits a local holds (which is how a mis-accepted copy of an owner reaches a double free), binding a local releases what it held before, and a move leaves a ghost mark whose only purpose is to let a later use be *named* `UseAfterMove`. Nothing in the machine prevents a fault; only the checker does. The error configurations are `UseAfterMove`, `UseAfterFree`, `DoubleFree`, `Leak` (a live ticket where the scope ends), `Race` and `AliasedArgs`; `Trap` is not one of them.
+
+**Concurrency is modelled as interleaving, not as a sequential approximation.** A task's body is abstracted to its footprint: while its ticket is live it may touch any place it was lent, in the mode it was lent, between any two steps of the spawner, any number of times. A task that holds the *whole owner* `rw` may also replace the cell in it, which is what `swap` through a lent owner does; a task that holds only elements or a part cannot, since a view cannot replace the storage it views. `Race` is an error configuration reached when the spawner and a live task, or two live tasks, touch a common location of one local with a write among them — for two parts, when their index ranges meet under the valuation. `if` has an opaque condition, so both branches are always reachable and the join is what makes a one-sided move dead.
 
 ### The theorems
 
-Every statement below is proved in `proofs/Cairn/Ownership.lean`, audited in `proofs/Cairn/Audit.lean` and required by `tests/test_lean_proofs.py`. `Reach p.scope (Cfg.start p) cfg` means "`cfg` is reachable from the initial configuration of `p` under the interleaving semantics".
+Every statement below is proved in `proofs/Cairn/`, audited in `proofs/Cairn/Audit.lean` and required by `tests/test_lean_proofs.py`. `Reach ρ p.scope (Cfg.start p) cfg` means "`cfg` is reachable from the initial configuration of `p` under the interleaving semantics, when the immutable bounds are worth what `ρ` says". The valuation is implicit in the theorems and universally quantified: an accepted program is safe for every one.
 
 ```lean
-theorem accepted_no_fault {p : Program} (hp : accepts p = true) {cfg : Cfg}
-    (hr : Reach p.scope (Cfg.start p) cfg) (e : Err) : cfg ≠ Cfg.err e
+theorem reaches_sound {ρ : Valuation} {facts : List Fact} (hf : FactsTrue ρ facts)
+    {x goal : Bound} (h : reaches facts x goal = true) : x.eval ρ ≤ goal.eval ρ
 
-theorem accepted_no_use_after_move {p : Program} (hp : accepts p = true) {cfg : Cfg}
-    (hr : Reach p.scope (Cfg.start p) cfg) (q : Place) : cfg ≠ Cfg.err (.useAfterMove q)
+theorem ovl_sound {ρ : Valuation} {inPlay : List Place}
+    (hg : ∀ p ∈ inPlay, p.guard ρ = true) {r s : Place}
+    (h : ovl inPlay r s = false) : meets ρ r s = false
 
-theorem accepted_no_use_after_free {p : Program} (hp : accepts p = true) {cfg : Cfg}
-    (hr : Reach p.scope (Cfg.start p) cfg) (a : AllocId) : cfg ≠ Cfg.err (.useAfterFree a)
+theorem accepted_no_fault {p : Program} (hp : accepts p = true) {ρ : Valuation} {cfg : Cfg}
+    (hr : Reach ρ p.scope (Cfg.start p) cfg) (e : Err) : cfg ≠ Cfg.err e
 
-theorem accepted_no_double_free {p : Program} (hp : accepts p = true) {cfg : Cfg}
-    (hr : Reach p.scope (Cfg.start p) cfg) (a : AllocId) : cfg ≠ Cfg.err (.doubleFree a)
+theorem accepted_no_use_after_move {p : Program} (hp : accepts p = true) {ρ : Valuation}
+    {cfg : Cfg} (hr : Reach ρ p.scope (Cfg.start p) cfg) (q : Var) :
+    cfg ≠ Cfg.err (.useAfterMove q)
 
-theorem accepted_race_free {p : Program} (hp : accepts p = true) {cfg : Cfg}
-    (hr : Reach p.scope (Cfg.start p) cfg) (q : Place) : cfg ≠ Cfg.err (.race q)
+theorem accepted_no_use_after_free {p : Program} (hp : accepts p = true) {ρ : Valuation}
+    {cfg : Cfg} (hr : Reach ρ p.scope (Cfg.start p) cfg) (a : AllocId) :
+    cfg ≠ Cfg.err (.useAfterFree a)
 
-theorem accepted_no_leaked_ticket {p : Program} (hp : accepts p = true) {cfg : Cfg}
-    (hr : Reach p.scope (Cfg.start p) cfg) (t : Ticket) : cfg ≠ Cfg.err (.leak t)
+theorem accepted_no_double_free {p : Program} (hp : accepts p = true) {ρ : Valuation}
+    {cfg : Cfg} (hr : Reach ρ p.scope (Cfg.start p) cfg) (a : AllocId) :
+    cfg ≠ Cfg.err (.doubleFree a)
 
-theorem accepted_no_aliased_args {p : Program} (hp : accepts p = true) {cfg : Cfg}
-    (hr : Reach p.scope (Cfg.start p) cfg) : cfg ≠ Cfg.err .aliasedArgs
+theorem accepted_race_free {p : Program} (hp : accepts p = true) {ρ : Valuation}
+    {cfg : Cfg} (hr : Reach ρ p.scope (Cfg.start p) cfg) (q : Var) :
+    cfg ≠ Cfg.err (.race q)
 
-theorem accepted_frees_each_allocation_once {p : Program} (hp : accepts p = true) {st : State}
-    (hr : Reach p.scope (Cfg.start p) (Cfg.done st)) :
+theorem accepted_no_leaked_ticket {p : Program} (hp : accepts p = true) {ρ : Valuation}
+    {cfg : Cfg} (hr : Reach ρ p.scope (Cfg.start p) cfg) (t : Ticket) :
+    cfg ≠ Cfg.err (.leak t)
+
+theorem accepted_no_aliased_args {p : Program} (hp : accepts p = true) {ρ : Valuation}
+    {cfg : Cfg} (hr : Reach ρ p.scope (Cfg.start p) cfg) : cfg ≠ Cfg.err .aliasedArgs
+
+theorem accepted_frees_each_allocation_once {p : Program} (hp : accepts p = true)
+    {ρ : Valuation} {st : State} (hr : Reach ρ p.scope (Cfg.start p) (Cfg.done st)) :
     (∀ a, st.live a = false) ∧ (∀ a, a < st.next → st.frees a = 1)
+
+def Progress : Prop :=
+  ∀ (p : Program) (ρ : Valuation), accepts p = true →
+    ∀ cfg, Reach ρ p.scope (Cfg.start p) cfg →
+      (∃ st, cfg = Cfg.done st) ∨ cfg = Cfg.trap ∨ succ ρ p.scope cfg ≠ []
+
+theorem accepted_progress : Progress
 ```
 
-The race theorem is proved for the whole calculus, not for a fragment. It rests on `Ok_succ`, the preservation lemma: every successor of a configuration satisfying the invariant satisfies it too, and the invariant is `False` on error configurations.
+The race theorem is proved for the whole calculus, not for a fragment. It rests on `Ok_succ`, the preservation lemma: every successor of a configuration satisfying the invariant satisfies it too, the invariant is `False` on error configurations, and it is trivially true of a trap. The release theorem is about normal termination only: a run that traps has aborted, and nothing is claimed about the cells it leaves behind. `accepted_progress` is cheap on its own — the machine is total by construction, since every statement has at least one successor — and its content is that the stuck configurations are exactly the errors, which `accepted_no_fault` excludes. It replaces the `OpenGoal.Progress` that earlier versions of this file left unproved.
 
-`ownership_regression` is the executable sanity check: the Lean encodings of the CAIRN programs pinned in `tests/test_soundness.py` and `tests/test_concurrency.py` are classified the way the Python checker classifies them — a move beside a view a task still holds, a leased read, a double move, an unawaited ticket, two arguments of one call overlapping with a write, a place moved on one path only, branches that disagree about live tickets, two tasks writing one place, a copy of an owner and a use after the implicit release are all **rejected**; the disjoint two-task split, shared read-only lending, a move on both paths and a scalar copy are **accepted**. The build prints `ownership-regression: pass`, and the Python gate asserts on that line.
+`ownership_regression` is the executable sanity check: the Lean encodings of the CAIRN programs pinned in `tests/test_soundness.py` and `tests/test_concurrency.py` are classified the way the Python checker classifies them. A move beside a view a task still holds, a leased read, a double move, an unawaited ticket, two arguments of one call overlapping with a write, a place moved on one path only, branches that disagree about live tickets, two tasks writing one place, two tasks writing parts that really overlap (`d[0..6]` and `d[3..9]`), two parts with nothing lent between them to order their bounds, one call handed two overlapping parts, a `len` read of an owner a task may replace, a copy of an owner and a use after the implicit release are all **rejected**; the two-part and K-way splits (`d[0..a]`, `d[a..b]`, `d[b..n]`), the backwards part that orders two others, a `len` read under a lease of the elements, shared read-only lending, a move on both paths and a scalar copy are **accepted**. Each of those classifications was re-checked against the Python checker on the corresponding CAIRN source while this model was written. The build prints `ownership-regression: pass`, and the Python gate asserts on that line.
 
-The safety theorems would be vacuous if the machine could never fault, so each fault is also shown *reachable* for a program the checker rejects: `leasedRead_races` and `overlappingTasks_races` drive the machine to `Race`, `copyAnOwner_doubleFrees` to `DoubleFree`, `useAfterDrop_usesDeadPlace` to `UseAfterMove` and `unawaitedTicket_leaks` to `Leak`, each by exhibiting the step sequence rather than by a tactic, and `witnesses_are_rejected` confirms the checker rejects all five. Together with `ownership_regression`, which rules out a checker that simply says no, that pins the result from both sides.
+The safety theorems would be vacuous if the machine could never fault, so each fault is also shown *reachable* for a program the checker rejects: `leasedRead_races`, `overlappingTasks_races` and `overlappingParts_races` drive the machine to `Race`, `copyAnOwner_doubleFrees` to `DoubleFree`, `useAfterDrop_usesDeadPlace` to `UseAfterMove` and `unawaitedTicket_leaks` to `Leak`, each by exhibiting the step sequence rather than by a tactic, and `witnesses_are_rejected` confirms the checker rejects all six. `backwardsPart_traps` is the other side of the same coin: that program **is** accepted, and under the valuation it is written for (`a = 6`, `b = 3`, `n = 9`) the machine reaches `Trap` at the guard of `d[6..3]`, not a race. Together with `ownership_regression`, which rules out a checker that simply says no, that pins the result from both sides.
 
 ### What this does NOT cover
 
 * **Any connection to `checking.py`.** The Lean checker is a hand-written abstraction of the Python rules. It is not extracted from them, not compared against them by a test, and the Python checker does many things this model does not.
-* **Array parts, fields and element views.** Places are atomic. The `overlaps`/`disjoint` reasoning about `b[0..mid]` and `b[mid..n]`, the "part of a part" rule, and the distinction between lending an owner and lending its elements (`len(d)` staying readable) are all outside the model.
-* **Linear values other than tickets, `defer`, `take`/`swap`, loops, `return`, `break`/`continue`, closures, traits, generics, lanes, placement, atomics, mutexes, effects and the foreign boundary.** None of them appear.
+* **The guard is an assumption about the emitter, not a theorem.** The chaining rule is sound in this calculus because the machine performs the `lo <= hi` guard where the slice is formed, before the borrow is taken. That the emitted C++ does the same — `cr::part` at the call site, on the spawning thread, before the task starts — is asserted by `src/cairn/codegen.py`, `src/cairn/runtime/cairn_owners.hpp` and a sanitizer test, not by any proof. If a part guard ever moved into the task, the rule would be unsound and this model would no longer describe the language.
+* **Fields, single elements, parts of parts and invisible bounds.** `a.b`, `a[i]`, `a[lo..hi][j..k]` and any bound `path` writes as `?` are outside the model. `checking.py` treats them conservatively (everything of that base overlaps); nothing here proves that it does.
+* **Closure captures.** `checking.py:disjoint` also compares a closure's captured places against the call's arguments, and a captured part contributes its own bounds to the chain before its slice has been formed. Closures are not modelled at all, so that case is neither proved nor refuted here.
+* **Device streams.** `e_spawn` hides the leases of tickets named in `after`, because queued device work runs after them on one stream. There are no streams in this model, so that exemption is absent: the calculus would reject those programs.
+* **Linear values other than tickets, `defer`, `take`/`swap` as statements, loops, `return`, `break`/`continue`, closures, traits, generics, lanes, placement, atomics, mutexes, effects and the foreign boundary.** None of them appear.
 * **Callee bodies.** A call is its footprint. `AliasedArgs` is detected, not caused: the model does not say what a callee would do with two overlapping views, only that the checker never hands it any.
 * **Value-level behaviour.** A task's write does not change the abstract value at a place (only a replacement of the cell does). The race result is the absence of conflicting concurrent access, not determinism of results.
-* **Machine reality.** No native memory model, no allocator, no C++ and no thread semantics. `Race` is a property of this abstract machine, not of hardware.
-* **Progress.** The result is safety. `Ownership.OpenGoal.Progress` states, as a named `def ... : Prop` that is deliberately left unproved (it is not an axiom and not a `sorry`), that an accepted program never gets stuck. Nothing in the file proves it.
+* **Machine reality.** No native memory model, no allocator, no C++ and no thread semantics. `Race` is a property of this abstract machine, not of hardware, and `Trap` is a configuration of it, not a signal.
+* **What a trap leaves behind.** A trapped run makes no claim about released cells; it is an abort.
 
 ## Value-level source equivalence
 
@@ -146,8 +183,8 @@ Runtime address-space/CPU limits are protections against some runaway executions
 
 ## Tested, not proved: the implementation of ownership, lanes, tasks and placement
 
-The section above proves a core ownership and lease calculus over whole places. The 1.0 rules as `checking.py` actually implements them -- affine and linear values, second-class borrows, leases over array parts and fields, race-free lanes, placement and the effect fixed point -- are exercised by acceptance and rejection tests, and nothing connects them mechanically to that calculus. Accepted programs run natively under both compilers and under AddressSanitizer, UndefinedBehaviorSanitizer, LeakSanitizer and ThreadSanitizer; device guards are exercised by death tests that must abort the host. These are finite executions, not theorems: a sanitizer-clean run shows the absence of those faults on those inputs only. Generic code is checked per instance, so an uninstantiated template is unchecked and is listed in the receipt rather than trusted.
+The section above proves a core ownership and lease calculus over locals and the places borrowed out of them, array parts included. The 1.0 rules as `checking.py` actually implements them -- affine and linear values, second-class borrows, leases over fields and over parts whose bounds are not visible, race-free lanes, placement and the effect fixed point -- are exercised by acceptance and rejection tests, and nothing connects them mechanically to that calculus. Accepted programs run natively under both compilers and under AddressSanitizer, UndefinedBehaviorSanitizer, LeakSanitizer and ThreadSanitizer; device guards are exercised by death tests that must abort the host. These are finite executions, not theorems: a sanitizer-clean run shows the absence of those faults on those inputs only. Generic code is checked per instance, so an uninstantiated template is unchecked and is listed in the receipt rather than trusted.
 
 ## Formal completion gate
 
-Three formal steps remain. Prove that the emitted collector loop refines the Lean model, or generate it from the model. Extend the ownership calculus from atomic places to the places the language actually has -- fields, array elements and the visibly disjoint parts that license a K-way split -- and add progress to the safety result (`Ownership.OpenGoal.Progress` names it and leaves it unproved). And relate `checking.py` to the calculus by something stronger than review: today the Lean checker is an abstraction written by hand beside the Python one, not extracted from it. Only a pinned Lean build with audited axioms may be called Lean verification; the receipt field above is the single place the compiler says so, and it is scoped to the certificate bundle.
+Three formal steps remain. Prove that the emitted collector loop refines the Lean model, or generate it from the model. Extend the ownership calculus past the places it now has -- it covers whole owners, headers, elements and the visibly disjoint parts that license a K-way split, with progress proved (`Ownership.accepted_progress`), but not fields, single elements, parts of parts, closures, lanes or placement -- and prove of the emitter what that calculus assumes of it: that a part's `lo <= hi` guard runs on the spawning thread before the task that borrows it starts. And relate `checking.py` to the calculus by something stronger than review: today the Lean checker is an abstraction written by hand beside the Python one, not extracted from it. Only a pinned Lean build with audited axioms may be called Lean verification; the receipt field above is the single place the compiler says so, and it is scoped to the certificate bundle.
