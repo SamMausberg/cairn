@@ -444,10 +444,13 @@ class Parser:
         elif t.s in {"|", "||"}:
             e = self.closure()
         elif self.recipe and t.s == "fold":
-            if self.ahead(1) not in PREC and self.ahead(2) != "each":
-                fail("E-PARSE", "fold takes an operator or a function of two operands: fold + each f in R { .. }.", t)
-            self.i += 2
-            e = Expr("fold", self.ts[self.i - 1].s, [self.expr(10)], *at)
+            self.i += 1
+            combiner = self.path() if IDENT.fullmatch(self.t.s) and self.t.s not in RESERVED else self.t.s
+            self.i += combiner in PREC
+            if self.t.s != "each" or not (combiner in PREC or IDENT.fullmatch(combiner.split(".")[0])):
+                fail("E-PARSE", "fold takes an operator or a function of two operands, then what it joins: "
+                     "fold + each f in R { .. } or fold lib.chain each f in R { .. }.", t)  # fmt: skip
+            e = Expr("fold", combiner, [self.expr(10)], *at)
         elif self.recipe and t.s == "each":
             e = Expr("each", "", [], *at, ref=self.each(lambda: self.need("{") or self.listed("}", self.expr)))
         elif self.eat("true") or self.eat("false"):

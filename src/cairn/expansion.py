@@ -193,8 +193,8 @@ class Deriver:
             parts = self.exprs(e.args[0], env)
             if not parts:
                 fail("E-RECIPE-STATIC", "fold needs at least one operand.", e)
-            tag = "binary" if e.val in PREC else "call"
-            return [reduce(lambda a, b: Expr(tag, e.val, [a, b], e.line, e.col), parts)]
+            tag, joined = ("binary", e.val) if e.val in PREC else ("call", self.own(e.val))
+            return [reduce(lambda a, b: Expr(tag, joined, [a, b], e.line, e.col), parts)]
         if e.tag == "name" and e.val.startswith("$") and e.val[1:] in env:
             value = self.static(e, env)
             if isinstance(value, (bool, int)):

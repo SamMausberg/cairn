@@ -491,6 +491,8 @@ def test_a_generic_call_types_its_arguments_where_they_are_written(tmp_path):
         ("E-VIEW-ALIAS", "only as a view argument", "fn f() { let mut d = Buf[u64](8); let x = d[0..4]; }"),
         ("E-VIEW-ALIAS", "only as a view argument", "fn f(n:usize, xs:ro<u64>[n]) -> u64 { return xs[0..2][1]; }"),
         ("E-VIEW-ALIAS", "only as a view argument", "fn f(n:usize, xs:ro<u64>[n]) -> bool = xs[0..2] == xs[0..2];"),
+        ("E-UNBOUND", "Option is not a type this module can name", "import std.sort as sort;\nfn f(xs:ro<u64>[2]) -> i32 { "
+         "match sort.search(2, xs, 7) { Option.Some(i) => { return 1; } Option.None => { return 0; } } }"),
         ("E-PARSE", "shl_wrap(x, k) and shr(x, k)", "fn f(a:u64) -> u64 = a >> 2;"),
         ("E-PARSE", "shl_wrap(x, k) and shr(x, k)", "fn f(a:u64) -> u64 = a << 2;"),
         ("E-REDUCE-OP", "not i64", "fn f(n:usize, xs:ro<i64>[n]) -> i64 { let s = reduce + for i in n yield xs[i]; return s; }"),
@@ -771,6 +773,22 @@ fn main() -> i32 {
   return 0;
 }
 """
+
+
+def test_a_natural_is_inferred_from_the_extent_it_names(tmp_path):
+    """`fn say[N:nat](text:ro<u8>[N])` learns N from a literal, a stack array or an Array: nobody counts by hand."""
+    source = (
+        "fn say[N:nat](text:ro<u8>[N]) -> usize = N;\n"
+        "fn total[N:nat](xs:ro<u64>[N]) -> u64 { let mut t:u64 = 0; for i in 0..N { t = t + xs[i]; } return t; }\n"
+        "fn main() -> i32 { stack cells:u64[4] = zeroed; let mut fixed = Array[u64, 3](); cells[3] = 5; fixed[0] = 2;\n"
+        '  if say("analytics: rows") != 15 || total(cells) != 5 || total(fixed) != 2 || say[3]("abc") != 3 { return 1; }\n'
+        "  return 0; }\n"
+    )
+    rows = compile_source(source)[1]["functions"]
+    assert {"say[15]", "say[3]", "total[4]", "total[3]"} <= set(rows)
+    with pytest.raises(Diagnostic) as e:  # A run-time extent names no natural.
+        compile_source(source + "fn f(n:usize, xs:ro<u64>[n]) -> u64 = total(xs);")
+    assert e.value.data["code"] == "E-INFER"
 
 
 NATURAL = """

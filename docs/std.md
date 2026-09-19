@@ -308,5 +308,3 @@ Three recipes that generate trait implementations: `derive eq for P;` (field-wis
   first: `let empty = vec.new[Handle](); a.insert(Node(1, empty));`.
 * **`max(8, n)` does not compile when `n` is a `usize`** — the literal does not adapt to its
   peer for `min`/`max`. Write `max(n, 8)`.
-* **A `const` cannot be an owner's extent.** `buffer a:f64[N] = zeroed;` with `const N` crashes
-  the compiler; bind `let n:usize = N;` and use `n`.

@@ -275,8 +275,10 @@ module m;
 pub fn twice[T:numeric](x:T) -> T = x + x;
 fn hidden(x:u64) -> u64 = x;
 pub recipe fieldwise[F:fn] for R { pub fn $F_$R(v:R) -> R = R(each f in R { $F(v.$f) }); }
+pub fn chain(seed:u64, value:u64) -> u64 pure = mul_wrap(seed ^ value, 1099511628211);
 pub recipe scaled[K:nat, F:fn] for R {
   pub fn $F_$K_$R(v:R) -> u64 = fold add_wrap each f in R { mul_wrap(u64($F(v.$f)), $K) };
+  pub fn key_$K_$R(v:R) -> u64 = fold m.chain each f in R { u64(v.$f) };
 }
 module app;
 import m;
@@ -290,6 +292,7 @@ pub fn main() -> i32 {
   let low = half_P(P(4, 3.0));
   let high = twice_P(P(4, 3.0));
   if low.a != 2 || low.b != 1.5 || high.a != 8 || high.b != 6.0 || twice_3_Q(Q(1, 2)) != 18 { return 1; }
+  if key_3_Q(Q(1, 2)) != m.chain(1, 2) { return 2; }
   return 0;
 }
 """

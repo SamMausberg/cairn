@@ -96,7 +96,9 @@ def test_the_generated_implementations_are_ordinary_implementations(host_receipt
     assert rows["analytics.schema.std.core.Eq.analytics.schema.Trade.same"]["effects"] == ["read:a", "read:b"]
     assert "std.sort.sort[analytics.schema.Trade]" in rows  # driven by the derived Ord
     for agg in ["SumAgg", "MaxAgg", "CountAgg"]:
-        member = f"analytics.agg.Aggregator.analytics.agg.{agg}.absorb"
+        member = (
+            f"analytics.agg.analytics.agg.Aggregator.analytics.agg.{agg}.absorb"  # module.Trait.Type.member, in full
+        )
         assert rows[member]["effects"] == ["read:self", "write:self"]
 
 

@@ -118,6 +118,10 @@ def infer(c: Checker, f: Function, args: list[Expr], targs: tuple, expected: Typ
     for a, (_, declared) in ordered:  # Typed arguments bind first, then the expected result, then literals.
         if expected and a.tag in {"int", "float"}:
             bind(f.ret, expected)
+        if declared.extent in generics and declared.extent not in bound and a.tag != "slice":
+            seen = c.peek(a)  # `say("text")` tells `[N:nat]` its N, and so does a fixed array.
+            extent = seen.extent if is_view(seen) else str(seen.args[1]) if seen.name == "Array" else ""
+            bound.update({declared.extent: int(extent)} if extent.isdigit() else {})
         if unbound(c, declared, generics, bound):
             actual = c.peek(a.args[0] if a.tag == "slice" else a)  # A part has the element type of its base.
             element = actual if not declared.extent or is_view(actual) else actual.args[0]

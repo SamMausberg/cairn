@@ -777,6 +777,11 @@ class Checker:
             fail("E-MATCH-TYPE", "match requires a declared enum or tagged sum.", s)
         given = [a.variant.rsplit(".", 1)[1] if self.qualify(a.variant.rsplit(".", 1)[0], self.types) == ty.name
                  else a.variant for a in s.arms]  # fmt: skip
+        for arm in s.arms:  # An arm that names nothing visible is that fault, not a gap in the coverage.
+            head = arm.variant.rsplit(".", 1)[0]
+            if "." in arm.variant and self.qualify(head, self.types) is None:
+                fail("E-UNBOUND", f"{head} is not a type this module can name; import it, or write "
+                     f"{ty.name}.{arm.variant.rsplit('.', 1)[1]}.", arm)  # fmt: skip
         if len(set(given)) != len(given):
             fail("E-MATCH-DUPLICATE", "A variant may appear only once.", s)
         if set(given) != set(layout):
