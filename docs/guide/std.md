@@ -49,7 +49,7 @@ Three habits explain most of the API shape:
 `Ord`, `Eq` and `Hash` are implemented for the unsigned integers plus `i32`/`i64` (`Ord` only).
 Implement them for your own types where you need them:
 
-```cairn
+```cairn fragment
 impl Ord for Boxed { fn less(a:ro<Boxed>, b:ro<Boxed>) -> bool = a.rank < b.rank; }
 ```
 
@@ -69,7 +69,7 @@ All three instantiate only for copyable elements: an owner would have to be move
 place. `copy` takes two views with the same extent name; overlapping parts of one array are
 rejected at the call site (`E-ALIAS`) and the entry guard checks it numerically as well.
 
-```cairn
+```cairn fragment
 buffer a:u8[8] = zeroed;
 buffer b:u8[8] = zeroed;
 mem.fill(len(a), a, 7);
@@ -92,7 +92,7 @@ because passing `v.data[0..n]` to a view parameter is the normal way to hand a V
 | `clear[T]`, `truncate[T](v, count)` | release elements now rather than at scope exit |
 | `extend_from[T](v:rw<Vec[T]>, n, src:ro<T>[n])` | append a view of copyable elements |
 
-```cairn
+```cairn fragment
 let mut line = vec.new[u8]();
 text.push_u64(line, 42);
 line.extend_from(5, "world");
@@ -117,7 +117,7 @@ passes `s[lo..hi]` onwards.
 | `find(n, s, m, needle) -> Option[usize]` | naive search; needles are short |
 | `hash_bytes(n, s) -> u64` | FNV-1a, no table |
 
-```cairn
+```cairn fragment
 match text.find_byte(n, line, ' ', 0) {
   Option.Some(at) => { let word = at; let rest = n - at - 1; }  // line[0..word], line[at+1..n]
   Option.None => {}
@@ -136,7 +136,7 @@ Equal elements are not kept in order.
 | `sort[T:Ord](n, xs:rw<T>[n])` | `sort_by` with the trait's `less` |
 | `search[T:Ord](n, xs:ro<T>[n], key:ro<T>) -> Option[usize]` | lower bound on a sorted view |
 
-```cairn
+```cairn fragment
 sort.sort(len(xs), xs);
 sort.sort_by(len(xs), xs, |a:ro<u64>, b:ro<u64>| -> bool { return a > b; });
 ```
@@ -165,7 +165,7 @@ errno inside an `IoError`.
 
 Flags: `READ`, `WRITE`, `APPEND`, `TRUNCATE`. Every call is one syscall; nothing buffers.
 
-```cairn
+```cairn fragment
 fn save(n:usize, path:ro<u8>[n]) -> Result[usize, io.IoError] {
   let f = try io.open(n, path, io.TRUNCATE);
   defer io.close(f);                       // runs on every exit, including the ones `try` takes
@@ -199,7 +199,7 @@ timeout in the language yet, so one connection is served at a time.
 
 The address is four bytes, so a string literal is a perfectly good IPv4 address:
 
-```cairn
+```cairn fragment
 let server = try net.listen_on("\x7f\x00\x00\x01", 39800, 16);
 defer net.close(server);
 let client = try net.accept(server);
@@ -226,7 +226,7 @@ Expected O(1); insert rehashes past three quarters full, so `alloc`, `free` and 
 in every caller's row. `K` must implement both `Hash` and `Eq`, and both bounds are checked when
 the instance is made.
 
-```cairn
+```cairn fragment
 let mut m = map.new[u64, Vec[u8]]();
 m.insert(7, payload);
 match m.find(key) {
@@ -250,7 +250,7 @@ handle to it stops resolving: a use after free becomes a `None`, not a dangling 
 | `remove[T](a:rw<Arena[T]>, h:Handle) -> Option[T]` | moves the value out, invalidates the handle |
 | `count`, `slots`, `alive(a, slot)`, `handle(a, slot)` | iteration by index |
 
-```cairn
+```cairn fragment
 struct Node { name:u64; edges:Vec[Handle]; }   // a cycle of handles, not of owners
 let mut g = arena.new[Node]();
 let no_edges = vec.new[Handle]();              // a call that allocates cannot be nested

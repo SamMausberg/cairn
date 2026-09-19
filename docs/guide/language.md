@@ -27,7 +27,7 @@ Functions take type and natural parameters: `fn largest[T](a:T, b:T) -> T`, `fn 
 
 ## Traits and methods
 
-```cairn
+```cairn fragment
 trait Shape { fn area(self:ro<Self>) -> u64; }
 impl Shape for Square { fn area(self:ro<Square>) -> u64 = self.side * self.side; }
 fn total[S:Shape](x:ro<S>, y:ro<S>) -> u64 = area(x) + area(y);
@@ -41,7 +41,7 @@ Dispatch is static, on the type of the `Self` argument; a bound (`[K:Hash + Eq]`
 
 ## Owners
 
-```cairn
+```cairn fragment
 buffer scratch:u64[n] = zeroed;     // lexical heap array, extent identity n
 stack counts:usize[256] = zeroed;   // fixed local storage, 65536 bytes per function at most
 let mut b = Buf[u64](n);            // first-class, movable, zeroed heap array
@@ -83,7 +83,7 @@ fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@devic
 
 ## Tasks and shared state
 
-```cairn
+```cairn fragment
 let left  = spawn fill(mid, data[0..mid], 0);
 let right = spawn fill(n - mid, data[mid..n], 500);
 wait(left);
@@ -110,7 +110,7 @@ Device work can be queued instead of awaited: `let up = spawn transfer(x, a);` a
 
 ## Recipes
 
-```cairn
+```cairn fragment
 pub recipe columns for R {                                  // R: the record it is derived for
   each f in R { require scalar(f), "columns holds scalar fields."; }
   pub struct $R_columns { each f in R where t = typeof(f) { $f:Buf[$t]; } }
