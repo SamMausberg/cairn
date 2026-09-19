@@ -1,8 +1,12 @@
 // Self-checking test for cr::par: exit 0 is a pass. With an argument it runs one death case,
 // which must abort the process; tests/test_native_runtime.py drives those as subprocesses.
 // Built with the language contract flags, so this file also proves the runtime headers still
-// compile without CUDA present.
+// compile without CUDA present. The lane pool is what most of this exercises: coverage and
+// exactly-once at many sizes, regions started at once from several threads, thousands of tiny
+// regions, a lane that blocks, and a lane that fails a guard.
+#include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <set>
 #include <thread>
@@ -10,6 +14,7 @@
 #include "cairn_parallel.hpp"
 
 using cr::par::Order;
+static const std::size_t CUT = cr::par::lanes::CUTOFF;
 static int failures = 0;
 static long checked = 0;
 #define CHECK(c) \
@@ -18,33 +23,115 @@ static long checked = 0;
     if(!(c)) { std::fprintf(stderr, "FAIL %s:%d %s\n", __FILE__, __LINE__, #c); ++failures; } \
   } while(0)
 
-// Every index is visited exactly once, chunks are contiguous, the caller runs one of them, and
-// n below 2 never leaves the calling thread.
+static std::size_t lane_count() { return cr::par::lanes::Pool::configured(); }
+
+// Every index is visited exactly once, no more than one lane per configured lane appears, and a
+// region below the cutoff never leaves the calling thread. Which lane runs which index is not part
+// of the contract, so nothing here asks for contiguous chunks.
 static void test_run() {
-  const std::size_t sizes[] = {0, 1, 2, 3, 63, 64, 65, 1000003};
-  const std::size_t hw = std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 1;
+  std::vector<std::size_t> sizes = {0, 1, 2, 3, 63, 64, 65, CUT - 1, CUT, CUT + 1, 2 * CUT + 7, 1000003};
+  std::uint64_t seed = 0x9e3779b97f4a7c15ull;
+  for(int k = 0; k < 32; ++k) {  // random sizes, so no ladder of round numbers hides a case
+    seed ^= seed << 13;
+    seed ^= seed >> 7;
+    seed ^= seed << 17;
+    sizes.push_back(seed % 200003);
+  }
   for(std::size_t n : sizes) {
     std::vector<unsigned> seen(n, 0);
     std::vector<std::thread::id> who(n);
-    cr::par::run(n, [&](std::size_t i) {
+    cr::par::run(n, [&](std::size_t i) noexcept {
       seen[i] += 1;
       who[i] = std::this_thread::get_id();
     });
-    std::size_t breaks = 0;
-    for(std::size_t i = 0; i < n; ++i) {
-      CHECK(seen[i] == 1);
-      if(i && who[i] != who[i - 1]) ++breaks;
-    }
+    std::size_t once = 0;
+    for(std::size_t i = 0; i < n; ++i) once += seen[i] == 1;
+    CHECK(once == n);
     const std::set<std::thread::id> distinct(who.begin(), who.end());
-    const std::size_t want = n < hw ? n : hw;
-    CHECK(distinct.size() <= want);
-    CHECK(breaks + 1 <= want || n == 0);  // contiguous chunks: one run of indices per thread
-    if(n) CHECK(distinct.count(std::this_thread::get_id()) == 1);
-    if(n && n < 2) CHECK(distinct.size() == 1);
+    CHECK(distinct.size() <= (n < lane_count() ? n : lane_count()));
+    if(n != 0 && n < CUT) {
+      CHECK(distinct.size() == 1);
+      CHECK(*distinct.begin() == std::this_thread::get_id());
+    }
   }
   std::size_t touched = 0;
-  cr::par::run(0, [&](std::size_t) { ++touched; });
+  cr::par::run(0, [&](std::size_t) noexcept { ++touched; });
   CHECK(touched == 0);
+}
+
+// Eight threads each run their own regions at the same time over their own arrays. The pool serves
+// whichever of them it can and every one of them can finish alone, so all eight must come out whole.
+static void test_regions_from_several_threads() {
+  const std::size_t threads = 8, rounds = 8, n = 3 * CUT + 11;
+  std::vector<std::vector<unsigned>> seen(threads, std::vector<unsigned>(n, 0));
+  std::vector<cr::par::Task<std::uint64_t>> runners;
+  for(std::size_t t = 0; t < threads; ++t) {
+    unsigned* mine = seen[t].data();
+    runners.push_back(cr::par::Task<std::uint64_t>::spawn([=] {
+      for(std::size_t round = 0; round < rounds; ++round)
+        cr::par::run(n, [mine](std::size_t i) noexcept { mine[i] += 1; });
+      std::uint64_t right = 0;
+      for(std::size_t i = 0; i < n; ++i) right += mine[i] == rounds;
+      return right;
+    }));
+  }
+  for(std::size_t t = 0; t < threads; ++t) CHECK(std::move(runners[t]).wait() == n);
+}
+
+// Thousands of regions in a row, above the cutoff and below it: the pool must be reused, not rebuilt.
+static void test_many_regions() {
+  const std::size_t n = CUT + 1, rounds = 2000;
+  std::vector<std::uint64_t> tally(n, 0);
+  std::uint64_t* tp = tally.data();
+  for(std::size_t r = 0; r < rounds; ++r) cr::par::run(n, [tp](std::size_t i) noexcept { tp[i] += 1; });
+  std::size_t right = 0;
+  for(std::size_t i = 0; i < n; ++i) right += tally[i] == rounds;
+  CHECK(right == n);
+  std::uint64_t tiny[7] = {0, 0, 0, 0, 0, 0, 0};
+  for(std::size_t r = 0; r < 5000; ++r) cr::par::run(7, [&tiny](std::size_t i) noexcept { tiny[i] += 1; });
+  for(std::uint64_t v : tiny) CHECK(v == 5000);
+}
+
+// One lane takes far longer than the others, so the thread that started the region stops spinning
+// and sleeps. It must still be woken, and the region must still be complete when run returns.
+static void test_a_slow_lane_still_completes() {
+  const std::size_t n = 4 * CUT;
+  std::vector<unsigned> seen(n, 0);
+  unsigned* sp = seen.data();
+  cr::par::run(n, [=](std::size_t i) noexcept {
+    sp[i] += 1;
+    if(i == n / 2) std::this_thread::sleep_for(std::chrono::milliseconds(30));
+  });
+  std::size_t right = 0;
+  for(std::size_t i = 0; i < n; ++i) right += seen[i] == 1;
+  CHECK(right == n);
+}
+
+// A lane may call a function that spawns a task and waits for it, and that task may itself run a
+// region. The worker running the lane is blocked meanwhile, so this deadlocks unless every region
+// can be finished by the thread that started it.
+static void test_a_lane_may_wait_for_a_task() {
+  const std::size_t n = 8 * CUT;
+  std::vector<std::uint64_t> out(n, 0);
+  std::uint64_t* op = out.data();
+  cr::par::run(n, [op](std::size_t i) noexcept {
+    if(i % CUT != 0) {
+      op[i] = std::uint64_t(i) + 1;
+      return;
+    }
+    auto inner = cr::par::Task<std::uint64_t>::spawn([i] {
+      std::vector<std::uint64_t> part(CUT + 3, 0);
+      std::uint64_t* pp = part.data();
+      cr::par::run(part.size(), [pp](std::size_t j) noexcept { pp[j] = 1; });
+      std::uint64_t total = 0;
+      for(std::uint64_t v : part) total += v;
+      return total == CUT + 3 ? std::uint64_t(i) + 1 : std::uint64_t(0);
+    });
+    op[i] = std::move(inner).wait();
+  });
+  std::size_t right = 0;
+  for(std::size_t i = 0; i < n; ++i) right += out[i] == std::uint64_t(i) + 1;
+  CHECK(right == n);
 }
 
 static void test_task() {
@@ -70,7 +157,7 @@ static void test_task() {
 
 static void test_mutex() {
   cr::par::Mutex<long> total(0);
-  cr::par::run(4096, [&](std::size_t) {
+  cr::par::run(4096, [&](std::size_t) noexcept {
     for(int k = 0; k < 64; ++k) total.with([](long& v) { v += 1; });
   });
   CHECK(total.with([](long& v) { return v; }) == 4096L * 64);
@@ -81,7 +168,7 @@ static void test_mutex() {
 
 static void test_atomic() {
   cr::par::Atomic<std::uint64_t> counter(0);
-  cr::par::run(4096, [&](std::size_t) {
+  cr::par::run(4096, [&](std::size_t) noexcept {
     for(int k = 0; k < 64; ++k) counter.fetch_add(1, Order::relaxed);
   });
   CHECK(counter.load(Order::seq_cst) == 4096ull * 64);
@@ -108,13 +195,13 @@ static void test_atomic() {
   });
   std::move(writer).wait();
   CHECK(std::move(reader).wait() == 0xfeed);
-  // contended compare_exchange: every thread must win exactly its own increment
+  // contended compare_exchange: every lane must win exactly its own increment
   cr::par::Atomic<std::uint64_t> cas(0);
-  cr::par::run(1024, [&](std::size_t) {
+  cr::par::run(CUT * 2, [&](std::size_t) noexcept {
     std::uint64_t seen = cas.load(Order::relaxed);
     while(!cas.compare_exchange(seen, seen + 1, Order::acquire_release, Order::relaxed)) {}
   });
-  CHECK(cas.load(Order::seq_cst) == 1024);
+  CHECK(cas.load(Order::seq_cst) == CUT * 2);
 }
 
 // Each death case must abort. The type system makes them unreachable; the runtime makes them loud.
@@ -137,7 +224,22 @@ static int death(const char* name) {
     int want = 0;
     (void)a.compare_exchange(want, 1, Order::seq_cst, Order::release);
   } else if(!std::strcmp(name, "host_overflow")) {
-    cr::par::run(2, [](std::size_t i) { (void)cr::add<std::uint64_t>(~std::uint64_t(0), i + 1); });
+    cr::par::run(2, [](std::size_t i) noexcept { (void)cr::add<std::uint64_t>(~std::uint64_t(0), i + 1); });
+  } else if(!std::strcmp(name, "worker_overflow")) {
+    // A guard that fails in a lane must end the process wherever that lane ran. With more than one
+    // lane the calling thread is excluded by name, so only a pool worker can reach the failure.
+    const bool alone = lane_count() < 2;
+    const std::thread::id caller = std::this_thread::get_id();
+    cr::par::run(64 * CUT, [alone, caller](std::size_t i) noexcept {
+      if(alone || std::this_thread::get_id() != caller) (void)cr::add<std::uint64_t>(~std::uint64_t(0), i + 1);
+    });
+  } else if(!std::strcmp(name, "lanes_not_a_number") || !std::strcmp(name, "lanes_zero") ||
+            !std::strcmp(name, "lanes_too_many")) {
+    const char* bad = !std::strcmp(name, "lanes_zero") ? "0"
+                      : !std::strcmp(name, "lanes_too_many") ? "100000"
+                                                             : "many";
+    setenv("CAIRN_LANES", bad, 1);  // read once, when the first region builds the pool
+    cr::par::run(CUT, [](std::size_t) noexcept {});
   } else {
     std::fprintf(stderr, "unknown death case %s\n", name);
     return 2;
@@ -147,17 +249,26 @@ static int death(const char* name) {
 }
 
 int main(int argc, char** argv) {
-  static const char* cases[] = {"task_dropped", "task_waited_twice",   "store_acquire",
-                                "load_release", "cas_failure_release", "host_overflow"};
+  static const char* cases[] = {"task_dropped",      "task_waited_twice", "store_acquire",
+                                "load_release",      "cas_failure_release", "host_overflow",
+                                "worker_overflow",   "lanes_not_a_number", "lanes_zero",
+                                "lanes_too_many"};
   if(argc > 1 && !std::strcmp(argv[1], "--list")) {
     for(const char* c : cases) std::printf("%s\n", c);
     return 0;
   }
   if(argc > 1) return death(argv[1]);
   test_run();
+  test_regions_from_several_threads();
+  test_many_regions();
+  test_a_slow_lane_still_completes();
+  test_a_lane_may_wait_for_a_task();
   test_task();
   test_mutex();
   test_atomic();
-  std::printf("parallel_runtime: %s after %ld checks\n", failures ? "FAILED" : "ok", checked);
+  // Returning from main is the last check: the exit handler must stop and join every lane, with no
+  // hang and nothing left for a sanitizer to report.
+  std::printf("parallel_runtime: %s after %ld checks on %zu lanes\n", failures ? "FAILED" : "ok", checked,
+              lane_count());
   return failures ? 1 : 0;
 }

@@ -129,8 +129,9 @@ unsafe { }. Do not widen a ceiling or add unsafe to make an edit pass.""",
 the next statement. Placement is part of a view type: @host (default), @pinned, @unified,
 @device. Indexing a @device view makes the region CUDA lanes, otherwise host threads; host
 code cannot index @device memory and lanes cannot index the other side; a @pinned or
-@unified view may be passed where @host is asked (@unified also as @device). Whatever any lane
-writes may be touched only at [i]; shared scalars cannot be assigned (use let s = reduce
+@unified view may be passed where @host is asked (@unified also as @device). The first host
+region of a process creates the lane pool and later ones reuse it; a small one is just the loop.
+Whatever any lane writes may be touched only at [i]; shared scalars cannot be assigned (use let s = reduce
 add_wrap for i in n yield x[i];, which is also the ordinary fold outside any region: i
 runs over 0..n and the operator is one of add_wrap mul_wrap min max & | ^, or + * on floats). Lanes cannot return, nest or move outer owners, and
 neither a lane nor anything it calls may do I/O, spawn, touch the machine or (on the

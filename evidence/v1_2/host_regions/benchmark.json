@@ -1,0 +1,957 @@
+{
+  "runs": {
+    "per_statement_threads": {
+      "note": "CAIRN 1.1: every parallel statement creates and joins its own threads (runtime headers taken from commit 4ff485a).",
+      "runtime_headers": "/tmp/claude-1000/-home-ubuntu/78055d39-ea6a-4ecb-85cc-07920485a9c1/scratchpad/pool/v11",
+      "runtime_header_sha256": "07ddc90cb621f331ee5e64270e5cbf328ae18a236e1dbac6e7ac7b5600fdeccf",
+      "by_compiler": {
+        "g++": {
+          "lanes_reported_by_hardware_concurrency": 64,
+          "statistic": "median of 9 timed runs (5 above 1e6, 3 above 1e7) after one warm up; a sweep block repeats the case until it covers sixteen million elements (at most a thousand times) and the total is divided back, so a small region is not measured against the clock's floor",
+          "sweep": [
+            {
+              "case": "saxpy_f32",
+              "n": 1000,
+              "sequential_ms": 8.2e-05,
+              "parallel_ms": 1.378952,
+              "speedup_par_over_seq": 0.0,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 1000,
+              "sequential_ms": 0.001586,
+              "parallel_ms": 1.406562,
+              "speedup_par_over_seq": 0.001,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 3000,
+              "sequential_ms": 0.00023,
+              "parallel_ms": 1.35632,
+              "speedup_par_over_seq": 0.0,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 3000,
+              "sequential_ms": 0.004614,
+              "parallel_ms": 1.332452,
+              "speedup_par_over_seq": 0.003,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 10000,
+              "sequential_ms": 0.000956,
+              "parallel_ms": 1.321506,
+              "speedup_par_over_seq": 0.001,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 10000,
+              "sequential_ms": 0.015173,
+              "parallel_ms": 1.322074,
+              "speedup_par_over_seq": 0.011,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 30000,
+              "sequential_ms": 0.002464,
+              "parallel_ms": 1.287451,
+              "speedup_par_over_seq": 0.002,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 30000,
+              "sequential_ms": 0.045973,
+              "parallel_ms": 1.296649,
+              "speedup_par_over_seq": 0.035,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 100000,
+              "sequential_ms": 0.014306,
+              "parallel_ms": 1.316988,
+              "speedup_par_over_seq": 0.011,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 100000,
+              "sequential_ms": 0.15546,
+              "parallel_ms": 1.335587,
+              "speedup_par_over_seq": 0.116,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 300000,
+              "sequential_ms": 0.049351,
+              "parallel_ms": 1.31816,
+              "speedup_par_over_seq": 0.037,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 300000,
+              "sequential_ms": 0.464518,
+              "parallel_ms": 1.324755,
+              "speedup_par_over_seq": 0.351,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 1000000,
+              "sequential_ms": 0.19043,
+              "parallel_ms": 1.311592,
+              "speedup_par_over_seq": 0.145,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 1000000,
+              "sequential_ms": 1.575171,
+              "parallel_ms": 1.351964,
+              "speedup_par_over_seq": 1.165,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 3000000,
+              "sequential_ms": 0.629147,
+              "parallel_ms": 1.43731,
+              "speedup_par_over_seq": 0.438,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 3000000,
+              "sequential_ms": 4.567933,
+              "parallel_ms": 1.434385,
+              "speedup_par_over_seq": 3.185,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 10000000,
+              "sequential_ms": 2.948803,
+              "parallel_ms": 1.429041,
+              "speedup_par_over_seq": 2.063,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 10000000,
+              "sequential_ms": 15.203413,
+              "parallel_ms": 1.629587,
+              "speedup_par_over_seq": 9.33,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 30000000,
+              "sequential_ms": 11.40692,
+              "parallel_ms": 1.797589,
+              "speedup_par_over_seq": 6.346,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 30000000,
+              "sequential_ms": 45.802371,
+              "parallel_ms": 2.47283,
+              "speedup_par_over_seq": 18.522,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 100000000,
+              "sequential_ms": 42.99584,
+              "parallel_ms": 4.507862,
+              "speedup_par_over_seq": 9.538,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 100000000,
+              "sequential_ms": 157.248244,
+              "parallel_ms": 6.354028,
+              "speedup_par_over_seq": 24.748,
+              "results_agree": true
+            }
+          ],
+          "crossover": {
+            "note": "smallest ladder size from which the region beat the sequential loop by a quarter and kept beating it at every larger size; 0 means none did",
+            "saxpy_f32": 10000000,
+            "mixed_u64": 3000000
+          },
+          "tiny_regions": [
+            {
+              "n": 64,
+              "regions": 1000,
+              "sequential_total_ms": 0.0209,
+              "parallel_total_ms": 1338.1743,
+              "parallel_per_region_us": 1338.174,
+              "sequential_per_region_us": 0.021,
+              "results_agree": true
+            },
+            {
+              "n": 1024,
+              "regions": 1000,
+              "sequential_total_ms": 0.4093,
+              "parallel_total_ms": 1413.3592,
+              "parallel_per_region_us": 1413.359,
+              "sequential_per_region_us": 0.409,
+              "results_agree": true
+            },
+            {
+              "n": 16384,
+              "regions": 1000,
+              "sequential_total_ms": 6.659,
+              "parallel_total_ms": 1413.2427,
+              "parallel_per_region_us": 1413.243,
+              "sequential_per_region_us": 6.659,
+              "results_agree": true
+            }
+          ],
+          "every_case_agreed_with_the_sequential_result": true,
+          "compiler": "g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+          "flags": [
+            "-std=c++20",
+            "-O3",
+            "-ffp-contract=off",
+            "-fno-fast-math",
+            "-fno-exceptions",
+            "-fno-rtti",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wno-unused-parameter",
+            "-Wno-unused-variable",
+            "-Wno-unused-but-set-variable",
+            "-march=armv8.2-a"
+          ]
+        },
+        "clang++": {
+          "lanes_reported_by_hardware_concurrency": 64,
+          "statistic": "median of 9 timed runs (5 above 1e6, 3 above 1e7) after one warm up; a sweep block repeats the case until it covers sixteen million elements (at most a thousand times) and the total is divided back, so a small region is not measured against the clock's floor",
+          "sweep": [
+            {
+              "case": "saxpy_f32",
+              "n": 1000,
+              "sequential_ms": 7.2e-05,
+              "parallel_ms": 1.360456,
+              "speedup_par_over_seq": 0.0,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 1000,
+              "sequential_ms": 0.001539,
+              "parallel_ms": 1.338021,
+              "speedup_par_over_seq": 0.001,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 3000,
+              "sequential_ms": 0.000208,
+              "parallel_ms": 1.321922,
+              "speedup_par_over_seq": 0.0,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 3000,
+              "sequential_ms": 0.004513,
+              "parallel_ms": 1.339746,
+              "speedup_par_over_seq": 0.003,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 10000,
+              "sequential_ms": 0.000742,
+              "parallel_ms": 1.417249,
+              "speedup_par_over_seq": 0.001,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 10000,
+              "sequential_ms": 0.015025,
+              "parallel_ms": 1.357707,
+              "speedup_par_over_seq": 0.011,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 30000,
+              "sequential_ms": 0.002343,
+              "parallel_ms": 1.322962,
+              "speedup_par_over_seq": 0.002,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 30000,
+              "sequential_ms": 0.045313,
+              "parallel_ms": 1.323593,
+              "speedup_par_over_seq": 0.034,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 100000,
+              "sequential_ms": 0.011381,
+              "parallel_ms": 1.318863,
+              "speedup_par_over_seq": 0.009,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 100000,
+              "sequential_ms": 0.152793,
+              "parallel_ms": 1.334648,
+              "speedup_par_over_seq": 0.114,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 300000,
+              "sequential_ms": 0.051114,
+              "parallel_ms": 1.339437,
+              "speedup_par_over_seq": 0.038,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 300000,
+              "sequential_ms": 0.460347,
+              "parallel_ms": 1.33628,
+              "speedup_par_over_seq": 0.344,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 1000000,
+              "sequential_ms": 0.19277,
+              "parallel_ms": 1.323936,
+              "speedup_par_over_seq": 0.146,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 1000000,
+              "sequential_ms": 1.572679,
+              "parallel_ms": 1.36342,
+              "speedup_par_over_seq": 1.153,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 3000000,
+              "sequential_ms": 0.600455,
+              "parallel_ms": 1.324848,
+              "speedup_par_over_seq": 0.453,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 3000000,
+              "sequential_ms": 4.915611,
+              "parallel_ms": 1.453457,
+              "speedup_par_over_seq": 3.382,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 10000000,
+              "sequential_ms": 2.704,
+              "parallel_ms": 1.459986,
+              "speedup_par_over_seq": 1.852,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 10000000,
+              "sequential_ms": 15.217205,
+              "parallel_ms": 1.623092,
+              "speedup_par_over_seq": 9.375,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 30000000,
+              "sequential_ms": 11.110052,
+              "parallel_ms": 1.919479,
+              "speedup_par_over_seq": 5.788,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 30000000,
+              "sequential_ms": 45.6248,
+              "parallel_ms": 2.461821,
+              "speedup_par_over_seq": 18.533,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 100000000,
+              "sequential_ms": 43.23562,
+              "parallel_ms": 4.66684,
+              "speedup_par_over_seq": 9.264,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 100000000,
+              "sequential_ms": 155.915139,
+              "parallel_ms": 6.804113,
+              "speedup_par_over_seq": 22.915,
+              "results_agree": true
+            }
+          ],
+          "crossover": {
+            "note": "smallest ladder size from which the region beat the sequential loop by a quarter and kept beating it at every larger size; 0 means none did",
+            "saxpy_f32": 10000000,
+            "mixed_u64": 3000000
+          },
+          "tiny_regions": [
+            {
+              "n": 64,
+              "regions": 1000,
+              "sequential_total_ms": 0.0128,
+              "parallel_total_ms": 1368.3217,
+              "parallel_per_region_us": 1368.322,
+              "sequential_per_region_us": 0.013,
+              "results_agree": true
+            },
+            {
+              "n": 1024,
+              "regions": 1000,
+              "sequential_total_ms": 0.2567,
+              "parallel_total_ms": 1451.9278,
+              "parallel_per_region_us": 1451.928,
+              "sequential_per_region_us": 0.257,
+              "results_agree": true
+            },
+            {
+              "n": 16384,
+              "regions": 1000,
+              "sequential_total_ms": 4.3837,
+              "parallel_total_ms": 1413.0616,
+              "parallel_per_region_us": 1413.062,
+              "sequential_per_region_us": 4.384,
+              "results_agree": true
+            }
+          ],
+          "every_case_agreed_with_the_sequential_result": true,
+          "compiler": "Ubuntu clang version 15.0.7",
+          "flags": [
+            "-std=c++20",
+            "-O3",
+            "-ffp-contract=off",
+            "-fno-fast-math",
+            "-fno-exceptions",
+            "-fno-rtti",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wno-unused-parameter",
+            "-Wno-unused-variable",
+            "-Wno-unused-but-set-variable",
+            "-march=armv8.2-a"
+          ]
+        }
+      }
+    },
+    "lane_pool": {
+      "note": "This branch: one lane pool, built by the first region of the process and reused by every later one.",
+      "runtime_headers": "/home/ubuntu/cairn/.claude/worktrees/agent-a703e8967a668167f/src/cairn/runtime",
+      "runtime_header_sha256": "a4e87143cb8c02ad9f5311d87349f2ac5644830b66be1256c226c9c82182d8e2",
+      "by_compiler": {
+        "g++": {
+          "lanes_reported_by_hardware_concurrency": 64,
+          "statistic": "median of 9 timed runs (5 above 1e6, 3 above 1e7) after one warm up; a sweep block repeats the case until it covers sixteen million elements (at most a thousand times) and the total is divided back, so a small region is not measured against the clock's floor",
+          "sweep": [
+            {
+              "case": "saxpy_f32",
+              "n": 1000,
+              "sequential_ms": 7.9e-05,
+              "parallel_ms": 8e-05,
+              "speedup_par_over_seq": 0.997,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 1000,
+              "sequential_ms": 0.001515,
+              "parallel_ms": 0.001529,
+              "speedup_par_over_seq": 0.991,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 3000,
+              "sequential_ms": 0.000291,
+              "parallel_ms": 0.000233,
+              "speedup_par_over_seq": 1.25,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 3000,
+              "sequential_ms": 0.004577,
+              "parallel_ms": 0.004574,
+              "speedup_par_over_seq": 1.001,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 10000,
+              "sequential_ms": 0.000963,
+              "parallel_ms": 0.00077,
+              "speedup_par_over_seq": 1.251,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 10000,
+              "sequential_ms": 0.01524,
+              "parallel_ms": 0.015231,
+              "speedup_par_over_seq": 1.001,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 30000,
+              "sequential_ms": 0.002889,
+              "parallel_ms": 0.002377,
+              "speedup_par_over_seq": 1.215,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 30000,
+              "sequential_ms": 0.045533,
+              "parallel_ms": 0.02133,
+              "speedup_par_over_seq": 2.135,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 100000,
+              "sequential_ms": 0.012885,
+              "parallel_ms": 0.008775,
+              "speedup_par_over_seq": 1.468,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 100000,
+              "sequential_ms": 0.152147,
+              "parallel_ms": 0.020042,
+              "speedup_par_over_seq": 7.591,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 300000,
+              "sequential_ms": 0.048296,
+              "parallel_ms": 0.023248,
+              "speedup_par_over_seq": 2.077,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 300000,
+              "sequential_ms": 0.460449,
+              "parallel_ms": 0.032622,
+              "speedup_par_over_seq": 14.115,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 1000000,
+              "sequential_ms": 0.178614,
+              "parallel_ms": 0.051117,
+              "speedup_par_over_seq": 3.494,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 1000000,
+              "sequential_ms": 1.542424,
+              "parallel_ms": 0.069721,
+              "speedup_par_over_seq": 22.123,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 3000000,
+              "sequential_ms": 0.589709,
+              "parallel_ms": 0.057466,
+              "speedup_par_over_seq": 10.262,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 3000000,
+              "sequential_ms": 4.556016,
+              "parallel_ms": 0.12155,
+              "speedup_par_over_seq": 37.483,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 10000000,
+              "sequential_ms": 3.363368,
+              "parallel_ms": 0.173187,
+              "speedup_par_over_seq": 19.42,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 10000000,
+              "sequential_ms": 15.150837,
+              "parallel_ms": 0.436933,
+              "speedup_par_over_seq": 34.675,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 30000000,
+              "sequential_ms": 12.869242,
+              "parallel_ms": 1.018828,
+              "speedup_par_over_seq": 12.631,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 30000000,
+              "sequential_ms": 45.615424,
+              "parallel_ms": 1.593619,
+              "speedup_par_over_seq": 28.624,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 100000000,
+              "sequential_ms": 43.384805,
+              "parallel_ms": 4.286292,
+              "speedup_par_over_seq": 10.122,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 100000000,
+              "sequential_ms": 152.663709,
+              "parallel_ms": 6.589071,
+              "speedup_par_over_seq": 23.169,
+              "results_agree": true
+            }
+          ],
+          "crossover": {
+            "note": "smallest ladder size from which the region beat the sequential loop by a quarter and kept beating it at every larger size; 0 means none did",
+            "saxpy_f32": 100000,
+            "mixed_u64": 30000
+          },
+          "tiny_regions": [
+            {
+              "n": 64,
+              "regions": 1000,
+              "sequential_total_ms": 0.021,
+              "parallel_total_ms": 0.0209,
+              "parallel_per_region_us": 0.021,
+              "sequential_per_region_us": 0.021,
+              "results_agree": true
+            },
+            {
+              "n": 1024,
+              "regions": 1000,
+              "sequential_total_ms": 0.4068,
+              "parallel_total_ms": 0.4057,
+              "parallel_per_region_us": 0.406,
+              "sequential_per_region_us": 0.407,
+              "results_agree": true
+            },
+            {
+              "n": 16384,
+              "regions": 1000,
+              "sequential_total_ms": 6.6289,
+              "parallel_total_ms": 3.9747,
+              "parallel_per_region_us": 3.975,
+              "sequential_per_region_us": 6.629,
+              "results_agree": true
+            }
+          ],
+          "every_case_agreed_with_the_sequential_result": true,
+          "compiler": "g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+          "flags": [
+            "-std=c++20",
+            "-O3",
+            "-ffp-contract=off",
+            "-fno-fast-math",
+            "-fno-exceptions",
+            "-fno-rtti",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wno-unused-parameter",
+            "-Wno-unused-variable",
+            "-Wno-unused-but-set-variable",
+            "-march=armv8.2-a"
+          ]
+        },
+        "clang++": {
+          "lanes_reported_by_hardware_concurrency": 64,
+          "statistic": "median of 9 timed runs (5 above 1e6, 3 above 1e7) after one warm up; a sweep block repeats the case until it covers sixteen million elements (at most a thousand times) and the total is divided back, so a small region is not measured against the clock's floor",
+          "sweep": [
+            {
+              "case": "saxpy_f32",
+              "n": 1000,
+              "sequential_ms": 7.2e-05,
+              "parallel_ms": 7.3e-05,
+              "speedup_par_over_seq": 0.981,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 1000,
+              "sequential_ms": 0.001515,
+              "parallel_ms": 0.001516,
+              "speedup_par_over_seq": 1.0,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 3000,
+              "sequential_ms": 0.000208,
+              "parallel_ms": 0.00021,
+              "speedup_par_over_seq": 0.988,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 3000,
+              "sequential_ms": 0.004535,
+              "parallel_ms": 0.00454,
+              "speedup_par_over_seq": 0.999,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 10000,
+              "sequential_ms": 0.000727,
+              "parallel_ms": 0.000736,
+              "speedup_par_over_seq": 0.988,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 10000,
+              "sequential_ms": 0.015126,
+              "parallel_ms": 0.015142,
+              "speedup_par_over_seq": 0.999,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 30000,
+              "sequential_ms": 0.002399,
+              "parallel_ms": 0.002329,
+              "speedup_par_over_seq": 1.03,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 30000,
+              "sequential_ms": 0.045313,
+              "parallel_ms": 0.02118,
+              "speedup_par_over_seq": 2.139,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 100000,
+              "sequential_ms": 0.012568,
+              "parallel_ms": 0.009104,
+              "speedup_par_over_seq": 1.38,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 100000,
+              "sequential_ms": 0.152336,
+              "parallel_ms": 0.022202,
+              "speedup_par_over_seq": 6.861,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 300000,
+              "sequential_ms": 0.05261,
+              "parallel_ms": 0.024387,
+              "speedup_par_over_seq": 2.157,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 300000,
+              "sequential_ms": 0.461232,
+              "parallel_ms": 0.03847,
+              "speedup_par_over_seq": 11.989,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 1000000,
+              "sequential_ms": 0.181344,
+              "parallel_ms": 0.051487,
+              "speedup_par_over_seq": 3.522,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 1000000,
+              "sequential_ms": 1.566067,
+              "parallel_ms": 0.078325,
+              "speedup_par_over_seq": 19.994,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 3000000,
+              "sequential_ms": 0.659368,
+              "parallel_ms": 0.058279,
+              "speedup_par_over_seq": 11.314,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 3000000,
+              "sequential_ms": 4.930651,
+              "parallel_ms": 0.125845,
+              "speedup_par_over_seq": 39.18,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 10000000,
+              "sequential_ms": 2.620287,
+              "parallel_ms": 0.149441,
+              "speedup_par_over_seq": 17.534,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 10000000,
+              "sequential_ms": 15.141557,
+              "parallel_ms": 0.432613,
+              "speedup_par_over_seq": 35.0,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 30000000,
+              "sequential_ms": 10.777761,
+              "parallel_ms": 1.045196,
+              "speedup_par_over_seq": 10.312,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 30000000,
+              "sequential_ms": 45.144154,
+              "parallel_ms": 1.724053,
+              "speedup_par_over_seq": 26.185,
+              "results_agree": true
+            },
+            {
+              "case": "saxpy_f32",
+              "n": 100000000,
+              "sequential_ms": 43.581,
+              "parallel_ms": 4.158513,
+              "speedup_par_over_seq": 10.48,
+              "results_agree": true
+            },
+            {
+              "case": "mixed_u64",
+              "n": 100000000,
+              "sequential_ms": 155.966788,
+              "parallel_ms": 6.069,
+              "speedup_par_over_seq": 25.699,
+              "results_agree": true
+            }
+          ],
+          "crossover": {
+            "note": "smallest ladder size from which the region beat the sequential loop by a quarter and kept beating it at every larger size; 0 means none did",
+            "saxpy_f32": 100000,
+            "mixed_u64": 30000
+          },
+          "tiny_regions": [
+            {
+              "n": 64,
+              "regions": 1000,
+              "sequential_total_ms": 0.0128,
+              "parallel_total_ms": 0.0106,
+              "parallel_per_region_us": 0.011,
+              "sequential_per_region_us": 0.013,
+              "results_agree": true
+            },
+            {
+              "n": 1024,
+              "regions": 1000,
+              "sequential_total_ms": 0.2583,
+              "parallel_total_ms": 0.2185,
+              "parallel_per_region_us": 0.218,
+              "sequential_per_region_us": 0.258,
+              "results_agree": true
+            },
+            {
+              "n": 16384,
+              "regions": 1000,
+              "sequential_total_ms": 4.1535,
+              "parallel_total_ms": 2.5078,
+              "parallel_per_region_us": 2.508,
+              "sequential_per_region_us": 4.154,
+              "results_agree": true
+            }
+          ],
+          "every_case_agreed_with_the_sequential_result": true,
+          "compiler": "Ubuntu clang version 15.0.7",
+          "flags": [
+            "-std=c++20",
+            "-O3",
+            "-ffp-contract=off",
+            "-fno-fast-math",
+            "-fno-exceptions",
+            "-fno-rtti",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wno-unused-parameter",
+            "-Wno-unused-variable",
+            "-Wno-unused-but-set-variable",
+            "-march=armv8.2-a"
+          ]
+        }
+      }
+    }
+  },
+  "environment": {
+    "host": "Linux aarch64 6.8.0-1062-nvidia-64k",
+    "cpu_threads": 64,
+    "arch_profile": "armv8.2-a",
+    "cpus_were_not_pinned": true,
+    "commit": "4ff485abf471957f10d9ea742320c05b98326f85"
+  }
+}

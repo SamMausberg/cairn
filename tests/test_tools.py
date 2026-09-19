@@ -351,3 +351,22 @@ def test_parallel_gpu_flags():
     expected = [f for f in profile_flags("exe", best_profile("g++")) if not f.startswith(("-std", "-O"))]
     assert expected == parallel_gpu.HOST, "the host half of the device build is the shared contract"
     assert "-Werror" in parallel_gpu.HOST and "--fmad=false" in parallel_gpu.DEVICE
+
+
+@needs_clang
+@needs_gcc
+def test_host_region_benchmark_builds_under_the_contract(tmp_path):
+    """The host region benchmark is not timed here: it writes release evidence. It must still build
+    warning free under the project's own flags, with both compilers, against the real headers."""
+    sys.path.insert(0, str(ROOT / "bench"))
+    import host_regions
+    from support import best_profile, profile_flags
+
+    assert host_regions.COMPILERS == ("g++", "clang++")
+    arch = best_profile(*host_regions.COMPILERS)
+    for cxx in host_regions.COMPILERS:
+        line = [cxx, *profile_flags("exe", arch), f"-I{ROOT / 'src/cairn/runtime'}"]
+        line += [str(ROOT / "bench/host_regions.cpp"), "-o", str(tmp_path / f"probe_{cxx[0]}")]
+        made = subprocess.run(line, capture_output=True, text=True, timeout=600)
+        assert made.returncode == 0, made.stderr[-3000:]
+        assert made.stderr == "", f"the benchmark must build without a warning:\n{made.stderr}"

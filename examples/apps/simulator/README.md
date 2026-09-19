@@ -7,10 +7,10 @@ The program then compares all three element by element and fails if any bit diff
 ```
 cd /home/ubuntu/cairn && .venv/bin/python bin/cairn run examples/apps/simulator --timeout 240
 simulator: 1024x1024 grid, 16 Jacobi sweeps
-simulator: sequential 37171 us
-simulator: threads    23996 us
-simulator: device up  275251 us
-simulator: device     466 us
+simulator: sequential 39327 us
+simulator: threads    3845 us
+simulator: device up  274738 us
+simulator: device     457 us
 simulator: all three back ends agree bit for bit
 ```
 
@@ -48,8 +48,10 @@ in the device build too.
 
 ## What the timings say
 
-Host threads beat the sequential loop by only ~1.6× on 64 cores because every `parallel`
-statement creates and joins its threads — 16 sweeps means 16 thread teams, and the kernel is
-memory bound anyway. The device sweeps are ~80× faster than the sequential loop, but the first
-device allocation pays ~275 ms to create the CUDA context, which the program reports separately
-rather than hiding inside the measurement.
+Host threads beat the sequential loop by ~10× on 64 cores. Sixteen sweeps are sixteen regions,
+and they are cheap now because the first one builds the lane pool and the other fifteen reuse it;
+under the 1.1 runtime, which created and joined a thread team per statement, the same program
+measured 24.0 ms instead of 3.8 ms, for ~1.6×. It is not ~64× because the kernel is memory bound.
+The device sweeps are ~86× faster than the sequential loop, but the first device allocation pays
+~275 ms to create the CUDA context, which the program reports separately rather than hiding
+inside the measurement.

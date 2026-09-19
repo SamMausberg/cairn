@@ -3,13 +3,16 @@
 Accepted programs run natively (and under ThreadSanitizer); every safety rule has a rejection.
 """
 
+import os
 import shutil
 import subprocess
 
 import pytest
 
 from cairn.agent_tools import canonical_source
+from cairn.build import build
 from cairn.cairnc import RUNTIME_FILES, Diagnostic, compile_source
+from cairn.project import load_project
 from cairn.toolchain import command
 
 HELPERS = """
@@ -152,6 +155,42 @@ def test_no_data_race_under_thread_sanitizer(tmp_path):
     subprocess.run([*build, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=240)
     run = subprocess.run(["setarch", "-R", str(tmp_path / "p")], capture_output=True, text=True, timeout=240)
     assert run.returncode == 0 and "ThreadSanitizer" not in run.stderr
+
+
+TWO_MODULES = """module fill;
+pub fn go(n:usize, out:rw<u64>[n]) { parallel i in n { out[i] = u64(i) * 2; } }
+module app;
+import fill;
+fn main() -> i32 {
+  let n:usize = 100000;
+  buffer d:u64[n] = zeroed;
+  fill.go(n, d);
+  parallel i in n { d[i] = d[i] + 1; }
+  let s = reduce add_wrap for i in n yield d[i];
+  if s != 10000000000 { return 1; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_one_lane_pool_serves_every_translation_unit(tmp_path, cxx):
+    """Regions in two separately compiled modules share one pool. The lanes live in a static inside
+    an inline function, so the linker keeps one; were that ever to change, a program compiled with
+    --incremental would quietly get a full set of lane threads per module."""
+    if not shutil.which(cxx) or not shutil.which("nm"):
+        pytest.skip(f"needs {cxx} and nm")
+    path = tmp_path / "program.cairn"
+    path.write_text(TWO_MODULES)
+    record = build(load_project(path), kind="exe", cxx=cxx, timeout=300, incremental=True)
+    assert record["status"] == "native-built", record.get("stderr")
+    assert {unit["unit"] for unit in record["units"]} == {"fill.cpp", "app.cpp", "0start.cpp"}
+    ran = subprocess.run([record["artifact"]], timeout=120, env={**os.environ, "CAIRN_LANES": "3"})
+    assert ran.returncode == 0
+    listed = subprocess.run(["nm", "-C", record["artifact"]], capture_output=True, text=True, timeout=60)
+    named = [line for line in listed.stdout.splitlines() if line.endswith("cr::par::lanes::shared()::one")]
+    pools = [line for line in named if "guard variable" not in line]
+    assert len(pools) == 1 and len(named) == 2, named  # one definition and one guard: one pool
 
 
 def test_the_same_lane_body_runs_on_the_device(tmp_path):
