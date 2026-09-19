@@ -8,6 +8,7 @@
 - **Operand order**: two calls that can be observed from outside (I/O, machine access, atomics and locks, function values) may no longer sit side by side in one expression, where C++ would choose which runs first; the audit is now one footprint per nested call.
 - **Dependencies**: `[dependencies] name = "deps/name"` vendors a project inside the root: modules only, `pub` only, loaded before the project's own sources, pinned by hash in the receipt; nothing is fetched and nothing outside the root is read.
 - **Derivable implementations**: a recipe may generate trait `impl`s; `std.derived` offers `derive eq`, `derive ord` and `derive hash` for records, and a generic impl now applies exactly where its bounds hold, so `std.core` implements its traits once per scalar class (`impl[T:integer] Ord for T`) and covers every integer type.
+- **Tour**: `docs/tour.md`, twelve complete programs from checked arithmetic to recipes and the foreign boundary; the suite builds and runs each under sanitizers, so the tour cannot rot.
 - **`cairn doc`**: an API reference generated from the checked program (signatures, bounds, comments, inferred effect rows; a template's row is the one at its witnesses). `docs/std_api.md` is its output for the packaged library and a test keeps it current.
 
 ## 1.1.0
