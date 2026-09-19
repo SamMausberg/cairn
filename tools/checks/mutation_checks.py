@@ -49,7 +49,8 @@ def main():
         "model_generated": False,
         "interpretation": "Eight hand-authored defects; not a general mutation score or a model success result.",
     }
-    (R / "results/mutation_checks.json").write_text(json.dumps(result, indent=2) + "\n")
+    (R / "results/agent").mkdir(parents=True, exist_ok=True)
+    (R / "results/agent/mutation_checks.json").write_text(json.dumps(result, indent=2) + "\n")
     print("Detected", len(rows), "type-correct behavioral mutations.")
 
 

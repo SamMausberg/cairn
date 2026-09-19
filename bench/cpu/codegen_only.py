@@ -32,20 +32,24 @@ def run(cmd):
     return subprocess.run(cmd, check=True, text=True, capture_output=True).stdout
 
 
-generate(ROOT / "examples/basics/native.cairn", ROOT / "results")
-for src, out in [("results/native.cpp", "results/native.o"), ("bench/cpu/reference.cpp", "results/reference.o")]:
+generate(ROOT / "examples/basics/native.cairn", ROOT / "results/native")
+(ROOT / "results/codegen").mkdir(parents=True, exist_ok=True)
+for src, out in [
+    ("results/native/native.cpp", "results/native/native.o"),
+    ("bench/cpu/reference.cpp", "results/native/reference.o"),
+]:
     run([find("clang++"), *FLAGS, "-c", src, "-o", out])
 rows = []
 for name in NAMES:
     data = []
     rels = []
     for prefix, obj in [("cf", "native"), ("cc", "reference")]:
-        out = f"results/{obj}_{name}.bin"
+        out = f"results/native/{obj}_{name}.bin"
         sec = f".text.{prefix}_{name}"
-        run(["objcopy", f"--dump-section={sec}={out}", f"results/{obj}.o"])
+        run(["objcopy", f"--dump-section={sec}={out}", f"results/native/{obj}.o"])
         data.append((ROOT / out).read_bytes())
         entries = []
-        for line in run(["objdump", "-r", "-j", sec, f"results/{obj}.o"]).splitlines():
+        for line in run(["objdump", "-r", "-j", sec, f"results/native/{obj}.o"]).splitlines():
             m = re.match(r"^([0-9a-f]+)\s+(R_\S+)\s+(\S+)", line)
             if m:
                 entries.append(tuple(x.replace("cf_", "FUNC_").replace("cc_", "FUNC_") for x in m.groups()))
@@ -64,8 +68,8 @@ for name in NAMES:
     )
 identical = sum(x["bytes_equal"] and x["relocations_equal"] for x in rows)
 result = {
-    "generated_source_sha256": hashlib.sha256((ROOT / "results/native.cpp").read_bytes()).hexdigest(),
-    "runtime_sha256": hashlib.sha256((ROOT / "results/cairn_runtime.hpp").read_bytes()).hexdigest(),
+    "generated_source_sha256": hashlib.sha256((ROOT / "results/native/native.cpp").read_bytes()).hexdigest(),
+    "runtime_sha256": hashlib.sha256((ROOT / "results/native/cairn_runtime.hpp").read_bytes()).hexdigest(),
     "reference_sha256": hashlib.sha256((ROOT / "bench/cpu/reference.cpp").read_bytes()).hexdigest(),
     "comparisons": rows,
     "identical_sections": identical,
@@ -79,5 +83,5 @@ result = {
     "boundary": "Ordinary C++ reference algorithms with equal entry guards, not expert baselines or a native-correctness proof. "
     "Section equality is a per-host, per-compiler, per-profile observation and does not carry to another machine.",
 }
-(ROOT / "results/codegen.json").write_text(json.dumps(result, indent=2) + "\n")
+(ROOT / "results/codegen/codegen.json").write_text(json.dumps(result, indent=2) + "\n")
 print("Identical function sections and relocations:", identical, "of", len(rows), "on", platform.machine(), ARCH)

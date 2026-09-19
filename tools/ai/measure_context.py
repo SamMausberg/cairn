@@ -29,7 +29,7 @@ def text(value: object) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--tiktoken", default=None)
-    ap.add_argument("--output", type=Path, default=ROOT / "results/context_06.json")
+    ap.add_argument("--output", type=Path, default=ROOT / "results/context/context_06.json")
     args = ap.parse_args()
     if args.tiktoken:
         import tiktoken

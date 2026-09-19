@@ -1,6 +1,6 @@
 // Independently written C++ algorithms. Same FFI entry guards as CAIRN.
 // Inner indices/arithmetic use the algorithm's invariants, not checked helpers.
-#include "../../results/cairn_runtime.hpp"
+#include "../../results/native/cairn_runtime.hpp"
 extern "C" void cc_saxpy(std::size_t n,float* out,const float* x,const float* y,float a) noexcept {
   cr::view(out,n); cr::view(x,n); cr::view(y,n);
   cr::disjoint(out,n,x,n); cr::disjoint(out,n,y,n);

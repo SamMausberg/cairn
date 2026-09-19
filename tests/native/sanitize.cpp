@@ -1,5 +1,5 @@
-#include "../../results/native.cpp"
-#include "../../results/wire.cpp"
+#include "../../results/native/native.cpp"
+#include "../../results/native/wire.cpp"
 #include <cassert>
 #include <vector>
 #include <numeric>

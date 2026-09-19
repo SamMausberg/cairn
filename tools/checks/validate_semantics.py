@@ -127,8 +127,8 @@ def main():
     start = time.perf_counter()
     rows = fixtures()
     source = "\n".join(r["source"] for r in rows)
-    (R / "results").mkdir(exist_ok=True)
-    (R / "results/scalar_validation.cairn").write_text(source)
+    (R / "results/semantics").mkdir(parents=True, exist_ok=True)
+    (R / "results/semantics/scalar_validation.cairn").write_text(source)
     refs = prepared(source)
     concrete = Concrete(refs)
     rng = random.Random(1709202604)
@@ -203,7 +203,7 @@ def main():
         "seconds": time.perf_counter() - start,
         "boundary": "Finite differential tests. Native traps instrumented as exceptions only in this test. No universal translation/native/Lean proof.",
     }
-    (R / "results/semantic_validation.json").write_text(json.dumps(result, indent=2) + "\n")
+    (R / "results/semantics/semantic_validation.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({k: v for k, v in result.items() if k != "smt_checks"}, indent=2))
 
 

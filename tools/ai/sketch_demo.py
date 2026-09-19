@@ -37,8 +37,8 @@ def main():
     p.add_argument("--out", type=Path, default=R / "examples/sketch", help="Where the sketch artifacts are written.")
     folder = p.parse_args().out
     folder.mkdir(parents=True, exist_ok=True)
-    results = R / "results"
-    results.mkdir(exist_ok=True)
+    results = R / "results/agent"
+    results.mkdir(parents=True, exist_ok=True)
     sk = make()
     packet = sk.packet()
     (folder / "reference.cairn").write_text(REFERENCE)

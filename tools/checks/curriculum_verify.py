@@ -97,7 +97,8 @@ def main():
         "formal_status": "not-verified",
         "status": "all finite teaching cases passed",
     }
-    (R / "results/curriculum_validation.json").write_text(json.dumps(result, indent=2) + "\n")
+    (R / "results/agent").mkdir(parents=True, exist_ok=True)
+    (R / "results/agent/curriculum_validation.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({k: v for k, v in result.items() if k != "results"}, indent=2))
     print([(x["compiler"], x["tasks"], x["cases"]) for x in outputs])
 
