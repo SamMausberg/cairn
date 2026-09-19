@@ -1,6 +1,6 @@
 # The CAIRN standard library
 
-Twelve modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. Nothing is downloaded and nothing is implicit: a module you do not import is not in your program, and every module you do import is compiled whole, because there is no dead-code elimination yet.
+Twelve modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. Nothing is downloaded and nothing is implicit: a module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
 
 [std_api.md](std_api.md) holds every signature and every effect row, generated from these sources by `cairn doc --std`. This page is the working guide: what each module is for, a program that uses it, and where it bites.
 
