@@ -80,7 +80,7 @@ def main() -> int:
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(whole, indent=2) + "\n")
-    print(f"wrote {args.label} to {args.out.relative_to(ROOT)}")
+    print(f"wrote {args.label} to {args.out}")
     return 0
 
 
