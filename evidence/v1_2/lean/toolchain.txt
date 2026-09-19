@@ -1,0 +1,2 @@
+Lean (version 4.34.0, aarch64-unknown-linux-gnu, commit 293d5d0c0c3f3dded4688b3ccd6a33939ac5102b, Release)
+leanprover/lean4:v4.34.0

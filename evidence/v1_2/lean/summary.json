@@ -1,0 +1,48 @@
+{
+  "schema": "cairn.lean-evidence/1",
+  "commit": "c2d6eb1d707a60d9d966a10ab898f5e197c21f9a",
+  "build": "succeeded",
+  "wall_seconds": "3.834",
+  "declarations_audited": 69,
+  "axioms_used": [
+    "Quot.sound",
+    "propext"
+  ],
+  "ownership_theorems": [
+    "Cairn.Ownership.accepted_no_fault",
+    "Cairn.Ownership.accepted_no_use_after_move",
+    "Cairn.Ownership.accepted_no_use_after_free",
+    "Cairn.Ownership.accepted_no_double_free",
+    "Cairn.Ownership.accepted_race_free",
+    "Cairn.Ownership.accepted_threads_disjoint",
+    "Cairn.Ownership.accepted_no_leaked_ticket",
+    "Cairn.Ownership.accepted_no_aliased_args",
+    "Cairn.Ownership.accepted_frees_each_allocation_once",
+    "Cairn.Ownership.accepted_progress"
+  ],
+  "place_lemmas": [
+    "Cairn.Ownership.reaches_sound",
+    "Cairn.Ownership.ovl_sound",
+    "Cairn.Ownership.lanesOf_pairwise",
+    "Cairn.Ownership.lane_borrows_dont_race",
+    "Cairn.Ownership.Regress.laneWritesFixedIndex_races",
+    "Cairn.Ownership.Regress.laneWritesShared_races",
+    "Cairn.Ownership.Regress.laneReadsOther_races"
+  ],
+  "non_vacuity_witnesses": [
+    "Cairn.Ownership.Regress.leasedRead_races",
+    "Cairn.Ownership.Regress.overlappingTasks_races",
+    "Cairn.Ownership.Regress.overlappingParts_races",
+    "Cairn.Ownership.Regress.fieldsToTwoTasks_races",
+    "Cairn.Ownership.Regress.fieldPartsOverlapInOneCall_aliases",
+    "Cairn.Ownership.Regress.laneWritesFixedIndex_races",
+    "Cairn.Ownership.Regress.laneWritesShared_races",
+    "Cairn.Ownership.Regress.laneReadsOther_races",
+    "Cairn.Ownership.Regress.backwardsPart_traps",
+    "Cairn.Ownership.Regress.copyAnOwner_doubleFrees",
+    "Cairn.Ownership.Regress.useAfterDrop_usesDeadPlace",
+    "Cairn.Ownership.Regress.unawaitedTicket_leaks",
+    "Cairn.Ownership.Regress.witnesses_are_rejected"
+  ],
+  "sorry_or_native_decide": false
+}

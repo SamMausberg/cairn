@@ -1,0 +1,176 @@
+{
+  "schema": "cairn.evidence/1",
+  "commit": "c2d6eb1d707a60d9d966a10ab898f5e197c21f9a",
+  "worktree_dirty": false,
+  "host": {
+    "version": "1.2.0",
+    "python": "3.13.15",
+    "platform": "Linux-6.8.0-1062-nvidia-64k-aarch64-with-glibc2.35",
+    "clang++": "/usr/bin/clang++",
+    "g++": "/usr/bin/g++",
+    "z3": "libz3.so.4",
+    "nvcc": "/usr/bin/nvcc",
+    "lean": "/home/ubuntu/.elan/bin/lean",
+    "lake": "/home/ubuntu/.elan/bin/lake",
+    "qemu-system-aarch64": "/usr/bin/qemu-system-aarch64",
+    "formal_status": "not-verified",
+    "native_platform": "Linux armv8-a",
+    "network_access": false
+  },
+  "gates": {
+    "format": {
+      "command": [
+        "python",
+        "-m",
+        "ruff",
+        "format",
+        "--check",
+        "."
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.0,
+      "tail": [
+        "151 files already formatted"
+      ]
+    },
+    "lint": {
+      "command": [
+        "python",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.0,
+      "tail": [
+        "All checks passed!"
+      ]
+    },
+    "types": {
+      "command": [
+        "python",
+        "-m",
+        "mypy",
+        "src/cairn/compiler",
+        "src/cairn/projects/toolchain.py",
+        "src/cairn/verify/scalar_semantics.py"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.1,
+      "tail": [
+        "Success: no issues found in 13 source files"
+      ]
+    },
+    "cairn_format": {
+      "command": [
+        "python",
+        "bin/cairn",
+        "fmt",
+        "--check",
+        "examples",
+        "src/cairn/std"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.2,
+      "tail": [
+        "  \"changed\": [],",
+        "  \"not_formatted\": []",
+        "}"
+      ]
+    },
+    "tests": {
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests",
+        "-n",
+        "16",
+        "-rs"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 48.7,
+      "tail": [
+        "........................................................................ [ 98%]",
+        "....................                                                     [100%]",
+        "1676 passed in 48.41s"
+      ]
+    },
+    "certificates": {
+      "command": [
+        "python",
+        "bin/cairn",
+        "certificates"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.1,
+      "tail": [
+        "  \"lean_scope\": \"checker soundness, these certificates, in-bounds stores and stable selection of the loop model (proofs/, Lean 4, axioms propext and Quot.sound); not this Python file, the emitter or native code\",",
+        "  \"native_refinement_proved\": false",
+        "}"
+      ]
+    },
+    "lean_in_sync": {
+      "command": [
+        "python",
+        "tools/checks/export_lean_certificates.py",
+        "--check"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.0,
+      "tail": [
+        "up to date: /home/ubuntu/cairn/proofs/Cairn/CollectorCertificates.lean"
+      ]
+    },
+    "module_equivalence": {
+      "command": [
+        "python",
+        "bin/cairn",
+        "verify",
+        "examples/proof_scope/reference.cairn",
+        "examples/proof_scope/candidate.cairn",
+        "--all"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.2,
+      "tail": [
+        "  ],",
+        "  \"uncovered\": []",
+        "}"
+      ]
+    }
+  },
+  "tests": {
+    "passed": 1676,
+    "skipped": 0
+  },
+  "source_lines": {
+    "compiler_core": 5291,
+    "compiler_package": 10242,
+    "runtime_headers": 887,
+    "standard_library_cairn": 757,
+    "lean_proofs": 4543,
+    "tests": 9662
+  },
+  "separately_recorded": [
+    "lean/summary.json",
+    "gpu/benchmark.json",
+    "embedded/summary.json"
+  ],
+  "claims_not_made": [
+    "whole-compiler proof",
+    "native refinement",
+    "tuned-baseline performance",
+    "AI proficiency"
+  ]
+}
