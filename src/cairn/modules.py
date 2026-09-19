@@ -10,13 +10,18 @@ from .syntax import Parser, Program, fail
 STD = Path(__file__).parent / "std"
 
 
-def library_source(module: str) -> str | None:
+def library_path(module: str) -> Path | None:
     """`std.io.file` lives at std/io/file.cairn; nothing outside the package is ever read."""
     parts = module.split(".")
-    if parts[0] != "std" or not all(part.isidentifier() for part in parts):
+    if not parts or parts[0] != "std" or not all(part.isidentifier() for part in parts):
         return None
     path = STD.joinpath(*parts[1:]).with_suffix(".cairn")
-    return path.read_text(encoding="utf-8") if path.is_file() else None
+    return path if path.is_file() else None
+
+
+def library_source(module: str) -> str | None:
+    path = library_path(module)
+    return path.read_text(encoding="utf-8") if path else None
 
 
 def link(p: Program) -> Program:

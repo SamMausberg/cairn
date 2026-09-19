@@ -13,7 +13,17 @@ from pathlib import Path
 
 import pytest
 
-from cairn.lsp import Document, definition, hover, symbols
+from cairn.lsp import (
+    Document,
+    completion,
+    definition,
+    hover,
+    prepare_rename,
+    references,
+    rename,
+    signature_help,
+    symbols,
+)
 from cairn.syntax import RESERVED
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +48,33 @@ fn main() -> i32 {
   total = average(10, 20);
   if total == 15 { return 0; }
   return 1;
+}
+"""
+
+# One buffer that exercises every name a feature has to resolve: a record, an enum, a trait and its
+# impl, a borrowed parameter, two aliased library modules and a generic container.
+PROGRAM = """import std.vec as vec;
+import std.map as m;
+
+struct Pair { a:u64; b:u64; }
+
+enum Op { Read; Write; }
+
+trait Shape { fn area(self:ro<Self>) -> u64; }
+
+impl Shape for Pair { fn area(self:ro<Pair>) -> u64 = self.a * self.b; }
+
+fn scale(p:rw<Pair>, by:u64) { p.a = p.a * by; }
+
+fn main() -> i32 {
+  let mut pair = Pair(2, 3);
+  scale(pair, 2);
+  let mut v = vec.new[u64]();
+  vec.push(v, pair.a);
+  let op = Op.Read;
+  let t = m.new[u64, u64]();
+  let total = v.capacity() + usize(pair.area());
+  return 0;
 }
 """
 
@@ -132,7 +169,21 @@ def client():
 
 def place(text, needle, offset=0):
     at = text.index(needle) + offset
-    return {"line": text[:at].count("\n"), "character": at - text.rfind("\n", 0, at) - 1}
+    line = text[text.rfind("\n", 0, at) + 1 : at]
+    return {"line": text[:at].count("\n"), "character": len(line) + sum(ord(c) > 0xFFFF for c in line)}
+
+
+def labels(doc, text, needle, offset=0):
+    return {item["label"] for item in completion(doc, text.index(needle) + offset)}
+
+
+def applied(doc, edits):
+    """The document with a WorkspaceEdit's changes in it, latest position first."""
+    text = doc.text
+    for edit in sorted(edits, key=lambda e: -doc.offset(e["range"]["start"])):
+        start, end = doc.offset(edit["range"]["start"]), doc.offset(edit["range"]["end"])
+        text = text[:start] + edit["newText"] + text[end:]
+    return text
 
 
 def test_a_whole_session(client):
@@ -141,6 +192,9 @@ def test_a_whole_session(client):
     assert capabilities["positionEncoding"] == "utf-16"
     assert capabilities["textDocumentSync"]["change"] == 1
     assert all(capabilities[k] for k in ("hoverProvider", "documentSymbolProvider", "documentFormattingProvider"))
+    assert capabilities["completionProvider"]["triggerCharacters"] == ["."]
+    assert capabilities["signatureHelpProvider"]["triggerCharacters"] == ["(", ","]
+    assert capabilities["referencesProvider"] and capabilities["renameProvider"]["prepareProvider"]
     client.send("initialized")
 
     reported = client.open(BROKEN)
@@ -200,16 +254,25 @@ def test_positions_use_utf16_code_units(client):
 
 def test_the_server_survives_nonsense(client):
     client.request("initialize", {"capabilities": {}}, 1)
-    for text in ("", "}{;;;", "fn fn fn", "\u00e9\u00e9\u00e9", "fn f() { let x = $; }"):
+    methods = ("hover", "definition", "documentSymbol", "completion", "signatureHelp", "references", "prepareRename")
+    edges = ({"line": 0, "character": 0}, {"line": 0, "character": 1}, {"line": 99, "character": 99})
+    for text in ("", "}{;;;", "fn fn fn", "\u00e9\u00e9\u00e9", "fn f() { let x = $; }", "let x = \U0001f600.", "a."):
         reported = client.open(text, URI)
         assert isinstance(reported, list)
-        for method in ("hover", "definition", "documentSymbol"):
-            answer = client.request(
-                f"textDocument/{method}",
-                {"textDocument": {"uri": URI}, "position": {"line": 0, "character": 1}},
-                hash(text + method) % 10000 + 100,
-            )
-            assert "error" not in answer
+        for method in methods:
+            for where in edges:
+                answer = client.request(
+                    f"textDocument/{method}",
+                    {"textDocument": {"uri": URI}, "position": where},
+                    hash(text + method + str(where)) % 100000 + 100,
+                )
+                assert "error" not in answer, answer
+        renamed = client.request(
+            "textDocument/rename",
+            {"textDocument": {"uri": URI}, "position": edges[1], "newName": "x"},
+            hash(text) % 100000 + 100000,
+        )
+        assert renamed.get("error", {}).get("code", -32602) == -32602  # refused, never an internal failure
     unknown = client.request("textDocument/willSaveWaitUntil", {"textDocument": {"uri": URI}}, 2)
     assert unknown["error"]["code"] == -32601
     assert client.request("shutdown", {}, 3)["result"] is None
@@ -291,6 +354,232 @@ def test_std_imports_do_not_leak_sites_from_other_files():
     assert doc.diagnostics == []
     assert all(site["end"] <= len(doc.text) for site in doc.sites)
     assert all(not site["symbol"].startswith("std.") for site in doc.sites)
+
+
+# Completion ----------------------------------------------------------------------------------------
+
+
+def test_completion_offers_the_fields_and_methods_of_a_record_local():
+    doc = Document(PROGRAM)
+    assert doc.diagnostics == []
+    # `scale` takes rw<Pair> first and `area` implements Shape for Pair: both are reachable as methods.
+    assert labels(doc, PROGRAM, "pair.a)", 5) == {"a", "b", "area", "scale"}
+    detail = {i["label"]: i["detail"] for i in completion(doc, PROGRAM.index("pair.a)") + 5)}
+    assert detail["a"] == "u64" and detail["area"].startswith("fn area(")
+
+
+def test_completion_reaches_fields_through_a_borrowed_parameter():
+    doc = Document(PROGRAM)
+    assert labels(doc, PROGRAM, "p.a = ", 2) == {"a", "b", "area", "scale"}
+
+
+def test_completion_instantiates_a_generic_library_container():
+    doc = Document(PROGRAM)
+    offered = {i["label"]: i["detail"] for i in completion(doc, PROGRAM.index("v.capacity") + 2)}
+    assert offered["data"] == "Buf[u64]" and offered["len"] == "usize"  # Vec[T] with T := u64
+    assert {"push", "pop", "capacity", "reserve"} <= set(offered)
+    assert "new" not in offered and "with_capacity" not in offered  # neither takes a receiver
+
+
+def test_completion_of_a_module_alias_hides_its_private_names():
+    doc = Document(PROGRAM)
+    offered = labels(doc, PROGRAM, "m.new", 2)
+    assert {"Map", "new", "insert", "find"} <= offered
+    assert not offered & {"probe", "place", "grow"}  # std.map keeps these to itself
+
+
+def test_completion_offers_the_variants_of_an_enum():
+    doc = Document(PROGRAM)
+    assert labels(doc, PROGRAM, "Op.Read", 3) == {"Read", "Write"}
+
+
+def test_completion_does_not_leak_locals_across_functions():
+    doc = Document(PROGRAM)
+    inside = labels(doc, PROGRAM, "p.a * by", 0)
+    assert {"p", "by"} <= inside and not inside & {"pair", "op", "total"}
+
+
+def test_completion_sees_a_binding_the_last_good_analysis_never_saw():
+    good = Document(PROGRAM)
+    typing = PROGRAM.replace("  return 0;", "  let fresh = pair.a;\n  let y = f\n  return 0;")
+    doc = Document(typing, good)
+    assert doc.diagnostics and doc.good is good  # the buffer is broken; the analysis is the old one
+    offered = labels(doc, typing, "let y = f", 9)
+    assert {"fresh", "pair", "v", "total"} <= offered  # the new binder and the old ones
+    assert {"Pair", "scale", "vec", "len", "u64", "match"} <= offered  # declarations, builtins, words
+
+
+def test_completion_offers_modules_after_import_and_recipes_after_derive():
+    text = (
+        "import std.core (Ord);\nstruct Pair { a:u64; b:u64; }\nderive eq for Pair;\nfn main() -> i32 { return 0; }\n"
+    )
+    doc = Document(text)
+    assert doc.diagnostics == []
+    assert {"std.vec", "std.core", "std.wire"} <= labels(doc, text, "import std.core", 7)
+    assert labels(doc, text, "derive eq", 7) == {"eq", "ord", "hash"}
+
+
+def test_completion_offers_promises_in_a_generic_bound():
+    good = Document("import std.core (Ord);\nfn main() -> i32 { return 0; }\n")
+    typing = "import std.core (Ord);\nfn less[T: \nfn main() -> i32 { return 0; }\n"
+    offered = labels(Document(typing, good), typing, "fn less[T: ", 11)
+    assert {"Ord", "copy", "affine", "linear", "integer", "scalar"} <= offered
+    assert "main" not in offered
+
+
+def test_completion_answers_a_buffer_that_never_compiled():
+    doc = Document("struct Pair { a:u64; }\nfn f() -> u64 { let x = nope; return x; }\n")
+    assert doc.good is None
+    offered = labels(doc, doc.text, "return x", 0)
+    assert {"x", "Pair", "f", "return", "len"} <= offered  # tokens alone still know this much
+
+
+# Signature help ------------------------------------------------------------------------------------
+
+
+def test_signature_help_names_the_parameter_being_written():
+    doc = Document(PROGRAM)
+    answer = signature_help(doc, PROGRAM.index("scale(pair, 2)") + len("scale(pair, "))
+    assert answer["signatures"][0]["label"] == "fn scale(p:rw<Pair>, by:u64)"
+    assert [p["label"] for p in answer["signatures"][0]["parameters"]] == ["p:rw<Pair>", "by:u64"]
+    assert answer["activeParameter"] == 1
+    assert signature_help(doc, PROGRAM.index("scale(pair, 2)") + len("scale("))["activeParameter"] == 0
+
+
+def test_signature_help_resolves_an_alias_and_shifts_for_method_syntax():
+    doc = Document(PROGRAM)
+    aliased = signature_help(doc, PROGRAM.index("vec.push(v, pair.a)") + len("vec.push(v, "))
+    assert aliased["signatures"][0]["label"] == "fn push[T:affine](v:rw<Vec[T]>, item:T)"
+    assert aliased["activeParameter"] == 1
+    method = signature_help(doc, PROGRAM.index("v.capacity()") + len("v.capacity("))
+    assert method["signatures"][0]["label"].startswith("fn capacity[T:affine](v:ro<Vec[T]>)")
+    assert method["activeParameter"] == 1  # the receiver already filled the first parameter
+    assert signature_help(doc, PROGRAM.index("let op")) is None
+
+
+# References, rename and definition -------------------------------------------------------------------
+
+
+def test_references_and_rename_of_a_declaration():
+    doc = Document(PROGRAM)
+    at = PROGRAM.index("fn scale") + 4
+    assert [r["range"]["start"]["line"] for r in references(doc, URI, at)] == [11, 15]
+    assert prepare_rename(doc, at)["placeholder"] == "scale"
+    edits = rename(doc, URI, at, "magnify")["changes"][URI]
+    assert len(edits) == 2
+    assert Document(applied(doc, edits)).diagnostics == []
+
+
+def test_references_and_rename_of_a_local():
+    doc = Document(PROGRAM)
+    at = PROGRAM.index("scale(pair, 2)") + 6
+    assert len(references(doc, URI, at)) == 4  # the binder and its three uses
+    edits = rename(doc, URI, at, "point")["changes"][URI]
+    changed = applied(doc, edits)
+    assert "let mut point = Pair(2, 3);" in changed and "pair" not in changed
+    assert Document(changed).diagnostics == []
+
+
+def test_rename_refuses_everything_it_cannot_prove():
+    doc = Document(PROGRAM)
+
+    def refuse(needle, offset, fresh="fresh"):
+        at = PROGRAM.index(needle) + offset
+        assert prepare_rename(doc, at) is None
+        with pytest.raises(ValueError):
+            rename(doc, URI, at, fresh)
+
+    refuse("fn scale", 0)  # a reserved word
+    refuse("v.capacity", 2)  # a name of another module, reached as a method
+    refuse("vec.push", 4)  # a name of another module, reached through its alias
+    refuse("usize(pair", 0)  # a builtin
+    refuse("area(self", 0)  # a trait member: one document cannot see every implementation
+    at = PROGRAM.index("let mut pair") + 8
+    for taken in ("mut", "Pair", "total", "len", "9lives"):  # word, declaration, local, builtin, not a name
+        with pytest.raises(ValueError):
+            rename(doc, URI, at, taken)
+    broken = Document("fn f() -> u64 { let x = nope; return x; }\n")
+    assert prepare_rename(broken, broken.text.index("let x") + 4) is None
+
+
+def test_rename_refuses_a_declaration_a_method_call_could_reach():
+    # `p.a` is a field and `pair.area()` a method: a bare name written after a `.` is not renameable.
+    text = "struct Pair { a:u64; }\nfn a(p:ro<Pair>) -> u64 = p.a;\nfn main() -> i32 { return 0; }\n"
+    doc = Document(text)
+    assert doc.diagnostics == []
+    assert prepare_rename(doc, text.index("fn a(") + 3) is None
+    assert references(doc, URI, text.index("fn a(") + 3) == []
+
+
+def test_definition_goes_into_the_packaged_library():
+    doc = Document(PROGRAM)
+    into = definition(doc, URI, PROGRAM.index("vec.push") + 5)
+    assert into["uri"].endswith("/cairn/std/vec.cairn")
+    library = Path(into["uri"].removeprefix("file://")).read_text(encoding="utf-8")
+    line = library.splitlines()[into["range"]["start"]["line"]]
+    assert line.startswith("pub fn push[T:affine]")
+    assert line[into["range"]["start"]["character"] : into["range"]["end"]["character"]] == "push"
+    # A bare name brought in by `import std.core (Option);` resolves the same way.
+    text = "import std.core (Option);\nfn f() -> Option[u64] { return Option.Some(1); }\n"
+    assert definition(Document(text), URI, text.index("-> Option") + 3)["uri"].endswith("/std/core.cairn")
+    assert definition(doc, URI, PROGRAM.index("scale(pair")) is not None  # this document still wins for its own
+
+
+def test_hover_adds_the_signature_and_effect_row_of_a_callee():
+    shown = hover(Document(PROGRAM), PROGRAM.index("vec.push") + 5)["contents"]["value"]
+    assert "fn push[T:affine](v:rw<Vec[T]>, item:T)" in shown
+    assert "Effects: " in shown and "`alloc`" in shown
+
+
+# The new features over the protocol -------------------------------------------------------------------
+
+
+def test_completion_in_a_buffer_broken_mid_expression(client):
+    client.request("initialize", {"capabilities": {}}, 1)
+    assert client.open(PROGRAM) == []
+    typing = PROGRAM.replace("  return 0;", "  let y = pair.\n  return 0;")
+    assert client.change(typing)  # the buffer no longer compiles
+    answered = client.request(
+        "textDocument/completion", {"textDocument": {"uri": URI}, "position": place(typing, "let y = pair.", 13)}, 2
+    )
+    assert {i["label"] for i in answered["result"]} == {"a", "b", "area", "scale"}
+    helped = client.request(
+        "textDocument/signatureHelp", {"textDocument": {"uri": URI}, "position": place(typing, "scale(pair, 2)", 6)}, 3
+    )
+    assert helped["result"]["signatures"][0]["label"] == "fn scale(p:rw<Pair>, by:u64)"
+
+
+def test_the_new_features_use_utf16_code_units(client):
+    client.request("initialize", {"capabilities": {}}, 1)
+    text = 'struct Pair { a:u64; b:u64; }\nfn main() -> i32 { let s = "\U0001f600\U0001f600"; let p = Pair(1, 2); return 0; }\n'
+    assert client.open(text) == []
+    answered = client.request(
+        "textDocument/completion", {"textDocument": {"uri": URI}, "position": place(text, "Pair(1, 2)", 10)}, 2
+    )
+    assert {"p", "s", "Pair", "main"} <= {i["label"] for i in answered["result"]}
+    renamed = client.request(
+        "textDocument/rename",
+        {"textDocument": {"uri": URI}, "position": place(text, "let p = Pair", 4), "newName": "point"},
+        3,
+    )
+    edit = renamed["result"]["changes"][URI][0]["range"]
+    assert edit["start"]["character"] == place(text, "let p = Pair", 4)["character"]
+    assert edit["end"]["character"] == edit["start"]["character"] + 1
+
+
+def test_rename_over_the_protocol_refuses_with_an_error(client):
+    client.request("initialize", {"capabilities": {}}, 1)
+    client.open(PROGRAM)
+    refused = client.request(
+        "textDocument/rename",
+        {"textDocument": {"uri": URI}, "position": place(PROGRAM, "vec.push", 4), "newName": "shove"},
+        2,
+    )
+    assert refused["error"]["code"] == -32602 and "one document" in refused["error"]["message"]
+    prepared = client.request(
+        "textDocument/prepareRename", {"textDocument": {"uri": URI}, "position": place(PROGRAM, "vec.push", 4)}, 3
+    )
+    assert prepared["result"] is None
 
 
 # Editor assets -------------------------------------------------------------------------------------
