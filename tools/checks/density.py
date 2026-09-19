@@ -28,7 +28,7 @@ RECIPE = f"docs/MANUAL.md: {RECIPE_SECTION}"
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--tiktoken")
-    ap.add_argument("--output", type=Path, default=R / "results/density.json")
+    ap.add_argument("--output", type=Path, default=R / "results/density/density.json")
     args = ap.parse_args()
     if args.tiktoken:
         try:
@@ -68,7 +68,7 @@ def main():
 
     # Count exactly what this compiler emits today, without waiting for another harness to leave it behind.
     for stem in ["native", "family", "wire"]:
-        generate(R / f"examples/basics/{stem}.cairn", R / "results")
+        generate(R / f"examples/basics/{stem}.cairn", R / "results/native")
     native = (R / "examples/basics/native.cairn").read_text()
     ref = (R / "bench/cpu/reference.cpp").read_text()
     pairs = []
@@ -91,10 +91,10 @@ def main():
         "examples/basics/wire.cairn",
         "bench/cpu/reference.cpp",
         "bench/cpu/family_template.cpp",
-        "results/native.cpp",
-        "results/family.cpp",
-        "results/wire.cpp",
-        "results/cairn_runtime.hpp",
+        "results/native/native.cpp",
+        "results/native/family.cpp",
+        "results/native/wire.cpp",
+        "results/native/cairn_runtime.hpp",
     ]
     compiler_paths = sorted(str(p.relative_to(R)) for p in (R / "src/cairn").rglob("*") if p.suffix in {".py", ".hpp"})
     paths += compiler_paths
@@ -116,22 +116,22 @@ def main():
 
     family = {
         "source_tokens": t("examples/basics/family.cairn"),
-        "expanded_cpp_tokens": t("results/family.cpp"),
+        "expanded_cpp_tokens": t("results/native/family.cpp"),
         "cpp_template_tokens": t("bench/cpu/family_template.cpp"),
-        "expansion_ratio": t("results/family.cpp") / t("examples/basics/family.cairn"),
+        "expansion_ratio": t("results/native/family.cpp") / t("examples/basics/family.cairn"),
         "compact_cpp_template_over_cairn": t("bench/cpu/family_template.cpp") / t("examples/basics/family.cairn"),
         "cold_cairn_source_plus_card_plus_recipe": t("examples/basics/family.cairn") + t(CARD) + t(RECIPE),
         "source_audit_cairn_plus_card_plus_recipe_plus_compiler": t("examples/basics/family.cairn")
         + t(CARD)
         + t(RECIPE)
         + sum(t(p) for p in compiler_paths),
-        "cpp_template_plus_shared_runtime": t("bench/cpu/family_template.cpp") + t("results/cairn_runtime.hpp"),
+        "cpp_template_plus_shared_runtime": t("bench/cpu/family_template.cpp") + t("results/native/cairn_runtime.hpp"),
         "limitation": "CAIRN exports 256 named entries; compact C++ uses one indexed entry and a function-pointer table. Different API; both tested over the same numerical family. Runtime header shared by both. No C++ language documentation charged; no universal cold-context advantage inferred.",
     }
     wire = {
         "source_tokens": t("examples/basics/wire.cairn"),
-        "expanded_cpp_tokens": t("results/wire.cpp"),
-        "expansion_ratio": t("results/wire.cpp") / t("examples/basics/wire.cairn"),
+        "expanded_cpp_tokens": t("results/native/wire.cpp"),
+        "expansion_ratio": t("results/native/wire.cpp") / t("examples/basics/wire.cairn"),
         "cold_source_plus_card_plus_recipe": t("examples/basics/wire.cairn") + t(CARD) + t(RECIPE),
         "limitation": "No independent compact C++ codec library baseline. Expansion ratio is not a language superiority comparison.",
     }
@@ -159,6 +159,7 @@ def main():
         ],
         "method": "Function slices include full signatures and bodies, one terminal newline; file counts include all exact bytes. Common runtime counted separately. Constructed cold packets, not actual interaction transcripts.",
     }
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n")
     print(
         json.dumps(

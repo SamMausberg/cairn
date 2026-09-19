@@ -251,8 +251,8 @@ fn stack_load()->u64 {stack x:u64[0]=zeroed;return x[0];}"""
     result["new_expression_identity_edits"] = identity_count
     result["arithmetic_certificates"] = audit_collector()
     result["status"] = "passed-finite-tests-and-exact-linear-certificates"
-    out = R / "results"
-    out.mkdir(exist_ok=True)
+    out = R / "results/systems"
+    out.mkdir(parents=True, exist_ok=True)
     (out / "systems_06.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({k: v for k, v in result.items() if k != "arithmetic_certificates"}, indent=2))
 

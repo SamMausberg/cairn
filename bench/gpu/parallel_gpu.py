@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Compile and run bench/gpu/parallel_gpu.cu and record the result with its environment.
 
-Writes evidence/v1_0/gpu/benchmark.json. Refuses to write anything if nvcc or a device is
-missing: an unmeasured benchmark is worse than none.
+Writes results/gpu/benchmark.json. Refuses to write anything if nvcc or a device is
+missing: an unmeasured benchmark is worse than none. A release copy of this record under
+evidence/ is the release collector's to make, never this benchmark's to overwrite.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from support import best_profile, profile_flags
 
 RUNTIME = ROOT / "src/cairn/runtime"
-OUT = ROOT / "evidence/v1_0/gpu/benchmark.json"
+OUT = ROOT / "results/gpu/benchmark.json"
 
 STRICT = ["-std=c++20", "-O3"]
 # nvcc owns -std/-O for both halves; the rest of the host contract is the compiler's own table,
@@ -47,7 +48,7 @@ def main() -> int:
     if not shutil.which("nvcc"):
         print("nvcc is not installed: nothing was measured", file=sys.stderr)
         return 1
-    build = ROOT / "results/bench_parallel_gpu"
+    build = ROOT / "results/gpu/bench_parallel_gpu"
     build.parent.mkdir(parents=True, exist_ok=True)
     command = ["nvcc", *STRICT, *DEVICE, "-Xcompiler", ",".join(HOST)]
     command += [f"-I{RUNTIME}", str(ROOT / "bench/gpu/parallel_gpu.cu"), "-o", str(build)]

@@ -57,8 +57,8 @@ def main():
     assert trace["status"] == "passed-reserved-finite-tests" and trace["attempts"] == 3
     assert trace["trace"][0]["feedback"]["code"] == "E-TYPE-MISMATCH"
     assert trace["trace"][1]["feedback"]["tests"]["status"] == "failed-tests"
-    (R / "results").mkdir(exist_ok=True)
-    (R / "results/scripted_demo.json").write_text(json.dumps(trace, indent=2) + "\n")
+    (R / "results/agent").mkdir(parents=True, exist_ok=True)
+    (R / "results/agent/scripted_demo.json").write_text(json.dumps(trace, indent=2) + "\n")
     print(json.dumps({k: v for k, v in trace.items() if k != "trace"}, indent=2))
 
 

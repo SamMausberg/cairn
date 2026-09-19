@@ -2,7 +2,7 @@
 """Paired CAIRN/C++ timing on one pinned core, plus the object-section comparison.
 
 Every number below was measured on the machine and CPU profile recorded in
-results/benchmark_environment.json. Ratios above one favour CAIRN. A ratio measured
+results/timing/benchmark_environment.json. Ratios above one favour CAIRN. A ratio measured
 here says nothing about another host, another compiler or an expert hand-tuned baseline.
 """
 
@@ -42,19 +42,21 @@ def describe(cmd):
         return f"{cmd[0]} unavailable on this host"
 
 
-generate(ROOT / "examples/basics/native.cairn", ROOT / "results")
+generate(ROOT / "examples/basics/native.cairn", ROOT / "results/native")
+(ROOT / "results/timing").mkdir(parents=True, exist_ok=True)
 clang = find("clang++")
 for file, out in [
-    ("results/native.cpp", "results/native.o"),
-    ("bench/cpu/reference.cpp", "results/reference.o"),
-    ("bench/cpu/driver.cpp", "results/driver.o"),
+    ("results/native/native.cpp", "results/native/native.o"),
+    ("bench/cpu/reference.cpp", "results/native/reference.o"),
+    ("bench/cpu/driver.cpp", "results/native/driver.o"),
 ]:
     run([clang, *FLAGS, "-c", file, "-o", out])
-run([clang, "results/native.o", "results/reference.o", "results/driver.o", "-o", "results/benchmark"])
+objects = [f"results/native/{stem}.o" for stem in ("native", "reference", "driver")]
+run([clang, *objects, "-o", "results/native/benchmark"])
 avail = sorted(os.sched_getaffinity(0))
 os.sched_setaffinity(0, {avail[0]})
-raw = run(["results/benchmark"]).stdout
-(ROOT / "results/timing_raw.csv").write_text(raw)
+raw = run(["results/native/benchmark"]).stdout
+(ROOT / "results/timing/timing_raw.csv").write_text(raw)
 rows = list(csv.DictReader(raw.splitlines()))
 groups = {}
 for row in rows:
@@ -77,18 +79,18 @@ for (name, n, pattern), rr in groups.items():
             "ratio_max": max(ratios),
         }
     )
-(ROOT / "results/timing_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+(ROOT / "results/timing/timing_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
 # Compare section bytes AND relocation targets/types/offsets, not disassembly text alone.
 equivalence = []
 for name in KERNELS:
     extracts = []
     rels = []
     for prefix, obj in [("cf", "native"), ("cc", "reference")]:
-        out = f"results/{obj}_{name}.bin"
+        out = f"results/native/{obj}_{name}.bin"
         sec = f".text.{prefix}_{name}"
-        run(["objcopy", f"--dump-section={sec}={out}", f"results/{obj}.o"])
+        run(["objcopy", f"--dump-section={sec}={out}", f"results/native/{obj}.o"])
         extracts.append((ROOT / out).read_bytes())
-        r = run(["objdump", "-r", "-j", sec, f"results/{obj}.o"]).stdout
+        r = run(["objdump", "-r", "-j", sec, f"results/native/{obj}.o"]).stdout
         rel = []
         for line in r.splitlines():
             m = re.match(r"^([0-9a-f]+)\s+(R_\S+)\s+(\S+)", line)
@@ -107,8 +109,8 @@ for name in KERNELS:
             "relocations": rels,
         }
     )
-(ROOT / "results/codegen_equivalence.json").write_text(json.dumps(equivalence, indent=2) + "\n")
-(ROOT / "results/benchmark_environment.json").write_text(
+(ROOT / "results/timing/codegen_equivalence.json").write_text(json.dumps(equivalence, indent=2) + "\n")
+(ROOT / "results/timing/benchmark_environment.json").write_text(
     json.dumps(
         {
             **environment("clang++", arch=ARCH),

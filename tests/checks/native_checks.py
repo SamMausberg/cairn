@@ -63,7 +63,7 @@ SIGS = {
 
 
 def load(path=None):
-    path = path or Path(os.environ.get("CAIRN_NATIVE_LIB", str(ROOT / "results/libnative.so")))
+    path = path or Path(os.environ.get("CAIRN_NATIVE_LIB", str(ROOT / "results/native/libnative.so")))
     lib = C.CDLL(str(path))
     for name, (args, ret) in SIGS.items():
         f = getattr(lib, "cf_" + name)
@@ -233,7 +233,7 @@ def run(libpath=None):
     l.cf_prefix(0, None, None)
     assert l.cf_sum_wrap(0, None) == 0
     count["empty_null_views"] += 3
-    family = C.CDLL(os.environ.get("CAIRN_FAMILY_LIB", str(ROOT / "results/libfamily.so")))
+    family = C.CDLL(os.environ.get("CAIRN_FAMILY_LIB", str(ROOT / "results/native/libfamily.so")))
     for k in range(1, 257):
         fn = getattr(family, "cf_gain_" + str(k))
         fn.argtypes = [SZ, C.POINTER(F32), C.POINTER(F32)]

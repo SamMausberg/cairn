@@ -1,6 +1,6 @@
 // A compact, independently authored C++20 family, not 256 copied functions.
 // Same 256 mathematical operations. Table entry selection is a different API.
-#include "../../results/cairn_runtime.hpp"
+#include "../../results/native/cairn_runtime.hpp"
 #include <array>
 #include <utility>
 template<std::size_t K>

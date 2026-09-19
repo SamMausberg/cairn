@@ -5,7 +5,7 @@ fact out of that tool's own JSON or stdout, so a tool that quietly stops working
 instead of at a release gate. Nothing needs a network; a missing compiler, Z3 or GPU skips with
 a reason. Tools are one test each so `-n` spreads the slow ones (verify, validate_semantics,
 curriculum_verify and validate_systems are the long poles). The four harnesses that share
-results/*.o take a file lock, because they overwrite the same artifacts.
+results/native/*.o take a file lock, because they overwrite the same artifacts.
 """
 
 import fcntl
@@ -22,6 +22,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 PY = sys.executable
 RESULTS = ROOT / "results"
+NATIVE = RESULTS / "native"  # the one shared build area; every other subdirectory holds records only
 TOOLS = sorted(p for top in ("tools", "bench") for p in (ROOT / top).rglob("*.py") if p.name != "__init__.py")
 needs_gcc = pytest.mark.skipif(not shutil.which("g++"), reason="g++ is not installed")
 needs_z3 = pytest.mark.skipif(not shutil.which("z3"), reason="the z3 solver is not installed")
@@ -52,9 +53,9 @@ def parsed(text):
 
 @contextmanager
 def exclusive():
-    """One writer at a time for the harnesses that all regenerate results/native.{cpp,o}."""
-    RESULTS.mkdir(exist_ok=True)
-    with open(RESULTS / ".smoke.lock", "w") as handle:
+    """One writer at a time for the harnesses that all regenerate results/native/native.{cpp,o}."""
+    NATIVE.mkdir(parents=True, exist_ok=True)
+    with open(NATIVE / ".smoke.lock", "w") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         yield
 
@@ -115,17 +116,17 @@ def test_verify():
             )
         )
     assert out["status"] == "all requested checks passed" and out["commands"] >= 14
-    record = json.loads((RESULTS / "verification_run.json").read_text())
+    record = json.loads((NATIVE / "verification_run.json").read_text())
     assert [c["exit_code"] for c in record["commands"]] == [0] * len(record["commands"])
     assert record["environment"]["arch_profile"] == out["arch_profile"]
-    assert (RESULTS / "libnative_gcc.so").exists() and (RESULTS / "sanitize").exists()
+    assert (NATIVE / "libnative_gcc.so").exists() and (NATIVE / "sanitize").exists()
 
 
 @needs_clang
 def test_codegen_only():
     with exclusive():
         printed = tool("bench/cpu/codegen_only.py", timeout=600)
-    result = json.loads((RESULTS / "codegen.json").read_text())
+    result = json.loads((RESULTS / "codegen/codegen.json").read_text())
     rows = result["comparisons"]
     assert len(rows) == 9 and all(r["cairn_bytes"] > 0 and r["cpp_bytes"] > 0 for r in rows)
     assert result["identical_sections"] == sum(r["bytes_equal"] and r["relocations_equal"] for r in rows)
@@ -136,11 +137,11 @@ def test_codegen_only():
 def test_bench_run():
     with exclusive():
         tool("bench/cpu/run.py", timeout=900)
-    summary = json.loads((RESULTS / "timing_summary.json").read_text())
+    summary = json.loads((RESULTS / "timing/timing_summary.json").read_text())
     assert summary and all(row["pairs"] > 1 and row["cairn_median_ns"] > 0 for row in summary)
-    where = json.loads((RESULTS / "benchmark_environment.json").read_text())
+    where = json.loads((RESULTS / "timing/benchmark_environment.json").read_text())
     assert where["pinned_cpu"] in where["available_cpus"] and where["arch_profile"] in where["flags"][-2]
-    assert len(json.loads((RESULTS / "codegen_equivalence.json").read_text())) == 9
+    assert len(json.loads((RESULTS / "timing/codegen_equivalence.json").read_text())) == 9
 
 
 def test_density(tmp_path):
@@ -185,7 +186,7 @@ def test_measure_context(tmp_path):
 @needs_clang
 def test_mutation_checks():
     printed = tool("tools/checks/mutation_checks.py", timeout=600)
-    result = json.loads((RESULTS / "mutation_checks.json").read_text())
+    result = json.loads((RESULTS / "agent/mutation_checks.json").read_text())
     assert result["cases"] == result["detected"] == 8 and not result["model_generated"]
     assert f"Detected {result['detected']}" in printed
 
@@ -245,7 +246,7 @@ def test_agent():
 
 def test_agent_metrics():
     printed = tool("tools/ai/agent_metrics.py", timeout=600)
-    result = json.loads((RESULTS / "agent_metrics.json").read_text())
+    result = json.loads((RESULTS / "agent/agent_metrics.json").read_text())
     assert result["identity_expression_edits"] > 0 and result["all_identity_edits_preserve_generated_cpp"]
     assert str(result["identity_expression_edits"]) in printed and result["model_runs"] == 0
 
@@ -272,7 +273,7 @@ def test_curriculum(tmp_path):
 @needs_gcc
 def test_curriculum_verify():
     printed = tool("tools/checks/curriculum_verify.py", "--gcc", timeout=900)
-    result = json.loads((RESULTS / "curriculum_validation.json").read_text())
+    result = json.loads((RESULTS / "agent/curriculum_validation.json").read_text())
     assert result["status"] == "all finite teaching cases passed" and result["model_runs"] == 0
     assert len(result["results"]) == 2 and all(r["cases"] > 0 for r in result["results"])
     assert all(e["status"] == "passed-finite-tests" for r in result["results"] for e in r["entries"])
@@ -354,7 +355,7 @@ def test_export_lean_certificates():
 
 
 def test_parallel_gpu_flags():
-    """The device benchmark is not run here: it writes release evidence. Its flags are still checked."""
+    """The device benchmark is not run here: it needs a device. Its flags are still checked."""
     if not shutil.which("nvcc"):
         pytest.skip("nvcc is not installed")
     sys.path.insert(0, str(ROOT / "bench/gpu"))

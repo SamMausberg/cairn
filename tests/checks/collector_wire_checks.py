@@ -37,7 +37,7 @@ class Packet(C.Structure):
     ]
 
 
-wire = C.CDLL(str(ROOT / "results/libwire.so"))
+wire = C.CDLL(str(ROOT / "results/native/libwire.so"))
 wire.cf_wire_size_Packet.restype = SZ
 wire.cf_encode_Packet.argtypes = [C.POINTER(U8), Packet]
 wire.cf_encode_Packet.restype = None

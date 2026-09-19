@@ -7,7 +7,7 @@ import random
 from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
-f = C.CDLL(str(R / "results/libtemplate.so")).cc_gain
+f = C.CDLL(str(R / "results/native/libtemplate.so")).cc_gain
 f.argtypes = [C.c_size_t, C.c_size_t, C.POINTER(C.c_float), C.POINTER(C.c_float)]
 f.restype = None
 rng = random.Random(20260917)

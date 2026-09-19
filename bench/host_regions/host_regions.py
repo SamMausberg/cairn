@@ -60,7 +60,7 @@ def main() -> int:
     args = ask.parse_args()
 
     arch = best_profile(*COMPILERS)
-    build = ROOT / "results/bench_host_regions"
+    build = ROOT / "results/host_regions"
     build.mkdir(parents=True, exist_ok=True)
     runs = {cxx: measure(cxx, args.runtime.resolve(), arch, build) for cxx in COMPILERS}
     row = {

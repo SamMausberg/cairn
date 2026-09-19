@@ -70,8 +70,8 @@ def main():
                 "note": "Constructed lexical packet, not model-read cost or measured comprehension.",
             }
         )
-    (R / "results").mkdir(exist_ok=True)
-    (R / "results/agent_metrics.json").write_text(
+    (R / "results/agent").mkdir(parents=True, exist_ok=True)
+    (R / "results/agent/agent_metrics.json").write_text(
         json.dumps(
             {
                 "tokenizer": "ByT5 plain UTF-8 byte-token mapping; no special tokens",
