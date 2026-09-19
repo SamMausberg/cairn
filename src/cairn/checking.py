@@ -419,13 +419,15 @@ class Checker:
                     kind = next((w for w in KINDS[:2] if w in words), "linear")
                     self.bounds[witness.name] = (traits, kind)
                     choices.append([witness])
-            if not all(choices) or math.prod(map(len, choices)) > 128:
-                verdicts[f.name] = (
-                    "a natural parameter has no single witness" if not all(choices) else "too many scalar cases"
-                )
+            family = [g for g in self.p.functions if g.source_name == f.name and g.bindings]
+            naturals = all(kind == "nat" for _, kind in f.generics)
+            if (not all(choices) and not (family and naturals)) or math.prod(map(len, choices)) > 128:
+                verdicts[f.name] = "too many scalar cases" if all(choices) else "no family gives its natural a witness"
                 continue
             try:
-                for values in itertools.product(*choices):
+                for instance in family if naturals else []:  # A natural's witnesses are its families' instances.
+                    self.function(instance)
+                for values in itertools.product(*choices) if all(choices) else []:
                     self.instantiate(f, dict(zip((g for g, _ in f.generics), values, strict=True)), f)
                 verdicts[f.name] = "ok"
             except Diagnostic as e:

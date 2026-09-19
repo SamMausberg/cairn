@@ -30,7 +30,7 @@
   "not_implemented": [
     "completion-based (non-thread) asynchronous I/O, cancellation and device-loss recovery",
     "multi-device collectives",
-    "certifying templates over natural parameters, and requiring (rather than reporting) that a program's own templates need only their bounds",
+    "requiring (rather than reporting) that a program's own templates need only their bounds",
     "SMT coverage of heap owners, view parameters, rw borrows, recursion, concurrency and unbounded loops",
     "emitter-to-model and native refinement proofs",
     "mechanized ownership and lease rules for array parts, fields, lanes, closures and placement, a progress theorem, and any link from checking.py to the Lean calculus",

@@ -496,11 +496,11 @@ def test_a_template_is_certified_once_when_its_body_needs_only_its_bounds():
     from cairn.cairnc import certify_templates
 
     verdicts = certify_templates(GENERIC_BOUNDS)
-    assert {n for n, v in verdicts.items() if v == "ok"} == {"larger", "biggest", "pass"}
+    assert {n for n, v in verdicts.items() if v == "ok"} == {"larger", "biggest", "pass", "scale"}
     assert verdicts["largest"].startswith("E-OPERATOR")  # `<` is not something a bare T promises.
     assert verdicts["twice"].startswith("E-MOVED")  # A T may be an owner.
     assert verdicts["ignore"].startswith("E-LINEAR-LEAK") and verdicts["keep"].startswith("E-LINEAR-LEAK")  # Or linear.
-    assert "natural" in verdicts["scale"]
+    assert verdicts["scale"] == "ok"  # A natural's witnesses are its family's instances.
     assert compile_source(GENERIC_BOUNDS)  # None of this changes what is accepted: instances are still checked.
 
 
