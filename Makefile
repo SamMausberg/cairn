@@ -34,7 +34,7 @@ proof: lean
 
 lean:
 	$(PYTHON) tools/checks/export_lean_certificates.py --check
-	cd proofs && lake build
+	cd proofs && PATH="$$HOME/.elan/bin:$$PATH" lake build
 
 gpu:
 	$(PYTHON) -m pytest -q tests/runtime/test_native_runtime.py tests/soundness/test_concurrency.py

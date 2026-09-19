@@ -81,7 +81,7 @@ def main() -> int:
             "runtime_headers": lines("src/cairn/runtime/*.hpp"),
             "standard_library_cairn": lines("src/cairn/std/*.cairn"),
             "lean_proofs": lines("proofs/Cairn/*.lean", "proofs/Cairn.lean"),
-            "tests": lines("tests/*.py", "tests/native/*"),
+            "tests": lines("tests/**/*.py", "tests/native/*"),
         },
         "separately_recorded": ["lean/summary.json", "gpu/benchmark.json", "embedded/summary.json"],
         "claims_not_made": ["whole-compiler proof", "native refinement", "tuned-baseline performance", "AI proficiency"],

@@ -12,8 +12,13 @@ import pytest
 from cairn.compiler.cairnc import Diagnostic, compile_source
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-DOCUMENTS = ["README.md", *sorted(str(p.relative_to(ROOT)) for p in ROOT.glob("docs/guide/*.md") if p.name != "std_api.md")]
-DOCUMENTS += sorted(str(p.relative_to(ROOT)) for p in [*ROOT.glob("docs/internals/*.md"), *ROOT.glob("examples/**/README.md")])
+DOCUMENTS = [
+    "README.md",
+    *sorted(str(p.relative_to(ROOT)) for p in ROOT.glob("docs/guide/*.md") if p.name != "std_api.md"),
+]
+DOCUMENTS += sorted(
+    str(p.relative_to(ROOT)) for p in [*ROOT.glob("docs/internals/*.md"), *ROOT.glob("examples/**/README.md")]
+)
 BLOCKS = [
     (f"{name}:{text[: found.start()].count(chr(10)) + 1}", found.group(1).strip(), found.group(2))
     for name in DOCUMENTS
