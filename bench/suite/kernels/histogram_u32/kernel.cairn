@@ -1,0 +1,23 @@
+// A 256 bin histogram over u32, preregistered as an expressiveness finding as much as a
+// measurement.
+//
+// CAIRN's lane rule is that whatever any lane writes may be touched only at that lane's own index.
+// src/cairn/compiler/checking.py around line 865 raises E-PARALLEL-RACE for every other subscript
+// on an array lanes write, and a shared bin histogram writes out[b] from every lane, so the
+// parallel shape does not compile at all. The message the compiler prints for it is "out is written
+// by lanes, so every lane may touch only out[i]."
+//
+// The usual escape, an array of atomic counters, is not available either. Atomic[T] is declared in
+// place and shared by ro borrow, and it is never stored in a record, passed by value or returned
+// (docs/guide/language.md line 812), so there is no way to hold 256 of them in a view. The CAIRN
+// arm of this kernel is therefore the sequential binned histogram written below, and the suite
+// reports it as sequential by construction.
+//
+// The honest like for like row is this function against the sequential C++ baseline. The OpenMP and
+// oneTBB arms privatize their bins and combine, which is the ordinary way to write a parallel
+// histogram; those rows record a capability this language does not offer here, and they are not a
+// fair speed comparison against a shape the compiler refuses to accept.
+fn histogram_u32(n:usize, out:rw<u64>[256], x:ro<u32>[n]) {
+  each b in 256 { out[b] = 0; }
+  each i in n { let b = usize(x[i] & 255); out[b] = add_wrap(out[b], 1); }
+}

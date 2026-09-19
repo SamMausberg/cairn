@@ -1,0 +1,42 @@
+// A 3 point blend, preregistered for a reported asymmetry as well as for a measurement.
+//
+// The lane rule constrains what lanes write and nothing else. A lane may touch a written array only
+// at its own index, so the out of place stencil below is accepted in a parallel region: out is
+// written only at out[i], and x is a ro view a lane may read anywhere it likes. The in place form
+// of the same computation, kept beside this file in in_place_rejected.cairn, writes x[i] and reads
+// x[i-1] and x[i+1], so it is refused with E-PARALLEL-RACE. An ordinary C++ or OpenMP toolchain
+// compiles the in place form without a word and runs it as a data race, which is the asymmetry this
+// kernel exists to record.
+//
+// Two entry points. stencil_1d is the checked one, and the receipt for it counts three checked
+// index operations and six element accesses. stencil_1d_wrap is the same function on every index
+// the branch admits, written with add_wrap and sub_wrap where the semantics permit it, so its
+// receipt carries the six element accesses and no checked index arithmetic at all. The suite
+// reports that arm as the wrapping boundary row and not as a cheaper version of the checked one.
+//
+// The measured input is exact by construction: x[i] is a small integer times a power of two, and
+// 0.25 * l + 0.5 * c + 0.25 * r over such values is exact in f32, so oracle.py compares without a
+// tolerance. The emitted C++ writes the blend as ((0.25f * l) + (0.5f * c)) + (0.25f * r) and the
+// build line fixes it there with -ffp-contract=off -fno-fast-math, so every baseline arm writes the
+// same parenthesisation and the arms really are the same function.
+fn blend3(l:f32, c:f32, r:f32) -> f32 = 0.25 * l + 0.5 * c + 0.25 * r;
+
+fn stencil_1d(n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
+  parallel i in n {
+    if i > 0 && i + 1 < n {
+      out[i] = blend3(x[i - 1], x[i], x[i + 1]);
+    } else {
+      out[i] = x[i];
+    }
+  }
+}
+
+fn stencil_1d_wrap(n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
+  parallel i in n {
+    if i > 0 && add_wrap(i, 1) < n {
+      out[i] = blend3(x[sub_wrap(i, 1)], x[i], x[add_wrap(i, 1)]);
+    } else {
+      out[i] = x[i];
+    }
+  }
+}

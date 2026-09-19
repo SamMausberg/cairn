@@ -1,7 +1,7 @@
 PYTHON ?= python3
 CAIRN = $(PYTHON) bin/cairn
 
-.PHONY: docs all check lint format test native systems proof lean gpu embedded context wheel audit demo
+.PHONY: docs all check lint format test native systems proof lean gpu embedded context wheel audit demo bench
 all: lint test proof
 
 check:
@@ -22,6 +22,12 @@ test:
 native:
 	$(PYTHON) tools/checks/verify.py --gcc --sanitize
 	$(PYTHON) bench/cpu/codegen_only.py
+
+# The preregistered CPU baseline suite: bench/suite/PREREGISTRATION.md fixes what it measures before
+# it runs. It writes under results/, never under evidence/, and nothing when a case disagrees.
+bench:
+	$(PYTHON) bench/suite/harness.py
+	$(PYTHON) bench/suite/report.py
 
 systems:
 	$(PYTHON) tools/checks/validate_systems.py

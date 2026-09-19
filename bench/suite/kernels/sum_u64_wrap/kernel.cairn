@@ -1,0 +1,21 @@
+// An order independent reduction: wrapping addition over u64 is associative and commutative, so
+// every association order gives the same total, which is what lets a parallel arm be the same
+// function as the sequential one rather than an approximation of it.
+//
+// Two entry points, because the host offers two different things. sum_u64_wrap is a reduce, and on
+// the host a CAIRN reduce is an ordinary in order fold on the calling thread: see
+// src/cairn/compiler/codegen.py s_reduce, whose host branch is commented "On the host a reduction
+// is an ordinary in-order fold: no threads, no hidden cost", and docs/guide/language.md line 895.
+// That arm is sequential by construction and is reported as such.
+//
+// sum_u64_atomic is the only parallel host reduction the language offers: a parallel region whose
+// lanes each add their element into one relaxed Atomic. It is here so the suite can price that
+// choice honestly beside the fold.
+fn sum_u64_wrap(n:usize, x:ro<u64>[n]) -> u64 {
+  let total = reduce add_wrap for i in n yield x[i];
+  return total;
+}
+
+fn sum_u64_atomic(n:usize, x:ro<u64>[n], total:ro<Atomic[u64]>) {
+  parallel i in n { let before = total.fetch_add(x[i], Order.relaxed); }
+}

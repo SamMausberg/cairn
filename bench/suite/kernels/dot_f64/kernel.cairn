@@ -1,0 +1,17 @@
+// A semantic difference report, not a speed comparison.
+//
+// On the host a CAIRN `reduce +` over f64 is a strict in-order fold on the calling thread: see
+// src/cairn/compiler/codegen.py s_reduce, whose host branch is commented "On the host a reduction
+// is an ordinary in-order fold: no threads, no hidden cost", and docs/guide/language.md line 895.
+// The fold is built with -ffp-contract=off -fno-fast-math, so it is the one sum the source names
+// and nothing else.
+//
+// An OpenMP `reduction(+:)` and a TBB parallel_reduce reassociate. Floating point addition is not
+// associative, so those arms compute a DIFFERENT function of the same inputs, not a faster version
+// of this one. The suite records whether each arm agrees with the in-order fold bit for bit and by
+// how much it differs. It does not divide their times, because there is no shared function whose
+// cost two such times would both be measuring.
+fn dot_f64(n:usize, x:ro<f64>[n], y:ro<f64>[n]) -> f64 {
+  let total = reduce + for i in n yield x[i] * y[i];
+  return total;
+}

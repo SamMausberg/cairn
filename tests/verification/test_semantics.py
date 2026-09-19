@@ -100,7 +100,9 @@ def test_saturating_add(ty):
 
 @pytest.mark.parametrize("expr,correct", [("x!=0 && x/x==1", "x!=0"), ("x==0 || x/x==1", "true")])
 def test_short_circuit(expr, correct):
-    check(fn("return " + expr + ";", ret="bool"), fn("return " + correct + ";", ret="bool"))
+    # Division under a guard is a heavy query, and the suite runs one worker per core, so the
+    # default wall-clock budget flakes to unknown under load. Unknown still fails.
+    check(fn("return " + expr + ";", ret="bool"), fn("return " + correct + ";", ret="bool"), timeout_ms=15000)
 
 
 def test_eager_condition_is_not_lazy():

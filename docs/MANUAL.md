@@ -3522,6 +3522,7 @@ A native behaviour table maps a sentence to an expected process exit status and 
 python tools/checks/verify.py --gcc --sanitize
 python tools/checks/validate_systems.py
 python tools/checks/validate_semantics.py --gcc
+make bench                                  # the preregistered CPU baseline suite, hours; --smoke takes seconds
 ```
 
 | Script under `tools/checks/` | What it checks |
@@ -3534,6 +3535,8 @@ python tools/checks/validate_semantics.py --gcc
 | `check_compact_forms.py`, `native_scalar.py` | complete definitions, not generated expansions; a test-only trap observer that is not the production runtime |
 | `density.py`, `export_lean_certificates.py` | lexical density accounting; `--check` fails when `collector_rules()` and `proofs/` have drifted |
 | `differential_ownership.py` | generated programs of one shared fragment, rendered as CAIRN source and as Lean `Program` literals, and required to be classified identically by `checking.py` and by the Lean `accepts` |
+| `bench/suite/harness.py` | the eight kernels of [bench/suite/PREREGISTRATION.md](../bench/suite/PREREGISTRATION.md), every arm built under both compilers with the project's own flags, each baseline once guarded and once not, safety boundaries counted against the build receipt, equal worker counts, and no result written when a case disagrees with its sequential or Python oracle |
+| `bench/suite/report.py` | reads one of those runs and prints its tables, applying the preregistered acceptance rule; it measures nothing and prints losses beside wins |
 
 Production sanitizer and SIGABRT fixtures are separate from that O0 observer, `validate_systems.py` proves nothing about allocation or lifetime safety for arbitrary programs, and a trusted translator or oracle can still hold a bug. `bench/cpu/codegen_only.py` compares code sections by instruction bytes and relocations and implies no fresh timing run: five of its nine selected function sections were byte-identical to the C++ references on AArch64 at 1.0, where the 0.6 figure of eight of nine was x86-64 under another compiler. These harnesses write under `results/`, which is ignored and may be replaced on rerun. One subdirectory per kind of output, and nothing at the top:
 
