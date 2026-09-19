@@ -5,11 +5,11 @@
 module std.mem;
 import std.core (Eq);
 
-pub fn fill[T](n:usize, dst:rw<T>[n], value:T) {
+pub fn fill[T:copy](n:usize, dst:rw<T>[n], value:T) {
   for i in 0..n { dst[i] = value; }
 }
 
-pub fn copy[T](n:usize, dst:rw<T>[n], src:ro<T>[n]) {
+pub fn copy[T:copy](n:usize, dst:rw<T>[n], src:ro<T>[n]) {
   for i in 0..n { dst[i] = src[i]; }
 }
 

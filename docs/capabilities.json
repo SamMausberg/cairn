@@ -8,7 +8,7 @@
     "native_cpu": "Linux x86-64 and AArch64, C++20 lowering, libraries and executables, clang++ and g++",
     "scalars": "fixed integers (8..64 bit), bool, strict floating point, byte text and character literals",
     "types": "generic records and sums with any value payload, tag-only enums, inline arrays, layout attributes",
-    "generics": "type and natural parameters, inference, on-demand monomorphization, bounded families; templates whose bodies need only their bounds are certified once at opaque linear witnesses (cairn check --generics)",
+    "generics": "generic records, sums and functions with inference and on-demand monomorphization; bounds by trait, kind (copy, affine) and closed scalar class, checked at the call (E-BOUND); templates certified once against their bounds at opaque witnesses or every type of a class (all of std; cairn check --generics)",
     "traits": "static dispatch on Self, multi-trait bounds checked per instance, methods by receiver module, impls held to their trait's declaration, one implementation per type (overlap and ambiguity are errors), borrowed dyn references and owned Dyn[Trait] values served by concrete and generic impls alike",
     "memory": "second-class borrows of values and arrays, checked parts, scoped and first-class zeroed owners",
     "ownership": "affine moves, take/swap, linear structs, defer, implicit release visible as effects",
@@ -30,7 +30,7 @@
   "not_implemented": [
     "completion-based (non-thread) asynchronous I/O, cancellation and device-loss recovery",
     "multi-device collectives",
-    "bounds for kind and operators (copy, droppable, storable, scalar), without which most generic code cannot be checked once against its bounds",
+    "certifying templates over natural parameters, and requiring (rather than reporting) that a program's own templates need only their bounds",
     "SMT coverage of heap owners, view parameters, rw borrows, recursion, concurrency and unbounded loops",
     "emitter-to-model and native refinement proofs",
     "mechanized ownership and lease rules for array parts, fields, lanes, closures and placement, a progress theorem, and any link from checking.py to the Lean calculus",

@@ -8,16 +8,22 @@ module std.map;
 import std.core (Option, Hash, Eq);
 
 // state: 0 never used, 1 live, 2 erased. An erased slot still routes probes past it.
-pub struct Map[K, V] { keys:Buf[K]; vals:Buf[V]; state:Buf[u8]; count:usize; fill:usize; }
+pub struct Map[K:affine, V:affine] {
+  keys:Buf[K];
+  vals:Buf[V];
+  state:Buf[u8];
+  count:usize;
+  fill:usize;
+}
 
-pub fn new[K, V]() -> Map[K, V] = Map(Buf[K](0), Buf[V](0), Buf[u8](0), 0, 0);
-pub fn count[K, V](m:ro<Map[K, V]>) -> usize = m.count;
-pub fn slots[K, V](m:ro<Map[K, V]>) -> usize = len(m.state);
-pub fn live[K, V](m:ro<Map[K, V]>, slot:usize) -> bool = m.state[slot] == 1;
+pub fn new[K:affine, V:affine]() -> Map[K, V] = Map(Buf[K](0), Buf[V](0), Buf[u8](0), 0, 0);
+pub fn count[K:affine, V:affine](m:ro<Map[K, V]>) -> usize = m.count;
+pub fn slots[K:affine, V:affine](m:ro<Map[K, V]>) -> usize = len(m.state);
+pub fn live[K:affine, V:affine](m:ro<Map[K, V]>, slot:usize) -> bool = m.state[slot] == 1;
 
 // The slot holding `key`, else the first slot its probe path may reuse. Capacity is a power of
 // two and never full, so the walk always ends.
-fn probe[K:Hash + Eq, V](m:ro<Map[K, V]>, key:ro<K>) -> usize {
+fn probe[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> usize {
   let mask = len(m.state) - 1;
   let mut i = usize(hash(key)) & mask;
   let mut free = len(m.state);
@@ -31,7 +37,7 @@ fn probe[K:Hash + Eq, V](m:ro<Map[K, V]>, key:ro<K>) -> usize {
 }
 
 // Store without considering growth: the caller guarantees a free slot.
-fn place[K, V](m:rw<Map[K, V]>, key:K, value:V) {
+fn place[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:K, value:V) {
   let slot = probe(m, key);
   if m.state[slot] == 1 {
     let replaced = take(m.vals[slot]); // released here, so the caller sees no old value
@@ -45,7 +51,7 @@ fn place[K, V](m:rw<Map[K, V]>, key:K, value:V) {
 }
 
 // Rehash into fresh storage; `swap` hands the old arrays to locals that release at exit.
-fn grow[K, V](m:rw<Map[K, V]>) {
+fn grow[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>) {
   let cap = max(len(m.state) * 2, 8);
   let mut keys = Buf[K](cap);
   let mut vals = Buf[V](cap);
@@ -60,19 +66,19 @@ fn grow[K, V](m:rw<Map[K, V]>) {
   }
 }
 
-pub fn insert[K:Hash + Eq, V](m:rw<Map[K, V]>, key:K, value:V) {
+pub fn insert[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:K, value:V) {
   if (m.fill + 1) * 4 > len(m.state) * 3 { grow(m); }
   place(m, key, value);
 }
 
-pub fn find[K:Hash + Eq, V](m:ro<Map[K, V]>, key:ro<K>) -> Option[usize] {
+pub fn find[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> Option[usize] {
   if len(m.state) == 0 { return Option.None; }
   let slot = probe(m, key);
   if m.state[slot] == 1 { return Option.Some(slot); }
   return Option.None;
 }
 
-pub fn remove[K:Hash + Eq, V](m:rw<Map[K, V]>, key:ro<K>) -> Option[V] {
+pub fn remove[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:ro<K>) -> Option[V] {
   match find(m, key) {
     Option.Some(slot) => {
       let erased = take(m.keys[slot]);

@@ -502,3 +502,53 @@ def test_a_template_is_certified_once_when_its_body_needs_only_its_bounds():
     assert verdicts["ignore"].startswith("E-LINEAR-LEAK") and verdicts["keep"].startswith("E-LINEAR-LEAK")  # Or linear.
     assert "natural" in verdicts["scale"]
     assert compile_source(GENERIC_BOUNDS)  # None of this changes what is accepted: instances are still checked.
+
+
+BOUNDED = """
+import std.core (Ord, Option);
+linear struct Token { id:u64; }
+struct Pair[T: copy] { a:T; b:T; }
+fn largest[T: numeric](a:T, b:T) -> T { if a < b { return b; } return a; }
+fn clamp[T: integer](x:T, lo:T, hi:T) -> T = max(lo, min(x, hi));
+fn twice[T: copy](x:T) -> Pair[T] = Pair(x, x);
+fn ignore[T: affine](x:T) -> u64 = 0;
+fn stash[T: affine](x:T) -> Buf[T] { let mut b = Buf[T](1); b[0] = x; return b; }
+fn best[T: Ord + copy](n:usize, xs:ro<T>[n]) -> Option[T] {
+  if n == 0 { return Option.None; }
+  let mut at:usize = 0;
+  for i in 1..n { if less(xs[at], xs[i]) { at = i; } }
+  return Option.Some(xs[at]);
+}
+fn main() -> i32 {
+  let kept = stash(Buf[u64](3));
+  let pair = twice(4);
+  if largest(3, 9) != 9 || largest(2.5, 1.5) != 2.5 || clamp(5, 1, 3) != 3 || ignore(kept) != 0 || pair.b != 4 { return 1; }
+  return 0;
+}
+"""
+
+
+def test_kind_and_class_bounds_are_promises_checked_at_the_call_and_certified_once(tmp_path):
+    from cairn.cairnc import certify_templates
+
+    assert set(certify_templates(BOUNDED).values()) == {"ok"}  # `numeric` means: checked at every numeric type.
+    refused = {
+        "let b = Buf[u64](1); let r = twice(b);": "Buf[u64] is affine, not copy; twice needs [T: copy]",
+        "let r = ignore(Token(1));": "Token is linear, not affine; ignore needs [T: affine]",
+        "let r = clamp(1.5, 0.5, 2.5);": "f64 is not integer; clamp needs [T: integer]",
+        "let p = Pair(Buf[u64](1), Buf[u64](1));": "Buf[u64] is affine, not copy; Pair needs [T: copy]",
+    }
+    for call, why in refused.items():
+        with pytest.raises(Diagnostic) as e:
+            compile_source(BOUNDED.replace("fn main() -> i32 {", "fn main() -> i32 { " + call))
+        assert e.value.data["code"] == "E-BOUND" and why in e.value.data["message"]
+    broken = BOUNDED.replace(
+        "fn ignore[T: affine](x:T) -> u64 = 0;", "fn ignore[T: affine](x:T) -> u64 { let a = x; let b = x; return 0; }"
+    )
+    assert certify_templates(broken)["ignore"].startswith("E-MOVED")  # affine promises one use, not two.
+    (tmp_path / "p.cpp").write_text(compile_source(BOUNDED)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    build = ["clang++", "-std=c++20", "-O1", "-fsanitize=address,undefined", str(tmp_path / "p.cpp"), "-o"]
+    subprocess.run([*build, str(tmp_path / "p")], check=True, timeout=120)
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0

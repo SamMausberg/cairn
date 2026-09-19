@@ -9,7 +9,7 @@ import std.core (Option);
 import std.vec (Vec);
 
 pub struct Handle { slot:usize; generation:u64; }
-pub struct Arena[T] {
+pub struct Arena[T:affine] {
   items:Buf[T];
   gen:Buf[u64];
   live:Buf[u8];
@@ -18,18 +18,18 @@ pub struct Arena[T] {
   count:usize;
 }
 
-pub fn new[T]() -> Arena[T] {
+pub fn new[T:affine]() -> Arena[T] {
   let free = vec.new[usize](); // a call that allocates cannot be a nested operand
   return Arena(Buf[T](0), Buf[u64](0), Buf[u8](0), free, 0, 0);
 }
-pub fn count[T](a:ro<Arena[T]>) -> usize = a.count;
-pub fn slots[T](a:ro<Arena[T]>) -> usize = a.used;
-pub fn alive[T](a:ro<Arena[T]>, slot:usize) -> bool = a.live[slot] == 1;
+pub fn count[T:affine](a:ro<Arena[T]>) -> usize = a.count;
+pub fn slots[T:affine](a:ro<Arena[T]>) -> usize = a.used;
+pub fn alive[T:affine](a:ro<Arena[T]>, slot:usize) -> bool = a.live[slot] == 1;
 
 // The handle a live slot currently answers to; pairs with `slots` to iterate an arena.
-pub fn handle[T](a:ro<Arena[T]>, slot:usize) -> Handle = Handle(slot, a.gen[slot]);
+pub fn handle[T:affine](a:ro<Arena[T]>, slot:usize) -> Handle = Handle(slot, a.gen[slot]);
 
-fn grow[T](a:rw<Arena[T]>) {
+fn grow[T:affine](a:rw<Arena[T]>) {
   let cap = max(len(a.live) * 2, 8);
   let mut items = Buf[T](cap);
   let mut gen = Buf[u64](cap);
@@ -44,7 +44,7 @@ fn grow[T](a:rw<Arena[T]>) {
   swap(a.live, live);
 }
 
-pub fn insert[T](a:rw<Arena[T]>, value:T) -> Handle {
+pub fn insert[T:affine](a:rw<Arena[T]>, value:T) -> Handle {
   let mut slot = a.used;
   match vec.pop(a.free) {
     Option.Some(reused) => { slot = reused; }
@@ -60,13 +60,13 @@ pub fn insert[T](a:rw<Arena[T]>, value:T) -> Handle {
 }
 
 // None when the handle is stale: wrong slot, removed value, or an older generation.
-pub fn find[T](a:ro<Arena[T]>, h:Handle) -> Option[usize] {
+pub fn find[T:affine](a:ro<Arena[T]>, h:Handle) -> Option[usize] {
   if h.slot >= a.used { return Option.None; }
   if a.live[h.slot] != 1 || a.gen[h.slot] != h.generation { return Option.None; }
   return Option.Some(h.slot);
 }
 
-pub fn remove[T](a:rw<Arena[T]>, h:Handle) -> Option[T] {
+pub fn remove[T:affine](a:rw<Arena[T]>, h:Handle) -> Option[T] {
   match find(a, h) {
     Option.Some(slot) => {
       a.live[slot] = 0;

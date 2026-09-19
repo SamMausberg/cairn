@@ -678,3 +678,19 @@ def test_no_packaged_source_is_hidden_from_version_control():
     if done.returncode == 128:
         pytest.skip("not a git checkout")
     assert done.stdout == ""
+
+
+def test_every_packaged_template_needs_only_what_its_bounds_promise():
+    """The library's generics are checked once against their bounds, so a misuse is reported at the call
+    (`Token is linear, not affine; std.vec.push needs [T: affine]`), never from inside the library."""
+    from cairn.cairnc import certify_templates
+
+    modules = sorted(p.stem for p in (pathlib.Path(__file__).resolve().parents[1] / "src/cairn/std").glob("*.cairn"))
+    source = "".join(f"import std.{m};\n" for m in modules) + "fn main() -> i32 { return 0; }\n"
+    verdicts = certify_templates(source)
+    assert len(verdicts) >= 40 and {n: v for n, v in verdicts.items() if v != "ok"} == {}
+    with pytest.raises(Diagnostic) as e:
+        compile_source(
+            "import std.vec as vec;\nlinear struct Token { id:u64; }\nfn main() -> i32 { let mut v = vec.new[Token](); return 0; }"
+        )
+    assert e.value.data["code"] == "E-BOUND" and "std.vec.new needs [T: affine]" in e.value.data["message"]

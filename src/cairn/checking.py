@@ -9,6 +9,7 @@ call arguments only), so no lifetime annotations exist; owners are affine and
 from __future__ import annotations
 
 import copy
+import itertools
 import math
 import re
 from dataclasses import dataclass, field
@@ -56,6 +57,8 @@ ATOMIC_OPS = {
     "fetch_xor": 1,
 }
 KINDS = ["copy", "affine", "linear"]
+# What a generic parameter may promise besides traits: the most its kind can be, or a closed class of scalars.
+CLASSES = {"integer": INT, "unsigned": UNSIGNED, "signed": SIGNED, "float": FLOAT, "numeric": NUMERIC, "scalar": SCALAR}
 COMPARISONS = {"==", "!=", "<", "<=", ">", ">="}
 
 
@@ -198,7 +201,7 @@ class Checker:
         self.fn_sites: list[tuple[Expr, set[str], str, str]] = []  # (argument, caller's parameters, callee, formal)
         self.impls: dict[tuple[str, Type], dict[str, Function] | None] = {}
         self.hostish: dict[str, str] = {}  # function -> the first host-only construct in its body
-        self.bounds: dict[str, list[str]] = {}  # witness type -> the traits its template's bounds promise
+        self.bounds: dict[str, tuple[list[str], str]] = {}  # witness type -> (traits it promises, its kind)
         self.dispatches: list[tuple] = []
         self.borrowed: list[tuple[str, str]] = []
         self.device_functions: set[str] = set()
@@ -255,6 +258,8 @@ class Checker:
             base = self.tenv[ty.name]
             if not isinstance(base, Type):
                 fail("E-TYPE", f"{ty.name} is a static natural, not a type.", node)
+        elif ty.name in self.bounds:  # A witness is already a type.
+            base = ty.value
         elif ty.name == "Dyn" and len(ty.args) == 1 and isinstance(ty.args[0], Type):
             trait = self.qualify(ty.args[0].name, self.p.traits, node=node)
             if trait is None:
@@ -283,6 +288,12 @@ class Checker:
             if name == "fn" and any(is_view(a) for a in args):
                 fail("E-FN-TYPE", "A function type carries values and single borrows, not array views.", node)
             base = Type(name, args=args)
+            for (g, constraint), value in zip(self.p.generics.get(name, []), args, strict=False):
+                for wanted in constraint.split("+") if constraint not in {"nat", "type"} else []:
+                    broken = self.satisfies(value, wanted, self.p.modules.get(name, ""), node)
+                    if broken:
+                        code = "E-TRAIT-IMPL" if broken.startswith("does not implement") else "E-BOUND"
+                        fail(code, f"{value.display()} {broken}; {name} needs [{g}: {constraint}].", node)
             self.define(base, node)
             if name in {"Buf", "Array"} and self.kind(args[0]) == "linear":
                 fail(
@@ -340,6 +351,8 @@ class Checker:
         """copy < affine (moves, implicit release) < linear (must be consumed exactly once)."""
         if ty.mode != "value" or ty.name in CPP or ty.name == "fn" or ty.name in self.p.enums:
             return "copy"
+        if ty.name in self.bounds:  # A witness: exactly as owning as its template's bounds allow.
+            return self.bounds[ty.name][1]
         if ty not in self.kinds:
             linear = "linear" in self.p.attributes.get(ty.name, ()) or ty.name == "Ticket"
             own = 2 if linear else int(ty.name in {"Buf", "dyn", "Dyn", "Atomic", "Mutex"})
@@ -382,28 +395,38 @@ class Checker:
         return concrete
 
     def certify(self) -> dict[str, str]:
-        """Check each generic function once, at opaque witness types that offer only what its bounds promise
-        and must be consumed exactly once (the strictest kind). "ok" means every instance whose arguments
-        satisfy the bounds checks too; otherwise the entry names the first thing the body needed beyond its
-        bounds, and that template is still checked per instance, as before. Run on a copy: nothing is emitted."""
+        """Check each generic function once against what its bounds promise. A parameter bounded by a scalar
+        class is checked at every type of that class; any other is an opaque witness that implements exactly the
+        traits named and is as owning as the bounds allow (linear when they say nothing: the strictest kind).
+        "ok" means every instance whose arguments satisfy the bounds checks too; otherwise the entry names the
+        first thing the body needed beyond its bounds, and that template is still checked per instance, as
+        before. Run on a copy of the program: nothing is emitted."""
         self.prepare()
         verdicts: dict[str, str] = {}
         for f in [f for f in self.p.functions if f.generics and not f.bindings]:
-            if any(kind == "nat" for _, kind in f.generics):
-                verdicts[f.name] = "a natural parameter has no single witness"
-                continue
-            bound = {}
+            choices: list[list[Any]] = []
             for g, constraint in f.generics:
-                witness = Type(f"?{f.name}.{g}")
-                self.p.attributes[witness.name] = {"linear"}
-                with self.within(f.module):
-                    wanted = (
-                        [self.qualify(t, self.p.traits) for t in constraint.split("+")] if constraint != "type" else []
-                    )
-                self.bounds[witness.name] = [t for t in wanted if t]
-                bound[g] = witness
+                words = [] if constraint == "type" else constraint.split("+")
+                classes = [CLASSES[w] for w in words if w in CLASSES]
+                if constraint == "nat":
+                    choices.append([])
+                elif classes:
+                    choices.append([Type(n) for n in sorted(set.intersection(*classes))])
+                else:
+                    witness = Type(f"?{f.name}.{g}")
+                    with self.within(f.module):
+                        traits = [t for t in (self.qualify(w, self.p.traits) for w in words) if t]
+                    kind = next((w for w in KINDS[:2] if w in words), "linear")
+                    self.bounds[witness.name] = (traits, kind)
+                    choices.append([witness])
+            if not all(choices) or math.prod(map(len, choices)) > 128:
+                verdicts[f.name] = (
+                    "a natural parameter has no single witness" if not all(choices) else "too many scalar cases"
+                )
+                continue
             try:
-                self.instantiate(f, bound, f)
+                for values in itertools.product(*choices):
+                    self.instantiate(f, dict(zip((g for g, _ in f.generics), values, strict=True)), f)
                 verdicts[f.name] = "ok"
             except Diagnostic as e:
                 verdicts[f.name] = f"{e.data['code']}: {e.data['message']}"
@@ -1496,7 +1519,7 @@ class Checker:
     def members(self, trait: str, target: Type, node: Any = None) -> dict[str, Function] | None:
         """The one implementation of a trait for a concrete type, or None: every declared member, conforming
         to its declaration with Self := target. A generic impl is instantiated; two matching impls are an error."""
-        if (trait, target) not in self.impls and trait in self.bounds.get(target.name, ()):
+        if (trait, target) not in self.impls and trait in self.bounds.get(target.name, ((),))[0]:
             promised = {}
             for m in self.p.traits[trait]:
                 with self.within(self.p.modules.get(trait, ""), {"Self": target}):
@@ -1611,6 +1634,18 @@ class Checker:
             return declared.name not in bound
         return any(self.open(a, generics, bound) for a in declared.args)
 
+    def satisfies(self, value: Type, wanted: str, module: str, node: Any) -> str:
+        """ "" if `value` keeps the promise `wanted` (a trait, a kind bound or a scalar class), else why not."""
+        with self.within(module):
+            trait = self.qualify(wanted, self.p.traits, node=node)
+        if trait:
+            return "" if self.members(trait, value, node) else f"does not implement {wanted}"
+        if wanted in KINDS[:2]:
+            fits = KINDS.index(self.kind(value)) <= KINDS.index(wanted)
+            return "" if fits else f"is {self.kind(value)}, not {wanted}"
+        plain = value.mode == "value" and not value.args and value.name in CLASSES.get(wanted, ())
+        return "" if plain else f"is not {wanted}" if wanted in CLASSES else f"does not implement {wanted}"
+
     def instantiate(self, template: Function, bound: dict[str, Any], node: Any) -> Function:
         values = [bound.get(g) for g, _ in template.generics]
         if None in values:
@@ -1626,10 +1661,10 @@ class Checker:
                         node,
                     )
                 for wanted in constraint.split("+") if constraint not in {"nat", "type"} else []:
-                    with self.within(template.module):
-                        trait = self.qualify(wanted, self.p.traits, node=node)
-                    if trait is None or not self.members(trait, value, node):
-                        fail("E-TRAIT-IMPL", f"{value.display()} does not implement {wanted}.", node)
+                    broken = self.satisfies(value, wanted, template.module, node)
+                    if broken:  # The caller learns which promise failed, not which line of the body did.
+                        code = "E-TRAIT-IMPL" if broken.startswith("does not implement") else "E-BOUND"
+                        fail(code, f"{value.display()} {broken}; {template.name} needs [{g}: {constraint}].", node)
             if len(self.p.functions) >= MAX_FUNCTIONS:
                 fail("E-EXPANSION-LIMIT", "Expanded program exceeds 2048 functions.", node)
             f = copy.deepcopy(template)

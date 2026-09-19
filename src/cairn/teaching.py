@@ -101,7 +101,9 @@ the same sum family with the same failure payload. It is the only propagation fo
 checked as ordinary code; arguments are inferred from values, literals and the expected
 type, or written f[u64](x), Pair[u8](1, 2), Option[u64].None. trait Shape {fn area(self:
 ro<Self>) -> u64;} with impl Shape for Square {...} dispatches statically on the Self
-argument; [S: Shape] is checked when the instance is made. value.f(a) is f(value, a),
+argument; [S: Shape] is checked when the instance is made. Bounds join with +: a trait,
+a kind (copy: reusable; affine: droppable, storable; none: may be linear) or a scalar class
+(integer unsigned signed float numeric scalar: operators and literals allowed). value.f(a) is f(value, a),
 found first in the module of the receiver's type. A ro<T> or rw<T> parameter borrows the
 named place you pass (a local, a field, another borrow): write area(sq), never &sq; rw
 needs a mutable place. No inheritance, no implicit boxing.""",

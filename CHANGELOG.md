@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Generics**: `cairn check --generics` checks each template once at opaque witness types that offer only its bounds and must be consumed exactly once; `ok` means every instance satisfying the bounds checks. Acceptance is unchanged: instances are still checked.
+- **Generics**: bounds may now promise a kind (`[T: copy]`, `[T: affine]`) or a closed scalar class (`integer unsigned signed float numeric scalar`) as well as traits, on functions and on generic records, and are checked at the call (`E-BOUND`). `cairn check --generics` checks each template once against its bounds, at opaque witnesses that are as owning as the bounds allow or at every type of a scalar class; every template of `std` now certifies, so misuse of a container is reported in the caller's terms. Unbounded templates are still accepted per instance.
 
 ## 1.1.0
 
