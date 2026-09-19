@@ -1,6 +1,6 @@
 # CAIRN 1.2 run notes
 
-Same rented host as 1.0 and 1.1: GH200, AArch64, Ubuntu 22.04, clang++ 15, g++ 11 and 12, CUDA 12.8, Z3, Lean 4.34, QEMU. 2026-09-19. `summary.json` is written by `tools/release/collect_evidence.py --release v1_2` on a committed tree. `host_regions/` holds the lane pool benchmark.
+The same rented host as the 1.0 and 1.1 records: GH200, AArch64, Ubuntu 22.04, clang++ 15, g++ 11 and 12, CUDA 12.8, Z3, Lean 4.34, QEMU. 2026-09-19. `summary.json` is written by `tools/release/collect_evidence.py --release v1_2` on a committed tree, and `host_regions/` holds the lane pool benchmark.
 
 ## What 1.2 added, and how each was checked here
 
@@ -22,4 +22,4 @@ A second application, `examples/apps/analytics`, was written against 1.1 by a fr
 
 ## What was not done
 
-Asynchronous I/O is still a task over blocking I/O. No multi-device work. No refinement proof, and no link between the Lean calculus and `checking.py`. Recipes do not take arbitrary expression fragments or named fields. Leasing one field of a record leases the whole record. The `free` effect is charged with `alloc`, so the row of a function that only drops an owner does not show it. No comparative AI experiment was run. The performance numbers are from one machine.
+Asynchronous I/O is still a task over blocking I/O. No multi-device work. No refinement proof, and no link between the Lean calculus and `checking.py`. Recipes do not take arbitrary expression fragments or named fields. Leasing one field of a record leases the whole record. The `free` effect is charged with `alloc`, so the row of a function that only drops an owner does not show it; that one was closed after this record was collected, and the row now carries `free` where the release runs. No comparative AI experiment was run. The performance numbers are from one machine.

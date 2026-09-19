@@ -3,7 +3,7 @@
 
 Default: ByT5 plain UTF-8 byte IDs (byte+3), without special tokens.
 Optional: --tiktoken o200k_base, requiring independently available package/vocab.
-All text whitespace/comments retained; raw file hashes identify exact inputs.
+All text whitespace/comments retained; a sha256 identifies every exact input.
 """
 
 from __future__ import annotations
@@ -17,7 +17,12 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
+from cairn.agent.teaching import CARDS
 from support import generate
+
+RECIPE_SECTION = "Closed generator contracts"
+CARD = "src/cairn/agent/teaching.py: CARDS"
+RECIPE = f"docs/MANUAL.md: {RECIPE_SECTION}"
 
 
 def main():
@@ -90,14 +95,20 @@ def main():
         "results/family.cpp",
         "results/wire.cpp",
         "results/cairn_runtime.hpp",
-        "docs/cards/AGENT_CARD.md",
-        "docs/cards/GENERATOR_CONTRACTS.md",
     ]
     compiler_paths = sorted(str(p.relative_to(R)) for p in (R / "src/cairn").rglob("*") if p.suffix in {".py", ".hpp"})
     paths += compiler_paths
     files = {
         p: {"tokens": count((R / p).read_text()), "sha256": hashlib.sha256((R / p).read_bytes()).hexdigest()}
         for p in paths
+    }
+    # The two packets an editing agent is handed: the live rule cards, and the generator contracts the manual states.
+    manual = (R / "docs/MANUAL.md").read_text()
+    start = manual.index(f"### {RECIPE_SECTION}\n")
+    packets = {CARD: "\n\n".join(CARDS.values()), RECIPE: manual[start : manual.index("\n### ", start + 1)]}
+    files |= {
+        name: {"tokens": count(text), "sha256": hashlib.sha256(text.encode()).hexdigest()}
+        for name, text in packets.items()
     }
 
     def t(p):
@@ -109,12 +120,10 @@ def main():
         "cpp_template_tokens": t("bench/cpu/family_template.cpp"),
         "expansion_ratio": t("results/family.cpp") / t("examples/basics/family.cairn"),
         "compact_cpp_template_over_cairn": t("bench/cpu/family_template.cpp") / t("examples/basics/family.cairn"),
-        "cold_cairn_source_plus_card_plus_recipe": t("examples/basics/family.cairn")
-        + t("docs/cards/AGENT_CARD.md")
-        + t("docs/cards/GENERATOR_CONTRACTS.md"),
+        "cold_cairn_source_plus_card_plus_recipe": t("examples/basics/family.cairn") + t(CARD) + t(RECIPE),
         "source_audit_cairn_plus_card_plus_recipe_plus_compiler": t("examples/basics/family.cairn")
-        + t("docs/cards/AGENT_CARD.md")
-        + t("docs/cards/GENERATOR_CONTRACTS.md")
+        + t(CARD)
+        + t(RECIPE)
         + sum(t(p) for p in compiler_paths),
         "cpp_template_plus_shared_runtime": t("bench/cpu/family_template.cpp") + t("results/cairn_runtime.hpp"),
         "limitation": "CAIRN exports 256 named entries; compact C++ uses one indexed entry and a function-pointer table. Different API; both tested over the same numerical family. Runtime header shared by both. No C++ language documentation charged; no universal cold-context advantage inferred.",
@@ -123,9 +132,7 @@ def main():
         "source_tokens": t("examples/basics/wire.cairn"),
         "expanded_cpp_tokens": t("results/wire.cpp"),
         "expansion_ratio": t("results/wire.cpp") / t("examples/basics/wire.cairn"),
-        "cold_source_plus_card_plus_recipe": t("examples/basics/wire.cairn")
-        + t("docs/cards/AGENT_CARD.md")
-        + t("docs/cards/GENERATOR_CONTRACTS.md"),
+        "cold_source_plus_card_plus_recipe": t("examples/basics/wire.cairn") + t(CARD) + t(RECIPE),
         "limitation": "No independent compact C++ codec library baseline. Expansion ratio is not a language superiority comparison.",
     }
     result = {
@@ -157,7 +164,7 @@ def main():
         json.dumps(
             {
                 "tokenizer": label,
-                "card_tokens": t("docs/cards/AGENT_CARD.md"),
+                "card_tokens": t(CARD),
                 "family": family,
                 "wire": wire,
                 "algorithms": result["aggregate_algorithms"],

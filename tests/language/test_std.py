@@ -6,7 +6,7 @@ cannot be leaked, overlapping views cannot be handed to one call.
 
 g++ is used wherever the program stays inside copyable sums. A sum that carries an owner emits
 a designated initializer that g++ rejects under -Werror=missing-field-initializers (see
-docs/guide/std.md and the issue list), so those programs are built with clang++ only.
+the standard library section of docs/MANUAL.md and the issue list), so those programs are built with clang++ only.
 """
 
 import pathlib
@@ -721,11 +721,11 @@ def test_every_packaged_template_needs_only_what_its_bounds_promise():
 
 
 def test_the_api_reference_is_what_the_compiler_says_today():
-    """docs/guide/std_api.md is generated (`cairn doc --std`): signatures, bounds, comments and inferred effect rows."""
+    """docs/std_api.md is generated (`cairn doc --std`): signatures, bounds, comments and inferred effect rows."""
     from cairn.editor.docs import document, standard_library
 
     root = pathlib.Path(__file__).resolve().parents[2]
-    assert (root / "docs/guide/std_api.md").read_text(encoding="utf-8") == standard_library(), "run `make docs`"
+    assert (root / "docs/std_api.md").read_text(encoding="utf-8") == standard_library(), "run `make docs`"
     own = document("module m;\n// Doubles.\npub fn twice[T: integer](x:T) -> T = x + x;\nfn hidden() {}\n")
     assert "pub fn twice[T:integer](x:T) -> T" in own and "Doubles." in own and "hidden" not in own
     assert "Effects (any arguments within its bounds): `trap`." in own

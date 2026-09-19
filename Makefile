@@ -44,7 +44,7 @@ embedded:
 	$(PYTHON) -m pytest -q tests/projects/test_freestanding.py
 
 docs:
-	$(CAIRN) doc --std > docs/guide/std_api.md
+	$(CAIRN) doc --std > docs/std_api.md
 
 context:
 	$(PYTHON) tools/ai/measure_context.py

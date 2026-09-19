@@ -36,8 +36,7 @@
     "mechanized ownership and lease rules for single elements, parts of parts, closures, `lane:f` callbacks, device placement, `reduce`/`compact` and queued device work, a proof that the emitter runs a part guard before the task that borrows it starts and joins every lane before the next statement, and any link from checking.py to the Lean calculus",
     "an equal-budget, multi-language, multi-model AI proficiency experiment with tokenizer accounting",
     "recipes over arbitrary expression fragments (they take naturals, a record type and names of functions), and replaying a checked theorem per recipe instance",
-    "leasing one field of a record without leasing the whole record, and extent identity through a record field (len(c.price) == c.rows)",
-    "a `free` effect on a function that only drops an owner (it is charged with `alloc` at the allocation site)"
+    "leasing one field of a record without leasing the whole record, and extent identity through a record field (len(c.price) == c.rows)"
   ],
   "principle": "Implemented, finite-tested, sanitizer-clean, exact-algebra-checked, SMT-equivalent and Lean-checked are distinct scopes."
 }

@@ -1,4 +1,4 @@
-"""docs/guide/tour.md is executable: every program in it is compiled, built and run; it must exit 0."""
+"""The tour in docs/MANUAL.md is executable: every program in it is compiled, built and run; it must exit 0."""
 
 import pathlib
 import re
@@ -9,8 +9,9 @@ import pytest
 
 from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
 
-TOUR = (pathlib.Path(__file__).resolve().parents[2] / "docs/guide/tour.md").read_text(encoding="utf-8")
-PROGRAMS = dict(re.findall(r"^## (\d+\. [^\n]+)\n.*?```cairn\n(.*?)```", TOUR, flags=re.S | re.M))
+MANUAL = (pathlib.Path(__file__).resolve().parents[2] / "docs/MANUAL.md").read_text(encoding="utf-8")
+TOUR = MANUAL.split("\n## A tour in twelve programs\n")[1].split("\n## ")[0]
+PROGRAMS = dict(re.findall(r"^### (\d+\. [^\n]+)\n.*?```cairn\n(.*?)```", TOUR, flags=re.S | re.M))
 
 
 def test_the_tour_has_its_twelve_programs():
