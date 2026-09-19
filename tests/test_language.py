@@ -8,6 +8,7 @@ import subprocess
 
 import pytest
 
+from cairn.agent_tools import canonical_source
 from cairn.cairnc import RUNTIME_FILES, Diagnostic, compile_source
 
 PRELUDE = """
@@ -366,6 +367,80 @@ def test_what_the_second_user_tripped_over(tmp_path):
     flags = ["-std=c++20", "-O1", "-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-Werror"]
     subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
     assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+
+
+UNPACK = """
+module lib;
+pub linear struct Token { id:u64; }
+pub struct Open { a:u64; b:Buf[u64]; }
+pub fn open(id:u64) -> Token = Token(id);
+pub fn close(t:Token) -> u64 { let Token(id) = t; return id; }
+module app;
+import lib;
+import std.vec as vec;
+linear struct Conn { token:lib.Token; sent:u64; log:vec.Vec[u64]; }
+struct Pair[T] { a:T; b:T; }
+fn finish(c:Conn) -> u64 {
+  let Conn(token, sent, log) = c;
+  let id = lib.close(token);
+  return id + sent + u64(log.len);
+}
+fn split(o:lib.Open) -> usize { let lib.Open(a, b) = o; return len(b) + usize(a); }
+pub fn main() -> i32 {
+  let t = lib.open(7);
+  let mut log = vec.new[u64]();
+  vec.push(log, 1);
+  vec.push(log, 2);
+  let c = Conn(t, 5, log);
+  let done = finish(c);
+  let p = Pair(1.5, 2.5);
+  let mut Pair(x, y) = p;
+  x = x + y + p.a;
+  let raw = Buf[u64](3);
+  let o = lib.Open(1, raw);
+  let four = split(o);
+  if done != 14 || x != 5.5 || four != 4 { return 1; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_record_is_taken_apart_as_it_was_built(tmp_path, cxx):
+    """`let Conn(token, sent, log) = c;` consumes the record and binds every field, so a linear value or an owner
+    kept inside a record has a way out that leaves no shell behind. Freed exactly once under AddressSanitizer."""
+    if not shutil.which(cxx):
+        pytest.skip("Native compiler unavailable")
+    cpp = compile_source(UNPACK, roots=("app.main",))[0]
+    assert canonical_source(UNPACK).count("let Conn(token, sent, log) = c;") == 1
+    assert compile_source(canonical_source(UNPACK), roots=("app.main",))[0] == cpp
+    (tmp_path / "p.cpp").write_text(cpp + "int main() { return cf_app_main(); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    flags = ["-std=c++20", "-O1", "-g", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-unused-variable"]
+    flags += ["-fsanitize=address,undefined", "-fno-sanitize-recover=all"] if cxx == "clang++" else []
+    subprocess.run([cxx, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+
+
+@pytest.mark.parametrize(
+    ("code", "body"),
+    [
+        ("E-MOVED", "let raw = Buf[u64](3); let o = lib.Open(1, raw); let lib.Open(a, b) = o; let n = len(o.b);"),
+        ("E-PRIVATE", "let t = lib.open(7); let lib.Token(id) = t;"),  # Only its own module ends a linear value.
+        ("E-UNPACK", "let p = Pair(1, 2); let Pair(x) = p;"),
+        ("E-UNPACK", "let p = Pair(1, 2); let lib.Open(x, y) = p;"),
+        ("E-UNPACK", "let v:u64 = 3; let Pair(x, y) = v;"),
+        ("E-SHADOW", "let p = Pair(1, 2); let x:u64 = 0; let Pair(x, y) = p;"),
+        ("E-LINEAR-LEAK", "let t = lib.open(7); let mut log = vec.new[u64](); let c = Conn(t, 5, log); "
+                          "let Conn(token, sent, kept) = c;"),
+        ("E-IMMUTABLE", "let p = Pair(1, 2); let Pair(x, y) = p; x = 3;"),
+    ],
+)  # fmt: skip
+def test_taking_apart_obeys_moves_privacy_and_linearity(code, body):
+    with pytest.raises(Diagnostic) as e:
+        compile_source(UNPACK + f"fn probe() {{ {body} }}\n")
+    assert e.value.data["code"] == code, e.value.data["message"]
 
 
 ACROSS_MODULES = """

@@ -113,7 +113,8 @@ needs a mutable place. No inheritance, no implicit boxing.""",
     "owners": """let mut b = Buf[u64](n); is a first-class zeroed heap array; Array[u64, 4]() is inline.
 Owners are affine: binding, passing by value or returning one moves it and the old name
 is dead. An owner never moves out of a place: take(place) moves it out leaving zero,
-swap(a, b) exchanges places. An outer owner cannot be moved inside a loop, closure or
+swap(a, b) exchanges places; let Conn(sock, sent) = c; consumes a whole record and binds
+every field (the way out for a linear field). An outer owner cannot be moved inside a loop, closure or
 lane. linear struct values must be consumed exactly once on every path; defer call(x);
 schedules that one visible call for every normal exit of its block. ro<T> and rw<T>
 borrow one value and read/assign like the value; x[lo..hi] passes a part of an array with

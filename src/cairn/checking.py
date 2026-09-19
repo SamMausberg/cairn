@@ -648,6 +648,22 @@ class Checker:
 
     s_reg = s_let
 
+    def s_unpack(self, s: Stmt):
+        """`let Conn(sock, sent) = c;` consumes a record and binds every field: the dual of constructing it, and the
+        way out for an owner or a linear value kept inside one. Only its own module takes a linear record apart."""
+        ty = self.expr(s.exprs[0])
+        record, layout = self.qualify(s.name, self.p.records, node=s), self.layouts.get(ty)
+        if ty.mode != "value" or ty.name != record or not isinstance(layout, list) or len(layout) != len(s.other_names):
+            fail("E-UNPACK", f"let {s.name}(...) takes a {s.name} value apart: one name per field, in order.", s)
+        home, linear = self.p.modules.get(ty.name, ""), "linear" in self.p.attributes.get(ty.name, ())
+        if home != self.module and (linear or ty.name not in self.p.public):
+            fail(
+                "E-PRIVATE", f"{ty.name} is {'linear' if linear else 'private'}: only module {home} takes it apart.", s
+            )
+        s.ty, s.ref = ty, layout
+        for name, (_, held) in zip(s.other_names, layout, strict=True):
+            self.bind(name.val, Binding(held, s.op == "reg"), name)
+
     def s_compact(self, s: Stmt):
         out, hi, pred, value = s.exprs
         if s.name in self.env or s.binder in self.env or s.name == s.binder:

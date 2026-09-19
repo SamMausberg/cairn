@@ -215,8 +215,10 @@ class Deriver:
                 arms = [
                     Arm(self.text(a.variant, env, a), a.binder, self.stmts(a.body, env), a.line, a.col) for a in s.arms
                 ]
+                names = [Expr(n.tag, self.text(n.val, env, n), [], n.line, n.col) for n in s.other_names]
                 out.append(Stmt(s.tag, self.text(s.name, env, s), self.type(s.ty, env, s), [self.expr(e, env) for e in s.exprs],
-                                self.stmts(s.body, env), self.stmts(s.other, env), s.line, s.col, s.binder, arms, s.op, s.ref))  # fmt: skip
+                                self.stmts(s.body, env), self.stmts(s.other, env), s.line, s.col, s.binder, arms, s.op, s.ref,
+                                names))  # fmt: skip
         return out
 
     def require(self, s: Stmt, env: dict[str, Any]):

@@ -186,7 +186,7 @@ class Stmt:
     arms: list[Arm] = field(default_factory=list)
     op: str = ""
     ref: Any = None
-    other_names: list[Expr] = field(default_factory=list)  # `after a, b` on a spawned region.
+    other_names: list[Expr] = field(default_factory=list)  # `after a, b` on a spawned region; the names of an unpack.
 
 
 @dataclass
@@ -675,6 +675,16 @@ class Parser:
         if t.s in {"let", "reg"}:
             self.i += 1
             tag = "reg" if t.s == "let" and self.eat("mut") else t.s
+            if self.ahead(1) in {"(", "."}:  # `let Conn(sock, sent) = c;` takes a record apart, as `Conn(..)` built it.
+                record = self.path()
+                self.need("(")
+                names = self.listed(
+                    ")", lambda: Expr("name", self.ident(), [], self.ts[self.i - 1].line, self.ts[self.i - 1].col)
+                )
+                self.need("=")
+                whole = self.expr()
+                self.need(";")
+                return Stmt("unpack", record, None, [whole], op=tag, other_names=names, **at)
             n = self.ident()
             typ = self.ty() if self.eat(":") else None
             self.need("=")

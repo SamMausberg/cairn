@@ -431,6 +431,13 @@ class Emitter:
 
     s_reg = s_let
 
+    def s_unpack(self, s: Stmt, es: list[str]):
+        whole = self.fresh("u")[0]
+        self.put(f"{self.type(s.ty)} {whole} = {es[0]};")
+        for name, (field, ty) in zip(s.other_names, s.ref, strict=True):
+            const = "const " if s.op == "let" and self.trivial(ty) else ""
+            self.put(f"{const}{self.type(ty)} v_{name.val} = std::move({whole}.v_{field});")
+
     def s_compact(self, s: Stmt, _: list[str]):
         out, hi, pred, value = (self.expr(e) for e in s.exprs)
         used, i = "v_" + s.name, "v_" + s.binder

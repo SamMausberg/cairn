@@ -113,6 +113,8 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
         elif s.tag in {"let", "reg"}:
             declared = ":" + s.ty.display() if s.ty else ""
             line = f"{'let mut' if s.tag == 'reg' else 'let'} {s.name}{declared} = {es[0]};"
+        elif s.tag == "unpack":
+            line = f"{'let mut' if s.op == 'reg' else 'let'} {s.name}({', '.join(n.val for n in s.other_names)}) = {es[0]};"
         elif s.tag == "compact":
             line = f"let {s.name} = compact {es[0]} for {s.binder} in {es[1]} where {es[2]} yield {es[3]};"
         elif s.tag == "reduce":

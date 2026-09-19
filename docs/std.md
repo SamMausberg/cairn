@@ -298,13 +298,9 @@ Three recipes that generate trait implementations: `derive eq for P;` (field-wis
 
 ## Known sharp edges
 
-* **g++ and owner-carrying sums.** A sum whose payload is an owner (`Result[File, IoError]`,
-  `Option[Vec[u8]]`) is emitted as `{tag, {.v_Err = ...}}` over a payload *struct*, which g++
-  rejects under `-Werror=missing-field-initializers`. clang++ accepts it. Any program that
-  imports `std.io` or `std.net` therefore builds with clang++ only, for now.
-* **A linear value cannot be wrapped in a struct.** `take`ing the File out of a struct leaves a
-  zeroed shell that still has to be consumed, and nothing can consume it. Keep a `File` or a
-  `Socket` beside your state, not inside it, and pass both.
+* **A linear value inside a record leaves by taking the record apart.** `take` cannot forge the zero
+  a `File` would leave behind, so a wrapper is consumed whole: `let Conn(sock, sent) = c;` binds
+  every field and `c` is gone. A `File` or a `Socket` may therefore live inside your own state.
 * **One failure family per function.** `try` requires the enclosing function to return the same
   sum family with the same failure payload, so everything fallible here is
   `Result[_, IoError]`; the void-ish ones answer `Ok(0)`.
