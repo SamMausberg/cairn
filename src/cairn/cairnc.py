@@ -29,6 +29,7 @@ from .syntax import (
     Type,
     fail,
 )  # fmt: skip
+from .traits import certify
 from .version import VERSION
 
 __all__ = [
@@ -85,7 +86,7 @@ def interfaces(p: Program, receipts: dict[str, Any]) -> dict[str, Any]:
 def certify_templates(source: str) -> dict[str, str]:
     """For each generic function of the program's own modules: "ok" if its body needs only its bounds."""
     p = specialize(derive(link(Parser(source).parse())))
-    return Checker(p).certify()
+    return certify(Checker(p))
 
 
 def compile_units(source: str, origin: Any = "", roots: tuple[str, ...] = ()) -> tuple[dict[str, str], dict[str, Any]]:

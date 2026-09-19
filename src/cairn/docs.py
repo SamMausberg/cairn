@@ -11,6 +11,7 @@ import re
 
 from .agent_tools import generics, local, signature, type_declarations
 from .cairnc import Checker, Parser, Program, derive, link, specialize
+from .traits import described
 
 TABLES = (("records", "struct"), ("sums", "enum"), ("enums", "enum"), ("traits", "trait"), ("consts", "const"))
 
@@ -26,7 +27,7 @@ def comment_above(text: str, offset: int) -> list[str]:
 
 def document(source: str, modules: list[str] | None = None) -> str:
     p = specialize(derive(link(Parser(source).parse())))
-    verdicts, rows = Checker(p).described()
+    verdicts, rows = described(Checker(p))
     out: list[str] = []
     for module in modules or sorted(m for m in set(p.modules.values()) if m not in p.sources):
         text = p.sources.get(module, source)

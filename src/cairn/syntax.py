@@ -135,6 +135,16 @@ FLOAT = {"f32", "f64"}
 NUMERIC = INT | FLOAT
 SCALAR = NUMERIC | {"bool"}
 WIDTH = BITS
+INTRINSIC_TYPES = {
+    "Buf": 1,
+    "Array": 2,
+    "fn": None,
+    "dyn": 1,
+    "Dyn": 1,
+    "Ticket": 1,
+    "Atomic": 1,
+    "Mutex": 1,
+}  # name -> number of type arguments
 VOID, BOOL, USIZE = Type("void"), Type("bool"), Type("usize")
 
 

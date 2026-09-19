@@ -8,25 +8,21 @@ call arguments only), so no lifetime annotations exist; owners are affine and
 
 from __future__ import annotations
 
-import copy
-import itertools
 import math
-import operator
 import re
-import struct
 from dataclasses import dataclass, field
 from typing import Any
 
 from .builtins import SOFT, TABLE, WRAPPING
+from .constants import constant
 from .effects import LANE_SAFE, PURE, audit, exposed, fixed_point
 from .syntax import (
-    BITS,
     BOOL,
     CPP,
     FLOAT,
     HOST_VISIBLE,
     INT,
-    MAX_FUNCTIONS,
+    INTRINSIC_TYPES,
     MAX_NODES,
     NUMERIC,
     SCALAR,
@@ -35,7 +31,6 @@ from .syntax import (
     USIZE,
     VOID,
     WIDTH,
-    Diagnostic,
     Expr,
     Function,
     Program,
@@ -45,8 +40,19 @@ from .syntax import (
     is_view,
     root,
 )  # fmt: skip
+from .traits import (
+    KINDS,
+    connect_dispatches,
+    hold_impls,
+    infer,
+    instantiate,
+    satisfies,
+    trait_member,
+    unbound,
+    unify,
+    vtable,
+)
 
-INTRINSIC_TYPES = {"Buf": 1, "Array": 2, "fn": None, "dyn": 1, "Dyn": 1, "Ticket": 1, "Atomic": 1, "Mutex": 1}
 PINNED = {"Ticket", "Atomic", "Mutex"}  # Declared and borrowed in place; never stored, passed or returned.
 ORDERS = ["relaxed", "acquire", "release", "acquire_release", "seq_cst"]
 ATOMIC_OPS = {
@@ -59,23 +65,7 @@ ATOMIC_OPS = {
     "fetch_or": 1,
     "fetch_xor": 1,
 }
-KINDS = ["copy", "affine", "linear"]
-# What a generic parameter may promise besides traits: the most its kind can be, or a closed class of scalars.
-CLASSES = {"integer": INT, "unsigned": UNSIGNED, "signed": SIGNED, "float": FLOAT, "numeric": NUMERIC, "scalar": SCALAR}
 COMPARISONS = {"==", "!=", "<", "<=", ">", ">="}
-
-
-def quotient(a: Any, b: Any) -> Any:
-    """Division as the language defines it: exact for floats, toward zero for integers."""
-    return (
-        a / b if isinstance(a, float) or isinstance(b, float) else abs(a) // abs(b) * (1 if (a < 0) == (b < 0) else -1)
-    )
-
-
-FOLD = {"+": operator.add, "-": operator.sub, "*": operator.mul, "/": quotient, "&": operator.and_, "|": operator.or_,
-        "^": operator.xor, "==": operator.eq, "!=": operator.ne, "<": operator.lt, "<=": operator.le, ">": operator.gt,
-        ">=": operator.ge, "&&": lambda a, b: a and b, "||": lambda a, b: a or b,
-        "%": lambda a, b: math.fmod(a, b) if isinstance(a, float) or isinstance(b, float) else a - b * quotient(a, b)}  # fmt: skip
 
 
 @dataclass
@@ -307,7 +297,7 @@ class Checker:
             base = Type(name, args=args)
             for (g, constraint), value in zip(self.p.generics.get(name, []), args, strict=False):
                 for wanted in constraint.split("+") if constraint not in {"nat", "type"} else []:
-                    broken = self.satisfies(value, wanted, self.p.modules.get(name, ""), node)
+                    broken = satisfies(self, value, wanted, self.p.modules.get(name, ""), node)
                     if broken:
                         code = "E-TRAIT-IMPL" if broken.startswith("does not implement") else "E-BOUND"
                         fail(code, f"{value.display()} {broken}; {name} needs [{g}: {constraint}].", node)
@@ -326,7 +316,7 @@ class Checker:
             if ty.extent and not ty.extent.isdigit() and bound is None
             else None
         )
-        bound = self.constant(named, []) if named else bound
+        bound = constant(self, named, []) if named else bound
         static = isinstance(bound, int) and not isinstance(bound, bool)
         return Type(base.name, ty.mode, str(bound) if static else ty.extent, base.args, ty.place)
 
@@ -408,129 +398,12 @@ class Checker:
                 with self.within(self.p.modules.get(name, "")):
                     self.define(Type(name))
         for name in list(self.p.consts):
-            self.constant(name, [])
+            constant(self, name, [])
         concrete = [f for f in self.p.functions if not f.generics or f.bindings]
         for f in concrete:
             self.signature(f)
-        self.hold_impls(concrete)
+        hold_impls(self, concrete)
         return concrete
-
-    def constant(self, name: str, pending: list[str]) -> Any:
-        """A constant folds to one literal of its type: exact arithmetic over literals and other constants."""
-        declared, written = self.p.consts[name]
-        if name not in self.folded:
-            if name in pending:
-                fail("E-CONST", f"{name} is defined in terms of itself.", written)
-            with self.within(self.p.modules.get(name, "")):
-                ty = self.resolve(declared, written)
-                if ty.name not in SCALAR or ty.mode != "value":
-                    fail("E-CONST", "A constant is a scalar.", written)
-                value = self.fold(written, ty, [*pending, name])
-                if isinstance(value, float) and not math.isfinite(value):
-                    fail("E-CONST", "A constant is finite.", written)
-                text = str(value).lower() if isinstance(value, bool) else repr(abs(value))
-                tag = "bool" if isinstance(value, bool) else "float" if isinstance(value, float) else "int"
-                literal = Expr(tag, text, [], written.line, written.col)
-                if not isinstance(value, bool) and (value < 0 or (value == 0 and math.copysign(1, value) < 0)):
-                    literal = Expr("unary", "-", [literal], written.line, written.col)
-                self.expr(literal, ty)  # The literal's own range check says whether the result fits.
-            self.p.consts[name], self.folded[name] = (declared, literal), value
-        return self.folded[name]
-
-    def fold(self, e: Expr, ty: Type, pending: list[str]) -> Any:
-        if e.tag in {"int", "float", "bool"}:
-            return (
-                e.val == "true"
-                if e.tag == "bool"
-                else float(e.val)
-                if e.tag == "float" or ty.name in FLOAT
-                else int(e.val)
-            )
-        if e.tag == "name":
-            const = self.qualify(e.val, self.p.consts, node=e)
-            if const is None:
-                fail("E-CONST", "A constant is made of literals and other constants.", e)
-            return self.constant(const, pending)
-        args = [self.fold(a, ty, pending) for a in e.args]
-        numbers = all(not isinstance(a, bool) for a in args)
-        if (
-            e.tag == "call" and e.val in NUMERIC and len(args) == 1 and numbers
-        ):  # u32(x), f64(n): checked like any literal.
-            low, high = (
-                (-(2 ** (BITS[e.val] - 1)), 2 ** (BITS[e.val] - 1) - 1)
-                if e.val in SIGNED
-                else (0, 2 ** BITS.get(e.val, 0) - 1)
-            )
-            if e.val in INT and not low <= int(args[0]) <= high:
-                fail("E-CONST", f"{args[0]} does not fit {e.val}.", e)
-            return float(args[0]) if e.val in FLOAT else int(args[0])
-        if e.tag == "unary" and ((e.val == "-" and numbers) or (e.val == "!" and not numbers)):
-            return -args[0] if e.val == "-" else not args[0]
-        logical = e.tag == "binary" and e.val in {"&&", "||"} and not numbers
-        if e.tag != "binary" or e.val not in FOLD or not (numbers or logical or e.val in {"==", "!="}):
-            fail(
-                "E-CONST", "A constant is made of literals, other constants, arithmetic, comparison and conversion.", e
-            )
-        if e.val in {"/", "%"} and args[1] == 0:
-            fail("E-CONST", "A constant does not divide by zero.", e)
-        if e.val in {"&", "|", "^"} and not all(isinstance(a, int) for a in args):
-            fail("E-CONST", "Bit operations fold integers.", e)
-        value = FOLD[e.val](*args)
-        if isinstance(value, float) and ty.name == "f32":  # Each f32 operation rounds once, as the machine will.
-            value = struct.unpack("f", struct.pack("f", value))[0]
-        return value
-
-    def certify(self) -> dict[str, str]:
-        """Check each generic function once against what its bounds promise. A parameter bounded by a scalar
-        class is checked at every type of that class; any other is an opaque witness that implements exactly the
-        traits named and is as owning as the bounds allow (linear when they say nothing: the strictest kind).
-        "ok" means every instance whose arguments satisfy the bounds checks too; otherwise the entry names the
-        first thing the body needed beyond its bounds, and that template is still checked per instance, as
-        before. Run on a copy of the program: nothing is emitted."""
-        self.prepare()
-        verdicts: dict[str, str] = {}
-        for f in [f for f in self.p.functions if f.generics and not f.bindings]:
-            choices: list[list[Any]] = []
-            for g, constraint in f.generics:
-                words = [] if constraint == "type" else constraint.split("+")
-                classes = [CLASSES[w] for w in words if w in CLASSES]
-                if constraint == "nat":
-                    choices.append([])
-                elif classes:
-                    choices.append([Type(n) for n in sorted(set.intersection(*classes))])
-                else:
-                    witness = Type(f"?{f.name}.{g}")
-                    with self.within(f.module):
-                        traits = [t for t in (self.qualify(w, self.p.traits) for w in words) if t]
-                    kind = next((w for w in KINDS[:2] if w in words), "linear")
-                    self.bounds[witness.name] = (traits, kind)
-                    choices.append([witness])
-            family = [g for g in self.p.functions if g.source_name == f.name and g.bindings]
-            naturals = all(kind == "nat" for _, kind in f.generics)
-            if (not all(choices) and not (family and naturals)) or math.prod(map(len, choices)) > 128:
-                verdicts[f.name] = "too many scalar cases" if all(choices) else "no family gives its natural a witness"
-                continue
-            try:
-                for instance in family if naturals else []:  # A natural's witnesses are its families' instances.
-                    self.function(instance)
-                for values in itertools.product(*choices) if all(choices) else []:
-                    self.instantiate(f, dict(zip((g for g, _ in f.generics), values, strict=True)), f)
-                verdicts[f.name] = "ok"
-            except Diagnostic as e:
-                verdicts[f.name] = f"{e.data['code']}: {e.data['message']}"
-        return verdicts
-
-    def described(self) -> tuple[dict[str, str], dict[str, set[str]]]:
-        """Verdicts as `certify`, and the effect row of every function: a concrete one's own, a template's at
-        its witnesses (what it may do for any arguments within its bounds, besides what their members do)."""
-        verdicts = self.certify()
-        for f in [f for f in self.p.functions if (not f.generics or f.bindings) and f.name not in self.local_effects]:
-            self.function(f)
-        rows = fixed_point(self)
-        for f in [f for f in self.p.functions if f.generics and not f.bindings and verdicts.get(f.name) == "ok"]:
-            witnessed = [rows[n] for n in rows if n.startswith(f.name + "[")]
-            rows[f.name] = set().union(*witnessed) if witnessed else set()
-        return verdicts, rows
 
     def check(self) -> dict[str, Any]:
         for f in self.prepare():  # Generic instances are appended, and checked, at their first use.
@@ -543,7 +416,7 @@ class Checker:
                     fail("E-UNINSTANTIATED", f"Static function {f.name} has no family; "
                          "unused templates are not silently ignored.")  # fmt: skip
                 self.unchecked.append(f.name)
-        self.connect_dispatches()
+        connect_dispatches(self)
         effects = fixed_point(self)
         audit(self, effects)
         self.judge_lane_callbacks(effects)
@@ -579,42 +452,6 @@ class Checker:
             }
             for n in effects
         }
-
-    def hold_impls(self, concrete: list[Function]):
-        """Every impl is held to its trait, used or not; a generic one must be determined by its Self type."""
-
-        def mentioned(t: Any) -> set[str]:
-            return {t.name}.union(*(mentioned(a) for a in t.args)) if isinstance(t, Type) else set()
-
-        for f in [f for f in self.p.functions if f.owner and f.generics and not f.bindings]:
-            with self.within(f.module):
-                trait = self.qualify(f.owner[0], self.p.traits, node=f)
-            stated = next((m for m in self.p.traits.get(trait, []) if m.name == f.name.rsplit(".", 1)[1]), None)
-            loose = (
-                {g for g, _ in f.generics} - mentioned(f.owner[1]) - {g for g, _ in (stated.generics if stated else [])}
-            )
-            if stated is None or loose:  # Its instances are made from the Self type alone.
-                fail("E-TRAIT-IMPL", f"{f.name}: a generic impl states its trait's members, and every generic "
-                     f"parameter appears in its Self type{' (not ' + ', '.join(sorted(loose)) + ')' if loose else ''}.", f)  # fmt: skip
-        for f in [f for f in concrete if f.owner]:
-            with self.within(f.module):
-                trait = self.qualify(f.owner[0], self.p.traits, node=f) or f.owner[0]
-                self.members(trait, self.resolve(f.owner[1], f), f)
-
-    def connect_dispatches(self):
-        """Draw each dynamic call's edges once every implementation is known: a later coercion may add one."""
-        for caller, parameters, trait, name, position, receiver, targets, callbacks, lane, row in self.dispatches:
-            for (owner, _), members in self.impls.items():
-                if owner == trait and members and not (members[name].generics and not members[name].bindings):
-                    target = members[name]
-                    targets.append(target.name)
-                    self.calls[caller].add(target.name)
-                    row.add(target.name)  # Inside a closure this is the closure's own row.
-                    passed = {target.params[i][0]: a.val if a.tag == "name" and a.val in parameters else ""
-                              for a, i in callbacks}  # fmt: skip
-                    self.call_edges[caller].append((target.name, {target.params[position][0]: receiver, **passed}))
-                    self.lane_calls += [(target.name, False, lane)] if lane else []
-                    self.fn_sites += [(a, parameters, target.name, target.params[i][0]) for a, i in callbacks]
 
     def judge_lane_callbacks(self, effects: dict[str, set[str]]):
         """What a callee's lanes will call (`lane:f` in its row) is judged where it was written: a closure
@@ -1297,7 +1134,7 @@ class Checker:
                 bound = dict(zip(generics, expected.args, strict=True))
             elif args:
                 with self.within(self.p.modules.get(enum.name, "")):
-                    self.unify(variants[variant], self.peek(args[0]), bound, set(generics))
+                    unify(self, variants[variant], self.peek(args[0]), bound, set(generics))
             if set(bound) != set(generics):
                 fail("E-INFER", f"Cannot infer the type arguments; write {enum.name}[...].{variant}.", e)
             enum = Type(enum.name, args=tuple(bound[g] for g in generics))
@@ -1343,7 +1180,7 @@ class Checker:
             bound = dict(
                 zip((n for n, _ in g.generics), (self.static(self.type_argument(a), e) for a in targs), strict=False)
             )
-            g = self.instantiate(g, bound, e)
+            g = instantiate(self, g, bound, e)
             e.args = []
         name = g.name
         self.signature(g)
@@ -1580,234 +1417,13 @@ class Checker:
         if record:
             return self.construct(e, record, args, targs, expected)
         name = self.qualify(n, self.fs, node=e)
-        f = self.fs[name] if name else self.trait_member(e, n, args)
+        f = self.fs[name] if name else trait_member(self, e, n, args)
         if f is not None and isinstance(e.ref, tuple) and e.ref[0] == "dispatch":
             return f.ret
         if f is None:
             fail("E-CALLEE", "Qualified calls are declared tagged-sum constructors, not methods." if "." in n
                  else f"Unknown callable {n}; arbitrary C++ names are not allowed.", e)  # fmt: skip
         return self.invoke(e, f, args, targs, expected)
-
-    def trait_member(self, e: Expr, n: str, args: list[Expr]) -> Function | None:
-        """A trait member called by name: dispatch is on the type of its Self argument, static unless that is dyn."""
-        prefix, _, short = n.rpartition(".")
-        named, found = [], []
-        for trait, members in self.p.traits.items():
-            hidden = self.p.modules.get(trait, "") not in ("", self.module) and trait not in self.p.public
-            if hidden or (prefix and self.qualify(prefix, self.p.traits) != trait):
-                continue
-            for declared in members:
-                position = next((i for i, (_, t) in enumerate(declared.params) if t.name == "Self"), None)
-                if declared.name == short and position is not None and position < len(args):
-                    receiver = self.peek(args[position]).value
-                    dynamic = receiver in (Type("dyn", args=(Type(trait),)), Type("Dyn", args=(Type(trait),)))
-                    named.append(trait)
-                    if dynamic or self.members(trait, receiver, e):
-                        found.append((trait, declared, position, dynamic))
-        if len(found) > 1:
-            fail("E-TRAIT-AMBIGUOUS", f"{short} is a member of {' and '.join(t for t, *_ in found)}; "
-                 f"write {found[0][0]}.{short}(...).", e)  # fmt: skip
-        if named and not found:
-            fail("E-TRAIT-IMPL", f"{args[0].ty.display() if args else n} does not implement {' or '.join(named)}.", e)
-        if not found:
-            return None
-        trait, declared, position, dynamic = found[0]
-        if dynamic:
-            return self.dispatch(e, trait, declared, position, args)
-        return self.members(trait, self.peek(args[position]).value, e)[short]
-
-    def members(self, trait: str, target: Type, node: Any = None) -> dict[str, Function] | None:
-        """The one implementation of a trait for a concrete type, or None: every declared member, conforming
-        to its declaration with Self := target. A generic impl is instantiated; two matching impls are an error."""
-        if (trait, target) not in self.impls and trait in self.bounds.get(target.name, ((),))[0]:
-            promised = {}
-            for m in self.p.traits[trait]:
-                with self.within(self.p.modules.get(trait, ""), {"Self": target}):
-                    params = [(n, self.resolve(t, m)) for n, t in m.params]
-                    promised[m.name] = Function(f"{trait}.{target.name}.{m.name}", params, self.resolve(m.ret, m), [])
-                name = promised[m.name].name
-                self.fs[name], self.local_effects[name], self.calls[name], self.call_edges[name] = (
-                    promised[m.name],
-                    set(),
-                    set(),
-                    [],
-                )
-                self.signed.add(name)
-            self.impls[trait, target] = promised
-        if (trait, target) not in self.impls:
-            self.impls[trait, target] = None  # While this is decided, a bound that asks the same question hears "no".
-            matches: dict[str, tuple[Function, dict[str, Any]]] = {}
-            for f in [f for f in list(self.fs.values()) if f.owner and not f.bindings]:
-                bound: dict[str, Any] = {}
-                with self.within(f.module):
-                    if self.qualify(f.owner[0], self.p.traits) != trait:
-                        continue
-                    if not self.unify(f.owner[1], target, bound, {g for g, _ in f.generics}):
-                        continue
-                promises = [
-                    (bound[g], w)
-                    for g, c in f.generics
-                    if g in bound and c not in {"nat", "type"}
-                    for w in c.split("+")
-                ]
-                if any(self.satisfies(value, wanted, f.module, node) for value, wanted in promises):
-                    continue  # `impl[T: integer] Ord for T` is an impl for the integers, not for everything.
-                short = f.name.rsplit(".", 1)[1]
-                if short in matches:
-                    fail("E-TRAIT-OVERLAP", f"Two impls of {trait} match {target.display()}: one Self type means "
-                         "one implementation.", node)  # fmt: skip
-                matches[short] = (f, bound)
-            # A member whose body uses its own trait on its own type finds the template while its instance is made.
-            self.impls[trait, target] = {short: f for short, (f, _) in matches.items()} or None
-            found = {short: self.instantiate(f, bound, node) if f.generics and set(bound) == {g for g, _ in f.generics}
-                     else f for short, (f, bound) in matches.items()}  # fmt: skip
-            declared = {m.name: m for m in self.p.traits[trait]}
-            if found and set(found) != set(declared):
-                fail("E-TRAIT-IMPL", f"impl {trait} for {target.display()} defines {', '.join(sorted(found))}; "
-                     f"the trait declares {', '.join(sorted(declared))}.", next(iter(found.values())))  # fmt: skip
-            for short, f in found.items():
-                if not f.generics or f.bindings:
-                    self.signature(f)
-                    rename = dict(zip((n for n, _ in f.params), (n for n, _ in declared[short].params), strict=False))
-                    got = [Type(t.name, t.mode, rename.get(t.extent, t.extent), t.args, t.place) for _, t in f.params]
-                    with self.within(self.p.modules.get(trait, ""), {"Self": target}):
-                        want = [self.resolve(t, f) for _, t in declared[short].params]
-                        if [*got, f.ret] != [*want, self.resolve(declared[short].ret, f)]:
-                            fail("E-TRAIT-IMPL", f"{f.name} does not match {trait}.{short}"
-                                 f"({', '.join(t.display() for t in want)}).", f)  # fmt: skip
-            self.impls[trait, target] = found or None
-        return self.impls[trait, target]
-
-    def dispatch(self, e: Expr, trait: str, member: Function, position: int, args: list[Expr]) -> Function:
-        """An indirect call through the vtable; its row is the join of every implementation's."""
-        self.host_only(e, "A dynamic reference points at a host table")
-        if len(args) != len(member.params):
-            fail("E-ARITY", f"{member.name} expects {len(member.params)} arguments.", e)
-        if member.params[position][1].mode == "rw" and not self.writable(args[position]):
-            fail("E-WRITE-LEASE", f"{member.name} writes its receiver; it needs an rw<dyn {trait}> reference.", e)
-
-        def selfless(t: Any) -> bool:
-            return not isinstance(t, Type) or (t.name != "Self" and all(selfless(a) for a in t.args))
-
-        receiver = self.lend(args[position], member.params[position][1].mode, [])  # Leases and lanes see it.
-        callbacks = []
-        with self.within(self.p.modules.get(trait, ""), {"Self": Type("dyn", args=(Type(trait),))}):
-            for i, (a, (_, declared)) in enumerate(zip(args, member.params, strict=True)):
-                if i != position:
-                    if declared.mode != "value" or not selfless(declared) or not selfless(member.ret):
-                        fail("E-DYN", f"{trait}.{member.name} is not dyn-compatible: only its receiver may be "
-                             "a borrow or mention Self.", e)  # fmt: skip
-                    callbacks += [(a, i)] if self.expr(a, self.resolve(declared, a)).name == "fn" else []
-            if not selfless(member.ret):
-                fail("E-DYN", f"{trait}.{member.name} returns Self, which a dynamic reference cannot name.", e)
-            ret = self.resolve(member.ret, e)
-        targets: list[str] = []  # Filled once every implementation is known: a later coercion may add one.
-        self.dispatches.append((self.f.name, {n for n, _ in self.f.params}, trait, member.name, position, receiver,
-                                targets, callbacks, e if self.lanes else None, self.callset))  # fmt: skip
-        self.effect("dispatch")
-        index = [m.name for m in self.p.traits[trait]].index(member.name)
-        e.ref = ("dispatch", trait, index, position, targets)
-        e.ty = ret
-        return Function("", [], ret, [])
-
-    def vtable(self, trait: str, value: Type, node: Any) -> list[Function]:
-        """The members a value of this type puts behind `dyn trait`, in declaration order."""
-        members = self.members(trait, value, node)
-        if members is None or any(m.generics and not m.bindings for m in members.values()):
-            fail("E-TRAIT-IMPL", f"{value.display()} does not implement {trait} with concrete members.", node)
-
-        def selfless(t: Any) -> bool:
-            return not isinstance(t, Type) or (t.name != "Self" and all(selfless(a) for a in t.args))
-
-        for m in self.p.traits[trait]:  # The static table has a slot for every member, called or not.
-            receiver = next((i for i, (_, t) in enumerate(m.params) if t.name == "Self"), None)
-            rest = [t for i, (_, t) in enumerate(m.params) if i != receiver]
-            if receiver is None or not selfless(m.ret) or any(t.mode != "value" or not selfless(t) for t in rest):
-                fail("E-DYN", f"{trait}.{m.name} is not dyn-compatible: only its receiver may be a borrow or "
-                     "mention Self.", node)  # fmt: skip
-        self.callset |= {m.name for m in members.values()}  # The static table reaches them, called here or not.
-        return [members[m.name] for m in self.p.traits[trait]]
-
-    def unify(self, pattern: Any, actual: Any, bound: dict[str, Any], generics: set[str]) -> bool:
-        """Bind generic names in `pattern` so that its value part equals `actual`."""
-        actual = actual.value if isinstance(actual, Type) else actual
-        if isinstance(pattern, Type) and pattern.name in generics and not pattern.args:
-            return bound.setdefault(pattern.name, actual) == actual
-        if not isinstance(pattern, Type) or not isinstance(actual, Type):
-            return pattern == actual
-        known = pattern.name in CPP or pattern.name in INTRINSIC_TYPES
-        name = pattern.name if known else self.qualify(pattern.name, self.types)
-        if name != actual.name or len(pattern.args) != len(actual.args):
-            return False
-        return all(self.unify(p, a, bound, generics) for p, a in zip(pattern.args, actual.args, strict=True))
-
-    def open(self, declared: Any, generics: set[str], bound: dict[str, Any]) -> bool:
-        """Does this declared type still mention an unbound generic parameter?"""
-        if not isinstance(declared, Type):
-            return False
-        if declared.name in generics and not declared.args:
-            return declared.name not in bound
-        return any(self.open(a, generics, bound) for a in declared.args)
-
-    def satisfies(self, value: Type, wanted: str, module: str, node: Any) -> str:
-        """ "" if `value` keeps the promise `wanted` (a trait, a kind bound or a scalar class), else why not."""
-        with self.within(module):
-            trait = self.qualify(wanted, self.p.traits, node=node)
-        if trait:
-            return "" if self.members(trait, value, node) else f"does not implement {wanted}"
-        if wanted in KINDS[:2]:
-            fits = KINDS.index(self.kind(value)) <= KINDS.index(wanted)
-            return "" if fits else f"is {self.kind(value)}, not {wanted}"
-        plain = value.mode == "value" and not value.args and value.name in CLASSES.get(wanted, ())
-        return "" if plain else f"is not {wanted}" if wanted in CLASSES else f"does not implement {wanted}"
-
-    def instantiate(self, template: Function, bound: dict[str, Any], node: Any) -> Function:
-        values = [bound.get(g) for g, _ in template.generics]
-        if None in values:
-            missing = ", ".join(g for g, _ in template.generics if g not in bound)
-            fail("E-INFER", f"Cannot infer {missing} of {template.name}; write {template.name}[...](...).", node)
-        name = f"{template.name}[{', '.join(v.display() if isinstance(v, Type) else str(v) for v in values)}]"
-        if name not in self.fs:
-            for (g, constraint), value in zip(template.generics, values, strict=True):
-                if (constraint == "nat") != isinstance(value, int):
-                    fail(
-                        "E-GENERIC-KIND",
-                        f"{g} of {template.name} is a {'natural' if constraint == 'nat' else 'type'}.",
-                        node,
-                    )
-                for wanted in constraint.split("+") if constraint not in {"nat", "type"} else []:
-                    broken = self.satisfies(value, wanted, template.module, node)
-                    if broken:  # The caller learns which promise failed, not which line of the body did.
-                        code = "E-TRAIT-IMPL" if broken.startswith("does not implement") else "E-BOUND"
-                        fail(code, f"{value.display()} {broken}; {template.name} needs [{g}: {constraint}].", node)
-            if len(self.p.functions) >= MAX_FUNCTIONS:
-                fail("E-EXPANSION-LIMIT", "Expanded program exceeds 2048 functions.", node)
-            f = copy.deepcopy(template)
-            f.name, f.bindings = (name, dict(zip((g for g, _ in template.generics), values, strict=True)))
-            self.fs[name] = f
-            self.p.functions.append(f)
-            self.function(f)
-        return self.fs[name]
-
-    def infer(self, f: Function, args: list[Expr], targs: tuple, expected: Type | None, node: Any) -> dict:
-        """Bind a template's generics from explicit arguments, Self, argument types, then the result."""
-        names = [g for g, _ in f.generics]
-        generics, bound = set(names), dict(zip(names, targs, strict=False))
-        with self.within(f.module, {}):
-            if f.owner:
-                self.unify(f.owner[1], self.peek(args[0]), bound, generics)
-            ordered = sorted(zip(args, f.params, strict=True), key=lambda x: x[0].tag in {"int", "float"})
-            for a, (_, declared) in ordered:  # Typed arguments bind first, then the expected result, then literals.
-                if expected and a.tag in {"int", "float"}:
-                    self.unify(f.ret, expected, bound, generics)
-                if self.open(declared, generics, bound):
-                    actual = self.peek(root(a) if a.tag == "slice" else a)
-                    element = actual if not declared.extent or is_view(actual) else actual.args[0]
-                    if not self.unify(declared, element, bound, generics):
-                        fail("E-TYPE-MISMATCH", f"{actual.display()} does not fit {declared.display()}.", a)
-            if expected:
-                self.unify(f.ret, expected, bound, generics)
-        return bound
 
     def invoke(self, e: Expr, f: Function, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
         if len(args) != len(f.params):
@@ -1817,7 +1433,7 @@ class Checker:
         if f.kernel and not self.device_depth:
             fail("E-PLACEMENT", f"{f.name} is a kernel: it runs in device lanes, not in host code.", e)
         if f.generics and not f.bindings:
-            f = self.instantiate(f, self.infer(f, args, targs, expected, e), e)
+            f = instantiate(self, f, infer(self, f, args, targs, expected, e), e)
         subst = dict(zip((n for n, _ in f.params), args, strict=True))
         borrows: list[tuple[str, str]] = []
         closures: list[list[tuple[str, str]]] = []
@@ -1840,7 +1456,7 @@ class Checker:
             named = root(a).tag == "name" and root(a).val in self.env
             if want.name == "dyn" and self.peek(a).name != "dyn":
                 boxed = self.peek(a).value == Type("Dyn", args=want.args)
-                table = None if boxed else self.vtable(want.args[0].name, self.peek(a).value, a)
+                table = None if boxed else vtable(self, want.args[0].name, self.peek(a).value, a)
                 if not named or (want.mode == "rw" and not self.writable(a)):
                     fail("E-WRITE-LEASE", "A dynamic reference borrows a named place (mutable for rw).", a)
                 inner = Expr(a.tag, a.val, a.args, a.line, a.col, a.ty, a.start, a.end, a.ref)
@@ -1908,7 +1524,9 @@ class Checker:
         ordered = sorted(zip(args, fields, strict=True), key=lambda x: x[0].tag in {"int", "float"})
         for a, (_, declared) in ordered:  # Literals adapt after the other fields bind generics.
             with self.within(home, {}):
-                if self.open(declared, set(names), bound) and not self.unify(declared, self.peek(a), bound, set(names)):
+                if unbound(self, declared, set(names), bound) and not unify(
+                    self, declared, self.peek(a), bound, set(names)
+                ):
                     fail("E-INFER", f"Cannot infer the type arguments of {record}; write {record}[...](...).", a)
         for a, (_, declared) in zip(args, fields, strict=True):
             with self.within(home, dict(bound)):

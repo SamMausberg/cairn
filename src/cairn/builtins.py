@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .syntax import FLOAT, HOST_VISIBLE, INT, NUMERIC, UNSIGNED, USIZE, VOID, Expr, Type, fail, is_view, root
+from .traits import vtable
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -194,7 +195,7 @@ def check_dyn(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Typ
     """Dyn[Trait](value) moves a value of any implementing type to the heap."""
     ty = explicit(c, e, "Dyn", targs, expected, "Write Dyn[Trait](value).")
     arity(e, args, 1, "Dyn takes the value it will own.")
-    members = c.vtable(ty.args[0].name, c.expr(args[0]).value, e)
+    members = vtable(c, ty.args[0].name, c.expr(args[0]).value, e)
     c.effects |= {"alloc", "free"}
     c.guard("allocation")
     e.ref = ("builtin", members)
