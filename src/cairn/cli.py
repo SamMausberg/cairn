@@ -59,6 +59,19 @@ fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
     return {"status": "created", "project": str(destination.resolve()), "network_access": False}
 
 
+def preconditions(items: list[str]) -> dict[str, str]:
+    """`--assume symbol=expression` entries, one per function; the expression keeps its own `=` signs."""
+    given: dict[str, str] = {}
+    for item in items:
+        name, sep, text = item.partition("=")
+        if not sep or not name.strip() or not text.strip():
+            raise ProjectError(f"Write --assume SYMBOL=EXPRESSION, not {item!r}.")
+        if name.strip() in given:
+            raise ProjectError(f"--assume gives {name.strip()} two preconditions; write one.")
+        given[name.strip()] = text.strip()
+    return given
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="cairn", description=__doc__)
     p.add_argument("--version", action="version", version=__version__)
@@ -104,6 +117,8 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--symbol")
     mode.add_argument("--all", action="store_true", help="Require scalar equivalence for every declared function.")
     v.add_argument("--timeout-ms", type=int, default=3000)
+    v.add_argument("--assume", action="append", default=[], metavar="SYMBOL=EXPRESSION",
+                   help="Compare one function only where this holds (repeatable); the receipt records every text.")  # fmt: skip
     sub.add_parser("certificates", help="Check collector arithmetic certificates; not a Lean/compiler proof.")
     f = sub.add_parser("fmt", help="Format CAIRN sources in place; refuses any change to the token stream.")
     f.add_argument("paths", nargs="+", type=Path, help="Files, or directories searched for *.cairn.")
@@ -113,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     project = None
     try:
+        assumed = preconditions(a.assume) if a.command == "verify" else {}
         if a.command == "doctor":
             elan = os.pathsep.join([os.environ.get("PATH", ""), str(Path.home() / ".elan/bin")])
             report(
@@ -152,14 +168,20 @@ def main(argv: list[str] | None = None) -> int:
         if a.command == "verify" and a.all:
             from .verify.verification import verify_module
 
-            result = verify_module(read_text(a.reference, 64000), read_text(a.candidate, 64000), a.timeout_ms)
+            result = verify_module(read_text(a.reference, 64000), read_text(a.candidate, 64000), a.timeout_ms, assumed)
             report(result)
             return 0 if result["status"] == "smt-module-equivalent" else 2
         if a.command == "verify":
             from .verify.scalar_semantics import equivalent
 
+            if set(assumed) - {a.symbol}:
+                raise ProjectError(f"--assume names a function other than the selected --symbol {a.symbol}.")
             result = equivalent(
-                read_text(a.reference, 64000), read_text(a.candidate, 64000), a.symbol, timeout_ms=a.timeout_ms
+                read_text(a.reference, 64000),
+                read_text(a.candidate, 64000),
+                a.symbol,
+                assume=assumed.get(a.symbol, "true"),
+                timeout_ms=a.timeout_ms,
             )
             report(result)
             return (

@@ -67,11 +67,46 @@ def test_views_and_borrows_are_covered():
     assert r["covered"] == ["bump", "extent", "first", "head"] and not r["uncovered"]
 
 
+PASS = VIEWS + "fn total(n:usize, xs:ro<u8>[n])->u8 { let mut t:u8=0; for i in 0..n { t=add_wrap(t,xs[i]); } return t; }"  # fmt: skip
+
+
 def test_a_symbolic_pass_over_a_view_is_not_covered_without_a_bound():
-    src = VIEWS + "fn total(n:usize, xs:ro<u8>[n])->u8 { let mut t:u8=0; for i in 0..n { t=add_wrap(t,xs[i]); } return t; }"  # fmt: skip
-    r = verify_module(src, src)
+    r = verify_module(PASS, PASS)
     assert r["status"] == "incomplete" and r["uncovered"] == ["total"]
     assert "unrolling budget" in r["results"]["total"]["reason"]
+    assert "16 or below" in r["results"]["total"]["reason"] and r["preconditions"] == {}
+
+
+def test_a_precondition_covers_that_pass_and_the_receipt_says_where_it_holds():
+    r = verify_module(PASS, PASS, preconditions={"total": "n<=4"})
+    assert r["status"] == "smt-module-equivalent" and "total" in r["covered"]
+    assert r["preconditions"] == {"total": "n<=4"}
+    assert "total only where n<=4" in r["domain"]
+    assert r["results"]["total"]["assume"] == "n<=4" and r["results"]["first"]["assume"] == "true"
+
+
+def test_a_precondition_naming_no_declared_function_is_refused():
+    r = verify_module(REF, REF, preconditions={"twce": "x<=1"})
+    assert r["status"] == "incomplete" and "twce" in r["reason"] and not r["results"]
+
+
+TAGGED = (
+    "enum Op { Read; Write; }\n"
+    "fn reads(n:usize, ops:ro<Op>[n], i:usize)->bool { if i >= n { return false; } return ops[i] == Op.Read; }\n"
+    "fn chosen(ops:ro<Op>[1])->u64 { match ops[0] { Op.Read => { return 0; } Op.Write => { return 1; } } }\n"
+)
+
+
+def test_a_tag_in_storage_is_covered_only_where_the_reference_stays_total():
+    """Storage may hold any tag, so reading one is covered while matching on one is a partial reference."""
+    r = verify_module(TAGGED, TAGGED)
+    assert r["status"] == "incomplete" and r["covered"] == ["reads"] and r["uncovered"] == ["chosen"]
+    assert r["results"]["chosen"]["status"] == "invalid-reference"
+
+
+def test_a_precondition_that_admits_nothing_cannot_cover():
+    r = verify_module(PASS, PASS, preconditions={"total": "n<n"})
+    assert r["status"] == "incomplete" and r["results"]["total"]["status"] == "invalid-domain"
 
 
 def test_one_uncovered_value_function_still_blocks_the_module():
@@ -111,6 +146,20 @@ def test_cli(tmp_path, capsys):
     assert json.loads(capsys.readouterr().out)["status"] == "smt-module-equivalent"
     b.write_text(REF + "fn extra()->u64=0;")
     assert main(["verify", str(a), str(b), "--all"]) == 2
+
+
+def test_cli_assume_is_what_completes_a_symbolic_pass(tmp_path, capsys):
+    a = tmp_path / "a.cairn"
+    a.write_text(PASS)
+    assert main(["verify", str(a), str(a), "--all"]) == 2
+    assert json.loads(capsys.readouterr().out)["uncovered"] == ["total"]
+    assert main(["verify", str(a), str(a), "--all", "--assume", "total=n<=4"]) == 0
+    r = json.loads(capsys.readouterr().out)
+    assert r["status"] == "smt-module-equivalent" and r["preconditions"] == {"total": "n<=4"}
+    assert main(["verify", str(a), str(a), "--symbol", "total", "--assume", "total=n<=4"]) == 0
+    assert json.loads(capsys.readouterr().out)["assume"] == "n<=4"
+    assert main(["verify", str(a), str(a), "--symbol", "total", "--assume", "first=n<=4"]) == 2
+    assert main(["verify", str(a), str(a), "--all", "--assume", "total"]) == 2
 
 
 def test_unknown_solver_cannot_cover(monkeypatch):

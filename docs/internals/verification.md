@@ -10,14 +10,14 @@ There is no whole-compiler proof. Three mechanisms establish three different thi
 | The seventeen collector certificates pass that checker. | Lean kernel `decide`, `all_checked` | `proofs/Cairn/CollectorCertificates.lean`, generated | Anything about the emitted loop. |
 | The collector loop model stores in bounds, keeps both cursors representable and selects stably. | Lean, `store_index_lt_capacity`, `increments_fit`, `collect_spec` | `proofs/Cairn/Collector.lean` | That the emitted C++ is this loop. The model uses `Int`/`Nat`, not machine words. |
 | An accepted program of the ownership and lease calculus has no use-after-move, use-after-free, double free, leaked ticket, aliased argument or race, under every interleaving and every valuation; never gets stuck; and releases every cell exactly once on normal termination. | Lean, `accepted_no_fault` and the named faults, `accepted_threads_disjoint`, `accepted_frees_each_allocation_once`, `accepted_progress` | `proofs/Cairn/Places.lean`, `proofs/Cairn/Ownership.lean` | Any link to `checking.py`. Single elements, parts of parts, invisible bounds, closures, `lane:f`, placement, `reduce`/`compact`, streams. The part guard and the region join are assumed of the emitter. |
-| Two versions of one function agree on the result and on everything they were lent, for every admitted input. | Z3 over a modeled source fragment, `smt-equivalent` | `src/cairn/verify/scalar_semantics.py` | A moving owner, recursion, tasks, lanes, device placement, closures, `dyn`, the foreign boundary, an unbounded trip count, an observed NaN, a tag inside a view, two views of one array in one call: each is `unknown`. Trusts the translator and Z3. |
-| Every declared function and public type of two modules was compared that way. | `cairn verify --all`, `smt-module-equivalent` | `src/cairn/verify/verification.py` | One uncovered function keeps the module incomplete. Size, count and solver budgets apply. |
+| Two versions of one function agree on the result and on everything they were lent, for every admitted input. | Z3 over a modeled source fragment, `smt-equivalent` | `src/cairn/verify/scalar_semantics.py` | A moving owner, recursion, tasks, lanes, device placement, closures, `dyn`, the foreign boundary, an unbounded trip count, an observed NaN, two views of one array in one call: each is `unknown`. A tag in storage that names no variant aborts, which assumes the emitter's `default: cr::trap()`. Trusts the translator and Z3. |
+| Every declared function and public type of two modules was compared that way. | `cairn verify --all`, `smt-module-equivalent` | `src/cairn/verify/verification.py` | One uncovered function keeps the module incomplete. A restricted entry holds only where its precondition does. Size, count and solver budgets apply. |
 | Accepted programs build and run under both compilers, four sanitizers, CUDA and QEMU, and pass their finite task contracts. | Executed tests | `tests/` | Finite inputs only. |
 
 ```sh
 cd proofs && lake build                       # about four seconds, no dependencies
 cd proofs && lake env lean Cairn/Audit.lean   # the axiom audit on its own
-python3 -m pytest -q tests/verification       # 195 tests, including that build
+python3 -m pytest -q tests/verification       # 201 tests, including that build
 python3 bin/cairn certificates
 python3 bin/cairn verify examples/proof_scope/reference.cairn \
   examples/proof_scope/candidate.cairn --all
@@ -251,7 +251,7 @@ The admitted inputs are the ones the emitted entry guards admit. `cr::view` says
 
 An `rw` view is observed element by element over its whole extent, so the solver is asked for an index inside the extent where the two runs differ.
 
-A view whose elements carry a tag is unknown, because no entry guard checks a tag inside storage and the model cannot admit only well-formed elements without a quantifier. Two views of one array in one call, the visibly disjoint `b[0..mid]`, `b[mid..n]` split the checker allows, are unknown, since the model updates each argument's storage independently. A local `buffer` or `Buf` is zeroed storage of its own; allocation failure is outside the model, and an owner that leaves its place is not modeled at all.
+A view whose elements carry a tag is admitted with whatever tag each element holds, because no entry guard reads a tag inside storage. A `match` over one that names no variant leaves no surviving path, so the call aborts. That is an assumption about the emitter, tested rather than proved, of the same kind as the part guard: `codegen.py` closes every emitted `switch` with `default: cr::trap();`, and `tests/verification/test_semantics.py` compares the two sides on such a tag rather than deriving the trap from the C++. Two views of one array in one call, the visibly disjoint `b[0..mid]`, `b[mid..n]` split the checker allows, are unknown, since the model updates each argument's storage independently. A local `buffer` or `Buf` is zeroed storage of its own; allocation failure is outside the model, and an owner that leaves its place is not modeled at all.
 
 ### Collectors and reductions
 
@@ -263,7 +263,7 @@ A view whose elements carry a tag is unknown, because no entry guard checks a ta
 
 A value is flattened into its scalar components: a record is its fields in declaration order, a sum is the emitted `std::uint32_t` tag beside every variant payload, an inline array is its elements. Two values look alike when their components do, except that a sum compares its tag and the payload of the active variant only, so storage the emitter never reads is not an observation.
 
-Quantification is over well-formed values: every tag names a declared variant, which is exactly what the emitted entry guard `if (tag >= n) cr::trap();` admits. A record or sum named in the signature must have the same definition on both sides, or the answer is `invalid-contract` rather than a proof about two different types with one name.
+Quantification is over well-formed values: every tag of a value parameter names a declared variant, which is exactly what the emitted entry guard `if (tag >= n) cr::trap();` admits. Storage behind a view passes no such guard, so its elements carry any tag, and a `match` over one that names no variant aborts instead. A record or sum named in the signature must have the same definition on both sides, or the answer is `invalid-contract` rather than a proof about two different types with one name.
 
 ### Traps
 
@@ -314,7 +314,13 @@ python3 bin/cairn verify examples/proof_scope/reference.cairn \
 
 The coverage checker parses and checks both complete sources, compares public records, enums and sums, and enumerates every function on both sides. Missing or extra entries, unsupported functions, mismatched types, partial references or any undecided obligation prevent `smt-module-equivalent`. Each entry retains its own result, and the receipt lists covered and uncovered functions. A tagged result is covered when its payloads are modeled values, and one uncovered function keeps the whole module incomplete.
 
-`--all` passes no precondition, so a function whose trip count depends on a symbolic extent stays uncovered there even though `equivalent(..., assume=...)` decides it. There is a 64000-byte limit per input, at most 128 functions, and a soft 30-second solver budget. That budget is not a security sandbox or a strict wall-clock bound on all compilation.
+`--all` passes the precondition a caller gives for a function and nothing otherwise, so a function whose trip count depends on a symbolic extent stays uncovered until one bounds it. `--assume` supplies them, one per function, and repeats:
+
+```sh
+python3 bin/cairn verify reference.cairn candidate.cairn --all --assume 'total=n<=4'
+```
+
+A restricted entry is equivalent only where its precondition holds, so the receipt keeps every text under `preconditions`, each entry keeps its own `assume`, and the module's `domain` names them: "restricted by a host precondition where one is given (total only where n<=4)". Reading that receipt as plain equivalence is reading past the domain it quantifies over. A precondition that names no declared function is refused rather than ignored, one that admits no input is `invalid-domain`, and a function with none is still compared over the whole domain. There is a 64000-byte limit per input, at most 128 functions, and a soft 30-second solver budget. That budget is not a security sandbox or a strict wall-clock bound on all compilation.
 
 `examples/proof_scope/mixed.cairn` is a negative coverage fixture: comparison with itself must remain incomplete, because it contains a function that moves an owner out of its place, which the model does not follow. Empty coverage is not success. Public-type changes also block aggregate acceptance even if numeric function results agree.
 
