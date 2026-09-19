@@ -21,7 +21,7 @@
     "modules": "namespaces, pub, imports with aliases and name lists, a packaged std written in CAIRN",
     "targets": "hosted, CUDA through nvcc, and a freestanding AArch64 profile with MMIO and inline target instructions",
     "generation": "library-defined typed recipes over record schemas and naturals (static each/where/require/fold, $ splices, generated records and functions, domains, budgets, content hashes); the packaged std.wire recipe; static families; the certified bounded collector",
-    "projects": "ordered files, data-only manifests, fresh build directories; opt-in per-module objects reused by content hash",
+    "projects": "ordered files, data-only manifests, fresh build directories; opt-in per-module objects reused by content hash; vendored path dependencies pinned by hash",
     "editing": "host-bound body/expression choices over the whole language, lexical rule cards, effect ceilings",
     "tooling": "comment-preserving formatter, language server, editor grammar",
     "arithmetic_certificates": "17 exact affine implications, checked before every emission and proved in Lean",

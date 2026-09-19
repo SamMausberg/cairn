@@ -1,4 +1,4 @@
-"""Data-only, ordered multi-file projects. No imports, hooks or network resolution."""
+"""Data-only, ordered multi-file projects with vendored dependencies. No hooks, no network, nothing outside the root."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-from .syntax import MAX_SOURCE, Diagnostic
+from .syntax import MAX_SOURCE, Diagnostic, Parser
 from .toolchain import ARCHS, KINDS, TARGETS, ProjectError
 
 
@@ -58,6 +58,9 @@ class Project:
     arch: str = "baseline"
     target: str = "hosted"
     manifest_sha256: str | None = None
+    dependencies: tuple[
+        dict, ...
+    ] = ()  # name, path, manifest and source hashes of every vendored project, in load order
 
     def origin(self, line: int) -> tuple[str, int]:
         """The authored file and line behind a line of the combined source."""
@@ -80,7 +83,8 @@ class Project:
             "name": self.name,
             "manifest_sha256": self.manifest_sha256,
             "sources": [u.__dict__ for u in self.units],
-            "composition": "ordered single module; no namespace or separate compilation",
+            "dependencies": list(self.dependencies),
+            "composition": "ordered sources, vendored dependencies first; modules are the only namespaces",
             "source_sha256": hashlib.sha256(self.source.encode()).hexdigest(),
         }
 
@@ -103,11 +107,12 @@ def load_project(path: str | Path = ".") -> Project:
         raise ProjectError("Pass a .cairn file, a project directory, or cairn.toml.")
     manifest = read_text(target, 65536)
     data = tomllib.loads(manifest)
-    if set(data) - {"project", "build"}:
-        raise ProjectError("Unknown manifest tables; hooks and dependencies are not supported.")
+    if set(data) - {"project", "build", "dependencies"}:
+        raise ProjectError("Unknown manifest tables; hooks are not supported.")
     project, build = data.get("project", {}), data.get("build", {})
     if not isinstance(project, dict) or not isinstance(build, dict):
         raise ProjectError("project and build must be tables.")
+    vendored, fragments = dependencies(root, data.get("dependencies", {}), {root})
     if set(project) - {"name", "sources", "tests"} or set(build) - {"kind", "arch", "target"}:
         raise ProjectError("Unknown manifest option.")
     name = project.get("name")
@@ -126,8 +131,8 @@ def load_project(path: str | Path = ".") -> Project:
     if not isinstance(machine, str) or machine not in TARGETS:
         raise ProjectError(f"Unsupported build target; known targets are {', '.join(sorted(TARGETS))}.")
     units, text, line, byte_count = [], [], 1, 0
-    for relative in sources:
-        body = read_text(contained_file(root, relative, ".cairn"), MAX_SOURCE)
+    own = [(relative, read_text(contained_file(root, relative, ".cairn"), MAX_SOURCE)) for relative in sources]
+    for relative, body in [*fragments, *own]:
         header = "// source: " + relative + "\n"
         units.append(Unit(relative, line + 1, body.count("\n") + 1, hashlib.sha256(body.encode()).hexdigest()))
         fragment = header + body + "\n"
@@ -142,4 +147,47 @@ def load_project(path: str | Path = ".") -> Project:
     for relative in contracts:
         contained_file(root, relative, ".json")
     digest = hashlib.sha256(manifest.encode()).hexdigest()
-    return Project(root, name, combined, tuple(units), tuple(contracts), kind, arch, machine, digest)
+    return Project(root, name, combined, tuple(units), tuple(contracts), kind, arch, machine, digest, tuple(vendored))
+
+
+def dependencies(
+    root: Path, table: object, seen: set[Path], depth: int = 0
+) -> tuple[list[dict], list[tuple[str, str]]]:
+    """`[dependencies] geometry = "deps/geometry"`: a project vendored inside this one's root. Its sources load
+    before ours (its own dependencies first), it contributes modules only, and only what it marks `pub` is
+    reachable. Nothing is fetched and nothing outside the root is read; the receipt pins what was used."""
+    if not isinstance(table, dict) or len(table) > 16 or depth > 4:
+        raise ProjectError("dependencies is a table of at most 16 entries, nested at most 4 deep.")
+    found, fragments = [], []
+    for name, where in table.items():
+        if (
+            not isinstance(where, str)
+            or not re.fullmatch(r"[A-Za-z0-9_-]+(/[A-Za-z0-9_.-]+)*", where)
+            or ".." in where.split("/")
+        ):
+            raise ProjectError(f"Dependency {name} must be a relative directory inside the project: {where!r}")
+        home = root / where
+        if any(part.is_symlink() for part in [home, *home.parents][: len(where.split("/"))]) or not home.is_dir():
+            raise ProjectError(f"Missing dependency directory (symbolic links are not followed): {where!r}")
+        if home.resolve() in seen:
+            continue  # A diamond loads once; the first mention fixes its place in the order.
+        seen.add(home.resolve())
+        manifest = read_text(contained_file(home.resolve(), "cairn.toml", ".toml"), 65536)
+        data = tomllib.loads(manifest)
+        project = data.get("project", {})
+        if not isinstance(project, dict) or project.get("name") != name:
+            raise ProjectError(f"Dependency {name} is a project of another name at {where!r}.")
+        inner, inner_fragments = dependencies(home.resolve(), data.get("dependencies", {}), seen, depth + 1)
+        sources = project.get("sources")
+        if not isinstance(sources, list) or not 1 <= len(sources) <= 64 or not all(isinstance(v, str) for v in sources):
+            raise ProjectError(f"Dependency {name} must list 1..64 sources.")
+        bodies = [(f"{where}/{s}", read_text(contained_file(home.resolve(), s, ".cairn"), MAX_SOURCE)) for s in sources]
+        rooted = [path for path, body in bodies if "" in set(Parser(body).parse().modules.values())]
+        if rooted:
+            raise ProjectError(
+                f"Dependency {name} declares outside any module in {rooted[0]}; a library is modules only."
+            )
+        found += [*inner, {"name": name, "path": where, "manifest_sha256": hashlib.sha256(manifest.encode()).hexdigest(),
+                           "source_sha256": hashlib.sha256("".join(b for _, b in bodies).encode()).hexdigest()}]  # fmt: skip
+        fragments += [*[(f"{where}/{path}", body) for path, body in inner_fragments], *bodies]
+    return found, fragments

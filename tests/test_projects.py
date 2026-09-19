@@ -248,3 +248,66 @@ def test_incremental_builds_relink_only_the_module_whose_body_changed(tmp_path, 
     path.write_text(named + "pub fn main() -> i32 { if entry.helper() != 41 { return 1; } return 0; }\n")
     record = build(load_project(path), kind="exe", cxx=cxx, timeout=180, incremental=True)
     assert record["status"] == "native-built" and subprocess.run([record["artifact"]], timeout=30).returncode == 0
+
+
+def vendored(root: Path) -> Path:
+    """app -> deps/geometry -> deps/geometry/deps/units, all inside the application's root."""
+    files = {
+        "cairn.toml": '[project]\nname = "app"\nsources = ["src/main.cairn"]\n[build]\nkind = "exe"\n'
+        '[dependencies]\ngeometry = "deps/geometry"\n',
+        "src/main.cairn": "module app;\nimport geometry.shapes as shapes;\nimport units;\n"
+        "pub fn main() -> i32 { let r = shapes.Rect(units.metres(2), 3); return i32(shapes.area(r)) - 6; }\n",
+        "deps/geometry/cairn.toml": '[project]\nname = "geometry"\nsources = ["src/shapes.cairn"]\n'
+        '[dependencies]\nunits = "deps/units"\n',
+        "deps/geometry/src/shapes.cairn": "module geometry.shapes;\nimport units;\npub struct Rect { w:u64; h:u64; }\n"
+        "fn secret(r:ro<Rect>) -> u64 = r.w;\npub fn area(r:ro<Rect>) -> u64 = units.metres(secret(r)) * r.h;\n",
+        "deps/geometry/deps/units/cairn.toml": '[project]\nname = "units"\nsources = ["units.cairn"]\n',
+        "deps/geometry/deps/units/units.cairn": "module units;\npub fn metres(v:u64) -> u64 = v;\n",
+    }
+    for relative, text in files.items():
+        (root / relative).parent.mkdir(parents=True, exist_ok=True)
+        (root / relative).write_text(text, encoding="utf-8")
+    return root
+
+
+def test_vendored_dependencies_load_first_stay_private_and_are_pinned(tmp_path):
+    project = load_project(vendored(tmp_path))
+    assert [d["name"] for d in project.dependencies] == ["units", "geometry"]  # A dependency's own come first.
+    assert project.units[0].path == "deps/geometry/deps/units/units.cairn"
+    assert all(len(d["source_sha256"]) == 64 for d in project.receipt()["dependencies"])
+    record = build(project, cxx="clang++", timeout=120)
+    assert record["status"] == "native-built" and subprocess.run([record["artifact"]], timeout=30).returncode == 0
+    (tmp_path / "src/main.cairn").write_text(
+        "module app;\nimport geometry.shapes as shapes;\n"
+        "pub fn main() -> i32 { return i32(shapes.secret(shapes.Rect(1, 1))); }\n"
+    )
+    with pytest.raises(Diagnostic) as private:
+        compile_source(load_project(tmp_path).source)
+    assert private.value.data["code"] == "E-PRIVATE"
+
+
+@pytest.mark.parametrize(
+    ("change", "why"),
+    [
+        (("cairn.toml", 'geometry = "deps/geometry"', 'geometry = "../elsewhere"'), "inside the project"),
+        (("cairn.toml", 'geometry = "deps/geometry"', 'shapes = "deps/geometry"'), "another name"),
+        (("deps/geometry/src/shapes.cairn", "module geometry.shapes;\n", ""), "modules only"),
+        (("cairn.toml", "[dependencies]", "[hooks]\npre = 1\n[dependencies]"), "Unknown manifest tables"),
+    ],
+)
+def test_a_dependency_is_data_inside_the_root_and_nothing_else(tmp_path, change, why):
+    relative, old, new = change
+    path = vendored(tmp_path) / relative
+    path.write_text(path.read_text().replace(old, new))
+    with pytest.raises(ProjectError, match=why):
+        load_project(tmp_path)
+
+
+def test_a_symbolic_link_is_not_a_dependency(tmp_path):
+    root = vendored(tmp_path / "app")
+    (tmp_path / "outside").mkdir()
+    shutil.copytree(root / "deps/geometry", tmp_path / "outside/geometry")
+    shutil.rmtree(root / "deps/geometry")
+    (root / "deps/geometry").symlink_to(tmp_path / "outside/geometry")
+    with pytest.raises(ProjectError, match="symbolic links"):
+        load_project(root)
