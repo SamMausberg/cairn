@@ -9,7 +9,7 @@ fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@devic
   parallel i in n { out[i] = a * x[i] + y[i]; }   // CUDA lanes here; host threads if the views are @host
 }
 
-fn largest[T: Ord](n:usize, xs:ro<T>[n]) -> Option[usize] {
+fn largest[T:Ord](n:usize, xs:ro<T>[n]) -> Option[usize] {
   if n == 0 { return Option.None; }
   let mut best:usize = 0;
   for i in 1..n { if less(xs[best], xs[i]) { best = i; } }

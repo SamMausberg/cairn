@@ -29,6 +29,7 @@ from .syntax import (
     SIGNED,
     UNSIGNED,
     USIZE,
+    VISIBLE_AS,
     VOID,
     WIDTH,
     Expr,
@@ -300,7 +301,7 @@ class Checker:
                     broken = satisfies(self, value, wanted, self.p.modules.get(name, ""), node)
                     if broken:
                         code = "E-TRAIT-IMPL" if broken.startswith("does not implement") else "E-BOUND"
-                        fail(code, f"{value.display()} {broken}; {name} needs [{g}: {constraint}].", node)
+                        fail(code, f"{value.display()} {broken}; {name} needs [{g}:{constraint}].", node)
             self.define(base, node)
             if name in {"Buf", "Array"} and self.kind(args[0]) == "linear":
                 fail(
@@ -544,8 +545,9 @@ class Checker:
         self.effects.add("trap")
         self.counts[kind] = self.counts.get(kind, 0) + 1
 
-    def expect(self, got: Type, want: Type, e: Any):
+    def expect(self, got: Type, want: Type, e: Any, declared: Type | None = None):
         if got != want:
+            want = declared or want
             fail("E-TYPE-MISMATCH", f"Expected {want.display()}, got {got.display()}.", e,
                  expected_type=want.display(), actual_type=got.display())  # fmt: skip
 
@@ -849,8 +851,10 @@ class Checker:
             wanted = UNSIGNED
             self.guard("overflow")
         if ty.mode != "value" or ty.name not in wanted:
-            fail("E-REDUCE-OP", f"reduce {s.op} combines {sorted(wanted)[0]}-like scalars in an unspecified order; "
-                 "only unsigned + has an order-independent trap (signed + and integer * do not).", s)  # fmt: skip
+            takes = {id(UNSIGNED): "unsigned integers", id(INT): "integers"}.get(id(wanted), "floats")
+            fail("E-REDUCE-OP", f"reduce {s.op} takes {takes}{' and unsigned integers' * (s.op == '+')}, not "
+                 f"{ty.display()}: lanes combine in an unspecified order, and only unsigned + has an order-independent "
+                 "trap (signed + and integer * do not).", s)  # fmt: skip
         s.ty = ty
         self.bind(s.name, Binding(ty), s)
 
@@ -891,7 +895,7 @@ class Checker:
             return self.p.consts[const][1].val if const else e.val
         if e.tag in {"name", "int"}:
             return e.val
-        if e.tag == "call" and e.val == "len" and len(e.args) == 1 and root(e.args[0]).tag == "name":
+        if e.tag == "call" and e.val == "len" and len(e.args) == 1 and root(e.args[0]).tag in {"name", "str"}:
             ty = e.args[0].ty or self.expr(e.args[0], consume=False)
             return ty.extent if is_view(ty) else f"len({self.identity(e.args[0])})" if ty.name == "Buf" else None
         return None
@@ -1057,6 +1061,9 @@ class Checker:
             self.effect("read:" + e.val)
             return b.ty.value
         return b.ty
+
+    def e_slice(self, e: Expr, expected: Type | None) -> Type:
+        fail("E-VIEW-ALIAS", "A part xs[lo..hi] is a borrow: it exists only as a view argument of a call.", e)
 
     def e_index(self, e: Expr, expected: Type | None, read: bool = True) -> Type:
         value = self.function_value(e, expected) if expected and expected.name == "fn" else None
@@ -1477,7 +1484,9 @@ class Checker:
                 if extent is None:
                     fail("E-CALL-SHAPE", "View extent must be a name, literal or len(view).", subst[want.extent])
                 mode = "rw" if actual.mode == "rw" and want.mode == "ro" else want.mode
-                self.expect(actual, Type(want.name, mode, extent, want.args, want.place), a)
+                place = actual.place if (actual.place, want.place) in VISIBLE_AS else want.place
+                asked = Type(want.name, want.mode, extent, want.args, want.place)
+                self.expect(actual, Type(want.name, mode, extent, want.args, place), a, asked)
             else:
                 actual = self.expr(a, consume=False)
                 if want.mode == "rw" and not self.writable(a):

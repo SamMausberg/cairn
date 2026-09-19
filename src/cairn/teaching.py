@@ -66,8 +66,9 @@ contracts; large expansion is not a measured advantage over compact C++ template
 wire is a library recipe. recipe name[K:nat] for R { ... } holds ordinary fn and
 struct declarations plus static forms: each f in R { } (fields) or each k in lo..hi { }
 at declaration, statement, field-list or call-argument level (there it splices a
-list); fold | each ... { e } joins the expansions with a real binary operator (| here;
-+ or && work too); where a = offset(f), t = typeof(f) names static values (facts take a
+list, { a.$f, b.$f } gives two per step); fold | each ... { e } joins the expansions with
+an operator or a two-operand function (fold add_wrap each ..); where a = offset(f),
+w = fold + each f in R { bytes(f) } names static values (naturals, min, max; facts take a
 field or a type alike, unsigned(f) or bytes(R): bytes bits offset index count typeof
 unsigned signed integer float scalar record); $name splices into identifiers (encode_$R, value.$f) or stands for the
 natural/type; bare R is the type; require cond, "message"; states the domain.
@@ -102,7 +103,7 @@ the same sum family with the same failure payload. It is the only propagation fo
 checked as ordinary code; arguments are inferred from values, literals and the expected
 type, or written f[u64](x), Pair[u8](1, 2), Option[u64].None. trait Shape {fn area(self:
 ro<Self>) -> u64;} with impl Shape for Square {...} dispatches statically on the Self
-argument; [S: Shape] is checked when the instance is made. Bounds join with +: a trait,
+argument; [S:Shape] is checked when the instance is made. Bounds join with +: a trait,
 a kind (copy: reusable; affine: droppable, storable; none: may be linear) or a scalar class
 (integer unsigned signed float numeric scalar: operators and literals allowed). value.f(a) is f(value, a),
 found first in the module of the receiver's type. A ro<T> or rw<T> parameter borrows the
@@ -125,7 +126,8 @@ unsafe { }. Do not widen a ceiling or add unsafe to make an edit pass.""",
     "parallel": """parallel i in n { out[i] = a * x[i] + y[i]; } runs one lane per index and finishes before
 the next statement. Placement is part of a view type: @host (default), @pinned, @unified,
 @device. Indexing a @device view makes the region CUDA lanes, otherwise host threads; host
-code cannot index @device memory and lanes cannot index the other side. Whatever any lane
+code cannot index @device memory and lanes cannot index the other side; a @pinned or
+@unified view may be passed where @host is asked (@unified also as @device). Whatever any lane
 writes may be touched only at [i]; shared scalars cannot be assigned (use let s = reduce
 add_wrap for i in n yield x[i];, which is also the ordinary fold outside any region: i
 runs over 0..n and the operator is one of add_wrap mul_wrap min max & | ^, or + * on floats). Lanes cannot return, nest or move outer owners, and

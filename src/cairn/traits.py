@@ -26,7 +26,6 @@ from .syntax import (
     Type,
     fail,
     is_view,
-    root,
 )
 
 if TYPE_CHECKING:
@@ -91,7 +90,7 @@ def instantiate(c: Checker, template: Function, bound: dict[str, Any], node: Any
                 broken = satisfies(c, value, wanted, template.module, node)
                 if broken:  # The caller learns which promise failed, not which line of the body did.
                     code = "E-TRAIT-IMPL" if broken.startswith("does not implement") else "E-BOUND"
-                    fail(code, f"{value.display()} {broken}; {template.name} needs [{g}: {constraint}].", node)
+                    fail(code, f"{value.display()} {broken}; {template.name} needs [{g}:{constraint}].", node)
         if len(c.p.functions) >= MAX_FUNCTIONS:
             fail("E-EXPANSION-LIMIT", "Expanded program exceeds 2048 functions.", node)
         f = copy.deepcopy(template)
@@ -114,7 +113,7 @@ def infer(c: Checker, f: Function, args: list[Expr], targs: tuple, expected: Typ
             if expected and a.tag in {"int", "float"}:
                 unify(c, f.ret, expected, bound, generics)
             if unbound(c, declared, generics, bound):
-                actual = c.peek(root(a) if a.tag == "slice" else a)
+                actual = c.peek(a.args[0] if a.tag == "slice" else a)  # A part has the element type of its base.
                 element = actual if not declared.extent or is_view(actual) else actual.args[0]
                 if not unify(c, declared, element, bound, generics):
                     fail("E-TYPE-MISMATCH", f"{actual.display()} does not fit {declared.display()}.", a)
@@ -179,7 +178,7 @@ def implemented(c: Checker, trait: str, target: Type, node: Any = None) -> dict[
                 (bound[g], w) for g, c in f.generics if g in bound and c not in {"nat", "type"} for w in c.split("+")
             ]
             if any(satisfies(c, value, wanted, f.module, node) for value, wanted in promises):
-                continue  # `impl[T: integer] Ord for T` is an impl for the integers, not for everything.
+                continue  # `impl[T:integer] Ord for T` is an impl for the integers, not for everything.
             short = f.name.rsplit(".", 1)[1]
             if short in matches:
                 fail("E-TRAIT-OVERLAP", f"Two impls of {trait} match {target.display()}: one Self type means "

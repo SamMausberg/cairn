@@ -302,6 +302,56 @@ def test_parts_are_guarded_inside_device_lanes_and_device_scratch_is_in_the_row(
     assert build_and_run(tmp_path, DEVICE_PARTS, "g++")[0] == 0
 
 
+LENT_PLACEMENTS = """
+fn total(n:usize, xs:ro<u64>[n]) -> u64 { let mut t:u64 = 0; for i in 0..n { t = t + xs[i]; } return t; }
+fn fill(n:usize, xs:rw<u64>[n], v:u64) { for i in 0..n { xs[i] = v + u64(i); } }
+fn upload(n:usize, dst:rw<u64>[n]@device, src:ro<u64>[n]) { transfer(dst, src); }
+fn download(n:usize, dst:rw<u64>[n], src:ro<u64>[n]@device) { transfer(dst, src); }
+fn bump(n:usize, xs:rw<u64>[n]@device) { parallel i in n { xs[i] = xs[i] + 1; } }
+fn main() -> i32 {
+  let n:usize = 1000;
+  buffer p:u64[n]@pinned = zeroed;
+  buffer u:u64[n]@unified = zeroed;
+  buffer d:u64[n]@device = zeroed;
+  buffer h:u64[n] = zeroed;
+  fill(n, p, 1);
+  fill(n, u, 2);
+  if total(n, p) != 500500 || total(n, u) != 501500 { return 1; }
+  upload(n, d, p);
+  bump(n, d);
+  download(n, h, d);
+  if total(n, h) != 501500 { return 2; }
+  upload(n, d, u);
+  bump(n, d);
+  download(n, p, d);
+  bump(n, u);
+  if total(n, p) != 502500 || total(n, u) != 502500 { return 3; }
+  return 0;
+}
+"""
+
+
+def test_a_view_is_lent_as_what_its_memory_also_is(tmp_path):
+    """Page-locked memory is host memory and managed memory is both, so helpers written for @host (or @device)
+    views serve them; nothing is lent the other way, and a device view never reaches host code."""
+    declared = "fn f(n:usize, xs:ro<u64>[n]@{want}) {{}} fn main() -> i32 {{ let n:usize = 4; buffer b:u64[n]@{got} = zeroed; f(n, b); return 0; }}"
+    for got, want in [
+        ("host", "pinned"),
+        ("host", "unified"),
+        ("device", "host"),
+        ("pinned", "device"),
+        ("device", "unified"),
+    ]:
+        with pytest.raises(Diagnostic) as e:
+            compile_source(declared.format(got=got, want=want))
+        assert e.value.data["code"] == "E-TYPE-MISMATCH"
+    for got, want in [("pinned", "host"), ("unified", "host"), ("unified", "device")]:
+        compile_source(declared.format(got=got, want=want))
+    if not shutil.which("nvcc") or subprocess.run(["nvidia-smi"], capture_output=True).returncode != 0:
+        pytest.skip("No CUDA toolkit or device here")
+    assert build_and_run(tmp_path, LENT_PLACEMENTS, "g++")[0] == 0
+
+
 def test_try_returns_from_the_closure_it_is_written_in(tmp_path):
     source = (
         "enum R { Ok(u64); Err(u8); }"

@@ -334,6 +334,59 @@ def test_what_the_first_real_users_tripped_over(tmp_path, cxx):
     assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
 
 
+SECOND_USER_FOUND = """
+import std.sort;
+struct Plain { price:Buf[u64]; }
+struct Two[A, B] { left:Buf[A]; right:Buf[B]; }
+fn first[T](n:usize, src:ro<T>[n]) -> T = src[0];
+fn say(n:usize, s:ro<u8>[n]) -> usize = n;
+fn main() -> i32 {
+  let n:usize = 8;
+  let mut c = Plain(Buf[u64](n));
+  let mut two = Two(Buf[u8](n), Buf[f64](n));
+  for i in 0..n { c.price[i] = u64(n - i); two.right[i] = 1.5; }
+  sort.sort(n, c.price[0..n]);
+  if c.price[0] != 1 || first(4, c.price[4..n]) != 5 || first(2, two.right[1..3]) != 1.5 { return 1; }
+  let host:u64 = 3;
+  let device = host + u64(say(len("hello"), "hello"));
+  if device != 8 || len("") != 0 { return 2; }
+  return 0;
+}
+"""
+
+
+def test_what_the_second_user_tripped_over(tmp_path):
+    """A generic callee given a part of a record's field (the element type comes from the field, not from the
+    record's own arguments), `len` of a literal as an extent, and placement words as ordinary names."""
+    if not shutil.which("clang++"):
+        pytest.skip("Native compiler unavailable")
+    (tmp_path / "p.cpp").write_text(compile_source(SECOND_USER_FOUND)[0] + "int main() { return cf_main(); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    flags = ["-std=c++20", "-O1", "-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-Werror"]
+    subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+
+
+@pytest.mark.parametrize(
+    ("code", "says", "source"),
+    [
+        ("E-VIEW-ALIAS", "only as a view argument", "fn f() { let mut d = Buf[u64](8); let x = d[0..4]; }"),
+        ("E-VIEW-ALIAS", "only as a view argument", "fn f(n:usize, xs:ro<u64>[n]) -> u64 { return xs[0..2][1]; }"),
+        ("E-VIEW-ALIAS", "only as a view argument", "fn f(n:usize, xs:ro<u64>[n]) -> bool = xs[0..2] == xs[0..2];"),
+        ("E-PARSE", "shl_wrap(x, k) and shr(x, k)", "fn f(a:u64) -> u64 = a >> 2;"),
+        ("E-PARSE", "shl_wrap(x, k) and shr(x, k)", "fn f(a:u64) -> u64 = a << 2;"),
+        ("E-REDUCE-OP", "not i64", "fn f(n:usize, xs:ro<i64>[n]) -> i64 { let s = reduce + for i in n yield xs[i]; return s; }"),
+        ("E-TYPE-MISMATCH", "Expected ro<u64>[n]@host, got rw<u64>[n]@device",
+         "fn g(n:usize, xs:ro<u64>[n]) {} fn f(n:usize, xs:rw<u64>[n]@device) { g(n, xs); }"),
+    ],
+)  # fmt: skip
+def test_a_diagnostic_says_what_to_write_instead(code, says, source):
+    with pytest.raises(Diagnostic) as e:
+        compile_source(source)
+    assert e.value.data["code"] == code and says in e.value.data["message"], e.value.data["message"]
+
+
 def test_a_move_before_break_still_counts_after_the_loop():
     source = (
         "fn consume(b:Buf[u64]) {}\n"
@@ -533,10 +586,10 @@ def test_kind_and_class_bounds_are_promises_checked_at_the_call_and_certified_on
 
     assert set(certify_templates(BOUNDED).values()) == {"ok"}  # `numeric` means: checked at every numeric type.
     refused = {
-        "let b = Buf[u64](1); let r = twice(b);": "Buf[u64] is affine, not copy; twice needs [T: copy]",
-        "let r = ignore(Token(1));": "Token is linear, not affine; ignore needs [T: affine]",
-        "let r = clamp(1.5, 0.5, 2.5);": "f64 is not integer; clamp needs [T: integer]",
-        "let p = Pair(Buf[u64](1), Buf[u64](1));": "Buf[u64] is affine, not copy; Pair needs [T: copy]",
+        "let b = Buf[u64](1); let r = twice(b);": "Buf[u64] is affine, not copy; twice needs [T:copy]",
+        "let r = ignore(Token(1));": "Token is linear, not affine; ignore needs [T:affine]",
+        "let r = clamp(1.5, 0.5, 2.5);": "f64 is not integer; clamp needs [T:integer]",
+        "let p = Pair(Buf[u64](1), Buf[u64](1));": "Buf[u64] is affine, not copy; Pair needs [T:copy]",
     }
     for call, why in refused.items():
         with pytest.raises(Diagnostic) as e:

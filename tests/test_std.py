@@ -682,7 +682,7 @@ def test_no_packaged_source_is_hidden_from_version_control():
 
 def test_every_packaged_template_needs_only_what_its_bounds_promise():
     """The library's generics are checked once against their bounds, so a misuse is reported at the call
-    (`Token is linear, not affine; std.vec.push needs [T: affine]`), never from inside the library."""
+    (`Token is linear, not affine; std.vec.push needs [T:affine]`), never from inside the library."""
     from cairn.cairnc import certify_templates
 
     modules = sorted(p.stem for p in (pathlib.Path(__file__).resolve().parents[1] / "src/cairn/std").glob("*.cairn"))
@@ -693,7 +693,7 @@ def test_every_packaged_template_needs_only_what_its_bounds_promise():
         compile_source(
             "import std.vec as vec;\nlinear struct Token { id:u64; }\nfn main() -> i32 { let mut v = vec.new[Token](); return 0; }"
         )
-    assert e.value.data["code"] == "E-BOUND" and "std.vec.new needs [T: affine]" in e.value.data["message"]
+    assert e.value.data["code"] == "E-BOUND" and "std.vec.new needs [T:affine]" in e.value.data["message"]
 
 
 def test_the_api_reference_is_what_the_compiler_says_today():

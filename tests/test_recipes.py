@@ -35,6 +35,18 @@ pub recipe columns for R {
   }
 }
 
+// Static folds compute over the schema; a run-time fold takes an operator or any function of two operands;
+// an `each` may splice several expressions per step; a recipe may generate a device helper.
+pub recipe stats for R where width = fold + each f in R { bytes(f) }, widest = fold max each f in R { bytes(f) } {
+  each f in R { require unsigned(f), "stats folds unsigned fields."; }
+  pub struct $R_range { each f in R where t = typeof(f) { lo_$f:$t; hi_$f:$t; } }
+  pub fn $R_point(v:R) -> $R_range = $R_range(each f in R { v.$f, v.$f });
+  pub fn $R_width() -> usize = $width + min($widest, 0);
+  pub fn $R_widest() -> usize = $widest;
+  pub fn $R_checksum(v:R) -> u64 = fold add_wrap each f in R { u64(v.$f) };
+  kernel fn $R_scaled(x:u64) -> u64 = mul_wrap(x, $width);
+}
+
 // A family by another name: one function per natural in a range.
 pub recipe powers[LO:nat, HI:nat] {
   each k in LO..HI { pub fn shift_$k(x:u64) -> u64 pure = shl_wrap(x, $k); }
@@ -51,6 +63,7 @@ struct Packet { kind:u8; size:u32; tag:u16; }
 derive layout.columns for Particle;
 derive layout.powers[1, 4];
 derive wire for Packet;
+derive layout.stats for Packet;
 pub fn main() -> i32 {
   let mut cols = Particle_columns_new(4);
   for i in 0..4 { Particle_set(cols, i, Particle(f32(i), 2.0, 1.5, u32(i))); }
@@ -61,6 +74,9 @@ pub fn main() -> i32 {
   encode_Packet(bytes, Packet(9, 0x01020304, 7));
   let back = decode_Packet(bytes);
   if bytes[1] != 4 || bytes[4] != 1 || back.size != 0x01020304 || back.tag != 7 || wire_size_Packet() != 7 { return 3; }
+  let at = Packet_point(Packet(9, 5, 7));
+  if Packet_width() != 7 || Packet_widest() != 4 || Packet_checksum(back) != 0x01020304 + 16 { return 4; }
+  if at.lo_kind != 9 || at.hi_size != 5 || at.hi_tag != 7 { return 5; }
   return 0;
 }
 """
@@ -88,7 +104,7 @@ def test_recipes_generate_records_functions_and_ranges_that_run(tmp_path, cxx):
 
 def test_a_receipt_pins_each_recipe_by_the_hash_of_its_tokens():
     first = compile_source(APP)[1]["recipes"]
-    assert set(first) == {"layout.columns", "layout.powers", "std.wire.wire"}
+    assert set(first) == {"layout.columns", "layout.powers", "layout.stats", "std.wire.wire"}
     assert all(len(digest) == 64 for digest in first.values())
     respaced = APP.replace("pub recipe powers[LO:nat, HI:nat] {", "pub recipe powers[LO:nat,HI:nat]\n{  // same tokens")
     assert compile_source(respaced)[1]["recipes"] == first  # Layout and comments are not the recipe.
@@ -176,6 +192,25 @@ REJECTED = {
         "  return 0; } }\nderive bomb;",
     ),
     "splices outside a recipe are not syntax": ("E-LEX", "fn f() -> usize = $n;"),
+    "a generated record cannot repeat a field": (
+        "E-DERIVE-COLLISION",
+        "recipe t for R { struct $R_table { each f in R { $f:u64; } rows:usize; } }\nstruct P { rows:u32; }\nderive t for P;",
+    ),
+    "fold says what it takes": ("E-PARSE", "recipe w for R { fn f() -> usize = fold add_wrap 3; }"),
+    "a static fold combines naturals": (
+        "E-RECIPE-STATIC",
+        "recipe w for R where n = fold + each f in R { typeof(f) } { fn f() -> usize = $n; }\nstruct P { a:u8; }\n"
+        "derive w for P;",
+    ),
+    "a static fold of nothing has no value": (
+        "E-RECIPE-STATIC",
+        "recipe w where n = fold + each i in 0..0 { i } { fn f() -> usize = $n; }\nderive w;",
+    ),
+    "a generated kernel is still a kernel": (
+        "E-PLACEMENT",
+        "recipe k for R { kernel fn twice_$R(x:u64) -> u64 = x * 2; }\nstruct P { a:u8; }\nderive k for P;\n"
+        "fn host() -> u64 = twice_P(2);",
+    ),
 }
 
 

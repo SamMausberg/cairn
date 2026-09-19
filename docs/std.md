@@ -217,9 +217,9 @@ values, so `Map[u64, Vec[u8]]` is ordinary.
 | function | notes |
 | --- | --- |
 | `new[K, V]() -> Map[K, V]` | no allocation until the first insert |
-| `insert[K: Hash + Eq, V](m:rw<Map[K,V]>, key:K, value:V)` | moves both in; replacing releases the old value |
-| `find[K: Hash + Eq, V](m:ro<Map[K,V]>, key:ro<K>) -> Option[usize]` | the slot, not the value |
-| `remove[K: Hash + Eq, V](m:rw<Map[K,V]>, key:ro<K>) -> Option[V]` | moves the value out |
+| `insert[K:Hash + Eq, V](m:rw<Map[K,V]>, key:K, value:V)` | moves both in; replacing releases the old value |
+| `find[K:Hash + Eq, V](m:ro<Map[K,V]>, key:ro<K>) -> Option[usize]` | the slot, not the value |
+| `remove[K:Hash + Eq, V](m:rw<Map[K,V]>, key:ro<K>) -> Option[V]` | moves the value out |
 | `count`, `slots`, `live(m, slot)` | iteration is `for slot in 0..m.slots()` |
 
 Expected O(1); insert rehashes past three quarters full, so `alloc`, `free` and `zero_init` are
@@ -294,7 +294,7 @@ generator it replaced.
 
 ## std.derived
 
-Three recipes that generate trait implementations: `derive eq for P;` (field-wise `same`), `derive ord for P;` (lexicographic `less`, declaration order) and `derive hash for P;` (FNV-1a over the fields' hashes). Each is an ordinary `impl` of the `std.core` trait for the record, so the record then satisfies `[T: Ord]` for `std.sort` or `[K: Hash + Eq + affine]` for `std.map`. A field whose type lacks the trait is reported as such (`bool does not implement std.core.Ord`); `std.core` itself implements `Ord` and `Eq` for every integer type, `Eq` for `bool`, and `Hash` for the unsigned integers, with one bounded impl per class.
+Three recipes that generate trait implementations: `derive eq for P;` (field-wise `same`), `derive ord for P;` (lexicographic `less`, declaration order) and `derive hash for P;` (FNV-1a over the fields' hashes). Each is an ordinary `impl` of the `std.core` trait for the record, so the record then satisfies `[T:Ord]` for `std.sort` or `[K:Hash + Eq + affine]` for `std.map`. A field whose type lacks the trait is reported as such (`bool does not implement std.core.Ord`); `std.core` itself implements `Ord` and `Eq` for every integer type, `Eq` for `bool`, and `Hash` for the unsigned integers, with one bounded impl per class.
 
 ## Known sharp edges
 

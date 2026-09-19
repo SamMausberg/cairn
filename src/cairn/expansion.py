@@ -5,18 +5,21 @@ from __future__ import annotations
 import copy
 import operator
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import reduce
 from typing import Any
 
 from .syntax import (  # isort: skip
-    FLOAT, INT, MAX_FAMILY, MAX_FUNCTIONS, MAX_NODES, SCALAR, SIGNED, UNSIGNED, WIDTH, Arm, Each, Expr, Function,
-    Impl, Program, Recipe, Shape, Stmt, Type, fail,
+    FLOAT, INT, MAX_FAMILY, MAX_FUNCTIONS, MAX_NODES, PREC, SCALAR, SIGNED, UNSIGNED, WIDTH, Arm, Each, Expr,
+    Function, Impl, Program, Recipe, Shape, Stmt, Type, fail,
 )  # fmt: skip
 
-OPERATORS = {"+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.floordiv, "%": operator.mod,
-             "==": operator.eq, "!=": operator.ne, "<": operator.lt, "<=": operator.le, ">": operator.gt,
-             ">=": operator.ge, "&&": lambda a, b: a and b, "||": lambda a, b: a or b}  # fmt: skip
+OPERATORS: dict[str, Callable[[Any, Any], Any]] = {
+    "+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.floordiv, "%": operator.mod,
+    "==": operator.eq, "!=": operator.ne, "<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge,
+    "&&": lambda a, b: a and b, "||": lambda a, b: a or b, "min": min, "max": max,
+}  # fmt: skip
 
 
 def declared(p: Program) -> set[str]:
@@ -81,7 +84,14 @@ class Deriver:
             return value
         if e.tag == "unary" and e.val == "!" and isinstance(self.static(e.args[0], env), bool):
             return not self.static(e.args[0], env)
-        if e.tag == "binary" and e.val in OPERATORS:
+        if e.tag == "fold" and e.val in OPERATORS and e.args[0].tag == "each":  # The same operation, over a list.
+            each = e.args[0].ref
+            found = [self.static(x, inner) for inner in self.each(each, env) for x in each.items]
+            parts = [Expr("bool" if isinstance(v, bool) else "int", str(v).lower(), [], e.line, e.col) for v in found]
+            if not parts or not all(isinstance(v, int) for v in found):
+                fail("E-RECIPE-STATIC", "A static fold combines at least one natural or boolean.", e)
+            return self.static(reduce(lambda a, b: Expr("binary", e.val, [a, b], e.line, e.col), parts), env)
+        if e.tag in {"binary", "call"} and e.val in OPERATORS and len(e.args) == 2:
             a, b = (self.static(x, env) for x in e.args)
             wanted = bool if e.val in {"&&", "||"} else int
             if type(a) is not wanted or type(b) is not wanted or (e.val in {"/", "%"} and b == 0):
@@ -161,12 +171,13 @@ class Deriver:
         if self.nodes > MAX_NODES:
             fail("E-EXPANSION-LIMIT", f"Recipe {self.recipe.name} exceeds the expansion budget.", e)
         if e.tag == "each":
-            return [x for inner in self.each(e.ref, env) for x in self.exprs(e.ref.items[0], inner)]
+            return [x for inner in self.each(e.ref, env) for item in e.ref.items for x in self.exprs(item, inner)]
         if e.tag == "fold":
             parts = self.exprs(e.args[0], env)
             if not parts:
                 fail("E-RECIPE-STATIC", "fold needs at least one operand.", e)
-            return [reduce(lambda a, b: Expr("binary", e.val, [a, b], e.line, e.col), parts)]
+            tag = "binary" if e.val in PREC else "call"
+            return [reduce(lambda a, b: Expr(tag, e.val, [a, b], e.line, e.col), parts)]
         if e.tag == "name" and e.val.startswith("$") and e.val[1:] in env:
             value = self.static(e, env)
             if isinstance(value, (bool, int)):
@@ -279,6 +290,13 @@ def derive(p: Program) -> Program:
                 name, public = (made.name, made.public) if isinstance(made, Function) else (made[0], made[2])
                 if name in names or name in p.modules:
                     fail("E-DERIVE-COLLISION", f"Derived name {name} already exists.", at)
+                twice = (
+                    []
+                    if isinstance(made, Function)
+                    else [n for n, _ in made[1] if [m for m, _ in made[1]].count(n) > 1]
+                )
+                if twice:
+                    fail("E-DERIVE-COLLISION", f"Derived record {name} would have two fields named {twice[0]}.", at)
                 names.add(name)
                 p.modules[name] = module
                 p.public |= {name} if public else set()

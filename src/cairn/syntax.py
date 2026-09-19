@@ -53,14 +53,16 @@ TOKEN = re.compile(
 IDENT = re.compile(r"[A-Za-z_$][A-Za-z_0-9$]*\Z")
 NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\Z")
 RESERVED = set(  # One readable paragraph of words beats a wall of quoted strings.
-    "fn struct enum family let mut reg if else for each in while return true false ro rw host nat "
+    "fn struct enum family let mut reg if else for each in while return true false ro rw nat "
     "effects pure extern unsafe defer match kernel module import compact where yield derive "
     "buffer stack zeroed break continue trait impl dyn const pub linear parallel reduce spawn try "
-    "as type device pinned unified".split()
+    "as type".split()  # Placements (@host @device @pinned @unified) are words only after `@`.
 )
 ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "0": "\0", "\\": "\\", '"': '"', "'": "'"}
 PLACES = ("host", "device", "pinned", "unified")
 HOST_VISIBLE = {"host", "pinned", "unified"}
+# A view may be lent as what its memory also is: page-locked memory is host memory, managed memory is both.
+VISIBLE_AS = {("pinned", "host"), ("unified", "host"), ("unified", "device")}
 
 
 def lex(text: str) -> list[Token]:
@@ -314,6 +316,9 @@ class Parser:
     def t(self) -> Token:
         return self.ts[self.i]
 
+    def ahead(self, k: int) -> str:
+        return self.ts[min(self.i + k, len(self.ts) - 1)].s
+
     def eat(self, s: str) -> bool:
         if self.t.s == s:
             self.i += 1
@@ -336,7 +341,7 @@ class Parser:
 
     def path(self) -> str:
         name = self.ident()
-        while self.t.s == "." and IDENT.fullmatch(self.ts[self.i + 1].s):
+        while self.t.s == "." and IDENT.fullmatch(self.ahead(1)):
             self.i += 1
             name += "." + self.ident()
         return name
@@ -436,11 +441,13 @@ class Parser:
                 e.args += self.after() if t.s == "spawn" else []
         elif t.s in {"|", "||"}:
             e = self.closure()
-        elif self.recipe and t.s == "fold" and self.ts[self.i + 1].s in PREC:
+        elif self.recipe and t.s == "fold":
+            if self.ahead(1) not in PREC and self.ahead(2) != "each":
+                fail("E-PARSE", "fold takes an operator or a function of two operands: fold + each f in R { .. }.", t)
             self.i += 2
             e = Expr("fold", self.ts[self.i - 1].s, [self.expr(10)], *at)
         elif self.recipe and t.s == "each":
-            e = Expr("each", "", [], *at, ref=self.each(lambda: [self.braced(self.expr)]))
+            e = Expr("each", "", [], *at, ref=self.each(lambda: self.need("{") or self.listed("}", self.expr)))
         elif self.eat("true") or self.eat("false"):
             e = Expr("bool", t.s, [], *at)
         elif NUMBER.match(t.s):
@@ -476,6 +483,8 @@ class Parser:
             elif self.t.s in PREC and PREC[self.t.s] >= prec:
                 op = self.t.s
                 self.i += 1
+                if op in {"<", ">"} and self.t.s == op and self.t.start == self.ts[self.i - 1].end:
+                    fail("E-PARSE", f"There is no {op * 2} operator: shifts are shl_wrap(x, k) and shr(x, k).", self.t)
                 e = Expr("binary", op, [e, self.expr(PREC[op] + 1)], e.line, e.col)
             else:
                 break
@@ -564,18 +573,12 @@ class Parser:
     def after(self) -> list[Expr]:
         """`after a, b`: tickets whose queued work runs first. A word only here, not a reserved one."""
         names: list[Expr] = []
-        if self.t.s == "after" and self.ts[self.i + 1].s not in {"=", ".", "(", "["}:
+        if self.t.s == "after" and self.ahead(1) not in {"=", ".", "(", "["}:
             self.i += 1
             names.append(Expr("name", self.ident(), [], self.t.line, self.t.col))
             while self.eat(","):
                 names.append(Expr("name", self.ident(), [], self.t.line, self.t.col))
         return names
-
-    def braced(self, item):
-        self.need("{")
-        value = item()
-        self.need("}")
-        return value
 
     def each(self, items) -> Each:
         """`each f in R where at = offset(f) { ... }` or `each b in 0..bytes(f) { ... }`."""
@@ -627,8 +630,9 @@ class Parser:
                     self.need("fn")
                     found[-1].members.append(self.function(start, public=True))
             else:
+                kernel = self.eat("kernel")
                 self.need("fn")
-                found.append(self.function(t, public=public))
+                found.append(self.function(t, public=public, kernel=kernel))
         return found
 
     def shape(self) -> list[Any]:
@@ -894,7 +898,7 @@ class Parser:
                 f = self.function(t, public=public, kernel=kernel)
                 f.name = f.source_name = declare(f.name, t)
                 p.functions.append(f)
-            elif self.t.s == "recipe" and IDENT.fullmatch(self.ts[self.i + 1].s):
+            elif self.t.s == "recipe" and IDENT.fullmatch(self.ahead(1)):
                 self.i += 1
                 name, first, self.recipe = declare(self.ident(), t), self.i - 2 - public, True
                 kinds = self.generic_parameters()

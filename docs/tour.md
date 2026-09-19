@@ -70,10 +70,10 @@ fn main() -> i32 {
 An instance is what is checked, and a bound is a promise checked at the call: a trait, a kind (`copy`, `affine`) or a closed class of scalars that licenses operators.
 
 ```cairn
-struct Pair[T: copy] { a:T; b:T; }
+struct Pair[T:copy] { a:T; b:T; }
 
-fn largest[T: numeric](a:T, b:T) -> T { if a < b { return b; } return a; }
-fn twice[T: copy](x:T) -> Pair[T] = Pair(x, x);
+fn largest[T:numeric](a:T, b:T) -> T { if a < b { return b; } return a; }
+fn twice[T:copy](x:T) -> Pair[T] = Pair(x, x);
 fn scale[K:nat](x:usize) -> usize = mul_wrap(x, K);
 family times = scale[2..5];                         // times_2, times_3, times_4
 
@@ -95,7 +95,7 @@ struct Rect { w:u64; h:u64; }
 impl Shape for Square { fn area(self:ro<Square>) -> u64 = self.side * self.side; }
 impl Shape for Rect { fn area(self:ro<Rect>) -> u64 = self.w * self.h; }
 
-fn both[A: Shape, B: Shape](a:ro<A>, b:ro<B>) -> u64 = area(a) + area(b);   // static
+fn both[A:Shape, B:Shape](a:ro<A>, b:ro<B>) -> u64 = area(a) + area(b);   // static
 fn measure(s:ro<dyn Shape>) -> u64 = area(s);                                // through a table
 
 fn main() -> i32 {

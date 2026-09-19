@@ -36,7 +36,9 @@ class Item:
     start: int
     end: int
     comment: bool = False
-    role: str = ""  # unary | angle_open | angle_close | lam_open | lam_close | lambda0 | inline | spaced
+    role: str = (
+        ""  # unary | angle_open | angle_close | lam_open | lam_close | lambda0 | inline | splice | fold | spaced
+    )
     pair: int = -1  # matching bracket, as an index into the code tokens
 
 
@@ -94,8 +96,11 @@ def roles(cs: list[Item]) -> list[Item]:
             t.role, pipe = "lam_close", False
         elif t.s in {"-", "!", "~"} and not (i and _value_end(cs[i - 1])):
             t.role = "unary"
+        elif t.s in PREC and i and cs[i - 1].s == "fold":
+            t.role = "fold"  # `fold + each ...`: the operator is an operand of fold, never a place to break
         elif t.s == "{" and i < t.pair and all(x.nl == 0 for x in cs[i + 1 : t.pair + 1]):
-            t.role = "inline"  # the author wrote this block on one line
+            body = cs[i + 1 : t.pair]  # One line without `;` is a list of expressions, `each f in R { a.$f, b.$f }`:
+            t.role = "splice" if body and all(x.s != ";" for x in body) else "inline"  # a bracket, not a block.
         elif t.s == "(" and importing:
             t.role = "spaced"  # `import std.core (Option);`
         importing = t.s == "import" or (importing and t.s != ";")
@@ -172,8 +177,12 @@ def wrap(parts: list[Part], indent: int) -> list[str]:
         j = _close(parts, i) if depth[i] == 0 and s in {"(", "["} else -1
         if j > i + 1 and j - i > best[1] - best[0]:
             best = (i, j)
-    if best == (0, 0):
-        return [pad + _join(parts)]
+    if best == (0, 0):  # No bracket to open: a list at the top, such as a recipe's `where a = .., b = ..`.
+        return _fill(
+            _groups(parts, [i + 1 for i in range(len(parts) - 1) if depth[i] == 0 and parts[i][1] == ","]),
+            pad,
+            pad + STEP,
+        )
     i, j = best
     body = parts[i + 1 : j]
     inner = _depths(body)
@@ -260,7 +269,7 @@ def render(items: list[Item]) -> str:
         if it.s == "}" and inline:
             inline -= 1
             w.push(space(prev, it), it.s)
-            if not inline and not (nxt and nxt.s in GLUE):
+            if not inline and not (nxt and nxt.s in GLUE) and cs[it.pair].role != "splice":
                 w.flush()
         elif it.s == "}":
             w.flush()
@@ -269,7 +278,7 @@ def render(items: list[Item]) -> str:
             if not (nxt and nxt.s in GLUE):
                 w.flush()
         elif it.s == "{":
-            keep = bool(inline) or (it.role == "inline" and _fits(w, cs, k))
+            keep = bool(inline) or it.role == "splice" or (it.role == "inline" and _fits(w, cs, k))
             w.push(space(prev, it), it.s)
             if keep:
                 inline += 1

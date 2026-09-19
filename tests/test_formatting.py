@@ -256,6 +256,27 @@ def test_a_comment_keeps_the_declaration_it_documents():
     assert format_source(source) == source
 
 
+def test_a_splice_is_a_bracket_and_a_fold_operator_is_not_a_break():
+    """`each f in R { a, b }` stays whole however long its line is; the line breaks around it, never after `fold`."""
+    source = (
+        "pub recipe stats for R where width = fold + each f in R { bytes(f) }, widest = fold max each f in R { bytes(f) } {\n"
+        "  pub fn $R_all(c:ro<$R_table>) -> $R_summary = $R_summary(each f in R { $R_min_$f(c) }, "
+        "each f in R { $R_max_$f(c), $R_sum_$f(c) });\n"
+        "  pub fn $R_key(v:R) -> u64 = fold ^ each f in R where o = offset(f) { shl_wrap(u64(v.$f), $o) } "
+        "+ fold add_wrap each f in R { u64(v.$f) };\n}\n"
+    )
+    assert format_source(source) == (
+        "pub recipe stats for R where width = fold + each f in R { bytes(f) },\n"
+        "  widest = fold max each f in R { bytes(f) } {\n"
+        "  pub fn $R_all(c:ro<$R_table>) -> $R_summary = $R_summary(\n"
+        "    each f in R { $R_min_$f(c) }, each f in R { $R_max_$f(c), $R_sum_$f(c) }\n"
+        "  );\n"
+        "  pub fn $R_key(v:R) -> u64 = fold ^ each f in R where o = offset(f) { shl_wrap(u64(v.$f), $o) }\n"
+        "    + fold add_wrap each f in R { u64(v.$f) };\n}\n"
+    )
+    assert format_source(format_source(source)) == format_source(source)
+
+
 def test_trailing_whitespace_and_carriage_returns_are_normalised():
     assert format_source("// spaced   \nfn f() -> u64 { return 1; }  \n") == (
         "// spaced\nfn f() -> u64 { return 1; }\n"

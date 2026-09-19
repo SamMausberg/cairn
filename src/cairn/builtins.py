@@ -34,12 +34,13 @@ def explicit(c: Checker, e: Expr, name: str, targs: tuple, expected: Type | None
 
 
 def check_len(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
-    if len(args) != 1 or root(args[0]).tag != "name" or args[0].tag == "slice":
-        fail("E-LEN", "len takes one direct borrowed view or local buffer.", e)
+    if len(args) != 1 or root(args[0]).tag not in {"name", "str"} or args[0].tag == "slice":
+        fail("E-LEN", "len takes one direct borrowed view, local buffer or string literal.", e)
     ty = c.expr(args[0], consume=False)
     if not is_view(ty) and ty.name not in {"Buf", "Array"}:
         fail("E-LEN", "len requires an array view.", e)
-    c.leased(c.where(args[0]), "ro", e, elements=False)  # Lent elements keep their count; a lent owner may not.
+    if args[0].tag != "str":
+        c.leased(c.where(args[0]), "ro", e, elements=False)  # Lent elements keep their count; a lent owner may not.
     return USIZE
 
 
