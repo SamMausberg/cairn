@@ -22,4 +22,4 @@
 - [private-publication.md](project/private-publication.md): the opt-in private publisher.
 - `BASELINE.json` and `UPSTREAM.json`: the archives this source was built from.
 
-`cards/` holds the rule cards given to AI agents. `history/` holds the 0.2, 0.3 and 0.4 specifications.
+The programs themselves are indexed in [examples/README.md](../examples/README.md). `cards/` holds the rule cards given to AI agents. `history/` holds the 0.2, 0.3 and 0.4 specifications.

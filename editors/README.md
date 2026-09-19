@@ -1,14 +1,14 @@
 # Editor support
 
-`editors/vscode/` is a VS Code and Cursor extension, version 1.1.0: a TextMate grammar, bracket and comment configuration, and a client that starts `cairn lsp` over stdio. It has no build step. `node_modules/` is not vendored; `vscode-languageclient` is declared in `package.json` and resolved when the extension is packaged or installed.
+`editors/vscode/` is a VS Code and Cursor extension, version 1.2.0: a TextMate grammar, bracket and comment configuration, and a client that starts `cairn lsp` over stdio. It has no build step. `node_modules/` is not vendored; `vscode-languageclient` is declared in `package.json` and resolved when the extension is packaged or installed.
 
 ## Install from this checkout
 
 Symlink the directory into the editor's extension folder and reload the window:
 
 ```sh
-ln -s "$PWD/editors/vscode" ~/.cursor/extensions/cairn-1.1.0          # Cursor
-ln -s "$PWD/editors/vscode" ~/.vscode/extensions/cairn-1.1.0          # VS Code
+ln -s "$PWD/editors/vscode" ~/.cursor/extensions/cairn-1.2.0          # Cursor
+ln -s "$PWD/editors/vscode" ~/.vscode/extensions/cairn-1.2.0          # VS Code
 ```
 
 Syntax highlighting works immediately. The language server needs its dependency present, so run `npm install --omit=dev` inside `editors/vscode/` once. That is the only step that touches the network; without it the grammar still loads and the client reports a missing module.
@@ -18,8 +18,8 @@ Syntax highlighting works immediately. The language server needs its dependency 
 ```sh
 cd editors/vscode
 npm install
-npx --yes @vscode/vsce package          # writes cairn-1.1.0.vsix
-code --install-extension cairn-1.1.0.vsix
+npx --yes @vscode/vsce package          # writes cairn-1.2.0.vsix
+code --install-extension cairn-1.2.0.vsix
 ```
 
 ## Server executable

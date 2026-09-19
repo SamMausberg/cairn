@@ -69,7 +69,7 @@ A lane may touch only element `[i]` of anything a lane writes, so lanes cannot r
 - Recipes: generators written as library code and applied with `derive`.
 - `extern` with mandatory effects and an `unsafe` gate, MMIO, inline assembly, a freestanding target.
 
-Start with the [tour](docs/guide/tour.md): twelve complete programs that the test suite compiles and runs. The [language reference](docs/guide/language.md) has the rules, [std](docs/guide/std.md) the library. The [documentation index](docs/README.md) lists the rest.
+Start with the [tour](docs/guide/tour.md): twelve complete programs that the test suite compiles and runs. The [language reference](docs/guide/language.md) has the rules, [std](docs/guide/std.md) the library. The [documentation index](docs/README.md) lists the rest, and [examples/](examples/README.md) says what each example program shows.
 
 ## Build and run
 
