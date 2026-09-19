@@ -2797,7 +2797,7 @@ There is no whole-compiler proof. Three mechanisms establish three different thi
 | The certificate checker is sound. | Lean, `check_sound` | `proofs/Cairn/Affine.lean` | That `linear_certificates.py` implements the Lean `check`; it is a reviewed transliteration. |
 | The seventeen collector certificates pass that checker. | Lean kernel `decide`, `all_checked` | `proofs/Cairn/CollectorCertificates.lean`, generated | Anything about the emitted loop. |
 | The collector loop model stores in bounds, keeps both cursors representable and selects stably. | Lean, `store_index_lt_capacity`, `increments_fit`, `collect_spec` | `proofs/Cairn/Collector.lean` | That the emitted C++ is this loop. The model uses `Int`/`Nat`, not machine words. |
-| An accepted program of the ownership and lease calculus has no use-after-move, use-after-free, double free, leaked ticket, aliased argument or race, under every interleaving and every valuation; never gets stuck; and releases every cell exactly once on normal termination. | Lean, `accepted_no_fault` and the named faults, `accepted_threads_disjoint`, `accepted_frees_each_allocation_once`, `accepted_progress` | `proofs/Cairn/Places.lean`, `proofs/Cairn/Ownership.lean` | Any link to `checking.py`. Single elements, parts of parts, invisible bounds, closures, `lane:f`, placement, `reduce`/`compact`, streams. The part guard and the region join are assumed of the emitter. |
+| An accepted program of the ownership and lease calculus has no use-after-move, use-after-free, double free, leaked ticket, aliased argument or race, under every interleaving and every valuation; never gets stuck; and releases every cell exactly once on normal termination. | Lean, `accepted_no_fault` and the named faults, `accepted_threads_disjoint`, `accepted_frees_each_allocation_once`, `accepted_progress` | `proofs/Cairn/Places.lean`, `proofs/Cairn/Ownership.lean` | That `checking.py` implements this calculus. The differential harness compares the two on generated programs of a shared fragment, which is agreement, not extraction. Closures, `lane:f`, placement, `reduce`/`compact`, streams. The part guard and the region join are assumed of the emitter. |
 | Two versions of one function agree on the result and on everything they were lent, for every admitted input. | Z3 over a modeled source fragment, `smt-equivalent` | `src/cairn/verify/scalar_semantics.py` | A moving owner, recursion, tasks, lanes, device placement, closures, `dyn`, the foreign boundary, an unbounded trip count, an observed NaN, a tag inside a view, two views of one array in one call: each is `unknown`. Trusts the translator and Z3. |
 | Every declared function and public type of two modules was compared that way. | `cairn verify --all`, `smt-module-equivalent` | `src/cairn/verify/verification.py` | One uncovered function keeps the module incomplete. Size, count and solver budgets apply. |
 | Accepted programs build and run under both compilers, four sanitizers, CUDA and QEMU, and pass their finite task contracts. | Executed tests | `tests/` | Finite inputs only. |
@@ -2805,7 +2805,7 @@ There is no whole-compiler proof. Three mechanisms establish three different thi
 ```sh
 cd proofs && lake build                       # about four seconds, no dependencies
 cd proofs && lake env lean Cairn/Audit.lean   # the axiom audit on its own
-python3 -m pytest -q tests/verification       # 195 tests, including that build
+python3 -m pytest -q tests/verification       # 197 tests, including that build
 python3 bin/cairn certificates
 python3 bin/cairn verify examples/proof_scope/reference.cairn \
   examples/proof_scope/candidate.cairn --all
@@ -2871,7 +2871,11 @@ A local is the unit of ownership: it is allocated, moved, dropped and released. 
 
 Each place carries a root: a local plus a field path, which is what `path` writes as `r.a.b`. `r.xs[lo..hi]`, `r.xs[]` and `len(r.xs)` are the same four shapes at the root `r.xs`.
 
-A bound is an integer literal or the name of an immutable natural, which is what `path` keeps. Anything else becomes `?` there and is not modelled. The names are read by an arbitrary valuation, and every theorem below quantifies over every valuation, so no result depends on the numbers. Single elements (`a[i]`) and parts of parts are not modelled.
+A bound is an integer literal or the name of an immutable natural, which is what `path` keeps. The names are read by an arbitrary valuation, and every theorem below quantifies over every valuation, so no result depends on the numbers.
+
+Anything else `path` writes as `?`, and the three shapes that produces are conservatively modelled as `elems`. A single element `a[i]` is `"a[]"` whatever the index is. A part of a part `a[lo..hi][j..k]` is `"a[?..?]"`, since it sits somewhere inside the outer part and nothing says where. A part one of whose bounds can change, `a[m..3]` for a mutable `m`, is `"a[?..3]"`. Each of them does three things: it overlaps every place of its base, whole owner, elements and parts alike; it contributes no `lo <= hi` fact to the chain, because `overlaps` drops the pairs carrying a `?` when it builds `edges`; and it still leaves a `len` read alone, because `leased(..., elements=False)` skips every held place whose string carries a `[`. `elems` does exactly those three: `ovl elems part` and `ovl elems whole` are `true`, `Place.range (elems r)` is `none`, and `ovl hdr elems` is `false`. The case table is beside `Place` in `proofs/Cairn/Places.lean` and its rows are pinned as `example`s under `ovl`.
+
+The classifications agree with `checking.py` on the programs in the `Regress` section: an element read beside a part a task holds and the same read beside a part of another buffer, two parts whose shared bound is a mutable local, and a part of a part beside a plain part. Each was run through `python bin/cairn check`, and each is pinned on the Python side in `tests/soundness/test_soundness.py`. That is agreement on named programs, not a proof that the mapping is right for every program.
 
 #### Disjointness, decided twice
 
@@ -2999,9 +3003,9 @@ The release theorem is about normal termination only. A run that traps has abort
 
 `ownership_regression` is the executable sanity check: the Lean encodings of the CAIRN programs pinned in `tests/soundness/test_soundness.py` and `tests/soundness/test_concurrency.py` are classified the way the Python checker classifies them.
 
-Rejected: a move beside a view a task still holds, a leased read, a double move, an unawaited ticket, two arguments of one call overlapping with a write, a place moved on one path only, branches that disagree about live tickets, two tasks writing one place, two tasks writing parts that really overlap (`d[0..6]` and `d[3..9]`), two parts with nothing lent between them to order their bounds, one call handed two overlapping parts, a `len` read of an owner a task may replace, one field lent to two tasks, a new value landing in a lent field's cell, a field read while the record is lent whole, a move of a record one field of which is lent, a copy of an owner, and a use after the implicit release.
+Rejected: a move beside a view a task still holds, a leased read, a double move, an unawaited ticket, two arguments of one call overlapping with a write, a place moved on one path only, branches that disagree about live tickets, two tasks writing one place, two tasks writing parts that really overlap (`d[0..6]` and `d[3..9]`), two parts with nothing lent between them to order their bounds, one call handed two overlapping parts, a `len` read of an owner a task may replace, one field lent to two tasks, a new value landing in a lent field's cell, a field read while the record is lent whole, a move of a record one field of which is lent, a copy of an owner, a use after the implicit release, an element read beside a part a task holds, two parts whose shared bound is a mutable local, and a part of a part beside a plain part.
 
-Accepted: the two-part and K-way splits (`d[0..a]`, `d[a..b]`, `d[b..n]`), the backwards part that orders two others, a `len` read under a lease of the elements, two fields of one record lent to two tasks, a `len` read of a field under a lease of that field's elements, shared read-only lending, a move on both paths, and a scalar copy.
+Accepted: the two-part and K-way splits (`d[0..a]`, `d[a..b]`, `d[b..n]`), the backwards part that orders two others, a `len` read under a lease of the elements, two fields of one record lent to two tasks, a `len` read of a field under a lease of that field's elements, an element read beside a part of another buffer, shared read-only lending, a move on both paths, and a scalar copy.
 
 Each of those classifications was re-checked against the Python checker on the corresponding CAIRN source while this model was written. The build prints `ownership-regression: pass`, and the Python gate asserts on that line.
 
@@ -3009,11 +3013,30 @@ The safety theorems would be vacuous if the machine could never fault, so a faul
 
 `backwardsPart_traps` is the other side of the same coin. That program is accepted, and under the valuation it is written for (`a = 6`, `b = 3`, `n = 9`) the machine reaches `Trap` at the guard of `d[6..3]`, not a race. Together with `ownership_regression`, which rules out a checker that says no to everything, that pins the result from both sides.
 
+#### The differential harness
+
+`tools/checks/differential_ownership.py` is the one mechanical link between the two checkers. A seeded generator emits programs in the fragment both of them understand and renders each one twice from a single intermediate: as CAIRN source, and as a Lean `Program` literal. `compile_program` classifies the source, one `lake env lean` run over one generated file evaluates `accepts` on every literal, and the two verdicts must match for every program. A disagreement prints both renderings and fails; a diagnostic outside the ownership set the calculus models fails too, since that means the generator left the fragment rather than that the checkers differ.
+
+What this establishes: the two checkers classify the same generated programs identically, modulo the hand-written rendering. That is stronger than review, and it catches drift at a scale review does not reach. It is not extraction. The rendering is what is being trusted, and a shape the generator never emits is never compared.
+
+The fragment is a table in the harness, and `--fragment` prints it. In: `alloc`, `mkScalar`, `copy`, `move`, `call`, `spawn`, `wait`, `if`, `parallel i in n { ... }` with the four lane access shapes the model distinguishes, and the places `whole`, `hdr`, `elems` and `part` over plain locals, with bounds drawn from the literals `0`, `2`, `4`, `8` and the immutable `a`, `b`, `n`, in either order. Out by construction: record fields, `drop`, a lane that calls anything, `lane:f`, a nested region and a region inside a branch, device work ordered by `after`, closures, placement, `reduce`, `compact`, `take`, `swap`, loops, traits, generics, re-binding a local, `spawn` and `wait` inside a branch, and a branch-local name used after the branch.
+
+The generated programs are checked, never built or run. A backwards part and a view extent that does not match its part are both legal to the checker and trap at run time, and only the checker's answer is compared.
+
+Two renderings are not one program, and three places state that. `elems` is written in CAIRN as `f(len(d), d)`, because the extent of a whole owner passed as a view is its length, so the CAIRN side charges a header read the Lean side has to be given as its own `call [(hdr d, ro)]` in front of the call. Nothing changes between the arguments of one call, so hoisting it cannot move a verdict, but it is a rendering rule and not a fact. A branch is a scope in CAIRN and not in the Lean model, which is why a name a branch declares is never used after it. And a lane body is rendered as one statement per access, so that the statements a lane runs and the `Touch` list the model carries are the same list in the same order.
+
+```sh
+python tools/checks/differential_ownership.py --count 2000 --seed 7
+CAIRN_DIFFERENTIAL_N=5000 python -m pytest -q tests/verification/test_differential_ownership.py
+```
+
+`make test` runs 40 programs and `make lean` runs 200. `tests/verification/test_differential_ownership.py` also plants one wrong verdict and requires the harness to report it, because a comparison that cannot fail is not evidence. Without `lake` the test skips with the reason and the harness exits 3 rather than passing.
+
 #### What this does NOT cover
 
-* Any connection to `checking.py`. The Lean checker is a hand-written abstraction of the Python rules. It is not extracted from them, not compared against them by a test, and the Python checker does many things this model does not.
+* That `checking.py` implements this calculus. The Lean checker is a hand-written abstraction of the Python rules, not extracted from them, and the Python checker does many things this model does not. The differential harness above compares the two, program by program, over a fragment narrower than either.
 * The guard is an assumption about the emitter, not a theorem. The chaining rule is sound in this calculus because the machine performs the `lo <= hi` guard where the slice is formed, before the borrow is taken. That the emitted C++ does the same, `cr::part` at the call site, on the spawning thread, before the task starts, is asserted by `src/cairn/compiler/codegen.py`, `src/cairn/runtime/cairn_owners.hpp` and a test that pins exactly this (`tests/soundness/test_concurrency.py::test_a_part_is_guarded_by_the_spawner_before_its_task_exists`: the guard sits in the capture list of the task's lambda, and a backwards part aborts after `spawning` is printed and before the task or the next statement runs). It is not asserted by any proof. If a part guard ever moved into the task, the rule would be unsound and this model would no longer describe the language.
-* Single elements, parts of parts and invisible bounds. `a[i]`, `a[lo..hi][j..k]` and any bound `path` writes as `?` are outside the model. `checking.py` treats them conservatively, so everything of that base overlaps; nothing here proves that it does.
+* That the `elems` mapping is right for every program. `a[i]`, `a[lo..hi][j..k]` and any bound `path` writes as `?` are modelled as `elems`, the classifications agree with `checking.py` on the programs named above, and the case table beside `Place` says why each row agrees. None of that is a proof: it is a reading of `overlaps` and `leased`, pinned by examples.
 * Where a field read is charged. `checking.py:e_field` suppresses the whole-local read its base would otherwise perform and charges `leased(box.a, "ro", elements=False)` at the outermost field of the path, so two tasks may hold `box.a` and `box.b` at once. The model writes that read out as an explicit `call [(hdr box.a, ro)]` in the regression programs rather than building it into the field rule, and nothing proves that `checking.py` charges it exactly where the model does. Assignment, `take` and `swap` name `whole box.a` in the model and `leased(box.a, "rw")` in `checking.py`; that those two agree is also unproved.
 * Everything a region is besides its accesses. `lane:f` callbacks and the `E-PARALLEL-CALL` effect rule, device placement and `E-PLACEMENT`, `reduce`, `compact`, queued device work and `after`, and the value a lane computes are all outside the model. A lane body is its footprint; the model does not say what a lane-private local holds, only that it is not a place of the enclosing scope. A lane's index expression other than the binder is modelled as the whole element footprint, so the model calls a race what `parallel i in n { x[i + 1] = 0; }` would not actually have. The checker rejects that program either way, and nothing here claims the converse.
 * That a region really completes before the next statement. The machine blocks the spawner while lanes are live. That the emitted `cr::par::run`, or a CUDA launch and its synchronize, joins every lane before returning is asserted by `src/cairn/compiler/codegen.py` and the runtime, and tested, not proved. It is the same kind of assumption as the part guard.
@@ -3128,9 +3151,9 @@ Three formal steps remain.
 
 Prove that the emitted collector loop refines the Lean model, or generate it from the model.
 
-Extend the ownership calculus past the places it now has, to single elements, parts of parts, closures, `lane:f` callbacks and placement. Then prove of the emitter what that calculus assumes of it: that a part's `lo <= hi` guard runs on the spawning thread before the task that borrows it starts.
+Extend the ownership calculus past the places it now has, to closures, `lane:f` callbacks and placement. Then prove of the emitter what that calculus assumes of it: that a part's `lo <= hi` guard runs on the spawning thread before the task that borrows it starts.
 
-Relate `checking.py` to the calculus by something stronger than review. Today the Lean checker is an abstraction written by hand beside the Python one, not extracted from it.
+Relate `checking.py` to the calculus by something stronger than review and a differential run. Today the Lean checker is an abstraction written by hand beside the Python one, not extracted from it; `tools/checks/differential_ownership.py` requires the two to classify generated programs of a shared fragment identically, which narrows this step to the shapes that fragment leaves out and to the rendering it trusts.
 
 Only a pinned Lean build with audited axioms may be called Lean verification. The receipt field above is the single place the compiler says so, and it is scoped to the certificate bundle.
 
@@ -3288,7 +3311,7 @@ theorem increments_fit (pred : α → Bool) (proj : α → β)
 
 This development proves things about models. Each of the following remains trusted, exactly as before.
 
-* The ownership calculus is an abstraction written by hand. Nothing extracts it from `checking.py` or compares the two, and it assumes of the emitter what `cr::part` and `cr::par::run` do and no proof states. [verification](#verification) has the full list of what it covers and what it leaves out.
+* The ownership calculus is an abstraction written by hand. Nothing extracts it from `checking.py`; `tools/checks/differential_ownership.py` compares the two on generated programs of a shared fragment, which is agreement over that fragment and not a refinement. It assumes of the emitter what `cr::part` and `cr::par::run` do and no proof states. [verification](#verification) has the full list of what it covers and what it leaves out.
 * The compiler-to-model correspondence. Nothing here relates `Cairn.Collector.step`/`run` to what `src/cairn` actually emits. That the Python emitter produces this loop, with this capacity and these cursor updates, is trusted code review, not a theorem.
 * The generated C++ and the native code. No refinement theorem connects the model to the emitted C++, to the machine instructions a C++ compiler produces from it, to the runtime, or to any target memory model.
 * Machine arithmetic. The model uses mathematical `Int`/`Nat`. `M` is a parameter standing for "largest representable cursor"; the theorems say the cursors stay `≤ M`, and they do not model wrapping, `size_t`, or pointer arithmetic.
@@ -3407,7 +3430,7 @@ Every gate runs locally, publishes nothing and needs no network. A gate whose to
 ```sh
 make lint          # ruff format --check, ruff check, cairn fmt --check
 make test          # the whole suite in parallel; hardware- and tool-dependent parts skip with a reason
-make proof         # certificates, the Lean export drift check, lake build, scalar module equivalence
+make proof         # certificates, the Lean export drift check, lake build, the differential run, scalar module equivalence
 make gpu embedded  # CUDA runtime and lanes, and the QEMU board, where the hardware is present
 ```
 
@@ -3427,7 +3450,7 @@ Run one folder with `python -m pytest -q tests/soundness -n auto`.
 |---|---|
 | `language/` | the accepted breadth of the language, built and run natively under both compilers; the twelve tour programs; every `cairn` block in README.md and in this manual |
 | `soundness/` | every hole an audit found stays closed; tasks, leases, atomics, mutexes, host and CUDA lanes, closures |
-| `verification/` | the certificates, `proofs/` in step with `collector_rules()` and building, the SMT translator against concrete replay, coverage that no single function can confer |
+| `verification/` | the certificates, `proofs/` in step with `collector_rules()` and building, `checking.py` and the Lean calculus classifying generated programs alike, the SMT translator against concrete replay, coverage that no single function can confer |
 | `projects/` | manifests, vendored dependencies, incremental builds, the five applications, the freestanding image under QEMU with an exact UART transcript |
 | `runtime/` | the self-checking binaries in `tests/native/`, at several `CAIRN_LANES` counts |
 | `tooling/` | `cairn fmt` over every `.cairn` in the checkout plus whitespace and comment fuzz, a real `cairn lsp` subprocess, publication against fakes, every script under `tools/` and `bench/` |
@@ -3438,7 +3461,7 @@ Sanitizers run where they bite: the ownership program under Address, Leak and Un
 
 ### Rejection and behaviour tables
 
-A rejection table maps a sentence naming the rule to a diagnostic code and a program. One parametrized test compiles each entry and requires exactly that code, so a rule that stops biting fails by name. `tests/soundness/test_soundness.py` holds 82 entries over 25 codes; smaller tables sit beside the feature they guard. Every safety rule has one.
+A rejection table maps a sentence naming the rule to a diagnostic code and a program. One parametrized test compiles each entry and requires exactly that code, so a rule that stops biting fails by name. `tests/soundness/test_soundness.py` holds 92 entries over 25 codes; smaller tables sit beside the feature they guard. Every safety rule has one.
 
 A native behaviour table maps a sentence to an expected process exit status and a program. The test emits C++ for that entry point alone, builds under clang++ with `-fsanitize=address,undefined`, runs it, and requires exactly that status: `0` where the program judges itself, `-6` where a guard must abort. Fifteen entries follow the second audit.
 
@@ -3459,6 +3482,7 @@ python tools/checks/validate_semantics.py --gcc
 | `curriculum_verify.py`, `mutation_checks.py` | teaching programs against independent finite oracles; one hand-authored defect per algorithm family, all of which the finite tests must catch |
 | `check_compact_forms.py`, `native_scalar.py` | complete definitions, not generated expansions; a test-only trap observer that is not the production runtime |
 | `density.py`, `export_lean_certificates.py` | lexical density accounting; `--check` fails when `collector_rules()` and `proofs/` have drifted |
+| `differential_ownership.py` | generated programs of one shared fragment, rendered as CAIRN source and as Lean `Program` literals, and required to be classified identically by `checking.py` and by the Lean `accepts` |
 
 Production sanitizer and SIGABRT fixtures are separate from that O0 observer, `validate_systems.py` proves nothing about allocation or lifetime safety for arbitrary programs, and a trusted translator or oracle can still hold a bug. `bench/cpu/codegen_only.py` compares code sections by instruction bytes and relocations and implies no fresh timing run: five of its nine selected function sections were byte-identical to the C++ references on AArch64 at 1.0, where the 0.6 figure of eight of nine was x86-64 under another compiler. These harnesses write under `results/`, which is ignored and may be replaced on rerun. One subdirectory per kind of output, and nothing at the top:
 
@@ -3703,9 +3727,9 @@ CAIRN 1.0 implements the breadth that 0.2 proposed, each feature with an applica
 ### Proof
 
 - The collector certificates and loop model are Lean-checked, and so is a core ownership and lease calculus over locals, record field paths, whole owners, headers, elements, array parts with visible bounds and `parallel` regions. An accepted program there has no use-after-move, use-after-free, double free, leaked ticket, aliased call argument or data race, never gets stuck, and frees every cell exactly once, under any interleaving and every valuation of those bounds and of the lane count.
-- That calculus is written by hand beside `checking.py`, not extracted from it. Relating the two by something stronger than review would close this.
+- That calculus is written by hand beside `checking.py`, not extracted from it. `tools/checks/differential_ownership.py` requires the two to classify generated programs of a shared fragment identically; relating them by something stronger than that would close this.
 - It assumes of the emitter that a part's `lo <= hi` guard runs before the task that borrows it starts, and that a region completes before the next statement. Both are tested, not proved.
-- Single elements, parts of parts, closures, `lane:f` callbacks, device placement, `reduce`/`compact` and queued device work are outside the calculus.
+- A single element, a part of a part and a part with an invisible bound are modelled as the elements, conservatively, and the classifications agree with `checking.py` on the programs the regression names. Closures, `lane:f` callbacks, device placement, `reduce`/`compact` and queued device work are outside the calculus.
 - The emitter's correspondence to the loop model and native refinement are unproved. Proving that the emitted loop refines the model, or generating it from the model, would close the first.
 - The SMT model covers records, tag-only enums and payload sums with `match` and `try`, IEEE `f32`/`f64`, fixed local storage, array views with their parts, `rw` borrows, function-local heap scratch, `compact`, host `reduce`, and loops it can unroll within a sixteen-iteration budget. It still rejects an owner that moves, recursion, tasks, lanes, device placement, closures, `dyn` and the foreign boundary, and reports as unknown rather than equal a trip count it cannot bound (which a pass over a symbolic extent is, until a precondition bounds it), a tag inside a view, two views of one array in one call, and an observed NaN.
 

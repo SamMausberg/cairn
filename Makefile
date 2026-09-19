@@ -35,6 +35,7 @@ proof: lean
 lean:
 	$(PYTHON) tools/checks/export_lean_certificates.py --check
 	cd proofs && PATH="$$HOME/.elan/bin:$$PATH" lake build
+	$(PYTHON) tools/checks/differential_ownership.py --count 200
 
 gpu:
 	$(PYTHON) -m pytest -q tests/runtime/test_native_runtime.py tests/soundness/test_concurrency.py

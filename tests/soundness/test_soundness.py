@@ -326,6 +326,22 @@ REJECTED = {
         "fn two(n:usize, a:rw<u64>[n], m:usize, b:rw<u64>[m]) { a[0] = 1; b[0] = 2; }\n"
         "fn main() -> i32 { let mut d = Buf[u64](16); two(2, d[0..8][0..2], 2, d[8..16][0..2]); return 0; }",
     ),
+    "a part of a part beside a plain part of the same array": (
+        "E-ALIAS",
+        "fn two(n:usize, a:rw<u64>[n], m:usize, b:rw<u64>[m]) { a[0] = 1; b[0] = 2; }\n"
+        "fn main() -> i32 { let mut d = Buf[u64](16); two(2, d[0..8][0..2], 8, d[8..16]); return 0; }",
+    ),
+    "an element read beside a part a task holds (the index is not visible)": (
+        "E-LEASED",
+        FILL + "fn main() -> i32 { let n:usize = 8; let a:usize = 4; let mut d = Buf[u64](n);\n"
+        "  let t = spawn fill(a, d[0..a], 1); let v = d[6]; wait(t); return i32(v); }",
+    ),
+    "two parts of one array whose shared bound is a mutable local": (
+        "E-LEASED",
+        FILL + "fn main() -> i32 { let n:usize = 8; let mut m:usize = 4; let mut d = Buf[u64](n);\n"
+        "  let t1 = spawn fill(m, d[0..m], 1); let t2 = spawn fill(n - m, d[m..n], 7);\n"
+        "  wait(t1); wait(t2); return 0; }",
+    ),
     # Round three: the new rules attacked ------------------------------------------------------
     "a host view reaching device code through a helper the lane calls": (
         "E-PLACEMENT",
@@ -556,6 +572,24 @@ def test_sequenced_and_single_opaque_operands_remain_legal():
         "  if !less(key, key) && i < n { return i; }\n  return n;\n}"
     )
     assert compile_source(source)
+
+
+def test_the_shapes_path_writes_with_a_question_mark_stay_conservative():
+    """An invisible bound and a bare index overlap everything of their base, and nothing else.
+
+    `proofs/Cairn/Places.lean` models both as `elems`, and these are the two halves that keep the
+    model honest: the header stays readable under such a part, and another buffer stays untouched.
+    """
+    under_a_mutable_bound = FILL + (
+        "fn main() -> i32 { let n:usize = 8; let mut m:usize = 4; let mut d = Buf[u64](n);\n"
+        "  let t = spawn fill(m, d[0..m], 1); let k = len(d); wait(t); return i32(k) - 8; }"
+    )
+    beside_another_buffer = FILL + (
+        "fn main() -> i32 { let n:usize = 8; let a:usize = 4; let mut d = Buf[u64](n); let mut e = Buf[u64](n);\n"
+        "  let t = spawn fill(a, e[0..a], 1); let v = d[6]; wait(t); return i32(v); }"
+    )
+    assert compile_source(under_a_mutable_bound)
+    assert compile_source(beside_another_buffer)
 
 
 def test_visibly_disjoint_parts_with_stable_bounds_are_still_lent_together():

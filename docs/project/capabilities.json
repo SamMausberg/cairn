@@ -2,7 +2,7 @@
   "profile": "cairn-native/1.2.0",
   "complete_cpp_breadth": false,
   "entire_compiler_proved": false,
-  "lean_verified": "collector certificate checker, its 17 certificates, the collector loop model, and a core ownership/lease calculus over locals, record field paths, whole owners, headers, elements, array parts with visible bounds and parallel regions, safety, race freedom between lanes and tasks, and progress for every valuation of those bounds and of the lane count (hand-written, not extracted from checking.py)",
+  "lean_verified": "collector certificate checker, its 17 certificates, the collector loop model, and a core ownership/lease calculus over locals, record field paths, whole owners, headers, elements, array parts with visible bounds and parallel regions, with single elements, parts of parts and parts whose bounds are not visible modelled conservatively as the elements, safety, race freedom between lanes and tasks, and progress for every valuation of those bounds and of the lane count (hand-written, not extracted from checking.py; tools/checks/differential_ownership.py requires the two to classify generated programs of a shared fragment identically)",
   "model_proficiency_measured": "pilot only: nine function-level tasks, one model family, rule cards and diagnostics as the only documentation, no comparison arm (evidence/v1_1/ai_pilot)",
   "implemented": {
     "native_cpu": "Linux x86-64 and AArch64, C++20 lowering, libraries and executables, clang++ and g++",
@@ -33,7 +33,7 @@
     "requiring (rather than reporting) that a program's own templates need only their bounds",
     "SMT coverage of owners that move (take, swap, a returned or stored owner), recursion, concurrency, device placement and unbounded loops",
     "emitter-to-model and native refinement proofs",
-    "mechanized ownership and lease rules for single elements, parts of parts, closures, `lane:f` callbacks, device placement, `reduce`/`compact` and queued device work, a proof that the emitter runs a part guard before the task that borrows it starts and joins every lane before the next statement, and any link from checking.py to the Lean calculus",
+    "mechanized ownership and lease rules for closures, `lane:f` callbacks, device placement, `reduce`/`compact` and queued device work (single elements, parts of parts and invisible bounds are conservatively `elems` in the calculus, regression-pinned), a proof that the emitter runs a part guard before the task that borrows it starts and joins every lane before the next statement, and a proof-level correspondence from checking.py to the calculus (the differential harness tests agreement on generated programs; it proves nothing)",
     "an equal-budget, multi-language, multi-model AI proficiency experiment with tokenizer accounting",
     "recipes over arbitrary expression fragments (they take naturals, a record type and names of functions), and replaying a checked theorem per recipe instance",
     "leasing one field of a record without leasing the whole record, and extent identity through a record field (len(c.price) == c.rows)"

@@ -8,9 +8,10 @@ names*.  It is the mechanization of `checking.py:path` and `checking.py:overlaps
   `d` for the owner, `d[]` for its elements, `d[lo..hi]` for a part.  A bound
   survives only when it cannot change -- an integer literal, or the name of an
   immutable value -- and anything else becomes `?`.  `Place` below is a `Root` (a
-  local and a field path) plus one constructor per shape, and the `?` shape is
-  deliberately absent: parts whose bounds are not visible (a mutable bound, or a
-  part of a part) are outside this model.
+  local and a field path) plus one constructor per shape.  There is no `?`
+  constructor, and none is needed: a single element and every place carrying a `?`
+  is mapped onto `elems`, which the section "The `?` shapes, case by case" below
+  checks row by row against `overlaps`.
 * `overlaps` decides disjointness of two parts of one array *syntactically*: they
   are disjoint only when one visibly ends at or before the other begins, where the
   order of two bounds may be derived by chaining the `lo <= hi` facts of every other
@@ -246,6 +247,42 @@ inductive Place where
   | part (r : Root) (lo hi : Bound)
 deriving DecidableEq, Repr, Inhabited
 
+/-! ### The `?` shapes, case by case
+
+`checking.py:path` writes three shapes this type has no constructor for.  A single element
+`a[i]` becomes `"a[]"`, whatever the index is.  A part of a part `a[lo..hi][j..k]` becomes
+`"a[?..?]"`, since it sits somewhere inside the outer part and nothing says where.  A part one
+of whose bounds can change -- a mutable local, a call -- keeps the bounds it can see and writes
+the rest as `?`, so `a[m..3]` with `m` mutable becomes `"a[?..3]"`.
+
+Every one of them is modelled here as `elems`, conservatively, and the two agree case by case.
+Write `d` and `e` for two locals and `q` for any `?`-carrying string over the base `d`:
+
+| `checking.py` | here | both say |
+| --- | --- | --- |
+| `overlaps(q, "d[0..3]")` | `ovl (elems d) (part d 0 3)` | `true` |
+| `overlaps(q, "d[]")`, `overlaps("d[]", "d[0..3]")` | `ovl (elems d) (elems d)`, `ovl (elems d) (part d 0 3)` | `true` |
+| `overlaps(q, "d")` | `ovl (elems d) (whole d)` | `true` |
+| a held `q` is skipped by `leased(..., elements = False)` | `ovl (hdr d) (elems d)` | `false` |
+| `overlaps(q, "e[0..3]")` | the roots do not touch | `false` |
+| a `?` bound never reaches `edges` | `Place.range (elems d) = none` | no chainable fact |
+
+The last row is the one that costs something.  `overlaps` collects the bounds of every part of
+the base that is in play and drops the pairs carrying a `?`, so a part whose bounds are not
+visible orders nothing: with `d[a..b]` in play the two ends `d[0..a]` and `d[b..n]` are visibly
+disjoint, and with a `?`-carrying part in its place they are not.  `Place.range` returns `none`
+for `elems`, which is exactly that.
+
+Two further parts of the mapping sit on the machine's side.  `Place.ext ρ (elems d) = .all` is
+every element, which contains whatever `a[i]`, the inner part or the invisible bound really
+touches, so `ovl_sound` below still covers the real access.  And `Place.guard ρ (elems d)` is
+`true`: forming `d[m..3]` does run the `lo <= hi` guard, but the model takes no fact from it, so
+there is nothing to discharge.
+
+This is a claim about `checking.py`, checked row by row against it and pinned by the `example`s
+under `ovl` below and by the programs in `Ownership.lean`'s `Regress` section.  Nothing here
+proves it, because nothing here reads the Python source. -/
+
 /-- The storage a place is rooted at. -/
 def Place.root : Place → Root
   | .whole r => r
@@ -355,6 +392,57 @@ theorem ovl_whole (inPlay : List Place) (x : Var) (r : Place) (h : r.base = x) :
     ovl inPlay (.whole ⟨x, []⟩) r = true := by
   have ht : Root.touches ⟨x, []⟩ r.root = true := touches_base h
   cases r <;> simp only [Place.root] at ht <;> simp only [ovl, Place.root, ht, Bool.true_and]
+
+/-! ### The `?` shapes, pinned
+
+One `example` per row of the table beside `Place`: what `checking.py:overlaps` answers for the
+strings `path` writes with a `?`, and what `ovl` answers for the `elems` they are mapped to. -/
+
+section ElemsMapping
+
+private def dLocal : Root := ⟨0, []⟩
+private def eLocal : Root := ⟨1, []⟩
+private def aBound : Bound := .nm 0
+private def bBound : Bound := .nm 1
+private def nBound : Bound := .nm 2
+
+/-- `overlaps("d[?..?]", "d[0..3]") = True`: a `?`-carrying part overlaps every part of its
+base, and so does `elems`. -/
+example : ovl [] (.elems dLocal) (.part dLocal (.lit 0) (.lit 3)) = true := by decide
+
+/-- `overlaps("d[]", "d[]") = True`: two element accesses of one array overlap. -/
+example : ovl [] (.elems dLocal) (.elems dLocal) = true := by decide
+
+/-- `overlaps("d[?..?]", "d") = True`: the whole owner too. -/
+example : ovl [] (.elems dLocal) (.whole dLocal) = true := by decide
+
+/-- `leased(place, mode, elements = False)` skips every held place whose string carries a `[`,
+so `len(d)` stays readable while a `?`-carrying part of `d` is lent. -/
+example : ovl [] (.hdr dLocal) (.elems dLocal) = false := by decide
+
+/-- `overlaps("e[?..?]", "d[0..3]") = False`: two different locals never touch, and a `?` does
+not change that. -/
+example : ovl [] (.elems eLocal) (.part dLocal (.lit 0) (.lit 3)) = false := by decide
+
+/-- The chain with a part whose bounds are visible in the middle: `d[0..a]` and `d[b..n]` are
+visibly disjoint, because `d[a..b]` contributes `a <= b`.  This is
+`overlaps("d[0..a]", "d[b..n]", ("d[a..b]",)) = False`. -/
+example :
+    ovl [.part dLocal (.lit 0) aBound, .part dLocal aBound bBound, .part dLocal bBound nBound]
+      (.part dLocal (.lit 0) aBound) (.part dLocal bBound nBound) = false := by decide
+
+/-- The same chain with a `?`-carrying part in the middle: it contributes no edge, so the two
+ends are no longer ordered and both checkers keep them apart.  This is
+`overlaps("d[0..a]", "d[b..n]", ("d[?..b]",)) = True`. -/
+example :
+    ovl [.part dLocal (.lit 0) aBound, .elems dLocal, .part dLocal bBound nBound]
+      (.part dLocal (.lit 0) aBound) (.part dLocal bBound nBound) = true := by decide
+
+/-- `elems` carries no `lo <= hi` fact, which is what "a `?` bound never reaches `edges`"
+means. -/
+example : Place.range (.elems dLocal) = none := rfl
+
+end ElemsMapping
 
 /-! ## The real relation
 

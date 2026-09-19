@@ -2424,7 +2424,10 @@ def backwardsPart : Program :=
          wait 0, wait 1, wait 2]⟩
 
 /-- `let t = spawn fill(len(d), d, 1); let k = len(d);` -- accepted: the task holds
-the elements, and the owner's length is not one of them. -/
+the elements, and the owner's length is not one of them.  The same program encodes
+`let mut m:usize = 4; let t = spawn fill(m, d[0..m], 1); let k = len(d);`, whose part carries a
+mutable bound and is therefore mapped to `elems` too; `checking.py` accepts that source, because
+`leased(d, "ro", elements = False)` skips every held place whose string carries a `[`. -/
 def lenUnderElementLease : Program :=
   ⟨[0], [alloc 0, spawn 0 [(.elems data, Mode.rw)], call [(.hdr data, Mode.ro)], wait 0]⟩
 
@@ -2449,6 +2452,43 @@ def useAfterDrop : Program := ⟨[0], [alloc 0, drop 0, call [(.whole data, Mode
 
 /-- A local the scope never declared. -/
 def outOfScope : Program := ⟨[1], [alloc 0]⟩
+
+/-! ### The shapes `path` writes with a `?`
+
+A single element `a[i]`, a part of a part `a[lo..hi][j..k]` and a part one of whose bounds can
+change are `"a[]"`, `"a[?..?]"` and `"a[?..3]"` to `checking.py:path`, and every one of them is
+modelled as `elems` (`Places.lean`, "The `?` shapes, case by case").  These programs pin that
+the classification the model gives is the one `checking.py` gives the CAIRN source beside it.
+Each was run through `python bin/cairn check`, and each is pinned on the Python side in
+`tests/soundness/test_soundness.py`.  `fill` is
+`fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }` and
+`two` is `fn two(n:usize, a:rw<u64>[n], m:usize, b:rw<u64>[m]) { a[0] = 1; b[0] = 2; }`. -/
+
+/-- `let a:usize = 4; let t = spawn fill(a, d[0..a], 1); let v = d[6];` -- E-LEASED.  The read is
+`d[]`, which overlaps every part of `d`, so it is refused even though index 6 lies outside the
+part the task holds.  Conservative, and what `checking.py` does. -/
+def elemUnderPartLease : Program :=
+  ⟨[0], [alloc 0, spawn 0 [(.part data (.lit 0) a, Mode.rw)], call [(.elems data, Mode.ro)], wait 0]⟩
+
+/-- `let t = spawn fill(a, e[0..a], 1); let v = d[6];` -- accepted.  The same element read
+while the task holds a part of ANOTHER buffer: two locals never touch, whatever the index
+would be. -/
+def elemBesideOtherPart : Program :=
+  ⟨[0, 3], [alloc 0, alloc 3, spawn 0 [(.part other (.lit 0) a, Mode.rw)],
+            call [(.elems data, Mode.ro)], wait 0]⟩
+
+/-- `let mut m:usize = 4; let t1 = spawn fill(m, d[0..m], 1); let t2 = spawn fill(n - m, d[m..n], 7);`
+-- E-LEASED.  `m` is mutable, so `path` writes `d[0..?]` and `d[?..n]`, neither part orders the
+other, and both become `elems` here.  With an immutable `m` the same source is `disjointSplit`,
+which both checkers accept: the rejection is the mutability, not the arithmetic. -/
+def mutableBoundParts : Program :=
+  ⟨[0], [alloc 0, spawn 0 [(.elems data, Mode.rw)], spawn 1 [(.elems data, Mode.rw)], wait 0, wait 1]⟩
+
+/-- `two(2, d[0..8][0..2], 8, d[8..16])` -- E-ALIAS.  A part of a part sits somewhere inside the
+outer part and `path` writes `d[?..?]`, so it overlaps the part beside it although the two
+really are disjoint. -/
+def partOfPartBesidePart : Program :=
+  ⟨[0], [alloc 0, call [(.elems data, Mode.rw), (.part data (.lit 8) (.lit 16), Mode.rw)]]⟩
 
 /-! ### Fields
 
@@ -2606,6 +2646,8 @@ def report : Bool :=
     && accepts backwardsPart && accepts lenUnderElementLease && !accepts lenUnderOwnerLease
     && !accepts overlappingTasks && !accepts copyAnOwner
     && accepts copyAScalar && !accepts useAfterDrop && !accepts outOfScope
+    && !accepts elemUnderPartLease && accepts elemBesideOtherPart
+    && !accepts mutableBoundParts && !accepts partOfPartBesidePart
     && accepts oneFieldToATask && accepts fieldsToTwoTasks && !accepts sameFieldToTwoTasks
     && !accepts fieldAssignUnderElementLease
     && accepts partsOfTwoFieldsInOneCall && accepts fieldPartsSplitInOneCall
@@ -2784,6 +2826,10 @@ example : accepts Regress.partsWithoutMiddle = false := by decide
 example : accepts Regress.overlappingParts = false := by decide
 example : accepts Regress.overlappingArgs = false := by decide
 example : accepts Regress.lenUnderOwnerLease = false := by decide
+example : accepts Regress.elemUnderPartLease = false := by decide
+example : accepts Regress.mutableBoundParts = false := by decide
+example : accepts Regress.partOfPartBesidePart = false := by decide
+example : accepts Regress.elemBesideOtherPart = true := by decide
 example : accepts Regress.sameFieldToTwoTasks = false := by decide
 example : accepts Regress.fieldAssignUnderElementLease = false := by decide
 example : accepts Regress.fieldMoveUnderLease = false := by decide
