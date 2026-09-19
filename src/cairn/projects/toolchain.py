@@ -124,6 +124,9 @@ def command(
     if not cuda:
         return [find(cxx), *flags(arch, kind), source, "-o", artifact]
     host = [f for f in flags(arch, kind) if not f.startswith(("-std", "-O", "-shared"))]
+    # CCCL 3 (CUDA 13) writes unguarded throw and catch inside headers CUB's dispatch requires, so a
+    # device program's host pass must parse exceptions. Nothing in the runtime throws; guards still abort.
+    host = [("-fexceptions" if f == "-fno-exceptions" else f) for f in host]
     # --fmad=false is the device half of -ffp-contract=off; relaxed constexpr lets guards use <limits>.
     device = ["-std=c++20", "-O3", "--fmad=false", "-arch=native", "--extended-lambda", "--expt-relaxed-constexpr"]
     shared = ["-shared"] if kind == "library" else []

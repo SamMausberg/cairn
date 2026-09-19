@@ -23,9 +23,11 @@ RUNTIME = ROOT / "src/cairn/runtime"
 OUT = ROOT / "evidence/v1_0/gpu/benchmark.json"
 
 STRICT = ["-std=c++20", "-O3"]
-# nvcc owns -std/-O for both halves; the rest of the host contract is the compiler's own table.
+# nvcc owns -std/-O for both halves; the rest of the host contract is the compiler's own table,
+# except that CCCL 3 (CUDA 13) needs the host pass to parse exceptions; see cairn_gpu.hpp's note.
 HOST = [f for f in profile_flags("exe", best_profile("g++")) if not f.startswith(("-std", "-O"))]
-DEVICE = ["--fmad=false", "-arch=sm_90", "--extended-lambda", "--expt-relaxed-constexpr"]
+HOST = [("-fexceptions" if f == "-fno-exceptions" else f) for f in HOST]
+DEVICE = ["--fmad=false", "-arch=native", "--extended-lambda", "--expt-relaxed-constexpr"]
 DEVICE += ["-Werror", "all-warnings"]
 
 

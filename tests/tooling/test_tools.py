@@ -363,7 +363,10 @@ def test_parallel_gpu_flags():
     from support import best_profile, profile_flags
 
     expected = [f for f in profile_flags("exe", best_profile("g++")) if not f.startswith(("-std", "-O"))]
+    # The one authorized departure: CCCL 3 needs the host pass to parse exceptions (cairn_gpu.hpp's note).
+    expected = [("-fexceptions" if f == "-fno-exceptions" else f) for f in expected]
     assert expected == parallel_gpu.HOST, "the host half of the device build is the shared contract"
+    assert "-fno-exceptions" not in parallel_gpu.HOST, "the swap starts from the shared contract"
     assert "-Werror" in parallel_gpu.HOST and "--fmad=false" in parallel_gpu.DEVICE
 
 

@@ -3,17 +3,22 @@
 // the entry point differs. Every entry point is synchronous unless its name says otherwise, and
 // any CUDA error - including a guard that fired in a lane - aborts the process.
 //
-// Build (GH200, CUDA 12.8, CUB from the toolkit; -ccbin g++-11, g++-12 and clang++-15 all pass).
-// One command; the lines below are joined by spaces:
+// Build (CUDA 12.8 with CUB from the toolkit and CUDA 13.2 with CCCL 3 both pass; g++ and clang++
+// as -ccbin alike). One command; the lines below are joined by spaces:
 //
-//   nvcc -std=c++20 -O3 --fmad=false -arch=sm_90
+//   nvcc -std=c++20 -O3 --fmad=false -arch=native
 //        --extended-lambda --expt-relaxed-constexpr -Werror all-warnings
 //        -Xcompiler -Wall,-Wextra,-Werror,-Wno-unused-parameter,-Wno-unused-variable,
-//                   -Wno-unused-but-set-variable,-fno-exceptions,-fno-rtti,
+//                   -Wno-unused-but-set-variable,-fexceptions,-fno-rtti,
 //                   -ffp-contract=off,-fno-fast-math
 //        prog.cu -o prog
 //
 // (-Xcompiler takes one comma separated word: the three indented lines are one argument.)
+//
+// -fexceptions is the one departure from the host contract, and only for a device program's host
+// pass: CCCL 3 (CUDA 13) reaches thrust/system/cuda/detail/util.h from CUB's dispatch headers,
+// and its throw sites and system_error.inl's catch are unguarded, so -fno-exceptions refuses to
+// parse them. Nothing in this runtime throws; every guard still aborts the process.
 //
 // --fmad=false is the device half of -ffp-contract=off: no contraction is ever authorized.
 // --expt-relaxed-constexpr is required, not cosmetic: without it std::numeric_limits<T>::min()
@@ -40,9 +45,8 @@
 #include <cstring>
 #include <cub/device/device_reduce.cuh>
 #include <cub/device/device_scan.cuh>
-#include <cub/iterator/counting_input_iterator.cuh>
-#include <cub/iterator/transform_input_iterator.cuh>
 #include <cuda_runtime.h>
+#include <iterator>
 #include "cairn_runtime.hpp"
 namespace cr::gpu {
 
@@ -185,12 +189,28 @@ template<class T, class Op> struct Binary {
   CR_DEVICE T operator()(T a, T b) const { return op(a, b); }
 };
 
+// A random-access input iterator whose element i is value(i). CUB 2 shipped this as its counting
+// and transform input iterators; CCCL 3 deleted both in favour of thrust's, so the runtime
+// carries its own eleven lines instead of a thrust dependency.
+template<class T, class F> struct Indexed {
+  using value_type = T;
+  using reference = T;
+  using pointer = void;
+  using difference_type = std::ptrdiff_t;
+  using iterator_category = std::random_access_iterator_tag;
+  F value;
+  std::size_t i = 0;
+  CR_HD T operator*() const { return value(i); }
+  CR_HD T operator[](difference_type d) const { return value(i + static_cast<std::size_t>(d)); }
+  CR_HD Indexed operator+(difference_type d) const { return Indexed{value, i + static_cast<std::size_t>(d)}; }
+  CR_HD Indexed& operator++() { ++i; return *this; }
+};
+
 // Transform-reduce of value(i) over [0,n). Association order is unspecified by contract, so the
 // result is exact for associative integer ops and within the usual tolerance for float sums.
 template<class T, class Op, class F> inline T reduce(std::size_t n, T identity, Op op, F value) noexcept {
   if(!n) return identity;
-  using Index = cub::CountingInputIterator<std::size_t>;
-  cub::TransformInputIterator<T, F, Index> in(Index(0), value);
+  const Indexed<T, F> in{value};
   const Binary<T, Op> fold{op};
   Buffer<T> out(1);
   std::size_t need = 0;

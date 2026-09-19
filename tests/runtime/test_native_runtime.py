@@ -103,7 +103,8 @@ def gpu_exe(tmp_path_factory: pytest.TempPathFactory) -> Path:
     if reason := device_reason():
         pytest.skip(reason)
     exe = tmp_path_factory.mktemp("native") / "gpu_runtime"
-    host = ["-Xcompiler", ",".join(HOST)]
+    # CCCL 3 (CUDA 13) needs the host pass to parse exceptions; see the note at the top of cairn_gpu.hpp.
+    host = ["-Xcompiler", ",".join(f.replace("-fno-exceptions", "-fexceptions") for f in HOST)]
     src = str(NATIVE / "gpu_runtime.cu")
     build(["nvcc", *STRICT, *DEVICE, *host, f"-I{RUNTIME}", src, "-o", str(exe)])
     return exe

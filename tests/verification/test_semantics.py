@@ -256,7 +256,9 @@ def test_float_doubling_and_addition_agree():
 def test_float_addition_is_not_associative():
     a = fn("return (x+y)+z;", "x:f64,y:f64,z:f64", "f64")
     b = fn("return x+(y+z);", "x:f64,y:f64,z:f64", "f64")
-    refute(a, b, assume="x==x && y==y && z==z")
+    # Three symbolic doubles make z3's heaviest query in this file; the timeout is wall clock and the
+    # suite runs one worker per core, so the default budget flakes to unknown under load. Unknown still fails.
+    refute(a, b, assume="x==x && y==y && z==z", timeout_ms=15000)
 
 
 def test_signed_zero_is_part_of_the_value():

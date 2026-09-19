@@ -12,7 +12,7 @@ dependencies = []
 classifiers = ["Development Status :: 3 - Alpha", "Private :: Do Not Upload"]
 
 [project.optional-dependencies]
-dev = ["pytest==9.0.2", "pytest-xdist", "ruff", "mypy"]
+dev = ["pytest==9.0.2", "pytest-xdist==3.8.0", "ruff==0.16.8", "mypy"]
 
 [project.scripts]
 cairn = "cairn.cli:main"
