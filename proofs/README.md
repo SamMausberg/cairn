@@ -82,8 +82,10 @@ theorem Cairn.Collector.obligation_store_strictly_below_capacity (K I N M : Int)
 
 `Inv K I N M` bundles `0 ≤ K`, `K ≤ I`, `I ≤ N`, `N ≤ M`. Each transition theorem is proved by applying the corresponding certified obligation, not by re-deriving the arithmetic with `omega`. `omega` appears only to translate between the affine encoding `c + ck*K + ci*I + cn*N + cm*M >= 0` and ordinary inequalities, and between `Nat` indices and their `Int` images.
 
+The eight transition theorems live in `namespace Inv` with `variable {K I N M : Int}` in scope, and each names the obligation it applies:
+
 ```lean
-theorem Inv.init  (hn : 0 ≤ N) (hm : N ≤ M) : Inv 0 0 N M              -- initial.*
+theorem Inv.init {N M : Int} (hn : 0 ≤ N) (hm : N ≤ M) : Inv 0 0 N M   -- initial.*
 theorem Inv.emit  (h : Inv K I N M) (hlt : I < N) : Inv (K + 1) (I + 1) N M -- emit.invariant.0-3
 theorem Inv.skip  (h : Inv K I N M) (hlt : I < N) : Inv K (I + 1) N M      -- skip.invariant.0-3
 theorem Inv.store_nonneg         (h : Inv K I N M) (hlt : I < N) : 0 ≤ K   -- store.nonnegative
