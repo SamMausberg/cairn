@@ -3,13 +3,15 @@
 The application judges itself — every query is answered twice and `main` returns 0 only when the
 two answers agree — so most assertions here are "it built, it ran and it agreed with itself".
 What this file adds is what a program cannot check about itself: the effect rows, the recipes a
-receipt pins, that an incremental rebuild after a body-only edit compiles exactly one unit, and
-that the host path is clean under Address and UndefinedBehavior sanitizers.
+receipt pins, that every template of the program certifies against its bounds, that an
+incremental rebuild after a body-only edit compiles exactly one unit, and that the host path is
+clean under Address and UndefinedBehavior sanitizers.
 
-The device configuration is `gpu.toml`, which replaces `src/main.cairn` with `src/gpu_main.cairn`:
-any @device view sends the whole program through nvcc, so the host-only build must not contain
-that module. A manifest is named by its path (`cairn run examples/apps/analytics/gpu.toml`); the
-tests that need a GPU skip when nvcc or the device node is missing.
+The device configuration is `gpu.toml`, which replaces `src/main.cairn` with
+`src/device_main.cairn`: any @device view sends the whole program through nvcc, so the host-only
+build must not contain that module. A manifest is named by its path (`cairn run
+examples/apps/analytics/gpu.toml`); the tests that need a GPU skip when nvcc or the device node
+is missing.
 """
 
 import shutil
@@ -54,7 +56,8 @@ def test_both_configurations_typecheck(tmp_path, host_receipt):
     assert all(name.startswith("std.") for name in host_receipt["uninstantiated_templates"])
     assert "cuda" not in compile_source(load_project(APP).source, "", (ENTRY,))[1]["requires"]
     device = compile_source(load_project(APP / "gpu.toml").source)[1]
-    assert "analytics.gpu.notional_of" in device["functions"]
+    assert "analytics.device.notional_of" in device["functions"]  # `device` is a module name now
+    assert "cuda" in device["requires"]
 
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
@@ -81,20 +84,32 @@ def test_the_costs_are_in_the_rows(host_receipt):
     assert "dispatch" not in rows["analytics.agg.run_static[analytics.agg.SumAgg]"]["effects"]
     assert {"io", "ffi:write", "alloc"} <= set(rows["analytics.table.write_dataset"]["effects"])
     assert rows["analytics.cols.chain"]["effects"] == []  # the helper the recipes splice in is pure
+    assert rows["analytics.agg.counting"]["effects"] == []  # and so is the one `folded` splices
     assert set(rows["analytics.schema.Trade_key"]["effects"]) <= {"read:row", "trap"}
     assert "trap" in rows["analytics.schema.Trade_total_qty"]["effects"]  # checked `reduce +`
-    # The impls a recipe may not write, forwarding to the two comparisons it generated.
-    assert rows["analytics.schema.Ord.Trade.less"]["effects"] == ["read:a", "read:b"]
-    assert rows["analytics.schema.Trade_less"]["effects"] == ["read:a", "read:b"]
-    assert "std.sort.sort[analytics.schema.Trade]" in rows
+
+
+def test_the_generated_implementations_are_ordinary_implementations(host_receipt):
+    """Three recipes write `impl`s here: std.derived's eq and ord, and the app's own folded/1."""
+    rows = host_receipt["functions"]
+    assert rows["analytics.schema.std.core.Ord.analytics.schema.Trade.less"]["effects"] == ["read:a", "read:b"]
+    assert rows["analytics.schema.std.core.Eq.analytics.schema.Trade.same"]["effects"] == ["read:a", "read:b"]
+    assert "std.sort.sort[analytics.schema.Trade]" in rows  # driven by the derived Ord
+    for agg in ["SumAgg", "MaxAgg", "CountAgg"]:
+        member = f"analytics.agg.Aggregator.analytics.agg.{agg}.absorb"
+        assert rows[member]["effects"] == ["read:self", "write:self"]
 
 
 def test_the_receipt_pins_every_generator(host_receipt):
     assert set(host_receipt["recipes"]) == {
+        "analytics.agg.folded",
         "analytics.cols.columns",
         "analytics.cols.stats",
         "analytics.cols.unrolled",
         "analytics.cols.device_columns",
+        "std.derived.eq",
+        "std.derived.hash",
+        "std.derived.ord",
         "std.wire.wire",
     }
     assert all(len(digest) == 64 for digest in host_receipt["recipes"].values())
@@ -102,6 +117,9 @@ def test_the_receipt_pins_every_generator(host_receipt):
     assert ("cols.columns", "Trade", ()) in derived
     assert ("cols.columns", "sensor.Reading", ()) in derived  # another module's record
     assert ("cols.unrolled", "Trade", (4,)) in derived and ("cols.unrolled", "sensor.Reading", (8,)) in derived
+    assert ("ord", "Trade", ()) in derived and ("eq", "Trade", ()) in derived
+    assert ("folded", "SumAgg", ("add_wrap",)) in derived  # a recipe applied to a function name
+    assert ("folded", "CountAgg", ("counting",)) in derived
     assert host_receipt["wire_derivations"] == ["analytics.sensor.Reading", "analytics.schema.Trade"]
     generated = host_receipt["functions"]
     assert {"analytics.schema.Trade_summarize", "analytics.schema.Reading_summarize"} <= set(generated)
@@ -148,14 +166,31 @@ def test_the_host_path_is_sanitizer_clean(tmp_path):
     assert "every cross-check passed on the host" in done.stdout
 
 
-def test_which_templates_certify_against_their_bounds():
-    """`--generics` is a report: one template certifies, and the rest name what they needed."""
-    verdicts = {n: v for n, v in certify_templates(load_project(APP).source).items() if not n.startswith("std.")}
-    assert verdicts["analytics.agg.run_static"] == "ok"
-    assert all(verdicts[n].startswith("E-LINEAR-STORAGE") for n in verdicts if n.startswith("analytics.agg.bins_"))
-    assert all(
-        verdicts[n].startswith("E-PARTIAL-MOVE") for n in ["analytics.query.map_par", "analytics.query.map_loop"]
-    )
+@pytest.mark.parametrize("configuration", ["cairn.toml", "gpu.toml"])
+def test_every_template_certifies_against_its_bounds(configuration):
+    """`cairn check --generics` exits 0 for this project: seven templates of its own, and std's."""
+    verdicts = certify_templates(load_project(APP / configuration).source)
+    assert {name: verdict for name, verdict in verdicts.items() if verdict != "ok"} == {}
+    mine = {name for name in verdicts if not name.startswith("std.")}
+    assert mine == {
+        "analytics.agg.bins_new",
+        "analytics.agg.bins_slot",
+        "analytics.agg.bins_tally",
+        "analytics.agg.bins_total",
+        "analytics.agg.run_static",
+        "analytics.query.map_loop",
+        "analytics.query.map_par",
+    }
+
+
+def test_a_label_of_the_wrong_width_is_a_type_error(tmp_path):
+    """report.line takes ro<u8>[LABEL]: the compiler counts the label, so no caller has to."""
+    root = copied(tmp_path)
+    main = root / "src" / "main.cairn"
+    main.write_text(main.read_text().replace('"analytics: ingest            "', '"analytics: ingest"'))
+    with pytest.raises(Exception) as raised:
+        compile_source(load_project(root).source)
+    assert "ro<u8>[29]" in str(raised.value)
 
 
 def test_the_device_agrees_with_the_host(tmp_path):
@@ -173,8 +208,12 @@ def test_the_device_agrees_with_the_host(tmp_path):
 
 def test_the_device_configuration_pays_for_what_it_uses(tmp_path):
     rows = compile_source(load_project(APP / "gpu.toml").source)[1]["functions"]
-    assert "par:device" in rows["analytics.gpu.notional_device"]["effects"]
-    assert {"gpu_alloc", "gpu_free", "par:device"} <= set(rows["analytics.gpu.above_device"]["effects"])
-    queued = set(rows["analytics.gpu.queued_notional"]["effects"])
+    assert "par:device" in rows["analytics.device.notional"]["effects"]
+    assert {"gpu_alloc", "gpu_free", "par:device"} <= set(rows["analytics.device.above"]["effects"])
+    queued = set(rows["analytics.device.queued_notional"]["effects"])
     assert {"spawn", "join", "par:device", "transfer:h2d", "transfer:d2h", "gpu_alloc"} <= queued
-    assert "par:device" in rows["analytics.gpu.Trade_device_wrapping_price"]["effects"]
+    # The staging buffers are lent to host helpers, so the pipeline needs no host copy of them.
+    assert {"read:price", "read:qty", "write:back"} <= queued
+    # One generated name per column on each side: the module says which side it runs on.
+    assert "par:device" in rows["analytics.device.Trade_wrapping_price"]["effects"]
+    assert "par:device" not in rows["analytics.schema.Trade_wrapping_price"]["effects"]

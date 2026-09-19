@@ -15,6 +15,11 @@ pub enum Loaded[T] { Done(T); Failed(IoError); }
 pub const ROW:usize = 21; // bytes(Trade); schema.Trade_row_bytes() reports the same number
 pub const BATCH:usize = 4096;
 
+// What the dataset is, stated once, because the two entry points must answer over the same one.
+pub const ROWS:usize = 1000000;
+pub const LIMIT:u64 = 8000000;
+pub const VENUES:usize = 8; // synth puts a row in venue `seed & 7`
+
 // The dataset is a function of the row index alone, so the file is reproducible and the
 // program can check a decoded row against the generator that wrote it.
 pub fn synth(i:usize) -> Trade {

@@ -1,48 +1,53 @@
 // The device half of the query layer. Every function here is the host function from
 // analytics.query with one thing changed: the placement of its views. The bodies are the same
-// statements, and the results have to be the same bits.
-module analytics.gpu;
+// statements, and the results have to be the same bits. The placement words are ordinary
+// identifiers everywhere but after `@`, so it can name the module instead of suffixing every
+// function in it.
+module analytics.device;
 import analytics.cols;
 import analytics.schema;
 
 // One device reduction per column of the trade schema, generated here rather than in
-// analytics.schema, so that the host-only configuration never sees a @device view.
+// analytics.schema so that the host-only configuration never sees a @device view. The names
+// are the ones analytics.schema generates for the host, which is the point:
+// device.Trade_wrapping_price against schema.Trade_wrapping_price.
 derive cols.device_columns for schema.Trade;
 
-// A device helper. Its body is device code, so only lanes and other kernels may call it.
+// A device helper: its body is device code, so only lanes and other kernels may call it. It is
+// the one thing here no recipe could write, because a recipe iterates over all of a record's
+// fields and this is arithmetic between two named ones.
 pub kernel fn notional_of(price:u64, qty:u32) -> u64 = mul_wrap(price, u64(qty));
 
-pub fn notional_device(
-  n:usize, out:rw<u64>[n]@device, price:ro<u64>[n]@device, qty:ro<u32>[n]@device
-) {
+pub fn notional(n:usize, out:rw<u64>[n]@device, price:ro<u64>[n]@device, qty:ro<u32>[n]@device) {
   parallel i in n { out[i] = notional_of(price[i], qty[i]); }
 }
 
 // Stable stream compaction on the device: the same contract as the host collector.
-pub fn above_device(n:usize, out:rw<u64>[n]@device, price:ro<u64>[n]@device, limit:u64) -> usize {
+pub fn above(n:usize, out:rw<u64>[n]@device, price:ro<u64>[n]@device, limit:u64) -> usize {
   let used = compact out for i in n where price[i] >= limit yield price[i];
   return used;
 }
 
 // A tree reduction in an unspecified association order, which is why it folds with add_wrap.
-pub fn wrapping_total_device(n:usize, price:ro<u64>[n]@device) -> u64 {
+pub fn wrapping_total(n:usize, price:ro<u64>[n]@device) -> u64 {
   let total = reduce add_wrap for i in n yield price[i];
   return total;
 }
 
 // Checked `+` over an unsigned column: no partial sum can overflow unless the total does, so
 // the trap cannot depend on the order the device happened to fold in.
-pub fn checked_total_device(n:usize, qty:ro<u32>[n]@device) -> u64 {
+pub fn checked_total(n:usize, qty:ro<u32>[n]@device) -> u64 {
   let total = reduce + for i in n yield u64(qty[i]);
   return total;
 }
 
 // The queued pipeline: two uploads, a region behind both of them, and a download behind that,
 // all on streams. The host never blocks until `wait`, so the fold below really does overlap
-// the device work — and the ticket keeps every view it touches leased until then.
+// the device work, and the ticket keeps every view it touches leased until then. The fold
+// reads the staging buffers themselves — pinned memory is host memory and a read-only lease is
+// shared — so there is no second copy of the columns to pass in.
 pub fn queued_notional(
-  n:usize, back:rw<u64>[n]@pinned, price:ro<u64>[n]@pinned, qty:ro<u32>[n]@pinned,
-  host_price:ro<u64>[n], host_qty:ro<u32>[n]
+  n:usize, back:rw<u64>[n]@pinned, price:ro<u64>[n]@pinned, qty:ro<u32>[n]@pinned
 ) -> u64 {
   buffer d_price:u64[n]@device = zeroed;
   buffer d_qty:u32[n]@device = zeroed;
@@ -54,7 +59,7 @@ pub fn queued_notional(
   };
   let down = spawn transfer(back, d_out) after work;
   let mut host_total:u64 = 0;
-  for i in 0..n { host_total = add_wrap(host_total, mul_wrap(host_price[i], u64(host_qty[i]))); }
+  for i in 0..n { host_total = add_wrap(host_total, mul_wrap(price[i], u64(qty[i]))); }
   wait(up_price);
   wait(up_qty);
   wait(work);

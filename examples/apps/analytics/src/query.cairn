@@ -2,7 +2,6 @@
 // can disagree with itself. Nothing here knows which schema it serves; the columns arrive as
 // plain views taken from a generated table.
 module analytics.query;
-import std.core (Option);
 
 // --- filter ---------------------------------------------------------------------------------
 
@@ -37,12 +36,6 @@ pub fn wrapping_total(n:usize, price:ro<u64>[n]) -> u64 {
   return total;
 }
 
-pub fn wrapping_total_loop(n:usize, price:ro<u64>[n]) -> u64 {
-  let mut total:u64 = 0;
-  for i in 0..n { total = add_wrap(total, price[i]); }
-  return total;
-}
-
 // --- derived columns --------------------------------------------------------------------------
 
 pub fn notional_loop(n:usize, out:rw<u64>[n], price:ro<u64>[n], qty:ro<u32>[n]) {
@@ -55,12 +48,13 @@ pub fn notional_par(n:usize, out:rw<u64>[n], price:ro<u64>[n], qty:ro<u32>[n]) {
 }
 
 // A map whose lanes call the caller's closure: `lane:f` in the row says so, and whatever is
-// passed is judged where it is written.
-pub fn map_par[T, U](n:usize, out:rw<U>[n], src:ro<T>[n], f:ro<fn(T) -> U>) {
+// passed is judged where it is written. Reading `src[i]` by value is what asks `T` to be
+// copyable; the output is only ever assigned over, which `affine` covers.
+pub fn map_par[T:copy, U:affine](n:usize, out:rw<U>[n], src:ro<T>[n], f:ro<fn(T) -> U>) {
   parallel i in n { out[i] = f(src[i]); }
 }
 
-pub fn map_loop[T, U](n:usize, out:rw<U>[n], src:ro<T>[n], f:ro<fn(T) -> U>) {
+pub fn map_loop[T:copy, U:affine](n:usize, out:rw<U>[n], src:ro<T>[n], f:ro<fn(T) -> U>) {
   for i in 0..n { out[i] = f(src[i]); }
 }
 

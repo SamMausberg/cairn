@@ -1,15 +1,19 @@
 // Printing, kept apart from the queries so that an edit to a query body recompiles one unit.
+// A label is exactly LABEL bytes wide, so the columns line up and the compiler, not the author,
+// is what checks that they do: a literal of any other length is E-TYPE-MISMATCH at the call.
 module analytics.report;
 import std.io;
 
-pub fn line(n:usize, label:ro<u8>[n], value:u64) {
-  io.print(n, label);
+pub const LABEL:usize = 29;
+
+pub fn line(label:ro<u8>[LABEL], value:u64) {
+  io.print(LABEL, label);
   io.print_u64(value);
   io.newline();
 }
 
-pub fn micros(n:usize, label:ro<u8>[n], nanoseconds:u64) {
-  io.print(n, label);
+pub fn micros(label:ro<u8>[LABEL], nanoseconds:u64) {
+  io.print(LABEL, label);
   io.print_u64(nanoseconds / 1000);
   let unit = " us";
   io.println(len(unit), unit);

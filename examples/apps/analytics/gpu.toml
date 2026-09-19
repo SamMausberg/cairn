@@ -13,8 +13,8 @@ sources = [
   "src/query.cairn",
   "src/table.cairn",
   "src/report.cairn",
-  "src/gpu.cairn",
-  "src/gpu_main.cairn",
+  "src/device.cairn",
+  "src/device_main.cairn",
 ]
 
 [build]

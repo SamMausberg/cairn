@@ -1,14 +1,16 @@
-// The three generators this engine is built from. Each one is ordinary CAIRN over a record
-// schema: a structure-of-arrays table, the per-column statistics of that table, and column
-// kernels whose unroll factor is a natural parameter. Nothing here is compiler code.
+// The four generators this engine is built from. Each one is ordinary CAIRN over a record
+// schema: a structure-of-arrays table, the per-column statistics of that table, column kernels
+// whose unroll factor is a natural, and the same reductions over device views.
 module analytics.cols;
 
 // Generated code reaches this by its full path. Privacy is judged where `derive` is written,
 // so a recipe may only call what the deriving module could have called itself.
 pub fn chain(seed:u64, value:u64) -> u64 pure = mul_wrap(seed ^ value, 1099511628211);
 
-// columns/1: one Buf per field, plus the row count the columns were built for.
-pub recipe columns for R where width = bytes(R), arity = count(R) {
+// columns/1: one Buf per field, plus the row count the columns were built for. `width` is the
+// row's width on the wire, folded over the fields at expansion time, because the codecs pack
+// it with no padding.
+pub recipe columns for R where width = fold + each f in R { bytes(f) }, arity = count(R) {
   each f in R {
     require unsigned(f), "E-DERIVE-DOMAIN: columns/1 stores unsigned scalar columns.";
   }
@@ -16,42 +18,31 @@ pub recipe columns for R where width = bytes(R), arity = count(R) {
     each f in R where t = typeof(f) { $f:Buf[$t]; }
     rows:usize;
   }
-  pub fn $R_table_new(rows:usize) -> $R_table {
-    return $R_table(each f in R where t = typeof(f) { Buf[$t](rows) }, rows);
-  }
+  pub fn $R_table_new(rows:usize) -> $R_table = $R_table(
+    each f in R where t = typeof(f) { Buf[$t](rows) }, rows
+  );
   pub fn $R_get(c:ro<$R_table>, i:usize) -> R = R(each f in R { c.$f[i] });
   pub fn $R_set(c:rw<$R_table>, i:usize, row:R) { each f in R { c.$f[i] = row.$f; } }
   // Order-independent row digest: every field mixed with its own position, joined by xor.
-  pub fn $R_key(row:ro<R>) -> u64 pure {
-    return fold ^ each f in R where at = index(f) { cols.chain(u64($at) + 1, u64(row.$f)) };
-  }
+  pub fn $R_key(row:ro<R>) -> u64 pure = fold ^ each f in R where at = index(f) {
+    cols.chain(u64($at) + 1, u64(row.$f))
+  };
   pub fn $R_row_bytes() -> usize pure = $width;
   pub fn $R_arity() -> usize pure = $arity;
-  // The lexicographic order of the schema, field by field. A recipe cannot write the `impl`
-  // that would make R an Ord (a recipe holds functions and records only), so it writes the
-  // two functions and the deriving module forwards its impls to them.
-  pub fn $R_same(a:ro<R>, b:ro<R>) -> bool pure {
-    each f in R { if a.$f != b.$f { return false; } }
-    return true;
-  }
-  pub fn $R_less(a:ro<R>, b:ro<R>) -> bool pure {
-    each f in R { if a.$f != b.$f { return a.$f < b.$f; } }
-    return false;
-  }
 }
 
-// stats/1: the min, max and total of every column, and one record holding all of them.
-// The totals come in two flavours because the two are different claims: `reduce +` traps if
-// the total does not fit, `reduce add_wrap` is exact in any association order and therefore
-// the one a device tree reduction can be compared against.
+// stats/1: the smallest, largest and total of every column, in one record laid out column by
+// column — three facts per field, in the schema's own order, because an `each` among a field
+// list or a constructor's arguments may splice several per step. The totals come in two
+// flavours because they are two claims: `reduce +` traps if the total does not fit, and
+// `reduce add_wrap` is exact in any association order, so a device tree reduction may be held
+// to it.
 pub recipe stats for R {
   each f in R {
     require unsigned(f), "E-DERIVE-DOMAIN: stats/1 summarises unsigned scalar columns.";
   }
   pub struct $R_summary {
-    each f in R where t = typeof(f) { min_$f:$t; }
-    each f in R where t = typeof(f) { max_$f:$t; }
-    each f in R { sum_$f:u64; }
+    each f in R where t = typeof(f) { min_$f:$t; max_$f:$t; sum_$f:u64; }
     rows:usize;
   }
   each f in R where t = typeof(f) {
@@ -78,35 +69,34 @@ pub recipe stats for R {
       return total;
     }
   }
-  pub fn $R_summarize(n:usize, c:ro<$R_table>) -> $R_summary {
-    return $R_summary(each f in R { $R_min_$f(n, c) }, each f in R { $R_max_$f(n, c) }, each f in R {
-      $R_total_$f(n, c)
-    }, n);
-  }
+  pub fn $R_summarize(n:usize, c:ro<$R_table>) -> $R_summary = $R_summary(
+    each f in R { $R_min_$f(n, c), $R_max_$f(n, c), $R_total_$f(n, c) }, n
+  );
 }
 
-// device_columns/1: the column totals again, this time over @device views. The bodies are the
-// ones in stats/1 with the placement changed, which is the whole difference between a host
-// fold and a device tree reduction. Derive it only where a device build is wanted: one
-// @device view sends the entire program through nvcc.
+// device_columns/1: the column totals again over @device views. The bodies are the ones in
+// stats/1 with the placement changed — the whole difference between a host fold and a device
+// tree reduction — and the names are the same, because the module they land in says which side
+// they run on. Derive it only where a device build is wanted: one @device view sends the
+// entire program through nvcc.
 pub recipe device_columns for R {
   each f in R {
     require unsigned(f), "E-DERIVE-DOMAIN: device_columns/1 summarises unsigned scalar columns.";
   }
   each f in R where t = typeof(f) {
-    pub fn $R_device_wrapping_$f(n:usize, col:ro<$t>[n]@device) -> u64 {
+    pub fn $R_wrapping_$f(n:usize, col:ro<$t>[n]@device) -> u64 {
       let total = reduce add_wrap for i in n yield u64(col[i]);
       return total;
     }
-    pub fn $R_device_total_$f(n:usize, col:ro<$t>[n]@device) -> u64 {
+    pub fn $R_total_$f(n:usize, col:ro<$t>[n]@device) -> u64 {
       let total = reduce + for i in n yield u64(col[i]);
       return total;
     }
   }
 }
 
-// unrolled/1: K accumulators per column, unrolled at expansion time. The natural is the only
-// thing that changes between a two-way and a sixteen-way kernel.
+// unrolled/1: K accumulators per column, unrolled at expansion time and joined by a fold over
+// the same static range. The natural is all that separates a two-way kernel from a sixteen.
 pub recipe unrolled[K:nat] for R {
   require K >= 1, "E-DERIVE-DOMAIN: unrolled/1 needs at least one accumulator.";
   require K <= 16, "E-DERIVE-DOMAIN: unrolled/1 stops at sixteen accumulators.";
@@ -118,8 +108,7 @@ pub recipe unrolled[K:nat] for R {
         each k in 0..K { acc_$k = add_wrap(acc_$k, u64(c.$f[i + $k])); }
         i = i + $K;
       }
-      let mut total:u64 = 0;
-      each k in 0..K { total = add_wrap(total, acc_$k); }
+      let mut total:u64 = fold add_wrap each k in 0..K { acc_$k };
       while i < n {
         total = add_wrap(total, u64(c.$f[i]));
         i = i + 1;

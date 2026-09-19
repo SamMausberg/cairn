@@ -1,0 +1,89 @@
+// The device entry point. It fills the same columns the host entry ingests from a file (the
+// dataset is a function of the row index, so the bytes are the same), answers three queries on
+// both sides, and returns 0 only if the device agrees with the host bit for bit.
+//
+// This entry replaces src/main.cairn in gpu.toml: any @device view sends the whole program
+// through nvcc, so the host-only configuration must not contain this module.
+module analytics.device_main;
+import std.io;
+import std.mem;
+import analytics.device;
+import analytics.query;
+import analytics.report;
+import analytics.schema;
+import analytics.table;
+
+pub fn main() -> i32 {
+  let rows:usize = table.ROWS;
+  let mut c = schema.Trade_table_new(rows);
+  for i in 0..rows { schema.Trade_set(c, i, table.synth(i)); }
+
+  // Host answers first.
+  let h0 = io.monotonic_ns();
+  let host_total = query.wrapping_total(rows, c.price[0..rows]);
+  let host_qty = query.checked_total(rows, c.qty[0..rows]);
+  let mut host_kept = Buf[u64](rows);
+  let host_used = query.above(rows, host_kept[0..rows], c.price[0..rows], table.LIMIT);
+  let mut host_notional = Buf[u64](rows);
+  query.notional_loop(rows, host_notional[0..rows], c.price[0..rows], c.qty[0..rows]);
+  let h1 = io.monotonic_ns();
+
+  // The same three queries over @device views.
+  buffer d_price:u64[rows]@device = zeroed;
+  buffer d_qty:u32[rows]@device = zeroed;
+  buffer d_kept:u64[rows]@device = zeroed;
+  let d0 = io.monotonic_ns(); // the first device allocation also creates the CUDA context
+  transfer(d_price[0..rows], c.price[0..rows]);
+  transfer(d_qty[0..rows], c.qty[0..rows]);
+  let d1 = io.monotonic_ns();
+  let device_total = device.wrapping_total(rows, d_price);
+  let device_qty = device.checked_total(rows, d_qty);
+  let device_used = device.above(rows, d_kept, d_price, table.LIMIT);
+  let d2 = io.monotonic_ns();
+  if device_total != host_total { return 1; }
+  if device_qty != host_qty { return 2; }
+  if device_used != host_used { return 3; }
+
+  // The generated reductions, one per column, host against device under the same name.
+  let generated_price = device.Trade_wrapping_price(rows, d_price);
+  let generated_qty = device.Trade_total_qty(rows, d_qty);
+  if generated_price != schema.Trade_wrapping_price(rows, c) { return 7; }
+  if generated_qty != schema.Trade_total_qty(rows, c) { return 8; }
+
+  // The compacted prefix comes back and must be the host's, element for element.
+  let mut back_kept = Buf[u64](rows);
+  transfer(back_kept[0..device_used], d_kept[0..device_used]);
+  let kept_agrees = mem.equal(
+    device_used, back_kept[0..device_used], host_used, host_kept[0..host_used]
+  );
+  if !kept_agrees { return 4; }
+  let d3 = io.monotonic_ns();
+
+  // The queued pipeline, over pinned staging. Pinned memory is host memory, so the ordinary
+  // host helpers fill it and read it back; only its type says it can be transferred without a
+  // bounce buffer.
+  buffer p_price:u64[rows]@pinned = zeroed;
+  buffer p_qty:u32[rows]@pinned = zeroed;
+  buffer p_back:u64[rows]@pinned = zeroed;
+  mem.copy(rows, p_price, c.price[0..rows]);
+  mem.copy(rows, p_qty, c.qty[0..rows]);
+  let q0 = io.monotonic_ns();
+  let overlapped = device.queued_notional(rows, p_back, p_price, p_qty);
+  let q1 = io.monotonic_ns();
+  let notional_agrees = mem.equal(rows, p_back, rows, host_notional[0..rows]);
+  if !notional_agrees { return 5; }
+  let queued_total = query.wrapping_total(rows, p_back);
+  if queued_total != overlapped { return 6; }
+
+  report.line("analytics: rows on the GPU   ", u64(rows));
+  report.line("analytics: rows above limit  ", u64(device_used));
+  report.line("analytics: price total       ", device_total);
+  report.micros("analytics: host queries      ", h1 - h0);
+  report.micros("analytics: upload            ", d1 - d0);
+  report.micros("analytics: device queries    ", d2 - d1);
+  report.micros("analytics: download          ", d3 - d2);
+  report.micros("analytics: queued pipeline   ", q1 - q0);
+  let done = "analytics: the device agrees with the host bit for bit";
+  report.say(len(done), done);
+  return 0;
+}
