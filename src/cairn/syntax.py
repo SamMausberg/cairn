@@ -208,6 +208,7 @@ class Function:
     extern: bool = False
     effects: tuple[str, ...] | None = None  # A declared ceiling; None infers.
     owner: tuple[str, Type] | None = None  # (trait, Self) for an impl member.
+    block: Any = None  # Which `impl { }` wrote this member: one Self type has one block, not a union of several.
     kernel: bool = False  # Runs on the device: callable only from device lanes and other kernels.
     symbol: str = ""  # The C symbol of an extern, when it differs from the CAIRN name.
     captures: list[tuple[str, str]] = field(default_factory=list)  # A closure's (outer place, mode) accesses.
@@ -250,6 +251,7 @@ class Impl:
     trait: str
     target: Type
     members: list[Function]
+    block: int = 0  # Where its `impl` stands among the recipe's tokens.
 
 
 @dataclass
@@ -623,7 +625,7 @@ class Parser:
             elif self.eat("impl"):
                 trait = self.path()
                 self.need("for")
-                found.append(Impl(trait, self.ty(), []))
+                found.append(Impl(trait, self.ty(), [], self.i))
                 self.need("{")
                 while not self.eat("}"):
                     start = self.t
@@ -881,6 +883,7 @@ class Parser:
                     members.append(self.function(start, bodiless=True))
                 p.traits[declare(n, t)] = members
             elif self.eat("impl"):
+                block = (self.module, self.i)
                 generics = self.generic_parameters()
                 trait = self.path()
                 self.need("for")
@@ -890,7 +893,7 @@ class Parser:
                     start = self.t
                     self.need("fn")
                     f = self.function(start, public=True, owner=(trait, target))
-                    f.generics = generics + f.generics
+                    f.generics, f.block = generics + f.generics, block
                     f.name = f.source_name = declare(f"{trait}.{target.display()}.{f.name}", start)
                     p.functions.append(f)
             elif self.eat("extern"):

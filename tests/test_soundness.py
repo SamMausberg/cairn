@@ -397,6 +397,59 @@ REJECTED = {
         "fn main() -> i32 { let n:usize = 4; buffer o:u64[n] = zeroed;\n"
         "  let r = once(|x:u64| -> u64 { parallel i in n { return 1; } return 0; }); return 0; }",
     ),
+    # Round five: what 1.2 added -----------------------------------------------------------------
+    "an extent the guard reads once and the callee reads again (overflow past the guard)": (
+        "E-CALL-SHAPE",
+        SUM + "fn main() -> i32 { let mut b = Buf[u64](4); let c = Atomic[usize](3);\n"
+        "  return i32(sum(c.fetch_sub(1, Order.relaxed), b[2..4])); }",
+    ),
+    "the same through a bound, which a transfer or a part of a part names again": (
+        "E-CALL-SHAPE",
+        SUM
+        + "fn two() -> usize = 2;\nfn main() -> i32 { let mut b = Buf[u64](8); return i32(sum(2, b[two()..8][0..2])); }",
+    ),
+    "a linear value boxed into Dyn, which would drop it unconsumed": (
+        "E-LINEAR-STORAGE",
+        TOKEN
+        + "trait Shape { fn area(self:ro<Self>) -> u64; }\nimpl Shape for Token { fn area(self:ro<Token>) -> u64 = self.id; }\n"
+        "fn main() -> i32 { let t = open(1); let d = Dyn[Shape](t); return 0; }",
+    ),
+    "the same inside a record": (
+        "E-LINEAR-STORAGE",
+        TOKEN + "struct Holder { t:Token; }\ntrait Shape { fn area(self:ro<Self>) -> u64; }\n"
+        "impl Shape for Holder { fn area(self:ro<Holder>) -> u64 = 1; }\n"
+        "fn main() -> i32 { let t = open(1); let h = Holder(t); let d = Dyn[Shape](h); return 0; }",
+    ),
+    "two impl blocks that together look like one implementation": (
+        "E-TRAIT-OVERLAP",
+        "trait Shape { fn area(self:ro<Self>) -> u64; fn peri(self:ro<Self>) -> u64; }\nstruct Sq { s:u64; }\n"
+        "impl Shape for Sq { fn area(self:ro<Sq>) -> u64 = 1; }\nimpl Shape for Sq { fn peri(self:ro<Sq>) -> u64 = 2; }\n"
+        "fn main() -> i32 { let q = Sq(3); return i32(area(q) + peri(q)); }",
+    ),
+    "a generic impl whose bound asks the question it answers, beside a concrete one": (
+        "E-TRAIT-OVERLAP",
+        "trait Tag { fn tag(self:ro<Self>) -> u64; }\nstruct S { v:u64; }\nimpl Tag for S { fn tag(self:ro<S>) -> u64 = 1; }\n"
+        "impl[T:Tag] Tag for T { fn tag(self:ro<T>) -> u64 = 2; }\nfn main() -> i32 { let s = S(0); return i32(tag(s)); }",
+    ),
+    "an impl of something that is not a trait (it crashed the checker)": (
+        "E-TRAIT-IMPL",
+        "struct S { v:u64; }\nimpl Nope for S { fn f(self:ro<S>) -> u64 = 1; }\nfn main() -> i32 { return 0; }",
+    ),
+    "an implementation doing what its trait's member promised not to": (
+        "E-EFFECT-CEILING",
+        "extern fn getpid() -> i32 effects(io);\ntrait P { fn pid(self:ro<Self>) -> u64 pure; }\nstruct C { v:u64; }\n"
+        "impl P for C { fn pid(self:ro<C>) -> u64 { unsafe { return u64(getpid()); } } }\nfn main() -> i32 { return 0; }",
+    ),
+    "an implementation declaring more than its trait's member allows": (
+        "E-TRAIT-IMPL",
+        "trait P { fn pid(self:ro<Self>) -> u64 pure; }\nstruct C { v:u64; }\n"
+        "impl P for C { fn pid(self:ro<C>) -> u64 effects(io) = self.v; }\nfn main() -> i32 { return 0; }",
+    ),
+    "the same in a task's arguments": (
+        "E-CALL-SHAPE",
+        FILL + "fn two() -> usize = 2;\n"
+        "fn main() -> i32 { let mut b = Buf[u64](4); let t = spawn fill(two(), b[0..2], 1); wait(t); return 0; }",
+    ),
 }
 
 
@@ -546,6 +599,12 @@ BEHAVIOR = {
         "  fn peri(self:ro<Square>) -> u64 = self.side * 4; }\n"
         "fn measure(s:ro<dyn Shape>) -> u64 = area(s);\nfn unused(s:ro<dyn Shape>) -> u64 = 7;\n"
         "fn main() -> i32 { let sq = Square(3); return i32(measure(sq)) - 9; }",
+    ),
+    "a reduction reads its extent once, as written": (
+        3,
+        "fn main() -> i32 { let c = Atomic[usize](0);\n"
+        "  let t = reduce add_wrap for i in c.fetch_add(3, Order.relaxed) + 3 yield u64(i);\n"
+        "  return i32(c.load(Order.relaxed)); }",
     ),
     "a part of a part carries one guard per level": (
         7,

@@ -249,7 +249,7 @@ def semantic_ast(p: Program) -> Any:
             return {
                 k: erase(x)
                 for k, x in v.items()
-                if k not in {"line", "col", "start", "end", "body_start", "cpp", "ty_inferred"}
+                if k not in {"line", "col", "start", "end", "body_start", "block", "cpp", "ty_inferred"}
             }
         if isinstance(v, list):
             return [erase(x) for x in v]

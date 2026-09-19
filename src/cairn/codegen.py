@@ -500,8 +500,10 @@ class Emitter:
             total = f"cr::gpu::reduce<{carried}>({es[0]}, {start}, {fold}, {value})"
             self.put(f"const {ty} v_{s.name} = {total}{'' if carried == ty else '.checked()'};")
         else:  # On the host a reduction is an ordinary in-order fold: no threads, no hidden cost.
+            count = self.fresh("n")[0]  # The extent is evaluated once, as written.
             self.put(f"{ty} v_{s.name} = static_cast<{ty}>({identity});")
-            self.put(f"for (std::size_t v_{s.binder} = 0; v_{s.binder} < {es[0]}; ++v_{s.binder}) {{")
+            self.put(f"const std::size_t {count} = {es[0]};")
+            self.put(f"for (std::size_t v_{s.binder} = 0; v_{s.binder} < {count}; ++v_{s.binder}) {{")
             self.put(f"  const {ty} a = v_{s.name}, b = {es[1]};")
             self.put(f"  v_{s.name} = {combine};")
             self.put("}")

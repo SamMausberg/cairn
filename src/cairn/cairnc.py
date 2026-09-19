@@ -85,8 +85,7 @@ def interfaces(p: Program, receipts: dict[str, Any]) -> dict[str, Any]:
 
 def certify_templates(source: str) -> dict[str, str]:
     """For each generic function of the program's own modules: "ok" if its body needs only its bounds."""
-    p = specialize(derive(link(Parser(source).parse())))
-    return certify(Checker(p))
+    return certify(lambda: Checker(specialize(derive(link(Parser(source).parse())))))[1]
 
 
 def compile_units(source: str, origin: Any = "", roots: tuple[str, ...] = ()) -> tuple[dict[str, str], dict[str, Any]]:

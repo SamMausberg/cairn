@@ -68,6 +68,7 @@ ATOMIC_OPS = {
     "fetch_xor": 1,
 }
 COMPARISONS = {"==", "!=", "<", "<=", ">", ">="}
+REPEATABLE = {"len", "min", "max", *WRAPPING, *NUMERIC}  # Calls a guard may name twice: they only compute.
 
 
 @dataclass
@@ -205,8 +206,11 @@ class Checker:
         self.call_edges: dict[str, list[tuple[str, dict[str, str]]]] = {}
         self.resources: dict[str, list[dict[str, Any]]] = {}
         self.unchecked: list[str] = []
-        self.lane_calls: list[tuple[str, bool, Expr]] = []
-        self.fn_sites: list[tuple[Expr, set[str], str, str]] = []  # (argument, caller's parameters, callee, formal)
+        self.lane_calls: list[tuple[str, bool, Expr, str]] = []  # (callee, on the device, the call, its caller)
+        self.judging = ""  # The function a whole-program rule is looking at: whom a failure there is about.
+        self.fn_sites: list[
+            tuple[Expr, set[str], str, str, str]
+        ] = []  # (argument, caller's parameters, callee, formal, caller)
         self.impls: dict[tuple[str, Type], dict[str, Function] | None] = {}
         self.hostish: dict[str, str] = {}  # function -> the first host-only construct in its body
         self.bounds: dict[str, tuple[list[str], str]] = {}  # witness type -> (traits it promises, its kind)
@@ -407,13 +411,16 @@ class Checker:
         hold_impls(self, concrete)
         return concrete
 
-    def check(self) -> dict[str, Any]:
+    def bodies(self):
         for f in self.prepare():  # Generic instances are appended, and checked, at their first use.
             try:
                 self.function(f)
             except Diagnostic as error:  # The position is the recipe's: say which derivation this copy came from.
                 error.data.update({"derived": f.source_name} if f.source_name.startswith("derive ") else {})
                 raise
+
+    def judge(self) -> dict[str, set[str]]:
+        """The rules that need every row: ceilings, operand order, and what a lane may reach."""
         instantiated = {f.source_name for f in self.p.functions if f.bindings}
         for f in [f for f in self.p.functions if f.generics and not f.bindings]:
             self.p.functions.remove(f)
@@ -426,12 +433,13 @@ class Checker:
         effects = fixed_point(self)
         audit(self, effects)
         self.judge_lane_callbacks(effects)
-        kernels = [(f.name, True, f) for f in self.p.functions if f.kernel]
-        for callee, device, node in [*self.lane_calls, *kernels]:
+        kernels = [(f.name, True, f, f.name) for f in self.p.functions if f.kernel]
+        for callee, device, node, caller in [*self.lane_calls, *kernels]:
+            self.judging = caller
             allowed = (
                 PURE if device else LANE_SAFE | {"dispatch", "indirect_call"}
             )  # Their targets' rows are joined in.
-            reach = ("read:", "write:") if callee in {k for k, _, _ in kernels} else ("read:",)
+            reach = ("read:", "write:") if callee in {k for k, *_ in kernels} else ("read:",)
             excess = sorted(x for x in effects[callee] if x not in allowed and not x.startswith(reach))
             if excess:
                 fail("E-PARALLEL-CALL", f"A lane cannot call {callee}: it may {', '.join(excess)}.", node)
@@ -445,6 +453,11 @@ class Checker:
                     if name in self.hostish or views:
                         fail("E-PLACEMENT", f"A device lane reaches {name}, where "
                              f"{self.hostish.get(name) or views[0] + ' is a host view'}.", node)  # fmt: skip
+        return effects
+
+    def check(self) -> dict[str, Any]:
+        self.bodies()
+        effects = self.judge()
         return {
             n: {
                 "effects": sorted(effects[n]),
@@ -462,7 +475,8 @@ class Checker:
     def judge_lane_callbacks(self, effects: dict[str, set[str]]):
         """What a callee's lanes will call (`lane:f` in its row) is judged where it was written: a closure
         may not write what it captured, and nothing it does may exceed what a lane may do."""
-        for a, parameters, callee, formal in self.fn_sites:
+        for a, parameters, callee, formal, caller in self.fn_sites:
+            self.judging = caller
             if "lane:" + formal in effects[callee] and not (a.tag == "name" and a.val in parameters):
                 closure = a.ref if a.tag == "lambda" else None
                 known = (
@@ -1471,7 +1485,7 @@ class Checker:
         mapping: dict[str, str] = {}
         for a, (name, want) in zip(args, f.params, strict=True):
             if want.name == "fn":  # If the callee's lanes call it, what is written here is judged here.
-                self.fn_sites.append((a, {n for n, _ in self.f.params}, f.name, name))
+                self.fn_sites.append((a, {n for n, _ in self.f.params}, f.name, name, self.f.name))
                 if self.lanes and a.tag == "name" and a.val in self.env:  # Handed on from a lane, it runs in that lane.
                     self.lane_callee(a)
             if want.name == "fn" and (a.tag == "lambda" or root(a).val not in self.env):
@@ -1503,8 +1517,9 @@ class Checker:
             if want.extent:
                 actual = self.view_argument(a)
                 extent = want.extent if want.extent.isdigit() else self.extent_of(subst[want.extent])
-                if a.tag == "slice":  # A part is guarded dynamically, so its extent may be any expression.
+                if a.tag == "slice":  # A part is guarded dynamically, so its extent may be any repeatable expression.
                     a.ref, extent = subst.get(want.extent, want.extent), actual.extent
+                    a.ref = self.repeatable(a.ref) if isinstance(a.ref, Expr) else a.ref
                 if extent is None:
                     fail("E-CALL-SHAPE", "View extent must be a name, literal or len(view).", subst[want.extent])
                 mode = "rw" if actual.mode == "rw" and want.mode == "ro" else want.mode
@@ -1524,17 +1539,30 @@ class Checker:
         self.callset.add(f.name)
         self.borrowed = borrows
         if self.lanes or self.f.kernel:
-            self.lane_calls.append((f.name, bool(self.device_depth), e))
+            self.lane_calls.append((f.name, bool(self.device_depth), e, self.f.name))
         e.ref = f
         return f.ret
+
+    def repeatable(self, e: Expr) -> Expr:
+        """A part's bounds and extent are named again by its guard, so they are written from what a second look
+        cannot change or pay for twice: names, literals, fields, elements, operators, `len` and scalar arithmetic.
+        A call is bound to a name first, as a computed capacity is (E-OWNER-EXTENT)."""
+        plain = e.tag in {"name", "int", "field", "index", "binary", "unary"} or (
+            e.tag == "call" and e.val in REPEATABLE
+        )
+        if not plain:
+            fail("E-CALL-SHAPE", "A part's bounds and extent are names, literals and arithmetic; bind a call first.", e)
+        for a in e.args:
+            self.repeatable(a)
+        return e
 
     def view_argument(self, a: Expr) -> Type:
         """A view, local owner, Buf, Array, part or string passed where an array borrow is expected."""
         if a.tag == "slice":
             base, lo, hi = a.args
             ty = self.view_argument(base)
-            self.expr(lo, USIZE)
-            self.expr(hi, USIZE)
+            self.expr(self.repeatable(lo), USIZE)
+            self.expr(self.repeatable(hi), USIZE)
             self.guard("bounds")
             a.ty = Type(ty.name, ty.mode, "part", ty.args, ty.place)
             return a.ty

@@ -7,9 +7,10 @@ from __future__ import annotations
 import copy
 import itertools
 import math
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from .effects import fixed_point
+from .effects import allowed, fixed_point
 from .syntax import (
     CPP,
     FLOAT,
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
     from .checking import Checker
 
 KINDS = ["copy", "affine", "linear"]
+PENDING: Any = object()  # An implementation that is being decided: a bound that asks for it has found a cycle.
 # What a generic parameter may promise besides traits: the most its kind can be, or a closed class of scalars.
 CLASSES = {"integer": INT, "unsigned": UNSIGNED, "signed": SIGNED, "float": FLOAT, "numeric": NUMERIC, "scalar": SCALAR}
 
@@ -164,12 +166,16 @@ def implemented(c: Checker, trait: str, target: Type, node: Any = None) -> dict[
             with c.within(c.p.modules.get(trait, ""), {"Self": target}):
                 params = [(n, c.resolve(t, m)) for n, t in m.params]
                 promised[m.name] = Function(f"{trait}.{target.name}.{m.name}", params, c.resolve(m.ret, m), [])
-            name = promised[m.name].name
-            c.fs[name], c.local_effects[name], c.calls[name], c.call_edges[name] = (promised[m.name], set(), set(), [])
+            name = promised[m.name].name  # It may do what its trait's ceiling allows; with none, nobody can say what.
+            row = {f"bound:{trait}.{m.name}"} if m.effects is None else allowed(m.effects) - {"pure"}
+            c.fs[name], c.local_effects[name], c.calls[name], c.call_edges[name] = (promised[m.name], row, set(), [])
             c.signed.add(name)
         c.impls[trait, target] = promised
+    if c.impls.get((trait, target)) is PENDING:
+        fail("E-TRAIT-OVERLAP", f"Whether {target.display()} implements {trait} depends on itself: the bound of a "
+             "generic impl asks the question that impl answers.", node)  # fmt: skip
     if (trait, target) not in c.impls:
-        c.impls[trait, target] = None  # While this is decided, a bound that asks the same question hears "no".
+        c.impls[trait, target] = PENDING
         matches: dict[str, tuple[Function, dict[str, Any]]] = {}
         for f in [f for f in list(c.fs.values()) if f.owner and not f.bindings]:
             bound: dict[str, Any] = {}
@@ -183,11 +189,10 @@ def implemented(c: Checker, trait: str, target: Type, node: Any = None) -> dict[
             ]
             if any(satisfies(c, value, wanted, f.module, node) for value, wanted in promises):
                 continue  # `impl[T:integer] Ord for T` is an impl for the integers, not for everything.
-            short = f.name.rsplit(".", 1)[1]
-            if short in matches:
+            if any(other.block != f.block for other, _ in matches.values()):
                 fail("E-TRAIT-OVERLAP", f"Two impls of {trait} match {target.display()}: one Self type means "
                      "one implementation.", node)  # fmt: skip
-            matches[short] = (f, bound)
+            matches[f.name.rsplit(".", 1)[1]] = (f, bound)
         # A member whose body uses its own trait on its own type finds the template while its instance is made.
         c.impls[trait, target] = {short: f for short, (f, _) in matches.items()} or None
         found = {short: instantiate(c, f, bound, node) if f.generics and set(bound) == {g for g, _ in f.generics}
@@ -206,6 +211,10 @@ def implemented(c: Checker, trait: str, target: Type, node: Any = None) -> dict[
                     if [*got, f.ret] != [*want, c.resolve(declared[short].ret, f)]:
                         fail("E-TRAIT-IMPL", f"{f.name} does not match {trait}.{short}"
                              f"({', '.join(t.display() for t in want)}).", f)  # fmt: skip
+                ceiling = declared[short].effects  # A member's ceiling is part of what a bound on its trait promises.
+                if ceiling is not None and f.effects is not None and not allowed(f.effects) <= allowed(ceiling):
+                    fail("E-TRAIT-IMPL", f"{f.name} declares effects that {trait}.{short} does not allow.", f)
+                f.effects = ceiling if f.effects is None else f.effects
         c.impls[trait, target] = found or None
     return c.impls[trait, target]
 
@@ -278,15 +287,18 @@ def hold_impls(c: Checker, concrete: list[Function]):
                  f"parameter appears in its Self type{' (not ' + ', '.join(sorted(loose)) + ')' if loose else ''}.", f)  # fmt: skip
     for f in [f for f in concrete if f.owner]:
         with c.within(f.module):
-            trait = c.qualify(f.owner[0], c.p.traits, node=f) or f.owner[0]
+            trait = c.qualify(f.owner[0], c.p.traits, node=f)
+            if trait is None:
+                fail("E-TRAIT-IMPL", f"{f.owner[0]} is not a trait this module can name.", f)
             implemented(c, trait, c.resolve(f.owner[1], f), f)
 
 
 def connect_dispatches(c: Checker):
     """Draw each dynamic call's edges once every implementation is known: a later coercion may add one."""
     for caller, parameters, trait, name, position, receiver, targets, callbacks, lane, row in c.dispatches:
-        for (owner, _), members in c.impls.items():
-            if owner == trait and members and not (members[name].generics and not members[name].bindings):
+        for (owner, held), members in c.impls.items():  # A witness is never the value behind a dynamic reference.
+            real = owner == trait and members and not held.name.startswith("?")
+            if real and not (members[name].generics and not members[name].bindings):
                 target = members[name]
                 targets.append(target.name)
                 c.calls[caller].add(target.name)
@@ -294,65 +306,79 @@ def connect_dispatches(c: Checker):
                 passed = {target.params[i][0]: a.val if a.tag == "name" and a.val in parameters else ""
                           for a, i in callbacks}  # fmt: skip
                 c.call_edges[caller].append((target.name, {target.params[position][0]: receiver, **passed}))
-                c.lane_calls += [(target.name, False, lane)] if lane else []
-                c.fn_sites += [(a, parameters, target.name, target.params[i][0]) for a, i in callbacks]
+                c.lane_calls += [(target.name, False, lane, caller)] if lane else []
+                c.fn_sites += [(a, parameters, target.name, target.params[i][0], caller) for a, i in callbacks]
 
 
-def certify(c: Checker) -> dict[str, str]:
+def certify(make: Callable[[], Checker]) -> tuple[Checker, dict[str, str]]:
     """Check each generic function once against what its bounds promise. A parameter bounded by a scalar
     class is checked at every type of that class; any other is an opaque witness that implements exactly the
-    traits named and is as owning as the bounds allow (linear when they say nothing: the strictest kind).
-    "ok" means every instance whose arguments satisfy the bounds checks too; otherwise the entry names the
-    first thing the body needed beyond its bounds, and that template is still checked per instance, as
-    before. Run on a copy of the program: nothing is emitted."""
-    c.prepare()
-    verdicts: dict[str, str] = {}
-    for f in [f for f in c.p.functions if f.generics and not f.bindings]:
-        choices: list[list[Any]] = []
-        for g, constraint in f.generics:
-            words = [] if constraint == "type" else constraint.split("+")
-            classes = [CLASSES[w] for w in words if w in CLASSES]
-            if constraint == "nat":
-                choices.append([])
-            elif classes:
-                choices.append([Type(n) for n in sorted(set.intersection(*classes))])
-            else:
-                witness = Type(f"?{f.name}.{g}")
-                with c.within(f.module):
-                    traits = [t for t in (c.qualify(w, c.p.traits) for w in words) if t]
-                kind = next((w for w in KINDS[:2] if w in words), "linear")
-                c.bounds[witness.name] = (traits, kind)
-                choices.append([witness])
-        family = [g for g in c.p.functions if g.source_name == f.name and g.bindings]
-        naturals = all(kind == "nat" for _, kind in f.generics)
-        if (not all(choices) and not (family and naturals)) or math.prod(map(len, choices)) > 128:
-            verdicts[f.name] = "too many scalar cases" if all(choices) else "no family gives its natural a witness"
-            continue
+    traits named and is as owning as the bounds allow (linear when they say nothing: the strictest kind), whose
+    members may do what their trait's ceiling allows. "ok" means every instance whose arguments satisfy the
+    bounds checks too, bodies and whole-program rules alike; otherwise the entry names the first thing the
+    template needed beyond its bounds, and it is still checked per instance, as before. A template that fails is
+    left out and the rest are judged again on a fresh checker (`make`), so one verdict never colours another."""
+    failed: dict[str, str] = {}
+    while True:
+        c, current = make(), ""
+        templates = [f for f in c.p.functions if f.generics and not f.bindings]
         try:
-            for instance in family if naturals else []:  # A natural's witnesses are its families' instances.
-                c.function(instance)
-            for values in itertools.product(*choices) if all(choices) else []:
-                instantiate(c, f, dict(zip((g for g, _ in f.generics), values, strict=True)), f)
-            verdicts[f.name] = "ok"
+            c.bodies()
+            for f in [f for f in templates if f.name not in failed]:
+                current = f.name
+                choices: list[list[Any]] = []
+                for g, constraint in f.generics:
+                    words = [] if constraint == "type" else constraint.split("+")
+                    classes = [CLASSES[w] for w in words if w in CLASSES]
+                    if constraint == "nat":
+                        choices.append([])
+                    elif classes:
+                        choices.append([Type(n) for n in sorted(set.intersection(*classes))])
+                    else:
+                        witness = Type(f"?{f.name}.{g}")
+                        with c.within(f.module):
+                            traits = [t for t in (c.qualify(w, c.p.traits) for w in words) if t]
+                        kind = next((w for w in KINDS[:2] if w in words), "linear")
+                        c.bounds[witness.name] = (traits, kind)
+                        choices.append([witness])
+                # A natural's witnesses are its families' instances, which `bodies` has checked.
+                family = [g for g in c.p.functions if g.source_name == f.name and g.bindings]
+                naturals = all(kind == "nat" for _, kind in f.generics)
+                if (not all(choices) and not (family and naturals)) or math.prod(map(len, choices)) > 128:
+                    failed[f.name] = (
+                        "too many scalar cases" if all(choices) else "no family gives its natural a witness"
+                    )
+                    continue
+                for values in itertools.product(*choices) if all(choices) else []:
+                    instantiate(c, f, dict(zip((g for g, _ in f.generics), values, strict=True)), f)
+            current = ""
+            c.judge()
+            return c, {f.name: failed.get(f.name, "ok") for f in templates}
         except Diagnostic as e:  # The strictest witness is the usual reason: say which parameter promised nothing.
+            at = c.fs.get(c.judging) or getattr(c.s, "f", None)  # What a whole-program rule, or a body check, was at.
+            blamed = current or (at.source_name if at is not None and at.bindings else "")
+            f = next((f for f in templates if f.name == blamed and blamed not in failed), None)
+            if f is None:  # The program itself does not check, so nothing more can be decided: unknown, never ok.
+                unknown = f"unknown: the program does not check ({e.data['code']})"
+                return c, {f.name: failed.get(f.name, unknown) for f in templates}
             free = [g for g, k in f.generics if k != "nat" and not {*KINDS, *CLASSES} & set(k.split("+"))]
-            hint = (
-                f" {', '.join(free)} may be linear here; [{free[0]}:affine] or [{free[0]}:copy] promises more."
-                if free
-                else ""
-            )
-            verdicts[f.name] = f"{e.data['code']}: {e.data['message']}{hint}"
-    return verdicts
+            failed[blamed] = f"{e.data['code']}: {e.data['message']}"
+            if free and e.data["code"].startswith(("E-LINEAR", "E-MOVE", "E-PARTIAL-MOVE")):
+                failed[blamed] += (
+                    f" {', '.join(free)} may be linear here; [{free[0]}:affine] or [{free[0]}:copy] promises more."
+                )
+            if "bound:" in str(e.data):
+                failed[blamed] += (
+                    " A bound promises only what its trait declares: give that member a ceiling (`-> u64 pure;`)."
+                )
 
 
-def described(c: Checker) -> tuple[dict[str, str], dict[str, set[str]]]:
-    """Verdicts as `certify`, and the effect row of every function: a concrete one's own, a template's at
-    its witnesses (what it may do for any arguments within its bounds, besides what their members do)."""
-    verdicts = certify(c)
-    for f in [f for f in c.p.functions if (not f.generics or f.bindings) and f.name not in c.local_effects]:
-        c.function(f)
+def described(make: Callable[[], Checker]) -> tuple[Checker, dict[str, str], dict[str, set[str]]]:
+    """Verdicts as `certify`, and the effect row of every function: a concrete one's own, a template's at its
+    witnesses, where `bound:Trait.member` stands for whatever that member of its argument does."""
+    c, verdicts = certify(make)
     rows = fixed_point(c)
-    for f in [f for f in c.p.functions if f.generics and not f.bindings and verdicts.get(f.name) == "ok"]:
-        witnessed = [rows[n] for n in rows if n.startswith(f.name + "[")]
-        rows[f.name] = set().union(*witnessed) if witnessed else set()
-    return verdicts, rows
+    for name in [name for name, verdict in verdicts.items() if verdict == "ok"]:
+        witnessed = [rows[n] for n in rows if n.startswith(name + "[")]
+        rows[name] = set().union(*witnessed) if witnessed else set()
+    return c, verdicts, rows

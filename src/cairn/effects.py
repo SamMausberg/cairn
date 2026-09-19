@@ -25,6 +25,11 @@ def exposed(effect: str, borrowed: set[str]) -> str:
     return "local_" + kind if kind in {"read", "write"} and name not in borrowed else effect
 
 
+def allowed(ceiling: tuple[str, ...]) -> set[str]:
+    """What a declared ceiling lets a row contain (`pure` also lets it read what it was lent)."""
+    return set(ceiling) | (PURE if "pure" in ceiling else set())
+
+
 def fixed_point(c: Checker) -> dict[str, set[str]]:
     """Least fixed point of E_f = L_f + divergence + renamed callee footprints."""
     effects = {n: set(es) for n, es in c.local_effects.items()}
@@ -65,10 +70,12 @@ def fixed_point(c: Checker) -> dict[str, set[str]]:
     else:
         fail("E-EFFECT-LIMIT", "Effect fixed point exceeded its finite universe.")
     for f in c.p.functions:
+        c.judging = f.name
         if f.effects is not None and not f.extern:
-            allowed = set(f.effects) | (PURE if "pure" in f.effects else set())
             reads = "pure" in f.effects
-            excess = {e for e in effects[f.name] if e not in allowed and not (reads and e.startswith("read:"))}
+            excess = {
+                e for e in effects[f.name] if e not in allowed(f.effects) and not (reads and e.startswith("read:"))
+            }
             if excess:
                 fail("E-EFFECT-CEILING", f"{f.name} exceeds its declared effects.", f, added_effects=sorted(excess))
     return effects

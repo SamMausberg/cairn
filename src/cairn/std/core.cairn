@@ -5,9 +5,10 @@ pub enum Option[T] { Some(T); None; }
 pub enum Result[T, E] { Ok(T); Err(E); }
 
 // Laws are documentation here, not proof obligations: less is a strict weak order, same an equivalence.
-pub trait Ord { fn less(a:ro<Self>, b:ro<Self>) -> bool; }
-pub trait Eq { fn same(a:ro<Self>, b:ro<Self>) -> bool; }
-pub trait Hash { fn hash(value:ro<Self>) -> u64; }
+// Purity is an obligation: every implementation is held to it, so `[T:Ord]` promises a comparison that only reads.
+pub trait Ord { fn less(a:ro<Self>, b:ro<Self>) -> bool pure; }
+pub trait Eq { fn same(a:ro<Self>, b:ro<Self>) -> bool pure; }
+pub trait Hash { fn hash(value:ro<Self>) -> u64 pure; }
 
 // One implementation per class of scalars; a record gets its own with `derive eq`, `derive ord`, `derive hash`.
 impl[T:integer] Ord for T { fn less(a:ro<T>, b:ro<T>) -> bool = a < b; }

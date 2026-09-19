@@ -67,20 +67,20 @@ pub enum Result[T, E] { Ok(T); Err(E); }
 ```
 
 ```cairn
-pub trait Ord { fn less(a:ro<Self>, b:ro<Self>) -> bool; }
+pub trait Ord { fn less(a:ro<Self>, b:ro<Self>) -> bool pure; }
 ```
-Laws are documentation here, not proof obligations: less is a strict weak order, same an equivalence.
+Laws are documentation here, not proof obligations: less is a strict weak order, same an equivalence. Purity is an obligation: every implementation is held to it, so `[T:Ord]` promises a comparison that only reads.
 
 ```cairn
-pub trait Eq { fn same(a:ro<Self>, b:ro<Self>) -> bool; }
-```
-
-```cairn
-pub trait Hash { fn hash(value:ro<Self>) -> u64; }
+pub trait Eq { fn same(a:ro<Self>, b:ro<Self>) -> bool pure; }
 ```
 
 ```cairn
-impl Eq for bool: fn same(a:ro<bool>, b:ro<bool>) -> bool
+pub trait Hash { fn hash(value:ro<Self>) -> u64 pure; }
+```
+
+```cairn
+impl Eq for bool: fn same(a:ro<bool>, b:ro<bool>) -> bool pure
 ```
 Effects: `read:a`, `read:b`.
 
@@ -289,17 +289,17 @@ Effects (any arguments within its bounds): `read:m`, `trap`.
 ```cairn
 pub fn insert[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:K, value:V)
 ```
-Effects (any arguments within its bounds): `alloc`, `diverge`, `free`, `local_read`, `local_write`, `read:m`, `trap`, `write:m`, `zero_init`.
+Effects (any arguments within its bounds): `alloc`, `diverge`, `ffi_precondition`, `free`, `local_read`, `local_write`, `read:m`, `stack_storage`, `trap`, `write:m`, `zero_init`.
 
 ```cairn
 pub fn find[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> Option[usize]
 ```
-Effects (any arguments within its bounds): `diverge`, `read:key`, `read:m`, `trap`.
+Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local_read`, `local_write`, `read:key`, `read:m`, `stack_storage`, `trap`, `zero_init`.
 
 ```cairn
 pub fn remove[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:ro<K>) -> Option[V]
 ```
-Effects (any arguments within its bounds): `diverge`, `read:key`, `read:m`, `trap`, `write:m`.
+Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local_read`, `local_write`, `read:key`, `read:m`, `stack_storage`, `trap`, `write:m`, `zero_init`.
 
 # std.mem
 
@@ -319,7 +319,7 @@ Effects (any arguments within its bounds): `ffi_precondition`, `read:src`, `trap
 pub fn equal[T:Eq](n:usize, a:ro<T>[n]@host, m:usize, b:ro<T>[m]@host) -> bool
 ```
 Two extents, because a comparison is the one place where the lengths may legitimately differ.
-Effects (any arguments within its bounds): `ffi_precondition`, `read:a`, `read:b`, `trap`.
+Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local_read`, `local_write`, `read:a`, `read:b`, `stack_storage`, `trap`, `zero_init`.
 
 # std.net
 
@@ -372,13 +372,13 @@ Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `indir
 ```cairn
 pub fn sort[T:Ord](n:usize, xs:rw<T>[n]@host)
 ```
-Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `indirect_call`, `local_read`, `read:xs`, `trap`, `write:xs`.
+Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `indirect_call`, `local_read`, `local_write`, `read:xs`, `stack_storage`, `trap`, `write:xs`, `zero_init`.
 
 ```cairn
 pub fn search[T:Ord](n:usize, xs:ro<T>[n]@host, key:ro<T>) -> Option[usize]
 ```
 The index of a value equal to `key` in an already sorted view, if one is there.
-Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `read:key`, `read:xs`, `trap`.
+Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local_read`, `local_write`, `read:key`, `read:xs`, `stack_storage`, `trap`, `zero_init`.
 
 # std.sys
 

@@ -26,8 +26,8 @@ def comment_above(text: str, offset: int) -> list[str]:
 
 
 def document(source: str, modules: list[str] | None = None) -> str:
-    p = specialize(derive(link(Parser(source).parse())))
-    verdicts, rows = described(Checker(p))
+    c, verdicts, rows = described(lambda: Checker(specialize(derive(link(Parser(source).parse())))))
+    p = c.p
     out: list[str] = []
     for module in modules or sorted(m for m in set(p.modules.values()) if m not in p.sources):
         text = p.sources.get(module, source)
@@ -55,7 +55,7 @@ def document(source: str, modules: list[str] | None = None) -> str:
                     f" for {recipe.param}" if recipe.param else ""
                 )
                 out += [f"```cairn\n{head}\n```", *comment_above(text, recipe.start), ""]
-        for f in [f for f in p.functions if f.module == module and not f.bindings and (f.owner or shown(f.name))]:
+        for f in [f for f in c.fs.values() if f.module == module and not f.bindings and (f.owner or shown(f.name))]:
             impl = f"impl {f.owner[0]} for {f.owner[1].display()}: " if f.owner else "pub " if module else ""
             row = ", ".join(f"`{x}`" for x in sorted(rows.get(f.name, ()))) or "none"
             certified = verdicts.get(f.name, "ok") == "ok"

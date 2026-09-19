@@ -674,6 +674,35 @@ def test_a_template_is_certified_once_when_its_body_needs_only_its_bounds():
     assert compile_source(GENERIC_BOUNDS)  # None of this changes what is accepted: instances are still checked.
 
 
+CEILINGS = """
+extern fn getpid() -> i32 effects(io);
+trait Quiet { fn id(self:ro<Self>) -> u64 pure; }
+trait Loud { fn pid(self:ro<Self>) -> u64; }
+fn ask[T:Quiet](x:ro<T>) -> u64 pure = id(x);
+fn lanes[T:Quiet + copy](n:usize, o:rw<u64>[n], c:T) { parallel i in n { o[i] = id(c); } }
+fn loose[T:Loud](x:ro<T>) -> u64 pure = pid(x);
+fn lanes_loose[T:Loud + copy](n:usize, o:rw<u64>[n], c:T) { parallel i in n { o[i] = pid(c); } }
+fn unceilinged[T:Loud](x:ro<T>) -> u64 = pid(x);
+"""
+
+
+def test_a_verdict_covers_the_rules_that_need_every_row():
+    """`ok` is about ceilings and lanes too. A bound promises what its trait's members declare, every impl is held
+    to that, and a member that declares nothing may do anything, which no `pure` template or lane can absorb."""
+    from cairn.cairnc import certify_templates
+
+    verdicts = certify_templates(CEILINGS)
+    assert {n for n, v in verdicts.items() if v == "ok"} == {"ask", "lanes", "unceilinged"}
+    assert verdicts["loose"].startswith("E-EFFECT-CEILING") and "give that member a ceiling" in verdicts["loose"]
+    assert verdicts["lanes_loose"].startswith("E-PARALLEL-CALL") and "bound:Loud.pid" in verdicts["lanes_loose"]
+    noisy = "struct C { v:u64; }\nimpl Loud for C { fn pid(self:ro<C>) -> u64 { unsafe { return u64(getpid()); } } }\n"
+    with pytest.raises(Diagnostic) as e:  # The instance the old verdict called fine.
+        compile_source(CEILINGS + noisy + "fn main() -> i32 { let c = C(1); return i32(loose(c)); }")
+    assert e.value.data["code"] == "E-EFFECT-CEILING"
+    broken = certify_templates(CEILINGS + "fn main() -> i32 { let x:u64 = true; return 0; }")
+    assert set(broken.values()) == {"unknown: the program does not check (E-TYPE-MISMATCH)"}  # Unknown is never ok.
+
+
 BOUNDED = """
 import std.core (Ord, Option);
 linear struct Token { id:u64; }

@@ -196,7 +196,10 @@ def check_dyn(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Typ
     """Dyn[Trait](value) moves a value of any implementing type to the heap."""
     ty = explicit(c, e, "Dyn", targs, expected, "Write Dyn[Trait](value).")
     arity(e, args, 1, "Dyn takes the value it will own.")
-    members = vtable(c, ty.args[0].name, c.expr(args[0]).value, e)
+    held = c.expr(args[0]).value
+    if c.kind(held) == "linear":  # The erased value is dropped with its box; a linear one may only be consumed.
+        fail("E-LINEAR-STORAGE", f"Dyn[...] erases what it holds and drops it: {held.display()} is linear.", e)
+    members = vtable(c, ty.args[0].name, held, e)
     c.effects |= {"alloc", "free"}
     c.guard("allocation")
     e.ref = ("builtin", members)

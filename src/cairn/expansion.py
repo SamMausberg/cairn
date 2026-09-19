@@ -257,7 +257,7 @@ class Deriver:
                 target = self.type(item.target, env, None)
                 for member in item.members:
                     made = self.function(member, env, f"{prefix}{item.trait}.{target.display()}.")
-                    made.owner = (item.trait, target)
+                    made.owner, made.block = (item.trait, target), (self.recipe.name, item.block, target)
                     out.append(made)
             else:
                 out.append(self.function(item, env, prefix))
