@@ -230,6 +230,46 @@ def test_the_projection_and_the_formatter_keep_recipes_and_derivations():
     assert format_source(formatted) == formatted and compile_source(formatted)[0] == compile_source(APP)[0]
 
 
+CAPTURE = """
+module lib;
+pub trait Same { fn same(a:ro<Self>, b:ro<Self>) -> bool; }
+pub fn helper(x:u64) -> u64 = 1;
+pub recipe go for R {
+  pub fn $R_go(v:ro<R>) -> u64 = helper(v.x);
+  impl Same for R { fn same(a:ro<R>, b:ro<R>) -> bool = a.x == b.x; }
+}
+pub fn alike[T:Same](a:ro<T>, b:ro<T>) -> bool = same(a, b);
+module app;
+import lib;
+trait Same { fn same(a:ro<Self>, b:ro<Self>) -> bool; }
+struct P { x:u64; }
+fn helper(x:u64) -> u64 = 99;
+derive lib.go for P;
+pub fn main() -> i32 { let p = P(1); if !lib.alike(p, p) { return 7; } return i32(P_go(p)); }
+"""
+
+
+def test_a_name_a_recipe_writes_means_what_it_means_in_the_recipes_module(tmp_path):
+    """Hygiene: the deriving module's `helper` and `Same` do not capture the recipe's. Only `$` splices (and the
+    names they build) belong to the deriving module; everything else is spelled out in full when it is expanded."""
+    if not shutil.which("clang++"):
+        pytest.skip("clang++ unavailable")
+    shown = expanded_source(CAPTURE)
+    assert "return lib.helper(v.x);" in shown and "impl lib.Same for app.P {" in shown
+    (tmp_path / "p.cpp").write_text(
+        compile_source(CAPTURE, roots=("app.main",))[0] + "int main() { return cf_app_main(); }\n"
+    )
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    subprocess.run(
+        ["clang++", "-std=c++20", "-O1", str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120
+    )
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 1  # lib.helper ran, and P implements lib.Same.
+    with pytest.raises(Diagnostic) as e:  # A private helper is private from where the code lands, and says so.
+        compile_source(CAPTURE.replace("pub fn helper(x:u64) -> u64 = 1;", "fn helper(x:u64) -> u64 = 1;"))
+    assert e.value.data["code"] == "E-PRIVATE"
+
+
 NAMED = """
 module m;
 pub fn twice[T:numeric](x:T) -> T = x + x;

@@ -49,17 +49,24 @@ def constant(c: Checker, name: str, pending: list[str]) -> Any:
     return c.folded[name]
 
 
+def single(value: Any, narrow: bool = True) -> Any:
+    """What an f32 holds: the machine rounds every literal, conversion and operation once, and so does folding."""
+    return struct.unpack("f", struct.pack("f", value))[0] if narrow and isinstance(value, float) else value
+
+
 def fold(c: Checker, e: Expr, ty: Type, pending: list[str]) -> Any:
+    f32 = ty.name == "f32"
     if e.tag in {"int", "float", "bool"}:
-        return (
-            e.val == "true" if e.tag == "bool" else float(e.val) if e.tag == "float" or ty.name in FLOAT else int(e.val)
-        )
+        if e.tag == "bool":
+            return e.val == "true"
+        return single(float(e.val), f32) if e.tag == "float" or ty.name in FLOAT else int(e.val)
     if e.tag == "name":
         const = c.qualify(e.val, c.p.consts, node=e)
         if const is None:
             fail("E-CONST", "A constant is made of literals and other constants.", e)
-        return constant(c, const, pending)
-    args = [fold(c, a, ty, pending) for a in e.args]
+        return single(constant(c, const, pending), f32)
+    inner = Type("i64") if e.tag == "call" and e.val in NUMERIC else ty  # A conversion's operand has its own type:
+    args = [fold(c, a, inner, pending) for a in e.args]  # nothing is expected of it, so its floats are f64.
     numbers = all(not isinstance(a, bool) for a in args)
     if e.tag == "call" and e.val in NUMERIC and len(args) == 1 and numbers:  # u32(x), f64(n): checked like any literal.
         low, high = (
@@ -69,7 +76,7 @@ def fold(c: Checker, e: Expr, ty: Type, pending: list[str]) -> Any:
         )
         if e.val in INT and not low <= int(args[0]) <= high:
             fail("E-CONST", f"{args[0]} does not fit {e.val}.", e)
-        return float(args[0]) if e.val in FLOAT else int(args[0])
+        return single(float(args[0]), e.val == "f32") if e.val in FLOAT else int(args[0])
     if e.tag == "unary" and ((e.val == "-" and numbers) or (e.val == "!" and not numbers)):
         return -args[0] if e.val == "-" else not args[0]
     logical = e.tag == "binary" and e.val in {"&&", "||"} and not numbers
@@ -79,7 +86,4 @@ def fold(c: Checker, e: Expr, ty: Type, pending: list[str]) -> Any:
         fail("E-CONST", "A constant does not divide by zero.", e)
     if e.val in {"&", "|", "^"} and not all(isinstance(a, int) for a in args):
         fail("E-CONST", "Bit operations fold integers.", e)
-    value = FOLD[e.val](*args)
-    if isinstance(value, float) and ty.name == "f32":  # Each f32 operation rounds once, as the machine will.
-        value = struct.unpack("f", struct.pack("f", value))[0]
-    return value
+    return single(FOLD[e.val](*args), f32)

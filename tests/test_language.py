@@ -773,6 +773,78 @@ fn main() -> i32 {
 """
 
 
+NATURAL = """
+const N:usize = 2 + 2;
+struct Grid { cells:Array[u64, N]; }
+fn scale[K:nat](x:usize) -> usize = mul_wrap(x, K);
+family times = scale[4..5];
+fn main() -> i32 {
+  let mut a = Array[u64, N]();
+  a[3] = 7;
+  let mut g = Grid(Array[u64, N]());
+  g.cells[N - 1] = a[3];
+  if g.cells[3] != 7 || scale[N](2) != 8 || len(a) != N { return 1; }
+  return 0;
+}
+"""
+
+
+def test_a_constant_is_a_natural_wherever_one_is_written(tmp_path):
+    """`Array[u64, N]` in a local, in a field and as `scale[N](x)`: the same N that names a view's extent."""
+    if not shutil.which("clang++"):
+        pytest.skip("Native compiler unavailable")
+    (tmp_path / "p.cpp").write_text(compile_source(NATURAL)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    build = ["clang++", "-std=c++20", "-O1", "-fsanitize=address,undefined", str(tmp_path / "p.cpp"), "-o"]
+    subprocess.run([*build, str(tmp_path / "p")], check=True, timeout=120)
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+    with pytest.raises(Diagnostic) as e:  # Not any constant: a natural.
+        compile_source("const X:f64 = 1.5;\nfn main() -> i32 { let a = Array[u64, X](); return 0; }")
+    assert e.value.data["code"] == "E-TYPE"
+
+
+SINGLE = """
+const A:f32 = 0.71764 + -2.686222;
+const B:f32 = 16777217.0;
+const N:usize = usize(B);
+const C:f32 = f32(0.1 + 0.2);
+const D:f64 = f64(f32(0.1)) * 3.0;
+const E:f32 = 1.1 * 1.1 / 3.3;
+const F:f32 = A * E - C;
+fn main() -> i32 {
+  let a:f32 = 0.71764;
+  let b:f32 = -2.686222;
+  let big:f32 = 16777217.0;
+  let wide:f64 = 0.1 + 0.2;
+  let tenth:f32 = 0.1;
+  let x:f32 = 1.1;
+  let y:f32 = 3.3;
+  let e:f32 = x * x / y;
+  if a + b != A { return 1; }
+  if usize(big) != N { return 2; }
+  if f32(wide) != C { return 3; }
+  if f64(tenth) * 3.0 != D { return 4; }
+  if e != E { return 5; }
+  if (a + b) * e - f32(wide) != F { return 6; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_an_f32_constant_is_what_the_machine_would_compute(tmp_path, cxx):
+    """Every literal, conversion and operation rounds once, as it will at run time; a conversion's operand is f64."""
+    if not shutil.which(cxx):
+        pytest.skip("Native compiler unavailable")
+    (tmp_path / "p.cpp").write_text(compile_source(SINGLE)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    flags = ["-std=c++20", "-O2", "-ffp-contract=off", "-fno-fast-math"]
+    subprocess.run([cxx, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+
+
 def test_constants_fold_exactly_and_name_static_extents(tmp_path):
     (tmp_path / "p.cpp").write_text(
         compile_source(CONSTANTS)[0] + "int main() { return static_cast<int>(cf_main()); }\n"

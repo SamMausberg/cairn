@@ -31,7 +31,7 @@ def lexable(text):
 
 
 def repository_sources():
-    return sorted(p for p in ROOT.rglob("*.cairn") if ".venv" not in p.parts)
+    return sorted(p for p in ROOT.rglob("*.cairn") if not {".venv", ".claude", "build"} & set(p.parts))
 
 
 def embedded_programs():

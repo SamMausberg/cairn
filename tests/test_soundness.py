@@ -445,6 +445,11 @@ REJECTED = {
         "trait P { fn pid(self:ro<Self>) -> u64 pure; }\nstruct C { v:u64; }\n"
         "impl P for C { fn pid(self:ro<C>) -> u64 effects(io) = self.v; }\nfn main() -> i32 { return 0; }",
     ),
+    "a call the world can observe beside an operand whose guard may abort": (
+        "E-EFFECT-ORDER",
+        "extern fn putchar(c:i32) -> i32 effects(io);\nfn say() -> u64 { unsafe { let r = putchar(65); } return 0; }\n"
+        "fn main() -> i32 { let mut b = Buf[u64](2); let i:usize = 9; return i32(say() + b[i]); }",
+    ),
     "the same in a task's arguments": (
         "E-CALL-SHAPE",
         FILL + "fn two() -> usize = 2;\n"

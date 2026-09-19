@@ -330,6 +330,10 @@ class Checker:
         """A type argument: a natural (literal or bound static name) or a type."""
         if isinstance(argument, Type) and not argument.args and isinstance(self.tenv.get(argument.name), int):
             return self.tenv[argument.name]
+        named = isinstance(argument, Type) and not argument.args and argument.name not in self.tenv
+        const = self.qualify(argument.name, self.p.consts, node=node) if named else None
+        if const and type(constant(self, const, [])) is int:  # `Array[u64, N]`, `scale[N](x)`: a constant natural.
+            return constant(self, const, [])
         return argument if isinstance(argument, int) else self.resolve(argument, node)
 
     def define(self, ty: Type, node=None):

@@ -28,9 +28,10 @@ def declared(p: Program) -> set[str]:
 
 def visible(p: Program, module: str, written: str, table: Any) -> str | None:
     """Resolve a name written in `module` before any checker exists: alias, own module, then the root."""
-    head, _, rest = written.partition(".")
+    head, dot, rest = written.partition(".")
     aliases = {alias: target for importer, target, alias in p.imports if importer == module}
     aliased = [f"{aliases[head]}.{rest}"] if rest and head in aliases else []
+    aliased += [p.uses[module, head] + dot + rest] if (module, head) in p.uses else []  # import m (Name);
     found = next((n for n in [*aliased, f"{module}.{written}", written] if n in table), None)
     if found and p.modules.get(found, "") not in ("", module) and found not in p.public:
         fail("E-PRIVATE", f"{found} is private to module {p.modules[found]}.")
@@ -51,7 +52,21 @@ class Deriver:
 
     def __init__(self, p: Program, recipe: Recipe, statics: dict[str, Any]):
         self.p, self.recipe, self.nodes = p, recipe, 0
+        self.declared = declared(p) | set(p.traits) | set(p.consts)
+        self.bound: set[str] = set()  # What the function being generated binds: a local is nobody's declaration.
         self.root = self.scope(statics, recipe.where)
+
+    def own(self, written: str) -> str:
+        """A name the recipe wrote means what it means in the recipe's module, so it is spelled out in full and
+        the deriving module cannot capture it. `$` splices, and the names they build, are the deriving module's."""
+        parts = written.split(".")
+        if "$" in written or parts[0] in self.bound:
+            return written
+        for k in range(len(parts), 0, -1):  # `core.Eq.same`: the longest prefix that is a declaration.
+            full = visible(self.p, self.recipe.module, ".".join(parts[:k]), self.declared)
+            if full:
+                return ".".join([full, *parts[k:]])
+        return written
 
     def scope(self, env: dict[str, Any], where: list[tuple[str, Expr]]) -> dict[str, Any]:
         env = dict(env)
@@ -163,7 +178,7 @@ class Deriver:
             return t
         named = t.name == self.recipe.param or (t.name.startswith("$") and t.name[1:] in env)
         value = self.static(Expr("name", t.name), env) if named else None
-        base = value if isinstance(value, Type) else Type(self.text(t.name, env, node))
+        base = value if isinstance(value, Type) else Type(self.text(self.own(t.name), env, node))
         args = base.args or tuple(self.type(a, env, node) for a in t.args)
         return Type(base.name, t.mode, self.text(t.extent, env, node), args, t.place)
 
@@ -196,6 +211,7 @@ class Deriver:
         elif isinstance(ref, Function):  # A closure written inside the recipe.
             ref = self.function(ref, env, "")
         text = e.val if e.tag in {"int", "float", "bool", "str", "binary", "unary"} else self.text(e.val, env, e)
+        text = self.own(e.val) if e.tag in {"call", "name"} and text == e.val else text
         return [Expr(e.tag, text, args, e.line, e.col, ref=ref)]
 
     def expr(self, e: Expr, env: dict[str, Any]) -> Expr:
@@ -213,10 +229,12 @@ class Deriver:
                 self.require(s, env)
             else:
                 arms = [
-                    Arm(self.text(a.variant, env, a), a.binder, self.stmts(a.body, env), a.line, a.col) for a in s.arms
+                    Arm(self.text(self.own(a.variant), env, a), a.binder, self.stmts(a.body, env), a.line, a.col)
+                    for a in s.arms
                 ]
                 names = [Expr(n.tag, self.text(n.val, env, n), [], n.line, n.col) for n in s.other_names]
-                out.append(Stmt(s.tag, self.text(s.name, env, s), self.type(s.ty, env, s), [self.expr(e, env) for e in s.exprs],
+                named = self.own(s.name) if s.tag == "unpack" else s.name
+                out.append(Stmt(s.tag, self.text(named, env, s), self.type(s.ty, env, s), [self.expr(e, env) for e in s.exprs],
                                 self.stmts(s.body, env), self.stmts(s.other, env), s.line, s.col, s.binder, arms, s.op, s.ref,
                                 names))  # fmt: skip
         return out
@@ -228,10 +246,20 @@ class Deriver:
             fail(code if known else "E-DERIVE-DOMAIN", message if known else s.name, s)
 
     def function(self, f: Function, env: dict[str, Any], prefix: str) -> Function:
-        made = copy.copy(f)
+        def binders(ss: list[Stmt]) -> set[str]:
+            found = {
+                n for s in ss for n in (s.name, s.binder, *(a.binder for a in s.arms), *(x.val for x in s.other_names))
+            }
+            inner = [x for s in ss for x in (s.body, s.other, *(a.body for a in s.arms), getattr(s.ref, "items", []))]
+            return found.union(*(binders([s for s in body if isinstance(s, Stmt)]) for body in inner))
+
+        made, outer = copy.copy(f), self.bound
+        self.bound = outer | {n for n, _ in f.params} | {g for g, _ in f.generics} | binders(f.body)
         made.name = prefix + self.text(f.name, env, f)
+        made.generics = [(g, "+".join(self.own(w) for w in k.split("+"))) for g, k in f.generics]
         made.params = [(self.text(n, env, f), self.type(t, env, f)) for n, t in f.params]
         made.ret, made.body = self.type(f.ret, env, f), self.stmts(f.body, env)
+        self.bound = outer
         return made
 
     def shape(self, fields: list[Any], env: dict[str, Any]) -> list[tuple[str, Type]]:
@@ -254,10 +282,10 @@ class Deriver:
             elif isinstance(item, Shape):
                 out.append((prefix + self.text(item.name, env, item), self.shape(item.fields, env), item.public))
             elif isinstance(item, Impl):  # `impl Trait for R { ... }`: members named and owned as a written impl's are.
-                target = self.type(item.target, env, None)
+                target, trait = self.type(item.target, env, None), self.own(item.trait)
                 for member in item.members:
-                    made = self.function(member, env, f"{prefix}{item.trait}.{target.display()}.")
-                    made.owner, made.block = (item.trait, target), (self.recipe.name, item.block, target)
+                    made = self.function(member, env, f"{prefix}{trait}.{target.display()}.")
+                    made.owner, made.block = (trait, target), (self.recipe.name, item.block, target)
                     out.append(made)
             else:
                 out.append(self.function(item, env, prefix))

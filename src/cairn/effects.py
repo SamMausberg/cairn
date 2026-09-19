@@ -132,6 +132,14 @@ def audit(c: Checker, effects: dict[str, set[str]]):
             tries(child, at_root and e.tag in {"try", "spawn"}, out)
         return out
 
+    def guarded(e: Expr, out: list[Expr]) -> list[Expr]:
+        """Operands whose own guard may abort the process: an element, a part, checked arithmetic."""
+        checked = (e.tag, e.val) in {*(("binary", op) for op in "+-*/%"), ("unary", "-")}
+        out += [e] if checked or e.tag in {"index", "slice"} else []
+        for child in e.args if e.tag != "lambda" else []:
+            guarded(child, out)
+        return out
+
     def within(e: Expr, node: Expr) -> bool:
         return e is node or any(within(a, node) for a in e.args)
 
@@ -160,9 +168,10 @@ def audit(c: Checker, effects: dict[str, set[str]]):
                 fail("E-EFFECT-ORDER", "Bind this call first: another operand here could observe its writes.", call)
             beside = [d for d in calls if d is not call and not within(call, d) and not within(d, call)]
             beside = [d for d in beside if not (isinstance(d.ref, tuple) and d.ref[0] in {"record", "variant"})]
+            beside += [d for d in guarded(e, []) if not within(call, d) and not within(d, call)]
             if beside and any(x in OBSERVABLE or x.startswith(("ffi:", "transfer:", "par:")) for x in row):
-                fail("E-EFFECT-ORDER", "Bind this call first: it can be observed from outside, and the call beside "
-                     "it could run before or after it.", call)  # fmt: skip
+                fail("E-EFFECT-ORDER", "Bind this call first: it can be observed from outside, and the operand beside "
+                     "it could run, or abort, before or after it.", call)  # fmt: skip
 
     def block(ss: list[Stmt]):
         for s in ss:
