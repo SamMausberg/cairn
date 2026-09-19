@@ -272,10 +272,11 @@ def test_the_readme_example_is_real():
     from pathlib import Path
 
     readme = (Path(__file__).resolve().parents[2] / "README.md").read_text()
-    sample = readme.split("```cairn\n", 1)[1].split("```", 1)[0]
-    receipt = compile_source(sample)[1]
-    assert "par:device" in receipt["functions"]["saxpy"]["effects"]
-    assert {"spawn", "join"} <= set(receipt["functions"]["halves"]["effects"])
+    rows = {}
+    for sample in [block.split("```", 1)[0] for block in readme.split("```cairn\n")[1:]]:
+        rows |= compile_source(sample)[1]["functions"]
+    assert "par:device" in rows["saxpy"]["effects"]
+    assert set(rows["halves"]["effects"]) == {"spawn", "join", "write:data", "trap", "ffi_precondition"}  # As it says.
 
 
 def test_multiple_bounds_and_take_operand_order():

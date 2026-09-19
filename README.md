@@ -1,91 +1,141 @@
-# CAIRN 1.1
+# CAIRN 1.2
 
-A systems language in which every cost is visible, borrows cannot dangle, and an AI agent's edit is admitted by the compiler rather than trusted. It compiles to readable, guarded C++20 for CPUs, to CUDA for GPUs from the same source, and to a freestanding image for bare metal. It is **not an entirely proved compiler**; what is proved, tested and merely implemented is kept apart everywhere below.
+CAIRN is a systems programming language. The compiler is written in Python and emits guarded C++20 for CPUs, CUDA for GPUs from the same source, and a freestanding image for bare-metal AArch64. It was designed so that an edit made by an AI agent is checked by the compiler before anyone has to trust it.
+
+The compiler is not proved correct. This file and the documentation keep apart what is proved, what is tested and what is only implemented.
+
+## A first program
 
 ```cairn
-import std.core (Option, Ord);
-
-fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
-  parallel i in n { out[i] = a * x[i] + y[i]; }   // CUDA lanes here; host threads if the views are @host
-}
-
-fn largest[T:Ord](n:usize, xs:ro<T>[n]) -> Option[usize] {
-  if n == 0 { return Option.None; }
-  let mut best:usize = 0;
-  for i in 1..n { if less(xs[best], xs[i]) { best = i; } }
-  return Option.Some(best);
-}
-
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
 
 fn halves(n:usize, data:rw<u64>[n]) {
   let mid = n / 2;
-  let left = spawn fill(mid, data[0..mid], 0);        // each task leases its half until wait
-  let right = spawn fill(n - mid, data[mid..n], 500);
+  let left = spawn fill(mid, data[0..mid], 0);             // a task leases what it borrows until wait
+  let right = spawn fill(n - mid, data[mid..n], u64(mid));
   wait(left);
   wait(right);
 }
+
+fn main() -> i32 {
+  let mut data = Buf[u64](1000);
+  halves(len(data), data);
+  let total = reduce + for i in len(data) yield data[i];   // a checked sum: it traps if it overflows
+  if total != 499500 { return 1; }
+  return 0;
+}
 ```
 
-Three rules explain most of it. **Costs are visible**: nothing allocates, synchronizes, moves an owner, runs in parallel or crosses a memory boundary unless the source says so, and every function carries an inferred effect row (`alloc`, `write:out`, `par:device`, `ffi:write`, ...) that `pure` and `effects(...)` can cap. **Borrows are second class**: they exist only as parameters and arguments, so there are no lifetime annotations; owners are affine, `linear` values must be consumed exactly once, a task leases what it borrows until `wait`, and a parallel lane may touch only element `[i]` of anything a lane writes. **Short forms are contracts**: `compact`, `reduce`, `parallel`, `try`, `family` and `derive` expand to inspectable code whose obligations travel with the expansion, and generators are library code (a `recipe` is ordinary declarations with static `each`, `where` and `$name` splices; `derive wire` is twelve lines of CAIRN in `std.wire`); the collector's one unchecked store is justified by certificates that are checked before every emission and proved sound in Lean.
+`rw<u64>[n]` is a mutable borrow of `n` elements, and `n` is part of the type. Borrows exist only as parameters and arguments, so there are no lifetime annotations. The two tasks may run together because `data[0..mid]` and `data[mid..n]` visibly share a boundary. Each part carries one bounds guard, and every index is checked.
+
+A task leases what it borrows until `wait`. Touching the array in between is refused at compile time:
+
+```cairn rejects E-LEASED
+fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
+
+fn racy(n:usize, data:rw<u64>[n]) {
+  let left = spawn fill(n, data, 0);
+  data[0] = 7;
+  wait(left);
+}
+```
+
+```text
+E-LEASED: data is lent to left until wait(left).
+```
+
+Every function has an inferred effect row. For `halves` it is `spawn`, `join`, `write:data`, `trap` and `ffi_precondition` (the entry guard of its view parameter). A function can cap its row with `pure` or `effects(...)`, and a caller sees the cost of everything it calls.
+
+The same `parallel` body runs as CUDA lanes when its views are on the device and on a pool of host threads when they are not:
+
+```cairn
+fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
+  parallel i in n { out[i] = a * x[i] + y[i]; }
+}
+```
+
+A lane may touch only element `[i]` of anything a lane writes, so lanes cannot race.
+
+## What the language has
+
+- Checked integer arithmetic, explicit conversions, wrapping forms that say so by name.
+- Records, sums with exhaustive `match`, `try` for error propagation.
+- Owners that move and are released at scope exit, `linear` values that must be consumed exactly once, `take`, `swap`, `defer`.
+- Generic types and functions with bounds on traits, kinds (`copy`, `affine`) and scalar classes; traits with static dispatch and explicit `dyn`.
+- Closures that borrow what they capture and never escape.
+- Tasks with leases, atomics, mutexes entered through a closure.
+- `parallel`, `reduce`, `compact`, placement types (`@host @pinned @unified @device`), kernels, transfers, queued device work.
+- Modules, a standard library written in CAIRN, projects with vendored dependencies.
+- Recipes: generators written as library code and applied with `derive`.
+- `extern` with mandatory effects and an `unsafe` gate, MMIO, inline assembly, a freestanding target.
+
+Start with the [tour](docs/guide/tour.md): twelve complete programs that the test suite compiles and runs. The [language reference](docs/guide/language.md) has the rules, [std](docs/guide/std.md) the library. The [documentation index](docs/README.md) lists the rest.
 
 ## Build and run
 
-Linux on x86-64 or AArch64, Python 3.11+, Clang or GCC with C++20. Ordinary compilation has no third-party Python dependency. Optional local tools switch on further gates and are never downloaded: `libz3` (source equivalence), CUDA `nvcc` (device programs), Lean 4 (`proofs/`), `qemu-system-aarch64` (the freestanding target).
+You need Linux on x86-64 or AArch64, Python 3.11 or later, and Clang or GCC with C++20. Compiling has no third-party Python dependency. Optional local tools switch on further gates and are never downloaded: `libz3` (source equivalence), CUDA `nvcc` (device programs), Lean 4 (`proofs/`), `qemu-system-aarch64` (the freestanding target).
 
 ```sh
-python3 bin/cairn doctor
+python3 bin/cairn doctor                               # what is installed, and which gates it enables
+python3 bin/cairn run examples/hello
 python3 bin/cairn run examples/systems                 # typed-error parser, stack sort, heap pipeline
 python3 bin/cairn test examples/systems --cxx g++      # independent finite task contracts
-python3 bin/cairn run examples/apps/kvstore            # a storage engine written in CAIRN
-python3 bin/cairn run examples/apps/gpu_pipeline       # transfer, lanes, device compaction and reduction
-python3 bin/cairn run examples/apps/analytics          # a columnar engine whose table types are generated by its own recipes
-python3 bin/cairn run examples/embedded                # bare-metal AArch64 under QEMU, UART over MMIO
-python3 bin/cairn verify examples/proof_scope/reference.cairn examples/proof_scope/candidate.cairn --all
-python3 bin/cairn certificates && (cd proofs && lake build)
-python3 bin/cairn fmt --check examples && python3 bin/cairn new my_project
+python3 bin/cairn run examples/apps/kvstore            # a storage engine
+python3 bin/cairn run examples/apps/analytics          # a columnar engine whose table types are generated by recipes
+python3 bin/cairn run examples/apps/gpu_pipeline       # needs CUDA
+python3 bin/cairn run examples/embedded                # bare-metal AArch64 under QEMU
+python3 bin/cairn new my_project
 ```
 
-| Command | Actual acceptance boundary |
+| Command | What passing means |
 |---|---|
-| `check`, `emit`, `expand` | Syntax, types, ownership, leases, lanes, placement and effects; the C++ is inspectable, and so is what every `derive` generated, as CAIRN source. |
-| `build`, `run` | Fresh native build (`--debug` adds symbols that point at the `.cairn` files); explicit execution with process limits, under QEMU for a freestanding target. |
-| `test` | Independent finite task cases, with the child's exit status checked. |
-| `certificates` | Seventeen exact affine identities for the collector, checked here by trusted Python and in `proofs/` by Lean. |
-| `verify --symbol f` / `--all` | Fixed-reference value equivalence through Z3 on the typed tree (scalars, IEEE floats, records, sums, local arrays, array views and their parts, `rw` borrows, local heap scratch, `compact`, host `reduce`, bounded loops), seeing through generics, traits and modules; unsupported entries block aggregate success. |
-| `inspect --symbol f` | Source, scope, effects and feature-selected rule cards for an AI edit. |
-| `fmt`, `lsp` | Comment-preserving formatter that fails closed; a language server (diagnostics, hover types, symbols, completion, signature help, definition into `std`, references, rename, formatting). |
+| `check`, `emit`, `expand` | The program is accepted: syntax, types, ownership, leases, lanes, placement, effects. `emit` prints the C++, `expand` prints what every `derive` generated. |
+| `build`, `run` | A fresh native build (`--debug` maps symbols to the `.cairn` files, `--incremental` reuses objects by content hash), then execution with process limits, under QEMU for the freestanding target. |
+| `test` | Independent finite task cases pass, with the child's exit status checked. |
+| `verify --symbol f`, `--all` | Z3 found no input on which two versions of a function differ, within the modeled fragment. Anything outside it is reported unknown and blocks the aggregate result. |
+| `certificates` | The seventeen arithmetic identities behind the collector check, here in Python and in `proofs/` in Lean. |
+| `check --generics` | Every generic function needs only what its bounds promise. |
+| `inspect --symbol f` | The packet an AI agent gets for an edit: source, scope, effects, rule cards. |
+| `fmt`, `doc`, `lsp` | A comment-preserving formatter, an API reference generated from the checked program, a language server. |
+
+`make lint test proof` are the everyday gates. `make gpu embedded` need the hardware and the emulator.
 
 ## Repository
 
 ```
 src/cairn/
-  compiler/         syntax, modules, recipes, the checker and its rules (traits, constants, effects, builtins), the emitter
+  compiler/         syntax, modules, recipes, the checker and its rules, the emitter
   projects/         manifests and vendored dependencies, native builds and their object cache, the toolchain table
   verify/           finite task tests, SMT source equivalence, coverage, collector certificates
   agent/            projections, edit sessions and packets, rule cards, sketches
   editor/           formatter, language server, API reference generator
   runtime/          guards, owners, threads, tasks, atomics, the lane pool, CUDA lanes (C++ headers)
   std/              the standard library, written in CAIRN
-  targets/          start-up code and linker script of the freestanding AArch64 board
+  targets/          start-up code and linker script of the freestanding board
 proofs/             Lean 4: certificate checker, collector loop model, ownership and lease calculus
-examples/           basics/, hello/, systems/, apps/ (storage engine, TCP service, simulator, GPU pipeline, analytics), embedded/
-tests/              language/ soundness/ verification/ projects/ runtime/ tooling/ agent/, native/ fixtures, checks/ scripts
-tools/              checks/ (repeatable validation), ai/ (agent loop, pilot, context accounting), release/ (evidence, audit, publication)
+examples/           basics/ hello/ systems/ apps/ embedded/ and inputs for the agent and proof tools
+tests/              language/ soundness/ verification/ projects/ runtime/ tooling/ agent/
+tools/              checks/ ai/ release/
 bench/              cpu/ gpu/ host_regions/
-editors/            VS Code / Cursor extension (grammar and language client)
+editors/            VS Code and Cursor extension
 docs/               guide/ internals/ project/ cards/ history/
-evidence/           executed results by release, v0_5 to v1_2, and their limits
+evidence/           executed results by release, and their limits
 ```
 
-Start with the [tour](docs/guide/tour.md) (twelve programs that the test suite compiles and runs), then [language](docs/guide/language.md), [std](docs/guide/std.md) with its generated [API reference](docs/guide/std_api.md), [architecture](docs/internals/architecture.md) and [verification](docs/internals/verification.md); [tooling](docs/guide/tooling.md) covers `fmt`, `lsp` and the editor extension, [freestanding](docs/guide/freestanding.md) the bare-metal target. [AGENTS.md](AGENTS.md) gives the edit rules; [capabilities.json](docs/project/capabilities.json) separates what is implemented from what is missing; [roadmap](docs/project/roadmap.md) states the remaining gates. `make lint test proof` are the everyday gates; `make gpu embedded` need the hardware and emulator.
+[AGENTS.md](AGENTS.md) has the rules for agents editing this repository. [capabilities.json](docs/project/capabilities.json) lists what is implemented and what is not, as data. The [roadmap](docs/project/roadmap.md) states what is still missing.
 
-## What this does not establish
+## What is established, and what is not
 
-The Lean result covers the certificate checker, its seventeen certificates, a model of the collector loop, and a core ownership and lease calculus over locals and the places borrowed out of them -- whole owners, their length, their elements and array parts whose bounds are literals or immutable names (no use-after-move, use-after-free, double free, leaked ticket, aliased call argument or race, no stuck state, and one release per cell, under any interleaving and for every valuation of those bounds; a backwards part aborts at its guard). It does not cover the Python that mirrors either checker, the emitter's correspondence to the model, or native code. Lane race-freedom, placement, effects, and the ownership rules for fields, single elements and closures are implemented and tested, including under Address, Leak, UndefinedBehavior and Thread sanitizers and device death tests, but they are not mechanized, and generic code is checked per instance. SMT equivalence trusts its translator and Z3; it compares a result together with what a call left in everything it was lent, and reports unknown for an owner that moves, a trip count it cannot bound, concurrency, device memory and the foreign boundary. The foreign boundary is as safe as its declarations are true.
+Proved in Lean 4, with no `sorry` and no axioms beyond `propext` and `Quot.sound`: the certificate checker is sound, the seventeen collector certificates hold, the collector loop model stores in bounds and selects stably, and in a core ownership and lease calculus an accepted program has no use after move, use after free, double free, leaked ticket, aliased call argument or data race, under any interleaving, and never gets stuck. That calculus covers whole owners, their length, their elements and array parts with symbolic bounds. It is written by hand beside the checker, not extracted from it. The Python checker, the emitter and the native code are not proved.
 
-The GPU numbers in `evidence/v1_0/gpu/` are one machine and three kernels, and device wins depend on transfer cost; that file's host-parallel column predates the lane pool and is superseded by `evidence/v1_2/host_regions/`, which is one machine and two kernels and puts the size at which a host region starts to beat the sequential loop at about a hundred thousand cheap elements, or thirty thousand dearer ones. No claim is made against tuned C++ or CUDA. No model was trained or evaluated; context measurements count constructed packets, not model proficiency, and byte counts are not frontier tokenizer counts.
+Tested, not proved: lane race freedom, placement, effects, fields, closures, generics. The suite holds about 1,600 tests, including rejection tables from five adversarial reviews, native runs under both compilers, Address, UndefinedBehavior, Leak and Thread sanitizers, CUDA runs and QEMU runs.
+
+`verify` trusts its translator and Z3. It compares a result together with what a call left in everything it was lent. It reports unknown for an owner that moves, a trip count it cannot bound, concurrency, device memory and the foreign boundary. The foreign boundary is as safe as its declarations are true.
+
+The performance numbers are from one machine. `evidence/v1_0/gpu/` has three kernels, and device wins depend on transfer cost. `evidence/v1_2/host_regions/` has two kernels and puts the size at which a host `parallel` region starts to beat a loop at about a hundred thousand cheap elements, or thirty thousand dearer ones. Nothing is claimed against tuned C++ or CUDA.
+
+One preregistered pilot has run (`evidence/v1_1/ai_pilot`): nine fresh subjects of one model family, given only the rule cards and compiler diagnostics, solved nine of nine small tasks against hidden tests. It shows the cards suffice for that. It shows no advantage over any other language, and no model was trained or evaluated beyond it.
 
 ## Private by default
 
-No license has been selected and nothing here is published for reuse. The optional [private publisher](docs/project/private-publication.md) stays opt-in, private-only and non-force, and is never invoked by tests or builds.
+No license has been selected and nothing here is published for reuse. The optional [private publisher](docs/project/private-publication.md) is opt-in, private-only and never force-pushes. Tests and builds never invoke it.
