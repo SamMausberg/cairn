@@ -368,6 +368,48 @@ def test_what_the_second_user_tripped_over(tmp_path):
     assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
 
 
+ACROSS_MODULES = """
+module m;
+pub fn twice[T:numeric](x:T) -> T = x + x;
+pub fn keep[T:affine](x:T) -> T = x;
+pub fn mean[T:numeric](n:usize, xs:ro<T>[n]) -> T { let mut t:T = 0; for i in 0..n { t = t + xs[i]; } return t / T(n); }
+module app;
+import m;
+struct P { a:u32; b:f64; }
+fn g[U:numeric](x:U) -> U = m.twice(x + U(1));
+fn h[U:copy](n:usize) -> usize { let raw = Buf[U](n); let b = m.keep(raw); return len(b); }
+fn wrap[T](n:u32) -> T = T(n);
+pub fn main() -> i32 {
+  let p = P(4, 3.0);
+  stack a:u32[4] = zeroed;
+  stack b:f64[2] = zeroed;
+  a[0] = 8;
+  b[1] = 3.0;
+  let made:P = P(wrap(7), 0.5);
+  let boxed:P = made;
+  let four = h[u8](4);
+  if g(3) != 8 || g(1.5) != 5.0 || four != 4 || m.twice(p.a) != 8 || m.twice(p.b) != 6.0 { return 1; }
+  if m.mean(4, a) != 2 || m.mean(2, b) != 1.5 || boxed.a != 7 { return 2; }
+  return 0;
+}
+"""
+
+
+def test_a_generic_call_types_its_arguments_where_they_are_written(tmp_path):
+    """The template's module decides what its own text means, never what the caller's arguments mean: a private
+    field, or the caller's own type parameter, in an argument of another module's generic. `T(x)` converts (or
+    constructs) at the instance's T, which is how a class-bounded template computes a mean."""
+    if not shutil.which("clang++"):
+        pytest.skip("Native compiler unavailable")
+    cpp = compile_source(ACROSS_MODULES, roots=("app.main",))[0]
+    (tmp_path / "p.cpp").write_text(cpp + "int main() { return cf_app_main(); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    flags = ["-std=c++20", "-O1", "-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-Werror"]
+    subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+
+
 @pytest.mark.parametrize(
     ("code", "says", "source"),
     [

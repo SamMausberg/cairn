@@ -63,7 +63,8 @@ derive wire for Packet; accepts fixed-width unsigned fields and creates little-
 endian, declaration-order, no-padding codecs. No framing/authentication/validation
 is inferred. Generated entries are not direct edit targets. Read generator
 contracts; large expansion is not a measured advantage over compact C++ templates.
-wire is a library recipe. recipe name[K:nat] for R { ... } holds ordinary fn and
+wire is a library recipe. recipe name[K:nat, F:fn] for R { ... } (F: a function's name,
+called as $F(x)) holds ordinary fn and
 struct declarations plus static forms: each f in R { } (fields) or each k in lo..hi { }
 at declaration, statement, field-list or call-argument level (there it splices a
 list, { a.$f, b.$f } gives two per step); fold | each ... { e } joins the expansions with

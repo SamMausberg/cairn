@@ -105,20 +105,24 @@ def infer(c: Checker, f: Function, args: list[Expr], targs: tuple, expected: Typ
     """Bind a template's generics from explicit arguments, Self, argument types, then the result."""
     names = [g for g, _ in f.generics]
     generics, bound = set(names), dict(zip(names, targs, strict=False))
-    with c.within(f.module, {}):
-        if f.owner:
-            unify(c, f.owner[1], c.peek(args[0]), bound, generics)
-        ordered = sorted(zip(args, f.params, strict=True), key=lambda x: x[0].tag in {"int", "float"})
-        for a, (_, declared) in ordered:  # Typed arguments bind first, then the expected result, then literals.
-            if expected and a.tag in {"int", "float"}:
-                unify(c, f.ret, expected, bound, generics)
-            if unbound(c, declared, generics, bound):
-                actual = c.peek(a.args[0] if a.tag == "slice" else a)  # A part has the element type of its base.
-                element = actual if not declared.extent or is_view(actual) else actual.args[0]
-                if not unify(c, declared, element, bound, generics):
-                    fail("E-TYPE-MISMATCH", f"{actual.display()} does not fit {declared.display()}.", a)
-        if expected:
-            unify(c, f.ret, expected, bound, generics)
+
+    def bind(pattern: Any, actual: Any) -> bool:  # The pattern is the template's text; an argument is the caller's,
+        with c.within(f.module, {}):  # typed where it is written, with the caller's names and the caller's privacy.
+            return unify(c, pattern, actual, bound, generics)
+
+    if f.owner:
+        bind(f.owner[1], c.peek(args[0]))
+    ordered = sorted(zip(args, f.params, strict=True), key=lambda x: x[0].tag in {"int", "float"})
+    for a, (_, declared) in ordered:  # Typed arguments bind first, then the expected result, then literals.
+        if expected and a.tag in {"int", "float"}:
+            bind(f.ret, expected)
+        if unbound(c, declared, generics, bound):
+            actual = c.peek(a.args[0] if a.tag == "slice" else a)  # A part has the element type of its base.
+            element = actual if not declared.extent or is_view(actual) else actual.args[0]
+            if not bind(declared, element):
+                fail("E-TYPE-MISMATCH", f"{actual.display()} does not fit {declared.display()}.", a)
+    if expected:
+        bind(f.ret, expected)
     return bound
 
 

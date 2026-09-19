@@ -230,8 +230,60 @@ def test_the_projection_and_the_formatter_keep_recipes_and_derivations():
     assert format_source(formatted) == formatted and compile_source(formatted)[0] == compile_source(APP)[0]
 
 
+NAMED = """
+module m;
+pub fn twice[T:numeric](x:T) -> T = x + x;
+fn hidden(x:u64) -> u64 = x;
+pub recipe fieldwise[F:fn] for R { pub fn $F_$R(v:R) -> R = R(each f in R { $F(v.$f) }); }
+pub recipe scaled[K:nat, F:fn] for R {
+  pub fn $F_$K_$R(v:R) -> u64 = fold add_wrap each f in R { mul_wrap(u64($F(v.$f)), $K) };
+}
+module app;
+import m;
+struct P { a:u32; b:f64; }
+struct Q { a:u32; b:u64; }
+fn half[T:numeric](x:T) -> T = x / 2;
+derive m.fieldwise[half] for P;
+derive m.fieldwise[m.twice] for P;
+derive m.scaled[3, m.twice] for Q;
+pub fn main() -> i32 {
+  let low = half_P(P(4, 3.0));
+  let high = twice_P(P(4, 3.0));
+  if low.a != 2 || low.b != 1.5 || high.a != 8 || high.b != 6.0 || twice_3_Q(Q(1, 2)) != 18 { return 1; }
+  return 0;
+}
+"""
+
+
+def test_a_recipe_takes_the_name_of_a_function(tmp_path):
+    """`[F:fn]`: the name is spliced as the deriving module wrote it and means what it means there, so a generic
+    function serves fields of different types and another module's private function stays private."""
+    if not shutil.which("clang++"):
+        pytest.skip("clang++ unavailable")
+    cpp, receipt = compile_source(NAMED, roots=("app.main",))
+    assert receipt["derivations"][2] == {"module": "app", "recipe": "m.scaled", "naturals": [3, "m.twice"], "for": "Q"}
+    (tmp_path / "p.cpp").write_text(cpp + "int main() { return static_cast<int>(cf_app_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    flags = ["-std=c++20", "-O1", "-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-Werror"]
+    subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=180)
+    assert subprocess.run([tmp_path / "p"], timeout=60).returncode == 0
+    assert "derive m.scaled[3, m.twice] for Q;" in canonical_source(NAMED)
+    for code, more in [
+        ("E-PRIVATE", "derive m.fieldwise[m.hidden] for Q;"),
+        ("E-CALLEE", "derive m.fieldwise[nothing] for Q;"),
+        ("E-DERIVE-RECIPE", "derive m.fieldwise[3] for Q;"),
+        ("E-DERIVE-RECIPE", "derive m.scaled[half, half] for Q;"),
+    ]:
+        with pytest.raises(Diagnostic) as e:
+            compile_source(NAMED + more)
+        assert e.value.data["code"] == code, e.value.data["message"]
+
+
 def test_a_diagnostic_inside_generated_code_names_its_derivation():
-    source = "recipe bad for R {\n  fn total_$R(v:R) -> u64 = fold + each f in R { v.$f };\n}\nstruct P { a:u32; b:u64; }\n"
+    source = (
+        "recipe bad for R {\n  fn total_$R(v:R) -> u64 = fold + each f in R { v.$f };\n}\nstruct P { a:u32; b:u64; }\n"
+    )
     with pytest.raises(Diagnostic) as e:
         compile_source(source + "struct Q { a:u64; }\nderive bad for Q;\nderive bad for P;\n")
     assert (e.value.data["line"], e.value.data["derived"]) == (2, "derive bad for P")  # The recipe's line, P's copy.

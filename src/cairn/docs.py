@@ -51,7 +51,7 @@ def document(source: str, modules: list[str] | None = None) -> str:
                 ]
         for name, recipe in p.recipes.items():
             if shown(name):
-                head = f"pub recipe {local(name)}{generics([(n, 'nat') for n in recipe.nats])}" + (
+                head = f"pub recipe {local(name)}{generics(recipe.statics)}" + (
                     f" for {recipe.param}" if recipe.param else ""
                 )
                 out += [f"```cairn\n{head}\n```", *comment_above(text, recipe.start), ""]

@@ -257,7 +257,7 @@ class Recipe:
     """A library-defined generator: declarations with `$name` splices, expanded per `derive` before checking."""
 
     name: str
-    nats: list[str]
+    statics: list[tuple[str, str]]  # Bracket parameters: a natural (`K:nat`) or the name of a function (`F:fn`).
     param: str
     where: list[tuple[str, Expr]]
     items: list[Any]
@@ -401,7 +401,7 @@ class Parser:
             name = self.ident()
             if not self.eat(":"):
                 return name, "type"
-            if self.t.s in {"nat", "type"}:
+            if self.t.s in {"nat", "type"} or (self.recipe and self.t.s == "fn"):
                 self.i += 1
                 return name, self.ts[self.i - 1].s
             bounds = [self.path()]
@@ -902,22 +902,19 @@ class Parser:
                 self.i += 1
                 name, first, self.recipe = declare(self.ident(), t), self.i - 2 - public, True
                 kinds = self.generic_parameters()
-                if any(kind != "nat" for _, kind in kinds):
-                    fail(
-                        "E-RECIPE",
-                        "A recipe's bracket parameters are naturals; the type it is derived for follows `for`.",
-                        t,
-                    )
-                nats, param = [n for n, _ in kinds], self.ident() if self.eat("for") else ""
-                recipe = Recipe(name, nats, param, self.where(), self.items(), self.module, public, t.line, t.col)
+                if any(kind not in {"nat", "fn"} for _, kind in kinds):
+                    fail("E-RECIPE", "A recipe's bracket parameters are naturals (K:nat) and function names (F:fn); "
+                         "the type it is derived for follows `for`.", t)  # fmt: skip
+                param = self.ident() if self.eat("for") else ""
+                recipe = Recipe(name, kinds, param, self.where(), self.items(), self.module, public, t.line, t.col)
                 recipe.start, recipe.end, self.recipe = self.ts[first].start, self.ts[self.i - 1].end, False
                 text = " ".join(x.s for x in self.ts[first : self.i])
                 recipe.digest = hashlib.sha256(text.encode()).hexdigest()
                 p.recipes[name] = recipe
             elif self.eat("derive"):
                 written, naturals = self.path(), []
-                if self.eat("["):
-                    naturals = self.listed("]", self.integer)
+                if self.eat("["):  # A natural, or the name of a function as the deriving module sees it.
+                    naturals = self.listed("]", lambda: self.integer() if self.t.s[0].isdigit() else self.path())
                 onto = self.path() if self.eat("for") else ""
                 p.derivations.append((self.module, written, tuple(naturals), onto, t))
                 self.need(";")

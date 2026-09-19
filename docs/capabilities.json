@@ -35,7 +35,7 @@
     "emitter-to-model and native refinement proofs",
     "mechanized ownership and lease rules for fields, single elements, parts of parts, lanes, closures and placement, a proof that the emitter runs a part guard before the task that borrows it starts, and any link from checking.py to the Lean calculus",
     "an equal-budget, multi-language, multi-model AI proficiency experiment with tokenizer accounting",
-    "recipes over expression fragments, and replaying a checked theorem per recipe instance"
+    "recipes over arbitrary expression fragments (they take naturals, a record type and names of functions), and replaying a checked theorem per recipe instance"
   ],
   "principle": "Implemented, finite-tested, sanitizer-clean, exact-algebra-checked, SMT-equivalent and Lean-checked are distinct scopes."
 }

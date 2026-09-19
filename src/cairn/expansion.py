@@ -146,10 +146,12 @@ class Deriver:
             while name not in env and "_" in name:
                 name = name.rsplit("_", 1)[0]
             value = self.static(Expr("name", name, line=getattr(node, "line", 0)), env)
-            if isinstance(value, bool) or not isinstance(value, (int, Field, Type)):
+            if isinstance(value, bool) or not isinstance(value, (int, str, Field, Type)):
                 fail("E-RECIPE-STATIC", f"${name} cannot be part of a name.", node)
-            shown = value.name.rsplit(".", 1)[-1] if isinstance(value, (Field, Type)) else str(value)
-            return shown + m.group(1)[len(name) :]
+            if isinstance(value, str) and m.group(0) == written:  # `$F(x)` calls the function as the derive named it;
+                return value  # inside a longer identifier (`$F_$R`) it gives its own name, as a type does.
+            shown = value.name if isinstance(value, (Field, Type)) else str(value)
+            return shown.rsplit(".", 1)[-1] + m.group(1)[len(name) :]
 
         head, dot, rest = written.partition(".")
         if head and head == self.recipe.param:  # Only the `for` parameter is a type when written bare: R, R.Variant.
@@ -278,13 +280,15 @@ def derive(p: Program) -> Program:
         for module, written, naturals, target, at in ready:
             found = visible(p, module, written, p.recipes)
             recipe = p.recipes.get(found or f"std.{written}.{written}") or p.recipes.get(f"std.derived.{written}")
-            if recipe is None or len(naturals) != len(recipe.nats) or bool(target) != bool(recipe.param):
+            kinds = [] if recipe is None else ["nat" if isinstance(n, int) else "fn" for n in naturals]
+            if recipe is None or kinds != [k for _, k in recipe.statics] or bool(target) != bool(recipe.param):
                 fail("E-DERIVE-RECIPE", f"No recipe {written} takes these arguments; write "
                      "`derive name[naturals] for Type;` as the recipe declares.", at)  # fmt: skip
             full = visible(p, module, target, {**p.records, **p.sums, **p.enums}) if target else ""
             if target and full is None:
                 fail("E-DERIVE-TYPE", f"Unknown record {target}.", at)
-            statics = dict(zip(recipe.nats, naturals, strict=True)) | ({recipe.param: Type(full)} if target else {})
+            statics = dict(zip((n for n, _ in recipe.statics), naturals, strict=True))
+            statics |= {recipe.param: Type(full)} if target else {}
             deriver = Deriver(p, recipe, statics)
             for made in deriver.items(recipe.items, deriver.root, module + "." if module else ""):
                 name, public = (made.name, made.public) if isinstance(made, Function) else (made[0], made[2])

@@ -1392,6 +1392,9 @@ class Checker:
     # Calls -------------------------------------------------------------------------------------
 
     def e_call(self, e: Expr, expected: Type | None) -> Type:
+        named = self.tenv.get(e.val)
+        if isinstance(named, Type) and not e.ref:  # `T(x)` converts or constructs at this instance's T.
+            e.val, e.ref = named.name, named.args or None
         n, args = e.val, e.args
         targs = tuple(e.ref or ()) if n == "Dyn" else tuple(self.static(a, e) for a in e.ref or ())
         receiver = None
