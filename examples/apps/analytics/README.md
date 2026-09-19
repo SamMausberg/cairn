@@ -33,7 +33,7 @@ one `@device` view sends the whole program through nvcc and a machine without CU
 be able to build and run the host engine.
 
 ```
-cp examples/apps/analytics/gpu.toml examples/apps/analytics/cairn.toml   # in a copy of the tree
+$ cairn run examples/apps/analytics/gpu.toml
 analytics: rows on the GPU   1000000
 analytics: rows above limit  523214
 analytics: price total       8389514683164

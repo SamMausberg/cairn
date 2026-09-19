@@ -27,6 +27,8 @@ from .cairnc import (
     fail,
 )
 from .effects import EFFECT_FAMILIES, EFFECTS
+from .expansion import declared, derive
+from .modules import link
 from .teaching import select_cards
 
 PROTOCOL = "cairn.edit/1"
@@ -188,7 +190,21 @@ def derivation(recipe: str, naturals: tuple, target: str) -> str:
 
 def canonical_source(source: str) -> str:
     """An inspectable AST projection. Comments are not copied. Not an in-place edit."""
-    p = Parser(source).parse()
+    return projection(Parser(source).parse(), source)
+
+
+def expanded_source(source: str) -> str:
+    """What the program's derivations generated, in the same projection: generated code reads as ordinary code."""
+    p = link(Parser(source).parse())
+    written = declared(p)
+    p = derive(p)
+    records = {n: fields for n, fields in p.records.items() if n not in written}
+    made = [f for f in p.functions if f.name not in written]
+    modules = {n: p.modules[n] for n in [*records, *(f.name for f in made)]}
+    return projection(Program(records, functions=made, generics=p.generics, public=p.public, modules=modules), source)
+
+
+def projection(p: Program, source: str) -> str:
     out = []
     for module in dict.fromkeys(p.modules.values()):
         tables = {k: {n: v for n, v in getattr(p, k).items() if p.modules.get(n, "") == module}

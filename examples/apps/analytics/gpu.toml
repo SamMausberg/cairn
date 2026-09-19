@@ -1,10 +1,8 @@
 # The device configuration. It is the host project with src/main.cairn replaced by the device
 # entry, because any @device view sends the whole program through nvcc and the host-only
-# build must stay buildable where there is no GPU. Copy it over cairn.toml to use it:
+# build must stay buildable where there is no GPU. A manifest is named by its path:
 #
-#   cp examples/apps/analytics/gpu.toml examples/apps/analytics/cairn.toml
-#
-# tests/test_app_analytics.py does exactly that in a private copy of the directory.
+#   cairn run examples/apps/analytics/gpu.toml
 [project]
 name = "analytics-gpu"
 sources = [

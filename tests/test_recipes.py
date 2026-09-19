@@ -12,7 +12,7 @@ import subprocess
 
 import pytest
 
-from cairn.agent_tools import canonical_source
+from cairn.agent_tools import canonical_source, expanded_source
 from cairn.cairnc import RUNTIME_FILES, Diagnostic, compile_source
 from cairn.formatting import format_source
 
@@ -228,6 +228,17 @@ def test_the_projection_and_the_formatter_keep_recipes_and_derivations():
     assert compile_source(projected)[0] == compile_source(APP)[0]
     formatted = format_source(APP)
     assert format_source(formatted) == formatted and compile_source(formatted)[0] == compile_source(APP)[0]
+
+
+def test_expand_shows_what_the_derivations_generated_as_source():
+    shown = expanded_source(APP)
+    assert (
+        shown.startswith("module app;\n") and "module layout;" not in shown
+    )  # Only what was generated, where it lives.
+    assert "pub struct Particle_columns { x:Buf[f32]; y:Buf[f32]; mass:Buf[f64]; id:Buf[u32]; }" in shown
+    assert "pub fn shift_2(x:u64) -> u64 pure {\n  return shl_wrap(x, 2);\n}" in shown
+    assert "fn Packet_width() -> usize {\n  return (7 + min(4, 0));\n}" in shown
+    assert "impl std.core.Eq for Key {\n  fn same(a:ro<Key>, b:ro<Key>) -> bool {" in expanded_source(DERIVED)
 
 
 HYGIENE = """

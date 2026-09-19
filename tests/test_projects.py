@@ -104,6 +104,16 @@ def test_project_is_ordered_and_pinned(tmp_path):
     assert load_project(root).receipt() != original
 
 
+def test_a_tree_may_hold_a_second_manifest_named_by_its_path(tmp_path):
+    root = make(tmp_path)
+    (root / "small.toml").write_text('[project]\nname = "small"\nsources = ["src/math.cairn"]\n')
+    assert [x.path for x in load_project(root / "small.toml").units] == ["src/math.cairn"]
+    assert load_project(root).name == "demo" and load_project(root / "cairn.toml").name == "demo"
+    (root / "notes.txt").write_text("not a manifest")
+    with pytest.raises(ProjectError):
+        load_project(root / "notes.txt")
+
+
 def test_project_error_maps_to_original_file(tmp_path):
     root = make(tmp_path)
     (root / "src/main.cairn").write_text("fn main()->i32 {\nreturn true;\n}")

@@ -8,8 +8,8 @@ that the host path is clean under Address and UndefinedBehavior sanitizers.
 
 The device configuration is `gpu.toml`, which replaces `src/main.cairn` with `src/gpu_main.cairn`:
 any @device view sends the whole program through nvcc, so the host-only build must not contain
-that module. The tests that need a GPU copy the directory, copy the manifest over `cairn.toml`
-and skip when nvcc or the device node is missing.
+that module. A manifest is named by its path (`cairn run examples/apps/analytics/gpu.toml`); the
+tests that need a GPU skip when nvcc or the device node is missing.
 """
 
 import shutil
@@ -36,12 +36,10 @@ def device_missing():
     return None
 
 
-def copied(tmp_path, manifest="cairn.toml"):
-    """A private copy of the app, so a test may edit its source or swap its manifest."""
+def copied(tmp_path):
+    """A private copy of the app, so a test may edit its source."""
     target = tmp_path / "analytics"
     shutil.copytree(APP, target, ignore=shutil.ignore_patterns("build"))
-    if manifest != "cairn.toml":
-        shutil.copy(target / manifest, target / "cairn.toml")
     return target
 
 
@@ -55,7 +53,7 @@ def test_both_configurations_typecheck(tmp_path, host_receipt):
     assert host_receipt["function_count"] > 0
     assert all(name.startswith("std.") for name in host_receipt["uninstantiated_templates"])
     assert "cuda" not in compile_source(load_project(APP).source, "", (ENTRY,))[1]["requires"]
-    device = compile_source(load_project(copied(tmp_path, "gpu.toml")).source)[1]
+    device = compile_source(load_project(APP / "gpu.toml").source)[1]
     assert "analytics.gpu.notional_of" in device["functions"]
 
 
@@ -164,9 +162,8 @@ def test_the_device_agrees_with_the_host(tmp_path):
     reason = device_missing()
     if reason:
         pytest.skip(f"the analytics device path needs a GPU: {reason}")
-    root = copied(tmp_path, "gpu.toml")
     started = time.monotonic()
-    record = build(load_project(root), output=tmp_path / "build", cxx="g++", timeout=290)
+    record = build(load_project(APP / "gpu.toml"), output=tmp_path / "build", cxx="g++", timeout=290)
     assert record["status"] == "native-built", record.get("stderr", "")[:4000]
     assert time.monotonic() - started < 290
     done = subprocess.run([record["artifact"]], capture_output=True, text=True, timeout=300)
@@ -175,7 +172,7 @@ def test_the_device_agrees_with_the_host(tmp_path):
 
 
 def test_the_device_configuration_pays_for_what_it_uses(tmp_path):
-    rows = compile_source(load_project(copied(tmp_path, "gpu.toml")).source)[1]["functions"]
+    rows = compile_source(load_project(APP / "gpu.toml").source)[1]["functions"]
     assert "par:device" in rows["analytics.gpu.notional_device"]["effects"]
     assert {"gpu_alloc", "gpu_free", "par:device"} <= set(rows["analytics.gpu.above_device"]["effects"])
     queued = set(rows["analytics.gpu.queued_notional"]["effects"])

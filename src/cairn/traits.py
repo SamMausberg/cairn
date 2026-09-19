@@ -330,8 +330,14 @@ def certify(c: Checker) -> dict[str, str]:
             for values in itertools.product(*choices) if all(choices) else []:
                 instantiate(c, f, dict(zip((g for g, _ in f.generics), values, strict=True)), f)
             verdicts[f.name] = "ok"
-        except Diagnostic as e:
-            verdicts[f.name] = f"{e.data['code']}: {e.data['message']}"
+        except Diagnostic as e:  # The strictest witness is the usual reason: say which parameter promised nothing.
+            free = [g for g, k in f.generics if k != "nat" and not {*KINDS, *CLASSES} & set(k.split("+"))]
+            hint = (
+                f" {', '.join(free)} may be linear here; [{free[0]}:affine] or [{free[0]}:copy] promises more."
+                if free
+                else ""
+            )
+            verdicts[f.name] = f"{e.data['code']}: {e.data['message']}{hint}"
     return verdicts
 
 

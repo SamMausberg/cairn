@@ -103,8 +103,8 @@ def load_project(path: str | Path = ".") -> Project:
             body,
             (Unit(target.name, 1, body.count("\n") + 1, hashlib.sha256(body.encode()).hexdigest()),),
         )
-    if target.name != "cairn.toml":
-        raise ProjectError("Pass a .cairn file, a project directory, or cairn.toml.")
+    if target.suffix != ".toml":  # A directory means its cairn.toml; a second configuration is named: app/gpu.toml.
+        raise ProjectError("Pass a .cairn file, a project directory, or a manifest (cairn.toml).")
     manifest = read_text(target, 65536)
     data = tomllib.loads(manifest)
     if set(data) - {"project", "build", "dependencies"}:

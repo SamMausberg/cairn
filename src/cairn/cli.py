@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("doctor", help="Report local tools; never downloads them.")
     new = sub.add_parser("new", help="Create a data-only example project.")
     new.add_argument("directory", type=Path)
-    for name in ["check", "emit", "build", "run", "test", "inspect", "doc"]:
+    for name in ["check", "emit", "expand", "build", "run", "test", "inspect", "doc"]:
         c = sub.add_parser(name)
         c.add_argument("path", nargs="?", default=".")
         if name in {"build", "run", "test"}:
@@ -194,6 +194,11 @@ def main(argv: list[str] | None = None) -> int:
                 }
             report(result)
             return 1 if any(v != "ok" for v in result.get("generics", {}).values()) else 0
+        if a.command == "expand":  # What the derivations generated, as source.
+            from .agent_tools import expanded_source
+
+            print(expanded_source(project.source), end="")
+            return 0
         if a.command == "doc":
             from .docs import document
 
