@@ -133,6 +133,16 @@ def path(e: Expr, stable=lambda name: False) -> str:
     return e.val
 
 
+def field_path(e: Expr) -> bool:
+    """Is this a chain of fields on a local: `box.a`, `box.a.b`, and nothing computed on the way?
+
+    Reaching such a place reads that field's header, not the record it sits in.
+    """
+    while e.tag == "field":
+        e = e.args[0]
+    return e.tag == "name"
+
+
 def overlaps(a: str, b: str, others: Any = ()) -> bool:
     """Two parts of one array are disjoint only when one visibly ends at or before the other begins.
 
@@ -221,6 +231,7 @@ class Checker:
         self.device_functions: set[str] = set()
         self.address_taken: set[str] = set()
         self.nodes = self.unique = 0
+        self.reaching = 0  # Depth inside a field path: its base is reached, not read whole.
 
     def __getattr__(self, name: str):  # Per-function state lives in the current Scope.
         if name in SCOPED:
@@ -554,7 +565,9 @@ class Checker:
 
     def function(self, f: Function):
         self.signature(f)
-        outer, self.s = self.s, Scope(f, dict(f.bindings), module=f.module, device_depth=int(f.kernel))
+        # A generic instance is checked where its call sits, which may be inside a field path; its own body is not.
+        outer, reaching = (self.s, self.reaching)
+        self.s, self.reaching = Scope(f, dict(f.bindings), module=f.module, device_depth=int(f.kernel)), 0
         self.call_edges[f.name], self.resources[f.name] = [], []
         if f.owner:
             self.tenv["Self"] = self.resolve(f.owner[1], f)
@@ -580,7 +593,7 @@ class Checker:
         borrowed = {n for n, t in f.params if t.mode != "value"}
         self.local_effects[f.name] = {exposed(e, borrowed) for e in self.effects}
         self.calls[f.name], self.checks[f.name] = self.callset, self.counts
-        self.s = outer
+        self.s, self.reaching = outer, reaching
 
     # Statements --------------------------------------------------------------------------------
 
@@ -991,7 +1004,8 @@ class Checker:
                 fail("E-IMMUTABLE", f"{e.val} is not a mutable local.", e)
             if write and b.ty.mode == "rw":
                 self.effect("write:" + e.val)
-            if write or (b is not None and not is_view(b.ty) and b.ty.name not in {"Buf", "Array"}):
+            whole = write or (b is not None and not is_view(b.ty) and b.ty.name not in {"Buf", "Array"})
+            if whole and not self.reaching:  # Inside a field path the field itself is leased, not the record.
                 self.leased(e.val, "rw" if write else "ro", e)
             if write and self.lanes and e.val in self.lanes.outer:
                 fail(
@@ -1008,8 +1022,14 @@ class Checker:
             e.ty = self.e_index(e, None, read=not write)
             return e.ty
         if e.tag == "field":
+            outer, reached = not self.reaching, field_path(e) and root(e).val in self.env
+            self.reaching += reached
             self.place(e.args[0], write)
-            return self.expr(e, consume=False)
+            ty = self.expr(e, consume=False)
+            self.reaching -= reached
+            if reached and outer:  # A new value in this cell replaces what a lease of its elements holds.
+                self.leased(self.where(e), "rw" if write else "ro", e, elements=write)
+            return ty
         fail("E-LVALUE", "Assignment requires a mutable variable, field, or rw element.", e)
 
     def expr(self, e: Expr, expected: Type | None = None, consume: bool = True) -> Type:
@@ -1133,8 +1153,8 @@ class Checker:
             fail("E-MOVED", f"{e.val} was moved.", e)
         if self.device_depth and self.lanes and e.val in self.lanes.outer and self.kind(b.ty.value) != "copy":
             self.host_only(e, f"{e.val} owns host memory, and a lane copies the values it captures")
-        if not is_view(b.ty) and b.ty.name not in {"Buf", "Array"}:  # Arrays are checked per element or part.
-            self.leased(e.val, "ro", e)
+        if not is_view(b.ty) and b.ty.name not in {"Buf", "Array"} and not self.reaching:
+            self.leased(e.val, "ro", e)  # Arrays are checked per element or part, a record per field reached.
         e.ref = "mut" if b.mutable or b.ty.mode == "rw" else b.constant
         if b.ty.mode != "value" and not b.ty.extent:  # A single borrow reads through to its value.
             self.effect("read:" + e.val)
@@ -1180,7 +1200,10 @@ class Checker:
         if const:
             e.tag, e.val, e.args = "name", path(e), []
             return self.e_name(e, expected)
+        outer, reached = not self.reaching, field_path(e) and root(e).val in self.env
+        self.reaching += reached
         at = self.expr(e.args[0], consume=False)
+        self.reaching -= reached
         layout = self.layouts.get(at)
         if at.mode != "value" or not isinstance(layout, list):
             fail("E-FIELD", "Field access requires a record.", e)
@@ -1188,6 +1211,8 @@ class Checker:
             fail("E-PRIVATE", f"{at.name} is private to module {self.p.modules[at.name]}; so are its fields.", e)
         if e.val not in dict(layout):
             fail("E-FIELD", f"Unknown field {e.val}.", e)
+        if reached and outer:  # Reaching a field reads its own header: a lease of its elements does not forbid it.
+            self.leased(self.where(e), "ro", e, elements=False)
         return dict(layout)[e.val]
 
     def named_type(self, e: Expr) -> Type | None:

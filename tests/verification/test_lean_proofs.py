@@ -57,7 +57,7 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Ownership.Regress.leasedRead_races",
     "Cairn.Ownership.Regress.overlappingTasks_races",
     "Cairn.Ownership.Regress.overlappingParts_races",
-    "Cairn.Ownership.Regress.fieldsToTwoTasks_races",
+    "Cairn.Ownership.Regress.sameFieldToTwoTasks_races",
     "Cairn.Ownership.Regress.fieldPartsOverlapInOneCall_aliases",
     "Cairn.Ownership.Regress.laneWritesFixedIndex_races",
     "Cairn.Ownership.Regress.laneWritesShared_races",

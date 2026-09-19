@@ -157,6 +157,54 @@ def test_no_data_race_under_thread_sanitizer(tmp_path):
     assert run.returncode == 0 and "ThreadSanitizer" not in run.stderr
 
 
+TWO_FIELDS = """
+struct Pair { left:Buf[u64]; right:Buf[u64]; }
+fn main() -> i32 {
+  let n:usize = 4096;
+  let mut p = Pair(Buf[u64](n), Buf[u64](n));
+  let l = spawn fill(len(p.left), p.left, 0);
+  let r = spawn fill(len(p.right), p.right, 1000);
+  let k = len(p.left);                        // the field's own header, which its element lease leaves alone
+  wait(l);
+  wait(r);
+  if k != n || sum(len(p.left), p.left) != 8386560 { return 1; }
+  if sum(len(p.right), p.right) != 12482560 { return 2; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+@pytest.mark.parametrize("sanitizer", ["thread", "address,undefined"])
+def test_two_fields_of_one_record_go_to_two_tasks(tmp_path, cxx, sanitizer):
+    """Lending a field leases that field, so two tasks may write two fields of one record at once, and the
+    header of a lent field stays readable. ThreadSanitizer watches the two writers under both compilers; the
+    address, leak and undefined sanitizers watch the two buffers, released once each where the scope ends."""
+    if not shutil.which(cxx) or not shutil.which("setarch"):
+        pytest.skip(f"needs {cxx} and setarch")
+    generated, receipt = compile_source(HELPERS + TWO_FIELDS)
+    assert {"spawn", "join", "alloc", "free"} <= set(receipt["functions"]["main"]["effects"])
+    (tmp_path / "p.cpp").write_text(generated + "int main() { return static_cast<int>(cf_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    line = command(cxx, str(tmp_path / "p.cpp"), str(tmp_path / "p"), kind="exe")
+    subprocess.run([*line, "-g", f"-fsanitize={sanitizer}"], check=True, timeout=300)
+    environment = {**os.environ, "ASAN_OPTIONS": "detect_leaks=1"}
+    ran = subprocess.run(
+        ["setarch", "-R", str(tmp_path / "p")], capture_output=True, text=True, timeout=240, env=environment
+    )
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    assert "Sanitizer" not in ran.stderr and "runtime error" not in ran.stderr, ran.stderr
+
+
+def test_the_same_field_cannot_go_to_two_tasks():
+    """The narrower lease is not a weaker one: one field twice is one piece of storage twice."""
+    same = TWO_FIELDS.replace("spawn fill(len(p.right), p.right, 1000)", "spawn fill(len(p.left), p.left, 1000)")
+    with pytest.raises(Diagnostic) as e:
+        compile_source(HELPERS + same)
+    assert e.value.data["code"] == "E-LEASED" and "p.left is lent to l" in e.value.data["message"]
+
+
 TWO_MODULES = """module fill;
 pub fn go(n:usize, out:rw<u64>[n]) { parallel i in n { out[i] = u64(i) * 2; } }
 module app;

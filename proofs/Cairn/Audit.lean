@@ -96,7 +96,7 @@ namespace Cairn
 #print axioms Cairn.Ownership.Regress.leasedRead_races
 #print axioms Cairn.Ownership.Regress.overlappingTasks_races
 #print axioms Cairn.Ownership.Regress.overlappingParts_races
-#print axioms Cairn.Ownership.Regress.fieldsToTwoTasks_races
+#print axioms Cairn.Ownership.Regress.sameFieldToTwoTasks_races
 #print axioms Cairn.Ownership.Regress.fieldPartsOverlapInOneCall_aliases
 #print axioms Cairn.Ownership.Regress.laneWritesFixedIndex_races
 #print axioms Cairn.Ownership.Regress.laneWritesShared_races

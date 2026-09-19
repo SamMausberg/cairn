@@ -12,6 +12,8 @@ import pytest
 from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
 
 FILL = "fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }\n"
+PAIR = "struct Pair { left:Buf[u64]; right:Buf[u64]; }\n"
+TWO_BUFFERS = "fn main() -> i32 { let n:usize = 8; let mut p = Pair(Buf[u64](n), Buf[u64](n));\n"
 TOKEN = (
     "linear struct Token { id:u64; }\nfn open(id:u64) -> Token = Token(id);\n"
     "fn close(t:Token, c:rw<u64>) { c = add_wrap(c, 1); }\n"
@@ -475,6 +477,24 @@ REJECTED = {
         "struct Holder { slots:Array[Buf[u64], 2]; }\n"
         "fn zeros() -> Holder = Holder(Array[Buf[u64], 2]());\n"
         "fn eat(x:Holder, c:bool) -> Holder pure { if c { return zeros(); } return x; }\n",
+    ),
+    # A field is leased on its own, so the rules that used to follow from reading the whole record are pinned here.
+    "one field of a record lent to two tasks at once (data race)": (
+        "E-LEASED",
+        FILL + PAIR + TWO_BUFFERS + "  let l = spawn fill(len(p.left), p.left, 0);\n"
+        "  let r = spawn fill(len(p.left), p.left, 100); wait(l); wait(r); return 0; }",
+    ),
+    "a field read while the whole record is lent (the task may replace that cell)": (
+        "E-LEASED",
+        PAIR
+        + "fn refit(p:rw<Pair>) { let mut fresh = Buf[u64](2); swap(fresh, p.left); }\n"
+        + TWO_BUFFERS
+        + "  let t = spawn refit(p); let k = len(p.right); wait(t); return i32(k); }",
+    ),
+    "a new buffer landing in a field a task holds the elements of (use after free)": (
+        "E-LEASED",
+        FILL + PAIR + TWO_BUFFERS + "  let t = spawn fill(len(p.left), p.left, 0);\n"
+        "  p.left = Buf[u64](2); wait(t); return 0; }",
     ),
 }
 

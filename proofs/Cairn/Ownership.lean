@@ -2456,69 +2456,86 @@ def outOfScope : Program := ⟨[1], [alloc 0]⟩
 dotted prefix: two fields of one record are apart, a field and its record are not,
 and a part of an array held in a field chains exactly as one of a plain local.
 
-Reaching a field, though, READS the record: `checking.py:e_name` runs
-`leased(box, "ro")` on the base local before `overlaps` ever sees `box.a`.  So the
-disjointness of two fields only ever bites inside ONE argument list, where no base
-read intervenes; across a live task lease, naming any field of a record one field of
-which is lent is `E-LEASED`.  `readBase` below is that read, written out, and it is
-why `fieldsToTwoTasks` is rejected although `box.a` and `box.b` are disjoint. -/
+Reaching a field reads THAT FIELD's header, not the record it sits in:
+`checking.py:e_field` suppresses the whole-local read its base would perform and runs
+`leased(box.a, "ro", elements = False)` at the outermost field of the path.  So two
+tasks may hold two different fields of one record, and the header of a field stays
+readable while a task holds that field's elements.  A lease of the record itself still
+covers every field inside it, because `whole box` overlaps every place rooted in `box`,
+and a lease of one field still blocks a move of the record for the same reason.
+`reachField` below is that read, written out. -/
 
-/-- The read of the base local that naming any field of `box` performs. -/
-def readBase : Stmt := call [(.whole box, Mode.ro)]
+/-- The header read that reaching `box.a` performs: the field's own, not the record's. -/
+def reachField (r : Root) : Stmt := call [(.hdr r, Mode.ro)]
 
 /-- `let t = spawn fill(len(box.a), box.a, 0); wait(t);` -- accepted. -/
 def oneFieldToATask : Program :=
-  ⟨[4], [alloc 4, readBase, spawn 0 [(.elems boxA, Mode.rw)], wait 0]⟩
+  ⟨[4], [alloc 4, reachField boxA, spawn 0 [(.elems boxA, Mode.rw)], wait 0]⟩
 
 /-- `let l = spawn fill(..., box.a, 0); let r = spawn fill(..., box.b, 1);` --
-E-LEASED, and NOT because the two fields overlap: naming `box.b` reads `box`, which
-is lent. -/
+accepted: two fields of one record are disjoint storage, and reaching `box.b` reads
+the header of `box.b` alone, which the lease of `box.a`'s elements does not cover. -/
 def fieldsToTwoTasks : Program :=
-  ⟨[4], [alloc 4, readBase, spawn 0 [(.elems boxA, Mode.rw)],
-         readBase, spawn 1 [(.elems boxB, Mode.rw)], wait 0, wait 1]⟩
+  ⟨[4], [alloc 4, reachField boxA, spawn 0 [(.elems boxA, Mode.rw)],
+         reachField boxB, spawn 1 [(.elems boxB, Mode.rw)], wait 0, wait 1]⟩
 
-/-- `both(6, box.xs[0..6], box.a[3..9])` -- accepted: inside one argument list two
-fields really are disjoint, whatever their bounds. -/
+/-- `let l = spawn fill(..., box.a, 0); let r = spawn fill(..., box.a, 1);` --
+E-LEASED: one field lent twice is one piece of storage lent twice. -/
+def sameFieldToTwoTasks : Program :=
+  ⟨[4], [alloc 4, reachField boxA, spawn 0 [(.elems boxA, Mode.rw)],
+         reachField boxA, spawn 1 [(.elems boxA, Mode.rw)], wait 0, wait 1]⟩
+
+/-- `let t = spawn fill(..., box.a, 0); box.a = Buf[u64](2);` -- E-LEASED: assignment
+replaces the cell the task's view lives in, so the place it names is `whole box.a`,
+which overlaps the elements the task holds. -/
+def fieldAssignUnderElementLease : Program :=
+  ⟨[4], [alloc 4, reachField boxA, spawn 0 [(.elems boxA, Mode.rw)],
+         call [(.whole boxA, Mode.rw)], wait 0]⟩
+
+/-- `both(6, box.xs[0..6], box.a[3..9])` -- accepted: two fields really are disjoint,
+whatever their bounds. -/
 def partsOfTwoFieldsInOneCall : Program :=
-  ⟨[4], [alloc 4, readBase, call [(.part boxXs (.lit 0) (.lit 6), Mode.rw),
-                                  (.part boxA (.lit 3) (.lit 9), Mode.ro)]]⟩
+  ⟨[4], [alloc 4, reachField boxXs, reachField boxA,
+         call [(.part boxXs (.lit 0) (.lit 6), Mode.rw),
+               (.part boxA (.lit 3) (.lit 9), Mode.ro)]]⟩
 
 /-- `both(4, box.xs[0..4], box.xs[4..8])` -- accepted: the part chain works inside a
 field exactly as it does on a local. -/
 def fieldPartsSplitInOneCall : Program :=
-  ⟨[4], [alloc 4, readBase, call [(.part boxXs (.lit 0) (.lit 4), Mode.rw),
-                                  (.part boxXs (.lit 4) (.lit 8), Mode.ro)]]⟩
+  ⟨[4], [alloc 4, reachField boxXs, call [(.part boxXs (.lit 0) (.lit 4), Mode.rw),
+                                          (.part boxXs (.lit 4) (.lit 8), Mode.ro)]]⟩
 
 /-- `both(6, box.xs[0..6], box.xs[3..9])` -- E-ALIAS: they really overlap. -/
 def fieldPartsOverlapInOneCall : Program :=
-  ⟨[4], [alloc 4, readBase, call [(.part boxXs (.lit 0) (.lit 6), Mode.rw),
-                                  (.part boxXs (.lit 3) (.lit 9), Mode.ro)]]⟩
+  ⟨[4], [alloc 4, reachField boxXs, call [(.part boxXs (.lit 0) (.lit 6), Mode.rw),
+                                          (.part boxXs (.lit 3) (.lit 9), Mode.ro)]]⟩
 
 /-- `both(len(box.a), box.a, box.a)` -- E-ALIAS: one field is not two. -/
 def sameFieldTwiceInOneCall : Program :=
-  ⟨[4], [alloc 4, readBase, call [(.elems boxA, Mode.rw), (.elems boxA, Mode.ro)]]⟩
+  ⟨[4], [alloc 4, reachField boxA, call [(.elems boxA, Mode.rw), (.elems boxA, Mode.ro)]]⟩
 
 /-- `let t = spawn fill(..., box.a, 0); let moved = box;` -- E-LEASED: a field is
 inside its record, so a lease on the field pins the record. -/
 def fieldMoveUnderLease : Program :=
-  ⟨[1, 4], [alloc 4, readBase, spawn 0 [(.elems boxA, Mode.rw)], move 1 4, wait 0]⟩
+  ⟨[1, 4], [alloc 4, reachField boxA, spawn 0 [(.elems boxA, Mode.rw)], move 1 4, wait 0]⟩
 
 /-- `let t = spawn bump(box); let s = sum(len(box.a), box.a);` -- E-LEASED the other
 way: the record is lent whole, so every field of it is. -/
 def fieldReadUnderRecordLease : Program :=
-  ⟨[4], [alloc 4, spawn 0 [(.whole box, Mode.rw)], readBase,
+  ⟨[4], [alloc 4, spawn 0 [(.whole box, Mode.rw)], reachField boxA,
          call [(.elems boxA, Mode.ro)], wait 0]⟩
 
-/-- `let t = spawn bump(box); let k = len(box.xs);` -- E-LEASED. -/
+/-- `let t = spawn bump(box); let k = len(box.xs);` -- E-LEASED: reaching the field
+reads its header, and the task may replace the whole record under it. -/
 def lenOfFieldUnderRecordLease : Program :=
-  ⟨[4], [alloc 4, spawn 0 [(.whole box, Mode.rw)], readBase,
+  ⟨[4], [alloc 4, spawn 0 [(.whole box, Mode.rw)], reachField boxXs,
          call [(.hdr boxXs, Mode.ro)], wait 0]⟩
 
-/-- `let t = spawn fill(len(box.xs), box.xs, 1); let k = len(box.xs);` -- E-LEASED,
-again by the base read: the header of a field is not one of its elements, but
-naming the field reads the record the task's view lives in. -/
+/-- `let t = spawn fill(len(box.xs), box.xs, 1); let k = len(box.xs);` -- accepted:
+the header of a field is not one of its elements, and reaching the field no longer
+reads the record. -/
 def lenOfFieldUnderElementLease : Program :=
-  ⟨[4], [alloc 4, readBase, spawn 0 [(.elems boxXs, Mode.rw)], readBase,
+  ⟨[4], [alloc 4, reachField boxXs, spawn 0 [(.elems boxXs, Mode.rw)], reachField boxXs,
          call [(.hdr boxXs, Mode.ro)], wait 0]⟩
 
 /-! ### Parallel regions
@@ -2589,11 +2606,12 @@ def report : Bool :=
     && accepts backwardsPart && accepts lenUnderElementLease && !accepts lenUnderOwnerLease
     && !accepts overlappingTasks && !accepts copyAnOwner
     && accepts copyAScalar && !accepts useAfterDrop && !accepts outOfScope
-    && accepts oneFieldToATask && !accepts fieldsToTwoTasks
+    && accepts oneFieldToATask && accepts fieldsToTwoTasks && !accepts sameFieldToTwoTasks
+    && !accepts fieldAssignUnderElementLease
     && accepts partsOfTwoFieldsInOneCall && accepts fieldPartsSplitInOneCall
     && !accepts fieldPartsOverlapInOneCall && !accepts sameFieldTwiceInOneCall
     && !accepts fieldMoveUnderLease && !accepts fieldReadUnderRecordLease
-    && !accepts lenOfFieldUnderElementLease && !accepts lenOfFieldUnderRecordLease
+    && accepts lenOfFieldUnderElementLease && !accepts lenOfFieldUnderRecordLease
     && accepts laneMap && accepts laneReadsShared && accepts laneLenAndWrite
     && !accepts laneWritesFixedIndex && !accepts laneWritesShared && !accepts laneReadsOther
     && accepts laneBesideTask && !accepts laneUnderLease && !accepts laneUnderPartLease
@@ -2649,16 +2667,18 @@ theorem overlappingParts_races :
     (Reach.step (List.Mem.head _)
       (Reach.step (List.Mem.head _) (Reach.refl _)))
 
-/-- **Naming a second field under a lease really races.**  `box.a` is lent to a
-task; the read of `box` that reaching `box.b` performs touches the same storage the
-task writes.  That is exactly what `checking.py` reports as `E-LEASED`, and it is why
-the field rule alone would not have been enough. -/
-theorem fieldsToTwoTasks_races :
-    Reach anyVal fieldsToTwoTasks.scope (Cfg.start fieldsToTwoTasks) (Cfg.err (Err.race 4)) :=
+/-- **Lending one field to two tasks really races.**  Two fields of one record are
+disjoint, so the checker accepts `box.a` and `box.b` going to two tasks; the SAME
+field twice is one piece of storage twice, and the second spawn is the race.  The
+header read that reaching `box.a` performs is not the race -- it steps through -- and
+the fault arrives at the spawn itself. -/
+theorem sameFieldToTwoTasks_races :
+    Reach anyVal sameFieldToTwoTasks.scope (Cfg.start sameFieldToTwoTasks) (Cfg.err (Err.race 4)) :=
   Reach.step (List.Mem.head _)
     (Reach.step (List.Mem.head _)
       (Reach.step (List.Mem.head _)
-        (Reach.step (List.Mem.head _) (Reach.refl _))))
+        (Reach.step (List.Mem.head _)
+          (Reach.step (List.Mem.head _) (Reach.refl _)))))
 
 /-- **Two overlapping parts of one field alias.**  `box.xs[0..6]` and `box.xs[3..9]`
 handed to one call reach the `AliasedArgs` configuration. -/
@@ -2736,7 +2756,7 @@ exception, `backwardsPart`, IS accepted -- and it reaches a trap, not a fault. -
 theorem witnesses_are_rejected :
     (accepts leasedRead || accepts overlappingTasks || accepts overlappingParts
       || accepts copyAnOwner || accepts useAfterDrop || accepts unawaitedTicket
-      || accepts fieldsToTwoTasks || accepts fieldPartsOverlapInOneCall
+      || accepts sameFieldToTwoTasks || accepts fieldPartsOverlapInOneCall
       || accepts laneWritesFixedIndex
       || accepts laneWritesShared || accepts laneReadsOther) = false
       ∧ accepts backwardsPart = true := by
@@ -2764,12 +2784,12 @@ example : accepts Regress.partsWithoutMiddle = false := by decide
 example : accepts Regress.overlappingParts = false := by decide
 example : accepts Regress.overlappingArgs = false := by decide
 example : accepts Regress.lenUnderOwnerLease = false := by decide
-example : accepts Regress.fieldsToTwoTasks = false := by decide
+example : accepts Regress.sameFieldToTwoTasks = false := by decide
+example : accepts Regress.fieldAssignUnderElementLease = false := by decide
 example : accepts Regress.fieldMoveUnderLease = false := by decide
 example : accepts Regress.fieldReadUnderRecordLease = false := by decide
 example : accepts Regress.fieldPartsOverlapInOneCall = false := by decide
 example : accepts Regress.sameFieldTwiceInOneCall = false := by decide
-example : accepts Regress.lenOfFieldUnderElementLease = false := by decide
 example : accepts Regress.lenOfFieldUnderRecordLease = false := by decide
 example : accepts Regress.laneWritesFixedIndex = false := by decide
 example : accepts Regress.laneWritesShared = false := by decide
@@ -2785,6 +2805,8 @@ example : accepts Regress.sharedRead = true := by decide
 example : accepts Regress.movedOnBothPaths = true := by decide
 example : accepts Regress.copyAScalar = true := by decide
 example : accepts Regress.oneFieldToATask = true := by decide
+example : accepts Regress.fieldsToTwoTasks = true := by decide
+example : accepts Regress.lenOfFieldUnderElementLease = true := by decide
 example : accepts Regress.fieldPartsSplitInOneCall = true := by decide
 example : accepts Regress.partsOfTwoFieldsInOneCall = true := by decide
 example : accepts Regress.laneMap = true := by decide

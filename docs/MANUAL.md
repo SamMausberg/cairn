@@ -1138,6 +1138,46 @@ fn main() -> i32 {
 samples is lent to t until wait(t).
 ```
 
+A lease names the place that was lent, not the local it is rooted in. Lending `box.a` leases `box.a`, so another task may take `box.b` at the same time, and `len(box.a)` still reads while a task holds that field's elements. Lending the record itself leases every field inside it, and a field of a record a task holds is not readable.
+
+```cairn
+struct Pair { left:Buf[u64]; right:Buf[u64]; }
+fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
+
+fn main() -> i32 {
+  let n:usize = 64;
+  let mut pair = Pair(Buf[u64](n), Buf[u64](n));
+  let left = spawn fill(len(pair.left), pair.left, 0);      // two fields, two threads
+  let right = spawn fill(len(pair.right), pair.right, 100);
+  let k = len(pair.left);                                   // the field's header, which its elements do not cover
+  wait(left);
+  wait(right);
+  if k != n || pair.left[1] != 1 || pair.right[1] != 101 { return 1; }
+  return 0;
+}
+```
+
+The same field twice is one piece of storage twice, and replacing a lent field's cell (`pair.left = Buf[u64](2)`) is refused for the same reason: the task's view lives in that cell.
+
+```cairn rejects E-LEASED
+struct Pair { left:Buf[u64]; right:Buf[u64]; }
+fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
+
+fn main() -> i32 {
+  let n:usize = 64;
+  let mut pair = Pair(Buf[u64](n), Buf[u64](n));
+  let left = spawn fill(len(pair.left), pair.left, 0);
+  let right = spawn fill(len(pair.left), pair.left, 100);
+  wait(left);
+  wait(right);
+  return 0;
+}
+```
+
+```text
+pair.left is lent to left until wait(left).
+```
+
 ### Atomics and mutexes
 
 `Atomic[T]` (the integers and `bool`) and `Mutex[T]` are declared in place and shared by `ro` borrow. They are the only interior mutability in the language, and they are never stored in a record, passed by value or returned (`E-PINNED`). Every atomic access names its memory order: `load`, `store`, `swap`, `fetch_add`, `fetch_sub`, `fetch_and`, `fetch_or`, `fetch_xor` and `compare_exchange(expected, desired, Order.seq_cst, Order.seq_cst)`. The effects are `spawn`, `join`, `atomic` and `lock`.
@@ -2959,13 +2999,13 @@ The release theorem is about normal termination only. A run that traps has abort
 
 `ownership_regression` is the executable sanity check: the Lean encodings of the CAIRN programs pinned in `tests/soundness/test_soundness.py` and `tests/soundness/test_concurrency.py` are classified the way the Python checker classifies them.
 
-Rejected: a move beside a view a task still holds, a leased read, a double move, an unawaited ticket, two arguments of one call overlapping with a write, a place moved on one path only, branches that disagree about live tickets, two tasks writing one place, two tasks writing parts that really overlap (`d[0..6]` and `d[3..9]`), two parts with nothing lent between them to order their bounds, one call handed two overlapping parts, a `len` read of an owner a task may replace, a copy of an owner, and a use after the implicit release.
+Rejected: a move beside a view a task still holds, a leased read, a double move, an unawaited ticket, two arguments of one call overlapping with a write, a place moved on one path only, branches that disagree about live tickets, two tasks writing one place, two tasks writing parts that really overlap (`d[0..6]` and `d[3..9]`), two parts with nothing lent between them to order their bounds, one call handed two overlapping parts, a `len` read of an owner a task may replace, one field lent to two tasks, a new value landing in a lent field's cell, a field read while the record is lent whole, a move of a record one field of which is lent, a copy of an owner, and a use after the implicit release.
 
-Accepted: the two-part and K-way splits (`d[0..a]`, `d[a..b]`, `d[b..n]`), the backwards part that orders two others, a `len` read under a lease of the elements, shared read-only lending, a move on both paths, and a scalar copy.
+Accepted: the two-part and K-way splits (`d[0..a]`, `d[a..b]`, `d[b..n]`), the backwards part that orders two others, a `len` read under a lease of the elements, two fields of one record lent to two tasks, a `len` read of a field under a lease of that field's elements, shared read-only lending, a move on both paths, and a scalar copy.
 
 Each of those classifications was re-checked against the Python checker on the corresponding CAIRN source while this model was written. The build prints `ownership-regression: pass`, and the Python gate asserts on that line.
 
-The safety theorems would be vacuous if the machine could never fault, so a fault is also shown reachable for programs the checker rejects, each by exhibiting the step sequence rather than by a tactic. `leasedRead_races`, `overlappingTasks_races`, `overlappingParts_races`, `fieldsToTwoTasks_races`, `laneWritesFixedIndex_races`, `laneWritesShared_races` and `laneReadsOther_races` drive the machine to `Race`; `fieldPartsOverlapInOneCall_aliases` to `AliasedArgs`; `copyAnOwner_doubleFrees` to `DoubleFree`; `useAfterDrop_usesDeadPlace` to `UseAfterMove`; and `unawaitedTicket_leaks` to `Leak`. `witnesses_are_rejected` confirms that the checker rejects all eleven. `UseAfterFree` is the one error configuration with no witness: no program here is shown to reach it.
+The safety theorems would be vacuous if the machine could never fault, so a fault is also shown reachable for programs the checker rejects, each by exhibiting the step sequence rather than by a tactic. `leasedRead_races`, `overlappingTasks_races`, `overlappingParts_races`, `sameFieldToTwoTasks_races`, `laneWritesFixedIndex_races`, `laneWritesShared_races` and `laneReadsOther_races` drive the machine to `Race`; `fieldPartsOverlapInOneCall_aliases` to `AliasedArgs`; `copyAnOwner_doubleFrees` to `DoubleFree`; `useAfterDrop_usesDeadPlace` to `UseAfterMove`; and `unawaitedTicket_leaks` to `Leak`. `witnesses_are_rejected` confirms that the checker rejects all eleven. `UseAfterFree` is the one error configuration with no witness: no program here is shown to reach it.
 
 `backwardsPart_traps` is the other side of the same coin. That program is accepted, and under the valuation it is written for (`a = 6`, `b = 3`, `n = 9`) the machine reaches `Trap` at the guard of `d[6..3]`, not a race. Together with `ownership_regression`, which rules out a checker that says no to everything, that pins the result from both sides.
 
@@ -2974,7 +3014,7 @@ The safety theorems would be vacuous if the machine could never fault, so a faul
 * Any connection to `checking.py`. The Lean checker is a hand-written abstraction of the Python rules. It is not extracted from them, not compared against them by a test, and the Python checker does many things this model does not.
 * The guard is an assumption about the emitter, not a theorem. The chaining rule is sound in this calculus because the machine performs the `lo <= hi` guard where the slice is formed, before the borrow is taken. That the emitted C++ does the same, `cr::part` at the call site, on the spawning thread, before the task starts, is asserted by `src/cairn/compiler/codegen.py`, `src/cairn/runtime/cairn_owners.hpp` and a test that pins exactly this (`tests/soundness/test_concurrency.py::test_a_part_is_guarded_by_the_spawner_before_its_task_exists`: the guard sits in the capture list of the task's lambda, and a backwards part aborts after `spawning` is printed and before the task or the next statement runs). It is not asserted by any proof. If a part guard ever moved into the task, the rule would be unsound and this model would no longer describe the language.
 * Single elements, parts of parts and invisible bounds. `a[i]`, `a[lo..hi][j..k]` and any bound `path` writes as `?` are outside the model. `checking.py` treats them conservatively, so everything of that base overlaps; nothing here proves that it does.
-* A field is reached through its record, and that read is a separate rule. `checking.py:e_name` runs `leased(box, "ro")` on the base local before `overlaps` ever sees `box.a`, so a lease on one field pins the whole record: `let l = spawn fill(len(box.a), box.a, 0); let r = spawn fill(len(box.b), box.b, 1);` is `E-LEASED` ("box is lent to l"), although `box.a` and `box.b` are disjoint places. The disjointness of two fields therefore only bites inside one argument list, where no base read intervenes (`both(6, box.xs[0..6], box.a[3..9])` is accepted). The model writes that base read out as an explicit `call [(whole box, ro)]` in the regression programs rather than building it into the field rule, and nothing proves that `checking.py` performs it exactly where the model does.
+* Where a field read is charged. `checking.py:e_field` suppresses the whole-local read its base would otherwise perform and charges `leased(box.a, "ro", elements=False)` at the outermost field of the path, so two tasks may hold `box.a` and `box.b` at once. The model writes that read out as an explicit `call [(hdr box.a, ro)]` in the regression programs rather than building it into the field rule, and nothing proves that `checking.py` charges it exactly where the model does. Assignment, `take` and `swap` name `whole box.a` in the model and `leased(box.a, "rw")` in `checking.py`; that those two agree is also unproved.
 * Everything a region is besides its accesses. `lane:f` callbacks and the `E-PARALLEL-CALL` effect rule, device placement and `E-PLACEMENT`, `reduce`, `compact`, queued device work and `after`, and the value a lane computes are all outside the model. A lane body is its footprint; the model does not say what a lane-private local holds, only that it is not a place of the enclosing scope. A lane's index expression other than the binder is modelled as the whole element footprint, so the model calls a race what `parallel i in n { x[i + 1] = 0; }` would not actually have. The checker rejects that program either way, and nothing here claims the converse.
 * That a region really completes before the next statement. The machine blocks the spawner while lanes are live. That the emitted `cr::par::run`, or a CUDA launch and its synchronize, joins every lane before returning is asserted by `src/cairn/compiler/codegen.py` and the runtime, and tested, not proved. It is the same kind of assumption as the part guard.
 * Closure captures. `checking.py:disjoint` also compares a closure's captured places against the call's arguments, and a captured part contributes its own bounds to the chain before its slice has been formed. Closures are not modelled at all, so that case is neither proved nor refuted here.

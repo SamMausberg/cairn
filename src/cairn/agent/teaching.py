@@ -155,6 +155,10 @@ ticket that must be consumed by wait(t) in the same function; let r = wait(t); i
 result (wait(t); alone when f returns nothing). Until then every place
 lent to the task is leased: nobody writes what it reads or touches what it writes;
 visibly disjoint parts (d[0..mid], d[mid..n]) may be lent mutably to different tasks.
+What is leased is the place lent, not the local it sits in: two fields of one record
+(spawn f(box.a) beside spawn g(box.b)) go to two tasks, and len(box.a) still reads while
+box.a's elements are lent, while lending the record whole leases every field in it and
+box.a = Buf[u64](2) under a lease of box.a is E-LEASED.
 Atomic[u64] and Mutex[T] are declared in place and shared by ro borrow: a.fetch_add(1,
 Order.relaxed) always names its memory order; m.with(|s:rw<T>| { ... }) is the only way
 into a mutex. Tickets, atomics and mutexes are never stored, passed by value or returned.
