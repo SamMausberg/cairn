@@ -449,6 +449,16 @@ def test_one_name_is_one_project_of_the_build(tmp_path):
         load_project(root)
 
 
+def test_a_project_of_one_file_declares_no_module_of_the_packaged_library(tmp_path):
+    """One `.cairn` file is a project too: it may not shadow `std.core` any more than a manifest's sources may."""
+    path = tmp_path / "one.cairn"
+    path.write_text("module std.core;\npub fn backdoor() -> i32 = 99;\n")
+    with pytest.raises(ProjectError, match="packaged library"):
+        load_project(path)
+    path.write_text("module std_core;\npub fn fine() -> i32 = 0;\n")  # only `std` and `std.*` are the library's
+    assert load_project(path).name == "one"
+
+
 def test_the_entry_point_is_the_root_project_s_own(tmp_path):
     """A dependency is a library: it neither supplies an executable's `main` nor denies the project its own."""
     if not shutil.which("clang++"):
