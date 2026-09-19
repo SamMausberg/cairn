@@ -1,10 +1,10 @@
 # A tour of CAIRN
 
-Twelve complete programs, each of which the test suite compiles and runs (`tests/language/test_tour.py`): a program here exits 0 or the build fails. The reference is `docs/guide/language.md`; the library is `docs/guide/std.md` and `docs/guide/std_api.md`.
+Twelve complete programs. The test suite compiles and runs every one of them under the address and undefined-behaviour sanitizers (`tests/language/test_tour.py`): a program here exits 0 or the build fails. The reference is [language.md](language.md), the library [std.md](std.md) and [std_api.md](std_api.md).
 
 ## 1. Values, checked arithmetic, explicit conversions
 
-Integers trap on overflow in every build; the wrapping forms say so by name. Nothing converts implicitly, and a narrowing conversion is a range check.
+Integers trap on overflow in every build. The wrapping forms say so by name. Nothing converts implicitly, and a narrowing conversion is a range check.
 
 ```cairn
 fn mean(a:u32, b:u32) -> u32 = u32((u64(a) + u64(b)) / 2);   // widen, then narrow with a check
@@ -22,7 +22,7 @@ fn main() -> i32 {
 
 ## 2. Views: borrowed arrays whose length is part of the type
 
-`ro<T>[n]` and `rw<T>[n]` borrow `n` elements; `n` is an earlier parameter, a literal or a constant. Indexing is bounds checked, two `rw` views of one call cannot overlap, and a part `xs[lo..hi]` carries one guard.
+`ro<T>[n]` and `rw<T>[n]` borrow `n` elements, where `n` is an earlier parameter, a literal or a constant. Indexing is bounds checked, two `rw` views of one call cannot overlap, and a part `xs[lo..hi]` carries one guard.
 
 ```cairn
 const N:usize = 4 * 2;
@@ -42,7 +42,7 @@ fn main() -> i32 {
 
 ## 3. Records, sums, `match` and `try`
 
-A sum has one payload per variant; `match` is exhaustive with no wildcard; `try` yields the success payload or returns the failure from the enclosing function. It is the only propagation form.
+A sum has one payload per variant. `match` is exhaustive and has no wildcard. `try` yields the success payload or returns the failure from the enclosing function, and it is the only propagation form.
 
 ```cairn
 struct Point { x:i64; y:i64; }
@@ -67,7 +67,7 @@ fn main() -> i32 {
 
 ## 4. Generics and what a parameter promises
 
-An instance is what is checked, and a bound is a promise checked at the call: a trait, a kind (`copy`, `affine`) or a closed class of scalars that licenses operators.
+An instance is what is checked. A bound is a promise checked at the call: a trait, a kind (`copy`, `affine`) or a closed class of scalars that licenses operators.
 
 ```cairn
 struct Pair[T:copy] { a:T; b:T; }
@@ -134,7 +134,7 @@ fn main() -> i32 {
 
 ## 7. Closures borrow exactly what they capture
 
-A closure exists only as a `ro<fn(...)>` argument, so it never escapes or allocates. What it captures it borrows for that call.
+A closure exists only as a `ro<fn(...)>` argument, so it never escapes or allocates. It borrows what it captures, for that call only.
 
 ```cairn
 fn apply(n:usize, xs:rw<u64>[n], f:ro<fn(u64) -> u64>) { for i in 0..n { xs[i] = f(xs[i]); } }
@@ -151,7 +151,7 @@ fn main() -> i32 {
 
 ## 8. Tasks lease what they borrow
 
-`spawn` runs a declared function on its own thread and gives a linear ticket. Until `wait`, what the task writes nobody else may touch; visibly disjoint parts may go to different tasks.
+`spawn` runs a declared function on its own thread and hands back a linear ticket. Until `wait`, nobody else may touch what the task writes. Visibly disjoint parts may go to different tasks.
 
 ```cairn
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
@@ -177,7 +177,7 @@ fn main() -> i32 {
 
 ## 9. Lanes are race free by construction
 
-Whatever any lane writes may be touched only at `[i]`. `reduce` is the way to combine; the checked `+` is offered where no order of evaluation can change whether it traps. A lane may call a closure that writes nothing it captured.
+A lane may touch what it writes only at `[i]`. `reduce` is how you combine. The checked `+` is offered where no order of evaluation can change whether it traps, and a lane may call a closure that writes nothing it captured.
 
 ```cairn
 fn map(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) { parallel i in n { out[i] = f(u64(i)); } }
@@ -278,7 +278,7 @@ pub fn main() -> i32 {
 
 ## 12. The foreign boundary states its effects
 
-An `extern` declaration has no body the checker can read, so it declares what it may do, and calling it needs `unsafe`. The effect travels to every caller; `pure` and `effects(...)` are checked ceilings.
+An `extern` declaration has no body the checker can read, so it declares what it may do, and calling it needs `unsafe`. The effect travels to every caller. `pure` and `effects(...)` are checked ceilings.
 
 ```cairn
 extern fn getpid() -> i32 effects(io);
@@ -292,4 +292,4 @@ fn main() -> i32 {
 }
 ```
 
-The device half of the language (placement types, `kernel fn`, device `reduce` and `compact`, queued work with `spawn ... after`) is shown in `examples/apps/gpu_pipeline` and `examples/apps/simulator`, which the suite runs when a GPU is present.
+The device half of the language (placement types, `kernel fn`, device `reduce` and `compact`, queued work with `spawn ... after`) is shown in [examples/apps/gpu_pipeline](../../examples/apps/gpu_pipeline) and [examples/apps/simulator](../../examples/apps/simulator), which the suite runs when a GPU is present.
