@@ -174,7 +174,7 @@ def test_disjoint_parts_are_accepted_and_guarded():
         ("E-PLACE", "fn f(x:ro<u64>[1]@gpu) -> u64 = x[0];"),
         ("E-SUM-PAYLOAD", "enum R { Bad(R); }"),
         ("E-RECORD-TYPE", "struct A { next:A; }"),
-        ("E-CONST", "const N:usize = 1 + 2;"),
+        ("E-CONST", "fn f() -> usize = 3;\nconst N:usize = f();"),
         ("E-BUILTIN-NAME", "struct Buf { x:u64; }"),
         ("E-LEX", "fn f() -> u8 = 'ab';"),
     ],
@@ -552,3 +552,45 @@ def test_kind_and_class_bounds_are_promises_checked_at_the_call_and_certified_on
     build = ["clang++", "-std=c++20", "-O1", "-fsanitize=address,undefined", str(tmp_path / "p.cpp"), "-o"]
     subprocess.run([*build, str(tmp_path / "p")], check=True, timeout=120)
     assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+
+
+CONSTANTS = """
+const W:usize = 8;
+const N:usize = W * H;                        // order of declaration does not matter
+const H:usize = 4;
+const MIN:i64 = -7 / 2;                       // toward zero, as at run time
+const REST:i64 = -7 % 2;
+const HALF:f32 = 1.0 / 2.0;
+const SUM:f64 = 0.1 + 0.2;
+const BIG:bool = N > 30 && !(W == H);
+const BYTE:u8 = u8(255);
+fn last(xs:ro<u64>[N]) -> u64 = xs[N - 1];    // a constant is a static extent
+fn main() -> i32 {
+  stack cells:u64[N] = zeroed;
+  cells[N - 1] = 9;
+  if last(cells) != 9 || MIN != -3 || REST != -1 || HALF != 0.5 || SUM != 0.30000000000000004 || !BIG || BYTE != 255 { return 1; }
+  return 0;
+}
+"""
+
+
+def test_constants_fold_exactly_and_name_static_extents(tmp_path):
+    (tmp_path / "p.cpp").write_text(
+        compile_source(CONSTANTS)[0] + "int main() { return static_cast<int>(cf_main()); }\n"
+    )
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    build = ["clang++", "-std=c++20", "-O1", "-fsanitize=address,undefined", str(tmp_path / "p.cpp"), "-o"]
+    subprocess.run([*build, str(tmp_path / "p")], check=True, timeout=120)
+    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+    refused = {
+        "const A:u32 = B + 1;\nconst B:u32 = A;": "E-CONST",  # defined in terms of itself
+        "const A:u8 = 200 + 100;": "E-LITERAL-RANGE",  # the result must fit its type
+        "const A:u32 = 1 / 0;": "E-CONST",
+        "const A:u8 = u8(256);": "E-CONST",
+        "const A:f64 = 1.0e308 * 10.0;": "E-CONST",  # not finite
+    }
+    for source, code in refused.items():
+        with pytest.raises(Diagnostic) as e:
+            compile_source(source)
+        assert e.value.data["code"] == code, e.value.data["message"]

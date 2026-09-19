@@ -11,13 +11,16 @@ from __future__ import annotations
 import copy
 import itertools
 import math
+import operator
 import re
+import struct
 from dataclasses import dataclass, field
 from typing import Any
 
 from .builtins import SOFT, TABLE, WRAPPING
 from .effects import LANE_SAFE, PURE, audit, exposed, fixed_point
 from .syntax import (
+    BITS,
     BOOL,
     CPP,
     FLOAT,
@@ -60,6 +63,19 @@ KINDS = ["copy", "affine", "linear"]
 # What a generic parameter may promise besides traits: the most its kind can be, or a closed class of scalars.
 CLASSES = {"integer": INT, "unsigned": UNSIGNED, "signed": SIGNED, "float": FLOAT, "numeric": NUMERIC, "scalar": SCALAR}
 COMPARISONS = {"==", "!=", "<", "<=", ">", ">="}
+
+
+def quotient(a: Any, b: Any) -> Any:
+    """Division as the language defines it: exact for floats, toward zero for integers."""
+    return (
+        a / b if isinstance(a, float) or isinstance(b, float) else abs(a) // abs(b) * (1 if (a < 0) == (b < 0) else -1)
+    )
+
+
+FOLD = {"+": operator.add, "-": operator.sub, "*": operator.mul, "/": quotient, "&": operator.and_, "|": operator.or_,
+        "^": operator.xor, "==": operator.eq, "!=": operator.ne, "<": operator.lt, "<=": operator.le, ">": operator.gt,
+        ">=": operator.ge, "&&": lambda a, b: a and b, "||": lambda a, b: a or b,
+        "%": lambda a, b: math.fmod(a, b) if isinstance(a, float) or isinstance(b, float) else a - b * quotient(a, b)}  # fmt: skip
 
 
 @dataclass
@@ -202,6 +218,7 @@ class Checker:
         self.impls: dict[tuple[str, Type], dict[str, Function] | None] = {}
         self.hostish: dict[str, str] = {}  # function -> the first host-only construct in its body
         self.bounds: dict[str, tuple[list[str], str]] = {}  # witness type -> (traits it promises, its kind)
+        self.folded: dict[str, Any] = {}  # constant -> its value
         self.dispatches: list[tuple] = []
         self.borrowed: list[tuple[str, str]] = []
         self.device_functions: set[str] = set()
@@ -303,8 +320,15 @@ class Checker:
             return base
         if base == VOID:
             fail("E-TYPE", "A slice cannot contain void.", node)
-        bound = self.tenv.get(ty.extent)  # rw<u64>[K] of a [K:nat] instance is a static extent.
-        return Type(base.name, ty.mode, str(bound) if isinstance(bound, int) else ty.extent, base.args, ty.place)
+        bound = self.tenv.get(ty.extent)  # rw<u64>[K] of a [K:nat] instance, or of a constant, is a static extent.
+        named = (
+            self.qualify(ty.extent, self.p.consts, node=node)
+            if ty.extent and not ty.extent.isdigit() and bound is None
+            else None
+        )
+        bound = self.constant(named, []) if named else bound
+        static = isinstance(bound, int) and not isinstance(bound, bool)
+        return Type(base.name, ty.mode, str(bound) if static else ty.extent, base.args, ty.place)
 
     def static(self, argument: Any, node=None) -> Any:
         """A type argument: a natural (literal or bound static name) or a type."""
@@ -383,16 +407,78 @@ class Checker:
             if not self.p.generics.get(name) and (name != "Order" or "Order" in self.p.modules):
                 with self.within(self.p.modules.get(name, "")):
                     self.define(Type(name))
-        for name, (declared, value) in self.p.consts.items():
-            with self.within(self.p.modules.get(name, "")):
-                ty = self.expr(value, self.resolve(declared, value))
-            if ty.name not in CPP or value.tag not in {"int", "float", "bool"}:
-                fail("E-CONST", "A constant is one scalar literal.", value)
+        for name in list(self.p.consts):
+            self.constant(name, [])
         concrete = [f for f in self.p.functions if not f.generics or f.bindings]
         for f in concrete:
             self.signature(f)
         self.hold_impls(concrete)
         return concrete
+
+    def constant(self, name: str, pending: list[str]) -> Any:
+        """A constant folds to one literal of its type: exact arithmetic over literals and other constants."""
+        declared, written = self.p.consts[name]
+        if name not in self.folded:
+            if name in pending:
+                fail("E-CONST", f"{name} is defined in terms of itself.", written)
+            with self.within(self.p.modules.get(name, "")):
+                ty = self.resolve(declared, written)
+                if ty.name not in SCALAR or ty.mode != "value":
+                    fail("E-CONST", "A constant is a scalar.", written)
+                value = self.fold(written, ty, [*pending, name])
+                if isinstance(value, float) and not math.isfinite(value):
+                    fail("E-CONST", "A constant is finite.", written)
+                text = str(value).lower() if isinstance(value, bool) else repr(abs(value))
+                tag = "bool" if isinstance(value, bool) else "float" if isinstance(value, float) else "int"
+                literal = Expr(tag, text, [], written.line, written.col)
+                if not isinstance(value, bool) and (value < 0 or (value == 0 and math.copysign(1, value) < 0)):
+                    literal = Expr("unary", "-", [literal], written.line, written.col)
+                self.expr(literal, ty)  # The literal's own range check says whether the result fits.
+            self.p.consts[name], self.folded[name] = (declared, literal), value
+        return self.folded[name]
+
+    def fold(self, e: Expr, ty: Type, pending: list[str]) -> Any:
+        if e.tag in {"int", "float", "bool"}:
+            return (
+                e.val == "true"
+                if e.tag == "bool"
+                else float(e.val)
+                if e.tag == "float" or ty.name in FLOAT
+                else int(e.val)
+            )
+        if e.tag == "name":
+            const = self.qualify(e.val, self.p.consts, node=e)
+            if const is None:
+                fail("E-CONST", "A constant is made of literals and other constants.", e)
+            return self.constant(const, pending)
+        args = [self.fold(a, ty, pending) for a in e.args]
+        numbers = all(not isinstance(a, bool) for a in args)
+        if (
+            e.tag == "call" and e.val in NUMERIC and len(args) == 1 and numbers
+        ):  # u32(x), f64(n): checked like any literal.
+            low, high = (
+                (-(2 ** (BITS[e.val] - 1)), 2 ** (BITS[e.val] - 1) - 1)
+                if e.val in SIGNED
+                else (0, 2 ** BITS.get(e.val, 0) - 1)
+            )
+            if e.val in INT and not low <= int(args[0]) <= high:
+                fail("E-CONST", f"{args[0]} does not fit {e.val}.", e)
+            return float(args[0]) if e.val in FLOAT else int(args[0])
+        if e.tag == "unary" and ((e.val == "-" and numbers) or (e.val == "!" and not numbers)):
+            return -args[0] if e.val == "-" else not args[0]
+        logical = e.tag == "binary" and e.val in {"&&", "||"} and not numbers
+        if e.tag != "binary" or e.val not in FOLD or not (numbers or logical or e.val in {"==", "!="}):
+            fail(
+                "E-CONST", "A constant is made of literals, other constants, arithmetic, comparison and conversion.", e
+            )
+        if e.val in {"/", "%"} and args[1] == 0:
+            fail("E-CONST", "A constant does not divide by zero.", e)
+        if e.val in {"&", "|", "^"} and not all(isinstance(a, int) for a in args):
+            fail("E-CONST", "Bit operations fold integers.", e)
+        value = FOLD[e.val](*args)
+        if isinstance(value, float) and ty.name == "f32":  # Each f32 operation rounds once, as the machine will.
+            value = struct.unpack("f", struct.pack("f", value))[0]
+        return value
 
     def certify(self) -> dict[str, str]:
         """Check each generic function once against what its bounds promise. A parameter bounded by a scalar
