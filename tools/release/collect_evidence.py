@@ -73,11 +73,8 @@ def main() -> int:
         "gates": gates,
         "tests": {"passed": int(counted.group(1)) if counted else None, "skipped": int(counted.group(2) or 0) if counted else None},
         "source_lines": {
-            "compiler_core": lines("src/cairn/compiler/syntax.py", "src/cairn/compiler/modules.py", "src/cairn/compiler/expansion.py",
-                                   "src/cairn/compiler/checking.py", "src/cairn/compiler/traits.py", "src/cairn/compiler/constants.py", "src/cairn/compiler/effects.py",
-                                   "src/cairn/compiler/builtins.py", "src/cairn/compiler/codegen.py",
-                                   "src/cairn/compiler/cairnc.py", "src/cairn/projects/toolchain.py", "src/cairn/projects/build.py", "src/cairn/projects/project.py"),
-            "compiler_package": lines("src/cairn/*.py"),
+            "compiler_core": lines("src/cairn/compiler/*.py", "src/cairn/projects/*.py"),
+            "compiler_package": lines("src/cairn/**/*.py"),
             "runtime_headers": lines("src/cairn/runtime/*.hpp"),
             "standard_library_cairn": lines("src/cairn/std/*.cairn"),
             "lean_proofs": lines("proofs/Cairn/*.lean", "proofs/Cairn.lean"),
