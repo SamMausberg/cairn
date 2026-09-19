@@ -146,7 +146,6 @@ def test_user_call_and_early_return():
         "fn f(n:usize,xs:ro<f64>[n])->f64{let s=reduce + for i in n yield xs[i];return s;}",  # An unspecified order.
         "fn f(n:usize,xs:ro<u64>[n],out:rw<u64>[n]){parallel i in n{out[i]=xs[i];}}",
         "fn g(n:usize,o:rw<u64>[n]){o[0]=1;}\nfn f(n:usize,out:rw<u64>[n])->usize{let t=spawn g(n,out);wait(t);return n;}",
-        "enum M{S(u64);N;}\nfn f(n:usize,ms:ro<M>[n])->u64{match ms[0]{M.S(v)=>{return v;} M.N=>{return 0;}}}",
         "fn g(a:usize,xs:rw<u64>[a],b:usize,ys:rw<u64>[b]){xs[0]=1;ys[0]=2;}\n"  # Two parts of one array.
         "fn f(n:usize,zs:rw<u64>[n],mid:usize){if mid>n{return;}g(mid,zs[0..mid],n-mid,zs[mid..n]);}",
         "enum Box{Full(Buf[u64]);Empty;}\n"
@@ -237,10 +236,11 @@ def test_try_near_miss_keeps_going_after_a_failure():
     assert r["counterexample"]["x"] > 99 and r["expected"]["return"]["variant"] == "Bad"
 
 
-def test_only_well_formed_tags_are_quantified_over():
+def test_only_well_formed_tags_of_a_value_parameter_are_quantified_over():
     r = check(OP + "fn f(o:Op)->u64{match o{Op.Read=>{return 0;} Op.Write=>{return 1;}}}",
               OP + "fn f(o:Op)->u64{if o==Op.Read{return 0;}return 1;}")  # fmt: skip
-    assert "every tag names a declared variant" in r["quantification"]
+    assert "every tag of a value parameter names a declared variant" in r["quantification"]
+    assert "an element of storage carries any tag" in r["quantification"]
 
 
 # Floating point -----------------------------------------------------------------------------
@@ -421,6 +421,37 @@ def test_an_untouched_rw_view_keeps_what_the_caller_lent():
 def test_a_loop_over_a_symbolic_extent_needs_a_bound():
     r = check(SUM, SUM.replace("t=add_wrap(t,xs[i]);", "t=add_wrap(xs[i],t);"), "unknown")
     assert "unrolling budget" in r["reason"]
+
+
+ITEM = "enum Item { Ok(u32); Bad; }\n"
+TALLY = ITEM + (
+    "fn f(n:usize, xs:ro<Item>[n]) -> u32 { let mut t:u32=0;\n"
+    "  for i in 0..n { match xs[i] { Item.Ok(v) => { t=add_wrap(t,v); } Item.Bad => {} } } return t; }"
+)
+
+
+def test_a_payload_sum_in_a_view_is_read_through_its_tag():
+    """Storage carries any tag, and both sides abort on one no variant names, so the two agree there too."""
+    other = ITEM + (
+        "fn f(n:usize, xs:ro<Item>[n]) -> u32 { let mut t:u32=0;\n"
+        "  for i in 0..n { let mut d:u32=0; match xs[i] { Item.Ok(v) => { d=v; } Item.Bad => { d=0; } }\n"
+        "    t=add_wrap(t,d); } return t; }"
+    )
+    check(TALLY, other, assume="n<=3", allow_reference_traps=True)
+    r = refute(TALLY, TALLY.replace("t=add_wrap(t,v);", "t=add_wrap(t,add_wrap(v,1));"),
+               assume="n>=1 && n<=2", allow_reference_traps=True)  # fmt: skip
+    assert any(x.get("variant") == "Ok" for x in r["counterexample"]["xs"])
+
+
+def test_a_tag_no_variant_names_traps_where_the_emitted_switch_does():
+    """No entry guard reads a tag in storage, so `default: cr::trap()` is what separates these two."""
+    total = OP + "fn f(o:ro<Op>[1]) -> u64 { if o[0]==Op.Read { return 0; } return 1; }"
+    matched = OP + "fn f(o:ro<Op>[1]) -> u64 { match o[0] { Op.Read => { return 0; } Op.Write => { return 1; } } }"
+    r = refute(total, matched)
+    element = r["counterexample"]["o"][0]
+    assert set(element) == {"tag"} and element["tag"] >= 2  # No variant names it, so no payload is carried.
+    assert r["expected"]["return"] == 1 and r["actual"]["trap"] == "unmatched-tag"
+    check(total, matched, assume="o[0]==Op.Read || o[0]==Op.Write")
 
 
 def test_read_only_views_may_alias_so_the_model_takes_them_apart():

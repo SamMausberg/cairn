@@ -11,9 +11,11 @@ placement, closures, dyn, atomics and FFI.
 
 A value is flattened into its scalar components: a record is its fields, a sum
 is the emitted u32 tag beside every variant payload, an array is its elements.
-Only a sum's active payload is compared, so inactive storage is not observed,
-and inputs are quantified over well-formed values -- every tag names a declared
-variant, which is what the emitted entry guard admits.
+Only a sum's active payload is compared, so inactive storage is not observed. A
+value parameter is quantified over well-formed values, every tag naming a
+declared variant, which is what the emitted entry guard admits. Storage behind a
+view has no such guard, so its elements carry any tag, and a `match` over one
+outside the declared variants aborts, as the emitted `default: cr::trap()` does.
 
 Storage behind a view is one SMT array per component of its element, read and
 written at `offset + i` while `i` is below the extent the signature gives it; a
@@ -293,16 +295,6 @@ class Source:
             return ty.value
         raise Unsupported(f"{ty.display()} holds no elements.")
 
-    def tagged(self, ty: Type) -> bool:
-        """Does a value of this type carry a tag an entry guard would have to check?"""
-        array = self.elements(ty)
-        layout = self.layout(ty)
-        if array is not None:
-            return self.tagged(array[0])
-        if isinstance(layout, dict):
-            return True
-        return isinstance(layout, list) and any(self.tagged(t) for _, t in layout)
-
     def leaves(self, ty: Type) -> tuple[Type, ...]:
         """The scalar components of a value, in the order the model stores them.
 
@@ -415,7 +407,10 @@ def undecided(src: Source, ty: Type, parts: tuple[str, ...]) -> str:
 
 
 def wellformed(src: Source, ty: Type, parts: tuple[str, ...]) -> str:
-    """Every tag inside an input names a declared variant; the entry guard traps on anything else."""
+    """Every tag inside a value parameter names a declared variant; the entry guard traps on anything else.
+
+    Storage behind a view has no entry guard that reads it, so this is not asked of its elements.
+    """
     array = src.elements(ty)
     layout = src.layout(ty)
     if array is not None:
@@ -432,7 +427,11 @@ def wellformed(src: Source, ty: Type, parts: tuple[str, ...]) -> str:
 
 
 def rebuild(src: Source, ty: Type, values: list) -> Any:
-    """A model assignment read back as a CAIRN value; `values` is consumed in component order."""
+    """A model assignment read back as a CAIRN value; `values` is consumed in component order.
+
+    A tag outside the declared variants is read back as `{"tag": n}`, since no
+    variant names it and a `match` over it aborts.
+    """
     array = src.elements(ty)
     layout = src.layout(ty)
     if array is not None:
@@ -442,30 +441,42 @@ def rebuild(src: Source, ty: Type, values: list) -> Any:
     if isinstance(layout, dict):
         tag = values.pop(0)
         payloads = {n: rebuild(src, t, values) for n, t in layout.items() if t is not None}
-        name = list(layout)[tag]
-        return {"variant": name, **({"value": payloads[name]} if layout[name] is not None else {})}
+        names = list(layout)
+        if not 0 <= tag < len(names):  # Only storage behind a view can hold one, and nothing observes its payloads.
+            return {"tag": tag}
+        return {"variant": names[tag], **({"value": payloads[names[tag]]} if layout[names[tag]] is not None else {})}
     raw = values.pop(0)
     return decoded(raw, ty.name) if ty.name in FLOAT else raw
 
 
-def admissible(src: Source, ty: Type, value: Any) -> bool:
-    """Is a caller-supplied input a value of this type? Malformed inputs are refused, not guessed."""
+def admissible(src: Source, ty: Type, value: Any, storage: bool = False) -> bool:
+    """Is a caller-supplied input a value of this type? Malformed inputs are refused, not guessed.
+
+    `storage` marks what lies behind a view, where no entry guard reads a tag, so
+    an element may carry one that names no variant. A value parameter may not.
+    """
     array = src.elements(ty)
     layout = src.layout(ty)
     if is_view(ty):  # Storage behind a view arrives as its elements; `outcome` holds it to the extent.
-        return isinstance(value, list) and all(admissible(src, ty.value, v) for v in value)
+        return isinstance(value, list) and all(admissible(src, ty.value, v, True) for v in value)
     if array is not None:
-        return isinstance(value, list) and len(value) == array[1] and all(admissible(src, array[0], v) for v in value)
+        return isinstance(value, list) and len(value) == array[1] and all(
+            admissible(src, array[0], v, storage) for v in value)  # fmt: skip
     if isinstance(layout, list):
         names = [n for n, _ in layout]
         return isinstance(value, dict) and sorted(value) == sorted(names) and all(
-            admissible(src, t, value[n]) for n, t in layout)  # fmt: skip
+            admissible(src, t, value[n], storage) for n, t in layout)  # fmt: skip
     if isinstance(layout, dict):
-        if not isinstance(value, dict) or value.get("variant") not in layout:
+        if not isinstance(value, dict):
+            return False
+        if "variant" not in value:  # A tag no variant names: what storage may hold, and what a match aborts on.
+            shaped = set(value) == {"tag"} and type(value["tag"]) is int
+            return storage and shaped and len(layout) <= value["tag"] < 1 << WIDTH[TAG.name]
+        if value["variant"] not in layout:
             return False
         payload = layout[value["variant"]]
         expected = {"variant"} | ({"value"} if payload is not None else set())
-        return set(value) == expected and (payload is None or admissible(src, payload, value["value"]))
+        return set(value) == expected and (payload is None or admissible(src, payload, value["value"], storage))
     if ty.name == "bool":
         return type(value) is bool
     if ty.name in FLOAT:
@@ -484,9 +495,11 @@ def identical(src: Source, ty: Type, a: Any, b: Any) -> bool:
     if isinstance(layout, list):
         return all(identical(src, t, a[n], b[n]) for n, t in layout)
     if isinstance(layout, dict):
-        if a["variant"] != b["variant"]:
+        order = list(layout)
+        at = [order.index(x["variant"]) if "variant" in x else x["tag"] for x in (a, b)]
+        if at[0] != at[1]:  # The tag is observed first, as the emitted discriminant is.
             return False
-        payload = layout[a["variant"]]
+        payload = layout[order[at[0]]] if at[0] < len(order) else None  # No variant is active, so nothing else shows.
         return payload is None or identical(src, payload, a["value"], b["value"])
     if ty.name in FLOAT:
         return encoded(a, ty.name) == encoded(b, ty.name)
@@ -514,8 +527,6 @@ class Formula:
         self.floating = self.arrays = False
         self.storages = 0
         for i, (name, ty) in enumerate(params):
-            if is_view(ty) and source.tagged(ty.value):
-                raise Unsupported("A tag inside a view has no entry guard, so its inputs are not admitted.")
             parts = []
             for j, leaf in enumerate(source.leaves(ty)):
                 n = f"arg_{i}_{j}"
@@ -1228,7 +1239,10 @@ class Concrete:
             return a or self.expr(e.args[1], env, stack)
         b = self.expr(e.args[1], env, stack)
         if op in {"==", "!="}:
-            equal = a["variant"] == b["variant"] if isinstance(a, dict) else a == b
+            if isinstance(a, dict):  # A tag-only enum compares as the emitted discriminant does, tag against tag.
+                equal = (a.get("variant"), a.get("tag")) == (b.get("variant"), b.get("tag"))
+            else:
+                equal = a == b
             return equal if op == "==" else not equal
         if op in {"<", "<=", ">", ">="}:
             return {"<": a < b, "<=": a <= b, ">": a > b, ">=": a >= b}[op]
@@ -1287,8 +1301,10 @@ class Concrete:
     def attempt(self, e, env, stack):
         value = self.expr(e.args[0], env, stack)
         ok, _, _, carrier = e.ref
-        if value["variant"] == ok:
+        if value.get("variant") == ok:
             return value.get("value")
+        if "variant" not in value:  # The emitted `try` would carry payload bits this replay does not hold.
+            raise Unsupported("A try over a tag outside the declared variants is not replayed.")
         raise Propagate({"variant": carrier, **({"value": value["value"]} if "value" in value else {})})
 
     def invoke(self, name, args, stack=()):
@@ -1349,7 +1365,9 @@ class Concrete:
                 signal, value = self.block(branch, env, stack)
             elif s.tag == "match":
                 subject = self.expr(s.exprs[0], env, stack)
-                arm = next(a for a, v in zip(s.arms, s.ref, strict=True) if v == subject["variant"])
+                arm = next((a for a, v in zip(s.arms, s.ref, strict=True) if v == subject.get("variant")), None)
+                if arm is None:  # The emitted switch sends a tag no case names to `default: cr::trap()`.
+                    raise ConcreteTrap("unmatched-tag")
                 if arm.binder:
                     env[arm.binder] = subject["value"]
                 signal, value = self.block(arm.body, env, stack)
@@ -1636,7 +1654,12 @@ def equivalent(
             if residual != "false":
                 r = run("loop-unrolling", conj(admitted, residual))
                 if r["status"] != "unsat":
-                    return finish("unknown", reason=f"A loop may run past the {MAX_UNROLL}-iteration unrolling budget.")
+                    return finish(
+                        "unknown",
+                        reason=f"A loop may run past the {MAX_UNROLL}-iteration unrolling budget; deciding it needs "
+                        f"a precondition that holds every trip count, and so every symbolic extent it reads, "
+                        f"at {MAX_UNROLL} or below.",
+                    )
             if not allow_reference_traps:
                 partial = conj(admitted, neg(lv.defined))
                 r = run("reference-totality", partial)
@@ -1670,8 +1693,9 @@ def equivalent(
                 return finish(
                     "smt-equivalent",
                     quantification="All well-formed values of the declared parameter types satisfying the host "
-                    "precondition; every tag names a declared variant; storage the entry guards admit, with "
-                    "distinct storage behind every rw view.",
+                    "precondition; every tag of a value parameter names a declared variant, while an element of "
+                    "storage carries any tag and a match over one outside them aborts; storage the entry guards "
+                    "admit, with distinct storage behind every rw view.",
                     observation=f"{visible}, or one undifferentiated abort outcome; an rw view is compared element "
                     "by element over its whole extent; a sum shows its tag and active payload only; no "
                     "memory/timing observation.",
