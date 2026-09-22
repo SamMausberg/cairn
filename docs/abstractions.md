@@ -499,7 +499,7 @@ fn main() -> i32 {
   for step in 0..100 {
     for i in 0..n { dw[i] = 0.0; }
     let mut dbias:f64 = 0.0;
-    let before = loss_grad(n, w, x, bias, 5.0, 1.0, dw, dbias);   // loss, and seed times its gradient
+    loss_grad(n, w, x, bias, 5.0, 1.0, dw, dbias);           // the loss, dropped; seed times its gradient added
     for i in 0..n { w[i] -= 0.05 * dw[i]; }
     bias -= 0.05 * dbias;
   }

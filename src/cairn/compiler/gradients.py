@@ -190,7 +190,8 @@ class Adjoint:
         for inner in s.body:
             if inner.tag == "assign" and self.summed(inner, s):
                 summed.add(inner.exprs[0].val)
-                lines.append(f"  {inner.exprs[0].val} = {show(inner.exprs[1])};")
+                added = inner.exprs[1]
+                lines.append(f"  {inner.exprs[0].val} {added.val}= {bare(added.args[1])};")
             elif inner.tag == "assign":
                 target, value = inner.exprs
                 out = target.args[0].val if target.tag == "index" and target.args[0].tag == "name" else ""
@@ -324,8 +325,7 @@ class Adjoint:
                 before.append(Line(f"let mut {temporary}:{ty.name} = 0.0;"))
                 adjoints.append(temporary)
                 after += self.back(arg, temporary)
-        called = self.fresh("grad_c")
-        text = f"let {called} = {e.val}_grad({', '.join(map(show, e.args))}, {adj}, {', '.join(adjoints)});"
+        text = f"{e.val}_grad({', '.join(map(bare, e.args))}, {adj}, {', '.join(adjoints)});"  # it writes, so it stands alone
         return [*before, Line(text), *after]
 
     def fresh(self, prefix: str) -> str:
