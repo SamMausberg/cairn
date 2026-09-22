@@ -14,17 +14,10 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler.lexing import RESERVED
-from cairn.editor.lsp import (
-    Document,
-    completion,
-    definition,
-    hover,
-    prepare_rename,
-    references,
-    rename,
-    signature_help,
-    symbols,
-)
+from cairn.editor.completion import completion, signature_help
+from cairn.editor.document import Document, symbols
+from cairn.editor.edits import prepare_rename, references, rename
+from cairn.editor.navigation import definition, hover
 
 ROOT = Path(__file__).resolve().parents[2]
 EDITOR = ROOT / "editors" / "vscode"

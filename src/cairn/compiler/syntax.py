@@ -11,7 +11,7 @@ import re
 from typing import Any
 
 from .lexing import IDENT, NUMBER, RESERVED, Token, lex, unescape
-from .tree import INTRINSIC_TYPES as INTRINSIC_TYPES  # lsp.py takes the vocabulary from here.
+from .tree import INTRINSIC_TYPES as INTRINSIC_TYPES  # The language server takes the vocabulary from here.
 from .tree import (
     PLACES,
     USIZE,
