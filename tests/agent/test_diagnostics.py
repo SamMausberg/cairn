@@ -45,6 +45,17 @@ def test_a_refusal_carries_the_fix_its_data_determines(body, code, hint):
     assert reply["code"] == code and reply["repair_hint"] == hint
 
 
+def test_a_misspelt_field_or_variant_gets_the_close_name():
+    source = "struct Frame { head:u8; size:u32; }\nenum Op { Read; Write; }\nfn f(x:Frame) -> u32 { return x.size; }\n"
+    host = EditHost()
+    host.open(source, "f")
+    ask = {"protocol": HANDLES, "handle": "e1", "kind": "body"}
+    field = host.reply(json.dumps({**ask, "replacement": "{ return x.sise; }"}))
+    assert field["code"] == "E-FIELD" and field["repair_hint"] == "Did you mean size?"
+    variant = host.reply(json.dumps({**ask, "replacement": "{ if Op.Wrte == Op.Read { return 1; } return 0; }"}))
+    assert variant["code"] == "E-ENUM-VARIANT" and variant["repair_hint"] == "Did you mean Write?"
+
+
 def test_a_refusal_points_into_the_reply_not_the_spliced_source():
     parse = refusal("{\n  return checksum(bytes)\n}")
     assert parse["code"] == "E-PARSE" and (parse["line"], parse["column"]) == (3, 1) and parse["source_line"] == "}"

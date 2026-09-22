@@ -146,7 +146,7 @@ def e_field(c: Checker, e: Expr, expected: Type | None) -> Type:
     if c.p.modules.get(at.name, "") not in ("", c.module) and at.name not in c.p.public:
         fail("E-PRIVATE", f"{at.name} is private to module {c.p.modules[at.name]}; so are its fields.", e)
     if e.val not in dict(layout):
-        fail("E-FIELD", f"Unknown field {e.val}.", e)
+        fail("E-FIELD", f"Unknown field {e.val}.", e, available_fields=[k for k, _ in layout])
     if reached and outer:  # Reaching a field reads its own header: a lease of its elements does not forbid it.
         c.leased(c.where(e), "ro", e, elements=False)
     return dict(layout)[e.val]

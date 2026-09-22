@@ -80,6 +80,12 @@ def fix(d: dict[str, Any], known: tuple[str, ...] = ()) -> str | None:
     if code == "E-UNBOUND" and (near := close(d["message"].removeprefix("Unbound name ").rstrip("."),
                                               d.get("available_names", ()))):  # fmt: skip
         return f"Did you mean {' or '.join(near)}?"
+    if code == "E-FIELD" and (near := close(d["message"].removeprefix("Unknown field ").rstrip("."),
+                                            d.get("available_fields", ()))):  # fmt: skip
+        return f"Did you mean {' or '.join(near)}?"
+    if code == "E-ENUM-VARIANT" and (near := close(d["message"].rstrip(".").rsplit(".", 1)[-1],
+                                                   d.get("available_variants", ()))):  # fmt: skip
+        return f"Did you mean {' or '.join(near)}?"
     if code == "E-CALLEE" and d["message"].startswith("Unknown callable "):
         name = d["message"].removeprefix("Unknown callable ").split(";")[0]
         near = close(name, [*known, *BUILTINS])
