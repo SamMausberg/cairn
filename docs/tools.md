@@ -180,6 +180,27 @@ A function with a device region is tuned over `block`, `per_lane` and `unroll`. 
 
 `python -m cairn.perf.calibrate --out PROFILE.json` measures another host, and `--profile PROFILE.json` or `CAIRN_PROFILE` selects it. Calibration runs only host kernels. Device code is read at compile time, never run: `cairn.perf.device` compiles for `sm_120` and reads each kernel's registers, spills, shared memory and instruction mix from ptxas and cuobjdump, and `cairn.perf.native` reads each host loop's cycles from llvm-mca.
 
+## cairn diff
+
+`cairn diff OLD NEW` says what changed between two versions of a program, function by function, and what establishes each answer. A side is a path (a file, a project directory or a manifest), or a revision of the git repository around the current directory, with `--in PATH` naming the project inside it. A revision is read object by object into a scratch directory, and nothing is checked out over the working tree. `--std` compares the packaged library under `src/cairn/std` as each side holds it.
+
+```text
+$ cairn diff before.cairn after.cairn
+before.cairn -> after.cairn: 1 identical-code, 1 smt-equivalent, 1 behavior-changed
+  behavior-changed  scale  at x = 63: before returns 126, after returns 189 (native: clang++ and g++ agree)
+  smt-equivalent    clamp  Z3 found no input on which they differ
+predicted, not measured (AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes): clamp x0.471, scale x0.889
+semver: major: scale behaves differently at x = 63
+```
+
+Here `clamp` became `min(x, hi)`, `scale` multiplies by 3 instead of 2, and `label` did not change. Each function the two versions share gets one class. `identical-code` means its emitted C++ is the same up to a consistent renaming of locals, parameters and compiler temporaries, and so is that of everything it calls, so the same native code runs; bare variants, one-statement arms, `+=` on a local and renamed parameters land here. `smt-equivalent` means Z3 found no admitted input on which the two differ in their result, in what they leave in an `rw` borrow or in whether they abort, within the fragment [verification.md](verification.md#value-level-source-equivalence) describes. `behavior-changed` comes with a witness: the input Z3 found, what each version does on it in the value model, and the same run natively under each compiler present when the task runner takes the signature. A native run that disagrees with the model makes the answer `unknown` instead. `unknown` gives its reason and is never counted as unchanged. A loop the solver cannot bound is retried with every unsigned parameter at 16 or below: a difference found there is a `behavior-changed` witness, and an equivalence found there is reported as holding only there.
+
+A function whose parameter or result types changed is `signature-changed` and is not compared value for value. One that a version alone holds is `added` or `removed`, and one whose code is the other's under a new name is `renamed`. Beside the class, every function lists what the compiler established differently on the two sides, whatever the solver decided: its signature, effect row, guard sites written and discharged, the guards its lowered code holds, heap allocations, local storage, tasks started and `unsafe` blocks. Test blocks are compared by their code. The cost change comes from [cairn predict](#cairn-predict) and is labelled predicted.
+
+The semantic version verdict reads the public interface: the functions and types a program's own modules export, or everything in a program that declares no module. A removed or renamed public function, a changed signature, a public function whose effect row gained an effect, a public function with a witness and a changed public type are `major`. An added public function or type is `minor`, and any other change is `patch`. A public function whose class is `unknown` is listed under `unproven`, and the verdict holds only if those behave as they did.
+
+`--require equivalent` exits 1 unless every function is `identical-code` or `smt-equivalent` and no type or test changed, and `--require identical` asks for identical code, which is how a refactoring's pull request can require proof that it refactored. `--markdown FILE` also writes a section for a pull request description, and nothing is posted anywhere. `--timeout-ms` is the solver's time for one function, `--budget-s` its time for the whole diff (60 seconds by default), and `--replays` the number of witnesses built natively (8). Both versions are checked and lowered by this compiler, so the diff compares two sources, never two compilers.
+
 ## cairn build --incremental
 
 One object per module, compiled against a shared interface header (`program.hpp`: types, tables and prototypes) and cached under `build/objects/`. It is opt-in because separate objects give up inlining across modules; device programs and freestanding images are always one unit. The cache is safe to delete.

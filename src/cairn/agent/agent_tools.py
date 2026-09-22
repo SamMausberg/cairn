@@ -78,6 +78,9 @@ def implementation() -> str:
     return digest(b"".join(f.name.encode() + b"\0" + f.read_bytes() + b"\0" for f in files))
 
 
+PRESERVE = {None: set(), "identical": {"identical-code"}, "equivalent": {"identical-code", "smt-equivalent"}}
+
+
 class EditSession:
     """One authored function, the host's contract for it, and what an edit of it may see and call.
 
@@ -127,6 +130,9 @@ class EditSession:
         if set(effects) - set(allowed):
             fail("E-CONTRACT", "Baseline itself exceeds the supplied effect ceiling.")
         self.allowed_effects = set(allowed)
+        self.preserve = self.contract.get("preserve")  # the class a candidate must prove, if the host asks for one
+        if self.preserve not in PRESERVE:
+            fail("E-CONTRACT", "preserve is identical or equivalent.")
         requested = classes(self.contract, set(fs))
         if set(include) - set(fs):
             fail("E-SYMBOL", "An included or contracted symbol is not in this module.")
@@ -409,6 +415,7 @@ class EditSession:
             if name != self.symbol and (delta := set(r["effects"]) - set(before[name]["effects"])):
                 fail("E-CALLER-EFFECT", "Candidate expands an unchanged caller footprint.", symbol=name,
                      added_effects=sorted(delta))  # fmt: skip
+        kept = self.preserved(candidate) if self.preserve else "not-proved"
         return candidate, {
             "protocol": "cairn.admission/1",
             "status": "typed",
@@ -424,9 +431,20 @@ class EditSession:
             "full_module_rechecked": True,
             "native_build": "not-run",
             "behavioral_tests": "not-run",
-            "equivalence": "not-proved",
+            "equivalence": kept,
             "formal_status": "not-verified",
         }
+
+    def preserved(self, candidate: str) -> str:
+        """What a `preserve` contract asks of an edit: the edited function's own code the same (`identical`), or that
+        or behaviour Z3 shows the same (`equivalent`); anything less is E-PRESERVE, with the witness when one exists."""
+        from ..verify.diff import single
+
+        found = single(self.source, candidate, self.symbol)
+        if found["class"] not in PRESERVE[self.preserve]:
+            fail("E-PRESERVE", f"The host asks this edit to keep {self.symbol} {self.preserve}; it is {found['class']}.",
+                 reason=found.get("reason"), witness=found.get("witness"))  # fmt: skip
+        return found["class"]
 
     def candidates(self, site: str, expressions: list[str]) -> list[dict[str, Any]]:
         if len(expressions) > 128:

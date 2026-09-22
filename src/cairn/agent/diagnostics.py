@@ -26,6 +26,7 @@ HINTS = {
     "E-PARSE": "Use braces, semicolons and CAIRN's grammar, not Rust's or Python's.",
     "E-SESSION": "Refresh the packet from the host; never guess a digest or a handle.",
     "E-EFFECT-EXPANSION": "Change the implementation, not the ceiling: the host owns it.",
+    "E-PRESERVE": "Keep what the function does; a witness, when the refusal has one, is an input where it differs.",
     "E-SYMBOL": "Name a function or type exactly as a packet or a body shows it.",
     "E-MOVED": "Use it before it moves, move it once, or lend it (ro<T>, rw<T>) instead of passing it by value.",
     "E-LEASED": "Touch it after the wait, or lend each task a part the other does not touch.",
@@ -93,6 +94,10 @@ def fix(d: dict[str, Any], known: tuple[str, ...] = ()) -> str | None:
     if code in {"E-EFFECT-EXPANSION", "E-CALLER-EFFECT"} and d.get("added_effects"):
         brought = "; ".join(f"{e}: {cause(e)}" for e in d["added_effects"])
         return f"Remove what brings {brought}. The ceiling is the host's."
+    if code == "E-PRESERVE" and isinstance(w := d.get("witness"), dict):
+        at = ", ".join(f"{k} = {v}" for k, v in w["inputs"].items()) or "no input"
+        seen = [f"returns {x['return']}" if x.get("defined") else "aborts" for x in (w["before"], w["after"])]
+        return f"At {at} the function {seen[0]} and the edit {seen[1]}: keep that answer."
     if code == "E-CONTEXT-CLOSURE" and d.get("symbols"):
         return f"Ask first: an expand request naming {', '.join(d['symbols'])}."
     if code == "E-TYPE-MISMATCH" and {"expected_type", "actual_type"} <= set(d):

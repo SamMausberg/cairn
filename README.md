@@ -101,6 +101,7 @@ cairn run examples/embedded                # bare-metal AArch64 under QEMU
 | `build`, `run` | A fresh native build (`--debug` maps symbols to the `.cairn` files, `--incremental` reuses objects by content hash), then execution with process limits, under QEMU for the freestanding target. `cairn run app -- ARGS` starts the program with `ARGS`. |
 | `test` | Every test block passes in a process of its own, and so does every independent finite task contract, with each child's exit status checked. |
 | `verify --symbol f`, `--all` | Z3 found no input on which two versions of a function differ, within the modeled fragment. Anything outside it is reported unknown and blocks the aggregate result. |
+| `diff OLD NEW` | Each function of two versions (paths or git revisions) is identical code, SMT-equivalent, changed with an input that shows it, or unknown with the reason, beside its exact effect, guard and signature changes and a semantic-version verdict; `--require equivalent` makes it a gate. |
 | `certificates` | The seventeen arithmetic identities behind the collector check, here in Python and in `proofs/` in Lean. |
 | `check --generics` | Every generic function needs only what its bounds promise. |
 | `inspect --symbol f` | The packet an AI agent gets for an edit: its source, the interfaces around it, effects, rule cards; `--expand g` adds a body. |

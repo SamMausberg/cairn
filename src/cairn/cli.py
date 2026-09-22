@@ -194,6 +194,20 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--timeout-ms", type=int, default=3000)
     v.add_argument("--assume", action="append", default=[], metavar="SYMBOL=EXPRESSION", help="Compare one "
                    "function only where this holds (repeatable); the receipt records every text.")  # fmt: skip
+    d = sub.add_parser("diff", help="What changed between two versions, function by function, and on what "
+                       "evidence.", parents=[shared])  # fmt: skip
+    d.add_argument("old", help="A path, or a revision of the repository around here.")
+    d.add_argument("new", help="The version it became: a path or a revision.")
+    d.add_argument("--in", dest="within", default=".", metavar="PATH", help="The project a revision holds, as a "
+                   "path from here; default: here.")  # fmt: skip
+    d.add_argument("--std", action="store_true", help="Compare the packaged library under src/cairn/std.")
+    d.add_argument("--timeout-ms", type=int, default=3000, help="The solver's time for one function.")
+    d.add_argument("--budget-s", type=float, default=60.0, help="The solver's time for the whole diff.")
+    d.add_argument("--replays", type=int, default=8, help="Witnesses replayed natively, at most.")
+    d.add_argument("--require", choices=["identical", "equivalent"], help="Exit 1 unless every function is "
+                   "identical-code, or identical-code or smt-equivalent.")  # fmt: skip
+    d.add_argument("--markdown", type=Path, metavar="FILE", help="Also write a pull request section to FILE.")
+    d.add_argument("--no-predict", action="store_true", help="Leave out the predicted cost change.")
     sub.add_parser("certificates", help="Check collector arithmetic certificates; not a Lean/compiler proof.",
                    parents=[shared])  # fmt: skip
     f = sub.add_parser("fmt", help="Format CAIRN sources in place; refuses any change to the token stream.")
@@ -249,6 +263,29 @@ def main(argv: list[str] | None = None) -> int:
             from .editor.lsp import serve
 
             return serve()
+        if a.command == "diff":
+            from .editor import changes
+            from .projects.revision import read
+            from .verify.diff import diff, holds
+
+            older, newer = read(a.old, a.within, a.std), read(a.new, a.within, a.std)
+            try:
+                record = diff(older.source, newer.source, timeout_ms=a.timeout_ms, budget_s=a.budget_s,
+                              replays=a.replays, predict=not a.no_predict)  # fmt: skip
+            except Diagnostic as error:  # placed in the version that is refused
+                refused = older if error.data.get("side") == "old" else newer
+                if terminal.human(FORMAT):
+                    terminal.diagnostic({**refused.locate(error), "source_line": error.data["line"]}, refused.source)
+                else:
+                    report(refused.locate(error))
+                return 1
+            record["old"], record["new"] = (
+                {"named": v.named, "kind": v.kind, "commit": v.commit} for v in (older, newer)
+            )
+            if a.markdown:
+                a.markdown.write_text(changes.markdown(record, a.old, a.new), encoding="utf-8")
+            print(changes.lines(record, a.old, a.new)) if terminal.human(FORMAT) else report(record)
+            return 0 if holds(record, a.require) else 1
         if a.command == "verify" and a.all:
             from .verify.verification import verify_module
 
