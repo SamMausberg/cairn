@@ -455,9 +455,7 @@ class Parser:
             arms = []
             while not self.eat("}"):
                 a = self.t
-                name = self.path()
-                if "." not in name:
-                    fail("E-PARSE", "A match arm names Enum.Variant.", a)
+                name = self.path()  # `Some(v)` or `Option.Some(v)`: a bare variant is the subject's.
                 binder = ""
                 if self.eat("("):
                     binder = self.ident()

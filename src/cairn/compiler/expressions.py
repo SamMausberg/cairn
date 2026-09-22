@@ -6,6 +6,7 @@ import math
 from typing import TYPE_CHECKING, Any
 
 from . import facts
+from .builtins import TABLE
 from .places import field_path, path
 from .scope import Binding
 from .traits import instantiate, unify
@@ -13,6 +14,7 @@ from .tree import (
     BOOL,
     FLOAT,
     INT,
+    INTRINSIC_TYPES,
     NUMERIC,
     SCALAR,
     SIGNED,
@@ -63,6 +65,10 @@ def e_str(c: Checker, e: Expr, expected: Type | None) -> Type:
 
 
 def e_name(c: Checker, e: Expr, expected: Type | None) -> Type:
+    sum_ = bare(c, e.val, expected, e)
+    if sum_:  # Checked, and lowered, as the qualified `Option.None` it stands for.
+        e.tag, e.args = "field", [Expr("name", sum_.name, [], e.line, e.col)]
+        return c.variant(sum_, e.val, [], e, expected)
     b = c.env.get(e.val)
     if b is None:
         const = c.qualify(e.val, c.p.consts, node=e)
@@ -70,7 +76,7 @@ def e_name(c: Checker, e: Expr, expected: Type | None) -> Type:
         if value:
             return value
         if const is None:
-            fail("E-UNBOUND", f"Unbound name {e.val}.", e, available_names=sorted(c.env),
+            fail("E-UNBOUND", f"Unbound name {e.val}.{unexpected(c, e.val)}", e, available_names=sorted(c.env),
                  expected_type=expected.display() if expected else None)  # fmt: skip
         e.ref = c.p.consts[const][1]
         with c.within(c.p.modules.get(const, "")):
@@ -163,6 +169,45 @@ def type_argument(c: Checker, e: Expr) -> Any:
     if e.tag == "index":
         return Type(path(e.args[0]), args=tuple(c.type_argument(a) for a in e.args[1:]))
     return Type(path(e))
+
+
+def bare(c: Checker, name: str, expected: Type | None, e: Expr) -> Type | None:
+    """`None`, `Some(x)`, `Ok(v)`: a variant written without its type is one of the sum or enum the context expects,
+    and only when nothing else of that name is visible. A name that could mean both is refused, never guessed."""
+    if expected is None or expected.mode != "value" or "." in name:
+        return None
+    if name not in [v for v, _ in c.p.sums.get(expected.name, [])] + list(c.p.enums.get(expected.name, [])):
+        return None
+    tables = {"a constant": c.p.consts, "a function": c.fs, "a type": c.types}
+    other = "a local" if name in c.env else "a builtin" if name in TABLE or name in INTRINSIC_TYPES else None
+    other = other or next((what for what, table in tables.items() if c.qualify(name, table)), None)
+    short = expected.name.rsplit(".", 1)[-1]
+    if other:
+        fail("E-VARIANT-AMBIGUOUS", f"{name} is both {short}.{name} and {other}; write {short}.{name}.", e)
+    home = c.p.modules.get(expected.name, "")
+    if home not in ("", c.module) and expected.name not in c.p.public:
+        fail("E-PRIVATE", f"{expected.name} is private to module {home}; so are its variants.", e)
+    return Type(expected.name, args=expected.args)
+
+
+def adapts(c: Checker, e: Expr) -> bool:
+    """A literal, or a bare name that can only be a variant: either takes its type from the operand beside it."""
+    if e.tag in {"int", "float"}:
+        return True
+    name = e.val if e.tag in {"name", "call"} and not e.ref else "."
+    if "." in name or name in c.env or name in TABLE or any(c.qualify(name, t) for t in (c.p.consts, c.fs, c.types)):
+        return False
+    return any(name in dict(vs) for vs in c.p.sums.values()) or any(name in vs for vs in c.p.enums.values())
+
+
+def unexpected(c: Checker, name: str) -> str:
+    """Why a bare variant did not resolve: nothing here expects its sum, so it has to say which one."""
+    sums = [s for s, vs in c.p.sums.items() if name in dict(vs)] + [s for s, vs in c.p.enums.items() if name in vs]
+    return (
+        f" {name} is a variant of {sums[0].rsplit('.', 1)[-1]}: nothing here expects that sum, so qualify it."
+        if sums
+        else ""
+    )
 
 
 def variant(c: Checker, enum: Type, variant: str, args: list[Expr], e: Expr, expected: Type | None) -> Type:
@@ -274,13 +319,13 @@ def e_binary(c: Checker, e: Expr, expected: Type | None) -> Type:
     (a, b), op = e.args, e.val
     logical, compare = op in {"&&", "||"}, op in COMPARISONS
     hint = BOOL if logical else (None if compare else expected)
-    # Literals adapt to their nonliteral peer; there is no general implicit conversion.
+    # Literals and bare variants adapt to their peer; there is no general implicit conversion.
     if logical:  # The right side runs only when the left said `&&` true or `||` false, so it knows that much.
         left, known = c.expr(a, hint), len(c.facts)
         facts.assume(c, a, op == "&&")
         right = c.expr(b, left)
         del c.facts[known:]
-    elif a.tag in {"int", "float"} and b.tag not in {"int", "float"}:
+    elif adapts(c, a) and not adapts(c, b):
         right = c.expr(b, hint)
         left = c.expr(a, right)
     else:

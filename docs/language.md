@@ -183,6 +183,40 @@ fn cost(op:Op) -> u64 { match op { Op.Read => { return 1; } Op.Write => { return
 Every variant must have exactly one arm; missing Op.Flush.
 ```
 
+A variant may leave out its type wherever the context names the sum. An arm names a variant of the subject, so `Some(v) =>` needs nothing more. In an expression, `None`, `Some(x)` and `Ok(v)` belong to the sum the context expects: the return type, an annotated `let`, an assignment, a parameter, a field, the payload of another variant, or the other side of `==`. The bare form checks and emits exactly as the qualified one, which stays legal everywhere.
+
+```cairn
+import std.core (Option);
+enum Op { Read; Write; }
+
+fn half(x:u64) -> Option[u64] {
+  if x % 2 != 0 { return None; }
+  return Some(x / 2);
+}
+
+fn main() -> i32 {
+  let mut op = Op.Read;
+  op = Write;                                     // the target is an Op
+  match half(6) {
+    Some(v) => { if v != 3 || op != Write { return 1; } }
+    None => { return 2; }
+  }
+  return 0;
+}
+```
+
+A bare name is a variant only when nothing else of that name is visible. A local, constant, function or type of the same name is `E-VARIANT-AMBIGUOUS`, and where no sum is expected, `let x = None;` is `E-UNBOUND` with a message that names the sum declaring it. A sum another module keeps private keeps its variants private too (`E-PRIVATE`).
+
+```cairn rejects E-VARIANT-AMBIGUOUS
+struct Line { width:u64; }
+enum Shape { Dot; Line(Line); }
+fn thin() -> Shape = Line(Line(1));
+```
+
+```text
+Line is both Shape.Line and a type; write Shape.Line.
+```
+
 `try e` takes a two-variant sum, success first and failure second. It yields the success payload, or returns the failure from the enclosing function or closure, whose return type must be a two-variant sum with the same failure payload (`E-TRY`). The families may differ, so a `Done[E]` failure propagates out of a function returning `Result[T, E]`. It is the only propagation form, and it is always written out.
 
 ```cairn

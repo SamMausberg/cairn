@@ -204,8 +204,11 @@ def s_match(c: Checker, s: Stmt):
     layout = c.layouts.get(ty)
     if ty.mode != "value" or not isinstance(layout, dict):
         fail("E-MATCH-TYPE", "match requires a declared enum or tagged sum.", s)
-    given = [a.variant.rsplit(".", 1)[1] if c.qualify(a.variant.rsplit(".", 1)[0], c.types) == ty.name
-             else a.variant for a in s.arms]  # fmt: skip
+    given = [a.variant.rsplit(".", 1)[1] if "." in a.variant and c.qualify(a.variant.rsplit(".", 1)[0], c.types)
+             == ty.name else a.variant for a in s.arms]  # fmt: skip  # A bare arm names a variant of the subject.
+    home = c.p.modules.get(ty.name, "")
+    if home not in ("", c.module) and ty.name not in c.p.public and any("." not in a.variant for a in s.arms):
+        fail("E-PRIVATE", f"{ty.name} is private to module {home}; so are its variants.", s)
     for arm in s.arms:  # An arm that names nothing visible is that fault, not a gap in the coverage.
         head = arm.variant.rsplit(".", 1)[0]
         if "." in arm.variant and c.qualify(head, c.types) is None:

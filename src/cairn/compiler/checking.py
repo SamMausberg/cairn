@@ -94,7 +94,8 @@ class Checker:
                                                   expressions.e_lambda, expressions.e_try)  # fmt: skip
     e_unary, e_binary, named_type, type_argument = (expressions.e_unary, expressions.e_binary, expressions.named_type,
                                                     expressions.type_argument)  # fmt: skip
-    variant, function_value = expressions.variant, expressions.function_value
+    variant, function_value, bare, unexpected = (expressions.variant, expressions.function_value, expressions.bare,
+                                                 expressions.unexpected)  # fmt: skip
 
     e_call, invoke, indirect, repeatable = calls.e_call, calls.invoke, calls.indirect, calls.repeatable
     view_argument, construct, establish = calls.view_argument, calls.construct, calls.establish

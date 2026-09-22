@@ -44,6 +44,9 @@ def indirect(c: Checker, e: Expr, target: Binding, args: list[Expr]) -> Type:
 
 
 def e_call(c: Checker, e: Expr, expected: Type | None) -> Type:
+    sum_ = c.bare(e.val, expected, e) if not e.ref else None  # `Some(x)` where an Option is expected
+    if sum_:
+        return c.variant(sum_, e.val, e.args, e, expected)
     named = c.tenv.get(e.val)
     if isinstance(named, Type) and not e.ref:  # `T(x)` converts or constructs at this instance's T.
         e.val, e.ref = named.name, named.args or None
@@ -91,7 +94,7 @@ def e_call(c: Checker, e: Expr, expected: Type | None) -> Type:
         return f.ret
     if f is None:
         fail("E-CALLEE", "Qualified calls are declared tagged-sum constructors, not methods." if "." in n
-             else f"Unknown callable {n}; arbitrary C++ names are not allowed.", e)  # fmt: skip
+             else f"Unknown callable {n}; arbitrary C++ names are not allowed.{c.unexpected(n)}", e)  # fmt: skip
     return c.invoke(e, f, args, targs, expected)
 
 
