@@ -101,6 +101,61 @@ fn main() -> i32 {
 """
 
 
+VEC_EDITS = """
+import std.core (Option, Eq);
+import std.map;
+import std.vec (Vec);
+
+fn main() -> i32 {
+  let mut xs = vec.new[u64]();
+  for i in 0..5 { vec.push(xs, u64(i) * 10); }          // 0 10 20 30 40
+  vec.insert(xs, 2, 15);                                 // 0 10 15 20 30 40
+  vec.insert(xs, 6, 50);                                 // append at the end
+  if xs.len != 7 || vec.get(xs, 2) != 15 || vec.get(xs, 3) != 20 || vec.get(xs, 6) != 50 { return 1; }
+  match vec.remove(xs, 2) { Option.Some(v) => { if v != 15 { return 2; } } Option.None => { return 3; } }
+  if xs.len != 6 || vec.get(xs, 2) != 20 || vec.get(xs, 5) != 50 { return 4; }
+  match vec.swap_remove(xs, 1) { Option.Some(v) => { if v != 10 { return 5; } } Option.None => { return 6; } }
+  if xs.len != 5 || vec.get(xs, 1) != 50 || vec.get(xs, 4) != 40 { return 7; }
+  match vec.remove(xs, 5) { Option.Some(v) => { return 8; } Option.None => {} }
+  match vec.swap_remove(xs, 9) { Option.Some(v) => { return 9; } Option.None => {} }
+  let wanted:u64 = 30;
+  match vec.find(xs, wanted) { Option.Some(at) => { if at != 3 { return 10; } } Option.None => { return 11; } }
+  let missing:u64 = 31;
+  match vec.find(xs, missing) { Option.Some(at) => { return 12; } Option.None => {} }
+  let mut seen = map.new[u64, u64]();
+  map.insert(seen, 7, 1);
+  let present:u64 = 7;
+  let absent:u64 = 8;
+  if !map.contains(seen, present) || map.contains(seen, absent) { return 13; }
+  return 0;
+}
+"""
+
+VEC_OF_OWNERS_EDITS = """
+import std.core (Option);
+import std.vec (Vec);
+
+fn line(byte:u8) -> Vec[u8] { let mut v = vec.new[u8](); vec.push(v, byte); return v; }
+
+fn main() -> i32 {
+  let mut lines = vec.new[Vec[u8]]();
+  for i in 0..4 { let l = line(u8(65 + i)); vec.push(lines, l); }   // A B C D
+  let inserted = line(90);
+  vec.insert(lines, 1, inserted);                                    // A Z B C D
+  match vec.remove(lines, 3) {                                       // A Z B D
+    Option.Some(taken) => { if taken.len != 1 || taken.data[0] != 67 { return 1; } }
+    Option.None => { return 2; }
+  }
+  match vec.swap_remove(lines, 0) {                                  // D Z B
+    Option.Some(taken) => { if taken.data[0] != 65 { return 3; } }
+    Option.None => { return 4; }
+  }
+  if lines.len != 3 || lines.data[0].data[0] != 68 || lines.data[1].data[0] != 90 || lines.data[2].data[0] != 66 { return 5; }
+  return 0;
+}
+"""
+
+
 MEM_TEXT_SORT = """
 import std.core (Option, Result);
 import std.mem;
@@ -448,6 +503,15 @@ def test_mem_text_sort_and_vec(tmp_path, cxx):
 def test_signed_decimal_prefixes_and_the_last_byte(tmp_path, cxx):
     done = native(tmp_path, SIGNED_TEXT, cxx)
     assert done.stdout == "-9223372036854775808\n"
+
+
+@pytest.mark.parametrize("cxx", BOTH)
+def test_vec_edits_and_map_contains(tmp_path, cxx):
+    native(tmp_path, VEC_EDITS, cxx)
+
+
+def test_vec_edits_move_owners_without_copying(tmp_path):
+    native(tmp_path, VEC_OF_OWNERS_EDITS)
 
 
 @pytest.mark.parametrize("cxx", BOTH)

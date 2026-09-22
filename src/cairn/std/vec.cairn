@@ -1,6 +1,6 @@
 // A growable owner. Growth is the only allocation and it is visible in every caller's effect row.
 module std.vec;
-import std.core (Option);
+import std.core (Option, Eq);
 
 pub struct Vec[T:affine] { data:Buf[T]; len:usize; }
 
@@ -28,6 +28,41 @@ pub fn pop[T:affine](v:rw<Vec[T]>) -> Option[T] {
   if v.len == 0 { return Option.None(); }
   v.len = v.len - 1;
   return Option.Some(take(v.data[v.len]));
+}
+
+// Put `item` at `i` and move the tail up by one; an index past the end is a guard failure.
+pub fn insert[T:affine](v:rw<Vec[T]>, i:usize, item:T) {
+  if i > v.len { v.data[len(v.data)] = item; return; }
+  reserve(v, v.len + 1);
+  let mut at = v.len;
+  while at > i {
+    swap(v.data[at], v.data[at - 1]);
+    at = at - 1;
+  }
+  v.data[i] = item;
+  v.len = v.len + 1;
+}
+
+// Take the element at `i` out and close the gap, keeping the order of the rest.
+pub fn remove[T:affine](v:rw<Vec[T]>, i:usize) -> Option[T] {
+  if i >= v.len { return Option.None(); }
+  let item = take(v.data[i]);
+  for k in i..(v.len - 1) { swap(v.data[k], v.data[k + 1]); }
+  v.len = v.len - 1;
+  return Option.Some(item);
+}
+
+// Take the element at `i` out and move the last one into its place: one swap, no shift.
+pub fn swap_remove[T:affine](v:rw<Vec[T]>, i:usize) -> Option[T] {
+  if i >= v.len { return Option.None(); }
+  swap(v.data[i], v.data[v.len - 1]);
+  return pop(v);
+}
+
+// The first index holding an element equal to `item`, by the element type's Eq.
+pub fn find[T:Eq + affine](v:ro<Vec[T]>, item:ro<T>) -> Option[usize] {
+  for i in 0..v.len { if same(v.data[i], item) { return Option.Some(i); } }
+  return Option.None;
 }
 
 pub fn get[T:copy](v:ro<Vec[T]>, i:usize) -> T {

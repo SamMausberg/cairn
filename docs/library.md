@@ -88,7 +88,7 @@ fn main() -> i32 {
 }
 ```
 
-`reserve` doubles and moves elements with `swap`, so an owner is never copied; `push` is amortized O(1) and puts `alloc` in every caller's row. `pop` moves the element out as an `Option[T]`. `get`, `set` and `extend_from` take only copyable elements, because an owner would have to be moved out of a place, and `get` and `set` trap on an index at or past `len`. `clear` and `truncate` release elements now and keep the capacity.
+`reserve` doubles and moves elements with `swap`, so an owner is never copied; `push` is amortized O(1) and puts `alloc` in every caller's row. `pop`, `remove` and `swap_remove` move an element out as an `Option[T]`, `insert` moves one in and shifts the tail by swaps, and `find` answers the index of the first element equal to a key by the element's `Eq`. `get`, `set` and `extend_from` take only copyable elements, because an owner would have to be moved out of a place, and `get` and `set` trap on an index at or past `len`. `clear` and `truncate` release elements now and keep the capacity.
 
 ## std.text
 
@@ -219,7 +219,7 @@ fn main() -> i32 {
 }
 ```
 
-`find` answers with the slot, not the value. `insert` moves key and value in and releases the old value when it replaces one; `remove` moves the value out. Operations are expected O(1), and `insert` rehashes past three quarters full, so `alloc`, `free` and `zero_init` are in every caller's row. `K` must implement `Hash` and `Eq`, checked where the instance is made: a key with `derive eq` and no `derive hash` is `E-TRAIT-IMPL`, "Route does not implement Hash; std.map.insert needs [K:Hash+Eq+affine]."
+`find` answers with the slot, not the value, and `contains` with a bool. `insert` moves key and value in and releases the old value when it replaces one; `remove` moves the value out. Operations are expected O(1), and `insert` rehashes past three quarters full, so `alloc`, `free` and `zero_init` are in every caller's row. `K` must implement `Hash` and `Eq`, checked where the instance is made: a key with `derive eq` and no `derive hash` is `E-TRAIT-IMPL`, "Route does not implement Hash; std.map.insert needs [K:Hash+Eq+affine]."
 
 ## std.derived
 

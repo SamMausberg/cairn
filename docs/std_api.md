@@ -308,6 +308,11 @@ pub fn find[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> Optio
 Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local_read`, `local_write`, `read:key`, `read:m`, `stack_storage`, `trap`, `zero_init`.
 
 ```cairn
+pub fn contains[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> bool
+```
+Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local_read`, `local_write`, `read:key`, `read:m`, `stack_storage`, `trap`, `zero_init`.
+
+```cairn
 pub fn remove[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:ro<K>) -> Option[V]
 ```
 Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `free`, `local_read`, `local_write`, `read:key`, `read:m`, `stack_storage`, `trap`, `write:m`, `zero_init`.
@@ -634,6 +639,30 @@ Effects (any arguments within its bounds): `alloc`, `free`, `local_read`, `local
 pub fn pop[T:affine](v:rw<Vec[T]>) -> Option[T]
 ```
 Effects (any arguments within its bounds): `read:v`, `trap`, `write:v`.
+
+```cairn
+pub fn insert[T:affine](v:rw<Vec[T]>, i:usize, item:T)
+```
+Put `item` at `i` and move the tail up by one; an index past the end is a guard failure.
+Effects (any arguments within its bounds): `alloc`, `diverge`, `free`, `local_read`, `local_write`, `read:v`, `trap`, `write:v`, `zero_init`.
+
+```cairn
+pub fn remove[T:affine](v:rw<Vec[T]>, i:usize) -> Option[T]
+```
+Take the element at `i` out and close the gap, keeping the order of the rest.
+Effects (any arguments within its bounds): `read:v`, `trap`, `write:v`.
+
+```cairn
+pub fn swap_remove[T:affine](v:rw<Vec[T]>, i:usize) -> Option[T]
+```
+Take the element at `i` out and move the last one into its place: one swap, no shift.
+Effects (any arguments within its bounds): `read:v`, `trap`, `write:v`.
+
+```cairn
+pub fn find[T:Eq + affine](v:ro<Vec[T]>, item:ro<T>) -> Option[usize]
+```
+The first index holding an element equal to `item`, by the element type's Eq.
+Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local_read`, `local_write`, `read:item`, `read:v`, `stack_storage`, `trap`, `zero_init`.
 
 ```cairn
 pub fn get[T:copy](v:ro<Vec[T]>, i:usize) -> T

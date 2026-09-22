@@ -78,6 +78,10 @@ pub fn find[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> Optio
   return Option.None;
 }
 
+pub fn contains[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> bool {
+  match find(m, key) { Option.Some(slot) => { return true; } Option.None => { return false; } }
+}
+
 pub fn remove[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:ro<K>) -> Option[V] {
   match find(m, key) {
     Option.Some(slot) => {
