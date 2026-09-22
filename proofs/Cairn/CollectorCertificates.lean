@@ -231,196 +231,124 @@ theorem certificates_length : certificates.length = 17 := by decide
 computation over exact integers (no `native_decide`). -/
 theorem all_checked : certificates.all (fun rc => check rc.1 rc.2) = true := by decide
 
-/-- `initial.nonnegative`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_initial_nonnegative (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 0, 0, 1, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    : 0 ≤ Form.eval ⟨0, 0, 0, 0, 0⟩ K I N M :=
-  check_sound' (r := rule_initial_nonnegative) (c := cert_initial_nonnegative)
-    (by decide) K I N M ⟨h0, h1, trivial⟩
+/-- `initial.nonnegative`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_initial_nonnegative : ∀ K I N M : Int,
+    satisfies K I N M rule_initial_nonnegative.assumptions →
+      0 ≤ rule_initial_nonnegative.conclusion.eval K I N M :=
+  check_sound' (r := rule_initial_nonnegative) (c := cert_initial_nonnegative) (by decide)
 
-/-- `initial.cursor_before_input`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_initial_cursor_before_input (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 0, 0, 1, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    : 0 ≤ Form.eval ⟨0, 0, 0, 0, 0⟩ K I N M :=
-  check_sound' (r := rule_initial_cursor_before_input) (c := cert_initial_cursor_before_input)
-    (by decide) K I N M ⟨h0, h1, trivial⟩
+/-- `initial.cursor_before_input`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_initial_cursor_before_input : ∀ K I N M : Int,
+    satisfies K I N M rule_initial_cursor_before_input.assumptions →
+      0 ≤ rule_initial_cursor_before_input.conclusion.eval K I N M :=
+  check_sound' (r := rule_initial_cursor_before_input) (c := cert_initial_cursor_before_input) (by decide)
 
-/-- `initial.input_before_capacity`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_initial_input_before_capacity (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 0, 0, 1, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    : 0 ≤ Form.eval ⟨0, 0, 0, 1, 0⟩ K I N M :=
-  check_sound' (r := rule_initial_input_before_capacity) (c := cert_initial_input_before_capacity)
-    (by decide) K I N M ⟨h0, h1, trivial⟩
+/-- `initial.input_before_capacity`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_initial_input_before_capacity : ∀ K I N M : Int,
+    satisfies K I N M rule_initial_input_before_capacity.assumptions →
+      0 ≤ rule_initial_input_before_capacity.conclusion.eval K I N M :=
+  check_sound' (r := rule_initial_input_before_capacity) (c := cert_initial_input_before_capacity) (by decide)
 
-/-- `initial.capacity_representable`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_initial_capacity_representable (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 0, 0, 1, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M :=
-  check_sound' (r := rule_initial_capacity_representable) (c := cert_initial_capacity_representable)
-    (by decide) K I N M ⟨h0, h1, trivial⟩
+/-- `initial.capacity_representable`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_initial_capacity_representable : ∀ K I N M : Int,
+    satisfies K I N M rule_initial_capacity_representable.assumptions →
+      0 ≤ rule_initial_capacity_representable.conclusion.eval K I N M :=
+  check_sound' (r := rule_initial_capacity_representable) (c := cert_initial_capacity_representable) (by decide)
 
-/-- `store.nonnegative`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_store_nonnegative (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    (h4 : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M)
-    : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M :=
-  check_sound' (r := rule_store_nonnegative) (c := cert_store_nonnegative)
-    (by decide) K I N M ⟨h0, h1, h2, h3, h4, trivial⟩
+/-- `store.nonnegative`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_store_nonnegative : ∀ K I N M : Int,
+    satisfies K I N M rule_store_nonnegative.assumptions →
+      0 ≤ rule_store_nonnegative.conclusion.eval K I N M :=
+  check_sound' (r := rule_store_nonnegative) (c := cert_store_nonnegative) (by decide)
 
-/-- `store.strictly_below_capacity`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_store_strictly_below_capacity (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    (h4 : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M)
-    : 0 ≤ Form.eval ⟨-1, -1, 0, 1, 0⟩ K I N M :=
-  check_sound' (r := rule_store_strictly_below_capacity) (c := cert_store_strictly_below_capacity)
-    (by decide) K I N M ⟨h0, h1, h2, h3, h4, trivial⟩
+/-- `store.strictly_below_capacity`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_store_strictly_below_capacity : ∀ K I N M : Int,
+    satisfies K I N M rule_store_strictly_below_capacity.assumptions →
+      0 ≤ rule_store_strictly_below_capacity.conclusion.eval K I N M :=
+  check_sound' (r := rule_store_strictly_below_capacity) (c := cert_store_strictly_below_capacity) (by decide)
 
-/-- `emit.cursor_increment_fits`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_emit_cursor_increment_fits (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    (h4 : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M)
-    : 0 ≤ Form.eval ⟨-1, -1, 0, 0, 1⟩ K I N M :=
-  check_sound' (r := rule_emit_cursor_increment_fits) (c := cert_emit_cursor_increment_fits)
-    (by decide) K I N M ⟨h0, h1, h2, h3, h4, trivial⟩
+/-- `emit.cursor_increment_fits`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_emit_cursor_increment_fits : ∀ K I N M : Int,
+    satisfies K I N M rule_emit_cursor_increment_fits.assumptions →
+      0 ≤ rule_emit_cursor_increment_fits.conclusion.eval K I N M :=
+  check_sound' (r := rule_emit_cursor_increment_fits) (c := cert_emit_cursor_increment_fits) (by decide)
 
-/-- `step.input_increment_fits`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_step_input_increment_fits (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    (h4 : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M)
-    : 0 ≤ Form.eval ⟨-1, 0, -1, 0, 1⟩ K I N M :=
-  check_sound' (r := rule_step_input_increment_fits) (c := cert_step_input_increment_fits)
-    (by decide) K I N M ⟨h0, h1, h2, h3, h4, trivial⟩
+/-- `step.input_increment_fits`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_step_input_increment_fits : ∀ K I N M : Int,
+    satisfies K I N M rule_step_input_increment_fits.assumptions →
+      0 ≤ rule_step_input_increment_fits.conclusion.eval K I N M :=
+  check_sound' (r := rule_step_input_increment_fits) (c := cert_step_input_increment_fits) (by decide)
 
-/-- `emit.invariant.0`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_emit_invariant_0 (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    (h4 : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M)
-    : 0 ≤ Form.eval ⟨1, 1, 0, 0, 0⟩ K I N M :=
-  check_sound' (r := rule_emit_invariant_0) (c := cert_emit_invariant_0)
-    (by decide) K I N M ⟨h0, h1, h2, h3, h4, trivial⟩
+/-- `emit.invariant.0`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_emit_invariant_0 : ∀ K I N M : Int,
+    satisfies K I N M rule_emit_invariant_0.assumptions →
+      0 ≤ rule_emit_invariant_0.conclusion.eval K I N M :=
+  check_sound' (r := rule_emit_invariant_0) (c := cert_emit_invariant_0) (by decide)
 
-/-- `emit.invariant.1`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_emit_invariant_1 (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    (h4 : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M)
-    : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M :=
-  check_sound' (r := rule_emit_invariant_1) (c := cert_emit_invariant_1)
-    (by decide) K I N M ⟨h0, h1, h2, h3, h4, trivial⟩
+/-- `emit.invariant.1`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_emit_invariant_1 : ∀ K I N M : Int,
+    satisfies K I N M rule_emit_invariant_1.assumptions →
+      0 ≤ rule_emit_invariant_1.conclusion.eval K I N M :=
+  check_sound' (r := rule_emit_invariant_1) (c := cert_emit_invariant_1) (by decide)
 
-/-- `emit.invariant.2`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_emit_invariant_2 (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    (h4 : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M)
-    : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M :=
-  check_sound' (r := rule_emit_invariant_2) (c := cert_emit_invariant_2)
-    (by decide) K I N M ⟨h0, h1, h2, h3, h4, trivial⟩
+/-- `emit.invariant.2`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_emit_invariant_2 : ∀ K I N M : Int,
+    satisfies K I N M rule_emit_invariant_2.assumptions →
+      0 ≤ rule_emit_invariant_2.conclusion.eval K I N M :=
+  check_sound' (r := rule_emit_invariant_2) (c := cert_emit_invariant_2) (by decide)
 
-/-- `emit.invariant.3`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_emit_invariant_3 (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    (h4 : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M)
-    : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M :=
-  check_sound' (r := rule_emit_invariant_3) (c := cert_emit_invariant_3)
-    (by decide) K I N M ⟨h0, h1, h2, h3, h4, trivial⟩
+/-- `emit.invariant.3`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_emit_invariant_3 : ∀ K I N M : Int,
+    satisfies K I N M rule_emit_invariant_3.assumptions →
+      0 ≤ rule_emit_invariant_3.conclusion.eval K I N M :=
+  check_sound' (r := rule_emit_invariant_3) (c := cert_emit_invariant_3) (by decide)
 
-/-- `skip.invariant.0`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_skip_invariant_0 (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    (h4 : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M)
-    : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M :=
-  check_sound' (r := rule_skip_invariant_0) (c := cert_skip_invariant_0)
-    (by decide) K I N M ⟨h0, h1, h2, h3, h4, trivial⟩
+/-- `skip.invariant.0`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_skip_invariant_0 : ∀ K I N M : Int,
+    satisfies K I N M rule_skip_invariant_0.assumptions →
+      0 ≤ rule_skip_invariant_0.conclusion.eval K I N M :=
+  check_sound' (r := rule_skip_invariant_0) (c := cert_skip_invariant_0) (by decide)
 
-/-- `skip.invariant.1`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_skip_invariant_1 (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    (h4 : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M)
-    : 0 ≤ Form.eval ⟨1, -1, 1, 0, 0⟩ K I N M :=
-  check_sound' (r := rule_skip_invariant_1) (c := cert_skip_invariant_1)
-    (by decide) K I N M ⟨h0, h1, h2, h3, h4, trivial⟩
+/-- `skip.invariant.1`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_skip_invariant_1 : ∀ K I N M : Int,
+    satisfies K I N M rule_skip_invariant_1.assumptions →
+      0 ≤ rule_skip_invariant_1.conclusion.eval K I N M :=
+  check_sound' (r := rule_skip_invariant_1) (c := cert_skip_invariant_1) (by decide)
 
-/-- `skip.invariant.2`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_skip_invariant_2 (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    (h4 : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M)
-    : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M :=
-  check_sound' (r := rule_skip_invariant_2) (c := cert_skip_invariant_2)
-    (by decide) K I N M ⟨h0, h1, h2, h3, h4, trivial⟩
+/-- `skip.invariant.2`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_skip_invariant_2 : ∀ K I N M : Int,
+    satisfies K I N M rule_skip_invariant_2.assumptions →
+      0 ≤ rule_skip_invariant_2.conclusion.eval K I N M :=
+  check_sound' (r := rule_skip_invariant_2) (c := cert_skip_invariant_2) (by decide)
 
-/-- `skip.invariant.3`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_skip_invariant_3 (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    (h4 : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M)
-    : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M :=
-  check_sound' (r := rule_skip_invariant_3) (c := cert_skip_invariant_3)
-    (by decide) K I N M ⟨h0, h1, h2, h3, h4, trivial⟩
+/-- `skip.invariant.3`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_skip_invariant_3 : ∀ K I N M : Int,
+    satisfies K I N M rule_skip_invariant_3.assumptions →
+      0 ≤ rule_skip_invariant_3.conclusion.eval K I N M :=
+  check_sound' (r := rule_skip_invariant_3) (c := cert_skip_invariant_3) (by decide)
 
-/-- `exit.output_count_bounded`: the certified affine implication, as a statement
-about arbitrary integers `K I N M`. -/
-theorem obligation_exit_output_count_bounded (K I N M : Int)
-    (h0 : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M)
-    (h1 : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M)
-    (h2 : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M)
-    (h3 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M)
-    : 0 ≤ Form.eval ⟨0, -1, 0, 1, 0⟩ K I N M :=
-  check_sound' (r := rule_exit_output_count_bounded) (c := cert_exit_output_count_bounded)
-    (by decide) K I N M ⟨h0, h1, h2, h3, trivial⟩
+/-- `exit.output_count_bounded`: the certified affine implication, for every integer
+assignment of `K I N M` that satisfies the rule's assumptions. -/
+theorem obligation_exit_output_count_bounded : ∀ K I N M : Int,
+    satisfies K I N M rule_exit_output_count_bounded.assumptions →
+      0 ≤ rule_exit_output_count_bounded.conclusion.eval K I N M :=
+  check_sound' (r := rule_exit_output_count_bounded) (c := cert_exit_output_count_bounded) (by decide)
 
 end Collector
 end Cairn

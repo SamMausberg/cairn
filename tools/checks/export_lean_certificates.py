@@ -86,16 +86,12 @@ def render(pairs: tuple[tuple[Rule, object], ...], digest: str) -> str:
     out("")
     for rule, _ in pairs:
         key = identifier(rule.name)
-        out("/-- `" + rule.name + "`: the certified affine implication, as a statement")
-        out("about arbitrary integers `K I N M`. -/")
-        out("theorem obligation_" + key + " (K I N M : Int)")
-        for index, assumption in enumerate(rule.assumptions):
-            out("    (h" + str(index) + " : 0 ≤ Form.eval " + form(assumption) + " K I N M)")
-        out("    : 0 ≤ Form.eval " + form(rule.conclusion) + " K I N M :=")
-        out("  check_sound' (r := rule_" + key + ") (c := cert_" + key + ")")
-        witness = ", ".join("h" + str(index) for index in range(len(rule.assumptions)))
-        witness = ("⟨" + witness + ", trivial⟩") if witness else "trivial"
-        out("    (by decide) K I N M " + witness)
+        out("/-- `" + rule.name + "`: the certified affine implication, for every integer")
+        out("assignment of `K I N M` that satisfies the rule's assumptions. -/")
+        out("theorem obligation_" + key + " : ∀ K I N M : Int,")
+        out("    satisfies K I N M rule_" + key + ".assumptions →")
+        out("      0 ≤ rule_" + key + ".conclusion.eval K I N M :=")
+        out("  check_sound' (r := rule_" + key + ") (c := cert_" + key + ") (by decide)")
         out("")
     out("end Collector")
     out("end Cairn")
