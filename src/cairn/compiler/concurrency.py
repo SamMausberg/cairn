@@ -77,9 +77,12 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
     written = {name for name, _, write, _ in c.lanes.accesses if write}
     touched = sorted({name for name, *_ in c.lanes.accesses})  # What a queued region holds until its wait.
     c.borrowed = [(name + "[]", "rw" if name in written else "ro") for name in touched]
-    for name, at_binder, _, node in c.lanes.accesses:
-        if name in written and not at_binder:
-            fail("E-PARALLEL-RACE", f"{name} is written by lanes, so every lane may touch only {name}[{binder}].", node)
+    strides: dict[str, int] = {}
+    for name, stride, _, node in c.lanes.accesses:  # Lanes' blocks of one stride are disjoint; of two, they meet.
+        if name in written and (stride is None or strides.setdefault(name, stride) != stride):
+            fail("E-PARALLEL-RACE", f"{name} is written by lanes, so every lane may touch only {name}[{binder}], "
+                 f"or only its own block {name}[{binder} * S + j] with j below one constant S.", node)  # fmt: skip
+    s.block = max((stride or 1 for _, stride, _, _ in c.lanes.accesses), default=1)  # A lane costs its block.
     c.lanes, c.device_depth, c.loop_depth, _, c.effects = saved
     del c.env[binder], c.facts[known:]
     if s.tag != "parallel" and target == "device":  # The runtime's scan and reduction need device scratch.

@@ -48,6 +48,10 @@ inline constexpr std::size_t CUTOFF = 2 * GRAIN;
 inline constexpr unsigned SPIN_READS = 200000;
 inline constexpr unsigned SPIN_YIELDS = 8;
 inline constexpr std::size_t MOST_LANES = 1024;  // A validated CAIRN_LANES cannot exceed this.
+// How many indices of `weight` elements each make up `elements` elements' work, rounded up; weight is at least 1.
+inline constexpr std::size_t indices(std::size_t elements, std::size_t weight) noexcept {
+  return weight >= elements ? 1 : (elements + weight - 1) / weight;
+}
 
 // Wait for `ready` without a syscall, then with a few, then give up. Sixty-four threads calling
 // sched_yield between regions was measured to cost more than the regions they were waiting for,
@@ -300,11 +304,13 @@ inline Pool& shared() noexcept {
 // Everything a wide region needs, kept out of run() so that a region below the cutoff compiles to
 // the loop it replaces: only this function takes the body's address, and a body whose address is
 // never taken stays in registers.
-// `grain` 0 claims GRAIN elements or more at a time, as a region does; a reduction claims its blocks one by one.
-template<class F> void run_wide(std::size_t n, F& body, std::size_t grain = 0) noexcept {
+// `weight` is how many elements' work one index stands for: 1 for a lane, a block's length for a lane that owns
+// a block or for a reduction's block. A claim covers at least GRAIN elements' work, and at most a SPLIT-th share.
+template<class F> void run_wide(std::size_t n, F& body, std::size_t weight = 1) noexcept {
   using Body = std::remove_reference_t<F>;
   lanes::Pool& pool = lanes::shared();
-  std::size_t use = grain ? n : n / lanes::GRAIN;  // a region below CUTOFF never gets here
+  const std::size_t least = lanes::indices(lanes::GRAIN, weight);  // one claim is GRAIN elements' work
+  std::size_t use = n / least;
   if(use > pool.lanes()) use = pool.lanes();
   if(use < 2) {
     for(std::size_t i = 0; i < n; ++i) body(i);
@@ -318,20 +324,20 @@ template<class F> void run_wide(std::size_t n, F& body, std::size_t grain = 0) n
   region.body = const_cast<void*>(static_cast<const void*>(std::addressof(body)));
   region.n = n;
   region.helpers = use - 1;
-  region.grain = grain ? grain : n / (use * lanes::SPLIT);
-  if(!grain && region.grain < lanes::GRAIN) region.grain = lanes::GRAIN;
+  region.grain = n / (use * lanes::SPLIT);
+  if(region.grain < least) region.grain = least;
   pool.execute(region);
 }
 
 // parallel i in n: body(i) runs once for every i below n, and run returns when all of them have.
 // Which lane runs which index is not promised; the language has already made that unobservable.
 // A region below the cutoff is exactly the loop it replaces: nothing is published and nothing woken.
-template<class F> inline void run(std::size_t n, F&& body) noexcept {
-  if(n < lanes::CUTOFF) {
+template<class F> inline void run(std::size_t n, F&& body, std::size_t weight = 1) noexcept {
+  if(n < 2 || n < lanes::indices(lanes::CUTOFF, weight)) {
     for(std::size_t i = 0; i < n; ++i) body(i);
     return;
   }
-  run_wide(n, body);
+  run_wide(n, body, weight);
 }
 
 // reduce op parallel i in n yield value(i). The count alone fixes the blocks: one below CUTOFF, else n / GRAIN
@@ -349,7 +355,7 @@ template<class T, class C, class F> T reduce(std::size_t n, T identity, C combin
     for(std::size_t i = lo; i < hi; ++i) acc = combine(acc, value(i));
     slot[b] = acc;
   };
-  run_wide(blocks, fold, 1);
+  run(blocks, fold, n / blocks + (n == 0));
   T total = identity;
   for(std::size_t b = 0; b < blocks; ++b) total = combine(total, slot[b]);
   return total;

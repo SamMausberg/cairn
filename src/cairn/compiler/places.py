@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
+from . import facts
 from .concurrency import PINNED
 from .tree import USIZE, Expr, Type, fail, is_view, root
 
@@ -234,8 +235,9 @@ def lend(c: Checker, a: Expr, mode: str, borrows: list[tuple[str, str]], element
     place = c.where(a) + "[]" * (elements and a.tag != "slice")
     c.leased(place, mode, a)
     borrows.append((place, mode))
-    if c.lanes and root(a).val in c.lanes.outer:
-        c.lanes.accesses.append((root(a).val, False, mode == "rw", a))
+    if c.lanes and root(a).val in c.lanes.outer:  # A part inside the lane's own block is that block.
+        block = facts.window(c, a, c.lanes.binder) if a.tag == "slice" and a.args[0].tag == "name" else None
+        c.lanes.accesses.append((root(a).val, block, mode == "rw", a))
     return root(a).val
 
 

@@ -480,7 +480,8 @@ class Emitter:
 
     def s_parallel(self, s: Stmt, es: list[str]):
         entry = "cr::gpu::launch" if s.ref == "device" else "cr::par::run"
-        self.put(f"{entry}({es[0]}, {self.lane(s, lambda: self.block(s.body))});")
+        weight = f", {s.block}" if s.block > 1 and s.ref != "device" else ""  # Each index is a block of that many.
+        self.put(f"{entry}({es[0]}, {self.lane(s, lambda: self.block(s.body))}{weight});")
 
     def s_reduce(self, s: Stmt, es: list[str]):
         ty, op = self.type(s.ty), s.op

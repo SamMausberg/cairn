@@ -408,7 +408,9 @@ class Checker:
             allowed = (
                 PURE if device else LANE_SAFE | {"dispatch", "indirect_call"}
             )  # Their targets' rows are joined in.
-            reach = ("read:", "write:") if callee in {k for k, *_ in kernels} else ("read:",)
+            # A callee writes only through what it was lent, and the lane's race rule judged each lent place where
+            # the lane lent it: its own element, its own block, or nothing lanes write.
+            reach = ("read:", "write:") if not device or callee in {k for k, *_ in kernels} else ("read:",)
             excess = sorted(x for x in effects[callee] if x not in allowed and not x.startswith(reach))
             if excess:
                 fail("E-PARALLEL-CALL", f"A lane cannot call {callee}: it may {', '.join(excess)}.", node)

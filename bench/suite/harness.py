@@ -124,7 +124,7 @@ KERNELS = {
         "why": "the certified collector against std::copy_if and a two-pass parallel compaction",
     },
     "histogram_u32": {
-        "cairn_arms": {"cairn": None},
+        "cairn_arms": {"cairn": None, "cairn_blocks": "histogram_u32_blocks"},
         "arms": ("plain", "omp", "tbb"),
         "claim": "expressiveness",
         "why": "the lane rule forbids the shared-bin parallel shape, so the CAIRN arm is sequential",

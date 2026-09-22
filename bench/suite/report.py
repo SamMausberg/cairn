@@ -21,6 +21,8 @@ DEFAULT = ROOT / "results/bench_suite/suite.json"
 
 # The preregistered threshold. A ratio above one favours CAIRN, as it does in bench/cpu/run.py.
 WIN_RATIO = 1.25
+# The arms the 1.4 addendum adds, which may also be divided into a baseline they check at least as much as.
+ADDENDUM_ARMS = {"cairn_pool", "cairn_blocks"}
 
 
 def column(row: dict) -> str:
@@ -116,8 +118,9 @@ def kernel_report(name: str, record: dict, out: list[str]) -> None:
             lines.append(line)
         out.append(table(lines, ["n", *columns]))
 
-    # One table per CAIRN arm: a baseline is divided into an arm only where their boundaries are equal. The
-    # primary arm's table is the preregistered one; the others apply the same rule to their own boundaries.
+    # One table per CAIRN arm, each under the equality rule. An arm the 1.4 addendum adds may
+    # also be divided into a baseline it checks at least as much as in every category; such a
+    # row says `cairn checks more` beside its verdict, and a win there holds with the baseline's checks added.
     by_arm = safety.get("cairn_boundaries_by_arm") or {"cairn": safety["cairn_boundaries"]}
     for mine_arm in sorted(by_arm, key=lambda a: (a != "cairn", a)):
         reference = {
@@ -126,7 +129,9 @@ def kernel_report(name: str, record: dict, out: list[str]) -> None:
         if not any(reference.values()):
             continue
         out.append("")
-        out.append(f"ratio of baseline time to {mine_arm} time, above one favours {mine_arm}; equal boundaries only")
+        rule = "boundaries equal, or more on the cairn side" if mine_arm in ADDENDUM_ARMS else "equal boundaries only"
+        out.append(f"ratio of baseline time to {mine_arm} time, above one favours {mine_arm}; {rule}")
+        more = False
         lines = []
         for name_of in sorted({column(r) for r in timed if not r["arm"].startswith("cairn")}):
             seen: dict[str, dict[int, float]] = {}
@@ -139,7 +144,11 @@ def kernel_report(name: str, record: dict, out: list[str]) -> None:
                     if "boundaries" in arm and mine_arm != "cairn"
                     else arm.get("equal_to_cairn", False)
                 )
-                if base is None or mine is None or not equal:
+                dominates = mine_arm in ADDENDUM_ARMS and all(
+                    by_arm[mine_arm][k] >= v for k, v in arm.get("boundaries", {"entry": 1 << 62}).items()
+                )
+                more = more or (dominates and not equal)
+                if base is None or mine is None or not (equal or dominates):
                     continue
                 seen[cxx] = {
                     row["n"]: row["median_ms"] / mine["timings"]["sweep"][k]["median_ms"]
@@ -151,8 +160,9 @@ def kernel_report(name: str, record: dict, out: list[str]) -> None:
             line = [name_of]
             for cxx in compilers:
                 line.append(f"{seen[cxx][sizes[-1]]:.2f}" if cxx in seen else "-")
-            line.append(verdict(seen, sizes, compilers))
+            line.append(verdict(seen, sizes, compilers) + ("; cairn checks more" if more else ""))
             lines.append(line)
+            more = False
         out.append(table(lines, ["column", *compilers, "verdict"]))
 
     out.append("")

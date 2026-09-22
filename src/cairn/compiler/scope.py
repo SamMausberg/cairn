@@ -41,7 +41,7 @@ class Lanes:
     binder: str
     outer: set[str]
     home: Any = None  # The closure the region began in: `return` may leave a newer closure, never the lane.
-    accesses: list[tuple[str, bool, bool, Expr]] = field(default_factory=list)  # root, at binder, write
+    accesses: list[tuple[str, int | None, bool, Expr]] = field(default_factory=list)  # root, block stride, write
 
 
 @dataclass

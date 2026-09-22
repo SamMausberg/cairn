@@ -145,7 +145,9 @@ the next statement. Placement is part of a view type: @host (default), @pinned, 
 code cannot index @device memory and lanes cannot index the other side; a @pinned or
 @unified view may be passed where @host is asked (@unified also as @device). The first host
 region of a process creates the lane pool and later ones reuse it; a small one is just the loop.
-Whatever any lane writes may be touched only at [i]; shared scalars cannot be assigned (use let s = reduce
+Whatever any lane writes may be touched only at [i], or only in lane b's own block: out[b * S + j] with j < S
+for one constant S, or an index a loop or condition keeps in [b * S, b * S + S), which a helper may write when the
+lane lends it that part. Shared scalars cannot be assigned (use let s = reduce
 add_wrap for i in n yield x[i];, which is also the ordinary fold outside any region: i
 runs over 0..n and the operator is one of add_wrap mul_wrap min max & | ^, or + * on floats). reduce op parallel
 i in n yield e folds the same integers on the lane pool, in blocks n alone fixes, to the in-order answer; floats

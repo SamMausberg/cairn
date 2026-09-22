@@ -21,3 +21,28 @@ fn histogram_u32(n:usize, out:rw<u64>[256], x:ro<u32>[n]) {
   each b in 256 { out[b] = 0; }
   each i in n { let b = usize(x[i] & 255); out[b] = add_wrap(out[b], 1); }
 }
+
+// The 1.4 arm. A lane may own a block of what lanes write, so each lane counts one block of the input
+// into its own 256 bins of a scratch buffer, and one thread merges the bins in block order. The
+// scratch is visible: a buffer of 256 counters per block, zeroed and released in this function.
+const BLOCK:usize = 65536;
+
+fn histogram_u32_blocks(n:usize, out:rw<u64>[256], x:ro<u32>[n]) {
+  let k = (n + BLOCK - 1) / BLOCK;
+  let rows = k * 256;
+  buffer partial:u64[rows] = zeroed;
+  parallel b in k {
+    let lo = b * BLOCK;
+    let hi = min(lo + BLOCK, n);
+    let row = b * 256;
+    for i in lo..hi {
+      let v = usize(x[i] & 255);
+      partial[row + v] = add_wrap(partial[row + v], 1);
+    }
+  }
+  for v in 0..256 {
+    let mut t:u64 = 0;
+    for b in 0..k { t = add_wrap(t, partial[b * 256 + v]); }
+    out[v] = t;
+  }
+}

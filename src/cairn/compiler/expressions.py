@@ -116,7 +116,7 @@ def e_index(c: Checker, e: Expr, expected: Type | None, read: bool = True) -> Ty
     if read and root(a).tag == "name":
         c.effect("read:" + root(a).val)
     if c.lanes and root(a).val in c.lanes.outer:
-        c.lanes.accesses.append((root(a).val, i.tag == "name" and i.val == c.lanes.binder, not read, e))
+        c.lanes.accesses.append((root(a).val, facts.window(c, i, c.lanes.binder), not read, e))
     if root(a).tag == "name":
         c.leased(c.where(e), "ro" if read else "rw", e)
     return ty.value if is_view(ty) else ty.args[0]

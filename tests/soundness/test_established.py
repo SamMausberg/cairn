@@ -65,6 +65,10 @@ ESTABLISHED = {
         "fn f(c:ro<Col>) -> u64 { let mut t:u64 = 0; for i in 0..c.rows { t = add_wrap(t, c.price[i]); } return t; }"
     ),
     "small_conversion": "fn f(n:usize, out:rw<u32>[n]) { for i in 0..min(n, 4096) { out[i] = u32(i); } }",
+    "scaled_row": (
+        "fn f(k:usize) -> u64 {\n  let rows = k * 256;\n  buffer p:u64[rows] = zeroed;\n"
+        "  for b in 0..k { let row = b * 256; for v in 0..256 { p[row + v] = u64(v); } }\n  return u64(k);\n}"
+    ),
     "constant_shift": "fn f(v:u64) -> u64 = mul_wrap(v ^ shr(v, 29), 3);",
     "static_array": "fn f() -> u64 { let a = Array[u64, 8](); let mut t:u64 = 0; each i in 8 { t = add_wrap(t, a[i]); } return t; }",
 }
@@ -114,6 +118,10 @@ KEPT = {
     ),
     "last_of_maybe_empty": ("fn f(n:usize, x:ro<u64>[n]) -> u64 { return x[n - 1]; }", {"sub": 1}),
     "wide_conversion": ("fn f(k:usize) -> u32 { return u32(k); }", {"convert": 1}),
+    "uncomputed_product": (
+        "fn f(k:usize, b:usize) -> usize { if b < k { let r = b * 4; return r + 4; } return 0; }",
+        {"add": 1},
+    ),
     "counted_shift": ("fn f(v:u64, s:usize) -> u64 = shr(v, s);", {"shr": 1}),
     "unbounded_sum": ("fn f(k:usize) -> usize { return k + 1; }", {"add": 1}),
     "one_past": (
@@ -191,6 +199,7 @@ INDEXES = {"i": lambda n, m, k, i: i, "i + 1": lambda n, m, k, i: i + 1, "i - 1"
            "k": lambda n, m, k, i: k, "n - 1 - i": lambda n, m, k, i: sub(sub(n, 1), i),
            "n - i": lambda n, m, k, i: sub(n, i), "i / 2": lambda n, m, k, i: i // 2,
            "i % m": lambda n, m, k, i: checked(i, m, int.__mod__), "usize(u8(i & 7))": lambda n, m, k, i: i & 7,
+           "k * 2 + i % 2": lambda n, m, k, i: k * 2 + i % 2, "i * 2": lambda n, m, k, i: i * 2,
            "m - 1": lambda n, m, k, i: sub(m, 1)}  # fmt: skip
 CONDITIONS = {"i < m": lambda n, m, k, i: i < m, "i + 1 < n": lambda n, m, k, i: i + 1 < n,
               "k < n": lambda n, m, k, i: k < n, "i > 0 && i < m": lambda n, m, k, i: i > 0 and i < m,

@@ -238,7 +238,7 @@ fn main() -> i32 {
 
 ## Parallel regions
 
-`parallel i in n { body }` runs one lane per index and completes before the next statement. Whatever any lane writes may be touched only at element `[i]` (`E-PARALLEL-RACE`), a shared scalar cannot be assigned (`E-PARALLEL-WRITE`: use `reduce`), and lanes cannot return, nest or move an outer owner. A lane's own row, and the row of everything it calls, must be pure-like (`E-PARALLEL-CALL`); a host lane may also allocate, use atomics and lock.
+`parallel i in n { body }` runs one lane per index and completes before the next statement. Whatever any lane writes may be touched only at element `[i]` or inside the lane's own block (`E-PARALLEL-RACE`), a shared scalar cannot be assigned (`E-PARALLEL-WRITE`: use `reduce`), and lanes cannot return, nest or move an outer owner. A lane's own row, and the row of everything it calls, must be pure-like (`E-PARALLEL-CALL`); a host lane may also allocate, use atomics and lock, and call a function that writes through what the lane lends it.
 
 ```cairn
 fn shade(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) { parallel i in n { out[i] = f(u64(i)); } }
@@ -258,7 +258,36 @@ fn shade(n:usize, out:rw<u64>[n]) { parallel i in n { out[0] = u64(i); } }
 ```
 
 ```text
-out is written by lanes, so every lane may touch only out[i].
+out is written by lanes, so every lane may touch only out[i], or only its own block out[i * S + j] with j below one constant S.
+```
+
+A lane may own a block instead of an element. With a constant stride `S`, lane `b` may touch `out[b * S + j]` for any `j` the checker can show is below `S`, or any index it can place in `[b * S, b * S + S)` from a loop, a `let` or a condition, and it may lend a part inside that block to a helper that writes it. Every access a lane makes to an array lanes write must stay inside that lane's block, all with one stride, so two lanes never meet; an access the checker cannot place is still `E-PARALLEL-RACE`. The element rule is the block of stride 1. The pool sizes its claims by the block, so a region of a few hundred heavy lanes still spreads across the cores.
+
+```cairn
+const BLOCK:usize = 4096;
+
+fn histogram(n:usize, bins:rw<u64>[256], x:ro<u32>[n], k:usize, rows:usize, partial:rw<u64>[rows]) {
+  parallel b in k {                                  // lane b owns partial[b * 256 .. b * 256 + 256]
+    let lo = b * BLOCK;
+    let hi = min(lo + BLOCK, n);
+    let row = b * 256;
+    for i in lo..hi {
+      let v = usize(x[i] & 255);
+      partial[row + v] = add_wrap(partial[row + v], 1);
+    }
+  }
+  for v in 0..256 {
+    let mut t:u64 = 0;
+    for b in 0..k { t = add_wrap(t, partial[b * 256 + v]); }
+    bins[v] = t;
+  }
+}
+```
+
+```cairn rejects E-PARALLEL-RACE
+fn spill(k:usize, n:usize, out:rw<u64>[n]) {
+  parallel b in k { for j in 0..9 { out[b * 8 + j] = 1; } }   // j = 8 is the next lane's first element
+}
 ```
 
 A lane may call, or hand on to a helper, a `fn` parameter of its function. That leaves `lane:f` in the row, and in a declared ceiling, renamed up the call graph like `read:x`. Whatever is finally passed is judged where it is written: a closure that reads its captures is accepted, a closure that writes what it captured is not, and a stored `fn` value counts as any function of its type whose address was taken. Dispatch from a host lane, from a function it calls, or from such a closure is judged against every implementation.
