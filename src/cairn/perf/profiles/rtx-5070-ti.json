@@ -1,0 +1,30 @@
+{
+  "schema": "cairn.machine/1",
+  "name": "NVIDIA GeForce RTX 5070 Ti (GB203, compute capability 12.0)",
+  "origin": "specification",
+  "notes": "Published figures, not a measurement: no device run has confirmed any of them. launch_ns, link_ns, memory_efficiency and occupancy_to_saturate are assumptions, marked as such below, until a device calibration the owner runs replaces them.",
+  "source": {
+    "published": ["sms", "cores_per_sm", "ghz", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "warp"],
+    "assumed": ["launch_ns", "link_ns", "memory_efficiency", "occupancy_to_saturate"],
+    "flops": "f32 is 2 operations per fused multiply-add on 8960 cores at the 2.452 GHz boost clock; Blackwell's cores issue either f32 or i32, so i32 is the same; f64 runs at 1/64 of f32.",
+    "link_gbps": "PCIe 5.0 x16, per direction, before protocol overhead."
+  },
+  "host": null,
+  "device": {
+    "name": "RTX 5070 Ti",
+    "sms": 70,
+    "cores_per_sm": 128,
+    "ghz": 2.452,
+    "dram_gbps": 896.0,
+    "flops": {"f32": 43940.0, "i32": 43940.0, "f64": 686.6},
+    "launch_ns": 8000.0,
+    "link_gbps": 64.0,
+    "link_ns": 10000.0,
+    "memory_efficiency": 0.85,
+    "occupancy_to_saturate": 0.5,
+    "registers_per_sm": 65536,
+    "threads_per_sm": 1536,
+    "shared_per_sm": 102400,
+    "warp": 32
+  }
+}

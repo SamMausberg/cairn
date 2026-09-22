@@ -1,0 +1,255 @@
+"""A predicted time for one call: the work `work` counted, priced by what a machine `profile` can do.
+
+Every piece of a call is priced on its own and says what bounds it. A sequential stretch or a small region costs the
+larger of its compute and its memory traffic on one thread. A wide host region pays the pool's start and then shares
+its work among the lanes it engages, bounded by the bandwidth of the level its data lives in. Tasks overlap until
+they are waited on. Transfers and allocations are priced by bytes. The speed of light is the same work at the whole
+machine's peak for the bound that applies: bandwidth for streams, every lane for compute.
+
+A prediction is never a measurement. Its confidence is `high` when every count is a size and every access a stream,
+`medium` when something was approximated, and `low`, with the reason, when a count or an address rests on data.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+from .profile import Host, Profile
+from .work import Cost, Poly, Region, Work
+
+# What calibration saw vectorize on the reference machine: anything else keeps a loop scalar, and so does anything a
+# profile's own calibration names in `scalarizing`.
+VECTOR_SAFE = {"load", "store", "int", "mul", "compare", "branch", "f32", "f64", "f32_div", "f64_div", "convert",
+               "call", "move", "index_checked", "bounds_guard", "shift_guard"}  # fmt: skip
+
+
+@dataclass
+class Piece:
+    """One priced part of a call: where it is, how long it takes, and what sets that time."""
+
+    what: str
+    ns: float
+    bound: str
+    light_ns: float = 0.0
+    detail: dict[str, Any] = field(default_factory=dict)
+
+
+def value(p: Poly, sizes: dict[str, float], missing: set[str]) -> float:
+    v = p.value(sizes)
+    if v is None:
+        missing |= {s for s in p.symbols() if s not in sizes}
+        return 0.0
+    return max(v, 0.0)
+
+
+def mode(work: Work, host: Host) -> str:
+    """Vector when nothing in the body keeps the loop scalar and every access is a stream; scalar otherwise."""
+    kinds = {k for k, n in work.ops.items() if n.terms}
+    keeps_scalar = kinds & set(host.scalarizing) or kinds - VECTOR_SAFE
+    return "scalar" if keeps_scalar or any(n.terms for n in work.irregular.values()) else "vector"
+
+
+def footprint(work: Work, sizes: dict[str, float], missing: set[str]) -> float:
+    return sum(value(n, sizes, missing) for n in work.footprint.values())
+
+
+def price(work: Work, host: Host, arch: str, sizes: dict[str, float], missing: set[str], threads: int,
+          reach: float) -> tuple[float, float, float, str]:  # fmt: skip
+    """(compute ns, memory ns, irregular ns, level) of `work` run once, on `threads` threads sharing it.
+
+    An irregular access costs the latency of the level its own view fits in, so a histogram's bins in the first
+    cache are cheap however large the input that streams past them."""
+    table = host.ops.get(arch) or next(iter(host.ops.values()))
+    chosen = mode(work, host)
+    compute = sum(value(n, sizes, missing) * table.get(chosen, table["scalar"]).get(k, table["scalar"].get(k, 0.0))
+                  for k, n in work.ops.items() if k != "atomic" or threads == 1)  # fmt: skip
+    level = host.level(reach, threads)
+    read = sum(value(n, sizes, missing) for n in work.reads.values())
+    written = sum(value(n, sizes, missing) for n in work.writes.values())
+    memory = host.seconds("read", read, reach, threads) + host.seconds("write", written, reach, threads)
+    irregular = sum(value(n, sizes, missing) * host.irregular_ns.get(
+        host.level(value(work.footprint.get(k, Poly()), sizes, missing), threads), 0.0) for k, n in work.irregular.items())  # fmt: skip
+    return compute / threads, memory, irregular / threads, level
+
+
+def contended(work: Work, host: Host, sizes: dict[str, float], missing: set[str], threads: int) -> float:
+    """Atomics that every lane reaches in one place run one after another, whatever the lane count."""
+    if threads == 1 or "atomic" not in work.ops:
+        return 0.0
+    return value(work.ops["atomic"], sizes, missing) * host.atomic_ns.get("shared", 0.0)
+
+
+def light(work: Work, host: Host, arch: str, sizes: dict[str, float], reach: float) -> float:
+    """The same work at the whole machine's peak: vector compute on every lane, the bandwidth of every lane."""
+    missing: set[str] = set()
+    table = host.ops.get(arch) or next(iter(host.ops.values()))
+    compute = sum(value(n, sizes, missing) * min(table["vector"].get(k, 0.0) or table["scalar"].get(k, 0.0),
+                  table["scalar"].get(k, 0.0) or table["vector"].get(k, 0.0)) for k, n in work.ops.items())  # fmt: skip
+    read = sum(value(n, sizes, missing) for n in work.reads.values())
+    written = sum(value(n, sizes, missing) for n in work.writes.values())
+    memory = host.seconds("read", read, reach, host.lanes) + host.seconds("write", written, reach, host.lanes)
+    return max(compute / host.lanes, memory)
+
+
+def settled(compute: float, memory: float, serial: float, irregular: float, level: str) -> str:
+    """The name of whichever of the four overlapping costs is the largest."""
+    named = {"compute": compute, f"memory ({level})": memory, "a shared atomic": serial, "irregular access": irregular}
+    return max(named, key=lambda k: named[k])
+
+
+def region(r: Region, host: Host, arch: str, sizes: dict[str, float], missing: set[str]) -> Piece:
+    n, runs = value(r.count, sizes, missing), value(r.runs, sizes, missing)
+    each = dict(sizes)
+    total = Work()
+    total.merge(r.body, r.count)
+    reach = footprint(r.body, each, missing)
+    cutoff, grain = host.pool["cutoff"], host.pool["grain"]
+    wide = r.kind in {"host", "pooled"} and n * max(r.weight, 1) >= cutoff and r.plan[1] != 1
+    grain_given = r.plan[0] or 0
+    if r.kind == "device":
+        return Piece(f"device region at line {r.line}", 0.0, "device", 0.0, {"count": r.count.render()})
+    if wide or (grain_given and n >= 2):
+        least = grain_given or max(1, grain // max(r.weight, 1))
+        used = min(host.lanes, max(1, int(n // least)), r.plan[1] or host.lanes)
+    else:
+        used = 1
+    compute, memory, irregular, level = price(total, host, arch, each, missing, used, reach)
+    serial = contended(total, host, each, missing, used)
+    start = host.fork(used) if used > 1 else 0.0
+    ns = start + max(compute, memory, serial, irregular)  # an out-of-order core overlaps all four
+    bound = "pool start" if start > max(compute, memory, serial, irregular) else settled(compute, memory, serial,
+                                                                                         irregular, level)  # fmt: skip
+    peak = light(total, host, arch, each, reach)
+    detail = {"count": r.count.render(), "lanes": used, "mode": mode(r.body, host), "level": level,
+              "compute_ns": round(compute, 1), "memory_ns": round(memory, 1), "start_ns": round(start, 1)}  # fmt: skip
+    return Piece(f"{r.kind} region at line {r.line}", ns * runs, bound, peak * runs, detail)
+
+
+def sequential(c: Cost, host: Host, arch: str, sizes: dict[str, float], missing: set[str]) -> Piece:
+    reach = footprint(c.seq, sizes, missing)
+    compute, memory, irregular, level = price(c.seq, host, arch, sizes, missing, 1, reach)
+    ns = max(compute, memory, irregular)
+    bound = settled(compute, memory, 0.0, irregular, level)
+    detail = {"mode": mode(c.seq, host), "level": level, "compute_ns": round(compute, 1),
+              "memory_ns": round(memory, 1)}  # fmt: skip
+    return Piece("sequential code", ns, bound, light(c.seq, host, arch, sizes, reach), detail)
+
+
+def tasks(c: Cost, host: Host, arch: str, sizes: dict[str, float], missing: set[str]) -> Piece | None:
+    if not c.tasks:
+        return None
+    started = sum(value(n, sizes, missing) for n, _ in c.tasks)
+    each = [sum(p.ns for p in pieces(t, host, arch, sizes, missing)) for _, t in c.tasks]
+    together = Work()
+    for n, t in c.tasks:
+        together.merge(t.seq, n)
+    reach = footprint(together, sizes, missing)
+    k = min(len(c.tasks), host.lanes)
+    _, memory, _, level = price(together, host, arch, sizes, missing, k, reach)
+    ns = started * host.spawn_ns + max(max(each), memory)
+    bound = "task start" if started * host.spawn_ns > max(max(each), memory) else (
+        f"memory ({level})" if memory >= max(each) else "the slowest task")  # fmt: skip
+    return Piece(f"{len(c.tasks)} tasks", ns, bound, light(together, host, arch, sizes, reach), {"lanes": k})
+
+
+def pieces(c: Cost, host: Host, arch: str, sizes: dict[str, float], missing: set[str]) -> list[Piece]:
+    out = [sequential(c, host, arch, sizes, missing)]
+    out += [region(r, host, arch, sizes, missing) for r in c.regions]
+    if (t := tasks(c, host, arch, sizes, missing)) is not None:
+        out.append(t)
+    zeroed = value(c.allocated, sizes, missing)
+    made = value(c.allocations, sizes, missing)
+    if made:
+        level = host.level(zeroed, 1)
+        ns = made * host.alloc_ns + zeroed / host.bandwidth("write", level, 1)
+        out.append(Piece("allocation", ns, "allocation", zeroed / host.bandwidth("write", level, host.lanes)))
+    return [p for p in out if p.ns or p.what != "sequential code"]
+
+
+WIDE = (
+    "a wide host region's start and its slowest lane vary with the machine's load; at 1e5 to 1e7 elements the "
+    "validation measured such regions up to ten times slower than predicted"
+)  # evidence/v1_4/perf_model
+
+
+def measured(profile: Profile) -> str:
+    return next(iter(profile.host.ops)) if profile.host and profile.host.ops else ""
+
+
+def confidence(c: Cost, missing: set[str], found: list[Piece], profile: Profile, arch: str) -> tuple[str, list[str]]:
+    """low when a number is a guess, medium when it is an approximation, high when neither: with every reason."""
+    guesses = list(c.unknown)
+    if missing:
+        guesses.append("no size given for " + ", ".join(sorted(missing)))
+    if any("irregular" in p.bound for p in found):
+        guesses.append("an address rests on data, so its cache behaviour is a guess")
+    approximations = list(c.approximate)
+    if any(p.detail.get("lanes", 1) > 1 and p.what.startswith(("host", "pooled")) for p in found):
+        approximations.append(WIDE)
+    if any(p.what.startswith("device") for p in found):
+        approximations.append("a device region is priced from a specification until the device is calibrated")
+    if profile.origin != "measured":
+        approximations.append(f"the machine profile is a {profile.origin}, not a measurement")
+    if profile.host and arch not in profile.host.ops:
+        approximations.append(f"the profile measured operations for {', '.join(sorted(profile.host.ops))}, not {arch}")
+    level = "low" if guesses else "medium" if approximations else "high"
+    return level, guesses + approximations
+
+
+def predict(c: Cost, profile: Profile, sizes: dict[str, float], arch: str | None = None) -> dict[str, Any]:
+    """The predicted time of one call of `c` at `sizes`, what bounds each part, and how sure the model is. `arch` is
+    the -march profile the code is built for; by default, the one the profile measured first."""
+    arch = arch or measured(profile)
+    host = profile.host
+    if host is None:
+        raise ValueError(f"{profile.name} describes no host.")
+    missing: set[str] = set()
+    found = pieces(c, host, arch, sizes, missing)
+    total = sum(p.ns for p in found)
+    peak = sum(p.light_ns for p in found)
+    level, why = confidence(c, missing, found, profile, arch)
+    dominant = max(found, key=lambda p: p.ns) if found else None
+    return {
+        "ns": round(total, 1),
+        "bound": dominant.bound if dominant else "nothing",
+        "speed_of_light": round(peak / total, 3) if total and peak else None,
+        "confidence": level,
+        "why": why,
+        "parts": [{"what": p.what, "ns": round(p.ns, 1), "bound": p.bound, **p.detail} for p in found],
+        "measure": level == "low",
+    }
+
+
+def regimes(c: Cost, profile: Profile, arch: str | None = None) -> list[dict[str, Any]]:
+    """The prediction in one extent, piece by piece: where the bound or the lane count changes, a new line begins,
+    and each line is a fixed part plus a cost per element. Other extents are held at 1."""
+    x, base = c.extents[0], dict.fromkeys(c.extents, 1.0)
+    samples = []
+    for k in range(6, 31):
+        predicted = predict(c, profile, {**base, x: float(2**k)}, arch)
+        lanes = max((p.get("lanes", 1) for p in predicted["parts"]), default=1)
+        samples.append((float(2**k), predicted["ns"], (predicted["bound"], lanes > 1)))
+    pieces: list[dict[str, Any]] = []
+    start = 0
+    for i in range(1, len(samples) + 1):
+        if i == len(samples) or samples[i][2] != samples[start][2]:
+            (n0, t0, (bound, wide)), (n1, t1, _) = samples[start], samples[i - 1]
+            per = (t1 - t0) / (n1 - n0) if n1 > n0 else t0 / n0
+            pieces.append({"from": n0, "to": n1, "fixed_ns": round(max(t0 - per * n0, 0.0), 1),
+                           "per_element_ns": round(per, 4), "bound": bound, "pool": wide})  # fmt: skip
+            start = i
+    return pieces
+
+
+def formula(c: Cost, profile: Profile, arch: str | None = None) -> str:
+    """The regimes written as one line: `fixed + per*n` for each span of the first extent."""
+    if not c.extents:
+        return f"{predict(c, profile, {}, arch)['ns']} ns"
+    x = c.extents[0]
+
+    def span(r: dict[str, Any]) -> str:
+        fixed = f"{r['fixed_ns'] / 1000:.3g} us + " if r["fixed_ns"] >= 100 else ""
+        return f"{fixed}{r['per_element_ns']:.3g} ns*{x} ({r['bound']}, up to {x}={r['to']:.3g})"
+
+    return "; ".join(span(r) for r in regimes(c, profile, arch))

@@ -18,7 +18,7 @@ from . import __version__
 from .compiler.cairnc import Diagnostic, certify_templates, compile_source
 from .editor import terminal
 from .projects.project import ProjectError, contained_file, load_project, read_text
-from .projects.toolchain import ARCHS, TARGETS, emulator, host_family
+from .projects.toolchain import ARCHS, TARGETS, emulator, host_family, resolve_arch
 
 FORMAT: str | None = None  # --format as given; None lets the stream decide (see editor/terminal.py)
 
@@ -98,13 +98,19 @@ COMMANDS = {
     "state": "Print the program's state for an agent: every signature and effect row by module, under a digest.",
     "migrate": "Change one function's interface through every caller, in all the files or in none.",
     "explain": "Where each function pays at run time: guards, allocations, waits and loop vectorization.",
+    "predict": "How long each function will take, from its checked work and a machine profile; nothing runs.",
     "doc": "Generate the API reference of the checked program, as Markdown.",
 }
 OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that take it, the option, its keywords)
     ({"build", "run", "test", "explain"}, "--cxx", {"default": "clang++"}),
-    ({"explain"}, "--symbol", {"action": "append", "help": "Explain this function only (repeatable)."}),
+    ({"explain", "predict"}, "--symbol", {"action": "append", "help": "This function only (repeatable)."}),
+    ({"predict"}, "--at", {"action": "append", "default": [], "metavar": "NAME=SIZE[,NAME=SIZE]", "help": "Price "
+                           "at these sizes (repeatable); a function of one extent defaults to 1e3, 1e5 and 1e7."}),
+    ({"predict"}, "--against", {"type": Path, "metavar": "BEFORE", "help": "Predict what changing BEFORE into this "
+                                "program does to every function both have."}),
+    ({"predict"}, "--profile", {"type": Path, "help": "A cairn.machine/1 profile; default: the packaged one."}),
     ({"build", "run"}, "--out", {"type": Path}),
-    ({"build", "run", "explain"}, "--arch", {"choices": sorted(ARCHS)}),
+    ({"build", "run", "explain", "predict"}, "--arch", {"choices": sorted(ARCHS)}),
     ({"build", "run"}, "--target", {"choices": sorted(TARGETS), "help": "Freestanding profile; default hosted."}),
     ({"build", "run"}, "--timeout", {"type": int, "default": 60}),
     ({"build", "run"}, "--debug", {"action": "store_true", "help": "Debug symbols that point at the CAIRN source."}),
@@ -305,6 +311,20 @@ def main(argv: list[str] | None = None) -> int:
             if chosen and chosen - set(result["functions"]):
                 raise ProjectError(f"No function {sorted(chosen - set(result['functions']))[0]} to explain.")
             report(result)
+            return 0
+        if a.command == "predict":
+            from .perf import report as priced
+            from .perf.profile import Profile
+
+            chosen = set(a.symbol) if a.symbol else None
+            sizes, supplied = priced.parse_sizes(a.at), Profile.load(a.profile) if a.profile else None
+            arch = resolve_arch(a.arch or project.arch)
+            if a.against:
+                before = load_project(a.against).source
+                answer = priced.delta(before, project.source, sizes, chosen, supplied, arch)
+            else:
+                answer = priced.report(project.source, sizes, chosen, supplied, arch)
+            print(priced.lines(answer)) if terminal.human(FORMAT) else report(answer)
             return 0
         if a.command == "test":
             from .agent.agent_tools import load_json_strict

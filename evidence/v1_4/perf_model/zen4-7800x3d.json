@@ -1,0 +1,241 @@
+{
+  "schema": "cairn.machine/1",
+  "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+  "origin": "measured",
+  "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster.",
+  "measured": {
+    "date": "2026-09-22",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "compiler": "clang version 21.1.8 (https://github.com/llvm/llvm-project 2078da43e25a4623cab2d0d60decddf709aaea28)",
+    "arch": "x86-64-v4",
+    "statistic": "minimum of nine timed blocks after one warm-up, each block at least 2 ms",
+    "operation_fit": {
+      "per_element_ns": {
+        "vector": {
+          "cp": 0.0710045400390625,
+          "fill": 0.0677807333984375,
+          "sum": 0.054992318359375,
+          "xor": 0.0887223486328125,
+          "mulw": 0.078136951171875,
+          "addc": 0.3696312900390625,
+          "mulc": 0.731862544921875,
+          "div": 1.4256949423828125,
+          "pick": 0.095188021484375,
+          "narrow": 0.686417580078125,
+          "fma64": 0.118126869140625,
+          "div64": 0.28249168359375,
+          "fma32": 0.0406561494140625,
+          "shifted": 0.0569074306640625,
+          "negate": 0.2582378388671875,
+          "sub64": 0.400112271484375,
+          "add32": 0.0342787802734375,
+          "div32": 0.0850375,
+          "shifts": 0.0647585390625,
+          "fsum64": 0.5996899609375,
+          "fsum32": 0.644069671875,
+          "csum": 0.240618228515625,
+          "keep": 0.2788608076171875,
+          "at_seq": 1.825618744140625
+        },
+        "scalar": {
+          "cp": 0.188680171875,
+          "fill": 0.1286712880859375,
+          "sum": 0.219865798828125,
+          "xor": 0.233260154296875,
+          "mulw": 0.4061188701171875,
+          "addc": 0.3005216123046875,
+          "mulc": 0.8537271025390625,
+          "div": 1.3838510517578124,
+          "pick": 0.4042484755859375,
+          "narrow": 0.82956981640625,
+          "fma64": 0.42976141015625,
+          "div64": 0.971276283203125,
+          "fma32": 0.31932651953125,
+          "shifted": 0.4376096728515625,
+          "negate": 0.3992533681640625,
+          "sub64": 0.455339431640625,
+          "add32": 0.2669516806640625,
+          "div32": 0.7217247490234375,
+          "shifts": 0.425527333984375,
+          "fsum64": 0.6297931669921875,
+          "fsum32": 0.6551218037109375,
+          "csum": 0.41727709765625,
+          "keep": 0.5967049599609375,
+          "at_seq": 2.101022720703125
+        }
+      },
+      "kinds": [
+        "atomic",
+        "bounds_guard",
+        "branch",
+        "collect",
+        "compare",
+        "convert",
+        "convert_guard",
+        "div",
+        "f32",
+        "f32_div",
+        "f32_fold",
+        "f64",
+        "f64_div",
+        "f64_fold",
+        "index_checked",
+        "int",
+        "int_checked",
+        "int_fold",
+        "load",
+        "mul",
+        "mul_checked",
+        "store"
+      ]
+    },
+    "chain_ns_per_round": 1.072,
+    "chain_cycles_per_round": 5.002
+  },
+  "host": {
+    "lanes": 16,
+    "cache": {
+      "l1": 32768,
+      "l2": 1048576,
+      "l3": 100663296
+    },
+    "read": {
+      "l1": {
+        "1": 154.88,
+        "all": 1239.07
+      },
+      "l2": {
+        "1": 114.62,
+        "all": 916.92
+      },
+      "l3": {
+        "1": 89.34,
+        "all": 293.38
+      },
+      "dram": {
+        "1": 26.26,
+        "all": 44.88
+      }
+    },
+    "write": {
+      "l1": {
+        "1": 137.99,
+        "all": 1103.95
+      },
+      "l2": {
+        "1": 73.46,
+        "all": 587.67
+      },
+      "l3": {
+        "1": 72.63,
+        "all": 256.89
+      },
+      "dram": {
+        "1": 16.89,
+        "all": 24.48
+      }
+    },
+    "ops": {
+      "x86-64-v4": {
+        "vector": {
+          "atomic": 1.82384,
+          "bounds_guard": 0.0148,
+          "branch": 0.05308,
+          "collect": 0.25385,
+          "compare": 0.0,
+          "convert": 0.0,
+          "convert_guard": 0.64431,
+          "div": 1.38359,
+          "f32": 0.0,
+          "f32_div": 0.04293,
+          "f32_fold": 0.64407,
+          "f64": 0.03801,
+          "f64_div": 0.24039,
+          "f64_fold": 0.59969,
+          "index_checked": 0.0,
+          "int": 0.02501,
+          "int_checked": 0.27024,
+          "int_fold": 0.24062,
+          "load": 0.0,
+          "mul": 0.03603,
+          "mul_checked": 0.68976,
+          "store": 0.04211
+        },
+        "scalar": {
+          "atomic": 2.09897,
+          "bounds_guard": 0.29752,
+          "branch": 0.25398,
+          "collect": 0.43896,
+          "compare": 0.0,
+          "convert": 0.0,
+          "convert_guard": 0.68948,
+          "div": 1.23867,
+          "f32": 0.09434,
+          "f32_div": 0.57655,
+          "f32_fold": 0.65003,
+          "f64": 0.13975,
+          "f64_div": 0.8261,
+          "f64_fold": 0.62471,
+          "index_checked": 0.0,
+          "int": 0.14757,
+          "int_checked": 0.18519,
+          "int_fold": 0.41219,
+          "load": 0.00509,
+          "mul": 0.26094,
+          "mul_checked": 0.70855,
+          "store": 0.135
+        }
+      }
+    },
+    "scalarizing": [
+      "atomic",
+      "convert_guard",
+      "div",
+      "f32_fold",
+      "f64_fold",
+      "int_checked",
+      "mul_checked"
+    ],
+    "pool": {
+      "fork_ns": 0.0,
+      "per_lane_ns": 823.3,
+      "cutoff": 16384,
+      "grain": 8192,
+      "points": [
+        [
+          2,
+          577.1
+        ],
+        [
+          4,
+          1188.7
+        ],
+        [
+          8,
+          3832.5
+        ],
+        [
+          16,
+          10060.8
+        ],
+        [
+          16,
+          13058.3
+        ]
+      ]
+    },
+    "spawn_ns": 121036.1,
+    "alloc_ns": 1.61,
+    "irregular_ns": {
+      "l1": 0.489,
+      "l2": 0.964,
+      "l3": 6.439,
+      "dram": 9.801
+    },
+    "atomic_ns": {
+      "shared": 6.282
+    },
+    "ghz": 4.666
+  },
+  "device": null
+}

@@ -330,6 +330,20 @@ class EditSession:
 
         return explain(self.source if candidate is None else candidate, "program.cairn", set(self.visible))
 
+    def predict(self, sizes: Any, candidate: str | None = None) -> dict[str, Any]:
+        """`cairn predict` of the disclosed functions: the original priced, or what an admitted candidate changes."""
+        from ..perf.report import delta, report
+
+        if not isinstance(sizes, list) or not all(
+            isinstance(s, dict) and all(isinstance(k, str) and isinstance(v, int | float) for k, v in s.items())
+            for s in sizes
+        ):
+            fail("E-REQUEST", "sizes is a list of objects from an extent's name to a number, such as [{\"n\": 1e6}].")
+        given = [{k: float(v) for k, v in s.items()} for s in sizes]
+        answer = report(self.source, given) if candidate is None else delta(self.source, candidate, given)
+        answer["functions"] = {n: v for n, v in answer["functions"].items() if n in self.visible}
+        return answer
+
     def check(self, request: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         """An edit/1 request: the session digest binds it to this source, contract, context and compiler."""
         kind = request.get("kind") if isinstance(request, dict) else None
@@ -426,6 +440,7 @@ ADMISSION_TERMS = {"protocol", "session", "candidate_sha256", "runtime_cost", "s
                    "formal_status"}  # fmt: skip
 REFUSAL_TERMS = {"protocol", "trust", "automatic_edit", "acceptance_boundary"}
 REQUESTS = {"body": {"replacement"}, "expr": {"site", "replacement"}, "expand": {"symbols"}, "explain": set(),
+            "predict": {"sizes"},
             "state": set(), "delta": {"since"}}  # fmt: skip
 
 
@@ -508,16 +523,18 @@ class EditHost:
         return self.sessions[handle]
 
     def respond(self, request: Any) -> dict[str, Any]:
-        """An edit/2 request: `body`, `expr` (with a short site name), `expand` (with symbols), `explain`, `state`
-        or `delta` (with the digest of a state this host sent)."""
+        """An edit/2 request: `body`, `expr` (with a short site name), `expand` (with symbols), `explain`, `predict`
+        (with sizes), `state` or `delta` (with the digest of a state this host sent)."""
         kind = request.get("kind") if isinstance(request, dict) else None
         if isinstance(request, dict) and not (isinstance(kind, str) and kind in REQUESTS):
-            fail("E-REQUEST", "Expected body, expr, expand, explain, state or delta.")
+            fail("E-REQUEST", "Expected body, expr, expand, explain, predict, state or delta.")
         shaped(request, HANDLES, {"protocol", "handle", "kind", *REQUESTS.get(kind, ())})
         s = self.session(request["handle"])
         admitted = self.admitted.get(request["handle"], [])
         if kind == "explain":  # The latest admitted candidate of this session, else the original.
             return s.explain(admitted[-1][0] if admitted else None)
+        if kind == "predict":  # What the latest admitted candidate is predicted to change; nothing is built.
+            return s.predict(request["sizes"], admitted[-1][0] if admitted else None)
         if kind in {"state", "delta"}:
             evidence = [{k: r[k] for k in ("symbol", "status", "effects", "check_sites")} for _, r in admitted]
             now = state(admitted[-1][0] if admitted else s.source, evidence)

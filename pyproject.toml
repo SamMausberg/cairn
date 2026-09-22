@@ -39,7 +39,7 @@ cairn = "cairn.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-cairn = ["runtime/*.hpp", "std/*.cairn", "targets/*/*.S", "targets/*/*.ld", "py.typed"]
+cairn = ["runtime/*.hpp", "std/*.cairn", "targets/*/*.S", "targets/*/*.ld", "perf/profiles/*.json", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
