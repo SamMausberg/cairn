@@ -11,11 +11,13 @@ placement, closures, dyn, atomics and FFI.
 
 A value is flattened into its scalar components: a record is its fields, a sum
 is the emitted u32 tag beside every variant payload, an array is its elements.
-Only a sum's active payload is compared, so inactive storage is not observed. A
-value parameter is quantified over well-formed values, every tag naming a
-declared variant, which is what the emitted entry guard admits. Storage behind a
-view has no such guard, so its elements carry any tag, and a `match` over one
-outside the declared variants aborts, as the emitted `default: cr::trap()` does.
+Only a sum's active payload is compared, so inactive storage is not observed. The
+inputs are exactly what the emitted entry guards admit: an enum or sum passed by
+value carries a declared tag, because the guard reads that one tag and nothing
+else. A tag anywhere else, nested in a record, an array or a payload, reached
+through a borrow, or behind a view, is any u32, and a `match` over one outside
+the declared variants aborts, as the emitted `default: cr::trap()` does. A `try`
+over one is not replayed, so a difference found there is reported unknown.
 
 Storage behind a view is one SMT array per component of its element, read and
 written at `offset + i` while `i` is below the extent the signature gives it; a
@@ -333,10 +335,11 @@ def equivalent(
                 visible = ", ".join(watched) or "no value"
                 return finish(
                     "smt-equivalent",
-                    quantification="All well-formed values of the declared parameter types satisfying the host "
-                    "precondition; every tag of a value parameter names a declared variant, while an element of "
-                    "storage carries any tag and a match over one outside them aborts; storage the entry guards "
-                    "admit, with distinct storage behind every rw view.",
+                    quantification="All values of the declared parameter types satisfying the host precondition; "
+                    "the top-level tag of an enum or sum passed by value names a declared variant, as the entry "
+                    "guard checks, while a tag nested in a record, an array or a payload, reached through a borrow "
+                    "or held in storage carries any value and a match over one outside them aborts; storage the "
+                    "entry guards admit, with distinct storage behind every rw view.",
                     observation=f"{visible}, or one undifferentiated abort outcome; an rw view is compared element "
                     "by element over its whole extent; a sum shows its tag and active payload only; no "
                     "memory/timing observation.",

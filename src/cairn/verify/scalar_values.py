@@ -368,22 +368,15 @@ def undecided(src: Source, ty: Type, parts: tuple[str, ...]) -> str:
 
 
 def wellformed(src: Source, ty: Type, parts: tuple[str, ...]) -> str:
-    """Every tag inside a value parameter names a declared variant; the entry guard traps on anything else.
+    """What the emitted entry guard admits of one parameter, and nothing more.
 
-    Storage behind a view has no entry guard that reads it, so this is not asked of its elements.
+    The guard reads the top-level tag of an enum or sum passed by value and traps unless it names a
+    declared variant. It reads nothing else: a tag nested in a record, an array or a payload, or reached
+    through a borrow, is admitted as storage is, any value, on which a `match` aborts.
     """
-    array = src.elements(ty)
     layout = src.layout(ty)
-    if array is not None:
-        width = len(src.leaves(array[0]))
-        return conj(*(wellformed(src, array[0], parts[i : i + width])
-                      for i in range(0, width * array[1], width)))  # fmt: skip
-    if isinstance(layout, list):
-        return conj(*(wellformed(src, t, parts[slice(*src.span(ty, n))]) for n, t in layout))
-    if isinstance(layout, dict):
-        limit = f"(bvult {parts[0]} {constant(len(layout), TAG.name)})"
-        return conj(limit, *(wellformed(src, t, parts[slice(*src.span(ty, n))])
-                             for n, t in layout.items() if t is not None))  # fmt: skip
+    if ty.mode == "value" and isinstance(layout, dict):
+        return f"(bvult {parts[0]} {constant(len(layout), TAG.name)})"
     return "true"
 
 
@@ -403,41 +396,45 @@ def rebuild(src: Source, ty: Type, values: list) -> Any:
         tag = values.pop(0)
         payloads = {n: rebuild(src, t, values) for n, t in layout.items() if t is not None}
         names = list(layout)
-        if not 0 <= tag < len(names):  # Only storage behind a view can hold one, and nothing observes its payloads.
+        if not 0 <= tag < len(names):  # Nothing the entry guard reads holds one, and nothing observes its payloads.
             return {"tag": tag}
         return {"variant": names[tag], **({"value": payloads[names[tag]]} if layout[names[tag]] is not None else {})}
     raw = values.pop(0)
     return decoded(raw, ty.name) if ty.name in FLOAT else raw
 
 
-def admissible(src: Source, ty: Type, value: Any, storage: bool = False) -> bool:
+def admissible(src: Source, ty: Type, value: Any, guarded: bool = True) -> bool:
     """Is a caller-supplied input a value of this type? Malformed inputs are refused, not guessed.
 
-    `storage` marks what lies behind a view, where no entry guard reads a tag, so
-    an element may carry one that names no variant. A value parameter may not.
+    `guarded` marks the one position the emitted entry guard reads: the top-level tag of an enum or
+    sum passed by value. Everywhere else, behind a view or a borrow, inside a record, an array or a
+    payload, a tag may name no variant, as storage may hold one.
     """
     array = src.elements(ty)
     layout = src.layout(ty)
     if is_view(ty):  # Storage behind a view arrives as its elements; `outcome` holds it to the extent.
-        return isinstance(value, list) and all(admissible(src, ty.value, v, True) for v in value)
+        return isinstance(value, list) and all(admissible(src, ty.value, v, False) for v in value)
+    guarded = guarded and ty.mode == "value"
     if array is not None:
         return isinstance(value, list) and len(value) == array[1] and all(
-            admissible(src, array[0], v, storage) for v in value)  # fmt: skip
+            admissible(src, array[0], v, False) for v in value)  # fmt: skip
     if isinstance(layout, list):
         names = [n for n, _ in layout]
         return isinstance(value, dict) and sorted(value) == sorted(names) and all(
-            admissible(src, t, value[n], storage) for n, t in layout)  # fmt: skip
+            admissible(src, t, value[n], False) for n, t in layout)  # fmt: skip
     if isinstance(layout, dict):
         if not isinstance(value, dict):
             return False
-        if "variant" not in value:  # A tag no variant names: what storage may hold, and what a match aborts on.
+        if (
+            "variant" not in value
+        ):  # A tag no variant names: what an unguarded position may hold, and what a match aborts on.
             shaped = set(value) == {"tag"} and type(value["tag"]) is int
-            return storage and shaped and len(layout) <= value["tag"] < 1 << WIDTH[TAG.name]
+            return not guarded and shaped and len(layout) <= value["tag"] < 1 << WIDTH[TAG.name]
         if value["variant"] not in layout:
             return False
         payload = layout[value["variant"]]
         expected = {"variant"} | ({"value"} if payload is not None else set())
-        return set(value) == expected and (payload is None or admissible(src, payload, value["value"], storage))
+        return set(value) == expected and (payload is None or admissible(src, payload, value["value"], False))
     if ty.name == "bool":
         return type(value) is bool
     if ty.name in FLOAT:

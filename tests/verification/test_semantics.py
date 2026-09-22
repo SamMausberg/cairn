@@ -239,11 +239,39 @@ def test_try_near_miss_keeps_going_after_a_failure():
     assert r["counterexample"]["x"] > 99 and r["expected"]["return"]["variant"] == "Bad"
 
 
-def test_only_well_formed_tags_of_a_value_parameter_are_quantified_over():
+def test_only_the_top_level_tag_of_a_value_parameter_is_guarded():
+    """The emitted entry guard reads one tag: `if(v_o >= 2) cr::trap();`. The model admits exactly that."""
     r = check(OP + "fn f(o:Op)->u64{match o{Op.Read=>{return 0;} Op.Write=>{return 1;}}}",
               OP + "fn f(o:Op)->u64{if o==Op.Read{return 0;}return 1;}")  # fmt: skip
-    assert "every tag of a value parameter names a declared variant" in r["quantification"]
-    assert "an element of storage carries any tag" in r["quantification"]
+    assert "the top-level tag of an enum or sum passed by value names a declared variant" in r["quantification"]
+    assert "reached through a borrow or held in storage carries any value" in r["quantification"]
+
+
+CMD = OP + "struct Cmd { op:Op; n:u64; }\n"
+MATCHED = CMD + "fn f(c:PARAM)->u64{match c.op{Op.Read=>{return c.n;} Op.Write=>{return 0;}}}"
+TOTAL = CMD + "fn f(c:PARAM)->u64{if c.op==Op.Read{return c.n;}return 0;}"
+
+
+@pytest.mark.parametrize("param", ["Cmd", "ro<Cmd>"])
+def test_a_tag_nested_in_a_parameter_is_admitted_as_storage_is(param):
+    """No entry guard reads a tag inside a record, or behind a borrow, so `default: cr::trap()` separates
+    a match from a comparison there, exactly as it does for an element of storage."""
+    matched, total = MATCHED.replace("PARAM", param), TOTAL.replace("PARAM", param)
+    r = refute(total, matched)
+    nested = r["counterexample"]["c"]["op"]
+    assert set(nested) == {"tag"} and nested["tag"] >= 2  # No variant names it, so it carries no payload.
+    assert r["expected"]["return"] == 0 and r["actual"]["trap"] == "unmatched-tag"
+    check(total, matched, assume="c.op==Op.Read || c.op==Op.Write")
+
+
+def test_a_try_over_a_nested_tag_no_variant_names_is_unknown_not_equivalent():
+    """The emitted `try` carries the failure payload bits of any tag but zero; the replay holds none, so a
+    difference the solver finds there is reported unknown, never smt-equivalent."""
+    box = RESULT + "struct Box { r:Res; }\n"
+    matched = box + "fn f(b:Box)->Res{match b.r{Res.Ok(v)=>{return Res.Ok(v);} Res.Bad(e)=>{return Res.Bad(e);}}}"
+    tried = box + "fn f(b:Box)->Res{let v = try b.r; return Res.Ok(v);}"
+    r = check(matched, tried, "unknown", allow_reference_traps=True)
+    assert "try over a tag outside the declared variants" in r["reason"]
 
 
 # Floating point -----------------------------------------------------------------------------
