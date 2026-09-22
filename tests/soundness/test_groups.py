@@ -190,3 +190,14 @@ def test_a_loop_may_lend_a_group_what_tasks_only_read():
         " let r = collect(g); wait(g); return i32(r); }"
     )
     assert compile_source(source)[1]["functions"]["main"]["syntactic_check_sites"]["submit"] == 1
+
+
+def test_a_group_or_a_ticket_is_never_lent():
+    """Spawning into a group that a callee only borrowed would record the task's lease in the callee's scope, which
+    ends at its return while the task still writes: the caller could then touch what the task writes. 1.3 refused a
+    group passed by value and accepted one lent by `rw`; now neither a group nor a ticket is a parameter at all."""
+    fill = "fn fill(n:usize, out:rw<u64>[n]) -> u64 { for i in 0..n { out[i] = 1; } return 0; }\n"
+    lent = "fn helper(n:usize, g:rw<Group[u64]>, xs:rw<u64>[n]) { spawn fill(xs) into g; }\n"
+    main = "fn main() -> i32 { let mut d = Buf[u64](8); let mut g = Group[u64](2); helper(g, d); d[0] = 5; wait(g); return 0; }"
+    refused("E-PINNED", fill + lent + main)
+    refused("E-PINNED", fill + "fn peek(t:ro<Ticket[u64]>) -> u64 = 0;\n")

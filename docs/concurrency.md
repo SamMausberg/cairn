@@ -92,7 +92,7 @@ pair.left is lent to left until wait(left).
 
 ## Task groups
 
-Tickets are awaited in the order they are written. A group collects tasks in the order they finish. `let g = Group[T](n);` declares a group of at most `n` tasks in flight whose results have type `T`. Like an atomic it is declared in place and never stored in a record, passed by value or returned (`E-PINNED`), and like a ticket it is linear: `wait(g)` must consume it on every path of the same function (`E-LINEAR-LEAK`, `E-LINEAR-BRANCH`). The declaration takes the group's whole storage, so its row carries `alloc` and `free`, and nothing after it allocates.
+Tickets are awaited in the order they are written. A group collects tasks in the order they finish. `let g = Group[T](n);` declares a group of at most `n` tasks in flight whose results have type `T`. It is declared in place and used only there: never stored in a record, passed by value, lent to a callee or returned (`E-PINNED`), since a lease recorded in a callee would end at its return while the task still runs. Like a ticket it is linear: `wait(g)` must consume it on every path of the same function (`E-LINEAR-LEAK`, `E-LINEAR-BRANCH`). The declaration takes the group's whole storage, so its row carries `alloc` and `free`, and nothing after it allocates.
 
 `spawn f(args) into g;` runs a declared function on its own thread, exactly as `spawn` does, and hands the task to the group instead of naming a ticket. `f` must return `T` (`E-TYPE-MISMATCH`), and a closure cannot follow it (`E-SPAWN`). Every place the task borrows is leased to the group until `wait(g)`, and touching one in between is `E-LEASED` with the group as the holder. A submission when `n` tasks are already outstanding is a guard failure at run time, never silent growth.
 
