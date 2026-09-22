@@ -252,6 +252,17 @@ pub fn print_u64(value:u64)
 Effects: `diverge`, `ffi:write`, `ffi_precondition`, `io`, `local_read`, `local_write`, `stack_storage`, `trap`, `zero_init`.
 
 ```cairn
+pub fn print_i64(value:i64)
+```
+Effects: `diverge`, `ffi:write`, `ffi_precondition`, `io`, `local_read`, `local_write`, `stack_storage`, `trap`, `zero_init`.
+
+```cairn
+pub fn read_stdin(n:usize, into:rw<u8>[n]@host) -> std.core.Result[usize, std.io.IoError]
+```
+One read from standard input: 0 at end of input, as `read` answers for a file.
+Effects: `ffi:__errno_location`, `ffi:read`, `ffi_precondition`, `io`, `mmio`, `trap`, `write:into`.
+
+```cairn
 pub fn monotonic_ns() -> u64
 ```
 CLOCK_MONOTONIC in nanoseconds: the only clock a measurement should trust.
@@ -508,9 +519,21 @@ pub fn parse_u64(n:usize, s:ro<u8>[n]@host) -> std.core.Result[u64, std.text.Par
 Effects: `ffi_precondition`, `read:s`, `trap`.
 
 ```cairn
+pub fn parse_i64(n:usize, s:ro<u8>[n]@host) -> std.core.Result[i64, std.text.ParseError]
+```
+Signed decimal: an optional leading '-', then digits. The magnitude may reach 2^63 only when negative, and the error offset names the byte at fault as parse_u64 does.
+Effects: `ffi_precondition`, `read:s`, `trap`.
+
+```cairn
 pub fn write_u64(n:usize, out:rw<u8>[n]@host, value:u64) -> usize
 ```
 Decimal, most significant digit first. The digits are produced backwards into fixed storage, so the caller's buffer is written once and never partially.
+Effects: `diverge`, `ffi_precondition`, `local_read`, `local_write`, `stack_storage`, `trap`, `write:out`, `zero_init`.
+
+```cairn
+pub fn write_i64(n:usize, out:rw<u8>[n]@host, value:i64) -> usize
+```
+A leading '-' and the magnitude, which is representable for every value, the minimum included.
 Effects: `diverge`, `ffi_precondition`, `local_read`, `local_write`, `stack_storage`, `trap`, `write:out`, `zero_init`.
 
 ```cairn
@@ -521,6 +544,11 @@ Effects: `ffi_precondition`, `trap`, `write:out`.
 
 ```cairn
 pub fn push_u64(v:rw<std.vec.Vec[u8]>, value:u64)
+```
+Effects: `alloc`, `diverge`, `ffi_precondition`, `free`, `local_read`, `local_write`, `read:v`, `stack_storage`, `trap`, `write:v`, `zero_init`.
+
+```cairn
+pub fn push_i64(v:rw<std.vec.Vec[u8]>, value:i64)
 ```
 Effects: `alloc`, `diverge`, `ffi_precondition`, `free`, `local_read`, `local_write`, `read:v`, `stack_storage`, `trap`, `write:v`, `zero_init`.
 
@@ -536,9 +564,25 @@ pub fn equal(n:usize, a:ro<u8>[n]@host, m:usize, b:ro<u8>[m]@host) -> bool
 Effects: `diverge`, `ffi_precondition`, `read:a`, `read:b`, `trap`.
 
 ```cairn
+pub fn starts_with(n:usize, s:ro<u8>[n]@host, m:usize, prefix:ro<u8>[m]@host) -> bool
+```
+Effects: `diverge`, `ffi_precondition`, `read:prefix`, `read:s`, `trap`.
+
+```cairn
+pub fn ends_with(n:usize, s:ro<u8>[n]@host, m:usize, suffix:ro<u8>[m]@host) -> bool
+```
+Effects: `diverge`, `ffi_precondition`, `read:s`, `read:suffix`, `trap`.
+
+```cairn
 pub fn find_byte(n:usize, s:ro<u8>[n]@host, byte:u8, from:usize) -> std.core.Option[usize]
 ```
 Effects: `ffi_precondition`, `read:s`, `trap`.
+
+```cairn
+pub fn find_last_byte(n:usize, s:ro<u8>[n]@host, byte:u8) -> std.core.Option[usize]
+```
+The last index holding `byte`, which is where a path's extension or a line's last field begins.
+Effects: `diverge`, `ffi_precondition`, `read:s`, `trap`.
 
 ```cairn
 pub fn find(n:usize, s:ro<u8>[n]@host, m:usize, needle:ro<u8>[m]@host) -> std.core.Option[usize]

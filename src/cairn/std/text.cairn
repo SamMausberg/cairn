@@ -22,6 +22,30 @@ pub fn parse_u64(n:usize, s:ro<u8>[n]) -> Result[u64, ParseError] {
   return Result.Ok(value);
 }
 
+// Signed decimal: an optional leading '-', then digits. The magnitude may reach 2^63 only when
+// negative, and the error offset names the byte at fault as parse_u64 does.
+pub fn parse_i64(n:usize, s:ro<u8>[n]) -> Result[i64, ParseError] {
+  if n == 0 { return Result.Err(ParseError.Empty); }
+  let negative = s[0] == 45;
+  let mut start:usize = 0;
+  if negative { start = 1; }
+  if start == n { return Result.Err(ParseError.Invalid(start)); }
+  let mut limit:u64 = 9223372036854775807;
+  if negative { limit = 9223372036854775808; }
+  let mut value:u64 = 0;
+  for i in start..n {
+    let byte = s[i];
+    if byte < 48 || byte > 57 { return Result.Err(ParseError.Invalid(i)); }
+    let digit = u64(byte - 48);
+    if value > (limit - digit) / 10 { return Result.Err(ParseError.Overflow(i)); }
+    value = value * 10 + digit;
+  }
+  if !negative { return Result.Ok(i64(value)); }
+  if value == 0 { return Result.Ok(0); }
+  let below = i64(value - 1); // value - 1 fits an i64 even when value is 2^63
+  return Result.Ok(-below - 1);
+}
+
 // Decimal, most significant digit first. The digits are produced backwards into fixed storage,
 // so the caller's buffer is written once and never partially.
 pub fn write_u64(n:usize, out:rw<u8>[n], value:u64) -> usize {
@@ -36,6 +60,18 @@ pub fn write_u64(n:usize, out:rw<u8>[n], value:u64) -> usize {
   if used > n { return 0; }
   for i in 0..used { out[i] = digits[used - 1 - i]; }
   return used;
+}
+
+// A leading '-' and the magnitude, which is representable for every value, the minimum included.
+pub fn write_i64(n:usize, out:rw<u8>[n], value:i64) -> usize {
+  if value >= 0 { return write_u64(n, out, u64(value)); }
+  let magnitude = u64(-(value + 1)) + 1;
+  stack digits:u8[20] = zeroed;
+  let used = write_u64(len(digits), digits, magnitude);
+  if used + 1 > n { return 0; }
+  out[0] = 45;
+  for i in 0..used { out[i + 1] = digits[i]; }
+  return used + 1;
 }
 
 // Exactly `width` lowercase hex digits, high nibble first; the high bits above `width` are lost.
@@ -54,6 +90,12 @@ pub fn push_u64(v:rw<Vec[u8]>, value:u64) {
   vec.extend_from(v, used, digits[0..used]);
 }
 
+pub fn push_i64(v:rw<Vec[u8]>, value:i64) {
+  stack digits:u8[21] = zeroed;
+  let used = write_i64(len(digits), digits, value);
+  vec.extend_from(v, used, digits[0..used]);
+}
+
 // Lexicographic order on bytes, shorter first on a common prefix: -1, 0 or 1.
 pub fn compare(n:usize, a:ro<u8>[n], m:usize, b:ro<u8>[m]) -> i32 {
   let mut i:usize = 0;
@@ -68,8 +110,28 @@ pub fn compare(n:usize, a:ro<u8>[n], m:usize, b:ro<u8>[m]) -> i32 {
 
 pub fn equal(n:usize, a:ro<u8>[n], m:usize, b:ro<u8>[m]) -> bool = compare(n, a, m, b) == 0;
 
+pub fn starts_with(n:usize, s:ro<u8>[n], m:usize, prefix:ro<u8>[m]) -> bool {
+  if m > n { return false; }
+  return equal(m, s[0..m], m, prefix);
+}
+
+pub fn ends_with(n:usize, s:ro<u8>[n], m:usize, suffix:ro<u8>[m]) -> bool {
+  if m > n { return false; }
+  return equal(m, s[n - m..n], m, suffix);
+}
+
 pub fn find_byte(n:usize, s:ro<u8>[n], byte:u8, from:usize) -> Option[usize] {
   for i in from..n { if s[i] == byte { return Option.Some(i); } }
+  return Option.None;
+}
+
+// The last index holding `byte`, which is where a path's extension or a line's last field begins.
+pub fn find_last_byte(n:usize, s:ro<u8>[n], byte:u8) -> Option[usize] {
+  let mut i = n;
+  while i > 0 {
+    i = i - 1;
+    if s[i] == byte { return Option.Some(i); }
+  }
   return Option.None;
 }
 

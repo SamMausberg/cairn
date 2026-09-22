@@ -152,6 +152,21 @@ pub fn print_u64(value:u64) {
   put(1, used, digits[0..used]);
 }
 
+pub fn print_i64(value:i64) {
+  stack digits:u8[21] = zeroed;
+  let used = text.write_i64(len(digits), digits, value);
+  put(1, used, digits[0..used]);
+}
+
+// One read from standard input: 0 at end of input, as `read` answers for a file.
+pub fn read_stdin(n:usize, into:rw<u8>[n]) -> Result[usize, IoError] {
+  unsafe {
+    let got = sys.read(0, into, n);
+    if got < 0 { return failed(); }
+    return Result.Ok(usize(got));
+  }
+}
+
 // CLOCK_MONOTONIC in nanoseconds: the only clock a measurement should trust.
 pub fn monotonic_ns() -> u64 {
   stack ts:i64[2] = zeroed;

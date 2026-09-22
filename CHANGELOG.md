@@ -6,6 +6,7 @@
 
 - A lease names the place that was lent, so two tasks may take two fields of one record: `spawn f(box.a)` and `spawn g(box.b)` run together, and `len(box.a)` still reads while a task holds that field's elements. The same field to two tasks, a field read while the record is lent whole, and a new value landing in a lent field's cell are `E-LEASED` with the narrower subject.
 - A `Buf` field may declare an earlier `usize` field of its record as its extent (`struct Chart { rows:usize; price:Buf[f64][rows]; }`). The identity is established by an inline `Buf[T](n)` at construction and held by `E-EXTENT-FIELD` at every place that could break it, so the field goes to a call whole and pays no part guard; `E-EXTENT` names a wrong extent field.
+- `std.text` gains `parse_i64`, `write_i64`, `push_i64`, `starts_with`, `ends_with` and `find_last_byte`; `std.io` gains `print_i64` and `read_stdin`.
 - `free` is charged where the release runs, not beside `alloc`: the end of a block or match arm that still holds an owner, a `return` that leaves while one is held, a by-value parameter passed on to nobody, and the place a new value is assigned over. A function that only drops an owner carries `free` alone, and the operand-order audit keys on `alloc` alone.
 
 ### Projects and tools

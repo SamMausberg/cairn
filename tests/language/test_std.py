@@ -41,6 +41,66 @@ def rejects(code, source):
     assert error.value.data["code"] == code, error.value.data
 
 
+SIGNED_TEXT = """
+import std.core (Option, Result);
+import std.io;
+import std.text;
+import std.vec (Vec);
+
+fn parsed(n:usize, s:ro<u8>[n], want:i64) -> bool {
+  match text.parse_i64(n, s) { Result.Ok(v) => { return v == want; } Result.Err(why) => { return false; } }
+}
+
+fn refused(n:usize, s:ro<u8>[n], at:usize, overflow:bool) -> bool {
+  match text.parse_i64(n, s) {
+    Result.Ok(v) => { return false; }
+    Result.Err(why) => {
+      match why {
+        text.ParseError.Invalid(i) => { return !overflow && i == at; }
+        text.ParseError.Overflow(i) => { return overflow && i == at; }
+        text.ParseError.Empty => { return false; }
+      }
+    }
+  }
+}
+
+fn round_trip(value:i64) -> bool {
+  stack out:u8[21] = zeroed;
+  let used = text.write_i64(len(out), out, value);
+  if used == 0 { return false; }
+  return parsed(used, out[0..used], value);
+}
+
+fn main() -> i32 {
+  if !parsed(len("-42"), "-42", -42) || !parsed(len("42"), "42", 42) || !parsed(len("-0"), "-0", 0) { return 1; }
+  if !parsed(len("9223372036854775807"), "9223372036854775807", 9223372036854775807) { return 2; }
+  if !parsed(len("-9223372036854775808"), "-9223372036854775808", -9223372036854775807 - 1) { return 3; }
+  if !refused(len("9223372036854775808"), "9223372036854775808", 18, true) { return 4; }
+  if !refused(len("-9223372036854775809"), "-9223372036854775809", 19, true) { return 5; }
+  if !refused(len("-"), "-", 1, false) || !refused(len("12x"), "12x", 2, false) { return 6; }
+  if !round_trip(-9223372036854775807 - 1) || !round_trip(0) || !round_trip(-7) || !round_trip(1234567) { return 7; }
+  stack tiny:u8[2] = zeroed;
+  let short = text.write_i64(len(tiny), tiny, -12);
+  let two = text.write_i64(len(tiny), tiny, -1);
+  if short != 0 || two != 2 || tiny[0] != 45 { return 8; }
+  let mut line = vec.new[u8]();
+  text.push_i64(line, -305);
+  if line.len != 4 || line.data[0] != 45 || line.data[3] != 53 { return 9; }
+  let path = "log/readings.csv";
+  if !text.starts_with(len(path), path, len("log/"), "log/") || text.starts_with(len(path), path, len("logs"), "logs") { return 10; }
+  if !text.ends_with(len(path), path, len(".csv"), ".csv") || text.ends_with(len(path), path, len("x.csv"), "x.csv") { return 11; }
+  if text.starts_with(len(path), path, len("log/readings.csv!"), "log/readings.csv!") { return 12; }
+  match text.find_last_byte(len(path), path, 46) { Option.Some(at) => { if at != 12 { return 13; } } Option.None => { return 14; } }
+  match text.find_last_byte(len(path), path, 47) { Option.Some(at) => { if at != 3 { return 15; } } Option.None => { return 16; } }
+  match text.find_last_byte(len(path), path, 33) { Option.Some(at) => { return 17; } Option.None => {} }
+  io.print_i64(-9223372036854775807 - 1);
+  io.newline();
+  match io.read_stdin(0, tiny[0..0]) { Result.Ok(got) => { if got != 0 { return 18; } } Result.Err(why) => { return 19; } }
+  return 0;
+}
+"""
+
+
 MEM_TEXT_SORT = """
 import std.core (Option, Result);
 import std.mem;
@@ -382,6 +442,12 @@ fn main() -> i32 {
 @pytest.mark.parametrize("cxx", BOTH)
 def test_mem_text_sort_and_vec(tmp_path, cxx):
     native(tmp_path, MEM_TEXT_SORT, cxx)
+
+
+@pytest.mark.parametrize("cxx", BOTH)
+def test_signed_decimal_prefixes_and_the_last_byte(tmp_path, cxx):
+    done = native(tmp_path, SIGNED_TEXT, cxx)
+    assert done.stdout == "-9223372036854775808\n"
 
 
 @pytest.mark.parametrize("cxx", BOTH)
