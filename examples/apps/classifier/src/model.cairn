@@ -1,0 +1,49 @@
+// A two-layer network: eight tanh units over two inputs and one logistic output. derive grad writes the
+// gradient of every function below, and main trains with loss_grad; `cairn expand` prints what it wrote.
+module model;
+import std.math;
+
+pub const HIDDEN:usize = 8;
+pub const WEIGHTS:usize = 16; // two inputs for each hidden unit
+
+// Hidden unit j, weighted by its output weight: v[j] tanh(z), with tanh(z) written as 1 - 2 / (e^2z + 1) so
+// that it stays finite as z grows and its derivative is generated too.
+fn unit(w:ro<f64>[WEIGHTS], c:ro<f64>[HIDDEN], v:ro<f64>[HIDDEN], j:usize, x0:f64, x1:f64) -> f64 {
+  let z = w[2 * j] * x0 + w[2 * j + 1] * x1 + c[j];
+  let t = 1.0 - 2.0 / (math.exp(2.0 * z) + 1.0);
+  return v[j] * t;
+}
+
+// The output before the logistic function: above zero means the point is inside.
+pub fn logit(
+  w:ro<f64>[WEIGHTS], c:ro<f64>[HIDDEN], v:ro<f64>[HIDDEN], b:f64, x0:f64, x1:f64
+) -> f64 {
+  let mut z:f64 = b;
+  for j in 0..HIDDEN { z += unit(w, c, v, j, x0, x1); }
+  return z;
+}
+
+// The log-loss of one point, log(1 + e^z) - y z, whose derivative in z is sigmoid(z) - y.
+fn sample(
+  w:ro<f64>[WEIGHTS], c:ro<f64>[HIDDEN], v:ro<f64>[HIDDEN], b:f64, x0:f64, x1:f64, y:f64
+) -> f64 {
+  let z = logit(w, c, v, b, x0, x1);
+  let grows = math.exp(z);
+  let softplus = math.log(1.0 + grows);
+  return softplus - y * z;
+}
+
+// The mean log-loss of n points, stored as x0, x1 pairs.
+pub fn loss(
+  n:usize, m:usize, w:ro<f64>[WEIGHTS], c:ro<f64>[HIDDEN], v:ro<f64>[HIDDEN], b:f64, xs:ro<f64>[m],
+  ys:ro<f64>[n]
+) -> f64 {
+  let mut total:f64 = 0.0;
+  for k in 0..n { total += sample(w, c, v, b, xs[2 * k], xs[2 * k + 1], ys[k]); }
+  return total / f64(n);
+}
+
+derive grad[w, c, v] for unit;
+derive grad[w, c, v, b] for logit;
+derive grad[w, c, v, b] for sample;
+derive grad[w, c, v, b] for loss; // the points are data: only the parameters get adjoints

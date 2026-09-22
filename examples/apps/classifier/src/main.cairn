@@ -1,0 +1,197 @@
+// classifier: learns which points of the square [-1.5, 1.5]^2 lie inside the unit circle, which no straight
+// line separates, with the two-layer network of src/model.cairn trained on the gradient derive grad writes. It
+// then runs the trained network with its parameters quantized to i8 and to f8e4m3, one scale per tensor, and
+// says what that cost in accuracy on points it never saw.
+//   $ cairn run examples/apps/classifier          # 800 steps
+//   $ cairn run examples/apps/classifier -- 40    # as many steps as the first argument says
+import std.env;
+import std.fmt;
+import std.io;
+import std.text;
+import std.vec (Vec);
+import model;
+
+const TRAIN:usize = 400;
+const TEST:usize = 400;
+const PAIRS:usize = 800; // two coordinates for each of TRAIN or TEST points
+const STEPS:usize = 800; // unless the first argument says otherwise
+const RATE:f64 = 1.0;
+
+// The parameters of the network: hidden weights and biases, output weights and bias.
+struct Net { w:Array[f64, 16]; c:Array[f64, 8]; v:Array[f64, 8]; b:f64; }
+
+// A 64-bit linear congruential generator, so the points and the starting weights are the same everywhere.
+fn next(state:rw<u64>) -> f64 {
+  state = add_wrap(mul_wrap(state, 6364136223846793005), 1442695040888963407);
+  return f64(shr(state, 11)) / 9007199254740992.0; // 53 bits in [0, 1)
+}
+
+fn points(n:usize, m:usize, xs:rw<f64>[m], ys:rw<f64>[n], state:rw<u64>) {
+  for k in 0..n {
+    let a = next(state);
+    let b = next(state);
+    let x0 = 3.0 * a - 1.5;
+    let x1 = 3.0 * b - 1.5;
+    xs[2 * k] = x0;
+    xs[2 * k + 1] = x1;
+    ys[k] = 0.0;
+    if x0 * x0 + x1 * x1 < 1.0 { ys[k] = 1.0; }
+  }
+}
+
+fn start(n:usize, p:rw<f64>[n], spread:f64, state:rw<u64>) {
+  for i in 0..n {
+    let u = next(state);
+    p[i] = spread * (2.0 * u - 1.0);
+  }
+}
+
+fn hit(z:f64, y:f64) -> f64 {
+  if (z > 0.0) == (y > 0.5) { return 1.0; }
+  return 0.0;
+}
+
+// The fraction of the n points the network puts on the right side of the circle.
+fn accuracy(net:ro<Net>, n:usize, m:usize, xs:ro<f64>[m], ys:ro<f64>[n]) -> f64 {
+  let mut right:f64 = 0.0;
+  for k in 0..n {
+    let z = model.logit(net.w, net.c, net.v, net.b, xs[2 * k], xs[2 * k + 1]);
+    right += hit(z, ys[k]);
+  }
+  return right / f64(n);
+}
+
+// Plain gradient descent on the mean log-loss; each step starts the adjoints at zero.
+fn train(net:rw<Net>, xs:ro<f64>[PAIRS], ys:ro<f64>[TRAIN], steps:usize) -> f64 {
+  let mut last:f64 = 0.0;
+  for step in 0..steps {
+    let mut dw = Array[f64, 16]();
+    let mut dc = Array[f64, 8]();
+    let mut dv = Array[f64, 8]();
+    let mut db:f64 = 0.0;
+    last = model.loss_grad(TRAIN, PAIRS, net.w, net.c, net.v, net.b, xs, ys, 1.0, dw, dc, dv, db);
+    for i in 0..16 { net.w[i] -= RATE * dw[i]; }
+    for j in 0..8 {
+      net.c[j] -= RATE * dc[j];
+      net.v[j] -= RATE * dv[j];
+    }
+    net.b -= RATE * db;
+  }
+  return last;
+}
+
+// The scale that maps the largest magnitude among n values to `top`; an all-zero tensor takes 1, since any
+// positive scale gives it zeros and quantize refuses a zero one.
+fn scale_of(n:usize, p:ro<f64>[n], top:f64) -> f32 {
+  let mut largest:f64 = 0.0;
+  for i in 0..n { largest = max_f(largest, abs(p[i])); }
+  if largest == 0.0 { return 1.0; }
+  return f32(largest / top);
+}
+
+fn max_f(a:f64, b:f64) -> f64 {
+  if a > b { return a; }
+  return b;
+}
+
+// Each parameter tensor rounded to i8 with the scale that maps its largest magnitude to 127, and back.
+fn through_i8(n:usize, p:ro<f64>[n], out:rw<f64>[n]) {
+  let scale = scale_of(p, 127.0);
+  for i in 0..n { out[i] = f64(f32(quantize[i8](f32(p[i]), scale)) * scale); }
+}
+
+// The same through f8e4m3, whose largest finite value is 448.
+fn through_f8(n:usize, p:ro<f64>[n], out:rw<f64>[n]) {
+  let scale = scale_of(p, 448.0);
+  for i in 0..n { out[i] = f64(f32(quantize[f8e4m3](f32(p[i]), scale)) * scale); }
+}
+
+fn quantized(net:ro<Net>, eight:bool) -> Net {
+  let mut q = Net(Array[f64, 16](), Array[f64, 8](), Array[f64, 8](), 0.0);
+  let mut b = Array[f64, 1]();
+  let mut out = Array[f64, 1]();
+  b[0] = net.b;
+  if eight {
+    through_f8(net.w, q.w);
+    through_f8(net.c, q.c);
+    through_f8(net.v, q.v);
+    through_f8(b, out);
+  } else {
+    through_i8(net.w, q.w);
+    through_i8(net.c, q.c);
+    through_i8(net.v, q.v);
+    through_i8(b, out);
+  }
+  q.b = out[0];
+  return q;
+}
+
+// How far the quantized network's output moved at the furthest of the n points.
+fn drift(a:ro<Net>, b:ro<Net>, n:usize, m:usize, xs:ro<f64>[m]) -> f64 {
+  let mut top:f64 = 0.0;
+  for k in 0..n {
+    let za = model.logit(a.w, a.c, a.v, a.b, xs[2 * k], xs[2 * k + 1]);
+    let zb = model.logit(b.w, b.c, b.v, b.b, xs[2 * k], xs[2 * k + 1]);
+    top = max_f(top, abs(za - zb));
+  }
+  return top;
+}
+
+// The number of training steps: the first argument, when there is one that is a number.
+fn steps() -> usize {
+  match env.args() {
+    Ok(a) => {
+      if a.count() < 2 { return STEPS; }
+      let lo = a.begin(1);
+      let hi = a.end(1);
+      match text.parse_u64(a.text.data[lo..hi]) {
+        Ok(n) => return usize(n);
+        Err(e) => return STEPS;
+      }
+    }
+    Err(e) => return STEPS;
+  }
+}
+
+fn say(out:rw<Vec[u8]>, n:usize, label:ro<u8>[n], value:f64) {
+  fmt.bytes(out, label);
+  fmt.fixed(out, value, 6);
+  out.push('\n');
+}
+
+fn main() -> i32 {
+  let mut state:u64 = 2026;
+  buffer train_xs:f64[PAIRS] = zeroed;
+  buffer train_ys:f64[TRAIN] = zeroed;
+  buffer test_xs:f64[PAIRS] = zeroed;
+  buffer test_ys:f64[TEST] = zeroed;
+  points(TRAIN, PAIRS, train_xs, train_ys, state);
+  points(TEST, PAIRS, test_xs, test_ys, state);
+  let mut net = Net(Array[f64, 16](), Array[f64, 8](), Array[f64, 8](), 0.0);
+  start(net.w, 1.0, state);
+  start(net.c, 1.0, state);
+  start(net.v, 1.0, state);
+  let first = model.loss(TRAIN, PAIRS, net.w, net.c, net.v, net.b, train_xs, train_ys);
+  let asked = steps();
+  let last = train(net, train_xs, train_ys, asked);
+  let low = quantized(net, false);
+  let tiny = quantized(net, true);
+  let seen = accuracy(net, TRAIN, PAIRS, train_xs, train_ys);
+  let unseen = accuracy(net, TEST, PAIRS, test_xs, test_ys);
+  let low_hit = accuracy(low, TEST, PAIRS, test_xs, test_ys);
+  let low_drift = drift(net, low, TEST, PAIRS, test_xs);
+  let tiny_hit = accuracy(tiny, TEST, PAIRS, test_xs, test_ys);
+  let tiny_drift = drift(net, tiny, TEST, PAIRS, test_xs);
+  let mut out = vec.new[u8]();
+  say(out, "loss before     ", first);
+  say(out, "loss after      ", last);
+  say(out, "train accuracy  ", seen);
+  say(out, "test accuracy   ", unseen);
+  say(out, "i8 accuracy     ", low_hit);
+  say(out, "i8 drift        ", low_drift);
+  say(out, "f8e4m3 accuracy ", tiny_hit);
+  say(out, "f8e4m3 drift    ", tiny_drift);
+  io.print(out.data[0..out.len]);
+  if last >= first { return 1; }
+  return 0;
+}

@@ -1,0 +1,7 @@
+[project]
+name = "classifier"
+sources = ["src/main.cairn", "src/model.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"
