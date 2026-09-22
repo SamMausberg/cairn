@@ -167,25 +167,21 @@ def checkBlock (c : CState) : List Stmt → Option CState
 
 end
 
-@[simp] theorem checkStmt_alloc (c : CState) (x : Var) :
-    checkStmt c (.alloc x) = if guardOf c (.alloc x) then some (effOf c (.alloc x)) else none := rfl
-@[simp] theorem checkStmt_mkScalar (c : CState) (x : Var) :
-    checkStmt c (.mkScalar x) = if guardOf c (.mkScalar x) then some (effOf c (.mkScalar x)) else none := rfl
-@[simp] theorem checkStmt_copy (c : CState) (y x : Var) :
-    checkStmt c (.copy y x) = if guardOf c (.copy y x) then some (effOf c (.copy y x)) else none := rfl
-@[simp] theorem checkStmt_move (c : CState) (y x : Var) :
-    checkStmt c (.move y x) = if guardOf c (.move y x) then some (effOf c (.move y x)) else none := rfl
-@[simp] theorem checkStmt_drop (c : CState) (x : Var) :
-    checkStmt c (.drop x) = if guardOf c (.drop x) then some (effOf c (.drop x)) else none := rfl
-@[simp] theorem checkStmt_call (c : CState) (args : List Borrow) :
-    checkStmt c (.call args) = if guardOf c (.call args) then some (effOf c (.call args)) else none := rfl
-@[simp] theorem checkStmt_spawn (c : CState) (t : Ticket) (args : List Borrow) :
-    checkStmt c (.spawn t args) = if guardOf c (.spawn t args) then some (effOf c (.spawn t args)) else none := rfl
-@[simp] theorem checkStmt_wait (c : CState) (t : Ticket) :
-    checkStmt c (.wait t) = if guardOf c (.wait t) then some (effOf c (.wait t)) else none := rfl
-@[simp] theorem checkStmt_parallel (c : CState) (nb : Bound) (body : List Touch) :
-    checkStmt c (.parallel nb body) =
-      if guardOf c (.parallel nb body) then some (effOf c (.parallel nb body)) else none := rfl
+/-- Every statement but `ite` is checked by its guard and continues in its effect. -/
+theorem checkStmt_of_ne_ite (c : CState) (s : Stmt) (h : ∀ thn els, s ≠ .ite thn els) :
+    checkStmt c s = if guardOf c s then some (effOf c s) else none := by
+  cases s <;> first | rfl | exact absurd rfl (h _ _)
+
+/-- What a checked straight-line statement says: its guard passed, and the state after it
+is its effect. -/
+theorem checkStmt_straight {c c1 : CState} {s : Stmt}
+    (h : checkStmt c s = some c1) (hne : ∀ thn els, s ≠ .ite thn els) :
+    guardOf c s = true ∧ c1 = effOf c s := by
+  rw [checkStmt_of_ne_ite c s hne] at h
+  split at h
+  · next hg => exact ⟨hg, (Option.some.inj h).symm⟩
+  · exact absurd h nofun
+
 @[simp] theorem checkStmt_ite (c : CState) (thn els : List Stmt) :
     checkStmt c (.ite thn els) =
       match checkBlock c thn, checkBlock c els with
@@ -198,6 +194,9 @@ end
       match checkStmt c s with
       | some c' => checkBlock c' rest
       | none => none := rfl
+
+theorem effOf_scope (c : CState) (s : Stmt) : (effOf c s).scope = c.scope := by
+  cases s <;> rfl
 
 /-- The starting ownership state of a scope: nothing bound, nothing lent. -/
 def CState.start (p : Program) : CState :=

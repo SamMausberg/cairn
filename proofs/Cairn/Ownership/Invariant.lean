@@ -14,18 +14,19 @@ namespace Ownership
 theorem raceErr_none {ρ : Valuation} {tasks : List Task} {x : Borrow}
     (h : heldRace ρ tasks x = false) : raceErr ρ tasks x = none := by simp [raceErr, h]
 
-theorem memErr_none {st : State} {scope} {p : Var} (hm : MemOk st scope)
-    (h1 : st.env p ≠ .nil) (h2 : st.env p ≠ .moved) : memErr st p = none := by
+/-- A local that holds something -- a scalar or a live cell -- is safe to touch. -/
+theorem memErr_none {st : State} {scope} {p : Var} {v : Val} (hm : MemOk st scope)
+    (hp : st.env p = v) (h1 : v ≠ .nil) (h2 : v ≠ .moved) : memErr st p = none := by
   unfold memErr
   split
-  · next heq => exact absurd heq h1
-  · next heq => exact absurd heq h2
+  · next heq => exact absurd (hp.symm.trans heq) h1
+  · next heq => exact absurd (hp.symm.trans heq) h2
   · rfl
   · next a heq => rw [hm.liveOfEnv p a heq]; rfl
 
 theorem accessErr_none {ρ : Valuation} {tasks : List Task} {st : State} {x : Borrow}
-    (hr : raceErr ρ tasks x = none) (hm : memErr st x.1.base = none) :
-    accessErr ρ tasks st x = none := by simp [accessErr, hr, hm]
+    (hr : heldRace ρ tasks x = false) (hm : memErr st x.1.base = none) :
+    accessErr ρ tasks st x = none := by simp [accessErr, raceErr, hr, hm]
 
 theorem accessAll_none {ρ : Valuation} {tasks : List Task} {st : State} :
     ∀ args : List Borrow, (∀ x ∈ args, accessErr ρ tasks st x = none) →
@@ -48,51 +49,33 @@ theorem splits_mem {α : Type} : ∀ {l : List α} {a : α} {r : List α},
     (a, r) ∈ splits l → a ∈ l ∧ ∀ b ∈ r, b ∈ l := by
   intro l
   induction l with
-  | nil => intro a r h; exact absurd h (by simp [splits])
+  | nil => simp [splits]
   | cons a0 rest ih =>
       intro a r h
-      rw [show splits (a0 :: rest) = (a0, rest) :: (splits rest).map
-            (fun x => (x.1, a0 :: x.2)) from rfl] at h
-      rcases List.mem_cons.mp h with h1 | h2
-      · have ha : a = a0 := congrArg Prod.fst h1
-        have hr : r = rest := congrArg Prod.snd h1
-        exact ⟨by rw [ha]; exact List.mem_cons_self .., by
-          intro b hb; rw [hr] at hb; exact List.mem_cons_of_mem _ hb⟩
-      · obtain ⟨y, hy, hyeq⟩ := List.mem_map.mp h2
-        have ha : a = y.1 := (congrArg Prod.fst hyeq).symm
-        have hr : r = a0 :: y.2 := (congrArg Prod.snd hyeq).symm
-        obtain ⟨hy1, hy2⟩ := ih hy
-        refine ⟨by rw [ha]; exact List.mem_cons_of_mem _ hy1, ?_⟩
-        intro b hb
-        rw [hr] at hb
-        rcases List.mem_cons.mp hb with hb1 | hb2
-        · rw [hb1]; exact List.mem_cons_self ..
-        · exact List.mem_cons_of_mem _ (hy2 b hb2)
+      simp only [splits, List.mem_cons, List.mem_map, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, rfl⟩ | ⟨⟨y, ys⟩, hy, rfl, rfl⟩
+      · exact ⟨List.mem_cons_self .., fun b hb => List.mem_cons_of_mem _ hb⟩
+      · obtain ⟨h1, h2⟩ := ih hy
+        refine ⟨List.mem_cons_of_mem _ h1, fun b hb => ?_⟩
+        rcases List.mem_cons.mp hb with rfl | hb
+        · exact List.mem_cons_self ..
+        · exact List.mem_cons_of_mem _ (h2 b hb)
 
 theorem pairwise_splits {α : Type} {R : α → α → Prop} (hsym : ∀ a b, R a b → R b a) :
     ∀ {l : List α}, l.Pairwise R → ∀ {a : α} {r : List α}, (a, r) ∈ splits l → ∀ b ∈ r, R a b := by
   intro l
   induction l with
-  | nil => intro _ a r h; exact absurd h (by simp [splits])
+  | nil => simp [splits]
   | cons a0 rest ih =>
       intro hp a r h
-      rw [show splits (a0 :: rest) = (a0, rest) :: (splits rest).map
-            (fun x => (x.1, a0 :: x.2)) from rfl] at h
       have hph := List.pairwise_cons.mp hp
-      rcases List.mem_cons.mp h with h1 | h2
-      · have ha : a = a0 := congrArg Prod.fst h1
-        have hr : r = rest := congrArg Prod.snd h1
-        intro b hb
-        rw [ha]; exact hph.1 b (hr ▸ hb)
-      · obtain ⟨y, hy, hyeq⟩ := List.mem_map.mp h2
-        have ha : a = y.1 := (congrArg Prod.fst hyeq).symm
-        have hr : r = a0 :: y.2 := (congrArg Prod.snd hyeq).symm
-        intro b hb
-        rw [hr] at hb
-        rcases List.mem_cons.mp hb with hb1 | hb2
-        · rw [ha, hb1]
-          exact hsym a0 y.1 (hph.1 y.1 (splits_mem hy).1)
-        · rw [ha]; exact ih hph.2 hy b hb2
+      simp only [splits, List.mem_cons, List.mem_map, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, rfl⟩ | ⟨⟨y, ys⟩, hy, rfl, rfl⟩
+      · exact hph.1
+      · intro b hb
+        rcases List.mem_cons.mp hb with rfl | hb
+        · exact hsym _ _ (hph.1 y (splits_mem hy).1)
+        · exact ih hph.2 hy b hb
 
 /-! ## The invariant
 
@@ -109,13 +92,32 @@ theorem Agree.live_of_livePlace {c : CState} {st : State} {tasks} (h : Agree c s
     {p : Var} (hp : c.livePlace p = true) : st.env p ≠ .nil ∧ st.env p ≠ .moved := by
   simp only [CState.livePlace, Bool.or_eq_true, contains_iff_mem] at hp
   rcases hp with hs | ho
-  · rw [h.scalars_ok p hs]; exact ⟨fun hc => Val.noConfusion hc, fun hc => Val.noConfusion hc⟩
+  · rw [h.scalars_ok p hs]; exact ⟨nofun, nofun⟩
   · obtain ⟨a, ha⟩ := h.owners_ok p ho
-    rw [ha]; exact ⟨fun hc => Val.noConfusion hc, fun hc => Val.noConfusion hc⟩
+    rw [ha]; exact ⟨nofun, nofun⟩
+
+/-- **Agreement survives rebinding one local.**  The checker's new sets may mention `x`
+only as what the state now holds there, and every other local is as it was. -/
+theorem Agree.rebind {c c' : CState} {st st' : State} {tasks : List Task} {x : Var}
+    (h : Agree c st tasks) (hkeep : ∀ p, p ≠ x → st'.env p = st.env p) (hl : c'.leases = c.leases)
+    (hs : ∀ p ∈ c'.scalars, p = x ∨ p ∈ c.scalars) (hsx : x ∈ c'.scalars → st'.env x = .scalar)
+    (ho : ∀ p ∈ c'.owners, p = x ∨ p ∈ c.owners) (hox : x ∈ c'.owners → ∃ a, st'.env x = .owner a) :
+    Agree c' st' tasks where
+  scalars_ok p hp := (dec_eq_or_ne p x).elim (fun e => e ▸ hsx (e ▸ hp))
+    fun ne => hkeep p ne ▸ h.scalars_ok p ((hs p hp).resolve_left ne)
+  owners_ok p hp := (dec_eq_or_ne p x).elim (fun e => e ▸ hox (e ▸ hp))
+    fun ne => hkeep p ne ▸ h.owners_ok p ((ho p hp).resolve_left ne)
+  leases_ok := hl ▸ h.leases_ok
 
 /-- The local under every place a live task holds still holds something. -/
 def TasksLive (tasks : List Task) (st : State) : Prop :=
   ∀ T ∈ tasks, ∀ y ∈ T.2, st.env y.1.base ≠ .nil ∧ st.env y.1.base ≠ .moved
+
+/-- Rebinding a local no live task holds a place of keeps every leased base bound. -/
+theorem TasksLive.rebind {tasks : List Task} {st st' : State} {x : Var} (h : TasksLive tasks st)
+    (hkeep : ∀ p, p ≠ x → st'.env p = st.env p) (hu : ∀ T ∈ tasks, ∀ y ∈ T.2, y.1.base ≠ x) :
+    TasksLive tasks st' :=
+  fun T hT y hy => hkeep _ (hu T hT y hy) ▸ h T hT y hy
 
 /-- **Every part a live task holds was guarded.**  This is the invariant the
 chaining rule needs: a lease on `d[lo..hi]` exists only because the spawner formed
@@ -128,17 +130,28 @@ def TasksGuarded (ρ : Valuation) (tasks : List Task) : Prop :=
 /-- No two live threads race with each other. -/
 def TasksOk (ρ : Valuation) (tasks : List Task) : Prop := tasks.Pairwise (NoRacePair ρ)
 
-/-- The invariant an accepted program keeps.  The three clauses about live threads
-range over the tasks AND the lanes together, which is the single statement that no
-two of them conflict -- two tasks, a task and a lane, or two lanes.  A trap satisfies
-the invariant vacuously: it is a defined abort, so nothing is claimed about the cells
-it leaves behind. -/
+/-- **The checker and the machine in step.**  The heap invariant holds, the live
+threads -- `threads` is the tasks and the lanes of a running region together -- are
+pairwise compatible, every base they hold is bound and every part they hold was
+guarded, and the checker state `c` describes the state and the tasks. -/
+structure Sync (ρ : Valuation) (scope : List Var) (c : CState) (tasks threads : List Task)
+    (st : State) : Prop where
+  mem : MemOk st scope
+  compat : TasksOk ρ threads
+  live : TasksLive threads st
+  guarded : TasksGuarded ρ threads
+  scope_eq : c.scope = scope
+  agree : Agree c st tasks
+
+/-- The invariant an accepted program keeps: some checker state is in step with the
+machine and checks the code that remains, leaving no ticket live at the end.  The
+three clauses about live threads range over the tasks AND the lanes together, which is
+the single statement that no two of them conflict -- two tasks, a task and a lane, or
+two lanes.  A trap satisfies the invariant vacuously: it is a defined abort, so nothing
+is claimed about the cells it leaves behind. -/
 def Ok (ρ : Valuation) (scope : List Var) : Cfg → Prop
   | .run code tasks lanes st =>
-      MemOk st scope ∧ TasksOk ρ (tasks ++ lanes) ∧ TasksLive (tasks ++ lanes) st ∧
-      TasksGuarded ρ (tasks ++ lanes) ∧
-      ∃ c, c.scope = scope ∧ Agree c st tasks ∧
-        ∃ d, checkBlock c code = some d ∧ d.leases = []
+      ∃ c, Sync ρ scope c tasks (tasks ++ lanes) st ∧ ∃ d, checkBlock c code = some d ∧ d.leases = []
   | .done st => (∀ a, st.live a = false) ∧ (∀ a, a < st.next → st.frees a = 1)
   | .trap => True
   | .err _ => False
@@ -148,10 +161,14 @@ empty tail: this is the shape every straight-line step produces. -/
 theorem Ok_run_nil {ρ : Valuation} {scope : List Var} {code : List Stmt} {tasks : List Task}
     {st : State} :
     Ok ρ scope (.run code tasks [] st) ↔
-      (MemOk st scope ∧ TasksOk ρ tasks ∧ TasksLive tasks st ∧ TasksGuarded ρ tasks ∧
-        ∃ c, c.scope = scope ∧ Agree c st tasks ∧
-          ∃ d, checkBlock c code = some d ∧ d.leases = []) := by
+      ∃ c, Sync ρ scope c tasks tasks st ∧ ∃ d, checkBlock c code = some d ∧ d.leases = [] := by
   simp only [Ok, List.append_nil]
+
+theorem Ok_of_sync {ρ : Valuation} {scope : List Var} {c d : CState} {code : List Stmt}
+    {tasks : List Task} {st : State} (hs : Sync ρ scope c tasks tasks st)
+    (hchk : checkBlock c code = some d) (hdl : d.leases = []) :
+    Ok ρ scope (.run code tasks [] st) :=
+  Ok_run_nil.mpr ⟨c, hs, d, hchk, hdl⟩
 
 /-- The guards of everything in play for one access: the lent parts by the
 invariant, and the accessed place itself by the guard the machine just ran. -/
@@ -178,6 +195,20 @@ theorem heldRace_none {ρ : Valuation} {c : CState} {tasks : List Task} {x : Bor
   rw [hleases] at hfalse
   exact heldRace_of_heldConflict (inPlay_guarded hleases hg hx) hfalse
 
+/-- Writing a local: the checker's permission gives both halves at once -- no live
+task holds any place of that local, so nothing races with the write and nothing a
+task holds moves under it. -/
+theorem write_ok {ρ : Valuation} {c : CState} {tasks : List Task} {x : Var}
+    (hleases : c.leases = tasks) (hg : TasksGuarded ρ tasks) (h : c.mayWrite x = true) :
+    heldRace ρ tasks (.whole ⟨x, []⟩, Mode.rw) = false ∧
+      ∀ T ∈ tasks, ∀ y ∈ T.2, y.1.base ≠ x := by
+  have hfalse : heldConflict (c.inPlay (.whole ⟨x, []⟩, Mode.rw)) c.leases
+      (.whole ⟨x, []⟩, Mode.rw) = false := by
+    simpa [CState.mayWrite, CState.mayAccess] using h
+  have hguards := inPlay_guarded (x := (Place.whole ⟨x, []⟩, Mode.rw)) hleases hg rfl
+  rw [hleases] at hfalse
+  exact ⟨heldRace_of_heldConflict hguards hfalse, untouched_of_write_ok hfalse⟩
+
 theorem checkBlock_scope {c c' : CState} {ss : List Stmt} (h : checkBlock c ss = some c') :
     c'.scope = c.scope := by
   obtain ⟨_, _, _, hsc⟩ := checkBlock_mono (blockSize ss + 1) ss (Nat.lt_succ_self _) (Le.refl c) h
@@ -187,14 +218,6 @@ theorem checkBlock_weaken {c d c' : CState} {ss : List Stmt} (hle : Le c d)
     (h : checkBlock c ss = some c') : ∃ d', checkBlock d ss = some d' ∧ Le c' d' := by
   obtain ⟨d', h1, h2, _⟩ := checkBlock_mono (blockSize ss + 1) ss (Nat.lt_succ_self _) hle h
   exact ⟨d', h1, h2⟩
-
-theorem effOf_scope (c : CState) (s : Stmt) : (effOf c s).scope = c.scope := by
-  cases s <;> rfl
-
-theorem checkStmt_scope {c c1 : CState} {s : Stmt} (h : checkStmt c s = some c1) :
-    c1.scope = c.scope := by
-  refine checkBlock_scope (ss := [s]) ?_
-  rw [checkBlock_cons, h]; rfl
 
 end Ownership
 end Cairn

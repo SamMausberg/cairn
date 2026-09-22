@@ -90,7 +90,7 @@ theorem release_live_of {st st' : State} {x : Var} (hr : release x st = .ok st')
   · rw [he] at ha; exact ha
   · rw [he] at ha
     have ha' : updL st.live b false a = true := ha
-    rcases nat_eq_or_ne a b with hab | hab
+    rcases dec_eq_or_ne a b with hab | hab
     · rw [hab, updL_same] at ha'; exact Bool.noConfusion ha'
     · rw [updL_other hab] at ha'; exact ha'
 
@@ -106,7 +106,7 @@ theorem memOk_release {st st' : State} {scope} {x : Var} (h : MemOk st scope)
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro p b hp0
     have hp : (upd st.env x Val.moved) p = .owner b := hp0
-    rcases nat_eq_or_ne p x with hpx | hpx
+    rcases dec_eq_or_ne p x with hpx | hpx
     · rw [hpx, upd_same] at hp; exact Val.noConfusion hp
     rw [henv p hpx] at hp
     have hne : b ≠ a := fun hba => hpx (h.uniq p x b hp (hba ▸ hx))
@@ -115,9 +115,9 @@ theorem memOk_release {st st' : State} {scope} {x : Var} (h : MemOk st scope)
   · intro p q b hp0 hq0
     have hp : (upd st.env x Val.moved) p = .owner b := hp0
     have hq : (upd st.env x Val.moved) q = .owner b := hq0
-    rcases nat_eq_or_ne p x with hpx | hpx
+    rcases dec_eq_or_ne p x with hpx | hpx
     · rw [hpx, upd_same] at hp; exact Val.noConfusion hp
-    rcases nat_eq_or_ne q x with hqx | hqx
+    rcases dec_eq_or_ne q x with hqx | hqx
     · rw [hqx, upd_same] at hq; exact Val.noConfusion hq
     rw [henv p hpx] at hp; rw [henv q hqx] at hq
     exact h.uniq p q b hp hq
@@ -141,7 +141,7 @@ theorem memOk_release {st st' : State} {scope} {x : Var} (h : MemOk st scope)
     show (updN st.frees a (st.frees a + 1)) b = 0
     rw [hfree b hne]; exact h.liveUnfreed b hb
   · intro b hb
-    rcases nat_eq_or_ne b a with hba | hba
+    rcases dec_eq_or_ne b a with hba | hba
     · right
       show (updN st.frees a (st.frees a + 1)) b = 1
       rw [hba, updN_same, h.liveUnfreed a ha]
@@ -191,7 +191,7 @@ theorem memOk_fresh {st : State} {scope} {x : Var} (h : MemOk st scope) (hx : x 
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro p b hp0
     have hp : (upd st.env x (Val.owner st.next)) p = .owner b := hp0
-    rcases nat_eq_or_ne p x with hpx | hpx
+    rcases dec_eq_or_ne p x with hpx | hpx
     · rw [hpx, upd_same] at hp
       have : st.next = b := Val.owner.inj hp
       show updL st.live st.next true b = true
@@ -205,7 +205,7 @@ theorem memOk_fresh {st : State} {scope} {x : Var} (h : MemOk st scope) (hx : x 
     have hq : (upd st.env x (Val.owner st.next)) q = .owner b := hq0
     have key : ∀ r, (upd st.env x (Val.owner st.next)) r = .owner b → r = x ∨ st.env r = .owner b := by
       intro r hr
-      rcases nat_eq_or_ne r x with hrx | hrx
+      rcases dec_eq_or_ne r x with hrx | hrx
       · exact Or.inl hrx
       · exact Or.inr (by rw [← upd_other (f := st.env) (v := Val.owner st.next) hrx]; exact hr)
     have hnb : ∀ r, st.env r = .owner b → b ≠ st.next := by
@@ -221,7 +221,7 @@ theorem memOk_fresh {st : State} {scope} {x : Var} (h : MemOk st scope) (hx : x 
       · exact h.uniq p q b hpe hqe
   · intro b hb0
     have hb : updL st.live st.next true b = true := hb0
-    rcases nat_eq_or_ne b st.next with hbn | hbn
+    rcases dec_eq_or_ne b st.next with hbn | hbn
     · refine ⟨x, hx, ?_⟩
       show upd st.env x (Val.owner st.next) x = Val.owner b
       rw [hbn]; exact upd_same _ _ _
@@ -233,11 +233,11 @@ theorem memOk_fresh {st : State} {scope} {x : Var} (h : MemOk st scope) (hx : x 
       rw [upd_other hpx]; exact hpe
   · intro b hb0
     have hb : updL st.live st.next true b = true := hb0
-    rcases nat_eq_or_ne b st.next with hbn | hbn
+    rcases dec_eq_or_ne b st.next with hbn | hbn
     · show st.frees b = 0; rw [hbn]; exact hnf
     · rw [updL_other hbn] at hb; exact h.liveUnfreed b hb
   · intro b hb
-    rcases nat_eq_or_ne b st.next with hbn | hbn
+    rcases dec_eq_or_ne b st.next with hbn | hbn
     · left; show updL st.live st.next true b = true; rw [hbn, updL_same]
     · have hlt : b < st.next := by
         rcases Nat.lt_or_ge b st.next with hh | hh
@@ -325,15 +325,15 @@ theorem memOk_bindAt {st st' : State} {scope} {y : Var} {v : Val} (h : MemOk st 
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro p b hp0
     have hp : (upd st1.env y v) p = .owner b := hp0
-    rcases nat_eq_or_ne p y with hpy | hpy
+    rcases dec_eq_or_ne p y with hpy | hpy
     · exact absurd hp (hpy ▸ hy b)
     · rw [hother p hpy] at hp; exact h1'.liveOfEnv p b hp
   · intro p q b hp0 hq0
     have hp : (upd st1.env y v) p = .owner b := hp0
     have hq : (upd st1.env y v) q = .owner b := hq0
-    rcases nat_eq_or_ne p y with hpy | hpy
+    rcases dec_eq_or_ne p y with hpy | hpy
     · exact absurd hp (hpy ▸ hy b)
-    rcases nat_eq_or_ne q y with hqy | hqy
+    rcases dec_eq_or_ne q y with hqy | hqy
     · exact absurd hq (hqy ▸ hy b)
     rw [hother p hpy] at hp; rw [hother q hqy] at hq
     exact h1'.uniq p q b hp hq
@@ -368,9 +368,9 @@ theorem memOk_move {st st1 : State} {scope} {y x : Var} {a : AllocId} (h : MemOk
   have hkey : ∀ p b, (upd st1.env x Val.moved) p = .owner b → p = y ∧ b = a ∨
       (p ≠ x ∧ p ≠ y ∧ st2.env p = .owner b) := by
     intro p b hp
-    rcases nat_eq_or_ne p x with hpx | hpx
+    rcases dec_eq_or_ne p x with hpx | hpx
     · rw [hpx, upd_same] at hp; exact absurd hp (fun hc => Val.noConfusion hc)
-    rcases nat_eq_or_ne p y with hpy | hpy
+    rcases dec_eq_or_ne p y with hpy | hpy
     · rw [hpy] at hp; rw [hey] at hp; exact Or.inl ⟨hpy, (Val.owner.inj hp).symm⟩
     · rw [hex p hpx, h1o p hpy] at hp; exact Or.inr ⟨hpx, hpy, hp⟩
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -392,9 +392,9 @@ theorem memOk_move {st st1 : State} {scope} {y x : Var} {a : AllocId} (h : MemOk
   · intro b hb0
     have hb2 : st2.live b = true := by rw [he] at hb0; exact hb0
     obtain ⟨p, hp, hpe⟩ := h2.covered b hb2
-    rcases nat_eq_or_ne p y with hpy | hpy
+    rcases dec_eq_or_ne p y with hpy | hpy
     · exact absurd hpe (hpy ▸ h2y b)
-    rcases nat_eq_or_ne p x with hpx | hpx
+    rcases dec_eq_or_ne p x with hpx | hpx
     · refine ⟨y, hy, ?_⟩
       have hba : b = a := by
         refine Val.owner.inj ?_

@@ -338,32 +338,72 @@ before the next statement. -/
 def twoRegions : Program :=
   ⟨[0], [alloc 0, parallel n [.elem data Mode.rw], parallel n [.elem data Mode.rw]]⟩
 
-/-- Every line of the regression, as one Boolean the build can print. -/
-def report : Bool :=
-  accepts moveOnce && !accepts doubleMove && !accepts leasedRead && accepts sharedRead
-    && !accepts moveBesideView && !accepts unawaitedTicket && !accepts aliasedCall
-    && !accepts movedOnOnePath && accepts movedOnBothPaths && !accepts ticketsDisagree
-    && accepts twoOwners && accepts disjointSplit && accepts kwaySplit
-    && !accepts partsWithoutMiddle && !accepts overlappingParts && !accepts overlappingArgs
-    && accepts backwardsPart && accepts lenUnderElementLease && !accepts lenUnderOwnerLease
-    && !accepts overlappingTasks && !accepts copyAnOwner
-    && accepts copyAScalar && !accepts useAfterDrop && !accepts outOfScope
-    && !accepts elemUnderPartLease && accepts elemBesideOtherPart
-    && !accepts mutableBoundParts && !accepts partOfPartBesidePart
-    && accepts oneFieldToATask && accepts fieldsToTwoTasks && !accepts sameFieldToTwoTasks
-    && !accepts fieldAssignUnderElementLease
-    && accepts partsOfTwoFieldsInOneCall && accepts fieldPartsSplitInOneCall
-    && !accepts fieldPartsOverlapInOneCall && !accepts sameFieldTwiceInOneCall
-    && !accepts fieldMoveUnderLease && !accepts fieldReadUnderRecordLease
-    && accepts lenOfFieldUnderElementLease && !accepts lenOfFieldUnderRecordLease
-    && accepts laneMap && accepts laneReadsShared && accepts laneLenAndWrite
-    && !accepts laneWritesFixedIndex && !accepts laneWritesShared && !accepts laneReadsOther
-    && accepts laneBesideTask && !accepts laneUnderLease && !accepts laneUnderPartLease
-    && accepts twoRegions
+/-- Every line of the regression: the program, and whether the Python checker accepts
+the CAIRN source it encodes. -/
+def lines : List (String × Bool × Program) :=
+  [("moveOnce", true, moveOnce),
+   ("doubleMove", false, doubleMove),
+   ("leasedRead", false, leasedRead),
+   ("sharedRead", true, sharedRead),
+   ("moveBesideView", false, moveBesideView),
+   ("unawaitedTicket", false, unawaitedTicket),
+   ("aliasedCall", false, aliasedCall),
+   ("movedOnOnePath", false, movedOnOnePath),
+   ("movedOnBothPaths", true, movedOnBothPaths),
+   ("ticketsDisagree", false, ticketsDisagree),
+   ("twoOwners", true, twoOwners),
+   ("disjointSplit", true, disjointSplit),
+   ("kwaySplit", true, kwaySplit),
+   ("partsWithoutMiddle", false, partsWithoutMiddle),
+   ("overlappingParts", false, overlappingParts),
+   ("overlappingArgs", false, overlappingArgs),
+   ("backwardsPart", true, backwardsPart),
+   ("lenUnderElementLease", true, lenUnderElementLease),
+   ("lenUnderOwnerLease", false, lenUnderOwnerLease),
+   ("overlappingTasks", false, overlappingTasks),
+   ("copyAnOwner", false, copyAnOwner),
+   ("copyAScalar", true, copyAScalar),
+   ("useAfterDrop", false, useAfterDrop),
+   ("outOfScope", false, outOfScope),
+   ("elemUnderPartLease", false, elemUnderPartLease),
+   ("elemBesideOtherPart", true, elemBesideOtherPart),
+   ("mutableBoundParts", false, mutableBoundParts),
+   ("partOfPartBesidePart", false, partOfPartBesidePart),
+   ("oneFieldToATask", true, oneFieldToATask),
+   ("fieldsToTwoTasks", true, fieldsToTwoTasks),
+   ("sameFieldToTwoTasks", false, sameFieldToTwoTasks),
+   ("fieldAssignUnderElementLease", false, fieldAssignUnderElementLease),
+   ("partsOfTwoFieldsInOneCall", true, partsOfTwoFieldsInOneCall),
+   ("fieldPartsSplitInOneCall", true, fieldPartsSplitInOneCall),
+   ("fieldPartsOverlapInOneCall", false, fieldPartsOverlapInOneCall),
+   ("sameFieldTwiceInOneCall", false, sameFieldTwiceInOneCall),
+   ("fieldMoveUnderLease", false, fieldMoveUnderLease),
+   ("fieldReadUnderRecordLease", false, fieldReadUnderRecordLease),
+   ("lenOfFieldUnderElementLease", true, lenOfFieldUnderElementLease),
+   ("lenOfFieldUnderRecordLease", false, lenOfFieldUnderRecordLease),
+   ("laneMap", true, laneMap),
+   ("laneReadsShared", true, laneReadsShared),
+   ("laneLenAndWrite", true, laneLenAndWrite),
+   ("laneWritesFixedIndex", false, laneWritesFixedIndex),
+   ("laneWritesShared", false, laneWritesShared),
+   ("laneReadsOther", false, laneReadsOther),
+   ("laneBesideTask", true, laneBesideTask),
+   ("laneUnderLease", false, laneUnderLease),
+   ("laneUnderPartLease", false, laneUnderPartLease),
+   ("twoRegions", true, twoRegions)]
 
-/-- What the build prints, so the Python gate can assert on it. -/
+/-- The lines this checker classifies differently from the Python checker. -/
+def failures : List String :=
+  lines.filterMap fun (name, expected, p) => if accepts p == expected then none else some name
+
+/-- Every line of the regression, as one Boolean the build can print. -/
+def report : Bool := failures.isEmpty
+
+/-- What the build prints, so the Python gate can assert on it, naming any line that
+fails. -/
 def line : String :=
-  if report then "ownership-regression: pass" else "ownership-regression: FAIL"
+  if report then "ownership-regression: pass"
+  else "ownership-regression: FAIL " ++ String.intercalate ", " failures
 
 /-! ### The faults are reachable
 
@@ -509,59 +549,10 @@ theorem witnesses_are_rejected :
 end Regress
 
 /-- The Lean encodings of the pinned CAIRN programs are classified exactly as the
-Python checker classifies them. -/
+Python checker classifies them: no line of the regression fails. -/
 theorem ownership_regression : Regress.report = true := by decide
 
-/-! ### The individual pinned programs -/
-
-example : accepts Regress.moveBesideView = false := by decide
-example : accepts Regress.leasedRead = false := by decide
-example : accepts Regress.doubleMove = false := by decide
-example : accepts Regress.unawaitedTicket = false := by decide
-example : accepts Regress.aliasedCall = false := by decide
-example : accepts Regress.movedOnOnePath = false := by decide
-example : accepts Regress.ticketsDisagree = false := by decide
-example : accepts Regress.overlappingTasks = false := by decide
-example : accepts Regress.copyAnOwner = false := by decide
-example : accepts Regress.useAfterDrop = false := by decide
-example : accepts Regress.partsWithoutMiddle = false := by decide
-example : accepts Regress.overlappingParts = false := by decide
-example : accepts Regress.overlappingArgs = false := by decide
-example : accepts Regress.lenUnderOwnerLease = false := by decide
-example : accepts Regress.elemUnderPartLease = false := by decide
-example : accepts Regress.mutableBoundParts = false := by decide
-example : accepts Regress.partOfPartBesidePart = false := by decide
-example : accepts Regress.elemBesideOtherPart = true := by decide
-example : accepts Regress.sameFieldToTwoTasks = false := by decide
-example : accepts Regress.fieldAssignUnderElementLease = false := by decide
-example : accepts Regress.fieldMoveUnderLease = false := by decide
-example : accepts Regress.fieldReadUnderRecordLease = false := by decide
-example : accepts Regress.fieldPartsOverlapInOneCall = false := by decide
-example : accepts Regress.sameFieldTwiceInOneCall = false := by decide
-example : accepts Regress.lenOfFieldUnderRecordLease = false := by decide
-example : accepts Regress.laneWritesFixedIndex = false := by decide
-example : accepts Regress.laneWritesShared = false := by decide
-example : accepts Regress.laneReadsOther = false := by decide
-example : accepts Regress.laneUnderLease = false := by decide
-example : accepts Regress.laneUnderPartLease = false := by decide
-example : accepts Regress.twoOwners = true := by decide
-example : accepts Regress.disjointSplit = true := by decide
-example : accepts Regress.kwaySplit = true := by decide
-example : accepts Regress.backwardsPart = true := by decide
-example : accepts Regress.lenUnderElementLease = true := by decide
-example : accepts Regress.sharedRead = true := by decide
-example : accepts Regress.movedOnBothPaths = true := by decide
-example : accepts Regress.copyAScalar = true := by decide
-example : accepts Regress.oneFieldToATask = true := by decide
-example : accepts Regress.fieldsToTwoTasks = true := by decide
-example : accepts Regress.lenOfFieldUnderElementLease = true := by decide
-example : accepts Regress.fieldPartsSplitInOneCall = true := by decide
-example : accepts Regress.partsOfTwoFieldsInOneCall = true := by decide
-example : accepts Regress.laneMap = true := by decide
-example : accepts Regress.laneReadsShared = true := by decide
-example : accepts Regress.laneLenAndWrite = true := by decide
-example : accepts Regress.laneBesideTask = true := by decide
-example : accepts Regress.twoRegions = true := by decide
+/-! ### Two rules, two chains -/
 
 /-- The two rules chain through different facts, exactly as `checking.py` does.  The
 lease check (`leased`) may use the bounds of every part the live tasks hold; the

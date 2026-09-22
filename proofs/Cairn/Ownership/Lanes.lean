@@ -41,31 +41,15 @@ nothing else carries bounds at all.  So a region never traps. -/
 
 @[simp] theorem Touch.borrow_guard (ρ : Valuation) (a : Touch) (k : Nat) :
     (a.borrow k).1.guard ρ = true := by
-  cases a
-  · exact decide_eq_true (Nat.le_succ k)
-  · rfl
-  · rfl
-  · rfl
+  cases a <;> simp [Touch.borrow, Place.guard, Bound.eval]
 
 /-- The lease check a region runs names `x[]`; a lane holds only its own element, so
 it inherits the answer. -/
 theorem races_borrow_of_lease {ρ : Valuation} {a : Touch} {k : Nat} {y : Borrow}
     (h : races ρ a.lease y = false) : races ρ (a.borrow k) y = false := by
-  cases a with
-  | other r m => exact h
-  | whole r m => exact h
-  | len r => exact h
-  | elem r m =>
-      show (meets ρ (.part r (.lit k) (.lit (k + 1))) y.1 && ((m == Mode.rw) || (y.2 == Mode.rw)))
-        = false
-      cases hm : meets ρ (Place.part r (.lit k) (.lit (k + 1))) y.1 with
-      | false => rfl
-      | true =>
-          have hlease : (meets ρ (Place.elems r) y.1 && ((m == Mode.rw) || (y.2 == Mode.rw)))
-              = false := h
-          rw [meets_elems_of_part hm, Bool.true_and] at hlease
-          rw [Bool.true_and]
-          exact hlease
+  cases a <;> try exact h
+  simp only [races, Bool.and_eq_false_iff, Touch.lease, Touch.borrow] at h ⊢
+  exact h.imp (bool_false_of_imp meets_elems_of_part) id
 
 /-- An access that writes puts its local in `written`. -/
 theorem writesVar_of_mem {body : List Touch} {a : Touch} (ha : a ∈ body) (hm : a.mode = Mode.rw) :
@@ -83,17 +67,7 @@ theorem borrow_shape {body : List Touch} (h : laneRule body = true) {a : Touch} 
     a.borrow k = (.part a.root (.lit k) (.lit (k + 1)), a.mode) ∨
       a.borrow k = (.hdr a.root, Mode.ro) := by
   have hall := (List.all_eq_true.mp h) a ha
-  cases a with
-  | elem r m => exact Or.inl rfl
-  | len r => exact Or.inr rfl
-  | other r m =>
-      have h2 : (!writesVar body r.var || false) = true := hall
-      rw [show writesVar body r.var = true from hw] at h2
-      exact Bool.noConfusion h2
-  | whole r m =>
-      have h2 : (!writesVar body r.var || false) = true := hall
-      rw [show writesVar body r.var = true from hw] at h2
-      exact Bool.noConfusion h2
+  cases a <;> simp_all [Touch.borrow, Touch.recorded, Touch.atBinder, Touch.root, Touch.mode]
 
 /-- **Two lanes of an accepted region never race.**  If their borrows met with a write
 among them they would be two writes, or a write and a read, of one local; the rule
@@ -105,12 +79,11 @@ theorem lane_borrows_dont_race {ρ : Valuation} {body : List Touch} (h : laneRul
   | false => rfl
   | true =>
       exfalso
-      obtain ⟨hmeet, hmode⟩ := and_parts hr
+      obtain ⟨hmeet, hmode⟩ := Bool.and_eq_true_iff.mp hr
       have hvar : a.root.var = b.root.var := by
-        have ht : (a.borrow k).1.root.touches (b.borrow l).1.root = true :=
-          (and_parts hmeet).1
+        have ht := (Bool.and_eq_true_iff.mp hmeet).1
         rw [Touch.borrow_root, Touch.borrow_root] at ht
-        exact eq_of_beq (and_parts ht).1
+        exact eq_of_beq (Bool.and_eq_true_iff.mp ht).1
       have hw : writesVar body a.root.var = true := by
         rcases Bool.or_eq_true_iff.mp hmode with hm | hm
         · rw [Touch.borrow_mode] at hm; exact writesVar_of_mem ha (eq_of_beq hm)
@@ -130,12 +103,12 @@ theorem lanesOf_index_lt : ∀ (n : Nat) {body : List Touch} {T : Task},
     T ∈ lanesOf n body → T.1 < n := by
   intro n
   induction n with
-  | zero => intro body T hT; exact absurd hT List.not_mem_nil
+  | zero => simp [lanesOf]
   | succ k ih =>
       intro body T hT
-      rcases List.mem_cons.mp hT with h1 | h2
-      · rw [h1]; exact Nat.lt_succ_self k
-      · exact Nat.lt_succ_of_lt (ih h2)
+      rcases List.mem_cons.mp hT with rfl | h
+      · exact Nat.lt_succ_self k
+      · exact Nat.lt_succ_of_lt (ih h)
 
 /-- Every borrow of a lane comes from an access of the body, taken at that lane's own
 index. -/
@@ -143,14 +116,13 @@ theorem mem_lanesOf : ∀ (n : Nat) {body : List Touch} {T : Task}, T ∈ lanesO
     ∀ {y : Borrow}, y ∈ T.2 → ∃ a ∈ body, y = a.borrow T.1 := by
   intro n
   induction n with
-  | zero => intro body T hT; exact absurd hT List.not_mem_nil
+  | zero => simp [lanesOf]
   | succ k ih =>
       intro body T hT y hy
-      rcases List.mem_cons.mp hT with h1 | h2
-      · subst h1
-        obtain ⟨a, haa, hae⟩ := List.mem_map.mp hy
-        exact ⟨a, haa, hae.symm⟩
-      · exact ih h2 hy
+      rcases List.mem_cons.mp hT with rfl | h
+      · obtain ⟨a, ha, rfl⟩ := List.mem_map.mp hy
+        exact ⟨a, ha, rfl⟩
+      · exact ih h hy
 
 /-- **The lanes of an accepted region are pairwise compatible.** -/
 theorem lanesOf_pairwise (ρ : Valuation) : ∀ (n : Nat) {body : List Touch},
@@ -162,11 +134,7 @@ theorem lanesOf_pairwise (ρ : Valuation) : ∀ (n : Nat) {body : List Touch},
       intro body h
       refine List.pairwise_cons.mpr ⟨?_, ih h⟩
       intro U hU x hx w hw
-      have hlt : U.1 < k := lanesOf_index_lt k hU
-      have hne : k ≠ U.1 := by
-        intro hc
-        rw [hc] at hlt
-        exact Nat.lt_irrefl U.1 hlt
+      have hne : k ≠ U.1 := Nat.ne_of_gt (lanesOf_index_lt k hU)
       obtain ⟨a, ha, hae⟩ := List.mem_map.mp hx
       obtain ⟨b, hb, hbe⟩ := mem_lanesOf k hU hw
       rw [← hae, hbe]

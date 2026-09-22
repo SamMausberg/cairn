@@ -24,10 +24,8 @@ theorem Ok_start {p : Program} {ρ : Valuation} (h : accepts p = true) :
   unfold accepts at h
   split at h
   · next c hc =>
-      refine ⟨memOk_start p.scope, List.Pairwise.nil, fun T hT => absurd hT List.not_mem_nil,
-        fun T hT => absurd hT List.not_mem_nil,
-        CState.start p, rfl, ⟨fun q hq => absurd hq List.not_mem_nil,
-          fun q hq => absurd hq List.not_mem_nil, rfl⟩, c, hc, ?_⟩
+      refine ⟨CState.start p, ⟨memOk_start p.scope, List.Pairwise.nil, nofun, nofun, rfl,
+        nofun, nofun, rfl⟩, c, hc, ?_⟩
       exact List.eq_nil_of_length_eq_zero (by simpa using h)
   · exact Bool.noConfusion h
 
@@ -101,7 +99,8 @@ theorem accepted_threads_disjoint {p : Program} (hp : accepts p = true) {ρ : Va
     {code : List Stmt} {tasks lanes : List Task} {st : State}
     (hr : Reach ρ p.scope (Cfg.start p) (.run code tasks lanes st)) :
     (tasks ++ lanes).Pairwise (NoRacePair ρ) :=
-  (Ok_reach hr (Ok_start hp)).2.1
+  match Ok_reach hr (Ok_start hp) with
+  | ⟨_, h, _⟩ => h.compat
 
 /-- **Every allocation is released exactly once.**  On normal termination nothing
 is still live and every cell the run ever allocated has been released once.  A run

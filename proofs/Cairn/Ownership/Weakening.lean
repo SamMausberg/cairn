@@ -123,18 +123,13 @@ theorem joinOf_mono {c d c1 d1 c2 d2 j : CState} (h : Le c d) (h1 : Le c1 d1) (h
         exact ⟨h1.owners p hp.1, h2.owners p hp.2⟩
   · exact absurd hj (by simp)
 
-/-- The straight-line half of weakening: a guard that passes in `c` passes in `d`. -/
-theorem guardAux {c d c1 : CState} {s : Stmt} (hle : Le c d)
-    (hc1 : (if guardOf c s then some (effOf c s) else none) = some c1) :
-    ∃ d1, (if guardOf d s then some (effOf d s) else none) = some d1 ∧ Le c1 d1
-      ∧ c1.scope = c.scope := by
-  split at hc1
-  · next hg =>
-      rw [guard_mono hle hg]
-      refine ⟨_, rfl, ?_, ?_⟩
-      · rw [← Option.some.inj hc1]; exact eff_mono hle s
-      · rw [← Option.some.inj hc1]; cases s <;> rfl
-  · exact absurd hc1 (by simp)
+/-- The straight-line half of weakening: a guard that passes in `c` passes in `d`, and
+the two effects stay ordered. -/
+theorem guardAux {c d : CState} {s : Stmt} (hle : Le c d) (hg : guardOf c s = true)
+    (hne : ∀ thn els, s ≠ .ite thn els) :
+    ∃ d1, checkStmt d s = some d1 ∧ Le (effOf c s) d1 ∧ (effOf c s).scope = c.scope :=
+  ⟨effOf d s, by simp [checkStmt_of_ne_ite d s hne, guard_mono hle hg], eff_mono hle s,
+    effOf_scope c s⟩
 
 /-- **Weakening.**  What checks from a weaker ownership state checks from a stronger
 one, and the result stays weaker. -/
@@ -156,33 +151,27 @@ theorem checkBlock_mono : ∀ (n : Nat) (ss : List Stmt), blockSize ss < n →
           | some c1 =>
               rw [hc1] at hs
               have hstep : ∃ d1, checkStmt d s = some d1 ∧ Le c1 d1 ∧ c1.scope = c.scope := by
-                cases s with
-                | ite thn els =>
-                    have hthn : blockSize thn < n := by
-                      simp only [blockSize_cons, stmtSize_ite] at hss; omega
-                    have hels : blockSize els < n := by
-                      simp only [blockSize_cons, stmtSize_ite] at hss; omega
-                    rw [checkStmt_ite] at hc1
-                    split at hc1
-                    · next a1 a2 h1 h2 =>
-                        obtain ⟨d1, hd1, hle1, _⟩ := ih thn hthn hle h1
-                        obtain ⟨d2, hd2, hle2, _⟩ := ih els hels hle h2
-                        obtain ⟨k, hk, hlek⟩ := joinOf_mono hle hle1 hle2 hc1
-                        refine ⟨k, by rw [checkStmt_ite, hd1, hd2]; exact hk, hlek, ?_⟩
-                        unfold joinOf at hc1
-                        split at hc1
-                        · rw [← Option.some.inj hc1]
-                        · exact absurd hc1 (by simp)
-                    · exact absurd hc1 (by simp)
-                | alloc x => exact guardAux hle hc1
-                | mkScalar x => exact guardAux hle hc1
-                | copy y x => exact guardAux hle hc1
-                | move y x => exact guardAux hle hc1
-                | drop x => exact guardAux hle hc1
-                | call args => exact guardAux hle hc1
-                | spawn t args => exact guardAux hle hc1
-                | wait t => exact guardAux hle hc1
-                | parallel nb body => exact guardAux hle hc1
+                cases s
+                case ite thn els =>
+                  have hthn : blockSize thn < n := by
+                    simp only [blockSize_cons, stmtSize_ite] at hss; omega
+                  have hels : blockSize els < n := by
+                    simp only [blockSize_cons, stmtSize_ite] at hss; omega
+                  rw [checkStmt_ite] at hc1
+                  split at hc1
+                  · next a1 a2 h1 h2 =>
+                      obtain ⟨d1, hd1, hle1, _⟩ := ih thn hthn hle h1
+                      obtain ⟨d2, hd2, hle2, _⟩ := ih els hels hle h2
+                      obtain ⟨k, hk, hlek⟩ := joinOf_mono hle hle1 hle2 hc1
+                      refine ⟨k, by rw [checkStmt_ite, hd1, hd2]; exact hk, hlek, ?_⟩
+                      unfold joinOf at hc1
+                      split at hc1
+                      · rw [← Option.some.inj hc1]
+                      · exact absurd hc1 (by simp)
+                  · exact absurd hc1 (by simp)
+                all_goals
+                  obtain ⟨hg, rfl⟩ := checkStmt_straight hc1 nofun
+                  exact guardAux hle hg nofun
               obtain ⟨d1, hd1, hle1, hsc1⟩ := hstep
               obtain ⟨d', hd', hled, hscd⟩ := ih rest hrest hle1 hs
               exact ⟨d', by rw [checkBlock_cons, hd1]; exact hd', hled, by rw [hscd, hsc1]⟩

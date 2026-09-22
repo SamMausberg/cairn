@@ -38,16 +38,14 @@ namespace Ownership
 Nothing in this development uses excluded middle; these two are the case splits
 that replace it. -/
 
-/-- Decidable case split, so that nothing below needs excluded middle. -/
-theorem nat_eq_or_ne (p q : Nat) : p = q ∨ p ≠ q :=
-  match Nat.decEq p q with
-  | isTrue h => Or.inl h
-  | isFalse h => Or.inr h
+/-- Decidable case split, for anything with decidable equality, which is every type in
+this development: `Decidable.em` needs no axiom at all. -/
+theorem dec_eq_or_ne {α : Type} [DecidableEq α] (p q : α) : p = q ∨ p ≠ q := Decidable.em _
 
-/-- The same case split for anything with decidable equality, which is every type in
-this development. -/
-theorem dec_eq_or_ne {α : Type} [DecidableEq α] (p q : α) : p = q ∨ p ≠ q :=
-  if h : p = q then Or.inl h else Or.inr h
+/-- A Boolean that implies another that is false is false: the contrapositive, for the
+Booleans the checker and the machine trade in. -/
+theorem bool_false_of_imp {a b : Bool} (f : a = true → b = true) (hb : b = false) : a = false := by
+  cases a <;> simp_all
 
 /-- `Nat.beq` is reflexive; proved here so that nothing reaches for the general
 `LawfulBEq` lemma, whose instance chain drags `Classical.choice` in. -/
@@ -56,10 +54,8 @@ theorem beq_place_self (x : Nat) : (x == x) = true := by
   | true => rfl
   | false => exact absurd rfl (beq_eq_false_iff_ne.mp h)
 
-theorem beq_place_comm (p q : Nat) : (p == q) = (q == p) := by
-  rcases nat_eq_or_ne p q with hpq | hpq
-  · rw [hpq]
-  · rw [beq_eq_false_iff_ne.mpr hpq, beq_eq_false_iff_ne.mpr fun hc => hpq hc.symm]
+theorem beq_place_comm (p q : Nat) : (p == q) = (q == p) :=
+  Bool.eq_iff_iff.mpr (by simp only [beq_iff_eq]; exact eq_comm)
 
 /-! ## Names, bounds and valuations -/
 
@@ -98,13 +94,7 @@ def leB : Bound → Bound → Bool
 
 theorem leB_sound {ρ : Valuation} : ∀ {a b : Bound}, leB a b = true → a.eval ρ ≤ b.eval ρ := by
   intro a b h
-  cases a <;> cases b <;> simp only [leB] at h <;>
-    first
-      | exact absurd h (fun hc => Bool.noConfusion hc)
-      | exact of_decide_eq_true h
-      | (rename_i u v
-         have huv : u = v := by simp at h; exact h
-         simp [Bound.eval, huv])
+  cases a <;> cases b <;> simp_all [leB, Bound.eval]
 
 /-! ## Chaining the guarded facts
 
@@ -325,19 +315,9 @@ theorem factsFor_true {ρ : Valuation} {r : Root} {inPlay : List Place}
     (hg : ∀ p ∈ inPlay, p.guard ρ = true) : FactsTrue ρ (factsFor r inPlay) := by
   intro f hf
   obtain ⟨p, hp, hpe⟩ := List.mem_filterMap.mp hf
-  have hrange : p.range = some f := by
-    split at hpe
-    · exact hpe
-    · exact absurd hpe (by simp)
   have hpg := hg p hp
-  cases p with
-  | whole y => exact absurd hrange (by simp [Place.range])
-  | hdr y => exact absurd hrange (by simp [Place.range])
-  | elems y => exact absurd hrange (by simp [Place.range])
-  | part y lo hi =>
-      have hfe : f = (lo, hi) := (Option.some.inj hrange).symm
-      rw [hfe]
-      exact of_decide_eq_true hpg
+  cases p <;> simp_all [Place.range, Place.guard]
+  exact hpe.2 ▸ hpg
 
 /-! ## The syntactic decision
 
@@ -369,17 +349,11 @@ def ovl (inPlay : List Place) (r s : Place) : Bool :=
       | _, _ => true)
 
 theorem ovl_symm (inPlay : List Place) (r s : Place) : ovl inPlay r s = ovl inPlay s r := by
-  cases r <;> cases s <;> simp only [ovl, Place.root, Root.touches_symm] <;>
-    first
-      | rfl
-      | (rename_i x lo1 hi1 y lo2 hi2
-         rcases dec_eq_or_ne x y with h | h
-         · subst h; simp only [visiblyDisjoint, Bool.or_comm]
-         · split
-           · next hc => exact absurd hc h
-           · split
-             · next hc => exact absurd hc.symm h
-             · rfl)
+  cases r <;> cases s <;> simp only [ovl, Place.root, Root.touches_symm] <;> try rfl
+  rename_i x lo1 hi1 y lo2 hi2
+  rcases dec_eq_or_ne x y with h | h
+  · subst h; simp only [visiblyDisjoint, Bool.or_comm]
+  · simp only [h, Ne.symm h, ↓reduceIte]
 
 /-- `whole x` touches the root of every place of the local `x`, field path and all. -/
 theorem touches_base {x : Var} {p : Place} (h : p.base = x) :
@@ -507,6 +481,15 @@ theorem meets_symm (ρ : Valuation) (r s : Place) : meets ρ r s = meets ρ s r 
   simp only [meets, Root.touches_symm r.root s.root, Bool.and_comm (r.header) (s.header),
     Ext.meets_symm (r.ext ρ) (s.ext ρ)]
 
+/-- Two parts the chain orders share no index: whichever end is reached first sits at or
+before the other part's start. -/
+theorem visiblyDisjoint_sound {ρ : Valuation} {facts : List Fact} (hf : FactsTrue ρ facts)
+    {lo1 hi1 lo2 hi2 : Bound} (h : visiblyDisjoint facts lo1 hi1 lo2 hi2 = true) :
+    ¬(lo1.eval ρ < hi1.eval ρ ∧ lo2.eval ρ < hi2.eval ρ ∧ lo1.eval ρ < hi2.eval ρ ∧
+      lo2.eval ρ < hi1.eval ρ) := by
+  simp only [visiblyDisjoint, Bool.or_eq_true] at h
+  rcases h with h | h <;> have := reaches_sound hf h <;> omega
+
 /-- **The bridge.**  What the checker decides syntactically is true of the numbers,
 provided every fact in play was guarded first. -/
 theorem ovl_sound {ρ : Valuation} {inPlay : List Place}
@@ -521,26 +504,15 @@ theorem ovl_sound {ρ : Valuation} {inPlay : List Place}
       simp only [Bool.true_and] at h ⊢
       cases r <;> cases s <;>
         simp only [Place.header, Place.ext, Bool.and_self, Bool.and_false, Bool.false_and,
-          Bool.false_or, Ext.meets] <;>
+          Bool.false_or, Ext.meets, decide_eq_false_iff_not] at h ⊢ <;>
         first
-          | exact absurd h (fun hc => Bool.noConfusion hc)
-          | (rw [decide_eq_false_iff_not]; omega)
-          | (rename_i x lo1 hi1 y lo2 hi2
-             have h' : (if x = y then !visiblyDisjoint (factsFor x inPlay) lo1 hi1 lo2 hi2
-                        else true) = false := h
-             split at h'
-             · have hvd : visiblyDisjoint (factsFor x inPlay) lo1 hi1 lo2 hi2 = true := by
-                 cases hv : visiblyDisjoint (factsFor x inPlay) lo1 hi1 lo2 hi2 with
-                 | true => rfl
-                 | false => rw [hv] at h'; exact absurd h' (fun hc => Bool.noConfusion hc)
-               have hft : FactsTrue ρ (factsFor x inPlay) := factsFor_true hg
-               rw [decide_eq_false_iff_not]
-               rcases Bool.or_eq_true_iff.mp hvd with h1 | h2
-               · have := reaches_sound hft h1
-                 omega
-               · have := reaches_sound hft h2
-                 omega
-             · exact absurd h' (fun hc => Bool.noConfusion hc))
+          | exact Bool.noConfusion h
+          | omega
+          | (split at h
+             · next hxy =>
+                 subst hxy
+                 exact visiblyDisjoint_sound (factsFor_true hg) (by simpa using h)
+             · exact Bool.noConfusion h)
 
 /-- **A lane's own element sits inside the elements.**  The lease check a region runs
 names `x[]` -- what `where` writes for an index -- while a lane holds only element
@@ -605,24 +577,9 @@ theorem races_symm (ρ : Valuation) (a b : Borrow) : races ρ a b = races ρ b a
 theorem conflict_sound {ρ : Valuation} {inPlay : List Place}
     (hg : ∀ p ∈ inPlay, p.guard ρ = true) {a b : Borrow}
     (h : conflict inPlay a b = false) : races ρ a b = false := by
-  unfold conflict at h
-  cases hm : ovl inPlay a.1 b.1 with
-  | false =>
-      show (meets ρ a.1 b.1 && _) = false
-      rw [ovl_sound hg hm, Bool.false_and]
-  | true =>
-      have hmode : ((a.2 == Mode.rw) || (b.2 == Mode.rw)) = false := by
-        rw [hm, Bool.true_and] at h; exact h
-      show (meets ρ a.1 b.1 && _) = false
-      rw [hmode, Bool.and_false]
-
-/-- Both halves of a conjunction that holds, without reaching for a `simp` lemma. -/
-theorem and_parts {a b : Bool} (h : (a && b) = true) : a = true ∧ b = true := by
-  cases a
-  · exact absurd h (fun hc => Bool.noConfusion hc)
-  · cases b
-    · exact absurd h (fun hc => Bool.noConfusion hc)
-    · exact ⟨rfl, rfl⟩
+  simp only [conflict, Bool.and_eq_false_iff] at h
+  simp only [races, Bool.and_eq_false_iff]
+  exact h.imp (ovl_sound hg) id
 
 /-- Two threads that hold nothing in common that either writes. -/
 def NoRacePair (ρ : Valuation) (T U : Task) : Prop :=
@@ -637,52 +594,31 @@ theorem noRacePair_symm (ρ : Valuation) (T U : Task) (h : NoRacePair ρ T U) :
 def lentPlaces (tasks : List Task) : List Place :=
   tasks.flatMap fun T => T.2.map Prod.fst
 
+/-- Does any live task hold a borrow of which `f` is true?  The checker and the machine
+ask this one question with two different `f`s. -/
+def anyHeld (f : Borrow → Bool) (tasks : List Task) : Bool :=
+  tasks.any fun T => T.2.any f
+
+theorem anyHeld_eq_false_iff {f : Borrow → Bool} {tasks : List Task} :
+    anyHeld f tasks = false ↔ ∀ T ∈ tasks, ∀ y ∈ T.2, f y = false := by
+  simp [anyHeld, List.any_eq_false]
+
 /-- `checking.py:leased` -- does any live task hold something that conflicts? -/
 def heldConflict (inPlay : List Place) (tasks : List Task) (x : Borrow) : Bool :=
-  tasks.any fun T => T.2.any fun y => conflict inPlay x y
+  anyHeld (conflict inPlay x) tasks
 
 /-- The same question of the machine: does any live task really race with this
 access? -/
 def heldRace (ρ : Valuation) (tasks : List Task) (x : Borrow) : Bool :=
-  tasks.any fun T => T.2.any fun y => races ρ x y
+  anyHeld (races ρ x) tasks
 
 theorem heldConflict_eq_false_iff {inPlay : List Place} {tasks : List Task} {x : Borrow} :
-    heldConflict inPlay tasks x = false ↔ ∀ T ∈ tasks, ∀ y ∈ T.2, conflict inPlay x y = false := by
-  constructor
-  · intro h T hT y hy
-    cases hc : conflict inPlay x y with
-    | false => rfl
-    | true =>
-        have hall : heldConflict inPlay tasks x = true := by
-          simp only [heldConflict, List.any_eq_true]
-          exact ⟨T, hT, y, hy, hc⟩
-        rw [hall] at h; exact Bool.noConfusion h
-  · intro h
-    cases hc : heldConflict inPlay tasks x with
-    | false => rfl
-    | true =>
-        simp only [heldConflict, List.any_eq_true] at hc
-        obtain ⟨T, hT, y, hy1, hy2⟩ := hc
-        rw [h T hT y hy1] at hy2; exact Bool.noConfusion hy2
+    heldConflict inPlay tasks x = false ↔ ∀ T ∈ tasks, ∀ y ∈ T.2, conflict inPlay x y = false :=
+  anyHeld_eq_false_iff
 
 theorem heldRace_eq_false_iff {ρ : Valuation} {tasks : List Task} {x : Borrow} :
-    heldRace ρ tasks x = false ↔ ∀ T ∈ tasks, ∀ y ∈ T.2, races ρ x y = false := by
-  constructor
-  · intro h T hT y hy
-    cases hc : races ρ x y with
-    | false => rfl
-    | true =>
-        have hall : heldRace ρ tasks x = true := by
-          simp only [heldRace, List.any_eq_true]
-          exact ⟨T, hT, y, hy, hc⟩
-        rw [hall] at h; exact Bool.noConfusion h
-  · intro h
-    cases hc : heldRace ρ tasks x with
-    | false => rfl
-    | true =>
-        simp only [heldRace, List.any_eq_true] at hc
-        obtain ⟨T, hT, y, hy1, hy2⟩ := hc
-        rw [h T hT y hy1] at hy2; exact Bool.noConfusion hy2
+    heldRace ρ tasks x = false ↔ ∀ T ∈ tasks, ∀ y ∈ T.2, races ρ x y = false :=
+  anyHeld_eq_false_iff
 
 theorem mem_lentPlaces {tasks : List Task} {T : Task} (hT : T ∈ tasks) {y : Borrow}
     (hy : y ∈ T.2) : y.1 ∈ lentPlaces tasks := by
@@ -705,13 +641,8 @@ theorem untouched_of_write_ok {inPlay : List Place} {tasks : List Task} {x : Var
     (h : heldConflict inPlay tasks (.whole ⟨x, []⟩, Mode.rw) = false) :
     ∀ T ∈ tasks, ∀ y ∈ T.2, y.1.base ≠ x := by
   intro T hT y hy hc
-  have hcf := heldConflict_eq_false_iff.mp h T hT y hy
-  have hone : conflict inPlay (.whole ⟨x, []⟩, Mode.rw) y = true := by
-    show (ovl inPlay (.whole ⟨x, []⟩) y.1 && ((Mode.rw == Mode.rw) || (y.2 == Mode.rw))) = true
-    rw [ovl_whole inPlay x y.1 hc]
-    rfl
-  rw [hone] at hcf
-  exact Bool.noConfusion hcf
+  have := heldConflict_eq_false_iff.mp h T hT y hy
+  simp [conflict, ovl_whole inPlay x y.1 hc] at this
 
 end Ownership
 end Cairn
