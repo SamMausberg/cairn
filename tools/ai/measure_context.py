@@ -10,8 +10,10 @@ cold (a new host per task) or warm (one host per program, so cards and boundarie
 
 `cards` keeps the 0.6 measurement: the same component packet with only the card texts swapped for 0.5's.
 Every total is also broken down by kind of message (packet, diagnostic, expansion, admission, reply), and
-`card_sizes` counts every rule card alone. Tokens are a real BPE vocabulary (`o200k_base` by default) when
-tiktoken and its cached vocabulary are present. Nothing is downloaded; without them only UTF-8 bytes count.
+`card_sizes` counts every rule card alone, and `resume` sets the whole warm focused conversation of a program
+beside the `cairn.state/1` object that stands in for it. Tokens are a real BPE vocabulary (`o200k_base` by
+default) when tiktoken and its cached vocabulary are present. Nothing is downloaded; without them only UTF-8
+bytes count.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from cairn.agent.agent_tools import HANDLES, PROTOCOL, EditHost, EditSession, explain, stable_json
+from cairn.agent.state import state
 from cairn.agent.teaching import CARDS
 from cairn.compiler.cairnc import Diagnostic
 from cairn.compiler.syntax import Parser
@@ -244,6 +247,16 @@ WRONG = {  # A representative wrong body per diagnostic an edit commonly meets, 
 }
 
 
+def measure_state(runs: list[tuple[str, str, list[str], list]], root: Path, count) -> dict:
+    """What a model resuming a program's work reads: the whole warm focused conversation so far, or the state."""
+    out = {}
+    for path, key, _, talks in runs:
+        if key == "focused edit/2 warm":
+            history = sum(count(stable_json(message)) for talk in talks for _, _, message in talk)
+            out[path] = {"history": history, "state": count(stable_json(state(load_project(root / path).source)))}
+    return out
+
+
 def measure_diagnostics(count) -> dict:
     """What a model reads back for one wrong reply of each kind, from a host that already sent the packet."""
     host = EditHost()
@@ -281,6 +294,7 @@ def main() -> int:
         "tasks": {name: measure_tasks(runs, count) for name, count in counters.items()},
         "card_sizes": {name: counters[unit](text) for name, text in CARDS.items()},
         "diagnostic_sizes": measure_diagnostics(counters[unit]),
+        "resume": measure_state(runs, args.programs, counters[unit]),
         **measure_cards(counters[unit]),
         "limitations": [
             "Authored transcripts, not a model: one type error, at most one expansion, then the right body.",

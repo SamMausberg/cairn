@@ -17,7 +17,7 @@ from ..compiler.cairnc import fail
 MAX_CASES_SHOWN = 8
 MAX_REPLACEMENT = 64_000  # bytes of one reply
 MAX_EXPAND = 32  # names in one expand request
-TERMS = {
+TERMS: dict[str, Any] = {
     "scopes": {
         "focused": "the target, and the interfaces of what it calls and what calls it; expand anything else by name",
         "component": "the target's whole call-graph component and every type",

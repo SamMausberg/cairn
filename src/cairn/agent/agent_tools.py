@@ -206,8 +206,14 @@ class EditSession:
             "allowed_effects": sorted(self.allowed_effects),
         }
 
-    def terms(self) -> dict[str, Any]:
-        return {"profile": VERSION, **TERMS}
+    def terms(self, dependencies: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        """The terms this packet is read under: its own scope, the evidence classes it shows, and the constant rest."""
+        shown = {d["evidence"] for d in dependencies.values() if "evidence" in d}
+        shown |= {"comment"} if any("comment" in d for d in dependencies.values()) else set()
+        evidence = {c: text for c, text in TERMS["evidence"].items() if c in shown}
+        kept = ("limits", "boundaries", "refusal", "admission", "state")
+        return {"profile": VERSION, "scope": TERMS["scopes"][self.scope], **{k: TERMS[k] for k in kept},
+                **({"evidence": evidence} if evidence else {}), **({} if "task" in self.contract else {"task": TERMS["task"]})}  # fmt: skip
 
     def component(self) -> dict[str, Any]:
         origins = {self.functions[n].source_name for n in self.visible}
@@ -220,14 +226,15 @@ class EditSession:
             if f"derive {recipe}" + (f" for {full}" if target else "") in origins:
                 context.append({"wire" if recipe == "wire" else "derive": full,
                                 "source": derivation(recipe, naturals, target)})  # fmt: skip
+        dependencies = {n: {**self.row(n), **self.evidence.get(n, {})} for n in sorted(self.visible)}
         return {
             **self.header("cairn.packet/1"),
             "types": type_declarations(self.parsed),
             "context": context,
             "rule_cards": self.cards("\n".join(x["source"] for x in context), self.visible, {}),
-            "dependencies": {n: {**self.row(n), **self.evidence.get(n, {})} for n in sorted(self.visible)},
+            "dependencies": dependencies,
             "scope": "component",
-            "terms": self.terms(),
+            "terms": self.terms(dependencies),
         }
 
     def focused(self) -> dict[str, Any]:
@@ -253,7 +260,7 @@ class EditSession:
             "callers": self.callers,
             "not_shown": written,
             "scope": "focused",
-            "terms": self.terms(),
+            "terms": self.terms(dependencies),
         }
 
     def source_of(self, name: str) -> str:
@@ -460,13 +467,40 @@ class EditHost:
             p["expand_protocol"] = {"protocol": HANDLES, "handle": handle, "kind": "expand", "symbols": ["name"]}
         p["explain_protocol"] = {"protocol": HANDLES, "handle": handle, "kind": "explain"}  # Costs, after an edit too.
         p["state_protocol"] = {"protocol": HANDLES, "handle": handle, "kind": "state"}  # The program as it now stands.
-        earlier = [n for n in [*p["rule_cards"], "terms"] if n in self.sent]
-        self.sent |= {*p["rule_cards"], "terms"}
+        earlier = [n for n in p["rule_cards"] if n in self.sent]
+        self.sent |= set(p["rule_cards"])
         p["rule_cards"] = {n: text for n, text in p["rule_cards"].items() if n not in earlier}
-        p.pop("terms") if "terms" in earlier else None
+        fresh, repeated = self.unsent(p.pop("terms"))
+        if fresh:
+            p["terms"] = fresh
+        if repeated:
+            earlier.append("terms")
         if earlier:
             p["sent_before"] = earlier
         return p
+
+    def unsent(self, terms: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        """The entries of `terms` this host has not sent, each evidence class on its own, and whether any it has.
+
+        A packet's terms depend on its scope and on the evidence it shows, so a later packet carries only what is
+        new to this host: the component scope after a focused packet, or an evidence class seen for the first time.
+        """
+        fresh: dict[str, Any] = {}
+        repeated = False
+        for key, value in terms.items():
+            parts = value.items() if key == "evidence" else [(None, value)]
+            for name, text in parts:
+                mark = f"terms.{key}.{name}:{stable_json(text)}"
+                if mark in self.sent:
+                    repeated = True
+                    continue
+                self.sent.add(mark)
+                if name is None:
+                    fresh[key] = text
+                else:
+                    fresh.setdefault(key, {})[name] = text
+        self.sent.add("terms")  # From here on, admissions and refusals leave out what the terms said.
+        return fresh, repeated
 
     def session(self, handle: Any) -> EditSession:
         if not isinstance(handle, str) or handle not in self.sessions:

@@ -11,6 +11,7 @@ import test_language as language
 from test_agent10 import PROGRAMS
 
 from cairn.agent.agent_tools import HANDLES, PROTOCOL, EditHost, EditSession
+from cairn.agent.evidence import TERMS
 from cairn.compiler.cairnc import Diagnostic
 from emitted import code_of as code
 
@@ -70,7 +71,7 @@ def test_host_contracts_and_comments_travel_with_an_interface():
         "contract": "Returns x + 1 modulo 2^64.",
         "comment": "Adds one, wrapping.",
     }
-    assert set(p["terms"]["evidence"]) == {"interface", "declared", "finite-tested", "smt-equivalent", "comment"}
+    assert set(p["terms"]["evidence"]) == {"declared", "comment"}  # the classes this packet shows, and no others
     assert code(lambda: EditSession(S, "caller", {"contracts": {"ghost": "x"}})) == "E-SYMBOL"
     assert code(lambda: EditSession(S, "caller", {"contracts": {"step": 1}})) == "E-CONTRACT"
     assert code(lambda: EditSession(S, "caller", scope="whole")) == "E-REQUEST"
@@ -203,8 +204,10 @@ def test_a_warm_host_sends_each_card_and_the_terms_once():
     host = EditHost()
     first, second = host.open(S, "step"), host.open(S, "caller")
     assert "base" in first["rule_cards"] and "terms" in first and "sent_before" not in first
-    assert "base" not in second["rule_cards"] and "terms" not in second
-    assert {"base", "terms"} <= set(second["sent_before"])
+    assert set(first["terms"]["evidence"]) == {"interface"}  # step's packet shows caller, which has no comment
+    assert "base" not in second["rule_cards"] and {"base", "terms"} <= set(second["sent_before"])
+    assert second["terms"] == {"evidence": {"comment": TERMS["evidence"]["comment"]}}  # only what is new to the host
+    assert "terms" not in host.open(S, "caller")  # e3: nothing in its terms is new
     typed = host.respond({"protocol": HANDLES, "handle": "e1", "kind": "body", "replacement": "{return x;}"})
     assert typed == {"status": "typed", "symbol": "step", "effects": [], "check_sites": {}}  # The rest is in terms.
     refused = host.reply(
@@ -214,7 +217,7 @@ def test_a_warm_host_sends_each_card_and_the_terms_once():
     assert refused["source_line"] == "{return y;}" and (refused["line"], refused["column"]) == (1, 9)
     third = host.open(language.PRELUDE + language.MAIN, "main", scope="component")
     assert "generics" in third["rule_cards"] and "base" in third["sent_before"]
-    expand = {"protocol": HANDLES, "handle": "e3", "kind": "expand", "symbols": ["push"]}
+    expand = {"protocol": HANDLES, "handle": "e4", "kind": "expand", "symbols": ["push"]}
     assert code(lambda: host.respond(expand)) == "E-REQUEST"  # A component packet has nothing more to disclose.
 
 
