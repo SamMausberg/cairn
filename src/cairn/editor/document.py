@@ -47,6 +47,7 @@ class Document:
         self.code = roles([t for t in scan(text) if not t.comment])
         self.program: Program | None = None
         self.rows: dict[str, list[str]] = {}  # function -> its effect row, for hovers
+        self.error: dict = {}  # the compiler's diagnostic with every detail it carries, for code actions
         self.sites, self.diagnostics = self._analyse() if analyse else ([], [])
         self.good: Document | None = self if self.program is not None else previous.good if previous else None
 
@@ -89,7 +90,7 @@ class Document:
         return sites, []
 
     def _report(self, error: Diagnostic) -> dict:
-        d = explain(error, self.text)
+        d = self.error = explain(error, self.text)
         line, column = int(d.get("line") or 0), int(d.get("column") or 0)
         start = end = 0
         if line > 0:
@@ -259,6 +260,15 @@ def module_at(cs: list[Item], offset: int) -> str:
         if t.start >= offset:
             break
         out = ahead(cs, i + 1) if t.s == "module" else out
+    return out
+
+
+def module_of_each(cs: list[Item]) -> list[str]:
+    """`module_at` for every token at once."""
+    out, module = [], ""
+    for i, t in enumerate(cs):
+        module = ahead(cs, i + 1) if t.s == "module" else module
+        out.append(module)
     return out
 
 

@@ -16,6 +16,9 @@ from ..version import VERSION
 from .completion import completion, signature_help
 from .document import Document, symbols
 from .edits import formatted, prepare_rename, references, rename
+from .fixes import code_actions
+from .highlighting import LEGEND, semantic_tokens
+from .hints import inlay_hints
 from .navigation import definition, hover
 
 CAPABILITIES = {
@@ -29,6 +32,9 @@ CAPABILITIES = {
     "signatureHelpProvider": {"triggerCharacters": ["(", ","]},
     "referencesProvider": True,
     "renameProvider": {"prepareProvider": True},
+    "semanticTokensProvider": {"legend": LEGEND, "full": True},
+    "inlayHintProvider": True,
+    "codeActionProvider": {"codeActionKinds": ["quickfix"]},
 }
 IGNORED = {"initialized", "$/cancelRequest", "$/setTrace", "workspace/didChangeConfiguration"}
 UNSUPPORTED: Any = object()
@@ -72,6 +78,9 @@ ANSWERS: dict[str, Any] = {
     "textDocument/rename": lambda d, u, at, p: rename(d, u, at, str(p.get("newName") or "")),
     "textDocument/documentSymbol": lambda d, u, at, p: symbols(d),
     "textDocument/formatting": lambda d, u, at, p: formatted(d),
+    "textDocument/semanticTokens/full": lambda d, u, at, p: semantic_tokens(d),
+    "textDocument/inlayHint": lambda d, u, at, p: inlay_hints(d, p.get("range")),
+    "textDocument/codeAction": lambda d, u, at, p: code_actions(d, u, p.get("range") or {}),
 }
 
 

@@ -1,0 +1,3 @@
+# Nothing here is built: the package is the manifest, the client, the grammar, the snippets and these notes.
+.vscodeignore
+**/*.vsix

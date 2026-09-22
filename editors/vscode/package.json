@@ -1,12 +1,15 @@
 {
   "name": "cairn",
   "displayName": "CAIRN",
-  "description": "CAIRN syntax highlighting and language server client.",
+  "description": "CAIRN highlighting, snippets and the cairn lsp client: diagnostics, semantic colors, effect rows, quick fixes.",
   "version": "1.3.0",
   "publisher": "cairn-language",
-  "license": "SEE LICENSE IN ../../README.md",
+  "license": "(MIT OR Apache-2.0)",
+  "repository": { "type": "git", "url": "https://github.com/SamMausberg/cairn.git", "directory": "editors/vscode" },
+  "homepage": "https://github.com/SamMausberg/cairn/blob/main/docs/tools.md#the-editor-extension",
   "engines": { "vscode": "^1.75.0" },
-  "categories": ["Programming Languages", "Formatters"],
+  "categories": ["Programming Languages", "Formatters", "Snippets"],
+  "keywords": ["cairn", "systems", "effects", "ownership", "gpu"],
   "main": "./client.js",
   "activationEvents": ["onLanguage:cairn"],
   "contributes": {
@@ -25,6 +28,33 @@
         "path": "./syntaxes/cairn.tmLanguage.json"
       }
     ],
+    "snippets": [{ "language": "cairn", "path": "./snippets/cairn.json" }],
+    "semanticTokenTypes": [
+      { "id": "effect", "superType": "keyword", "description": "A name in an effect row: io, alloc, read:x." }
+    ],
+    "semanticTokenModifiers": [
+      { "id": "mutable", "description": "A local declared let mut, or a parameter lent rw, which may be assigned." }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "cairn",
+        "scopes": {
+          "effect": ["support.constant.effect.cairn"],
+          "*.mutable": ["markup.underline"],
+          "type.defaultLibrary": ["support.type.cairn"],
+          "struct.defaultLibrary": ["support.type.cairn"],
+          "function.defaultLibrary": ["support.function.builtin.cairn"]
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "[cairn]": {
+        "editor.semanticHighlighting.enabled": true,
+        "editor.inlayHints.enabled": "on",
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true
+      }
+    },
     "configuration": {
       "type": "object",
       "title": "CAIRN",

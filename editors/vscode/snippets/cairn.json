@@ -1,0 +1,92 @@
+{
+  "main": {
+    "prefix": "main",
+    "description": "The entry point: its i32 is the process exit status.",
+    "body": ["fn main() -> i32 {", "\t$0", "\treturn 0;", "}"]
+  },
+  "function": {
+    "prefix": "fn",
+    "description": "A function with a block body; every path returns.",
+    "body": ["fn ${1:name}(${2:x:u64}) -> ${3:u64} {", "\t${0:return x;}", "}"]
+  },
+  "expression function": {
+    "prefix": "fne",
+    "description": "A function whose body is one expression.",
+    "body": ["fn ${1:name}(${2:x:u64}) -> ${3:u64} = ${0:x};"]
+  },
+  "view function": {
+    "prefix": "fnv",
+    "description": "A function that borrows n elements; a call may leave n out.",
+    "body": ["fn ${1:sum}(n:usize, ${2:xs}:${3|ro,rw|}<${4:u64}>[n]) -> ${5:u64} {", "\tlet mut total:$5 = 0;", "\tfor i in 0..n { total = total + $2[i]; }", "\treturn total;", "}"]
+  },
+  "struct": {
+    "prefix": "struct",
+    "description": "A record.",
+    "body": ["struct ${1:Name} { ${2:field}:${3:u64}; }"]
+  },
+  "enum": {
+    "prefix": "enum",
+    "description": "A tagged sum with a payload per variant, or none.",
+    "body": ["enum ${1:Name} { ${2:First}(${3:u64}); ${4:Second}; }"]
+  },
+  "match": {
+    "prefix": "match",
+    "description": "One arm per variant; there is no wildcard.",
+    "body": ["match ${1:value} {", "\t${2:Option}.Some(${3:v}) => { $0 }", "\t$2.None => { }", "}"]
+  },
+  "if": {
+    "prefix": "if",
+    "description": "A branch.",
+    "body": ["if ${1:condition} {", "\t$0", "}"]
+  },
+  "for": {
+    "prefix": "for",
+    "description": "A sequential loop over lo..hi, evaluated once.",
+    "body": ["for ${1:i} in ${2:0}..${3:n} {", "\t$0", "}"]
+  },
+  "while": {
+    "prefix": "while",
+    "description": "A loop while a condition holds.",
+    "body": ["while ${1:condition} {", "\t$0", "}"]
+  },
+  "let mut": {
+    "prefix": "letm",
+    "description": "A mutable local.",
+    "body": ["let mut ${1:name}:${2:u64} = ${0:0};"]
+  },
+  "parallel": {
+    "prefix": "parallel",
+    "description": "A region: lane i touches only element [i] of what it writes.",
+    "body": ["parallel ${1:i} in ${2:n} { ${3:out}[$1] = ${0:0}; }"]
+  },
+  "reduce": {
+    "prefix": "reduce",
+    "description": "A checked reduction over n elements.",
+    "body": ["let ${1:total} = reduce ${2|+,*,min,max,&,\\|,^|} for ${3:i} in ${4:n} yield ${0:xs[$3]};"]
+  },
+  "spawn and wait": {
+    "prefix": "spawn",
+    "description": "A task that leases what it borrows until wait.",
+    "body": ["let ${1:task} = spawn ${2:work}(${3});", "$0", "wait($1);"]
+  },
+  "defer": {
+    "prefix": "defer",
+    "description": "A call run at every normal exit of this block.",
+    "body": ["defer ${1:release}(${2:resource});"]
+  },
+  "import": {
+    "prefix": "import",
+    "description": "A module of the packaged library.",
+    "body": ["import std.${1|core,vec,map,text,io,sort,mem,arena,net,sys,wire|};"]
+  },
+  "trait and impl": {
+    "prefix": "trait",
+    "description": "A trait with static dispatch, and an implementation for a record.",
+    "body": ["trait ${1:Shape} { fn ${2:area}(self:ro<Self>) -> ${3:u64}; }", "impl $1 for ${4:Square} { fn $2(self:ro<$4>) -> $3 = ${0:0}; }"]
+  },
+  "unsafe": {
+    "prefix": "unsafe",
+    "description": "The foreign boundary and the machine, never a way to silence the checker.",
+    "body": ["unsafe {", "\t$0", "}"]
+  }
+}

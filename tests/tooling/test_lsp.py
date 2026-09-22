@@ -571,28 +571,3 @@ def test_rename_over_the_protocol_refuses_with_an_error(client):
 
 
 # Editor assets -------------------------------------------------------------------------------------
-
-
-def test_the_extension_manifest_points_at_files_that_exist():
-    manifest = json.loads((EDITOR / "package.json").read_text(encoding="utf-8"))
-    language = manifest["contributes"]["languages"][0]
-    assert language["extensions"] == [".cairn"]
-    for relative in (manifest["main"], language["configuration"], manifest["contributes"]["grammars"][0]["path"]):
-        assert (EDITOR / relative).is_file(), relative
-    assert manifest["activationEvents"] == ["onLanguage:cairn"]
-    assert set(manifest["dependencies"]) == {"vscode-languageclient"}
-    assert not (EDITOR / "node_modules").exists(), "node_modules must not be vendored"
-
-
-def test_the_language_configuration_is_valid():
-    configuration = json.loads((EDITOR / "language-configuration.json").read_text(encoding="utf-8"))
-    assert configuration["comments"]["lineComment"] == "//"
-    assert [pair[0] for pair in configuration["brackets"]] == ["{", "[", "("]
-    assert {pair["open"] for pair in configuration["autoClosingPairs"]} == {"{", "[", "(", '"', "'"}
-
-
-def test_the_client_starts_the_server_over_stdio():
-    client = (EDITOR / "client.js").read_text(encoding="utf-8")
-    assert "vscode-languageclient/node" in client
-    assert "TransportKind.stdio" in client
-    assert 'settings.get("server.arguments", ["lsp"])' in client

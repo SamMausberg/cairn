@@ -8,9 +8,53 @@ from .document import Document, declarations, dotted, flatten, module_at, word_a
 from .names import callee, declared, qualified, template
 
 
+def comment_above(text: str, head: int) -> str:
+    """The `//` lines directly above the line a declaration starts on, as one paragraph."""
+    lines = text[: text.rfind("\n", 0, head) + 1].split("\n")[:-1]
+    said: list[str] = []
+    for line in reversed(lines):
+        if not line.strip().startswith("//"):
+            break
+        said.append(line.strip()[2:].strip())
+    return " ".join(reversed(said))
+
+
+def packaged(doc: Document, module: str, path: str) -> tuple[Document, dict, str] | None:
+    """A name of a linked library module: the library's text, the declaration and the packaged file's uri."""
+    p = doc.good.program if doc.good else None
+    if p is None:
+        return None
+    tables = (declared(p), p.records, p.sums, p.enums, p.traits, p.consts, p.recipes)
+    name = next((n for n in (qualified(p, module, path, table) for table in tables) if n), "")
+    source, file = p.sources.get(p.modules.get(name, "")), library_path(p.modules.get(name, ""))
+    if not name or source is None or file is None:
+        return None
+    library = Document(source, analyse=False)
+    found = (d for d in flatten(declarations(library.code, 0, len(library.code))) if d["name"] == local(name))
+    return next(((library, d, file.as_uri()) for d in found), None)
+
+
+def declaration(doc: Document, offset: int, own: bool = True) -> tuple[Document, dict, str] | None:
+    """The declaration the name under the cursor refers to, in this document ("" as its uri) or the library;
+    with `own` false, never the declaration whose name the cursor stands on."""
+    at = word_at(doc, offset)
+    if at is None:
+        return None
+    i, word = at
+    path = dotted(doc.code, i)
+    elsewhere = packaged(doc, module_at(doc.code, word.start), path)
+    if elsewhere and "." in path:  # `vec.push` is that module's, whatever this document declares.
+        return elsewhere
+    for d in flatten(declarations(doc.code, 0, len(doc.code))):
+        if d["name"] == word.s and (own or d["mark"][0] != word.start):
+            return doc, d, ""
+    return elsewhere
+
+
 def hover(doc: Document, offset: int) -> dict | None:
-    """The smallest checked expression covering `offset`, with its type, its binding and, for the
-    name of a function, the signature and effect row the last good analysis gave it."""
+    """The smallest checked expression covering `offset`, with its type and its binding; for the name of a
+    function, the signature and effect row the last good analysis gave it; for any declared name, the comment
+    written above its declaration."""
     best: dict | None = None
     for s in doc.sites:
         if s["start"] <= offset < s["end"] and (best is None or s["end"] - s["start"] < best["end"] - best["start"]):
@@ -30,38 +74,24 @@ def hover(doc: Document, offset: int) -> dict | None:
         effects = {x for n, xs in doc.good.rows.items() if template(n) == f.name for x in xs}
         body += ["", "```cairn", signature(f), "```", ""]
         body += [f"Effects: {', '.join(f'`{x}`' for x in sorted(effects)) or 'none'}."]
+    found = declaration(doc, offset) if at else None
+    if found is not None:
+        text, d = found[0].text, found[1]
+        if not body:  # a type, a trait or a constant: the line that declares it
+            line_end = text.find("\n", d["head"])
+            body = ["```cairn", text[d["head"] : line_end if line_end >= 0 else len(text)].strip()[:200], "```"]
+        comment = comment_above(text, d["head"])
+        body += ["", comment] if comment else []
     if not body:
         return None
     where = doc.span(best["start"], best["end"]) if best is not None else doc.span(at[1].start, at[1].end)
     return {"contents": {"kind": "markdown", "value": "\n".join(body)}, "range": where}
 
 
-def packaged(doc: Document, module: str, path: str) -> dict | None:
-    """Where a name of a linked library module is declared: its packaged file and the range of its name."""
-    p = doc.good.program if doc.good else None
-    if p is None:
-        return None
-    tables = (declared(p), p.records, p.sums, p.enums, p.traits, p.consts, p.recipes)
-    name = next((n for n in (qualified(p, module, path, table) for table in tables) if n), "")
-    source, file = p.sources.get(p.modules.get(name, "")), library_path(p.modules.get(name, ""))
-    if not name or source is None or file is None:
-        return None
-    library = Document(source, analyse=False)
-    found = (d for d in flatten(declarations(library.code, 0, len(library.code))) if d["name"] == local(name))
-    return next(({"uri": file.as_uri(), "range": library.span(*d["mark"])} for d in found), None)
-
-
 def definition(doc: Document, uri: str, offset: int) -> dict | None:
     """A declaration of the name under the cursor: this document, else the packaged module it comes from."""
-    at = word_at(doc, offset)
-    if at is None:
+    found = declaration(doc, offset, own=False)
+    if found is None:
         return None
-    i, word = at
-    path = dotted(doc.code, i)
-    elsewhere = packaged(doc, module_at(doc.code, word.start), path)
-    if elsewhere and "." in path:  # `vec.push` is that module's, whatever this document declares.
-        return elsewhere
-    for d in flatten(declarations(doc.code, 0, len(doc.code))):
-        if d["name"] == word.s and d["mark"][0] != word.start:
-            return {"uri": uri, "range": doc.span(*d["mark"])}
-    return elsewhere
+    library, d, file = found
+    return {"uri": file or uri, "range": library.span(*d["mark"])}
