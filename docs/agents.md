@@ -50,6 +50,21 @@ A refusal points into the reply the agent wrote: `line`, `column` and `source_li
 
 When a reply arrives, the host splices it into the pinned original, leaves everything outside the authorized range untouched, and rechecks the complete linked module, whatever the packet showed. It refuses a changed signature (`E-SIGNATURE`), an added or removed declaration (`E-DECLARATION`), an effect beyond the ceiling (`E-EFFECT-EXPANSION`) and a call to a function the packet did not show (`E-CONTEXT-CLOSURE`). A stale session or an unknown handle is `E-SESSION`, and an expansion that names nothing, or two things, is `E-SYMBOL`. An accepted reply is `typed`, which says nothing yet about its behaviour. The functions a focused packet shows are a subset of what the component packet shows, so a reply admitted under the focused packet is admitted under the component one.
 
+## The program's state
+
+An agent that has made several edits does not need the conversation that made them. `cairn state` prints the program as it now stands, and a `state` request to the host gives the same for the candidate it last admitted: every function of the program's own modules as `[signature, effect row]` under its module, the types those modules declare, the open diagnostics, and the edits the host admitted. The object is deterministic, and its `digest` is the sha256 of the rest of it. A refused program keeps its parsed signatures, with a row of `null`, which means unknown, never empty.
+
+```sh
+cairn state examples/apps/kvstore > before.json
+cairn state examples/apps/kvstore --since before.json    # only what changed
+```
+
+A `delta` request, or `--since`, gives only what changed: each function whose signature or row moved, `null` for one that is gone, and the types, diagnostics and evidence when they differ. Applying a delta to the state it names reproduces the new digest exactly, so an agent can tell a refresh it missed from one it has. A delta from a digest the host never sent is `E-SESSION`.
+
+```json
+{"protocol": "cairn.edit/2", "handle": "e1", "kind": "delta", "since": "<the digest of an earlier state>"}
+```
+
 ## Named choices
 
 A host prepares a sketch in Python:

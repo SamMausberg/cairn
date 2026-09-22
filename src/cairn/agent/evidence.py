@@ -36,6 +36,8 @@ TERMS = {
         "comment": "the author's, unchecked",
     },
     "task": "no task: none was given; infer none",
+    "state": "kind state is the program now, every function's [signature, row] by module, under a digest; kind "
+    "delta with since: a digest is only what changed",
     "refusal": "frontend only, not a proof; nothing is applied automatically",
     "admission": "typed: the linked module checks with the reply in place and nothing outside it changed; nothing "
     "was built, tested, proved or measured, and check sites are static counts",

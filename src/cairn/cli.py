@@ -88,6 +88,7 @@ COMMANDS = {
     "run": "Build, then run under process limits, or under the target's emulator.",
     "test": "Run the project's finite task contracts against a native build.",
     "inspect": "Print the packet an editing agent gets for one symbol.",
+    "state": "Print the program's state for an agent: every signature and effect row by module, under a digest.",
     "explain": "Where each function pays at run time: guards, allocations, waits and loop vectorization.",
     "doc": "Generate the API reference of the checked program, as Markdown.",
 }
@@ -116,6 +117,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"inspect"}, "--expand", {"action": "append", "default": [], "metavar": "NAME", "help": "Disclose this "
                                "function's source or this type first, as an expand request would."}),
     ({"inspect"}, "--explain", {"action": "store_true", "help": "Attach cairn explain for the disclosed functions."}),
+    ({"state"}, "--since", {"type": Path, "metavar": "STATE.json", "help": "Print only what changed since this "
+                            "saved state."}),
 ]  # fmt: skip
 REFUSED = {"counterexample", "rejected", "invalid-contract", "invalid-domain", "invalid-reference"}  # verify exits 1
 
@@ -253,6 +256,12 @@ def main(argv: list[str] | None = None) -> int:
                 session.expand(a.expand)
             report({**session.packet(), **({"performance": session.explain()} if a.explain else {})})
             return 0
+        if a.command == "state":
+            from .agent.state import delta, state
+
+            now = state(project.source, locate=project.locate)
+            report(delta(json.loads(read_text(a.since, 16_000_000)), now) if a.since else now)
+            return 0 if now["status"] == "typed" else 1
         if a.command == "explain":
             from .agent.explain import explain
 

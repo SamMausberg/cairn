@@ -150,6 +150,57 @@
       "required": [
         "protocol",
         "handle",
+        "kind"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "cairn.edit/2"
+        },
+        "handle": {
+          "type": "string",
+          "pattern": "^e[0-9]+$",
+          "description": "A session the host opened; the host keeps its digests."
+        },
+        "kind": {
+          "const": "state",
+          "description": "The session's program as it now stands: signatures, effect rows, types, diagnostics and admitted edits, under a digest."
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "handle",
+        "kind",
+        "since"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "cairn.edit/2"
+        },
+        "handle": {
+          "type": "string",
+          "pattern": "^e[0-9]+$",
+          "description": "A session the host opened; the host keeps its digests."
+        },
+        "kind": {
+          "const": "delta"
+        },
+        "since": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "The digest of a state this host sent; the answer is only what changed since."
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "handle",
         "kind",
         "symbols"
       ],

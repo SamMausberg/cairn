@@ -28,6 +28,7 @@ from .projection import (
     signature,
     type_declarations,
 )
+from .state import delta, state, written
 from .teaching import select_cards
 
 PROTOCOL = "cairn.edit/1"  # A request bound by the session digest.
@@ -271,10 +272,7 @@ class EditSession:
     def written_name(self, name: str) -> tuple[str, str]:
         """(module, the name as that module writes it): an impl method is Trait.Type.method, where the compiler's
         own name repeats the module three times."""
-        f = self.functions[name]
-        if f.owner:
-            return f.module, f"{local(f.owner[0])}.{local(f.owner[1].name)}.{local(name)}"
-        return f.module, name.removeprefix(f.module + ".") if f.module else name
+        return written(self.functions[name])
 
     @functools.cache  # noqa: B019 (a session lives as long as its host, and its program never changes)
     def aliases(self) -> dict[str, str]:
@@ -420,7 +418,8 @@ ADMISSION_TERMS = {"protocol", "session", "candidate_sha256", "runtime_cost", "s
                    "contract_unchanged", "full_module_rechecked", "native_build", "behavioral_tests", "equivalence",
                    "formal_status"}  # fmt: skip
 REFUSAL_TERMS = {"protocol", "trust", "automatic_edit", "acceptance_boundary"}
-REQUESTS = {"body": {"replacement"}, "expr": {"site", "replacement"}, "expand": {"symbols"}, "explain": set()}
+REQUESTS = {"body": {"replacement"}, "expr": {"site", "replacement"}, "expand": {"symbols"}, "explain": set(),
+            "state": set(), "delta": {"since"}}  # fmt: skip
 
 
 class EditHost:
@@ -428,14 +427,16 @@ class EditHost:
 
     The host keeps every digest, the pinned sources and each admitted candidate, so a request names a session
     as `e1` and a site as `x3` and never copies a hash. A handle resolves to the same session object that an
-    edit/1 digest names, and admission runs the same checks. Each rule card and the boundary text are sent once
-    per host; a later packet lists them under `sent_before`.
+    edit/1 digest names, and admission runs the same checks. Each rule card and the terms are sent once per
+    host; a later packet lists them under `sent_before`. A `state` request gives the session's program as it now
+    stands (`agent/state.py`), and `delta` what changed since a state this host sent.
     """
 
     def __init__(self) -> None:
         self.sessions: dict[str, EditSession] = {}
         self.sent: set[str] = set()
         self.admitted: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+        self.states: dict[str, dict[str, Any]] = {}  # Every state this host sent, by digest, for a later delta.
 
     def open(self, source: str, symbol: str, contract: dict[str, Any] | None = None, include: tuple[str, ...] = (),
              scope: str = "focused", site: str | None = None) -> dict[str, Any]:  # fmt: skip
@@ -458,6 +459,7 @@ class EditHost:
         if s.scope == "focused":
             p["expand_protocol"] = {"protocol": HANDLES, "handle": handle, "kind": "expand", "symbols": ["name"]}
         p["explain_protocol"] = {"protocol": HANDLES, "handle": handle, "kind": "explain"}  # Costs, after an edit too.
+        p["state_protocol"] = {"protocol": HANDLES, "handle": handle, "kind": "state"}  # The program as it now stands.
         earlier = [n for n in [*p["rule_cards"], "terms"] if n in self.sent]
         self.sent |= {*p["rule_cards"], "terms"}
         p["rule_cards"] = {n: text for n, text in p["rule_cards"].items() if n not in earlier}
@@ -472,14 +474,24 @@ class EditHost:
         return self.sessions[handle]
 
     def respond(self, request: Any) -> dict[str, Any]:
-        """An edit/2 request: `body`, `expr` (with a short site name), `expand` (with symbols) or `explain`."""
+        """An edit/2 request: `body`, `expr` (with a short site name), `expand` (with symbols), `explain`, `state`
+        or `delta` (with the digest of a state this host sent)."""
         kind = request.get("kind") if isinstance(request, dict) else None
         if isinstance(request, dict) and not (isinstance(kind, str) and kind in REQUESTS):
-            fail("E-REQUEST", "Expected body, expr, expand or explain.")
+            fail("E-REQUEST", "Expected body, expr, expand, explain, state or delta.")
         shaped(request, HANDLES, {"protocol", "handle", "kind", *REQUESTS.get(kind, ())})
         s = self.session(request["handle"])
+        admitted = self.admitted.get(request["handle"], [])
         if kind == "explain":  # The latest admitted candidate of this session, else the original.
-            return s.explain(self.admitted[request["handle"]][-1][0] if self.admitted.get(request["handle"]) else None)
+            return s.explain(admitted[-1][0] if admitted else None)
+        if kind in {"state", "delta"}:
+            evidence = [{k: r[k] for k in ("symbol", "status", "effects", "check_sites")} for _, r in admitted]
+            now = state(admitted[-1][0] if admitted else s.source, evidence)
+            earlier = self.states.get(request["since"]) if kind == "delta" else None
+            if kind == "delta" and earlier is None:
+                fail("E-SESSION", "This host sent no state with that digest; ask for the state.")
+            self.states[now["digest"]] = now
+            return delta(earlier, now) if earlier else now
         if kind == "expand":
             if s.scope != "focused":
                 fail("E-REQUEST", "A component packet already shows everything it may call.")
