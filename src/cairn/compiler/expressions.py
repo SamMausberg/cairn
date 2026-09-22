@@ -322,7 +322,7 @@ def e_binary(c: Checker, e: Expr, expected: Type | None) -> Type:
     # Literals and bare variants adapt to their peer; there is no general implicit conversion.
     if logical:  # The right side runs only when the left said `&&` true or `||` false, so it knows that much.
         left, known = c.expr(a, hint), len(c.facts)
-        facts.assume(c, a, op == "&&")
+        facts.assume(c, a, op == "&&", origin=("left", e, op == "&&"))
         right = c.expr(b, left)
         del c.facts[known:]
     elif adapts(c, a) and not adapts(c, b):
@@ -345,7 +345,8 @@ def e_binary(c: Checker, e: Expr, expected: Type | None) -> Type:
             fail("E-OPERATOR", "Bitwise operation requires unsigned scalars.", e)
     elif left.name in INT:
         c.guard("division" if op in {"/", "%"} else "overflow")
-        facts.discharge(c, e, "overflow", op in {"+", "-"} and left == USIZE and facts.arithmetic(c, e))
+        if op in {"+", "-"} and left == USIZE and not facts.discharge(c, e, "overflow", facts.arithmetic(c, e)):
+            facts.discharge(c, e, "overflow", e.span is not None, ("span", e.span))  # What a part's guard covers.
     elif left.name not in FLOAT or op == "%":
         fail("E-OPERATOR", f"{op} not defined on {left.name}.", e)
     return left

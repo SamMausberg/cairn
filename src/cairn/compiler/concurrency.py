@@ -45,7 +45,7 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
     target = target or ("device" if "device" in found else "host")
     binder, known = s.binder or s.name, len(c.facts)
     c.bind(binder, Binding(USIZE), s)
-    facts.binder(c, binder, None, s.exprs[s.tag == "compact"])  # Every lane's index is below the extent.
+    facts.binder(c, binder, None, s.exprs[s.tag == "compact"], origin=("binder", s))  # Each lane's index is below it.
     saved = c.lanes, c.device_depth, c.loop_depth, set(c.moved), c.effects
     c.lanes, c.device_depth = Lanes(binder, set(c.env) - {binder}, c.closure), int(target == "device")
     c.loop_depth, c.effects = 0, set()

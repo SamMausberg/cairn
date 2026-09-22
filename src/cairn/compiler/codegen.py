@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ..verify.elision import audit
 from ..version import VERSION
 from . import rings
 from .builtins import SHARED, TABLE, WRAPPING
@@ -41,7 +42,9 @@ def bare(condition: str) -> str:
 
 
 class Emitter:
-    def __init__(self, p: Program, checker: Checker | None = None, origin: Any = "", roots: tuple[str, ...] = ()):
+    def __init__(
+        self, p: Program, checker: Checker | None = None, origin: Any = "", roots: tuple[str, ...] = (), keep=False
+    ):
         self.p, self.ind, self.counter = p, 0, 0
         self.lines: list[str] = []
         # A source name, or a function from a line to (file, line), turns on #line directives.
@@ -56,6 +59,8 @@ class Emitter:
         self.c = checker or Checker(p)
         if checker is None:
             self.c.check()
+        # A guard is left out only where verify/elision.py accepts the checker's proof; `keep` writes every guard.
+        self.elision = audit(p, keep_all=keep)
 
     def put(self, s: str = ""):
         self.lines.append("  " * self.ind + s)
@@ -207,6 +212,8 @@ class Emitter:
 
     def e_slice(self, e: Expr) -> str:
         data, count = self.pointer(e.args[0])
+        if e.established:  # The checker showed lo <= hi <= len and that the extent is hi - lo (facts.part).
+            return f"({data} + {self.expr(e.args[1])})"
         want = self.expr(e.ref) if isinstance(e.ref, Expr) else str(e.ref or self.span(e))
         self.need("cairn_owners.hpp")
         return f"cr::part({data}, {self.expr(e.args[1])}, {self.expr(e.args[2])}, {count}, {want})"

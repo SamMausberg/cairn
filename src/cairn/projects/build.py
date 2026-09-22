@@ -38,12 +38,14 @@ def store(target: Path, digest: Path, fresh: Path) -> None:
     temporary.replace(digest)
 
 
-def objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout) -> tuple[list[str], list]:
+def objects(
+    project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout, keep=False
+) -> tuple[list[str], list]:
     """One object per module, reused only when the unit, the shared interface, the command and the compiler all hash
     to the same key and the stored bytes still match the digest beside them, so nothing stale, truncated or replaced
     is ever linked. The cache is a directory of the project's own build output, never a link out of it. Missing
     objects compile concurrently."""
-    files, _ = compile_units(project.source, project.origin if debug else "", (entry,) if entry else ())
+    files, _ = compile_units(project.source, project.origin if debug else "", (entry,) if entry else (), keep)
     files["0start.cpp"] = '#include "program.hpp"\n' + stub  # No module's unit can be named with a leading digit.
     compile_prefix, link = unit_commands(cxx, arch or project.arch, kind)
     compile_prefix += ["-g"] if debug else []
@@ -89,6 +91,7 @@ def build(
     target: str | None = None,
     debug: bool = False,
     incremental: bool = False,
+    keep_guards: bool = False,
 ) -> dict:
     kind = kind or project.kind
     target = target or project.target
@@ -109,7 +112,8 @@ def build(
             raise ProjectError("An executable needs exactly one fn main() -> i32 with no arguments.")
         entry = main.name
     # A library exports everything; a program contains only what its entry point reaches.
-    generated, receipt = compile_source(project.source, project.origin if debug else "", (entry,) if entry else ())
+    roots = (entry,) if entry else ()
+    generated, receipt = compile_source(project.source, project.origin if debug else "", roots, keep_guards)
     if bare:  # No hosted runtime stands behind the image, so no effect may assume one.
         audit_effects(receipt["functions"])
     generated += "\n// entry\n" if entry else ""
@@ -156,7 +160,9 @@ def build(
         ).stdout[:10000]
         if incremental and not bare and "cuda" not in receipt["requires"]:  # Device code and images stay one unit.
             stub = generated[generated.rindex("\n// entry\n") :] if "\n// entry\n" in generated else ""
-            command, units = objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout)
+            command, units = objects(
+                project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout, keep_guards
+            )
             command += ["-o", str(artifact)]
             record["command"] = command
             record["units"] = [{k: v for k, v in unit.items() if k != "error"} for unit in units]

@@ -13,9 +13,13 @@ between plain atoms also holds scaled by any constant a product atom names, so `
 
 A guard is discharged when the shortest path through those facts shows it cannot fail: an index
 below its view's extent, a usize `+` that stays below the maximum, a usize `-` whose right side is
-no larger than its left, a shift count below the width, a conversion whose operand fits. The site still
-counts as a syntactic check site and its function's row still says `trap`; lowering omits the guard, and
-the receipt counts it under `discharged_check_sites`. Nothing here changes which programs are accepted.
+no larger than its left, a shift count below the width, a conversion whose operand fits, a part
+`x[lo..hi]` with `lo <= hi <= len(x)` whose extent is `hi - lo`. The site still counts as a syntactic check
+site and its function's row still says `trap`; lowering omits the guard, and the receipt counts it under
+`discharged_check_sites`. Nothing here changes which programs are accepted.
+
+Every fact remembers its origin, and a discharged site keeps the facts its decision used (`Expr.proof`).
+This module only proposes: `verify/elision.py` checks each proof on its own terms before lowering acts on it.
 
 The same facts place a lane's accesses (`window`): lane `b` owns the block `[b*S, b*S + S)` of an array
 lanes write when every access it makes there is shown to stay inside it, which the race rule in
@@ -24,9 +28,12 @@ lanes write when every access it makes there is shown to stay inside it, which t
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .tree import BITS, SIGNED, UNSIGNED, USIZE, Expr, is_view
+
+CHECKED = {"+", "-", "*", "/", "%"}  # The binary operators lowering guards on integers.
+GUARDED_CALLS = {*BITS, "shr", "shl_wrap"}  # Conversions to an integer, and shifts.
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -36,6 +43,21 @@ MAX = 2**64 - 1
 WIDEST = 4  # How many bounds of one expression are kept; more would only cost time.
 NEGATED = {"<": ">=", "<=": ">", ">": "<=", ">=": "<", "==": "!=", "!=": "=="}
 Term = tuple[str, int]  # An atom plus a constant.
+# Where a fact comes from: ("binder", s), ("let", s), ("arm", s, truth), ("exit", s, truth), ("left", e, truth),
+# ("predicate", s) or ("kept", s), naming the statement or expression that makes it true.
+Origin = tuple[Any, ...]
+
+
+class Fact(tuple):
+    """`x - y <= k`, and the origin that makes it true; a scaled copy keeps the fact it was scaled from."""
+
+    origin: Origin | None
+    base: Any
+
+    def __new__(cls, x: str, y: str, k: int, origin: Origin | None = None, base: Any = None):
+        fact = super().__new__(cls, (x, y, k))
+        fact.origin, fact.base = origin, base
+        return fact
 
 
 def fixed(c: Checker, e: Expr) -> str | None:
@@ -143,18 +165,27 @@ def plus(c: Checker, ha: list[Term], hb: list[Term]) -> list[Term]:
 
 def ceiling(c: Checker, atom: str) -> int | None:
     """The least constant the facts cap an atom at, when they cap it below MAX."""
-    d = distance(c, atom, ZERO)
-    return d if d is not None and d < MAX else None
+    found = path(c, atom, ZERO)
+    if found is None or found[0] >= MAX:
+        return None
+    cite(c, found[1])
+    return found[0]
 
 
-def learn(c: Checker, low: Term, high: Term, strict: bool):
+def learn(c: Checker, low: Term, high: Term, strict: bool, origin: Origin | None = None):
     """Record low < high (strict) or low <= high."""
     if low[0] != high[0]:
-        c.facts.append((low[0], high[0], high[1] - low[1] - strict))
+        c.facts.append(Fact(low[0], high[0], high[1] - low[1] - strict, origin))
 
 
 def distance(c: Checker, source: str, target: str) -> int | None:
-    """The least k with source - target <= k that the facts in scope give, by Bellman-Ford over them.
+    """The least k with source - target <= k that the facts in scope give."""
+    found = path(c, source, target)
+    return None if found is None else found[0]
+
+
+def path(c: Checker, source: str, target: str) -> tuple[int, list[tuple[str, str, int]]] | None:
+    """That least k by Bellman-Ford over the facts in scope, and the edges of the path that gives it.
 
     x - y <= k also gives x*S - y*S <= k*S for every stride S an atom multiplies by. Every usize the
     program holds is at most MAX, but a product atom is only a number: it gets no such bound of its own,
@@ -162,36 +193,57 @@ def distance(c: Checker, source: str, target: str) -> int | None:
     facts = [*c.facts, *scaled(c.facts, {source, target})]
     atoms = {source, target, ZERO, *(a for a, _, _ in facts), *(b for _, b, _ in facts)}
     edges = [*facts, *((a, ZERO, MAX) for a in atoms if "*" not in a), *((ZERO, a, 0) for a in atoms)]
-    best = {source: 0}
+    best: dict[str, int] = {source: 0}
+    via: dict[str, tuple[str, str, int]] = {}
     for _ in range(len(atoms)):
         changed = False
-        for a, b, k in edges:
+        for edge in edges:
+            a, b, k = edge
             if a in best and best[a] + k < best.get(b, MAX + 1):
-                best[b], changed = best[a] + k, True
+                best[b], via[b], changed = best[a] + k, edge, True
         if not changed:
-            return best.get(target)
+            if target not in best:
+                return None
+            used: list[tuple[str, str, int]] = []
+            at = target
+            while at != source and len(used) < len(atoms):  # Each atom's last improvement: a shortest-path tree.
+                used.append(via[at])
+                at = via[at][0]
+            return best[target], used
     return None  # A negative cycle: contradictory facts, unreachable code, and nothing is claimed for it.
 
 
 def scaled(facts: list[tuple[str, str, int]], atoms: set[str]) -> list[tuple[str, str, int]]:
     """Each fact between plain atoms, multiplied by every stride a product atom names."""
     strides = {int(a.rsplit("*", 1)[1]) for a in {*atoms, *(a for f in facts for a in f[:2])} if "*" in a}
-    return [(a and f"{a}*{n}", b and f"{b}*{n}", k * n) for n in strides for a, b, k in facts if "*" not in a + b]
+    return [Fact(f[0] and f"{f[0]}*{n}", f[1] and f"{f[1]}*{n}", f[2] * n, getattr(f, "origin", None), f)
+            for n in strides for f in facts if "*" not in f[0] + f[1]]  # fmt: skip
+
+
+def cite(c: Checker, used: list[Any]):
+    """Keep the facts a decision rests on, each as it was learned (a scaled copy as the fact it scales)."""
+    cited = getattr(c, "cited", None)
+    for f in used if cited is not None else ():
+        if isinstance(f, Fact) and f.origin is not None:
+            cited.append(f if f.base is None else f.base)
 
 
 def at_most(c: Checker, x: Term, y: Term, slack: int = 0) -> bool:
     """Whether x - y <= slack follows from the facts in scope."""
-    d = distance(c, x[0], y[0])
-    return d is not None and d <= slack - x[1] + y[1]
+    found = path(c, x[0], y[0])
+    if found is None or found[0] > slack - x[1] + y[1]:
+        return False
+    cite(c, found[1])
+    return True
 
 
-def assume(c: Checker, cond: Expr, truth: bool = True):
+def assume(c: Checker, cond: Expr, truth: bool = True, origin: Origin | None = None):
     """Record what a condition that has just evaluated to `truth` says about usize values."""
     if cond.tag == "unary" and cond.val == "!":
-        return assume(c, cond.args[0], not truth)
+        return assume(c, cond.args[0], not truth, origin)
     if cond.tag == "binary" and cond.val in {"&&", "||"}:
         for part in cond.args if truth == (cond.val == "&&") else []:
-            assume(c, part, truth)
+            assume(c, part, truth, origin)
         return
     if cond.tag != "binary" or cond.val not in NEGATED or cond.args[0].ty != USIZE:
         return
@@ -199,36 +251,98 @@ def assume(c: Checker, cond: Expr, truth: bool = True):
     a, b = cond.args if op in {"<", "<=", "=="} else cond.args[::-1]
     for zero, other in [(a, b), (b, a)] if op == "!=" else []:  # A usize that is not zero is at least one.
         if exact(c, zero) == (ZERO, 0) and (x := exact(c, other)):
-            learn(c, (ZERO, 1), x, False)
+            learn(c, (ZERO, 1), x, False, origin)
     for left, right in [(a, b), (b, a)][: {"!=": 0, "==": 2}.get(op, 1)]:
         for x in bounds(c, left)[1]:
             for y in bounds(c, right)[0]:
-                learn(c, x, y, op in {"<", ">"})
+                learn(c, x, y, op in {"<", ">"}, origin)
 
 
-def binder(c: Checker, name: str, lo: Expr | None, hi: Expr, strict: bool = True):
+def binder(c: Checker, name: str, lo: Expr | None, hi: Expr, strict: bool = True, origin: Origin | None = None):
     """A loop, lane or collector binder: lo <= name < hi, or name <= hi when not strict."""
     for y in bounds(c, hi)[0]:
-        learn(c, (name, 0), y, strict)
+        learn(c, (name, 0), y, strict, origin)
     for x in bounds(c, lo)[1] if lo else []:
-        learn(c, x, (name, 0), False)
+        learn(c, x, (name, 0), False, origin)
 
 
-def defined(c: Checker, name: str, value: Expr):
-    """An immutable name bound to a usize value, or to a new owner of that many elements."""
+def defined(c: Checker, name: str, value: Expr, origin: Origin | None = None):
+    """An immutable name bound to a usize value, or to a new owner of that many elements. A usize value is also
+    kept whole, so that `linear` can see through the name to what it was bound to."""
+    if value.ty == USIZE:
+        c.values[name] = (c.env.get(name), value)
     if value.tag == "call" and value.val == "Buf" and value.ty.name == "Buf" and len(value.args) == 1:
         name, value = f"len({name})", value.args[0]
-    binder(c, name, value, value, strict=False)
+    binder(c, name, value, value, strict=False, origin=origin)
+
+
+def linear(c: Checker, e: Expr | str, depth: int = 4) -> dict[str, int] | None:
+    """A usize expression as atoms times integers plus a constant (the ZERO entry), when it is one: `+` and `-`
+    of atoms and literals, and immutable names seen through to what they were bound to. Two expressions with the
+    same form have the same value wherever both evaluate without a trap."""
+    if isinstance(e, str):
+        return ({ZERO: int(e)} if int(e) else {}) if e.isdigit() else None
+    if e.ty != USIZE:
+        return None
+    if e.tag == "binary" and e.val in {"+", "-"}:
+        a, b = (linear(c, x, depth) for x in e.args)
+        if a is None or b is None:
+            return None
+        sign, out = (1 if e.val == "+" else -1), dict(a)
+        for name, times in b.items():
+            out[name] = out.get(name, 0) + sign * times
+        return {name: times for name, times in out.items() if times}
+    known = c.values.get(e.val) if e.tag == "name" and depth else None
+    if known and known[0] is not None and known[0] is c.env.get(e.val) and not known[0].mutable:
+        return linear(c, known[1], depth - 1)
+    term = exact(c, e)
+    if term is None or "*" in term[0]:
+        return None
+    out = {term[0]: 1} if term[0] else {}
+    return {**out, ZERO: term[1]} if term[1] else out
+
+
+def guarded(e: Expr) -> bool:
+    """Whether lowering writes a guard anywhere in `e`, a bound of a part."""
+    ty = e.ty.name if e.ty is not None else ""
+    site = e.tag == "index" or (e.tag == "binary" and e.val in CHECKED and ty in BITS)
+    site = site or (e.tag == "unary" and e.val == "-" and ty in SIGNED) or (e.tag == "call" and e.val in GUARDED_CALLS)
+    return (site and not e.established) or any(guarded(a) for a in e.args)
 
 
 def index(c: Checker, e: Expr) -> bool:
     """An index below the extent of what it indexes."""
+    c.cited = []
     n = extent(c, e.args[0])
     return n is not None and any(at_most(c, x, n, -1) for x in bounds(c, e.args[1])[0])
 
 
+def part(c: Checker, e: Expr) -> bool:
+    """A part `x[lo..hi]` with lo <= hi <= len(x), handed where the callee expects exactly `hi - lo` elements: its
+    extent is this part's own span, or has the same linear form. Lowering writes `x + lo` and does not evaluate
+    `hi` again, so `hi` may hold no guard of its own."""
+    c.cited = []
+    (base, lo, hi), want = e.args, e.ref
+    n = extent(c, base)
+    if n is None or guarded(hi) or want is None or not spans(c, e, want):
+        return False
+    (h_lo, _), (h_hi, l_hi) = bounds(c, lo), bounds(c, hi)
+    return any(at_most(c, y, x) for y in h_lo for x in l_hi) and any(at_most(c, y, n) for y in h_hi)
+
+
+def spans(c: Checker, e: Expr, want: Expr | str) -> bool:
+    """Whether a part's extent is `hi - lo`: its own span written out, or an extent of the same linear form."""
+    if isinstance(want, Expr) and want.span is e and want.tag == "binary":
+        return True
+    high, low, given = linear(c, e.args[2]), linear(c, e.args[1]), linear(c, want)
+    if high is None or low is None or given is None:
+        return False
+    return {a: t for a in {*high, *low} if (t := high.get(a, 0) - low.get(a, 0))} == given
+
+
 def arithmetic(c: Checker, e: Expr) -> bool:
     """A usize + that cannot pass the maximum, or a usize - that cannot go below zero."""
+    c.cited = []
     (ha, la), (hb, _) = (bounds(c, a) for a in e.args)
     if e.val == "+":
         return any(at_most(c, x, (ZERO, MAX)) for x in plus(c, ha, hb))
@@ -237,11 +351,13 @@ def arithmetic(c: Checker, e: Expr) -> bool:
 
 def shift(c: Checker, e: Expr) -> bool:
     """A shift count below the width of what it shifts."""
+    c.cited = []
     return any(at_most(c, x, (ZERO, BITS[e.args[0].ty.name] - 1)) for x in bounds(c, e.args[1])[0])
 
 
 def conversion(c: Checker, e: Expr) -> bool:
     """A conversion to an integer type that holds every value its operand can have."""
+    c.cited = []
     src, dst = e.args[0].ty.name, e.val
     if src not in BITS or dst not in BITS or (src in SIGNED and dst not in SIGNED):
         return False
@@ -277,8 +393,11 @@ def below(c: Checker, e: Expr, base: Term, room: int) -> bool:
     return False
 
 
-def discharge(c: Checker, e: Expr, kind: str, holds: bool):
-    """Mark a guard site whose condition was established, and count it."""
+def discharge(c: Checker, e: Expr, kind: str, holds: bool, proof: tuple[str, Any] | None = None) -> bool:
+    """Mark a guard site whose condition was established, count it, and keep its proof: ("facts", the facts the
+    decision used) unless the caller gives another, as ("span", part) for a value a part's own guard covers."""
     if holds:
         e.established = True
+        e.proof = proof or ("facts", tuple(dict.fromkeys(getattr(c, "cited", None) or ())))
         c.discharged[kind] = c.discharged.get(kind, 0) + 1
+    return holds

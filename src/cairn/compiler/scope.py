@@ -31,6 +31,8 @@ class Scope:
     spawning: str = ""  # The name a `let t = spawn ...` is about to bind.
     touched: list[tuple[str, str, bool, Any]] | None = None  # Every access of the loop body being checked.
     facts: list[tuple[str, str, int]] = field(default_factory=list)  # (x, y, k): x - y <= k, in scope (facts.py)
+    values: dict[str, tuple[Any, Any]] = field(default_factory=dict)  # name -> (binding, the usize it was bound to)
+    cited: list[tuple[str, str, int]] = field(default_factory=list)  # The facts the last decision rested on.
     discharged: dict[str, int] = field(default_factory=dict)  # Guard sites whose condition was established.
 
 

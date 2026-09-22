@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import rings
+from . import facts, rings
 from .builtins import SOFT, TABLE, WRAPPING
 from .scope import Binding
 from .traits import infer, instantiate, trait_member, unbound, unify, vtable
@@ -132,8 +132,28 @@ def elaborate(f: Function, args: list[Expr]) -> None:
     args[:] = [written[n] if n in written else measured(first[n]) for n, _ in f.params]
 
 
+def same(a: Expr, b: Expr) -> bool:
+    """Whether two expressions are written alike."""
+    return (a.tag, a.val, len(a.args)) == (b.tag, b.val, len(b.args)) and all(map(same, a.args, b.args))
+
+
+def spanned(args: list[Expr]):
+    """Mark an argument written `hi - lo` over the bounds of a part among the same arguments, as an omitted extent
+    is. The part evaluates those bounds under their own guards and traps when lo > hi, all before the callee runs,
+    so that argument's usize `+` and `-` need no guard of their own (`e_binary`, with the proof ("span", part))."""
+    for a in args:
+        part = next((p for p in args if p.tag == "slice" and a.tag == "binary" and a.val == "-"
+                     and same(a.args[0], p.args[2]) and same(a.args[1], p.args[1])), None)  # fmt: skip
+        stack = [a] if part is not None else []
+        while stack:
+            node = stack.pop()
+            node.span = part
+            stack += node.args
+
+
 def invoke(c: Checker, e: Expr, f: Function, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
     elaborate(f, args)
+    spanned(args)
     if len(args) != len(f.params):
         implied = extents(f)
         fewer = f", or {len(f.params) - len(implied)} leaving out the extents {', '.join(implied)}" if implied else ""
@@ -200,6 +220,9 @@ def invoke(c: Checker, e: Expr, f: Function, args: list[Expr], targs: tuple, exp
         mapping[name] = c.lend(a, want.mode, borrows, bool(want.extent))
         if named and want.mode == "rw" and c.env[root(a).val].ty.mode == "value":
             c.effect("write:" + root(a).val)
+    for a in args:  # Every extent is known now, so a part whose bounds the facts settle loses its guard.
+        if a.tag == "slice":
+            facts.discharge(c, a, "bounds", facts.part(c, a))
     c.disjoint(borrows, e, *closures)
     c.call_edges[c.f.name].append((f.name, mapping))
     c.callset.add(f.name)

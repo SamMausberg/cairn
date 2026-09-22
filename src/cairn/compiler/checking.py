@@ -61,6 +61,8 @@ class Checker:
     spawning: str
     touched: list[tuple[str, str, bool, Any]] | None
     facts: list[tuple[str, str, int]]
+    values: dict[str, tuple[Any, Any]]
+    cited: list[tuple[str, str, int]]
     discharged: dict[str, int]
     # The rules live one module per subject, each a function taking the checker as `c`, and are bound here as methods
     # so that mypy checks every call; a statement or expression tag dispatches to `s_<tag>` or `e_<tag>`.
@@ -574,7 +576,7 @@ class Checker:
             handler = getattr(self, "e_" + e.tag, None)
             if handler is None:
                 fail("E-INTERNAL", f"Unknown expression {e.tag}.", e)
-            e.established = False  # Only what this check establishes, where it stands, may remove a guard.
+            e.established, e.proof = False, None  # Only what this check establishes, where it stands, removes a guard.
             ty = e.ty = handler(e, expected)
         if consume and ty.mode == "value" and self.kind(ty) != "copy":
             self.consume(e)

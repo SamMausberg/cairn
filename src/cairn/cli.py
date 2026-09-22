@@ -103,6 +103,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"build", "run"}, "--debug", {"action": "store_true", "help": "Debug symbols that point at the CAIRN source."}),
     ({"build", "run"}, "--incremental", {"action": "store_true", "help": "One object per module, reused by content "
                                          "hash; gives up inlining across modules."}),
+    ({"emit", "build", "run"}, "--keep-guards", {"action": "store_true", "help": "Write every guard, also those the "
+                                                 "checker showed cannot fail: the conservative build."}),
     ({"run"}, "--memory-mib", {"type": int, "default": 1024,
                                "help": "Native address-space cap, 64..65536 MiB; not a sandbox."}),
     ({"build"}, "--kind", {"choices": ["library", "exe"]}),
@@ -239,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         project = load_project(a.path)
         if a.command in {"check", "emit"}:
-            generated, receipt = compile_source(project.source)
+            generated, receipt = compile_source(project.source, keep_guards=getattr(a, "keep_guards", False))
             if a.command == "emit":
                 print(generated, end="")
                 return 0
@@ -314,7 +316,8 @@ def main(argv: list[str] | None = None) -> int:
         from .projects.build import build
 
         result = build(project, output=a.out, cxx=a.cxx, arch=a.arch, kind="exe" if a.command == "run" else a.kind,
-                       timeout=a.timeout, target=a.target, debug=a.debug, incremental=a.incremental)  # fmt: skip
+                       timeout=a.timeout, target=a.target, debug=a.debug, incremental=a.incremental,
+                       keep_guards=a.keep_guards)  # fmt: skip
         if a.command == "build" or result["status"] != "native-built":
             report(result, brief=True)
             return 0 if result["status"] == "native-built" else 2

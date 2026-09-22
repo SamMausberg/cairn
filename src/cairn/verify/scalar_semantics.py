@@ -109,6 +109,7 @@ def implementation_hash():
                 "verify/scalar_symbolic.py",
                 "verify/scalar_concrete.py",
                 "verify/smt_bridge.py",
+                "verify/elision.py",
                 "compiler/cairnc.py",
                 "compiler/lexing.py",
                 "compiler/tree.py",
