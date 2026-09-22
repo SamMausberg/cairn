@@ -2,12 +2,10 @@
 and templates certified once against their bounds.
 """
 
-import shutil
-import subprocess
-
 import pytest
 
-from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
+from cairn.compiler.cairnc import Diagnostic, compile_source
+from emitted import SANITIZED, run
 
 ACROSS_MODULES = """
 module m;
@@ -40,15 +38,8 @@ def test_a_generic_call_types_its_arguments_where_they_are_written(tmp_path):
     """The template's module decides what its own text means, never what the caller's arguments mean: a private
     field, or the caller's own type parameter, in an argument of another module's generic. `T(x)` converts (or
     constructs) at the instance's T, which is how a class-bounded template computes a mean."""
-    if not shutil.which("clang++"):
-        pytest.skip("Native compiler unavailable")
     cpp = compile_source(ACROSS_MODULES, roots=("app.main",))[0]
-    (tmp_path / "p.cpp").write_text(cpp + "int main() { return cf_app_main(); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = ["-std=c++20", "-O1", "-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-Werror"]
-    subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
-    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+    assert run(tmp_path, cpp, *SANITIZED, "-Werror", entry="app.main").returncode == 0
 
 
 def test_a_nat_parameter_is_a_static_extent_and_literals_take_the_expected_result_type(tmp_path):
@@ -60,12 +51,7 @@ def test_a_nat_parameter_is_a_static_extent_and_literals_take_the_expected_resul
         "  let y:u32 = conv(3); let z:u8 = conv(200);\n"
         "  if a[3] != 7 || b[4] != 2 || y != 3 || z != 200 { return 1; }\n  return 0; }"
     )
-    (tmp_path / "p.cpp").write_text(compile_source(source)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    build = ["clang++", "-std=c++20", "-O1", "-fsanitize=address,undefined", str(tmp_path / "p.cpp"), "-o"]
-    subprocess.run([*build, str(tmp_path / "p")], check=True, timeout=120)
-    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+    assert run(tmp_path, compile_source(source)[0], *SANITIZED).returncode == 0
     with pytest.raises(Diagnostic) as wrong_extent:
         compile_source(source.replace("fill[4](a, 7)", "fill[8](a, 7)"))
     assert wrong_extent.value.data["code"] == "E-TYPE-MISMATCH"
@@ -175,9 +161,4 @@ def test_kind_and_class_bounds_are_promises_checked_at_the_call_and_certified_on
         "fn ignore[T: affine](x:T) -> u64 = 0;", "fn ignore[T: affine](x:T) -> u64 { let a = x; let b = x; return 0; }"
     )
     assert certify_templates(broken)["ignore"].startswith("E-MOVED")  # affine promises one use, not two.
-    (tmp_path / "p.cpp").write_text(compile_source(BOUNDED)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    build = ["clang++", "-std=c++20", "-O1", "-fsanitize=address,undefined", str(tmp_path / "p.cpp"), "-o"]
-    subprocess.run([*build, str(tmp_path / "p")], check=True, timeout=120)
-    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+    assert run(tmp_path, compile_source(BOUNDED)[0], *SANITIZED).returncode == 0

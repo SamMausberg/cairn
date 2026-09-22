@@ -3,12 +3,10 @@
 Every accepted construct is executed natively under both compilers; every rule has a rejection.
 """
 
-import shutil
-import subprocess
-
 import pytest
 
-from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
+from cairn.compiler.cairnc import Diagnostic, compile_source
+from emitted import SANITIZED, WARNINGS, run
 
 PRELUDE = """
 const LIMIT:usize = 8;
@@ -98,16 +96,9 @@ fn main() -> i32 {
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 @pytest.mark.parametrize("sanitize", [False, True])
 def test_breadth_runs_natively(tmp_path, cxx, sanitize):
-    if not shutil.which(cxx):
-        pytest.skip("Native compiler unavailable")
     generated, receipt = compile_source(PRELUDE + MAIN)
-    (tmp_path / "p.cpp").write_text(generated + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = ["-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-O1", "-g"] if sanitize else ["-O3"]
-    command = [cxx, "-std=c++20", "-Wall", "-Wextra", "-Werror", "-Wno-unused-variable", "-Wno-unused-parameter"]
-    subprocess.run([*command, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
-    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+    flags = SANITIZED if sanitize else ["-std=c++20", "-O3"]
+    assert run(tmp_path, generated, *flags, *WARNINGS, cxx=cxx).returncode == 0
     effects = receipt["functions"]["make"]["effects"]
     assert {"alloc", "free", "zero_init", "trap"} <= set(effects) and "local_write" in effects
     assert receipt["functions"]["push[u64]"]["effects"] == sorted(
@@ -231,8 +222,6 @@ fn forward(s:ro<dyn Shape>) -> u64 = measure(s);
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_dynamic_interfaces_are_explicit_fat_references(tmp_path, cxx):
-    if not shutil.which(cxx):
-        pytest.skip("Native compiler unavailable")
     main = (
         "fn main() -> i32 { let mut sq = Square(3); let mut r = Rect(2, 5);"
         " if measure(sq) != 10 || measure(r) != 11 { return 1; }"
@@ -240,12 +229,7 @@ def test_dynamic_interfaces_are_explicit_fat_references(tmp_path, cxx):
         " if bigger != 16 || wider != 20 || forward(sq) != 17 { return 2; } return 0; }"
     )
     generated, receipt = compile_source(DYNAMIC + main)
-    (tmp_path / "p.cpp").write_text(generated + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    subprocess.run([cxx, "-std=c++20", "-O2", "-Wall", "-Wextra", "-Werror", str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")],
-                   check=True, timeout=120)  # fmt: skip
-    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+    assert run(tmp_path, generated, "-std=c++20", "-O2", "-Wall", "-Wextra", "-Werror", cxx=cxx).returncode == 0
     assert receipt["functions"]["enlarge"]["effects"] == ["dispatch", "read:s", "trap", "write:s"]
     assert generated.count("static const cdt_Shape") == 2
 
@@ -273,20 +257,7 @@ def test_owned_dynamic_values_hold_heterogeneous_owners(tmp_path):
     source = (Path(__file__).parents[1] / "native/owned_dynamic.cairn").read_text()
     generated, receipt = compile_source(source)
     assert {"alloc", "free", "dispatch"} <= set(receipt["functions"]["main"]["effects"])
-    (tmp_path / "p.cpp").write_text(generated + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    build = [
-        "clang++",
-        "-std=c++20",
-        "-O1",
-        "-g",
-        "-fno-exceptions",
-        "-fsanitize=address,undefined",
-        "-fno-sanitize-recover=all",
-    ]
-    subprocess.run([*build, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
-    assert subprocess.run([tmp_path / "p"], timeout=60, env={"ASAN_OPTIONS": "detect_leaks=1"}).returncode == 0
+    assert run(tmp_path, generated, *SANITIZED, env={"ASAN_OPTIONS": "detect_leaks=1"}).returncode == 0
 
 
 @pytest.mark.parametrize(
@@ -306,13 +277,7 @@ def test_owned_dynamic_rejections(code, tail):
 
 def test_an_empty_owned_dynamic_value_traps_when_lent(tmp_path):
     source = DYNAMIC + "fn main() -> i32 { let mut pair = Array[Dyn[Shape], 2](); return i32(measure(pair[0])); }"
-    (tmp_path / "p.cpp").write_text(compile_source(source)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    subprocess.run(
-        ["g++", "-std=c++20", "-O2", str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120
-    )
-    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == -6
+    assert run(tmp_path, compile_source(source)[0], "-std=c++20", "-O2", cxx="g++").returncode == -6
 
 
 def test_the_readme_example_is_real():

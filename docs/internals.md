@@ -73,6 +73,8 @@ make native        # both compilers with the sanitizers that bite, and the codeg
 make gpu embedded  # CUDA runtime and lanes, and the QEMU board, where the hardware is present
 ```
 
+`make gpu` is the only command that runs code on a CUDA device. It sets `CAIRN_GPU_TESTS=1`, runs in one process, and holds `/tmp/cairn-gpu.lock` around every device run, so two checkouts cannot overlap on the device either (`tools/support.py`: `device_reason`, `device_lock`). Everywhere else a device test compiles what it can and skips the run. The reason is the machine the evidence comes from: under WSL2 and Windows the GPU also drives the display, the driver reset its engine after device test runs, and two mornings of repeated resets ended in a host crash.
+
 `make proof` needs `lake` on `PATH`; elan installs it in `~/.elan/bin`. Its Lean half prints the axioms behind every theorem, and only `propext` and `Quot.sound` are allowed. It runs only the positive coverage case; the negative one, `cairn verify examples/proof_scope/mixed.cairn examples/proof_scope/mixed.cairn --all`, must come back incomplete and nonzero.
 
 | `tests/` folder | What it establishes |

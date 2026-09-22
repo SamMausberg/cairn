@@ -2,7 +2,7 @@
 
 The executables under tests/native are self checking: exit 0 is a pass. Each also runs one
 named death case per invocation, which must abort the process, so those are driven here as
-subprocesses. Device work is skipped with a reason when nvcc or a GPU is missing.
+subprocesses. Device work runs only under `make gpu`, one run at a time (`support.device_reason`).
 
 The parallel test is run at several lane counts (CAIRN_LANES), under ThreadSanitizer and under
 AddressSanitizer with UBSan, because the lane pool is shared, long lived and joined at exit.
@@ -17,6 +17,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
+from support import device_lock, device_reason
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / "src/cairn/runtime"
@@ -60,18 +62,6 @@ def run_cases(exe: Path) -> None:
 def lanes(count: str | None) -> dict[str, str]:
     """The environment for one lane count; a timeout here is a hung pool, which is a failure."""
     return {**os.environ, "CAIRN_LANES": count} if count else dict(os.environ)
-
-
-def device_reason() -> str:
-    if not shutil.which("nvcc"):
-        return "nvcc is not installed: the device runtime cannot be compiled here"
-    smi = shutil.which("nvidia-smi")
-    if not smi:
-        return "nvidia-smi is missing: no NVIDIA device is visible"
-    found = subprocess.run([smi, "-L"], capture_output=True, text=True)
-    if found.returncode != 0 or "GPU 0" not in found.stdout:
-        return "no CUDA device is available on this host"
-    return ""
 
 
 @pytest.fixture(scope="session")
@@ -156,10 +146,12 @@ def test_parallel_runtime_is_clean_under_address_and_ub(sanitized_parallel: dict
 
 
 def test_gpu_runtime(gpu_exe: Path) -> None:
-    done = subprocess.run([str(gpu_exe)], capture_output=True, text=True)
+    with device_lock():
+        done = subprocess.run([str(gpu_exe)], capture_output=True, text=True)
     assert done.returncode == 0, done.stdout + done.stderr
     assert "ok after" in done.stdout
 
 
 def test_gpu_runtime_deaths(gpu_exe: Path) -> None:
-    run_cases(gpu_exe)
+    with device_lock():
+        run_cases(gpu_exe)

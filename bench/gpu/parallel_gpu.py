@@ -11,14 +11,13 @@ from __future__ import annotations
 import json
 import os
 import platform
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
-from support import best_profile, profile_flags
+from support import best_profile, device_lock, device_reason, profile_flags
 
 RUNTIME = ROOT / "src/cairn/runtime"
 OUT = ROOT / "results/gpu/benchmark.json"
@@ -45,15 +44,16 @@ def version(command: list[str], pick: str = "") -> str:
 
 
 def main() -> int:
-    if not shutil.which("nvcc"):
-        print("nvcc is not installed: nothing was measured", file=sys.stderr)
+    if reason := device_reason():
+        print(f"{reason}: nothing was measured", file=sys.stderr)
         return 1
     build = ROOT / "results/gpu/bench_parallel_gpu"
     build.parent.mkdir(parents=True, exist_ok=True)
     command = ["nvcc", *STRICT, *DEVICE, "-Xcompiler", ",".join(HOST)]
     command += [f"-I{RUNTIME}", str(ROOT / "bench/gpu/parallel_gpu.cu"), "-o", str(build)]
-    subprocess.run(command, check=True)
-    measured = json.loads(subprocess.run([str(build)], capture_output=True, text=True, check=True).stdout)
+    with device_lock():
+        subprocess.run(command, check=True)
+        measured = json.loads(subprocess.run([str(build)], capture_output=True, text=True, check=True).stdout)
     smi = ["nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"]
     measured["environment"] = {
         "host": f"{platform.system()} {platform.machine()} {platform.release()}",

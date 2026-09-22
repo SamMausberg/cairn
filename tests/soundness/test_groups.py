@@ -6,15 +6,12 @@ Accepted programs run natively under both compilers with the sanitizers that bit
 rejection naming its code.
 """
 
-import os
-import shutil
-import subprocess
-
 import pytest
 from test_concurrency import HELPERS, build_and_run
 
-from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
-from cairn.projects.toolchain import audit_effects, command
+from cairn.compiler.cairnc import Diagnostic, compile_source
+from cairn.projects.toolchain import audit_effects
+from emitted import watched
 
 NAP = """
 extern fn usleep(us:u32) -> i32 effects(io);
@@ -61,20 +58,6 @@ FULL = "fn main() -> i32 { let g = Group[u64](1); spawn nap(1000, 1) into g; spa
 EMPTY = "fn main() -> i32 { let g = Group[u64](2); let r = collect(g); wait(g); return i32(r); }"
 
 
-def sanitized(tmp_path, source, cxx, sanitizer):
-    generated, receipt = compile_source(source)
-    (tmp_path / "p.cpp").write_text(generated + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    line = command(cxx, str(tmp_path / "p.cpp"), str(tmp_path / "p"), kind="exe")
-    subprocess.run([*line, "-g", f"-fsanitize={sanitizer}"], check=True, timeout=300)
-    environment = {**os.environ, "ASAN_OPTIONS": "detect_leaks=1"}
-    ran = subprocess.run(
-        ["setarch", "-R", str(tmp_path / "p")], capture_output=True, text=True, timeout=240, env=environment
-    )
-    return ran, receipt
-
-
 def test_a_group_is_declared_with_its_costs():
     """The declaration takes the whole storage (alloc, free), a submission is a spawn behind a guard, a collect
     is a join behind a guard, and wait is the join that returns the leases."""
@@ -91,9 +74,7 @@ def test_a_group_is_declared_with_its_costs():
 def test_results_arrive_in_completion_order_and_owners_are_released_once(tmp_path, cxx, sanitizer):
     """ThreadSanitizer watches the three tasks that write three parts and the results crossing back; the address
     and leak sanitizers watch a collected owner and the two that wait drops, each released exactly once."""
-    if not shutil.which(cxx) or not shutil.which("setarch"):
-        pytest.skip(f"needs {cxx} and setarch")
-    ran, _ = sanitized(tmp_path, HELPERS + NAP + GROUPS, cxx, sanitizer)
+    ran = watched(tmp_path, compile_source(HELPERS + NAP + GROUPS)[0], cxx, sanitizer)
     assert ran.returncode == 0, ran.stdout + ran.stderr
     assert "Sanitizer" not in ran.stderr and "runtime error" not in ran.stderr, ran.stderr
 
@@ -103,8 +84,6 @@ def test_results_arrive_in_completion_order_and_owners_are_released_once(tmp_pat
 def test_a_full_or_empty_group_traps(tmp_path, cxx, program):
     """A submission past the capacity, or a collect with nothing outstanding, is a guard failure, never growth
     or a wait that can never end."""
-    if not shutil.which(cxx):
-        pytest.skip(f"needs {cxx}")
     code, _ = build_and_run(tmp_path, NAP + program, cxx)
     assert code in (-6, 134)
 

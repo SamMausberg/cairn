@@ -7,14 +7,13 @@ domains, budgets, hygiene, privacy and the content hash a receipt pins.
 """
 
 import hashlib
-import shutil
-import subprocess
 
 import pytest
 
 from cairn.agent.agent_tools import canonical_source, expanded_source
-from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
+from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.editor.formatting import format_source
+from emitted import SANITIZED, WARNINGS, run, sanitized
 
 LAYOUT = """
 module layout;
@@ -85,16 +84,8 @@ pub fn main() -> i32 {
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_recipes_generate_records_functions_and_ranges_that_run(tmp_path, cxx):
-    if not shutil.which(cxx):
-        pytest.skip(f"{cxx} unavailable")
     cpp, receipt = compile_source(APP, roots=("app.main",))
-    (tmp_path / "p.cpp").write_text(cpp + "int main() { return static_cast<int>(cf_app_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter"]
-    flags += ["-fsanitize=address,undefined", "-fno-sanitize-recover=all"] if cxx == "clang++" else []
-    subprocess.run([cxx, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=180)
-    assert subprocess.run([tmp_path / "p"], timeout=60).returncode == 0
+    assert run(tmp_path, cpp, *sanitized(cxx), *WARNINGS, cxx=cxx, entry="app.main").returncode == 0
     rows = receipt["functions"]
     assert rows["app.shift_2"]["effects"] == ["trap"]  # The recipe's `pure` ceiling held for the instance.
     assert {"alloc", "free"} <= set(rows["app.Particle_columns_new"]["effects"])
@@ -159,8 +150,6 @@ pub fn main() -> i32 {
 def test_a_recipe_declares_a_field_extent_and_the_column_goes_whole(tmp_path, cxx):
     """`$f:Buf[$t][rows]` inside a recipe is the declared extent of the generated record's field, so a call
     takes the column whole and pays no part guard; the rule is the one a written record obeys."""
-    if not shutil.which(cxx):
-        pytest.skip(f"{cxx} unavailable")
     cpp, receipt = compile_source(COLUMNS_WITH_EXTENTS, roots=("app.main",))
     assert receipt["functions"]["app.main"]["syntactic_check_sites"].get("bounds", 0) == 0
     projected = canonical_source(COLUMNS_WITH_EXTENTS)
@@ -168,13 +157,7 @@ def test_a_recipe_declares_a_field_extent_and_the_column_goes_whole(tmp_path, cx
     assert compile_source(projected, roots=("app.main",))[0] == cpp
     formatted = format_source(COLUMNS_WITH_EXTENTS)
     assert format_source(formatted) == formatted and compile_source(formatted, roots=("app.main",))[0] == cpp
-    (tmp_path / "p.cpp").write_text(cpp + "int main() { return static_cast<int>(cf_app_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter"]
-    flags += ["-fsanitize=address,undefined", "-fno-sanitize-recover=all"] if cxx == "clang++" else []
-    subprocess.run([cxx, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=180)
-    assert subprocess.run([tmp_path / "p"], timeout=60).returncode == 0
+    assert run(tmp_path, cpp, *sanitized(cxx), *WARNINGS, cxx=cxx, entry="app.main").returncode == 0
 
 
 REJECTED = {
@@ -322,19 +305,10 @@ pub fn main() -> i32 { let p = P(1); if !lib.alike(p, p) { return 7; } return i3
 def test_a_name_a_recipe_writes_means_what_it_means_in_the_recipes_module(tmp_path):
     """Hygiene: the deriving module's `helper` and `Same` do not capture the recipe's. Only `$` splices (and the
     names they build) belong to the deriving module; everything else is spelled out in full when it is expanded."""
-    if not shutil.which("clang++"):
-        pytest.skip("clang++ unavailable")
     shown = expanded_source(CAPTURE)
     assert "return lib.helper(v.x);" in shown and "impl lib.Same for app.P {" in shown
-    (tmp_path / "p.cpp").write_text(
-        compile_source(CAPTURE, roots=("app.main",))[0] + "int main() { return cf_app_main(); }\n"
-    )
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    subprocess.run(
-        ["clang++", "-std=c++20", "-O1", str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120
-    )
-    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 1  # lib.helper ran, and P implements lib.Same.
+    cpp = compile_source(CAPTURE, roots=("app.main",))[0]
+    assert run(tmp_path, cpp, "-std=c++20", "-O1", entry="app.main").returncode == 1  # lib.helper ran; P is lib.Same.
     with pytest.raises(Diagnostic) as e:  # A private helper is private from where the code lands, and says so.
         compile_source(CAPTURE.replace("pub fn helper(x:u64) -> u64 = 1;", "fn helper(x:u64) -> u64 = 1;"))
     assert e.value.data["code"] == "E-PRIVATE"
@@ -371,16 +345,9 @@ pub fn main() -> i32 {
 def test_a_recipe_takes_the_name_of_a_function(tmp_path):
     """`[F:fn]`: the name is spliced as the deriving module wrote it and means what it means there, so a generic
     function serves fields of different types and another module's private function stays private."""
-    if not shutil.which("clang++"):
-        pytest.skip("clang++ unavailable")
     cpp, receipt = compile_source(NAMED, roots=("app.main",))
     assert receipt["derivations"][2] == {"module": "app", "recipe": "m.scaled", "naturals": [3, "m.twice"], "for": "Q"}
-    (tmp_path / "p.cpp").write_text(cpp + "int main() { return static_cast<int>(cf_app_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = ["-std=c++20", "-O1", "-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-Werror"]
-    subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=180)
-    assert subprocess.run([tmp_path / "p"], timeout=60).returncode == 0
+    assert run(tmp_path, cpp, *SANITIZED, "-Werror", entry="app.main").returncode == 0
     assert "derive m.scaled[3, m.twice] for Q;" in canonical_source(NAMED)
     for code, more in [
         ("E-PRIVATE", "derive m.fieldwise[m.hidden] for Q;"),
@@ -434,16 +401,9 @@ pub fn main() -> i32 {
 
 def test_only_dollar_splices_are_rewritten_and_derivations_wait_for_what_they_need(tmp_path):
     """A `where` name once rewrote the ordinary identifier `t`; a private `wire` elsewhere once hid std.wire."""
-    if not shutil.which("clang++"):
-        pytest.skip("clang++ unavailable")
     cpp = compile_source(HYGIENE, roots=("app.main",))[0]
     assert "cf_app_t(" in cpp
-    (tmp_path / "p.cpp").write_text(cpp + "int main() { return static_cast<int>(cf_app_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = ["-std=c++20", "-O1", "-fno-exceptions", "-fsanitize=address,undefined"]
-    subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=180)
-    assert subprocess.run([tmp_path / "p"], timeout=60).returncode == 0
+    assert run(tmp_path, cpp, *SANITIZED, entry="app.main").returncode == 0
 
 
 DERIVED = """
@@ -487,25 +447,8 @@ fn main() -> i32 {
 def test_derived_implementations_serve_generic_library_code(tmp_path, cxx):
     """`derive eq|ord|hash` are recipes in std.derived that generate impls; std.core's own impls are one bounded
     blanket impl per class of scalars, which applies exactly where its bound holds."""
-    if not shutil.which(cxx):
-        pytest.skip(f"{cxx} unavailable")
     cpp = compile_source(DERIVED, roots=("main",))[0]
-    (tmp_path / "p.cpp").write_text(cpp + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = [
-        "-std=c++20",
-        "-O1",
-        "-fno-exceptions",
-        "-Wall",
-        "-Wextra",
-        "-Werror",
-        "-Wno-unused-parameter",
-        "-Wno-unused-variable",
-    ]
-    flags += ["-fsanitize=address,undefined"] if cxx == "clang++" else []
-    subprocess.run([cxx, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=180)
-    assert subprocess.run([tmp_path / "p"], timeout=60).returncode == 0
+    assert run(tmp_path, cpp, *sanitized(cxx), *WARNINGS, cxx=cxx).returncode == 0
 
 
 @pytest.mark.parametrize(

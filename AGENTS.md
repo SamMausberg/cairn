@@ -53,7 +53,7 @@ Count whole compiler dependencies in density measurements, not a facade alone.
 
 ## Development
 
-Work on a branch, one focused change at a time. Run the fast suite before and after you touch code, and both native compilers with the relevant sanitizers when you touch the runtime or the lowering. Accepted examples are not evidence on their own: every rule needs a rejection test naming its diagnostic code and an independent behaviour oracle.
+Work on a branch, one focused change at a time. Run the fast suite before and after you touch code, and both native compilers with the relevant sanitizers when you touch the runtime or the lowering. Never run code on the GPU outside `make gpu`, never set `CAIRN_GPU_TESTS` yourself, and never start `make gpu` while another agent may: repeated device runs have crashed the host. Several agents on one machine share its cores, so give pytest at most four workers each. Accepted examples are not evidence on their own: every rule needs a rejection test naming its diagnostic code and an independent behaviour oracle.
 
 Source belongs in `src/cairn`, tests in `tests`, real programs in `examples`, and generated results under `results/`, which is not tracked. Do not reimplement a compiler rule in a script. `implementation_hash()` in `src/cairn/verify/scalar_semantics.py` lists the files a semantic receipt is pinned to; add a new parser, checker or emitter file to that list. Prefer removing repeated boilerplate to adding opaque punctuation, and do not shrink a source-token measurement by excluding semantics the program imports.
 

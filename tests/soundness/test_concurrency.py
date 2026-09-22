@@ -10,10 +10,10 @@ import subprocess
 import pytest
 
 from cairn.agent.agent_tools import canonical_source
-from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
+from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project
-from cairn.projects.toolchain import command
+from emitted import contract, on_device, watched
 
 HELPERS = """
 struct Stats { hits:u64; total:u64; }
@@ -124,13 +124,8 @@ fn main() -> i32 {
 
 def build_and_run(tmp_path, source, cxx, extra=(), timeout=240):
     generated, receipt = compile_source(source)
-    (tmp_path / "p.cpp").write_text(generated + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    cuda = "cuda" in receipt["requires"]
-    line = command(cxx, str(tmp_path / "p.cpp"), str(tmp_path / "p"), kind="exe", cuda=cuda)
-    subprocess.run([*line, *extra], check=True, timeout=timeout)
-    return subprocess.run([tmp_path / "p"], timeout=timeout).returncode, receipt
+    done = contract(tmp_path, generated, cxx, *extra, cuda="cuda" in receipt["requires"], timeout=timeout)
+    return done.returncode, receipt
 
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
@@ -145,15 +140,7 @@ def test_tasks_atomics_mutexes_regions_and_closures_run(tmp_path, cxx):
 
 
 def test_no_data_race_under_thread_sanitizer(tmp_path):
-    if not shutil.which("clang++") or not shutil.which("setarch"):
-        pytest.skip("ThreadSanitizer needs clang++ and setarch")
-    generated, _ = compile_source(HELPERS + TASKS)
-    (tmp_path / "p.cpp").write_text(generated + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    build = ["clang++", "-std=c++20", "-O1", "-g", "-fsanitize=thread", "-fno-exceptions"]
-    subprocess.run([*build, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=240)
-    run = subprocess.run(["setarch", "-R", str(tmp_path / "p")], capture_output=True, text=True, timeout=240)
+    run = watched(tmp_path, compile_source(HELPERS + TASKS)[0], "clang++", "thread")
     assert run.returncode == 0 and "ThreadSanitizer" not in run.stderr
 
 
@@ -180,19 +167,9 @@ def test_two_fields_of_one_record_go_to_two_tasks(tmp_path, cxx, sanitizer):
     """Lending a field leases that field, so two tasks may write two fields of one record at once, and the
     header of a lent field stays readable. ThreadSanitizer watches the two writers under both compilers; the
     address, leak and undefined sanitizers watch the two buffers, released once each where the scope ends."""
-    if not shutil.which(cxx) or not shutil.which("setarch"):
-        pytest.skip(f"needs {cxx} and setarch")
     generated, receipt = compile_source(HELPERS + TWO_FIELDS)
     assert {"spawn", "join", "alloc", "free"} <= set(receipt["functions"]["main"]["effects"])
-    (tmp_path / "p.cpp").write_text(generated + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    line = command(cxx, str(tmp_path / "p.cpp"), str(tmp_path / "p"), kind="exe")
-    subprocess.run([*line, "-g", f"-fsanitize={sanitizer}"], check=True, timeout=300)
-    environment = {**os.environ, "ASAN_OPTIONS": "detect_leaks=1"}
-    ran = subprocess.run(
-        ["setarch", "-R", str(tmp_path / "p")], capture_output=True, text=True, timeout=240, env=environment
-    )
+    ran = watched(tmp_path, generated, cxx, sanitizer)
     assert ran.returncode == 0, ran.stdout + ran.stderr
     assert "Sanitizer" not in ran.stderr and "runtime error" not in ran.stderr, ran.stderr
 
@@ -242,14 +219,13 @@ def test_one_lane_pool_serves_every_translation_unit(tmp_path, cxx):
 
 
 def test_the_same_lane_body_runs_on_the_device(tmp_path):
-    if not shutil.which("nvcc") or subprocess.run(["nvidia-smi"], capture_output=True).returncode != 0:
-        pytest.skip("No CUDA toolkit or device here; the host path is covered above")
-    code, receipt = build_and_run(tmp_path, DEVICE, "g++")
-    assert code == 0 and receipt["requires"] == ["cuda"]
-    effects = set(receipt["functions"]["main"]["effects"])
-    assert {"par:device", "gpu_alloc", "gpu_free", "transfer:h2d", "transfer:d2h"} <= effects
-    host = DEVICE.replace("@device", "").replace("kernel fn", "fn")  # The same program, on host threads.
-    assert "cr::par::run" in compile_source(host)[0] and "cr::gpu::launch" in compile_source(DEVICE)[0]
+    with on_device():
+        code, receipt = build_and_run(tmp_path, DEVICE, "g++")
+        assert code == 0 and receipt["requires"] == ["cuda"]
+        effects = set(receipt["functions"]["main"]["effects"])
+        assert {"par:device", "gpu_alloc", "gpu_free", "transfer:h2d", "transfer:d2h"} <= effects
+        host = DEVICE.replace("@device", "").replace("kernel fn", "fn")  # The same program, on host threads.
+        assert "cr::par::run" in compile_source(host)[0] and "cr::gpu::launch" in compile_source(DEVICE)[0]
 
 
 BODY = (
@@ -354,9 +330,8 @@ fn main() -> i32 {
 
 
 def test_lane_local_storage_and_sums_run_on_the_device(tmp_path):
-    if not shutil.which("nvcc") or subprocess.run(["nvidia-smi"], capture_output=True).returncode != 0:
-        pytest.skip("No CUDA toolkit or device here")
-    assert build_and_run(tmp_path, LANE_LOCAL, "g++")[0] == 0
+    with on_device():
+        assert build_and_run(tmp_path, LANE_LOCAL, "g++")[0] == 0
 
 
 DEVICE_PARTS = """
@@ -384,9 +359,8 @@ fn main() -> i32 {
 def test_parts_are_guarded_inside_device_lanes_and_device_scratch_is_in_the_row(tmp_path):
     rows = compile_source(DEVICE_PARTS)[1]["functions"]["main"]["effects"]
     assert {"gpu_alloc", "gpu_free", "par:device", "transfer:h2d", "transfer:d2h"} <= set(rows)
-    if not shutil.which("nvcc") or subprocess.run(["nvidia-smi"], capture_output=True).returncode != 0:
-        pytest.skip("No CUDA toolkit or device here")
-    assert build_and_run(tmp_path, DEVICE_PARTS, "g++")[0] == 0
+    with on_device():
+        assert build_and_run(tmp_path, DEVICE_PARTS, "g++")[0] == 0
 
 
 LENT_PLACEMENTS = """
@@ -434,9 +408,8 @@ def test_a_view_is_lent_as_what_its_memory_also_is(tmp_path):
         assert e.value.data["code"] == "E-TYPE-MISMATCH"
     for got, want in [("pinned", "host"), ("unified", "host"), ("unified", "device")]:
         compile_source(declared.format(got=got, want=want))
-    if not shutil.which("nvcc") or subprocess.run(["nvidia-smi"], capture_output=True).returncode != 0:
-        pytest.skip("No CUDA toolkit or device here")
-    assert build_and_run(tmp_path, LENT_PLACEMENTS, "g++")[0] == 0
+    with on_device():
+        assert build_and_run(tmp_path, LENT_PLACEMENTS, "g++")[0] == 0
 
 
 BACKWARDS_PART = """
@@ -464,12 +437,7 @@ def test_a_part_is_guarded_by_the_spawner_before_its_task_exists(tmp_path):
     assert "cr::part(" in captures and "cr::part(" not in body
     if not shutil.which("clang++"):
         pytest.skip("Native compiler unavailable")
-    (tmp_path / "p.cpp").write_text(cpp + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    line = command("clang++", str(tmp_path / "p.cpp"), str(tmp_path / "p"), kind="exe")
-    subprocess.run(line, check=True, timeout=240)
-    done = subprocess.run([tmp_path / "p"], capture_output=True, text=True, timeout=60)
+    done = contract(tmp_path, cpp, "clang++")
     assert done.returncode == -6 and done.stdout == "spawning\n"  # Aborted at the slice: no task, no next statement.
 
 
@@ -539,9 +507,8 @@ def test_queued_device_work_is_ordered_by_tickets_and_overlaps_the_host(tmp_path
         receipt["functions"]["main"]["effects"]
     )
     assert compile_source(canonical_source(QUEUED))[0] == generated
-    if not shutil.which("nvcc") or subprocess.run(["nvidia-smi"], capture_output=True).returncode != 0:
-        pytest.skip("No CUDA toolkit or device here")
-    assert build_and_run(tmp_path, QUEUED, "g++")[0] == 0
+    with on_device():
+        assert build_and_run(tmp_path, QUEUED, "g++")[0] == 0
 
 
 DEVICE_HEAD = "fn main() -> i32 { let n:usize = 64; buffer a:f32[n]@pinned = zeroed; buffer x:f32[n]@device = zeroed;\n"
@@ -594,8 +561,7 @@ def test_unsigned_reduce_plus_is_checked_in_any_order_on_host_and_device(tmp_pat
         with pytest.raises(Diagnostic) as e:
             compile_source(source)
         assert e.value.data["code"] == "E-REDUCE-OP"
-    if not shutil.which("nvcc") or subprocess.run(["nvidia-smi"], capture_output=True).returncode != 0:
-        pytest.skip("No CUDA toolkit or device here")
-    for name, source, status in (("fits", fits, (0,)), ("overflows", overflows, (-6, 134))):
-        (tmp_path / name).mkdir()
-        assert build_and_run(tmp_path / name, source, "g++")[0] in status
+    with on_device():
+        for name, source, status in (("fits", fits, (0,)), ("overflows", overflows, (-6, 134))):
+            (tmp_path / name).mkdir()
+            assert build_and_run(tmp_path / name, source, "g++")[0] in status

@@ -31,7 +31,7 @@ cairn = ["runtime/*.hpp", "std/*.cairn", "targets/*/*.S", "targets/*/*.ld", "py.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "tests/language", "tests/soundness", "tests/verification"]  # The agent-layer tests reuse those programs.
+pythonpath = ["src", "tests", "tests/language", "tests/soundness", "tests/verification"]  # The agent-layer tests reuse those programs.
 
 [tool.ruff]
 extend-exclude = [".claude"]  # Agent worktrees are whole copies of the repository.

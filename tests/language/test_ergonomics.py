@@ -2,13 +2,13 @@
 the ergonomics a library author asked for. Every accepted program runs natively; every rule keeps its rejection.
 """
 
-import shutil
 import subprocess
 
 import pytest
 
 from cairn.agent.agent_tools import canonical_source
-from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
+from cairn.compiler.cairnc import Diagnostic, compile_source
+from emitted import SANITIZED, WARNINGS, run, sanitized
 
 FIRST_USERS_FOUND = """
 import std.vec;
@@ -41,16 +41,9 @@ fn main() -> i32 {
 def test_what_the_first_real_users_tripped_over(tmp_path, cxx):
     """Constant capacities, bare owner-sum variants, moves on returning branches, literal min/max,
     instantiated generics as function values, a pure host reduce, and owner-carrying sums under g++."""
-    if not shutil.which(cxx):
-        pytest.skip("Native compiler unavailable")
     generated, receipt = compile_source(FIRST_USERS_FOUND)
     assert "par:host" not in receipt["functions"]["total"]["effects"]
-    (tmp_path / "p.cpp").write_text(generated + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = ["-std=c++20", "-O2", "-Wall", "-Wextra", "-Werror", "-Wno-unused-variable", "-Wno-unused-parameter"]
-    subprocess.run([cxx, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
-    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+    assert run(tmp_path, generated, "-std=c++20", "-O2", *WARNINGS, cxx=cxx).returncode == 0
 
 
 SECOND_USER_FOUND = """
@@ -77,14 +70,7 @@ fn main() -> i32 {
 def test_what_the_second_user_tripped_over(tmp_path):
     """A generic callee given a part of a record's field (the element type comes from the field, not from the
     record's own arguments), `len` of a literal as an extent, and placement words as ordinary names."""
-    if not shutil.which("clang++"):
-        pytest.skip("Native compiler unavailable")
-    (tmp_path / "p.cpp").write_text(compile_source(SECOND_USER_FOUND)[0] + "int main() { return cf_main(); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = ["-std=c++20", "-O1", "-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-Werror"]
-    subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
-    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+    assert run(tmp_path, compile_source(SECOND_USER_FOUND)[0], *SANITIZED, "-Werror").returncode == 0
 
 
 UNPACK = """
@@ -127,18 +113,10 @@ pub fn main() -> i32 {
 def test_a_record_is_taken_apart_as_it_was_built(tmp_path, cxx):
     """`let Conn(token, sent, log) = c;` consumes the record and binds every field, so a linear value or an owner
     kept inside a record has a way out that leaves no shell behind. Freed exactly once under AddressSanitizer."""
-    if not shutil.which(cxx):
-        pytest.skip("Native compiler unavailable")
     cpp = compile_source(UNPACK, roots=("app.main",))[0]
     assert canonical_source(UNPACK).count("let Conn(token, sent, log) = c;") == 1
     assert compile_source(canonical_source(UNPACK), roots=("app.main",))[0] == cpp
-    (tmp_path / "p.cpp").write_text(cpp + "int main() { return cf_app_main(); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = ["-std=c++20", "-O1", "-g", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-unused-variable"]
-    flags += ["-fsanitize=address,undefined", "-fno-sanitize-recover=all"] if cxx == "clang++" else []
-    subprocess.run([cxx, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
-    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == 0
+    assert run(tmp_path, cpp, *sanitized(cxx), *WARNINGS, cxx=cxx, entry="app.main").returncode == 0
 
 
 @pytest.mark.parametrize(
@@ -241,10 +219,4 @@ def test_ergonomics_the_first_library_author_asked_for(tmp_path):
 @pytest.mark.parametrize("value", ["0.0 / 0.0", "18446744073709551616.0", "0.0 - 1.0"])
 def test_float_to_integer_traps_outside_the_target(tmp_path, value):
     source = f"fn main() -> i32 {{ let zero:f64 = 0.0; let x:f64 = {value} + zero; let y = u64(x); return i32(y); }}"
-    (tmp_path / "p.cpp").write_text(compile_source(source)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    subprocess.run(
-        ["g++", "-std=c++20", "-O2", str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120
-    )
-    assert subprocess.run([tmp_path / "p"], timeout=30).returncode == -6
+    assert run(tmp_path, compile_source(source)[0], "-std=c++20", "-O2", cxx="g++").returncode == -6

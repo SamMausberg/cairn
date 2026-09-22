@@ -1,21 +1,19 @@
 """What the audits found ambiguous now has one meaning, shown by native runs and by rejections."""
 
 import shutil
-import subprocess
 
 import pytest
 from test_soundness import FILL, MAP, SUM, TWO_TRAITS
 
-from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
+from cairn.compiler.cairnc import Diagnostic, compile_source
+from emitted import SANITIZED
+from emitted import run as native
+
+PLAIN = SANITIZED[:4]  # the sanitized build without its sanitizers; a test adds the one that bites
 
 
 def run(tmp_path, source, flags=()):
-    (tmp_path / "p.cpp").write_text(compile_source(source)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    build = ["clang++", "-std=c++20", "-O1", "-g", "-fno-exceptions", *flags, str(tmp_path / "p.cpp"), "-o"]
-    subprocess.run([*build, str(tmp_path / "p")], check=True, timeout=120)
-    return subprocess.run([tmp_path / "p"], capture_output=True, timeout=60)
+    return native(tmp_path, compile_source(source)[0], *PLAIN, *flags)
 
 
 @pytest.mark.skipif(not shutil.which("clang++"), reason="needs clang++")
@@ -247,13 +245,7 @@ def test_what_the_second_audit_found_ambiguous_now_has_one_meaning(tmp_path, nam
     status, source = BEHAVIOR[name]
     entry = "app.main" if "module app;" in source else "main"
     cpp = compile_source(source, roots=(entry,))[0]  # As `cairn build` does: only what main reaches is emitted.
-    start = f"int main() {{ return static_cast<int>(cf_{entry.replace('.', '_')}()); }}\n"
-    (tmp_path / "p.cpp").write_text(cpp + start)
-    for header, text in RUNTIME_FILES.items():
-        (tmp_path / header).write_text(text)
-    flags = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-pthread", "-fsanitize=address,undefined"]
-    subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=120)
-    assert subprocess.run([tmp_path / "p"], timeout=60).returncode == status
+    assert native(tmp_path, cpp, *PLAIN, "-pthread", "-fsanitize=address,undefined", entry=entry).returncode == status
 
 
 def test_a_wait_on_every_path_ends_the_lease_for_what_follows():

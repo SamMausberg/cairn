@@ -10,8 +10,7 @@ clean under Address and UndefinedBehavior sanitizers.
 The device configuration is `gpu.toml`, which replaces `src/main.cairn` with
 `src/device_main.cairn`: any @device view sends the whole program through nvcc, so the host-only
 build must not contain that module. A manifest is named by its path (`cairn run
-examples/apps/analytics/gpu.toml`); the tests that need a GPU skip when nvcc or the device node
-is missing.
+examples/apps/analytics/gpu.toml`); the test that runs it on a GPU runs only under `make gpu`.
 """
 
 import shutil
@@ -21,21 +20,13 @@ from pathlib import Path
 
 import pytest
 
-from cairn.compiler.cairnc import RUNTIME_FILES, certify_templates, compile_source
-from cairn.compiler.codegen import mangle
+from cairn.compiler.cairnc import certify_templates, compile_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project
+from emitted import SANITIZED, on_device, run
 
 APP = Path(__file__).resolve().parents[2] / "examples" / "apps" / "analytics"
 ENTRY = "analytics.main.main"
-
-
-def device_missing():
-    if not shutil.which("nvcc"):
-        return "nvcc is not installed"
-    if not Path("/dev/nvidiactl").exists():
-        return "no CUDA device node"
-    return None
 
 
 def copied(tmp_path):
@@ -153,17 +144,8 @@ def test_a_body_only_edit_recompiles_one_unit(tmp_path, cxx):
 
 def test_the_host_path_is_sanitizer_clean(tmp_path):
     """Address and UndefinedBehavior sanitizers over the whole self-check, owners included."""
-    if not shutil.which("clang++"):
-        pytest.skip("clang++ unavailable")
     generated = compile_source(load_project(APP).source, "", (ENTRY,))[0]
-    entry = f"int main() {{ return static_cast<int>(cf_{mangle(ENTRY)}()); }}\n"
-    (tmp_path / "p.cpp").write_text(generated + entry)
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=address,undefined"]
-    flags += ["-fno-sanitize-recover=all"]
-    subprocess.run(["clang++", *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=300)
-    done = subprocess.run([tmp_path / "p"], capture_output=True, text=True, timeout=300)
+    done = run(tmp_path, generated, *SANITIZED, entry=ENTRY, timeout=300)
     assert done.returncode == 0, done.stderr[-4000:]
     assert "every cross-check passed on the host" in done.stdout
 
@@ -196,14 +178,12 @@ def test_a_label_of_the_wrong_width_is_a_type_error(tmp_path):
 
 
 def test_the_device_agrees_with_the_host(tmp_path):
-    reason = device_missing()
-    if reason:
-        pytest.skip(f"the analytics device path needs a GPU: {reason}")
-    started = time.monotonic()
-    record = build(load_project(APP / "gpu.toml"), output=tmp_path / "build", cxx="g++", timeout=290)
-    assert record["status"] == "native-built", record.get("stderr", "")[:4000]
-    assert time.monotonic() - started < 290
-    done = subprocess.run([record["artifact"]], capture_output=True, text=True, timeout=300)
+    with on_device():
+        started = time.monotonic()
+        record = build(load_project(APP / "gpu.toml"), output=tmp_path / "build", cxx="g++", timeout=290)
+        assert record["status"] == "native-built", record.get("stderr", "")[:4000]
+        assert time.monotonic() - started < 290
+        done = subprocess.run([record["artifact"]], capture_output=True, text=True, timeout=300)
     assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
     assert "the device agrees with the host bit for bit" in done.stdout
 

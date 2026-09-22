@@ -9,8 +9,12 @@ compilers accept and this CPU actually executes, and callers record which one ra
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import functools
+import os
 import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -93,3 +97,35 @@ def generate(source: Path, out: Path) -> dict:
     runtime_headers(out)
     (out / (source.stem + ".cpp")).write_text(cpp)
     return receipt
+
+
+DEVICE_LOCK = Path("/tmp/cairn-gpu.lock")  # one path for every checkout and worktree on the machine
+
+
+def device_reason() -> str:
+    """Why no code may run on a CUDA device here, or "" when it may.
+
+    Device code runs only with CAIRN_GPU_TESTS=1, which `make gpu` sets. Under WSL2 and Windows the GPU also drives
+    the display: a device run can make the driver reset its engine, and a morning of test runs that each did so ended
+    in a host crash twice. So the everyday suite never touches the device, and `device_lock` serializes the rest.
+    """
+    if os.environ.get("CAIRN_GPU_TESTS") != "1":
+        return "device code runs only under `make gpu` (CAIRN_GPU_TESTS=1)"
+    if not shutil.which("nvcc"):
+        return "nvcc is not installed"
+    smi = shutil.which("nvidia-smi")
+    found = subprocess.run([smi, "-L"], capture_output=True, text=True) if smi else None
+    if found is None or found.returncode != 0 or "GPU 0" not in found.stdout:
+        return "no CUDA device is visible"
+    return ""
+
+
+@contextlib.contextmanager
+def device_lock():
+    """Hold the machine-wide device lock, so that no two device runs overlap, from any process or checkout."""
+    with open(DEVICE_LOCK, "a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)

@@ -13,7 +13,7 @@ help:
 	@echo 'systems   the systems examples against independent oracles'
 	@echo 'proof     certificates, the Lean build, the differential run, scalar module equivalence'
 	@echo 'lean      the Lean half of proof alone'
-	@echo 'gpu       CUDA runtime, lanes and the device benchmark (needs nvcc and a device)'
+	@echo 'gpu       the only target that runs device code: CUDA runtime, lanes, apps, the device benchmark'
 	@echo 'embedded  the freestanding image under QEMU (needs an AArch64 host)'
 	@echo 'bench     the preregistered CPU baseline suite (hours)'
 	@echo 'docs      regenerate docs/std_api.md'
@@ -61,9 +61,12 @@ lean:
 	cd proofs && PATH="$$HOME/.elan/bin:$$PATH" lake build
 	$(PYTHON) tools/checks/differential_ownership.py --count 200
 
+# The only target that runs code on a CUDA device, in one process, one device run at a time
+# (tools/support.py: device_reason, device_lock). Everything else leaves the device alone.
 gpu:
-	$(PYTHON) -m pytest -q tests/runtime/test_native_runtime.py tests/soundness/test_concurrency.py
-	$(PYTHON) bench/gpu/parallel_gpu.py
+	CAIRN_GPU_TESTS=1 $(PYTHON) -m pytest -q -p no:xdist tests/runtime/test_native_runtime.py \
+	  tests/soundness/test_concurrency.py tests/projects/test_apps.py tests/projects/test_app_analytics.py
+	CAIRN_GPU_TESTS=1 $(PYTHON) bench/gpu/parallel_gpu.py
 
 embedded:
 	$(PYTHON) -m pytest -q tests/projects/test_freestanding.py

@@ -6,11 +6,12 @@ import subprocess
 
 import pytest
 
-from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
+from cairn.compiler.cairnc import compile_source
 from cairn.compiler.tree import CPP, VOID, is_view
 from cairn.verify.scalar_concrete import Concrete
 from cairn.verify.scalar_semantics import equivalent, prepared
 from cairn.verify.scalar_values import bounds, decoded, encoded, rounded
+from emitted import SANITIZED, build
 
 # The model against the machine ----------------------------------------------------------------
 
@@ -198,14 +199,10 @@ def test_the_model_agrees_with_the_machine(tmp_path):
         for _ in range(10):
             cases.append((name, drawn(src.functions[name], rng)))
     arms = [arm(k, src.functions[name], name, args) for k, (name, args) in enumerate(cases)]
-    (tmp_path / "p.cpp").write_text(compile_source(NATIVE)[0] + HARNESS % "\n".join(arms))
-    for header, text in RUNTIME_FILES.items():
-        (tmp_path / header).write_text(text)
-    build = ["clang++", "-std=c++20", "-O1", "-fno-exceptions", str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")]
-    subprocess.run(build, check=True, timeout=180, capture_output=True)
+    program = build(tmp_path, compile_source(NATIVE)[0] + HARNESS % "\n".join(arms), *SANITIZED[:4], entry=None)
     traps = 0
     for k, (name, args) in enumerate(cases):
-        native = subprocess.run([tmp_path / "p", str(k)], capture_output=True, timeout=60)
+        native = subprocess.run([program, str(k)], capture_output=True, timeout=60)
         model = Concrete(src).outcome(name, args)
         if not model["defined"]:
             traps += 1

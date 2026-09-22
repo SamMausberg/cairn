@@ -1,13 +1,13 @@
 """Scope-owned memory and its interfaces. Native checks are finite, not proofs."""
 
 import ctypes
-import shutil
 import subprocess
 
 import pytest
 
 from cairn.agent.agent_tools import EditSession, canonical_source
-from cairn.compiler.cairnc import RUNTIME, RUNTIME_FILES, Diagnostic, compile_source
+from cairn.compiler.cairnc import RUNTIME, Diagnostic, compile_source
+from emitted import SANITIZED, WARNINGS, run
 
 SOURCE = """
 fn fill(n:usize,x:rw<u64>[n]) { for i in 0..n { x[i]=u64(i); } }
@@ -214,16 +214,8 @@ def test_the_release_runs_at_the_drop(cxx, tmp_path):
     """Each loop passes at least a gigabyte through a release site, one mebibyte at a time. Leak detection
     shows the storage comes back, and the resident cap shows it comes back at the drop rather than at the
     exit: holding any one loop's buffers would pass 768 MiB while the program is still running."""
-    if not shutil.which(cxx):
-        pytest.skip(f"{cxx} unavailable")
-    (tmp_path / "p.cpp").write_text(compile_source(RELEASE)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter"]
-    flags += ["-Wno-unused-variable", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
-    subprocess.run([cxx, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=180)
     options = {"ASAN_OPTIONS": "detect_leaks=1:hard_rss_limit_mb=768"}
-    assert subprocess.run([tmp_path / "p"], timeout=120, env=options).returncode == 0
+    assert run(tmp_path, compile_source(RELEASE)[0], *SANITIZED, *WARNINGS, cxx=cxx, env=options).returncode == 0
 
 
 def test_semantics_models_scratch_storage_and_a_moved_owner():
@@ -380,13 +372,5 @@ def test_a_record_with_a_declared_extent_is_still_outside_the_scalar_model():
 def test_the_guarded_and_unguarded_forms_agree_natively(cxx, tmp_path):
     """The part `c.price[0..c.rows]` and the plain `c.price` read the same elements, over every size the
     program builds, with address and leak detection on."""
-    if not shutil.which(cxx):
-        pytest.skip(f"{cxx} unavailable")
-    (tmp_path / "p.cpp").write_text(compile_source(EXTENTS)[0] + "int main() { return static_cast<int>(cf_main()); }\n")
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    flags = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter"]
-    flags += ["-Wno-unused-variable", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
-    subprocess.run([cxx, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=180)
     options = {"ASAN_OPTIONS": "detect_leaks=1"}
-    assert subprocess.run([tmp_path / "p"], timeout=120, env=options).returncode == 0
+    assert run(tmp_path, compile_source(EXTENTS)[0], *SANITIZED, *WARNINGS, cxx=cxx, env=options).returncode == 0

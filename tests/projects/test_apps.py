@@ -3,7 +3,7 @@
 Every app returns 0 only when its own checks pass, so the assertions here are mostly "it built
 and it agreed with itself". The service is the exception: Python plays the client.
 
-Device programs skip with a reason when nvcc or a CUDA device is missing. Apps that import
+Device programs run only under `make gpu`, one at a time (`support.device_reason`). Apps that import
 std.io are built with clang++ only, because a sum carrying an owner (Result[File, IoError])
 emits a designated initializer that g++ rejects under -Werror=missing-field-initializers.
 """
@@ -20,17 +20,10 @@ import pytest
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project
+from emitted import on_device
 
 APPS = Path(__file__).resolve().parents[2] / "examples" / "apps"
 NAMES = ["kvstore", "service", "simulator", "gpu_pipeline"]
-
-
-def device_missing():
-    if not shutil.which("nvcc"):
-        return "nvcc is not installed"
-    if not Path("/dev/nvidiactl").exists():
-        return "no CUDA device node"
-    return None
 
 
 def built(root, tmp_path, cxx="clang++", timeout=240):
@@ -128,11 +121,9 @@ def test_service_speaks_its_line_protocol(tmp_path):
 
 @pytest.mark.parametrize("name", ["simulator", "gpu_pipeline"])
 def test_device_apps_agree_with_the_host(tmp_path, name):
-    reason = device_missing()
-    if reason:
-        pytest.skip(f"{name} needs a GPU: {reason}")
-    artifact = built(APPS / name, tmp_path, timeout=290)
-    done = subprocess.run([artifact], capture_output=True, text=True, timeout=300)
+    with on_device():
+        artifact = built(APPS / name, tmp_path, timeout=290)
+        done = subprocess.run([artifact], capture_output=True, text=True, timeout=300)
     assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
     assert "agree" in done.stdout or "matches the host" in done.stdout
 
