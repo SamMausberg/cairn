@@ -9,7 +9,9 @@ from dataclasses import dataclass
 from itertools import takewhile
 from pathlib import Path, PurePosixPath
 
-from ..compiler.syntax import MAX_SOURCE, Diagnostic, Parser, lex
+from ..compiler.lexing import lex
+from ..compiler.syntax import Parser
+from ..compiler.tree import MAX_SOURCE, Diagnostic
 from .toolchain import ARCHS, KINDS, TARGETS, ProjectError
 
 SEGMENT = re.compile(r"[A-Za-z0-9_.-]+")

@@ -14,23 +14,11 @@ from ..version import VERSION
 from .checking import Binding, Checker
 from .codegen import RUNTIME, RUNTIME_FILES, Emitter
 from .expansion import derive, specialize
+from .lexing import IDENT, RESERVED
 from .modules import link
-from .syntax import (
-    IDENT,
-    INT,
-    RESERVED,
-    SIGNED,
-    WIDTH,
-    Diagnostic,
-    Expr,
-    Function,
-    Parser,
-    Program,
-    Stmt,
-    Type,
-    fail,
-)  # fmt: skip
+from .syntax import Parser
 from .traits import certify
+from .tree import INT, SIGNED, WIDTH, Diagnostic, Expr, Function, Program, Stmt, Type, fail
 
 __all__ = [
     "IDENT",

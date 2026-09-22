@@ -7,7 +7,7 @@ import operator
 import struct
 from typing import TYPE_CHECKING, Any
 
-from .syntax import BITS, FLOAT, INT, NUMERIC, SCALAR, SIGNED, Expr, Type, fail
+from .tree import BITS, FLOAT, INT, NUMERIC, SCALAR, SIGNED, Expr, Type, fail
 
 if TYPE_CHECKING:
     from .checking import Checker

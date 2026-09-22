@@ -11,7 +11,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from .effects import allowed, fixed_point
-from .syntax import (
+from .tree import (
     CPP,
     FLOAT,
     INT,

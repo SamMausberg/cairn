@@ -1,0 +1,214 @@
+"""Tasks and tickets, lanes and regions, atomics and mutexes, and where code may run (placement)."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from .builtins import WRAPPING
+from .effects import LANE_SAFE, PURE
+from .scope import Binding, Lanes
+from .tree import BOOL, FLOAT, HOST_VISIBLE, INT, UNSIGNED, USIZE, VOID, Expr, Function, Stmt, Type, fail, root
+
+if TYPE_CHECKING:
+    from .checking import Checker
+
+
+PINNED = {"Ticket", "Atomic", "Mutex"}  # Declared and borrowed in place; never stored, passed or returned.
+ORDERS = ["relaxed", "acquire", "release", "acquire_release", "seq_cst"]
+ATOMIC_OPS = {
+    "load": 0,
+    "store": 1,
+    "swap": 1,
+    "fetch_add": 1,
+    "fetch_sub": 1,
+    "fetch_and": 1,
+    "fetch_or": 1,
+    "fetch_xor": 1,
+}
+
+
+def host_only(c: Checker, node: Any, what: str):
+    """Refuse a host construct in device code, and remember it for functions a device lane turns out to reach."""
+    if c.device_depth:
+        fail("E-PLACEMENT", f"{what}; a device lane cannot use it.", node)
+    c.hostish.setdefault(c.f.name, what[0].lower() + what[1:])
+
+
+def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any:
+    """Check a lane body; the placement of the views it indexes decides where it runs."""
+    if c.lanes or c.f.kernel:
+        fail("E-PARALLEL-NEST", "A lane cannot start another parallel region.", s)
+
+    def places(e: Expr) -> set[str]:
+        mine = {c.env[root(e).val].ty.place} if e.tag == "index" and root(e).val in c.env else set()
+        return mine.union(*(places(a) for a in e.args))
+
+    def scan(ss: list[Stmt]) -> set[str]:
+        found = set().union(*(places(e) for x in ss for e in x.exprs))
+        return found.union(*(scan(x.body) | scan(x.other) | scan([b for a in x.arms for b in a.body]) for x in ss))
+
+    found = scan(s.body) | set().union(*(places(e) for e in exprs))
+    target = target or ("device" if "device" in found else "host")
+    c.bind(s.binder or s.name, Binding(USIZE), s)
+    binder = s.binder or s.name
+    saved = c.lanes, c.device_depth, c.loop_depth, set(c.moved), c.effects
+    c.lanes, c.device_depth, c.loop_depth, c.effects = (
+        Lanes(binder, set(c.env) - {binder}, c.closure),
+        int(target == "device"),
+        0,
+        set(),
+    )
+    result = run()
+    if (c.moved - saved[3]) & c.lanes.outer:
+        fail("E-MOVE-IN-LOOP", "An outer owner would be moved once per lane.", s)
+    allowed = PURE if target == "device" else LANE_SAFE | {"indirect_call", "dispatch"}  # Judged at their calls.
+    excess = sorted(x for x in c.effects if x not in allowed and not x.startswith(("read:", "write:", "lane:")))
+    if excess:  # A lane's own row obeys the rule its callees obey.
+        fail("E-PARALLEL-CALL", f"A {target} lane cannot {', '.join(excess)}.", s)
+    saved[4].update(c.effects)
+    written = {name for name, _, write, _ in c.lanes.accesses if write}
+    touched = sorted({name for name, *_ in c.lanes.accesses})  # What a queued region holds until its wait.
+    c.borrowed = [(name + "[]", "rw" if name in written else "ro") for name in touched]
+    for name, at_binder, _, node in c.lanes.accesses:
+        if name in written and not at_binder:
+            fail("E-PARALLEL-RACE", f"{name} is written by lanes, so every lane may touch only {name}[{binder}].", node)
+    c.lanes, c.device_depth, c.loop_depth, _, c.effects = saved
+    del c.env[binder]
+    if s.tag != "parallel" and target == "device":  # The runtime's scan and reduction need device scratch.
+        c.effects |= {"gpu_alloc", "gpu_free"}
+    if s.tag == "parallel" or target == "device":  # A host reduction is an ordinary in-order fold.
+        c.effect("par:" + target)
+        c.counts["parallel_regions"] = c.counts.get("parallel_regions", 0) + 1
+    s.ref = target
+    return result
+
+
+def s_parallel(c: Checker, s: Stmt, queued: bool = False):
+    if s.other_names and not queued:
+        fail("E-SPAWN", "after orders queued work: write `let t = spawn parallel ... after ... { }`.", s)
+    c.expr(s.exprs[0], USIZE)
+    c.region(s, [], lambda: c.block(s.body))
+
+
+def s_reduce(c: Checker, s: Stmt):
+    hi, value = s.exprs
+    c.expr(hi, USIZE)
+    declared = c.resolve(s.ty, s) if s.ty else None
+    ty = c.region(s, [value], lambda: c.expr(value, declared))
+    wanted = UNSIGNED if s.op in WRAPPING or s.op in {"&", "|", "^"} else INT if s.op in {"min", "max"} else FLOAT
+    if s.op == "+" and ty.name in UNSIGNED:  # No partial sum of naturals overflows unless the total does.
+        wanted = UNSIGNED
+        c.guard("overflow")
+    if ty.mode != "value" or ty.name not in wanted:
+        takes = {id(UNSIGNED): "unsigned integers", id(INT): "integers"}.get(id(wanted), "floats")
+        fail("E-REDUCE-OP", f"reduce {s.op} takes {takes}{' and unsigned integers' * (s.op == '+')}, not "
+             f"{ty.display()}: lanes combine in an unspecified order, and only unsigned + has an order-independent "
+             "trap (signed + and integer * do not).", s)  # fmt: skip
+    s.ty = ty
+    c.bind(s.name, Binding(ty), s)
+
+
+def judge_lane_callbacks(c: Checker, effects: dict[str, set[str]]):
+    """What a callee's lanes will call (`lane:f` in its row) is judged where it was written: a closure
+    may not write what it captured, and nothing it does may exceed what a lane may do."""
+    for a, parameters, callee, formal, caller in c.fn_sites:
+        c.judging = caller
+        if "lane:" + formal in effects[callee] and not (a.tag == "name" and a.val in parameters):
+            closure = a.ref if a.tag == "lambda" else None
+            known = (
+                [a.ref.name]
+                if a.tag == "function"
+                else [  # A stored fn value is some function whose address was taken.
+                    g for g in c.address_taken if (*(t for _, t in c.fs[g].params), c.fs[g].ret) == a.ty.args
+                ]
+            )
+            rows = (
+                [closure.row[0], *(effects[callee] for callee in closure.row[1])]
+                if closure
+                else [effects[g] for g in known]
+            )
+            allowed = LANE_SAFE | {"dispatch"}  # A dispatch's targets are in the row beside it.
+            wrong = {x for row in rows for x in row if x not in allowed and not x.startswith(("read:", "write:"))}
+            wrong |= {"write:" + place for place, mode in (closure.captures if closure else []) if mode == "rw"}
+            if wrong:
+                fail("E-PARALLEL-CALL", f"{callee} calls {formal} from parallel lanes, where it cannot "
+                     f"{', '.join(sorted(wrong))}.", a)  # fmt: skip
+
+
+def lane_callee(c: Checker, e: Expr):
+    """A function value used inside a lane must be a parameter: `lane:f` tells whoever passes it to answer for it."""
+    if e.val not in dict(c.f.params):
+        fail("E-PARALLEL-CALL", "A lane calls declared functions and fn parameters, which their writer answers for.", e)
+    c.effect("lane:" + e.val)
+
+
+def shared(c: Checker, e: Expr, n: str, ty: Type, args: list[Expr]) -> Type:
+    """Interior mutability, and only here: every atomic access names its memory order."""
+    c.host_only(e, "Atomics and mutexes are host objects")
+    e.ref = ("shared", ty)
+    if ty.name == "Mutex":
+        if n != "with" or len(args) != 1 or args[0].tag != "lambda":
+            fail("E-CALLEE", "A mutex has one operation: m.with(|state:rw<T>| { ... }).", e)
+        ret = c.resolve(args[0].ref.ret, e)
+        c.expr(args[0], Type("fn", "ro", args=(Type(ty.args[0].name, "rw", args=ty.args[0].args), ret)))
+        c.disjoint([(c.where(e.args[0]), "rw")], e, args[0].ref.captures)  # Locking it again would trap.
+        c.effect("lock")
+        return ret
+    order = Type(c.qualify("Order", c.p.enums) or "Order")
+    if n == "compare_exchange":
+        wanted = [ty.args[0], ty.args[0], order, order]
+    elif n in ATOMIC_OPS:
+        wanted = [ty.args[0]] * ATOMIC_OPS[n] + [order]
+    else:
+        fail("E-CALLEE", f"An atomic offers {', '.join(ATOMIC_OPS)} and compare_exchange.", e)
+    if len(args) != len(wanted):
+        fail("E-ARITY", f"{n} takes {len(wanted) - 1} value(s) and an explicit memory order.", e)
+    if n == "compare_exchange" and not c.writable(args[0]):
+        fail("E-WRITE-LEASE", "compare_exchange updates its expected value; pass a mutable local.", args[0])
+    for a, want in zip(args, wanted, strict=True):
+        c.expect(c.place(a, write=True), want, a) if n == "compare_exchange" and a is args[0] else c.expr(a, want)
+    c.effect("atomic")
+    return BOOL if n == "compare_exchange" else VOID if n == "store" else ty.args[0]
+
+
+def e_spawn(c: Checker, e: Expr, expected: Type | None) -> Type:
+    """`let t = spawn f(args);` runs f on its own thread; `spawn parallel ...` and `spawn transfer(...)` queue
+    device work on a stream of their own. Either way t lends what the work borrows until wait(t)."""
+    region, name = e.ref if isinstance(e.ref, Stmt) else None, c.spawning
+    call, after = (None, e.args) if region else (e.args[0], e.args[1:])
+    if name in ("", "<wait>") or (call is not None and call.tag != "call") or c.lanes or c.closure:
+        fail("E-SPAWN", "Write `let t = spawn f(args);` in a function body; a task is always named.", e)
+    c.spawning = ""
+    earlier: set[str] = set()
+    for ticket in after:  # Work queued after a ticket's work may touch what that ticket holds.
+        if c.before.get(ticket.val) is None or ticket.val in c.moved:
+            fail("E-SPAWN", f"after names live tickets of queued device work; {ticket.val} is not one.", ticket)
+        earlier |= {ticket.val} | c.before[ticket.val]
+    held, c.leases = c.leases, {t: places for t, places in c.leases.items() if t not in earlier}
+    queued = region is not None or (call.val == "transfer" and c.qualify("transfer", c.fs) is None)
+    if region is not None:
+        c.s_parallel(region, queued=True)
+    result = VOID if region is not None else c.expr(call)
+    c.leases = held
+    if queued:
+        on_device = region.ref == "device" if region is not None else "transfer:h2h" not in c.effects_of(call)
+        if not on_device:
+            fail("E-SPAWN", "Only device work is queued; spawn a function to run host work as a task.", e)
+        c.before[name] = earlier
+    elif (
+        after
+        or not isinstance(call.ref, Function)
+        or any(t.name == "fn" and t.mode != "value" for _, t in call.ref.params)
+    ):
+        fail("E-SPAWN", "spawn runs a declared function (a closure cannot follow it to another thread); "
+             "only queued device work is ordered with after.", e)  # fmt: skip
+    c.leases[name] = c.borrowed
+    c.effect("spawn")
+    e.val = "queue" if queued else ""
+    return Type("Ticket", args=(result,), place="device" if queued else "host")
+
+
+def effects_of(c: Checker, call: Expr) -> set[str]:
+    """The transfer directions a just-checked `transfer(dst, src)` call crosses."""
+    ends = ["h" if a.ty.place in HOST_VISIBLE else "d" for a in (call.args[1], call.args[0])]
+    return {f"transfer:{ends[0]}2{ends[1]}"}

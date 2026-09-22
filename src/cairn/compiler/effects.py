@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .syntax import Expr, Function, Stmt, fail, root
+from .tree import Expr, Function, Stmt, fail, root
 
 if TYPE_CHECKING:
     from .checking import Checker

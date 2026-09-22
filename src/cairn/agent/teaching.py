@@ -1,6 +1,6 @@
 """Feature-selected semantic cards. Shorter wording never grants edit authority."""
 
-from ..compiler.syntax import lex
+from ..compiler.lexing import lex
 
 CARDS = {
     "base": """CAIRN 1.3 is a checked systems language, not Rust/Python. Use fn, typed interfaces,

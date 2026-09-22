@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from cairn.compiler.syntax import RESERVED
+from cairn.compiler.lexing import RESERVED
 from cairn.editor.lsp import (
     Document,
     completion,

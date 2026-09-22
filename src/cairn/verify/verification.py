@@ -29,7 +29,7 @@ def verify_module(
         "status": "incomplete",
         "reference_sha256": hashlib.sha256(reference.encode()).hexdigest(),
         "candidate_sha256": hashlib.sha256(candidate.encode()).hexdigest(),
-        "domain": "all well-formed values of the declared parameter types; reference must be total",
+        "domain": "all values the entry guards admit of the declared parameter types; reference must be total",
         "scope": "all declared functions in the restricted value source model",
         "preconditions": {},
         "native_proof": False,
