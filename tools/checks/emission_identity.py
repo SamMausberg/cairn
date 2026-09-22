@@ -32,84 +32,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.projects.project import ProjectError, load_project
+from cairn.verify.emission import NORMALIZE, UNGUARDED, arguments, guard_count  # the identities live in the package
 
-LITERAL = re.compile(r'^\s*const std::uint8_t\* const (v_\w+) = (reinterpret_cast<const std::uint8_t\*>\("(?:[^"\\]|\\.)*"\));\n', re.M)  # fmt: skip
-ZERO = re.compile(r"\((v_\w+|static_cast<std::size_t>\(\d+ULL\)) - static_cast<std::size_t>\(0ULL\)\)")
-
-
-def literals(cpp: str) -> str:
-    out = []
-    for chunk in re.split(r"(?m)^(?=\S)", cpp):  # one top-level declaration at a time
-        at = 0
-        while found := LITERAL.search(chunk, at):
-            name, rest = found.group(1), chunk[found.end() :]
-            again = re.search(rf"const std::uint8_t\* const {name} =", rest)  # the same name bound again
-            scope, tail = (rest[: again.start()], rest[again.start() :]) if again else (rest, "")
-            if len(re.findall(rf"\b{name}\b", scope)) != 1:
-                at = found.end()
-                continue
-            chunk = chunk[: found.start()] + re.sub(rf"\b{name}\b", lambda _, f=found: f.group(2), scope) + tail
-            at = found.start()
-        out.append(chunk)
-    return "".join(out)
-
-
-GUARD = re.compile(
-    r"\bcr::(at|part|view|disjoint|add|sub|mul|divide|remainder|convert|truncate|shr|shl_wrap)\b(<[^<>()]*>)?\("
-)
-UNGUARDED = {
-    "at": lambda t, a: f"{a[0]}[{a[1]}]",
-    "part": lambda t, a: f"({a[0]} + {a[1]})",
-    "view": lambda t, a: "",
-    "disjoint": lambda t, a: "",
-    "add": lambda t, a: f"({a[0]} + {a[1]})",
-    "sub": lambda t, a: f"({a[0]} - {a[1]})",
-    "mul": lambda t, a: f"({a[0]} * {a[1]})",
-    "divide": lambda t, a: f"({a[0]} / {a[1]})",
-    "remainder": lambda t, a: f"({a[0]} % {a[1]})",
-    "convert": lambda t, a: f"static_cast{t}({a[0]})",
-    "truncate": lambda t, a: f"static_cast{t}({a[0]})",
-    "shr": lambda t, a: f"static_cast{t}(std::uint64_t({a[0]}) >> {a[1]})",
-    "shl_wrap": lambda t, a: f"static_cast{t}(std::uint64_t({a[0]}) << {a[1]})",
-}
-
-
-def arguments(text: str, at: int) -> tuple[list[str], int]:
-    """The top-level arguments of the call whose `(` ends just before `at`, and the index past its `)`."""
-    depth, start, out = 0, at, []
-    for i in range(at, len(text)):
-        ch = text[i]
-        if ch in "([{":
-            depth += 1
-        elif ch in ")]}" and depth:
-            depth -= 1
-        elif ch == ")" or (ch == "," and not depth):
-            out.append(text[start:i].strip())
-            start = i + 1
-            if ch == ")":
-                return out, i + 1
-    raise ValueError("an unbalanced call in the emitted C++")
-
-
-def unguarded(cpp: str) -> str:
-    """Every guard written as the operation it guards. The last one is rewritten first: a guard nested in another's
-    arguments starts after it, and a rewrite leaves all the text before it where it was."""
-    for m in reversed(list(GUARD.finditer(cpp))):
-        args, end = arguments(cpp, m.end())
-        written = UNGUARDED[m.group(1)](m.group(2) or "", args)
-        if not written and cpp.startswith(";\n", end):  # An entry check is a statement of its own.
-            line = cpp.rfind("\n", 0, m.start()) + 1
-            cpp = cpp[:line] + cpp[end + 2 :]
-            continue
-        cpp = cpp[: m.start()] + written + cpp[end:]
-    return cpp
-
-
-def guard_count(cpp: str) -> int:
-    return len(GUARD.findall(cpp))
-
-
-NORMALIZE = {"literals": literals, "zero": lambda cpp: ZERO.sub(lambda m: m.group(1), cpp), "guards": unguarded}
+__all__ = ["NORMALIZE", "UNGUARDED", "arguments", "guard_count"]
 
 
 def programs() -> dict[str, str]:

@@ -25,6 +25,7 @@ from typing import Any
 
 from ..agent.agent_tools import digest, explain, load_json_strict, stable_json
 from ..compiler.cairnc import RUNTIME_FILES, Diagnostic, Parser, compile_source
+from ..compiler.codegen import mangle
 from ..projects.toolchain import command as native_command
 from ..projects.toolchain import flags, link_flags, linked
 from .scalar_values import bounds
@@ -127,7 +128,7 @@ def child(library, source, contract):
     resource.setrlimit(resource.RLIMIT_AS, (768 * 1024 * 1024, 768 * 1024 * 1024))
     f = validate_contract(source, contract)
     lib = C.CDLL(str(library))
-    native = getattr(lib, "cf_" + f.name)
+    native = getattr(lib, "cf_" + mangle(f.name))  # `m.f` is the C symbol cf_m_f
     native.argtypes = [CTYPES[t.name] if t.mode == "value" else C.POINTER(CTYPES[t.name]) for _, t in f.params]
     native.restype = None if f.ret.name == "void" else CTYPES[f.ret.name]
     for i, case in enumerate(contract["cases"]):
