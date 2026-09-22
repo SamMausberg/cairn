@@ -1,6 +1,6 @@
 # Language reference
 
-This reference states implemented behavior. Every construct is executed natively by the test suite, every accepted example compiles, and every refused example is refused with the code shown. None of it is a whole-compiler proof; [verification.md](verification.md) says what is proved. `docs/history/` holds the 0.2, 0.3 and 0.4 specifications, which record earlier proposals and must not be used to infer accepted features.
+This reference describes what the compiler implements. The test suite runs every construct natively, compiles every accepted example and requires every refused one to fail with the code shown. [verification.md](verification.md) says which of it is proved. The 0.2, 0.3 and 0.4 specifications under `docs/history/` are earlier proposals, and a feature they describe exists only if this reference describes it too.
 
 Three rules explain most of the language. Costs are visible: nothing allocates, synchronizes, copies an owner, runs in parallel or crosses a memory boundary unless the source says so, and every function carries an inferred effect row. Borrows are second class: a borrow exists only as a parameter or a call argument, so there are no lifetime annotations and no dangling references. Short forms are contracts: `compact`, `reduce`, `parallel`, `family`, `derive wire` and `try` expand to ordinary inspectable code with their obligations attached to the expansion.
 

@@ -23,7 +23,7 @@ Three habits explain the API shape. A lookup answers with an index, never a borr
 
 ## std.core
 
-`Option[T]`, `Result[T, E]` and the three traits everything else dispatches on: `Ord` (`less`, a strict weak order), `Eq` (`same`, an equivalence) and `Hash` (`hash`). `Option` is absence, not a null. `Result` is the only failure carrier, and `try` is the only thing that propagates it.
+`Option[T]`, `Result[T, E]` and the three traits everything else dispatches on: `Ord` (`less`, a strict weak order), `Eq` (`same`, an equivalence) and `Hash` (`hash`). `Option` stands for absence, and there is no null. `Result` is the only failure carrier, and `try` is the only thing that propagates it.
 
 ```cairn
 import std.core (Option, Result, Ord);
@@ -133,7 +133,7 @@ fn main() -> i32 {
 
 ## std.io
 
-A `File` is `linear`: the type system, not a convention, is what closes a descriptor. A failure is an errno inside an `IoError`, because CAIRN cannot express the `int*` the C library keeps its error behind.
+A `File` is `linear`, so the checker requires every path to close it. A failure is an errno inside an `IoError`, because CAIRN cannot express the `int*` the C library keeps its error behind.
 
 ```cairn
 import std.core (Option, Result);

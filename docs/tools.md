@@ -35,7 +35,7 @@ $ cairn fmt --diff sloppy.cairn
 
 The layout: two-space indentation, one statement per line, one trailing newline; canonical spacing (`fn f(n:usize, x:ro<u8>[n]) -> u64`, `a + b`, `x[i]`, `f(a, b)`, `key:Type` with no space after the colon, no space before `;` `,` `[`, and `@device` attached to its extent); a block the author wrote on one line stays on one line if it still fits in 100 columns and otherwise breaks, while a block written over several lines is never collapsed; long parameter lists, call arguments and binary chains wrap greedily to 100 columns; every comment is kept where it was; one blank line between declarations is kept, a run collapses to one, and blank lines next to a brace are dropped.
 
-It refuses rather than risk a change of meaning. Before writing anything the formatter re-lexes its own output and compares the token stream and the comment list with the input. If either differs, or the input does not lex, the file is left as it was and listed under `not_formatted` with the reason. Everything but a `--diff` patch is a JSON report:
+It never risks a change of meaning. Before writing anything the formatter re-lexes its own output and compares the token stream and the comment list with the input. If either differs, or the input does not lex, the file is left as it was and listed under `not_formatted` with the reason. Everything but a `--diff` patch is a JSON report:
 
 ```json
 {
@@ -107,7 +107,7 @@ cairn build examples/apps/analytics                  1.17 s             whole pr
 
 A body-only edit recompiles one module: one statement added to `analytics.query.above_loop` took 0.87 s and rebuilt `analytics_query.cpp` alone. A signature or layout change recompiles all, because the shared header is in every key.
 
-A key names an object; only a digest identifies it. `<key>.o` is published by a rename, and the sha256 of its bytes is written beside it as `<key>.sha256` by a second rename, so an interrupted compile leaves at worst an object with no digest. Before an object is reused its bytes are hashed and compared with that digest: truncate a cached object and the next build compiles that unit again. This is an integrity check against interrupted, corrupted or shared caches, not a defence against anyone who can write into `build/`, who can rewrite the digest too.
+A key names an object; only a digest identifies it. `<key>.o` is published by a rename, and the sha256 of its bytes is written beside it as `<key>.sha256` by a second rename, so an interrupted compile leaves at worst an object with no digest. Before an object is reused its bytes are hashed and compared with that digest: truncate a cached object and the next build compiles that unit again. This catches interrupted, corrupted and shared caches. It does not stop anyone who can write into `build/`, since they can rewrite the digest too.
 
 `build/objects`, an object and its digest must each be a plain entry of the project's own build output. A symbolic link, or a file where the directory belongs, is refused under the same fail-closed rule the build directory itself has. A unit whose compile times out or is killed leaves no object under its key, and still produces the `cairn.build/1` record and the `receipt.json` that a whole-program build produces.
 
@@ -279,4 +279,4 @@ QEMU loads the ELF by its program headers and enters at `_start`, so no raw bina
 2. Add one row to `TARGETS` in `src/cairn/projects/toolchain.py` naming the host `family`, the `-march` `arch`, any extra `flags`, and the `run` command that executes an image, ending in the option that takes the image path.
 3. Add the directory's `*.S` and `*.ld` to `package-data` in `pyproject.toml` if the glob does not already cover it, and extend `tests/projects/test_freestanding.py`.
 
-Nothing else in the compiler knows about targets: the profile is a flag set, a linker script, a start-up file and an effect refusal, not a second code generator.
+Nothing else in the compiler knows about targets. A profile is a flag set, a linker script, a start-up file and an effect refusal, and every target shares one code generator.
