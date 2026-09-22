@@ -18,19 +18,10 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
-from cairn.verify.scalar_semantics import (
-    Concrete,
-    Formula,
-    Symbolic,
-    bounds,
-    conj,
-    constant,
-    disj,
-    neg,
-    outcome_key,
-    prepared,
-    same,
-)
+from cairn.verify.scalar_concrete import Concrete
+from cairn.verify.scalar_semantics import outcome_key, prepared
+from cairn.verify.scalar_symbolic import Formula, Symbolic
+from cairn.verify.scalar_values import bounds, conj, constant, disj, neg, same
 from cairn.verify.smt_bridge import Solver
 from checks.native_scalar import NativeScalar
 

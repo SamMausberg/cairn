@@ -6,7 +6,9 @@ import pytest
 
 from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
 from cairn.compiler.tree import CPP, VOID, is_view
-from cairn.verify.scalar_semantics import Concrete, bounds, decoded, encoded, equivalent, identical, prepared, rounded
+from cairn.verify.scalar_concrete import Concrete
+from cairn.verify.scalar_semantics import equivalent, prepared
+from cairn.verify.scalar_values import bounds, decoded, encoded, identical, rounded
 from cairn.verify.smt_bridge import Solver
 
 
