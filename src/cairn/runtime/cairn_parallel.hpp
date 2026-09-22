@@ -306,12 +306,15 @@ inline Pool& shared() noexcept {
 // never taken stays in registers.
 // `weight` is how many elements' work one index stands for: 1 for a lane, a block's length for a lane that owns
 // a block or for a reduction's block. A claim covers at least GRAIN elements' work, and at most a SPLIT-th share.
-template<class F> void run_wide(std::size_t n, F& body, std::size_t weight = 1) noexcept {
+// A plan's `grain` replaces that floor with a count of indices, and its `most` caps the lanes.
+template<class F> void run_wide(std::size_t n, F& body, std::size_t weight = 1, std::size_t grain = 0,
+                                std::size_t most = 0) noexcept {
   using Body = std::remove_reference_t<F>;
   lanes::Pool& pool = lanes::shared();
-  const std::size_t least = lanes::indices(lanes::GRAIN, weight);  // one claim is GRAIN elements' work
+  const std::size_t least = grain ? grain : lanes::indices(lanes::GRAIN, weight);  // one claim's indices
   std::size_t use = n / least;
   if(use > pool.lanes()) use = pool.lanes();
+  if(most && use > most) use = most;
   if(use < 2) {
     for(std::size_t i = 0; i < n; ++i) body(i);
     return;
@@ -332,12 +335,13 @@ template<class F> void run_wide(std::size_t n, F& body, std::size_t weight = 1) 
 // parallel i in n: body(i) runs once for every i below n, and run returns when all of them have.
 // Which lane runs which index is not promised; the language has already made that unobservable.
 // A region below the cutoff is exactly the loop it replaces: nothing is published and nothing woken.
-template<class F> inline void run(std::size_t n, F&& body, std::size_t weight = 1) noexcept {
-  if(n < 2 || n < lanes::indices(lanes::CUTOFF, weight)) {
+template<class F>
+inline void run(std::size_t n, F&& body, std::size_t weight = 1, std::size_t grain = 0, std::size_t most = 0) noexcept {
+  if(n < 2 || most == 1 || (!grain && n < lanes::indices(lanes::CUTOFF, weight))) {
     for(std::size_t i = 0; i < n; ++i) body(i);
     return;
   }
-  run_wide(n, body, weight);
+  run_wide(n, body, weight, grain, most);
 }
 
 // reduce op parallel i in n yield value(i). The count alone fixes the blocks: one below CUTOFF, else n / GRAIN

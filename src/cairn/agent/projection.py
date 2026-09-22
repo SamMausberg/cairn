@@ -232,6 +232,8 @@ def projection(p: Program, source: str) -> str:
                 for pre, name, lo, hi in p.families if p.modules[pre] == module]  # fmt: skip
         out += [source[r.start : r.end] for r in p.recipes.values() if r.module == module]  # A recipe is its own text.
         out += [derivation(r, naturals, target) for m, r, naturals, target, _ in p.derivations if m == module]
+        out += [f"plan {name} {{{''.join(f' {k} {v};' for k, v in (('grain', g), ('lanes', most)) if v)} }}"
+                for m, name, g, most, _ in p.plans if m == module]  # fmt: skip
     return "\n\n".join(out) + "\n"
 
 

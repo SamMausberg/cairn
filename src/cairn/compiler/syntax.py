@@ -674,6 +674,20 @@ class Parser:
                 text = " ".join(x.s for x in self.ts[first : self.i])
                 recipe.digest = hashlib.sha256(text.encode()).hexdigest()
                 p.recipes[name] = recipe
+            elif self.t.s == "plan" and IDENT.fullmatch(self.ahead(1)):  # A word only here: `plan f { grain 64; }`.
+                self.i += 1
+                name, chosen = self.path(), {}
+                self.need("{")
+                while not self.eat("}"):
+                    item = self.t
+                    if item.s not in {"grain", "lanes"} or item.s in chosen:
+                        fail("E-PLAN", "A plan sets grain and lanes, each at most once.", item)
+                    self.i += 1
+                    chosen[item.s] = self.integer()
+                    self.need(";")
+                    if chosen[item.s] < 1 or chosen.get("lanes", 1) > 1024:
+                        fail("E-PLAN", "A grain is at least 1 index, and lanes run from 1 to 1024.", item)
+                p.plans.append((self.module, name, chosen.get("grain", 0), chosen.get("lanes", 0), t))
             elif self.eat("derive"):
                 written, naturals = self.path(), []
                 if self.eat("["):  # A natural, or the name of a function as the deriving module sees it.

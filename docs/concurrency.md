@@ -311,6 +311,32 @@ shade calls f from parallel lanes, where it cannot write:calls.
 
 Host lanes are a pool. The first host region of a process creates them and every later one reuses them, so a region costs a hand-off rather than a thread, and a region of fewer than sixteen thousand elements is compiled as the ordinary loop it replaces and starts nothing. The pool holds one thread per core, or the number `CAIRN_LANES` names. How many lanes there are is never observable in a result, only in the time a region takes; `evidence/v1_2/host_regions` records where a region starts to pay off.
 
+## Plans
+
+A plan says how a function's host regions are split across the lane pool, apart from the code that says what they compute. `plan f { grain G; lanes L; }` makes every host `parallel` region in `f` hand out at least `G` indices per claim and run on at most `L` lanes; either item may be left out. A region's lanes are race free and finish before the next statement, so every split of its indices is one the region already allows. A plan changes how long a region takes, and not its result, its effect row or its guards. The receipt records it beside the function's row.
+
+```cairn
+fn mix(v:u64) -> u64 {
+  let mut w = v;
+  for k in 0..20000 { w = mul_wrap(w ^ shr(w, 29), 0xbf58476d1ce4e5b9); }
+  return w;
+}
+fn spread(n:usize, out:rw<u64>[n]) { parallel i in n { out[i] = mix(u64(i)); } }
+
+plan spread { grain 1; lanes 8; }     // a few dozen slow lanes: one index per claim, eight threads
+```
+
+Without a plan the pool claims at least 8192 elements' work at a time, and runs a region with less than 16384 elements' work on the thread that starts it; a lane that owns a block counts as its block. That suits cheap bodies. A body that costs microseconds per index wants a grain of 1.
+
+`E-PLAN` refuses a plan that names no function with a host region, a second plan for one function, an item other than `grain` and `lanes`, a repeated item, a grain of 0 and a lane count outside 1 to 1024. A device region is scheduled by the device and takes no plan. `plan` is a keyword only at the top of a module, so it stays an ordinary name everywhere else.
+
+```cairn rejects E-PLAN
+fn walk(n:usize, out:rw<u64>[n]) { for i in 0..n { out[i] = 1; } }
+plan walk { grain 64; }
+```
+
+Halide separated algorithms from schedules, and MLIR's transform dialect does the same inside a compiler. The open question for CAIRN is whether a schedule kept apart from the algorithm, where the checker holds it to the algorithm's ownership rules, makes tuning cheaper than rewriting the loop, for a person or an agent. Nothing about that has been measured.
+
 ## reduce and compact
 
 `reduce` combines with one of `add_wrap mul_wrap & | ^ min max` on integers, or `+ *` on floats. On the host it is an in-order fold. Over device views it is a tree whose association order is unspecified, which is exact for the integer operators and explicitly not for floats.

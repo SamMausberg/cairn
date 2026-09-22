@@ -428,6 +428,7 @@ class Checker:
 
     def check(self) -> dict[str, Any]:
         self.bodies()
+        planned = concurrency.plans(self)
         effects = self.judge()
         return {
             n: {
@@ -435,6 +436,7 @@ class Checker:
                 "calls": sorted(self.calls[n]),
                 "syntactic_check_sites": self.checks[n],
                 "discharged_check_sites": self.discharges[n],
+                **({"plan": planned[n]} if n in planned else {}),
                 "heap_allocations": sum(x["kind"] == "buffer" for x in self.resources[n]),
                 "allocation_count_kind": "syntactic-sites-not-dynamic-bound",
                 "local_storage": self.resources[n],

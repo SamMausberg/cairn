@@ -94,6 +94,30 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
     return result
 
 
+def plans(c: Checker) -> dict[str, dict[str, int]]:
+    """`plan f { grain G; lanes L; }` chooses how f's host regions are claimed: at least G indices at a time, on at
+    most L lanes. Lanes are race free and a region finishes before the next statement, so a plan only picks one of
+    the schedules the region already allows; it changes no result and no effect row. What each function got."""
+    chosen: dict[str, dict[str, int]] = {}
+    for module, name, grain, most, token in c.p.plans:
+        with c.within(module):
+            target = c.qualify(name, c.fs)
+        planned = [f for f in c.p.functions if target in (f.name, f.source_name)]
+        regions = [s for f in planned for s in walk(f.body) if s.tag == "parallel" and s.ref == "host"]
+        if not regions or any(f.name in chosen for f in planned):
+            fail("E-PLAN", f"plan {name} must name a function with a host parallel region, once.", token)
+        for s in regions:
+            s.plan = (grain, most)
+        chosen |= {f.name: {k: v for k, v in (("grain", grain), ("lanes", most)) if v} for f in planned}
+    return chosen
+
+
+def walk(ss: list[Stmt]):
+    for s in ss:
+        yield s
+        yield from walk([*s.body, *s.other, *(x for arm in s.arms for x in arm.body)])
+
+
 def s_parallel(c: Checker, s: Stmt, queued: bool = False):
     if s.other_names and not queued:
         fail("E-SPAWN", "after orders queued work: write `let t = spawn parallel ... after ... { }`.", s)
