@@ -11,10 +11,22 @@ license = "MIT OR Apache-2.0"
 license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
 requires-python = ">=3.11"
 dependencies = []
-classifiers = ["Development Status :: 4 - Beta", "Private :: Do Not Upload"]  # Uploading to an index is an owner action.
+keywords = ["compiler", "systems-programming", "ownership", "effects", "gpu", "cuda", "parallelism", "ai-agents"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Private :: Do Not Upload",  # Uploading to an index is an owner action.
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Compilers",
+]
 
 [project.urls]
 Repository = "https://github.com/SamMausberg/cairn"
+Documentation = "https://github.com/SamMausberg/cairn/tree/main/docs"
+Issues = "https://github.com/SamMausberg/cairn/issues"
 Changelog = "https://github.com/SamMausberg/cairn/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
