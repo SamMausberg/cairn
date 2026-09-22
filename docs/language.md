@@ -266,8 +266,8 @@ fn body_size(n:usize, bytes:ro<u8>[n]) -> Sized {
 }
 
 fn main() -> i32 {
-  match body_size(7, "\x07abcdef") { Ok(size) => { if size != 2 { return 1; } } Err(e) => { return 2; } }
-  match body_size(2, "hi") { Ok(size) => { return 3; } Err(e) => { if e != 1 { return 4; } } }
+  match body_size(7, "\x07abcdef") { Ok(size) => { if size != 2 { return 1; } } Err(e) => return 2; }
+  match body_size(2, "hi") { Ok(size) => return 3; Err(e) => { if e != 1 { return 4; } } }
   return 0;
 }
 ```

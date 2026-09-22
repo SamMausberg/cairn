@@ -99,7 +99,7 @@ pub fn get(s:ro<Store>, k:usize, key:ro<u8>[k]) -> Option[usize] {
       }
       return None;
     }
-    None => { return None; }
+    None => return None;
   }
 }
 

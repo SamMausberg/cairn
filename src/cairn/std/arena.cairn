@@ -47,7 +47,7 @@ fn grow[T:affine](a:rw<Arena[T]>) {
 pub fn insert[T:affine](a:rw<Arena[T]>, value:T) -> Handle {
   let mut slot = a.used;
   match vec.pop(a.free) {
-    Some(reused) => { slot = reused; }
+    Some(reused) => slot = reused;
     None => {
       if a.used == len(a.live) { grow(a); }
       a.used = a.used + 1;
@@ -75,6 +75,6 @@ pub fn remove[T:affine](a:rw<Arena[T]>, h:Handle) -> Option[T] {
       vec.push(a.free, slot);
       return Some(take(a.items[slot]));
     }
-    None => { return None; }
+    None => return None;
   }
 }

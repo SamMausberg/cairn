@@ -304,8 +304,8 @@ import codec as packet;
 import std.core (Option);
 
 pub fn main() -> i32 {
-  match packet.accepts(40) { Some(total) => { if total != 45 { return 1; } } None => { return 2; } }
-  match packet.accepts(9000) { Some(total) => { return 3; } None => {} }
+  match packet.accepts(40) { Some(total) => { if total != 45 { return 1; } } None => return 2; }
+  match packet.accepts(9000) { Some(total) => return 3; None => {} }
   return 0;
 }
 ```

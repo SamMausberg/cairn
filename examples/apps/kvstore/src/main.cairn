@@ -49,10 +49,10 @@ fn scenario() -> Result[usize, IoError] {
     if s.index.count() != 2 { return Ok(3); }
     match get(s, "gamma") {
       Some(slot) => { if !value_is(s, slot, "333") { return Ok(4); } }
-      None => { return Ok(5); }
+      None => return Ok(5);
     }
     match get(s, "beta") {
-      Some(slot) => { return Ok(6); }
+      Some(slot) => return Ok(6);
       None => {}
     }
     let torn = try io.write(f, "\x01\x02\x03\x04\x05\x06\x07\x08\x09");
@@ -90,10 +90,10 @@ fn scenario() -> Result[usize, IoError] {
     if s.index.count() != 2 { return Ok(11); }
     match get(s, "alpha") {
       Some(slot) => { if !value_is(s, slot, "1") { return Ok(12); } }
-      None => { return Ok(13); }
+      None => return Ok(13);
     }
     match get(s, "beta") {
-      Some(slot) => { return Ok(14); }
+      Some(slot) => return Ok(14);
       None => {}
     }
     let after = try put(s, f, "new", "4444");

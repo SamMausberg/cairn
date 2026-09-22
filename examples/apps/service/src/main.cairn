@@ -25,8 +25,8 @@ struct Client { live:bool; fd:i32; have:usize; line:Buf[u8]; }
 // The end of the word starting at `from`: the next space, or the end of the line.
 fn word_end(n:usize, line:ro<u8>[n], from:usize) -> usize {
   match text.find_byte(line, ' ', from) {
-    Some(at) => { return at; }
-    None => { return n; }
+    Some(at) => return at;
+    None => return n;
   }
 }
 
@@ -130,7 +130,7 @@ fn take_in(c:rw<Client>, t:rw<Table>, n:usize, got:ro<u8>[n]) -> Result[bool, Io
         for i in 0..rest { c.line[i] = c.line[at + 1 + i]; }
         c.have = rest;
       }
-      None => { return Ok(false); }
+      None => return Ok(false);
     }
   }
   return Ok(true);
@@ -189,7 +189,7 @@ fn run() -> Result[usize, IoError] {
 
 fn main() -> i32 {
   match run() {
-    Ok(code) => { return i32(code); }
+    Ok(code) => return i32(code);
     Err(e) => {
       io.print("service: io error ");
       io.print_u64(u64(e.code));

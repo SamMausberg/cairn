@@ -25,7 +25,7 @@ fn ingest(rows:usize, c:rw<schema.Trade_table>) -> Result[usize, IoError] {
       let gone = io.remove(name[0..n]);
       return Ok(count);
     }
-    Failed(e) => { return Err(e); }
+    Failed(e) => return Err(e);
   }
 }
 

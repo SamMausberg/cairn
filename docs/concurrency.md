@@ -180,7 +180,7 @@ fn main() -> i32 {
   let read = q.next(tag, result);                 // then the read, holding the five bytes
   match io.outcome(result) {
     Ok(n) => { if tag != 1 || n != 5 || read[0] != 104 { return 2; } }
-    Err(e) => { return 3; }
+    Err(e) => return 3;
   }
   return 0;
 }
@@ -225,7 +225,7 @@ fn main() -> i32 {
   defer wait(q);
   match io.outcome(q.status()) {
     Ok(up) => {}
-    Err(e) => { return 1; }                // no io_uring here: fall back or report it
+    Err(e) => return 1;                // no io_uring here: fall back or report it
   }
   let refused = submit_all(q, 6);
   let mut tag:u64 = 0;

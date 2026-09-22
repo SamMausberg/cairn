@@ -202,10 +202,10 @@ fn manhattan(x:i64, y:i64) -> Checked { let p = try parse(x, y); return Ok(p.x +
 fn main() -> i32 {
   match manhattan(3, 4) {
     Ok(d) => { if d != 7 { return 1; } }
-    Err(code) => { return 2; }
+    Err(code) => return 2;
   }
   match manhattan(-1, 4) {
-    Ok(d) => { return 3; }
+    Ok(d) => return 3;
     Err(code) => { if code != 7 { return 4; } }
   }
   return 0;
@@ -398,15 +398,15 @@ pub fn empty() -> Stock {
 pub fn add(s:rw<Stock>, item:u64, count:u64) {
   let seen = map.find(s.names, item);
   match seen {
-    Some(slot) => { s.names.vals[slot] = s.names.vals[slot] + count; }
-    None => { map.insert(s.names, item, count); }
+    Some(slot) => s.names.vals[slot] = s.names.vals[slot] + count;
+    None => map.insert(s.names, item, count);
   }
   vec.push(s.log, item);
 }
 pub fn count(s:ro<Stock>, item:u64) -> u64 {
   match map.find(s.names, item) {
-    Some(slot) => { return s.names.vals[slot]; }
-    None => { return 0; }
+    Some(slot) => return s.names.vals[slot];
+    None => return 0;
   }
 }
 

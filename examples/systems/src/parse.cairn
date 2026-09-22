@@ -20,10 +20,10 @@ fn decimal(n:usize, input:ro<u8>[n]) -> Parsed {
 struct ParseObservation { kind:u32; value:u64; offset:usize; }
 fn observe_decimal(n:usize, input:ro<u8>[n]) -> ParseObservation {
   match decimal(input) {
-    Value(value) => { return ParseObservation(0, value, 0); }
-    Invalid(offset) => { return ParseObservation(1, 0, offset); }
-    Overflow(offset) => { return ParseObservation(2, 0, offset); }
-    Empty => { return ParseObservation(3, 0, 0); }
+    Value(value) => return ParseObservation(0, value, 0);
+    Invalid(offset) => return ParseObservation(1, 0, offset);
+    Overflow(offset) => return ParseObservation(2, 0, offset);
+    Empty => return ParseObservation(3, 0, 0);
   }
 }
 

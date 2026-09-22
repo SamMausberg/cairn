@@ -37,7 +37,7 @@ fn find(t:ro<Table>, k:usize, key:ro<u8>[k]) -> Option[usize] {
       }
       return None;
     }
-    None => { return None; }
+    None => return None;
   }
 }
 
@@ -48,6 +48,6 @@ fn erase(t:rw<Table>, k:usize, key:ro<u8>[k]) -> bool {
       let gone = t.index.remove(id);
       return true;
     }
-    None => { return false; }
+    None => return false;
   }
 }
