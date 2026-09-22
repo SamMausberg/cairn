@@ -26,14 +26,14 @@ Run one folder with `python -m pytest -q tests/soundness -n auto`.
 
 | `tests/` folder | What it establishes |
 |---|---|
-| `language/` | the accepted breadth of the language, built and run natively under both compilers; the twelve tour programs; every `cairn` block in README.md and in this manual |
+| `language/` | the accepted breadth of the language, built and run natively under both compilers; the twelve tour programs; every `cairn` block in README.md and under `docs/` |
 | `soundness/` | every hole an audit found stays closed; tasks, leases, atomics, mutexes, host and CUDA lanes, closures |
 | `verification/` | the certificates, `proofs/` in step with `collector_rules()` and building, `checking.py` and the Lean calculus classifying generated programs alike, the SMT translator against concrete replay, coverage that no single function can confer |
 | `projects/` | manifests, vendored dependencies, incremental builds, the five applications, the freestanding image under QEMU with an exact UART transcript |
 | `runtime/` | the self-checking binaries in `tests/native/`, at several `CAIRN_LANES` counts |
 | `tooling/` | `cairn fmt` over every `.cairn` in the checkout plus whitespace and comment fuzz, a real `cairn lsp` subprocess, publication against fakes, every script under `tools/` and `bench/` |
 | `agent/` | projections, packets, rule cards, sketches, guarded edits, and the canonical projection round-tripping every sample and `std` module to identical native code |
-| `checks/`, `native/` | not pytest modules: the Python oracles `tools/checks/verify.py` drives, and the C++ and CUDA fixtures `runtime/` compiles |
+| `oracles/`, `native/` | not pytest modules: the Python oracles `tools/checks/verify.py` drives, and the C++ and CUDA fixtures `runtime/` compiles |
 
 Sanitizers run where they bite: the ownership program under Address, Leak and UndefinedBehavior, tasks and lanes under Thread. Death tests must abort the host, one per invocation: a guard that fires inside a CUDA lane, an unawaited ticket. A task whose child exits abnormally has failed, whatever it printed. Examples are gates too, and `cairn run examples/systems --memory-mib 1024` with `cairn test examples/systems --cxx g++` drives a typed decimal parser and a stack and heap sorting and filter pipeline whose contracts inspect meaningful outputs rather than a successful compilation.
 
@@ -54,7 +54,7 @@ make bench                                  # the preregistered CPU baseline sui
 
 | Script under `tools/checks/` | What it checks |
 |---|---|
-| `verify.py` | rebuilds the native artifacts and drives the oracles in `tests/checks/`: equal boundary checks, strict floating flags, both compilers, independent codec and template cases, exhaustive small collectors |
+| `verify.py` | rebuilds the native artifacts and drives the oracles in `tests/oracles/`: equal boundary checks, strict floating flags, both compilers, independent codec and template cases, exhaustive small collectors |
 | `validate_systems.py` | decimal values and first error offsets, sorts, filters, unchanged inputs, output tails and identity edits against Python oracles under both compilers, plus an O0 observer counting allocation and release across returns, loops and match exits |
 | `validate_semantics.py` | the translator and trap-aware interpreter against Python arithmetic, the concrete interpreter, instrumented clang and gcc, and input-pinned SMT |
 | `semantic_check.py`, `semantic_corpus.py` | two scalar implementations against one immutable reference; same-contract pairs, every label decided and replayed |
@@ -77,7 +77,7 @@ Production sanitizer and SIGABRT fixtures are separate from that O0 observer, `v
 | `results/host_regions/` | where `bench/host_regions/host_regions.py` builds; its record goes to `--out` |
 | `results/semantics/`, `results/systems/`, `results/density/`, `results/context/` | one record each from `validate_semantics.py`, `validate_systems.py`, `density.py` and `measure_context.py` |
 | `results/agent/` | the agent and curriculum records from `tools/ai/` plus `mutation_checks.py` and `curriculum_verify.py` |
-| `results/bench_suite/` | reserved for a future `bench/suite/` harness; nothing writes it today |
+| `results/bench_suite/` | every arm's build and the raw timings of `bench/suite/harness.py`, and the tables `report.py` prints from them |
 
 `tools/ai/measure_context.py` keeps its counterfactual honest: the same current full JSON packet for each legacy-profile function, with only the rule-card text swapped for the preserved 0.5 text, and new-feature packets reported apart because they have no executable 0.5 baseline. Its counts are exact plain ByT5 bytes with no special tokens; `--tiktoken o200k_base` needs a separately installed package and vocabulary and is reported only if it ran. Packet sizes are not logged conversations, training gains or comprehension scores, and wider feature coverage can enlarge the full card while common packets shrink.
 
@@ -85,7 +85,7 @@ Production sanitizer and SIGABRT fixtures are separate from that O0 observer, `v
 
 `python tools/release/collect_evidence.py --release v1_1` runs the release gates (format, lint, mypy, `cairn fmt --check`, the suite, certificates, the Lean drift check, module equivalence) and writes `evidence/<release>/summary.json`: each gate's command, status, exit code, seconds and last three output lines, plus `cairn doctor`, the commit, whether the worktree was dirty, and source-line counts. A missing tool is `unavailable`, a timeout `timed-out`, and nothing is retried. It lists `lean/`, `gpu/` and `embedded/` under `separately_recorded` but writes none of them: the Lean and embedded records come from their own harnesses, and the GPU record is copied into the release directory from `results/gpu/benchmark.json`, since `bench/gpu/parallel_gpu.py` writes only there and never into `evidence/`.
 
-`evidence/` holds one directory per release. `summary.json` is the entry point of each, `v1_2/RUN_NOTES.md` says what ran, on which machine, and what was not done, and every directory keeps the names and source identity it was recorded under. `v1_0/` also holds `lean/`, `gpu/` and `embedded/` records, `v1_1/` the preregistered `ai_pilot/`, and `v1_2/host_regions/` a later measurement of host parallel regions that supersedes the host-parallel column of `v1_0/gpu/benchmark.json`. Earlier releases are history, not fresh measurements, and no old result confers verification on new source: `collect_evidence.py` writes a new directory rather than reusing one. `evidence/verification-run.json` is a retained child-command log from an earlier layout, run on an x86-64 host.
+`evidence/` holds one directory per release. `summary.json` is the entry point of each, `v1_2/RUN_NOTES.md` says what ran, on which machine, and what was not done, and every directory keeps the names and source identity it was recorded under. `v1_0/` also holds `lean/`, `gpu/` and `embedded/` records, `v1_1/` the preregistered `ai_pilot/`, and `v1_2/host_regions/` a later measurement of host parallel regions that supersedes the host-parallel column of `v1_0/gpu/benchmark.json`. Earlier releases are history, not fresh measurements, and no old result confers verification on new source: `collect_evidence.py` writes a new directory rather than reusing one. `evidence/v0_5/verification-run.json` is a retained child-command log from the 0.5 layout, run on an x86-64 host.
 
 `docs/history/BASELINE.json` and `UPSTREAM.json` name the archives this source was built from, each by sha256, with the commit and tag the import started from and the standing policy that no prior result is a new measurement.
 

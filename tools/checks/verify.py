@@ -55,15 +55,15 @@ def main():
     run(command("clang++", "bench/cpu/family_template.cpp", "results/native/libtemplate.so", arch, "library"))
     # The suite's own smoke test runs this script; the flag stops it re-entering and rewriting results/.
     run([py, "-m", "pytest", a.tests, "-q"], "results/checks/compiler_tests.txt", dict(os.environ, CAIRN_VERIFY="1"))
-    run([py, "tests/checks/native_checks.py"], "results/checks/native_tests.json")
-    run([py, "tests/checks/collector_wire_checks.py"], "results/checks/collector_wire_tests.json")
-    run([py, "tests/checks/template_checks.py"], "results/checks/template_tests.json")
+    run([py, "tests/oracles/native_checks.py"], "results/checks/native_tests.json")
+    run([py, "tests/oracles/collector_wire_checks.py"], "results/checks/collector_wire_tests.json")
+    run([py, "tests/oracles/template_checks.py"], "results/checks/template_tests.json")
     if a.gcc:
         for stem in ["native", "family"]:
             run(command("g++", f"results/native/{stem}.cpp", f"results/native/lib{stem}_gcc.so", arch, "library"))
         env = dict(os.environ, CAIRN_FAMILY_LIB=str(ROOT / "results/native/libfamily_gcc.so"))
         run(
-            [py, "tests/checks/native_checks.py", str(ROOT / "results/native/libnative_gcc.so")],
+            [py, "tests/oracles/native_checks.py", str(ROOT / "results/native/libnative_gcc.so")],
             "results/checks/gcc_native_tests.json",
             env,
         )

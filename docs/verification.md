@@ -210,7 +210,7 @@ The race theorem is proved for the whole calculus, not for a fragment. It rests 
 
 The release theorem is about normal termination only. A run that traps has aborted, and nothing is claimed about the cells it leaves behind.
 
-`accepted_progress` is cheap on its own, because the machine is total by construction and every statement has at least one successor. Its content is that the stuck configurations are exactly the errors, which `accepted_no_fault` excludes. It replaces the `OpenGoal.Progress` that earlier versions of this file left unproved.
+`accepted_progress` is cheap on its own, because the machine is total by construction and every statement has at least one successor. Its content is that the stuck configurations are exactly the errors, which `accepted_no_fault` excludes. It replaces the `OpenGoal.Progress` that earlier versions of the calculus left unproved.
 
 ### The regression, and that the faults are reachable
 

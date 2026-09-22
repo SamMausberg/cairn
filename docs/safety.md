@@ -52,4 +52,4 @@ A model cannot change a pinned reference, domain, signature, effect ceiling, vis
 
 ## Publication policy
 
-Development is local. Publication is opt-in, private-only and non-force. The preflight scans every reachable committed blob for finite credential patterns and excluded binary and secret paths, and is not an exhaustive detector. The GitHub workflow is manual-only, private-repository guarded and read-only. No license or public host has been selected. [Publication](releasing.md) below has the sequence and its failure modes. Report sensitive issues only through the owner's private channel.
+No script here changes the repository's visibility, force-pushes, deletes a remote resource or uploads to a package index. The one scripted remote action, the private publisher of [releasing.md](releasing.md), creates a new private repository and pushes to it, after a preflight that scans every reachable committed blob for finite credential patterns and excluded binary and secret paths; it is not an exhaustive detector. The CI workflow has read-only permissions. Report a soundness bug privately, as [SECURITY.md](../SECURITY.md) says.

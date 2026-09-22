@@ -79,9 +79,21 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("doctor", help="Report local tools; never downloads them.")
     new = sub.add_parser("new", help="Create a data-only example project.")
     new.add_argument("directory", type=Path)
-    for name in ["check", "emit", "expand", "build", "run", "test", "inspect", "doc"]:
-        c = sub.add_parser(name)
-        c.add_argument("path", nargs="?", default=".")
+    commands = {
+        "check": "Accept or refuse a program: syntax, types, ownership, leases, lanes, placement, effects.",
+        "emit": "Print the C++ the program lowers to.",
+        "expand": "Print what every derive generated, as CAIRN source.",
+        "build": "Build a native artifact in a fresh directory, with a receipt.",
+        "run": "Build, then run under process limits, or under the target's emulator.",
+        "test": "Run the project's finite task contracts against a native build.",
+        "inspect": "Print the packet an editing agent gets for one symbol.",
+        "doc": "Generate the API reference of the checked program, as Markdown.",
+    }
+    for name, help in commands.items():
+        c = sub.add_parser(name, help=help)
+        c.add_argument(
+            "path", nargs="?", default=".", help="A .cairn file, a project directory or a manifest; default: here."
+        )
         if name in {"build", "run", "test"}:
             c.add_argument("--cxx", default="clang++")
         if name == "doc":
