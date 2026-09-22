@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     from .codegen import Emitter
 
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
-SOFT = {"take", "swap", "transfer", "mmio_read", "mmio_write", "asm", "wait"}
-SHARED = {"Ticket": "Task", "Atomic": "Atomic", "Mutex": "Mutex"}  # CAIRN name -> cr::par class
+SOFT = {"take", "swap", "transfer", "mmio_read", "mmio_write", "asm", "wait", "collect"}
+SHARED = {"Ticket": "Task", "Atomic": "Atomic", "Mutex": "Mutex", "Group": "Group"}  # CAIRN name -> cr::par class
 
 
 def arity(e: Expr, args: list[Expr], count: int, message: str):
@@ -151,17 +151,43 @@ def lower_transfer(g: Emitter, e: Expr, queued: str | None = None) -> str:
 
 
 def check_wait(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
-    """Completion is the only thing that returns a task's borrows."""
-    arity(e, args, 1, "wait takes one ticket.")
+    """Completion is the only thing that returns a task's borrows. wait(g) on a group joins every task still
+    running, drops every result nobody collected, and returns every lease the group held."""
+    arity(e, args, 1, "wait takes one ticket or one group.")
     c.spawning = "<wait>"
     ticket = c.expr(args[0])
     c.spawning = ""
-    if ticket.name != "Ticket" or args[0].tag != "name":
-        fail("E-TYPE-MISMATCH", "wait takes the name of a ticket.", e)
+    if ticket.name not in {"Ticket", "Group"} or args[0].tag != "name":
+        fail("E-TYPE-MISMATCH", "wait takes the name of a ticket or of a group.", e)
     c.leases.pop(args[0].val, None)
     c.before.pop(args[0].val, None)
     c.effect("join")
-    return ticket.args[0]
+    return VOID if ticket.name == "Group" else ticket.args[0]
+
+
+def check_group(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    """Group[T](n): up to n tasks in flight, collected in the order they finish. Declared in place like an
+    atomic, linear like a ticket, and its whole storage is taken here, so a submission never allocates."""
+    c.host_only(e, "A task group is a host object")
+    ty = explicit(c, e, "Group", targs, expected, "Write Group[T](capacity).")
+    arity(e, args, 1, "Group takes the most tasks it holds at once.")
+    c.expr(args[0], USIZE)
+    c.effects |= {"alloc", "free"}
+    c.guard("allocation")
+    return ty
+
+
+def check_collect(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    """collect(g) blocks until some task of the group has finished and yields its result. Which task that was
+    is not known here, so no lease is returned before wait(g); a group with nothing outstanding traps."""
+    arity(e, args, 1, "collect takes the name of a group.")
+    binding = c.env.get(args[0].val) if args[0].tag == "name" else None
+    if binding is None or binding.ty.name != "Group":
+        fail("E-TYPE-MISMATCH", "collect takes the name of a group.", e)
+    c.expr(args[0], consume=False)
+    c.effect("join")
+    c.guard("collect")
+    return binding.ty.args[0]
 
 
 def check_shared(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
@@ -235,6 +261,8 @@ TABLE: dict[str, tuple[Any, Any]] = {
     **dict.fromkeys(("mmio_read", "mmio_write", "asm"), (check_machine, lower_machine)),
     "transfer": (check_transfer, lower_transfer),
     "wait": (check_wait, lambda g, e: f"{g.expr(e.args[0])}.wait()"),
+    "collect": (check_collect, lambda g, e: f"{g.expr(e.args[0])}.collect()"),
+    "Group": (check_group, lower_construct),
     **dict.fromkeys(("Atomic", "Mutex"), (check_shared, lower_construct)),
     **dict.fromkeys(("take", "swap"), (check_exchange, lower_exchange)),
     "Dyn": (check_dyn, lower_dyn),

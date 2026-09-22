@@ -128,6 +128,8 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
             line = "return" + (" " + es[0] if es else "") + ";"
         elif s.tag == "expr":
             line = es[0] + ";"
+        elif s.tag == "submit":
+            line = f"{es[0]} into {s.name};"
         elif s.tag == "match":
             arms = [
                 f"{pad}  {a.variant}{f'({a.binder})' if a.binder else ''} => {format_block(a.body, indent + 2)}"

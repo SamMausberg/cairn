@@ -90,6 +90,62 @@ fn main() -> i32 {
 pair.left is lent to left until wait(left).
 ```
 
+## Task groups
+
+Tickets are awaited in the order they are written. A group collects tasks in the order they finish. `let g = Group[T](n);` declares a group of at most `n` tasks in flight whose results have type `T`. Like an atomic it is declared in place and never stored in a record, passed by value or returned (`E-PINNED`), and like a ticket it is linear: `wait(g)` must consume it on every path of the same function (`E-LINEAR-LEAK`, `E-LINEAR-BRANCH`). The declaration takes the group's whole storage, so its row carries `alloc` and `free`, and nothing after it allocates.
+
+`spawn f(args) into g;` runs a declared function on its own thread, exactly as `spawn` does, and hands the task to the group instead of naming a ticket. `f` must return `T` (`E-TYPE-MISMATCH`), and a closure cannot follow it (`E-SPAWN`). Every place the task borrows is leased to the group until `wait(g)`, and touching one in between is `E-LEASED` with the group as the holder. A submission when `n` tasks are already outstanding is a guard failure at run time, never silent growth.
+
+`let r = collect(g);` blocks until some task of the group has finished and yields its result, whichever task that was. Collecting from a group with nothing outstanding is a guard failure. A collect returns no lease, because the checker cannot know which task finished; only `wait(g)` returns them. `wait(g)` joins every task still running, drops every result nobody collected, releases the leases and consumes the group. Submitting and collecting are `spawn` and `join`, and each carries the `trap` of its guard.
+
+```cairn
+fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
+fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut sum:u64 = 0;
+  for i in 0..n { sum = add_wrap(sum, xs[i]); }
+  return sum;
+}
+fn work(n:usize, xs:ro<u64>[n], first:usize, count:usize) -> u64 = total(count, xs[first..first + count]);
+
+fn main() -> i32 {
+  let n:usize = 900;
+  let a:usize = 300;
+  let b:usize = 600;
+  let mut samples = Buf[u64](n);
+  let writers = Group[void](3);
+  spawn fill(a, samples[0..a], 0) into writers;             // three disjoint parts, three threads
+  spawn fill(b - a, samples[a..b], 300) into writers;
+  spawn fill(n - b, samples[b..n], 600) into writers;
+  wait(writers);                                            // joins all three and returns the leases
+  let readers = Group[u64](4);
+  for k in 0..4 { spawn work(len(samples), samples, k * 200, 200) into readers; }   // read-only: shared
+  let mut sum:u64 = 0;
+  for k in 0..4 { sum = add_wrap(sum, collect(readers)); }  // in the order they finish
+  wait(readers);
+  if sum != total(800, samples[0..800]) { return 1; }
+  return 0;
+}
+```
+
+A loop may lend a group what its tasks only read, since read-only lending is shared. Lending a place `rw` inside a loop is refused, because the next iteration would lend it to the group again while the group still holds it.
+
+```cairn rejects E-LEASED
+fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
+fn main() -> i32 {
+  let mut samples = Buf[u64](8);
+  let writers = Group[void](4);
+  for k in 0..4 { spawn fill(2, samples[k * 2..k * 2 + 2], 0) into writers; }
+  wait(writers);
+  return 0;
+}
+```
+
+```text
+samples[?..?] is lent to writers until wait(writers), and the next iteration would lend it again.
+```
+
+A group holds tasks that run declared functions. Queued device work keeps its ticket and its `after` ordering (`E-SPAWN`), a result type that is `linear` cannot be dropped by `wait` and is refused (`E-LINEAR-STORAGE`), and a group is a host object (`E-PLACEMENT`).
+
 ## Atomics and mutexes
 
 `Atomic[T]` (the integers and `bool`) and `Mutex[T]` are declared in place and shared by `ro` borrow. They are the only interior mutability in the language, and they are never stored in a record, passed by value or returned (`E-PINNED`). Every atomic access names its memory order: `load`, `store`, `swap`, `fetch_add`, `fetch_sub`, `fetch_and`, `fetch_or`, `fetch_xor` and `compare_exchange(expected, desired, Order.seq_cst, Order.seq_cst)`. The effects are `spawn`, `join`, `atomic` and `lock`.

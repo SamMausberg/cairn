@@ -240,7 +240,8 @@ class Emitter:
                 f"*a{k}" if place else f"a{k}" if self.trivial(want) or want.mode != "value" else f"std::move(a{k})"
             )
         body = f"return cf_{mangle(call.ref.name)}({', '.join(passed)});"
-        return f"{self.type(e.ty)}::spawn([{', '.join(captures)}]() mutable noexcept {{ {body} }})"
+        thunk = f"[{', '.join(captures)}]() mutable noexcept {{ {body} }}"
+        return thunk if e.val == "into" else f"{self.type(e.ty)}::spawn({thunk})"
 
     def e_coerce(self, e: Expr) -> str:
         """A fat reference: the object's address and the static vtable of its implementation."""
@@ -523,6 +524,9 @@ class Emitter:
 
     def s_expr(self, s: Stmt, es: list[str]):
         self.put(es[0] + ";")
+
+    def s_submit(self, s: Stmt, es: list[str]):
+        self.put(f"v_{s.name}.submit({es[0]});")
 
     def s_block(self, s: Stmt, _: list[str]):
         self.nest("{", lambda: self.block(s.body))

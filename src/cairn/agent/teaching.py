@@ -166,9 +166,13 @@ What is leased is the place lent, not the local it sits in: two fields of one re
 (spawn f(box.a) beside spawn g(box.b)) go to two tasks, and len(box.a) still reads while
 box.a's elements are lent, while lending the record whole leases every field in it and
 box.a = Buf[u64](2) under a lease of box.a is E-LEASED.
+let g = Group[u64](4); holds up to 4 tasks at once: spawn f(args) into g; hands the task to g
+(no ticket), let r = collect(g); is the result of whichever task finishes next (an empty g
+traps, a full g traps), and wait(g); joins the rest and drops their results. Every place lent
+to any task of g is leased until wait(g); collect returns none, so a loop lends g only ro places.
 Atomic[u64] and Mutex[T] are declared in place and shared by ro borrow: a.fetch_add(1,
 Order.relaxed) always names its memory order; m.with(|s:rw<T>| { ... }) is the only way
-into a mutex. Tickets, atomics and mutexes are never stored, passed by value or returned.
+into a mutex. Tickets, groups, atomics and mutexes are never stored, passed by value or returned.
 Device work can be queued: let up = spawn transfer(x, a); let k = spawn parallel i in n
 after up { y[i] = x[i]; }; each returns at once with a linear ticket that leases the
 views it touches until wait; after orders it behind live tickets on the device and lets
@@ -206,7 +210,7 @@ def select_cards(
         "owners": words & {"Buf", "Array", "take", "swap", "defer", "linear"},
         "effects": words & {"extern", "unsafe", "pure", "effects"},
         "parallel": words & {"parallel", "reduce", "transfer", "device", "pinned", "unified"},
-        "tasks": words & {"spawn", "wait", "Atomic", "Mutex"},
+        "tasks": words & {"spawn", "wait", "collect", "Group", "Atomic", "Mutex"},
         "closures": words & {"|", "||", "dyn"} and ("dyn" in words or "fn" in words),
         "modules": words & {"module", "import", "pub"},
     }

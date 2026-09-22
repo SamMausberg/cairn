@@ -79,7 +79,7 @@ class Checker:
                                                concurrency.host_only)  # fmt: skip
     e_spawn, effects_of, shared, lane_callee = (concurrency.e_spawn, concurrency.effects_of, concurrency.shared,
                                                 concurrency.lane_callee)  # fmt: skip
-    judge_lane_callbacks = concurrency.judge_lane_callbacks
+    judge_lane_callbacks, s_submit = concurrency.judge_lane_callbacks, concurrency.s_submit
 
     e_int, e_float, e_bool, e_str, e_name = (expressions.e_int, expressions.e_float, expressions.e_bool,
                                              expressions.e_str, expressions.e_name)  # fmt: skip
@@ -229,6 +229,8 @@ class Checker:
                 fail(
                     "E-LINEAR-STORAGE", "Zeroed storage cannot hold linear values: a zero would be a forged one.", node
                 )
+            if name == "Group" and self.kind(args[0]) == "linear":
+                fail("E-LINEAR-STORAGE", "A group drops every result nobody collects; a linear one cannot be.", node)
         if ty.mode == "value":
             return base
         if base == VOID:
@@ -317,7 +319,7 @@ class Checker:
         if ty.name in self.bounds:  # A witness: exactly as owning as its template's bounds allow.
             return self.bounds[ty.name][1]
         if ty not in self.kinds:
-            linear = "linear" in self.p.attributes.get(ty.name, ()) or ty.name == "Ticket"
+            linear = "linear" in self.p.attributes.get(ty.name, ()) or ty.name in {"Ticket", "Group"}
             own = 2 if linear else int(ty.name in {"Buf", "dyn", "Dyn", "Atomic", "Mutex"})
             layout = self.layouts.get(ty, {} if ty.name in INTRINSIC_TYPES else None)
             if layout is None:  # Asked while its own definition is open: it reaches itself through a Buf.
@@ -458,7 +460,7 @@ class Checker:
                 f.params[i] = (n, ty)
             f.ret = self.resolve(f.ret, f)
         if any(t.name in PINNED and t.mode == "value" for t in [f.ret, *(t for _, t in f.params)]):
-            fail("E-PINNED", "Tickets, atomics and mutexes cannot be passed or returned by value; borrow them.", f)
+            fail("E-PINNED", "Tickets, groups, atomics and mutexes cannot be passed or returned by value.", f)
         if f.ret.mode != "value":
             fail("E-ESCAPE", "Borrowed view returns are not in the native subset.", f)
         if f.extern and f.effects is None:

@@ -491,6 +491,12 @@ class Parser:
         if t.s == "{":
             return Stmt("block", body=self.block(), **at)
         e = self.expr()
+        if e.tag == "spawn" and self.t.s == "into" and IDENT.fullmatch(self.ahead(1)):  # `spawn f(args) into g;`
+            self.i += 1  # A word only here, like `after`: the task joins a group instead of naming a ticket.
+            e.val = "into"
+            group = self.ident()
+            self.need(";")
+            return Stmt("submit", group, exprs=[e], **at)
         if self.eat("="):
             v = self.expr()
             self.need(";")

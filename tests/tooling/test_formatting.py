@@ -97,6 +97,12 @@ def test_repository_sources_still_compile_after_formatting():
 # Spacing, blocks and blank lines ------------------------------------------------------------------
 
 GOLDEN = {
+    "a task group": (
+        "fn tag(x:u64)->u64=x;\nfn main()->i32{let g=Group[u64](2);spawn tag(1)into g;let r=collect(g);wait(g);return 0;}\n",
+        "fn tag(x:u64) -> u64 = x;\n"
+        "fn main() -> i32 {\n  let g = Group[u64](2);\n  spawn tag(1) into g;\n  let r = collect(g);\n  wait(g);\n"
+        "  return 0;\n}\n",
+    ),
     "canonical spacing": (
         "fn  f( a : u64 ,b:u64 )->u64{return a+b;}\n",
         "fn f(a:u64, b:u64) -> u64 { return a + b; }\n",
