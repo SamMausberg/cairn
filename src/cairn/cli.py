@@ -89,6 +89,7 @@ COMMANDS = {
     "test": "Run the project's finite task contracts against a native build.",
     "inspect": "Print the packet an editing agent gets for one symbol.",
     "state": "Print the program's state for an agent: every signature and effect row by module, under a digest.",
+    "migrate": "Change one function's interface through every caller, in all the files or in none.",
     "explain": "Where each function pays at run time: guards, allocations, waits and loop vectorization.",
     "doc": "Generate the API reference of the checked program, as Markdown.",
 }
@@ -111,7 +112,7 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"doc"}, "--module", {"action": "append",
                            "help": "Document this module (repeatable); default: the project's own."}),
     ({"doc"}, "--std", {"action": "store_true", "help": "Document the packaged standard library instead."}),
-    ({"inspect"}, "--symbol", {"required": True}),
+    ({"inspect", "migrate"}, "--symbol", {"required": True}),
     ({"inspect"}, "--scope", {"choices": ["focused", "component"], "default": "focused", "help": "focused: the symbol "
                               "and the interfaces around it; component: its whole call graph."}),
     ({"inspect"}, "--expand", {"action": "append", "default": [], "metavar": "NAME", "help": "Disclose this "
@@ -119,6 +120,13 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"inspect"}, "--explain", {"action": "store_true", "help": "Attach cairn explain for the disclosed functions."}),
     ({"state"}, "--since", {"type": Path, "metavar": "STATE.json", "help": "Print only what changed since this "
                             "saved state."}),
+    ({"migrate"}, "--to", {"required": True, "metavar": "SIGNATURE", "help": "The new signature, from fn."}),
+    ({"migrate"}, "--also", {"action": "append", "default": [], "metavar": "NAME=SIGNATURE", "help": "Another "
+                             "function whose signature changes with it (repeatable)."}),
+    ({"migrate"}, "--allow", {"action": "append", "default": [], "metavar": "EFFECT", "help": "An effect the "
+                              "rows may gain (repeatable)."}),
+    ({"migrate"}, "--reply", {"type": Path, "metavar": "REPLY.json", "help": "Check this reply and write every "
+                              "file, or none; without it, print the packet."}),
 ]  # fmt: skip
 REFUSED = {"counterexample", "rejected", "invalid-contract", "invalid-domain", "invalid-reference"}  # verify exits 1
 
@@ -255,6 +263,18 @@ def main(argv: list[str] | None = None) -> int:
             if a.expand:
                 session.expand(a.expand)
             report({**session.packet(), **({"performance": session.explain()} if a.explain else {})})
+            return 0
+        if a.command == "migrate":  # A refusal names the file of the new text itself, so it is reported as it is.
+            from .agent.migration import Migration
+
+            if bad := [x for x in a.also if not x.partition("=")[1]]:
+                raise ProjectError(f"Write --also NAME=SIGNATURE, not {bad[0]!r}.")
+            try:
+                m = Migration(a.path, a.symbol, a.to, dict(x.split("=", 1) for x in a.also), tuple(a.allow))
+                report(m.apply(read_text(a.reply, 16_000_000)) if a.reply else m.packet())
+            except Diagnostic as error:
+                report(error.data)
+                return 1
             return 0
         if a.command == "state":
             from .agent.state import delta, state

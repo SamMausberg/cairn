@@ -65,6 +65,19 @@ A `delta` request, or `--since`, gives only what changed: each function whose si
 {"protocol": "cairn.edit/2", "handle": "e1", "kind": "delta", "since": "<the digest of an earlier state>"}
 ```
 
+## Interface migrations
+
+A one-function edit can never change a signature. Changing one, such as adding a parameter or changing an error type, is a separate authorization class that the host grants by name, and nothing in an edit session reaches it: an edit request of another kind is `E-REQUEST`, and a body cannot name a parameter its signature lacks.
+
+```sh
+cairn migrate app --symbol lib.checksum --to "fn checksum(n:usize, bytes:ro<u8>[n], seed:u32) -> u32" > packet.json
+cairn migrate app --symbol lib.checksum --to "fn checksum(n:usize, bytes:ro<u8>[n], seed:u32) -> u32" --reply reply.json
+```
+
+The host names the function, its new signature, any function whose signature changes with it (`--also NAME=SIGNATURE`) and the effects rows may gain (`--allow EFFECT`). The packet shows each function the migration may rewrite, the migrated ones and every caller of them in any file, as its declaration reads in its file, with the types they name and the cards they select. The authorization digest binds the change to the sha256 of every file of the project and to the compiler.
+
+A reply maps function names to whole new declarations, `pub` included where the original has it. The tool refuses a reply for another authorization or a tree that changed since (`E-SESSION`), one that rewrites a function it did not authorize (`E-MIGRATION-SCOPE`), changes visibility or declares something else (`E-MIGRATION`), gives a migrated function any other signature or any other function a new one (`E-SIGNATURE`), adds or removes a declaration (`E-DECLARATION`), or gives any row an effect the host did not allow (`E-CALLER-EFFECT`). It rechecks the whole linked program with every replacement in place, and a refusal names the file and line of the text the reply wrote. Only then does it write: each file beside itself, then renamed into place, and a failure part way puts back every file already renamed, so the project holds all the changes or none. Nothing is built or tested, and the result says so.
+
 ## Named choices
 
 A host prepares a sketch in Python:
