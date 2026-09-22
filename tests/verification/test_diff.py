@@ -217,7 +217,9 @@ def test_the_library_compared_with_itself_is_identical_code(capsys):
     assert main(["diff", str(root), str(root), "--std", "--format", "json", "--no-predict", "--require",
                  "identical"]) == 0  # fmt: skip
     record = json.loads(capsys.readouterr().out)
-    assert set(record["summary"]) == {"identical-code"} and record["summary"]["identical-code"] > 100
+    assert (
+        set(record["summary"]) == {"identical-code", "identical-source"} and record["summary"]["identical-code"] > 100
+    )
 
 
 @pytest.mark.skipif(not COMPILERS, reason="no native compiler")
@@ -235,3 +237,28 @@ def test_a_device_program_is_never_run_to_replay_a_witness():
     assert entry["class"] == "behavior-changed"
     assert {s for sides in entry["witness"]["native"].values() for s in sides.values()} <= {
         "not replayed: a program with device code is compiled here, never run"}  # fmt: skip
+
+
+PICK = "fn pick[T:copy](x:T, y:T, first:bool) -> T { if first { return x; } return y; }\n"
+
+
+def test_a_template_no_code_instantiates_is_compared_by_its_tokens_and_never_left_out():
+    same = diff(PICK + "fn one() -> u64 = 1;\n", PICK + "fn one() -> u64 = 1;\n", predict=False)
+    assert same["functions"]["pick"] == {"class": "identical-source", "template": True}
+    assert same["semver"]["level"] == "none" and holds(same, "identical")
+    rewritten = PICK.replace("if first { return x; } return y;", "if !first { return y; } return x;")
+    changed = diff(PICK, rewritten, predict=False)
+    assert (
+        changed["functions"]["pick"]["class"] == "unknown"
+        and "tokens changed" in changed["functions"]["pick"]["reason"]
+    )
+    assert changed["semver"]["unproven"] == ["pick"] and not holds(changed, "equivalent")
+    used = "fn use() -> u64 = pick(1, 2, true);\n"  # an instance has code, and is compared as a function
+    instanced = diff(PICK + used, rewritten + used, predict=False)["functions"]
+    assert instanced["pick[u64]"]["class"] == "smt-equivalent" and instanced["use"]["class"] == "smt-equivalent"
+
+
+def test_a_template_that_names_a_changed_function_is_not_identical_source():
+    helper = "fn base(x:u64) -> u64 = x;\nfn wrap[T:copy](x:T) -> T { let b = base(1); return x; }\n"
+    entry = diff(helper, helper.replace("= x;", "= x + 1;"), predict=False)["functions"]["wrap"]
+    assert entry["class"] == "unknown" and "base" in entry["reason"]

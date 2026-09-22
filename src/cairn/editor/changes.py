@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 SHOWN = ["behavior-changed", "unknown", "signature-changed", "smt-equivalent", "renamed", "added", "removed"]
+# identical-code and identical-source are counted, not listed
 
 
 def value(x: Any) -> str:

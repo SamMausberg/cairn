@@ -30,13 +30,16 @@ from typing import Any
 
 from ..compiler.cairnc import VERSION, Diagnostic
 from ..compiler.codegen import mangle
+from ..compiler.lexing import lex
+from ..compiler.syntax import Parser
 from ..compiler.tree import Arm, Expr, Function, Program, Stmt
 from .emission import CALLED, canonical, emitted, guard_count, unguarded
 from .scalar_semantics import equivalent
 from .scalar_values import MAX_UNROLL
 
-ORDER = ["identical-code", "smt-equivalent", "behavior-changed", "unknown", "signature-changed", "renamed",
-         "added", "removed"]  # fmt: skip
+ORDER = ["identical-code", "identical-source", "smt-equivalent", "behavior-changed", "unknown", "signature-changed",
+         "renamed", "added", "removed"]  # fmt: skip
+UNCHANGED = {"identical-code", "identical-source"}
 LEVELS = ["none", "patch", "minor", "major"]
 FOOTPRINT = {"read", "write", "lane"}  # effects that name a parameter, compared by its position
 UNSIGNED = {"u8", "u16", "u32", "u64", "usize"}
@@ -284,6 +287,47 @@ def single(old: str, new: str, name: str, timeout_ms: int = 3000) -> dict[str, A
     return compare(o, n, name, time.monotonic() + timeout_ms / 1000 * 3, timeout_ms)
 
 
+def templates(v: Version) -> dict[str, Function]:
+    """The program's own generic functions as written; the checker keeps only their instances."""
+    return {f.name: f for f in Parser(v.source).parse().functions if f.generics and not f.bindings}
+
+
+def tokens(v: Version, f: Function) -> list[str]:
+    return [t.s for t in lex(v.source[f.start : f.end])]
+
+
+def header(f: Function) -> tuple:
+    return tuple(f.generics), shape(f)
+
+
+def uninstantiated(o: Version, n: Version, functions: dict[str, Any]) -> dict[str, Any]:
+    """A template no code instantiates has no code to compare. Its tokens are compared instead, with everything it
+    names: `identical-source` when both are the same, and `unknown` otherwise, never left out of the diff."""
+    to, tn = templates(o), templates(n)
+    written = {name: tokens(o, to[name]) == tokens(n, tn[name]) for name in to.keys() & tn.keys()}
+    changed = {k.rsplit(".", 1)[-1].split("[")[0] for k, e in functions.items() if e["class"] not in UNCHANGED}
+    changed |= {k.rsplit(".", 1)[-1] for k, same in written.items() if not same}
+    out: dict[str, Any] = {}
+    for name in sorted(to.keys() | tn.keys()):
+        if name not in to:
+            out[name] = {"class": "added", "signature": signature(tn[name]), "template": True}
+        elif name not in tn:
+            out[name] = {"class": "removed", "signature": signature(to[name]), "template": True}
+        elif header(to[name]) != header(tn[name]):
+            out[name] = {"class": "signature-changed", "template": True}
+        else:
+            named = set(tokens(n, tn[name])) & (changed - {name.rsplit(".", 1)[-1]})
+            if written[name] and not named:
+                out[name] = {"class": "identical-source", "template": True}
+            else:
+                why = (
+                    "its tokens changed" if not written[name] else f"it names {', '.join(sorted(named))}, which changed"
+                )
+                out[name] = {"class": "unknown", "template": True, "reason": f"A generic function no code "
+                             f"instantiates, so there is no code to compare, and {why}."}  # fmt: skip
+    return out
+
+
 def types_of(v: Version) -> dict[str, Any]:
     """The program's own type declarations, each as a comparable value."""
     p, linked = v.p, set(v.p.sources)
@@ -300,10 +344,12 @@ def types_of(v: Version) -> dict[str, Any]:
 
 def public(v: Version) -> tuple[set[str], set[str]]:
     """The functions and types a user of the program may name."""
-    own_modules = {v.p.modules.get(f, "") for f in v.own} - {""}
+    generic = templates(v)
+    own_modules = ({v.p.modules.get(f, "") for f in v.own} | {f.module for f in generic.values()}) - {""}
     if not own_modules:  # a program that declares no module: a library build exports every function
-        return set(v.own), set(types_of(v))
+        return set(v.own) | set(generic), set(types_of(v))
     functions = {f for f in v.own if v.functions[f].public or v.functions[f].owner}
+    functions |= {name for name, f in generic.items() if f.public or f.owner}
     return functions, {t for t in types_of(v) if t in v.p.public}
 
 
@@ -343,7 +389,7 @@ def semver(o: Version, n: Version, functions: dict[str, Any], types: dict[str, A
             reasons.append(("major", f"type {name}'s definition changed"))
         if how == "added" and name in tn:
             reasons.append(("minor", f"type {name} was added"))
-    changed = any(e["class"] != "identical-code" for e in functions.values()) or types
+    changed = any(e["class"] not in UNCHANGED for e in functions.values()) or types
     level = max((lvl for lvl, _ in reasons), key=LEVELS.index, default="patch" if changed else "none")
     shown = [why for _, why in sorted(reasons, key=lambda r: -LEVELS.index(r[0]))]
     verdict: dict[str, Any] = {"level": level, "reasons": shown}
@@ -365,6 +411,7 @@ def diff(old: str, new: str, *, timeout_ms: int = 3000, budget_s: float = 60.0, 
     o, n = sides
     present = [cxx for cxx in compilers if shutil.which(cxx)]
     functions = classes(o, n, timeout_ms, budget_s, present, replays)
+    functions |= uninstantiated(o, n, functions)
     to, tn = types_of(o), types_of(n)
     types = {t: "added" if t not in to else "removed" if t not in tn else "changed" for t in to.keys() | tn.keys()
              if to.get(t) != tn.get(t)}  # fmt: skip
@@ -392,14 +439,15 @@ def holds(record: dict[str, Any], required: str | None) -> bool:
     """Whether every function meets `--require`: identical code, or identical code or proven equivalence."""
     if required is None:
         return True
-    allowed = {"identical-code"} | ({"smt-equivalent"} if required == "equivalent" else set())
+    allowed = UNCHANGED | ({"smt-equivalent"} if required == "equivalent" else set())
     functions = all(e["class"] in allowed for e in record["functions"].values())
     return functions and not record["types"] and all(how == "identical-code" for how in record["tests"].values())
 
 
 def predicted(o: Version, n: Version, functions: dict[str, Any]) -> dict[str, Any]:
     """The predicted cost change of every compared function whose code changed; nothing is built or run."""
-    chosen = {name for name, e in functions.items() if e["class"] in {"smt-equivalent", "behavior-changed", "unknown"}}
+    compared = {"smt-equivalent", "behavior-changed", "unknown"}
+    chosen = {name for name, e in functions.items() if e["class"] in compared and not e.get("template")}
     if not chosen:
         return {}
     try:
