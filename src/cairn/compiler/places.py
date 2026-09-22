@@ -168,9 +168,9 @@ def capture(c: Checker, place: str, mode: str):
 
 def consume(c: Checker, e: Expr):
     """An owner used as a value moves; its name is dead afterwards."""
-    waited = e.ty.name == "Ticket" and c.spawning == "<wait>"
+    waited = e.ty.name in {"Ticket", "Group"} and c.spawning == "<wait>"
     if e.tag in {"name", "field", "index"} and e.ty.name in PINNED and not waited:
-        fail("E-PINNED", f"{e.ty.display()} cannot move; wait() a ticket, borrow an atomic or mutex.", e)
+        fail("E-PINNED", f"{e.ty.display()} cannot move; wait() a ticket or a group, borrow an atomic or mutex.", e)
     if e.tag == "name":
         c.leased(e.val, "rw", e)
         if e.val in c.moved | c.deferred:

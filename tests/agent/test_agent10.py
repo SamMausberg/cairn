@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import test_concurrency as concurrency
+import test_groups as groups
 import test_language as language
 import test_memory as memory
 
@@ -17,6 +18,7 @@ PROGRAMS = {
     "breadth": language.PRELUDE + language.MAIN,
     "dynamic": language.DYNAMIC,
     "tasks": concurrency.HELPERS + concurrency.TASKS,
+    "groups": concurrency.HELPERS + groups.NAP + groups.GROUPS,
     "device": concurrency.DEVICE,
     "extents": memory.EXTENTS,
     **{"std." + p.stem: p.read_text() for p in sorted(STD.glob("*.cairn"))},

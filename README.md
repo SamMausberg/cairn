@@ -63,7 +63,7 @@ A lane may touch only element `[i]` of anything a lane writes, so lanes cannot r
 - Owners that move and are released at scope exit, `linear` values that must be consumed exactly once, `take`, `swap`, `defer`.
 - Generic types and functions with bounds on traits, kinds (`copy`, `affine`) and scalar classes; traits with static dispatch and explicit `dyn`.
 - Closures that borrow what they capture and never escape.
-- Tasks with leases, down to one field of a record; atomics; mutexes entered through a closure.
+- Tasks with leases, down to one field of a record; task groups collected in completion order; atomics; mutexes entered through a closure.
 - `parallel`, `reduce`, `compact`, placement types (`@host @pinned @unified @device`), kernels, transfers, queued device work.
 - Modules, a standard library written in CAIRN, projects with vendored dependencies.
 - Recipes: generators written as library code and applied with `derive`.

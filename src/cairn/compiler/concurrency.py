@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from .checking import Checker
 
 
-PINNED = {"Ticket", "Atomic", "Mutex"}  # Declared and borrowed in place; never stored, passed or returned.
+PINNED = {"Ticket", "Group", "Atomic", "Mutex"}  # Declared and borrowed in place; never stored, passed or returned.
 ORDERS = ["relaxed", "acquire", "release", "acquire_release", "seq_cst"]
 ATOMIC_OPS = {
     "load": 0,
@@ -171,6 +171,18 @@ def shared(c: Checker, e: Expr, n: str, ty: Type, args: list[Expr]) -> Type:
     return BOOL if n == "compare_exchange" else VOID if n == "store" else ty.args[0]
 
 
+def s_submit(c: Checker, s: Stmt):
+    """`spawn f(args) into g;` runs f on its own thread and hands the task to the group g instead of naming
+    a ticket; g holds what the task borrows until wait(g), and collect(g) yields results as they finish."""
+    binding = c.env.get(s.name)
+    if binding is None or binding.ty.name != "Group":
+        fail("E-TYPE-MISMATCH", f"into names a group declared in this function; {s.name} is not one.", s)
+    if s.name in c.moved:
+        fail("E-MOVED", f"{s.name} was moved.", s)
+    c.spawning = s.name
+    c.expr(s.exprs[0])
+
+
 def e_spawn(c: Checker, e: Expr, expected: Type | None) -> Type:
     """`let t = spawn f(args);` runs f on its own thread; `spawn parallel ...` and `spawn transfer(...)` queue
     device work on a stream of their own. Either way t lends what the work borrows until wait(t)."""
@@ -179,6 +191,8 @@ def e_spawn(c: Checker, e: Expr, expected: Type | None) -> Type:
     if name in ("", "<wait>") or (call is not None and call.tag != "call") or c.lanes or c.closure:
         fail("E-SPAWN", "Write `let t = spawn f(args);` in a function body; a task is always named.", e)
     c.spawning = ""
+    if e.val == "into" and (region is not None or (call.val == "transfer" and c.qualify("transfer", c.fs) is None)):
+        fail("E-SPAWN", "A group holds tasks that run declared functions; queued device work keeps its ticket.", e)
     earlier: set[str] = set()
     for ticket in after:  # Work queued after a ticket's work may touch what that ticket holds.
         if c.before.get(ticket.val) is None or ticket.val in c.moved:
@@ -202,6 +216,17 @@ def e_spawn(c: Checker, e: Expr, expected: Type | None) -> Type:
     ):
         fail("E-SPAWN", "spawn runs a declared function (a closure cannot follow it to another thread); "
              "only queued device work is ordered with after.", e)  # fmt: skip
+    if e.val == "into":  # The group holds every lease until wait(g); which task finished is never known here.
+        group = c.env[name]
+        c.expect(result, group.ty.args[0], e)
+        again = [p for p, mode in c.borrowed if mode == "rw"] if c.loop_depth > group.depth else []
+        if again:
+            fail("E-LEASED", f"{again[0].removesuffix('[]')} is lent to {name} until wait({name}), and the next "
+                 "iteration would lend it again.", e)  # fmt: skip
+        c.leases.setdefault(name, []).extend(c.borrowed)
+        c.effect("spawn")
+        c.guard("submit")  # A full group traps rather than growing.
+        return VOID
     c.leases[name] = c.borrowed
     c.effect("spawn")
     e.val = "queue" if queued else ""

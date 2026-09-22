@@ -8,7 +8,7 @@ Recipes are library code over record schemas, naturals and names of functions. T
 
 The collector remains a closed, certified form: a user cannot write a loop that carries its own certificates.
 
-Asynchronous I/O is a task over blocking I/O, and tasks are awaited in the order they are written. The named next step is a linear `Group[T]`: `submit` queues a spawned function into the group and `collect` yields the next result to finish, so many I/O tasks can be awaited in completion order, while tickets stay linear and leases stay as they are. Cancellation, device-loss recovery and multi-device collectives are absent. Device regions and transfers do queue as linear stream tickets ordered with `after`.
+Asynchronous I/O is a task over blocking I/O. A task group (`Group[T](n)`, `spawn f(args) into g;`, `collect(g)`, `wait(g)`) awaits tasks in the order they finish, with linear groups and the same leases as tickets, and its storage taken where it is declared. What it does not have: a task cannot be cancelled, a `collect` returns no lease before `wait(g)`, a group is a host object, and the calculus does not model it. Device-loss recovery and multi-device collectives are absent. Device regions and transfers do queue as linear stream tickets ordered with `after`.
 
 A lease names the place that was lent, so two tasks may take two fields of one record, and a `Buf` field may declare an earlier `usize` field as its extent, so `len(c.price)` and `c.rows` are one identity along a field path rooted in a local. An element of an array of records (`cs[0].price`) is still passed as a part and pays its guard.
 

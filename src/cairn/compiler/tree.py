@@ -88,6 +88,7 @@ INTRINSIC_TYPES = {
     "Ticket": 1,
     "Atomic": 1,
     "Mutex": 1,
+    "Group": 1,
 }  # name -> number of type arguments
 VOID, BOOL, USIZE = Type("void"), Type("bool"), Type("usize")
 

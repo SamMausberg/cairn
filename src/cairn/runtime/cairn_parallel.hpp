@@ -362,6 +362,72 @@ public:
   }
 };
 
+// A task group: up to `capacity` tasks in flight at once, collected in the order they finish. Linear
+// like a ticket: exactly one wait() consumes it, joining whatever still runs and dropping every result
+// nobody collected. Everything it will ever hold is allocated here, once, so a submission never
+// allocates, and a group that is full or empty traps instead of growing or blocking forever. Each task
+// is a thread of its own, never a lane of the pool, and only the owning thread submits, collects and
+// waits, so `spare_`, `free_` and `threads_` need no lock; the done ring is what the tasks write.
+template<class T> class Group final {
+  using Slot = std::conditional_t<std::is_void_v<T>, char, T>;
+  const std::size_t capacity_;
+  std::unique_ptr<Slot[]> slots_;           // one result cell per berth; reset by wait()
+  std::unique_ptr<std::thread[]> threads_;  // one thread per berth
+  std::unique_ptr<std::size_t[]> free_;     // berths nothing runs in, as a stack
+  std::unique_ptr<std::size_t[]> done_;     // berths whose task has finished, as a ring; guarded by m_
+  std::size_t spare_ = 0;                   // entries of free_
+  std::size_t head_ = 0;                    // the next berth to collect from done_
+  std::size_t finished_ = 0;                // berths queued in done_ and not yet collected
+  std::mutex m_;
+  std::condition_variable cv_;
+public:
+  explicit Group(std::size_t capacity) noexcept
+      : capacity_(capacity), slots_(new(std::nothrow) Slot[capacity]{}),
+        threads_(new(std::nothrow) std::thread[capacity]), free_(new(std::nothrow) std::size_t[capacity]),
+        done_(new(std::nothrow) std::size_t[capacity]) {
+    if(!slots_ || !threads_ || !free_ || !done_) trap();
+    for(std::size_t k = capacity; k-- > 0;) free_[spare_++] = k;
+  }
+  Group(const Group&) = delete;
+  Group& operator=(const Group&) = delete;
+  Group(Group&&) = delete;
+  Group& operator=(Group&&) = delete;
+  ~Group() noexcept { if(slots_) trap(); }  // The type system makes an unwaited group unreachable; be loud.
+  template<class F> void submit(F&& f) noexcept {
+    if(spare_ == 0) trap();  // capacity_ tasks are already outstanding
+    const std::size_t k = free_[--spare_];
+    threads_[k] = std::thread([this, k, g = std::forward<F>(f)]() mutable {
+      if constexpr(std::is_void_v<T>) g(); else slots_[k] = g();
+      {
+        std::lock_guard<std::mutex> hold(m_);
+        done_[(head_ + finished_) % capacity_] = k;
+        ++finished_;
+      }
+      cv_.notify_one();
+    });
+  }
+  T collect() noexcept {
+    if(spare_ == capacity_) trap();  // nothing is outstanding
+    std::size_t k;
+    {
+      std::unique_lock<std::mutex> hold(m_);
+      cv_.wait(hold, [this] { return finished_ != 0; });
+      k = done_[head_];
+      head_ = (head_ + 1) % capacity_;
+      --finished_;
+    }
+    threads_[k].join();  // it has finished: this only reclaims the thread
+    free_[spare_++] = k;
+    if constexpr(!std::is_void_v<T>) return std::exchange(slots_[k], Slot{});
+  }
+  void wait() && noexcept {
+    for(std::size_t k = 0; k < capacity_; ++k)
+      if(threads_[k].joinable()) threads_[k].join();
+    slots_.reset();  // every result nobody collected is released here
+    spare_ = capacity_;
+  }
+};
+
 // The mutex owns its value: with() is the only way in and no guard object escapes it.
 template<class T> class Mutex final {
   T val_{};
