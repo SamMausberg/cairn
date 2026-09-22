@@ -107,7 +107,7 @@ cairn run examples/embedded                # bare-metal AArch64 under QEMU
 
 ## Documentation
 
-[docs/](docs/README.md) is the index. The [tour](docs/tour.md) is twelve complete programs, the [language reference](docs/language/README.md) states every rule with a program that is accepted and one that is refused, and [library.md](docs/library.md), [tools.md](docs/tools.md), [freestanding.md](docs/freestanding.md) and [examples.md](docs/examples.md) cover the rest of using CAIRN. [verification.md](docs/verification.md) says what is proved, what is SMT-checked and what is only tested. [AGENTS.md](AGENTS.md) has the rules for anyone, human or agent, editing this repository, [CHANGELOG.md](CHANGELOG.md) is the release history, and [docs/project/capabilities.json](docs/project/capabilities.json) lists what is implemented and what is not, as data.
+[docs/](docs/README.md) is the index. [getting-started.md](docs/getting-started.md) takes a fresh checkout to a project that builds, runs and passes its contract, the [tour](docs/tour.md) is twelve complete programs, the [language reference](docs/language/README.md) states every rule with a program that is accepted and one that is refused, and [library.md](docs/library.md), [tools.md](docs/tools.md), [freestanding.md](docs/freestanding.md) and [examples.md](docs/examples.md) cover the rest of using CAIRN. [verification.md](docs/verification.md) says what is proved, what is SMT-checked and what is only tested. [AGENTS.md](AGENTS.md) has the rules for anyone, human or agent, editing this repository, [CHANGELOG.md](CHANGELOG.md) is the release history, and [docs/project/capabilities.json](docs/project/capabilities.json) lists what is implemented and what is not, as data.
 
 ## Repository
 

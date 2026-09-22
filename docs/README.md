@@ -4,6 +4,7 @@ Start with the [README](../README.md) for what CAIRN is and how to install it, t
 
 | Document | What it gives you |
 | --- | --- |
+| [getting-started.md](getting-started.md) | Install, create a project, check, run and test it, and read your first diagnostic and receipt. |
 | [tour.md](tour.md) | Twelve complete programs, one per idea. The suite builds and runs every one. |
 | [language/](language/README.md) | The language reference: every rule, with a program that is accepted and one that is refused, and the diagnostic code it is refused with. |
 | [library.md](library.md) | The standard library, module by module, with a program for each. [std_api.md](std_api.md) is the generated signature and effect-row reference. |
