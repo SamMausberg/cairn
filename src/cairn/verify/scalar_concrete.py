@@ -30,7 +30,8 @@ class Zeroed:
     """Zero-initialized storage of any length, held only where it was written: `Buf[T](n)` for a symbolic n."""
 
     def __init__(self, count: int, zero):
-        self.count, self.zero, self.written = count, zero, {}
+        self.count, self.zero = count, zero
+        self.written: dict[int, Any] = {}
 
     def __len__(self) -> int:
         return self.count
