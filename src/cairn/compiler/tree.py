@@ -1,0 +1,245 @@
+"""The syntax tree, the closed scalar vocabulary and the diagnostic that names a source position.
+
+Every name the parser produces is resolved, typed and given effects by checking.py; nothing here
+evaluates source. `Type` is frozen and compared by value, so a side table (`Program.field_extents`)
+carries what a type does not say about itself.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, NoReturn
+
+MAX_SOURCE = 2_000_000
+MAX_FAMILY = 1024
+MAX_FUNCTIONS = 2048
+MAX_NODES = 200_000
+
+
+class Diagnostic(Exception):
+    def __init__(self, code: str, message: str, line: int = 0, column: int = 0, **details):
+        super().__init__(message)
+        self.data = {
+            "protocol": "cairn.diagnostic/2",
+            "status": "rejected",
+            "code": code,
+            "message": message,
+            "line": line,
+            "column": column,
+            "trust": "prototype-not-verified",
+            **details,
+        }
+
+
+def fail(code: str, message: str, node: Any = None, **details) -> NoReturn:
+    raise Diagnostic(code, message, getattr(node, "line", 0), getattr(node, "col", 0), **details)
+
+
+PLACES = ("host", "device", "pinned", "unified")
+HOST_VISIBLE = {"host", "pinned", "unified"}
+# A view may be lent as what its memory also is: page-locked memory is host memory, managed memory is both.
+VISIBLE_AS = {("pinned", "host"), ("unified", "host"), ("unified", "device")}
+
+
+@dataclass(frozen=True)
+class Type:
+    """A value type, or a second-class borrow of one (`mode` ro/rw, optional array extent)."""
+
+    name: str
+    mode: str = "value"
+    extent: str = ""
+    args: tuple = ()
+    place: str = "host"
+
+    @property
+    def value(self) -> Type:
+        return Type(self.name, args=self.args)
+
+    def display(self) -> str:
+        if self.name == "fn":
+            inner = f"fn({', '.join(a.display() for a in self.args[:-1])})"
+            inner += "" if self.args[-1].name == "void" else " -> " + self.args[-1].display()
+        elif self.name == "dyn":
+            inner = "dyn " + self.args[0].display()
+        else:
+            shown = (a.display() if isinstance(a, Type) else str(a) for a in self.args)
+            inner = self.name + ("[" + ", ".join(shown) + "]" if self.args else "")
+        if self.mode == "value":
+            return inner
+        return f"{self.mode}<{inner}>" + (f"[{self.extent}]@{self.place}" if self.extent else "")
+
+
+BITS = {"u8": 8, "u16": 16, "u32": 32, "u64": 64, "usize": 64, "i8": 8, "i16": 16, "i32": 32, "i64": 64}
+CPP = {n: "std::size_t" if n == "usize" else f"std::{'u' * (n[0] == 'u')}int{w}_t" for n, w in BITS.items()}
+CPP |= {"bool": "bool", "f32": "float", "f64": "double", "void": "void"}
+UNSIGNED = {n for n in BITS if n[0] == "u"}
+SIGNED = set(BITS) - UNSIGNED
+INT = UNSIGNED | SIGNED
+FLOAT = {"f32", "f64"}
+NUMERIC = INT | FLOAT
+SCALAR = NUMERIC | {"bool"}
+WIDTH = BITS
+INTRINSIC_TYPES = {
+    "Buf": 1,
+    "Array": 2,
+    "fn": None,
+    "dyn": 1,
+    "Dyn": 1,
+    "Ticket": 1,
+    "Atomic": 1,
+    "Mutex": 1,
+}  # name -> number of type arguments
+VOID, BOOL, USIZE = Type("void"), Type("bool"), Type("usize")
+
+
+@dataclass
+class Expr:
+    tag: str
+    val: str = ""
+    args: list[Expr] = field(default_factory=list)
+    line: int = 0
+    col: int = 0
+    ty: Type | None = None
+    start: int = -1
+    end: int = -1
+    ref: Any = None  # The checker's resolution: a binding, callee, constant or lambda.
+
+
+@dataclass
+class Arm:
+    variant: str
+    binder: str
+    body: list[Stmt]
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
+class Stmt:
+    tag: str
+    name: str = ""
+    ty: Type | None = None
+    exprs: list[Expr] = field(default_factory=list)
+    body: list[Stmt] = field(default_factory=list)
+    other: list[Stmt] = field(default_factory=list)
+    line: int = 0
+    col: int = 0
+    binder: str = ""
+    arms: list[Arm] = field(default_factory=list)
+    op: str = ""
+    ref: Any = None
+    other_names: list[Expr] = field(default_factory=list)  # `after a, b` on a spawned region; the names of an unpack.
+
+
+@dataclass
+class Function:
+    name: str
+    params: list[tuple[str, Type]]
+    ret: Type
+    body: list[Stmt]
+    generics: list[tuple[str, str]] = field(default_factory=list)  # (name, nat | type | Trait)
+    bindings: dict[str, Any] = field(default_factory=dict)  # instantiated generics
+    source_name: str = ""
+    line: int = 0
+    col: int = 0
+    start: int = -1
+    body_start: int = -1
+    end: int = -1
+    module: str = ""
+    public: bool = False
+    extern: bool = False
+    effects: tuple[str, ...] | None = None  # A declared ceiling; None infers.
+    owner: tuple[str, Type] | None = None  # (trait, Self) for an impl member.
+    block: Any = None  # Which `impl { }` wrote this member: one Self type has one block, not a union of several.
+    kernel: bool = False  # Runs on the device: callable only from device lanes and other kernels.
+    symbol: str = ""  # The C symbol of an extern, when it differs from the CAIRN name.
+    captures: list[tuple[str, str]] = field(default_factory=list)  # A closure's (outer place, mode) accesses.
+    row: tuple[set, set] = field(default_factory=lambda: (set(), set()))  # A closure's own (effects, callees).
+
+    @property
+    def static(self) -> str | None:
+        return self.generics[0][0] if self.generics and not self.bindings else None
+
+    @property
+    def binding(self) -> int | None:
+        return next((v for v in self.bindings.values() if isinstance(v, int)), None)
+
+
+@dataclass
+class Each:
+    """Static iteration in a recipe, over a record's fields or a natural range; `where` names static values."""
+
+    binder: str
+    seq: list[Expr]
+    where: list[tuple[str, Expr]]
+    items: list[Any]  # Declarations, statements or one expression, by where it is written.
+
+
+@dataclass
+class Shape:
+    """A record that a recipe generates; its field list may iterate."""
+
+    name: str
+    fields: list[Any]  # (name, Type) or Each of them
+    public: bool = False
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
+class Impl:
+    """A trait implementation that a recipe generates for the type it is derived for."""
+
+    trait: str
+    target: Type
+    members: list[Function]
+    block: int = 0  # Where its `impl` stands among the recipe's tokens.
+
+
+@dataclass
+class Recipe:
+    """A library-defined generator: declarations with `$name` splices, expanded per `derive` before checking."""
+
+    name: str
+    statics: list[tuple[str, str]]  # Bracket parameters: a natural (`K:nat`) or the name of a function (`F:fn`).
+    param: str
+    where: list[tuple[str, Expr]]
+    items: list[Any]
+    module: str = ""
+    public: bool = False
+    line: int = 0
+    col: int = 0
+    start: int = -1
+    end: int = -1
+    digest: str = ""  # sha256 of its tokens: what a derived function's receipt pins.
+
+
+@dataclass
+class Program:
+    records: dict[str, list[tuple[str, Type]]] = field(default_factory=dict)
+    enums: dict[str, list[str]] = field(default_factory=dict)
+    functions: list[Function] = field(default_factory=list)
+    families: list[tuple[str, str, int, int]] = field(default_factory=list)
+    derivations: list[tuple] = field(default_factory=list)  # (module, recipe as written, naturals, target, token)
+    recipes: dict[str, Recipe] = field(default_factory=dict)
+    sums: dict[str, list[tuple[str, Type | None]]] = field(default_factory=dict)
+    generics: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # generic types
+    attributes: dict[str, set[str]] = field(default_factory=dict)  # linear, packed, align(n)
+    traits: dict[str, list[Function]] = field(default_factory=dict)
+    consts: dict[str, tuple[Type, Expr]] = field(default_factory=dict)
+    imports: list[tuple[str, str, str]] = field(default_factory=list)  # (importer, path, alias)
+    public: set[str] = field(default_factory=set)
+    uses: dict[tuple[str, str], str] = field(default_factory=dict)  # (importer, bare name) -> full name
+    sources: dict[str, str] = field(default_factory=dict)  # linked library module -> its text
+    modules: dict[str, str] = field(default_factory=dict)  # declared name -> owning module
+    field_extents: dict[str, dict[str, str]] = field(default_factory=dict)  # record -> Buf field -> extent field
+
+
+def is_view(ty: Type) -> bool:
+    return ty.mode != "value" and ty.extent != ""
+
+
+def root(e: Expr) -> Expr:
+    while e.tag in {"field", "index", "slice"}:
+        e = e.args[0]
+    return e

@@ -53,7 +53,7 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import SIGNED, WIDTH, Diagnostic, Expr, Function, Parser, Stmt, Type, compile_program
-from ..compiler.syntax import BOOL, FLOAT, NUMERIC, USIZE, VOID, is_view
+from ..compiler.tree import BOOL, FLOAT, NUMERIC, USIZE, VOID, is_view
 from .smt_bridge import Solver, SolverUnavailable
 
 PROFILE = "cairn-value-bv-fp-array/3"

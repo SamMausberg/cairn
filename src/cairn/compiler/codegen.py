@@ -8,8 +8,9 @@ from typing import Any
 
 from ..version import VERSION
 from .builtins import SHARED, TABLE, WRAPPING
-from .checking import COMPARISONS, Checker
-from .syntax import CPP, FLOAT, UNSIGNED, Expr, Function, Program, Stmt, Type, fail, is_view
+from .checking import Checker
+from .expressions import COMPARISONS
+from .tree import CPP, FLOAT, UNSIGNED, Expr, Function, Program, Stmt, Type, fail, is_view
 
 RUNTIME_FILES = {
     p.name: p.read_text(encoding="utf-8") for p in sorted((Path(__file__).parents[1] / "runtime").glob("*.hpp"))

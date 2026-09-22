@@ -10,10 +10,29 @@ from dataclasses import dataclass
 from functools import reduce
 from typing import Any
 
-from .syntax import (  # isort: skip
-    FLOAT, INT, MAX_FAMILY, MAX_FUNCTIONS, MAX_NODES, PREC, SCALAR, SIGNED, UNSIGNED, WIDTH, Arm, Each, Expr,
-    Function, Impl, Program, Recipe, Shape, Stmt, Type, fail,
-)  # fmt: skip
+from .syntax import PREC
+from .tree import (
+    FLOAT,
+    INT,
+    MAX_FAMILY,
+    MAX_FUNCTIONS,
+    MAX_NODES,
+    SCALAR,
+    SIGNED,
+    UNSIGNED,
+    WIDTH,
+    Arm,
+    Each,
+    Expr,
+    Function,
+    Impl,
+    Program,
+    Recipe,
+    Shape,
+    Stmt,
+    Type,
+    fail,
+)
 
 OPERATORS: dict[str, Callable[[Any, Any], Any]] = {
     "+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.floordiv, "%": operator.mod,

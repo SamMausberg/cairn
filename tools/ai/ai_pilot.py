@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from cairn.agent.teaching import CARDS
 from cairn.compiler.cairnc import Diagnostic, Parser, compile_source
-from cairn.compiler.syntax import lex
+from cairn.compiler.lexing import lex
 from cairn.verify.testing import evaluate
 
 MASK = 2**64 - 1

@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import fields
 from pathlib import Path
 
-from .syntax import Parser, Program, fail
+from .syntax import Parser
+from .tree import Program, fail
 
 STD = Path(__file__).parents[1] / "std"
 
