@@ -336,7 +336,7 @@ def main(argv: list[str] | None = None) -> int:
             if not paths:
                 raise ProjectError("No test contracts. Add project.tests or supply --contract.")
             results = [{"contract": path.name, **evaluate(project.source, load_json_strict(read_text(path, 2_000_000)),
-                                                          a.cxx)} for path in paths]  # fmt: skip
+                                                          a.cxx, project.libraries)} for path in paths]  # fmt: skip
             passed = all(x["status"] == "passed-finite-tests" for x in results)
             status = "passed-finite-tests" if passed else "tests-not-passed"
             report({"status": status, "tests": results, "formal_status": "not-verified"}, brief=True)
@@ -371,7 +371,10 @@ def main(argv: list[str] | None = None) -> int:
             if code:
                 print(f"error: {project.name} {terminal.ended(code)}", file=sys.stderr)
             return 0 if code == 0 else 1
-        cp = subprocess.run(started, capture_output=True, text=True, timeout=a.timeout, **run)
+        # A program may print bytes that are not UTF-8 (an image, a zlib stream); the record escapes them.
+        cp = subprocess.run(
+            started, capture_output=True, text=True, errors="backslashreplace", timeout=a.timeout, **run
+        )
         report({"status": "program-exited", "exit_code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr,
                 "build_directory": result["directory"], "security_sandbox": False,
                 "memory_limit_mib": None if machine else a.memory_mib, "emulator": machine})  # fmt: skip

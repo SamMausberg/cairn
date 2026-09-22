@@ -26,7 +26,7 @@ from typing import Any
 from ..agent.agent_tools import digest, explain, load_json_strict, stable_json
 from ..compiler.cairnc import RUNTIME_FILES, Diagnostic, Parser, compile_source
 from ..projects.toolchain import command as native_command
-from ..projects.toolchain import flags
+from ..projects.toolchain import flags, link_flags, linked
 from .scalar_values import bounds
 
 CTYPES: dict[str, Any] = {
@@ -156,7 +156,8 @@ def child(library, source, contract):
     return 0
 
 
-def evaluate(source: str, contract: dict, cxx="clang++") -> dict:
+def evaluate(source: str, contract: dict, cxx="clang++", libraries: tuple[str, ...] = ()) -> dict:
+    """Build `source` as a library and run the contract's cases in a child; `libraries` are the manifest's."""
     start = time.monotonic()
     common = {
         "source_sha256": digest(source),
@@ -183,6 +184,7 @@ def evaluate(source: str, contract: dict, cxx="clang++") -> dict:
         (t / "contract.json").write_text(stable_json(contract))
         cuda = "cuda" in receipt["requires"]
         command = native_command(cxx, str(t / "candidate.cpp"), str(t / "libtask.so"), cuda=cuda)
+        command += link_flags(linked(libraries, receipt["modules"]))
         try:
             cp = subprocess.run(command, text=True, capture_output=True, timeout=30)
             build = {"exit_code": cp.returncode, "flags": FLAGS, "compiler": compiler}

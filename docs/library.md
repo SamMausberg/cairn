@@ -1,6 +1,6 @@
 # The standard library
 
-Seventeen modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
+Eighteen modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
 
 [std_api.md](std_api.md) holds every signature and every effect row, generated from these sources by `cairn doc --std`. This file is the working guide: what each module is for, a program that uses it, and where it bites.
 
@@ -13,6 +13,7 @@ Three habits explain the API shape. A lookup answers with an index, never a borr
 | `std.text` | integers to and from bytes, comparison, search, hashing | only `push_u64`, `push_i64` |
 | `std.io` | files, standard streams, a monotonic clock | only `read_file`, `read_to_end` |
 | `std.math` | the C math library on `f64`, whose last bit varies | no |
+| `std.zlib` | the system zlib: whole-view streams, CRC-32, Adler-32 | only `compress` |
 | `std.time` | a monotonic clock, the date, sleeping | no |
 | `std.env` | the program's arguments and environment | yes |
 | `std.fs` | files by path, without a NUL to write | only `read` |
@@ -297,6 +298,25 @@ fn main() -> i32 {
   return 0;
 }
 ```
+
+## std.zlib
+
+`std.zlib` binds the system zlib. `compress(data, level)` gives the zlib stream of a whole view as a `Vec[u8]`, and `crc32` and `adler32` continue a checksum over a view. Importing the module links `-lz`, found where the C compiler finds it, and nothing is downloaded.
+
+```cairn
+import std.zlib;
+
+fn main() -> i32 {
+  match zlib.compress("hello hello hello hello", 9) {
+    Ok(z) => { if z.len == 0 { return 1; } }
+    Err(e) => return 2;
+  }
+  if zlib.crc32(0, "abc") != 891568578 { return 3; }
+  return 0;
+}
+```
+
+Only the calls that take a pointer and a length for the length of one call are bound. zlib's streaming interface keeps pointers into the caller's buffers inside a `z_stream` between calls, and a CAIRN borrow never outlives its call, so a C library built that way needs a wrapper that owns the buffers, or its one-shot entry points. The rows say `ffi:compress2`, `ffi:crc32_z` or `ffi:adler32_z` and `ffi_precondition`, with no `io`. A level outside -1 to 9 is `ZError(-2)`, a value and not a trap. A project whose own `extern` declarations call a system library names it under `[build]` as `libraries = ["z"]` ([abstractions.md](abstractions.md#projects)).
 
 ## std.map
 

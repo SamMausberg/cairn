@@ -15,7 +15,7 @@ from pathlib import Path
 from ..compiler.cairnc import RUNTIME_FILES, Parser, compile_source, compile_units
 from ..compiler.codegen import mangle
 from .project import Project, ProjectError
-from .toolchain import audit_effects, find, flags, profile, unit_commands
+from .toolchain import audit_effects, find, flags, link_flags, linked, profile, unit_commands
 from .toolchain import command as native_command
 
 
@@ -136,6 +136,8 @@ def build(
     command = native_command(
         cxx, str(cpp), str(artifact), arch or project.arch, kind, "cuda" in receipt["requires"], target
     )
+    libraries = [] if bare else linked(project.libraries, receipt["modules"])  # an image refuses ffi effects above
+    command += link_flags(libraries)
     if debug:  # Symbols plus #line directives: a debugger steps through the .cairn files.
         command.insert(1, "-g")
     units: list[dict] = []
@@ -148,6 +150,7 @@ def build(
         "frontend": receipt,
         "kind": kind,
         "target": target,
+        **({"libraries": libraries} if libraries else {}),
         "command": command,
         "generated_sha256": hashlib.sha256(generated.encode()).hexdigest(),
         "units": [],
@@ -163,7 +166,7 @@ def build(
             command, units = objects(
                 project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout, keep_guards
             )
-            command += ["-o", str(artifact)]
+            command += ["-o", str(artifact), *link_flags(libraries)]
             record["command"] = command
             record["units"] = [{k: v for k, v in unit.items() if k != "error"} for unit in units]
         failed = next((unit["error"] for unit in units if unit.get("error")), None)

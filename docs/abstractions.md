@@ -341,7 +341,10 @@ geometry = "deps/geometry"
 kind = "exe"            # or "library"
 arch = "baseline"       # or a named profile of the host family (x86-64, AArch64)
 target = "hosted"       # or a board such as "aarch64-virt"
+libraries = ["z"]       # system libraries this project's own externs call, by name
 ```
+
+A name under `libraries` is a row of the toolchain's closed table in `projects/toolchain.py`, never a flag or a path, and the library is found where the C compiler finds it. A packaged module that binds a library links it wherever it is imported (`std.zlib` links zlib), so only a project's own `extern` declarations need the line. An unknown or repeated name, and a library on a freestanding target, are refused when the manifest is read; a missing name fails at the link, naming the symbol, and the build record lists what was linked.
 
 A freestanding `target` refuses any program whose effect rows need a hosted runtime ([the freestanding target](tools.md#the-freestanding-target)). The host chooses trusted compilers (`clang++`, `g++`, and `nvcc` when a program uses the device), and builds use fresh directories. Generated C++ is readable and keeps the C ABI for every function whose signature is C compatible. A library exports every function; an executable contains only what its `main` reaches, and `main` may live in a module, while the receipt still covers everything that was checked.
 

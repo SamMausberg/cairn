@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 from ..compiler.lexing import lex
 from ..compiler.syntax import Parser
 from ..compiler.tree import MAX_SOURCE, Diagnostic
-from .toolchain import ARCHS, KINDS, TARGETS, ProjectError
+from .toolchain import ARCHS, KINDS, LIBRARIES, TARGETS, ProjectError
 
 SEGMENT = re.compile(r"[A-Za-z0-9_.-]+")
 
@@ -70,6 +70,7 @@ class Project:
     # name, path, manifest and source hashes of every vendored project, in load order
     dependencies: tuple[dict, ...] = ()
     vendored_units: tuple[str, ...] = ()  # the unit paths a dependency contributed, never the root project's own
+    libraries: tuple[str, ...] = ()  # the system libraries the root manifest names: rows of toolchain.LIBRARIES
 
     def unit_at(self, line: int) -> Unit | None:
         """The source file a line of the combined source comes from."""
@@ -100,6 +101,7 @@ class Project:
             "dependencies": list(self.dependencies),
             "composition": "ordered sources, vendored dependencies first; modules are the only namespaces",
             "source_sha256": hashlib.sha256(self.source.encode()).hexdigest(),
+            **({"libraries": list(self.libraries)} if self.libraries else {}),
         }
 
 
@@ -113,6 +115,7 @@ class Manifest:
     target: str
     table: dict  # the `[dependencies]` entries, name -> path, checked when each one is loaded
     sha256: str
+    libraries: tuple[str, ...] = ()
 
 
 def read_manifest(target: Path) -> Manifest:
@@ -126,7 +129,7 @@ def read_manifest(target: Path) -> Manifest:
     project, build, table = data.get("project", {}), data.get("build", {}), data.get("dependencies", {})
     if not isinstance(project, dict) or not isinstance(build, dict) or not isinstance(table, dict):
         raise ProjectError("project, build and dependencies must be tables.")
-    if set(project) - {"name", "sources", "tests"} or set(build) - {"kind", "arch", "target"}:
+    if set(project) - {"name", "sources", "tests"} or set(build) - {"kind", "arch", "target", "libraries"}:
         raise ProjectError("Unknown manifest option.")
     name = project.get("name")
     if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name):
@@ -145,9 +148,15 @@ def read_manifest(target: Path) -> Manifest:
         raise ProjectError(f"Unsupported build target; known targets are {', '.join(sorted(TARGETS))}.")
     if len(table) > 16:
         raise ProjectError("dependencies is a table of at most 16 entries.")
-    return Manifest(
-        name, tuple(sources), tuple(contracts), kind, arch, machine, table, hashlib.sha256(text.encode()).hexdigest()
-    )
+    libraries = build.get("libraries", [])  # names of toolchain rows, never flags or paths
+    if not isinstance(libraries, list) or len(libraries) > 8 or not all(isinstance(n, str) for n in libraries):
+        raise ProjectError("libraries is a list of at most 8 names.")
+    if len(set(libraries)) != len(libraries) or set(libraries) - set(LIBRARIES):
+        raise ProjectError(f"libraries names each known library once; known: {', '.join(sorted(LIBRARIES))}.")
+    if libraries and machine != "hosted":
+        raise ProjectError("A freestanding image links no system library.")
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    return Manifest(name, tuple(sources), tuple(contracts), kind, arch, machine, table, digest, tuple(libraries))
 
 
 def opened(body: str, current: str) -> list[str]:
@@ -216,7 +225,8 @@ def load_project(path: str | Path = ".") -> Project:
     for relative in manifest.contracts:
         contained_file(root, relative, ".json")
     return Project(root, manifest.name, combined, tuple(units), manifest.contracts, manifest.kind, manifest.arch,
-                   manifest.target, manifest.sha256, tuple(vendored), tuple(p for p, _, _ in fragments))  # fmt: skip
+                   manifest.target, manifest.sha256, tuple(vendored), tuple(p for p, _, _ in fragments),
+                   manifest.libraries)  # fmt: skip
 
 
 def dependencies(

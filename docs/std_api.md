@@ -641,3 +641,23 @@ pub fn truncate[T:affine](v:rw<Vec[T]>, count:usize)  // effects: free, read:v, 
 // encode_Packet, decode_Packet and wire_size_Packet.
 pub recipe wire for R
 ```
+
+# std.zlib
+
+The system zlib through its one-shot C interface: the zlib stream of a whole view, and the CRC-32 and Adler-32 checksums that PNG files and zlib streams carry. Importing this module links -lz (its row in projects/toolchain.py); the library is found where the C compiler finds it, and nothing is downloaded. zlib's streaming interface keeps pointers into the caller's buffers inside a z_stream, which a second-class borrow cannot be, so only the calls that take a pointer and a length for the length of the call are bound. Cost: one foreign call each, `ffi:<symbol>` in every caller's row, and the output Vec's allocation.
+
+```cairn
+// zlib's own code: -2 a level outside -1..9, -4 out of memory, -5 a destination too small.
+pub struct ZError { code:i32; }
+
+// The zlib stream (RFC 1950) of `data` at `level`: 0 stores, 1 is fastest, 9 is smallest, -1 is zlib's default.
+// effects: alloc, ffi:compress2, ffi:compressBound, ffi_precondition, free, local_write, read:data, trap, zero_init
+pub fn compress(n:usize, data:ro<u8>[n]@host, level:i32) -> std.core.Result[std.vec.Vec[u8], std.zlib.ZError]
+
+// The CRC-32 of `data` continued from `crc`; start a new one from 0.
+pub fn crc32(crc:u32, n:usize, data:ro<u8>[n]@host) -> u32  // effects: ffi:crc32_z, ffi_precondition, read:data, trap
+
+// The Adler-32 of `data` continued from `adler`; start a new one from 1.
+// effects: ffi:adler32_z, ffi_precondition, read:data, trap
+pub fn adler32(adler:u32, n:usize, data:ro<u8>[n]@host) -> u32
+```

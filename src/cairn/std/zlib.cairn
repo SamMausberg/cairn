@@ -1,0 +1,49 @@
+// The system zlib through its one-shot C interface: the zlib stream of a whole view, and the CRC-32 and
+// Adler-32 checksums that PNG files and zlib streams carry. Importing this module links -lz (its row in
+// projects/toolchain.py); the library is found where the C compiler finds it, and nothing is downloaded.
+// zlib's streaming interface keeps pointers into the caller's buffers inside a z_stream, which a second-class
+// borrow cannot be, so only the calls that take a pointer and a length for the length of the call are bound.
+// Cost: one foreign call each, `ffi:<symbol>` in every caller's row, and the output Vec's allocation.
+module std.zlib;
+import std.core (Result);
+import std.vec (Vec);
+
+// None of these keeps state between calls or performs I/O, so they declare no effect of their own.
+extern "compressBound" fn bound(n:usize) -> usize effects();
+// zlib reads the capacity of `dest` from `produced` and writes at most that many bytes from the pointer, so a
+// caller passes dest[0..1] of storage that holds `produced` bytes: that is the precondition `unsafe` owns here.
+extern "compress2" fn deflate_all(dest:rw<u8>[1], produced:rw<usize>, source:ro<u8>[n], n:usize, level:i32) -> i32 effects();
+extern "crc32_z" fn crc_of(crc:u64, data:ro<u8>[n], n:usize) -> u64 effects();
+extern "adler32_z" fn adler_of(adler:u64, data:ro<u8>[n], n:usize) -> u64 effects();
+
+// zlib's own code: -2 a level outside -1..9, -4 out of memory, -5 a destination too small.
+pub struct ZError { code:i32; }
+
+// The zlib stream (RFC 1950) of `data` at `level`: 0 stores, 1 is fastest, 9 is smallest, -1 is zlib's default.
+pub fn compress(n:usize, data:ro<u8>[n], level:i32) -> Result[Vec[u8], ZError] {
+  if level < -1 || level > 9 { return Err(ZError(-2)); }
+  let mut room:usize = 0;
+  unsafe { room = bound(n); }
+  let mut out = vec.with_capacity[u8](room + 1);
+  let mut produced = room;
+  let mut code:i32 = 0;
+  unsafe { code = deflate_all(out.data[0..1], produced, data, n, level); }
+  if code != 0 { return Err(ZError(code)); }
+  if produced > room { return Err(ZError(-5)); }  // zlib never writes past what it was told it has
+  out.len = produced;
+  return Ok(out);
+}
+
+// The CRC-32 of `data` continued from `crc`; start a new one from 0.
+pub fn crc32(crc:u32, n:usize, data:ro<u8>[n]) -> u32 {
+  let mut sum:u64 = 0;
+  unsafe { sum = crc_of(u64(crc), data, n); }
+  return u32(sum);
+}
+
+// The Adler-32 of `data` continued from `adler`; start a new one from 1.
+pub fn adler32(adler:u32, n:usize, data:ro<u8>[n]) -> u32 {
+  let mut sum:u64 = 0;
+  unsafe { sum = adler_of(u64(adler), data, n); }
+  return u32(sum);
+}

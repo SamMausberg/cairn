@@ -42,6 +42,11 @@ TARGETS = {
         "run": ["qemu-system-aarch64", "-M", "virt", "-cpu", "cortex-a72", "-nographic", "-semihosting", "-kernel"],
     },
 }
+# System libraries a build may link, each a closed row like a target: the flags that link it, and the packaged
+# modules whose externs call it, so importing one of them links it. A manifest may name a row for its own
+# externs. Nothing outside this table is linked, and the library is found where the C compiler finds it.
+# Adding a library is this row.
+LIBRARIES = {"z": {"flags": ["-lz"], "modules": ("std.zlib",)}}
 # Effects a hosted runtime provides and a freestanding image does not.
 HOSTED_EFFECTS = {"alloc", "free", "io"}
 HOSTED_FAMILIES = ("gpu_", "transfer:", "par:", "ffi:")
@@ -98,6 +103,19 @@ def emulator(target: str | None, artifact: str) -> list[str] | None:
     if not machine:
         raise ProjectError(f"A {target} image runs under {spec['run'][0]}, which is absent. Nothing was downloaded.")
     return [machine, *spec["run"][1:], artifact]
+
+
+def linked(named, modules) -> list[str]:
+    """The libraries a build links: those its manifest names and those its imported modules call, in table order."""
+    unknown = sorted(set(named) - set(LIBRARIES))
+    if unknown:
+        raise ProjectError(f"Unknown system library {unknown[0]!r}; known: {', '.join(sorted(LIBRARIES))}.")
+    return [n for n, row in LIBRARIES.items() if n in named or set(row["modules"]) & set(modules)]
+
+
+def link_flags(libraries: list[str]) -> list[str]:
+    """What the linker is given for `libraries`; it comes after every source and object on the command line."""
+    return [flag for name in libraries for flag in LIBRARIES[name]["flags"]]
 
 
 def flags(arch: str | None = None, kind: str = "library", target: str | None = None) -> list[str]:
