@@ -58,69 +58,76 @@ theorem a3 (h : Inv K I N M) : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M := b
 theorem a4 (hlt : I < N) : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M := by
   simp only [Form.eval]; omega
 
+/-- The five facts every obligation of the loop body assumes, in the order the rules list
+them: the invariant, and `I < N`. -/
+theorem body (h : Inv K I N M) (hlt : I < N) :
+    satisfies K I N M [⟨0, 1, 0, 0, 0⟩, ⟨0, -1, 1, 0, 0⟩, ⟨0, 0, -1, 1, 0⟩, ⟨0, 0, 0, -1, 1⟩,
+      ⟨-1, 0, -1, 1, 0⟩] :=
+  ⟨h.a0, h.a1, h.a2, h.a3, a4 hlt, trivial⟩
+
 /-- `initial.*`: the invariant holds on entry, where `K = I = 0`. -/
 theorem init {N M : Int} (hn : 0 ≤ N) (hm : N ≤ M) : Inv 0 0 N M := by
   have b0 : 0 ≤ Form.eval ⟨0, 0, 0, 1, 0⟩ 0 0 N M := by simp only [Form.eval]; omega
   have b1 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ 0 0 N M := by simp only [Form.eval]; omega
   refine ⟨?_, ?_, ?_, ?_⟩
-  · have := obligation_initial_nonnegative 0 0 N M b0 b1
-    simp only [Form.eval] at this; omega
-  · have := obligation_initial_cursor_before_input 0 0 N M b0 b1
-    simp only [Form.eval] at this; omega
-  · have := obligation_initial_input_before_capacity 0 0 N M b0 b1
-    simp only [Form.eval] at this; omega
-  · have := obligation_initial_capacity_representable 0 0 N M b0 b1
-    simp only [Form.eval] at this; omega
+  · have := obligation_initial_nonnegative 0 0 N M ⟨b0, b1, trivial⟩
+    simp only [rule_initial_nonnegative, Form.eval] at this; omega
+  · have := obligation_initial_cursor_before_input 0 0 N M ⟨b0, b1, trivial⟩
+    simp only [rule_initial_cursor_before_input, Form.eval] at this; omega
+  · have := obligation_initial_input_before_capacity 0 0 N M ⟨b0, b1, trivial⟩
+    simp only [rule_initial_input_before_capacity, Form.eval] at this; omega
+  · have := obligation_initial_capacity_representable 0 0 N M ⟨b0, b1, trivial⟩
+    simp only [rule_initial_capacity_representable, Form.eval] at this; omega
 
 /-- `store.nonnegative`: the store index is nonnegative. -/
 theorem store_nonneg (h : Inv K I N M) (hlt : I < N) : 0 ≤ K := by
-  have := obligation_store_nonnegative K I N M h.a0 h.a1 h.a2 h.a3 (a4 hlt)
-  simp only [Form.eval] at this; omega
+  have := obligation_store_nonnegative K I N M (h.body hlt)
+  simp only [rule_store_nonnegative, Form.eval] at this; omega
 
 /-- `store.strictly_below_capacity`: the store index is strictly inside the
 buffer, which is what removes the dynamic bounds check. -/
 theorem store_lt_capacity (h : Inv K I N M) (hlt : I < N) : K < N := by
-  have := obligation_store_strictly_below_capacity K I N M h.a0 h.a1 h.a2 h.a3 (a4 hlt)
-  simp only [Form.eval] at this; omega
+  have := obligation_store_strictly_below_capacity K I N M (h.body hlt)
+  simp only [rule_store_strictly_below_capacity, Form.eval] at this; omega
 
 /-- `emit.cursor_increment_fits`: `++k` stays representable. -/
 theorem emit_increment_fits (h : Inv K I N M) (hlt : I < N) : K + 1 ≤ M := by
-  have := obligation_emit_cursor_increment_fits K I N M h.a0 h.a1 h.a2 h.a3 (a4 hlt)
-  simp only [Form.eval] at this; omega
+  have := obligation_emit_cursor_increment_fits K I N M (h.body hlt)
+  simp only [rule_emit_cursor_increment_fits, Form.eval] at this; omega
 
 /-- `step.input_increment_fits`: `++i` stays representable. -/
 theorem step_increment_fits (h : Inv K I N M) (hlt : I < N) : I + 1 ≤ M := by
-  have := obligation_step_input_increment_fits K I N M h.a0 h.a1 h.a2 h.a3 (a4 hlt)
-  simp only [Form.eval] at this; omega
+  have := obligation_step_input_increment_fits K I N M (h.body hlt)
+  simp only [rule_step_input_increment_fits, Form.eval] at this; omega
 
 /-- `emit.invariant.0-3`: the emitting branch `K' = K+1, I' = I+1` preserves it. -/
 theorem emit (h : Inv K I N M) (hlt : I < N) : Inv (K + 1) (I + 1) N M := by
   refine ⟨?_, ?_, ?_, ?_⟩
-  · have := obligation_emit_invariant_0 K I N M h.a0 h.a1 h.a2 h.a3 (a4 hlt)
-    simp only [Form.eval] at this; omega
-  · have := obligation_emit_invariant_1 K I N M h.a0 h.a1 h.a2 h.a3 (a4 hlt)
-    simp only [Form.eval] at this; omega
-  · have := obligation_emit_invariant_2 K I N M h.a0 h.a1 h.a2 h.a3 (a4 hlt)
-    simp only [Form.eval] at this; omega
-  · have := obligation_emit_invariant_3 K I N M h.a0 h.a1 h.a2 h.a3 (a4 hlt)
-    simp only [Form.eval] at this; omega
+  · have := obligation_emit_invariant_0 K I N M (h.body hlt)
+    simp only [rule_emit_invariant_0, Form.eval] at this; omega
+  · have := obligation_emit_invariant_1 K I N M (h.body hlt)
+    simp only [rule_emit_invariant_1, Form.eval] at this; omega
+  · have := obligation_emit_invariant_2 K I N M (h.body hlt)
+    simp only [rule_emit_invariant_2, Form.eval] at this; omega
+  · have := obligation_emit_invariant_3 K I N M (h.body hlt)
+    simp only [rule_emit_invariant_3, Form.eval] at this; omega
 
 /-- `skip.invariant.0-3`: the non-emitting branch `K' = K, I' = I+1` preserves it. -/
 theorem skip (h : Inv K I N M) (hlt : I < N) : Inv K (I + 1) N M := by
   refine ⟨?_, ?_, ?_, ?_⟩
-  · have := obligation_skip_invariant_0 K I N M h.a0 h.a1 h.a2 h.a3 (a4 hlt)
-    simp only [Form.eval] at this; omega
-  · have := obligation_skip_invariant_1 K I N M h.a0 h.a1 h.a2 h.a3 (a4 hlt)
-    simp only [Form.eval] at this; omega
-  · have := obligation_skip_invariant_2 K I N M h.a0 h.a1 h.a2 h.a3 (a4 hlt)
-    simp only [Form.eval] at this; omega
-  · have := obligation_skip_invariant_3 K I N M h.a0 h.a1 h.a2 h.a3 (a4 hlt)
-    simp only [Form.eval] at this; omega
+  · have := obligation_skip_invariant_0 K I N M (h.body hlt)
+    simp only [rule_skip_invariant_0, Form.eval] at this; omega
+  · have := obligation_skip_invariant_1 K I N M (h.body hlt)
+    simp only [rule_skip_invariant_1, Form.eval] at this; omega
+  · have := obligation_skip_invariant_2 K I N M (h.body hlt)
+    simp only [rule_skip_invariant_2, Form.eval] at this; omega
+  · have := obligation_skip_invariant_3 K I N M (h.body hlt)
+    simp only [rule_skip_invariant_3, Form.eval] at this; omega
 
 /-- `exit.output_count_bounded`: on exit the emitted count is within capacity. -/
 theorem exit_le_capacity (h : Inv K I N M) : K ≤ N := by
-  have := obligation_exit_output_count_bounded K I N M h.a0 h.a1 h.a2 h.a3
-  simp only [Form.eval] at this; omega
+  have := obligation_exit_output_count_bounded K I N M ⟨h.a0, h.a1, h.a2, h.a3, trivial⟩
+  simp only [rule_exit_output_count_bounded, Form.eval] at this; omega
 
 end Inv
 
@@ -129,22 +136,16 @@ def InvN (k i n : Nat) (M : Int) : Prop := Inv (k : Int) (i : Int) (n : Int) M
 
 namespace InvN
 
-theorem init {n : Nat} {M : Int} (hm : (n : Int) ≤ M) : InvN 0 0 n M := by
-  have := Inv.init (N := (n : Int)) (M := M) (by omega) hm
-  simpa [InvN] using this
+theorem init {n : Nat} {M : Int} (hm : (n : Int) ≤ M) : InvN 0 0 n M :=
+  Inv.init (by omega) hm
 
 theorem emit {k i n : Nat} {M : Int} (h : InvN k i n M) (hlt : i < n) :
     InvN (k + 1) (i + 1) n M := by
-  have h2 : Inv ((k : Int) + 1) ((i : Int) + 1) (n : Int) M := Inv.emit h (by omega)
-  have e1 : (((k + 1 : Nat)) : Int) = (k : Int) + 1 := by omega
-  have e2 : (((i + 1 : Nat)) : Int) = (i : Int) + 1 := by omega
-  unfold InvN; rw [e1, e2]; exact h2
+  unfold InvN; exact_mod_cast Inv.emit h (by omega)
 
 theorem skip {k i n : Nat} {M : Int} (h : InvN k i n M) (hlt : i < n) :
     InvN k (i + 1) n M := by
-  have h2 : Inv (k : Int) ((i : Int) + 1) (n : Int) M := Inv.skip h (by omega)
-  have e2 : (((i + 1 : Nat)) : Int) = (i : Int) + 1 := by omega
-  unfold InvN; rw [e2]; exact h2
+  unfold InvN; exact_mod_cast Inv.skip h (by omega)
 
 /-- The guardless store is in range: `k < n` as `Nat` indices. -/
 theorem store_lt_capacity {k i n : Nat} {M : Int} (h : InvN k i n M) (hlt : i < n) : k < n := by
@@ -168,28 +169,9 @@ theorem take_set_succ (l : List β) (k : Nat) (v : β) (h : k < l.length) :
     | zero => simp
     | succ k => simp only [List.length_cons] at h; simp [ih k (by omega)]
 
-theorem drop_set_of_lt (l : List β) (k j : Nat) (v : β) (h : k < j) :
-    (l.set k v).drop j = l.drop j := by
-  induction l generalizing k j with
-  | nil => simp
-  | cons a t ih =>
-    cases k with
-    | zero => cases j with
-      | zero => exact absurd h (Nat.lt_irrefl 0)
-      | succ j => simp
-    | succ k => cases j with
-      | zero => exact absurd h (Nat.not_lt_zero _)
-      | succ j => simp [ih k j (Nat.lt_of_succ_lt_succ h)]
-
-theorem take_append_length (l₁ l₂ : List β) : (l₁ ++ l₂).take l₁.length = l₁ := by
-  induction l₁ with
-  | nil => simp
-  | cons a t ih => simp [ih]
-
-theorem drop_append_length (l₁ l₂ : List β) : (l₁ ++ l₂).drop l₁.length = l₂ := by
-  induction l₁ with
-  | nil => simp
-  | cons a t ih => simp [ih]
+/-! Setting an element below `j` leaves everything from `j` on untouched, and taking or
+dropping a prefix's length splits an append: `List.drop_set_of_lt`, `List.take_left` and
+`List.drop_left` in core. -/
 
 /-! ## The executable model -/
 
@@ -300,7 +282,7 @@ theorem run_spec (pred : α → Bool) (proj : α → β) :
       refine ⟨?_, ?_, ?_⟩
       · rw [ih'.1]; simp [hb]; omega
       · rw [ih'.2.1]; simp; omega
-      · rw [ih'.2.2, take_set_succ _ _ _ hk, drop_set_of_lt _ _ _ _ (by omega)]
+      · rw [ih'.2.2, take_set_succ _ _ _ hk, List.drop_set_of_lt (by omega)]
         have hidx : k + 1 + (xs.filter pred).length
             = k + ((x :: xs).filter pred).length := by
           simp [hb]; omega
@@ -337,9 +319,9 @@ theorem collect_spec (pred : α → Bool) (proj : α → β) (xs : List α) (out
     simp only [List.length_append, hmaplen, List.length_drop]
     omega
   · rw [hout, hk, ← hmaplen]
-    exact take_append_length _ _
+    exact List.take_left
   · rw [hout, hk, ← hmaplen]
-    exact drop_append_length _ _
+    exact List.drop_left
 
 /-! ## (b) Every store is in bounds, with no dynamic guard -/
 
