@@ -6,13 +6,14 @@ A fact is an edge `x - y ≤ k` between two atoms.  An atom is zero, an immutabl
 name, a field reached from an immutable local, a length), or such a value times a positive
 constant.  `distance` is the Bellman-Ford search `facts.py` runs over the facts in scope,
 `bounds` is what an expression is known not to exceed and known to reach, and `index`, `addOk`,
-`subOk` and `atMostConst` are the four decisions lowering acts on.  Each is transliterated from
+`subOk`, `atMostConst` and `partOk` are the five decisions lowering acts on.  Each is transliterated from
 the Python, including the order in which bounds are kept and the four `WIDEST` of them, so that
 `tools/checks/differential_facts.py` can require the two to decide generated inputs alike.
 
 The theorems say that under every valuation that makes the facts in scope true, a discharged
 index is below its extent, a discharged `+` stays at most the largest usize, a discharged `-`
-does not go below zero, and a value discharged below a constant is at most it.  That the facts
+does not go below zero, a value discharged below a constant is at most it, and a discharged part
+lies inside its view.  That the facts
 in scope are true where they are visible is the checker's bookkeeping: a binder's bounds, a
 `let`, a condition and an early exit, over values that cannot change.  It is tested in
 `tests/soundness/test_established.py`, not proved here.  So is lowering's use of the decisions.
@@ -208,7 +209,7 @@ def bounds (facts : List Fact) : E → List Term × List Term
   | .min x y => trim (.min x y) ((bounds facts x).1 ++ (bounds facts y).1) []
   | e => trim e [] []
 
-/-! ## The four decisions -/
+/-! ## The five decisions -/
 
 /-- An index below its view's extent. -/
 def index (facts : List Fact) (i : E) (extent : Term) : Bool :=
@@ -225,6 +226,10 @@ def subOk (facts : List Fact) (x y : E) : Bool :=
 /-- A value at most a constant: a shift count below the width, or a narrowing that fits. -/
 def atMostConst (facts : List Fact) (K : Int) (e : E) : Bool :=
   (bounds facts e).1.any fun t => atMost facts t (.zero, K) 0
+
+/-- A part `x[lo..hi]` inside its view: `lo ≤ hi`, and `hi` at most the extent. -/
+def partOk (facts : List Fact) (lo hi : E) (extent : Term) : Bool :=
+  subOk facts hi lo && (bounds facts hi).1.any fun t => atMost facts t extent 0
 
 /-! ## Soundness of the search -/
 
@@ -571,7 +576,7 @@ theorem bounds_sound (hf : Holds ρ facts) (hρ : Fine ρ) :
 
 end Bounds
 
-/-! ## The four decisions are sound -/
+/-! ## The five decisions are sound -/
 
 section Decisions
 
@@ -611,6 +616,18 @@ theorem atMostConst_sound (hf : Holds ρ facts) (hρ : Fine ρ) {K : Int} {e : E
   have := (bounds_sound hf hρ hv).1 t ht
   have := atMost_sound hf hρ hm
   unfold Above at *; simp only [Atom.val] at *; omega
+
+/-- **A discharged part lies inside its view**: its bounds are in order and its end is at most the
+extent, so its guard never fires. -/
+theorem part_sound (hf : Holds ρ facts) (hρ : Fine ρ) {lo hi : E} {extent : Term} {a b : Nat}
+    (h : partOk facts lo hi extent = true) (ha : eval ρ σ lo = some a) (hb : eval ρ σ hi = some b) :
+    a ≤ b ∧ (b : Int) ≤ extent.1.val ρ + extent.2 := by
+  simp only [partOk, Bool.and_eq_true] at h
+  refine ⟨sub_sound hf hρ h.1 hb ha, ?_⟩
+  obtain ⟨t, ht, hm⟩ := List.any_eq_true.mp h.2
+  have := (bounds_sound hf hρ hb).1 t ht
+  have := atMost_sound hf hρ hm
+  unfold Above at *; omega
 
 end Decisions
 

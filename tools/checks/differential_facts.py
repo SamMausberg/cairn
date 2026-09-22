@@ -2,11 +2,11 @@
 """Differential check: `compiler/facts.py` and `proofs/Cairn/Facts.lean` decide the same generated inputs alike.
 
 Lowering drops a guard when `facts.py` shows it cannot fail. `Facts.lean` transliterates the search, the bounds and the
-four decisions lowering acts on, and proves each sound. This harness generates fact sets and usize expressions, asks
-the real Python functions (`index`, `arithmetic` for `+` and `-`, `shift`, `conversion` to `u32`) through a checker
-that holds only the facts and the bindings, renders the same inputs as Lean terms, and requires the five answers to
-match on every input. It compares the rule on its inputs, not on whole programs: which facts are in scope where is
-the checker's bookkeeping, tested in `tests/soundness/test_established.py`.
+five decisions lowering acts on, and proves each sound. This harness generates fact sets and usize expressions, asks
+the real Python functions (`index`, `arithmetic` for `+` and `-`, `shift`, `conversion` to `u32`, `inside` for a part)
+through a checker that holds only the facts and the bindings, renders the same inputs as Lean terms, and requires the
+six answers to match on every input. It compares the rule on its inputs, not on whole programs: which facts are in
+scope where is checked per site by `verify/elision.py` and tested in `tests/soundness/test_established.py`.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from checks.differential_ownership import PROOFS, find_lake, lean_environment
 ATOMS = 4  # x0..x3 are immutable usize values; m0 is one that can change.
 STRIDES = (2, 4, 8, 256)
 CONSTANTS = (0, 1, 2, 3, 7, 8, 63, 64, 255, 256, 4096, 2**32 - 1, 2**32, F.MAX - 1, F.MAX)
-DECISIONS = ("index", "add", "sub", "shift", "u32")
+DECISIONS = ("index", "add", "sub", "shift", "u32", "part")
 
 
 def atom_name(rng: random.Random) -> str:
@@ -94,6 +94,7 @@ def python_row(c: dict) -> str:
         F.arithmetic(checker, Expr("binary", "-", args=[x, y], ty=USIZE)),
         F.shift(checker, Expr("binary", "<<", args=[Expr("int", "1", ty=Type("u64")), x], ty=Type("u64"))),
         F.conversion(checker, Expr("call", "u32", args=[x], ty=Type("u32"))),
+        F.inside(checker, x, y, (c["extent"][0], c["extent"][1])),
     )
     return "".join("1" if a else "0" for a in answers)
 
@@ -122,7 +123,7 @@ def lean_source(rows: list[str], chunk: int = 100) -> str:
     lines.append('def bit (b : Bool) : String := if b then "1" else "0"')
     lines.append("def row (fs : List Fact) (x y : E) (ext : Term) : String :=")
     lines.append("  bit (index fs x ext) ++ bit (addOk fs x y) ++ bit (subOk fs x y) ++ bit (atMostConst fs 63 x)")
-    lines.append("    ++ bit (atMostConst fs 4294967295 x)")
+    lines.append("    ++ bit (atMostConst fs 4294967295 x) ++ bit (partOk fs x y ext)")
     for start in range(0, len(rows), chunk):
         lines += [
             "",

@@ -112,6 +112,7 @@ namespace Cairn
 #print axioms Cairn.Facts.add_sound
 #print axioms Cairn.Facts.sub_sound
 #print axioms Cairn.Facts.atMostConst_sound
+#print axioms Cairn.Facts.part_sound
 
 /-! ### Non-vacuity: the faults are reachable for rejected programs -/
 

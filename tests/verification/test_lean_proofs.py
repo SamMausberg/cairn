@@ -85,11 +85,12 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Region.runs_once",
     "Cairn.Region.quiet_when_back",
     "Cairn.Region.finishes",
-    # The guard-elision rule: a discharged index is in bounds, a discharged + or - cannot trap.
+    # The guard-elision rule: a discharged index or part is in bounds, a discharged + or - cannot trap.
     "Cairn.Facts.index_sound",
     "Cairn.Facts.add_sound",
     "Cairn.Facts.sub_sound",
     "Cairn.Facts.atMostConst_sound",
+    "Cairn.Facts.part_sound",
 )
 
 # `#print axioms` prints one line per declaration; names may end in a prime.

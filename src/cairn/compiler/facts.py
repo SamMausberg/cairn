@@ -324,8 +324,11 @@ def part(c: Checker, e: Expr) -> bool:
     c.cited = []
     (base, lo, hi), want = e.args, e.ref
     n = extent(c, base)
-    if n is None or guarded(hi) or want is None or not spans(c, e, want):
-        return False
+    return n is not None and not guarded(hi) and want is not None and spans(c, e, want) and inside(c, lo, hi, n)
+
+
+def inside(c: Checker, lo: Expr, hi: Expr, n: Term) -> bool:
+    """lo <= hi <= n, from the facts in scope: `partOk` in Facts.lean."""
     (h_lo, _), (h_hi, l_hi) = bounds(c, lo), bounds(c, hi)
     return any(at_most(c, y, x) for y in h_lo for x in l_hi) and any(at_most(c, y, n) for y in h_hi)
 
