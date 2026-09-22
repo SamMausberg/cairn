@@ -431,6 +431,16 @@ def test_sort_moves_owners_without_copying(tmp_path):
 
 # The API guarantees that are types, not documentation ------------------------------------------
 
+UPDATE_REACHES_THE_MAP = """
+import std.map (Map);
+fn main() -> i32 {
+  let mut m = map.new[u64, u64]();
+  m.insert(1, 10);
+  let found = m.update(1, |v:rw<u64>| { m.insert(2, 20); v = 0; });
+  return 0;
+}
+"""
+
 OVERLAPPING_COPY = """
 import std.mem;
 fn main() -> i32 {
@@ -488,6 +498,7 @@ fn main() -> i32 {
     "code,source",
     [
         ("E-ALIAS", OVERLAPPING_COPY),
+        ("E-ALIAS", UPDATE_REACHES_THE_MAP),  # the closure is lent the value while the call holds the map
         ("E-TRAIT-IMPL", UNHASHABLE_KEY),
         ("E-WRITE-LEASE", WRITE_THROUGH_READONLY),
         ("E-TYPE-MISMATCH", FILL_A_READONLY_VIEW),
@@ -559,6 +570,52 @@ def test_parallel_and_device_placement_are_separate_effects():
     assert "par:device" in functions["on_lanes"]["effects"]
 
 
+MAP_SLOTS = """
+import std.core (Option);
+import std.map (Map, Slot);
+
+// A Slot names one entry: it resolves while that entry lives where it was, and never to another.
+fn resolves(m:ro<Map[u64, u64]>, s:Slot) -> bool {
+  match m.resolve(s) { Option.Some(at) => { return true; } Option.None => { return false; } }
+}
+
+fn slot_of(m:ro<Map[u64, u64]>, key:u64) -> Slot {
+  match m.slot(key) { Option.Some(s) => { return s; } Option.None => { return Slot(0, 0); } }
+}
+
+fn main() -> i32 {
+  let mut m = map.new[u64, u64]();
+  m.insert(1, 10);                                  // capacity 8, and 1 and 9 start their probes alike
+  let first = slot_of(m, 1);
+  m.insert(1, 11);                                  // a new value for the same key: the same entry
+  if !resolves(m, first) { return 1; }
+  let gone = m.remove(1);
+  if resolves(m, first) { return 2; }               // removed
+  m.insert(9, 90);                                  // lands in the tombstone the removal left
+  let ninth = slot_of(m, 9);
+  if ninth.at != first.at { return 3; }             // the very slot, so an index alone would lie
+  if resolves(m, first) || !resolves(m, ninth) { return 4; }
+  for k in 100..120 { m.insert(u64(k), 0); }        // growth rehashes every entry
+  if resolves(m, ninth) { return 5; }               // moved: look the key up again
+  if !resolves(m, slot_of(m, 9)) { return 6; }
+  if resolves(m, Slot(0, 0)) || resolves(m, Slot(1000000, 1)) { return 7; }   // forged
+  let changed = m.update(9, |v:rw<u64>| { v = v + 1; });
+  let missing = m.update(2, |v:rw<u64>| { v = 0; });
+  match m.get(9) {
+    Option.Some(v) => { if !changed || missing || v != 91 { return 8; } }
+    Option.None => { return 9; }
+  }
+  match m.get(2) { Option.Some(v) => { return 10; } Option.None => {} }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", BOTH)
+def test_a_map_slot_never_names_another_entry(tmp_path, cxx):
+    native(tmp_path, MAP_SLOTS, cxx)
+
+
 COVERAGE = """
 import std.core (Option);
 import std.arena (Arena, Handle);
@@ -626,6 +683,15 @@ fn main() -> i32 {
     Option.None => { return 13; }
   }
   if m.contains(three) { return 28; }
+  match m.slot(4) {
+    Option.Some(s) => { match m.resolve(s) { Option.Some(at) => {} Option.None => { return 29; } } }
+    Option.None => { return 30; }
+  }
+  let bumped = m.update(4, |x:rw<u64>| { x = x + 1; });
+  match m.get(4) {
+    Option.Some(x) => { if !bumped || x != 5 { return 31; } }
+    Option.None => { return 32; }
+  }
 
   let mut a = arena.new[u64]();
   let mut last = a.insert(0);

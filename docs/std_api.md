@@ -276,12 +276,17 @@ Effects: `trap`.
 
 # std.map
 
-An open-addressed hash table with linear probing and tombstones. The map owns its keys and values, so Map[u64, Vec[u8]] is ordinary. A lookup answers with a *slot index* rather than the value: a borrow cannot be returned, so the caller reads m.vals[slot] itself, and the same index is what iteration uses. Cost: expected O(1) per operation; insert reallocates and rehashes past three quarters full, so `alloc`, `free` and `zero_init` appear in every caller's row.
+An open-addressed hash table with linear probing and tombstones. The map owns its keys and values, so Map[u64, Vec[u8]] is ordinary. A borrow cannot be returned, so a lookup answers with a position rather than the value, in one of three forms. `find` gives the raw slot index, which the caller reads as m.vals[slot], good until the next insert or remove. `slot` gives a Slot that `resolve` checks again later: once its key is removed or the map rehashes, it resolves to None, never to another entry. `update` lends the value to a closure, which cannot reach the map while it holds it. `get` copies a copyable value out. Cost: expected O(1) per operation; insert reallocates and rehashes past three quarters full, so `alloc`, `free` and `zero_init` appear in every caller's row.
 
 ```cairn
-pub struct Map[K:affine, V:affine] { keys:Buf[K]; vals:Buf[V]; state:Buf[u8]; count:usize; fill:usize; }
+pub struct Map[K:affine, V:affine] { keys:Buf[K]; vals:Buf[V]; state:Buf[u8]; stamps:Buf[u64]; count:usize; fill:usize; placed:u64; }
 ```
-state: 0 never used, 1 live, 2 erased. An erased slot still routes probes past it.
+state: 0 never used, 1 live, 2 erased. An erased slot still routes probes past it. A live slot's stamp is how many keys had been placed when its own key was, so no two entries ever share one, across removals and rehashing alike, and a zeroed stamp names nothing.
+
+```cairn
+pub struct Slot { at:usize; stamp:u64; }
+```
+A position that remembers which entry it named.
 
 ```cairn
 pub fn new[K:affine, V:affine]() -> Map[K, V]
@@ -312,6 +317,30 @@ Effects (any arguments within its bounds): `alloc`, `diverge`, `ffi_precondition
 pub fn find[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> Option[usize]
 ```
 Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local_read`, `local_write`, `read:key`, `read:m`, `stack_storage`, `trap`, `zero_init`.
+
+```cairn
+pub fn slot[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> Option[Slot]
+```
+The entry holding `key` as a Slot, which stays checkable across inserts, removes and growth.
+Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local_read`, `local_write`, `read:key`, `read:m`, `stack_storage`, `trap`, `zero_init`.
+
+```cairn
+pub fn resolve[K:affine, V:affine](m:ro<Map[K, V]>, s:Slot) -> Option[usize]
+```
+Where the entry `s` named is now: None once its key was removed or the map rehashed, when the key has to be looked up again. A stale Slot is never taken for another entry.
+Effects (any arguments within its bounds): `read:m`, `trap`.
+
+```cairn
+pub fn get[K:Hash + Eq + affine, V:copy](m:ro<Map[K, V]>, key:ro<K>) -> Option[V]
+```
+A copy of the value under `key`.
+Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local_read`, `local_write`, `read:key`, `read:m`, `stack_storage`, `trap`, `zero_init`.
+
+```cairn
+pub fn update[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:ro<K>, change:ro<fn(rw<V>)>) -> bool
+```
+Change the value under `key` in place, or answer false when it is absent. The closure is lent the value alone, and the map is lent to this call, so nothing the closure does can move the entry.
+Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `indirect_call`, `local_read`, `local_write`, `read:key`, `read:m`, `stack_storage`, `trap`, `write:m`, `zero_init`.
 
 ```cairn
 pub fn contains[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> bool

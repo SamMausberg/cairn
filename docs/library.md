@@ -4,7 +4,7 @@ Twelve modules, written in CAIRN, shipped inside the package and linked on deman
 
 [std_api.md](std_api.md) holds every signature and every effect row, generated from these sources by `cairn doc --std`. This file is the working guide: what each module is for, a program that uses it, and where it bites.
 
-Three habits explain the API shape. A lookup answers with an index, never a borrow: `map.find` and `arena.find` return `Option[usize]`, and the caller reads `m.vals[slot]` itself, which is a place and can be passed on, borrowed, taken or assigned. Every array parameter carries its length, `f(n, xs)` against a callee's `xs:ro<u8>[n]`; a whole view or buffer matches by name identity, and a part `v.data[lo..hi]` matches whatever `usize` expression you pass, at the cost of one bounds guard. Costs are in the signature: a function that allocates says `alloc` in its effect row and so does everyone who calls it.
+Three habits explain the API shape. A lookup answers with an index, never a borrow: `map.find` and `arena.find` return `Option[usize]`, and the caller reads `m.vals[slot]` itself, which is a place and can be passed on, borrowed, taken or assigned. A position kept across changes is a handle checked on use: `arena.Handle` and `map.Slot`. Every array parameter carries its length, `f(n, xs)` against a callee's `xs:ro<u8>[n]`; a whole view or buffer matches by name identity, and a part `v.data[lo..hi]` matches whatever `usize` expression you pass, at the cost of one bounds guard. Costs are in the signature: a function that allocates says `alloc` in its effect row and so does everyone who calls it.
 
 | module | what it is for | allocates |
 | --- | --- | --- |
@@ -219,7 +219,27 @@ fn main() -> i32 {
 }
 ```
 
-`find` answers with the slot, not the value, and `contains` with a bool. `insert` moves key and value in and releases the old value when it replaces one; `remove` moves the value out. Operations are expected O(1), and `insert` rehashes past three quarters full, so `alloc`, `free` and `zero_init` are in every caller's row. `K` must implement `Hash` and `Eq`, checked where the instance is made: a key with `derive eq` and no `derive hash` is `E-TRAIT-IMPL`, "Route does not implement Hash; std.map.insert needs [K:Hash+Eq+affine]."
+`find` answers with the slot, not the value, and `contains` with a bool. `insert` moves key and value in and releases the old value when it replaces one; `remove` moves the value out.
+
+A slot index from `find` is good until the next `insert` or `remove`: growth rehashes every entry, and a removed key's slot can be reused by another key, so an old index may still be in bounds and name the wrong entry. Three forms keep a position honest instead. `slot(m, key)` answers with a `Slot`, an index and the stamp its entry got when its key was placed, and `resolve(m, s)` answers `None` once that key is removed or the map rehashes, never another entry's index. `update(m, key, f)` lends the value to a closure and answers whether the key was there; the call holds the map, so a closure that reaches the map is refused (`E-ALIAS`). `get(m, key)` copies a copyable value out.
+
+```cairn
+import std.core (Option);
+import std.map (Map, Slot);
+
+fn main() -> i32 {
+  let mut m = map.new[u64, u64]();
+  m.insert(1, 10);
+  let mut kept = Slot(0, 0);
+  match m.slot(1) { Option.Some(s) => { kept = s; } Option.None => { return 1; } }
+  let gone = m.remove(1);
+  m.insert(9, 90);                                   // may reuse the slot key 1 had
+  match m.resolve(kept) { Option.Some(at) => { return 2; } Option.None => {} }
+  let found = m.update(9, |v:rw<u64>| { v = v + 1; });
+  match m.get(9) { Option.Some(v) => { if !found || v != 91 { return 3; } } Option.None => { return 4; } }
+  return 0;
+}
+``` Operations are expected O(1), and `insert` rehashes past three quarters full, so `alloc`, `free` and `zero_init` are in every caller's row. `K` must implement `Hash` and `Eq`, checked where the instance is made: a key with `derive eq` and no `derive hash` is `E-TRAIT-IMPL`, "Route does not implement Hash; std.map.insert needs [K:Hash+Eq+affine]."
 
 ## std.derived
 
