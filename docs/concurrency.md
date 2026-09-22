@@ -150,7 +150,7 @@ A group holds tasks that run declared functions. Queued device work keeps its ti
 
 ## I/O rings
 
-A task is a thread. A ring keeps many kernel operations in flight from one thread, and hands them back in the order they finish. `let mut q = IoRing(n);` declares, in place, a ring of at most `n` operations. It is Linux io_uring, set up here once, so the declaration carries `alloc`, `free` and `io`, and a kernel that refuses io_uring makes the declaration trap.
+A task is a thread. A ring keeps many kernel operations in flight from one thread, and hands them back in the order they finish. `let mut q = IoRing(n);` declares, in place, a ring of at most `n` operations, for `n` from 1 to 4096; any other `n` traps. It is Linux io_uring, set up here once, so the declaration carries `alloc`, `free` and `io`, and a kernel that refuses io_uring makes the declaration trap.
 
 An operation takes the bytes it works on by value. `q.read(fd, data, count, offset, tag)`, `q.write(fd, data, count, offset, tag)`, `q.recv(fd, data, count, tag)`, `q.send(fd, data, count, tag)` and `q.accept(fd, tag)` move the `Buf[u8]` called `data` into the ring, so the program cannot touch storage the kernel is using (`E-MOVED`). `let data = q.next(tag, result);` waits for the next operation to finish and hands its `Buf` back, with the tag it was given and the kernel's result: a byte count, a new descriptor, or a negative errno. `io.outcome(result)` turns that into a `Result[usize, IoError]`, so a failure is a value to match on. `count` may be less than `len(data)`, never more. A submission to a full ring, or a `next` with nothing in flight, traps.
 
