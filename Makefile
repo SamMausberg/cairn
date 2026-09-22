@@ -1,7 +1,7 @@
 PYTHON ?= python3
 CAIRN = $(PYTHON) bin/cairn
 
-.PHONY: help docs all check lint format test native systems proof lean gpu embedded context wheel audit demo bench
+.PHONY: help docs editors all check lint format test native systems proof lean gpu embedded context wheel audit demo bench
 all: lint test proof
 
 help:
@@ -17,6 +17,7 @@ help:
 	@echo 'embedded  the freestanding image under QEMU (needs an AArch64 host)'
 	@echo 'bench     the preregistered CPU baseline suite (hours)'
 	@echo 'docs      regenerate docs/std_api.md'
+	@echo 'editors   regenerate the TextMate and Vim grammars from the compiler vocabulary'
 	@echo 'wheel     build the package offline into dist/'
 	@echo 'audit     scan the committed history for credentials and binaries'
 	@echo 'demo      run and test examples/hello'
@@ -74,6 +75,9 @@ embedded:
 
 docs:
 	$(CAIRN) doc --std > docs/std_api.md
+
+editors:
+	PYTHONPATH=src $(PYTHON) -m cairn.editor.grammar
 
 context:
 	$(PYTHON) tools/ai/measure_context.py

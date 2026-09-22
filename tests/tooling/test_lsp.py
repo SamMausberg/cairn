@@ -5,7 +5,6 @@ Every read has a deadline, so a server that hangs fails the suite instead of it.
 
 import json
 import queue
-import re
 import subprocess
 import sys
 import threading
@@ -13,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-from cairn.compiler.lexing import RESERVED
 from cairn.editor.completion import completion, signature_help
 from cairn.editor.document import Document, symbols
 from cairn.editor.edits import prepare_rename, references, rename
@@ -573,29 +571,6 @@ def test_rename_over_the_protocol_refuses_with_an_error(client):
 
 
 # Editor assets -------------------------------------------------------------------------------------
-
-
-def grammar():
-    return json.loads((EDITOR / "syntaxes" / "cairn.tmLanguage.json").read_text(encoding="utf-8"))
-
-
-def test_the_grammar_keywords_are_exactly_the_reserved_words():
-    words = set()
-    for pattern in grammar()["repository"]["keywords"]["patterns"]:
-        matched = re.fullmatch(r"\\b\(\?:([a-z|]+)\)\\b", pattern["match"])
-        assert matched, f"unexpected keyword pattern shape: {pattern['match']}"
-        group = set(matched.group(1).split("|"))
-        assert not group & words, "a keyword is listed twice"
-        words |= group
-    assert words == RESERVED
-
-
-def test_the_grammar_covers_the_other_lexical_classes():
-    repository = grammar()["repository"]
-    assert set(repository) >= {"comments", "strings", "numbers", "types", "builtins", "placements", "effects"}
-    included = [p["include"].lstrip("#") for p in grammar()["patterns"]]
-    assert set(included) <= set(repository)
-    assert included.index("comments") == 0 and included.index("placements") < included.index("keywords")
 
 
 def test_the_extension_manifest_points_at_files_that_exist():

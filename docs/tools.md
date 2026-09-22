@@ -225,7 +225,23 @@ The client runs `cairn`, with `lsp` as its argument. When `cairn` is not on `PAT
 }
 ```
 
-The extension gives diagnostics as you type, hover types and effect rows, a document outline, completion, signature help, go to definition inside the open file and into the packaged `std`, references and rename within the file, and `Format Document`, which is the same formatter as `cairn fmt`. The grammar's keyword list is checked against the compiler's `RESERVED` set by `tests/tooling/test_lsp.py`, so a new keyword fails the suite until the grammar learns it.
+The extension gives diagnostics as you type, hover types and effect rows, a document outline, completion, signature help, go to definition inside the open file and into the packaged `std`, references and rename within the file, and `Format Document`, which is the same formatter as `cairn fmt`. The grammar is generated, never edited: `make editors` writes it and the Vim files from the compiler's own vocabulary (`src/cairn/editor/grammar.py`): the reserved words sorted into classes, the words the parser reads in one position only (`plan`, `into`, `after`, `packed` and the rest), the builtins, scalar and intrinsic types, placements, effects and the library's variants. Scope names are the standard TextMate ones, so every theme colors them. `tests/tooling/test_grammar.py` fails when a committed grammar differs from a fresh run, when a reserved word has no class, or when the parser compares a token against a word the grammar does not know, and it pins the scope of each construct. Where node and an installed editor's `vscode-textmate` are present, the same test tokenizes every `.cairn` file in the repository with that real engine and requires it to agree with the suite's own engine character by character.
+
+## Vim, Neovim and GitHub
+
+`editors/vim/` is a runtime directory: `ftdetect` sets the file type for `.cairn`, `syntax` highlights with Vim's standard groups from the same vocabulary as the TextMate grammar, and `ftplugin` sets two-space indentation and `//` comments. Add it to the runtime path, and in Neovim start the built-in client on `cairn lsp`:
+
+```vim
+set runtimepath^=/path/to/cairn/editors/vim
+```
+
+```lua
+vim.api.nvim_create_autocmd("FileType", { pattern = "cairn", callback = function()
+  vim.lsp.start({ name = "cairn", cmd = { "cairn", "lsp" }, root_dir = vim.fs.root(0, { "cairn.toml", ".git" }) })
+end })
+```
+
+GitHub has no CAIRN grammar, so `.gitattributes` asks it to render `.cairn` files as Rust, whose keywords and punctuation are the closest, and marks the generated grammars and `docs/std_api.md` as generated.
 
 ## The freestanding target
 
