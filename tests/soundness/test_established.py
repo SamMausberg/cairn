@@ -71,6 +71,13 @@ ESTABLISHED = {
     ),
     "constant_shift": "fn f(v:u64) -> u64 = mul_wrap(v ^ shr(v, 29), 3);",
     "static_array": "fn f() -> u64 { let a = Array[u64, 8](); let mut t:u64 = 0; each i in 8 { t = add_wrap(t, a[i]); } return t; }",
+    "and_then": "fn f(n:usize, x:ro<u64>[n], k:usize) -> bool = k < n && x[k] > 3;",
+    "or_else": "fn f(n:usize, x:ro<u64>[n], k:usize) -> u64 { if k >= n || x[k] == 0 { return 0; } return x[k]; }",
+    "next_test": "fn f(n:usize, x:ro<u64>[n], k:usize) -> bool = k < n && k + 1 < n && x[k + 1] == 1;",
+    "kept_projection": (
+        "fn f(n:usize, out:rw<u64>[n], x:ro<u64>[n]) -> usize {\n"
+        "  let used = compact out for i in n where i + 1 < n yield x[i + 1];\n  return used;\n}"
+    ),
 }
 
 
@@ -138,6 +145,12 @@ KEPT = {
         "struct Col { rows:usize; price:Buf[u64][rows]; }\n"
         "fn f(c:rw<Col>) -> u64 { let mut t:u64 = 0; "
         "for i in 0..c.rows { t = add_wrap(t, c.price[i]); } return t; }",
+        {"at": 1},
+    ),
+    "before_the_test": ("fn f(n:usize, x:ro<u64>[n], k:usize) -> bool = x[k] > 3 && k < n;", {"at": 1}),
+    "or_on_success": ("fn f(n:usize, x:ro<u64>[n], k:usize) -> bool = k < n || x[k] > 3;", {"at": 1}),
+    "after_the_or": (
+        "fn f(n:usize, x:ro<u64>[n], k:usize, flag:bool) -> u64 { if k < n && flag { return 1; } return x[k]; }",
         {"at": 1},
     ),
     "fact_out_of_scope": (

@@ -303,6 +303,9 @@ def test_emission_identity(tmp_path):
     twice = bound.replace("  g(2, v_m);\n", "  g(2, v_m);\n  h(v_m);\n")
     assert NORMALIZE["literals"](twice) == twice  # read twice: the local stays
     assert NORMALIZE["zero"]("g((v_n - static_cast<std::size_t>(0ULL)), (v_n - v_k))") == "g(v_n, (v_n - v_k))"
+    guarded = "f {\n  cr::view(v_x, v_n);\n  return cr::at(v_x, cr::sub<std::size_t>(v_n, cr::add<std::size_t>(v_k, 1)), v_n);\n}\n"
+    assert NORMALIZE["guards"](guarded) == "f {\n  return v_x[(v_n - (v_k + 1))];\n}\n"
+    assert NORMALIZE["guards"]("g(cr::part(v_s, v_lo, v_hi, v_n, (v_hi - v_lo)))") == "g((v_s + v_lo))"
 
 
 def test_drift_ignores_only_what_records_a_run(tmp_path):

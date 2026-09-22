@@ -104,9 +104,12 @@ def s_compact(c: Checker, s: Stmt):
     def mentions(e: Expr) -> bool:
         return (e.tag == "name" and e.val == out.val) or any(mentions(x) for x in e.args)
 
-    def body():
+    def body():  # The projection runs only for an index the predicate kept, on the host and on the device.
         c.expr(pred, BOOL)
+        known = len(c.facts)
+        facts.assume(c, pred)
         c.expr(value, target.ty.value)
+        del c.facts[known:]
 
     if mentions(pred) or mentions(value):
         fail("E-COLLECT-SELF-READ", "Collector predicate/projection cannot read its output.", s)

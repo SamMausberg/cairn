@@ -4,8 +4,9 @@ A fact is an edge `x - y <= k` between two atoms. An atom is ZERO, an immutable 
 field reached from an immutable local (`c.rows`), the length of an owner reached that way (`len(data)`,
 or the field a record declares as its extent), or such an atom times a positive constant (`b*256`). A
 loop, lane or collector binder brings its bounds, a `let` brings what bounds its initializer (an owner's
-length for `Buf[T](n)`), a branch brings its condition, and an `if` with one arm that leaves gives the
-other arm's condition to the rest of the block. Facts are dropped with the block that made them and name
+length for `Buf[T](n)`), a branch brings its condition, the left side of `&&` (true) or `||` (false) brings
+itself to the right side, a collector's predicate to its projection, and an `if` with one arm that leaves gives
+the other arm's condition to the rest of the block. Facts are dropped with the block that made them and name
 only values that cannot change while they are in scope, so a fact holds wherever it is visible. A fact
 between plain atoms also holds scaled by any constant a product atom names, so `b < k` gives
 `b*256 + 256 <= k*256`.

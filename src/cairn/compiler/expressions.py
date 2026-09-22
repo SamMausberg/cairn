@@ -275,7 +275,12 @@ def e_binary(c: Checker, e: Expr, expected: Type | None) -> Type:
     logical, compare = op in {"&&", "||"}, op in COMPARISONS
     hint = BOOL if logical else (None if compare else expected)
     # Literals adapt to their nonliteral peer; there is no general implicit conversion.
-    if a.tag in {"int", "float"} and b.tag not in {"int", "float"}:
+    if logical:  # The right side runs only when the left said `&&` true or `||` false, so it knows that much.
+        left, known = c.expr(a, hint), len(c.facts)
+        facts.assume(c, a, op == "&&")
+        right = c.expr(b, left)
+        del c.facts[known:]
+    elif a.tag in {"int", "float"} and b.tag not in {"int", "float"}:
         right = c.expr(b, hint)
         left = c.expr(a, right)
     else:
