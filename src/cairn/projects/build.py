@@ -113,10 +113,8 @@ def build(
     if bare:  # No hosted runtime stands behind the image, so no effect may assume one.
         audit_effects(receipt["functions"])
     generated += "\n// entry\n" if entry else ""
-    if entry and (bare or entry != "main"):  # Start-up code calls cf_main, wherever main was written.
-        generated += f'\nextern "C" std::int32_t cf_main() noexcept {{ return cf_{mangle(entry)}(); }}\n' * (
-            entry != "main"
-        )
+    if entry and entry != "main":  # Start-up code calls cf_main, wherever main was written.
+        generated += f'\nextern "C" std::int32_t cf_main() noexcept {{ return cf_{mangle(entry)}(); }}\n'
     if entry and not bare:
         generated += "\nint main() { return static_cast<int>(cf_" + mangle(entry) + "()); }\n"
     # No manifest can select a compiler executable, flags, build script, or output path.

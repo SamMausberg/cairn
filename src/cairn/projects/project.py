@@ -67,32 +67,29 @@ class Project:
     arch: str = "baseline"
     target: str = "hosted"
     manifest_sha256: str | None = None
-    dependencies: tuple[
-        dict, ...
-    ] = ()  # name, path, manifest and source hashes of every vendored project, in load order
+    # name, path, manifest and source hashes of every vendored project, in load order
+    dependencies: tuple[dict, ...] = ()
     vendored_units: tuple[str, ...] = ()  # the unit paths a dependency contributed, never the root project's own
+
+    def unit_at(self, line: int) -> Unit | None:
+        """The source file a line of the combined source comes from."""
+        return next((u for u in self.units if u.first_line <= line < u.first_line + u.lines), None)
 
     def origin(self, line: int) -> tuple[str, int]:
         """The authored file and line behind a line of the combined source."""
-        for unit in self.units:
-            if unit.first_line <= line < unit.first_line + unit.lines:
-                return str(self.root / unit.path), line - unit.first_line + 1
-        return self.name, line
+        unit = self.unit_at(line)
+        return (str(self.root / unit.path), line - unit.first_line + 1) if unit else (self.name, line)
 
     def wrote(self, line: int) -> bool:
         """True when the root project itself wrote this line of the combined source, not a vendored dependency."""
-        return not any(
-            unit.path in self.vendored_units and unit.first_line <= line < unit.first_line + unit.lines
-            for unit in self.units
-        )
+        unit = self.unit_at(line)
+        return unit is None or unit.path not in self.vendored_units
 
     def locate(self, error: Diagnostic) -> dict:
         result = dict(error.data)
-        line = result.get("line", 0)
-        for unit in self.units:
-            if unit.first_line <= line < unit.first_line + unit.lines:
-                result.update(file=unit.path, line=line - unit.first_line + 1)
-                break
+        unit = self.unit_at(result.get("line", 0))
+        if unit:
+            result.update(file=unit.path, line=result["line"] - unit.first_line + 1)
         return result
 
     def receipt(self) -> dict:
@@ -215,9 +212,7 @@ def load_project(path: str | Path = ".") -> Project:
             raise ProjectError("Combined project exceeds the 2 MB native source limit.")
         text.append(fragment)
         line += fragment.count("\n")
-    combined = "".join(text)
-    if len(combined.encode()) > MAX_SOURCE:
-        raise ProjectError("Combined project exceeds the 2 MB native source limit.")
+    combined = "".join(text)  # its size was held to the limit fragment by fragment
     for relative in manifest.contracts:
         contained_file(root, relative, ".json")
     return Project(root, manifest.name, combined, tuple(units), manifest.contracts, manifest.kind, manifest.arch,

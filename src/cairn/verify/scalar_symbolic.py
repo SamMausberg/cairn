@@ -307,7 +307,8 @@ class Symbolic:
             shift = extend(b.value, WIDTH[b.ty.name], width, False)
             return self.q.term(e.ty, f"({'bvshl' if n == 'shl_wrap' else 'bvlshr'} {a.value} {shift})", conj(ok, limit))
         if n in {"min", "max"}:
-            return self.extreme(n, e.ty, *args, ok)
+            a, b = args
+            return self.extreme(n, e.ty, a, b, ok)
         if n == "Array":  # An inline array is a value; `Buf` and `stack` are storage.
             return self.q.make(e.ty, self.zeros(e.ty))
         if n == "len":
