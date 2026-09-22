@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 
 REPEATABLE = {"len", "min", "max", *WRAPPING, *NUMERIC}  # Calls a guard may name twice: they only compute.
+PASSED = {"name", "field", "slice", "str"}  # What a view argument is written as.
 
 
 def indirect(c: Checker, e: Expr, target: Binding, args: list[Expr]) -> Type:
@@ -91,9 +92,46 @@ def e_call(c: Checker, e: Expr, expected: Type | None) -> Type:
     return c.invoke(e, f, args, targs, expected)
 
 
+def unwritten(e: Expr) -> Expr:
+    """A copy of what was written, with no source span (so no site, hover or edit slot) and none of the checker's
+    annotations: an unchecked node keeps the explicit type arguments its parser left in `ref`."""
+    return Expr(e.tag, e.val, [unwritten(a) for a in e.args], e.line, e.col, ref=None if e.ty else e.ref)
+
+
+def measured(a: Expr) -> Expr:
+    """What an omitted extent is: `len(v)` of the view argument that names it, or `hi - lo` of a part."""
+    if a.tag == "slice":
+        return Expr("binary", "-", [unwritten(a.args[2]), unwritten(a.args[1])], a.line, a.col)
+    return Expr("call", "len", [unwritten(a)], a.line, a.col)
+
+
+def extents(f: Function) -> list[str]:
+    """The usize parameters of `f` that a later view parameter names as its extent: a call may leave them out."""
+    views = [t.extent for _, t in f.params if is_view(t)]
+    return [] if f.extern else [n for n, t in f.params if t.name == "usize" and t.mode == "value" and n in views]
+
+
+def elaborate(f: Function, args: list[Expr]) -> None:
+    """`checksum(frame)` for `checksum(n:usize, bytes:ro<u8>[n])`: a call that leaves out every extent parameter
+    gets each from the first view argument that names it, and the call is rewritten in place, so everything after
+    the checker sees the explicit form. The other views are held to that extent as if it had been written."""
+    implied = extents(f)
+    if not implied or len(args) != len(f.params) - len(implied):
+        return
+    given = iter(list(args))
+    written = {n: next(given) for n, _ in f.params if n not in implied}
+    if any(is_view(t) and written[n].tag not in PASSED for n, t in f.params if n in written):
+        return  # `dot(len(a), a)` wrote one extent and forgot a view: that is an arity error, said as one.
+    first = {t.extent: written[n] for n, t in reversed(f.params) if is_view(t)}  # the earliest view wins
+    args[:] = [written[n] if n in written else measured(first[n]) for n, _ in f.params]
+
+
 def invoke(c: Checker, e: Expr, f: Function, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    elaborate(f, args)
     if len(args) != len(f.params):
-        fail("E-ARITY", f"{e.val} expects {len(f.params)} arguments.", e)
+        implied = extents(f)
+        fewer = f", or {len(f.params) - len(implied)} leaving out the extents {', '.join(implied)}" if implied else ""
+        fail("E-ARITY", f"{e.val} expects {len(f.params)} arguments{fewer}.", e)
     if f.extern and not c.unsafe_depth:
         fail("E-UNSAFE", f"{f.name} is foreign; call it inside an unsafe block.", e)
     if f.kernel and not c.device_depth:

@@ -27,12 +27,12 @@ or out of range. Literals use expected type, else u64/f64.
 x+1 and add_wrap(x,1) differ at u64 maximum. Never weaken arithmetic or the
 allowed trap/domain policy merely to pass a check.""",
     "views": """ro<T>[n] and rw<T>[n] borrow host storage; @host is optional, not a transfer. An interface
-extent is a literal or earlier immutable usize parameter. Indexes are usize; indexing checks bounds.
-len(view) reads extent metadata, not elements. Read-only views may alias. Each rw view must be
-disjoint from every other view in a call. Entry checks cover numerical null/alignment/overflow/overlap
+extent is a literal or earlier immutable usize parameter; calls may omit all: f(xs) is f(len(xs),xs).
+Indexes are usize and bounds-checked. len(view) reads metadata, not elements. Read-only views may alias;
+an rw view is disjoint from every other view in a call. Entry checks cover numerical null/alignment/overflow/overlap
 only; the caller supplies live initialized typed storage with no conflicting access. A declared field
-extent gives len(c.price) the identity c.rows: no part. No arbitrary view aliases, view returns,
-resizing or implicit copies/parallelism.""",
+extent gives len(c.price) the identity c.rows: no part. No view returns, resizing or implicit
+copies/parallelism.""",
     "compact": """let used = compact out for i in n where predicate yield value;
 out is an rw borrow or scoped buffer of capacity exactly n (len(out) also works).
 Predicate is bool; projection has the element type. Neither may read out or

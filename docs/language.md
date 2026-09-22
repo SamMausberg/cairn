@@ -284,6 +284,33 @@ fn main() -> i32 { let a = Buf[u8](8); let b = Buf[u8](8); return i32(checksum(l
 Expected ro<u8>[len(a)]@host, got ro<u8>[len(b)]@host.
 ```
 
+A call may leave out its extent parameters. A `usize` parameter that a later view parameter names as its extent can only be that view's length, so when a call omits every such parameter the checker writes each one in as `len` of the first view argument that names it, or `hi - lo` for a part. Everything after the checker sees the call written out: the same C++, the same effect row. Every other view with that extent must match it, as it would a written length. A call passes all of its extents or none of them (`E-ARITY`), and an `extern` takes every argument, in the order C gives them.
+
+```cairn
+fn dot(n:usize, xs:ro<u64>[n], ys:ro<u64>[n]) -> u64 {
+  let mut t:u64 = 0;
+  for i in 0..n { t = t + xs[i] * ys[i]; }
+  return t;
+}
+
+fn main() -> i32 {
+  let mut v = Buf[u64](8);
+  for i in 0..8 { v[i] = u64(i); }
+  if dot(v, v) != dot(len(v), v, v) { return 1; }            // the same call
+  if dot(v[0..4], v[4..8]) != 0 * 4 + 1 * 5 + 2 * 6 + 3 * 7 { return 2; }
+  return 0;
+}
+```
+
+```cairn rejects E-TYPE-MISMATCH
+fn dot(n:usize, xs:ro<u64>[n], ys:ro<u64>[n]) -> u64 = xs[0] * ys[0];
+fn main() -> i32 { let a = Buf[u64](8); let b = Buf[u64](8); return i32(dot(a, b)); }
+```
+
+```text
+Expected ro<u64>[len(a)]@host, got ro<u64>[len(b)]@host.
+```
+
 A part `bytes[lo..hi]` goes wherever an array borrow is expected and carries one dynamic guard: `lo <= hi <= len`, and `hi - lo` equal to the callee's extent, which for a part may be any `usize` arithmetic. A part of a part guards once per level. Bounds and extents are written from names, literals, fields, elements, operators, `len` and the arithmetic builtins; a call is bound to a name first (`E-CALL-SHAPE`).
 
 ```cairn

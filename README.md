@@ -11,15 +11,15 @@ fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u
 
 fn halves(n:usize, data:rw<u64>[n]) {
   let mid = n / 2;
-  let left = spawn fill(mid, data[0..mid], 0);             // a task leases what it borrows until wait
-  let right = spawn fill(n - mid, data[mid..n], u64(mid));
+  let left = spawn fill(data[0..mid], 0);                  // a task leases what it borrows until wait
+  let right = spawn fill(data[mid..n], u64(mid));
   wait(left);
   wait(right);
 }
 
 fn main() -> i32 {
   let mut data = Buf[u64](1000);
-  halves(len(data), data);
+  halves(data);                                            // n is len(data): a call may leave extents out
   let total = reduce + for i in len(data) yield data[i];   // a checked sum: it traps if it overflows
   if total != 499500 { return 1; }
   return 0;

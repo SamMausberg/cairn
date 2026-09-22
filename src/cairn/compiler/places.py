@@ -93,6 +93,8 @@ def extent_of(c: Checker, e: Expr) -> str | None:
             return ty.extent
         if ty.name == "Buf":  # A declared field extent answers for the field, so both spellings agree.
             return c.declared_extent(e.args[0]) or f"len({c.identity(e.args[0])})"
+        if ty.name == "Array":  # An inline array's length is its literal.
+            return str(ty.args[1])
     return None
 
 
