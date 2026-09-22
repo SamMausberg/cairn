@@ -153,7 +153,8 @@ class Region:
     runs: Poly
     body: Work
     weight: int = 1  # elements one index stands for, when a lane owns a block
-    plan: tuple[int, int] = (0, 0)
+    plan: tuple[int, int] = (0, 0)  # a host region's (grain, lanes)
+    launch: tuple[int, int, int] = (0, 0, 0)  # a device region's (block, per_lane, unroll)
 
 
 @dataclass
@@ -184,7 +185,7 @@ class Cost:
             body = Work()
             body.merge(r.body.subst(given), ONE, rename)
             out.regions.append(Region(r.kind, r.line, r.count.subst(given), r.runs.subst(given) * times, body,
-                                      r.weight, r.plan))  # fmt: skip
+                                      r.weight, r.plan, r.launch))  # fmt: skip
         out.tasks = [(n.subst(given) * times, t.subst(given, rename, ONE)) for n, t in self.tasks]
         out.transfers = {d: b.subst(given) * times for d, b in self.transfers.items()}
         out.allocated, out.allocations = self.allocated.subst(given) * times, self.allocations.subst(given) * times
@@ -418,7 +419,7 @@ class Counter:
         self.block(s.body, Frame(body, ONE, (*at.binders, s.name), True))
         self.bound.pop()
         kind = "device" if s.ref == "device" else "host"
-        self.cost.regions.append(Region(kind, s.line, count, at.times, body, s.block, s.plan))
+        self.cost.regions.append(Region(kind, s.line, count, at.times, body, s.block, s.plan, s.launch))
 
     def s_reduce(self, s: Stmt, at: Frame) -> None:
         count = self.size(s.exprs[0]) or Poly.var(f"?count@{s.line}")

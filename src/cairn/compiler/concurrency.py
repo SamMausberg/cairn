@@ -77,21 +77,50 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
     return result
 
 
+# Every item a plan may set: the regions it schedules, its least and greatest value, and what it must be a multiple of.
+# grain and lanes split a host region over the pool; block, per_lane and unroll shape a device region's launch.
+PLAN_ITEMS = {
+    "grain": ("host", 1, 2**63 - 1, 1),  # indices one claim covers at least
+    "lanes": ("host", 1, 1024, 1),  # lanes a region engages at most
+    "block": ("device", 32, 1024, 32),  # threads in one block: whole warps
+    "per_lane": ("device", 1, 65536, 1),  # indices each thread runs before the grid wraps
+    "unroll": ("device", 1, 32, 1),  # passes of a thread's index loop the compiler unrolls
+}
+
+
 def plans(c: Checker) -> dict[str, dict[str, int]]:
     """`plan f { grain G; lanes L; }` chooses how f's host regions are claimed: at least G indices at a time, on at
-    most L lanes. Lanes are race free and a region finishes before the next statement, so a plan only picks one of
-    the schedules the region already allows; it changes no result and no effect row. What each function got."""
+    most L lanes; `block B; per_lane K; unroll U;` how f's device regions launch: B threads a block, a grid that
+    gives each thread K indices, its loop unrolled U times. Lanes are race free, every index runs exactly once and a
+    region finishes before the next statement, so a plan only picks one of the schedules the region already allows;
+    it changes no result and no effect row. What each function got."""
     chosen: dict[str, dict[str, int]] = {}
-    for module, name, grain, most, token in c.p.plans:
+    for module, name, items, token in c.p.plans:
+        for item, value in items.items():
+            if item not in PLAN_ITEMS:
+                fail("E-PLAN", f"A plan sets {', '.join(PLAN_ITEMS)}; {item} is none of them.", token)
+            _, least, most, step = PLAN_ITEMS[item]
+            if not least <= value <= most or value % step:
+                multiple = f", a multiple of {step}" if step > 1 else ""
+                fail("E-PLAN", f"{item} runs from {least} to {most}{multiple}; {value} is outside.", token)
         with c.within(module):
             target = c.qualify(name, c.fs)
         planned = [f for f in c.p.functions if target in (f.name, f.source_name)]
-        regions = [s for f in planned for s in walk(f.body) if s.tag == "parallel" and s.ref == "host"]
+        regions = [s for f in planned for s in walk(f.body) if s.tag == "parallel"]
         if not regions or any(f.name in chosen for f in planned):
-            fail("E-PLAN", f"plan {name} must name a function with a host parallel region, once.", token)
-        for s in regions:
-            s.plan = (grain, most)
-        chosen |= {f.name: {k: v for k, v in (("grain", grain), ("lanes", most)) if v} for f in planned}
+            fail("E-PLAN", f"plan {name} must name a function with a parallel region, once.", token)
+        for where in ("host", "device"):
+            given = {k: v for k, v in items.items() if PLAN_ITEMS[k][0] == where}
+            regions = [s for f in planned for s in walk(f.body) if s.tag == "parallel" and s.ref == where]
+            if given and not regions:
+                fail("E-PLAN", f"{', '.join(given)} schedule{'s' * (len(given) == 1)} a {where} parallel region, and "
+                     f"{name} has none.", token)  # fmt: skip
+            for s in regions:
+                if where == "host":
+                    s.plan = (given.get("grain", 0), given.get("lanes", 0))
+                else:
+                    s.launch = (given.get("block", 0), given.get("per_lane", 0), given.get("unroll", 0))
+        chosen |= {f.name: dict(items) for f in planned}
     return chosen
 
 

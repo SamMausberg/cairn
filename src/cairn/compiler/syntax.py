@@ -717,16 +717,14 @@ class Parser:
                 self.i += 1
                 name, chosen = self.path(), {}
                 self.need("{")
-                while not self.eat("}"):
+                while not self.eat("}"):  # Items and their ranges are the checker's (concurrency.PLAN_ITEMS).
                     item = self.t
-                    if item.s not in {"grain", "lanes"} or item.s in chosen:
-                        fail("E-PLAN", "A plan sets grain and lanes, each at most once.", item)
+                    if not IDENT.fullmatch(item.s) or item.s in chosen:
+                        fail("E-PLAN", "A plan sets each of its items once, as a name and a natural.", item)
                     self.i += 1
                     chosen[item.s] = self.integer()
                     self.need(";")
-                    if chosen[item.s] < 1 or chosen.get("lanes", 1) > 1024:
-                        fail("E-PLAN", "A grain is at least 1 index, and lanes run from 1 to 1024.", item)
-                p.plans.append((self.module, name, chosen.get("grain", 0), chosen.get("lanes", 0), t))
+                p.plans.append((self.module, name, chosen, t))
             elif self.eat("derive"):
                 written, naturals = self.path(), []
                 if self.eat("["):  # A natural, or the name of a function as the deriving module sees it.

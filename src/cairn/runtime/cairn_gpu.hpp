@@ -105,21 +105,38 @@ template<class T> inline void copy(T* dst, const T* src, std::size_t n, Dir d) n
   if(n) check(cudaMemcpy(dst, src, bytes<T>(n), kind(d)));
 }
 
-// One lane per i, strided so that n is limited by memory rather than by a grid dimension.
-constexpr unsigned BLOCK = 256, MAX_GRID = 65535;
-template<class F> __global__ void lanes(std::size_t n, F body) {
+// One lane per i, strided so that n is limited by memory rather than by a grid dimension. Every i below n runs
+// exactly once whatever the grid and block, which is why a plan may choose them: `block` threads a block, a grid
+// that gives each thread about `per_lane` indices, and the stride loop unrolled `U` times.
+constexpr unsigned BLOCK = 256, MAX_GRID = 65535, WARP = 32;
+template<unsigned U, class F> __global__ void lanes(std::size_t n, F body) {
   const std::size_t step = std::size_t(gridDim.x) * blockDim.x;
+#pragma unroll U
   for(std::size_t i = blockIdx.x * std::size_t(blockDim.x) + threadIdx.x; i < n; i += step) body(i);
 }
-template<class F> inline void fire(std::size_t n, const F& body, cudaStream_t s) noexcept {
+// The most threads a block of this kernel can hold, read once: a planned block the kernel's registers cannot fill
+// runs in whole warps as wide as fit, and computes the same.
+template<unsigned U, class F> inline unsigned widest() noexcept {
+  static const unsigned most = [] {
+    cudaFuncAttributes held{};
+    check(cudaFuncGetAttributes(&held, lanes<U, F>));
+    return unsigned(held.maxThreadsPerBlock) / WARP * WARP;
+  }();
+  return most;
+}
+template<unsigned U = 1, class F>
+inline void fire(std::size_t n, const F& body, cudaStream_t s, unsigned block = BLOCK, std::size_t per_lane = 1) noexcept {
   static_assert(std::is_trivially_copyable_v<F>, "a lane body crosses over as kernel arguments");
   if(!n) return;
-  const std::size_t g = (n + BLOCK - 1) / BLOCK;
-  lanes<<<(g < MAX_GRID ? unsigned(g) : MAX_GRID), BLOCK, 0, s>>>(n, body);
+  if(block > widest<U, F>()) block = widest<U, F>();
+  const std::size_t each = std::size_t(block) * per_lane;
+  const std::size_t g = (n + each - 1) / each;
+  lanes<U><<<(g < MAX_GRID ? unsigned(g) : MAX_GRID), block, 0, s>>>(n, body);
   check(cudaGetLastError());
 }
-template<class F> inline void launch(std::size_t n, F body) noexcept {
-  fire(n, body, nullptr);
+template<unsigned U = 1, class F>
+inline void launch(std::size_t n, F body, unsigned block = BLOCK, std::size_t per_lane = 1) noexcept {
+  fire<U>(n, body, nullptr, block, per_lane);
   check(cudaDeviceSynchronize());
 }
 

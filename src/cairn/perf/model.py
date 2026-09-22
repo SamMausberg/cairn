@@ -108,7 +108,9 @@ def settled(compute: float, memory: float, serial: float, irregular: float, leve
 
 def lanes(r: Region, card: Device | None, sizes: dict[str, float], missing: set[str]) -> Piece:
     """A device region by its roofline: a launch, then the larger of its bytes at the memory's sustained bandwidth
-    and its instructions at the device's issue rate. Priced from the specification the profile names."""
+    and its instructions at the device's issue rate, both shared out over the part of the device its grid keeps
+    busy, so a plan whose per_lane leaves the device underfilled is priced as underfilled. Priced from the
+    specification the profile names; registers, and so occupancy, are not known before ptxas has run."""
     n, runs = value(r.count, sizes, missing), value(r.runs, sizes, missing)
     if card is None:
         return Piece(f"device region at line {r.line}", 0.0, "device (no device profile)", 0.0)
@@ -117,7 +119,10 @@ def lanes(r: Region, card: Device | None, sizes: dict[str, float], missing: set[
     moved = sum(value(b, sizes, missing) for b in (*total.reads.values(), *total.writes.values()))
     moved += 32 * sum(value(k, sizes, missing) for k in total.irregular.values())  # one sector per scattered access
     issued = sum(value(k, sizes, missing) for k in total.ops.values())
-    memory, compute = moved / (card.dram_gbps * card.memory_efficiency), issued / card.flops["i32"]
+    block, per_lane, _ = r.launch
+    threads = min(n / (per_lane or 1), 65535 * (block or 256))  # the grid the runtime launches
+    busy = min(1.0, threads / (card.sms * card.threads_per_sm * card.occupancy_to_saturate)) if n else 1.0
+    memory, compute = moved / (card.dram_gbps * card.memory_efficiency * busy), issued / (card.flops["i32"] * busy)
     ns = card.launch_ns + max(memory, compute)
     bound = (
         "launch"
@@ -128,7 +133,7 @@ def lanes(r: Region, card: Device | None, sizes: dict[str, float], missing: set[
     )
     light = max(moved / card.dram_gbps, issued / card.flops["i32"])
     detail = {"count": r.count.render(), "device": card.name, "memory_ns": round(memory, 1), "compute_ns": round(compute, 1),
-              "launch_ns": card.launch_ns, "elements": n}  # fmt: skip
+              "launch_ns": card.launch_ns, "threads": int(threads), "busy": round(busy, 3)}  # fmt: skip
     return Piece(f"device region at line {r.line}", ns * runs, bound, light * runs, detail)
 
 

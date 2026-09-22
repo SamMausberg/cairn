@@ -434,6 +434,10 @@
      "match": "\\balign\\b(?=\\s*\\(\\s*[0-9]+\\s*\\)\\s*\\{)"
     },
     {
+     "name": "keyword.other.plan.cairn",
+     "match": "\\bblock\\b(?=\\s+[0-9])"
+    },
+    {
      "name": "keyword.control.flow.cairn",
      "match": "\\bfold\\b(?=\\s*(?:[-+*&|^]|[A-Za-z_][\\w.]*\\s+each\\b))"
     },
@@ -454,6 +458,10 @@
      "match": "\\bpacked\\b(?=\\s*\\{)"
     },
     {
+     "name": "keyword.other.plan.cairn",
+     "match": "\\bper_lane\\b(?=\\s+[0-9])"
+    },
+    {
      "name": "keyword.declaration.cairn",
      "match": "\\bplan\\b(?=\\s+[A-Za-z_][\\w.]*\\s*\\{)"
     },
@@ -468,6 +476,10 @@
     {
      "name": "keyword.declaration.cairn",
      "match": "\\btest\\b(?=\\s+[A-Za-z_]\\w*\\s*\\{)"
+    },
+    {
+     "name": "keyword.other.plan.cairn",
+     "match": "\\bunroll\\b(?=\\s+[0-9])"
     }
    ]
   },

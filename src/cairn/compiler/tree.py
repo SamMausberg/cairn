@@ -141,6 +141,7 @@ class Stmt:
     pooled: bool = False  # `reduce op parallel i in n`: the host fold runs on the lane pool.
     block: int = 1  # The widest block of elements one index of a region owns (facts.window); it sizes claims.
     plan: tuple[int, int] = (0, 0)  # (grain, lanes) a `plan` fixes for a host region; 0 leaves the pool's choice.
+    launch: tuple[int, int, int] = (0, 0, 0)  # (block, per_lane, unroll) a plan fixes for a device region.
 
 
 @dataclass
@@ -234,7 +235,7 @@ class Program:
     functions: list[Function] = field(default_factory=list)
     families: list[tuple[str, str, int, int]] = field(default_factory=list)
     derivations: list[tuple] = field(default_factory=list)  # (module, recipe as written, naturals, target, token)
-    plans: list[tuple] = field(default_factory=list)  # (module, function as written, grain, lanes, token)
+    plans: list[tuple] = field(default_factory=list)  # (module, function as written, {item: value}, token)
     recipes: dict[str, Recipe] = field(default_factory=dict)
     sums: dict[str, list[tuple[str, Type | None]]] = field(default_factory=dict)
     generics: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # generic types

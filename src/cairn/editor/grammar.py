@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 from ..compiler.builtins import TABLE
+from ..compiler.concurrency import PLAN_ITEMS
 from ..compiler.effects import EFFECT_FAMILIES, EFFECTS
 from ..compiler.lexing import RESERVED
 from ..compiler.modules import STD
@@ -26,7 +27,7 @@ from ..compiler.tree import INTRINSIC_TYPES, PLACES, SCALAR, STORAGE
 ROOT = Path(__file__).resolve().parents[3]
 
 # Words the parser reads in one position only; anywhere else they are ordinary names (syntax.py says where).
-CONTEXTUAL = {"after", "align", "fold", "grain", "into", "lanes", "packed", "plan", "recipe", "require", "test"}
+CONTEXTUAL = {"after", "align", "fold", "into", "packed", "plan", "recipe", "require", "test", *PLAN_ITEMS}
 
 # class -> (TextMate scope, Vim group, words). Every reserved word is in exactly one class.
 WORDS: dict[str, tuple[str, str, set[str]]] = {
@@ -53,14 +54,13 @@ CONTEXT: dict[str, tuple[str, str]] = {
     "after": ("keyword.control.concurrency.cairn", r"(?=\s+[A-Za-z_])"),
     "into": ("keyword.control.concurrency.cairn", r"(?=\s+[A-Za-z_]\w*\s*;)"),
     "fold": ("keyword.control.flow.cairn", r"(?=\s*(?:[-+*&|^]|[A-Za-z_][\w.]*\s+each\b))"),
-    "grain": ("keyword.other.plan.cairn", r"(?=\s+[0-9])"),
-    "lanes": ("keyword.other.plan.cairn", r"(?=\s+[0-9])"),
     "plan": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*\{)"),
     "test": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*\{)"),
     "recipe": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*[\[({]|\s+[A-Za-z_]\w*\s+for\b)"),
     "require": ("keyword.control.flow.cairn", r"(?=\s+\S[^;]*,\s*\")"),
     "packed": ("storage.modifier.layout.cairn", r"(?=\s*\{)"),
     "align": ("storage.modifier.layout.cairn", r"(?=\s*\(\s*[0-9]+\s*\)\s*\{)"),
+    **dict.fromkeys(PLAN_ITEMS, ("keyword.other.plan.cairn", r"(?=\s+[0-9])")),  # the items a plan sets
 }
 FAMILIES = (*(f.rstrip(":") for f in EFFECT_FAMILIES), "read", "write", "lane")  # as effects.py names them
 TYPES = sorted(SCALAR | STORAGE.keys() | {"void"} | {n for n in INTRINSIC_TYPES if n[0].isupper()})

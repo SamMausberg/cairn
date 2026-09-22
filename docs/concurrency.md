@@ -361,11 +361,30 @@ plan spread { grain 1; lanes 8; }     // a few dozen slow lanes: one index per c
 
 Without a plan the pool claims at least 8192 elements' work at a time, and runs a region with less than 16384 elements' work on the thread that starts it; a lane that owns a block counts as its block. That suits cheap bodies. A body that costs microseconds per index wants a grain of 1.
 
-`E-PLAN` refuses a plan that names no function with a host region, a second plan for one function, an item other than `grain` and `lanes`, a repeated item, a grain of 0 and a lane count outside 1 to 1024. A device region is scheduled by the device and takes no plan. `plan` is a keyword only at the top of a module, so it stays an ordinary name everywhere else.
+A device region takes three items of its own. `block B` launches blocks of `B` threads, whole warps from 32 to 1024. `per_lane K` sizes the grid so that each thread runs about `K` indices before the grid wraps, and `unroll U` unrolls each thread's loop over its indices `U` times, from 1 to 32. Every index below the count still runs exactly once, on whatever thread the grid gives it, which is why none of the three can change a result. A block wider than the kernel's registers allow runs in the widest whole warps that fit.
+
+```cairn
+fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i]; } }
+
+plan scale { block 128; per_lane 4; unroll 4; }   // 128 threads a block, about four indices each
+```
+
+Without a plan a device region launches blocks of 256 threads and one index per thread, up to 65535 blocks. `grain` and `lanes` apply to host regions and `block`, `per_lane` and `unroll` to device regions, so one plan may set both for a function that has both.
+
+`E-PLAN` refuses a plan that names no function with a parallel region, an item whose kind of region the function lacks, a second plan for one function, an unknown or repeated item, and a value out of its range: a grain of 0, a lane count outside 1 to 1024, a block that is not whole warps from 32 to 1024, a `per_lane` outside 1 to 65536 and an `unroll` outside 1 to 32. `plan` is a keyword only at the top of a module, so it stays an ordinary name everywhere else, and so are its items.
 
 ```cairn rejects E-PLAN
 fn walk(n:usize, out:rw<u64>[n]) { for i in 0..n { out[i] = 1; } }
 plan walk { grain 64; }
+```
+
+```cairn rejects E-PLAN
+fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i]; } }
+plan scale { block 100; }
+```
+
+```text
+block runs from 32 to 1024, a multiple of 32; 100 is outside.
 ```
 
 Halide separated algorithms from schedules, and MLIR's transform dialect does the same inside a compiler. The open question for CAIRN is whether a schedule kept apart from the algorithm, where the checker holds it to the algorithm's ownership rules, makes tuning cheaper than rewriting the loop, for a person or an agent. [`cairn tune`](tools.md#cairn-predict) is the search this makes possible: every plan it tries is one the checker accepts, it ranks them all by prediction and times only the best few. Whether that is cheaper than rewriting the loop has not been measured.

@@ -524,10 +524,14 @@ class Emitter:
 
     def s_parallel(self, s: Stmt, es: list[str]):
         entry = "cr::gpu::launch" if s.ref == "device" else "cr::par::run"
-        # Each index is a block of that many elements, and a plan fixes the claim and the lanes; defaults say nothing.
-        schedule = [] if s.ref == "device" else [s.block, *s.plan]
-        while schedule and schedule[-1] == (1 if len(schedule) == 1 else 0):
-            schedule.pop()
+        if s.ref == "device":  # A plan fixes the block, the indices per thread and the unrolled passes of each thread.
+            block, per_lane, unroll = s.launch
+            schedule = [block or 256, per_lane] if per_lane else [block] if block else []
+            entry += f"<{unroll}>" if unroll > 1 else ""
+        else:  # Each index is a block of that many elements, and a plan fixes the claim and the lanes.
+            schedule = [s.block, *s.plan]
+            while schedule and schedule[-1] == (1 if len(schedule) == 1 else 0):  # defaults say nothing
+                schedule.pop()
         self.put(f"{entry}({es[0]}, {self.lane(s, lambda: self.block(s.body))}{''.join(f', {x}' for x in schedule)});")
 
     def s_reduce(self, s: Stmt, es: list[str]):
