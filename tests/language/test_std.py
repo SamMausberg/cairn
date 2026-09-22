@@ -757,4 +757,5 @@ def test_the_api_reference_is_what_the_compiler_says_today():
     assert (root / "docs/std_api.md").read_text(encoding="utf-8") == standard_library(), "run `make docs`"
     own = document("module m;\n// Doubles.\npub fn twice[T: integer](x:T) -> T = x + x;\nfn hidden() {}\n")
     assert "pub fn twice[T:integer](x:T) -> T" in own and "Doubles." in own and "hidden" not in own
-    assert "Effects (any arguments within its bounds): `trap`." in own
+    assert "pub fn twice[T:integer](x:T) -> T  // effects: trap" in own
+    assert own.startswith("A generic function's effects are what it may do for any arguments within its bounds")

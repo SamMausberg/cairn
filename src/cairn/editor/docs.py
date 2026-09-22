@@ -2,18 +2,29 @@
 
 For every public declaration of a module: its signature with bounds, the comment written above it, and
 for a function the effect row the checker inferred. A template's row is the one at its witnesses: what it
-may do for any arguments within its bounds, besides what their own trait members do.
+may do for any arguments within its bounds, besides what their own trait members do. A module is one
+heading, its own comment, and one block of declarations, each under its comment and its row as `//` lines,
+so the reference reads like the source it came from.
 """
 
 from __future__ import annotations
 
 import re
+import textwrap
 
 from ..agent.projection import comment_above, generics, local, signature, type_declarations
 from ..compiler.cairnc import Checker, Parser, Program, derive, link, specialize
 from ..compiler.traits import described
 
 TABLES = (("records", "struct"), ("sums", "enum"), ("enums", "enum"), ("traits", "trait"), ("consts", "const"))
+
+
+WIDTH = 120
+
+
+def commented(lines: list[str]) -> list[str]:
+    """Prose as `//` lines of at most WIDTH columns."""
+    return [f"// {line}" for text in lines for line in textwrap.wrap(text, WIDTH - 3)]
 
 
 def document(source: str, modules: list[str] | None = None) -> str:
@@ -30,30 +41,36 @@ def document(source: str, modules: list[str] | None = None) -> str:
             at = re.search(pattern, text, re.M)
             return comment_above(text, at.start()) if at else []
 
-        out += [f"# {module or 'root module'}", "", *above(rf"^module {re.escape(module)};"), ""]
+        entries: list[list[str]] = []
         for table, kind in TABLES:
             for name in filter(shown, getattr(p, table)):
                 one = Program(generics=p.generics, attributes=p.attributes, public=p.public)
                 setattr(one, table, {name: getattr(p, table)[name]})
-                out += [
-                    f"```cairn\n{type_declarations(one)}\n```",
-                    *above(rf"^(?:pub )?(?:linear )?{kind} {re.escape(local(name))}\b"),
-                    "",
-                ]
+                doc = above(rf"^(?:pub )?(?:linear )?{kind} {re.escape(local(name))}\b")
+                entries.append([*commented(doc), type_declarations(one)])
         for name, recipe in p.recipes.items():
             if shown(name):
                 head = f"pub recipe {local(name)}{generics(recipe.statics)}" + (
                     f" for {recipe.param}" if recipe.param else ""
                 )
-                out += [f"```cairn\n{head}\n```", *comment_above(text, recipe.start), ""]
+                entries.append([*commented(comment_above(text, recipe.start)), head])
         for f in [f for f in c.fs.values() if f.module == module and not f.bindings and (f.owner or shown(f.name))]:
             impl = f"impl {f.owner[0]} for {f.owner[1].display()}: " if f.owner else "pub " if module else ""
-            row = ", ".join(f"`{x}`" for x in sorted(rows.get(f.name, ()))) or "none"
+            row = ", ".join(sorted(rows.get(f.name, ()))) or "none"
             certified = verdicts.get(f.name, "ok") == "ok"
-            effects = f"Effects{' (any arguments within its bounds)' if f.generics else ''}: {row}." if certified else (
-                f"Checked per instance: {verdicts[f.name]}")  # fmt: skip
-            out += [f"```cairn\n{impl}{signature(f)}\n```", *comment_above(text, f.start), effects, ""]
-    return "\n".join(out).rstrip() + "\n"
+            effects = f"effects: {row}" if certified else f"checked per instance: {verdicts[f.name]}"
+            declared = f"{impl}{signature(f)}"
+            if len(declared) + len(effects) + 5 <= WIDTH:  # the row at the end of the line it describes
+                entries.append([*commented(comment_above(text, f.start)), f"{declared}  // {effects}"])
+            else:
+                entries.append([*commented([*comment_above(text, f.start), effects]), declared])
+        block = "\n\n".join("\n".join(entry) for entry in entries)
+        told = above(rf"^module {re.escape(module)};")
+        out += [f"# {module or 'root module'}", "", *([*told, ""] if told else [])]
+        out += [f"```cairn\n{block}\n```", ""] if entries else []
+    note = "A generic function's effects are what it may do for any arguments within its bounds, besides what"
+    note += " their own trait members do."
+    return "\n".join([note, "", *out] if any(f.generics for f in c.fs.values()) else out).rstrip() + "\n"
 
 
 def standard_library() -> str:
