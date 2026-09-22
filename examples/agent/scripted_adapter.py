@@ -15,13 +15,5 @@ bodies = [
     "{ let used=compact out for i in n where x[i]>=threshold yield x[i]; return used; }",
     "{ let used=compact out for i in n where x[i]>threshold yield x[i]; return used; }",
 ]
-print(
-    json.dumps(
-        {
-            "protocol": "cairn.edit/1",
-            "session": packet["session"],
-            "kind": "body",
-            "replacement": bodies[min(request["attempt"], 2)],
-        }
-    )
-)
+reply = {"protocol": "cairn.edit/2", "handle": packet["handle"], "kind": "body"}
+print(json.dumps({**reply, "replacement": bodies[min(request["attempt"], 2)]}))

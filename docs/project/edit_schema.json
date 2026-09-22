@@ -60,7 +60,100 @@
           "pattern": "^[a-f0-9]{64}$"
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "handle",
+        "kind",
+        "replacement"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "cairn.edit/2"
+        },
+        "handle": {
+          "type": "string",
+          "pattern": "^e[0-9]+$",
+          "description": "A session the host opened; the host keeps its digests."
+        },
+        "kind": {
+          "const": "body"
+        },
+        "replacement": {
+          "type": "string",
+          "maxLength": 64000,
+          "description": "Compiler additionally enforces a 64000 UTF-8 byte maximum."
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "handle",
+        "kind",
+        "replacement",
+        "site"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "cairn.edit/2"
+        },
+        "handle": {
+          "type": "string",
+          "pattern": "^e[0-9]+$",
+          "description": "A session the host opened; the host keeps its digests."
+        },
+        "kind": {
+          "const": "expr"
+        },
+        "replacement": {
+          "type": "string",
+          "maxLength": 64000,
+          "description": "Compiler additionally enforces a 64000 UTF-8 byte maximum."
+        },
+        "site": {
+          "type": "string",
+          "pattern": "^x[0-9]+$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "handle",
+        "kind",
+        "symbols"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "cairn.edit/2"
+        },
+        "handle": {
+          "type": "string",
+          "pattern": "^e[0-9]+$",
+          "description": "A session the host opened; the host keeps its digests."
+        },
+        "kind": {
+          "const": "expand"
+        },
+        "symbols": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "string"
+          },
+          "description": "Functions whose source to disclose, which a candidate may then call, or types."
+        }
+      }
     }
   ],
-  "description": "Structural convenience schema; the actual checker additionally validates stale IDs, parser closure, types, effects and source identity."
+  "description": "Structural convenience schema. cairn.edit/1 binds a request to a session digest, cairn.edit/2 to a host handle. The checker additionally validates stale sessions, parser closure, types, effects and source identity."
 }

@@ -43,10 +43,10 @@ the entire compiler, lifetime system, or native backend.""",
     "calls": """Call declared functions, not invented libraries. Calls with external writes or
 allocation must be whole expressions at statement/condition roots, not nested operands; a call
 that only releases may be nested, since a drop runs where C++ ends the scope.
-Read the included callee implementation/contract: its name, types and effect row
-do not specify its behavior. Effects substitute caller buffers, including recursive
-calls. Request context before calling an undisclosed dependency. Source/model
-acceptance does not establish the reference's intent or native performance.""",
+A callee may be shown by signature, effect row, contract and comment only; none
+specifies behavior, so expand it and read its body before relying on it. Effects
+substitute caller buffers, including recursive calls. Expand an undisclosed function
+before calling it. Acceptance does not establish intent or performance.""",
     "floats": """f32/f64 use -ffp-contract=off -fno-fast-math. No implicit reassociation or FMA;
 floating min/max are unsupported; u64(x) of a float truncates, trapping out of range.
 Strict flags are not

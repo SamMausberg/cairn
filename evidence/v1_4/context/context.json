@@ -1,0 +1,1408 @@
+{
+  "aggregate": {
+    "after": 115506,
+    "before": 115609,
+    "current_only_packet_count": 4,
+    "packet_count": 22,
+    "saving_fraction": 0.0008909340968263901
+  },
+  "baseline_card_source_sha256": "4d19fb46d0dee32ad62c43065a60927286f95dab4a01e60ca0c68c5bdb2246f6",
+  "current_card_source_sha256": "4c96aec7117fbd5dc98c6db03b7b2aba4230864032507fd3fb044ce33929764d",
+  "current_only": [
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records",
+        "closures"
+      ],
+      "complete_packet_tokens": 6367,
+      "legacy_comparison": null,
+      "reason": "Cards absent from the 0.5 curriculum: closures.",
+      "symbol": "decode_le32"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "compact",
+        "records",
+        "memory",
+        "sums",
+        "closures"
+      ],
+      "complete_packet_tokens": 12298,
+      "legacy_comparison": null,
+      "reason": "Scoped storage or tagged sums were not accepted in 0.5.",
+      "symbol": "decimal"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "compact",
+        "records",
+        "memory",
+        "sums",
+        "closures"
+      ],
+      "complete_packet_tokens": 12406,
+      "legacy_comparison": null,
+      "reason": "Scoped storage or tagged sums were not accepted in 0.5.",
+      "symbol": "sort_bytes"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "compact",
+        "records",
+        "memory",
+        "sums",
+        "closures"
+      ],
+      "complete_packet_tokens": 12442,
+      "legacy_comparison": null,
+      "reason": "Scoped storage or tagged sums were not accepted in 0.5.",
+      "symbol": "sorted_even"
+    }
+  ],
+  "full_card_text": {
+    "baseline": 4792,
+    "current": 15537
+  },
+  "limitations": [
+    "Authored transcripts, not a model: one type error, at most one expansion, then the right body.",
+    "A real agent may expand more, or less; the focused packet's saving shrinks with every expansion.",
+    "UTF-8 bytes are not model tokens; tiktoken encodings, where given, are not Claude's tokenizer.",
+    "Reading with history charges a whole reread per model turn; prompt caching changes that price."
+  ],
+  "method": "What an edit costs in context: whole scripted tasks, and the rule-card counterfactual against 0.5.\n\nNo model runs. `tasks` replays one authored transcript per function of five real programs: the packet, a\nfirst reply with a type error and its diagnostic, a request to read a callee's body (focused scope only, where\nthe body is not already shown), and the correct reply with its admission. It counts every message once, and\nalso as a model reads it, re-reading the conversation so far on every turn. Five settings are compared: the\ncomponent packet over cairn.edit/1 (the 1.3 protocol), and component or focused packets over cairn.edit/2,\ncold (a new host per task) or warm (one host per program, so cards and boundaries go once).\n\n`cards` keeps the 0.6 measurement: the same component packet with only the card texts swapped for 0.5's.",
+  "model_trials": 0,
+  "rows": [
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 5862,
+      "legacy_card_packet_tokens": 5906,
+      "saving_fraction": 0.0074500507958008555,
+      "saving_tokens": 44,
+      "symbol": "saxpy"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 6114,
+      "legacy_card_packet_tokens": 6158,
+      "saving_fraction": 0.007145177005521308,
+      "saving_tokens": 44,
+      "symbol": "dot"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "current_packet_tokens": 5374,
+      "legacy_card_packet_tokens": 5396,
+      "saving_fraction": 0.004077094143810189,
+      "saving_tokens": 22,
+      "symbol": "sum_wrap"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "current_packet_tokens": 5441,
+      "legacy_card_packet_tokens": 5463,
+      "saving_fraction": 0.004027091341753608,
+      "saving_tokens": 22,
+      "symbol": "prefix"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 5808,
+      "legacy_card_packet_tokens": 5852,
+      "saving_fraction": 0.007518796992481258,
+      "saving_tokens": 44,
+      "symbol": "count_gt"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "current_packet_tokens": 5513,
+      "legacy_card_packet_tokens": 5535,
+      "saving_fraction": 0.003974706413730766,
+      "saving_tokens": 22,
+      "symbol": "histogram"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "compact",
+        "records"
+      ],
+      "current_packet_tokens": 6054,
+      "legacy_card_packet_tokens": 6141,
+      "saving_fraction": 0.014167073766487515,
+      "saving_tokens": 87,
+      "symbol": "compact_even"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "current_packet_tokens": 5537,
+      "legacy_card_packet_tokens": 5559,
+      "saving_fraction": 0.003957546321280758,
+      "saving_tokens": 22,
+      "symbol": "lower_bound"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 4601,
+      "legacy_card_packet_tokens": 4563,
+      "saving_fraction": -0.008327854481700703,
+      "saving_tokens": -38,
+      "symbol": "gcd"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 4610,
+      "legacy_card_packet_tokens": 4572,
+      "saving_fraction": -0.008311461067366688,
+      "saving_tokens": -38,
+      "symbol": "factorial_wrap"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 4954,
+      "legacy_card_packet_tokens": 4938,
+      "saving_fraction": -0.003240178209801492,
+      "saving_tokens": -16,
+      "symbol": "distance_sq"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 4603,
+      "legacy_card_packet_tokens": 4565,
+      "saving_fraction": -0.008324205914567395,
+      "saving_tokens": -38,
+      "symbol": "translated"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 4613,
+      "legacy_card_packet_tokens": 4575,
+      "saving_fraction": -0.00830601092896166,
+      "saving_tokens": -38,
+      "symbol": "header_valid"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 4570,
+      "legacy_card_packet_tokens": 4532,
+      "saving_fraction": -0.00838481906443067,
+      "saving_tokens": -38,
+      "symbol": "op_class"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 6149,
+      "legacy_card_packet_tokens": 6193,
+      "saving_fraction": 0.007104795737122527,
+      "saving_tokens": 44,
+      "symbol": "copy_twice"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 6147,
+      "legacy_card_packet_tokens": 6191,
+      "saving_fraction": 0.007107090938459071,
+      "saving_tokens": 44,
+      "symbol": "delegated"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 4538,
+      "legacy_card_packet_tokens": 4500,
+      "saving_fraction": -0.008444444444444477,
+      "saving_tokens": -38,
+      "symbol": "checked_add"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 4538,
+      "legacy_card_packet_tokens": 4500,
+      "saving_fraction": -0.008444444444444477,
+      "saving_tokens": -38,
+      "symbol": "checked_div"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "current_packet_tokens": 5336,
+      "legacy_card_packet_tokens": 5358,
+      "saving_fraction": 0.004106009705113878,
+      "saving_tokens": 22,
+      "symbol": "checked_at"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 4565,
+      "legacy_card_packet_tokens": 4527,
+      "saving_fraction": -0.008394079964656465,
+      "saving_tokens": -38,
+      "symbol": "checked_shift"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 4484,
+      "legacy_card_packet_tokens": 4446,
+      "saving_fraction": -0.008547008547008517,
+      "saving_tokens": -38,
+      "symbol": "narrow"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 6095,
+      "legacy_card_packet_tokens": 6139,
+      "saving_fraction": 0.007167291089754002,
+      "saving_tokens": 44,
+      "symbol": "square_sum"
+    }
+  ],
+  "tasks": {
+    "tiktoken/o200k_base": {
+      "rows": [
+        {
+          "model_reads_once": 65855,
+          "model_turns": 12,
+          "model_writes": 1420,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 196445,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 67275
+        },
+        {
+          "model_reads_once": 64280,
+          "model_turns": 12,
+          "model_writes": 1010,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 192019,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 65290
+        },
+        {
+          "model_reads_once": 13884,
+          "model_turns": 14,
+          "model_writes": 1058,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 45741,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 14942
+        },
+        {
+          "model_reads_once": 51345,
+          "model_turns": 12,
+          "model_writes": 1010,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 564226,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 52355
+        },
+        {
+          "model_reads_once": 8388,
+          "model_turns": 14,
+          "model_writes": 1058,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 109462,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 9446
+        },
+        {
+          "model_reads_once": 101099,
+          "model_turns": 12,
+          "model_writes": 1244,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 301677,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 102343
+        },
+        {
+          "model_reads_once": 99425,
+          "model_turns": 12,
+          "model_writes": 824,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 297033,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 100249
+        },
+        {
+          "model_reads_once": 15558,
+          "model_turns": 12,
+          "model_writes": 824,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 45432,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 16382
+        },
+        {
+          "model_reads_once": 80330,
+          "model_turns": 12,
+          "model_writes": 824,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 877914,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 81154
+        },
+        {
+          "model_reads_once": 10661,
+          "model_turns": 12,
+          "model_writes": 824,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 128331,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 11485
+        },
+        {
+          "model_reads_once": 54980,
+          "model_turns": 12,
+          "model_writes": 1384,
+          "program": "examples/apps/service",
+          "reads_with_history": 163730,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 56364
+        },
+        {
+          "model_reads_once": 53348,
+          "model_turns": 12,
+          "model_writes": 968,
+          "program": "examples/apps/service",
+          "reads_with_history": 159178,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 54316
+        },
+        {
+          "model_reads_once": 13967,
+          "model_turns": 14,
+          "model_writes": 1016,
+          "program": "examples/apps/service",
+          "reads_with_history": 45619,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 14983
+        },
+        {
+          "model_reads_once": 44873,
+          "model_turns": 12,
+          "model_writes": 968,
+          "program": "examples/apps/service",
+          "reads_with_history": 489124,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 45841
+        },
+        {
+          "model_reads_once": 7847,
+          "model_turns": 14,
+          "model_writes": 1016,
+          "program": "examples/apps/service",
+          "reads_with_history": 106270,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 8863
+        },
+        {
+          "model_reads_once": 36844,
+          "model_turns": 12,
+          "model_writes": 1444,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 109298,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 38288
+        },
+        {
+          "model_reads_once": 35212,
+          "model_turns": 12,
+          "model_writes": 1028,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 104746,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 36240
+        },
+        {
+          "model_reads_once": 11274,
+          "model_turns": 15,
+          "model_writes": 1100,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 38643,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 12374
+        },
+        {
+          "model_reads_once": 28027,
+          "model_turns": 12,
+          "model_writes": 1028,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 311758,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 29055
+        },
+        {
+          "model_reads_once": 6333,
+          "model_turns": 15,
+          "model_writes": 1100,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 96291,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 7433
+        },
+        {
+          "model_reads_once": 20615,
+          "model_turns": 12,
+          "model_writes": 1994,
+          "program": "examples/systems",
+          "reads_with_history": 61482,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 22609
+        },
+        {
+          "model_reads_once": 19061,
+          "model_turns": 12,
+          "model_writes": 1606,
+          "program": "examples/systems",
+          "reads_with_history": 57142,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 20667
+        },
+        {
+          "model_reads_once": 12514,
+          "model_turns": 16,
+          "model_writes": 1704,
+          "program": "examples/systems",
+          "reads_with_history": 43541,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 14218
+        },
+        {
+          "model_reads_once": 11131,
+          "model_turns": 12,
+          "model_writes": 1606,
+          "program": "examples/systems",
+          "reads_with_history": 139081,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 12737
+        },
+        {
+          "model_reads_once": 7059,
+          "model_turns": 16,
+          "model_writes": 1704,
+          "program": "examples/systems",
+          "reads_with_history": 113679,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 8763
+        }
+      ],
+      "summary": {
+        "component edit/1 cold": {
+          "model_reads_once": 279393,
+          "model_turns": 60,
+          "model_writes": 7486,
+          "reads_with_history": 832632,
+          "total_once": 286879,
+          "vs_1_3": {
+            "model_reads_once": 1.0,
+            "model_turns": 1.0,
+            "model_writes": 1.0,
+            "reads_with_history": 1.0,
+            "total_once": 1.0
+          }
+        },
+        "component edit/2 cold": {
+          "model_reads_once": 271326,
+          "model_turns": 60,
+          "model_writes": 5436,
+          "reads_with_history": 810118,
+          "total_once": 276762,
+          "vs_1_3": {
+            "model_reads_once": 0.971,
+            "model_turns": 1.0,
+            "model_writes": 0.726,
+            "reads_with_history": 0.973,
+            "total_once": 0.965
+          }
+        },
+        "component edit/2 warm": {
+          "model_reads_once": 215706,
+          "model_turns": 60,
+          "model_writes": 5436,
+          "reads_with_history": 2382103,
+          "total_once": 221142,
+          "vs_1_3": {
+            "model_reads_once": 0.772,
+            "model_turns": 1.0,
+            "model_writes": 0.726,
+            "reads_with_history": 2.861,
+            "total_once": 0.771
+          }
+        },
+        "focused edit/2 cold": {
+          "model_reads_once": 67197,
+          "model_turns": 71,
+          "model_writes": 5702,
+          "reads_with_history": 218976,
+          "total_once": 72899,
+          "vs_1_3": {
+            "model_reads_once": 0.241,
+            "model_turns": 1.183,
+            "model_writes": 0.762,
+            "reads_with_history": 0.263,
+            "total_once": 0.254
+          }
+        },
+        "focused edit/2 warm": {
+          "model_reads_once": 40288,
+          "model_turns": 71,
+          "model_writes": 5702,
+          "reads_with_history": 554033,
+          "total_once": 45990,
+          "vs_1_3": {
+            "model_reads_once": 0.144,
+            "model_turns": 1.183,
+            "model_writes": 0.762,
+            "reads_with_history": 0.665,
+            "total_once": 0.16
+          }
+        }
+      },
+      "task_count": 30
+    },
+    "utf8_bytes": {
+      "rows": [
+        {
+          "model_reads_once": 221601,
+          "model_turns": 12,
+          "model_writes": 3648,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 659022,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 225249
+        },
+        {
+          "model_reads_once": 218313,
+          "model_turns": 12,
+          "model_writes": 2892,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 649980,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 221205
+        },
+        {
+          "model_reads_once": 53625,
+          "model_turns": 14,
+          "model_writes": 3050,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 174676,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 56675
+        },
+        {
+          "model_reads_once": 164668,
+          "model_turns": 12,
+          "model_writes": 2892,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 1822581,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 167560
+        },
+        {
+          "model_reads_once": 30550,
+          "model_turns": 14,
+          "model_writes": 3050,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 397789,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 33600
+        },
+        {
+          "model_reads_once": 347382,
+          "model_turns": 12,
+          "model_writes": 3132,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 1035183,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 350514
+        },
+        {
+          "model_reads_once": 344094,
+          "model_turns": 12,
+          "model_writes": 2376,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 1026141,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 346470
+        },
+        {
+          "model_reads_once": 64770,
+          "model_turns": 12,
+          "model_writes": 2376,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 188169,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 67146
+        },
+        {
+          "model_reads_once": 266079,
+          "model_turns": 12,
+          "model_writes": 2376,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 2924364,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 268455
+        },
+        {
+          "model_reads_once": 44192,
+          "model_turns": 12,
+          "model_writes": 2376,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 519150,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 46568
+        },
+        {
+          "model_reads_once": 185114,
+          "model_turns": 12,
+          "model_writes": 3812,
+          "program": "examples/apps/service",
+          "reads_with_history": 549995,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 188926
+        },
+        {
+          "model_reads_once": 181826,
+          "model_turns": 12,
+          "model_writes": 3056,
+          "program": "examples/apps/service",
+          "reads_with_history": 540953,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 184882
+        },
+        {
+          "model_reads_once": 53831,
+          "model_turns": 14,
+          "model_writes": 3209,
+          "program": "examples/apps/service",
+          "reads_with_history": 174761,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 57040
+        },
+        {
+          "model_reads_once": 146116,
+          "model_turns": 12,
+          "model_writes": 3056,
+          "program": "examples/apps/service",
+          "reads_with_history": 1602824,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 149172
+        },
+        {
+          "model_reads_once": 28388,
+          "model_turns": 14,
+          "model_writes": 3209,
+          "program": "examples/apps/service",
+          "reads_with_history": 387371,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 31597
+        },
+        {
+          "model_reads_once": 122972,
+          "model_turns": 12,
+          "model_writes": 3424,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 362590,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 126396
+        },
+        {
+          "model_reads_once": 119684,
+          "model_turns": 12,
+          "model_writes": 2668,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 353548,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 122352
+        },
+        {
+          "model_reads_once": 44080,
+          "model_turns": 15,
+          "model_writes": 2899,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 148820,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 46979
+        },
+        {
+          "model_reads_once": 89739,
+          "model_turns": 12,
+          "model_writes": 2668,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 1000498,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 92407
+        },
+        {
+          "model_reads_once": 23501,
+          "model_turns": 15,
+          "model_writes": 2899,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 347481,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 26400
+        },
+        {
+          "model_reads_once": 76068,
+          "model_turns": 12,
+          "model_writes": 5382,
+          "program": "examples/systems",
+          "reads_with_history": 224618,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 81450
+        },
+        {
+          "model_reads_once": 72780,
+          "model_turns": 12,
+          "model_writes": 4626,
+          "program": "examples/systems",
+          "reads_with_history": 215576,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 77406
+        },
+        {
+          "model_reads_once": 49932,
+          "model_turns": 16,
+          "model_writes": 4953,
+          "program": "examples/systems",
+          "reads_with_history": 171309,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 54885
+        },
+        {
+          "model_reads_once": 38580,
+          "model_turns": 12,
+          "model_writes": 4626,
+          "program": "examples/systems",
+          "reads_with_history": 484784,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 43206
+        },
+        {
+          "model_reads_once": 26716,
+          "model_turns": 16,
+          "model_writes": 4953,
+          "program": "examples/systems",
+          "reads_with_history": 424805,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 31669
+        }
+      ],
+      "summary": {
+        "component edit/1 cold": {
+          "model_reads_once": 953137,
+          "model_turns": 60,
+          "model_writes": 19398,
+          "reads_with_history": 2831408,
+          "total_once": 972535,
+          "vs_1_3": {
+            "model_reads_once": 1.0,
+            "model_turns": 1.0,
+            "model_writes": 1.0,
+            "reads_with_history": 1.0,
+            "total_once": 1.0
+          }
+        },
+        "component edit/2 cold": {
+          "model_reads_once": 936697,
+          "model_turns": 60,
+          "model_writes": 15618,
+          "reads_with_history": 2786198,
+          "total_once": 952315,
+          "vs_1_3": {
+            "model_reads_once": 0.983,
+            "model_turns": 1.0,
+            "model_writes": 0.805,
+            "reads_with_history": 0.984,
+            "total_once": 0.979
+          }
+        },
+        "component edit/2 warm": {
+          "model_reads_once": 705182,
+          "model_turns": 60,
+          "model_writes": 15618,
+          "reads_with_history": 7835051,
+          "total_once": 720800,
+          "vs_1_3": {
+            "model_reads_once": 0.74,
+            "model_turns": 1.0,
+            "model_writes": 0.805,
+            "reads_with_history": 2.767,
+            "total_once": 0.741
+          }
+        },
+        "focused edit/2 cold": {
+          "model_reads_once": 266238,
+          "model_turns": 71,
+          "model_writes": 16487,
+          "reads_with_history": 857735,
+          "total_once": 282725,
+          "vs_1_3": {
+            "model_reads_once": 0.279,
+            "model_turns": 1.183,
+            "model_writes": 0.85,
+            "reads_with_history": 0.303,
+            "total_once": 0.291
+          }
+        },
+        "focused edit/2 warm": {
+          "model_reads_once": 153347,
+          "model_turns": 71,
+          "model_writes": 16487,
+          "reads_with_history": 2076596,
+          "total_once": 169834,
+          "vs_1_3": {
+            "model_reads_once": 0.161,
+            "model_turns": 1.183,
+            "model_writes": 0.85,
+            "reads_with_history": 0.733,
+            "total_once": 0.175
+          }
+        }
+      },
+      "task_count": 30
+    }
+  },
+  "units": [
+    "utf8_bytes",
+    "tiktoken/o200k_base"
+  ]
+}

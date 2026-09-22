@@ -100,7 +100,7 @@ cairn run examples/embedded                # bare-metal AArch64 under QEMU
 | `verify --symbol f`, `--all` | Z3 found no input on which two versions of a function differ, within the modeled fragment. Anything outside it is reported unknown and blocks the aggregate result. |
 | `certificates` | The seventeen arithmetic identities behind the collector check, here in Python and in `proofs/` in Lean. |
 | `check --generics` | Every generic function needs only what its bounds promise. |
-| `inspect --symbol f` | The packet an AI agent gets for an edit: source, scope, effects, rule cards. |
+| `inspect --symbol f` | The packet an AI agent gets for an edit: its source, the interfaces around it, effects, rule cards; `--expand g` adds a body. |
 | `fmt`, `doc`, `lsp` | A comment-preserving formatter, an API reference generated from the checked program, a language server. |
 
 `make lint test proof` are the everyday gates. `make gpu embedded` need the hardware and the emulator, and `make docs` regenerates [docs/std_api.md](docs/std_api.md).

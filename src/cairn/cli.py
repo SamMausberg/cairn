@@ -122,6 +122,10 @@ def main(argv: list[str] | None = None) -> int:
             c.add_argument("--contract", type=Path)
         if name == "inspect":
             c.add_argument("--symbol", required=True)
+            c.add_argument("--scope", choices=["focused", "component"], default="focused",
+                           help="focused: the symbol and the interfaces around it; component: its whole call graph.")  # fmt: skip
+            c.add_argument("--expand", action="append", default=[], metavar="NAME",
+                           help="Disclose this function's source or this type first, as an expand request would.")  # fmt: skip
     v = sub.add_parser("verify", help="SMT source equivalence, not native or Lean verification.")
     v.add_argument("reference", type=Path)
     v.add_argument("candidate", type=Path)
@@ -241,7 +245,10 @@ def main(argv: list[str] | None = None) -> int:
         if a.command == "inspect":
             from .agent.agent_tools import EditSession
 
-            report(EditSession(project.source, a.symbol).packet())
+            session = EditSession(project.source, a.symbol, scope=a.scope)
+            if a.expand:
+                session.expand(a.expand)
+            report(session.packet())
             return 0
         if a.command == "test":
             from .agent.agent_tools import load_json_strict

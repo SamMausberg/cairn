@@ -60,16 +60,24 @@ def test_recursive_permutations_reach_fixed_point(count):
     assert "diverge" in r["functions"]["rotate"]["effects"]
 
 
-def test_packet_includes_callers_and_callees():
-    s = EditSession(S, "step")
+def test_component_packet_includes_callers_and_callees():
+    s = EditSession(S, "step", scope="component")
     assert set(s.packet()["dependencies"]) == {"step", "caller"}
     assert len(s.packet()["context"]) == 2
     assert "other" not in json.dumps(s.packet())
 
 
-def test_extra_context():
-    s = EditSession(S, "step", include=("other",))
-    assert set(s.packet()["dependencies"]) == {"step", "caller", "other"}
+def test_focused_packet_shows_the_target_and_interfaces():
+    p = EditSession(S, "step").packet()
+    assert p["protocol"] == "cairn.packet/2" and [c["symbol"] for c in p["context"]] == ["step"]
+    assert set(p["dependencies"]) == {"caller"} and p["callers"] == ["caller"] and p["not_shown"] == ["other"]
+    assert p["dependencies"]["caller"]["contract"] is None and "mul_wrap(x,2)" not in json.dumps(p)
+
+
+@pytest.mark.parametrize("scope", ["focused", "component"])
+def test_extra_context(scope):
+    s = EditSession(S, "step", include=("other",), scope=scope)
+    assert {"caller", "other"} <= set(s.packet()["dependencies"])
     s.check(request(s, "{return other(x);}"))
 
 
@@ -219,9 +227,12 @@ def test_every_site_identity_substitution(source):
 
 def test_generated_dependency_disclosed():
     source = "fn f[K:nat](x:u64)->u64{return mul_wrap(x,u64(K));} family scale=f[1..3]; fn top(x:u64)->u64{return scale_1(x);}"
-    s = EditSession(source, "top")
-    text = json.dumps(s.packet())
+    text = json.dumps(EditSession(source, "top", scope="component").packet())
     assert "family scale = f[1..3];" in text and "fn f[K:nat]" in text
+    s = EditSession(source, "top")
+    assert "fn f[K:nat]" not in json.dumps(s.packet()) and "scale_1" in s.packet()["dependencies"]
+    body = s.expand(["scale_1"])["context"][0]["source"]
+    assert "fn f[K:nat]" in body and "family scale=f[1..3];" not in body and "family scale = f[1..3];" in body
 
 
 def test_unrelated_template_not_editable():

@@ -21,6 +21,8 @@ def main():
     p.add_argument("--symbol")
     p.add_argument("--contract", type=Path)
     p.add_argument("--include", action="append", default=[])
+    p.add_argument("--scope", choices=["focused", "component"], default="focused")
+    p.add_argument("--expand", action="append", default=[], help="Disclose a function or type first (repeatable).")
     p.add_argument("--site")
     p.add_argument("--request", type=Path)
     p.add_argument("--out", type=Path)
@@ -38,7 +40,9 @@ def main():
         if not a.symbol:
             p.error("--symbol is required for edit commands")
         contract = load_json_strict(a.contract.read_text()) if a.contract else None
-        session = EditSession(source, a.symbol, contract, tuple(a.include))
+        session = EditSession(source, a.symbol, contract, tuple(a.include), a.scope)
+        if a.expand:
+            session.expand(a.expand)  # A stateless command replays the disclosures its session had.
         if a.command == "packet":
             result = session.packet(a.site)
         elif a.command == "sites":

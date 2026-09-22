@@ -1,6 +1,6 @@
 # The AI edit protocol
 
-An agent edits CAIRN through a host. The host holds the program, shows the agent a packet, and decides whether the agent's reply is kept. [internals.md](internals.md#safety-and-trust) lists what a reply can never change. The request an agent sends is the `cairn.edit/1` object of [project/edit_schema.json](project/edit_schema.json): a session digest, a replacement of at most 64000 UTF-8 bytes, and a kind, either `body` for a whole function or `expr` for one site named by its own digest.
+An agent edits CAIRN through a host. The host holds the program, shows the agent a packet, and decides whether the agent's reply is kept. [internals.md](internals.md#safety-and-trust) lists what a reply can never change. A request is one of the objects of [project/edit_schema.json](project/edit_schema.json). A `cairn.edit/2` request names a session by the handle the host gave it, such as `e1`, and is a `body` edit of the whole function, an `expr` edit of one site named like `x3`, or an `expand` request. A `cairn.edit/1` request carries the session digest itself and a site's own digest. Replacements are at most 64000 UTF-8 bytes.
 
 ## The rule cards
 
@@ -12,9 +12,17 @@ The full set of cards is what `tools/ai/ai_pilot.py prepare` gives a pilot subje
 
 The host chooses how much the agent may change. A full-function edit replaces one body, for changes to an algorithm's structure. Named expression slots replace one or more expressions, for local decisions. Slots may not overlap and are resolved against the exact original source.
 
-Both kinds of packet carry the same context: the function's call-graph component in both directions, the cards it selects, and, for slots, the expected type and the lexical bindings at each one. A scalar contract attached to the task shows its full reference source, its input domain and its trap policy. The agent reads these facts and cannot replace them.
+A packet starts focused. It holds the target's source, its effect row and ceiling, and the signature and effect row of every function it calls and every function that calls it, with the host's contract for each one and the comment written above it. Where the host gave no contract the field is `null`, and nothing stands in for the body. It holds the types those name, the cards the target selects, and, for slots, the expected type and the lexical bindings at each one. `not_shown` lists every other function of the program. A scalar contract attached to the task shows its full reference source, its input domain and its trap policy. The agent reads these facts and cannot replace them.
 
-When a reply arrives, the host splices it into the pinned original, leaves everything outside the authorized range untouched, and rechecks the complete linked module. It refuses a changed signature (`E-SIGNATURE`), an added or removed declaration (`E-DECLARATION`), an effect beyond the ceiling (`E-EFFECT-EXPANSION`) and a call to a function the packet did not show (`E-CONTEXT-CLOSURE`). A stale session is `E-SESSION`. An accepted reply is `typed`, which says nothing yet about its behaviour.
+The agent asks for more with `expand`, naming up to 32 functions or types. The host answers from the pinned program with each body as written, the types those bodies use, and any card they add. A function the agent has expanded may then be called. `cairn inspect --symbol f --expand g` prints the packet after the same request, and `--scope component` prints the 1.3 packet, which shows the whole call-graph component in both directions at once.
+
+```json
+{"protocol": "cairn.edit/2", "handle": "e1", "kind": "expand", "symbols": ["append", "Header"]}
+```
+
+The host keeps the digests of source, contract, compiler and disclosed context behind each handle, so the agent never copies a hash. Expanding a function it had not disclosed changes the session digest, and an `edit/1` request made before is refused as stale. One host sends each card and the boundary text once, and later packets name them under `sent_before`. On thirty scripted edits of five example programs a focused packet with one expansion took about a quarter of the context of the component packet (`evidence/v1_4/context/`). No model took part in that measurement.
+
+When a reply arrives, the host splices it into the pinned original, leaves everything outside the authorized range untouched, and rechecks the complete linked module, whatever the packet showed. It refuses a changed signature (`E-SIGNATURE`), an added or removed declaration (`E-DECLARATION`), an effect beyond the ceiling (`E-EFFECT-EXPANSION`) and a call to a function the packet did not show (`E-CONTEXT-CLOSURE`). A stale session or an unknown handle is `E-SESSION`, and an expansion that names nothing, or two things, is `E-SYMBOL`. An accepted reply is `typed`, which says nothing yet about its behaviour. The functions a focused packet shows are a subset of what the component packet shows, so a reply admitted under the focused packet is admitted under the component one.
 
 ## Named choices
 

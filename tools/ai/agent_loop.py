@@ -2,7 +2,8 @@
 """Run a host-owned CAIRN task with a user-selected external adapter.
 
 Adapter stdin: one JSON object with `messages`, `attempt`, `protocol`.
-Adapter stdout: one strict cairn.edit/1 JSON request, no Markdown fences.
+Adapter stdout: one strict cairn.edit/2 JSON request, no Markdown fences: a body edit, or an
+expand request naming functions or types to read first. An expansion uses an attempt.
 The adapter executable is user supplied. No network/model is built in, no API
 key is read by this runner, and a local process is NOT a security sandbox.
 Public examples may be used for repairs. Reserved cases are checked once after
@@ -21,7 +22,7 @@ from pathlib import Path
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
 from ai.task_eval import evaluate, validate_contract
-from cairn.agent.agent_tools import EditSession, digest, explain, load_json_strict, stable_json
+from cairn.agent.agent_tools import EditHost, digest, explain, load_json_strict, stable_json
 from cairn.compiler.cairnc import Diagnostic
 
 
@@ -31,15 +32,15 @@ def run(source, contract, command, attempts=4, public_cases=3, adapter_kind="ext
     validate_contract(source, contract)
     if not 1 <= public_cases < len(contract["cases"]):
         raise ValueError("Need nonempty public and reserved case sets.")
-    session = EditSession(source, contract["symbol"], contract)
+    host = EditHost()
     public = {**contract, "cases": contract["cases"][:public_cases]}
     reserved = {**contract, "cases": contract["cases"][public_cases:]}
-    packet = session.packet()
+    packet = host.open(source, contract["symbol"], contract)
     packet["public_examples"] = public["cases"]
     messages = [
         {
             "role": "system",
-            "content": "Return one strict cairn.edit/1 JSON request. Change only the authorized function body. Preserve the signature, host-owned contract and allowed effects. Compiler acceptance alone is not task completion.",
+            "content": "Return one strict cairn.edit/2 JSON request: a body edit, or an expand request for a function or type you need to read. Change only the authorized function body. Preserve the signature, host-owned contract and allowed effects. Compiler acceptance alone is not task completion.",
         },
         {"role": "user", "content": stable_json(packet)},
     ]
@@ -67,9 +68,13 @@ def run(source, contract, command, attempts=4, public_cases=3, adapter_kind="ext
             else:
                 try:
                     edit = load_json_strict(raw)
-                    candidate, typed = session.check(edit)
-                    tests = evaluate(candidate, public)
-                    feedback = {"admission": typed, "tests": tests}
+                    typed = host.respond(edit)
+                    if typed["protocol"] == "cairn.expansion/1":
+                        feedback, tests = typed, {"status": "not-run"}
+                    else:
+                        candidate = host.admitted[edit["handle"]][-1][0]
+                        tests = evaluate(candidate, public)
+                        feedback = {"admission": typed, "tests": tests}
                     if tests["status"] == "passed-finite-tests":
                         # Check reserved cases once, without exposing their outcomes to the adapter.
                         hidden = evaluate(candidate, reserved)
@@ -90,7 +95,7 @@ def run(source, contract, command, attempts=4, public_cases=3, adapter_kind="ext
                         )
                         break
                 except Diagnostic as e:
-                    feedback = explain(e)
+                    feedback = explain(e, source)
                 except (ValueError, TypeError, KeyError, RecursionError) as e:
                     feedback = {"status": "invalid-reply", "message": str(e)}
         except subprocess.TimeoutExpired:

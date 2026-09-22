@@ -64,12 +64,15 @@ def test_lane_edits_are_admitted_only_when_race_free_and_within_effects():
 
 
 def test_packets_disclose_generic_origins_and_feature_cards():
-    session = EditSession(language.PRELUDE + language.MAIN, "main")
+    session = EditSession(language.PRELUDE + language.MAIN, "main", scope="component")
     packet = session.packet()
     shown = {c.get("symbol") for c in packet["context"]}
     assert {"push", "vec_new", "largest", "main"} <= shown  # Templates, not their mangled instances.
     assert {"generics", "owners", "sums", "views"} <= set(packet["rule_cards"])
     assert "push[u64]" in packet["dependencies"]
+    focused = EditSession(language.PRELUDE + language.MAIN, "main")
+    assert "push[u64]" in focused.packet()["dependencies"]
+    assert focused.expand(["push[u64]"])["context"][0]["source"].startswith("fn push[")  # The template, as written.
 
 
 def test_templates_are_not_edit_targets_but_their_callers_are():
