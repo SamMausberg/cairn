@@ -10,10 +10,10 @@ import subprocess
 import pytest
 
 from cairn.agent.projection import canonical_source
-from cairn.compiler.cairnc import Diagnostic, compile_source
+from cairn.compiler.cairnc import compile_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project
-from emitted import contract, on_device, refused, watched
+from emitted import code_of, contract, on_device, refused, watched
 
 HELPERS = """
 struct Stats { hits:u64; total:u64; }
@@ -177,9 +177,7 @@ def test_two_fields_of_one_record_go_to_two_tasks(tmp_path, cxx, sanitizer):
 def test_the_same_field_cannot_go_to_two_tasks():
     """The narrower lease is not a weaker one: one field twice is one piece of storage twice."""
     same = TWO_FIELDS.replace("spawn fill(len(p.right), p.right, 1000)", "spawn fill(len(p.left), p.left, 1000)")
-    with pytest.raises(Diagnostic) as e:
-        compile_source(HELPERS + same)
-    assert e.value.data["code"] == "E-LEASED" and "p.left is lent to l" in e.value.data["message"]
+    assert "p.left is lent to l" in refused("E-LEASED", HELPERS + same)["message"]
 
 
 TWO_MODULES = """module fill;
@@ -467,9 +465,7 @@ def test_device_lanes_refuse_host_only_constructs(lane):
         "fn go(n:usize, d:rw<u64>[n]@device, hits:ro<Atomic[u64]>, f:ro<fn(u64) -> u64>, shape:ro<dyn Shape>) -> R {"
         f" parallel i in n {{ {lane} }} return R.Ok(0); }}"
     )
-    with pytest.raises(Diagnostic) as e:
-        compile_source(source)
-    assert e.value.data["code"] in {"E-PLACEMENT", "E-PARALLEL-CONTROL"}
+    assert code_of(lambda: compile_source(source)) in {"E-PLACEMENT", "E-PARALLEL-CONTROL"}
 
 
 QUEUED = """

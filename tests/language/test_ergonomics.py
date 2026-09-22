@@ -7,8 +7,8 @@ import subprocess
 import pytest
 
 from cairn.agent.projection import canonical_source
-from cairn.compiler.cairnc import Diagnostic, compile_source
-from emitted import SANITIZED, WARNINGS, refused, run, sanitized
+from cairn.compiler.cairnc import compile_source
+from emitted import SANITIZED, WARNINGS, code_of, refused, run, sanitized
 
 FIRST_USERS_FOUND = """
 import std.vec;
@@ -153,9 +153,7 @@ def test_taking_apart_obeys_moves_privacy_and_linearity(code, body):
     ],
 )  # fmt: skip
 def test_a_diagnostic_says_what_to_write_instead(code, says, source):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(source)
-    assert e.value.data["code"] == code and says in e.value.data["message"], e.value.data["message"]
+    assert says in refused(code, source)["message"]
 
 
 def test_a_move_before_break_still_counts_after_the_loop():
@@ -163,9 +161,7 @@ def test_a_move_before_break_still_counts_after_the_loop():
         "fn consume(b:Buf[u64]) {}\n"
         "fn f(n:usize) -> usize { let b = Buf[u64](4); for i in 0..n { if i == 1 { consume(b); break; } } return len(b); }"
     )
-    with pytest.raises(Diagnostic) as e:
-        compile_source(source)
-    assert e.value.data["code"] in {"E-MOVE-IN-LOOP", "E-MOVED"}
+    assert code_of(lambda: compile_source(source)) in {"E-MOVE-IN-LOOP", "E-MOVED"}
 
 
 ERGONOMICS = """

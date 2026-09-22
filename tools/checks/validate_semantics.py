@@ -93,6 +93,11 @@ def fixtures():
 EDGES = [-2, -1, 0, 1, 2, 7, 8, 31, 32, 63, 64, 127, 128, 255, 256]
 
 
+def literal(value, ty):
+    """A concrete value as the SMT term of its type."""
+    return ("true" if value else "false") if ty == "bool" else constant(value, ty)
+
+
 def inputs(row, rng, exhaustive=True):
     pars = row["params"]
     if exhaustive and pars == [("x", "u8"), ("y", "u8")]:
@@ -137,21 +142,10 @@ def main():
             mismatches = []
             for args in selected:
                 expected = r["oracle"](args)
-                equal_inputs = conj(
-                    *(
-                        same(
-                            q.inputs[n].value, ("true" if args[n] else "false") if t == "bool" else constant(args[n], t)
-                        )
-                        for n, t in r["params"]
-                    )
-                )
+                equal_inputs = conj(*(same(q.inputs[n].value, literal(args[n], t)) for n, t in r["params"]))
                 mismatch = neg(sym.defined) if expected["defined"] else sym.defined
                 if expected["defined"]:
-                    v = (
-                        ("true" if expected["return"] else "false")
-                        if r["ret"] == "bool"
-                        else constant(expected["return"], r["ret"])
-                    )
+                    v = literal(expected["return"], r["ret"])
                     mismatch = disj(mismatch, conj(sym.defined, neg(same(sym.value, v))))
                 mismatches.append(conj(equal_inputs, mismatch))
             smt = q.text(disj(*mismatches))
@@ -174,15 +168,8 @@ def main():
                         raise AssertionError((r["name"], args, expected, actual, machine))
                     count += 1
                     traps += not expected["defined"]
-            native_rows.append(
-                {
-                    "compiler": native.compiler,
-                    "cases": count,
-                    "trap_cases": traps,
-                    "generated_sha256": native.generated_sha256,
-                    "instrumented_runtime_sha256": native.runtime_sha256,
-                }
-            )
+            hashes = {"generated_sha256": native.generated_sha256, "instrumented_runtime_sha256": native.runtime_sha256}
+            native_rows.append({"compiler": native.compiler, "cases": count, "trap_cases": traps, **hashes})
     result = {
         "status": "passed",
         "seed": 1709202604,

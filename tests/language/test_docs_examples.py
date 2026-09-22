@@ -9,7 +9,8 @@ import re
 
 import pytest
 
-from cairn.compiler.cairnc import Diagnostic, compile_source
+from cairn.compiler.cairnc import compile_source
+from emitted import refused
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOCUMENTS = [
@@ -33,9 +34,7 @@ def test_an_example_is_what_the_compiler_says(where, tag, source):
     if tag == "fragment":
         return
     if tag.startswith("rejects "):
-        with pytest.raises(Diagnostic) as refused:
-            compile_source(source)
-        assert refused.value.data["code"] == tag.split()[1], refused.value.data["message"]
+        refused(tag.split()[1], source)
     else:
         assert tag == "", f"{where}: unknown example tag {tag!r}"
         compile_source(source)

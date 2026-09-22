@@ -15,7 +15,7 @@ import subprocess
 
 import pytest
 
-from cairn.compiler.cairnc import Diagnostic, compile_source
+from cairn.compiler.cairnc import compile_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project
 from emitted import refused
@@ -854,11 +854,9 @@ def test_every_packaged_template_needs_only_what_its_bounds_promise():
     source = "".join(f"import std.{m};\n" for m in modules) + "fn main() -> i32 { return 0; }\n"
     verdicts = certify_templates(source)
     assert len(verdicts) >= 40 and {n: v for n, v in verdicts.items() if v != "ok"} == {}
-    with pytest.raises(Diagnostic) as e:
-        compile_source(
-            "import std.vec as vec;\nlinear struct Token { id:u64; }\nfn main() -> i32 { let mut v = vec.new[Token](); return 0; }"
-        )
-    assert e.value.data["code"] == "E-BOUND" and "std.vec.new needs [T:affine]" in e.value.data["message"]
+    token = "import std.vec as vec;\nlinear struct Token { id:u64; }\n"
+    said = refused("E-BOUND", token + "fn main() -> i32 { let mut v = vec.new[Token](); return 0; }")["message"]
+    assert "std.vec.new needs [T:affine]" in said
 
 
 def test_the_api_reference_is_what_the_compiler_says_today():
