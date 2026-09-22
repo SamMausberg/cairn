@@ -11,6 +11,8 @@ cairn doctor
 make lint test
 ```
 
+`compile_flags.txt` gives clangd the runtime's C++20 flags and include path, so the headers under `src/cairn/runtime/` and the native tests read cleanly in an editor.
+
 Work on a branch, one focused change at a time. Run `make lint test` before and after you touch code, `make native` when you touch the runtime or the lowering, `make lean` when you touch a rule the calculus models, and `make gpu` or `make embedded` where the hardware is present. A pull request needs green CI, a rejection test for every rule it adds and a behaviour test for every observable change.
 
 Commit messages are one plain sentence that says what is now true, in the style of the existing history. Do not add attribution trailers.
