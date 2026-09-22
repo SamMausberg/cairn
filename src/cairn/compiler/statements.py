@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from . import facts
 from .places import settle
 from .scope import Binding
 from .tree import BOOL, USIZE, VOID, Expr, Stmt, Type, fail, is_view
@@ -67,6 +68,8 @@ def s_let(c: Checker, s: Stmt):
         fail("E-VIEW-ALIAS", "Local view aliases and void values are outside this subset.", s)
     s.ty = ty
     c.bind(s.name, Binding(ty, s.tag == "reg"), s)
+    if s.tag == "let":
+        facts.defined(c, s.name, s.exprs[0])
 
 
 def s_unpack(c: Checker, s: Stmt):
@@ -111,10 +114,12 @@ def s_compact(c: Checker, s: Stmt):
     if target.ty.place == "device":  # The predicate and projection run as device lanes.
         c.region(s, [], body, "device")
     else:
-        c.env[s.binder], s.ref = Binding(USIZE), "host"
+        c.env[s.binder], s.ref, known = Binding(USIZE), "host", len(c.facts)
+        facts.binder(c, s.binder, None, hi)
         body()
-        del c.env[s.binder]
+        del c.env[s.binder], c.facts[known:]
     c.env[s.name] = Binding(USIZE)
+    facts.binder(c, s.name, None, hi, strict=False)  # The certificates' last: what was kept fits the capacity.
     c.effect("write:" + out.val)
     c.counts["bounded_collectors"] = c.counts.get("bounded_collectors", 0) + 1
 
@@ -176,8 +181,19 @@ def branches(c: Checker, node: Any, runs: list) -> Any:
 
 
 def s_if(c: Checker, s: Stmt):
-    c.expr(s.exprs[0], BOOL)
-    both = c.branches(s, [lambda: c.block(s.body), lambda: c.block(s.other)])
+    cond, ends = s.exprs[0], []
+    c.expr(cond, BOOL)
+
+    def arm(body: list[Stmt], truth: bool) -> Any:
+        known = len(c.facts)
+        facts.assume(c, cond, truth)
+        ends.append(c.block(body))
+        del c.facts[known:]
+        return ends[-1]
+
+    both = c.branches(s, [lambda: arm(s.body, True), lambda: arm(s.other, False)])
+    if bool(ends[0]) != bool(ends[1]):  # One arm leaves, so the rest of the block runs after the other.
+        facts.assume(c, cond, bool(ends[1]))
     return both if s.other else False
 
 
@@ -243,8 +259,10 @@ def s_for(c: Checker, s: Stmt):
     c.expr(s.exprs[0], USIZE)
     c.expr(s.exprs[1], USIZE)
     c.bind(s.name, Binding(USIZE), s, f"Loop binder {s.name} already exists.")
+    known = len(c.facts)
+    facts.binder(c, s.name, s.exprs[0], s.exprs[1])
     c.loop(s)
-    del c.env[s.name]
+    del c.env[s.name], c.facts[known:]
 
 
 def s_expr(c: Checker, s: Stmt):

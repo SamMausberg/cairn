@@ -59,6 +59,8 @@ class Checker:
     before: dict[str, set[str]]
     spawning: str
     touched: list[tuple[str, str, bool, Any]] | None
+    facts: list[tuple[str, str, int]]
+    discharged: dict[str, int]
 
     # The rules live one module per subject, each function taking the checker as `c`; a statement or
     # expression tag dispatches to `s_<tag>` or `e_<tag>` through this table.
@@ -120,6 +122,7 @@ class Checker:
         self.local_effects: dict[str, set[str]] = {}
         self.calls: dict[str, set[str]] = {}
         self.checks: dict[str, dict[str, int]] = {}
+        self.discharges: dict[str, dict[str, int]] = {}
         self.call_edges: dict[str, list[tuple[str, dict[str, str]]]] = {}
         self.resources: dict[str, list[dict[str, Any]]] = {}
         self.unchecked: list[str] = []
@@ -429,6 +432,7 @@ class Checker:
                 "effects": sorted(effects[n]),
                 "calls": sorted(self.calls[n]),
                 "syntactic_check_sites": self.checks[n],
+                "discharged_check_sites": self.discharges[n],
                 "heap_allocations": sum(x["kind"] == "buffer" for x in self.resources[n]),
                 "allocation_count_kind": "syntactic-sites-not-dynamic-bound",
                 "local_storage": self.resources[n],
@@ -496,7 +500,7 @@ class Checker:
             self.released([n for n, t in f.params if t.mode == "value"])
         borrowed = {n for n, t in f.params if t.mode != "value"}
         self.local_effects[f.name] = {exposed(e, borrowed) for e in self.effects}
-        self.calls[f.name], self.checks[f.name] = self.callset, self.counts
+        self.calls[f.name], self.checks[f.name], self.discharges[f.name] = self.callset, self.counts, self.discharged
         self.s, self.reaching = outer, reaching
 
     # The walk ----------------------------------------------------------------------------------
@@ -533,7 +537,7 @@ class Checker:
             self.effect("free")
 
     def block(self, ss: list[Stmt]) -> Any:
-        saved, deferred, returned = dict(self.env), set(self.deferred), False
+        saved, deferred, returned, known = dict(self.env), set(self.deferred), False, len(self.facts)
         for s in ss:
             if returned:
                 fail("E-UNREACHABLE", "Statement after unconditional return.", s)
@@ -544,6 +548,7 @@ class Checker:
         self.moved |= (self.deferred - deferred) & set(saved)  # Its cleanup has now run: gone for good.
         self.leases = {t: held for t, held in self.leases.items() if t in saved}
         self.env, self.deferred = saved, deferred
+        del self.facts[known:]  # What this block learned named what it bound or what it tested.
         return returned
 
     def stmt(self, s: Stmt) -> Any:
@@ -563,6 +568,7 @@ class Checker:
             handler = getattr(self, "e_" + e.tag, None)
             if handler is None:
                 fail("E-INTERNAL", f"Unknown expression {e.tag}.", e)
+            e.established = False  # Only what this check establishes, where it stands, may remove a guard.
             ty = e.ty = handler(e, expected)
         if consume and ty.mode == "value" and self.kind(ty) != "copy":
             self.consume(e)

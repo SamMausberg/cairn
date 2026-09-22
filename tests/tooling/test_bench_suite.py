@@ -112,11 +112,11 @@ def test_one_kernel_builds_every_arm_with_equal_boundaries(tmp_path):
         if build["grain_row"] in ("not_applicable", "library_default"):
             assert build["status"] == "built", f"{build['exe']} did not build:\n{build.get('stderr', '')}"
 
-    safety = record["safety"]["saxpy_f32"]
-    assert safety["cairn_boundaries"] == {"entry": 5, "element": 3, "arithmetic": 0, "conversion": 0}
+    safety = record["safety"]["saxpy_f32"]  # The checker established every index, so only the entry guards stay.
+    assert safety["cairn_boundaries"] == {"entry": 5, "element": 0, "arithmetic": 0, "conversion": 0}
     for name, arm in safety["arms"].items():
-        guarded = "|guarded|" in name
-        assert arm["equal_to_cairn"] is guarded, f"{name} should be {'equal' if guarded else 'unequal'} to cairn"
+        equal = name.startswith("cairn|") or "|matched|" in name
+        assert arm["equal_to_cairn"] is equal, f"{name} should be {'equal' if equal else 'unequal'} to cairn"
         assert arm["guard_failure_path"]["status"] == "read", f"{name}: {arm['guard_failure_path']}"
-        want = "present" if guarded else "absent"
+        want = "absent" if "|unguarded|" in name else "present"
         assert arm["boundary_in_the_object"] == want, f"{name}: {arm['boundary_in_the_object']}"

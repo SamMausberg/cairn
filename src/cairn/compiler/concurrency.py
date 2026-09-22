@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from . import facts
 from .builtins import WRAPPING
 from .effects import LANE_SAFE, PURE
 from .scope import Binding, Lanes
@@ -50,7 +51,8 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
     found = scan(s.body) | set().union(*(places(e) for e in exprs))
     target = target or ("device" if "device" in found else "host")
     c.bind(s.binder or s.name, Binding(USIZE), s)
-    binder = s.binder or s.name
+    binder, known = s.binder or s.name, len(c.facts)
+    facts.binder(c, binder, None, s.exprs[s.tag == "compact"])  # Every lane's index is below the extent.
     saved = c.lanes, c.device_depth, c.loop_depth, set(c.moved), c.effects
     c.lanes, c.device_depth, c.loop_depth, c.effects = (
         Lanes(binder, set(c.env) - {binder}, c.closure),
@@ -73,7 +75,7 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
         if name in written and not at_binder:
             fail("E-PARALLEL-RACE", f"{name} is written by lanes, so every lane may touch only {name}[{binder}].", node)
     c.lanes, c.device_depth, c.loop_depth, _, c.effects = saved
-    del c.env[binder]
+    del c.env[binder], c.facts[known:]
     if s.tag != "parallel" and target == "device":  # The runtime's scan and reduction need device scratch.
         c.effects |= {"gpu_alloc", "gpu_free"}
     if s.tag == "parallel" or target == "device":  # A host reduction is an ordinary in-order fold.

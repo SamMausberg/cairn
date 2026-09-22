@@ -185,6 +185,8 @@ class Emitter:
 
     def e_index(self, e: Expr) -> str:
         data, count = self.pointer(e.args[0])
+        if e.established:  # The checker showed the index is below the extent (facts.py).
+            return f"{data}[{self.expr(e.args[1])}]"
         return f"cr::at({data}, {self.expr(e.args[1])}, {count})"
 
     def span(self, e: Expr) -> str:
@@ -291,7 +293,7 @@ class Emitter:
         a, b, op, ty = self.expr(e.args[0]), self.expr(e.args[1]), e.val, e.ty
         if op in {"&", "|", "^"}:
             return f"static_cast<{self.type(ty)}>({a} {op} {b})"
-        if op in COMPARISONS or op in {"&&", "||"} or ty.name in FLOAT:
+        if op in COMPARISONS or op in {"&&", "||"} or ty.name in FLOAT or e.established:
             return f"({a} {op} {b})"
         return f"cr::{CHECKED[op]}<{self.type(ty)}>({a}, {b})"
 

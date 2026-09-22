@@ -102,7 +102,7 @@ inline const char* grain_row() noexcept {
 #endif
 }
 
-inline bool guarded() noexcept { return BENCH_GUARDED != 0; }
+inline bool guarded() noexcept { return BENCH_GUARDED == 1; }  // 2 is the matched build: see guards.hpp
 
 }  // namespace bench
 

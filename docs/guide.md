@@ -68,10 +68,10 @@ cairn run demo
 `run` builds a native executable in a fresh directory under `build/` and runs it under an address-space cap. The directory holds the generated `program.cpp`, the runtime headers it includes and `receipt.json`, which records what was compiled, with what, and the effect row of every function:
 
 ```json
-"average": {"effects": ["trap"], "calls": [], "syntactic_check_sites": {"shift": 1, "overflow": 1}}
+"average": {"effects": ["trap"], "calls": [], "syntactic_check_sites": {"shift": 1, "overflow": 1}, "discharged_check_sites": {}}
 ```
 
-`trap` says the function carries a guard that can abort, and the two sites are the shift count and the checked `+`. A function that allocated, wrote through a borrow, started a task or crossed to the device would say so in the same list, and so would everything that calls it.
+`trap` says the function carries a guard that can abort, and the two sites are the shift count and the checked `+`. `discharged_check_sites` lists the guards the checker proved cannot fail and the C++ leaves out; nothing bounds `x` and `y` here, so both guards stay. A function that allocated, wrote through a borrow, started a task or crossed to the device would say so in the same list, and so would everything that calls it.
 
 ```sh
 cairn test demo

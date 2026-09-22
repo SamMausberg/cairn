@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
+from . import facts
 from .places import field_path, path
 from .scope import Binding
 from .traits import instantiate, unify
@@ -111,6 +112,7 @@ def e_index(c: Checker, e: Expr, expected: Type | None, read: bool = True) -> Ty
         )
     c.expr(i, USIZE)
     c.guard("bounds")
+    facts.discharge(c, e, "bounds", facts.index(c, e))
     if read and root(a).tag == "name":
         c.effect("read:" + root(a).val)
     if c.lanes and root(a).val in c.lanes.outer:
@@ -293,6 +295,7 @@ def e_binary(c: Checker, e: Expr, expected: Type | None) -> Type:
             fail("E-OPERATOR", "Bitwise operation requires unsigned scalars.", e)
     elif left.name in INT:
         c.guard("division" if op in {"/", "%"} else "overflow")
+        facts.discharge(c, e, "overflow", op in {"+", "-"} and left == USIZE and facts.arithmetic(c, e))
     elif left.name not in FLOAT or op == "%":
         fail("E-OPERATOR", f"{op} not defined on {left.name}.", e)
     return left

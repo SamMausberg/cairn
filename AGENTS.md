@@ -21,6 +21,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/effects.py` | the effect vocabulary, the fixed point, the operand-order audit |
 | `compiler/traits.py` | who implements what, what a bound promises, the one place an instance is made |
 | `compiler/constants.py` | constant folding |
+| `compiler/facts.py` | what the checker established about `usize` values, which lowering uses to drop a guard |
 | `compiler/builtins.py` | every primitive's rule, beside its lowering |
 | `compiler/codegen.py` | lowering the typed tree; nothing else produces text |
 | `runtime/*.hpp` | guards, owners, threads, device calls |

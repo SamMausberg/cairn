@@ -114,6 +114,7 @@ def implementation_hash():
                 "compiler/tree.py",
                 "compiler/syntax.py",
                 "compiler/scope.py",
+                "compiler/facts.py",
                 "compiler/checking.py",
                 "compiler/statements.py",
                 "compiler/expressions.py",

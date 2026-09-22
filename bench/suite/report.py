@@ -24,7 +24,7 @@ WIN_RATIO = 1.25
 
 
 def column(row: dict) -> str:
-    guard = "guarded" if row["guarded"] else "unguarded"
+    guard = row.get("boundary") or ("guarded" if row["guarded"] else "unguarded")  # 1.3 records have no boundary
     return f"{row['arm']}/{guard}/{row['grain_row']}"
 
 
@@ -154,7 +154,8 @@ def kernel_report(name: str, record: dict, out: list[str]) -> None:
                     r["guarded"]: r
                     for r in timed
                     if r["compiler"] == cxx and r["arm"] == arm and r["grain_row"] == row_name
-                }
+                    and r.get("boundary") != "matched"
+                }  # fmt: skip
                 if set(pair) != {True, False}:
                     continue
                 at = len(sizes) - 1

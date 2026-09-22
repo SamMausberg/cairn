@@ -30,6 +30,8 @@ class Scope:
     before: dict[str, set[str]] = field(default_factory=dict)  # device ticket -> tickets its work is queued after
     spawning: str = ""  # The name a `let t = spawn ...` is about to bind.
     touched: list[tuple[str, str, bool, Any]] | None = None  # Every access of the loop body being checked.
+    facts: list[tuple[str, str, int]] = field(default_factory=list)  # (x, y, k): x - y <= k, in scope (facts.py)
+    discharged: dict[str, int] = field(default_factory=dict)  # Guard sites whose condition was established.
 
 
 @dataclass

@@ -104,6 +104,7 @@ class Expr:
     start: int = -1
     end: int = -1
     ref: Any = None  # The checker's resolution: a binding, callee, constant or lambda.
+    established: bool = False  # The checker showed this site's guard cannot fail (facts.py); lowering omits it.
 
 
 @dataclass

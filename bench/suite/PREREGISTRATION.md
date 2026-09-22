@@ -111,3 +111,13 @@ An `unavailable` column stays empty. A missing library is never replaced by a de
 It can say what these programs did on this machine, with this lane count, under these two compilers, at this architecture profile, with these flags, on the commit the run records. It can say what a safety boundary cost, because the two columns differ in one `-D` and nothing else. It can say where CAIRN's rules refused a shape, because the harness ran the compiler and recorded the code.
 
 It cannot say that CAIRN is faster than C++, than OpenMP or than oneTBB. It cannot say anything about a tuned kernel: every baseline here is the ordinary way to write the loop, not an expert's. It cannot carry to another host, another core count, another compiler version or another architecture profile. It cannot say anything about whole-compiler correctness, about the GPU, or about any of the claims [internals.md](../../docs/internals.md) keeps separate. A run that is interrupted, that times out, or in which a case disagrees is recorded as that and is not rerun into silence.
+
+## Addendum for 1.4: guards the checker established
+
+This section was committed before any 1.4 measurement. Everything above stays in force; this adds one build and says how the CAIRN arm is counted.
+
+From 1.4 the emitter leaves a guard out where the checker has shown it cannot fail (`src/cairn/compiler/facts.py`), and the receipt lists those sites under `discharged_check_sites`. The CAIRN arm's boundary count is therefore its receipt's `syntactic_check_sites` minus its `discharged_check_sites`, over the same entry point and callees as before. On a kernel whose element accesses are all established, the CAIRN arm no longer carries boundary 2, so it is unequal to the guarded baseline, and the rule above already excludes that pair from every ratio.
+
+So every baseline gains a third build, `matched`: `-DBENCH_GUARDED=2` with one `-DBENCH_KEEP_<category>` switch per boundary, set to the categories the CAIRN arm still carries. The harness counts the matched build the same way as the others, and a ratio against it is computed only when its counts equal the CAIRN arm's in every category. A kernel whose CAIRN arm keeps part of a category, as `tasks_split` does, gets no equal matched column and no ratio from it. The acceptance rule, the sizes, the protocol and the guarded and unguarded columns are unchanged, and the report still prices the boundary as unguarded time over guarded time.
+
+What this can add to a result is a ratio between CAIRN as it now emits and a C++ baseline that checks exactly what CAIRN still checks. It says nothing new about the guarded column, which keeps the 1.3 meaning: the price of every guard the 1.3 emitter wrote.

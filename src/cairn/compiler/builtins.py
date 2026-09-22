@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from . import facts
 from .traits import vtable
 from .tree import FLOAT, HOST_VISIBLE, INT, NUMERIC, UNSIGNED, USIZE, VOID, Expr, Type, fail, is_view, root
 
@@ -56,11 +57,13 @@ def check_convert(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected:
         fail("E-CAST", "Conversion requires numeric scalar.", e)
     if e.val in INT:  # Narrowing, and float to integer (truncation toward zero), are range checked.
         c.guard("conversion")
+        facts.discharge(c, e, "conversion", facts.conversion(c, e))
     return Type(e.val)
 
 
 def lower_convert(g: Emitter, e: Expr) -> str:
-    guard = "static_cast" if e.val in FLOAT else "cr::convert" if e.args[0].ty.name in INT else "cr::truncate"
+    exact = e.val in FLOAT or e.established
+    guard = "static_cast" if exact else "cr::convert" if e.args[0].ty.name in INT else "cr::truncate"
     return f"{guard}<{g.type(e.ty)}>({g.expr(e.args[0])})"
 
 
@@ -80,6 +83,7 @@ def check_binary(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: 
             fail("E-WRAP-TYPE", "Wrapping/bit shift operations require unsigned integers.", e)
         if shift:
             c.guard("shift")
+            facts.discharge(c, e, "shift", facts.shift(c, e))
     elif t.name not in INT or t.mode != "value":
         fail("E-MINMAX", "Bootstrap min/max are integer-only; floating NaN semantics must be explicit.", e)
     return t
@@ -87,6 +91,8 @@ def check_binary(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: 
 
 def lower_binary(g: Emitter, e: Expr) -> str:
     a, b = (g.expr(x) for x in e.args)
+    if e.established:  # A count the checker showed is below the width: the runtime's shift, unguarded.
+        return f"static_cast<{g.type(e.ty)}>(std::uint64_t({a}) {'<<' if e.val == 'shl_wrap' else '>>'} {b})"
     return f"cr::{e.val}<{g.type(e.ty)}>({a}, {b})" if e.val in WRAPPING else f"std::{e.val}({a}, {b})"
 
 

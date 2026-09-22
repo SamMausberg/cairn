@@ -86,6 +86,8 @@ RECEIPT_BOUNDARY = {
 # A guard that fails ends in cr::trap, which g++ inlines to a call of abort and clang++ leaves as a
 # call of cr::trap itself. Either relocation in a kernel's own section proves the boundary is there.
 GUARD_FAILURE = ("abort", "cr4trapEv")
+# BENCH_GUARDED as a word: 2 is the matched build the 1.4 addendum to the preregistration adds.
+BOUNDARIES = {1: "guarded", 0: "unguarded", 2: "matched"}
 
 BOUNDARY = "One machine, one lane count, two compilers. Not a tuned-kernel claim, and not another host's numbers."
 
@@ -308,10 +310,11 @@ class Harness:
             reached.add(name)
             todo.extend(receipt["functions"][name]["calls"])
         counts = dict.fromkeys(SITE_PATTERNS, 0)
-        for name in reached:
-            for key, many in receipt["functions"][name]["syntactic_check_sites"].items():
+        for name in reached:  # A site the checker discharged is not in the emitted code (compiler/facts.py).
+            row = receipt["functions"][name]
+            for key, many in row["syntactic_check_sites"].items():
                 if key in RECEIPT_BOUNDARY:
-                    counts[RECEIPT_BOUNDARY[key]] += many
+                    counts[RECEIPT_BOUNDARY[key]] += many - row.get("discharged_check_sites", {}).get(key, 0)
         for name in reached:
             found = re.search(rf'^extern "C" [^;]*?\bcf_{re.escape(name)}\([^;]*?\{{\n(.*?)^\}}$', emitted, re.S | re.M)
             counts["entry"] += found.group(1).count("cr::disjoint(") if found else 0
@@ -367,8 +370,11 @@ class Harness:
             "refused_as_preregistered": report.get("status") == "rejected" and report.get("code") == want,
         }
 
-    def jobs(self, kernel: str, work: Path, libraries: dict) -> list[dict]:
+    def jobs(self, kernel: str, work: Path, libraries: dict, kept: dict[str, int]) -> list[dict]:
+        """Every arm under every compiler: a baseline guarded, unguarded, and matched to the categories of
+        boundary the CAIRN arm still carries (`kept`), which is the 1.4 addendum's third build."""
         spec = KERNELS[kernel]
+        matched = [f"-DBENCH_KEEP_{category.upper()}={int(kept[category] > 0)}" for category in SITE_PATTERNS]
         out = []
         for cxx in self.args.compilers:
             for arm in (*spec["cairn_arms"], *spec["arms"]):
@@ -381,17 +387,22 @@ class Harness:
                     extra = found.get("extra_flags", [])
                     skip = None if found["status"] == "available" else found["reason"]
                 for row in rows:
-                    for guarded in (1, 0) if not cairn else (1,):
+                    for guarded in (1, 0, 2) if not cairn else (1,):
                         out.append(
                             {
                                 "kernel": kernel,
                                 "arm": arm,
                                 "compiler": cxx,
-                                "guarded": bool(guarded),
+                                "guarded": guarded == 1,
+                                "boundary": BOUNDARIES[guarded],
                                 "grain_row": row if arm in ARM_ROWS else "not_applicable",
                                 "sources": sources,
                                 "extra_flags": extra,
-                                "defines": [f"-DBENCH_GUARDED={guarded}", f"-DBENCH_GRAIN_ROW={GRAIN_ROWS[row]}"],
+                                "defines": [
+                                    f"-DBENCH_GUARDED={guarded}",
+                                    f"-DBENCH_GRAIN_ROW={GRAIN_ROWS[row]}",
+                                    *(matched if guarded == 2 else []),
+                                ],
                                 "exe": work / f"{arm}_{cxx.replace('+', 'p')}_g{guarded}_{row}",
                                 "unavailable": skip,
                             }
@@ -497,7 +508,7 @@ def main() -> int:
             for arm, entry in KERNELS[kernel]["cairn_arms"].items()
         }
         cairn_sites = by_arm["cairn"]
-        jobs = harness.jobs(kernel, work, libraries)
+        jobs = harness.jobs(kernel, work, libraries, cairn_sites)
 
         def one_build(job, work=work):
             return harness.build(job, work)
@@ -510,7 +521,7 @@ def main() -> int:
         builds.extend(made)
         priced = {}
         for job, record in zip(jobs, made, strict=True):
-            name = f"{job['arm']}|{'guarded' if job['guarded'] else 'unguarded'}|{job['compiler']}"
+            name = f"{job['arm']}|{job['boundary']}|{job['compiler']}"
             if name not in priced and record["status"] == "built":
                 priced[name] = job
         with concurrent.futures.ThreadPoolExecutor(max_workers=harness.lanes) as pool:
@@ -519,8 +530,8 @@ def main() -> int:
         for (name, job), presence in zip(priced.items(), seen, strict=True):
             cairn = job["arm"].startswith("cairn")
             sites = by_arm[job["arm"]] if cairn else harness.source_sites(job["sources"][0])
-            if not cairn and not job["guarded"]:
-                sites = dict.fromkeys(SITE_PATTERNS, 0)
+            if not cairn and job["boundary"] != "guarded":  # A matched build keeps only the categories it names.
+                sites = {k: v if job["boundary"] == "matched" and cairn_sites[k] else 0 for k, v in sites.items()}
             equal = sites == cairn_sites
             arms[name] = {
                 "boundaries": sites,
@@ -534,13 +545,13 @@ def main() -> int:
         for name, arm in arms.items():
             which, guard, cxx = name.split("|")
             here = arm["guard_failure_path"].get("guard_failure_relocations")
-            twin = arms.get(f"{which}|{'unguarded' if guard == 'guarded' else 'guarded'}|{cxx}", {})
+            twin = arms.get(f"{which}|{'guarded' if guard == 'unguarded' else 'unguarded'}|{cxx}", {})
             there = twin.get("guard_failure_path", {}).get("guard_failure_relocations")
             if here is None or (there is None and not which.startswith("cairn")):
                 arm["boundary_in_the_object"] = "unknown"
             elif which.startswith("cairn"):
                 arm["boundary_in_the_object"] = "present" if here > 0 else "absent"
-            elif guard == "guarded":
+            elif guard != "unguarded":  # guarded, or matched to what the CAIRN arm keeps
                 arm["boundary_in_the_object"] = "present" if here > there else "absent"
             else:  # the unguarded twin: fewer failure paths than the guarded build, or say nothing
                 arm["boundary_in_the_object"] = "absent" if here < there else "unknown"
@@ -572,6 +583,7 @@ def main() -> int:
                 "arm": job["arm"],
                 "compiler": job["compiler"],
                 "guarded": job["guarded"],
+                "boundary": job["boundary"],
                 "grain_row": job["grain_row"],
                 "independent_oracle": checked,
                 "timings": timed,
