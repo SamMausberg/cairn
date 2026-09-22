@@ -72,24 +72,24 @@ pub fn insert[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:K, value:V) {
 }
 
 pub fn find[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> Option[usize] {
-  if len(m.state) == 0 { return Option.None; }
+  if len(m.state) == 0 { return None; }
   let slot = probe(m, key);
-  if m.state[slot] == 1 { return Option.Some(slot); }
-  return Option.None;
+  if m.state[slot] == 1 { return Some(slot); }
+  return None;
 }
 
 pub fn contains[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> bool {
-  match find(m, key) { Option.Some(slot) => { return true; } Option.None => { return false; } }
+  match find(m, key) { Some(slot) => { return true; } None => { return false; } }
 }
 
 pub fn remove[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:ro<K>) -> Option[V] {
   match find(m, key) {
-    Option.Some(slot) => {
+    Some(slot) => {
       let erased = take(m.keys[slot]);
       m.state[slot] = 2;
       m.count = m.count - 1;
-      return Option.Some(take(m.vals[slot]));
+      return Some(take(m.vals[slot]));
     }
-    Option.None => { return Option.None(); }
+    None => { return None; }
   }
 }

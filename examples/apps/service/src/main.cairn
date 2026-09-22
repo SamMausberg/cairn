@@ -5,7 +5,7 @@
 // it finishes; nothing here is a thread. A reply is one blocking send, since a line fits the socket.
 // Overload is an answer, never a trap: a client past the table hears -busy, a failed accept (no
 // descriptor left) waits a moment before the next, and a kernel without io_uring is reported and ends it.
-import std.core (Option, Result);
+import std.core (Result);
 import std.io (IoError);
 import std.net (Socket);
 import std.sys;
@@ -25,15 +25,15 @@ struct Client { live:bool; fd:i32; have:usize; line:Buf[u8]; }
 // The end of the word starting at `from`: the next space, or the end of the line.
 fn word_end(n:usize, line:ro<u8>[n], from:usize) -> usize {
   match text.find_byte(line, ' ', from) {
-    Option.Some(at) => { return at; }
-    Option.None => { return n; }
+    Some(at) => { return at; }
+    None => { return n; }
   }
 }
 
 fn say(fd:i32, n:usize, message:ro<u8>[n]) -> Result[usize, IoError] {
   let body = try net.send_all(fd, message);
   let end = try net.send_all(fd, "\n");
-  return Result.Ok(body + end);
+  return Ok(body + end);
 }
 
 // One request. The answer goes back on `fd`; `true` means the client asked the service to stop.
@@ -41,29 +41,29 @@ fn respond(fd:i32, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, IoError
   let verb = word_end(line, 0);
   if text.equal(line[0..verb], "quit") {
     let bye = try say(fd, "+bye");
-    return Result.Ok(true);
+    return Ok(true);
   }
   if verb >= n {
     let bad = try say(fd, "-error");
-    return Result.Ok(false);
+    return Ok(false);
   }
   let key_lo = verb + 1;
   let key_hi = word_end(line, key_lo);
   let k = key_hi - key_lo;
   if k == 0 {
     let bad = try say(fd, "-error");
-    return Result.Ok(false);
+    return Ok(false);
   }
   if text.equal(line[0..verb], "put") && key_hi < n {
     let value_lo = key_hi + 1;
     let v = n - value_lo;
     put(t, k, line[key_lo..key_hi], v, line[value_lo..n]);
     let ok = try say(fd, "+ok");
-    return Result.Ok(false);
+    return Ok(false);
   }
   if text.equal(line[0..verb], "get") {
     match find(t, k, line[key_lo..key_hi]) {
-      Option.Some(slot) => {
+      Some(slot) => {
         let mut out = vec.new[u8]();
         out.push('=');
         out.push(' ');
@@ -72,9 +72,9 @@ fn respond(fd:i32, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, IoError
         let m = out.len;
         let sent = try say(fd, out.data[0..m]);
       }
-      Option.None => { let missing = try say(fd, "-missing"); }
+      None => { let missing = try say(fd, "-missing"); }
     }
-    return Result.Ok(false);
+    return Ok(false);
   }
   if text.equal(line[0..verb], "del") {
     if erase(t, k, line[key_lo..key_hi]) {
@@ -82,10 +82,10 @@ fn respond(fd:i32, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, IoError
     } else {
       let missing = try say(fd, "-missing");
     }
-    return Result.Ok(false);
+    return Ok(false);
   }
   let bad = try say(fd, "-error");
-  return Result.Ok(false);
+  return Ok(false);
 }
 
 // A slot for a client the ring's accept answered, and its first receive; a full table says so and closes.
@@ -99,8 +99,8 @@ fn admit(q:rw<IoRing>, clients:rw<Buf[Client]>, fd:i32) {
     }
   }
   match say(fd, "-busy") {
-    Result.Ok(sent) => {}
-    Result.Err(e) => {} // it is being turned away either way
+    Ok(sent) => {}
+    Err(e) => {} // it is being turned away either way
   }
   unsafe { let refused = sys.close(fd); }
 }
@@ -124,16 +124,16 @@ fn take_in(c:rw<Client>, t:rw<Table>, n:usize, got:ro<u8>[n]) -> Result[bool, Io
   let mut stop = false;
   while !stop {
     match text.find_byte(c.have, c.line[0..c.have], '\n', 0) {
-      Option.Some(at) => {
+      Some(at) => {
         stop = try respond(c.fd, t, c.line[0..at]);
         let rest = c.have - (at + 1);
         for i in 0..rest { c.line[i] = c.line[at + 1 + i]; }
         c.have = rest;
       }
-      Option.None => { return Result.Ok(false); }
+      None => { return Ok(false); }
     }
   }
-  return Result.Ok(true);
+  return Ok(true);
 }
 
 fn run() -> Result[usize, IoError] {
@@ -142,12 +142,12 @@ fn run() -> Result[usize, IoError] {
   let mut q = IoRing(CLIENTS + 1);
   defer wait(q); // after the cancels below, this collects what they stopped
   match io.outcome(q.status()) {
-    Result.Ok(up) => {}
-    Result.Err(e) => { // a seccomp filter, a sysctl or no descriptor left: say so rather than serve nobody
+    Ok(up) => {}
+    Err(e) => { // a seccomp filter, a sysctl or no descriptor left: say so rather than serve nobody
       io.print("service: no io_uring here, errno ");
       io.print_u64(u64(e.code));
       io.newline();
-      return Result.Ok(2);
+      return Ok(2);
     }
   }
   let mut t = new_table();
@@ -184,13 +184,13 @@ fn run() -> Result[usize, IoError] {
       hang_up(clients, k);
     }
   }
-  return Result.Ok(0);
+  return Ok(0);
 }
 
 fn main() -> i32 {
   match run() {
-    Result.Ok(code) => { return i32(code); }
-    Result.Err(e) => {
+    Ok(code) => { return i32(code); }
+    Err(e) => {
       io.print("service: io error ");
       io.print_u64(u64(e.code));
       io.newline();

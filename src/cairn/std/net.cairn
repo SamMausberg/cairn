@@ -19,12 +19,12 @@ fn address(addr:rw<u8>[16], ip:ro<u8>[4], port:u16) {
   for i in 0..4 { addr[4 + i] = ip[i]; }
 }
 
-fn error[T]() -> Result[T, IoError] = Result.Err(IoError(sys.errno()));
+fn error[T]() -> Result[T, IoError] = Err(IoError(sys.errno()));
 
 fn abandon[T](fd:i32) -> Result[T, IoError] {
   let code = sys.errno();
   unsafe { let closed = sys.close(fd); }
-  return Result.Err(IoError(code));
+  return Err(IoError(code));
 }
 
 pub fn listen_on(ip:ro<u8>[4], port:u16, backlog:i32) -> Result[Socket, IoError] {
@@ -37,7 +37,7 @@ pub fn listen_on(ip:ro<u8>[4], port:u16, backlog:i32) -> Result[Socket, IoError]
     let reused = sys.setsockopt(fd, 1, 2, "\x01\x00\x00\x00", 4);
     if sys.bind(fd, addr, 16) < 0 { return abandon(fd); }
     if sys.listen(fd, backlog) < 0 { return abandon(fd); }
-    return Result.Ok(Socket(fd));
+    return Ok(Socket(fd));
   }
 }
 
@@ -47,7 +47,7 @@ pub fn accept(s:ro<Socket>) -> Result[Socket, IoError] {
   unsafe {
     let fd = sys.accept(s.fd, addr, length);
     if fd < 0 { return error(); }
-    return Result.Ok(Socket(fd));
+    return Ok(Socket(fd));
   }
 }
 
@@ -58,7 +58,7 @@ pub fn connect_to(ip:ro<u8>[4], port:u16) -> Result[Socket, IoError] {
     let fd = sys.socket(2, 1, 0);
     if fd < 0 { return error(); }
     if sys.connect(fd, addr, 16) < 0 { return abandon(fd); }
-    return Result.Ok(Socket(fd));
+    return Ok(Socket(fd));
   }
 }
 
@@ -74,7 +74,7 @@ pub fn send_all(fd:i32, n:usize, data:ro<u8>[n]) -> Result[usize, IoError] {
       done = done + usize(sent);
     }
   }
-  return Result.Ok(done);
+  return Ok(done);
 }
 
 // One recv: a count of 0 means the peer closed its end, never an error.
@@ -82,7 +82,7 @@ pub fn recv(s:ro<Socket>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] {
   unsafe {
     let got = sys.recv(s.fd, into, n, 0);
     if got < 0 { return error(); }
-    return Result.Ok(usize(got));
+    return Ok(usize(got));
   }
 }
 

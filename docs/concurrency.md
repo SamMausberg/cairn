@@ -179,8 +179,8 @@ fn main() -> i32 {
   let wrote = q.next(tag, result);                // the write finishes first
   let read = q.next(tag, result);                 // then the read, holding the five bytes
   match io.outcome(result) {
-    Result.Ok(n) => { if tag != 1 || n != 5 || read[0] != 104 { return 2; } }
-    Result.Err(e) => { return 3; }
+    Ok(n) => { if tag != 1 || n != 5 || read[0] != 104 { return 2; } }
+    Err(e) => { return 3; }
   }
   return 0;
 }
@@ -224,8 +224,8 @@ fn main() -> i32 {
   let mut q = IoRing(4);
   defer wait(q);
   match io.outcome(q.status()) {
-    Result.Ok(up) => {}
-    Result.Err(e) => { return 1; }                // no io_uring here: fall back or report it
+    Ok(up) => {}
+    Err(e) => { return 1; }                // no io_uring here: fall back or report it
   }
   let refused = submit_all(q, 6);
   let mut tag:u64 = 0;

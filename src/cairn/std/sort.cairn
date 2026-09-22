@@ -44,6 +44,6 @@ pub fn search[T:Ord](n:usize, xs:ro<T>[n], key:ro<T>) -> Option[usize] {
     let mid = lo + (hi - lo) / 2;
     if less(xs[mid], key) { lo = mid + 1; } else { hi = mid; }
   }
-  if lo < n && !less(key, xs[lo]) { return Option.Some(lo); }
-  return Option.None;
+  if lo < n && !less(key, xs[lo]) { return Some(lo); }
+  return None;
 }

@@ -51,7 +51,7 @@ pub fn write_dataset(n:usize, path:ro<u8>[n], rows:usize) -> Result[u64, IoError
     done = done + fill;
   }
   let flushed = try io.sync(f);
-  return Result.Ok(written);
+  return Ok(written);
 }
 
 // Read the file once and decode it column-wise. `try` on a Result[Vec[u8], IoError] leaves
@@ -67,7 +67,7 @@ pub fn load_dataset(
     let row = schema.decode_Trade(bytes.data[at..at + ROW]);
     schema.Trade_set(c, i, row);
   }
-  return Loaded.Done(count);
+  return Done(count);
 }
 
 // A path no other process in this test run shares; there is no argv, so the pid is the handle.

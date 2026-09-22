@@ -3,14 +3,14 @@
 enum Reading { Value(u64); Invalid(usize); Overflow(usize); Empty; }
 
 fn decimal(n:usize, input:ro<u8>[n]) -> Reading {
-  if n == 0 { return Reading.Empty; }
+  if n == 0 { return Empty; }
   let mut value = 0;
   for i in 0..n {
     let byte = input[i];
-    if byte < 48 || byte > 57 { return Reading.Invalid(i); }
+    if byte < 48 || byte > 57 { return Invalid(i); }
     let digit = u64(byte - 48);
-    if value > (18446744073709551615 - digit) / 10 { return Reading.Overflow(i); }
+    if value > (18446744073709551615 - digit) / 10 { return Overflow(i); }
     value = value * 10 + digit;
   }
-  return Reading.Value(value);
+  return Value(value);
 }

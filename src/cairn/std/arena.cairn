@@ -47,8 +47,8 @@ fn grow[T:affine](a:rw<Arena[T]>) {
 pub fn insert[T:affine](a:rw<Arena[T]>, value:T) -> Handle {
   let mut slot = a.used;
   match vec.pop(a.free) {
-    Option.Some(reused) => { slot = reused; }
-    Option.None => {
+    Some(reused) => { slot = reused; }
+    None => {
       if a.used == len(a.live) { grow(a); }
       a.used = a.used + 1;
     }
@@ -61,20 +61,20 @@ pub fn insert[T:affine](a:rw<Arena[T]>, value:T) -> Handle {
 
 // None when the handle is stale: wrong slot, removed value, or an older generation.
 pub fn find[T:affine](a:ro<Arena[T]>, h:Handle) -> Option[usize] {
-  if h.slot >= a.used { return Option.None; }
-  if a.live[h.slot] != 1 || a.gen[h.slot] != h.generation { return Option.None; }
-  return Option.Some(h.slot);
+  if h.slot >= a.used { return None; }
+  if a.live[h.slot] != 1 || a.gen[h.slot] != h.generation { return None; }
+  return Some(h.slot);
 }
 
 pub fn remove[T:affine](a:rw<Arena[T]>, h:Handle) -> Option[T] {
   match find(a, h) {
-    Option.Some(slot) => {
+    Some(slot) => {
       a.live[slot] = 0;
       a.gen[slot] = a.gen[slot] + 1; // every existing handle to this slot is now stale
       a.count = a.count - 1;
       vec.push(a.free, slot);
-      return Option.Some(take(a.items[slot]));
+      return Some(take(a.items[slot]));
     }
-    Option.None => { return Option.None(); }
+    None => { return None; }
   }
 }

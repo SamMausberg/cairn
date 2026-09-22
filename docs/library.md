@@ -32,34 +32,34 @@ struct Frame { stream:u32; bytes:u32; }
 impl Ord for Frame { fn less(a:ro<Frame>, b:ro<Frame>) -> bool pure = a.bytes < b.bytes; }
 
 fn widest(n:usize, frames:ro<Frame>[n]) -> Option[usize] {
-  if n == 0 { return Option.None; }
+  if n == 0 { return None; }
   let mut best:usize = 0;
   for i in 1..n { if less(frames[best], frames[i]) { best = i; } }
-  return Option.Some(best);
+  return Some(best);
 }
 
 fn under(n:usize, frames:ro<Frame>[n], limit:u32) -> Result[u32, u32] {
   match widest(n, frames) {
-    Option.Some(at) => {
-      if frames[at].bytes > limit { return Result.Err(frames[at].stream); }
-      return Result.Ok(frames[at].bytes);
+    Some(at) => {
+      if frames[at].bytes > limit { return Err(frames[at].stream); }
+      return Ok(frames[at].bytes);
     }
-    Option.None => { return Result.Ok(0); }
+    None => { return Ok(0); }
   }
 }
 
 fn headroom(n:usize, frames:ro<Frame>[n]) -> Result[u32, u32] {
   let used = try under(n, frames, 1500);   // on failure this leaves with the stream number
-  return Result.Ok(1500 - used);
+  return Ok(1500 - used);
 }
 
 fn main() -> i32 {
   stack frames:Frame[2] = zeroed;
   frames[0] = Frame(1, 512);
   frames[1] = Frame(2, 1400);
-  match headroom(2, frames) { Result.Ok(spare) => { if spare != 100 { return 1; } } Result.Err(s) => { return 2; } }
+  match headroom(2, frames) { Ok(spare) => { if spare != 100 { return 1; } } Err(s) => { return 2; } }
   frames[1] = Frame(2, 9000);
-  match headroom(2, frames) { Result.Ok(spare) => { return 3; } Result.Err(s) => { if s != 2 { return 4; } } }
+  match headroom(2, frames) { Ok(spare) => { return 3; } Err(s) => { if s != 2 { return 4; } } }
   return 0;
 }
 ```
@@ -101,24 +101,24 @@ import std.text as text;
 // The decimal field that starts at `from` and ends at the next comma or at the end of the line.
 fn field(n:usize, line:ro<u8>[n], from:usize) -> Result[u64, text.ParseError] {
   match text.find_byte(n, line, 44, from) {
-    Option.Some(at) => { return text.parse_u64(at - from, line[from..at]); }
-    Option.None => { return text.parse_u64(n - from, line[from..n]); }
+    Some(at) => { return text.parse_u64(at - from, line[from..at]); }
+    None => { return text.parse_u64(n - from, line[from..n]); }
   }
 }
 
 fn main() -> i32 {
   let line = "23,19,x9";
   match field(line, 0) {
-    Result.Ok(value) => { if value != 23 { return 1; } }
-    Result.Err(why) => { return 2; }
+    Ok(value) => { if value != 23 { return 1; } }
+    Err(why) => { return 2; }
   }
   match field(line, 6) {
-    Result.Ok(value) => { return 3; }
-    Result.Err(why) => {
+    Ok(value) => { return 3; }
+    Err(why) => {
       match why {
-        text.ParseError.Invalid(at) => { if at != 0 { return 4; } }   // offset of the byte at fault
-        text.ParseError.Overflow(at) => { return 5; }
-        text.ParseError.Empty => { return 6; }
+        Invalid(at) => { if at != 0 { return 4; } }   // offset of the byte at fault
+        Overflow(at) => { return 5; }
+        Empty => { return 6; }
       }
     }
   }
@@ -146,7 +146,7 @@ fn record(path:ro<u8>[PATH], n:usize, data:ro<u8>[n]) -> Result[usize, io.IoErro
   defer io.close(f);                       // runs on every exit, including the ones `try` takes
   let wrote = try io.write(f, n, data);
   let flushed = try io.sync(f);
-  return Result.Ok(wrote);
+  return Ok(wrote);
 }
 
 fn lines(path:ro<u8>[PATH]) -> Result[u64, io.IoError] {
@@ -154,20 +154,20 @@ fn lines(path:ro<u8>[PATH]) -> Result[u64, io.IoError] {
   let n = bytes.len;
   let mut count:u64 = 0;
   for i in 0..n { if bytes.data[i] == 10 { count = count + 1; } }
-  return Result.Ok(count);
+  return Ok(count);
 }
 
 fn main() -> i32 {
   let path = "readings.log\x00";
   match record(path, 14, "23,19\n31,7\n42\n") {
-    Result.Ok(wrote) => { if wrote != 14 { return 1; } }
-    Result.Err(why) => { return 2; }
+    Ok(wrote) => { if wrote != 14 { return 1; } }
+    Err(why) => { return 2; }
   }
   match lines(path) {
-    Result.Ok(count) => { if count != 3 { return 3; } }
-    Result.Err(why) => { return 4; }
+    Ok(count) => { if count != 3 { return 3; } }
+    Err(why) => { return 4; }
   }
-  match io.remove(PATH, path) { Result.Ok(done) => {} Result.Err(why) => { return 5; } }
+  match io.remove(PATH, path) { Ok(done) => {} Err(why) => { return 5; } }
   return 0;
 }
 ```
@@ -187,8 +187,8 @@ import std.text as text;
 
 fn bump(counts:rw<map.Map[u64, u64]>, key:u64) {
   match map.find(counts, key) {
-    Option.Some(slot) => { counts.vals[slot] = counts.vals[slot] + 1; }
-    Option.None => { map.insert(counts, key, 1); }
+    Some(slot) => { counts.vals[slot] = counts.vals[slot] + 1; }
+    None => { map.insert(counts, key, 1); }
   }
 }
 
@@ -197,7 +197,7 @@ fn tally(n:usize, line:ro<u8>[n], counts:rw<map.Map[u64, u64]>) {
   let mut start:usize = 0;
   while start < n {
     let mut stop = n;
-    match text.find_byte(n, line, 32, start) { Option.Some(at) => { stop = at; } Option.None => {} }
+    match text.find_byte(n, line, 32, start) { Some(at) => { stop = at; } None => {} }
     if stop > start { bump(counts, text.hash_bytes(stop - start, line[start..stop])); }
     start = stop + 1;
   }
@@ -209,8 +209,8 @@ fn main() -> i32 {
   tally(line, counts);
   if map.count(counts) != 3 { return 1; }
   match map.find(counts, text.hash_bytes(3, "put")) {
-    Option.Some(slot) => { if counts.vals[slot] != 3 { return 2; } }
-    Option.None => { return 3; }
+    Some(slot) => { if counts.vals[slot] != 3 { return 2; } }
+    None => { return 3; }
   }
   let mut seen:u64 = 0;
   for slot in 0..map.slots(counts) { if map.live(counts, slot) { seen = seen + counts.vals[slot]; } }
@@ -241,8 +241,8 @@ fn main() -> i32 {
   if map.count(hits) != 2 { return 1; }
   let wanted = Route(10, 80);
   match map.find(hits, wanted) {
-    Option.Some(slot) => { if hits.vals[slot] != 5 { return 2; } }
-    Option.None => { return 3; }
+    Some(slot) => { if hits.vals[slot] != 5 { return 2; } }
+    None => { return 3; }
   }
   if !same(Route(10, 80), wanted) || same(Route(10, 81), wanted) { return 4; }
   return 0;
@@ -273,8 +273,8 @@ fn main() -> i32 {
   if book[0].venue != 1 || book[0].cents != 50 || book[3].cents != 900 { return 1; }
   let wanted = Trade(2, 100);
   match sort.search(book, wanted) {
-    Option.Some(at) => { if at != 2 { return 2; } }
-    Option.None => { return 3; }
+    Some(at) => { if at != 2 { return 2; } }
+    None => { return 3; }
   }
   sort.sort_by(book, |a:ro<Trade>, b:ro<Trade>| -> bool { return a.cents > b.cents; });
   if book[0].cents != 900 { return 4; }
@@ -326,14 +326,14 @@ fn main() -> i32 {
   let empty = vec.new[arena.Handle]();
   let parse = arena.insert(plan, Step(5, empty));
   match arena.find(plan, parse) {
-    Option.Some(slot) => { vec.push(plan.items[slot].needs, fetch); }
-    Option.None => { return 1; }
+    Some(slot) => { vec.push(plan.items[slot].needs, fetch); }
+    None => { return 1; }
   }
   match arena.remove(plan, fetch) {
-    Option.Some(dropped) => { if dropped.cost != 3 { return 2; } }
-    Option.None => { return 3; }
+    Some(dropped) => { if dropped.cost != 3 { return 2; } }
+    None => { return 3; }
   }
-  match arena.find(plan, fetch) { Option.Some(slot) => { return 4; } Option.None => {} }  // stale
+  match arena.find(plan, fetch) { Some(slot) => { return 4; } None => {} }  // stale
   return 0;
 }
 ```
@@ -384,14 +384,14 @@ fn echo_once(port:u16) -> Result[usize, IoError] {
   let back = try net.send(session, got, heard[0..got]);
   stack echoed:u8[5] = zeroed;
   let last = try net.recv(client, len(echoed), echoed);
-  if echoed[0] != 112 { return Result.Err(IoError(71)); }   // 'p'
-  return Result.Ok(last);
+  if echoed[0] != 112 { return Err(IoError(71)); }   // 'p'
+  return Ok(last);
 }
 
 fn main() -> i32 {
   match echo_once(39812) {
-    Result.Ok(n) => { if n != 5 { return 1; } }
-    Result.Err(why) => { return 2; }
+    Ok(n) => { if n != 5 { return 1; } }
+    Err(why) => { return 2; }
   }
   return 0;
 }

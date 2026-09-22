@@ -295,8 +295,8 @@ import std.core (Option);
 struct Limits { largest:u32; }                            // private: so are its fields
 pub fn accepts(size:u32) -> Option[u32] {
   let limits = Limits(1480);
-  if size > limits.largest { return Option.None; }
-  return Option.Some(size + 5);
+  if size > limits.largest { return None; }
+  return Some(size + 5);
 }
 
 module app;
@@ -304,8 +304,8 @@ import codec as packet;
 import std.core (Option);
 
 pub fn main() -> i32 {
-  match packet.accepts(40) { Option.Some(total) => { if total != 45 { return 1; } } Option.None => { return 2; } }
-  match packet.accepts(9000) { Option.Some(total) => { return 3; } Option.None => {} }
+  match packet.accepts(40) { Some(total) => { if total != 45 { return 1; } } None => { return 2; } }
+  match packet.accepts(9000) { Some(total) => { return 3; } None => {} }
   return 0;
 }
 ```

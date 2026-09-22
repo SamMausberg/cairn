@@ -13,7 +13,7 @@ import analytics.query;
 import analytics.report;
 import analytics.schema (Trade);
 import analytics.sensor (Reading);
-import analytics.table (Loaded);
+import analytics.table;
 
 // The io-heavy half: one file written, one file read, both failures carried as values.
 fn ingest(rows:usize, c:rw<schema.Trade_table>) -> Result[usize, IoError] {
@@ -21,11 +21,11 @@ fn ingest(rows:usize, c:rw<schema.Trade_table>) -> Result[usize, IoError] {
   let Vec(name, n) = path; // the path's storage, taken apart as it was built
   let bytes = try table.write_dataset(name[0..n], rows);
   match table.load_dataset(name[0..n], rows, c) {
-    Loaded.Done(count) => {
+    Done(count) => {
       let gone = io.remove(name[0..n]);
-      return Result.Ok(count);
+      return Ok(count);
     }
-    Loaded.Failed(e) => { return Result.Err(e); }
+    Failed(e) => { return Err(e); }
   }
 }
 
@@ -34,8 +34,8 @@ pub fn main() -> i32 {
   let t0 = io.monotonic_ns();
   let mut c = schema.Trade_table_new(rows);
   match ingest(rows, c) {
-    Result.Ok(count) => { if count != rows { return 1; } }
-    Result.Err(e) => {
+    Ok(count) => { if count != rows { return 1; } }
+    Err(e) => {
       report.say("analytics: the dataset could not be written or read");
       return 2;
     }

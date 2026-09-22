@@ -157,18 +157,18 @@ struct Header { kind:u8; size:u32; }
 enum Parsed { Ok(Header); Short(usize); }
 
 fn parse(n:usize, bytes:ro<u8>[n]) -> Parsed {
-  if n < 5 { return Parsed.Short(n); }
-  return Parsed.Ok(Header(bytes[0], u32(n) - 5));
+  if n < 5 { return Short(n); }
+  return Ok(Header(bytes[0], u32(n) - 5));
 }
 
 fn main() -> i32 {
   match parse(len("\x07abcdefg"), "\x07abcdefg") {
-    Parsed.Ok(head) => { if head.kind != 7 || head.size != 3 { return 1; } }
-    Parsed.Short(got) => { return 2; }
+    Ok(head) => { if head.kind != 7 || head.size != 3 { return 1; } }
+    Short(got) => { return 2; }
   }
   match parse(2, "hi") {
-    Parsed.Ok(head) => { return 3; }
-    Parsed.Short(got) => { if got != 2 { return 4; } }
+    Ok(head) => { return 3; }
+    Short(got) => { if got != 2 { return 4; } }
   }
   return 0;
 }
@@ -176,7 +176,7 @@ fn main() -> i32 {
 
 ```cairn rejects E-MATCH-COVERAGE
 enum Op { Read; Write; Flush; }
-fn cost(op:Op) -> u64 { match op { Op.Read => { return 1; } Op.Write => { return 2; } } }
+fn cost(op:Op) -> u64 { match op { Read => { return 1; } Write => { return 2; } } }
 ```
 
 ```text
@@ -225,17 +225,17 @@ enum Read { Ok(Header); Err(u8); }
 enum Sized { Ok(u32); Err(u8); }
 
 fn head(n:usize, bytes:ro<u8>[n]) -> Read {
-  if n < 5 { return Read.Err(1); }
-  return Read.Ok(Header(bytes[0], u32(n) - 5));
+  if n < 5 { return Err(1); }
+  return Ok(Header(bytes[0], u32(n) - 5));
 }
 fn body_size(n:usize, bytes:ro<u8>[n]) -> Sized {
   let h = try head(n, bytes);                     // or return Sized.Err(1) from here
-  return Sized.Ok(h.size);
+  return Ok(h.size);
 }
 
 fn main() -> i32 {
-  match body_size(7, "\x07abcdef") { Sized.Ok(size) => { if size != 2 { return 1; } } Sized.Err(e) => { return 2; } }
-  match body_size(2, "hi") { Sized.Ok(size) => { return 3; } Sized.Err(e) => { if e != 1 { return 4; } } }
+  match body_size(7, "\x07abcdef") { Ok(size) => { if size != 2 { return 1; } } Err(e) => { return 2; } }
+  match body_size(2, "hi") { Ok(size) => { return 3; } Err(e) => { if e != 1 { return 4; } } }
   return 0;
 }
 ```
@@ -245,8 +245,8 @@ Inside a larger expression, a `try` may not sit beside an operand that already o
 ```cairn rejects E-EFFECT-ORDER
 struct Frame { body:Buf[u8]; size:usize; }
 enum Sized { Ok(usize); Err(u8); }
-fn size(v:u8) -> Sized { if v == 0 { return Sized.Err(1); } return Sized.Ok(2); }
-fn build(v:u8, body:rw<Buf[u8]>) -> Sized { let f = Frame(take(body), try size(v)); return Sized.Ok(f.size); }
+fn size(v:u8) -> Sized { if v == 0 { return Err(1); } return Ok(2); }
+fn build(v:u8, body:rw<Buf[u8]>) -> Sized { let f = Frame(take(body), try size(v)); return Ok(f.size); }
 ```
 
 ```text

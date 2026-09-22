@@ -1,5 +1,5 @@
 // The self-check: fill a log, reopen it, survive two kinds of damaged tail, compact, reopen.
-import std.core (Option, Result);
+import std.core (Result);
 import std.io (IoError);
 import std.sys;
 import std.text;
@@ -33,12 +33,12 @@ fn scenario() -> Result[usize, IoError] {
     defer io.close(f);
     let mut s = new_store();
     let start = try replay(s, f);
-    if start != 0 { return Result.Ok(1); }
+    if start != 0 { return Ok(1); }
     let a = try put(s, f, "alpha", "1");
     let b = try put(s, f, "beta", "22");
     let c = try put(s, f, "gamma", "333");
     let d = try erase(s, f, "beta");
-    if s.index.count() != 2 { return Result.Ok(2); }
+    if s.index.count() != 2 { return Ok(2); }
   }
 
   { // reopen: the index comes back from the log, then a crash tears the next record
@@ -46,14 +46,14 @@ fn scenario() -> Result[usize, IoError] {
     defer io.close(f);
     let mut s = new_store();
     let end = try replay(s, f);
-    if s.index.count() != 2 { return Result.Ok(3); }
+    if s.index.count() != 2 { return Ok(3); }
     match get(s, "gamma") {
-      Option.Some(slot) => { if !value_is(s, slot, "333") { return Result.Ok(4); } }
-      Option.None => { return Result.Ok(5); }
+      Some(slot) => { if !value_is(s, slot, "333") { return Ok(4); } }
+      None => { return Ok(5); }
     }
     match get(s, "beta") {
-      Option.Some(slot) => { return Result.Ok(6); }
-      Option.None => {}
+      Some(slot) => { return Ok(6); }
+      None => {}
     }
     let torn = try io.write(f, "\x01\x02\x03\x04\x05\x06\x07\x08\x09");
   }
@@ -63,9 +63,9 @@ fn scenario() -> Result[usize, IoError] {
     defer io.close(f);
     let mut s = new_store();
     let end = try replay(s, f);
-    if s.index.count() != 2 { return Result.Ok(7); }
+    if s.index.count() != 2 { return Ok(7); }
     let size = try io.size(f);
-    if size != end { return Result.Ok(8); }
+    if size != end { return Ok(8); }
     stack bad:u8[16] = zeroed;
     encode_Header(bad, Header(12345, 0, 1, 1));
     let header = try io.write(f, bad);
@@ -77,9 +77,9 @@ fn scenario() -> Result[usize, IoError] {
     defer io.close(f);
     let mut s = new_store();
     let end = try replay(s, f);
-    if s.index.count() != 2 { return Result.Ok(9); }
+    if s.index.count() != 2 { return Ok(9); }
     let written = try compact_log(s, log.data[0..n], tmp.data[0..m]);
-    if written == 0 || written >= end { return Result.Ok(10); }
+    if written == 0 || written >= end { return Ok(10); }
   }
 
   { // the compacted log holds exactly the live records
@@ -87,26 +87,26 @@ fn scenario() -> Result[usize, IoError] {
     defer io.close(f);
     let mut s = new_store();
     let end = try replay(s, f);
-    if s.index.count() != 2 { return Result.Ok(11); }
+    if s.index.count() != 2 { return Ok(11); }
     match get(s, "alpha") {
-      Option.Some(slot) => { if !value_is(s, slot, "1") { return Result.Ok(12); } }
-      Option.None => { return Result.Ok(13); }
+      Some(slot) => { if !value_is(s, slot, "1") { return Ok(12); } }
+      None => { return Ok(13); }
     }
     match get(s, "beta") {
-      Option.Some(slot) => { return Result.Ok(14); }
-      Option.None => {}
+      Some(slot) => { return Ok(14); }
+      None => {}
     }
     let after = try put(s, f, "new", "4444");
-    if s.index.count() != 3 { return Result.Ok(15); }
+    if s.index.count() != 3 { return Ok(15); }
   }
 
   let gone = try io.remove(log.data[0..n]);
-  return Result.Ok(0);
+  return Ok(0);
 }
 
 fn main() -> i32 {
   match scenario() {
-    Result.Ok(step) => {
+    Ok(step) => {
       if step == 0 {
         io.println("kvstore: self-check passed");
         return 0;
@@ -116,7 +116,7 @@ fn main() -> i32 {
       io.newline();
       return i32(step);
     }
-    Result.Err(e) => {
+    Err(e) => {
       io.print("kvstore: io error ");
       io.print_u64(u64(e.code));
       io.newline();

@@ -2,28 +2,28 @@
 enum Parsed { Value(u64); Invalid(usize); Overflow(usize); Empty; }
 
 fn decimal(n:usize, input:ro<u8>[n]) -> Parsed {
-  if n == 0 { return Parsed.Empty; }
+  if n == 0 { return Empty; }
   let mut value = 0;
   for i in 0..n {
     let byte = input[i];
-    if byte < 48 || byte > 57 { return Parsed.Invalid(i); }
+    if byte < 48 || byte > 57 { return Invalid(i); }
     let digit = u64(byte - 48);
     if value > (18446744073709551615 - digit) / 10 {
-      return Parsed.Overflow(i);
+      return Overflow(i);
     }
     value = value * 10 + digit;
   }
-  return Parsed.Value(value);
+  return Value(value);
 }
 
 // An ordinary value record makes the foreign test interface explicit.
 struct ParseObservation { kind:u32; value:u64; offset:usize; }
 fn observe_decimal(n:usize, input:ro<u8>[n]) -> ParseObservation {
   match decimal(input) {
-    Parsed.Value(value) => { return ParseObservation(0, value, 0); }
-    Parsed.Invalid(offset) => { return ParseObservation(1, 0, offset); }
-    Parsed.Overflow(offset) => { return ParseObservation(2, 0, offset); }
-    Parsed.Empty => { return ParseObservation(3, 0, 0); }
+    Value(value) => { return ParseObservation(0, value, 0); }
+    Invalid(offset) => { return ParseObservation(1, 0, offset); }
+    Overflow(offset) => { return ParseObservation(2, 0, offset); }
+    Empty => { return ParseObservation(3, 0, 0); }
   }
 }
 

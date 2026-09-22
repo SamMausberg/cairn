@@ -196,17 +196,17 @@ struct Point { x:i64; y:i64; }
 enum Parsed { Ok(Point); Err(u8); }
 enum Checked { Ok(i64); Err(u8); }
 
-fn parse(x:i64, y:i64) -> Parsed { if x < 0 || y < 0 { return Parsed.Err(7); } return Parsed.Ok(Point(x, y)); }
-fn manhattan(x:i64, y:i64) -> Checked { let p = try parse(x, y); return Checked.Ok(p.x + p.y); }
+fn parse(x:i64, y:i64) -> Parsed { if x < 0 || y < 0 { return Err(7); } return Ok(Point(x, y)); }
+fn manhattan(x:i64, y:i64) -> Checked { let p = try parse(x, y); return Ok(p.x + p.y); }
 
 fn main() -> i32 {
   match manhattan(3, 4) {
-    Checked.Ok(d) => { if d != 7 { return 1; } }
-    Checked.Err(code) => { return 2; }
+    Ok(d) => { if d != 7 { return 1; } }
+    Err(code) => { return 2; }
   }
   match manhattan(-1, 4) {
-    Checked.Ok(d) => { return 3; }
-    Checked.Err(code) => { if code != 7 { return 4; } }
+    Ok(d) => { return 3; }
+    Err(code) => { if code != 7 { return 4; } }
   }
   return 0;
 }
@@ -398,15 +398,15 @@ pub fn empty() -> Stock {
 pub fn add(s:rw<Stock>, item:u64, count:u64) {
   let seen = map.find(s.names, item);
   match seen {
-    Option.Some(slot) => { s.names.vals[slot] = s.names.vals[slot] + count; }
-    Option.None => { map.insert(s.names, item, count); }
+    Some(slot) => { s.names.vals[slot] = s.names.vals[slot] + count; }
+    None => { map.insert(s.names, item, count); }
   }
   vec.push(s.log, item);
 }
 pub fn count(s:ro<Stock>, item:u64) -> u64 {
   match map.find(s.names, item) {
-    Option.Some(slot) => { return s.names.vals[slot]; }
-    Option.None => { return 0; }
+    Some(slot) => { return s.names.vals[slot]; }
+    None => { return 0; }
   }
 }
 

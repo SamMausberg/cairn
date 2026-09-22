@@ -8,18 +8,18 @@ fn ingest(n:usize, text:ro<u8>[n], k:usize, out:rw<u64>[k]) -> usize {
     if text[i] == 44 {
       let count = i - start;
       match decimal(count, text[start..i]) {
-        Reading.Value(value) => { if used < k { out[used] = value; used = used + 1; } }
-        Reading.Invalid(offset) => {
+        Value(value) => { if used < k { out[used] = value; used = used + 1; } }
+        Invalid(offset) => {
           puts("  bad digit at ");
           putu(u64(start + offset));
           putc(10);
         }
-        Reading.Overflow(offset) => {
+        Overflow(offset) => {
           puts("  too large at ");
           putu(u64(start + offset));
           putc(10);
         }
-        Reading.Empty => {
+        Empty => {
           puts("  empty field at ");
           putu(u64(start));
           putc(10);

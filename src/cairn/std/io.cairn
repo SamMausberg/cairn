@@ -4,7 +4,7 @@
 // its error behind one. Cost: one syscall per call except `write` and `read_full`, which loop
 // until the kernel is done; nothing here buffers, so n bytes written is n bytes of syscall.
 module std.io;
-import std.core (Result, Option);
+import std.core (Result);
 import std.sys;
 import std.text;
 import std.vec (Vec);
@@ -22,15 +22,15 @@ pub const CUR:i32 = 1;
 pub const END:i32 = 2;
 
 // One generic failure constructor: the success type comes from the caller's return type.
-fn failed[T]() -> Result[T, IoError] = Result.Err(IoError(sys.errno()));
+fn failed[T]() -> Result[T, IoError] = Err(IoError(sys.errno()));
 
 // `path` must end in a NUL byte, since C reads a pointer and not a length.
 pub fn open(n:usize, path:ro<u8>[n], flags:i32) -> Result[File, IoError] {
-  if n == 0 || path[n - 1] != 0 { return Result.Err(IoError(22)); }
+  if n == 0 || path[n - 1] != 0 { return Err(IoError(22)); }
   unsafe {
     let fd = sys.open(path[0..1], flags, 420);
     if fd < 0 { return failed(); }
-    return Result.Ok(File(fd));
+    return Ok(File(fd));
   }
 }
 
@@ -42,7 +42,7 @@ pub fn read(f:ro<File>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] {
   unsafe {
     let got = sys.read(f.fd, into, n);
     if got < 0 { return failed(); }
-    return Result.Ok(usize(got));
+    return Ok(usize(got));
   }
 }
 
@@ -51,10 +51,10 @@ pub fn read_full(f:ro<File>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] 
   let mut done:usize = 0;
   while done < n {
     let got = try read(f, into[done..n]);
-    if got == 0 { return Result.Ok(done); }
+    if got == 0 { return Ok(done); }
     done = done + got;
   }
-  return Result.Ok(done);
+  return Ok(done);
 }
 
 // A short write is not an error to the kernel; it is here, so callers never lose a tail.
@@ -67,28 +67,28 @@ pub fn write(f:ro<File>, n:usize, data:ro<u8>[n]) -> Result[usize, IoError] {
       done = done + usize(sent);
     }
   }
-  return Result.Ok(done);
+  return Ok(done);
 }
 
 pub fn seek(f:ro<File>, offset:i64, whence:i32) -> Result[u64, IoError] {
   unsafe {
     let where_at = sys.lseek(f.fd, offset, whence);
     if where_at < 0 { return failed(); }
-    return Result.Ok(u64(where_at));
+    return Ok(u64(where_at));
   }
 }
 
 pub fn size(f:ro<File>) -> Result[u64, IoError] {
   let end = try seek(f, 0, END);
   let back = try seek(f, 0, SET);
-  return Result.Ok(end);
+  return Ok(end);
 }
 
 // Durability is a syscall, never a side effect of closing.
 pub fn sync(f:ro<File>) -> Result[usize, IoError] {
   unsafe {
     if sys.fsync(f.fd) < 0 { return failed(); }
-    return Result.Ok(0);
+    return Ok(0);
   }
 }
 
@@ -96,24 +96,24 @@ pub fn sync(f:ro<File>) -> Result[usize, IoError] {
 pub fn truncate(f:ro<File>, length:u64) -> Result[usize, IoError] {
   unsafe {
     if sys.ftruncate(f.fd, i64(length)) < 0 { return failed(); }
-    return Result.Ok(0);
+    return Ok(0);
   }
 }
 
 pub fn remove(n:usize, path:ro<u8>[n]) -> Result[usize, IoError] {
-  if n == 0 || path[n - 1] != 0 { return Result.Err(IoError(22)); }
+  if n == 0 || path[n - 1] != 0 { return Err(IoError(22)); }
   unsafe {
     if sys.unlink(path[0..1]) < 0 { return failed(); }
-    return Result.Ok(0);
+    return Ok(0);
   }
 }
 
 // One atomic replacement, which is how a compacted file becomes the live one.
 pub fn rename(n:usize, from:ro<u8>[n], m:usize, to:ro<u8>[m]) -> Result[usize, IoError] {
-  if n == 0 || m == 0 || from[n - 1] != 0 || to[m - 1] != 0 { return Result.Err(IoError(22)); }
+  if n == 0 || m == 0 || from[n - 1] != 0 || to[m - 1] != 0 { return Err(IoError(22)); }
   unsafe {
     if sys.rename(from[0..1], to[0..1]) < 0 { return failed(); }
-    return Result.Ok(0);
+    return Ok(0);
   }
 }
 
@@ -126,7 +126,7 @@ pub fn read_file(n:usize, path:ro<u8>[n]) -> Result[Vec[u8], IoError] {
   let mut out = vec.with_capacity[u8](total);
   let got = try read_full(f, out.data[0..total]);
   out.len = got;
-  return Result.Ok(out);
+  return Ok(out);
 }
 
 // Best effort output: a Result at every logging call site buys nothing a program acts on.
@@ -163,7 +163,7 @@ pub fn read_stdin(n:usize, into:rw<u8>[n]) -> Result[usize, IoError] {
   unsafe {
     let got = sys.read(0, into, n);
     if got < 0 { return failed(); }
-    return Result.Ok(usize(got));
+    return Ok(usize(got));
   }
 }
 
@@ -180,6 +180,6 @@ pub fn monotonic_ns() -> u64 {
 // What an I/O ring's `q.next(tag, result)` reported: a byte count or a new descriptor, or the error the
 // kernel gave, which a ring returns as a negative errno instead of setting errno.
 pub fn outcome(result:i64) -> Result[usize, IoError] {
-  if result < 0 { return Result.Err(IoError(i32(0 - result))); }
-  return Result.Ok(usize(result));
+  if result < 0 { return Err(IoError(i32(0 - result))); }
+  return Ok(usize(result));
 }

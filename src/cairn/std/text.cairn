@@ -14,34 +14,34 @@ fn digits(n:usize, s:ro<u8>[n], start:usize, limit:u64) -> Result[u64, ParseErro
   let mut value = 0;
   for i in start..n {
     let byte = s[i];
-    if byte < 48 || byte > 57 { return Result.Err(ParseError.Invalid(i)); }
+    if byte < 48 || byte > 57 { return Err(Invalid(i)); }
     let digit = u64(byte - 48);
-    if value > (limit - digit) / 10 { return Result.Err(ParseError.Overflow(i)); }
+    if value > (limit - digit) / 10 { return Err(Overflow(i)); }
     value = value * 10 + digit;
   }
-  return Result.Ok(value);
+  return Ok(value);
 }
 
 pub fn parse_u64(n:usize, s:ro<u8>[n]) -> Result[u64, ParseError] {
-  if n == 0 { return Result.Err(ParseError.Empty); }
+  if n == 0 { return Err(Empty); }
   return digits(s, 0, 18446744073709551615);
 }
 
 // Signed decimal: an optional leading '-', then digits. The magnitude may reach 2^63 only when
 // negative, and the error offset names the byte at fault as parse_u64 does.
 pub fn parse_i64(n:usize, s:ro<u8>[n]) -> Result[i64, ParseError] {
-  if n == 0 { return Result.Err(ParseError.Empty); }
+  if n == 0 { return Err(Empty); }
   let negative = s[0] == 45;
   let mut start:usize = 0;
   if negative { start = 1; }
-  if start == n { return Result.Err(ParseError.Invalid(start)); }
+  if start == n { return Err(Invalid(start)); }
   let mut limit:u64 = 9223372036854775807;
   if negative { limit = 9223372036854775808; }
   let value = try digits(s, start, limit);
-  if !negative { return Result.Ok(i64(value)); }
-  if value == 0 { return Result.Ok(0); }
+  if !negative { return Ok(i64(value)); }
+  if value == 0 { return Ok(0); }
   let below = i64(value - 1); // value - 1 fits an i64 even when value is 2^63
-  return Result.Ok(-below - 1);
+  return Ok(-below - 1);
 }
 
 // Decimal, most significant digit first. The digits are produced backwards into fixed storage,
@@ -119,8 +119,8 @@ pub fn ends_with(n:usize, s:ro<u8>[n], m:usize, suffix:ro<u8>[m]) -> bool {
 }
 
 pub fn find_byte(n:usize, s:ro<u8>[n], byte:u8, from:usize) -> Option[usize] {
-  for i in from..n { if s[i] == byte { return Option.Some(i); } }
-  return Option.None;
+  for i in from..n { if s[i] == byte { return Some(i); } }
+  return None;
 }
 
 // The last index holding `byte`, which is where a path's extension or a line's last field begins.
@@ -128,20 +128,20 @@ pub fn find_last_byte(n:usize, s:ro<u8>[n], byte:u8) -> Option[usize] {
   let mut i = n;
   while i > 0 {
     i = i - 1;
-    if s[i] == byte { return Option.Some(i); }
+    if s[i] == byte { return Some(i); }
   }
-  return Option.None;
+  return None;
 }
 
 // The first index where `needle` starts. Naive, because a line protocol's needles are short.
 pub fn find(n:usize, s:ro<u8>[n], m:usize, needle:ro<u8>[m]) -> Option[usize] {
-  if m == 0 || m > n { return Option.None; }
+  if m == 0 || m > n { return None; }
   for start in 0..n - m + 1 {
     let mut matched:usize = 0;
     while matched < m && s[start + matched] == needle[matched] { matched = matched + 1; }
-    if matched == m { return Option.Some(start); }
+    if matched == m { return Some(start); }
   }
-  return Option.None;
+  return None;
 }
 
 // FNV-1a: no table, no allocation, good enough to key a map or checksum a record.

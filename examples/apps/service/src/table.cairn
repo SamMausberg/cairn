@@ -30,24 +30,24 @@ fn put(t:rw<Table>, k:usize, key:ro<u8>[k], v:usize, value:ro<u8>[v]) {
 fn find(t:ro<Table>, k:usize, key:ro<u8>[k]) -> Option[usize] {
   let id = text.hash_bytes(key);
   match t.index.find(id) {
-    Option.Some(slot) => {
+    Some(slot) => {
       let stored = t.index.vals[slot].key.len;
       if text.equal(t.index.vals[slot].key.data[0..stored], key) {
-        return Option.Some(slot);
+        return Some(slot);
       }
-      return Option.None;
+      return None;
     }
-    Option.None => { return Option.None; }
+    None => { return None; }
   }
 }
 
 fn erase(t:rw<Table>, k:usize, key:ro<u8>[k]) -> bool {
   match find(t, key) {
-    Option.Some(slot) => {
+    Some(slot) => {
       let id = text.hash_bytes(key);
       let gone = t.index.remove(id);
       return true;
     }
-    Option.None => { return false; }
+    None => { return false; }
   }
 }

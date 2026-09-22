@@ -47,7 +47,7 @@ fn append(
   let a = try io.write(f, head);
   let b = try io.write(f, key);
   let c = try io.write(f, value);
-  return Result.Ok(u64(a + b + c));
+  return Ok(u64(a + b + c));
 }
 
 // Apply a decoded record to the index; both owners move in, and a tombstone drops them.
@@ -76,7 +76,7 @@ pub fn put(
   let stored_value = owned(value);
   apply(s, PUT, stored_key, stored_value);
   s.end = s.end + bytes;
-  return Result.Ok(bytes);
+  return Ok(bytes);
 }
 
 pub fn erase(s:rw<Store>, f:ro<File>, k:usize, key:ro<u8>[k]) -> Result[u64, IoError] {
@@ -85,21 +85,21 @@ pub fn erase(s:rw<Store>, f:ro<File>, k:usize, key:ro<u8>[k]) -> Result[u64, IoE
   let id = text.hash_bytes(key);
   let gone = s.index.remove(id);
   s.end = s.end + bytes;
-  return Result.Ok(bytes);
+  return Ok(bytes);
 }
 
 // The slot holding `key`, verified byte for byte because the index is keyed by a hash.
 pub fn get(s:ro<Store>, k:usize, key:ro<u8>[k]) -> Option[usize] {
   let id = text.hash_bytes(key);
   match s.index.find(id) {
-    Option.Some(slot) => {
+    Some(slot) => {
       let stored = s.index.vals[slot].key.len;
       if text.equal(s.index.vals[slot].key.data[0..stored], key) {
-        return Option.Some(slot);
+        return Some(slot);
       }
-      return Option.None;
+      return None;
     }
-    Option.None => { return Option.None; }
+    None => { return None; }
   }
 }
 
@@ -131,7 +131,7 @@ pub fn replay(s:rw<Store>, f:ro<File>) -> Result[u64, IoError] {
   let cut = try io.truncate(f, offset);
   let resumed = try io.seek(f, i64(offset), io.SET);
   s.end = offset;
-  return Result.Ok(offset);
+  return Ok(offset);
 }
 
 // Write every live record to `temp` and rename it over `path`. The caller reopens afterwards:
@@ -156,5 +156,5 @@ pub fn compact_log(
     let flushed = try io.sync(f);
   }
   let moved = try io.rename(temp, path);
-  return Result.Ok(written);
+  return Ok(written);
 }

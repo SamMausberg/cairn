@@ -23,11 +23,9 @@ pub fn push[T:affine](v:rw<Vec[T]>, item:T) {
 }
 
 pub fn pop[T:affine](v:rw<Vec[T]>) -> Option[T] {
-  // Option.None() and not Option.None: a bare variant is a place, and a place holding an owner
-  // cannot be moved. The call spelling is the only one that compiles for every T.
-  if v.len == 0 { return Option.None(); }
+  if v.len == 0 { return None; }
   v.len = v.len - 1;
-  return Option.Some(take(v.data[v.len]));
+  return Some(take(v.data[v.len]));
 }
 
 // Put `item` at `i` and move the tail up by one; an index past the end is a guard failure.
@@ -45,24 +43,24 @@ pub fn insert[T:affine](v:rw<Vec[T]>, i:usize, item:T) {
 
 // Take the element at `i` out and close the gap, keeping the order of the rest.
 pub fn remove[T:affine](v:rw<Vec[T]>, i:usize) -> Option[T] {
-  if i >= v.len { return Option.None(); }
+  if i >= v.len { return None; }
   let item = take(v.data[i]);
   for k in i..v.len - 1 { swap(v.data[k], v.data[k + 1]); }
   v.len = v.len - 1;
-  return Option.Some(item);
+  return Some(item);
 }
 
 // Take the element at `i` out and move the last one into its place: one swap, no shift.
 pub fn swap_remove[T:affine](v:rw<Vec[T]>, i:usize) -> Option[T] {
-  if i >= v.len { return Option.None(); }
+  if i >= v.len { return None; }
   swap(v.data[i], v.data[v.len - 1]);
   return pop(v);
 }
 
 // The first index holding an element equal to `item`, by the element type's Eq.
 pub fn find[T:Eq + affine](v:ro<Vec[T]>, item:ro<T>) -> Option[usize] {
-  for i in 0..v.len { if same(v.data[i], item) { return Option.Some(i); } }
-  return Option.None;
+  for i in 0..v.len { if same(v.data[i], item) { return Some(i); } }
+  return None;
 }
 
 pub fn get[T:copy](v:ro<Vec[T]>, i:usize) -> T {
