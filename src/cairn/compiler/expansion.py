@@ -281,13 +281,15 @@ class Deriver:
         self.bound = outer
         return made
 
-    def shape(self, fields: list[Any], env: dict[str, Any]) -> list[tuple[str, Type]]:
-        out: list[tuple[str, Type]] = []
+    def shape(self, fields: list[Any], env: dict[str, Any]) -> list[tuple[str, Type, str]]:
+        """The generated fields as `(name, type, extent)`; a declared extent is spliced like the name it follows."""
+        out: list[tuple[str, Type, str]] = []
         for item in fields:
             if isinstance(item, Each):
                 out += [x for inner in self.each(item, env) for x in self.shape(item.items, inner)]
             else:
-                out.append((self.text(item[0], env, None), self.type(item[1], env, None)))
+                extent = self.text(item[2], env, None) if item[2] else ""
+                out.append((self.text(item[0], env, None), self.type(item[1], env, None), extent))
         return out
 
     def items(self, items: list[Any], env: dict[str, Any], prefix: str) -> list[Any]:
@@ -346,7 +348,7 @@ def derive(p: Program) -> Program:
                 twice = (
                     []
                     if isinstance(made, Function)
-                    else [n for n, _ in made[1] if [m for m, _ in made[1]].count(n) > 1]
+                    else [n for n, _, _ in made[1] if [m for m, _, _ in made[1]].count(n) > 1]
                 )
                 if twice:
                     fail("E-DERIVE-COLLISION", f"Derived record {name} would have two fields named {twice[0]}.", at)
@@ -358,7 +360,11 @@ def derive(p: Program) -> Program:
                     made.source_name = f"derive {written}" + (f" for {full}" if target else "")
                     p.functions.append(made)
                 else:
-                    p.records[name], p.generics[name], p.attributes[name] = made[1], [], set()
+                    p.records[name] = [(n, t) for n, t, _ in made[1]]
+                    p.generics[name], p.attributes[name] = [], set()
+                    carried = {n: extent for n, _, extent in made[1] if extent}
+                    if carried:
+                        p.field_extents[name] = carried
     return p
 
 

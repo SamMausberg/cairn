@@ -370,13 +370,19 @@ class Parser:
         return found
 
     def shape(self) -> list[Any]:
+        """A recipe's record: `(name, type, extent)` per field, where `$f:Buf[$t][rows];` names an extent field."""
         self.need("{")
         fields: list[Any] = []
         while not self.eat("}"):
             if self.t.s == "each":
                 fields.append(self.each(self.shape))
             else:
-                fields.append(self.parameter())
+                name, ty = self.parameter()
+                extent = ""
+                if self.eat("["):
+                    extent = self.ident()
+                    self.need("]")
+                fields.append((name, ty, extent))
                 self.need(";")
         return fields
 

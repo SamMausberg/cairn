@@ -407,6 +407,41 @@ derive layout.columns for Frame;
 columns holds scalar fields.
 ```
 
+A generated record may declare a field extent as a written one does: `$f:Buf[$t][rows]` says the generated column holds `rows` elements, where `rows` is an earlier `usize` field of the same generated record. The rule is the written record's rule (`E-EXTENT` names the generated record), so a column goes to a call whole and pays no part guard, and the constructor writes each carrier inline as `Buf[$t](rows)` on the same `rows`.
+
+```cairn
+module layout;
+
+pub recipe columns for R {
+  pub struct $R_columns {
+    rows:usize;
+    each f in R where t = typeof(f) { $f:Buf[$t][rows]; }
+  }
+  pub fn $R_columns_new(rows:usize) -> $R_columns = $R_columns(
+    rows, each f in R where t = typeof(f) { Buf[$t](rows) }
+  );
+}
+
+module app;
+import layout;
+
+struct Particle { x:f32; mass:f64; }
+derive layout.columns for Particle;
+
+fn heaviest(n:usize, mass:ro<f64>[n]) -> f64 {
+  let mut top:f64 = 0.0;
+  for i in 0..n { if mass[i] > top { top = mass[i]; } }
+  return top;
+}
+
+pub fn main() -> i32 {
+  let mut columns = Particle_columns_new(4);
+  columns.mass[2] = 3.0;
+  if heaviest(columns.rows, columns.mass) != 3.0 { return 1; }   // whole, by the declared extent
+  return 0;
+}
+```
+
 A function name is spliced as the deriving module wrote it (`$F(v.$f)` calls it; inside a longer identifier, `$F_$R`, it gives its last segment) and means what it means there, so one generic function serves fields of different types and privacy is judged from the deriving module. Recipes take types and naturals, not expressions: behavior reaches a generated function as a `fn` value or a closure. A recipe over a natural range generates one function per step, as `family` does for one template.
 
 Expansion happens before checking and reads nothing but the recipe and the schema, so it is a function of its inputs; `cairn expand` prints what it produced, as source. Expansion is hygienic: a function, type, trait or constant the recipe names means what it means in the recipe's own module and is spelled out in full where the code lands (`helper(x)` becomes `lib.helper(x)`, so the deriving module's own `helper` cannot capture it, and a private one is `E-PRIVATE` from there). Only `$` splices, and the names they build, belong to the deriving module. What a recipe generates is ordinary code of the deriving module, checked like any other; its signatures and effect ceilings are its contract.

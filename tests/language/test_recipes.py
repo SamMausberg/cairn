@@ -118,6 +118,65 @@ def test_expansion_is_a_function_of_its_inputs():
     assert digest == hashlib.sha256(compile_source(APP)[0].encode()).hexdigest()
 
 
+COLUMNS_WITH_EXTENTS = """
+module layout;
+
+pub recipe columns for R {
+  each f in R { require scalar(f), "columns holds scalar fields."; }
+  pub struct $R_columns {
+    rows:usize;
+    each f in R where t = typeof(f) { $f:Buf[$t][rows]; }
+  }
+  pub fn $R_columns_new(rows:usize) -> $R_columns = $R_columns(
+    rows, each f in R where t = typeof(f) { Buf[$t](rows) }
+  );
+  pub fn $R_set(c:rw<$R_columns>, i:usize, row:R) { each f in R { c.$f[i] = row.$f; } }
+}
+
+module app;
+import layout;
+
+struct Particle { x:f32; mass:f64; }
+derive layout.columns for Particle;
+
+fn heaviest(n:usize, mass:ro<f64>[n]) -> f64 {
+  let mut top:f64 = 0.0;
+  for i in 0..n { if mass[i] > top { top = mass[i]; } }
+  return top;
+}
+
+pub fn main() -> i32 {
+  let mut columns = Particle_columns_new(4);
+  Particle_set(columns, 2, Particle(1.5, 3.0));
+  if heaviest(columns.rows, columns.mass) != 3.0 { return 1; } // the column goes whole: no part, no guard
+  if heaviest(len(columns.mass), columns.mass) != 3.0 { return 2; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_recipe_declares_a_field_extent_and_the_column_goes_whole(tmp_path, cxx):
+    """`$f:Buf[$t][rows]` inside a recipe is the declared extent of the generated record's field, so a call
+    takes the column whole and pays no part guard; the rule is the one a written record obeys."""
+    if not shutil.which(cxx):
+        pytest.skip(f"{cxx} unavailable")
+    cpp, receipt = compile_source(COLUMNS_WITH_EXTENTS, roots=("app.main",))
+    assert receipt["functions"]["app.main"]["syntactic_check_sites"].get("bounds", 0) == 0
+    projected = canonical_source(COLUMNS_WITH_EXTENTS)
+    assert "$f:Buf[$t][rows];" in projected and "x:Buf[f32][rows]" in expanded_source(COLUMNS_WITH_EXTENTS)
+    assert compile_source(projected, roots=("app.main",))[0] == cpp
+    formatted = format_source(COLUMNS_WITH_EXTENTS)
+    assert format_source(formatted) == formatted and compile_source(formatted, roots=("app.main",))[0] == cpp
+    (tmp_path / "p.cpp").write_text(cpp + "int main() { return static_cast<int>(cf_app_main()); }\n")
+    for name, text in RUNTIME_FILES.items():
+        (tmp_path / name).write_text(text)
+    flags = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter"]
+    flags += ["-fsanitize=address,undefined", "-fno-sanitize-recover=all"] if cxx == "clang++" else []
+    subprocess.run([cxx, *flags, str(tmp_path / "p.cpp"), "-o", str(tmp_path / "p")], check=True, timeout=180)
+    assert subprocess.run([tmp_path / "p"], timeout=60).returncode == 0
+
+
 REJECTED = {
     "a field outside the recipe's admissible domain, with the recipe's own message": (
         "E-DERIVE-DOMAIN",
@@ -205,6 +264,17 @@ REJECTED = {
     "a static fold of nothing has no value": (
         "E-RECIPE-STATIC",
         "recipe w where n = fold + each i in 0..0 { i } { fn f() -> usize = $n; }\nderive w;",
+    ),
+    "a generated field extent must be an earlier field of the generated record": (
+        "E-EXTENT",
+        "module layout;\npub recipe columns for R { pub struct $R_columns { each f in R where t = typeof(f) "
+        "{ $f:Buf[$t][rows]; } rows:usize; } }\nmodule app;\nimport layout;\nstruct P { x:f32; }\n"
+        "derive layout.columns for P;",
+    ),
+    "a generated field extent must be a usize field": (
+        "E-EXTENT",
+        "module layout;\npub recipe columns for R { pub struct $R_columns { rows:u32; each f in R where t = typeof(f) "
+        "{ $f:Buf[$t][rows]; } } }\nmodule app;\nimport layout;\nstruct P { x:f32; }\nderive layout.columns for P;",
     ),
     "a generated kernel is still a kernel": (
         "E-PLACEMENT",

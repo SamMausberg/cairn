@@ -74,6 +74,7 @@ w = fold + each f in R { bytes(f) } names static values (naturals, min, max; fac
 field or a type alike, unsigned(f) or bytes(R): bytes bits offset index count typeof
 unsigned signed integer float scalar record); $name splices into identifiers (encode_$R, value.$f) or stands for the
 natural/type; bare R is the type; require cond, "message"; states the domain.
+A generated field may declare an earlier usize field as its extent: $f:Buf[$t][rows];.
 A recipe may also hold impl Trait for R { ... }. derive name[naturals] for Type; expands
 before checking into code of the deriving module, checked like any other; std offers
 derive eq|ord|hash for P; (impls of std.core's Eq, Ord, Hash).""",
