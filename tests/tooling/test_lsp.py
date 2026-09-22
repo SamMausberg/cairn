@@ -90,6 +90,7 @@ class Client:
             stderr=subprocess.PIPE,
         )
         self.inbox: queue.Queue = queue.Queue()
+        self.asked = 1000  # ids of `ask`, clear of the ones a test writes itself
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
 
@@ -143,6 +144,15 @@ class Client:
     def request(self, method, params, request):
         self.send(method, params, request)
         return self.response(request)
+
+    def start(self):
+        return self.request("initialize", {"capabilities": {}}, 1)
+
+    def ask(self, method, position=None, **params):
+        """A request about the open document under a fresh id, at `position` when the request has one."""
+        self.asked += 1
+        where = {"position": position} if position is not None else {}
+        return self.request(f"textDocument/{method}", {"textDocument": {"uri": URI}, **where, **params}, self.asked)
 
     def open(self, text, uri=URI):
         self.send("textDocument/didOpen", {"textDocument": {"uri": uri, "languageId": "cairn", "text": text}})
@@ -206,23 +216,18 @@ def test_a_whole_session(client):
 
     assert client.change(FIXED) == []
 
-    hovered = client.request(
-        "textDocument/hover", {"textDocument": {"uri": URI}, "position": place(FIXED, "average(10, 20)", 2)}, 2
-    )
+    hovered = client.ask("hover", place(FIXED, "average(10, 20)", 2))
     assert "u64" in hovered["result"]["contents"]["value"]
 
-    outline = client.request("textDocument/documentSymbol", {"textDocument": {"uri": URI}}, 3)
+    outline = client.ask("documentSymbol")
     names = {entry["name"] for entry in outline["result"]}
     assert {"average", "Pair", "Op", "LIMIT", "Shape", "main"} <= names
     assert [e["kind"] for e in outline["result"] if e["name"] == "Pair"] == [23]
 
-    gone_to = client.request(
-        "textDocument/definition", {"textDocument": {"uri": URI}, "position": place(FIXED, "average(10, 20)", 2)}, 4
-    )
+    gone_to = client.ask("definition", place(FIXED, "average(10, 20)", 2))
     assert gone_to["result"]["range"]["start"] == place(FIXED, "average(x:u64")
 
-    edits = client.request("textDocument/formatting", {"textDocument": {"uri": URI}, "options": {}}, 5)
-    assert edits["result"] == []  # FIXED is already formatted
+    assert client.ask("formatting", options={})["result"] == []  # FIXED is already formatted
 
     assert client.request("shutdown", {}, 6)["result"] is None
     client.send("exit")
@@ -230,30 +235,27 @@ def test_a_whole_session(client):
 
 
 def test_formatting_returns_one_whole_document_edit(client):
-    client.request("initialize", {"capabilities": {}}, 1)
+    client.start()
     ugly = "fn f(a:u64,b:u64)->u64{return a+b;}\n"
     client.open(ugly)
-    edits = client.request("textDocument/formatting", {"textDocument": {"uri": URI}, "options": {}}, 2)
+    edits = client.ask("formatting", options={})
     assert len(edits["result"]) == 1
     assert edits["result"][0]["newText"] == "fn f(a:u64, b:u64) -> u64 { return a + b; }\n"
     assert edits["result"][0]["range"] == {"start": {"line": 0, "character": 0}, "end": {"line": 1, "character": 0}}
 
 
 def test_positions_use_utf16_code_units(client):
-    client.request("initialize", {"capabilities": {}}, 1)
+    client.start()
     text = "// \U0001f600 \u00e9\u00e9\u00e9\nfn f() -> u64 {\n  let x = nope;\n  return x;\n}\n"
     reported = client.open(text)
     assert reported[0]["code"] == "E-UNBOUND"
     assert reported[0]["range"] == {"start": {"line": 2, "character": 10}, "end": {"line": 2, "character": 14}}
     # A hover on the astral comment line must round-trip through UTF-16 without an exception.
-    hovered = client.request(
-        "textDocument/hover", {"textDocument": {"uri": URI}, "position": {"line": 0, "character": 5}}, 2
-    )
-    assert hovered["result"] is None
+    assert client.ask("hover", {"line": 0, "character": 5})["result"] is None
 
 
 def test_the_server_survives_nonsense(client):
-    client.request("initialize", {"capabilities": {}}, 1)
+    client.start()
     methods = ("hover", "definition", "documentSymbol", "completion", "signatureHelp", "references", "prepareRename")
     edges = ({"line": 0, "character": 0}, {"line": 0, "character": 1}, {"line": 99, "character": 99})
     for text in ("", "}{;;;", "fn fn fn", "\u00e9\u00e9\u00e9", "fn f() { let x = $; }", "let x = \U0001f600.", "a."):
@@ -261,34 +263,25 @@ def test_the_server_survives_nonsense(client):
         assert isinstance(reported, list)
         for method in methods:
             for where in edges:
-                answer = client.request(
-                    f"textDocument/{method}",
-                    {"textDocument": {"uri": URI}, "position": where},
-                    hash(text + method + str(where)) % 100000 + 100,
-                )
+                answer = client.ask(method, where)
                 assert "error" not in answer, answer
-        renamed = client.request(
-            "textDocument/rename",
-            {"textDocument": {"uri": URI}, "position": edges[1], "newName": "x"},
-            hash(text) % 100000 + 100000,
-        )
+        renamed = client.ask("rename", edges[1], newName="x")
         assert renamed.get("error", {}).get("code", -32602) == -32602  # refused, never an internal failure
-    unknown = client.request("textDocument/willSaveWaitUntil", {"textDocument": {"uri": URI}}, 2)
-    assert unknown["error"]["code"] == -32601
+    assert client.ask("willSaveWaitUntil")["error"]["code"] == -32601
     assert client.request("shutdown", {}, 3)["result"] is None
     client.send("exit")
     assert client.proc.wait(timeout=TIMEOUT) == 0
 
 
 def test_closing_a_document_clears_its_diagnostics(client):
-    client.request("initialize", {"capabilities": {}}, 1)
+    client.start()
     assert client.open(BROKEN)
     client.send("textDocument/didClose", {"textDocument": {"uri": URI}})
     assert client.diagnostics() == []
 
 
 def test_exit_without_shutdown_is_a_failure(client):
-    client.request("initialize", {"capabilities": {}}, 1)
+    client.start()
     client.proc.stdin.close()
     assert client.proc.wait(timeout=TIMEOUT) == 1
 
@@ -556,51 +549,34 @@ def test_hover_adds_the_signature_and_effect_row_of_a_callee():
 
 
 def test_completion_in_a_buffer_broken_mid_expression(client):
-    client.request("initialize", {"capabilities": {}}, 1)
+    client.start()
     assert client.open(PROGRAM) == []
     typing = PROGRAM.replace("  return 0;", "  let y = pair.\n  return 0;")
     assert client.change(typing)  # the buffer no longer compiles
-    answered = client.request(
-        "textDocument/completion", {"textDocument": {"uri": URI}, "position": place(typing, "let y = pair.", 13)}, 2
-    )
+    answered = client.ask("completion", place(typing, "let y = pair.", 13))
     assert {i["label"] for i in answered["result"]} == {"a", "b", "area", "scale"}
-    helped = client.request(
-        "textDocument/signatureHelp", {"textDocument": {"uri": URI}, "position": place(typing, "scale(pair, 2)", 6)}, 3
-    )
+    helped = client.ask("signatureHelp", place(typing, "scale(pair, 2)", 6))
     assert helped["result"]["signatures"][0]["label"] == "fn scale(p:rw<Pair>, by:u64)"
 
 
 def test_the_new_features_use_utf16_code_units(client):
-    client.request("initialize", {"capabilities": {}}, 1)
+    client.start()
     text = 'struct Pair { a:u64; b:u64; }\nfn main() -> i32 { let s = "\U0001f600\U0001f600"; let p = Pair(1, 2); return 0; }\n'
     assert client.open(text) == []
-    answered = client.request(
-        "textDocument/completion", {"textDocument": {"uri": URI}, "position": place(text, "Pair(1, 2)", 10)}, 2
-    )
+    answered = client.ask("completion", place(text, "Pair(1, 2)", 10))
     assert {"p", "s", "Pair", "main"} <= {i["label"] for i in answered["result"]}
-    renamed = client.request(
-        "textDocument/rename",
-        {"textDocument": {"uri": URI}, "position": place(text, "let p = Pair", 4), "newName": "point"},
-        3,
-    )
+    renamed = client.ask("rename", place(text, "let p = Pair", 4), newName="point")
     edit = renamed["result"]["changes"][URI][0]["range"]
     assert edit["start"]["character"] == place(text, "let p = Pair", 4)["character"]
     assert edit["end"]["character"] == edit["start"]["character"] + 1
 
 
 def test_rename_over_the_protocol_refuses_with_an_error(client):
-    client.request("initialize", {"capabilities": {}}, 1)
+    client.start()
     client.open(PROGRAM)
-    refused = client.request(
-        "textDocument/rename",
-        {"textDocument": {"uri": URI}, "position": place(PROGRAM, "vec.push", 4), "newName": "shove"},
-        2,
-    )
+    refused = client.ask("rename", place(PROGRAM, "vec.push", 4), newName="shove")
     assert refused["error"]["code"] == -32602 and "one document" in refused["error"]["message"]
-    prepared = client.request(
-        "textDocument/prepareRename", {"textDocument": {"uri": URI}, "position": place(PROGRAM, "vec.push", 4)}, 3
-    )
-    assert prepared["result"] is None
+    assert client.ask("prepareRename", place(PROGRAM, "vec.push", 4))["result"] is None
 
 
 # Editor assets -------------------------------------------------------------------------------------

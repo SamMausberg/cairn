@@ -38,9 +38,8 @@ class Item:
     start: int
     end: int
     comment: bool = False
-    role: str = (
-        ""  # unary | angle_open | angle_close | lam_open | lam_close | lambda0 | inline | splice | fold | spaced
-    )
+    # unary | angle_open | angle_close | lam_open | lam_close | lambda0 | inline | splice | fold | spaced
+    role: str = ""
     pair: int = -1  # matching bracket, as an index into the code tokens
 
 
@@ -180,11 +179,8 @@ def wrap(parts: list[Part], indent: int) -> list[str]:
         if j > i + 1 and j - i > best[1] - best[0]:
             best = (i, j)
     if best == (0, 0):  # No bracket to open: a list at the top, such as a recipe's `where a = .., b = ..`.
-        return _fill(
-            _groups(parts, [i + 1 for i in range(len(parts) - 1) if depth[i] == 0 and parts[i][1] == ","]),
-            pad,
-            pad + STEP,
-        )
+        commas = [i + 1 for i in range(len(parts) - 1) if depth[i] == 0 and parts[i][1] == ","]
+        return _fill(_groups(parts, commas), pad, pad + STEP)
     i, j = best
     body = parts[i + 1 : j]
     inner = _depths(body)
@@ -325,10 +321,7 @@ def format_source(text: str) -> str:
 
 
 def sources(paths: list[Path]) -> list[Path]:
-    out: list[Path] = []
-    for p in paths:
-        out += sorted(p.rglob("*.cairn")) if p.is_dir() else [p]
-    return out
+    return [q for p in paths for q in (sorted(p.rglob("*.cairn")) if p.is_dir() else [p])]
 
 
 def format_paths(paths: list[Path], check: bool = False, diff: bool = False) -> int:
@@ -348,18 +341,10 @@ def format_paths(paths: list[Path], check: bool = False, diff: bool = False) -> 
             )
             if not (check or diff):
                 path.write_text(out, encoding="utf-8")
+    status = "formatted" if not (check or failed) else "would-change" if changed else "clean"
+    report = {"status": status, "mode": "check" if check else "rewrite", "changed": changed, "not_formatted": failed}
     if diff:
         print("".join(chunks), end="")
     else:
-        print(
-            json.dumps(
-                {
-                    "status": "formatted" if not (check or failed) else "would-change" if changed else "clean",
-                    "mode": "check" if check else "rewrite",
-                    "changed": changed,
-                    "not_formatted": failed,
-                },
-                indent=2,
-            )
-        )
+        print(json.dumps(report, indent=2))
     return 1 if failed or (changed and (check or diff)) else 0

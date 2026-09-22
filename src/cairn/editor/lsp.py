@@ -83,11 +83,7 @@ def write_message(stream: BinaryIO, payload: dict) -> None:
 
 
 def line_starts(text: str) -> list[int]:
-    out, i = [0], text.find("\n")
-    while i >= 0:
-        out.append(i + 1)
-        i = text.find("\n", i + 1)
-    return out
+    return [0, *(m.end() for m in re.finditer("\n", text))]
 
 
 def _units(s: str) -> int:
@@ -134,16 +130,7 @@ class Document:
         except Diagnostic as error:
             return [], [self._report(error)]
         except Exception as error:  # A compiler failure is reported, never raised at the client.
-            zero = {"line": 0, "character": 0}
-            return [], [
-                {
-                    "range": {"start": zero, "end": zero},
-                    "severity": 1,
-                    "source": "cairn",
-                    "code": "E-INTERNAL",
-                    "message": f"{type(error).__name__}: {error}",
-                }
-            ]
+            return [], [problem(self.span(0, 0), "E-INTERNAL", f"{type(error).__name__}: {error}")]
         # The checker takes each template out of the program once it has checked it; an editor wants
         # every declared function back, and none of the instances it made along the way.
         program.functions = [f for f in checker.fs.values() if f.name in program.modules]
@@ -165,14 +152,13 @@ class Document:
             start = min(self.starts[min(line, len(self.starts)) - 1] + max(column - 1, 0), len(self.text))
             end = next((t.end for t in self.code if t.start == start), start)
         hint = d.get("repair_hint")
-        return {
-            "range": self.span(start, end),
-            "severity": 1,
-            "source": "cairn",
-            "code": d["code"],
-            "message": d["message"] + ("\n" + hint if hint else ""),
-            "data": {k: d[k] for k in ("code", "repair_hint", "source_line") if k in d},
-        }
+        shown = problem(self.span(start, end), d["code"], d["message"] + ("\n" + hint if hint else ""))
+        return {**shown, "data": {k: d[k] for k in ("code", "repair_hint", "source_line") if k in d}}
+
+
+def problem(where: dict, code: str, message: str) -> dict:
+    """One LSP error diagnostic from the compiler."""
+    return {"range": where, "severity": 1, "source": "cairn", "code": code, "message": message}
 
 
 # Language features -------------------------------------------------------------------------------
