@@ -1,0 +1,7 @@
+[project]
+name = "wordfreq"
+sources = ["src/words.cairn", "src/main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

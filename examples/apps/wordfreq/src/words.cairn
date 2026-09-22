@@ -1,0 +1,48 @@
+// Words and their counts. A word is a run of ASCII letters and digits, folded to lowercase; everything
+// else separates words. The map is keyed by the word itself, so two words never share an entry, whatever
+// their hashes do.
+import std.core (Hash, Eq);
+import std.map (Map);
+import std.text;
+import std.vec (Vec);
+
+struct Word { bytes:Vec[u8]; }
+
+impl Hash for Word { fn hash(w:ro<Word>) -> u64 = text.hash_bytes(w.bytes.data[0..w.bytes.len]); }
+impl Eq for Word {
+  fn same(a:ro<Word>, b:ro<Word>) -> bool = text.equal(
+    a.bytes.data[0..a.bytes.len], b.bytes.data[0..b.bytes.len]
+  );
+}
+
+fn letter(c:u8) -> bool = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+  || (c >= '0' && c <= '9');
+fn lower(c:u8) -> u8 {
+  if c >= 'A' && c <= 'Z' { return c + 32; }
+  return c;
+}
+
+// One more of the word s[lo..hi]: its count goes up, or it arrives with a count of one.
+fn tally(counts:rw<Map[Word, u64]>, n:usize, s:ro<u8>[n], lo:usize, hi:usize) {
+  let mut folded = vec.with_capacity[u8](hi - lo);
+  for i in lo..hi { folded.push(lower(s[i])); }
+  let word = Word(folded);
+  let seen = counts.update(word, |c:rw<u64>| { c += 1; });
+  if !seen { counts.insert(word, 1); }
+}
+
+// Every word of `s` counted once more in `counts`; the answer is how many words `s` held.
+fn count_words(counts:rw<Map[Word, u64]>, n:usize, s:ro<u8>[n]) -> u64 {
+  let mut words:u64 = 0;
+  let mut start:usize = 0;
+  for i in 0..n + 1 {
+    if i == n || !letter(s[i]) {
+      if i > start {
+        tally(counts, s, start, i);
+        words += 1;
+      }
+      start = i + 1;
+    }
+  }
+  return words;
+}

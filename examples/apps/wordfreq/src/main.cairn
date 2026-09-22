@@ -1,0 +1,116 @@
+// wordfreq [-n N] FILE...: the N most frequent words of the files named, most frequent first and ties in
+// byte order, then how many words and how many distinct ones there were. N is 10 unless -n says otherwise.
+//   $ cairn run examples/apps/wordfreq -- -n 3 examples/apps/wordfreq/tale.txt
+//   14 the
+//   12 of
+//   11 was
+//   119 words, 58 distinct
+import std.core (Option, Result);
+import std.env (Args);
+import std.fmt;
+import std.fs;
+import std.io (IoError);
+import std.map (Map);
+import std.sort;
+import std.text;
+import std.vec (Vec);
+
+// One line of the answer: a word's count and the slot of the map that holds the word.
+struct Row { count:u64; at:usize; }
+
+fn usage() -> i32 {
+  io.eprintln("usage: wordfreq [-n N] FILE...");
+  return 2;
+}
+
+// More frequent first; among equals, the word that sorts first in bytes.
+fn before(counts:ro<Map[Word, u64]>, a:ro<Row>, b:ro<Row>) -> bool {
+  if a.count != b.count { return a.count > b.count; }
+  let x = counts.keys[a.at].bytes.len;
+  let y = counts.keys[b.at].bytes.len;
+  return text.compare(counts.keys[a.at].bytes.data[0..x], counts.keys[b.at].bytes.data[0..y]) < 0;
+}
+
+// The table: the top `shown` rows, counts right-aligned to the widest, then the totals.
+fn report(counts:ro<Map[Word, u64]>, n:usize, rows:ro<Row>[n], shown:usize, words:u64) {
+  let mut widest:usize = 1;
+  if n > 0 {
+    let mut digits = vec.new[u8]();
+    fmt.uint(digits, rows[0].count);
+    widest = digits.len;
+  }
+  let mut out = vec.new[u8]();
+  for r in 0..min(n, shown) {
+    fmt.padded(out, rows[r].count, widest, ' ');
+    out.push(' ');
+    let w = counts.keys[rows[r].at].bytes.len;
+    fmt.bytes(out, counts.keys[rows[r].at].bytes.data[0..w]);
+    out.push('\n');
+  }
+  fmt.uint(out, words);
+  fmt.bytes(out, " words, ");
+  fmt.uint(out, counts.count());
+  fmt.bytes(out, " distinct\n");
+  io.print(out.data[0..out.len]);
+}
+
+// Whether argument i is exactly `name`.
+fn flag(a:ro<Args>, i:usize, m:usize, name:ro<u8>[m]) -> bool {
+  let lo = a.begin(i);
+  let hi = a.end(i);
+  return text.equal(a.text.data[lo..hi], name);
+}
+
+fn run(a:ro<Args>) -> i32 {
+  let mut shown:usize = 10;
+  let mut first:usize = 1;
+  if a.count() > 2 && flag(a, 1, "-n") {
+    let lo = a.begin(2);
+    let hi = a.end(2);
+    match text.parse_u64(a.text.data[lo..hi]) {
+      Ok(asked) => shown = usize(asked);
+      Err(e) => return usage();
+    }
+    first = 3;
+  }
+  if first >= a.count() { return usage(); }
+  let mut counts = map.new[Word, u64]();
+  let mut words:u64 = 0;
+  for i in first..a.count() {
+    let lo = a.begin(i);
+    let hi = a.end(i);
+    match fs.read(a.text.data[lo..hi]) {
+      Ok(body) => {
+        let found = count_words(counts, body.data[0..body.len]);
+        words += found;
+      }
+      Err(e) => {
+        let mut line = vec.new[u8]();
+        fmt.bytes(line, "wordfreq: cannot read ");
+        fmt.bytes(line, a.text.data[lo..hi]);
+        fmt.bytes(line, ": errno ");
+        fmt.int(line, e.code);
+        io.eprintln(line.data[0..line.len]);
+        return 1;
+      }
+    }
+  }
+  let mut rows = vec.with_capacity[Row](counts.count());
+  for slot in 0..counts.slots() {
+    if counts.live(slot) { rows.push(Row(counts.vals[slot], slot)); }
+  }
+  let n = rows.len;
+  sort.sort_by(rows.data[0..n], |x:ro<Row>, y:ro<Row>| -> bool { return before(counts, x, y); });
+  report(counts, rows.data[0..n], shown, words);
+  return 0;
+}
+
+fn main() -> i32 {
+  match env.args() {
+    Ok(a) => return run(a);
+    Err(e) => {
+      io.eprintln("wordfreq: cannot read the arguments");
+      return 1;
+    }
+  }
+}
