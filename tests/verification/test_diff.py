@@ -262,3 +262,12 @@ def test_a_template_that_names_a_changed_function_is_not_identical_source():
     helper = "fn base(x:u64) -> u64 = x;\nfn wrap[T:copy](x:T) -> T { let b = base(1); return x; }\n"
     entry = diff(helper, helper.replace("= x;", "= x + 1;"), predict=False)["functions"]["wrap"]
     assert entry["class"] == "unknown" and "base" in entry["reason"]
+
+
+def test_a_program_past_the_value_model_s_limit_is_compared_through_the_modules_a_function_reaches():
+    filler = "module pad;\n" + "".join(f"pub fn p{i}(x:u64) -> u64 = x + {i};\n" for i in range(2000))
+    small = "module m;\npub fn f(x:u32) -> u32 = x + 1;\n"
+    old, new = filler + small, filler + small.replace("x + 1", "1 + x")
+    assert len(old.encode()) > 64000
+    entry = diff(old, new, predict=False)["functions"]["m.f"]
+    assert entry["class"] == "smt-equivalent"

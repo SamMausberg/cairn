@@ -23,9 +23,11 @@ that declares no module.
 from __future__ import annotations
 
 import dataclasses
+import re
 import shutil
 import time
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import Any
 
 from ..compiler.cairnc import VERSION, Diagnostic
@@ -35,7 +37,7 @@ from ..compiler.syntax import Parser
 from ..compiler.tree import Arm, Expr, Function, Program, Stmt
 from .emission import CALLED, canonical, emitted, guard_count, unguarded
 from .scalar_semantics import equivalent
-from .scalar_values import MAX_UNROLL
+from .scalar_values import MAX_SOURCE_BYTES, MAX_UNROLL
 
 ORDER = ["identical-code", "identical-source", "smt-equivalent", "behavior-changed", "unknown", "signature-changed",
          "renamed", "added", "removed"]  # fmt: skip
@@ -200,16 +202,40 @@ def replay(v: Version, name: str, inputs: dict[str, Any], seen: dict[str, Any], 
     return "agrees" if aborted else f"disagrees: {result['status']}"
 
 
+MODULE = re.compile(r"^module\s+([\w.]+)\s*;", re.M)
+IMPORT = re.compile(r"^import\s+([\w.]+)", re.M)
+
+
+def reach(source: str, module: str) -> str:
+    """The part of `source` a function of `module` can reach: its module and every module that imports lead to.
+    Modules cannot import the root, so a module function needs no root code; a root function needs all it imports."""
+    cuts = [0, *(m.start() for m in MODULE.finditer(source)), len(source)]
+    chunks = [(h.group(1) if (h := MODULE.match(source, a)) else "", source[a:b]) for a, b in pairwise(cuts)]
+    texts: dict[str, list[str]] = {}
+    for m, text in chunks:
+        texts.setdefault(m, []).append(text)
+    need, todo = set(), [module]
+    while todo:
+        m = todo.pop()
+        if m not in need and m in texts:
+            need.add(m)
+            todo += [x for text in texts[m] for x in IMPORT.findall(text)]
+    return "".join(text for m, text in chunks if m in need)
+
+
 def compare(o: Version, n: Version, name: str, deadline: float, timeout_ms: int) -> dict[str, Any]:
-    """The solver's answer for one function whose code differs, as a class and its evidence."""
+    """The solver's answer for one function whose code differs, as a class and its evidence. A program past the
+    value model's size limit is handed to it as the modules the function can reach."""
     remaining = int((deadline - time.monotonic()) * 1000)
     if remaining < 10:
         return {"class": "unknown", "reason": "The diff's solver budget ran out before this function."}
-    r = equivalent(o.source, n.source, name, allow_reference_traps=True, timeout_ms=min(timeout_ms, remaining))
+    module = n.p.modules.get(name, n.functions[name].module)
+    old, new = (v.source if len(v.source.encode()) <= MAX_SOURCE_BYTES else reach(v.source, module) for v in (o, n))
+    r = equivalent(old, new, name, allow_reference_traps=True, timeout_ms=min(timeout_ms, remaining))
     counts = [p for p, t in n.functions[name].params if t.mode == "value" and t.name in UNSIGNED]
     if r["status"] == "unknown" and "unrolling budget" in r.get("reason", "") and counts:
         assume = " && ".join(f"{p} <= {MAX_UNROLL}" for p in counts)  # every trip count the model can bound
-        bounded = equivalent(o.source, n.source, name, assume=assume, allow_reference_traps=True,
+        bounded = equivalent(old, new, name, assume=assume, allow_reference_traps=True,
                              timeout_ms=min(timeout_ms, max(1, int((deadline - time.monotonic()) * 1000))))  # fmt: skip
         if bounded["status"] == "counterexample":  # a difference inside the bound is a difference
             return {"class": "behavior-changed", "witness": {"inputs": bounded["counterexample"],
