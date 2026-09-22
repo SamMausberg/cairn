@@ -434,6 +434,9 @@ pub extern fn access(path:ro<u8>[1]@host, mode:i32) -> i32 effects(io)
 // effects: ffi:clock_gettime, ffi_precondition, io, trap, write:ts
 pub extern fn clock_gettime(clock:i32, ts:rw<i64>[2]@host) -> i32 effects(io)
 
+// effects: ffi:nanosleep, ffi_precondition, io, read:wanted, trap, write:left
+pub extern fn nanosleep(wanted:ro<i64>[2]@host, left:rw<i64>[2]@host) -> i32 effects(io)
+
 // errno is a macro over a thread-local int*, so its address arrives as an integer.
 pub extern fn __errno_location() -> usize effects(io)  // effects: ffi:__errno_location, io
 
@@ -527,6 +530,31 @@ pub fn find(n:usize, s:ro<u8>[n]@host, m:usize, needle:ro<u8>[m]@host) -> std.co
 
 // FNV-1a: no table, no allocation, good enough to key a map or checksum a record.
 pub fn hash_bytes(n:usize, s:ro<u8>[n]@host) -> u64  // effects: ffi_precondition, read:s, trap
+```
+
+# std.time
+
+Clocks and waiting. `now` reads CLOCK_MONOTONIC, which never jumps, and is the one to measure with; `wall_ns` reads CLOCK_REALTIME, the date, which moves when the system clock is set. Cost: one system call each; `sleep` blocks the calling thread for at least the time asked.
+
+```cairn
+// A moment on the monotonic clock, in nanoseconds from an arbitrary start the process shares.
+pub struct Instant { ns:u64; }
+
+// effects: ffi:clock_gettime, ffi_precondition, io, local_read, local_write, stack_storage, trap, zero_init
+pub fn now() -> std.time.Instant
+
+// Nanoseconds from `start` to now: never negative, since the monotonic clock never runs back.
+// effects: ffi:clock_gettime, ffi_precondition, io, local_read, local_write, stack_storage, trap, zero_init
+pub fn since(start:std.time.Instant) -> u64
+
+// Nanoseconds since 1970-01-01 UTC.
+// effects: ffi:clock_gettime, ffi_precondition, io, local_read, local_write, stack_storage, trap, zero_init
+pub fn wall_ns() -> u64
+
+// Wait at least `ns` nanoseconds; a signal that wakes the thread early is slept through.
+// effects: diverge, ffi:__errno_location, ffi:nanosleep, ffi_precondition, io, local_read, local_write, mmio,
+// stack_storage, trap, zero_init
+pub fn sleep(ns:u64)
 ```
 
 # std.vec

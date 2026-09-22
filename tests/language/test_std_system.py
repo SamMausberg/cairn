@@ -1,8 +1,8 @@
-"""std.env and std.fs: what a whole program needs from the system, run for real.
+"""std.env, std.fs and std.time: what a whole program needs from the system, run for real.
 
-The arguments and the environment are compared with what Python started the program with, and files with
-what Python finds on disk afterwards. `cairn run PATH -- ARGS` is checked to hand the arguments on, on the
-JSON path and on the terminal path alike.
+The arguments and the environment are compared with what Python started the program with, files with what
+Python finds on disk afterwards, and the clock with a sleep it must outlast. `cairn run PATH -- ARGS` is checked
+to hand the arguments on, on the JSON path and on the terminal path alike.
 """
 
 import json
@@ -155,8 +155,33 @@ def test_a_path_too_long_for_the_kernel_is_an_error_value(tmp_path):
     assert done.returncode == 0, done.stderr
 
 
+CLOCK = """
+import std.time (Instant);
+
+fn main() -> i32 {
+  let start = time.now();
+  let wall = time.wall_ns();
+  time.sleep(30000000);                              // thirty milliseconds
+  let slept = time.since(start);
+  let later = time.wall_ns();
+  if slept < 30000000 || slept > 5000000000 { return 1; }
+  if later < wall || wall < 1700000000000000000 { return 2; }   // after 2023, and not backwards here
+  return 0;
+}
+"""
+
+
+def test_the_clock_outlasts_a_sleep(tmp_path):
+    done = subprocess.run([built(tmp_path, CLOCK)], capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stderr
+
+
 def test_rows_name_the_system_calls():
-    rows = compile_source('import std.fs;\nfn seen() -> bool = fs.exists("/");\n')[1]["functions"]
+    rows = compile_source(
+        "import std.env (Args);\nimport std.fs;\nimport std.time (Instant);\n"
+        'fn wait() { time.sleep(1); }\nfn seen() -> bool = fs.exists("/");\n'
+    )[1]["functions"]
+    assert {"ffi:nanosleep", "io"} <= set(rows["wait"]["effects"])
     assert {"ffi:access", "io", "stack_storage"} <= set(rows["seen"]["effects"])
 
 
@@ -164,6 +189,6 @@ def test_arguments_are_read_not_written():
     refused("E-WRITE-LEASE", "import std.env (Args);\nfn f(a:ro<Args>) { a.text.data[0] = 0; }")
 
 
-@pytest.mark.parametrize("module", ["fmt", "fs", "env"])
+@pytest.mark.parametrize("module", ["fmt", "fs", "env", "time"])
 def test_each_new_module_is_documented(module):
     assert f"## std.{module}" in (ROOT / "docs/library.md").read_text()

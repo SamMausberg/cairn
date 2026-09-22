@@ -1,6 +1,6 @@
 # The standard library
 
-Fifteen modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
+Sixteen modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
 
 [std_api.md](std_api.md) holds every signature and every effect row, generated from these sources by `cairn doc --std`. This file is the working guide: what each module is for, a program that uses it, and where it bites.
 
@@ -12,6 +12,7 @@ Three habits explain the API shape. A lookup answers with an index, never a borr
 | `std.vec` | the growable owner `Vec[T]` | yes |
 | `std.text` | integers to and from bytes, comparison, search, hashing | only `push_u64`, `push_i64` |
 | `std.io` | files, standard streams, a monotonic clock | only `read_file`, `read_to_end` |
+| `std.time` | a monotonic clock, the date, sleeping | no |
 | `std.env` | the program's arguments and environment | yes |
 | `std.fs` | files by path, without a NUL to write | only `read` |
 | `std.fmt` | integers, hex, padding and exact fixed-point floats into a `Vec[u8]` | yes |
@@ -177,7 +178,7 @@ fn main() -> i32 {
 
 `defer io.close(f)` is the idiom: `try` refuses to leave a function while a linear value is unconsumed, so a File that is not deferred cannot be used with `try` at all (`E-LINEAR-LEAK`, "f is linear: consume it, or defer its consumer, on every path"). `close` reports nothing, because consuming a linear value requires a function that never reaches a `return`, and `return` demands that every linear value already be consumed. Report through a borrow if you need the status.
 
-Open flags are `READ`, `WRITE`, `APPEND` and `TRUNCATE`; `seek` takes `SET`, `CUR` or `END`; `sync` and `truncate` answer `Ok(0)`. A path ends in a NUL byte, since C reads a pointer and not a length. `read` is one syscall and answers 0 at end of file; `read_full` and `write` loop, and a short write is an error here even though it is not one to the kernel. Nothing buffers: n bytes written is n bytes of syscall. `print`, `println`, `eprintln`, `newline`, `print_u64` and `print_i64` are best effort and return nothing. `read_stdin` is one read from standard input, answering 0 at end of input. `read_to_end(f, into)` appends everything left to read in 4096-byte steps, for a pipe, a socket or a `/proc` file whose size says 0. `monotonic_ns` reads CLOCK_MONOTONIC.
+Open flags are `READ`, `WRITE`, `APPEND` and `TRUNCATE`; `seek` takes `SET`, `CUR` or `END`; `sync` and `truncate` answer `Ok(0)`. A path ends in a NUL byte, since C reads a pointer and not a length. `read` is one syscall and answers 0 at end of file; `read_full` and `write` loop, and a short write is an error here even though it is not one to the kernel. Nothing buffers: n bytes written is n bytes of syscall. `print`, `println`, `eprintln`, `newline`, `print_u64` and `print_i64` are best effort and return nothing. `read_stdin` is one read from standard input, answering 0 at end of input. `read_to_end(f, into)` appends everything left to read in 4096-byte steps, for a pipe, a socket or a `/proc` file whose size says 0. `monotonic_ns` reads CLOCK_MONOTONIC; `std.time` has the same clock as a value.
 
 ## std.fmt
 
@@ -262,6 +263,22 @@ fn main() -> i32 {
     Ok(n) => { return 0; }
     Err(e) => { return 1; }
   }
+}
+```
+
+## std.time
+
+`now()` is an `Instant` on CLOCK_MONOTONIC, which never jumps, and `since(start)` is the nanoseconds from it. `wall_ns()` reads CLOCK_REALTIME, the date, which moves when the system clock is set. `sleep(ns)` waits at least that long, sleeping through a signal that wakes it early. Each is one system call, so its row says `io` and `ffi:clock_gettime` or `ffi:nanosleep`.
+
+```cairn
+import std.time (Instant);
+
+fn main() -> i32 {
+  let start = time.now();
+  time.sleep(1000000);                            // a millisecond
+  let took = time.since(start);
+  if took < 1000000 { return 1; }
+  return 0;
 }
 ```
 

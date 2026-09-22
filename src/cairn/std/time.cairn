@@ -1,0 +1,42 @@
+// Clocks and waiting. `now` reads CLOCK_MONOTONIC, which never jumps, and is the one to measure with;
+// `wall_ns` reads CLOCK_REALTIME, the date, which moves when the system clock is set.
+// Cost: one system call each; `sleep` blocks the calling thread for at least the time asked.
+module std.time;
+import std.sys;
+
+// A moment on the monotonic clock, in nanoseconds from an arbitrary start the process shares.
+pub struct Instant { ns:u64; }
+
+fn clock(id:i32) -> u64 {
+  stack ts:i64[2] = zeroed;
+  unsafe {
+    let status = sys.clock_gettime(id, ts);
+    if status != 0 { return 0; }
+  }
+  return u64(ts[0]) * 1000000000 + u64(ts[1]);
+}
+
+pub fn now() -> Instant = Instant(clock(1));
+
+// Nanoseconds from `start` to now: never negative, since the monotonic clock never runs back.
+pub fn since(start:Instant) -> u64 = clock(1) - start.ns;
+
+// Nanoseconds since 1970-01-01 UTC.
+pub fn wall_ns() -> u64 = clock(0);
+
+// Wait at least `ns` nanoseconds; a signal that wakes the thread early is slept through.
+pub fn sleep(ns:u64) {
+  stack wanted:i64[2] = zeroed;
+  stack left:i64[2] = zeroed;
+  wanted[0] = i64(ns / 1000000000);
+  wanted[1] = i64(ns % 1000000000);
+  let mut asleep = true;
+  while asleep {
+    unsafe {
+      let status = sys.nanosleep(wanted, left);
+      asleep = status != 0 && sys.errno() == 4; // EINTR: what is left of it is in `left`
+    }
+    wanted[0] = left[0];
+    wanted[1] = left[1];
+  }
+}
