@@ -8,7 +8,7 @@ fn ingest(n:usize, text:ro<u8>[n], k:usize, out:rw<u64>[k]) -> usize {
     if text[i] == 44 {
       let count = i - start;
       match decimal(count, text[start..i]) {
-        Value(value) => { if used < k { out[used] = value; used = used + 1; } }
+        Value(value) => { if used < k { out[used] = value; used += 1; } }
         Invalid(offset) => {
           puts("  bad digit at ");
           putu(u64(start + offset));
@@ -37,13 +37,13 @@ fn sort_small(k:usize, values:rw<u64>[k], used:usize) {
   stack counts:usize[64] = zeroed;
   for i in 0..used {
     let bucket = usize(u8(values[i]));
-    counts[bucket] = counts[bucket] + 1;
+    counts[bucket] += 1;
   }
   let mut cursor:usize = 0;
   for bucket in 0..64 {
     for repeat in 0..counts[bucket] {
       values[cursor] = u64(bucket);
-      cursor = cursor + 1;
+      cursor += 1;
     }
   }
 }
@@ -63,7 +63,7 @@ fn main() -> i32 {
   let mut total = 0;
   let mut peak = 0;
   for i in 0..used {
-    total = total + readings[i];
+    total += readings[i];
     peak = max(peak, readings[i]);
   }
   if used == 0 { return 1; }

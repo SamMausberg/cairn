@@ -19,12 +19,12 @@ pub fn reserve[T:affine](v:rw<Vec[T]>, wanted:usize) {
 pub fn push[T:affine](v:rw<Vec[T]>, item:T) {
   reserve(v, v.len + 1);
   v.data[v.len] = item;
-  v.len = v.len + 1;
+  v.len += 1;
 }
 
 pub fn pop[T:affine](v:rw<Vec[T]>) -> Option[T] {
   if v.len == 0 { return None; }
-  v.len = v.len - 1;
+  v.len -= 1;
   return Some(take(v.data[v.len]));
 }
 
@@ -35,10 +35,10 @@ pub fn insert[T:affine](v:rw<Vec[T]>, i:usize, item:T) {
   let mut at = v.len;
   while at > i {
     swap(v.data[at], v.data[at - 1]);
-    at = at - 1;
+    at -= 1;
   }
   v.data[i] = item;
-  v.len = v.len + 1;
+  v.len += 1;
 }
 
 // Take the element at `i` out and close the gap, keeping the order of the rest.
@@ -46,7 +46,7 @@ pub fn remove[T:affine](v:rw<Vec[T]>, i:usize) -> Option[T] {
   if i >= v.len { return None; }
   let item = take(v.data[i]);
   for k in i..v.len - 1 { swap(v.data[k], v.data[k + 1]); }
-  v.len = v.len - 1;
+  v.len -= 1;
   return Some(item);
 }
 
@@ -83,7 +83,7 @@ pub fn clear[T:affine](v:rw<Vec[T]>) {
 pub fn extend_from[T:copy](v:rw<Vec[T]>, n:usize, src:ro<T>[n]) {
   reserve(v, v.len + n);
   for i in 0..n { v.data[v.len + i] = src[i]; }
-  v.len = v.len + n;
+  v.len += n;
 }
 
 // Release the tail now instead of at the owner's scope exit; capacity is kept.

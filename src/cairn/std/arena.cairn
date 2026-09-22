@@ -50,12 +50,12 @@ pub fn insert[T:affine](a:rw<Arena[T]>, value:T) -> Handle {
     Some(reused) => slot = reused;
     None => {
       if a.used == len(a.live) { grow(a); }
-      a.used = a.used + 1;
+      a.used += 1;
     }
   }
   a.items[slot] = value;
   a.live[slot] = 1;
-  a.count = a.count + 1;
+  a.count += 1;
   return Handle(slot, a.gen[slot]);
 }
 
@@ -70,8 +70,8 @@ pub fn remove[T:affine](a:rw<Arena[T]>, h:Handle) -> Option[T] {
   match find(a, h) {
     Some(slot) => {
       a.live[slot] = 0;
-      a.gen[slot] = a.gen[slot] + 1; // every existing handle to this slot is now stale
-      a.count = a.count - 1;
+      a.gen[slot] += 1; // every existing handle to this slot is now stale
+      a.count -= 1;
       vec.push(a.free, slot);
       return Some(take(a.items[slot]));
     }

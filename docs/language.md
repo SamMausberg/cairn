@@ -138,7 +138,7 @@ struct Chart { rows:usize; price:Buf[f64][rows]; qty:Buf[f64][rows]; }
 
 fn both(n:usize, xs:ro<f64>[n], ys:ro<f64>[n]) -> f64 {
   let mut sum:f64 = 0.0;
-  for i in 0..n { sum = sum + xs[i] * ys[i]; }
+  for i in 0..n { sum += xs[i] * ys[i]; }
   return sum;
 }
 
@@ -333,7 +333,7 @@ fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {
   for i in 0..n { sum = add_wrap(sum, u32(bytes[i])); }
   return sum;
 }
-fn bump(seen:rw<u64>) { seen = seen + 1; }        // a single borrow, assigned by name
+fn bump(seen:rw<u64>) { seen += 1; }              // a single borrow, assigned by name
 
 fn main() -> i32 {
   stack frame:u8[16] = zeroed;
@@ -361,7 +361,7 @@ A call may leave out its extent parameters. A `usize` parameter that a later vie
 ```cairn
 fn dot(n:usize, xs:ro<u64>[n], ys:ro<u64>[n]) -> u64 {
   let mut t:u64 = 0;
-  for i in 0..n { t = t + xs[i] * ys[i]; }
+  for i in 0..n { t += xs[i] * ys[i]; }
   return t;
 }
 
@@ -538,7 +538,7 @@ A `linear struct` must be consumed exactly once on every path: leaving one uncon
 linear struct Lease { id:u64; }
 
 fn acquire(id:u64) -> Lease = Lease(id);
-fn release(l:Lease, freed:rw<u64>) { let Lease(id) = l; freed = freed + id; }
+fn release(l:Lease, freed:rw<u64>) { let Lease(id) = l; freed += id; }
 
 fn main() -> i32 {
   let mut freed:u64 = 0;

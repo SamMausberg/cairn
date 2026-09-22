@@ -75,7 +75,7 @@ pub fn put(
   let stored_key = owned(key);
   let stored_value = owned(value);
   apply(s, PUT, stored_key, stored_value);
-  s.end = s.end + bytes;
+  s.end += bytes;
   return Ok(bytes);
 }
 
@@ -84,7 +84,7 @@ pub fn erase(s:rw<Store>, f:ro<File>, k:usize, key:ro<u8>[k]) -> Result[u64, IoE
   let flushed = try io.sync(f);
   let id = text.hash_bytes(key);
   let gone = s.index.remove(id);
-  s.end = s.end + bytes;
+  s.end += bytes;
   return Ok(bytes);
 }
 
@@ -150,7 +150,7 @@ pub fn compact_log(
         let bytes = try append(
           f, PUT, s.index.vals[slot].key.data[0..k], s.index.vals[slot].value.data[0..v]
         );
-        written = written + bytes;
+        written += bytes;
       }
     }
     let flushed = try io.sync(f);

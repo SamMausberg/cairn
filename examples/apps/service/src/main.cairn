@@ -119,7 +119,7 @@ fn take_in(c:rw<Client>, t:rw<Table>, n:usize, got:ro<u8>[n]) -> Result[bool, Io
       c.have = 0;
     }
     c.line[c.have] = got[i];
-    c.have = c.have + 1;
+    c.have += 1;
   }
   let mut stop = false;
   while !stop {

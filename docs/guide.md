@@ -161,7 +161,7 @@ fn main() -> i32 {
   if mean(big, big) != big { return 1; }              // big + big would have trapped in u32
   if add_wrap(big, big) != 3705032704 { return 2; }   // modular on purpose
   let mut steps:u64 = 0;
-  for i in 0..10 { steps = steps + u64(i); }
+  for i in 0..10 { steps += u64(i); }
   if steps != 45 { return 3; }
   return 0;
 }
@@ -175,7 +175,7 @@ fn main() -> i32 {
 const N:usize = 4 * 2;
 
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
-fn total(n:usize, xs:ro<u64>[n]) -> u64 { let mut t:u64 = 0; for i in 0..n { t = t + xs[i]; } return t; }
+fn total(n:usize, xs:ro<u64>[n]) -> u64 { let mut t:u64 = 0; for i in 0..n { t += xs[i]; } return t; }
 fn last(xs:ro<u64>[N]) -> u64 = xs[N - 1];
 
 fn main() -> i32 {
@@ -260,7 +260,7 @@ fn main() -> i32 {
 ```cairn
 linear struct Token { id:u64; }
 fn open(id:u64) -> Token = Token(id);
-fn close(t:Token, closed:rw<u64>) { closed = closed + 1; }
+fn close(t:Token, closed:rw<u64>) { closed += 1; }
 
 struct Slot { data:Buf[u64]; }
 fn grow(s:rw<Slot>, n:usize) { let mut bigger = Buf[u64](n); swap(bigger, s.data); }   // the old array is freed here
@@ -290,7 +290,7 @@ fn main() -> i32 {
   let mut cells = Buf[u64](4);
   let bias:u64 = 10;
   let mut calls:u64 = 0;
-  apply(cells, |x:u64| -> u64 { calls = calls + 1; return x + bias; });
+  apply(cells, |x:u64| -> u64 { calls += 1; return x + bias; });
   if cells[3] != 10 || calls != 4 { return 1; }
   return 0;
 }
@@ -353,7 +353,7 @@ recipe sums for R {
   each f in R { require integer(f), "sums adds integer fields."; }
   pub fn sum_$R(n:usize, rows:ro<R>[n]) -> R = R(each f in R { total_$f(n, rows) });
   each f in R where t = typeof(f) {
-    fn total_$f(n:usize, rows:ro<R>[n]) -> $t { let mut s:$t = 0; for i in 0..n { s = s + rows[i].$f; } return s; }
+    fn total_$f(n:usize, rows:ro<R>[n]) -> $t { let mut s:$t = 0; for i in 0..n { s += rows[i].$f; } return s; }
   }
 }
 
@@ -398,7 +398,7 @@ pub fn empty() -> Stock {
 pub fn add(s:rw<Stock>, item:u64, count:u64) {
   let seen = map.find(s.names, item);
   match seen {
-    Some(slot) => s.names.vals[slot] = s.names.vals[slot] + count;
+    Some(slot) => s.names.vals[slot] += count;
     None => map.insert(s.names, item, count);
   }
   vec.push(s.log, item);

@@ -43,12 +43,12 @@ pub fn write_dataset(n:usize, path:ro<u8>[n], rows:usize) -> Result[u64, IoError
     while fill < BATCH && done + fill < rows {
       let at = fill * ROW;
       schema.encode_Trade(block[at..at + ROW], synth(done + fill));
-      fill = fill + 1;
+      fill += 1;
     }
     let bytes = fill * ROW;
     let sent = try io.write(f, block[0..bytes]);
-    written = written + u64(sent);
-    done = done + fill;
+    written += u64(sent);
+    done += fill;
   }
   let flushed = try io.sync(f);
   return Ok(written);

@@ -215,7 +215,7 @@ import std.io as io;
 fn submit_all(q:rw<IoRing>, jobs:usize) -> u64 {
   let mut refused:u64 = 0;
   for k in 0..jobs {
-    if q.room() == 0 { refused = refused + 1; } else { q.timeout(1000000, u64(k)); }   // a millisecond each
+    if q.room() == 0 { refused += 1; } else { q.timeout(1000000, u64(k)); }            // a millisecond each
   }
   return refused;
 }
@@ -264,7 +264,7 @@ A mutex has one operation, and it may return a value. No guard object exists to 
 ```cairn
 fn main() -> i32 {
   let bytes_sent = Mutex[u64](0);
-  bytes_sent.with(|total:rw<u64>| { total = total + 1480; });
+  bytes_sent.with(|total:rw<u64>| { total += 1480; });
   let seen = bytes_sent.with(|total:rw<u64>| -> u64 { return total; });
   if seen != 1480 { return 1; }
   return 0;
@@ -333,7 +333,7 @@ fn main() -> i32 {
   let n:usize = 64;
   buffer squares:u64[n] = zeroed;
   let mut calls:u64 = 0;
-  shade(n, squares, |x:u64| -> u64 { calls = calls + 1; return x; });
+  shade(n, squares, |x:u64| -> u64 { calls += 1; return x; });
   return 0;
 }
 ```

@@ -16,7 +16,7 @@ pub fn above_loop(n:usize, out:rw<u64>[n], price:ro<u64>[n], limit:u64) -> usize
   for i in 0..n {
     if price[i] >= limit {
       out[used] = price[i];
-      used = used + 1;
+      used += 1;
     }
   }
   return used;

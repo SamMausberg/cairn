@@ -13,7 +13,7 @@ struct Column[T] { values:Buf[T]; used:usize; }
 
 fn mean[T:numeric](n:usize, xs:ro<T>[n]) -> T {
   let mut total:T = 0;
-  for i in 0..n { total = total + xs[i]; }
+  for i in 0..n { total += xs[i]; }
   return total / T(n);                          // T(n) converts at the instance's T
 }
 fn take_first[T:copy](c:ro<Column[T]>) -> T = c.values[0];
@@ -171,7 +171,7 @@ module frames;
 pub struct Ring { slots:Buf[u8]; used:usize; }
 pub fn ring(room:usize) -> Ring = Ring(Buf[u8](room), 0);
 pub fn len(r:ro<Ring>) -> usize = r.used;                 // a type may have its own len
-pub fn add(r:rw<Ring>, byte:u8) { r.slots[r.used] = byte; r.used = r.used + 1; }
+pub fn add(r:rw<Ring>, byte:u8) { r.slots[r.used] = byte; r.used += 1; }
 
 module app;
 import frames;
@@ -261,7 +261,7 @@ fn main() -> i32 {
   let gain:u64 = 3;
   let mut calls:u64 = 0;
   for i in 0..len(samples) { samples[i] = u64(i); }
-  scale(samples, |x:u64| -> u64 { calls = calls + 1; return x * gain; });
+  scale(samples, |x:u64| -> u64 { calls += 1; return x * gain; });
   if samples[3] != 9 || calls != 4 { return 1; }
   return 0;
 }

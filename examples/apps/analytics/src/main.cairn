@@ -53,7 +53,7 @@ pub fn main() -> i32 {
     let agrees = same(row, want); // the derived Eq, not a comparison written by hand
     if !agrees && wrong == rows { wrong = i; }
     row_total = add_wrap(row_total, row.price);
-    row_digest = row_digest ^ schema.Trade_key(row);
+    row_digest ^= schema.Trade_key(row);
   }
   if wrong != rows { return 3; }
   let col_total = query.wrapping_total(c.rows, c.price);

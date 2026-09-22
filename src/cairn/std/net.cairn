@@ -71,7 +71,7 @@ pub fn send_all(fd:i32, n:usize, data:ro<u8>[n]) -> Result[usize, IoError] {
     unsafe {
       let sent = sys.send(fd, data[done..n], n - done, 0);
       if sent <= 0 { return error(); }
-      done = done + usize(sent);
+      done += usize(sent);
     }
   }
   return Ok(done);

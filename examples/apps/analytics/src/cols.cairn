@@ -106,12 +106,12 @@ pub recipe unrolled[K:nat] for R {
       let mut i:usize = 0;
       while i + $K <= n {
         each k in 0..K { acc_$k = add_wrap(acc_$k, u64(c.$f[i + $k])); }
-        i = i + $K;
+        i += $K;
       }
       let mut total = fold add_wrap each k in 0..K { acc_$k };
       while i < n {
         total = add_wrap(total, u64(c.$f[i]));
-        i = i + 1;
+        i += 1;
       }
       return total;
     }

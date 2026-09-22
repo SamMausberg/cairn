@@ -9,7 +9,7 @@ fn saxpy(n:usize, out:rw<f32>[n], x:ro<f32>[n], y:ro<f32>[n], a:f32) {
 
 fn dot(n:usize, x:ro<f64>[n], y:ro<f64>[n]) -> f64 {
   reg total:f64 = 0.0;
-  each i in n { total = total + x[i] * y[i]; }
+  each i in n { total += x[i] * y[i]; }
   return total;
 }
 
@@ -71,9 +71,9 @@ fn distance_sq(a:Vec3, b:Vec3) -> f64 {
 
 fn translated(p:Vec3, delta:Vec3) -> Vec3 {
   reg q = p;
-  q.x = q.x + delta.x;
-  q.y = q.y + delta.y;
-  q.z = q.z + delta.z;
+  q.x += delta.x;
+  q.y += delta.y;
+  q.z += delta.z;
   return q;
 }
 

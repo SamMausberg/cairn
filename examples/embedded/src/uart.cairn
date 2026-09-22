@@ -21,12 +21,12 @@ fn putu(value:u64) {
   let mut used:usize = 0;
   while rest != 0 {
     digits[used] = u8(48 + rest % 10);
-    rest = rest / 10;
-    used = used + 1;
+    rest /= 10;
+    used += 1;
   }
   if used == 0 { putc(48); }
   while used != 0 {
-    used = used - 1;
+    used -= 1;
     putc(digits[used]);
   }
 }

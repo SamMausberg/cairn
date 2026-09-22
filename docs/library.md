@@ -158,7 +158,7 @@ fn lines(path:ro<u8>[PATH]) -> Result[u64, io.IoError] {
   let bytes = try io.read_file(PATH, path);
   let n = bytes.len;
   let mut count:u64 = 0;
-  for i in 0..n { if bytes.data[i] == 10 { count = count + 1; } }
+  for i in 0..n { if bytes.data[i] == 10 { count += 1; } }
   return Ok(count);
 }
 
@@ -309,7 +309,7 @@ import std.text as text;
 
 fn bump(counts:rw<map.Map[u64, u64]>, key:u64) {
   match map.find(counts, key) {
-    Some(slot) => counts.vals[slot] = counts.vals[slot] + 1;
+    Some(slot) => counts.vals[slot] += 1;
     None => map.insert(counts, key, 1);
   }
 }
@@ -335,7 +335,7 @@ fn main() -> i32 {
     None => return 3;
   }
   let mut seen:u64 = 0;
-  for slot in 0..map.slots(counts) { if map.live(counts, slot) { seen = seen + counts.vals[slot]; } }
+  for slot in 0..map.slots(counts) { if map.live(counts, slot) { seen += counts.vals[slot]; } }
   if seen != 6 { return 4; }
   return 0;
 }
@@ -357,7 +357,7 @@ fn main() -> i32 {
   let gone = m.remove(1);
   m.insert(9, 90);                                   // may reuse the slot key 1 had
   match m.resolve(kept) { Option.Some(at) => { return 2; } Option.None => {} }
-  let found = m.update(9, |v:rw<u64>| { v = v + 1; });
+  let found = m.update(9, |v:rw<u64>| { v += 1; });
   match m.get(9) { Option.Some(v) => { if !found || v != 91 { return 3; } } Option.None => { return 4; } }
   return 0;
 }

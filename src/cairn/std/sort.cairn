@@ -10,7 +10,7 @@ fn sift[T](n:usize, xs:rw<T>[n], start:usize, count:usize, less:ro<fn(ro<T>, ro<
   let mut root = start;
   while root * 2 + 1 < count {
     let mut child = root * 2 + 1;
-    if child + 1 < count && less(xs[child], xs[child + 1]) { child = child + 1; }
+    if child + 1 < count && less(xs[child], xs[child + 1]) { child += 1; }
     if !less(xs[root], xs[child]) { return; }
     swap(xs[root], xs[child]);
     root = child;
@@ -21,12 +21,12 @@ pub fn sort_by[T](n:usize, xs:rw<T>[n], less:ro<fn(ro<T>, ro<T>) -> bool>) {
   if n < 2 { return; }
   let mut i = n / 2;
   while i > 0 {
-    i = i - 1;
+    i -= 1;
     sift(n, xs, i, n, less);
   }
   let mut end = n;
   while end > 1 {
-    end = end - 1;
+    end -= 1;
     swap(xs[0], xs[end]);
     sift(n, xs, 0, end, less);
   }

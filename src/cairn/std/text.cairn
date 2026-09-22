@@ -52,8 +52,8 @@ pub fn write_u64(n:usize, out:rw<u8>[n], value:u64) -> usize {
   let mut used:usize = 0;
   while used == 0 || rest > 0 {
     digits[used] = u8(rest % 10 + 48);
-    rest = rest / 10;
-    used = used + 1;
+    rest /= 10;
+    used += 1;
   }
   if used > n { return 0; }
   for i in 0..used { out[i] = digits[used - 1 - i]; }
@@ -99,7 +99,7 @@ pub fn compare(n:usize, a:ro<u8>[n], m:usize, b:ro<u8>[m]) -> i32 {
   let mut i:usize = 0;
   while i < n && i < m {
     if a[i] != b[i] { if a[i] < b[i] { return -1; } return 1; }
-    i = i + 1;
+    i += 1;
   }
   if n < m { return -1; }
   if n > m { return 1; }
@@ -127,7 +127,7 @@ pub fn find_byte(n:usize, s:ro<u8>[n], byte:u8, from:usize) -> Option[usize] {
 pub fn find_last_byte(n:usize, s:ro<u8>[n], byte:u8) -> Option[usize] {
   let mut i = n;
   while i > 0 {
-    i = i - 1;
+    i -= 1;
     if s[i] == byte { return Some(i); }
   }
   return None;
@@ -138,7 +138,7 @@ pub fn find(n:usize, s:ro<u8>[n], m:usize, needle:ro<u8>[m]) -> Option[usize] {
   if m == 0 || m > n { return None; }
   for start in 0..n - m + 1 {
     let mut matched:usize = 0;
-    while matched < m && s[start + matched] == needle[matched] { matched = matched + 1; }
+    while matched < m && s[start + matched] == needle[matched] { matched += 1; }
     if matched == m { return Some(start); }
   }
   return None;

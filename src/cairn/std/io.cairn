@@ -52,7 +52,7 @@ pub fn read_full(f:ro<File>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] 
   while done < n {
     let got = try read(f, into[done..n]);
     if got == 0 { return Ok(done); }
-    done = done + got;
+    done += got;
   }
   return Ok(done);
 }
@@ -64,7 +64,7 @@ pub fn write(f:ro<File>, n:usize, data:ro<u8>[n]) -> Result[usize, IoError] {
     unsafe {
       let sent = sys.write(f.fd, data[done..n], n - done);
       if sent <= 0 { return failed(); }
-      done = done + usize(sent);
+      done += usize(sent);
     }
   }
   return Ok(done);
@@ -150,7 +150,7 @@ fn put(fd:i32, n:usize, data:ro<u8>[n]) {
     unsafe {
       let sent = sys.write(fd, data[done..n], n - done);
       if sent <= 0 { return; }
-      done = done + usize(sent);
+      done += usize(sent);
     }
   }
 }
