@@ -12,7 +12,7 @@ from . import rings
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import Checker
 from .expressions import COMPARISONS
-from .tree import CPP, FLOAT, STORAGE, UNSIGNED, Expr, Function, Program, Stmt, Type, fail, is_view
+from .tree import CPP, FLOAT, STORAGE, UNSIGNED, VOID, Expr, Function, Program, Stmt, Type, fail, is_view
 
 RUNTIME_FILES = {
     p.name: p.read_text(encoding="utf-8") for p in sorted((Path(__file__).parents[1] / "runtime").glob("*.hpp"))
@@ -436,7 +436,10 @@ class Emitter:
     s_stack = s_buffer
 
     def s_let(self, s: Stmt, es: list[str]):
-        if s.ty.mode != "value":  # A local name for static text: a constant pointer to constant bytes.
+        if s.name == "_":  # Kept by no name: a temporary, so an owner moved here is released where this ends.
+            owned = s.ty.mode == "value" and not self.trivial(s.ty)
+            self.put(f"static_cast<void>({self.type(s.ty)}({es[0]}));" if owned else f"static_cast<void>({es[0]});")
+        elif s.ty.mode != "value":  # A local name for static text: a constant pointer to constant bytes.
             self.put(f"{self.type(s.ty)} const v_{s.name} = {es[0]};")
         else:  # An owner stays non-const so that it can be moved from later.
             const = "const " if s.tag == "let" and self.trivial(s.ty) else ""
@@ -523,7 +526,7 @@ class Emitter:
         self.put("return" + (" v_" + s.exprs[0].val if local else " " + es[0] if es else "") + ";")
 
     def s_expr(self, s: Stmt, es: list[str]):
-        self.put(es[0] + ";")
+        self.put(es[0] + ";" if s.exprs[0].ty == VOID else f"static_cast<void>({es[0]});")
 
     def s_submit(self, s: Stmt, es: list[str]):
         self.put(f"v_{s.name}.submit({es[0]});")

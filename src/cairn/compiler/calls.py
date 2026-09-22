@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 
 REPEATABLE = {"len", "min", "max", *WRAPPING, *NUMERIC}  # Calls a guard may name twice: they only compute.
+COMPUTES = {*REPEATABLE, "abs", "ceil", "floor", "sqrt", "trunc", "to_bits"}  # a statement of one does nothing
 PASSED = {"name", "field", "slice", "str"}  # What a view argument is written as.
 
 

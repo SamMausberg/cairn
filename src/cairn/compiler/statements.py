@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from . import facts
+from .calls import COMPUTES
 from .places import settle
 from .scope import Binding
 from .tree import BOOL, USIZE, VOID, Expr, Stmt, Type, fail, is_view
@@ -59,6 +60,10 @@ def s_buffer(c: Checker, s: Stmt):
 
 
 def s_let(c: Checker, s: Stmt):
+    if s.name == "_":  # `let _ = e;` evaluates e and keeps nothing: never bound, so it may repeat
+        c.spawning = ""
+        s.ty = c.expr(s.exprs[0], c.resolve(s.ty, s) if s.ty else None)
+        return dropped(c, s.ty, s)
     if s.name in c.env:
         fail("E-SHADOW", f"{s.name} is already bound; shadowing is forbidden in this subset.", s)
     c.spawning = s.name if s.exprs[0].tag == "spawn" else ""
@@ -201,7 +206,9 @@ def s_if(c: Checker, s: Stmt):
 
 
 def s_match(c: Checker, s: Stmt):
-    ty = c.expr(s.exprs[0])
+    ty, e = c.expr(s.exprs[0]), s.exprs[0]
+    if e.tag == "call" and isinstance(e.ref, tuple) and e.ref[0] == "builtin" and e.val in COMPUTES:
+        fail("E-DISCARD", f"{e.val}(...) only computes a value: use it, or leave the call out.", s)
     layout = c.layouts.get(ty)
     if ty.mode != "value" or not isinstance(layout, dict):
         fail("E-MATCH-TYPE", "match requires a declared enum or tagged sum.", s)
@@ -272,11 +279,27 @@ def s_for(c: Checker, s: Stmt):
 
 
 def s_expr(c: Checker, s: Stmt):
-    ty = c.expr(s.exprs[0])
+    """`f(x);` and `try f(x);` drop what they return, unless it says whether the call worked: a two-variant sum
+    `try` accepts is handled with `try` or `match`, or let go on purpose with `let _ =`."""
     if s.exprs[0].tag not in {"call", "try"}:
         fail("E-DISCARD", "Only calls may be used as discarded expression statements.", s)
-    if ty != VOID:
-        fail("E-DISCARD", "Nonvoid result must be bound or returned.", s)
+    ty, e = c.expr(s.exprs[0]), s.exprs[0]
+    if e.tag == "call" and isinstance(e.ref, tuple) and e.ref[0] == "builtin" and e.val in COMPUTES:
+        fail("E-DISCARD", f"{e.val}(...) only computes a value: use it, or leave the call out.", s)
+    layout = c.layouts.get(ty)
+    if isinstance(layout, dict) and len(layout) == 2 and ty.name not in c.p.enums:
+        fail("E-DISCARD", f"This call returns {ty.display()}, an outcome to handle: use try or match, or drop it "
+             "on purpose with let _ = ...", s)  # fmt: skip
+    dropped(c, ty, s)
+
+
+def dropped(c: Checker, ty: Type, s: Stmt):
+    """A value no name holds is gone at the end of its statement: an owner is released there, a linear value
+    would be lost."""
+    if ty != VOID and c.kind(ty) == "linear":
+        fail("E-LINEAR-LEAK", f"This {ty.display()} is linear: consume it; dropping it would lose it.", s)
+    if c.releases(ty):
+        c.effect("free")
 
 
 def s_block(c: Checker, s: Stmt):

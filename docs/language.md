@@ -149,6 +149,40 @@ fn kind(first:u8) -> u8 { if first == 71 { return 1; } }
 Not all paths of kind return.
 ```
 
+A call is a statement of its own: `count(log);` drops what `count` returns, and `try check(v);` drops the success payload. A dropped owner is released where the statement ends, so a call that makes a `Buf` and drops it charges `alloc` and `free` there, and a dropped linear value is `E-LINEAR-LEAK`. An outcome is never dropped in silence: a two-variant sum that `try` accepts, such as `Result` or `Option`, is handled with `try` or `match`, or let go by name with `let _ = check(v);` (`E-DISCARD`). A call that only computes, such as `min(a, b);` or `u64(x);`, does nothing as a statement and is `E-DISCARD` too. `let _ = e;` binds nothing, so it may repeat, and `_` cannot be read.
+
+```cairn
+import std.core (Result);
+
+fn count(log:rw<u64>) -> u64 { log += 1; return log; }
+fn check(v:u64) -> Result[u64, u8] { if v > 9 { return Err(1); } return Ok(v); }
+
+fn step(v:u64, log:rw<u64>) -> Result[u64, u8] {
+  count(log);                                      // the count it returns is dropped
+  try check(v);                                    // or return the failure from here
+  let _ = check(v + 100);                          // a failure let go on purpose
+  return Ok(v);
+}
+
+fn main() -> i32 {
+  let mut log:u64 = 0;
+  let _ = step(3, log);
+  let _ = step(12, log);
+  if log != 2 { return 1; }
+  return 0;
+}
+```
+
+```cairn rejects E-DISCARD
+import std.core (Result);
+fn check(v:u64) -> Result[u64, u8] { if v > 9 { return Err(1); } return Ok(v); }
+fn step(v:u64) { check(v); }
+```
+
+```text
+This call returns std.core.Result[u64, u8], an outcome to handle: use try or match, or drop it on purpose with let _ = ...
+```
+
 ## Records and sums
 
 `struct` is a record, `enum` a tagged sum with zero or one payload per variant. Fields and payloads may be any value type (scalars, records, sums, owners), never a borrow, never `void`, and never their own type by value, directly or through an inline `Array` (`E-RECORD-TYPE`). A record is copyable when all of its fields are. A tag-only enum may be compared with `==`.

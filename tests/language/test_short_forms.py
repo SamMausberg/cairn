@@ -1,5 +1,5 @@
-"""The short forms: a variant written without its type, an arm without its braces, compound assignment, and the rules
-that keep each one meaning exactly its long form. Every accepted program emits the C++ of its long form or runs natively under both compilers, and every
+"""The short forms: a variant written without its type, an arm without its braces, compound assignment, a call as a
+statement, and the rules that keep each one meaning exactly its long form. Every accepted program emits the C++ of its long form or runs natively under both compilers, and every
 refusal names its code.
 """
 
@@ -309,4 +309,79 @@ def test_compound_assignment_traps_where_its_long_form_does(tmp_path, cxx):
 def test_compound_assignment_keeps_every_rule_of_its_long_form(code, body):
     head = ("struct C { rows:usize; p:Buf[f64][rows]; }\nfn fill(n:usize, d:rw<u64>[n]) { d[0] = 1; }\n"
             "extern fn putchar(c:i32) -> i32 effects(io);\nfn say(c:i32) -> i32 { unsafe { return putchar(c); } }\n")  # fmt: skip
+    refused(code, head + f"fn main() -> i32 {{ {body} return 0; }}\n")
+
+
+CALLS = """
+import std.core (Option, Result);
+import std.vec;
+fn count(log:rw<u64>) -> u64 { log += 1; return log; }
+fn make(n:usize) -> Buf[u8] = Buf[u8](n);
+fn check(v:u64) -> Result[u64, u8] { if v > 9 { return Err(1); } return Ok(v); }
+fn step(v:u64) -> Result[u64, u8] {
+  try check(v);
+  let _ = check(v + 100);
+  let _ = check(v + 200);
+  return Ok(v);
+}
+fn churn() { make(8); }
+fn main() -> i32 {
+  let mut log:u64 = 0;
+  count(log);
+  count(log);
+  churn();
+  let b = make(4);
+  let _ = b;
+  let mut v = vec.new[Buf[u8]]();
+  let two = make(2);
+  v.push(two);
+  let three = make(3);
+  v.push(three);
+  take(v.data[0]);
+  let _ = v.pop();
+  match step(3) { Ok(x) => { if x != 3 { return 2; } } Err(e) => return 3; }
+  match step(12) { Ok(x) => return 4; Err(e) => { if e != 1 { return 5; } } }
+  if log != 2 { return 1; }
+  return 0;
+}
+"""
+
+
+def test_a_call_statement_drops_what_it_returns():
+    """`count(log);` drops a u64, `make(8);` releases the Buf it made where the statement ends (so churn's row is
+    alloc and free), `try check(v);` drops the success payload, and `let _ = e;` binds nothing, so it repeats."""
+    cpp, receipt = compile_source(CALLS)
+    assert {"alloc", "free"} <= set(receipt["functions"]["churn"]["effects"])
+    assert (
+        "static_cast<void>(cf_count(v_log));" in cpp
+        and "static_cast<void>(cr::Buf<std::uint8_t>(std::move(v_b)));" in cpp
+    )
+    assert compile_source(canonical_source(CALLS))[0] == cpp and format_source(format_source(CALLS)) == format_source(
+        CALLS
+    )
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_dropped_owners_are_released_once(tmp_path, cxx):
+    """Every Buf a statement drops, or `let _` lets go, is freed exactly once: AddressSanitizer and its leak check."""
+    assert run(tmp_path, compile_source(CALLS)[0], *sanitized(cxx), *WARNINGS, cxx=cxx).returncode == 0
+
+
+@pytest.mark.parametrize(
+    ("code", "body"),
+    [
+        ("E-DISCARD", "check(3);"),  # an outcome is handled, or let go by name
+        ("E-DISCARD", "let mut v = vec.new[u64](); v.pop();"),
+        ("E-DISCARD", "let x:u64 = 1; x + 1;"),  # only a call is a statement
+        ("E-DISCARD", "let x:u64 = 1; min(x, 2);"),  # and one that only computes does nothing
+        ("E-LINEAR-LEAK", "open(7);"),
+        ("E-LINEAR-LEAK", "let _ = open(7);"),
+        ("E-UNBOUND", "let _ = check(1); let y = _;"),
+        ("E-SPAWN", "let _ = spawn work(3);"),  # a task is always named
+    ],
+)
+def test_a_call_statement_never_loses_an_outcome_or_a_linear_value(code, body):
+    head = ("import std.core (Option, Result);\nimport std.vec;\nlinear struct Token { id:u64; }\n"
+            "fn open(id:u64) -> Token = Token(id);\nfn check(v:u64) -> Result[u64, u8] = Ok(v);\n"
+            "fn work(n:usize) -> u64 = 1;\n")  # fmt: skip
     refused(code, head + f"fn main() -> i32 {{ {body} return 0; }}\n")
