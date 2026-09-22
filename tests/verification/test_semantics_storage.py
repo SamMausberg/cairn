@@ -51,6 +51,44 @@ def test_an_untouched_rw_view_keeps_what_the_caller_lent():
            "fn f(n:usize, out:rw<u8>[n]) -> usize { if n>0 { out[0]=0; } return n; }", assume="n<=2")  # fmt: skip
 
 
+TWO_PARTS = (
+    "fn g(a:usize, xs:rw<u64>[a], b:usize, ys:rw<u64>[b]) { for i in 0..a { xs[i]=1; } for i in 0..b { ys[i]=2; } }\n"
+    "fn f(n:usize, zs:rw<u64>[n], mid:usize) { if mid>n { return; } g(mid, zs[0..mid], n-mid, zs[mid..n]); }"
+)
+ONE_PASS = "fn f(n:usize, zs:rw<u64>[n], mid:usize) { if mid>n { return; } for i in 0..n { if i<mid { zs[i]=1; } else { zs[i]=2; } } }"
+
+
+def test_two_views_of_one_array_in_one_call_write_one_storage():
+    """A part is a window into its base: what a callee writes through either part is in the caller's array."""
+    check(TWO_PARTS, ONE_PASS, assume="n<=3")
+    check(ONE_PASS, TWO_PARTS, assume="n<=3")
+    r = refute(TWO_PARTS, ONE_PASS.replace("zs[i]=2;", "zs[i]=3;"), assume="n<=3")
+    zs = r["counterexample"]["zs"]
+    assert r["counterexample"]["mid"] < len(zs) and r["expected"]["written"]["zs"] != r["actual"]["written"]["zs"]
+    assert any(x != y for x, y in zip(r["expected"]["written"]["zs"], r["actual"]["written"]["zs"], strict=True))
+
+
+def test_read_only_views_of_one_array_may_alias():
+    twice = (
+        "fn g(n:usize, xs:ro<u8>[n], ys:ro<u8>[n]) -> u8 { let mut t:u8=0; for i in 0..n { t=add_wrap(t,add_wrap(xs[i],ys[i])); } return t; }\n"
+        "fn f(n:usize, b:ro<u8>[n]) -> u8 = g(n, b, b);"
+    )
+    check(twice, "fn f(n:usize, b:ro<u8>[n]) -> u8 { let mut t:u8=0; for i in 0..n { t=add_wrap(t,mul_wrap(b[i],2)); } return t; }",
+          assume="n<=3")  # fmt: skip
+    refute(twice, "fn f(n:usize, b:ro<u8>[n]) -> u8 { let mut t:u8=0; for i in 0..n { t=add_wrap(t,b[i]); } return t; }",
+           assume="n>=1 && n<=3")  # fmt: skip
+
+
+def test_a_part_of_a_part_beside_its_sibling_reads_the_same_storage():
+    nested = (
+        "fn g(a:usize, xs:ro<u8>[a], b:usize, ys:ro<u8>[b]) -> u8 { let mut t:u8=0; for i in 0..a { t=add_wrap(t,xs[i]); } for i in 0..b { t=add_wrap(t,ys[i]); } return t; }\n"
+        "fn f(n:usize, zs:ro<u8>[n], mid:usize, k:usize) -> u8 { if mid>n || k>mid { return 0; } return g(k, zs[0..mid][0..k], n-mid, zs[mid..n]); }"
+    )
+    flat = "fn f(n:usize, zs:ro<u8>[n], mid:usize, k:usize) -> u8 { if mid>n || k>mid { return 0; } let mut t:u8=0; for i in 0..k { t=add_wrap(t,zs[i]); } for i in mid..n { t=add_wrap(t,zs[i]); } return t; }"
+    check(nested, flat, assume="n<=3")
+    refute(nested, flat.replace("for i in 0..k", "for i in 0..mid"), assume="n<=3")
+
+
 def test_a_loop_over_a_symbolic_extent_needs_a_bound():
     r = check(SUM, SUM.replace("t=add_wrap(t,xs[i]);", "t=add_wrap(xs[i],t);"), "unknown")
     assert "unrolling budget" in r["reason"]

@@ -202,6 +202,12 @@ class Concrete:
             return Region([self.zeros(e.ty.args[0]) for _ in range(xs[0])])
         n = e.ref.name if isinstance(e.ref, Function) else n
         if n in self.functions:
+            lent = [(x, t) for x, (_, t) in zip(xs, self.functions[n].params, strict=True) if isinstance(x, Region)]
+            for i, (a, ta) in enumerate(lent):  # `cr::disjoint` at the callee's entry, on windows into one storage.
+                for b, tb in lent[i + 1 :]:
+                    shared = a.data is b.data and "rw" in (ta.mode, tb.mode) and a.extent and b.extent
+                    if shared and a.offset < b.offset + b.extent and b.offset < a.offset + a.extent:
+                        raise ConcreteTrap("overlapping-views")
             value, written = self.invoke(n, xs, stack)
             lent = [(a, t) for a, (_, t) in zip(e.args, self.functions[n].params, strict=True) if t.mode == "rw"]
             for (a, t), final in zip(lent, written, strict=True):

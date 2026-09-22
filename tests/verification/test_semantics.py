@@ -149,8 +149,6 @@ def test_user_call_and_early_return():
         "fn f(n:usize,xs:ro<f64>[n])->f64{let s=reduce + for i in n yield xs[i];return s;}",  # An unspecified order.
         "fn f(n:usize,xs:ro<u64>[n],out:rw<u64>[n]){parallel i in n{out[i]=xs[i];}}",
         "fn g(n:usize,o:rw<u64>[n]){o[0]=1;}\nfn f(n:usize,out:rw<u64>[n])->usize{let t=spawn g(n,out);wait(t);return n;}",
-        "fn g(a:usize,xs:rw<u64>[a],b:usize,ys:rw<u64>[b]){xs[0]=1;ys[0]=2;}\n"  # Two parts of one array.
-        "fn f(n:usize,zs:rw<u64>[n],mid:usize){if mid>n{return;}g(mid,zs[0..mid],n-mid,zs[mid..n]);}",
         "enum Box{Full(Buf[u64]);Empty;}\n"
         + fn("let b=Box.Full(Buf[u64](4));match b{Box.Full(v)=>{return len(v);} Box.Empty=>{return 0;}}", ret="usize"),
         fn("let mut t:u64=0;for i in 0..40{t=add_wrap(t,u64(i));}return t;"),  # Past the unrolling budget.
