@@ -485,8 +485,10 @@ def test_the_guide_shows_the_project_new_creates(tmp_path):
     assert (root / "cairn.toml").read_text() in section
     sources = (root / "src/math.cairn").read_text() + "\n" + (root / "src/main.cairn").read_text()
     assert f"```cairn\n{sources}```" in section
-    count = compile_source(load_project(root).source)[1]["function_count"]
-    assert f"typed: {count} functions" in section and f'"functions": {count},' in section
+    functions = compile_source(load_project(root).source)[1]["functions"]
+    library = sum(1 for name in functions if name.startswith("std."))
+    assert f"typed: {len(functions) - library} functions, and {library} from the library" in section
+    assert f'"functions": {len(functions)}, "library_functions": {library},' in section
     record = build(load_project(root), cxx="clang++", timeout=120)
     done = subprocess.run([record["artifact"]], capture_output=True, text=True, timeout=30)
     assert done.returncode == 0 and f"```text\n{done.stdout}```" in section

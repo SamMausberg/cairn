@@ -252,8 +252,9 @@ def main(argv: list[str] | None = None) -> int:
             if a.command == "emit":
                 print(generated, end="")
                 return 0
-            result = {"status": "typed", "functions": receipt["function_count"], "formal_status": "not-verified",
-                      "project": project.receipt()}  # fmt: skip
+            library = sum(1 for name in receipt["functions"] if name.startswith("std."))  # what the imports bring in
+            result = {"status": "typed", "functions": receipt["function_count"], "library_functions": library,
+                      "formal_status": "not-verified", "project": project.receipt()}  # fmt: skip
             if a.generics:  # "ok": every instance within the bounds checks; else what the body needed beyond them.
                 linked = tuple(module + "." for module in receipt["modules"] if module.startswith("std."))
                 verdicts = certify_templates(project.source).items()

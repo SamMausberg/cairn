@@ -84,7 +84,7 @@ def summary(result: dict, stream: TextIO | None = None) -> None:
     status = str(result.get("status", ""))
     good = status in {"typed", "native-built", "passed-finite-tests", "created"}
     detail = {
-        "typed": lambda: plural(int(result.get("functions", 0)), "function"),
+        "typed": lambda: typed(result),
         "native-built": lambda: str(result.get("artifact", "")),
         "created": lambda: str(result.get("project", "")),
         "passed-finite-tests": lambda: cases(result),
@@ -97,6 +97,13 @@ def summary(result: dict, stream: TextIO | None = None) -> None:
     generics = {n: v for n, v in result.get("generics", {}).items() if v != "ok"}
     for name, verdict in generics.items():
         print(f"  {name}: {verdict}", file=stream)
+
+
+def typed(result: dict) -> str:
+    """The program's own functions, and apart from them what its imports of the library brought in."""
+    library = int(result.get("library_functions", 0))
+    own = plural(int(result.get("functions", 0)) - library, "function")
+    return own + (f", and {library} from the library" if library else "")
 
 
 def cases(result: dict) -> str:

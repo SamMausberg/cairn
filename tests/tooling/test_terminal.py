@@ -64,6 +64,10 @@ def test_an_accepted_program_is_one_line(tmp_path, capsys):
     source.write_text("fn main() -> i32 = 0;\n")
     assert main(["check", str(source), "--format", "human"]) == 0
     assert capsys.readouterr().out == "typed: 1 function\n"
+    source.write_text('import std.text;\nfn main() -> i32 { if text.equal("a", "a") { return 0; } return 1; }\n')
+    assert main(["check", str(source), "--format", "human"]) == 0
+    said = capsys.readouterr().out
+    assert said.startswith("typed: 1 function, and ") and said.endswith(" from the library\n"), said
 
 
 @pytest.mark.parametrize(

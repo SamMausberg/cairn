@@ -59,14 +59,14 @@ cairn check demo
 ```
 
 ```text
-typed: 71 functions
+typed: 2 functions, and 69 from the library
 ```
 
 ```json
-{"status": "typed", "functions": 71, "formal_status": "not-verified"}
+{"status": "typed", "functions": 71, "library_functions": 69, "formal_status": "not-verified"}
 ```
 
-`typed` means the program passed every static rule: syntax, types, ownership, leases, lanes, placement and effects. Two of the 71 functions are the program's; the rest are the parts of `std.io`, `std.text`, `std.vec` and `std.sys` that the import brings in, checked the same way. `formal_status` is `not-verified` here and everywhere, because acceptance is not a proof.
+`typed` means the program passed every static rule: syntax, types, ownership, leases, lanes, placement and effects. Two functions are the program's; the other 69 are the parts of `std.io`, `std.text`, `std.vec` and `std.sys` that the import brings in, checked the same way. `formal_status` is `not-verified` here and everywhere, because acceptance is not a proof.
 
 ```sh
 cairn run demo
