@@ -11,7 +11,7 @@ those error states -- under every valuation of the immutable part bounds -- and 
 every allocation is released exactly once on normal termination.
 
 The model is written by hand.  Nothing here is extracted from, or mechanically
-connected to, the Python compiler; the verification section of `docs/MANUAL.md` states exactly
+connected to, the Python compiler; the verification chapter of the documentation states exactly
 what is and is not covered.
 
 Design notes that matter for reading the theorems:

@@ -26,7 +26,7 @@ names*.  It is the mechanization of `checking.py:path` and `checking.py:overlaps
 The bridge between them is `ovl_sound`: if every fact in play is true under the
 valuation, then what the checker calls disjoint really is disjoint.  A fact is true
 exactly when the `lo <= hi` guard that `cr::part` performs at the slice has already
-run, which is why the machine in `Ownership.lean` performs that guard -- and traps
+run, which is why the machine in `Ownership/Machine.lean` performs that guard -- and traps
 when it fails -- before a borrow is ever taken.
 -/
 
@@ -270,7 +270,7 @@ touches, so `ovl_sound` below still covers the real access.  And `Place.guard ρ
 there is nothing to discharge.
 
 This is a claim about `checking.py`, checked row by row against it and pinned by the `example`s
-under `ovl` below and by the programs in `Ownership.lean`'s `Regress` section.  Nothing here
+under `ovl` below and by the programs in `Ownership/Regress.lean`.  Nothing here
 proves it, because nothing here reads the Python source. -/
 
 /-- The storage a place is rooted at. -/
@@ -422,7 +422,7 @@ end ElemsMapping
 
 Under a valuation each place denotes a footprint: a Boolean saying whether it
 touches the header, and the set of element indices it may touch.  Two accesses
-collide when the footprints meet.  This is what the machine in `Ownership.lean`
+collide when the footprints meet.  This is what the machine in `Ownership/Machine.lean`
 calls a race. -/
 
 /-- The element footprint of a place: every element, or the half-open range. -/

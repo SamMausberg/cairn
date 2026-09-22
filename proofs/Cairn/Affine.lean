@@ -131,17 +131,13 @@ theorem check_sound {r : Rule} {c : Certificate} (h : check r c = true) :
       0 ≤ r.conclusion.eval K I N M := by
   simp only [check, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at h
   intro K I N M ha
-  have hw : ∀ w ∈ c.weights, 0 ≤ w := fun w hw => by
-    have := h.1.1.2 w hw
-    simpa using this
-  have hc : 0 ≤ c.nonnegativeConstant := h.1.2
-  have hid := h.2
+  have hw : ∀ w ∈ c.weights, 0 ≤ w := fun w hw => by simpa using h.1.1.2 w hw
   calc (0 : Int)
       ≤ c.nonnegativeConstant + (combine c.weights r.assumptions).eval K I N M :=
-        Int.add_nonneg hc (eval_combine_nonneg c.weights r.assumptions hw ha)
+        Int.add_nonneg h.1.2 (eval_combine_nonneg c.weights r.assumptions hw ha)
     _ = (Form.add (Form.const c.nonnegativeConstant)
           (combine c.weights r.assumptions)).eval K I N M := by simp
-    _ = r.conclusion.eval K I N M := by rw [hid]
+    _ = r.conclusion.eval K I N M := by rw [h.2]
 
 /-- Convenience wrapper used by the generated per-obligation corollaries. -/
 theorem check_sound' {r : Rule} {c : Certificate} (h : check r c = true) (K I N M : Int)
