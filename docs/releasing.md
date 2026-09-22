@@ -15,10 +15,11 @@ make all native systems                        # lint, the suite, proofs, saniti
 make gpu embedded                              # where the hardware and the emulator are present
 make bench && python3 bench/suite/report.py    # the preregistered CPU suite, hours
 python3 tools/release/collect_evidence.py --release v1_3
+python3 tools/release/collect_lean_evidence.py --release v1_3
 make wheel audit
 ```
 
-`collect_evidence.py` runs the release gates and writes `evidence/<release>/summary.json`: each gate's command, status, exit code, seconds and last lines, `cairn doctor`, the commit, whether the tree was dirty, and source-line counts. It writes nothing else. The Lean record is copied from the build log and the axiom audit, the GPU record from `results/gpu/benchmark.json`, the freestanding transcript from `cairn run examples/embedded`, and the bench tables from `results/bench_suite/`, each into its own subdirectory of the release. `RUN_NOTES.md` beside them names what did not run and why: a gate whose tool is absent is `unavailable`, never passed, and a machine that cannot run a target says so.
+`collect_evidence.py` runs the release gates and writes `evidence/<release>/summary.json`: each gate's command, status, exit code, seconds and last lines, `cairn doctor`, the commit, whether the tree was dirty, and source-line counts. It writes nothing else. `collect_lean_evidence.py` rebuilds `proofs/` from scratch and writes the build log, the axiom audit, the toolchain versions and a summary under `lean/`. The GPU record is copied from `results/gpu/benchmark.json`, the freestanding transcript from `cairn run examples/embedded`, and the bench tables from `results/bench_suite/`, each into its own subdirectory of the release. `RUN_NOTES.md` beside them names what did not run and why: a gate whose tool is absent is `unavailable`, never passed, and a machine that cannot run a target says so.
 
 Tag the commit the evidence names, `git tag -a v1.3.0`, and push `main` and the tag. A release that does not pass every gate on a committed tree is not tagged; the failure is recorded and fixed first.
 

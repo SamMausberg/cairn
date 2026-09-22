@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.3.0
+
+### Language
+
+- A lease names the place that was lent, so two tasks may take two fields of one record: `spawn f(box.a)` and `spawn g(box.b)` run together, and `len(box.a)` still reads while a task holds that field's elements. The same field to two tasks, a field read while the record is lent whole, and a new value landing in a lent field's cell are `E-LEASED` with the narrower subject.
+- A `Buf` field may declare an earlier `usize` field of its record as its extent (`struct Chart { rows:usize; price:Buf[f64][rows]; }`). The identity is established by an inline `Buf[T](n)` at construction and held by `E-EXTENT-FIELD` at every place that could break it, so the field goes to a call whole and pays no part guard; `E-EXTENT` names a wrong extent field.
+- `free` is charged where the release runs, not beside `alloc`: the end of a block or match arm that still holds an owner, a `return` that leaves while one is held, a by-value parameter passed on to nobody, and the place a new value is assigned over. A function that only drops an owner carries `free` alone, and the operand-order audit keys on `alloc` alone.
+
+### Projects and tools
+
+- `cairn verify --all` takes `--assume symbol=expression`, one precondition per function, recorded in the receipt and named in the module's domain; a trip count over a symbolic extent stays unknown until one bounds it.
+- Every subcommand of `cairn` says what it does in `--help`.
+- `bench/suite/` is the preregistered CPU baseline suite (`make bench`): eight kernels against plain C++, OpenMP and oneTBB, each baseline built once guarded and once not, with safety boundaries counted from the build receipt and losses printed beside wins.
+- `tools/release/collect_lean_evidence.py` rebuilds `proofs/` from scratch and records the build, the axiom audit and the toolchain for a release.
+- The package declares its license and repository, CI runs on every push and pull request with a separate proofs job, and the version is stated as 1.3.0 everywhere it appears.
+
+### Runtime
+
+- CUDA 13: the device runtime builds under CCCL 3, whose deleted `cub` iterators are replaced by `thrust::counting_iterator` and `thrust::transform_iterator`, and a device program's host pass compiles with `-fexceptions` because CCCL 3 cannot parse without it. Nothing throws and guards still abort.
+
+### Verification
+
+- The SMT model admits any tag in storage behind a view, and any tag nested inside a value parameter, as the emitter does; only the top-level tag of a value parameter is guarded at entry, as the emitter guards it. A `match` over a tag that names no variant aborts, as the emitted `default: cr::trap()` does. A tagged view is no longer refused, and an out-of-range tag replays as a counterexample.
+- Lean: reaching a field reads that field's header, so the calculus accepts two fields of one record to two tasks and rejects the same field twice (`sameFieldToTwoTasks_races`). A single element, a part of a part and a part with an invisible bound are conservatively the elements, with a case table beside `Place` and regression programs cross-checked against the checker.
+- `tools/checks/differential_ownership.py` renders generated programs of one shared fragment as CAIRN source and as Lean `Program` literals and requires `checking.py` and the Lean `accepts` to classify them identically; twenty thousand programs agree, and `make lean` runs two hundred.
+- The ownership development is one module per subject under `proofs/Cairn/Ownership/`, and every proof was revisited for a shorter argument.
+
+### Documentation
+
+- One file per subject under `docs/`: a getting-started guide, the tour, a language reference in six chapters, the library, the tools, the freestanding target, the examples, verification, architecture, testing, safety, the agent protocol, releasing and the roadmap. Every example compiles, and no source file in the repository is longer than 800 lines.
+
+### Reviews and users
+
+- The whole tree is green on x86-64 with g++ 13, clang 21 and an RTX 5070 Ti under CUDA 13.2; every earlier record was AArch64.
+
 ## 1.2.0
 
 ### Language
