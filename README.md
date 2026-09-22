@@ -95,7 +95,7 @@ cairn run examples/embedded                # bare-metal AArch64 under QEMU
 | Command | What passing means |
 |---|---|
 | `check`, `emit`, `expand` | The program is accepted: syntax, types, ownership, leases, lanes, placement, effects. `emit` prints the C++, `expand` prints what every `derive` generated. |
-| `build`, `run` | A fresh native build (`--debug` maps symbols to the `.cairn` files, `--incremental` reuses objects by content hash), then execution with process limits, under QEMU for the freestanding target. |
+| `build`, `run` | A fresh native build (`--debug` maps symbols to the `.cairn` files, `--incremental` reuses objects by content hash), then execution with process limits, under QEMU for the freestanding target. `cairn run app -- ARGS` starts the program with `ARGS`. |
 | `test` | Independent finite task cases pass, with the child's exit status checked. |
 | `verify --symbol f`, `--all` | Z3 found no input on which two versions of a function differ, within the modeled fragment. Anything outside it is reported unknown and blocks the aggregate result. |
 | `certificates` | The seventeen arithmetic identities behind the collector check, here in Python and in `proofs/` in Lean. |

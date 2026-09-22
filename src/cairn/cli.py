@@ -85,7 +85,7 @@ COMMANDS = {
     "emit": "Print the C++ the program lowers to.",
     "expand": "Print what every derive generated, as CAIRN source.",
     "build": "Build a native artifact in a fresh directory, with a receipt.",
-    "run": "Build, then run under process limits, or under the target's emulator.",
+    "run": "Build, then run under process limits, or under the target's emulator; ARGS after -- go to the program.",
     "test": "Run the project's finite task contracts against a native build.",
     "inspect": "Print the packet an editing agent gets for one symbol.",
     "state": "Print the program's state for an agent: every signature and effect row by module, under a digest.",
@@ -165,7 +165,12 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--check", action="store_true", help="Write nothing; exit 1 if any file would change.")
     f.add_argument("--diff", action="store_true", help="Write nothing; print a unified diff of what would change.")
     sub.add_parser("lsp", help="Speak the Language Server Protocol over stdin/stdout.")
-    a = p.parse_args(argv)
+    argv = sys.argv[1:] if argv is None else argv
+    given = argv.index("--") if "--" in argv else len(argv)  # what follows is the program's, for `cairn run`
+    a = p.parse_args(argv[:given])
+    a.arguments = argv[given + 1 :]
+    if a.arguments and a.command != "run":
+        p.error("only `cairn run PATH -- ARGS` passes arguments on to a program")
     FORMAT = getattr(a, "format", None)
     project = None
     try:
@@ -326,13 +331,16 @@ def main(argv: list[str] | None = None) -> int:
                 memory = a.memory_mib * 1024 * 1024
                 resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
 
+        if machine and a.arguments:
+            raise ProjectError("A freestanding image is started by its board, with no arguments.")
+        started = machine or [result["artifact"], *a.arguments]
         run: dict = {"stdin": subprocess.DEVNULL} if machine else {"preexec_fn": limits}
         if terminal.human(FORMAT):  # A person sees the program itself: its streams are the terminal's.
-            code = subprocess.run(machine or [result["artifact"]], timeout=a.timeout, check=False, **run).returncode
+            code = subprocess.run(started, timeout=a.timeout, check=False, **run).returncode
             if code:
                 print(f"error: {project.name} {terminal.ended(code)}", file=sys.stderr)
             return 0 if code == 0 else 1
-        cp = subprocess.run(machine or [result["artifact"]], capture_output=True, text=True, timeout=a.timeout, **run)
+        cp = subprocess.run(started, capture_output=True, text=True, timeout=a.timeout, **run)
         report({"status": "program-exited", "exit_code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr,
                 "build_directory": result["directory"], "security_sandbox": False,
                 "memory_limit_mib": None if machine else a.memory_mib, "emulator": machine})  # fmt: skip

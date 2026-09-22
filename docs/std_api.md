@@ -71,6 +71,32 @@ pub recipe ord for R
 pub recipe hash for R
 ```
 
+# std.env
+
+The program's arguments and environment, as it was started. Linux keeps both under /proc/self exactly as the kernel passed them, so reading them needs no start-up code and works from any module. Cost: each call reads one small file into a Vec it returns; a program reads its arguments once.
+
+```cairn
+// Every argument, the program's own path first, in `text` with the NUL each ends in. Argument i is text[begin(a,
+// i)..end(a, i)], and text[end(a, i)] is its NUL, for a call into C that wants one.
+pub struct Args { text:Vec[u8]; ends:Vec[usize]; }
+
+// effects: alloc, diverge, ffi:__errno_location, ffi:close, ffi:open, ffi:read, ffi_precondition, free, io, local_read,
+// local_write, mmio, stack_storage, trap, zero_init
+pub fn args() -> std.core.Result[std.env.Args, std.io.IoError]
+
+pub fn count(a:ro<std.env.Args>) -> usize  // effects: read:a
+
+// Where argument i starts and ends in a.text; an i past the last argument is a guard failure.
+pub fn begin(a:ro<std.env.Args>, i:usize) -> usize  // effects: read:a, trap
+
+pub fn end(a:ro<std.env.Args>, i:usize) -> usize  // effects: read:a, trap
+
+// The value of the variable called `name` when the program started, or None.
+// effects: alloc, diverge, ffi:__errno_location, ffi:close, ffi:open, ffi:read, ffi_precondition, free, io, local_read,
+// local_write, mmio, read:name, stack_storage, trap, zero_init
+pub fn var(n:usize, name:ro<u8>[n]@host) -> std.core.Result[std.core.Option[std.vec.Vec[u8]], std.io.IoError]
+```
+
 # std.fmt
 
 Text built into a byte Vec: each call appends to `out`, so a line is a run of calls and one write. Numbers are exact. Integers are decimal or hex; a float in fixed point is its exact binary value rounded half to even at the last place, which is what printf's %.*f prints. Cost: a call appends in place and may grow the Vec, so `alloc` and `free` are in the caller's row; `fixed` works in 720 bytes of stack, and places past 40 are a guard failure.

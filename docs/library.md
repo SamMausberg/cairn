@@ -1,6 +1,6 @@
 # The standard library
 
-Fourteen modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
+Fifteen modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
 
 [std_api.md](std_api.md) holds every signature and every effect row, generated from these sources by `cairn doc --std`. This file is the working guide: what each module is for, a program that uses it, and where it bites.
 
@@ -12,6 +12,7 @@ Three habits explain the API shape. A lookup answers with an index, never a borr
 | `std.vec` | the growable owner `Vec[T]` | yes |
 | `std.text` | integers to and from bytes, comparison, search, hashing | only `push_u64`, `push_i64` |
 | `std.io` | files, standard streams, a monotonic clock | only `read_file`, `read_to_end` |
+| `std.env` | the program's arguments and environment | yes |
 | `std.fs` | files by path, without a NUL to write | only `read` |
 | `std.fmt` | integers, hex, padding and exact fixed-point floats into a `Vec[u8]` | yes |
 | `std.map` | open-addressed `Map[K, V]` | yes |
@@ -231,6 +232,38 @@ fn main() -> i32 {
 ```
 
 `open` hands back the `std.io` `File`, and `read`, `write`, `append`, `remove`, `rename` and `exists` do one job each. `exists` answers for this instant; the next call may find something else.
+
+## std.env
+
+The arguments and the environment the program was started with. Linux keeps both under `/proc/self` as the kernel passed them, so reading them needs no start-up code and works from any module. `args()` reads them once into an `Args`: argument `i` is `a.text.data[a.begin(i)..a.end(i)]`, the program's own path first, and `a.text.data[a.end(i)]` is the NUL a C call wants. `var(name)` is the value of one variable, copied out, or `None`. `cairn run app -- in.txt -v` starts the program with `in.txt` and `-v`.
+
+```cairn
+import std.core (Option, Result);
+import std.env (Args);
+import std.io (IoError);
+
+fn greet() -> Result[usize, IoError] {
+  let a = try env.args();
+  for i in 1..a.count() {
+    let lo = a.begin(i);
+    let hi = a.end(i);
+    io.print("argument: ");
+    io.println(a.text.data[lo..hi]);
+  }
+  match try env.var("HOME") {
+    Some(home) => { io.println(home.data[0..home.len]); }
+    None => { io.println("no HOME"); }
+  }
+  return Ok(a.count());
+}
+
+fn main() -> i32 {
+  match greet() {
+    Ok(n) => { return 0; }
+    Err(e) => { return 1; }
+  }
+}
+```
 
 ## std.map
 
