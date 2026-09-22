@@ -1,9 +1,8 @@
-# Tooling
+# Tools and targets
 
+Everything here ships with the compiler and depends on nothing outside the standard library. None of it changes what the compiler accepts: `fmt` and `lsp` are layout and presentation, `doc` and `expand` print what the checker already saw, and `--incremental` changes only how the same program reaches the linker. The sessions were run in this checkout against `examples/hello` and `examples/apps/analytics`.
 
-Everything here ships with the compiler and depends on nothing outside the standard library. None of it changes what the compiler accepts: `fmt` and `lsp` are layout and presentation, `doc` and `expand` print what the checker already saw, and `--incremental` only changes how the same program reaches the linker. The sessions below were run in this checkout against `examples/hello` and `examples/apps/analytics`.
-
-## `cairn fmt`
+## cairn fmt
 
 ```sh
 cairn fmt src/                 # rewrite every *.cairn under src/ in place
@@ -11,7 +10,7 @@ cairn fmt --check src/ tests/  # write nothing; exit 1 if anything would change
 cairn fmt --diff src/a.cairn   # write nothing; print a unified diff
 ```
 
-Paths may be files or directories, and a directory is searched for `*.cairn`. In place is the default. The exit code is 1 when a file fails to lex, or when `--check` or `--diff` found something to change; otherwise 0.
+Paths may be files or directories, and a directory is searched for `*.cairn`. The exit code is 1 when a file fails to lex, or when `--check` or `--diff` found something to change.
 
 ```text
 $ cairn fmt --diff sloppy.cairn
@@ -34,16 +33,9 @@ $ cairn fmt --diff sloppy.cairn
  }
 ```
 
-The layout it produces:
+The layout: two-space indentation, one statement per line, one trailing newline; canonical spacing (`fn f(n:usize, x:ro<u8>[n]) -> u64`, `a + b`, `x[i]`, `f(a, b)`, `key:Type` with no space after the colon, no space before `;` `,` `[`, and `@device` attached to its extent); a block the author wrote on one line stays on one line if it still fits in 100 columns and otherwise breaks, while a block written over several lines is never collapsed; long parameter lists, call arguments and binary chains wrap greedily to 100 columns; every comment is kept where it was; one blank line between declarations is kept, a run collapses to one, and blank lines next to a brace are dropped.
 
-* two-space indentation, one statement per line, one trailing newline;
-* canonical spacing: `fn f(n:usize, x:ro<u8>[n]) -> u64`, `a + b`, `x[i]`, `f(a, b)`, `key:Type` with no space after the colon, no space before `;` `,` `[`, and `@device` attached to its extent;
-* a block the author wrote on one line stays on one line if it still fits in 100 columns (`if x { return 1; }`), and otherwise breaks over lines; a block written over several lines is never collapsed;
-* long parameter lists and call arguments wrap inside their brackets, long binary chains wrap before an operator, both greedily filled to 100 columns;
-* every comment is kept, at the end of its line or on its own line;
-* one blank line between declarations or statements is kept, a run of blank lines collapses to one, and blank lines next to a brace are dropped.
-
-It refuses rather than risk a change of meaning. Before writing anything the formatter re-lexes its own output and compares the token stream and the comment list with the input. If either differs, or if the input does not lex at all, the file is left exactly as it was and listed under `not_formatted` with the reason. Everything but a `--diff` patch is a JSON report:
+It refuses rather than risk a change of meaning. Before writing anything the formatter re-lexes its own output and compares the token stream and the comment list with the input. If either differs, or the input does not lex, the file is left as it was and listed under `not_formatted` with the reason. Everything but a `--diff` patch is a JSON report:
 
 ```json
 {
@@ -56,7 +48,7 @@ It refuses rather than risk a change of meaning. Before writing anything the for
 
 Formatting is a fixed point: `format_source(format_source(x)) == format_source(x)`. The API is `cairn.editor.formatting.format_source(text) -> str`, which returns `text` unchanged when it refuses, and `format_report(text) -> (text, reason)` when the reason matters.
 
-## `cairn check --generics`
+## cairn check --generics
 
 `cairn check` types the program. `--generics` also checks each generic function once against its bounds and fails if one needs more, so misuse is reported at the call rather than at the instance. The answer is one entry per template of the project's own modules:
 
@@ -72,7 +64,7 @@ A template that reaches past its bounds is named with what it needed, and the co
 {"generics": {"ranking.widest": "E-TRAIT-IMPL: ?ranking.widest.T does not implement std.core.Ord."}}
 ```
 
-## `cairn doc`
+## cairn doc
 
 `cairn doc [path] [--module m]` prints a Markdown reference taken from the checked program: every public type, recipe and function of the project's modules with its bounds, the `//` comment written above it, and the effect row the checker inferred.
 
@@ -85,9 +77,9 @@ A template that reaches past its bounds is named with what it needed, and the co
     source: src/math.cairn Floor average without overflowing the intermediate sum.
     Effects: `trap`.
 
-A template's row is the one at its witnesses, that is, what it may do for any arguments within its bounds, besides what their own trait members do; a template that needs more than its bounds is listed with what it needed. `cairn doc --std` documents the packaged library. [std_api.md](std_api.md) is that output, regenerated by `make docs` and compared with the compiler's answer by the test suite, so it cannot drift.
+A template's row is the one at its witnesses: what it may do for any arguments within its bounds, besides what their own trait members do. `cairn doc --std` documents the packaged library; [std_api.md](std_api.md) is that output, regenerated by `make docs` and compared with the compiler's answer by the test suite, so it cannot drift.
 
-## `cairn expand`
+## cairn expand
 
 `cairn expand [path]` prints what the program's `derive` statements generated, as CAIRN source in the canonical projection, module by module: the records, functions and `impl` blocks a recipe made, with every `$name` spliced and every static value folded.
 
@@ -99,13 +91,13 @@ fn encode_Header(out:rw<u8>[16]@host, value:Header) {
   ...
 ```
 
-Generated code is ordinary code of the deriving module, so this is exactly what the checker sees. When a diagnostic points into a recipe, this is where to read the instance it is about. `cairn inspect --symbol` still refuses a generated entry, because an edit belongs in the recipe: `E-SYMBOL`, "Edit an authored function, not a generated entry."
+Generated code is ordinary code of the deriving module, so this is exactly what the checker sees. When a diagnostic points into a recipe, this is where to read the instance it is about. `cairn inspect --symbol` refuses a generated entry, because an edit belongs in the recipe (`E-SYMBOL`, "Edit an authored function, not a generated entry.").
 
-## `cairn build --incremental`
+## cairn build --incremental
 
 One object per module, compiled against a shared interface header (`program.hpp`: types, tables and prototypes) and cached under `build/objects/`. It is opt-in because separate objects give up inlining across modules; device programs and freestanding images are always one unit. The cache is safe to delete.
 
-An object's key is the hash of everything that went into it: the unit, the header, the command line (which carries the compiler, the architecture, the build kind and `--debug`), the runtime headers and the compiler version. Nothing stale can be linked, because a change to any of those is a different key. Missing objects compile concurrently, and the build receipt lists every unit and whether it was reused. On this machine, the fifteen units of `examples/apps/analytics`, its own eight modules and the seven `std` modules it links:
+An object's key is the hash of everything that went into it: the unit, the header, the command line (which carries the compiler, the architecture, the build kind and `--debug`), the runtime headers and the compiler version. A change to any of those is a different key, so nothing stale can be linked. Missing objects compile concurrently, and the build receipt lists every unit and whether it was reused. On one machine, the fifteen units of `examples/apps/analytics`, its own eight modules and the seven `std` modules it links:
 
 ```text
 cairn build --incremental examples/apps/analytics    1.34 s   15 compiled   cold cache
@@ -113,11 +105,11 @@ cairn build --incremental examples/apps/analytics    0.14 s    0 compiled   noth
 cairn build examples/apps/analytics                  1.17 s             whole program, one unit
 ```
 
-A body-only edit recompiles one module: one statement added to `analytics.query.above_loop` took 0.87 s and rebuilt `analytics_query.cpp` alone. A signature or layout change recompiles all, because the shared header is in every key; renaming one parameter of `analytics.report.micros` rebuilt all fifteen.
+A body-only edit recompiles one module: one statement added to `analytics.query.above_loop` took 0.87 s and rebuilt `analytics_query.cpp` alone. A signature or layout change recompiles all, because the shared header is in every key.
 
-A key names an object; only a digest identifies it. `<key>.o` is published by a rename, and the sha256 of its bytes is written beside it as `<key>.sha256` by a second rename, so an interrupted compile leaves at worst an object with no digest. Before an object is reused its bytes are hashed and compared with that digest: truncate a cached object and the next build compiles that unit again rather than linking it. This is an integrity check against interrupted, corrupted or shared caches, not a defence against anyone who can write into `build/`, who can rewrite the digest too.
+A key names an object; only a digest identifies it. `<key>.o` is published by a rename, and the sha256 of its bytes is written beside it as `<key>.sha256` by a second rename, so an interrupted compile leaves at worst an object with no digest. Before an object is reused its bytes are hashed and compared with that digest: truncate a cached object and the next build compiles that unit again. This is an integrity check against interrupted, corrupted or shared caches, not a defence against anyone who can write into `build/`, who can rewrite the digest too.
 
-`build/objects`, an object and its digest must each be a plain entry of the project's own build output. A symbolic link, or a file where the directory belongs, is refused under the same fail-closed rule the build directory itself has, so nothing is ever written through a link out of the project. A unit whose compile times out or is killed leaves no object under its key, and still produces the `cairn.build/1` record and the `receipt.json` that a whole-program build produces.
+`build/objects`, an object and its digest must each be a plain entry of the project's own build output. A symbolic link, or a file where the directory belongs, is refused under the same fail-closed rule the build directory itself has. A unit whose compile times out or is killed leaves no object under its key, and still produces the `cairn.build/1` record and the `receipt.json` that a whole-program build produces.
 
 ## A manifest is named by its path
 
@@ -130,7 +122,7 @@ cairn run examples/apps/analytics/gpu.toml   # the same sources plus the device 
 
 [examples/apps/analytics](examples.md#examplesappsanalytics) says what its second manifest changes, and why a machine without CUDA must still be able to build the host engine.
 
-## `cairn lsp`
+## cairn lsp
 
 ```sh
 cairn lsp      # speaks JSON-RPC with Content-Length framing on stdin/stdout
@@ -143,14 +135,14 @@ Supported: `initialize`, `initialized`, `shutdown`, `exit`; full-text `textDocum
 | `publishDiagnostics` | the compiler's diagnostic for the buffer: its code, its message, the `repair_hint` from `agent_tools.explain`, and the exact token range |
 | `textDocument/hover` | the smallest checked expression covering the position: its type, the type expected of it, and for a name whether the binding is mutable; on a function name, its signature and its inferred effect row |
 | `textDocument/documentSymbol` | functions, structs, enums, traits, consts and impls with ranges; trait and impl members nest as children |
-| `textDocument/definition` | a declaration of the name under the cursor: this document, or the packaged `src/cairn/std/*.cairn` file the name comes from (`vec.push` and a name brought in by `import std.core (Option);` alike) |
+| `textDocument/definition` | a declaration of the name under the cursor: this document, or the packaged `src/cairn/std/*.cairn` file the name comes from |
 | `textDocument/completion` | see below; the trigger character is `.` and the client filters by the prefix already typed |
-| `textDocument/signatureHelp` | the innermost call still open before the cursor: its signature, its parameters and the index of the one being written (commas at depth zero; method syntax counts the receiver). Triggers are `(` and `,` |
-| `textDocument/references` | every place in **this document** that names what the cursor stands on, under the rule below |
+| `textDocument/signatureHelp` | the innermost call still open before the cursor: its signature, its parameters and the index of the one being written; triggers are `(` and `,` |
+| `textDocument/references` | every place in this document that names what the cursor stands on, under the rule below |
 | `textDocument/prepareRename`, `textDocument/rename` | the same set as one `WorkspaceEdit`, or a refusal |
 | `textDocument/formatting` | one whole-document edit from `cairn fmt`, or no edit when the buffer is already formatted |
 
-Positions are UTF-16 code units, as the protocol requires, so non-ASCII comments and astral characters do not shift a range. Hovering `average` in `examples/hello/src/math.cairn`, and asking for help inside its call, answers this:
+Positions are UTF-16 code units, as the protocol requires. Hovering `average` in `examples/hello/src/math.cairn`, and asking for help inside its call, answers this:
 
 ```json
 {"id": 2, "result": {"contents": {"kind": "markdown",
@@ -161,32 +153,26 @@ Positions are UTF-16 code units, as the protocol requires, so non-ASCII comments
   "activeSignature": 0, "activeParameter": 1}}
 ```
 
-**The last good analysis.** A buffer being typed usually does not compile, so each feature takes its context from the current tokens, which always exist because the scan never fails, and its meaning from the last analysis that did compile. The two are matched by name, not by position: the old analysis' offsets are stale after an edit, the name of the enclosing function and of its locals is not. After `let y = p.` the fields of `p` are still offered. The locals on offer are those the last good analysis saw in this function, plus the names the current tokens bind before the cursor (`let`, `let mut`, `reg`, `for`, `each`, `parallel`, `buffer`, `stack`, parameters, closure parameters and `match` payload binders), so a binding typed one edit ago completes too. A buffer that has never compiled still completes its own keywords, builtins, types, declarations and token-visible locals; it is never renamed.
+A buffer being typed usually does not compile, so each feature takes its context from the current tokens, which always exist because the scan never fails, and its meaning from the last analysis that did compile. The two are matched by name, not by position. After `let y = p.` the fields of `p` are still offered. The locals on offer are those the last good analysis saw in this function, plus the names the current tokens bind before the cursor (`let`, `let mut`, `reg`, `for`, `each`, `parallel`, `buffer`, `stack`, parameters, closure parameters and `match` payload binders). A buffer that has never compiled still completes its own keywords, builtins, types, declarations and token-visible locals; it is never renamed.
 
-After `name.`, completion offers the fields of the record `name` holds (through `ro<>`/`rw<>`, with a generic container's arguments substituted, so `Vec[u64]` has `data:Buf[u64]`) and every function `name.f(...)` resolves to: those of the receiver type's module and the members implementing a trait you can see for it, both taking the receiver first. If `name` is an enum or sum, its variants; if it is an import alias or a module path, that module's public declarations. Elsewhere it offers the locals with their types, the declarations visible in the cursor's module (its own, imported names, import aliases), the builtins the checker knows, the intrinsic and scalar types, and the reserved words. After `import ` it offers the packaged modules and the document's own; after `derive ` the recipes it can reach; inside a generic bound after `:` the traits in scope, the kinds and the scalar classes. A private name of another module is never offered.
+After `name.`, completion offers the fields of the record `name` holds (through `ro<>`/`rw<>`, with a generic container's arguments substituted) and every function `name.f(...)` resolves to: those of the receiver type's module and the members implementing a trait you can see for it. If `name` is an enum or sum, its variants; if it is an import alias or a module path, that module's public declarations. Elsewhere it offers the locals with their types, the declarations visible in the cursor's module, the builtins, the intrinsic and scalar types, and the reserved words. After `import ` it offers the packaged modules and the document's own; after `derive ` the recipes it can reach; inside a generic bound after `:` the traits in scope, the kinds and the scalar classes. A private name of another module is never offered.
 
-**References and rename answer only what one document can prove.** For a top-level declaration: every identifier token equal to its name, unless that name is ever written after a `.` or after `import` (a field, a method, a variant or a module path, which one document cannot tell apart), or a local of that name is bound somewhere, or two declarations share it. Another declaration's own name is never touched. For a local: the identifiers from its binder to the end of its declaration, provided it is bound exactly once there (blocks are scopes, so a sibling block may bind the name again) and is not also a declaration, an import alias or an imported name. Nothing can shadow it inside that range, because CAIRN rejects shadowing (`E-SHADOW`). Where the rule does not hold, `references` answers nothing and `prepareRename` answers null. A rename is refused as well for a reserved word, a builtin, a name of another module, a buffer with no good analysis, and a new name that is not a free identifier of this document. The suite applies the returned edit and recompiles, so an edit that would break a program that compiled is a test failure.
+References and rename answer only what one document can prove. For a top-level declaration: every identifier token equal to its name, unless that name is ever written after a `.` or after `import`, or a local of that name is bound somewhere, or two declarations share it. For a local: the identifiers from its binder to the end of its declaration, provided it is bound exactly once there and is not also a declaration, an import alias or an imported name. Nothing can shadow it inside that range, because CAIRN rejects shadowing (`E-SHADOW`). Where the rule does not hold, `references` answers nothing and `prepareRename` answers null. A rename is also refused for a reserved word, a builtin, a name of another module, a buffer with no good analysis, and a new name that is not a free identifier of this document. The suite applies the returned edit and recompiles, so an edit that would break a program that compiled is a test failure.
 
-The server analyses the open buffer. `std.*` imports are linked by the compiler itself, and sites from a linked module are not offered as hovers of the file you are editing. A buffer that does not compile still gets its outline, and any compiler failure becomes a diagnostic rather than an exception: the server answers every request it accepted and keeps running. Every handler answers an empty list or null for any position in any buffer, and costs far less than the analysis it reads from.
-
-Known limits: only one document is analysed at a time, so a name declared in a sibling file of the same project is neither hovered, completed nor jumped to, and references and rename stop at the edge of the buffer; the first declaration with a matching name wins in `definition`, and `Enum.Variant` resolves to the enum; completion after `derive ` lists the recipes the program already links; there is no workspace symbol, code action or formatting-on-type support; diagnostics stop at the first compiler error, because the compiler does.
+The server analyses the open buffer. Any compiler failure becomes a diagnostic rather than an exception, and every handler answers an empty list or null for any position in any buffer. Known limits: only one document is analysed at a time, so a name declared in a sibling file of the same project is neither hovered, completed nor jumped to, and references and rename stop at the edge of the buffer; the first declaration with a matching name wins in `definition`, and `Enum.Variant` resolves to the enum; there is no workspace symbol, code action or formatting-on-type support; diagnostics stop at the first compiler error, because the compiler does.
 
 ## The editor extension
 
 `editors/vscode/` is a VS Code and Cursor extension, version 1.3.0: a TextMate grammar, bracket and comment configuration, and a client that starts `cairn lsp` over stdio. It has no build step. `node_modules/` is not vendored; `vscode-languageclient` is declared in `package.json` and resolved when the extension is packaged or installed.
 
-### Install from this checkout
-
-Symlink the directory into the editor's extension folder and reload the window:
+Install from a checkout by symlinking the directory into the editor's extension folder and reloading the window:
 
 ```sh
 ln -s "$PWD/editors/vscode" ~/.cursor/extensions/cairn-1.3.0          # Cursor
 ln -s "$PWD/editors/vscode" ~/.vscode/extensions/cairn-1.3.0          # VS Code
 ```
 
-Syntax highlighting works immediately. The language server needs its dependency present, so run `npm install --omit=dev` inside `editors/vscode/` once. That is the only step that touches the network; without it the grammar still loads and the client reports a missing module.
-
-### Install as a package
+Syntax highlighting works at once. The language server needs its dependency present, so run `npm install --omit=dev` inside `editors/vscode/` once; that is the only step that touches the network. To install as a package:
 
 ```sh
 cd editors/vscode
@@ -195,9 +181,7 @@ npx --yes @vscode/vsce package          # writes cairn-1.3.0.vsix
 code --install-extension cairn-1.3.0.vsix
 ```
 
-### Server executable
-
-The client runs `cairn`, with `lsp` as its argument. When `cairn` is not on `PATH`, a source checkout for instance, point the setting at the checkout's entry script:
+The client runs `cairn`, with `lsp` as its argument. When `cairn` is not on `PATH`, point the setting at the checkout's entry script, which needs a Python 3.11 or later interpreter on `PATH`:
 
 ```json
 {
@@ -206,10 +190,93 @@ The client runs `cairn`, with `lsp` as its argument. When `cairn` is not on `PAT
 }
 ```
 
-`bin/cairn` needs a Python 3.11 or later interpreter on `PATH`. To pin one, set the command to that interpreter and the arguments to `["/path/to/cairn/bin/cairn", "lsp"]`.
+The extension gives diagnostics as you type, hover types and effect rows, a document outline, completion, signature help, go to definition inside the open file and into the packaged `std`, references and rename within the file, and `Format Document`, which is the same formatter as `cairn fmt`. The grammar's keyword list is checked against the compiler's `RESERVED` set by `tests/tooling/test_lsp.py`, so a new keyword fails the suite until the grammar learns it.
 
-### What the extension gives you
+## The freestanding target
 
-Diagnostics as you type, hover types and effect rows, a document outline, completion (fields, methods, module members, variants, locals and words), signature help, go to definition inside the open file and into the packaged `std`, references and rename within the file, and `Format Document`, which is the same formatter as `cairn fmt`. The client negotiates all of it from the server, so nothing here changes when the server learns something new. `cairn lsp` above says what each of those covers and what it does not.
+A freestanding build produces one ELF image that runs on bare hardware: no operating system, no C library, no C++ runtime, no dynamic loader, no start files and no unwinder. `[build] target` in `cairn.toml` selects it, `--target` on `cairn build` and `cairn run` overrides it, and the default is `"hosted"`.
 
-The grammar's keyword list is checked against the compiler's `RESERVED` set by `tests/tooling/test_lsp.py`, so a new keyword fails the suite until the grammar learns it.
+```toml
+[project]
+name = "embedded"
+sources = ["src/uart.cairn", "src/parse.cairn", "src/main.cairn"]
+
+[build]
+kind = "exe"
+target = "aarch64-virt"
+```
+
+```sh
+cairn build examples/embedded   # the ELF image plus a receipt, in a fresh directory
+cairn run   examples/embedded   # the same image, under the target's emulator
+```
+
+`cairn run` reports the UART transcript as `stdout` and the emulator's exit status as `exit_code`. The deliberate guard violation in `examples/embedded/trap/` reads one element past a four-element array:
+
+```json
+{"status": "program-exited", "exit_code": 134,
+ "stdout": "trap demo: reading window[4] of 4\n",
+ "emulator": ["/usr/bin/qemu-system-aarch64", "-M", "virt", "-cpu", "cortex-a72",
+              "-nographic", "-semihosting", "-kernel", ".../trapdemo.elf"]}
+```
+
+The profile guarantees the whole language minus what a host provides. Checked `+ - * / %`, bounds, extent, null, alignment, overlap and tag guards, `stack` storage, records, sums, `match`, generics, traits, closures, `compact`, `reduce` and `derive wire` behave as they do hosted. `f32` and `f64` work, because the start-up code enables FP and SIMD at EL1.
+
+The build refuses instead of failing at link. It reads each function's effect row out of the frontend receipt and rejects the program by name if any row holds an effect a hosted runtime would have to supply: `alloc`, `free`, `io`, `gpu_*`, `transfer:*`, `par:*` or `ffi:*`. That is every `buffer`, `Buf`, `std.vec`, `parallel`, device region and `extern` call, caught before a compiler runs. `mmio_read`, `mmio_write` and `asm` remain available inside `unsafe`.
+
+```json
+{"status": "unknown", "code": "E-PROJECT-OR-ENVIRONMENT",
+ "message": "A freestanding target has no hosted runtime: main has effect 'alloc'."}
+```
+
+No symbol is undefined: `memset`, `memcpy` and the exit path are defined in the target's `start.S`, and `cr::trap()` does not call `std::abort`. A trap is distinguishable from success: `fn main() -> i32` returns its value as the emulator's exit status, and a failed guard leaves through the same door with status 134, the status a hosted shell reports for `std::abort`.
+
+```text
+$ nm -u examples/embedded/build/embedded-*/embedded.elf     # nothing is undefined
+$ size examples/embedded/build/embedded-*/embedded.elf
+   text	   data	    bss	    dec	    hex	filename
+   5411	      0	      0	   5411	   1523	embedded.elf
+```
+
+What it does not give: no allocator, so `buffer`, `Buf` and `std.vec` are rejected, not emulated, and storage is `stack` arrays, statics and `ro<u8>[n]` string views; no concurrency and no device; no MMU, caches, interrupts or timer. The image runs in the state QEMU hands it, flat physical memory at EL1 with the MMU off, so every access is Device-nGnRnE memory; the build passes `-mstrict-align`, and performance numbers from this profile are not comparable to hosted ones. Nothing installs a vector table, so a hardware exception hangs the machine rather than reporting; the language's own guards are what stop a bad index or an overflow. A trap does not unwind, log or roll back: `defer` and owner release do not run, as a hosted abort does not run them. Cross compilation is not offered: a target names a host family and is refused on any other host. `cairn test` still runs on the host, since a task contract builds a hosted shared library whatever `target` says. The backend is not verified, and `formal_status` stays `not-verified`.
+
+### The aarch64-virt target
+
+QEMU's `virt` machine with a Cortex-A72, the board CAIRN's evidence is captured on.
+
+| Address | What |
+| --- | --- |
+| `0x0900_0000` | PL011 UART0 data register; `0x0900_0018` is the flag register, bit 5 = TX FIFO full |
+| `0x4000_0000` | DRAM base, 128 MiB by default |
+| `0x4008_0000` | image load address: `.text`, `.rodata`, `.data`, `.bss` |
+| `0x4100_0000` | stack top, growing down; 16 MiB clear of the image and of the device tree QEMU writes just past it |
+
+`src/cairn/targets/aarch64-virt/start.S` sets `sp`, zeroes `.bss`, enables FP and SIMD through `CPACR_EL1`, calls `cf_main` and branches to `cr_exit`. `cr_exit` issues ARM semihosting `SYS_EXIT` (`0x18`) with `ADP_Stopped_ApplicationExit` and the status, which QEMU turns into its own exit status; that is why the emulator is started with `-semihosting`. PSCI `SYSTEM_OFF` would also stop the machine, but it always exits 0, so a trap could not be told from a success. `start.S` also defines `memset` and `memcpy`, byte at a time, because the compiler lowers aggregate copies to those names whatever `-ffreestanding` says.
+
+The build is one command line, from the receipt of `cairn build examples/embedded`:
+
+```text
+clang++ -std=c++20 -O3 -ffp-contract=off -fno-fast-math -fno-exceptions -fno-rtti
+  -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable -Wno-unused-but-set-variable
+  -DCAIRN_FREESTANDING=1 -ffreestanding -nostdlib -static -fno-stack-protector
+  -fno-threadsafe-statics -fno-PIC -fno-PIE -fno-unwind-tables -fno-asynchronous-unwind-tables
+  -Wl,--build-id=none -Wno-unused-command-line-argument -mstrict-align -march=armv8-a
+  -Wl,-T,<target>/link.ld <build>/program.cpp <target>/start.S -o <build>/embedded.elf
+```
+
+`-Wno-unused-command-line-argument` is there because the C++ options are unused on the `start.S` job and `-Werror` would otherwise reject them. `cairn run --target aarch64-virt <project>` runs exactly this:
+
+```sh
+qemu-system-aarch64 -M virt -cpu cortex-a72 -nographic -semihosting -kernel <image>.elf
+echo $?      # fn main()'s return value, or 134 for a failed guard
+```
+
+QEMU loads the ELF by its program headers and enters at `_start`, so no raw binary and no bootloader is needed. `examples/embedded/` is the worked application and `examples/embedded/trap/` the guard violation; `evidence/v1_0/embedded/` holds a captured transcript, `size`, `nm` and tool versions.
+
+### Adding a target
+
+1. Create `src/cairn/targets/<name>/` with `link.ld` and `start.S`. The start-up code owns the stack, `.bss`, the call to `extern "C" cf_main()`, `memset`, `memcpy`, and `extern "C" [[noreturn]] void cr_exit(int)`, the one exit path, which must carry a status out so a trap (134) is distinguishable from any value `fn main() -> i32` can return.
+2. Add one row to `TARGETS` in `src/cairn/projects/toolchain.py` naming the host `family`, the `-march` `arch`, any extra `flags`, and the `run` command that executes an image, ending in the option that takes the image path.
+3. Add the directory's `*.S` and `*.ld` to `package-data` in `pyproject.toml` if the glob does not already cover it, and extend `tests/projects/test_freestanding.py`.
+
+Nothing else in the compiler knows about targets: the profile is a flag set, a linker script, a start-up file and an effect refusal, not a second code generator.

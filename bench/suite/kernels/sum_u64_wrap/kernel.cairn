@@ -5,7 +5,7 @@
 // Two entry points, because the host offers two different things. sum_u64_wrap is a reduce, and on
 // the host a CAIRN reduce is an ordinary in order fold on the calling thread: see
 // src/cairn/compiler/codegen.py s_reduce, whose host branch is commented "On the host a reduction
-// is an ordinary in-order fold: no threads, no hidden cost", and docs/language/concurrency.md, reduce and compact.
+// is an ordinary in-order fold: no threads, no hidden cost", and docs/concurrency.md, reduce and compact.
 // That arm is sequential by construction and is reported as such.
 //
 // sum_u64_atomic is the only parallel host reduction the language offers: a parallel region whose

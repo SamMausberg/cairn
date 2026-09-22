@@ -1,6 +1,6 @@
 # Security
 
-CAIRN is a young compiler. It is not a security sandbox, and the process limits `cairn run` applies are protections against runaway programs, never isolation. Compile and run untrusted programs, adapters and compilers under operating-system isolation. [docs/safety.md](docs/safety.md) states what an accepted program promises, on what evidence, and what the foreign boundary trusts.
+CAIRN is a young compiler. It is not a security sandbox, and the process limits `cairn run` applies are protections against runaway programs, never isolation. Compile and run untrusted programs, adapters and compilers under operating-system isolation. [docs/internals.md](docs/internals.md#safety-and-trust) states what an accepted program promises, on what evidence, and what the foreign boundary trusts.
 
 A soundness bug is a security bug: an accepted program that uses a moved owner, aliases a mutable borrow, keeps a borrow past its call, races, or reaches memory of the wrong placement outside `unsafe` and `extern`. So is a guard that can be skipped, a manifest that reads or writes outside its project root, or a build that executes anything a manifest names.
 

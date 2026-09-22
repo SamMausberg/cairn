@@ -1,6 +1,6 @@
 # Contributing
 
-[AGENTS.md](AGENTS.md) is the working agreement for anyone changing this repository, human or agent: which file owns which rule, what every language change must bring with it, and the claims that must be kept apart. Read it first, then [docs/architecture.md](docs/architecture.md) and [docs/testing.md](docs/testing.md).
+[AGENTS.md](AGENTS.md) is the working agreement for anyone changing this repository, human or agent: which file owns which rule, what every language change must bring with it, and the claims that must be kept apart. Read it first, then [docs/internals.md](docs/internals.md).
 
 Set up a checkout with:
 

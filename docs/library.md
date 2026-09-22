@@ -1,11 +1,10 @@
 # The standard library
 
+Twelve modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
 
-Twelve modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. Nothing is downloaded and nothing is implicit: a module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
+[std_api.md](std_api.md) holds every signature and every effect row, generated from these sources by `cairn doc --std`. This file is the working guide: what each module is for, a program that uses it, and where it bites.
 
-[std_api.md](std_api.md) holds every signature and every effect row, generated from these sources by `cairn doc --std`. What follows is the working guide: what each module is for, a program that uses it, and where it bites.
-
-Three habits explain most of the API shape. A lookup answers with an index, never a borrow: `map.find` and `arena.find` return `Option[usize]` and the caller reads `m.vals[slot]` itself, which is a place and can therefore be passed on, borrowed, `take`n or assigned. Every array parameter carries its length, `f(n, xs)` against a callee's `xs:ro<u8>[n]`; a whole view or buffer matches by name identity, and a part `v.data[lo..hi]` matches whatever `usize` expression you pass, at the cost of one bounds guard. Costs are in the signature: a function that allocates says `alloc` in its effect row and so does everyone who calls it. `cairn doc` prints each row, and `cairn build` writes it into the receipt at `frontend.functions.<name>.effects`.
+Three habits explain the API shape. A lookup answers with an index, never a borrow: `map.find` and `arena.find` return `Option[usize]`, and the caller reads `m.vals[slot]` itself, which is a place and can be passed on, borrowed, taken or assigned. Every array parameter carries its length, `f(n, xs)` against a callee's `xs:ro<u8>[n]`; a whole view or buffer matches by name identity, and a part `v.data[lo..hi]` matches whatever `usize` expression you pass, at the cost of one bounds guard. Costs are in the signature: a function that allocates says `alloc` in its effect row and so does everyone who calls it.
 
 | module | what it is for | allocates |
 | --- | --- | --- |
@@ -173,7 +172,7 @@ fn main() -> i32 {
 }
 ```
 
-`defer io.close(f)` is the idiom, not a nicety: `try` refuses to leave a function while a linear value is unconsumed, so a File that is not deferred cannot be used with `try` at all (`E-LINEAR-LEAK`, "f is linear: consume it, or defer its consumer, on every path"). `close` reports nothing because consuming a linear value requires a function that never reaches a `return`, and `return` demands that every linear value already be consumed. Report through a borrow if you need the status.
+`defer io.close(f)` is the idiom: `try` refuses to leave a function while a linear value is unconsumed, so a File that is not deferred cannot be used with `try` at all (`E-LINEAR-LEAK`, "f is linear: consume it, or defer its consumer, on every path"). `close` reports nothing, because consuming a linear value requires a function that never reaches a `return`, and `return` demands that every linear value already be consumed. Report through a borrow if you need the status.
 
 Open flags are `READ`, `WRITE`, `APPEND` and `TRUNCATE`; `seek` takes `SET`, `CUR` or `END`; `sync` and `truncate` answer `Ok(0)`. A path ends in a NUL byte, since C reads a pointer and not a length. `read` is one syscall and answers 0 at end of file; `read_full` and `write` loop, and a short write is an error here even though it is not one to the kernel. Nothing buffers: n bytes written is n bytes of syscall. `print`, `println`, `eprintln`, `newline` and `print_u64` are best effort and return nothing. `monotonic_ns` reads CLOCK_MONOTONIC.
 
@@ -359,11 +358,11 @@ fn main() -> i32 {
 }
 ```
 
-`copy` takes two views of one extent, so it is not a memmove: overlapping parts of one array are refused at the call site with `E-ALIAS`, "A mutable view cannot be passed to overlapping call arguments", and the entry guard checks it numerically as well. Shift a buffer down with an ordinary loop. `equal` takes two extents, since a comparison is the one place where the lengths may legitimately differ, and it stops at the first difference.
+`copy` takes two views of one extent, so it is not a memmove: overlapping parts of one array are refused at the call site with `E-ALIAS`, and the entry guard checks it numerically as well. Shift a buffer down with an ordinary loop. `equal` takes two extents, since a comparison is the one place where the lengths may differ, and it stops at the first difference.
 
 ## std.net
 
-Blocking TCP. A `Socket` is linear for the same reason a `File` is. There is no thread, poll or timeout in the language yet, so one connection is served at a time. An address is four bytes, so a string literal is a perfectly good IPv4 address.
+Blocking TCP. A `Socket` is linear for the same reason a `File` is. There is no thread, poll or timeout in the language yet, so one connection is served at a time. An address is four bytes, so a string literal is an IPv4 address.
 
 ```cairn
 import std.core (Result);
@@ -423,7 +422,7 @@ fn main() -> i32 {
 
 The second convention is for C strings: a pointer is not a view, so `open` is declared `path:ro<u8>[1]` and called as `sys.open(path[0..1], flags, 420)` with the NUL byte inside `path`. `errno` is a macro over a thread-local `int*`, which no CAIRN signature can return, so `std.sys.errno` declares `__errno_location` as a `usize` and does one `mmio_read[u32]` of that address inside `unsafe`. It is the only place in the library that needs the `mmio` effect.
 
-## Known sharp edges
+## Sharp edges
 
 A linear value inside a record leaves by taking the record apart. `take` cannot forge the zero a `File` would leave behind (`E-LINEAR-STORAGE`, "take would leave a forged linear value behind; swap two places instead"), so a wrapper is consumed whole: `let Conn(f, sent) = c;` binds every field and `c` is gone. A `File` or a `Socket` may therefore live inside your own state.
 

@@ -1,9 +1,141 @@
-# A tour in twelve programs
+# Guide
 
+From a fresh checkout to a project that builds, runs and refuses a wrong edit, then twelve complete programs, one per idea. Every command prints JSON, so its output reads the same in a terminal, in a script and in an agent's transcript.
 
-Twelve complete programs. The test suite compiles and runs every one of them under the address and undefined-behaviour sanitizers (`tests/language/test_tour.py`): a program here exits 0 or the build fails.
+## Install
 
-## 1. Values, checked arithmetic, explicit conversions
+```sh
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e '.[dev]'
+cairn doctor
+```
+
+`doctor` names the compilers it found and which optional tools are present. Clang or GCC with C++20 is required. `libz3`, `nvcc`, Lean and QEMU each enable one more gate and are never downloaded. In a checkout without an install, `python3 bin/cairn` is the same command.
+
+## A project
+
+```sh
+cairn new demo
+```
+
+A project is a directory with a manifest, ordered sources and task contracts. The manifest is data: it lists files and names a build kind, and it cannot run anything.
+
+```toml
+[project]
+name = "demo"
+sources = ["src/math.cairn", "src/main.cairn"]
+tests = ["tests/average.json"]
+
+[build]
+kind = "exe"
+arch = "baseline"
+```
+
+The sources are compiled together, in manifest order, as one program:
+
+```cairn
+// Floor average without overflowing the intermediate sum.
+fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
+
+fn main() -> i32 {
+  if average(10, 20) == 15 { return 0; }
+  return 1;
+}
+```
+
+`u64` is a fixed-width integer, `+` traps on overflow, `&` and `^` are unsigned, `shr` takes a count below the width, and `= expression;` is a one-return body. `main` returns the process exit status.
+
+## Check, run, test
+
+```sh
+cairn check demo
+```
+
+```json
+{"status": "typed", "functions": 2, "formal_status": "not-verified"}
+```
+
+`typed` means the program passed every static rule: syntax, types, ownership, leases, lanes, placement and effects. `formal_status` is `not-verified` here and everywhere, because acceptance is not a proof.
+
+```sh
+cairn run demo
+```
+
+```json
+{"status": "program-exited", "exit_code": 0, "build_directory": "demo/build/demo-38_uge7b", "memory_limit_mib": 1024}
+```
+
+`run` builds a native executable in a fresh directory under `build/` and runs it under an address-space cap. The directory holds the generated `program.cpp`, the runtime headers it includes and `receipt.json`, which records what was compiled, with what, and the effect row of every function:
+
+```json
+"average": {"effects": ["trap"], "calls": [], "syntactic_check_sites": {"shift": 1, "overflow": 1}}
+```
+
+`trap` says the function carries a guard that can abort, and the two sites are the shift count and the checked `+`. A function that allocated, wrote through a borrow, started a task or crossed to the device would say so in the same list, and so would everything that calls it.
+
+```sh
+cairn test demo
+```
+
+```json
+{"status": "passed-finite-tests", "tests": [{"contract": "average.json", "cases": 81, "execution_exit_code": 0}]}
+```
+
+A contract names a symbol and finite cases. `test` builds a shared library and calls the symbol for each case from Python. A case that disagrees, or a child that exits abnormally, fails the run whatever was printed.
+
+```json
+{"schema": "cairn.task/1", "symbol": "average",
+ "cases": [{"args": {"x": 0, "y": 0}, "return": 0}, {"args": {"x": 18446744073709551615, "y": 18446744073709551615}, "return": 18446744073709551615}]}
+```
+
+## A wrong edit
+
+Change the annotation of a local and the compiler refuses the program with a code, a message and a position:
+
+```cairn rejects E-TYPE-MISMATCH
+fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
+fn main() -> i32 {
+  let mean:u32 = average(10, 20);
+  return 0;
+}
+```
+
+```json
+{"status": "rejected", "code": "E-TYPE-MISMATCH", "message": "Expected u32, got u64.", "line": 3, "column": 18}
+```
+
+Nothing converts on its own; `u32(average(10, 20))` says the narrowing and checks it. The safety rules are refused the same way. A heap array is an owner, using it as a value moves it, and the old name is dead:
+
+```cairn rejects E-MOVED
+fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
+fn main() -> i32 {
+  let mut data = Buf[u64](4);
+  let first = data;
+  return i32(average(data[0], 1));
+}
+```
+
+```text
+E-MOVED: data was moved.
+```
+
+Every diagnostic code has a paragraph in the language reference with a program that is refused with it.
+
+## Format, document, edit
+
+```sh
+cairn fmt demo                 # rewrite every .cairn in place; --check and --diff write nothing
+cairn doc demo                 # a Markdown reference from the checked program, effect rows included
+cairn emit demo/src/math.cairn # the C++ one file lowers to
+```
+
+`fmt` re-lexes its own output and leaves a file alone unless the tokens and comments are unchanged. `doc` prints each public function with its signature, its comment and its inferred effects. The [editor extension](tools.md#the-editor-extension) gives diagnostics as you type, hover types and effect rows, completion and rename over the same language server.
+
+## The tour in twelve programs
+
+The suite compiles and runs every program here under the address and undefined-behaviour sanitizers (`tests/language/test_tour.py`): a program exits 0 or the build fails.
+
+### 1. Values, checked arithmetic, explicit conversions
 
 Integers trap on overflow in every build. The wrapping forms say so by name. Nothing converts implicitly, and a narrowing conversion is a range check.
 
@@ -21,7 +153,7 @@ fn main() -> i32 {
 }
 ```
 
-## 2. Views: borrowed arrays whose length is part of the type
+### 2. Views: borrowed arrays whose length is part of the type
 
 `ro<T>[n]` and `rw<T>[n]` borrow `n` elements, where `n` is an earlier parameter, a literal or a constant. Indexing is bounds checked, two `rw` views of one call cannot overlap, and a part `xs[lo..hi]` carries one guard.
 
@@ -41,7 +173,7 @@ fn main() -> i32 {
 }
 ```
 
-## 3. Records, sums, `match` and `try`
+### 3. Records, sums, `match` and `try`
 
 A sum has one payload per variant. `match` is exhaustive and has no wildcard. `try` yields the success payload or returns the failure from the enclosing function, and it is the only propagation form.
 
@@ -66,7 +198,7 @@ fn main() -> i32 {
 }
 ```
 
-## 4. Generics and what a parameter promises
+### 4. Generics and what a parameter promises
 
 An instance is what is checked. A bound is a promise checked at the call: a trait, a kind (`copy`, `affine`) or a closed class of scalars that licenses operators.
 
@@ -85,7 +217,7 @@ fn main() -> i32 {
 }
 ```
 
-## 5. Traits, static and dynamic
+### 5. Traits, static and dynamic
 
 Dispatch is static on the type of `Self`. A `dyn` reference is an explicit two-word borrow, and a call through it shows `dispatch` in the effect row together with the rows of every implementation.
 
@@ -107,7 +239,7 @@ fn main() -> i32 {
 }
 ```
 
-## 6. Owners: moved, never copied, released at scope exit
+### 6. Owners: moved, never copied, released at scope exit
 
 `Buf[T]` is a zeroed heap array and an ordinary affine value. `take` and `swap` are the only ways out of a place, a `linear struct` must be consumed exactly once on every path, and `defer` schedules one visible call.
 
@@ -133,7 +265,7 @@ fn main() -> i32 {
 }
 ```
 
-## 7. Closures borrow exactly what they capture
+### 7. Closures borrow exactly what they capture
 
 A closure exists only as a `ro<fn(...)>` argument, so it never escapes or allocates. It borrows what it captures, for that call only.
 
@@ -150,7 +282,7 @@ fn main() -> i32 {
 }
 ```
 
-## 8. Tasks lease what they borrow
+### 8. Tasks lease what they borrow
 
 `spawn` runs a declared function on its own thread and hands back a linear ticket. Until `wait`, nobody else may touch what the task writes. Visibly disjoint parts may go to different tasks.
 
@@ -176,9 +308,9 @@ fn main() -> i32 {
 }
 ```
 
-## 9. Lanes are race free by construction
+### 9. Lanes are race free by construction
 
-A lane may touch what it writes only at `[i]`. `reduce` is how you combine. The checked `+` is offered where no order of evaluation can change whether it traps, and a lane may call a closure that writes nothing it captured.
+A lane may touch what it writes only at `[i]`. `reduce` is how lanes combine. The checked `+` is offered where no order of evaluation can change whether it traps, and a lane may call a closure that writes nothing it captured.
 
 ```cairn
 fn map(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) { parallel i in n { out[i] = f(u64(i)); } }
@@ -195,7 +327,7 @@ fn main() -> i32 {
 }
 ```
 
-## 10. Generators are library code
+### 10. Generators are library code
 
 A recipe is ordinary declarations with static `each`, `where` and `$name` splices. `derive wire`, `derive eq`, `derive ord` and `derive hash` are recipes of the packaged library.
 
@@ -233,7 +365,7 @@ fn main() -> i32 {
 }
 ```
 
-## 11. Modules and the library
+### 11. Modules and the library
 
 `module` names what follows, `pub` exports, `import` brings a module (or listed names) into view. Growth, maps and I/O are library code written in CAIRN, so their costs show in every caller's effect row.
 
@@ -277,7 +409,7 @@ pub fn main() -> i32 {
 }
 ```
 
-## 12. The foreign boundary states its effects
+### 12. The foreign boundary states its effects
 
 An `extern` declaration has no body the checker can read, so it declares what it may do, and calling it needs `unsafe`. The effect travels to every caller. `pure` and `effects(...)` are checked ceilings.
 
@@ -293,4 +425,8 @@ fn main() -> i32 {
 }
 ```
 
-The device half of the language (placement types, `kernel fn`, device `reduce` and `compact`, queued work with `spawn ... after`) is shown in [examples/apps/gpu_pipeline](examples.md#examplesappsgpu_pipeline) and [examples/apps/simulator](examples.md#examplesappssimulator), which the suite runs when a GPU is present.
+The device half of the language (placement types, `kernel fn`, device `reduce` and `compact`, queued work with `spawn ... after`) is shown by [examples/apps/gpu_pipeline](examples.md#examplesappsgpu_pipeline) and [examples/apps/simulator](examples.md#examplesappssimulator), which the suite runs when a GPU is present.
+
+## Where to go next
+
+[language.md](language.md), [abstractions.md](abstractions.md) and [concurrency.md](concurrency.md) are the reference: every rule with a program that is accepted and one that is refused. [library.md](library.md) is the standard library, [examples.md](examples.md) has real programs from a storage engine to a bare-metal image, and [verification.md](verification.md) says which claims are proved, which are SMT-checked and which are only tested.

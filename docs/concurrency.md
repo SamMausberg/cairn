@@ -1,5 +1,7 @@
 # Tasks, lanes and devices
 
+Tasks lease what they borrow, lanes are race free by construction, and placement is part of a view's type. [language.md](language.md) covers values, memory and effects; [abstractions.md](abstractions.md) covers generics, traits, closures, modules and recipes.
+
 ## Tasks and leases
 
 `let t = spawn f(args);` runs a declared function on its own thread. The arguments are evaluated at the spawn and carried by value, so a task never reads the spawner's locals. `t` is a linear ticket bound to its scope. `wait(t)` consumes it and returns `f`'s result, and it must do so on every path of the same function; the ticket cannot be stored, passed or returned.
@@ -123,9 +125,7 @@ fn main() -> i32 {
 
 ## Parallel regions
 
-`parallel i in n { body }` runs one lane per index and completes before the next statement.
-
-Lanes are race free by construction. Whatever any lane writes may be touched only at element `[i]` (`E-PARALLEL-RACE`), a shared scalar cannot be assigned (`E-PARALLEL-WRITE`: use `reduce`), and lanes cannot return, nest or move an outer owner. A lane's own row, and the row of everything it calls, must be pure-like (`E-PARALLEL-CALL`); a host lane may also allocate, use atomics and lock.
+`parallel i in n { body }` runs one lane per index and completes before the next statement. Whatever any lane writes may be touched only at element `[i]` (`E-PARALLEL-RACE`), a shared scalar cannot be assigned (`E-PARALLEL-WRITE`: use `reduce`), and lanes cannot return, nest or move an outer owner. A lane's own row, and the row of everything it calls, must be pure-like (`E-PARALLEL-CALL`); a host lane may also allocate, use atomics and lock.
 
 ```cairn
 fn shade(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) { parallel i in n { out[i] = f(u64(i)); } }
@@ -148,9 +148,7 @@ fn shade(n:usize, out:rw<u64>[n]) { parallel i in n { out[0] = u64(i); } }
 out is written by lanes, so every lane may touch only out[i].
 ```
 
-A lane may call, or hand on to a helper, a `fn` parameter of its function. That leaves `lane:f` in the row, and in a declared ceiling, renamed up the call graph like `read:x`.
-
-Whatever is finally passed is judged where it is written: the closure above is accepted, a closure that writes what it captured is not, and a stored `fn` value counts as any function of its type whose address was taken. Dispatch from a host lane, from a function it calls, or from such a closure is judged against every implementation.
+A lane may call, or hand on to a helper, a `fn` parameter of its function. That leaves `lane:f` in the row, and in a declared ceiling, renamed up the call graph like `read:x`. Whatever is finally passed is judged where it is written: a closure that reads its captures is accepted, a closure that writes what it captured is not, and a stored `fn` value counts as any function of its type whose address was taken. Dispatch from a host lane, from a function it calls, or from such a closure is judged against every implementation.
 
 ```cairn rejects E-PARALLEL-CALL
 fn shade(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) { parallel i in n { out[i] = f(u64(i)); } }
@@ -167,9 +165,7 @@ fn main() -> i32 {
 shade calls f from parallel lanes, where it cannot write:calls.
 ```
 
-Host lanes are a pool. The first host region of a process creates them and every later one reuses them, so a region costs a hand-off rather than a thread, and a region of fewer than sixteen thousand elements is compiled as the ordinary loop it replaces and starts nothing at all. The pool holds one thread per core, or the number `CAIRN_LANES` names.
-
-How many lanes there are is never observable in a result, only in the time a region takes. Start-up makes host regions pay off only for large `n`; `evidence/v1_0/gpu/benchmark.json` records measured break-even points.
+Host lanes are a pool. The first host region of a process creates them and every later one reuses them, so a region costs a hand-off rather than a thread, and a region of fewer than sixteen thousand elements is compiled as the ordinary loop it replaces and starts nothing. The pool holds one thread per core, or the number `CAIRN_LANES` names. How many lanes there are is never observable in a result, only in the time a region takes; `evidence/v1_2/host_regions` records where a region starts to pay off.
 
 ## reduce and compact
 
@@ -189,9 +185,7 @@ fn main() -> i32 {
 }
 ```
 
-`compact` writes the stable selected prefix into existing storage of capacity exactly `n`. It evaluates the predicate once per input and the projection only when selected, never reads its output, leaves the tail unchanged and allocates nothing on the host. Over a `@device` output it is stable stream compaction whose scan needs device scratch, which shows as `gpu_alloc` and `gpu_free`; a device `reduce` likewise.
-
-Its one unchecked store is justified by seventeen affine certificates, checked before every emission and proved sound in Lean together with in-bounds stores and stable selection for the loop model ([verification](../verification.md)).
+`compact` writes the stable selected prefix into existing storage of capacity exactly `n`. It evaluates the predicate once per input and the projection only when selected, never reads its output, leaves the tail unchanged and allocates nothing on the host. Over a `@device` output it is stable stream compaction whose scan needs device scratch, which shows as `gpu_alloc` and `gpu_free`; a device `reduce` likewise. Its one unchecked store is justified by seventeen affine certificates, checked before every emission and proved sound in Lean together with in-bounds stores and stable selection for the loop model ([verification.md](verification.md)).
 
 ```cairn
 fn keep_live(n:usize, out:rw<u64>[n], xs:ro<u64>[n]) -> usize {
