@@ -8,15 +8,10 @@ A generational arena: values live in one owned array and are named by a copyable
 
 ```cairn
 pub struct Handle { slot:usize; generation:u64; }
-
 pub struct Arena[T:affine] { items:Buf[T]; gen:Buf[u64]; live:Buf[u8]; free:Vec[usize]; used:usize; count:usize; }
-
 pub fn new[T:affine]() -> Arena[T]  // effects: alloc, free, trap, zero_init
-
 pub fn count[T:affine](a:ro<Arena[T]>) -> usize  // effects: read:a
-
 pub fn slots[T:affine](a:ro<Arena[T]>) -> usize  // effects: read:a
-
 pub fn alive[T:affine](a:ro<Arena[T]>, slot:usize) -> bool  // effects: read:a, trap
 
 // The handle a live slot currently answers to; pairs with `slots` to iterate an arena.
@@ -38,7 +33,6 @@ The vocabulary every other module shares. Importing a name is explicit: import s
 
 ```cairn
 pub enum Option[T] { Some(T); None; }
-
 pub enum Result[T, E] { Ok(T); Err(E); }
 
 // Laws are documentation here, not proof obligations: less is a strict weak order, same an equivalence. Purity is an
@@ -46,15 +40,10 @@ pub enum Result[T, E] { Ok(T); Err(E); }
 pub trait Ord { fn less(a:ro<Self>, b:ro<Self>) -> bool pure; }
 
 pub trait Eq { fn same(a:ro<Self>, b:ro<Self>) -> bool pure; }
-
 pub trait Hash { fn hash(value:ro<Self>) -> u64 pure; }
-
 impl Eq for bool: fn same(a:ro<bool>, b:ro<bool>) -> bool pure  // effects: read:a, read:b
-
 impl Ord for T: fn less[T:integer](a:ro<T>, b:ro<T>) -> bool  // effects: read:a, read:b
-
 impl Eq for T: fn same[T:integer](a:ro<T>, b:ro<T>) -> bool  // effects: read:a, read:b
-
 impl Hash for T: fn hash[T:unsigned](value:ro<T>) -> u64  // effects: read:value, trap
 ```
 
@@ -85,7 +74,6 @@ pub struct Mark { x:i64; y:i64; w:i64; h:i64; }
 pub struct Layout { text:Vec[u8]; count:usize; names:Vec[u8]; ends:Vec[usize]; marks:Vec[Mark]; }
 
 pub const GLYPH_W:i64 = 8;
-
 pub const GLYPH_H:i64 = 13;
 
 // `s` over `d`.
@@ -125,7 +113,6 @@ pub fn layer(base:rw<std.image.Image>, top:ro<std.image.Image>)
 pub fn text(img:rw<std.image.Image>, x:i64, y:i64, n:usize, s:ro<u8>[n]@host, c:u32, scale:i64)
 
 pub fn text_width(n:usize, scale:i64) -> i64  // effects: trap
-
 pub fn layout() -> std.draw.Layout  // effects: alloc, free, trap, zero_init
 
 // The rectangle last marked `name`. A name never marked is a guard failure, which is what a test wants.
@@ -136,7 +123,6 @@ pub fn place(l:ro<std.draw.Layout>, n:usize, name:ro<u8>[n]@host) -> std.draw.Ma
 pub fn marked(l:ro<std.draw.Layout>, n:usize, name:ro<u8>[n]@host) -> bool
 
 pub fn inside(a:std.draw.Mark, b:std.draw.Mark) -> bool  // effects: trap
-
 pub fn apart(a:std.draw.Mark, b:std.draw.Mark) -> bool  // effects: trap
 
 // Report the rectangle `name` covers. The name is written as a JSON string, its quotes, backslashes and control bytes
@@ -274,13 +260,9 @@ pub struct Image { w:usize; h:usize; n:usize; px:Buf[u32]; }
 pub fn new(w:usize, h:usize) -> std.image.Image  // effects: alloc, free, local_read, trap, zero_init
 
 pub fn rgba(r:u8, g:u8, b:u8, a:u8) -> u32  // effects: trap
-
 pub fn red(c:u32) -> u8  // effects: trap
-
 pub fn green(c:u32) -> u8  // effects: trap
-
 pub fn blue(c:u32) -> u8  // effects: trap
-
 pub fn alpha(c:u32) -> u8  // effects: trap
 
 // The pixel at (x, y). A column past the width traps like an index past the end, instead of reading the row below.
@@ -330,22 +312,16 @@ Files and standard streams. A File is linear: the type system, not a convention,
 
 ```cairn
 pub struct IoError { code:i32; }
-
 pub linear struct File { fd:i32; }
 
 // open flags and lseek origins, exactly as Linux defines them.
 pub const READ:i32 = 0;
 
 pub const WRITE:i32 = 66;
-
 pub const APPEND:i32 = 1090;
-
 pub const TRUNCATE:i32 = 578;
-
 pub const SET:i32 = 0;
-
 pub const CUR:i32 = 1;
-
 pub const END:i32 = 2;
 
 // `path` must end in a NUL byte, since C reads a pointer and not a length.
@@ -400,11 +376,8 @@ pub fn read_to_end(f:ro<std.io.File>, into:rw<std.vec.Vec[u8]>) -> std.core.Resu
 pub fn read_file(n:usize, path:ro<u8>[n]@host) -> std.core.Result[std.vec.Vec[u8], std.io.IoError]
 
 pub fn print(n:usize, data:ro<u8>[n]@host)  // effects: diverge, ffi:write, ffi_precondition, io, read:data, trap
-
 pub fn println(n:usize, data:ro<u8>[n]@host)  // effects: diverge, ffi:write, ffi_precondition, io, read:data, trap
-
 pub fn eprintln(n:usize, data:ro<u8>[n]@host)  // effects: diverge, ffi:write, ffi_precondition, io, read:data, trap
-
 pub fn newline()  // effects: diverge, ffi:write, ffi_precondition, io, trap
 
 // effects: diverge, ffi:write, ffi_precondition, io, local_read, local_write, stack_storage, trap, zero_init
@@ -440,11 +413,8 @@ pub struct Map[K:affine, V:affine] { keys:Buf[K]; vals:Buf[V]; state:Buf[u8]; st
 pub struct Slot { at:usize; stamp:u64; }
 
 pub fn new[K:affine, V:affine]() -> Map[K, V]  // effects: alloc, free, trap, zero_init
-
 pub fn count[K:affine, V:affine](m:ro<Map[K, V]>) -> usize  // effects: read:m
-
 pub fn slots[K:affine, V:affine](m:ro<Map[K, V]>) -> usize  // effects: read:m
-
 pub fn live[K:affine, V:affine](m:ro<Map[K, V]>, slot:usize) -> bool  // effects: read:m, trap
 
 // effects: alloc, diverge, ffi_precondition, free, local_read, local_write, read:m, stack_storage, trap, write:m,
@@ -486,23 +456,14 @@ The C math library's functions on f64. Their last bit depends on which libm the 
 
 ```cairn
 pub const PI:f64 = 3.141592653589793;
-
 pub const E:f64 = 2.718281828459045;
-
 pub fn exp(x:f64) -> f64  // effects: ffi:exp
-
 pub fn log(x:f64) -> f64  // effects: ffi:log
-
 pub fn log2(x:f64) -> f64  // effects: ffi:log2
-
 pub fn pow(x:f64, y:f64) -> f64  // effects: ffi:pow
-
 pub fn sin(x:f64) -> f64  // effects: ffi:sin
-
 pub fn cos(x:f64) -> f64  // effects: ffi:cos
-
 pub fn tan(x:f64) -> f64  // effects: ffi:tan
-
 pub fn atan2(y:f64, x:f64) -> f64  // effects: ffi:atan2
 ```
 
@@ -588,11 +549,8 @@ pub extern fn write(fd:i32, data:ro<u8>[n]@host, n:usize) -> i64 effects(io)
 pub extern fn open(path:ro<u8>[1]@host, flags:i32, mode:u32) -> i32 effects(io)
 
 pub extern fn close(fd:i32) -> i32 effects(io)  // effects: ffi:close, io
-
 pub extern fn lseek(fd:i32, offset:i64, whence:i32) -> i64 effects(io)  // effects: ffi:lseek, io
-
 pub extern fn fsync(fd:i32) -> i32 effects(io)  // effects: ffi:fsync, io
-
 pub extern fn ftruncate(fd:i32, length:i64) -> i32 effects(io)  // effects: ffi:ftruncate, io
 
 // effects: ffi:unlink, ffi_precondition, io, read:path, trap
@@ -615,7 +573,6 @@ pub extern fn nanosleep(wanted:ro<i64>[2]@host, left:rw<i64>[2]@host) -> i32 eff
 pub extern fn __errno_location() -> usize effects(io)  // effects: ffi:__errno_location, io
 
 pub extern fn getpid() -> i32 effects(io)  // effects: ffi:getpid, io
-
 pub extern fn socket(domain:i32, kind:i32, protocol:i32) -> i32 effects(io)  // effects: ffi:socket, io
 
 // effects: ffi:bind, ffi_precondition, io, read:addr, trap
@@ -737,11 +694,8 @@ A growable owner. Growth is the only allocation and it is visible in every calle
 
 ```cairn
 pub struct Vec[T:affine] { data:Buf[T]; len:usize; }
-
 pub fn new[T:affine]() -> Vec[T]  // effects: alloc, free, trap, zero_init
-
 pub fn with_capacity[T:affine](capacity:usize) -> Vec[T]  // effects: alloc, free, trap, zero_init
-
 pub fn capacity[T:affine](v:ro<Vec[T]>) -> usize  // effects: read:v
 
 // Doubling keeps pushes amortized constant; elements move by swap, so owners are never copied.
@@ -768,9 +722,7 @@ pub fn swap_remove[T:affine](v:rw<Vec[T]>, i:usize) -> Option[T]  // effects: re
 pub fn find[T:Eq + affine](v:ro<Vec[T]>, item:ro<T>) -> Option[usize]
 
 pub fn get[T:copy](v:ro<Vec[T]>, i:usize) -> T  // effects: read:v, trap
-
 pub fn set[T:affine](v:rw<Vec[T]>, i:usize, item:T)  // effects: free, read:v, trap, write:v
-
 pub fn clear[T:affine](v:rw<Vec[T]>)  // effects: free, read:v, trap, write:v
 
 // Append a view. Copying elements, so it instantiates only for copyable ones; an owner would have to be moved out of

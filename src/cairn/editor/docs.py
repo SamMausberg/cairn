@@ -64,7 +64,10 @@ def document(source: str, modules: list[str] | None = None) -> str:
                 entries.append([*commented(comment_above(text, f.start)), f"{declared}  // {effects}"])
             else:
                 entries.append([*commented([*comment_above(text, f.start), effects]), declared])
-        block = "\n\n".join("\n".join(entry) for entry in entries)
+        block = ""  # One-line declarations stack; a blank line sets off every declaration that carries a comment.
+        for k, entry in enumerate(entries):
+            apart = k > 0 and (len(entry) > 1 or len(entries[k - 1]) > 1)
+            block += ("\n\n" if apart else "\n" if k else "") + "\n".join(entry)
         told = above(rf"^module {re.escape(module)};")
         out += [f"# {module or 'root module'}", "", *([*told, ""] if told else [])]
         out += [f"```cairn\n{block}\n```", ""] if entries else []
