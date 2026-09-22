@@ -105,14 +105,22 @@ pub fn circle(img:rw<Image>, cx:i64, cy:i64, r:i64, c:u32) {
 
 // `src` over `dst` with its top left corner at (x, y), clipped to `dst`.
 pub fn blit(dst:rw<Image>, src:ro<Image>, x:i64, y:i64) {
-  for sy in 0..src.h {
-    let ty = y + i64(sy);
+  blit_part(dst, src, 0, 0, src.w, src.h, x, y);
+}
+
+// The w by h part of `src` whose corner is (sx, sy), such as one cell of a sprite sheet, over `dst` at (x, y);
+// clipped to both images.
+pub fn blit_part(dst:rw<Image>, src:ro<Image>, sx:usize, sy:usize, w:usize, h:usize, x:i64, y:i64) {
+  let right = min(sx + w, src.w);
+  let bottom = min(sy + h, src.h);
+  for row in sy..bottom {
+    let ty = y + i64(row - sy);
     if ty < 0 || ty >= i64(dst.h) { continue; }
-    for sx in 0..src.w {
-      let tx = x + i64(sx);
+    for col in sx..right {
+      let tx = x + i64(col - sx);
       if tx >= 0 && tx < i64(dst.w) {
         let at = usize(ty) * dst.w + usize(tx);
-        dst.px[at] = over(dst.px[at], src.px[sy * src.w + sx]);
+        dst.px[at] = over(dst.px[at], src.px[row * src.w + col]);
       }
     }
   }

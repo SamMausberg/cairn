@@ -46,6 +46,19 @@ An `explain` request returns [`cairn explain`](tools.md#cairn-explain) for the f
 
 A `predict` request, `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "predict", "sizes": [{"n": 1e7}]}`, returns [`cairn predict`](tools.md#cairn-predict) for the disclosed functions at those sizes: the original priced before any candidate is admitted, and afterwards what the latest admitted candidate is predicted to change, as a ratio at each size with the bound on each side and a confidence. An agent tuning a function can try a candidate and hear its predicted cost in milliseconds, and build and time only the one it keeps. A prediction is not evidence of speed: the host still decides what is measured.
 
+A `shot` request, `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "shot", "functions": ["panel.ui.update"]}`, shows the agent what the program draws. The host builds the latest admitted candidate, or the original before any, runs it once headless with `CAIRN_SHOT` naming a fresh directory, and returns every frame [`std.draw.capture`](library.md#stddraw) wrote there, with the effect rows of the named functions and, for a candidate, what each row gained and lost against the original. The functions must be ones the packet disclosed. `cairn shot app --symbol f` gives the same from the command line, and `--against BEFORE` compares the rows with another version. Nothing opens a window or touches a device, and the run has the limits of `cairn run`.
+
+```json
+{"schema": "cairn.shot/1", "status": "shot", "exit_code": 0,
+ "frames": [{"frame": 1, "png": "…/shot-x/frame-1.png", "since_previous_ns": 3261000,
+             "layout": {"width": 320, "height": 200, "at_ns": 17035994170318,
+                        "elements": [{"name": "list", "x": 8, "y": 8, "w": 150, "h": 170}]}}],
+ "effects": {"panel.ui.update": ["read:ui", "trap", "write:ui"]},
+ "changed": {"panel.render.frame": {"added": ["ffi:write", "io"], "removed": []}}}
+```
+
+The PNG is the pixels, for an agent that reads images. The layout record is what the program says it drew where, so a property such as "the detail panel does not overlap the list" is checked on numbers, and a test can hold it. The rows say what the edit costs: a `panel.render.frame` that gained `alloc` allocates in every frame. A status of `program-failed` still carries the frames written before the failure, and a program that captures nothing returns no frames.
+
 The host keeps the digests of source, contract, compiler and disclosed context behind each handle, so the agent never copies a hash. Expanding a function it had not disclosed changes the session digest, and an `edit/1` request made before is refused as stale. One host sends each card and the terms once, and later packets name them under `sent_before`. Its admissions and refusals leave out what the terms say of every admission and every refusal: an admission gives the status, the symbol, the effect row and the check sites, and the check sites before the edit only where they differ.
 
 A refusal points into the reply the agent wrote: `line`, `column` and `source_line` are the reply's, and `in` is `reply`, unless the whole-module recheck found the fault elsewhere, when `source_line` is that line of the spliced program. Its `repair_hint` is the smallest fix the host can state without guessing, computed from the diagnostic's data where it can be: a close name for an unknown one, the construct that brings each effect the ceiling refuses, the expand request that discloses a callee, the conversion between two scalar types. A code whose message already says how to repair it carries no hint of its own. On thirty scripted edits of five example programs a focused packet with one expansion took about a quarter of the context of the component packet (`evidence/v1_4/context/`). No model took part in that measurement.

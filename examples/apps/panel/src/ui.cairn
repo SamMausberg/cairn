@@ -1,0 +1,25 @@
+// The state of a small inventory screen and the one function that changes it. `update` declares its effect
+// ceiling, so the checker refuses it when anything it does or calls would allocate, lock, spawn or reach the
+// outside world: a frame's update costs what the ceiling names and no more, and a change that allocates there
+// is E-EFFECT-CEILING before it ever runs.
+module panel.ui;
+
+pub const ITEMS:usize = 6;
+
+pub struct Ui { selected:usize; opened:bool; moves:u64; }
+
+pub fn start() -> Ui = Ui(0, false, 0);
+
+// One key: 'j' and 'k' move the selection down and up, wrapping round, and 'o' opens or closes the selected
+// item's detail. Any other key is ignored.
+pub fn update(ui:rw<Ui>, key:u8) effects(read:ui, write:ui, trap) {
+  if key == 'j' {
+    ui.selected = (ui.selected + 1) % ITEMS;
+    ui.moves += 1;
+  } else if key == 'k' {
+    ui.selected = (ui.selected + ITEMS - 1) % ITEMS;
+    ui.moves += 1;
+  } else if key == 'o' {
+    ui.opened = !ui.opened;
+  }
+}

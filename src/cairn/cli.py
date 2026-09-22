@@ -98,6 +98,7 @@ COMMANDS = {
     "expand": "Print what every derive generated, as CAIRN source.",
     "build": "Build a native artifact in a fresh directory, with a receipt.",
     "run": "Build, then run under process limits, or under the target's emulator; ARGS after -- go to the program.",
+    "shot": "Run headless and collect every frame std.draw captured: its PNG, its layout record and its time.",
     "test": "Run the project's test blocks, each in a process of its own, and its finite task contracts.",
     "inspect": "Print the packet an editing agent gets for one symbol.",
     "state": "Print the program's state for an agent: every signature and effect row by module, under a digest.",
@@ -108,8 +109,9 @@ COMMANDS = {
     "doc": "Generate the API reference of the checked program, as Markdown.",
 }
 OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that take it, the option, its keywords)
-    ({"build", "run", "test", "explain", "tune"}, "--cxx", {"default": "clang++"}),
-    ({"explain", "predict"}, "--symbol", {"action": "append", "help": "This function only (repeatable)."}),
+    ({"build", "run", "test", "explain", "tune", "shot"}, "--cxx", {"default": "clang++"}),
+    ({"explain", "predict", "shot"}, "--symbol", {"action": "append", "help": "This function only (repeatable); "
+                                                  "for shot, a function whose effect row is reported."}),
     ({"tune"}, "--symbol", {"action": "append", "required": True, "help": "The function whose plan is chosen."}),
     ({"predict", "tune"}, "--at", {"action": "append", "default": [], "metavar": "NAME=SIZE[,NAME=SIZE]", "help":
                                    "Price at these sizes (repeatable); predict defaults a function of one extent to "
@@ -118,13 +120,13 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                              "the current one on this host, halving each round."}),
     ({"tune"}, "--write", {"action": "store_true", "help": "Write the chosen plan into the file that declares the "
                            "function."}),
-    ({"predict"}, "--against", {"type": Path, "metavar": "BEFORE", "help": "Predict what changing BEFORE into this "
-                                "program does to every function both have."}),
+    ({"predict", "shot"}, "--against", {"type": Path, "metavar": "BEFORE", "help": "What changing BEFORE into this "
+                                         "program does: predicted costs, or for shot the rows of --symbol."}),
     ({"predict", "tune"}, "--profile", {"type": Path, "help": "A cairn.machine/1 profile; default: the packaged one."}),
     ({"build", "run"}, "--out", {"type": Path}),
     ({"build", "run", "explain", "predict", "tune"}, "--arch", {"choices": sorted(ARCHS)}),
     ({"build", "run"}, "--target", {"choices": sorted(TARGETS), "help": "Freestanding profile; default hosted."}),
-    ({"build", "run", "test"}, "--timeout", {"type": int, "default": 60}),
+    ({"build", "run", "test", "shot"}, "--timeout", {"type": int, "default": 60}),
     ({"build", "run"}, "--debug", {"action": "store_true", "help": "Debug symbols that point at the CAIRN source."}),
     ({"build", "run"}, "--incremental", {"action": "store_true", "help": "One object per module, reused by content "
                                          "hash; gives up inlining across modules."}),
@@ -332,6 +334,13 @@ def main(argv: list[str] | None = None) -> int:
                 raise ProjectError(f"No function {sorted(chosen - set(result['functions']))[0]} to explain.")
             report(result)
             return 0
+        if a.command == "shot":
+            from .agent.shot import lines, shot
+
+            before = load_project(a.against).source if a.against else None
+            taken = shot(project, a.symbol or [], before, cxx=a.cxx, timeout=a.timeout)
+            print(lines(taken)) if terminal.human(FORMAT) else report(taken)
+            return 0 if taken["status"] == "shot" else 1
         if a.command == "predict":
             from .perf import report as priced
             from .perf.profile import Profile

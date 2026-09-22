@@ -344,6 +344,15 @@ class EditSession:
         answer["functions"] = {n: v for n, v in answer["functions"].items() if n in self.visible}
         return answer
 
+    def shot(self, functions: Any, root: Path, candidate: str | None = None) -> dict[str, Any]:
+        """What the program draws, in the original or in an admitted candidate, and how the named rows changed."""
+        from .shot import shot_source
+
+        if not isinstance(functions, list) or not all(isinstance(n, str) and n in self.visible for n in functions):
+            fail("E-REQUEST", "functions is a list of disclosed function names whose effect rows the shot reports.")
+        return shot_source(self.source if candidate is None else candidate, functions,
+                           None if candidate is None else self.source, root)  # fmt: skip
+
     def check(self, request: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         """An edit/1 request: the session digest binds it to this source, contract, context and compiler."""
         kind = request.get("kind") if isinstance(request, dict) else None
@@ -440,7 +449,7 @@ ADMISSION_TERMS = {"protocol", "session", "candidate_sha256", "runtime_cost", "s
                    "formal_status"}  # fmt: skip
 REFUSAL_TERMS = {"protocol", "trust", "automatic_edit", "acceptance_boundary"}
 REQUESTS = {"body": {"replacement"}, "expr": {"site", "replacement"}, "expand": {"symbols"}, "explain": set(),
-            "predict": {"sizes"},
+            "predict": {"sizes"}, "shot": {"functions"},
             "state": set(), "delta": {"since"}}  # fmt: skip
 
 
@@ -459,6 +468,7 @@ class EditHost:
         self.sent: set[str] = set()
         self.admitted: dict[str, list[tuple[str, dict[str, Any]]]] = {}
         self.states: dict[str, dict[str, Any]] = {}  # Every state this host sent, by digest, for a later delta.
+        self.shots: Path | None = None  # Where shots are built, made on the first; the frames stay for the agent.
 
     def open(self, source: str, symbol: str, contract: dict[str, Any] | None = None, include: tuple[str, ...] = (),
              scope: str = "focused", site: str | None = None) -> dict[str, Any]:  # fmt: skip
@@ -524,10 +534,10 @@ class EditHost:
 
     def respond(self, request: Any) -> dict[str, Any]:
         """An edit/2 request: `body`, `expr` (with a short site name), `expand` (with symbols), `explain`, `predict`
-        (with sizes), `state` or `delta` (with the digest of a state this host sent)."""
+        (with sizes), `shot` (with functions), `state` or `delta` (with the digest of a state this host sent)."""
         kind = request.get("kind") if isinstance(request, dict) else None
         if isinstance(request, dict) and not (isinstance(kind, str) and kind in REQUESTS):
-            fail("E-REQUEST", "Expected body, expr, expand, explain, predict, state or delta.")
+            fail("E-REQUEST", "Expected body, expr, expand, explain, predict, shot, state or delta.")
         shaped(request, HANDLES, {"protocol", "handle", "kind", *REQUESTS.get(kind, ())})
         s = self.session(request["handle"])
         admitted = self.admitted.get(request["handle"], [])
@@ -535,6 +545,11 @@ class EditHost:
             return s.explain(admitted[-1][0] if admitted else None)
         if kind == "predict":  # What the latest admitted candidate is predicted to change; nothing is built.
             return s.predict(request["sizes"], admitted[-1][0] if admitted else None)
+        if kind == "shot":  # What the latest admitted candidate draws, run headless, and how its rows moved.
+            import tempfile
+
+            self.shots = self.shots or Path(tempfile.mkdtemp(prefix="cairn-shots-"))
+            return s.shot(request["functions"], self.shots, admitted[-1][0] if admitted else None)
         if kind in {"state", "delta"}:
             evidence = [{k: r[k] for k in ("symbol", "status", "effects", "check_sites")} for _, r in admitted]
             now = state(admitted[-1][0] if admitted else s.source, evidence)

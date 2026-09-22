@@ -1,0 +1,66 @@
+// One frame of the screen, drawn from a copy of its state. `main` runs `frame` as a task: until `wait`, the
+// task holds a lease on the canvas it writes and the icons it reads, so nothing else may touch either while a
+// frame is drawn (E-LEASED), and its ticket is linear, so a frame that starts is always waited for
+// (E-LINEAR-LEAK). The frame marks every panel it draws, and those marks are what a shot reports.
+module panel.render;
+import panel.ui (Ui, ITEMS);
+import std.draw (Layout);
+import std.image (Image);
+
+pub const W:usize = 320;
+pub const H:usize = 200;
+const ROW:i64 = 26;
+
+// The icons, drawn once into one sheet the frames read: a 16 by 16 cell per item.
+pub fn icons() -> Image {
+  let mut sheet = image.new(16 * ITEMS, 16);
+  for k in 0..ITEMS {
+    let x = i64(k) * 16;
+    draw.rect(sheet, x + 1, 1, 14, 14, tint(k));
+    draw.circle(sheet, x + 8, 8, 3, 0xffffffb0);
+  }
+  return sheet;
+}
+
+fn tint(k:usize) -> u32 {
+  if k == 0 { return 0xd9822bff; }
+  if k == 1 { return 0x3fa34dff; }
+  if k == 2 { return 0x2d72d2ff; }
+  if k == 3 { return 0xc23030ff; }
+  if k == 4 { return 0x8f398fff; }
+  return 0x8a9ba8ff;
+}
+
+fn caption(canvas:rw<Image>, x:i64, y:i64, item:usize, c:u32, scale:i64) {
+  if item == 0 { draw.text(canvas, x, y, "Rope", c, scale); }
+  if item == 1 { draw.text(canvas, x, y, "Lantern", c, scale); }
+  if item == 2 { draw.text(canvas, x, y, "Map", c, scale); }
+  if item == 3 { draw.text(canvas, x, y, "Potion", c, scale); }
+  if item == 4 { draw.text(canvas, x, y, "Scroll", c, scale); }
+  if item == 5 { draw.text(canvas, x, y, "Compass", c, scale); }
+}
+
+pub fn frame(canvas:rw<Image>, sheet:ro<Image>, ui:Ui) -> Layout {
+  let mut l = draw.layout();
+  image.fill(canvas, 0x1b1f27ff);
+  draw.rect(canvas, 8, 8, 150, 170, 0x262c38ff);
+  draw.mark(l, "list", 8, 8, 150, 170);
+  for k in 0..ITEMS {
+    let y = 16 + i64(k) * ROW;
+    draw.blit_part(canvas, sheet, k * 16, 0, 16, 16, 16, y);
+    caption(canvas, 40, y + 2, k, 0xe8e8e8ff, 1);
+  }
+  let top = 12 + i64(ui.selected) * ROW;
+  draw.rect(canvas, 12, top, 142, ROW - 2, 0x5a8cff50); // translucent: the row shows through
+  draw.mark(l, "highlight", 12, top, 142, ROW - 2);
+  if ui.opened {
+    draw.rect(canvas, 166, 8, 146, 170, 0x2e3544ff);
+    draw.mark(l, "detail", 166, 8, 146, 170);
+    draw.blit_part(canvas, sheet, ui.selected * 16, 0, 16, 16, 176, 20);
+    caption(canvas, 176, 44, ui.selected, 0xffffffff, 2);
+  }
+  draw.rect(canvas, 0, 184, 320, 16, 0x11141aff);
+  draw.mark(l, "status", 0, 184, 320, 16);
+  draw.text(canvas, 8, 186, "j/k move   o open", 0x9aa4b2ff, 1);
+  return l;
+}

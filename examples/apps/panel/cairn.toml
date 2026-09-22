@@ -1,0 +1,7 @@
+[project]
+name = "panel"
+sources = ["src/ui.cairn", "src/render.cairn", "src/main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

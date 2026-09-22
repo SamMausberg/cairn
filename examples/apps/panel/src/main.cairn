@@ -1,0 +1,39 @@
+// A small inventory screen driven by a script of keys, one frame per key. Each frame is drawn by a task from
+// a copy of the state, while `main` already applies the next key to the state itself: the copy is the task's,
+// and the canvas and icons are leased to it until `wait`.
+//   $ cairn shot examples/apps/panel --symbol panel.ui.update
+// gives every frame as a PNG with the rectangles it marked; `cairn run` draws the same frames and prints a line.
+import panel.render;
+import panel.ui (Ui);
+import std.draw;
+import std.fmt;
+import std.image (Image);
+import std.io;
+import std.vec (Vec);
+
+fn main() -> i32 {
+  let keys = "jjojkko";
+  let sheet = render.icons();
+  let mut canvas = image.new(render.W, render.H);
+  let mut state = ui.start();
+  ui.update(state, keys[0]);
+  let mut shots:usize = 0;
+  for k in 0..len(keys) {
+    let shown = state;
+    let job = spawn render.frame(canvas, sheet, shown);
+    if k + 1 < len(keys) { ui.update(state, keys[k + 1]); } // the next state, while this frame is drawn
+    let marks = wait(job);
+    match draw.capture(canvas, marks, k) {
+      Ok(taken) => { if taken { shots += 1; } }
+      Err(e) => return 1;
+    }
+  }
+  let mut line = vec.new[u8]();
+  fmt.bytes(line, "panel: ");
+  fmt.uint(line, len(keys));
+  fmt.bytes(line, " frames drawn, ");
+  fmt.uint(line, shots);
+  fmt.bytes(line, " captured");
+  io.println(line.data[0..line.len]);
+  return 0;
+}

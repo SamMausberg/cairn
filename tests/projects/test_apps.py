@@ -25,7 +25,7 @@ from cairn.projects.project import load_project
 from emitted import on_device
 
 APPS = Path(__file__).resolve().parents[2] / "examples" / "apps"
-NAMES = ["kvstore", "service", "simulator", "gpu_pipeline", "wordfreq", "classifier"]
+NAMES = ["kvstore", "service", "simulator", "gpu_pipeline", "wordfreq", "classifier", "panel"]
 OPEN_FILES = resource.getrlimit(resource.RLIMIT_NOFILE)
 
 

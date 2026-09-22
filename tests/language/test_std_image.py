@@ -73,9 +73,12 @@ class Canvas:
                     self.plot(x, y, c)
 
     def blit(self, src, x, y):
-        for sy in range(src.h):
-            for sx in range(src.w):
-                self.plot(x + sx, y + sy, src.px[sy * src.w + sx])
+        self.blit_part(src, 0, 0, src.w, src.h, x, y)
+
+    def blit_part(self, src, sx, sy, w, h, x, y):
+        for row in range(sy, min(sy + h, src.h)):
+            for col in range(sx, min(sx + w, src.w)):
+                self.plot(x + col - sx, y + row - sy, src.px[row * src.w + col])
 
     def layer(self, top):
         self.px = [over(d, s) for d, s in zip(self.px, top.px, strict=True)]
@@ -123,6 +126,7 @@ SCENE = [
     ("text", 90, 104, "ok?", rgba(0, 0, 0, 180), 2),
     ("text", 150, 2, "clip\x7f", rgba(255, 0, 255, 255), 1),
     ("blit", 30, 70),
+    ("blit_part", 8, 2, 12, 30, 140, 118),  # a cell of the sprite, running past its bottom and the canvas corner
     ("layer",),
 ]
 
@@ -134,8 +138,8 @@ def source_of(op) -> str:
     if kind == "text":
         escaped = "".join(ch if 32 <= ord(ch) < 127 and ch not in '"\\' else f"\\x{ord(ch):02x}" for ch in a[2])
         return f'draw.text(img, {a[0]}, {a[1]}, "{escaped}", {a[3]}, {a[4]});'
-    if kind == "blit":
-        return f"draw.blit(img, sprite, {a[0]}, {a[1]});"
+    if kind in {"blit", "blit_part"}:
+        return f"draw.{kind}(img, sprite, {', '.join(map(str, a))});"
     if kind == "layer":
         return "draw.layer(img, veil);"
     return f"draw.{kind}(img, {', '.join(map(str, a))});"
@@ -181,8 +185,8 @@ def expected() -> Canvas:
     veil.fill(rgba(0, 0, 40, 60))
     img = Canvas(W, H)
     for kind, *a in SCENE:
-        if kind == "blit":
-            img.blit(sprite, *a)
+        if kind in {"blit", "blit_part"}:
+            getattr(img, kind)(sprite, *a)
         elif kind == "layer":
             img.layer(veil)
         else:

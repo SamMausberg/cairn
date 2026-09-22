@@ -105,6 +105,11 @@ pub fn circle(img:rw<std.image.Image>, cx:i64, cy:i64, r:i64, c:u32)  // effects
 // effects: read:dst, read:src, trap, write:dst
 pub fn blit(dst:rw<std.image.Image>, src:ro<std.image.Image>, x:i64, y:i64)
 
+// The w by h part of `src` whose corner is (sx, sy), such as one cell of a sprite sheet, over `dst` at (x, y); clipped
+// to both images.
+// effects: read:dst, read:src, trap, write:dst
+pub fn blit_part(dst:rw<std.image.Image>, src:ro<std.image.Image>, sx:usize, sy:usize, w:usize, h:usize, x:i64, y:i64)
+
 // `top` over `base`, pixel by pixel, as a parallel region: a whole layer composited at once. The two must be the same
 // size; different sizes are a guard failure.
 // effects: par:host, read:base, read:top, trap, write:base
