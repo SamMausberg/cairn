@@ -3,11 +3,12 @@
 Supported: bool, fixed integers, f32/f64, records, tag-only enums and payload
 sums with match and try, array views (`ro<T>[n]`, `rw<T>[n]`) and their parts,
 single borrows of values, fixed local storage (`stack x:T[N]`, `Array[T, N]`),
-function-local heap owners (`buffer x:T[n]`, `Buf[T](n)`), `compact`, host
+function-local heap owners (`buffer x:T[n]`, `Buf[T](n)`) and owners that move
+(`take`, `swap`, an owner passed by value, an owner returned), `compact`, host
 `reduce`, locals, assignment to a name/field/element, if/else, bounded for/while
-with break/continue, early returns and acyclic calls. Excluded: owners that move
-(`take`, `swap`, a returned or stored owner), recursion, tasks, lanes, device
-placement, closures, dyn, atomics and FFI.
+with break/continue, early returns and acyclic calls. Excluded: an owner inside
+a record, a sum or an array, recursion, tasks, lanes, device placement, closures,
+dyn, atomics and FFI.
 
 A value is flattened into its scalar components: a record is its fields, a sum
 is the emitted u32 tag beside every variant payload, an array is its elements.
@@ -26,7 +27,10 @@ final contents of every `rw` parameter, element by element over the whole
 extent. The admitted inputs are the ones the emitted entry guards admit
 (`cr::view`, and `cr::disjoint` between an `rw` view and every other view), so
 storage behind two `rw` parameters is distinct while read-only views may alias,
-which is why they are modeled as independent arrays of equal contents.
+which is why they are modeled as independent arrays of equal contents. An owner
+is storage with a length of its own: `take` moves it out and leaves an empty
+owner, `swap` exchanges two, a `Buf` parameter has any length because no guard
+reads one, and a `Buf` result is observed by its length and its elements.
 
 Every guard aborts and every abort is one observation, so "both trap" is equal
 behaviour. Floats use Z3's FloatingPoint theory: one round-to-nearest-even per
@@ -74,6 +78,7 @@ from .scalar_values import (
     lifted,
     neg,
     observed,
+    owned,
     rebuild,
     same,
     sha,
@@ -188,20 +193,22 @@ def equivalent(
         lv, lw = left.invoke(symbol, list(q.inputs.values()))
         rv, rw = right.invoke(symbol, list(q.inputs.values()))
         lent = [q.inputs[n] for n, t in rf.params if t.mode == "rw"]
-        probe = "probe"  # One index: where the final contents of two rw views may differ.
-        if any(x.window for x in lent):
+        probe = "probe"  # One index: where the final contents of two rw views, or two owner results, may differ.
+        if any(x.window for x in lent) or owned(rf.ret):
             q.declarations.append(f"(declare-const {probe} {sort(USIZE)})")
         named, limits = [], []
         for i, (n, t) in enumerate(rf.params):  # Name the leading elements, so a model carries its storage.
-            if not is_view(t):
+            if q.inputs[n].window is None:
                 continue
             limits.append(f"(bvule {q.inputs[n].window.extent} {constant(MAX_REPLAY, 'usize')})")
-            for j, leaf in enumerate(refs.leaves(t)):
+            for j, leaf in enumerate(refs.leaves(t.args[0] if owned(t) else t)):
                 for k in range(MAX_REPLAY):
                     at = f"elem_{i}_{j}_{k}"
                     q.declarations.append(f"(declare-const {at} {declared(leaf)})")
                     q.variables[at] = leaf.name
                     named.append(same(f"(select arg_{i}_{j} {constant(k, 'usize')})", lifted(at, leaf)))
+        if owned(rf.ret):  # A witness whose result is replayable: an owner of at most MAX_REPLAY elements.
+            limits += [f"(bvule {x.window.extent} {constant(MAX_REPLAY, 'usize')})" for x in (lv, rv)]
         small = conj(*limits)
         formed = conj(*(wellformed(refs, t, q.inputs[n].parts) for n, t in rf.params if not is_view(t)), *named)
         domain = Term(BOOL, ("true",))
@@ -223,12 +230,25 @@ def equivalent(
             inside = f"(bvult {probe} {held.window.extent})"
             return disj(neg(inside), observed(refs, item, left.at(a, probe), right.at(b, probe)))
 
+        def returned(a: Term, b: Term) -> str:
+            """Do two results look the same? An owner shows its length and its elements, read at the probe."""
+            if not owned(rf.ret):
+                return observed(refs, rf.ret, a.parts, b.parts)
+            inside = f"(bvult {probe} {a.window.extent})"
+            elements = disj(neg(inside), observed(refs, rf.ret.args[0], left.at(a, probe), right.at(b, probe)))
+            return conj(same(a.window.extent, b.window.extent), elements)
+
         def nan(held: Term, a: Term) -> str:
             """Could this rw parameter hold a NaN, whose payload bits the model does not track?"""
             if held.window is None:
                 return undecided(refs, a.ty, a.parts)
             inside = f"(bvult {probe} {held.window.extent})"
             return conj(inside, undecided(refs, refs.item(held.ty), left.at(a, probe)))
+
+        def nan_result(a: Term) -> str:
+            if not owned(rf.ret):
+                return undecided(refs, rf.ret, a.parts)
+            return conj(f"(bvult {probe} {a.window.extent})", undecided(refs, rf.ret.args[0], left.at(a, probe)))
 
         query_summaries = []
         with Solver(timeout_ms) as solver:
@@ -257,15 +277,19 @@ def equivalent(
             def inputs(result):
                 out = {}
                 for i, (n, t) in enumerate(rf.params):
-                    width = len(refs.leaves(t))
-                    if not is_view(t):
+                    item = t.args[0] if owned(t) else t.value
+                    width = len(refs.leaves(item if q.inputs[n].window else t))
+                    if q.inputs[n].window is None:
                         out[n] = rebuild(refs, t, [result["values"][f"arg_{i}_{j}"] for j in range(width)])
                         continue
-                    size = int(t.extent) if t.extent.isdigit() else out[t.extent]
+                    if owned(t):
+                        size = result["values"][f"arg_{i}_len"]
+                    else:
+                        size = int(t.extent) if t.extent.isdigit() else out[t.extent]
                     if not 0 <= size <= MAX_REPLAY:
                         raise Unsupported(f"An extent past {MAX_REPLAY} elements cannot be replayed.")
                     read = [[result["values"][f"elem_{i}_{j}_{k}"] for j in range(width)] for k in range(size)]
-                    out[n] = [rebuild(refs, t.value, x) for x in read]
+                    out[n] = [rebuild(refs, item, x) for x in read]
                 return out
 
             def shown(stage, assertion, result):
@@ -314,13 +338,12 @@ def equivalent(
                     return finish("unknown", reason="Reference totality was not established.")
             differs = [neg(seen(held, a, b)) for held, a, b in zip(lent, lw, rw, strict=True)]
             mismatch = disj(
-                neg(same(lv.defined, rv.defined)),
-                conj(lv.defined, rv.defined, disj(neg(observed(refs, rf.ret, lv.parts, rv.parts)), *differs)),
+                neg(same(lv.defined, rv.defined)), conj(lv.defined, rv.defined, disj(neg(returned(lv, rv)), *differs))
             )
             r = run("equivalence", conj(admitted, mismatch))
             if r["status"] == "unsat":
                 unsure = (nan(held, a) for held, a in zip(lent, lw, strict=True))
-                floats = disj(undecided(refs, rf.ret, lv.parts), *unsure)
+                floats = disj(nan_result(lv), *unsure)
                 unspoken = conj(admitted, lv.defined, floats)
                 if unspoken != "false":
                     n = run("nan-observation", unspoken)
@@ -340,9 +363,9 @@ def equivalent(
                     "guard checks, while a tag nested in a record, an array or a payload, reached through a borrow "
                     "or held in storage carries any value and a match over one outside them aborts; storage the "
                     "entry guards admit, with distinct storage behind every rw view.",
-                    observation=f"{visible}, or one undifferentiated abort outcome; an rw view is compared element "
-                    "by element over its whole extent; a sum shows its tag and active payload only; no "
-                    "memory/timing observation.",
+                    observation=f"{visible}, or one undifferentiated abort outcome; an rw view, and an owner that "
+                    "is returned, is compared element by element over its whole extent; a sum shows its tag and "
+                    "active payload only; no memory/timing observation.",
                 )
             if r["status"] != "sat":
                 return finish("unknown", reason="Equivalence solver did not decide the obligation.")

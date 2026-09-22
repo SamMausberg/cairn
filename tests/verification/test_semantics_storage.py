@@ -254,3 +254,94 @@ def test_a_local_owner_is_bounded_by_its_own_extent():
     check(a, a, assume="k<n")
     refute(a, "fn f(n:usize, k:usize) -> u8 { buffer tmp:u8[n] = zeroed; if k<n { return tmp[k]; } return 1; }",
            allow_reference_traps=True)  # fmt: skip
+
+
+# Owners that move -------------------------------------------------------------------------------
+
+TAKEN = (
+    "fn f(n:usize, xs:ro<u8>[n]) -> u8 {\n"
+    "  let mut a = Buf[u8](n);\n"
+    "  for i in 0..n { a[i] = add_wrap(xs[i], 1); }\n"
+    "  let b = take(a);\n"
+    "  let mut t:u8 = 0;\n"
+    "  for i in 0..len(b) { t = add_wrap(t, b[i]); }\n"
+    "  return add_wrap(t, u8(len(a)));\n}"
+)
+SWAPPED = (
+    "fn f(n:usize, xs:ro<u8>[n]) -> u8 {\n"
+    "  let mut a = Buf[u8](n);\n"
+    "  let mut b = Buf[u8](2);\n"
+    "  for i in 0..n { a[i] = xs[i]; }\n"
+    "  swap(a, b);\n"
+    "  let mut t:u8 = 0;\n"
+    "  for i in 0..len(b) { t = add_wrap(t, b[i]); }\n"
+    "  return add_wrap(t, u8(len(a)));\n}"
+)
+
+
+def test_take_moves_the_storage_out_and_leaves_an_empty_owner():
+    """After `take`, the old name holds no elements: `len` answers 0 and an index traps, as cr::Buf does."""
+    check(TAKEN, DIRECT, assume="n<=3")
+    r = refute(TAKEN, DIRECT.replace("add_wrap(xs[i],1)", "add_wrap(xs[i],2)"), assume="n>=1 && n<=2")
+    assert r["expected"]["return"] != r["actual"]["return"]
+    empty = "fn f(n:usize) -> usize { let mut d = Buf[u64](n); let h = take(d); return len(d); }"
+    check(empty, "fn f(n:usize) -> usize = 0;")
+    r = refute(empty.replace("return len(d);", "if n == 0 { return 0; } return usize(d[0]);"),
+               "fn f(n:usize) -> usize = 0;", allow_reference_traps=True)  # fmt: skip
+    assert r["expected"]["trap"] == "out-of-bounds" and r["counterexample"]["n"] >= 1
+
+
+def test_swap_exchanges_two_owners_storage_and_length():
+    expected = "fn f(n:usize, xs:ro<u8>[n]) -> u8 { let mut t:u8=0; for i in 0..n { t=add_wrap(t,xs[i]); } return add_wrap(t,2); }"
+    check(SWAPPED, expected, assume="n<=3")
+    r = refute(SWAPPED, expected.replace("add_wrap(t,2)", "add_wrap(t,u8(n))"), assume="n<=3")
+    assert r["counterexample"]["n"] != 2
+    lengths = "fn f(n:usize, m:usize) -> usize { let mut a = Buf[u64](n); let mut b = Buf[u64](m); swap(a, b); return len(a); }"
+    check(lengths, "fn f(n:usize, m:usize) -> usize = m;")
+    r = refute(lengths, "fn f(n:usize, m:usize) -> usize = n;")
+    assert r["counterexample"]["n"] != r["counterexample"]["m"]
+
+
+BUILT = (
+    "fn f(n:usize, xs:ro<u8>[n]) -> Buf[u8] {\n"
+    "  let mut b = Buf[u8](n);\n"
+    "  for i in 0..n { b[i] = add_wrap(xs[i], 1); }\n"
+    "  return b;\n}"
+)
+
+
+def test_a_returned_owner_is_observed_by_length_and_element():
+    """A result that is an owner shows its length and its elements, as an rw view shows its contents."""
+    check(BUILT, BUILT.replace("add_wrap(xs[i], 1)", "add_wrap(1, xs[i])"), assume="n<=3")
+    r = refute(BUILT, BUILT.replace("add_wrap(xs[i], 1)", "add_wrap(xs[i], 2)"), assume="n>=1 && n<=3")
+    assert r["expected"]["return"] != r["actual"]["return"] and len(r["expected"]["return"]) == r["counterexample"]["n"]
+    r = refute(BUILT, BUILT.replace("Buf[u8](n)", "Buf[u8](n + 1)"), assume="n<=2")
+    assert len(r["expected"]["return"]) + 1 == len(r["actual"]["return"])
+    through = (
+        "fn g(n:usize, xs:ro<u8>[n]) -> Buf[u8] { let mut b = Buf[u8](n); for i in 0..n { b[i] = xs[i]; } return b; }\n"
+        + (
+            "fn f(n:usize, xs:ro<u8>[n]) -> u8 { let b = g(n, xs); let mut t:u8 = 0; for i in 0..len(b) { t = add_wrap(t, b[i]); } return t; }"
+        )
+    )
+    check(through, SUM, assume="n<=3")
+
+
+def test_an_owner_passed_by_value_is_storage_of_any_length():
+    """No entry guard reads an owner, so its length is free; a precondition bounds it as it bounds an extent."""
+    own = "fn f(b:Buf[u8]) -> u8 { let mut t:u8 = 0; for i in 0..len(b) { t = add_wrap(t, b[i]); } return t; }"
+    check(own, own.replace("add_wrap(t, b[i])", "add_wrap(b[i], t)"), assume="len(b)<=3")
+    r = refute(own, own.replace("add_wrap(t, b[i])", "add_wrap(t, add_wrap(b[i], 1))"), assume="len(b)>=1 && len(b)<=3")
+    assert 1 <= len(r["counterexample"]["b"]) <= 3
+    r = check(own, own, "unknown")
+    assert "unrolling budget" in r["reason"]
+    handed = (
+        own.replace("fn f(", "fn g(")
+        + "\nfn f(n:usize, xs:ro<u8>[n]) -> u8 { let mut b = Buf[u8](n); for i in 0..n { b[i] = xs[i]; } return g(b); }"
+    )
+    check(handed, SUM, assume="n<=3")
+
+
+def test_an_owner_inside_a_value_is_named_as_unmodeled():
+    stored = "struct P { a:Buf[u8]; }\nfn f(n:usize) -> usize { let p = P(Buf[u8](n)); return n; }"
+    r = check(stored, stored, "unknown")
+    assert r["reason"] == "An owner inside a record, a sum or an array is not modeled."
