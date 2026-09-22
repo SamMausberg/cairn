@@ -190,7 +190,7 @@ shot: 7 frames
 
 What it shows. `update` declares `effects(read:ui, write:ui, trap)`, so an allocation added to it anywhere is `E-EFFECT-CEILING` before it runs, and the row in the shot says so too. Each frame is `spawn render.frame(canvas, sheet, shown)`: the task draws a copy of the state while `main` applies the next key to the state itself, and until `wait` the canvas it writes and the icon sheet it reads are leased to it, so filling the canvas there is `E-LEASED`. The ticket is linear, so a frame that starts without its `wait` is `E-LINEAR-LEAK`. The frame marks the list, the highlight, the detail and the status bar in a `Layout`, and `draw.capture` writes the frame and those marks when `CAIRN_SHOT` names a directory. `cairn run examples/apps/panel` draws the same frames and captures none.
 
-`tests/projects/test_app_panel.py` recomputes each frame's selection from the key script, requires every mark inside the canvas, the highlight inside the list and the detail apart from the list, and reads the pixels back from the PNG files. It also holds the three refusals above to their codes, and asks the edit host for the same shot.
+`render.cairn` ends in `test layout`, which draws every state and asserts that the panels stay on the screen and apart and that the highlight sits on its row, so `cairn test examples/apps/panel` holds the layout without a pixel read. `tests/projects/test_app_panel.py` recomputes each frame's selection from the key script, requires every mark inside the canvas, the highlight inside the list and the detail apart from the list, and reads the pixels back from the PNG files. It also holds the three refusals above to their codes, and asks the edit host for the same shot.
 
 ## examples/apps/analytics
 

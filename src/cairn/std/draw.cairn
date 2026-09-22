@@ -15,6 +15,7 @@ import std.env;
 import std.fmt;
 import std.fs;
 import std.image (Image);
+import std.mem;
 import std.io (IoError);
 import std.time;
 import std.vec (Vec);
@@ -154,14 +155,44 @@ pub fn text(img:rw<Image>, x:i64, y:i64, n:usize, s:ro<u8>[n], c:u32, scale:i64)
 
 pub fn text_width(n:usize, scale:i64) -> i64 = i64(n) * GLYPH_W * scale;
 
+// A marked rectangle. `place` finds one by name, and `inside` and `apart` compare two, so a test can hold a
+// layout to its rules in CAIRN itself.
+pub struct Mark { x:i64; y:i64; w:i64; h:i64; }
+
 // Named rectangles a program reports as it draws, so a person or an agent can check where things landed without
 // reading pixels: `json` gives {"width":W,"height":H,"at_ns":T,"elements":[{"name":"panel","x":0,...},...]}.
-pub struct Layout { text:Vec[u8]; count:usize; }
+pub struct Layout { text:Vec[u8]; count:usize; names:Vec[u8]; ends:Vec[usize]; marks:Vec[Mark]; }
 
 pub fn layout() -> Layout {
   let text = vec.new[u8]();
-  return Layout(text, 0);
+  let names = vec.new[u8]();
+  let ends = vec.new[usize]();
+  let marks = vec.new[Mark]();
+  return Layout(text, 0, names, ends, marks);
 }
+
+// The rectangle last marked `name`. A name never marked is a guard failure, which is what a test wants.
+pub fn place(l:ro<Layout>, n:usize, name:ro<u8>[n]) -> Mark = vec.get(l.marks, find(l, name));
+
+pub fn marked(l:ro<Layout>, n:usize, name:ro<u8>[n]) -> bool = find(l, name) < l.count;
+
+// The index of the last mark called `name`, or the count when there is none.
+fn find(l:ro<Layout>, n:usize, name:ro<u8>[n]) -> usize {
+  let mut found = l.count;
+  let mut lo:usize = 0;
+  for k in 0..l.count {
+    let hi = vec.get(l.ends, k);
+    if mem.equal(l.names.data[lo..hi], name) { found = k; }
+    lo = hi;
+  }
+  return found;
+}
+
+pub fn inside(a:Mark, b:Mark) -> bool = b.x <= a.x && b.y <= a.y && a.x + a.w <= b.x + b.w && a.y
+  + a.h <= b.y + b.h;
+
+pub fn apart(a:Mark, b:Mark) -> bool = a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y
+  || b.y + b.h <= a.y;
 
 // Report the rectangle `name` covers. The name is written as a JSON string, its quotes, backslashes and control
 // bytes escaped.
@@ -189,6 +220,9 @@ pub fn mark(l:rw<Layout>, n:usize, name:ro<u8>[n], x:i64, y:i64, w:i64, h:i64) {
   fmt.bytes(l.text, ",\"h\":");
   fmt.int(l.text, h);
   l.text.push('}');
+  l.names.extend_from(name);
+  l.ends.push(l.names.len);
+  l.marks.push(Mark(x, y, w, h));
   l.count += 1;
 }
 

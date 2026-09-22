@@ -64,3 +64,27 @@ pub fn frame(canvas:rw<Image>, sheet:ro<Image>, ui:Ui) -> Layout {
   draw.text(canvas, 8, 186, "j/k move   o open", 0x9aa4b2ff, 1);
   return l;
 }
+
+// Every state keeps the layout's rules: the panels on the screen and apart, the highlight on its own row, and
+// no detail while nothing is open. `cairn test examples/apps/panel` runs this in a process of its own.
+test layout {
+  let sheet = icons();
+  let mut canvas = image.new(W, H);
+  let screen = draw.Mark(0, 0, 320, 200);
+  for k in 0..ITEMS {
+    let marks = frame(canvas, sheet, Ui(k, true, 0));
+    let list = draw.place(marks, "list");
+    let detail = draw.place(marks, "detail");
+    let highlight = draw.place(marks, "highlight");
+    assert(
+      draw.inside(list, screen) && draw.inside(detail, screen), "the panels are on the screen"
+    );
+    assert(draw.apart(list, detail), "the list and the detail do not overlap");
+    assert(
+      draw.inside(highlight, list) && highlight.y == 12 + i64(k) * ROW,
+      "the highlight is on its row"
+    );
+  }
+  let closed = frame(canvas, sheet, Ui(0, false, 0));
+  assert(!draw.marked(closed, "detail"), "a closed item draws no detail");
+}

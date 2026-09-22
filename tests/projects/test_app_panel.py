@@ -142,3 +142,16 @@ def test_touching_the_canvas_while_a_frame_draws_is_refused(tmp_path):
 def test_a_frame_that_is_started_must_be_waited_for(tmp_path):
     started = "    let marks = wait(job);\n    match draw.capture(canvas, marks, k) {\n      Ok(taken) => { if taken { shots += 1; } }\n      Err(e) => return 1;\n    }\n"
     assert refused(tmp_path, "main.cairn", started, "") == "E-LINEAR-LEAK"
+
+
+def test_the_app_s_own_test_block_holds_the_layout_and_catches_an_overlap(tmp_path, capsys):
+    root = copied(tmp_path)
+    assert main(["test", str(root), "--format", "json"]) == 0
+    capsys.readouterr()
+    render = root / "src/render.cairn"
+    moved = render.read_text().replace('draw.rect(canvas, 166, 8, 146, 170, 0x2e3544ff);\n    draw.mark(l, "detail", 166,',
+                                       'draw.rect(canvas, 120, 8, 146, 170, 0x2e3544ff);\n    draw.mark(l, "detail", 120,')  # fmt: skip
+    assert moved != render.read_text()
+    render.write_text(moved)
+    assert main(["test", str(root), "--format", "json"]) == 1
+    assert "the list and the detail do not overlap" in capsys.readouterr().out

@@ -76,9 +76,13 @@ pub recipe hash for R
 Drawing into an Image on the CPU: filled rectangles, lines, filled circles, source-over blending, blits of one image onto another, text in a built-in 8 by 13 bitmap font, and the layout record and frame capture that let a person or an agent see what a program drew. Every shape is clipped, so a shape partly outside draws its inside part and none traps. Coordinates are i64, so a shape may start left of or above the image. Pixel (x, y) belongs to a rectangle when x0 <= x < x0 + w and y0 <= y < y0 + h, and to a circle when dx * dx + dy * dy <= r * r. Colours blend source over destination with integer rounding: each colour channel becomes (s * a + d * (255 - a) + 127) / 255, and alpha becomes a + (d_a * (255 - a) + 127) / 255, so an opaque colour replaces a pixel and a clear one leaves it. The glyphs are the X11 misc-fixed 8x13 font, which is in the public domain, as console-setup ships it (Lat15-Fixed13.psf). Cost: a shape is a sequential loop over the pixels it covers; `layer` and image.fill are parallel regions. A Layout allocates as it grows, and `capture` allocates, reads the environment and writes files.
 
 ```cairn
+// A marked rectangle. `place` finds one by name, and `inside` and `apart` compare two, so a test can hold a layout to
+// its rules in CAIRN itself.
+pub struct Mark { x:i64; y:i64; w:i64; h:i64; }
+
 // Named rectangles a program reports as it draws, so a person or an agent can check where things landed without reading
 // pixels: `json` gives {"width":W,"height":H,"at_ns":T,"elements":[{"name":"panel","x":0,...},...]}.
-pub struct Layout { text:Vec[u8]; count:usize; }
+pub struct Layout { text:Vec[u8]; count:usize; names:Vec[u8]; ends:Vec[usize]; marks:Vec[Mark]; }
 
 pub const GLYPH_W:i64 = 8;
 
@@ -123,6 +127,17 @@ pub fn text(img:rw<std.image.Image>, x:i64, y:i64, n:usize, s:ro<u8>[n]@host, c:
 pub fn text_width(n:usize, scale:i64) -> i64  // effects: trap
 
 pub fn layout() -> std.draw.Layout  // effects: alloc, free, trap, zero_init
+
+// The rectangle last marked `name`. A name never marked is a guard failure, which is what a test wants.
+// effects: ffi_precondition, read:l, read:name, trap
+pub fn place(l:ro<std.draw.Layout>, n:usize, name:ro<u8>[n]@host) -> std.draw.Mark
+
+// effects: ffi_precondition, read:l, read:name, trap
+pub fn marked(l:ro<std.draw.Layout>, n:usize, name:ro<u8>[n]@host) -> bool
+
+pub fn inside(a:std.draw.Mark, b:std.draw.Mark) -> bool  // effects: trap
+
+pub fn apart(a:std.draw.Mark, b:std.draw.Mark) -> bool  // effects: trap
 
 // Report the rectangle `name` covers. The name is written as a JSON string, its quotes, backslashes and control bytes
 // escaped.
