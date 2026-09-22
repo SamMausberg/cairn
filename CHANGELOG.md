@@ -17,7 +17,7 @@
 - Every subcommand of `cairn` says what it does in `--help`.
 - `bench/suite/` is the preregistered CPU baseline suite (`make bench`): eight kernels against plain C++, OpenMP and oneTBB, each baseline built once guarded and once not, with safety boundaries counted from the build receipt and losses printed beside wins.
 - `tools/release/collect_lean_evidence.py` rebuilds `proofs/` from scratch and records the build, the axiom audit and the toolchain for a release.
-- The package declares its license and repository, CI runs on every push and pull request with a separate proofs job, and the version is stated as 1.3.0 everywhere it appears.
+- The package declares its license and repository, CI runs on every push and pull request with a separate proofs job, `make lint` type-checks the whole package, `make help` lists the gates, and a test pins the one version every file states.
 
 ### Runtime
 
@@ -34,7 +34,7 @@
 
 ### Documentation
 
-- One file per subject under `docs/`: a getting-started guide, the tour, a language reference in six chapters, the library, the tools, the freestanding target, the examples, verification, architecture, testing, safety, the agent protocol, releasing and the roadmap. Every example compiles, and no source file in the repository is longer than 800 lines.
+- The documentation is eleven files under `docs/`: a guide that goes from a fresh checkout to a running project and then through twelve programs, a language reference in three files, the library, the tools and targets, the examples, verification, internals, the agent protocol and the roadmap. Every example compiles, every tour program runs, and no file in the repository is longer than 800 lines.
 
 ### Reviews and users
 
