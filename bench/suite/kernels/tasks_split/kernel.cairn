@@ -3,7 +3,7 @@
 // tbb::parallel_invoke.
 //
 // Until every wait, nobody may touch what a task writes, and the four parts are visibly disjoint
-// because each part ends where the next begins (docs/guide/language.md, Tasks and leases).
+// because each part ends where the next begins (docs/language/concurrency.md, tasks and leases).
 //
 // K is four and not a variable. A ticket is linear and scope bound and has to be waited for on every
 // path of the same function, so a spawn cannot sit in a loop, and four literal parts is what the

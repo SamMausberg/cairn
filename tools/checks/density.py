@@ -22,7 +22,7 @@ from support import generate
 
 RECIPE_SECTION = "Closed generator contracts"
 CARD = "src/cairn/agent/teaching.py: CARDS"
-RECIPE = f"docs/MANUAL.md: {RECIPE_SECTION}"
+RECIPE = f"docs/agents.md: {RECIPE_SECTION}"
 
 
 def main():
@@ -102,10 +102,10 @@ def main():
         p: {"tokens": count((R / p).read_text()), "sha256": hashlib.sha256((R / p).read_bytes()).hexdigest()}
         for p in paths
     }
-    # The two packets an editing agent is handed: the live rule cards, and the generator contracts the manual states.
-    manual = (R / "docs/MANUAL.md").read_text()
-    start = manual.index(f"### {RECIPE_SECTION}\n")
-    packets = {CARD: "\n\n".join(CARDS.values()), RECIPE: manual[start : manual.index("\n### ", start + 1)]}
+    # The two packets an editing agent is handed: the live rule cards, and the generator contracts the docs state.
+    manual = (R / "docs/agents.md").read_text()
+    start = manual.index(f"## {RECIPE_SECTION}\n")
+    packets = {CARD: "\n\n".join(CARDS.values()), RECIPE: manual[start : manual.index("\n## ", start + 1)]}
     files |= {
         name: {"tokens": count(text), "sha256": hashlib.sha256(text.encode()).hexdigest()}
         for name, text in packets.items()

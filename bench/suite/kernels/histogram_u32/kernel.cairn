@@ -9,7 +9,7 @@
 //
 // The usual escape, an array of atomic counters, is not available either. Atomic[T] is declared in
 // place and shared by ro borrow, and it is never stored in a record, passed by value or returned
-// (docs/guide/language.md line 812), so there is no way to hold 256 of them in a view. The CAIRN
+// (docs/language/concurrency.md, atomics and mutexes), so there is no way to hold 256 of them in a view. The CAIRN
 // arm of this kernel is therefore the sequential binned histogram written below, and the suite
 // reports it as sequential by construction.
 //

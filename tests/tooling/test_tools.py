@@ -1,6 +1,6 @@
 """Every script under tools/ and bench/ still runs here, and still says something true.
 
-Each test drives the real command line from the testing section of docs/MANUAL.md in a child process and checks one
+Each test drives the real command line from docs/testing.md in a child process and checks one
 fact out of that tool's own JSON or stdout, so a tool that quietly stops working fails here
 instead of at a release gate. Nothing needs a network; a missing compiler, Z3 or GPU skips with
 a reason. Tools are one test each so `-n` spreads the slow ones (verify, validate_semantics,

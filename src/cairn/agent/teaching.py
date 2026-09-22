@@ -3,7 +3,7 @@
 from ..compiler.syntax import lex
 
 CARDS = {
-    "base": """CAIRN 1.2 is a checked systems language, not Rust/Python. Use fn, typed interfaces,
+    "base": """CAIRN 1.3 is a checked systems language, not Rust/Python. Use fn, typed interfaces,
 braces, semicolons, explicit return; let is immutable, let mut is mutable.
 Parameters are immutable; shadowing and implicit conversions are forbidden.
 fn inc(x:u64)->u64 = add_wrap(x,1); is one return, not a closure.

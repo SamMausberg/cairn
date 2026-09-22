@@ -3,7 +3,7 @@
 // `compact` writes the stable selected prefix into storage of capacity exactly n, leaves the tail
 // beyond the returned count unchanged, allocates nothing on the host, and is sequential on the
 // host. Its one store into the output is deliberately unguarded in the emitted C++, and that store
-// is what the seventeen affine certificates of docs/internals/verification.md justify: the running
+// is what the seventeen affine certificates of docs/verification.md justify: the running
 // index never leaves the capacity the parameter declares, so no bounds test is emitted for it and
 // none is needed. Every baseline arm here therefore leaves its own store unguarded too, or the two
 // sides would not be carrying the same boundary.

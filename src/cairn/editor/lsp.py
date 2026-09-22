@@ -620,7 +620,7 @@ def occurrences(doc: Document, offset: int) -> list[Item]:
     as a local anywhere, or is declared twice (another declaration's own name is never touched); or a
     local, from its binder to the end of its declaration, when it is bound exactly once there -- so
     nothing can shadow it, CAIRN having none (`E-SHADOW`) -- and is not also a declaration, an import
-    alias or an imported name. The tooling section of `docs/MANUAL.md` states the rule for the people it refuses."""
+    alias or an imported name. `docs/tools.md` states the rule for the people it refuses."""
     cs = doc.code
     at = word_at(doc, offset)
     if at is None or doc.good is None:

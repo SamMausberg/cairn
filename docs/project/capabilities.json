@@ -1,5 +1,5 @@
 {
-  "profile": "cairn-native/1.2.0",
+  "profile": "cairn-native/1.3.0",
   "complete_cpp_breadth": false,
   "entire_compiler_proved": false,
   "lean_verified": "collector certificate checker, its 17 certificates, the collector loop model, and a core ownership/lease calculus over locals, record field paths, whole owners, headers, elements, array parts with visible bounds and parallel regions, with single elements, parts of parts and parts whose bounds are not visible modelled conservatively as the elements, safety, race freedom between lanes and tasks, and progress for every valuation of those bounds and of the lane count (hand-written, not extracted from checking.py; tools/checks/differential_ownership.py requires the two to classify generated programs of a shared fragment identically)",
@@ -28,15 +28,15 @@
     "scalar_equivalence": "trusted translator and Z3 over values (scalars, IEEE f32/f64, records, enums and payload sums with match and try, fixed local arrays), over array views, their parts, rw borrows and function-local heap scratch as SMT arrays with symbolic extents, and over compact, host reduce and loops unrolled within a bounded budget; the observation is the result plus the final contents of every rw parameter, the admitted inputs are the ones the cr::view and cr::disjoint entry guards admit, a value parameter's tags name declared variants while an element of storage carries any tag and a match over one that names no variant aborts as the emitted default does, and explicit per-function/module coverage is required, with an optional per-function precondition (cairn verify --assume symbol=expression) recorded in the receipt and named in the domain it quantifies over; an observed NaN, two views of one array in one call, an owner that moves, an unbounded trip count and anything unmodeled are unknown, never equivalent"
   },
   "not_implemented": [
-    "completion-based (non-thread) asynchronous I/O, cancellation and device-loss recovery",
+    "completion-based (non-thread) asynchronous I/O (the linear Group[T] submit/collect design is the named next step), cancellation and device-loss recovery",
     "multi-device collectives",
     "requiring (rather than reporting) that a program's own templates need only their bounds",
-    "SMT coverage of owners that move (take, swap, a returned or stored owner), recursion, concurrency, device placement and unbounded loops",
+    "SMT coverage of owners that move (take, swap, a returned or stored owner), two views of one array in one call, recursion, concurrency, device placement and unbounded loops without a precondition",
     "emitter-to-model and native refinement proofs",
-    "mechanized ownership and lease rules for closures, `lane:f` callbacks, device placement, `reduce`/`compact` and queued device work (single elements, parts of parts and invisible bounds are conservatively `elems` in the calculus, regression-pinned), a proof that the emitter runs a part guard before the task that borrows it starts and joins every lane before the next statement, and a proof-level correspondence from checking.py to the calculus (the differential harness tests agreement on generated programs; it proves nothing)",
+    "mechanized ownership and lease rules for closures, `lane:f` callbacks, device placement, `reduce`/`compact`, queued device work and declared field extents (single elements, parts of parts and invisible bounds are conservatively `elems` in the calculus, regression-pinned), a proof that the emitter runs a part guard before the task that borrows it starts and joins every lane before the next statement, and a proof-level correspondence from checking.py to the calculus (the differential harness tests agreement on generated programs; it proves nothing)",
     "an equal-budget, multi-language, multi-model AI proficiency experiment with tokenizer accounting",
-    "recipes over arbitrary expression fragments (they take naturals, a record type and names of functions), and replaying a checked theorem per recipe instance",
-    "leasing one field of a record without leasing the whole record, and extent identity through a record field (len(c.price) == c.rows)"
+    "recipes over arbitrary expression fragments (they take naturals, a record type and names of functions), a recipe that declares a field extent in a record it generates, and replaying a checked theorem per recipe instance",
+    "extent identity through an element of an array of records (cs[0].price is still a part), and full independence of alloc and free in effect rows (a constructor row still carries free)"
   ],
   "principle": "Implemented, finite-tested, sanitizer-clean, exact-algebra-checked, SMT-equivalent and Lean-checked are distinct scopes."
 }

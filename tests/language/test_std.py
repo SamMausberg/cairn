@@ -6,7 +6,7 @@ cannot be leaked, overlapping views cannot be handed to one call.
 
 g++ is used wherever the program stays inside copyable sums. A sum that carries an owner emits
 a designated initializer that g++ rejects under -Werror=missing-field-initializers (see
-the standard library section of docs/MANUAL.md and the issue list), so those programs are built with clang++ only.
+docs/library.md and the issue list), so those programs are built with clang++ only.
 """
 
 import pathlib
