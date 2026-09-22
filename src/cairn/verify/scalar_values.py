@@ -121,18 +121,20 @@ def lifted(name: str, ty: Type) -> str:
     return f"((_ to_fp {eb} {sb}) {name})" if ty.name in FLOAT else name
 
 
+def joined(op: str, unit: str, zero: str, parts: tuple[str, ...]) -> str:
+    """`parts` under `op`, simplified: `zero` absorbs everything, `unit` drops out, a repeat counts once."""
+    if zero in parts:
+        return zero
+    xs = list(dict.fromkeys(x for x in parts if x != unit))
+    return unit if not xs else xs[0] if len(xs) == 1 else f"({op} {' '.join(xs)})"
+
+
 def conj(*parts: str) -> str:
-    if "false" in parts:
-        return "false"
-    xs = list(dict.fromkeys(x for x in parts if x != "true"))
-    return "true" if not xs else xs[0] if len(xs) == 1 else "(and " + " ".join(xs) + ")"
+    return joined("and", "true", "false", parts)
 
 
 def disj(*parts: str) -> str:
-    if "true" in parts:
-        return "true"
-    xs = list(dict.fromkeys(x for x in parts if x != "false"))
-    return "false" if not xs else xs[0] if len(xs) == 1 else "(or " + " ".join(xs) + ")"
+    return joined("or", "false", "true", parts)
 
 
 def neg(p: str) -> str:
@@ -144,13 +146,9 @@ def same(a: str, b: str) -> str:
 
 
 def ite(c: str, a: str, b: str) -> str:
-    if a == b:
+    if a == b or c == "true":
         return a
-    if c == "true":
-        return a
-    if c == "false":
-        return b
-    return f"(ite {c} {a} {b})"
+    return b if c == "false" else f"(ite {c} {a} {b})"
 
 
 def extend(value: str, source_width: int, dest_width: int, signed: bool) -> str:
@@ -294,19 +292,12 @@ class Source:
     def span(self, ty: Type, member: str) -> tuple[int, int]:
         """Where a record field or a sum's payload sits among the components of its value."""
         layout = self.layout(ty)
-        if isinstance(layout, list):
-            at = 0
-            for name, t in layout:
-                if name == member:
-                    return at, at + len(self.leaves(t))
-                at += len(self.leaves(t))
-        else:
-            at = 1
-            for name, t in layout.items():
-                width = len(self.leaves(t)) if t else 0
-                if name == member:
-                    return at, at + width
-                at += width
+        at = 0 if isinstance(layout, list) else 1  # A sum's payloads follow its tag.
+        for name, t in layout if isinstance(layout, list) else layout.items():
+            width = len(self.leaves(t)) if t else 0
+            if name == member:
+                return at, at + width
+            at += width
         raise Unsupported(f"Unknown member {member}.")
 
     def shape(self, ty: Type) -> str:
@@ -433,9 +424,8 @@ def admissible(src: Source, ty: Type, value: Any, guarded: bool = True) -> bool:
     if isinstance(layout, dict):
         if not isinstance(value, dict):
             return False
-        if (
-            "variant" not in value
-        ):  # A tag no variant names: what an unguarded position may hold, and what a match aborts on.
+        # A tag no variant names: what an unguarded position may hold, and what a match aborts on.
+        if "variant" not in value:
             shaped = set(value) == {"tag"} and type(value["tag"]) is int
             return not guarded and shaped and len(layout) <= value["tag"] < 1 << WIDTH[TAG.name]
         if value["variant"] not in layout:

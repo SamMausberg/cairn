@@ -27,6 +27,7 @@ from ..agent.agent_tools import digest, explain, load_json_strict, stable_json
 from ..compiler.cairnc import RUNTIME_FILES, Diagnostic, Parser, compile_source
 from ..projects.toolchain import command as native_command
 from ..projects.toolchain import flags
+from .scalar_values import bounds
 
 CTYPES: dict[str, Any] = {
     "bool": C.c_bool,
@@ -40,16 +41,7 @@ CTYPES: dict[str, Any] = {
     "f32": C.c_float,
     "f64": C.c_double,
 }
-LIMITS = {
-    "bool": (0, 1),
-    "u8": (0, 255),
-    "u16": (0, 65535),
-    "u32": (0, 2**32 - 1),
-    "u64": (0, 2**64 - 1),
-    "usize": (0, 2**64 - 1),
-    "i32": (-(2**31), 2**31 - 1),
-    "i64": (-(2**63), 2**63 - 1),
-}
+LIMITS = {"bool": (0, 1), **{n: bounds(n) for n in ("u8", "u16", "u32", "u64", "usize", "i32", "i64")}}
 FLAGS = flags()
 
 
@@ -156,23 +148,9 @@ def child(library, source, contract):
         expected_after = {n: [scalar(t.name, v) for v in case["after"][n]] for n, t in f.params if t.mode == "rw"}
         # Strict scalar equality; tasks use finite integer values in this release.
         if actual != expected or after != expected_after:
-            print(
-                json.dumps(
-                    diagnostic_value(
-                        {
-                            "status": "failed-tests",
-                            "case": i,
-                            "args": case["args"],
-                            "expected_return": expected,
-                            "actual_return": actual,
-                            "expected_after": expected_after,
-                            "actual_after": after,
-                        }
-                    ),
-                    allow_nan=False,
-                ),
-                flush=True,
-            )
+            failed = {"status": "failed-tests", "case": i, "args": case["args"], "expected_return": expected}
+            failed |= {"actual_return": actual, "expected_after": expected_after, "actual_after": after}
+            print(json.dumps(diagnostic_value(failed), allow_nan=False), flush=True)
             return 1
     print(json.dumps({"status": "passed-finite-tests", "cases": len(contract["cases"])}), flush=True)
     return 0
@@ -210,15 +188,8 @@ def evaluate(source: str, contract: dict, cxx="clang++") -> dict:
             build = {"exit_code": cp.returncode, "flags": FLAGS, "compiler": compiler}
             if cp.returncode:
                 return {**common, "status": "native-build-failed", "build": build, "stderr": cp.stderr[:8000]}
-            cmd = [
-                sys.executable,
-                "-m",
-                "cairn.verify.testing",
-                "--child",
-                str(t / "libtask.so"),
-                str(t / "source.cairn"),
-                str(t / "contract.json"),
-            ]
+            files = (str(t / name) for name in ("libtask.so", "source.cairn", "contract.json"))
+            cmd = [sys.executable, "-m", "cairn.verify.testing", "--child", *files]
             cp = subprocess.run(
                 cmd,
                 text=True,
@@ -246,12 +217,8 @@ def evaluate(source: str, contract: dict, cxx="clang++") -> dict:
                 "elapsed_seconds": time.monotonic() - start,
             }
         except subprocess.TimeoutExpired:
-            return {
-                **common,
-                "status": "unknown",
-                "stage": "timeout",
-                "message": "The bounded build or execution did not complete.",
-            }
+            message = "The bounded build or execution did not complete."
+            return {**common, "status": "unknown", "stage": "timeout", "message": message}
 
 
 def main():

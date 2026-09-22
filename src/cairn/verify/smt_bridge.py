@@ -15,6 +15,33 @@ P = C.c_void_p
 U = C.c_uint
 S = C.c_char_p
 ERROR_CB = C.CFUNCTYPE(None, P, U)
+SIGNATURES = {  # the C functions used, with their result and argument types
+    "Z3_mk_config": (P, []),
+    "Z3_set_param_value": (None, [P, S, S]),
+    "Z3_del_config": (None, [P]),
+    "Z3_mk_context": (P, [P]),
+    "Z3_del_context": (None, [P]),
+    "Z3_set_error_handler": (None, [P, ERROR_CB]),
+    "Z3_get_error_msg": (S, [P, U]),
+    "Z3_mk_solver": (P, [P]),
+    "Z3_mk_solver_for_logic": (P, [P, P]),
+    "Z3_solver_inc_ref": (None, [P, P]),
+    "Z3_solver_dec_ref": (None, [P, P]),
+    "Z3_solver_from_string": (None, [P, P, S]),
+    "Z3_solver_check": (C.c_int, [P, P]),
+    "Z3_solver_get_reason_unknown": (S, [P, P]),
+    "Z3_solver_get_model": (P, [P, P]),
+    "Z3_model_inc_ref": (None, [P, P]),
+    "Z3_model_dec_ref": (None, [P, P]),
+    "Z3_model_eval": (C.c_bool, [P, P, P, C.c_bool, C.POINTER(P)]),
+    "Z3_mk_string_symbol": (P, [P, S]),
+    "Z3_mk_bv_sort": (P, [P, U]),
+    "Z3_mk_bool_sort": (P, [P]),
+    "Z3_mk_const": (P, [P, P, P]),
+    "Z3_get_bool_value": (C.c_int, [P, P]),
+    "Z3_get_numeral_string": (S, [P, P]),
+    "Z3_get_full_version": (S, []),
+}
 
 
 class SolverUnavailable(RuntimeError):
@@ -30,31 +57,9 @@ class Solver:
             raise SolverUnavailable("A system libz3 library is required for semantic checking.")
         try:
             self.lib = C.CDLL(library)
-            self._bind("Z3_mk_config", P, [])
-            self._bind("Z3_set_param_value", None, [P, S, S])
-            self._bind("Z3_del_config", None, [P])
-            self._bind("Z3_mk_context", P, [P])
-            self._bind("Z3_del_context", None, [P])
-            self._bind("Z3_set_error_handler", None, [P, ERROR_CB])
-            self._bind("Z3_get_error_msg", S, [P, U])
-            self._bind("Z3_mk_solver", P, [P])
-            self._bind("Z3_mk_solver_for_logic", P, [P, P])
-            self._bind("Z3_solver_inc_ref", None, [P, P])
-            self._bind("Z3_solver_dec_ref", None, [P, P])
-            self._bind("Z3_solver_from_string", None, [P, P, S])
-            self._bind("Z3_solver_check", C.c_int, [P, P])
-            self._bind("Z3_solver_get_reason_unknown", S, [P, P])
-            self._bind("Z3_solver_get_model", P, [P, P])
-            self._bind("Z3_model_inc_ref", None, [P, P])
-            self._bind("Z3_model_dec_ref", None, [P, P])
-            self._bind("Z3_model_eval", C.c_bool, [P, P, P, C.c_bool, C.POINTER(P)])
-            self._bind("Z3_mk_string_symbol", P, [P, S])
-            self._bind("Z3_mk_bv_sort", P, [P, U])
-            self._bind("Z3_mk_bool_sort", P, [P])
-            self._bind("Z3_mk_const", P, [P, P, P])
-            self._bind("Z3_get_bool_value", C.c_int, [P, P])
-            self._bind("Z3_get_numeral_string", S, [P, P])
-            self._bind("Z3_get_full_version", S, [])
+            for name, (result, arguments) in SIGNATURES.items():
+                function = getattr(self.lib, name)
+                function.restype, function.argtypes = result, arguments
         except (AttributeError, OSError) as e:
             raise SolverUnavailable(str(e)) from e
         self.version = self.lib.Z3_get_full_version().decode()
@@ -73,11 +78,6 @@ class Solver:
 
         self.callback = ERROR_CB(on_error)
         self.lib.Z3_set_error_handler(self.ctx, self.callback)
-
-    def _bind(self, name, restype, argtypes):
-        fn = getattr(self.lib, name)
-        fn.restype = restype
-        fn.argtypes = argtypes
 
     def close(self):
         if self.ctx:
@@ -117,23 +117,23 @@ class Solver:
             "timeout_ms": self.timeout_ms,
             "query_sha256": hashlib.sha256(text.encode()).hexdigest(),
         }
+
+        def unknown(reason: str, **more) -> dict[str, Any]:
+            return {**common, "status": "unknown", "reason": reason, **more}
+
         try:
             z.Z3_solver_from_string(self.ctx, solver, text.encode())
             if self.errors:
-                return {**common, "status": "unknown", "reason": "SMT parse/API error", "errors": list(self.errors)}
+                return unknown("SMT parse/API error", errors=list(self.errors))
             status = z.Z3_solver_check(self.ctx, solver)
             if self.errors:
-                return {**common, "status": "unknown", "reason": "SMT API error", "errors": list(self.errors)}
+                return unknown("SMT API error", errors=list(self.errors))
             if status == -1:
                 return {**common, "status": "unsat"}
             if status == 0:
-                return {
-                    **common,
-                    "status": "unknown",
-                    "reason": z.Z3_solver_get_reason_unknown(self.ctx, solver).decode(),
-                }
+                return unknown(z.Z3_solver_get_reason_unknown(self.ctx, solver).decode())
             if status != 1:
-                return {**common, "status": "unknown", "reason": "Unexpected solver status."}
+                return unknown("Unexpected solver status.")
             model = z.Z3_solver_get_model(self.ctx, solver)
             z.Z3_model_inc_ref(self.ctx, model)
             values = {}
@@ -145,11 +145,11 @@ class Solver:
                 term = z.Z3_mk_const(self.ctx, symbol, sort)
                 result = P()
                 if not z.Z3_model_eval(self.ctx, model, term, True, C.byref(result)):
-                    return {**common, "status": "unknown", "reason": "Model completion failed."}
+                    return unknown("Model completion failed.")
                 if is_bool:
                     val = z.Z3_get_bool_value(self.ctx, result)
                     if val not in {-1, 1}:
-                        return {**common, "status": "unknown", "reason": "Non-Boolean model value."}
+                        return unknown("Non-Boolean model value.")
                     values[name] = val == 1
                 else:
                     raw = z.Z3_get_numeral_string(self.ctx, result)
@@ -158,7 +158,7 @@ class Solver:
                         value -= 1 << bits
                     values[name] = value
             if self.errors:
-                return {**common, "status": "unknown", "reason": "Model API error", "errors": list(self.errors)}
+                return unknown("Model API error", errors=list(self.errors))
             return {**common, "status": "sat", "values": values}
         finally:
             if model:

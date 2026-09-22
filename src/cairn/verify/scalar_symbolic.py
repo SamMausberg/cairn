@@ -45,6 +45,12 @@ from .scalar_values import (
     sort,
 )
 
+BITWISE = {"&": "bvand", "|": "bvor", "^": "bvxor"}
+ARITHMETIC = {"+": "bvadd", "-": "bvsub", "*": "bvmul"}
+WRAPPED = {"add_wrap": "+", "sub_wrap": "-", "mul_wrap": "*"}  # A wrapping form is its operator, unchecked.
+ORDERS = {"<": "lt", "<=": "le", ">": "gt", ">=": "ge"}
+FLOAT_ORDERS = {"<": "lt", "<=": "leq", ">": "gt", ">=": "geq"}
+
 
 class Formula:
     def __init__(self, params: list[tuple[str, Type]], source: Source):
@@ -174,21 +180,20 @@ class Symbolic:
                 return self.compose(ty, e.ref[1], None)
             base = self.expr(e.args[0], env, inner)
             return self.q.make(ty, base.parts[slice(*self.source.span(base.ty, e.val))], base.defined)
-        if e.tag == "index":
-            return self.element(e, env, inner)
-        if e.tag == "slice":
-            return self.part(e, env, inner)
         if e.tag == "try":
             if not frame.top:
                 raise Unsupported("A try inside a larger expression is not modeled; bind it first.")
             return self.propagate(e, env, frame)
-        if e.tag == "unary":
-            return self.unary(e, env, inner)
-        if e.tag == "binary":
-            return self.binary(e, env, inner)
-        if e.tag == "call":
-            return self.call(e, env, inner)
-        raise Unsupported(f"Expression form {e.tag!r} is not modeled.")
+        walk = {
+            "index": self.element,
+            "slice": self.part,
+            "unary": self.unary,
+            "binary": self.binary,
+            "call": self.call,
+        }
+        if e.tag not in walk:
+            raise Unsupported(f"Expression form {e.tag!r} is not modeled.")
+        return walk[e.tag](e, env, inner)
 
     def unary(self, e: Expr, env: dict[str, Term], frame: Frame) -> Term:
         a = self.expr(e.args[0], env, frame)
@@ -222,20 +227,19 @@ class Symbolic:
             return self.q.term(ty, v if op == "==" else neg(v), both)
         if op in {"<", "<=", ">", ">="}:
             if name in FLOAT:
-                v = f"(fp.{ {'<': 'lt', '<=': 'leq', '>': 'gt', '>=': 'geq'}[op] } {a.value} {b.value})"
+                v = f"(fp.{FLOAT_ORDERS[op]} {a.value} {b.value})"
             elif name == "bool":
                 ordered = {"<": conj(neg(a.value), b.value), ">": conj(a.value, neg(b.value))}
                 v = ordered[op] if op in ordered else neg(ordered[">" if op == "<=" else "<"])
             else:
-                suffix = {"<": "lt", "<=": "le", ">": "gt", ">=": "ge"}[op]
-                v = f"(bv{'s' if name in SIGNED else 'u'}{suffix} {a.value} {b.value})"
+                v = f"(bv{'s' if name in SIGNED else 'u'}{ORDERS[op]} {a.value} {b.value})"
             return self.q.term(ty, v, both)
         if name in FLOAT:
             fn = {"+": "add", "-": "sub", "*": "mul", "/": "div"}[op]
             return self.q.term(ty, f"(fp.{fn} RNE {a.value} {b.value})", both)
-        if op in {"&", "|", "^"}:
-            return self.q.term(ty, f"({ {'&': 'bvand', '|': 'bvor', '^': 'bvxor'}[op] } {a.value} {b.value})", both)
-        if op in {"+", "-", "*"}:
+        if op in BITWISE:
+            return self.q.term(ty, f"({BITWISE[op]} {a.value} {b.value})", both)
+        if op in ARITHMETIC:
             return self.arithmetic(ty, op, a, b, checked=True)
         if op in {"/", "%"}:
             n = ty.name
@@ -247,7 +251,7 @@ class Symbolic:
         raise Unsupported("Unsupported binary operator.")
 
     def arithmetic(self, ty: Type, op: str, a: Term, b: Term, checked: bool) -> Term:
-        fn = {"+": "bvadd", "-": "bvsub", "*": "bvmul"}[op]
+        fn = ARITHMETIC[op]
         value = f"({fn} {a.value} {b.value})"
         ok = conj(a.defined, b.defined)
         if checked:
@@ -294,9 +298,8 @@ class Symbolic:
             return self.q.make(e.ty, tuple(x for a in args for x in a.parts), ok)
         if n in NUMERIC:
             return self.convert(e.ty, args[0], ok)
-        if n in {"add_wrap", "sub_wrap", "mul_wrap"}:
-            wrap = {"add_wrap": "+", "sub_wrap": "-", "mul_wrap": "*"}[n]
-            return self.arithmetic(e.ty, wrap, args[0], args[1], checked=False)
+        if n in WRAPPED:
+            return self.arithmetic(e.ty, WRAPPED[n], args[0], args[1], checked=False)
         if n in {"shl_wrap", "shr"}:
             a, b = args
             width = WIDTH[e.ty.name]
@@ -304,9 +307,7 @@ class Symbolic:
             shift = extend(b.value, WIDTH[b.ty.name], width, False)
             return self.q.term(e.ty, f"({'bvshl' if n == 'shl_wrap' else 'bvlshr'} {a.value} {shift})", conj(ok, limit))
         if n in {"min", "max"}:
-            a, b = args
-            cmp = f"(bv{'s' if e.ty.name in SIGNED else 'u'}le {a.value} {b.value})"
-            return self.q.term(e.ty, ite(cmp, a.value, b.value) if n == "min" else ite(cmp, b.value, a.value), ok)
+            return self.extreme(n, e.ty, *args, ok)
         if n == "Array":  # An inline array is a value; `Buf` and `stack` are storage.
             return self.q.make(e.ty, self.zeros(e.ty))
         if n == "len":
@@ -633,17 +634,19 @@ class Symbolic:
                     inside[binder] = Term(i.ty, (constant(whole + 1, i.ty.name) if whole is not None else up,))
         return self.merge(survivors, keep - {binder})
 
+    def extreme(self, op: str, ty: Type, a: Term, b: Term, ok: str) -> Term:
+        """`min` or `max` of two integers."""
+        cmp = f"(bv{'s' if ty.name in SIGNED else 'u'}le {a.value} {b.value})"
+        return self.q.term(ty, ite(cmp, a.value, b.value) if op == "min" else ite(cmp, b.value, a.value), ok)
+
     def reduction(self, op: str, ty: Type, a: Term, b: Term) -> Term:
         """One step of the emitted host fold. Every operator offered here is order independent."""
-        if op in {"+", "add_wrap", "mul_wrap"}:
-            kept = {"+": "+", "add_wrap": "+", "mul_wrap": "*"}[op]
-            return self.arithmetic(ty, kept, a, b, checked=op == "+")
-        both = conj(a.defined, b.defined)
-        if op in {"&", "|", "^"}:
-            return self.q.term(ty, f"({ {'&': 'bvand', '|': 'bvor', '^': 'bvxor'}[op] } {a.value} {b.value})", both)
+        if op == "+" or op in {"add_wrap", "mul_wrap"}:
+            return self.arithmetic(ty, WRAPPED.get(op, "+"), a, b, checked=op == "+")
+        if op in BITWISE:
+            return self.q.term(ty, f"({BITWISE[op]} {a.value} {b.value})", conj(a.defined, b.defined))
         if op in {"min", "max"}:
-            cmp = f"(bv{'s' if ty.name in SIGNED else 'u'}le {a.value} {b.value})"
-            return self.q.term(ty, ite(cmp, a.value, b.value) if op == "min" else ite(cmp, b.value, a.value), both)
+            return self.extreme(op, ty, a, b, conj(a.defined, b.defined))
         raise Unsupported(f"reduce {op} is not modeled.")
 
     def seeded(self, op: str, ty: Type) -> Term:

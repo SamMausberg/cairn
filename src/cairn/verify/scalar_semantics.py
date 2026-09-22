@@ -302,13 +302,18 @@ def equivalent(
                         return None
                 return inputs(result)
 
+            def witnessed(stage, assertion, result) -> dict:
+                """The counterexample field of a receipt, when inputs a caller can rerun were found."""
+                witness = shown(stage, assertion, result) if result["status"] == "sat" else None
+                return {"counterexample": witness} if witness is not None else {}
+
             if domain.defined != "true":
                 trapping = conj(formed, neg(domain.defined))
                 r = run("domain-totality", trapping)
                 if r["status"] == "sat":
-                    witness = shown("domain-totality", trapping, r)
-                    shape = {"counterexample": witness} if witness is not None else {}
-                    return finish("invalid-domain", reason="Precondition may trap.", **shape)
+                    return finish(
+                        "invalid-domain", reason="Precondition may trap.", **witnessed("domain-totality", trapping, r)
+                    )
                 if r["status"] != "unsat":
                     return finish("unknown", reason="Domain totality was not established.")
             if admitted != "true":
@@ -333,9 +338,8 @@ def equivalent(
                 partial = conj(admitted, neg(lv.defined))
                 r = run("reference-totality", partial)
                 if r["status"] == "sat":
-                    witness = shown("reference-totality", partial, r)
-                    shape = {"counterexample": witness} if witness is not None else {}
-                    return finish("invalid-reference", reason="Reference traps on an admitted input.", **shape)
+                    reason = "Reference traps on an admitted input."
+                    return finish("invalid-reference", reason=reason, **witnessed("reference-totality", partial, r))
                 if r["status"] != "unsat":
                     return finish("unknown", reason="Reference totality was not established.")
             differs = [neg(seen(held, a, b)) for held, a, b in zip(lent, lw, rw, strict=True)]
@@ -350,12 +354,8 @@ def equivalent(
                 if unspoken != "false":
                     n = run("nan-observation", unspoken)
                     if n["status"] != "unsat":
-                        witness = shown("nan-observation", unspoken, n) if n["status"] == "sat" else None
-                        return finish(
-                            "unknown",
-                            reason="An observed float may be NaN, whose payload bits this model does not track.",
-                            **({"counterexample": witness} if witness is not None else {}),
-                        )
+                        reason = "An observed float may be NaN, whose payload bits this model does not track."
+                        return finish("unknown", reason=reason, **witnessed("nan-observation", unspoken, n))
                 watched = [*(["the result"] if rf.ret != VOID else []), *(n for n, t in rf.params if t.mode == "rw")]
                 visible = ", ".join(watched) or "no value"
                 return finish(
@@ -390,8 +390,7 @@ def equivalent(
                     and all(identical(refs, t, x["written"][n], y["written"][n]) for t, n in lend)
                 )
 
-            agree = alike(expected, actual)
-            if agree:
+            if alike(expected, actual):
                 return finish(
                     "unknown",
                     reason="Solver/concrete replay disagreed; no semantic rejection is certified.",

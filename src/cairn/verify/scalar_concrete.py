@@ -7,6 +7,7 @@ said it would, and the replay traps exactly where the emitted guards would.
 from __future__ import annotations
 
 import math
+import operator
 from typing import Any
 
 from ..compiler.cairnc import SIGNED, WIDTH, Expr, Function, Type
@@ -24,6 +25,11 @@ from .scalar_values import (
     owned,
     rounded,
 )
+
+COMPARED = {"<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge}
+BITS = {"&": operator.and_, "|": operator.or_, "^": operator.xor}
+ARITHMETIC = {"+": operator.add, "-": operator.sub, "*": operator.mul}
+WRAPPED = {"add_wrap": operator.add, "sub_wrap": operator.sub, "mul_wrap": operator.mul}
 
 
 class Zeroed:
@@ -177,16 +183,15 @@ class Concrete:
             else:
                 equal = a == b
             return equal if op == "==" else not equal
-        if op in {"<", "<=", ">", ">="}:
-            return {"<": a < b, "<=": a <= b, ">": a > b, ">=": a >= b}[op]
-        if op in {"&", "|", "^"}:
-            return {"&": a & b, "|": a | b, "^": a ^ b}[op]
+        if op in COMPARED:
+            return COMPARED[op](a, b)
+        if op in BITS:
+            return BITS[op](a, b)
+        if op in ARITHMETIC:
+            value = ARITHMETIC[op](a, b)
+            return rounded(value, ty.name) if ty.name in FLOAT else self.checked(value, ty.name)
         if ty.name in FLOAT:
-            if op == "/":
-                return self.divided(a, b, ty.name)
-            return rounded({"+": a + b, "-": a - b, "*": a * b}[op], ty.name)
-        if op in {"+", "-", "*"}:
-            return self.checked({"+": a + b, "-": a - b, "*": a * b}[op], ty.name)
+            return self.divided(a, b, ty.name)
         if b == 0 or (ty.name in SIGNED and a == bounds(ty.name)[0] and b == -1):
             raise ConcreteTrap("invalid-division")
         q = abs(a) // abs(b)
@@ -206,10 +211,8 @@ class Concrete:
             return self.convert(xs[0], e.args[0].ty.name, n)
         if n in {"min", "max"}:
             return (min if n == "min" else max)(*xs)
-        if n in {"add_wrap", "sub_wrap", "mul_wrap"}:
-            a, b = xs
-            v = a + b if n == "add_wrap" else a - b if n == "sub_wrap" else a * b
-            return v % (1 << WIDTH[e.ty.name])
+        if n in WRAPPED:
+            return WRAPPED[n](*xs) % (1 << WIDTH[e.ty.name])
         if n in {"shl_wrap", "shr"}:
             a, b = xs
             if not 0 <= b < WIDTH[e.ty.name]:
@@ -371,10 +374,10 @@ class Concrete:
                 v = self.expr(s.exprs[1], env, stack)
                 if s.op == "+":
                     used = self.checked(used + v, s.ty.name)
-                elif s.op in {"add_wrap", "mul_wrap"}:
-                    used = (used + v if s.op == "add_wrap" else used * v) % (1 << WIDTH[s.ty.name])
-                elif s.op in {"&", "|", "^"}:
-                    used = {"&": used & v, "|": used | v, "^": used ^ v}[s.op]
+                elif s.op in WRAPPED:
+                    used = WRAPPED[s.op](used, v) % (1 << WIDTH[s.ty.name])
+                elif s.op in BITS:
+                    used = BITS[s.op](used, v)
                 else:
                     used = (min if s.op == "min" else max)(used, v)
         env.pop(s.binder, None)  # An empty pass never binds it.
