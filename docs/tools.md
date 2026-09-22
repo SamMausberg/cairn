@@ -2,6 +2,20 @@
 
 Everything here ships with the compiler and depends on nothing outside the standard library. None of it changes what the compiler accepts: `fmt` and `lsp` are layout and presentation, `doc` and `expand` print what the checker already saw, and `--incremental` changes only how the same program reaches the linker. The sessions were run in this checkout against `examples/hello` and `examples/apps/analytics`.
 
+## Output for people and for programs
+
+At a terminal, `cairn` renders what a person reads: a refusal names its code and position and underlines the token, `check`, `build`, `test` and `new` answer in one line, and `run` hands the terminal to the program, so its output streams and it can read standard input. Piped, every command prints the JSON record that scripts, tests and agents read. `--format human` or `--format json` chooses explicitly, `CAIRN_FORMAT` sets the default, and `NO_COLOR` turns colour off.
+
+```text
+error[E-LEASED]: data is lent to left until wait(left).
+  --> src/main.cairn:5:3
+  |
+5 |   data[0] = 7;
+  |   ^^^^
+```
+
+A misspelled name is answered with the nearest one in scope (`= help: did you mean total?`), and a program stopped by a failed guard is reported as stopped by `SIGABRT`. The rendering is presentation only: the exit status, and the record behind `--format json`, are the same either way.
+
 ## cairn fmt
 
 ```sh

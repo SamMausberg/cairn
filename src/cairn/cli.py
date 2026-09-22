@@ -10,16 +10,24 @@ import platform
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 from . import __version__
 from .compiler.cairnc import Diagnostic, certify_templates, compile_source
+from .editor import terminal
 from .projects.project import ProjectError, contained_file, load_project, read_text
 from .projects.toolchain import ARCHS, TARGETS, emulator, host_family
 
+FORMAT: str | None = None  # --format as given; None lets the stream decide (see editor/terminal.py)
 
-def report(value: dict) -> None:
+
+def report(value: dict, brief: bool = False) -> None:
+    """The JSON record, or one line for a person when `brief` results are rendered for a terminal."""
+    if brief and terminal.human(FORMAT):
+        terminal.summary(value)
+        return
     print(json.dumps(value, indent=2, allow_nan=False))
 
 
@@ -113,20 +121,24 @@ REFUSED = {"counterexample", "rejected", "invalid-contract", "invalid-domain", "
 
 
 def main(argv: list[str] | None = None) -> int:
+    global FORMAT
     p = argparse.ArgumentParser(prog="cairn", description=__doc__)
     p.add_argument("--version", action="version", version=__version__)
+    shared = argparse.ArgumentParser(add_help=False)
+    shared.add_argument("--format", choices=["human", "json"], help="human: rendered for a person; json: the "
+                        "record. Default: human on a terminal, json when piped, or CAIRN_FORMAT.")  # fmt: skip
     sub = p.add_subparsers(dest="command", required=True)
-    sub.add_parser("doctor", help="Report local tools; never downloads them.")
-    new = sub.add_parser("new", help="Create a data-only example project.")
+    sub.add_parser("doctor", help="Report local tools; never downloads them.", parents=[shared])
+    new = sub.add_parser("new", help="Create a data-only example project.", parents=[shared])
     new.add_argument("directory", type=Path)
     for name, help in COMMANDS.items():
-        c = sub.add_parser(name, help=help)
+        c = sub.add_parser(name, help=help, parents=[shared])
         c.add_argument(
             "path", nargs="?", default=".", help="A .cairn file, a project directory or a manifest; default: here."
         )
         for option, keywords in ((option, keywords) for names, option, keywords in OPTIONS if name in names):
             c.add_argument(option, **keywords)
-    v = sub.add_parser("verify", help="SMT source equivalence, not native or Lean verification.")
+    v = sub.add_parser("verify", help="SMT source equivalence, not native or Lean verification.", parents=[shared])
     v.add_argument("reference", type=Path)
     v.add_argument("candidate", type=Path)
     mode = v.add_mutually_exclusive_group(required=True)
@@ -135,20 +147,21 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--timeout-ms", type=int, default=3000)
     v.add_argument("--assume", action="append", default=[], metavar="SYMBOL=EXPRESSION", help="Compare one "
                    "function only where this holds (repeatable); the receipt records every text.")  # fmt: skip
-    sub.add_parser("certificates", help="Check collector arithmetic certificates; not a Lean/compiler proof.")
+    sub.add_parser("certificates", help="Check collector arithmetic certificates; not a Lean/compiler proof.",
+                   parents=[shared])  # fmt: skip
     f = sub.add_parser("fmt", help="Format CAIRN sources in place; refuses any change to the token stream.")
     f.add_argument("paths", nargs="+", type=Path, help="Files, or directories searched for *.cairn.")
     f.add_argument("--check", action="store_true", help="Write nothing; exit 1 if any file would change.")
     f.add_argument("--diff", action="store_true", help="Write nothing; print a unified diff of what would change.")
     sub.add_parser("lsp", help="Speak the Language Server Protocol over stdin/stdout.")
     a = p.parse_args(argv)
+    FORMAT = getattr(a, "format", None)
     project = None
     try:
         assumed = preconditions(a.assume) if a.command == "verify" else {}
         if a.command == "doctor":
             elan = os.pathsep.join([os.environ.get("PATH", ""), str(Path.home() / ".elan/bin")])
-            report(
-                {
+            tools = {
                     "version": __version__,
                     "python": platform.python_version(),
                     "platform": platform.platform(),
@@ -162,8 +175,11 @@ def main(argv: list[str] | None = None) -> int:
                     "formal_status": "not-verified",
                     "native_platform": "Linux " + host_family(),
                     "network_access": False,
-                }
-            )
+            }  # fmt: skip
+            if terminal.human(FORMAT):
+                print("\n".join(f"{k:<20} {'missing' if v is None else v}" for k, v in tools.items()))
+            else:
+                report(tools)
             return 0
         if a.command == "certificates":
             from .verify.linear_certificates import audit_collector
@@ -171,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
             report(audit_collector())
             return 0
         if a.command == "new":
-            report(create_project(a.directory))
+            report(create_project(a.directory), brief=True)
             return 0
         if a.command == "fmt":
             from .editor.formatting import format_paths
@@ -217,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
                 linked = tuple(module + "." for module in receipt["modules"] if module.startswith("std."))
                 verdicts = certify_templates(project.source).items()
                 result["generics"] = {n: v for n, v in verdicts if not n.startswith(linked)}
-            report(result)
+            report(result, brief=True)
             return 1 if any(v != "ok" for v in result.get("generics", {}).values()) else 0
         if a.command == "expand":  # What the derivations generated, as source.
             from .agent.projection import expanded_source
@@ -259,14 +275,14 @@ def main(argv: list[str] | None = None) -> int:
                                                           a.cxx)} for path in paths]  # fmt: skip
             passed = all(x["status"] == "passed-finite-tests" for x in results)
             status = "passed-finite-tests" if passed else "tests-not-passed"
-            report({"status": status, "tests": results, "formal_status": "not-verified"})
+            report({"status": status, "tests": results, "formal_status": "not-verified"}, brief=True)
             return 0 if passed else 1
         from .projects.build import build
 
         result = build(project, output=a.out, cxx=a.cxx, arch=a.arch, kind="exe" if a.command == "run" else a.kind,
                        timeout=a.timeout, target=a.target, debug=a.debug, incremental=a.incremental)  # fmt: skip
         if a.command == "build" or result["status"] != "native-built":
-            report(result)
+            report(result, brief=True)
             return 0 if result["status"] == "native-built" else 2
         # Execution is explicit. Process timeout is not an OS security sandbox.
         from .verify.testing import resource
@@ -282,16 +298,29 @@ def main(argv: list[str] | None = None) -> int:
                 resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
 
         run: dict = {"stdin": subprocess.DEVNULL} if machine else {"preexec_fn": limits}
+        if terminal.human(FORMAT):  # A person sees the program itself: its streams are the terminal's.
+            code = subprocess.run(machine or [result["artifact"]], timeout=a.timeout, check=False, **run).returncode
+            if code:
+                print(f"error: {project.name} {terminal.ended(code)}", file=sys.stderr)
+            return 0 if code == 0 else 1
         cp = subprocess.run(machine or [result["artifact"]], capture_output=True, text=True, timeout=a.timeout, **run)
         report({"status": "program-exited", "exit_code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr,
                 "build_directory": result["directory"], "security_sandbox": False,
                 "memory_limit_mib": None if machine else a.memory_mib, "emulator": machine})  # fmt: skip
         return 0 if cp.returncode == 0 else 1
     except Diagnostic as error:
-        report(project.locate(error) if project else error.data)
+        located = project.locate(error) if project else error.data
+        if terminal.human(FORMAT):
+            terminal.diagnostic({**located, "source_line": error.data["line"]}, project.source if project else "")
+        else:
+            report(located)
         return 1
     except (OSError, ValueError, RecursionError, subprocess.SubprocessError) as error:
-        report({"status": "unknown", "code": "E-PROJECT-OR-ENVIRONMENT", "message": str(error)})
+        unknown = {"status": "unknown", "code": "E-PROJECT-OR-ENVIRONMENT", "message": str(error)}
+        if terminal.human(FORMAT):
+            terminal.diagnostic(unknown, "")
+        else:
+            report(unknown)
         return 2
 
 
