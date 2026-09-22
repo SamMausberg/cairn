@@ -41,6 +41,7 @@ SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and h
     "spawn": "::spawn(",
     "lock": ".with(",
     "host region completes": "cr::par::run(",
+    "pooled reduce completes": "cr::par::reduce<",
     "device region completes": "cr::gpu::launch(",
     "queued device work": "cr::gpu::launch_async(",
     "transfer": "cr::gpu::copy(",

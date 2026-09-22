@@ -1,0 +1,191 @@
+{
+  "tasks": {
+    "above_loop": {
+      "shipped": {
+        "passed": true,
+        "main_exit": 0,
+        "contracts": []
+      },
+      "planted": {
+        "passed": false,
+        "main_exit": 12,
+        "contracts": []
+      },
+      "valid": true
+    },
+    "venue_tasks": {
+      "shipped": {
+        "passed": true,
+        "main_exit": 0,
+        "contracts": []
+      },
+      "planted": {
+        "passed": false,
+        "main_exit": 15,
+        "contracts": []
+      },
+      "valid": true
+    },
+    "notional": {
+      "shipped": {
+        "passed": true,
+        "main_exit": 0,
+        "contracts": []
+      },
+      "planted": {
+        "passed": false,
+        "main_exit": 13,
+        "contracts": []
+      },
+      "valid": true
+    },
+    "replay_tail": {
+      "shipped": {
+        "passed": true,
+        "main_exit": 0,
+        "contracts": []
+      },
+      "planted": {
+        "passed": false,
+        "main_exit": 3,
+        "contracts": []
+      },
+      "valid": true
+    },
+    "apply_kind": {
+      "shipped": {
+        "passed": true,
+        "main_exit": 0,
+        "contracts": []
+      },
+      "planted": {
+        "passed": false,
+        "main_exit": 2,
+        "contracts": []
+      },
+      "valid": true
+    },
+    "digest_order": {
+      "shipped": {
+        "passed": true,
+        "main_exit": 0,
+        "contracts": [
+          "passed-finite-tests"
+        ]
+      },
+      "planted": {
+        "passed": false,
+        "main_exit": 0,
+        "contracts": [
+          "failed-tests"
+        ]
+      },
+      "valid": true
+    },
+    "checksum_check": {
+      "shipped": {
+        "passed": true,
+        "main_exit": 0,
+        "contracts": []
+      },
+      "planted": {
+        "passed": false,
+        "main_exit": 9,
+        "contracts": []
+      },
+      "valid": true
+    },
+    "overflow_digit": {
+      "shipped": {
+        "passed": true,
+        "main_exit": 0,
+        "contracts": [
+          "passed-finite-tests",
+          "passed-finite-tests"
+        ]
+      },
+      "planted": {
+        "passed": false,
+        "main_exit": 0,
+        "contracts": [
+          "native-trap-or-crash",
+          "passed-finite-tests"
+        ]
+      },
+      "valid": true
+    },
+    "digit_range": {
+      "shipped": {
+        "passed": true,
+        "main_exit": 0,
+        "contracts": [
+          "passed-finite-tests",
+          "passed-finite-tests",
+          "passed-finite-tests"
+        ]
+      },
+      "planted": {
+        "passed": false,
+        "main_exit": 0,
+        "contracts": [
+          "passed-finite-tests",
+          "passed-finite-tests",
+          "failed-tests"
+        ]
+      },
+      "valid": true
+    },
+    "sort_top": {
+      "shipped": {
+        "passed": true,
+        "main_exit": 0,
+        "contracts": [
+          "passed-finite-tests",
+          "passed-finite-tests"
+        ]
+      },
+      "planted": {
+        "passed": false,
+        "main_exit": 0,
+        "contracts": [
+          "passed-finite-tests",
+          "failed-tests"
+        ]
+      },
+      "valid": true
+    },
+    "even_bit": {
+      "shipped": {
+        "passed": true,
+        "main_exit": 0,
+        "contracts": [
+          "passed-finite-tests",
+          "passed-finite-tests"
+        ]
+      },
+      "planted": {
+        "passed": false,
+        "main_exit": 5,
+        "contracts": [
+          "passed-finite-tests",
+          "failed-tests"
+        ]
+      },
+      "valid": true
+    },
+    "plan_first": {
+      "shipped": {
+        "passed": true,
+        "main_exit": 0,
+        "contracts": []
+      },
+      "planted": {
+        "passed": false,
+        "main_exit": 19,
+        "contracts": []
+      },
+      "valid": true
+    }
+  },
+  "valid": true
+}
