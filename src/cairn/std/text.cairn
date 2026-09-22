@@ -9,17 +9,22 @@ import std.vec (Vec);
 
 pub enum ParseError { Empty; Invalid(usize); Overflow(usize); }
 
-pub fn parse_u64(n:usize, s:ro<u8>[n]) -> Result[u64, ParseError] {
-  if n == 0 { return Result.Err(ParseError.Empty); }
+// The decimal digits of s[start..n] as a value no larger than `limit`, or the offset of the byte at fault.
+fn digits(n:usize, s:ro<u8>[n], start:usize, limit:u64) -> Result[u64, ParseError] {
   let mut value = 0;
-  for i in 0..n {
+  for i in start..n {
     let byte = s[i];
     if byte < 48 || byte > 57 { return Result.Err(ParseError.Invalid(i)); }
     let digit = u64(byte - 48);
-    if value > (18446744073709551615 - digit) / 10 { return Result.Err(ParseError.Overflow(i)); }
+    if value > (limit - digit) / 10 { return Result.Err(ParseError.Overflow(i)); }
     value = value * 10 + digit;
   }
   return Result.Ok(value);
+}
+
+pub fn parse_u64(n:usize, s:ro<u8>[n]) -> Result[u64, ParseError] {
+  if n == 0 { return Result.Err(ParseError.Empty); }
+  return digits(s, 0, 18446744073709551615);
 }
 
 // Signed decimal: an optional leading '-', then digits. The magnitude may reach 2^63 only when
@@ -32,14 +37,7 @@ pub fn parse_i64(n:usize, s:ro<u8>[n]) -> Result[i64, ParseError] {
   if start == n { return Result.Err(ParseError.Invalid(start)); }
   let mut limit:u64 = 9223372036854775807;
   if negative { limit = 9223372036854775808; }
-  let mut value = 0;
-  for i in start..n {
-    let byte = s[i];
-    if byte < 48 || byte > 57 { return Result.Err(ParseError.Invalid(i)); }
-    let digit = u64(byte - 48);
-    if value > (limit - digit) / 10 { return Result.Err(ParseError.Overflow(i)); }
-    value = value * 10 + digit;
-  }
+  let value = try digits(s, start, limit);
   if !negative { return Result.Ok(i64(value)); }
   if value == 0 { return Result.Ok(0); }
   let below = i64(value - 1); // value - 1 fits an i64 even when value is 2^63
