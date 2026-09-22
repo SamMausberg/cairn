@@ -1,8 +1,7 @@
-"""What a test does by hand with a CAIRN program: require that it is refused with one code, or build the C++ it
-emits beside the runtime headers and run it.
+"""What a test does by hand with a CAIRN program: require that it is refused with one code, build the C++ it
+emits beside the runtime headers and run it, or build it as `cairn build` does and run that (`native`).
 
-A test that wants the project's own build goes through `cairn.projects.build`; these helpers are for a test that
-names its compiler flags, a sanitizer or its own `main`.
+The C++ helpers are for a test that names its compiler flags, a sanitizer or its own `main`.
 """
 
 import contextlib
@@ -15,6 +14,8 @@ import pytest
 
 from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
 from cairn.compiler.codegen import mangle
+from cairn.projects.build import build as build_project
+from cairn.projects.project import load_project
 from cairn.projects.toolchain import command
 from support import device_lock, device_reason
 
@@ -65,6 +66,19 @@ def run(tmp_path: Path, cpp: str, *flags: str, cxx="clang++", entry="main", time
     """`build`, then run it once; the finished process, with its status and its output as text."""
     executable = build(tmp_path, cpp, *flags, cxx=cxx, entry=entry, timeout=timeout)
     return subprocess.run([executable], capture_output=True, text=True, timeout=timeout, env=env)
+
+
+def native(tmp_path: Path, source: str, cxx="clang++", timeout=180):
+    """Build one CAIRN program in its own directory and run it; a nonzero exit is a failure."""
+    if not shutil.which(cxx):
+        pytest.skip(f"{cxx} unavailable")
+    path = tmp_path / "program.cairn"
+    path.write_text(source, encoding="utf-8")
+    record = build_project(load_project(path), kind="exe", cxx=cxx, timeout=timeout)
+    assert record["status"] == "native-built", record.get("stderr", "")[:4000]
+    done = subprocess.run([record["artifact"]], capture_output=True, text=True, timeout=120)
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    return done
 
 
 def contract(tmp_path: Path, cpp: str, cxx: str, *extra: str, cuda=False, timeout=240, env=None, under=()):
