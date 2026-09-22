@@ -20,12 +20,12 @@ pub fn main() -> i32 {
 
   // Host answers first.
   let h0 = io.monotonic_ns();
-  let host_total = query.wrapping_total(rows, c.price[0..rows]);
-  let host_qty = query.checked_total(rows, c.qty[0..rows]);
+  let host_total = query.wrapping_total(c.rows, c.price);
+  let host_qty = query.checked_total(c.rows, c.qty);
   let mut host_kept = Buf[u64](rows);
-  let host_used = query.above(rows, host_kept[0..rows], c.price[0..rows], table.LIMIT);
+  let host_used = query.above(c.rows, host_kept[0..rows], c.price, table.LIMIT);
   let mut host_notional = Buf[u64](rows);
-  query.notional_loop(rows, host_notional[0..rows], c.price[0..rows], c.qty[0..rows]);
+  query.notional_loop(c.rows, host_notional[0..rows], c.price, c.qty);
   let h1 = io.monotonic_ns();
 
   // The same three queries over @device views.

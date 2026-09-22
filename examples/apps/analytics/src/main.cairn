@@ -57,7 +57,7 @@ pub fn main() -> i32 {
     row_digest = row_digest ^ schema.Trade_key(row);
   }
   if wrong != rows { return 3; }
-  let col_total = query.wrapping_total(rows, c.price[0..rows]);
+  let col_total = query.wrapping_total(c.rows, c.price);
   if row_total != col_total { return 4; }
   let t2 = io.monotonic_ns();
 
@@ -68,7 +68,7 @@ pub fn main() -> i32 {
   if stats.rows != rows { return 5; }
   if stats.min_qty < 1 || stats.max_qty > 1024 { return 6; }
   if stats.sum_price != col_total { return 7; }
-  let checked_qty = query.checked_total(rows, c.qty[0..rows]);
+  let checked_qty = query.checked_total(c.rows, c.qty);
   if stats.sum_qty != checked_qty { return 8; }
   let unrolled = schema.Trade_unrolled_price(rows, c);
   let wrapping = schema.Trade_wrapping_price(rows, c);
@@ -79,8 +79,8 @@ pub fn main() -> i32 {
   // The contracted collector against the loop that means the same thing.
   let mut kept = Buf[u64](rows);
   let mut kept_loop = Buf[u64](rows);
-  let used = query.above(rows, kept[0..rows], c.price[0..rows], table.LIMIT);
-  let used_loop = query.above_loop(rows, kept_loop[0..rows], c.price[0..rows], table.LIMIT);
+  let used = query.above(c.rows, kept[0..rows], c.price, table.LIMIT);
+  let used_loop = query.above_loop(c.rows, kept_loop[0..rows], c.price, table.LIMIT);
   if used != used_loop || used == 0 || used >= rows { return 11; }
   if !mem.equal(used, kept[0..used], used_loop, kept_loop[0..used_loop]) { return 12; }
   let kept_total = query.wrapping_total(used, kept[0..used]);
@@ -89,16 +89,16 @@ pub fn main() -> i32 {
   // Sequential against host lanes, and a closure whose body the lanes run.
   let mut seq_col = Buf[u64](rows);
   let mut par_col = Buf[u64](rows);
-  query.notional_loop(rows, seq_col[0..rows], c.price[0..rows], c.qty[0..rows]);
-  query.notional_par(rows, par_col[0..rows], c.price[0..rows], c.qty[0..rows]);
+  query.notional_loop(c.rows, seq_col[0..rows], c.price, c.qty);
+  query.notional_par(c.rows, par_col[0..rows], c.price, c.qty);
   if !mem.equal(rows, seq_col[0..rows], rows, par_col[0..rows]) { return 13; }
   let factor:u64 = 3;
   let mut mapped = Buf[u64](rows);
   let mut mapped_loop = Buf[u64](rows);
-  query.map_par(rows, mapped[0..rows], c.price[0..rows], |x:u64| -> u64 {
+  query.map_par(c.rows, mapped[0..rows], c.price, |x:u64| -> u64 {
     return mul_wrap(x, factor);
   });
-  query.map_loop(rows, mapped_loop[0..rows], c.price[0..rows], |x:u64| -> u64 {
+  query.map_loop(c.rows, mapped_loop[0..rows], c.price, |x:u64| -> u64 {
     return mul_wrap(x, factor);
   });
   for i in 0..rows { if mapped[i] != mul_wrap(c.price[i], factor) { return 14; } }
@@ -108,8 +108,8 @@ pub fn main() -> i32 {
   // Group by venue: one pass, then four tasks over four disjoint row ranges.
   stack seq_bins:u64[table.VENUES] = zeroed;
   stack task_bins:u64[table.VENUES] = zeroed;
-  query.venue_sums(rows, c.venue[0..rows], c.price[0..rows], len(seq_bins), seq_bins);
-  query.venue_sums_tasks(rows, c.venue[0..rows], c.price[0..rows], len(task_bins), task_bins);
+  query.venue_sums(c.rows, c.venue, c.price, len(seq_bins), seq_bins);
+  query.venue_sums_tasks(c.rows, c.venue, c.price, len(task_bins), task_bins);
   let mut bin_total:u64 = 0;
   for b in 0..len(seq_bins) {
     if seq_bins[b] != task_bins[b] { return 15; }
@@ -121,17 +121,17 @@ pub fn main() -> i32 {
   // Aggregators: a bound in the hot loop, a table lookup for a plan chosen at run time. Every
   // impl below is generated from the function that folds the accumulator.
   let mut sum_agg = SumAgg(0);
-  let by_bound = agg.run_static(sum_agg, rows, c.price[0..rows]);
+  let by_bound = agg.run_static(sum_agg, c.rows, c.price);
   if by_bound != col_total { return 17; }
   let mut max_agg = MaxAgg(0);
-  let by_table = agg.run_dyn(max_agg, rows, c.price[0..rows]);
+  let by_table = agg.run_dyn(max_agg, c.rows, c.price);
   if by_table != stats.max_price { return 18; }
   let mut plan = vec.new[Dyn[Aggregator]]();
   plan.push(Dyn[Aggregator](SumAgg(0)));
   plan.push(Dyn[Aggregator](MaxAgg(0)));
   plan.push(Dyn[Aggregator](CountAgg(0)));
   stack answers:u64[4] = zeroed;
-  let answered = agg.run_plan(plan, rows, c.price[0..rows], answers);
+  let answered = agg.run_plan(plan, c.rows, c.price, answers);
   if answered != 3 { return 19; }
   if answers[0] != col_total || answers[1] != stats.max_price || answers[2] != u64(rows) {
     return 20;
@@ -142,7 +142,7 @@ pub fn main() -> i32 {
   bins.edges[0] = 4000000;
   bins.edges[1] = table.LIMIT;
   bins.edges[2] = 12000000;
-  agg.bins_tally(bins, rows, c.price[0..rows]);
+  agg.bins_tally(bins, c.rows, c.price);
   let counted = agg.bins_total(bins);
   if counted != u64(rows) { return 21; }
   if add_wrap(bins.counts[2], bins.counts[3]) != u64(used) { return 22; }

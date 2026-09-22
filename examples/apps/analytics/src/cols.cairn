@@ -15,11 +15,11 @@ pub recipe columns for R where width = fold + each f in R { bytes(f) }, arity = 
     require unsigned(f), "E-DERIVE-DOMAIN: columns/1 stores unsigned scalar columns.";
   }
   pub struct $R_table {
-    each f in R where t = typeof(f) { $f:Buf[$t]; }
     rows:usize;
+    each f in R where t = typeof(f) { $f:Buf[$t][rows]; } // each column holds `rows` elements, by declaration
   }
   pub fn $R_table_new(rows:usize) -> $R_table = $R_table(
-    each f in R where t = typeof(f) { Buf[$t](rows) }, rows
+    rows, each f in R where t = typeof(f) { Buf[$t](rows) }
   );
   pub fn $R_get(c:ro<$R_table>, i:usize) -> R = R(each f in R { c.$f[i] });
   pub fn $R_set(c:rw<$R_table>, i:usize, row:R) { each f in R { c.$f[i] = row.$f; } }

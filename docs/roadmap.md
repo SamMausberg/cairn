@@ -4,7 +4,7 @@ What is still missing is stated here as gates rather than plans, and [project/ca
 
 ## Language
 
-Recipes are library code over record schemas, naturals and names of functions. They do not take arbitrary expression fragments, and no checked theorem is replayed per instance. A recipe may declare a field extent in a record it generates (`$f:Buf[$t][rows]`), and `examples/apps/analytics` has not yet been rewritten to use it, so it still passes its columns as parts.
+Recipes are library code over record schemas, naturals and names of functions. They do not take arbitrary expression fragments, and no checked theorem is replayed per instance. A recipe may declare a field extent in a record it generates (`$f:Buf[$t][rows]`), which is how `examples/apps/analytics` passes its columns whole.
 
 The collector remains a closed, certified form: a user cannot write a loop that carries its own certificates.
 
