@@ -48,8 +48,9 @@ it inherits the answer. -/
 theorem races_borrow_of_lease {ρ : Valuation} {a : Touch} {k : Nat} {y : Borrow}
     (h : races ρ a.lease y = false) : races ρ (a.borrow k) y = false := by
   cases a <;> try exact h
-  simp only [races, Bool.and_eq_false_iff, Touch.lease, Touch.borrow] at h ⊢
-  exact h.imp (bool_false_of_imp meets_elems_of_part) id
+  all_goals
+    simp only [races, Bool.and_eq_false_iff, Touch.lease, Touch.borrow] at h ⊢
+    exact h.imp (bool_false_of_imp meets_elems_of_part) id
 
 /-- An access that writes puts its local in `written`. -/
 theorem writesVar_of_mem {body : List Touch} {a : Touch} (ha : a ∈ body) (hm : a.mode = Mode.rw) :
@@ -59,19 +60,37 @@ theorem writesVar_of_mem {body : List Touch} {a : Touch} (ha : a ∈ body) (hm :
   have h1 : (a.mode == Mode.rw) = true := by rw [hm]; rfl
   rw [h1, beq_place_self, Bool.and_self]
 
-/-- **Under the region rule a lane holds only its own element, or the header.**  A
-write is always the lane's own element; a `len` read is the header; nothing else
-survives on a local the lanes write. -/
-theorem borrow_shape {body : List Touch} (h : laneRule body = true) {a : Touch} (ha : a ∈ body)
-    (hw : writesVar body a.root.var = true) (k : Nat) :
-    a.borrow k = (.part a.root (.lit k) (.lit (k + 1)), a.mode) ∨
-      a.borrow k = (.hdr a.root, Mode.ro) := by
-  have hall := (List.all_eq_true.mp h) a ha
-  cases a <;> simp_all [Touch.borrow, Touch.recorded, Touch.atBinder, Touch.root, Touch.mode]
+/-- An access the facts place in a block of stride `S` holds that block of each lane. -/
+theorem Touch.borrow_of_stride {a : Touch} {S : Nat} (h : a.stride = some S) (k : Nat) :
+    a.borrow k = (.part a.root (.lit (k * S)) (.lit (k * S + S)), a.mode) := by
+  cases a <;> simp_all [Touch.stride, Touch.borrow, Touch.root, Touch.mode]
 
-/-- **Two lanes of an accepted region never race.**  If their borrows met with a write
-among them they would be two writes, or a write and a read, of one local; the rule
-then makes both of them the lane's own element, and the indices differ. -/
+/-- A `len` read holds the header, to read. -/
+theorem Touch.borrow_of_unrecorded {a : Touch} (h : a.recorded = false) (k : Nat) :
+    a.borrow k = (.hdr a.root, Mode.ro) := by
+  cases a <;> simp_all [Touch.recorded, Touch.borrow, Touch.root]
+
+/-- **Under the region rule every access to a local the lanes write has one stride.**  The
+first recorded access fixes it, and each other one must agree. -/
+theorem rule_stride {body : List Touch} (h : laneRule body = true) {a : Touch} (ha : a ∈ body)
+    (hra : a.recorded = true) (hw : writesVar body a.root.var = true) :
+    ∃ S, a.stride = some S ∧ ∀ b ∈ body, b.recorded = true → b.root.var = a.root.var → b.stride = some S := by
+  have hall := (List.all_eq_true.mp h) a ha
+  simp only [hra, hw, Bool.not_true, Bool.false_or, Bool.and_eq_true, List.all_eq_true, Bool.or_eq_true,
+    Bool.not_eq_true', decide_eq_true_eq] at hall
+  obtain ⟨hsome, hevery⟩ := hall
+  cases hs : a.stride with
+  | none => rw [hs] at hsome; exact Bool.noConfusion hsome
+  | some S =>
+      refine ⟨S, rfl, fun b hb hrb hvb => ?_⟩
+      rcases hevery b hb with hno | hyes
+      · simp [hrb, hvb] at hno
+      · rw [hyes, hs]
+
+/-- **Two lanes of an accepted region never race.**  If their borrows met with a write among
+them they would be two accesses of one local the lanes write; the rule gives both one stride, so
+each is its lane's own block, and two lanes' blocks of one stride are apart.  A `len` read is the
+header, which no block meets. -/
 theorem lane_borrows_dont_race {ρ : Valuation} {body : List Touch} (h : laneRule body = true)
     {k l : Nat} (hkl : k ≠ l) {a b : Touch} (ha : a ∈ body) (hb : b ∈ body) :
     races ρ (a.borrow k) (b.borrow l) = false := by
@@ -90,13 +109,18 @@ theorem lane_borrows_dont_race {ρ : Valuation} {body : List Touch} (h : laneRul
         · rw [Touch.borrow_mode] at hm
           rw [hvar]; exact writesVar_of_mem hb (eq_of_beq hm)
       have hwb : writesVar body b.root.var = true := by rw [← hvar]; exact hw
-      rcases borrow_shape h ha hw k with hab | hab <;>
-        rcases borrow_shape h hb hwb l with hbb | hbb <;>
-        rw [hab, hbb] at hmeet hmode
-      · rw [meets_own_element hkl] at hmeet; exact Bool.noConfusion hmeet
-      · rw [meets_part_hdr] at hmeet; exact Bool.noConfusion hmeet
-      · rw [meets_symm, meets_part_hdr] at hmeet; exact Bool.noConfusion hmeet
-      · exact Bool.noConfusion hmode
+      cases hra : a.recorded <;> cases hrb : b.recorded
+      · rw [Touch.borrow_of_unrecorded hra, Touch.borrow_of_unrecorded hrb] at hmode
+        exact Bool.noConfusion hmode
+      · obtain ⟨S, hS, _⟩ := rule_stride h hb hrb hwb
+        rw [Touch.borrow_of_unrecorded hra, Touch.borrow_of_stride hS, meets_symm, meets_part_hdr] at hmeet
+        exact Bool.noConfusion hmeet
+      · obtain ⟨S, hS, _⟩ := rule_stride h ha hra hw
+        rw [Touch.borrow_of_stride hS, Touch.borrow_of_unrecorded hrb, meets_part_hdr] at hmeet
+        exact Bool.noConfusion hmeet
+      · obtain ⟨S, hS, hall⟩ := rule_stride h ha hra hw
+        rw [Touch.borrow_of_stride hS, Touch.borrow_of_stride (hall b hb hrb hvar.symm), meets_own_block hkl] at hmeet
+        exact Bool.noConfusion hmeet
 
 /-- Every lane carries an index below `n`, so two of them never share one. -/
 theorem lanesOf_index_lt : ∀ (n : Nat) {body : List Touch} {T : Task},

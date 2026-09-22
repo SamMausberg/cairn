@@ -113,6 +113,8 @@ namespace Cairn
 #print axioms Cairn.Ownership.Regress.laneWritesFixedIndex_races
 #print axioms Cairn.Ownership.Regress.laneWritesShared_races
 #print axioms Cairn.Ownership.Regress.laneReadsOther_races
+#print axioms Cairn.Ownership.Regress.laneTwoStrides_races
+#print axioms Cairn.Ownership.meets_own_block
 #print axioms Cairn.Ownership.Regress.backwardsPart_traps
 #print axioms Cairn.Ownership.Regress.copyAnOwner_doubleFrees
 #print axioms Cairn.Ownership.Regress.useAfterDrop_usesDeadPlace

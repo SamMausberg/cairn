@@ -59,6 +59,8 @@ FRAGMENT = (
     ("two paths", "if flag { ... } else { ... }", "Stmt.ite thn els"),
     ("a region", "parallel i in n { ... }", "Stmt.parallel n body"),
     ("a lane's own element", "dJ[i] = 1;", "Touch.elem r Mode.rw"),
+    ("an element of the lane's own block", "dJ[i * S + j] = 1; with j below S", "Touch.block r S Mode.rw"),
+    ("the first element past it", "dJ[i * S + S] = 1;", "Touch.other r Mode.rw"),
     ("any other element", "dJ[0] = 1;", "Touch.other r Mode.rw"),
     ("a local of the enclosing scope", "sJ = 1;", "Touch.whole r Mode.rw"),
     ("a length a lane reads", "let lvK = len(dJ);", "Touch.len r"),
@@ -187,7 +189,7 @@ class Region:
     list carry the same accesses in the same order.
     """
 
-    touches: tuple[tuple[str, str, str], ...]  # (elem | other | whole | len, local, ro | rw)
+    touches: tuple[tuple[str, str, str], ...]  # (elem | blockS.j | spillS | other | whole | len, local, ro | rw)
 
 
 @dataclass(frozen=True)
@@ -259,8 +261,23 @@ def lane_statement(kind: str, var: str, mode: str, position: int) -> str:
     if kind == "whole":
         return var + " = 1;" if mode == "rw" else "let " + private + " = " + var + ";"
     index = "i" if kind == "elem" else "0"
+    if kind.startswith("block"):  # `facts.window` places i * S + j, j below S, in the lane's own block.
+        stride, offset = kind[5:].split(".")
+        index = "i * " + stride + " + " + offset
+    elif kind.startswith("spill"):  # One past the block: the next lane's first element, which nothing places.
+        index = "i * " + kind[5:] + " + " + kind[5:]
     read = var + "[" + index + "]"
     return read + " = 1;" if mode == "rw" else "let " + private + " = " + read + ";"
+
+
+def lean_touch(kind: str, var: int, mode: str) -> str:
+    """One lane access as a Lean `Touch`: a block access by its stride, one past it as any other element."""
+    root = " ⟨" + str(var) + ", []⟩"
+    if kind == "len":
+        return "Touch.len" + root
+    if kind.startswith("block"):
+        return "Touch.block" + root + " " + kind[5:].split(".")[0] + " Mode." + mode
+    return "Touch." + ("other" if kind.startswith("spill") else kind) + root + " Mode." + mode
 
 
 def render_cairn(prog: Prog, scalars: frozenset[str]) -> str:
@@ -350,10 +367,7 @@ def render_lean(prog: Prog, numbering: dict[str, int], tickets: dict[str, int]) 
                 written.append("Stmt.ite [" + ", ".join(statements(statement.thn)) + "] ["
                                + ", ".join(statements(statement.els)) + "]")  # fmt: skip
             elif isinstance(statement, Region):
-                touches = ", ".join(
-                    "Touch." + kind + " ⟨" + str(numbering[var]) + ", []⟩" + ("" if kind == "len" else " Mode." + mode)
-                    for kind, var, mode in statement.touches
-                )
+                touches = ", ".join(lean_touch(kind, numbering[var], mode) for kind, var, mode in statement.touches)
                 written.append("Stmt.parallel (Bound.nm 2) [" + touches + "]")
             else:
                 for owner in header_reads(statement.borrows):
@@ -484,7 +498,17 @@ class Generator:
             elif choice < 0.25:
                 touches.append(("len", self.rng.choice(self.owners), "ro"))
             else:
-                kind = "elem" if self.rng.random() < 0.6 else "other"
+                shape = self.rng.random()
+                stride = self.rng.choice((2, 4))
+                kind = (
+                    "elem"
+                    if shape < 0.45
+                    else "block" + str(stride) + "." + str(self.rng.randrange(stride))
+                    if shape < 0.75
+                    else "spill" + str(stride)
+                    if shape < 0.82
+                    else "other"
+                )
                 touches.append((kind, self.rng.choice(self.owners), self.rng.choice(("ro", "rw"))))
         return [Region(tuple(touches))]
 

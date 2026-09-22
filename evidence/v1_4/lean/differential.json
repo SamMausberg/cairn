@@ -1,18 +1,18 @@
 {
   "status": "agreed",
   "programs": 20000,
-  "seed": 11,
-  "python_accepted": 3479,
-  "python_rejected": 16521,
+  "seed": 13,
+  "python_accepted": 3555,
+  "python_rejected": 16445,
   "codes": {
-    "E-ALIAS": 4520,
-    "E-LEASED": 7453,
-    "E-LINEAR-BRANCH": 372,
-    "E-LINEAR-LEAK": 831,
-    "E-MOVED": 1709,
-    "E-PARALLEL-RACE": 1167,
-    "E-PARALLEL-WRITE": 469,
-    "accepted": 3479
+    "E-ALIAS": 4471,
+    "E-LEASED": 7586,
+    "E-LINEAR-BRANCH": 364,
+    "E-LINEAR-LEAK": 828,
+    "E-MOVED": 1687,
+    "E-PARALLEL-RACE": 1091,
+    "E-PARALLEL-WRITE": 418,
+    "accepted": 3555
   },
   "disagreements": [],
   "outside_the_fragment": []

@@ -63,6 +63,8 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Ownership.Regress.laneWritesFixedIndex_races",
     "Cairn.Ownership.Regress.laneWritesShared_races",
     "Cairn.Ownership.Regress.laneReadsOther_races",
+    "Cairn.Ownership.Regress.laneTwoStrides_races",
+    "Cairn.Ownership.meets_own_block",
     # An accepted program whose parts are ordered by a backwards one aborts at that guard.
     "Cairn.Ownership.Regress.backwardsPart_traps",
     "Cairn.Ownership.Regress.copyAnOwner_doubleFrees",

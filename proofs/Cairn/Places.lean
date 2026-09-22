@@ -523,13 +523,23 @@ theorem meets_elems_of_part {ρ : Valuation} {r : Root} {lo hi : Bound} {q : Pla
     Bool.and_eq_true] at h ⊢
   exact ⟨h.1, Ext.meets_all_of_rng h.2⟩
 
-/-- **Two lanes never touch the same element.**  Their indices differ, and each holds
-the single element at its own index. -/
-theorem meets_own_element {ρ : Valuation} {r s : Root} {k l : Nat} (h : k ≠ l) :
-    meets ρ (.part r (.lit k) (.lit (k + 1))) (.part s (.lit l) (.lit (l + 1))) = false := by
+/-- **Two lanes never touch the same block.**  Lane `k` holds `[k * S, k * S + S)`, their
+indices differ, and blocks of one stride follow one another. -/
+theorem meets_own_block {ρ : Valuation} {r s : Root} {k l S : Nat} (h : k ≠ l) :
+    meets ρ (.part r (.lit (k * S)) (.lit (k * S + S))) (.part s (.lit (l * S)) (.lit (l * S + S))) = false := by
   simp only [meets, Place.header, Place.ext, Bound.eval, Bool.false_and, Bool.false_or,
     Ext.meets, Bool.and_eq_false_iff, decide_eq_false_iff_not]
-  right; omega
+  right
+  rcases Nat.lt_or_gt_of_ne h with hkl | hkl
+  · have := Nat.mul_le_mul_right S (Nat.succ_le_of_lt hkl)
+    rw [Nat.succ_mul] at this; omega
+  · have := Nat.mul_le_mul_right S (Nat.succ_le_of_lt hkl)
+    rw [Nat.succ_mul] at this; omega
+
+/-- **Two lanes never touch the same element**: the blocks of stride 1. -/
+theorem meets_own_element {ρ : Valuation} {r s : Root} {k l : Nat} (h : k ≠ l) :
+    meets ρ (.part r (.lit k) (.lit (k + 1))) (.part s (.lit l) (.lit (l + 1))) = false := by
+  simpa using meets_own_block (ρ := ρ) (r := r) (s := s) (S := 1) h
 
 /-- The header's extent is empty, so nothing meets it. -/
 theorem Ext.meets_hdr : ∀ e : Ext, e.meets (.rng 0 0) = false := by

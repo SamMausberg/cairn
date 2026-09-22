@@ -338,6 +338,21 @@ before the next statement. -/
 def twoRegions : Program :=
   ⟨[0], [alloc 0, parallel n [.elem data Mode.rw], parallel n [.elem data Mode.rw]]⟩
 
+/-- `parallel b in k { partial[b * 4 + 3] = 1; let v = partial[b * 4]; }` -- accepted: every
+access stays inside the lane's own block of stride 4 (`tests/soundness/test_blocks.py`). -/
+def laneOwnBlock : Program :=
+  ⟨[0], [alloc 0, parallel n [.block data 4 Mode.rw, .block data 4 Mode.ro]]⟩
+
+/-- `parallel b in k { out[b * 4 + 1] = 1; out[b * 8] = 1; }` -- E-PARALLEL-RACE: blocks of two
+strides meet. -/
+def laneTwoStrides : Program :=
+  ⟨[0], [alloc 0, parallel n [.block data 4 Mode.rw, .block data 8 Mode.rw]]⟩
+
+/-- `parallel b in k { for j in 0..9 { out[b * 8 + j] = 1; } }` -- E-PARALLEL-RACE: `j = 8` is the
+next lane's first element, which nothing places in the lane's own block. -/
+def laneSpillsBlock : Program :=
+  ⟨[0], [alloc 0, parallel n [.block data 8 Mode.rw, .other data Mode.rw]]⟩
+
 /-! ### Task groups
 
 `let g = Group[T](k);` is `group`, `spawn f(...) into g;` is `submit`, `collect(g)` is `collect`
@@ -462,6 +477,9 @@ def lines : List (String × Bool × Program) :=
    ("laneWritesFixedIndex", false, laneWritesFixedIndex),
    ("laneWritesShared", false, laneWritesShared),
    ("laneReadsOther", false, laneReadsOther),
+   ("laneOwnBlock", true, laneOwnBlock),
+   ("laneTwoStrides", false, laneTwoStrides),
+   ("laneSpillsBlock", false, laneSpillsBlock),
    ("laneBesideTask", true, laneBesideTask),
    ("laneUnderLease", false, laneUnderLease),
    ("laneUnderPartLease", false, laneUnderPartLease),
@@ -609,6 +627,12 @@ theorem laneReadsOther_races :
     Reach twoLanes laneReadsOther.scope (Cfg.start laneReadsOther) (Cfg.err (Err.race 0)) :=
   reach_fault 3 (by decide)
 
+/-- Lane 0 holds `[0, 8)` through the stride-8 access and lane 1 holds `[4, 8)` through the
+stride-4 one: blocks of two strides meet. -/
+theorem laneTwoStrides_races :
+    Reach twoLanes laneTwoStrides.scope (Cfg.start laneTwoStrides) (Cfg.err (Err.race 0)) :=
+  reach_fault 3 (by decide)
+
 /-- **A double free is reachable.** Copying an owner duplicates the cell, and the implicit
 release at scope exit frees it twice. -/
 theorem copyAnOwner_doubleFrees :
@@ -661,7 +685,7 @@ theorem witnesses_are_rejected :
       || accepts copyAnOwner || accepts useAfterDrop || accepts unawaitedTicket
       || accepts sameFieldToTwoTasks || accepts fieldPartsOverlapInOneCall
       || accepts laneWritesFixedIndex
-      || accepts laneWritesShared || accepts laneReadsOther) = false
+      || accepts laneWritesShared || accepts laneReadsOther || accepts laneTwoStrides) = false
       ∧ accepts backwardsPart = true := by
   constructor <;> decide
 

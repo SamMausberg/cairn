@@ -17,8 +17,9 @@ abbrev AllocId := Nat
 
 `parallel i in n { body }` runs one lane per index `i < n`.  `checking.py:region`
 abstracts the body to one list, `Lanes.accesses`: for every place of the enclosing
-scope the body touches, the root local, whether the index written there is the binder
-itself, and whether it writes.  `Touch` is that list, with the place kept, so that the
+scope the body touches, the root local, the stride of the lane's own block the access
+is shown to stay inside (`facts.window`, 1 for the binder itself, none when nothing
+places it), and whether it writes.  `Touch` is that list, with the place kept, so that the
 leases of the enclosing scope can still be asked about each access.
 
 The things a lane cannot do are not rules here but absences: the body is a list of
@@ -28,9 +29,9 @@ not appear. -/
 
 /-- One access a lane makes to a place of the enclosing scope.
 
-* `elem r m` is `x[i]`, or `r.xs[i]`, at the lane's own index -- the only shape
-  `checking.py` allows on anything lanes write (`i.tag == "name" and i.val == binder`,
-  exactly that name as the whole index);
+* `elem r m` is `x[i]`, or `r.xs[i]`, at the lane's own index: the block of stride 1;
+* `block r S m` is `x[i * S + j]` with `j` shown below `S`, any index the facts place
+  in `[i * S, i * S + S)`, or a part or element of that block lent to a helper;
 * `other r m` is every other way of naming elements: `x[j]`, `x[i + 1]`, `x[0]`, or a
   part or whole view lent on to a call.  Its footprint is modelled as EVERY element,
   the worst case, since nothing here bounds where the index lands;
@@ -40,6 +41,7 @@ not appear. -/
   `leased(..., elements = False)` and which `region` does not record at all. -/
 inductive Touch where
   | elem (r : Root) (m : Mode)
+  | block (r : Root) (S : Nat) (m : Mode)
   | other (r : Root) (m : Mode)
   | whole (r : Root) (m : Mode)
   | len (r : Root)
@@ -48,6 +50,7 @@ deriving DecidableEq, Repr, Inhabited
 /-- The storage the access names. -/
 def Touch.root : Touch → Root
   | .elem r _ => r
+  | .block r _ _ => r
   | .other r _ => r
   | .whole r _ => r
   | .len r => r
@@ -55,15 +58,18 @@ def Touch.root : Touch → Root
 /-- The mode it is touched in.  A `len` read is a read. -/
 def Touch.mode : Touch → Mode
   | .elem _ m => m
+  | .block _ _ m => m
   | .other _ m => m
   | .whole _ m => m
   | .len _ => Mode.ro
 
-/-- Is the index the lane's own binder?  This is the `at_binder` flag
-`checking.py:e_index` records. -/
-def Touch.atBinder : Touch → Bool
-  | .elem _ _ => true
-  | _ => false
+/-- The stride of the lane's own block an access stays inside: the stride
+`checking.py:e_index` and `lend` record, 1 for the binder itself, none for anything
+the facts cannot place. -/
+def Touch.stride : Touch → Option Nat
+  | .elem _ _ => some 1
+  | .block _ S _ => some S
+  | _ => none
 
 /-- Does `checking.py:region` see this access at all?  `e_index` and `lend` record;
 `len` does not, and needs no rule, since the header is not an element. -/
@@ -75,14 +81,16 @@ def Touch.recorded : Touch → Bool
 any index of `x` is `x[]`, whatever the index is. -/
 def Touch.lease : Touch → Borrow
   | .elem r m => (.elems r, m)
+  | .block r _ m => (.elems r, m)
   | .other r m => (.elems r, m)
   | .whole r m => (.whole r, m)
   | .len r => (.hdr r, Mode.ro)
 
-/-- What the lane with index `k` really touches: its own element where the binder is
-the index, and the worst case everywhere else. -/
+/-- What the lane with index `k` really touches: its own block `[k * S, k * S + S)`, of
+which its own element is the stride-1 case, and the worst case everywhere else. -/
 def Touch.borrow (k : Nat) : Touch → Borrow
-  | .elem r m => (.part r (.lit k) (.lit (k + 1)), m)
+  | .elem r m => (.part r (.lit (k * 1)) (.lit (k * 1 + 1)), m)
+  | .block r S m => (.part r (.lit (k * S)) (.lit (k * S + S)), m)
   | .other r m => (.elems r, m)
   | .whole r m => (.whole r, m)
   | .len r => (.hdr r, Mode.ro)
@@ -93,13 +101,15 @@ def writesVar (body : List Touch) (x : Var) : Bool :=
   body.any fun c => c.mode == Mode.rw && c.root.var == x
 
 /-- **The region rule.**  Whatever any lane writes may be touched, by any lane, only
-at the lane's own index: `checking.py:region` computes `written` and raises
-`E-PARALLEL-RACE` for every recorded access to a written local that is not `x[i]`.
-Assigning a shared scalar of the enclosing scope is the case reported as
-`E-PARALLEL-WRITE`; it fails here too, because such an access writes its local and is
-not at the binder. -/
+inside the lane's own block, with one stride for every access to that local:
+`checking.py:region` computes `written` and raises `E-PARALLEL-RACE` for a recorded
+access to a written local that the facts cannot place, or whose stride differs from
+the first one recorded.  Assigning a shared scalar of the enclosing scope is the case
+reported as `E-PARALLEL-WRITE`; it fails here too, because such an access writes its
+local and has no stride. -/
 def laneRule (body : List Touch) : Bool :=
-  body.all fun a => !a.recorded || !writesVar body a.root.var || a.atBinder
+  body.all fun a => !a.recorded || !writesVar body a.root.var ||
+    (a.stride.isSome && body.all fun b => !(b.recorded && decide (b.root.var = a.root.var)) || decide (b.stride = a.stride))
 
 /-- Statements.  `call`/`spawn` take a borrow list rather than a callee: the
 callee's body is abstracted to the footprint it was handed, which is all the
