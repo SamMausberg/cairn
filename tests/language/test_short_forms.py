@@ -1,5 +1,5 @@
-"""The short forms: a variant written without its type, an arm without its braces, and the rules that keep each one
-meaning exactly its long form. Every accepted program emits the C++ of its long form or runs natively under both compilers, and every
+"""The short forms: a variant written without its type, an arm without its braces, compound assignment, and the rules
+that keep each one meaning exactly its long form. Every accepted program emits the C++ of its long form or runs natively under both compilers, and every
 refusal names its code.
 """
 
@@ -8,7 +8,7 @@ import pytest
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from cairn.editor.formatting import format_source
-from emitted import WARNINGS, refused, run, sanitized
+from emitted import WARNINGS, refused, run, sanitized, watched
 
 LONG = """
 import std.core (Option, Result);
@@ -209,3 +209,104 @@ def test_an_arm_without_braces_is_one_simple_statement(arm):
     body = f"fn f(s:Step) -> u64 {{ let mut log:u64 = 0; match s {{ Skip => return 0; {arm} }} return 0; }}"
     said = refused("E-PARSE", head + body)
     assert "one return, break, continue, assignment or call" in said["message"]
+
+
+COMPOUND = """
+struct Tally { hits:u64; bins:Buf[u32]; }
+fn bump(seen:rw<u64>) { seen += 1; }
+fn scale(n:usize, out:rw<u64>[n], x:ro<u64>[n]) { parallel i in n { out[i] += x[i] * 3; } }
+fn main() -> i32 {
+  let mut x:u64 = 10;
+  x += 5;
+  x -= 3;
+  x *= 4;
+  x /= 6;
+  x %= 5;
+  let mut bits:u32 = 0xf0;
+  bits &= 0x3c;
+  bits |= 1;
+  bits ^= 0x21;
+  let mut f:f64 = 1.5;
+  f *= 2.0;
+  let mut seen:u64 = 0;
+  bump(seen);
+  let mut t = Tally(0, Buf[u32](4));
+  t.hits += 7;
+  t.bins[2] += 9;
+  t.bins[2] *= 2;
+  let n:usize = 40000;
+  let mut out = Buf[u64](n);
+  let mut ones = Buf[u64](n);
+  for i in 0..n { ones[i] += 1; }
+  scale(out[0..n], ones[0..n]);
+  let mut s:i32 = -7;
+  s -= 1;
+  if x != 3 || bits != 0x10 || f != 3.0 || seen != 1 || t.hits != 7 || t.bins[2] != 18 { return 1; }
+  if out[n - 1] != 3 || s != -8 { return 2; }
+  return 0;
+}
+"""
+
+
+def written_out(source: str) -> str:
+    """Every `p op= v;` as `p = p op v;`."""
+    import re
+
+    return re.sub(r"([\w.\[\]]+) ([-+*/%&|^])= ([^;]+);", r"\1 = \1 \2 \3;", source)
+
+
+def test_compound_assignment_is_its_long_form():
+    """`x += 5` checks as `x = x + 5`: the same effect rows and guard counts in the receipt, and for a place without
+    an index the same C++ line. With an index the emitter finds the element once, so it pays one guard, not two."""
+    short, long = compile_source(COMPOUND), compile_source(written_out(COMPOUND))
+    assert "+=" not in written_out(COMPOUND) and "t.bins[2] = t.bins[2] * 2;" in written_out(COMPOUND)
+    for name, row in long[1]["functions"].items():
+        assert short[1]["functions"][name]["effects"] == row["effects"], name
+    assert "v_x = cr::add<std::uint64_t>(v_x, static_cast<std::uint64_t>(5ULL));" in short[0]
+    assert short[0].count("cr::at((v_t).v_bins.data()") == 3 and long[0].count("cr::at((v_t).v_bins.data()") == 5
+    assert canonical_source(COMPOUND).count("+=") == COMPOUND.count("+=")
+    assert (
+        compile_source(canonical_source(COMPOUND))[0] == compile_source(canonical_source(canonical_source(COMPOUND)))[0]
+    )
+    assert format_source(COMPOUND) == format_source(format_source(COMPOUND)) and "  bits ^= 0x21;\n" in format_source(
+        COMPOUND
+    )
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_compound_assignment_runs_natively(tmp_path, cxx):
+    assert run(tmp_path, compile_source(COMPOUND)[0], *sanitized(cxx), *WARNINGS, cxx=cxx).returncode == 0
+
+
+def test_compound_assignment_in_lanes_is_race_free(tmp_path):
+    """`out[i] += x[i] * 3` in a region of 40000 lanes on the host pool, under ThreadSanitizer."""
+    done = watched(tmp_path, compile_source(COMPOUND)[0], "clang++", "thread")
+    assert done.returncode == 0, done.stderr[-2000:]
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_compound_assignment_traps_where_its_long_form_does(tmp_path, cxx):
+    """Checked arithmetic stays checked: `x += big` past the maximum aborts, and so does the written-out form."""
+    trap = "fn main() -> i32 { let mut x:i32 = 2; x += 2147483647; return x; }"
+    for source in [trap, written_out(trap)]:
+        assert run(tmp_path, compile_source(source)[0], *sanitized(cxx)[:4], cxx=cxx).returncode == -6
+
+
+@pytest.mark.parametrize(
+    ("code", "body"),
+    [
+        ("E-IMMUTABLE", "let x:u64 = 1; x += 1;"),
+        ("E-OPERATOR", "let mut f = true; f |= false;"),  # bitwise forms are unsigned, as their operators are
+        ("E-OPERATOR", "let mut s:i32 = 1; s &= 3;"),
+        ("E-TYPE-MISMATCH", "let mut x:u64 = 1; x += 1.5;"),
+        ("E-TYPE-MISMATCH", "let mut b = Buf[u8](2); b += 1;"),
+        ("E-EXTENT-FIELD", "let mut c = C(2, Buf[f64](2)); c.rows += 1;"),
+        ("E-LEASED", "let mut d = Buf[u64](4); let t = spawn fill(d); d[0] += 1; wait(t);"),
+        ("E-EFFECT-ORDER", "let mut b = Buf[i32](2); b[0] += say(65);"),
+        ("E-NAME", "let mut x:u64 = 1; x +%= 1;"),  # wrapping arithmetic stays by name: x = add_wrap(x, 1)
+    ],
+)  # fmt: skip
+def test_compound_assignment_keeps_every_rule_of_its_long_form(code, body):
+    head = ("struct C { rows:usize; p:Buf[f64][rows]; }\nfn fill(n:usize, d:rw<u64>[n]) { d[0] = 1; }\n"
+            "extern fn putchar(c:i32) -> i32 effects(io);\nfn say(c:i32) -> i32 { unsafe { return putchar(c); } }\n")  # fmt: skip
+    refused(code, head + f"fn main() -> i32 {{ {body} return 0; }}\n")

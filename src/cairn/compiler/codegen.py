@@ -52,6 +52,7 @@ class Emitter:
         self.dynamic: dict[str, None] = {}  # Traits used behind dyn, in first-use order.
         self.vtables: dict[str, str] = {}
         self.tables: dict[str, tuple[str, Type]] = {}  # Which (trait, type) owns each vtable symbol.
+        self.aliases: dict[int, str] = {}  # A node already evaluated into a C++ name: `p` of `p += v`.
         self.c = checker or Checker(p)
         if checker is None:
             self.c.check()
@@ -167,7 +168,7 @@ class Emitter:
         return text + ".data()", (str(ty.args[1]) if ty.name == "Array" else text + ".size()")
 
     def expr(self, e: Expr) -> str:
-        return getattr(self, "e_" + e.tag)(e)
+        return self.aliases.get(id(e)) or getattr(self, "e_" + e.tag)(e)
 
     def e_int(self, e: Expr) -> str:
         return self.literal(int(e.val), e.ty)
@@ -491,7 +492,17 @@ class Emitter:
                   f"  v_{s.name} = {combine};", "}")  # fmt: skip
 
     def s_assign(self, s: Stmt, es: list[str]):
-        self.put(f"{es[0]} = {es[1]};")
+        at = s.exprs[0]
+        while at.tag == "field":
+            at = at.args[0]
+        if not s.op or at.tag != "index":
+            self.put(f"{es[0]} = {es[1]};")
+            return
+        place = self.fresh("cr_place_")[0]  # `xs[i] += v` finds its element, and pays its guard, once.
+        self.aliases[id(s.exprs[1].args[0])] = place
+        value = self.expr(s.exprs[1])
+        del self.aliases[id(s.exprs[1].args[0])]
+        self.nest("{", lambda: self.puts(f"auto& {place} = {es[0]};", f"{place} = {value};"))
 
     def s_break(self, s: Stmt, _: list[str]):
         self.put(f"goto cr_{s.tag}_{self.loops[-1]};")

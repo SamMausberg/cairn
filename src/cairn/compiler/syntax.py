@@ -10,7 +10,7 @@ import hashlib
 import re
 from typing import Any
 
-from .lexing import IDENT, NUMBER, RESERVED, Token, lex, unescape
+from .lexing import COMPOUND, IDENT, NUMBER, RESERVED, Token, lex, unescape
 from .tree import INTRINSIC_TYPES as INTRINSIC_TYPES  # The language server takes the vocabulary from here.
 from .tree import (
     PLACES,
@@ -35,6 +35,12 @@ PREC = {"||": 1, "&&": 2, "|": 3, "^": 4, "&": 5, "==": 6, "!=": 6, "<": 7, "<="
 PREC |= {"+": 8, "-": 8, "*": 9, "/": 9, "%": 9}
 REDUCERS = {"+", "*", "&", "|", "^", "add_wrap", "mul_wrap", "min", "max"}
 ARM_STATEMENTS = {"return", "break", "continue", "assign", "expr"}  # what an arm may be without braces
+
+
+def copied(e: Expr) -> Expr:
+    """The place `p += v` reads, as a node of its own: checked and annotated apart from the place it writes, and
+    without a source span, so the one place written is the one site a hover or an edit sees."""
+    return Expr(e.tag, e.val, [copied(a) for a in e.args], e.line, e.col, ref=e.ref)
 
 
 class Parser:
@@ -511,6 +517,12 @@ class Parser:
             v = self.expr()
             self.need(";")
             return Stmt("assign", exprs=[e, v], **at)
+        if self.t.s in COMPOUND:  # `p += v` is checked as `p = p + v`; the emitter evaluates `p` once.
+            op = COMPOUND[self.t.s]
+            self.i += 1
+            v = self.expr()
+            self.need(";")
+            return Stmt("assign", exprs=[e, Expr("binary", op, [copied(e), v], e.line, e.col)], op=op, **at)
         self.need(";")
         return Stmt("expr", exprs=[e], **at)
 

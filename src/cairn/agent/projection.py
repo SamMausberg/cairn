@@ -102,7 +102,7 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
         elif s.tag == "reduce":
             line = f"let {s.name}{typed} = reduce {s.op} {'parallel' if s.pooled else 'for'} {s.binder} in {es[0]} yield {es[1]};"
         elif s.tag == "assign":
-            line = f"{es[0]} = {es[1]};"
+            line = f"{es[0]} {s.op}= {format_expr(s.exprs[1].args[1])};" if s.op else f"{es[0]} = {es[1]};"
         elif s.tag in {"break", "continue"}:
             line = s.tag + ";"
         elif s.tag == "return":

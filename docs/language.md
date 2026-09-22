@@ -14,6 +14,8 @@ The scalars are `bool`, the unsigned `u8 u16 u32 u64 usize` (`usize` is 64-bit),
 
 `+ - *` abort on overflow in every build. `/` and `%` reject a zero divisor and the signed minimum over `-1`, and a signed remainder truncates toward zero. `add_wrap sub_wrap mul_wrap` are modular, `shl_wrap` and `shr` take a `usize` count below the width, `& | ^ ~` are unsigned, and `min` and `max` are integer-only.
 
+`x += e` is `x = x + e`, checked the same way, and so are `-= *= /= %= &= |= ^=`. The place is evaluated once, so `xs[i] += 1` finds its element and pays its bounds guard once. There is no wrapping compound form: write `x = add_wrap(x, e)`.
+
 ```cairn
 fn payload(total:u32, header:u32) -> u32 = total - header;   // aborts if header > total
 fn share(part:u32, whole:u32) -> f64 = f64(part) / f64(whole);
@@ -21,8 +23,10 @@ fn share(part:u32, whole:u32) -> f64 = f64(part) / f64(whole);
 fn main() -> i32 {
   let total:u32 = 1500;
   if payload(total, 20) != 1480 { return 1; }
-  let seq:u32 = 4294967290;
-  if add_wrap(seq, 10) != 4 { return 2; }                    // modular, and it says so
+  let mut seq:u32 = 4294967290;
+  seq = add_wrap(seq, 10);                                   // modular, and it says so
+  seq += 1;                                                  // checked, as seq = seq + 1 is
+  if seq != 5 { return 2; }
   let drift:i32 = -7;
   if drift / 2 != -3 || drift % 2 != -1 { return 3; }        // toward zero
   if shr(0xff00, 8) != 0xff || (0xf0 & 0x3c) != 0x30 { return 4; }

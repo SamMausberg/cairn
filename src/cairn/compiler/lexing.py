@@ -20,8 +20,9 @@ class Token:
 TOKEN = re.compile(
     r"//[^\n]*|\s+|\"(?:[^\"\\\n]|\\.)*\"|'(?:[^'\\\n]|\\.)+'|0x[0-9A-Fa-f]+"
     r"|(?:[0-9]+\.[0-9]+(?:[eE][+-]?[0-9]+)?|[0-9]+(?:[eE][+-]?[0-9]+))|[0-9]+"
-    r"|[A-Za-z_$][A-Za-z_0-9$]*|=>|->|\.\.|==|!=|<=|>=|&&|\|\||[{}()\[\],;:.@+*/%<>=!&|^~-]"
+    r"|[A-Za-z_$][A-Za-z_0-9$]*|=>|->|\.\.|==|!=|<=|>=|&&|\|\||[-+*/%&|^]=|[{}()\[\],;:.@+*/%<>=!&|^~-]"
 )
+COMPOUND = {op + "=": op for op in "+-*/%&|^"}  # `x += e` is the checked `x = x + e`; wrapping stays by name
 IDENT = re.compile(r"[A-Za-z_$][A-Za-z_0-9$]*\Z")
 NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\Z")
 RESERVED = set(  # One readable paragraph of words beats a wall of quoted strings.
