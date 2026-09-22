@@ -1,0 +1,487 @@
+{
+  "commit": "164b63efe211f4edecdb22b3d3c98cd686a659db",
+  "programs": [
+    {
+      "program": "bench/suite/kernels/compact_even/kernel.cairn",
+      "before": {
+        "bounds": 2,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 3
+      },
+      "after": {
+        "bounds": 0,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 3
+      },
+      "discharged_check_sites": {
+        "bounds": 2
+      }
+    },
+    {
+      "program": "bench/suite/kernels/dot_f64/kernel.cairn",
+      "before": {
+        "bounds": 2,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 2
+      },
+      "after": {
+        "bounds": 0,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 2
+      },
+      "discharged_check_sites": {
+        "bounds": 2
+      }
+    },
+    {
+      "program": "bench/suite/kernels/histogram_u32/kernel.cairn",
+      "before": {
+        "bounds": 4,
+        "overflow": 0,
+        "conversion": 1,
+        "division": 0,
+        "part": 0,
+        "entry": 3
+      },
+      "after": {
+        "bounds": 0,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 3
+      },
+      "discharged_check_sites": {
+        "bounds": 4,
+        "conversion": 1
+      }
+    },
+    {
+      "program": "bench/suite/kernels/mixed_u64/kernel.cairn",
+      "before": {
+        "bounds": 2,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 3
+      },
+      "after": {
+        "bounds": 0,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 3
+      },
+      "discharged_check_sites": {
+        "shift": 1,
+        "bounds": 2
+      }
+    },
+    {
+      "program": "bench/suite/kernels/saxpy_f32/kernel.cairn",
+      "before": {
+        "bounds": 3,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 5
+      },
+      "after": {
+        "bounds": 0,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 5
+      },
+      "discharged_check_sites": {
+        "bounds": 3
+      }
+    },
+    {
+      "program": "bench/suite/kernels/stencil_1d/kernel.cairn",
+      "before": {
+        "bounds": 12,
+        "overflow": 3,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 6
+      },
+      "after": {
+        "bounds": 2,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 6
+      },
+      "discharged_check_sites": {
+        "overflow": 3,
+        "bounds": 10
+      }
+    },
+    {
+      "program": "bench/suite/kernels/sum_u64_wrap/kernel.cairn",
+      "before": {
+        "bounds": 2,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 2
+      },
+      "after": {
+        "bounds": 0,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 2
+      },
+      "discharged_check_sites": {
+        "bounds": 2
+      }
+    },
+    {
+      "program": "bench/suite/kernels/tasks_split/kernel.cairn",
+      "before": {
+        "bounds": 1,
+        "overflow": 4,
+        "conversion": 4,
+        "division": 1,
+        "part": 4,
+        "entry": 2
+      },
+      "after": {
+        "bounds": 0,
+        "overflow": 4,
+        "conversion": 0,
+        "division": 1,
+        "part": 4,
+        "entry": 2
+      },
+      "discharged_check_sites": {
+        "bounds": 1,
+        "conversion": 4
+      }
+    },
+    {
+      "program": "examples/apps/analytics",
+      "before": {
+        "bounds": 240,
+        "overflow": 173,
+        "conversion": 169,
+        "division": 13,
+        "part": 45,
+        "entry": 87
+      },
+      "after": {
+        "bounds": 124,
+        "overflow": 165,
+        "conversion": 54,
+        "division": 13,
+        "part": 45,
+        "entry": 87
+      },
+      "discharged_check_sites": {
+        "bounds": 116,
+        "conversion": 115,
+        "shift": 60,
+        "overflow": 8
+      }
+    },
+    {
+      "program": "examples/apps/gpu_pipeline",
+      "before": {
+        "bounds": 43,
+        "overflow": 61,
+        "conversion": 21,
+        "division": 5,
+        "part": 16,
+        "entry": 47
+      },
+      "after": {
+        "bounds": 16,
+        "overflow": 55,
+        "conversion": 15,
+        "division": 5,
+        "part": 16,
+        "entry": 47
+      },
+      "discharged_check_sites": {
+        "bounds": 27,
+        "conversion": 6,
+        "overflow": 6
+      }
+    },
+    {
+      "program": "examples/apps/kvstore",
+      "before": {
+        "bounds": 94,
+        "overflow": 76,
+        "conversion": 72,
+        "division": 4,
+        "part": 32,
+        "entry": 48
+      },
+      "after": {
+        "bounds": 45,
+        "overflow": 70,
+        "conversion": 38,
+        "division": 4,
+        "part": 32,
+        "entry": 48
+      },
+      "discharged_check_sites": {
+        "bounds": 49,
+        "conversion": 34,
+        "overflow": 6,
+        "shift": 32
+      }
+    },
+    {
+      "program": "examples/apps/service",
+      "before": {
+        "bounds": 61,
+        "overflow": 81,
+        "conversion": 28,
+        "division": 4,
+        "part": 29,
+        "entry": 47
+      },
+      "after": {
+        "bounds": 40,
+        "overflow": 71,
+        "conversion": 21,
+        "division": 4,
+        "part": 29,
+        "entry": 47
+      },
+      "discharged_check_sites": {
+        "bounds": 21,
+        "conversion": 7,
+        "overflow": 10,
+        "shift": 1
+      }
+    },
+    {
+      "program": "examples/apps/simulator",
+      "before": {
+        "bounds": 58,
+        "overflow": 73,
+        "conversion": 19,
+        "division": 8,
+        "part": 14,
+        "entry": 43
+      },
+      "after": {
+        "bounds": 20,
+        "overflow": 63,
+        "conversion": 15,
+        "division": 8,
+        "part": 14,
+        "entry": 43
+      },
+      "discharged_check_sites": {
+        "overflow": 10,
+        "bounds": 38,
+        "conversion": 4
+      }
+    },
+    {
+      "program": "examples/basics/family.cairn",
+      "before": {
+        "bounds": 512,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 768
+      },
+      "after": {
+        "bounds": 0,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 768
+      },
+      "discharged_check_sites": {
+        "bounds": 512
+      }
+    },
+    {
+      "program": "examples/basics/native.cairn",
+      "before": {
+        "bounds": 23,
+        "overflow": 7,
+        "conversion": 6,
+        "division": 3,
+        "part": 0,
+        "entry": 28
+      },
+      "after": {
+        "bounds": 6,
+        "overflow": 7,
+        "conversion": 1,
+        "division": 3,
+        "part": 0,
+        "entry": 28
+      },
+      "discharged_check_sites": {
+        "bounds": 17,
+        "conversion": 5,
+        "shift": 3
+      }
+    },
+    {
+      "program": "examples/basics/wire.cairn",
+      "before": {
+        "bounds": 72,
+        "overflow": 0,
+        "conversion": 72,
+        "division": 0,
+        "part": 0,
+        "entry": 2
+      },
+      "after": {
+        "bounds": 0,
+        "overflow": 0,
+        "conversion": 34,
+        "division": 0,
+        "part": 0,
+        "entry": 2
+      },
+      "discharged_check_sites": {
+        "bounds": 72,
+        "shift": 72,
+        "conversion": 38
+      }
+    },
+    {
+      "program": "examples/embedded",
+      "before": {
+        "bounds": 14,
+        "overflow": 15,
+        "conversion": 11,
+        "division": 4,
+        "part": 1,
+        "entry": 6
+      },
+      "after": {
+        "bounds": 10,
+        "overflow": 14,
+        "conversion": 2,
+        "division": 4,
+        "part": 1,
+        "entry": 6
+      },
+      "discharged_check_sites": {
+        "conversion": 9,
+        "bounds": 4,
+        "overflow": 1
+      }
+    },
+    {
+      "program": "examples/embedded/trap",
+      "before": {
+        "bounds": 4,
+        "overflow": 0,
+        "conversion": 3,
+        "division": 0,
+        "part": 0,
+        "entry": 1
+      },
+      "after": {
+        "bounds": 1,
+        "overflow": 0,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 1
+      },
+      "discharged_check_sites": {
+        "conversion": 3,
+        "bounds": 3
+      }
+    },
+    {
+      "program": "examples/hello",
+      "before": {
+        "bounds": 0,
+        "overflow": 1,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 0
+      },
+      "after": {
+        "bounds": 0,
+        "overflow": 1,
+        "conversion": 0,
+        "division": 0,
+        "part": 0,
+        "entry": 0
+      },
+      "discharged_check_sites": {
+        "shift": 1
+      }
+    },
+    {
+      "program": "examples/systems",
+      "before": {
+        "bounds": 16,
+        "overflow": 6,
+        "conversion": 3,
+        "division": 1,
+        "part": 0,
+        "entry": 9
+      },
+      "after": {
+        "bounds": 1,
+        "overflow": 6,
+        "conversion": 0,
+        "division": 1,
+        "part": 0,
+        "entry": 9
+      },
+      "discharged_check_sites": {
+        "bounds": 15,
+        "conversion": 3
+      }
+    }
+  ],
+  "total_before": {
+    "bounds": 1165,
+    "overflow": 500,
+    "conversion": 409,
+    "division": 43,
+    "part": 141,
+    "entry": 1112
+  },
+  "total_after": {
+    "bounds": 265,
+    "overflow": 456,
+    "conversion": 180,
+    "division": 43,
+    "part": 141,
+    "entry": 1112
+  },
+  "measures": "guard calls in emitted C++ text, not guards executed at runtime"
+}
