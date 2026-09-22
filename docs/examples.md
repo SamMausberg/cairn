@@ -84,7 +84,7 @@ compact_log  ffi:close, ffi:fsync, ffi:open, ffi:rename, ffi:write, io, mmio, re
 
 ## examples/apps/service
 
-A TCP key/value service on 127.0.0.1, one client at a time, shut down by the client.
+A TCP key/value service on 127.0.0.1, serving many clients at once from one thread, shut down by a client.
 
 ```text
 put <key> <value>   ->  +ok
@@ -95,7 +95,7 @@ anything else       ->  -error
 ```
 
 ```sh
-cairn run examples/apps/service                                   # blocks: "service: listening on 39800"
+cairn run examples/apps/service                                   # until a client says quit: "service: listening on 39800"
 printf 'put a hello\nget a\ndel a\nget a\nquit\n' | nc 127.0.0.1 39800
 ```
 
@@ -109,15 +109,19 @@ printf 'put a hello\nget a\ndel a\nget a\nquit\n' | nc 127.0.0.1 39800
 
 The port is `const PORT:u16` in `src/main.cairn`. `tests/projects/test_apps.py` copies the project and rewrites it with a free port, so parallel test workers never collide.
 
-What it shows. A linear `Socket` per connection: `let c = try net.accept(server); defer net.close(c);` inside the accept loop, so the deferred close runs at the end of each iteration, and forgetting either close is `E-LINEAR-LEAK`, not a descriptor leak. Parsing without substrings: a borrow cannot be returned, so `word_end` answers with an index and the request is sliced at the call site, `find(t, k, line[key_lo..key_hi])`, and nothing is copied until a key is stored. One buffer, no allocation on the request path: `serve` keeps a 4096-byte `buffer`, finds a newline in the filled prefix, answers, then shifts the remainder down with an ordinary loop, since `mem.copy` would be rejected here (`E-ALIAS`). State that outlives connections: the `Table` lives in `run`, so the second client sees what the first one stored.
+What it shows. One thread and one I/O ring: `run` keeps the accept and every client's receive in flight together, and `q.next(tag, result)` answers whichever finished first. The tag says which: 0 is the accept, `k + 1` is client `k`'s receive. The buffer a receive fills comes back with its result and goes straight into the next receive, so nothing is allocated per request except the answer to `get`. When a client says `quit`, `run` cancels the accept and every idle receive, and `defer wait(q)` collects what the cancels stopped before the listener closes. `tests/projects/test_apps.py` holds three clients connected at once, interleaves their requests, and checks that the process never has a second thread.
+
+Parsing without substrings: a borrow cannot be returned, so `word_end` answers with an index and the request is sliced at the call site, `find(t, k, line[key_lo..key_hi])`, and nothing is copied until a key is stored. Each client keeps its pending line in its own slot; `take_in` appends what arrived, answers every complete line, and shifts the remainder down with an ordinary loop, since `mem.copy` would be rejected there (`E-ALIAS`). The `Table` lives in `run`, so every client sees what the others stored.
 
 ```text
-respond  alloc, ffi:send, free, io, mmio, read:c, read:line, read:t, trap, write:t, zero_init
-serve    alloc, ffi:recv, ffi:send, free, io, mmio, read:c, read:t, trap, write:t, zero_init
-run      + ffi:socket, ffi:bind, ffi:listen, ffi:accept, ffi:setsockopt, ffi:close, ffi:write
+respond  alloc, ffi:send, free, io, mmio, read:line, read:t, trap, write:t, zero_init
+take_in  ... read:c, read:got, write:c, write:t
+admit    alloc, ffi:close, free, io, read:clients, read:q, write:clients, write:q, trap, zero_init
+hang_up  ffi:close, io, read:clients, trap, write:clients
+run      + ffi:socket, ffi:bind, ffi:listen, ffi:setsockopt, ffi:close, ffi:write
 ```
 
-`respond` reads the connection and the request and writes only the table, and the row says which argument each read and write belongs to. The calls that open and close a socket appear only in `run`, so the protocol layer cannot open or close a connection behind the loop's back. `alloc` is there because `get` builds its answer in a `Vec`; a reply of a fixed shape would not allocate. Known limit: blocking and sequential, one `accept` at a time, no timeout and no poll, so a client that opens a connection and says nothing stops the service until it goes away.
+`respond` reads the request and writes only the table, and the row says which argument each read and write belongs to. `admit` writes the ring it was lent, because every submission changes it. `alloc` is in `respond` because `get` builds its answer in a `Vec`; a reply of a fixed shape would not allocate. A reply is a blocking send, which a line always fits; a client that stops reading its replies can still stall the service. The table holds 32 clients, and a 33rd connection is closed as soon as it is accepted.
 
 ## examples/apps/analytics
 

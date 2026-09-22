@@ -1,8 +1,8 @@
 // Blocking TCP over the C library. A Socket is linear, so a descriptor cannot be dropped by
 // forgetting it; the failure paths below close the raw descriptor *before* a Socket exists,
 // which is why they still read errno first - close() would overwrite it.
-// Cost: one syscall per call except `send`, which loops until the whole view is gone. There is
-// no polling, no timeout and no concurrency here: one connection is served at a time.
+// Cost: one syscall per call except `send` and `send_all`, which loop until the whole view is gone.
+// Everything here blocks; an I/O ring (`IoRing`) keeps accepts and receives in flight without a thread.
 module std.net;
 import std.core (Result);
 import std.io (IoError);
@@ -62,11 +62,14 @@ pub fn connect_to(ip:ro<u8>[4], port:u16) -> Result[Socket, IoError] {
   }
 }
 
-pub fn send(s:ro<Socket>, n:usize, data:ro<u8>[n]) -> Result[usize, IoError] {
+pub fn send(s:ro<Socket>, n:usize, data:ro<u8>[n]) -> Result[usize, IoError] = send_all(s.fd, data);
+
+// Loops until the whole view is gone. On a raw descriptor, for one an I/O ring's accept answered.
+pub fn send_all(fd:i32, n:usize, data:ro<u8>[n]) -> Result[usize, IoError] {
   let mut done:usize = 0;
   while done < n {
     unsafe {
-      let sent = sys.send(s.fd, data[done..n], n - done, 0);
+      let sent = sys.send(fd, data[done..n], n - done, 0);
       if sent <= 0 { return error(); }
       done = done + usize(sent);
     }

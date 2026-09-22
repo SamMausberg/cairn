@@ -345,7 +345,7 @@ Effects (any arguments within its bounds): `diverge`, `ffi_precondition`, `local
 
 # std.net
 
-Blocking TCP over the C library. A Socket is linear, so a descriptor cannot be dropped by forgetting it; the failure paths below close the raw descriptor *before* a Socket exists, which is why they still read errno first - close() would overwrite it. Cost: one syscall per call except `send`, which loops until the whole view is gone. There is no polling, no timeout and no concurrency here: one connection is served at a time.
+Blocking TCP over the C library. A Socket is linear, so a descriptor cannot be dropped by forgetting it; the failure paths below close the raw descriptor *before* a Socket exists, which is why they still read errno first - close() would overwrite it. Cost: one syscall per call except `send` and `send_all`, which loop until the whole view is gone. Everything here blocks; an I/O ring (`IoRing`) keeps accepts and receives in flight without a thread.
 
 ```cairn
 pub linear struct Socket { fd:i32; }
@@ -370,6 +370,12 @@ Effects: `alloc`, `ffi:__errno_location`, `ffi:close`, `ffi:connect`, `ffi:socke
 pub fn send(s:ro<std.net.Socket>, n:usize, data:ro<u8>[n]@host) -> std.core.Result[usize, std.io.IoError]
 ```
 Effects: `diverge`, `ffi:__errno_location`, `ffi:send`, `ffi_precondition`, `io`, `mmio`, `read:data`, `read:s`, `trap`.
+
+```cairn
+pub fn send_all(fd:i32, n:usize, data:ro<u8>[n]@host) -> std.core.Result[usize, std.io.IoError]
+```
+Loops until the whole view is gone. On a raw descriptor, for one an I/O ring's accept answered.
+Effects: `diverge`, `ffi:__errno_location`, `ffi:send`, `ffi_precondition`, `io`, `mmio`, `read:data`, `trap`.
 
 ```cairn
 pub fn recv(s:ro<std.net.Socket>, n:usize, into:rw<u8>[n]@host) -> std.core.Result[usize, std.io.IoError]

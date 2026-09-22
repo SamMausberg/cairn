@@ -53,6 +53,7 @@ def method(c: Checker, e: Expr, name: str, args: list[Expr]) -> Type:
     if b is None or b.ty.mode == "ro":
         fail("E-WRITE-LEASE", "Submitting to a ring or collecting from it changes it; name a ring or one lent rw.", e)
     c.leased(c.where(e.args[0]), "rw", e)  # A task the ring is lent to is the only one that may use it.
+    c.effect(f"write:{root(e.args[0]).val}" if b.ty.mode == "rw" else "local_write")  # Every operation changes it.
     e.ref = ("ring", name)
     if name == "next":
         if len(args) != 2:

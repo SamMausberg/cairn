@@ -362,7 +362,7 @@ fn main() -> i32 {
 
 ## std.net
 
-Blocking TCP. A `Socket` is linear for the same reason a `File` is. There is no thread, poll or timeout in the language yet, so one connection is served at a time. An address is four bytes, so a string literal is an IPv4 address.
+Blocking TCP. A `Socket` is linear for the same reason a `File` is. To serve many connections from one thread, keep their accepts and receives in an I/O ring ([concurrency.md](concurrency.md#io-rings)) and answer with `net.send_all(fd, data)`, which takes the raw descriptor a ring's accept returns. `examples/apps/service` does exactly that. An address is four bytes, so a string literal is an IPv4 address.
 
 ```cairn
 import std.core (Result);

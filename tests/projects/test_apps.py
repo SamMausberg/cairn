@@ -77,24 +77,54 @@ def talk(stream, line):
     return stream.readline().strip()
 
 
-def test_service_speaks_its_line_protocol(tmp_path):
+def started_service(tmp_path, cxx="clang++"):
+    """The service built on a free port and running, with a client connection factory."""
     root = copied("service", tmp_path)
     source = root / "src" / "main.cairn"
     port = free_port()
     source.write_text(re.sub(r"const PORT:u16 = \d+;", f"const PORT:u16 = {port};", source.read_text()))
-    artifact = built(root, tmp_path)
-    server = subprocess.Popen([artifact], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    try:
-        client = None
+    server = subprocess.Popen([built(root, tmp_path, cxx)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    def connect():
         for _ in range(100):  # the listener is up within a few milliseconds of exec
             try:
-                client = socket.create_connection(("127.0.0.1", port), timeout=5)
-                break
+                return socket.create_connection(("127.0.0.1", port), timeout=5)
             except OSError as refused:
                 if server.poll() is not None:
                     raise AssertionError("service exited before it listened") from refused
                 time.sleep(0.05)
-        assert client is not None, "service never accepted a connection"
+        raise AssertionError("service never accepted a connection")
+
+    return server, connect, port
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_service_serves_clients_at_once_from_one_thread(tmp_path, cxx):
+    """Three clients connected together, their requests interleaved: the ring answers each as its line arrives,
+    where the blocking service served one connection until it closed. Only the main thread ever runs."""
+    server, connect, _ = started_service(tmp_path, cxx)
+    try:
+        streams = [connect().makefile("rw", newline="\n") for _ in range(3)]
+        assert talk(streams[0], "put shared 1") == "+ok"
+        assert talk(streams[1], "get shared") == "= 1"
+        assert talk(streams[2], "put shared 3") == "+ok"
+        assert talk(streams[0], "get shared") == "= 3"
+        threads = int(Path(f"/proc/{server.pid}/status").read_text().split("Threads:")[1].split()[0])
+        assert threads == 1, f"the service runs {threads} threads"
+        streams[1].close()  # one client leaves; the others are still served
+        assert talk(streams[2], "del shared") == "+ok"
+        assert talk(streams[0], "quit") == "+bye"
+        assert server.wait(timeout=30) == 0  # the accept and the idle receive were cancelled, not awaited
+    finally:
+        if server.poll() is None:
+            server.kill()
+            server.wait(timeout=10)
+
+
+def test_service_speaks_its_line_protocol(tmp_path):
+    server, connect, port = started_service(tmp_path)
+    try:
+        client = connect()
         with client, client.makefile("rw", newline="\n") as stream:
             assert talk(stream, "put alpha hello world") == "+ok"
             assert talk(stream, "get alpha") == "= hello world"

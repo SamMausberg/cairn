@@ -1,16 +1,22 @@
-// A line protocol over TCP on the loopback address, one client at a time:
+// A line protocol over TCP on the loopback address, served to many clients at once from one thread:
 //   put <key> <value>  ->  +ok          get <key>  ->  = <value>   or  -missing
 //   del <key>          ->  +ok/-missing quit       ->  +bye, and the service stops
-// Everything blocks: there is no thread, no poll and no timeout in the language yet, so the
-// shape of the program is exactly the shape of the protocol.
+// One I/O ring holds the accept and every client's receive in flight together, and hands each back as
+// it finishes; nothing here is a thread. A reply is one blocking send, since a line fits the socket.
 import std.core (Option, Result);
 import std.io (IoError);
 import std.net (Socket);
+import std.sys;
 import std.text;
 import std.vec (Vec);
 
 const PORT:u16 = 39800;
 const LIMIT:usize = 4096;
+const CLIENTS:usize = 32;
+const ACCEPT:u64 = 0; // the tag of the one accept in flight; client k's receive is tagged k + 1
+
+// One client: whether the slot is taken, its descriptor, and the bytes of a line not yet complete.
+struct Client { live:bool; fd:i32; have:usize; line:Buf[u8]; }
 
 // The end of the word starting at `from`: the next space, or the end of the line.
 fn word_end(n:usize, line:ro<u8>[n], from:usize) -> usize {
@@ -20,35 +26,35 @@ fn word_end(n:usize, line:ro<u8>[n], from:usize) -> usize {
   }
 }
 
-fn say(c:ro<Socket>, n:usize, message:ro<u8>[n]) -> Result[usize, IoError] {
-  let body = try net.send(c, n, message);
-  let end = try net.send(c, 1, "\n");
+fn say(fd:i32, n:usize, message:ro<u8>[n]) -> Result[usize, IoError] {
+  let body = try net.send_all(fd, message);
+  let end = try net.send_all(fd, "\n");
   return Result.Ok(body + end);
 }
 
-// One request. The answer goes back on `c`; `true` means the client asked the service to stop.
-fn respond(c:ro<Socket>, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, IoError] {
+// One request. The answer goes back on `fd`; `true` means the client asked the service to stop.
+fn respond(fd:i32, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, IoError] {
   let verb = word_end(n, line, 0);
   if text.equal(verb, line[0..verb], 4, "quit") {
-    let bye = try say(c, 4, "+bye");
+    let bye = try say(fd, 4, "+bye");
     return Result.Ok(true);
   }
   if verb >= n {
-    let bad = try say(c, 6, "-error");
+    let bad = try say(fd, 6, "-error");
     return Result.Ok(false);
   }
   let key_lo = verb + 1;
   let key_hi = word_end(n, line, key_lo);
   let k = key_hi - key_lo;
   if k == 0 {
-    let bad = try say(c, 6, "-error");
+    let bad = try say(fd, 6, "-error");
     return Result.Ok(false);
   }
   if text.equal(verb, line[0..verb], 3, "put") && key_hi < n {
     let value_lo = key_hi + 1;
     let v = n - value_lo;
     put(t, k, line[key_lo..key_hi], v, line[value_lo..n]);
-    let ok = try say(c, 3, "+ok");
+    let ok = try say(fd, 3, "+ok");
     return Result.Ok(false);
   }
   if text.equal(verb, line[0..verb], 3, "get") {
@@ -60,50 +66,66 @@ fn respond(c:ro<Socket>, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, I
         let v = t.index.vals[slot].value.len;
         out.extend_from(v, t.index.vals[slot].value.data[0..v]);
         let m = out.len;
-        let sent = try say(c, m, out.data[0..m]);
+        let sent = try say(fd, m, out.data[0..m]);
       }
-      Option.None => { let missing = try say(c, 8, "-missing"); }
+      Option.None => { let missing = try say(fd, 8, "-missing"); }
     }
     return Result.Ok(false);
   }
   if text.equal(verb, line[0..verb], 3, "del") {
     if erase(t, k, line[key_lo..key_hi]) {
-      let ok = try say(c, 3, "+ok");
+      let ok = try say(fd, 3, "+ok");
     } else {
-      let missing = try say(c, 8, "-missing");
+      let missing = try say(fd, 8, "-missing");
     }
     return Result.Ok(false);
   }
-  let bad = try say(c, 6, "-error");
+  let bad = try say(fd, 6, "-error");
   return Result.Ok(false);
 }
 
-// Serve one connection until the client closes it or asks the service to stop. The buffer holds
-// one pending line at most; a line longer than LIMIT is answered with an error and dropped.
-fn serve(c:ro<Socket>, t:rw<Table>) -> Result[bool, IoError] {
-  buffer input:u8[4096] = zeroed;
-  let mut have:usize = 0;
-  while true {
-    match text.find_byte(have, input[0..have], '\n', 0) {
-      Option.Some(at) => {
-        let stop = try respond(c, t, at, input[0..at]);
-        let rest = have - (at + 1);
-        for i in 0..rest { input[i] = input[at + 1 + i]; }
-        have = rest;
-        if stop { return Result.Ok(true); }
-      }
-      Option.None => {
-        if have == LIMIT {
-          let bad = try say(c, 6, "-error");
-          have = 0;
-        }
-        let got = try net.recv(c, LIMIT - have, input[have..LIMIT]);
-        if got == 0 { return Result.Ok(false); }
-        have = have + got;
-      }
+// A slot for a client the ring's accept answered, and its first receive; a full table refuses it.
+fn admit(q:rw<IoRing>, clients:rw<Buf[Client]>, fd:i32) {
+  for k in 0..CLIENTS {
+    if !clients[k].live {
+      clients[k] = Client(true, fd, 0, Buf[u8](LIMIT));
+      let first = Buf[u8](LIMIT);
+      q.recv(fd, first, LIMIT, u64(k) + 1);
+      return;
     }
   }
-  return Result.Ok(false);
+  unsafe { let refused = sys.close(fd); }
+}
+
+fn hang_up(clients:rw<Buf[Client]>, k:usize) {
+  unsafe { let closed = sys.close(clients[k].fd); }
+  clients[k].live = false; // its line buffer is released when the slot is reused
+}
+
+// What one receive brought: appended to the client's pending line, then every complete line answered.
+// A line longer than LIMIT is answered with an error and dropped. `true` means a client said quit.
+fn take_in(c:rw<Client>, t:rw<Table>, n:usize, got:ro<u8>[n]) -> Result[bool, IoError] {
+  for i in 0..n {
+    if c.have == LIMIT {
+      let bad = try say(c.fd, 6, "-error");
+      c.have = 0;
+    }
+    c.line[c.have] = got[i];
+    c.have = c.have + 1;
+  }
+  let mut stop = false;
+  while !stop {
+    match text.find_byte(c.have, c.line[0..c.have], '\n', 0) {
+      Option.Some(at) => {
+        stop = try respond(c.fd, t, at, c.line[0..at]);
+        let rest = c.have - (at + 1);
+        for i in 0..rest { c.line[i] = c.line[at + 1 + i]; }
+        c.have = rest;
+      }
+      Option.None => { return Result.Ok(false); }
+    }
+  }
+  return Result.Ok(true);
 }
 
 fn run() -> Result[usize, IoError] {
@@ -114,12 +136,34 @@ fn run() -> Result[usize, IoError] {
   io.print(ready);
   io.print_u64(u64(PORT));
   io.newline();
+  let mut clients = Buf[Client](CLIENTS);
+  let mut q = IoRing(CLIENTS + 1);
+  defer wait(q); // after the cancels below, this collects what they stopped
+  q.accept(server.fd, ACCEPT);
   let mut running = true;
   while running {
-    let c = try net.accept(server);
-    defer net.close(c);
-    let stop = try serve(c, t);
-    if stop { running = false; }
+    let mut tag:u64 = 0;
+    let mut result:i64 = 0;
+    let data = q.next(tag, result); // whichever of them finished first
+    if tag == ACCEPT {
+      if result >= 0 { admit(q, clients, i32(result)); }
+      q.accept(server.fd, ACCEPT);
+    } else {
+      let k = usize(tag - 1);
+      if result <= 0 {
+        hang_up(clients, k); // the client closed its end, or its socket failed
+      } else {
+        let stop = try take_in(clients[k], t, usize(result), data[0..usize(result)]);
+        if stop { running = false; } else { q.recv(clients[k].fd, data, LIMIT, tag); }
+      }
+    }
+  }
+  q.cancel(ACCEPT);
+  for k in 0..CLIENTS {
+    if clients[k].live {
+      q.cancel(u64(k) + 1);
+      hang_up(clients, k);
+    }
   }
   return Result.Ok(0);
 }
