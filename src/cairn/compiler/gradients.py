@@ -178,6 +178,8 @@ class Adjoint:
 
     def region(self, s: Stmt) -> list[str]:
         """A loop or region whose body is lets and output elements, each written once at the binder."""
+        if s.tag == "for" and s.op == "elements":
+            fail("E-GRAD-FORM", "derive grad differentiates index loops: write for i in 0..len(xs) with xs[i].", s)
         if s.tag == "for":
             head = f"for {s.name} in {show(s.exprs[0])}..{show(s.exprs[1])}"
         elif s.other_names:

@@ -289,6 +289,11 @@ def test_the_row_says_what_the_gradient_writes():
         ("E-GRAD-FORM", "fn f(x:f64) -> f64 { let mut s = x; s = s * x; return s; }\nderive grad for f;"),
         ("E-GRAD-FORM", "fn f(x:f64) -> f64 { while x > 1.0 { return x; } return x; }\nderive grad for f;"),
         (
+            "E-GRAD-FORM",  # an element loop has no index to accumulate the adjoint at
+            "fn f(n:usize, x:ro<f64>[n]) -> f64 { let mut s:f64 = 0.0; for v in x { s += v; } return s; }\n"
+            "derive grad for f;",
+        ),
+        (
             "E-GRAD-FORM",
             "fn f(n:usize, x:ro<f64>[n]) -> f64 { let p = reduce * for i in n yield x[i]; return p; }\n"
             "derive grad for f;",

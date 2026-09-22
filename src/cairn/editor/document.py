@@ -240,6 +240,8 @@ def binders(cs: list[Item], lo: int, hi: int) -> list[int]:
         if word in BINDERS:
             j = i + 1 + (then == "mut")
             out += [j] if j < hi and IDENT.fullmatch(cs[j].s) and cs[j].s not in RESERVED else []
+            if word == "for" and j + 2 < hi and cs[j + 1].s == "," and IDENT.fullmatch(cs[j + 2].s):
+                out.append(j + 2)  # `for i, x in xs` binds the element too
         elif then == ":" and cs[i - 1].s in {"(", ",", "|"} and IDENT.fullmatch(word) and word not in RESERVED:
             out.append(i)  # a parameter of a function or of a closure
         elif word == "(" and i + 3 < hi and (cs[i + 2].s, cs[i + 3].s) == (")", "=>") and IDENT.fullmatch(then):
