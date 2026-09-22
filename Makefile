@@ -1,7 +1,7 @@
 PYTHON ?= python3
 CAIRN = $(PYTHON) bin/cairn
 
-.PHONY: help docs editors all check lint format test native systems proof lean gpu embedded context wheel audit demo bench
+.PHONY: help docs editors all check lint format test native systems proof lean gpu tune-device calibrate-device embedded context wheel audit demo bench
 all: lint test proof
 
 help:
@@ -13,7 +13,9 @@ help:
 	@echo 'systems   the systems examples against independent oracles'
 	@echo 'proof     certificates, the Lean build, the differential run, scalar module equivalence'
 	@echo 'lean      the Lean half of proof alone'
-	@echo 'gpu       the only target that runs device code: CUDA runtime, lanes, apps, the device benchmark'
+	@echo 'gpu       runs device code: CUDA runtime, lanes, device plans, apps, the device benchmark'
+	@echo 'tune-device      times device plans: FILE=... SYMBOL=... AT=n=1e7 (runs device code)'
+	@echo 'calibrate-device measures the device into results/perf_model/device.json (runs device code)'
 	@echo 'embedded  the freestanding image under QEMU (needs an AArch64 host)'
 	@echo 'bench     the preregistered CPU baseline suite (hours)'
 	@echo 'docs      regenerate docs/std_api.md'
@@ -67,8 +69,17 @@ lean:
 # (tools/support.py: device_reason, device_lock). Everything else leaves the device alone.
 gpu:
 	CAIRN_GPU_TESTS=1 $(PYTHON) -m pytest -q -p no:xdist tests/runtime/test_native_runtime.py \
-	  tests/soundness/test_concurrency.py tests/projects/test_apps.py tests/projects/test_app_analytics.py
+	  tests/soundness/test_concurrency.py tests/soundness/test_plans.py tests/projects/test_apps.py \
+	  tests/projects/test_app_analytics.py
 	CAIRN_GPU_TESTS=1 $(PYTHON) bench/gpu/parallel_gpu.py
+
+# The two other targets that run device code. Only the owner runs them, never while anything else uses the device:
+# each device run holds /tmp/cairn-gpu.lock, rests two seconds after, and one process makes at most 64 of them.
+tune-device:
+	CAIRN_GPU_TESTS=1 $(CAIRN) tune $(FILE) --symbol $(SYMBOL) --at $(AT) --measure 3 --device --format json
+
+calibrate-device:
+	CAIRN_GPU_TESTS=1 PYTHONPATH=src $(PYTHON) -m cairn.perf.on_device --out results/perf_model/device.json
 
 embedded:
 	$(PYTHON) -m pytest -q tests/projects/test_freestanding.py

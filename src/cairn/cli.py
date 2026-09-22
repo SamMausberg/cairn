@@ -118,6 +118,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                                    "1e3, 1e5 and 1e7."}),
     ({"tune"}, "--measure", {"type": int, "default": 0, "metavar": "K", "help": "Time the K best-ranked plans and "
                              "the current one on this host, halving each round."}),
+    ({"tune"}, "--device", {"action": "store_true", "help": "Time device plans on the device; only make "
+                            "tune-device, the owner's target, allows it to run."}),
     ({"tune"}, "--write", {"action": "store_true", "help": "Write the chosen plan into the file that declares the "
                            "function."}),
     ({"predict", "shot"}, "--against", {"type": Path, "metavar": "BEFORE", "help": "What changing BEFORE into this "
@@ -362,7 +364,9 @@ def main(argv: list[str] | None = None) -> int:
 
             supplied = Profile.load(a.profile) if a.profile else None
             arch = resolve_arch(a.arch or project.arch)
-            answer = tune(project.source, a.symbol[0], priced.parse_sizes(a.at), supplied, arch, a.measure, a.cxx)
+            answer = tune(
+                project.source, a.symbol[0], priced.parse_sizes(a.at), supplied, arch, a.measure, a.cxx, a.device
+            )
             if a.write:  # Only the plan line changes: the file that declares the function gains or replaces it.
                 local = a.symbol[0].rsplit(".", 1)[-1]
                 home = next(u for u in project.units if re.search(rf"\bfn\s+{re.escape(local)}\b", read_text(

@@ -110,7 +110,7 @@ def lanes(r: Region, card: Device | None, sizes: dict[str, float], missing: set[
     """A device region by its roofline: a launch, then the larger of its bytes at the memory's sustained bandwidth
     and its instructions at the device's issue rate, both shared out over the part of the device its grid keeps
     busy, so a plan whose per_lane leaves the device underfilled is priced as underfilled. Priced from the
-    specification the profile names; registers, and so occupancy, are not known before ptxas has run."""
+    specification the profile names; its registers, and so its occupancy, count once ptxas has read them."""
     n, runs = value(r.count, sizes, missing), value(r.runs, sizes, missing)
     if card is None:
         return Piece(f"device region at line {r.line}", 0.0, "device (no device profile)", 0.0)
@@ -122,6 +122,8 @@ def lanes(r: Region, card: Device | None, sizes: dict[str, float], missing: set[
     block, per_lane, _ = r.launch
     threads = min(n / (per_lane or 1), 65535 * (block or 256))  # the grid the runtime launches
     busy = min(1.0, threads / (card.sms * card.threads_per_sm * card.occupancy_to_saturate)) if n else 1.0
+    if r.registers:  # a kernel whose registers keep few warps resident cannot keep the memory busy either
+        busy = min(busy, card.occupancy(r.registers, block or 256) / card.occupancy_to_saturate)
     memory, compute = moved / (card.dram_gbps * card.memory_efficiency * busy), issued / (card.flops["i32"] * busy)
     ns = card.launch_ns + max(memory, compute)
     bound = (

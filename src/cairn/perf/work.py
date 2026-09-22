@@ -155,6 +155,7 @@ class Region:
     weight: int = 1  # elements one index stands for, when a lane owns a block
     plan: tuple[int, int] = (0, 0)  # a host region's (grain, lanes)
     launch: tuple[int, int, int] = (0, 0, 0)  # a device region's (block, per_lane, unroll)
+    registers: int = 0  # what ptxas said its kernel uses, when something asked; 0 is not known
 
 
 @dataclass
