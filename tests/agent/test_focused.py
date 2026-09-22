@@ -186,6 +186,7 @@ def test_every_draft_the_host_offers_has_the_shape_the_schema_states():
         host.open(S, "step")["draft_protocol"],
         host.open(S, "step", site="x0")["draft_protocol"],
         host.open(S, "step")["expand_protocol"],
+        host.open(S, "step")["explain_protocol"],
         session.packet()["draft_protocol"],
         session.packet(next(iter(session.sites)))["draft_protocol"],
     ]

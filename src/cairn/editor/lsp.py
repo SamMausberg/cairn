@@ -19,7 +19,8 @@ import re
 import sys
 from typing import Any, BinaryIO
 
-from ..agent.agent_tools import explain, local, signature
+from ..agent.agent_tools import explain
+from ..agent.projection import local, signature
 from ..compiler.builtins import TABLE
 from ..compiler.cairnc import Diagnostic, compile_program
 from ..compiler.calls import extents

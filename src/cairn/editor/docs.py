@@ -9,20 +9,11 @@ from __future__ import annotations
 
 import re
 
-from ..agent.agent_tools import generics, local, signature, type_declarations
+from ..agent.projection import comment_above, generics, local, signature, type_declarations
 from ..compiler.cairnc import Checker, Parser, Program, derive, link, specialize
 from ..compiler.traits import described
 
 TABLES = (("records", "struct"), ("sums", "enum"), ("enums", "enum"), ("traits", "trait"), ("consts", "const"))
-
-
-def comment_above(text: str, offset: int) -> list[str]:
-    """The `//` lines directly above a declaration, as one paragraph (or nothing)."""
-    lines = text[:offset].rstrip().split("\n") if offset > 0 else []
-    found: list[str] = []
-    while lines and lines[-1].lstrip().startswith("//"):
-        found.insert(0, lines.pop().lstrip()[2:].strip())
-    return [" ".join(found)] if found else []
 
 
 def document(source: str, modules: list[str] | None = None) -> str:

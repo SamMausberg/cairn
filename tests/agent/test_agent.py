@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from cairn.agent.agent_tools import PROTOCOL, EditSession, canonical_source, explain, load_json_strict, semantic_ast
+from cairn.agent.agent_tools import PROTOCOL, EditSession, explain, load_json_strict
+from cairn.agent.projection import canonical_source, semantic_ast
 from cairn.compiler.cairnc import Diagnostic, Parser, compile_source
 
 R = Path(__file__).resolve().parents[2]

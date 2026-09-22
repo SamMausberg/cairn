@@ -8,7 +8,8 @@ import test_groups as groups
 import test_language as language
 import test_memory as memory
 
-from cairn.agent.agent_tools import PROTOCOL, EditSession, canonical_source
+from cairn.agent.agent_tools import PROTOCOL, EditSession
+from cairn.agent.projection import canonical_source
 from cairn.agent.sketches import Sketch
 from cairn.agent.teaching import CARDS, select_cards
 from cairn.compiler.cairnc import Diagnostic, compile_source

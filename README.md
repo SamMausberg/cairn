@@ -101,6 +101,7 @@ cairn run examples/embedded                # bare-metal AArch64 under QEMU
 | `certificates` | The seventeen arithmetic identities behind the collector check, here in Python and in `proofs/` in Lean. |
 | `check --generics` | Every generic function needs only what its bounds promise. |
 | `inspect --symbol f` | The packet an AI agent gets for an edit: its source, the interfaces around it, effects, rule cards; `--expand g` adds a body. |
+| `explain`, `explain --symbol f` | Where each function pays at run time, read from the emitted C++ and clang's optimization record: guards per line, allocations, waits, loop vectorization. Nothing runs. |
 | `fmt`, `doc`, `lsp` | A comment-preserving formatter, an API reference generated from the checked program, a language server. |
 
 `make lint test proof` are the everyday gates. `make gpu embedded` need the hardware and the emulator, and `make docs` regenerates [docs/std_api.md](docs/std_api.md).

@@ -9,7 +9,7 @@ The [README](../README.md) says what CAIRN is and how to install it. Read the re
 | [abstractions.md](abstractions.md) | Generics, bounds, traits, `dyn`, closures, modules, projects, dependencies and recipes. |
 | [concurrency.md](concurrency.md) | Tasks and leases, task groups collected in completion order, atomics and mutexes, parallel regions, `reduce` and `compact`, placement and queued device work. |
 | [library.md](library.md) | The standard library, module by module, with a program for each. [std_api.md](std_api.md) is the generated signature and effect-row reference. |
-| [tools.md](tools.md) | `cairn fmt`, `check --generics`, `doc`, `expand`, `build --incremental`, `lsp`, the editor extension, and the bare-metal AArch64 target under QEMU. |
+| [tools.md](tools.md) | `cairn fmt`, `check --generics`, `doc`, `expand`, `explain`, `build --incremental`, `lsp`, the editor extension, and the bare-metal AArch64 target under QEMU. |
 | [examples.md](examples.md) | What each project under `examples/` shows, with its output and the effect rows worth reading. |
 | [verification.md](verification.md) | The Lean proofs, the SMT source equivalence and the tests, each with what it does and does not cover. |
 | [internals.md](internals.md) | The compiler's stages and which file owns which rule, the test layers, what an accepted program promises, and how a release is cut. |

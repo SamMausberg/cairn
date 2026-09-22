@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from cairn.agent.agent_tools import canonical_source
+from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import RUNTIME, compile_source
 from emitted import refused
 

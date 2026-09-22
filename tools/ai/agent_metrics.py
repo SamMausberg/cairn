@@ -9,7 +9,8 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(R / "src"))
-from cairn.agent.agent_tools import EditSession, canonical_source, stable_json
+from cairn.agent.agent_tools import EditSession, stable_json
+from cairn.agent.projection import canonical_source
 from cairn.agent.teaching import CARDS
 from cairn.compiler.cairnc import Parser, compile_source
 

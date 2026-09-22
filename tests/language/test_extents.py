@@ -6,7 +6,7 @@ if the length had been written by hand.
 
 import pytest
 
-from cairn.agent.agent_tools import canonical_source
+from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from emitted import refused, run, sanitized
 

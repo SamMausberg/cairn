@@ -20,6 +20,8 @@ KINDS = {"library", "exe"}
 STRICT = ["-std=c++20", "-O3", "-ffp-contract=off", "-fno-fast-math", "-fno-exceptions", "-fno-rtti"]
 WARNINGS = ["-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-unused-variable"]
 WARNINGS += ["-Wno-unused-but-set-variable"]
+# What `cairn explain` adds to a host build to read clang's vectorizer verdicts, with the `.cairn` line of each loop.
+REMARKS = ["-gline-tables-only", "-fsave-optimization-record", "-foptimization-record-passes=loop-vectorize"]
 
 # Freestanding images: no C library, no C++ runtime, no start files, no dynamic loader, no unwinder.
 # -Wno-unused-command-line-argument keeps -Werror from failing on the C++ options of the .S job.

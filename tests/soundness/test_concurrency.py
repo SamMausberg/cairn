@@ -9,7 +9,7 @@ import subprocess
 
 import pytest
 
-from cairn.agent.agent_tools import canonical_source
+from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project

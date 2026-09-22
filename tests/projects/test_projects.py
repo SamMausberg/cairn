@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from cairn.agent.agent_tools import PROTOCOL, EditSession, canonical_source
+from cairn.agent.agent_tools import PROTOCOL, EditSession
+from cairn.agent.projection import canonical_source
 from cairn.agent.sketches import Sketch
 from cairn.cli import create_project, main
 from cairn.compiler.cairnc import Diagnostic, compile_source

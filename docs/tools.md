@@ -93,6 +93,27 @@ fn encode_Header(out:rw<u8>[16]@host, value:Header) {
 
 Generated code is ordinary code of the deriving module, so this is exactly what the checker sees. When a diagnostic points into a recipe, this is where to read the instance it is about. `cairn inspect --symbol` refuses a generated entry, because an edit belongs in the recipe (`E-SYMBOL`, "Edit an authored function, not a generated entry.").
 
+## cairn explain
+
+`cairn explain [path] [--symbol f]` shows where each function pays at run time, at the `.cairn` line of each cost: the guards the emitted C++ still checks, the owners it allocates, the calls whose effect row allocates, spawns, joins, locks or does I/O, the points where it waits for a task, a lock or a region, and clang's verdict on every loop. It reads all of this from the emitted C++ and from clang's optimization record for the build's own flags. Nothing is run or timed.
+
+```text
+$ cairn explain examples/apps/analytics --symbol analytics.query.above_loop
+"guards": {
+  "sites":      {"bounds": 3, "overflow": 1, "view_entry": 2},
+  "emitted":    {"bounds": 1, "disjointness": 1, "overflow": 1, "view_entry": 2},
+  "discharged": {"bounds": 2},
+  "by_line":    {"src/query.cairn:14": {"view_entry": 2, "disjointness": 1}, "src/query.cairn:18": {"bounds": 1}, ...},
+  "discharged_by_line": {"src/query.cairn:17": {"bounds": 1}, "src/query.cairn:18": {"bounds": 1}}
+},
+"loops": [{"at": "src/query.cairn:16:5", "verdict": "not vectorized",
+           "reasons": ["Cannot vectorize early exit loop", ...]}, ...]
+```
+
+`sites` is what the checker counted as needing a guard, under its names for each kind. `discharged` is the part of those the checker showed cannot fail, which the lowering leaves out, and `discharged_by_line` says where each one was. `emitted` is what the lowering wrote. It is usually `sites` less `discharged`, and higher where the lowering writes one expression twice: a part's base is written for its data and again for its size, so a guard inside it runs twice. In the example, `out[used]` on line 18 keeps its guard, because nothing bounds `used` by the extent of `out`, and so does the `+` on line 19. Clang names an early exit, which is what a guard's trap is, among its reasons for leaving the loop scalar. A loop is reported where clang placed it, so one whose first instruction was inlined from a guard shows the runtime header's line. Verdicts come from clang only: under `--cxx g++`, and for any program with device code, `vectorization` says why it was not read, and nothing is compiled with nvcc.
+
+An agent gets the same report through `cairn inspect --symbol f --explain`, or by sending `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "explain"}` after an edit, which explains the candidate the host last admitted for that session.
+
 ## cairn build --incremental
 
 One object per module, compiled against a shared interface header (`program.hpp`: types, tables and prototypes) and cached under `build/objects/`. It is opt-in because separate objects give up inlining across modules; device programs and freestanding images are always one unit. The cache is safe to delete.

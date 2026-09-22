@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from cairn.agent.agent_tools import canonical_source
+from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from emitted import SANITIZED, WARNINGS, refused, run, sanitized
 

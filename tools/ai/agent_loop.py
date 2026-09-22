@@ -69,7 +69,7 @@ def run(source, contract, command, attempts=4, public_cases=3, adapter_kind="ext
                 try:
                     edit = load_json_strict(raw)
                     typed = host.respond(edit)
-                    if typed["protocol"] == "cairn.expansion/1":
+                    if typed.get("status") != "typed":  # An expansion or an explanation, not a candidate.
                         feedback, tests = typed, {"status": "not-run"}
                     else:
                         candidate = host.admitted[edit["handle"]][-1][0]

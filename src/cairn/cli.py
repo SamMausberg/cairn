@@ -87,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         "run": "Build, then run under process limits, or under the target's emulator.",
         "test": "Run the project's finite task contracts against a native build.",
         "inspect": "Print the packet an editing agent gets for one symbol.",
+        "explain": "Where each function pays at run time: guards, allocations, waits and loop vectorization.",
         "doc": "Generate the API reference of the checked program, as Markdown.",
     }
     for name, help in commands.items():
@@ -94,8 +95,11 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument(
             "path", nargs="?", default=".", help="A .cairn file, a project directory or a manifest; default: here."
         )
-        if name in {"build", "run", "test"}:
+        if name in {"build", "run", "test", "explain"}:
             c.add_argument("--cxx", default="clang++")
+        if name == "explain":
+            c.add_argument("--symbol", action="append", help="Explain this function only (repeatable).")
+            c.add_argument("--arch", choices=sorted(ARCHS))
         if name == "doc":
             c.add_argument(
                 "--module", action="append", help="Document this module (repeatable); default: the project's own."
@@ -126,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
                            help="focused: the symbol and the interfaces around it; component: its whole call graph.")  # fmt: skip
             c.add_argument("--expand", action="append", default=[], metavar="NAME",
                            help="Disclose this function's source or this type first, as an expand request would.")  # fmt: skip
+            c.add_argument("--explain", action="store_true", help="Attach cairn explain for the disclosed functions.")
     v = sub.add_parser("verify", help="SMT source equivalence, not native or Lean verification.")
     v.add_argument("reference", type=Path)
     v.add_argument("candidate", type=Path)
@@ -233,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
             report(result)
             return 1 if any(v != "ok" for v in result.get("generics", {}).values()) else 0
         if a.command == "expand":  # What the derivations generated, as source.
-            from .agent.agent_tools import expanded_source
+            from .agent.projection import expanded_source
 
             print(expanded_source(project.source), end="")
             return 0
@@ -248,7 +253,16 @@ def main(argv: list[str] | None = None) -> int:
             session = EditSession(project.source, a.symbol, scope=a.scope)
             if a.expand:
                 session.expand(a.expand)
-            report(session.packet())
+            report({**session.packet(), **({"performance": session.explain()} if a.explain else {})})
+            return 0
+        if a.command == "explain":
+            from .agent.explain import explain
+
+            chosen = set(a.symbol) if a.symbol else None
+            result = explain(project.source, project.origin, chosen, a.cxx, a.arch or project.arch, project.root)
+            if chosen and chosen - set(result["functions"]):
+                raise ProjectError(f"No function {sorted(chosen - set(result['functions']))[0]} to explain.")
+            report(result)
             return 0
         if a.command == "test":
             from .agent.agent_tools import load_json_strict

@@ -5,7 +5,8 @@ import subprocess
 
 import pytest
 
-from cairn.agent.agent_tools import EditSession, canonical_source
+from cairn.agent.agent_tools import EditSession
+from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import RUNTIME, Diagnostic, compile_source
 from emitted import SANITIZED, WARNINGS, refused, run
 
