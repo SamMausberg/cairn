@@ -226,13 +226,15 @@ def test_the_release_runs_at_the_drop(cxx, tmp_path):
     assert subprocess.run([tmp_path / "p"], timeout=120, env=options).returncode == 0
 
 
-def test_semantics_models_scratch_storage_but_not_a_moved_owner():
+def test_semantics_models_scratch_storage_and_a_moved_owner():
     from cairn.verify.scalar_semantics import equivalent
 
     zeroed = equivalent("fn f()->u64=0;", "fn f()->u64 { buffer b:u64[4]=zeroed;return b[0]; }", "f")
     assert zeroed["status"] == "smt-equivalent"  # Zeroed scratch; a failed allocation is outside the model.
     moved = "fn f(n:usize)->usize { let mut b=Buf[u64](n); let c=take(b); return len(c); }"
-    assert equivalent(moved, moved, "f")["status"] == "unknown"
+    assert equivalent(moved, moved, "f")["status"] == "smt-equivalent"  # take moves the storage out.
+    emptied = "fn f(n:usize)->usize { let mut b=Buf[u64](n); let c=take(b); return len(b); }"
+    assert equivalent(moved, emptied, "f")["status"] == "counterexample"  # what is left behind has length 0
 
 
 # A declared field extent: `price` holds as many elements as `rows` says, so a call needs no part. ------------

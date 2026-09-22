@@ -191,7 +191,7 @@ def test_native(cxx, tmp_path):
         assert lib.cf_scoped(n) == 0
 
 
-def test_value_equivalence_covers_sums_but_not_heap_storage():
+def test_value_equivalence_covers_sums_and_moved_owners_but_not_an_owner_inside_a_value():
     from cairn.verify.scalar_semantics import equivalent
 
     assert equivalent(SOURCE, SOURCE, "use")["status"] == "smt-equivalent"
@@ -201,4 +201,7 @@ def test_value_equivalence_covers_sums_but_not_heap_storage():
     assert wrong["status"] == "counterexample" and wrong["counterexample"]["b"] == 0
     assert equivalent(SOURCE, SOURCE, "scoped")["status"] == "smt-equivalent"  # A local buffer is zeroed scratch.
     moved = "fn scoped(n:usize)->u64 { let mut b=Buf[u64](n); let c=take(b); return u64(len(c)); }"
-    assert equivalent(moved, moved, "scoped")["status"] == "unknown"  # An owner that moves is not modeled.
+    assert equivalent(moved, moved, "scoped")["status"] == "smt-equivalent"  # take moves the storage out.
+    boxed = "struct Box { b:Buf[u64]; }\nfn scoped(n:usize)->u64 { let x=Box(Buf[u64](n)); return u64(len(x.b)); }"
+    inside = equivalent(boxed, boxed, "scoped")
+    assert inside["status"] == "unknown" and "inside a record" in inside["reason"]  # An owner in a value is not.
