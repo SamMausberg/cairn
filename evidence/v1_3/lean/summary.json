@@ -1,0 +1,290 @@
+{
+  "schema": "cairn.lean-evidence/1",
+  "commit": "58e4c07a59fa6ab09f0f6cf0d7cae83e16b8ec62",
+  "worktree_dirty": true,
+  "build": "succeeded",
+  "wall_seconds": 5.066,
+  "from_scratch": true,
+  "declarations_audited": 69,
+  "axioms_used": [
+    "Quot.sound",
+    "propext"
+  ],
+  "axioms_by_declaration": {
+    "Cairn.check_sound": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.eval_combine_nonneg": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.forall_mem_of_satisfies": [
+      "propext"
+    ],
+    "Cairn.Collector.all_checked": [
+      "propext"
+    ],
+    "Cairn.Collector.obligation_initial_nonnegative": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_initial_cursor_before_input": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_initial_input_before_capacity": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_initial_capacity_representable": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_store_nonnegative": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_store_strictly_below_capacity": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_emit_cursor_increment_fits": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_step_input_increment_fits": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_emit_invariant_0": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_emit_invariant_1": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_emit_invariant_2": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_emit_invariant_3": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_skip_invariant_0": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_skip_invariant_1": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_skip_invariant_2": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_skip_invariant_3": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.obligation_exit_output_count_bounded": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.init": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.emit": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.skip": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.store_nonneg": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.store_lt_capacity": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.emit_increment_fits": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.step_increment_fits": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.Inv.exit_le_capacity": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.run_preserves_inv": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.run_spec": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.collect_spec": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.store_index_lt_capacity": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.store_index_lt_buffer_length": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Collector.increments_fit": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.reaches_sound": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.ovl_sound": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.accepted_no_fault": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.accepted_no_use_after_move": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.accepted_no_use_after_free": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.accepted_no_double_free": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.accepted_race_free": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.accepted_threads_disjoint": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.accepted_no_leaked_ticket": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.accepted_no_aliased_args": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.accepted_frees_each_allocation_once": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.accepted_progress": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.Ok_succ": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.Ok_start": [
+      "propext"
+    ],
+    "Cairn.Ownership.checkBlock_mono": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.releaseAll_final": [
+      "propext"
+    ],
+    "Cairn.Ownership.lanesOf_pairwise": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.lane_borrows_dont_race": [
+      "propext",
+      "Quot.sound"
+    ],
+    "Cairn.Ownership.races_borrow_of_lease": [
+      "propext"
+    ],
+    "Cairn.Ownership.ownership_regression": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.leasedRead_races": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.overlappingTasks_races": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.overlappingParts_races": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.sameFieldToTwoTasks_races": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.fieldPartsOverlapInOneCall_aliases": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.laneWritesFixedIndex_races": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.laneWritesShared_races": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.laneReadsOther_races": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.backwardsPart_traps": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.copyAnOwner_doubleFrees": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.useAfterDrop_usesDeadPlace": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.unawaitedTicket_leaks": [
+      "propext"
+    ],
+    "Cairn.Ownership.Regress.witnesses_are_rejected": [
+      "propext"
+    ],
+    "Cairn.Collector.certificates_length": []
+  },
+  "ownership_regression": "pass",
+  "sorry_or_native_decide": false,
+  "lean_files": [
+    "Cairn/Affine.lean",
+    "Cairn/Audit.lean",
+    "Cairn/Collector.lean",
+    "Cairn/CollectorCertificates.lean",
+    "Cairn/Ownership.lean",
+    "Cairn/Ownership/Checker.lean",
+    "Cairn/Ownership/Heap.lean",
+    "Cairn/Ownership/Invariant.lean",
+    "Cairn/Ownership/Lanes.lean",
+    "Cairn/Ownership/Machine.lean",
+    "Cairn/Ownership/Preservation.lean",
+    "Cairn/Ownership/Regress.lean",
+    "Cairn/Ownership/Soundness.lean",
+    "Cairn/Ownership/Syntax.lean",
+    "Cairn/Ownership/Weakening.lean",
+    "Cairn/Places.lean"
+  ],
+  "host": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39"
+}

@@ -1,0 +1,174 @@
+{
+  "schema": "cairn.evidence/1",
+  "commit": "58e4c07a59fa6ab09f0f6cf0d7cae83e16b8ec62",
+  "worktree_dirty": false,
+  "host": {
+    "version": "1.3.0",
+    "python": "3.12.3",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "clang++": "/opt/llvm-21.1.8/bin/clang++",
+    "g++": "/usr/bin/g++",
+    "z3": "libz3.so.4",
+    "nvcc": "/usr/local/cuda/bin/nvcc",
+    "lean": "/home/sam/.elan/bin/lean",
+    "lake": "/home/sam/.elan/bin/lake",
+    "qemu-system-aarch64": null,
+    "formal_status": "not-verified",
+    "native_platform": "Linux x86-64",
+    "network_access": false
+  },
+  "gates": {
+    "format": {
+      "command": [
+        "python",
+        "-m",
+        "ruff",
+        "format",
+        "--check",
+        "."
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.0,
+      "tail": [
+        "165 files already formatted"
+      ]
+    },
+    "lint": {
+      "command": [
+        "python",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.0,
+      "tail": [
+        "All checks passed!"
+      ]
+    },
+    "types": {
+      "command": [
+        "python",
+        "-m",
+        "mypy",
+        "src/cairn"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.1,
+      "tail": [
+        "Success: no issues found in 44 source files"
+      ]
+    },
+    "cairn_format": {
+      "command": [
+        "python",
+        "bin/cairn",
+        "fmt",
+        "--check",
+        "examples",
+        "src/cairn/std"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.2,
+      "tail": [
+        "  \"changed\": [],",
+        "  \"not_formatted\": []",
+        "}"
+      ]
+    },
+    "tests": {
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests",
+        "-n",
+        "16",
+        "-rs"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 58.8,
+      "tail": [
+        "SKIPPED [1] tests/projects/test_freestanding.py:127: aarch64-virt needs an AArch64 host",
+        "SKIPPED [1] tests/projects/test_freestanding.py:135: aarch64-virt needs an AArch64 host",
+        "1888 passed, 18 skipped in 58.51s"
+      ]
+    },
+    "certificates": {
+      "command": [
+        "python",
+        "bin/cairn",
+        "certificates"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.1,
+      "tail": [
+        "  \"lean_scope\": \"checker soundness, these certificates, in-bounds stores and stable selection of the loop model (proofs/, Lean 4, axioms propext and Quot.sound); not this Python file, the emitter or native code\",",
+        "  \"native_refinement_proved\": false",
+        "}"
+      ]
+    },
+    "lean_in_sync": {
+      "command": [
+        "python",
+        "tools/checks/export_lean_certificates.py",
+        "--check"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.1,
+      "tail": [
+        "up to date: /home/sam/cairn/proofs/Cairn/CollectorCertificates.lean"
+      ]
+    },
+    "module_equivalence": {
+      "command": [
+        "python",
+        "bin/cairn",
+        "verify",
+        "examples/proof_scope/reference.cairn",
+        "examples/proof_scope/candidate.cairn",
+        "--all"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.2,
+      "tail": [
+        "  ],",
+        "  \"uncovered\": []",
+        "}"
+      ]
+    }
+  },
+  "tests": {
+    "passed": 1888,
+    "skipped": 18
+  },
+  "source_lines": {
+    "compiler_core": 5697,
+    "compiler_package": 11015,
+    "runtime_headers": 973,
+    "standard_library_cairn": 873,
+    "lean_proofs": 1704,
+    "tests": 11015
+  },
+  "separately_recorded": [
+    "lean/summary.json",
+    "gpu/benchmark.json",
+    "embedded/summary.json"
+  ],
+  "claims_not_made": [
+    "whole-compiler proof",
+    "native refinement",
+    "tuned-baseline performance",
+    "AI proficiency"
+  ]
+}
