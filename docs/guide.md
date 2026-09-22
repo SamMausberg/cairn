@@ -37,13 +37,20 @@ The sources are compiled together, in manifest order, as one program:
 // Floor average without overflowing the intermediate sum.
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
 
+import std.io;
+
+// Prints the average it checks, and exits 0 only when it is right.
 fn main() -> i32 {
-  if average(10, 20) == 15 { return 0; }
-  return 1;
+  let mean = average(10, 20);
+  io.print("average(10, 20) = ");
+  io.print_u64(mean);
+  io.newline();
+  if mean != 15 { return 1; }
+  return 0;
 }
 ```
 
-`u64` is a fixed-width integer, `+` traps on overflow, `&` and `^` are unsigned, `shr` takes a count below the width, and `= expression;` is a one-return body. `main` returns the process exit status.
+`u64` is a fixed-width integer, `+` traps on overflow, `&` and `^` are unsigned, `shr` takes a count below the width, and `= expression;` is a one-return body. `import std.io;` brings in the standard library's output, a `let` is immutable, and a call whose result is nothing is a statement. `main` returns the process exit status.
 
 ## Check, run, test
 
@@ -52,24 +59,32 @@ cairn check demo
 ```
 
 ```text
-typed: 2 functions
+typed: 71 functions
 ```
 
 ```json
-{"status": "typed", "functions": 2, "formal_status": "not-verified"}
+{"status": "typed", "functions": 71, "formal_status": "not-verified"}
 ```
 
-`typed` means the program passed every static rule: syntax, types, ownership, leases, lanes, placement and effects. `formal_status` is `not-verified` here and everywhere, because acceptance is not a proof.
+`typed` means the program passed every static rule: syntax, types, ownership, leases, lanes, placement and effects. Two of the 71 functions are the program's; the rest are the parts of `std.io`, `std.text`, `std.vec` and `std.sys` that the import brings in, checked the same way. `formal_status` is `not-verified` here and everywhere, because acceptance is not a proof.
 
 ```sh
 cairn run demo
 ```
 
-`run` builds a native executable in a fresh directory under `build/` and runs it under an address-space cap. At a terminal the program gets the terminal's own streams, so `demo` prints nothing and `cairn` exits with its status; piped, the record carries what it printed:
+`run` builds a native executable in a fresh directory under `build/` and runs it under an address-space cap. At a terminal the program gets the terminal's own streams, and `cairn` exits with its status:
+
+```text
+average(10, 20) = 15
+```
+
+Piped, the record carries what it printed:
 
 ```json
-{"status": "program-exited", "exit_code": 0, "build_directory": "demo/build/demo-38_uge7b", "memory_limit_mib": 1024}
+{"status": "program-exited", "exit_code": 0, "stdout": "average(10, 20) = 15\n", "build_directory": "demo/build/demo-38_uge7b", "memory_limit_mib": 1024}
 ```
+
+`cairn run demo -- one two` starts the program with the arguments `one` and `two`, which `std.env` reads.
 
  The directory holds the generated `program.cpp`, the runtime headers it includes and `receipt.json`, which records what was compiled, with what, and the effect row of every function:
 
@@ -100,22 +115,30 @@ Change the annotation of a local and the compiler refuses the program with a cod
 
 ```cairn rejects E-TYPE-MISMATCH
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
+
+import std.io;
+
+// Prints the average it checks, and exits 0 only when it is right.
 fn main() -> i32 {
   let mean:u32 = average(10, 20);
+  io.print("average(10, 20) = ");
+  io.print_u64(mean);
+  io.newline();
+  if mean != 15 { return 1; }
   return 0;
 }
 ```
 
 ```text
 error[E-TYPE-MISMATCH]: Expected u32, got u64.
-  --> demo/src/main.cairn:3:18
+  --> src/main.cairn:5:18
   |
-3 |   let mean:u32 = average(10, 20);
+5 |   let mean:u32 = average(10, 20);
   |                  ^^^^^^^
 ```
 
 ```json
-{"status": "rejected", "code": "E-TYPE-MISMATCH", "message": "Expected u32, got u64.", "line": 3, "column": 18}
+{"status": "rejected", "code": "E-TYPE-MISMATCH", "message": "Expected u32, got u64.", "line": 5, "column": 18, "file": "src/main.cairn"}
 ```
 
 Nothing converts on its own; `u32(average(10, 20))` says the narrowing and checks it. The safety rules are refused the same way. A heap array is an owner, using it as a value moves it, and the old name is dead:

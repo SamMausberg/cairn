@@ -101,7 +101,8 @@ def test_project_is_ordered_and_pinned(tmp_path):
     root = make(tmp_path)
     p = load_project(root)
     assert [x.path for x in p.units] == ["src/math.cairn", "src/main.cairn"]
-    assert compile_source(p.source)[1]["function_count"] == 2
+    functions = compile_source(p.source)[1]["functions"]
+    assert sorted(f for f in functions if not f.startswith("std.")) == ["average", "main"]
     original = p.receipt()
     (root / "src/main.cairn").write_text("fn main()->i32=0;")
     assert load_project(root).receipt() != original
@@ -474,3 +475,18 @@ def test_the_entry_point_is_the_root_project_s_own(tmp_path):
     record = build(load_project(root), cxx="clang++", timeout=120)
     assert record["status"] == "native-built", record.get("stderr")
     assert subprocess.run([record["artifact"]], timeout=30).returncode == 0  # the project's main, not the library's
+
+
+def test_the_guide_shows_the_project_new_creates(tmp_path):
+    """docs/guide.md prints the template and what check and run answer for it; both follow create_project."""
+    guide = (Path(__file__).resolve().parents[2] / "docs/guide.md").read_text()
+    section = guide.split("## A project\n", 1)[1].split("## A wrong edit\n", 1)[0]
+    root = make(tmp_path)
+    assert (root / "cairn.toml").read_text() in section
+    sources = (root / "src/math.cairn").read_text() + "\n" + (root / "src/main.cairn").read_text()
+    assert f"```cairn\n{sources}```" in section
+    count = compile_source(load_project(root).source)[1]["function_count"]
+    assert f"typed: {count} functions" in section and f'"functions": {count},' in section
+    record = build(load_project(root), cxx="clang++", timeout=120)
+    done = subprocess.run([record["artifact"]], capture_output=True, text=True, timeout=30)
+    assert done.returncode == 0 and f"```text\n{done.stdout}```" in section

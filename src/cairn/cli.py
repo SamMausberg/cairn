@@ -51,9 +51,16 @@ arch = "baseline"
     (destination / "src/math.cairn").write_text("""// Floor average without overflowing the intermediate sum.
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
 """)
-    (destination / "src/main.cairn").write_text("""fn main() -> i32 {
-  if average(10, 20) == 15 { return 0; }
-  return 1;
+    (destination / "src/main.cairn").write_text("""import std.io;
+
+// Prints the average it checks, and exits 0 only when it is right.
+fn main() -> i32 {
+  let mean = average(10, 20);
+  io.print("average(10, 20) = ");
+  io.print_u64(mean);
+  io.newline();
+  if mean != 15 { return 1; }
+  return 0;
 }
 """)
     values = [0, 1, 2, 255, 256, 2**63 - 1, 2**63, 2**64 - 2, 2**64 - 1]
