@@ -179,6 +179,31 @@ static void test_wait_drains_before_it_releases() {
   close(p[1]);
 }
 
+// A timeout bounds how long a program waits on the kernel: the receive below has nobody to hear from, the
+// timeout answers first with -ETIME, and cancelling the receive brings it back with -ECANCELED and its Buf.
+static void test_a_timeout_and_a_cancel() {
+  int s[2];
+  CHECK(socketpair(AF_UNIX, SOCK_STREAM, 0, s) == 0);
+  Ring ring(2);
+  ring.submit(Op::recv, s[1], Buf<std::uint8_t>(16), 16, 0, 1);
+  ring.submit(Op::timeout, -1, Buf<std::uint8_t>(), 0, 20000000, 2);  // twenty milliseconds
+  std::uint64_t tag;
+  std::int64_t result;
+  (void)ring.collect(tag, result);
+  CHECK(tag == 2 && result == -ETIME);
+  ring.cancel(1);
+  ring.cancel(1);  // asked twice: one request reaches the kernel
+  Buf<std::uint8_t> back = ring.collect(tag, result);
+  CHECK(tag == 1 && result == -ECANCELED && back.size() == 16);
+  ring.cancel(1);  // nothing under that tag is in flight any more: nothing happens
+  ring.submit(Op::send, s[0], Buf<std::uint8_t>(3), 3, 0, 1);  // the berth again, a new operation
+  (void)ring.collect(tag, result);
+  CHECK(tag == 1 && result == 3);  // an earlier cancel of the same berth did not reach it
+  std::move(ring).wait();
+  close(s[0]);
+  close(s[1]);
+}
+
 // Each case leaves through _Exit inside its own scope, so a guard that failed to fire cannot be rescued by the
 // destructor of an unwaited ring, which traps too.
 static void survived(const char* name) {
@@ -224,6 +249,7 @@ int main(int argc, char** argv) {
   test_accept();
   test_an_error_is_a_result();
   test_wait_drains_before_it_releases();
+  test_a_timeout_and_a_cancel();
   if(failures) {
     std::fprintf(stderr, "%d of %ld checks failed\n", failures, checked);
     return 1;

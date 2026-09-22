@@ -201,7 +201,9 @@ fn main() -> i32 {
 data was moved.
 ```
 
-A ring is a host object (`E-PLACEMENT`), and a lane may not reach one (`E-PARALLEL-CALL`). The value model reports a function that uses one as `unknown`. Operations cannot yet be cancelled.
+`q.timeout(ns, tag)` is an operation that finishes after `ns` nanoseconds with `-ETIME`, which bounds how long a `next` can wait. `q.cancel(tag)` asks the kernel to stop every operation in flight under that tag. Each still comes back through `next`, with `-ECANCELED` or with its own result if it finished first, and with its `Buf`, so cancelling releases nothing early and a cancel that finds nothing does nothing.
+
+A ring is a host object (`E-PLACEMENT`), and a lane may not reach one (`E-PARALLEL-CALL`). The value model reports a function that uses one as `unknown`.
 
 ## Atomics and mutexes
 

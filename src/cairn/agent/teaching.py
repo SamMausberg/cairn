@@ -188,7 +188,8 @@ let data = q.next(tag, result); hands the next finished one back with its tag an
 result (a count, a descriptor or -errno; io.outcome(result) makes it a Result). wait(q), or
 defer wait(q), consumes the ring where it was declared, after every operation finishes. A ring
 may be lent rw to a callee or a task, never stored, passed by value or returned (E-PINNED). A
-full ring or an empty next traps. Host only; effects io, alloc, free.""",
+full ring or an empty next traps. q.timeout(ns, tag) finishes with -ETIME after ns; q.cancel(tag)
+stops what runs under tag, which still returns through next. Host only; effects io, alloc, free.""",
     "closures": """fn(u64) -> u64 is a copyable code pointer to a plain declared function of values.
 ro<fn(u64) -> u64> is a borrowed callable: pass a declared function or write the closure
 in place, apply(n, xs, |x:u64| -> u64 { return x + bias; }). A closure captures its scope

@@ -28,8 +28,9 @@ OPERATIONS: dict[str, tuple[tuple[str, ...], str]] = {
     "recv": (("fd", "data", "count", "tag"), "recv"),
     "send": (("fd", "data", "count", "tag"), "send"),
     "accept": (("fd", "tag"), "accept"),
+    "timeout": (("ns", "tag"), "timeout"),  # finishes with -ETIME after ns nanoseconds
 }
-KINDS = {"fd": I32, "data": BYTES, "count": USIZE, "offset": U64, "tag": U64}
+KINDS = {"fd": I32, "data": BYTES, "count": USIZE, "offset": U64, "ns": U64, "tag": U64}
 
 
 def check_ring(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
@@ -44,7 +45,9 @@ def check_ring(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Ty
 
 
 def method(c: Checker, e: Expr, name: str, args: list[Expr]) -> Type:
-    """`q.read(...)`, `q.write(...)`, `q.recv(...)`, `q.send(...)`, `q.accept(...)` and `q.next(tag, result)`."""
+    """`q.read(...)`, `q.write(...)`, `q.recv(...)`, `q.send(...)`, `q.accept(...)`, `q.timeout(ns, tag)`, `q.next(tag,
+    result)` and `q.cancel(tag)`, which asks the kernel to stop what is in flight under a tag: each still comes back
+    through `next`, with -ECANCELED or its own result, so cancelling releases nothing early."""
     c.host_only(e, "An I/O ring is a host object")
     b = c.env.get(root(e.args[0]).val) if root(e.args[0]).tag == "name" else None
     if b is None or b.ty.mode == "ro":
@@ -59,8 +62,14 @@ def method(c: Checker, e: Expr, name: str, args: list[Expr]) -> Type:
         c.effect("io")
         c.guard("collect")
         return BYTES
+    if name == "cancel":
+        if len(args) != 1:
+            fail("E-ARITY", "q.cancel(tag) names the operations to stop by their tag.", e)
+        c.expr(args[0], U64)
+        c.effect("io")
+        return Type("void")
     if name not in OPERATIONS:
-        fail("E-CALLEE", f"A ring offers {', '.join(OPERATIONS)} and next.", e)
+        fail("E-CALLEE", f"A ring offers {', '.join(OPERATIONS)}, next and cancel.", e)
     names = OPERATIONS[name][0]
     if len(args) != len(names):
         fail("E-ARITY", f"q.{name} takes {', '.join(names)}.", e)
@@ -83,9 +92,11 @@ def lower(g: Emitter, e: Expr) -> str:
     ring, rest = g.expr(e.args[0]), e.args[1:]
     if e.ref[1] == "next":
         return f"{ring}.collect({g.expr(rest[0])}, {g.expr(rest[1])})"
+    if e.ref[1] == "cancel":
+        return f"{ring}.cancel({g.expr(rest[0])})"
     named: dict[str, Any] = dict(zip(OPERATIONS[e.ref[1]][0], rest, strict=True))
     data = g.expr(named["data"]) if "data" in named else "cr::Buf<std::uint8_t>()"
     count = g.expr(named["count"]) if "count" in named else "0"
-    offset = g.expr(named["offset"]) if "offset" in named else "0"
-    fd, tag = g.expr(named["fd"]), g.expr(named["tag"])
+    offset = g.expr(named.get("offset") or named["ns"]) if {"offset", "ns"} & set(named) else "0"
+    fd, tag = g.expr(named["fd"]) if "fd" in named else "-1", g.expr(named["tag"])
     return f"{ring}.submit(cr::io::Op::{OPERATIONS[e.ref[1]][1]}, {fd}, {data}, {count}, {offset}, {tag})"

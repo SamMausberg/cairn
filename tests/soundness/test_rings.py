@@ -96,6 +96,40 @@ fn main() -> i32 {
 )
 
 
+BOUNDED = """
+extern fn socketpair(domain:i32, kind:i32, protocol:i32, fds:rw<i32>[2]) -> i32 effects(io);
+extern fn close(fd:i32) -> i32 effects(io);
+
+fn paired(fds:rw<i32>[2]) -> i32 { unsafe { return socketpair(1, 1, 0, fds); } }
+
+fn main() -> i32 {
+  let mut fds = Array[i32, 2]();
+  let made = paired(fds);
+  if made != 0 { return 1; }
+  let mut q = IoRing(2);
+  defer wait(q);
+  let into = Buf[u8](16);
+  q.recv(fds[1], into, 16, 1);                    // nobody writes: this would wait for ever
+  q.timeout(20000000, 2);                         // twenty milliseconds
+  let mut tag:u64 = 0;
+  let mut result:i64 = 0;
+  let nothing = q.next(tag, result);
+  if tag != 2 || result != -62 { return 2; }      // -ETIME: the bound, reported as a value
+  q.cancel(1);
+  let back = q.next(tag, result);
+  if tag != 1 || result != -125 || len(back) != 16 { return 3; }   // -ECANCELED, and the Buf is back
+  unsafe { let a = close(fds[0]); let b = close(fds[1]); }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_timeout_bounds_a_wait_and_a_cancel_returns_the_buffer(tmp_path, cxx):
+    done = run(tmp_path, compile_source(BOUNDED)[0], *sanitized(cxx), *WARNINGS, cxx=cxx)
+    assert done.returncode == 0, done.stdout + done.stderr
+
+
 def test_a_ring_is_declared_with_its_costs():
     rows = compile_source(ROUND_TRIP)[1]["functions"]
     assert {"alloc", "free", "io", "trap"} <= set(rows["main"]["effects"])
@@ -142,6 +176,7 @@ BODY = "fn main() -> i32 { let q = IoRing(2); let data = Buf[u8](8); "
         ("E-WRITE-LEASE", "fn peek(q:ro<IoRing>, data:Buf[u8]) { q.read(0, data, 8, 0, 1); }"),
         ("E-TYPE-MISMATCH", BODY + "q.read(0, data, 8, 0, 1u); wait(q); return 0; }".replace("1u", "true")),
         ("E-CALLEE", BODY + "q.seek(0); wait(q); return 0; }"),
+        ("E-ARITY", BODY + "q.cancel(1, 2); wait(q); return 0; }"),
         ("E-ARITY", BODY + "q.read(0, data, 8, 1); wait(q); return 0; }"),
         ("E-ARITY", "fn main() -> i32 { let q = IoRing(); wait(q); return 0; }"),
         (

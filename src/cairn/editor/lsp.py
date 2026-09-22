@@ -681,6 +681,26 @@ def rename(doc: Document, uri: str, offset: int, fresh: str) -> dict:
     return {"changes": {uri: [{"range": doc.span(t.start, t.end), "newText": fresh} for t in found]}}
 
 
+def formatted(doc: Document) -> list[dict]:
+    """One whole-document edit from `cairn fmt`, or none when the buffer is already formatted."""
+    out = format_source(doc.text)
+    return [] if out == doc.text else [{"range": doc.span(0, len(doc.text)), "newText": out}]
+
+
+# What each request asks of an open document: (document, its uri, the cursor's offset, the request's params).
+ANSWERS: dict[str, Any] = {
+    "textDocument/hover": lambda d, u, at, p: hover(d, at),
+    "textDocument/definition": lambda d, u, at, p: definition(d, u, at),
+    "textDocument/completion": lambda d, u, at, p: completion(d, at),
+    "textDocument/signatureHelp": lambda d, u, at, p: signature_help(d, at),
+    "textDocument/references": lambda d, u, at, p: references(d, u, at),
+    "textDocument/prepareRename": lambda d, u, at, p: prepare_rename(d, at),
+    "textDocument/rename": lambda d, u, at, p: rename(d, u, at, str(p.get("newName") or "")),
+    "textDocument/documentSymbol": lambda d, u, at, p: symbols(d),
+    "textDocument/formatting": lambda d, u, at, p: formatted(d),
+}
+
+
 # Server ------------------------------------------------------------------------------------------
 
 
@@ -720,27 +740,8 @@ class Server:
         doc = self.docs.get(uri)
         if doc is None:
             return None if method.startswith("textDocument/") else UNSUPPORTED
-        at = doc.offset(p.get("position") or {})
-        if method == "textDocument/hover":
-            return hover(doc, at)
-        if method == "textDocument/definition":
-            return definition(doc, uri, at)
-        if method == "textDocument/completion":
-            return completion(doc, at)
-        if method == "textDocument/signatureHelp":
-            return signature_help(doc, at)
-        if method == "textDocument/references":
-            return references(doc, uri, at)
-        if method == "textDocument/prepareRename":
-            return prepare_rename(doc, at)
-        if method == "textDocument/rename":
-            return rename(doc, uri, at, str(p.get("newName") or ""))
-        if method == "textDocument/documentSymbol":
-            return symbols(doc)
-        if method == "textDocument/formatting":
-            out = format_source(doc.text)
-            return [] if out == doc.text else [{"range": doc.span(0, len(doc.text)), "newText": out}]
-        return UNSUPPORTED
+        answer = ANSWERS.get(method)
+        return answer(doc, uri, doc.offset(p.get("position") or {}), p) if answer else UNSUPPORTED
 
     def dispatch(self, message: dict) -> bool:
         """Answer one message; True when the server must exit."""

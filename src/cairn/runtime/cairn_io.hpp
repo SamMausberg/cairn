@@ -22,7 +22,7 @@
 namespace cr::io {
 
 // What an operation asks the kernel to do; the numbers are the ones the language lowers to.
-enum class Op : std::uint8_t { read = 0, write = 1, recv = 2, send = 3, accept = 4 };
+enum class Op : std::uint8_t { read = 0, write = 1, recv = 2, send = 3, accept = 4, timeout = 5 };
 
 // Up to `capacity` operations in flight at once. Linear in the source language: exactly one wait()
 // consumes it, after every operation has finished, so no storage the kernel may still touch is ever
@@ -30,10 +30,20 @@ enum class Op : std::uint8_t { read = 0, write = 1, recv = 2, send = 3, accept =
 // a kernel that refuses io_uring: the declaration is where that failure is visible.
 class Ring final {
   int fd_ = -1;
-  std::size_t spare_ = 0, outstanding_ = 0;
+  std::size_t capacity_ = 0, spare_ = 0, outstanding_ = 0;
   std::unique_ptr<Buf<std::uint8_t>[]> held_;  // berth k owns the memory of the operation tagged k
   std::unique_ptr<std::uint64_t[]> tags_;      // the program's tag for berth k
   std::unique_ptr<std::size_t[]> free_;        // berths nothing is in flight in, as a stack
+  std::unique_ptr<__kernel_timespec[]> times_; // the interval a timeout in berth k waits for
+  std::unique_ptr<std::uint32_t[]> live_;      // berth k's generation while in flight, 0 when it is free
+  std::unique_ptr<std::uint32_t[]> stopping_;  // the generation a cancel was asked for, at most once each
+  std::uint32_t generation_ = 0;               // bumped per submission, so a stale cancel names nothing
+  std::size_t cancels_ = 0;                    // cancel requests whose own completion has not been read
+  static constexpr std::uint64_t CANCEL = std::uint64_t(1) << 63;  // marks a cancel request's completion
+  // An operation's user_data is its berth and its generation; a cancel request's is marked by CANCEL.
+  static std::uint64_t name(std::size_t k, std::uint32_t generation) noexcept {
+    return (std::uint64_t(generation) << 32) | k;
+  }
   void* sq_ = nullptr;
   void* cq_ = nullptr;
   io_uring_sqe* sqes_ = nullptr;
@@ -45,6 +55,13 @@ class Ring final {
   static unsigned* at(void* base, unsigned offset) noexcept {
     return reinterpret_cast<unsigned*>(static_cast<char*>(base) + offset);
   }
+  void push(const io_uring_sqe& e) noexcept {
+    const unsigned tail = *sq_tail_, slot = tail & *sq_mask_;  // only this thread writes the tail
+    sqes_[slot] = e;
+    sq_array_[slot] = slot;
+    std::atomic_ref<unsigned>(*sq_tail_).store(tail + 1, std::memory_order_release);
+    if(enter(1, 0) != 1) trap();
+  }
   int enter(unsigned submit, unsigned wait) noexcept {
     for(;;) {
       const long done = syscall(__NR_io_uring_enter, fd_, submit, wait, wait ? IORING_ENTER_GETEVENTS : 0u, nullptr, 0);
@@ -55,9 +72,11 @@ class Ring final {
 
 public:
   explicit Ring(std::size_t capacity) noexcept
-      : held_(new(std::nothrow) Buf<std::uint8_t>[capacity]),
-        tags_(new(std::nothrow) std::uint64_t[capacity]()), free_(new(std::nothrow) std::size_t[capacity]) {
-    if(capacity == 0 || capacity > 4096 || !held_ || !tags_ || !free_) trap();
+      : capacity_(capacity), held_(new(std::nothrow) Buf<std::uint8_t>[capacity]),
+        tags_(new(std::nothrow) std::uint64_t[capacity]()), free_(new(std::nothrow) std::size_t[capacity]),
+        times_(new(std::nothrow) __kernel_timespec[capacity]()), live_(new(std::nothrow) std::uint32_t[capacity]()),
+        stopping_(new(std::nothrow) std::uint32_t[capacity]()) {
+    if(capacity == 0 || capacity > 4096 || !held_ || !tags_ || !free_ || !times_ || !live_ || !stopping_) trap();
     io_uring_params p;
     std::memset(&p, 0, sizeof p);
     const long made = syscall(__NR_io_uring_setup, static_cast<unsigned>(capacity), &p);
@@ -92,35 +111,62 @@ public:
     const std::size_t k = free_[--spare_];
     held_[k] = std::move(data);
     tags_[k] = tag;
-    const unsigned tail = *sq_tail_, slot = tail & *sq_mask_;  // only this thread writes the tail
-    io_uring_sqe& e = sqes_[slot];
-    std::memset(&e, 0, sizeof e);
     static constexpr std::uint8_t codes[] = {IORING_OP_READ, IORING_OP_WRITE, IORING_OP_RECV, IORING_OP_SEND,
-                                             IORING_OP_ACCEPT};
+                                             IORING_OP_ACCEPT, IORING_OP_TIMEOUT};
+    io_uring_sqe e;
+    std::memset(&e, 0, sizeof e);
     e.opcode = codes[static_cast<unsigned>(op)];
-    e.fd = fd;
-    if(op != Op::accept) {
+    e.fd = op == Op::timeout ? -1 : fd;
+    if(op == Op::timeout) {  // `offset` is the interval in nanoseconds; no other completion ends it early
+      times_[k] = {static_cast<long long>(offset / 1000000000u), static_cast<long long>(offset % 1000000000u)};
+      e.addr = reinterpret_cast<std::uint64_t>(&times_[k]);
+      e.len = 1;
+    } else if(op != Op::accept) {
       e.addr = reinterpret_cast<std::uint64_t>(held_[k].data());
       e.len = count > 0x7ffff000u ? 0x7ffff000u : static_cast<unsigned>(count);  // the kernel's own ceiling
       e.off = (op == Op::read || op == Op::write) ? offset : 0;
     }
-    e.user_data = k;
-    sq_array_[slot] = slot;
-    std::atomic_ref<unsigned>(*sq_tail_).store(tail + 1, std::memory_order_release);
-    if(enter(1, 0) != 1) trap();
+    generation_ = (generation_ % 0x7fffffffu) + 1;  // never 0, never reaching the CANCEL bit
+    live_[k] = generation_;
+    e.user_data = name(k, generation_);
+    push(e);
     ++outstanding_;
+  }
+
+  // Ask the kernel to stop every operation in flight under `tag`. Each still finishes through collect(),
+  // with -ECANCELED (or its own result, if it finished first) and its Buf, so nothing is lost or freed early.
+  void cancel(std::uint64_t tag) noexcept {
+    for(std::size_t k = 0; k < capacity_; ++k) {
+      if(!live_[k] || tags_[k] != tag || stopping_[k] == live_[k]) continue;
+      stopping_[k] = live_[k];  // so pending answers never outnumber the berths, and the kernel queue holds them
+      io_uring_sqe e;
+      std::memset(&e, 0, sizeof e);
+      e.opcode = IORING_OP_ASYNC_CANCEL;
+      e.fd = -1;
+      e.addr = name(k, live_[k]);  // exactly this operation, never a later one in the same berth
+      e.user_data = CANCEL | k;
+      ++cancels_;
+      push(e);
+    }
   }
 
   // The next operation to finish: its tag, the kernel's result (a byte count, a descriptor, or -errno),
   // and the Buf it was given, back in the program's hands.
   Buf<std::uint8_t> collect(std::uint64_t& tag, std::int64_t& result) noexcept {
     if(outstanding_ == 0) trap();  // nothing is in flight
-    const unsigned head = *cq_head_;  // only this thread writes the head
-    while(std::atomic_ref<unsigned>(*cq_tail_).load(std::memory_order_acquire) == head) enter(0, 1);
-    const io_uring_cqe& c = cqes_[head & *cq_mask_];
-    const std::size_t k = static_cast<std::size_t>(c.user_data);
-    result = c.res;
-    std::atomic_ref<unsigned>(*cq_head_).store(head + 1, std::memory_order_release);
+    std::size_t k;
+    for(;;) {
+      const unsigned head = *cq_head_;  // only this thread writes the head
+      while(std::atomic_ref<unsigned>(*cq_tail_).load(std::memory_order_acquire) == head) enter(0, 1);
+      const io_uring_cqe& c = cqes_[head & *cq_mask_];
+      const std::uint64_t data = c.user_data;
+      result = c.res;
+      std::atomic_ref<unsigned>(*cq_head_).store(head + 1, std::memory_order_release);
+      k = static_cast<std::size_t>(data & 0xffffffffu);
+      if(!(data & CANCEL)) break;
+      --cancels_;  // a cancel request's own answer; the operation it named reports separately
+    }
+    live_[k] = 0;
     --outstanding_;
     tag = tags_[k];
     free_[spare_++] = k;
@@ -132,6 +178,12 @@ public:
     std::uint64_t tag;
     std::int64_t result;
     while(outstanding_) (void)collect(tag, result);
+    while(cancels_) {  // the answers to cancel requests that outlived the operations they named
+      const unsigned head = *cq_head_;
+      while(std::atomic_ref<unsigned>(*cq_tail_).load(std::memory_order_acquire) == head) enter(0, 1);
+      std::atomic_ref<unsigned>(*cq_head_).store(head + 1, std::memory_order_release);
+      --cancels_;
+    }
     munmap(sqes_, sqe_bytes_);
     if(cq_ != sq_) munmap(cq_, cq_bytes_);
     munmap(sq_, sq_bytes_);
