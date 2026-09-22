@@ -15,4 +15,6 @@ Tokens are OpenAI's `o200k_base` encoding, which is not Claude's tokenizer; byte
 
 On these transcripts a focused packet cuts what a model reads per task to about a quarter, at eleven more turns in sixty for the expansions. Handles alone save a fifth of what the model writes and little else. The per-program totals are in `rows`; the smallest saving is `examples/systems` (0.68 of the 1.3 bytes), whose call graph is already small.
 
+`before.json` is the same measurement taken again, with `o200k_base` now the default unit, before the packets, cards and diagnostics were reworked. It adds `by_kind` (how much of each total is packets, diagnostics, expansions, admissions and replies), `card_sizes` (each card alone) and `diagnostic_sizes` (one wrong reply for each of eight common diagnostics). In it a cold focused packet averages 1,966 tokens, of which the rule cards are 1,130, and a diagnostic averages 111 tokens.
+
 What this does not show: that a model given the focused packet solves as many tasks, or needs no more repair rounds. A real agent may expand more than once, and every expansion shrinks the saving. Only a trial with model subjects can measure that, and none has run.

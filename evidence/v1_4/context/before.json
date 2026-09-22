@@ -1,0 +1,1822 @@
+{
+  "aggregate": {
+    "after": 33050,
+    "before": 32482,
+    "current_only_packet_count": 4,
+    "packet_count": 22,
+    "saving_fraction": -0.017486607967489576
+  },
+  "baseline_card_source_sha256": "4d19fb46d0dee32ad62c43065a60927286f95dab4a01e60ca0c68c5bdb2246f6",
+  "card_sizes": {
+    "base": 262,
+    "calls": 114,
+    "closures": 201,
+    "compact": 104,
+    "effects": 175,
+    "floats": 81,
+    "generators": 420,
+    "generics": 252,
+    "integers": 183,
+    "memory": 180,
+    "modules": 78,
+    "owners": 415,
+    "parallel": 547,
+    "records": 110,
+    "rings": 228,
+    "sums": 217,
+    "tasks": 449,
+    "views": 147
+  },
+  "current_card_source_sha256": "0c2e7977afb78ee6f70958f6ef33de665c80556d8eb5c90e484f01326b20fcda",
+  "current_only": [
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records",
+        "closures"
+      ],
+      "complete_packet_tokens": 1784,
+      "legacy_comparison": null,
+      "reason": "Cards absent from the 0.5 curriculum: closures.",
+      "symbol": "decode_le32"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "compact",
+        "records",
+        "memory",
+        "sums",
+        "closures"
+      ],
+      "complete_packet_tokens": 3386,
+      "legacy_comparison": null,
+      "reason": "Scoped storage or tagged sums were not accepted in 0.5.",
+      "symbol": "decimal"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "compact",
+        "records",
+        "memory",
+        "sums",
+        "closures"
+      ],
+      "complete_packet_tokens": 3428,
+      "legacy_comparison": null,
+      "reason": "Scoped storage or tagged sums were not accepted in 0.5.",
+      "symbol": "sort_bytes"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "compact",
+        "records",
+        "memory",
+        "sums",
+        "closures"
+      ],
+      "complete_packet_tokens": 3441,
+      "legacy_comparison": null,
+      "reason": "Scoped storage or tagged sums were not accepted in 0.5.",
+      "symbol": "sorted_even"
+    }
+  ],
+  "diagnostic_sizes": {
+    "sizes": {
+      "E-CALLEE": 121,
+      "E-EFFECT-EXPANSION": 99,
+      "E-MOVED": 98,
+      "E-PARSE": 105,
+      "E-RETURN": 108,
+      "E-SHADOW": 111,
+      "E-TYPE-MISMATCH": 124,
+      "E-UNBOUND": 120
+    },
+    "total": 886
+  },
+  "full_card_text": {
+    "baseline": 1108,
+    "current": 4163
+  },
+  "limitations": [
+    "Authored transcripts, not a model: one type error, at most one expansion, then the right body.",
+    "A real agent may expand more, or less; the focused packet's saving shrinks with every expansion.",
+    "UTF-8 bytes are not model tokens; a tiktoken encoding is one real BPE vocabulary, not every model's.",
+    "Reading with history charges a whole reread per model turn; prompt caching changes that price."
+  ],
+  "method": "What an edit costs in context: whole scripted tasks, and the rule-card counterfactual against 0.5.\n\nNo model runs. `tasks` replays one authored transcript per function of five real programs: the packet, a\nfirst reply with a type error and its diagnostic, a request to read a callee's body (focused scope only, where\nthe body is not already shown), and the correct reply with its admission. It counts every message once, and\nalso as a model reads it, re-reading the conversation so far on every turn. Five settings are compared: the\ncomponent packet over cairn.edit/1 (the 1.3 protocol), and component or focused packets over cairn.edit/2,\ncold (a new host per task) or warm (one host per program, so cards and boundaries go once).\n\n`cards` keeps the 0.6 measurement: the same component packet with only the card texts swapped for 0.5's.\nEvery total is also broken down by kind of message (packet, diagnostic, expansion, admission, reply), and\n`card_sizes` counts every rule card alone. Tokens are a real BPE vocabulary (`o200k_base` by default) when\ntiktoken and its cached vocabulary are present. Nothing is downloaded; without them only UTF-8 bytes count.",
+  "model_trials": 0,
+  "rows": [
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 1691,
+      "legacy_card_packet_tokens": 1677,
+      "saving_fraction": -0.008348240906380422,
+      "saving_tokens": -14,
+      "symbol": "saxpy"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 1747,
+      "legacy_card_packet_tokens": 1733,
+      "saving_fraction": -0.008078476630121179,
+      "saving_tokens": -14,
+      "symbol": "dot"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "current_packet_tokens": 1534,
+      "legacy_card_packet_tokens": 1522,
+      "saving_fraction": -0.007884362680683266,
+      "saving_tokens": -12,
+      "symbol": "sum_wrap"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "current_packet_tokens": 1548,
+      "legacy_card_packet_tokens": 1536,
+      "saving_fraction": -0.0078125,
+      "saving_tokens": -12,
+      "symbol": "prefix"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 1637,
+      "legacy_card_packet_tokens": 1623,
+      "saving_fraction": -0.008626001232285851,
+      "saving_tokens": -14,
+      "symbol": "count_gt"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "current_packet_tokens": 1575,
+      "legacy_card_packet_tokens": 1563,
+      "saving_fraction": -0.007677543186180413,
+      "saving_tokens": -12,
+      "symbol": "histogram"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "compact",
+        "records"
+      ],
+      "current_packet_tokens": 1680,
+      "legacy_card_packet_tokens": 1708,
+      "saving_fraction": 0.016393442622950838,
+      "saving_tokens": 28,
+      "symbol": "compact_even"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "current_packet_tokens": 1585,
+      "legacy_card_packet_tokens": 1573,
+      "saving_fraction": -0.0076287349014620975,
+      "saving_tokens": -12,
+      "symbol": "lower_bound"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 1355,
+      "legacy_card_packet_tokens": 1310,
+      "saving_fraction": -0.03435114503816794,
+      "saving_tokens": -45,
+      "symbol": "gcd"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 1330,
+      "legacy_card_packet_tokens": 1285,
+      "saving_fraction": -0.035019455252918386,
+      "saving_tokens": -45,
+      "symbol": "factorial_wrap"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 1421,
+      "legacy_card_packet_tokens": 1374,
+      "saving_fraction": -0.03420669577874813,
+      "saving_tokens": -47,
+      "symbol": "distance_sq"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 1330,
+      "legacy_card_packet_tokens": 1285,
+      "saving_fraction": -0.035019455252918386,
+      "saving_tokens": -45,
+      "symbol": "translated"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 1309,
+      "legacy_card_packet_tokens": 1264,
+      "saving_fraction": -0.03560126582278489,
+      "saving_tokens": -45,
+      "symbol": "header_valid"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 1322,
+      "legacy_card_packet_tokens": 1277,
+      "saving_fraction": -0.035238841033672585,
+      "saving_tokens": -45,
+      "symbol": "op_class"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 1766,
+      "legacy_card_packet_tokens": 1752,
+      "saving_fraction": -0.007990867579908745,
+      "saving_tokens": -14,
+      "symbol": "copy_twice"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 1755,
+      "legacy_card_packet_tokens": 1741,
+      "saving_fraction": -0.008041355542791395,
+      "saving_tokens": -14,
+      "symbol": "delegated"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 1319,
+      "legacy_card_packet_tokens": 1274,
+      "saving_fraction": -0.035321821036106815,
+      "saving_tokens": -45,
+      "symbol": "checked_add"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 1307,
+      "legacy_card_packet_tokens": 1262,
+      "saving_fraction": -0.03565768621236143,
+      "saving_tokens": -45,
+      "symbol": "checked_div"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "records"
+      ],
+      "current_packet_tokens": 1508,
+      "legacy_card_packet_tokens": 1496,
+      "saving_fraction": -0.008021390374331583,
+      "saving_tokens": -12,
+      "symbol": "checked_at"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 1301,
+      "legacy_card_packet_tokens": 1256,
+      "saving_fraction": -0.035828025477707026,
+      "saving_tokens": -45,
+      "symbol": "checked_shift"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "records"
+      ],
+      "current_packet_tokens": 1287,
+      "legacy_card_packet_tokens": 1242,
+      "saving_fraction": -0.03623188405797095,
+      "saving_tokens": -45,
+      "symbol": "narrow"
+    },
+    {
+      "cards": [
+        "base",
+        "integers",
+        "calls",
+        "views",
+        "floats",
+        "records"
+      ],
+      "current_packet_tokens": 1743,
+      "legacy_card_packet_tokens": 1729,
+      "saving_fraction": -0.00809716599190291,
+      "saving_tokens": -14,
+      "symbol": "square_sum"
+    }
+  ],
+  "tasks": {
+    "tiktoken/o200k_base": {
+      "rows": [
+        {
+          "by_kind": {
+            "admission": 1286,
+            "diagnostic": 766,
+            "packet": 62788,
+            "reply": 1380
+          },
+          "model_reads_once": 64840,
+          "model_turns": 12,
+          "model_writes": 1380,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 193282,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 66220
+        },
+        {
+          "by_kind": {
+            "admission": 808,
+            "diagnostic": 766,
+            "packet": 61772,
+            "reply": 976
+          },
+          "model_reads_once": 63346,
+          "model_turns": 12,
+          "model_writes": 976,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 189150,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 64322
+        },
+        {
+          "by_kind": {
+            "admission": 808,
+            "diagnostic": 766,
+            "expansion": 229,
+            "packet": 12237,
+            "reply": 1024
+          },
+          "model_reads_once": 14040,
+          "model_turns": 14,
+          "model_writes": 1024,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 46174,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 15064
+        },
+        {
+          "by_kind": {
+            "admission": 808,
+            "diagnostic": 766,
+            "packet": 48812,
+            "reply": 976
+          },
+          "model_reads_once": 50386,
+          "model_turns": 12,
+          "model_writes": 976,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 553875,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 51362
+        },
+        {
+          "by_kind": {
+            "admission": 808,
+            "diagnostic": 766,
+            "expansion": 229,
+            "packet": 6721,
+            "reply": 1024
+          },
+          "model_reads_once": 8524,
+          "model_turns": 14,
+          "model_writes": 1024,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 110759,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 9548
+        },
+        {
+          "by_kind": {
+            "admission": 1314,
+            "diagnostic": 814,
+            "packet": 99256,
+            "reply": 1226
+          },
+          "model_reads_once": 101384,
+          "model_turns": 12,
+          "model_writes": 1226,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 302579,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 102610
+        },
+        {
+          "by_kind": {
+            "admission": 847,
+            "diagnostic": 814,
+            "packet": 98250,
+            "reply": 820
+          },
+          "model_reads_once": 99911,
+          "model_turns": 12,
+          "model_writes": 820,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 298485,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 100731
+        },
+        {
+          "by_kind": {
+            "admission": 847,
+            "diagnostic": 814,
+            "packet": 14347,
+            "reply": 820
+          },
+          "model_reads_once": 16008,
+          "model_turns": 12,
+          "model_writes": 820,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 46776,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 16828
+        },
+        {
+          "by_kind": {
+            "admission": 847,
+            "diagnostic": 814,
+            "packet": 78410,
+            "reply": 820
+          },
+          "model_reads_once": 80071,
+          "model_turns": 12,
+          "model_writes": 820,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 876258,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 80891
+        },
+        {
+          "by_kind": {
+            "admission": 847,
+            "diagnostic": 814,
+            "packet": 9286,
+            "reply": 820
+          },
+          "model_reads_once": 10947,
+          "model_turns": 12,
+          "model_writes": 820,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 130683,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 11767
+        },
+        {
+          "by_kind": {
+            "admission": 1284,
+            "diagnostic": 776,
+            "packet": 60308,
+            "reply": 1346
+          },
+          "model_reads_once": 62368,
+          "model_turns": 12,
+          "model_writes": 1346,
+          "program": "examples/apps/service",
+          "reads_with_history": 185809,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 63714
+        },
+        {
+          "by_kind": {
+            "admission": 794,
+            "diagnostic": 776,
+            "packet": 59274,
+            "reply": 930
+          },
+          "model_reads_once": 60844,
+          "model_turns": 12,
+          "model_writes": 930,
+          "program": "examples/apps/service",
+          "reads_with_history": 181593,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 61774
+        },
+        {
+          "by_kind": {
+            "admission": 794,
+            "diagnostic": 776,
+            "expansion": 363,
+            "packet": 12151,
+            "reply": 978
+          },
+          "model_reads_once": 14084,
+          "model_turns": 14,
+          "model_writes": 978,
+          "program": "examples/apps/service",
+          "reads_with_history": 45922,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 15062
+        },
+        {
+          "by_kind": {
+            "admission": 794,
+            "diagnostic": 776,
+            "packet": 47374,
+            "reply": 930
+          },
+          "model_reads_once": 48944,
+          "model_turns": 12,
+          "model_writes": 930,
+          "program": "examples/apps/service",
+          "reads_with_history": 536706,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 49874
+        },
+        {
+          "by_kind": {
+            "admission": 794,
+            "diagnostic": 776,
+            "expansion": 363,
+            "packet": 6011,
+            "reply": 978
+          },
+          "model_reads_once": 7944,
+          "model_turns": 14,
+          "model_writes": 978,
+          "program": "examples/apps/service",
+          "reads_with_history": 107350,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 8922
+        },
+        {
+          "by_kind": {
+            "admission": 1303,
+            "diagnostic": 790,
+            "packet": 35246,
+            "reply": 1412
+          },
+          "model_reads_once": 37339,
+          "model_turns": 12,
+          "model_writes": 1412,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 110769,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 38751
+        },
+        {
+          "by_kind": {
+            "admission": 836,
+            "diagnostic": 790,
+            "packet": 34240,
+            "reply": 1006
+          },
+          "model_reads_once": 35866,
+          "model_turns": 12,
+          "model_writes": 1006,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 106675,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 36872
+        },
+        {
+          "by_kind": {
+            "admission": 836,
+            "diagnostic": 790,
+            "expansion": 213,
+            "packet": 10015,
+            "reply": 1078
+          },
+          "model_reads_once": 11854,
+          "model_turns": 15,
+          "model_writes": 1078,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 40715,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 12932
+        },
+        {
+          "by_kind": {
+            "admission": 836,
+            "diagnostic": 790,
+            "packet": 26335,
+            "reply": 1006
+          },
+          "model_reads_once": 27961,
+          "model_turns": 12,
+          "model_writes": 1006,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 312112,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 28967
+        },
+        {
+          "by_kind": {
+            "admission": 836,
+            "diagnostic": 790,
+            "expansion": 213,
+            "packet": 4771,
+            "reply": 1078
+          },
+          "model_reads_once": 6610,
+          "model_turns": 15,
+          "model_writes": 1078,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 100977,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 7688
+        },
+        {
+          "by_kind": {
+            "admission": 1344,
+            "diagnostic": 760,
+            "packet": 18559,
+            "reply": 1984
+          },
+          "model_reads_once": 20663,
+          "model_turns": 12,
+          "model_writes": 1984,
+          "program": "examples/systems",
+          "reads_with_history": 61547,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 22647
+        },
+        {
+          "by_kind": {
+            "admission": 860,
+            "diagnostic": 760,
+            "packet": 17537,
+            "reply": 1580
+          },
+          "model_reads_once": 19157,
+          "model_turns": 12,
+          "model_writes": 1580,
+          "program": "examples/systems",
+          "reads_with_history": 57391,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 20737
+        },
+        {
+          "by_kind": {
+            "admission": 860,
+            "diagnostic": 760,
+            "expansion": 1383,
+            "packet": 9666,
+            "reply": 1678
+          },
+          "model_reads_once": 12669,
+          "model_turns": 16,
+          "model_writes": 1678,
+          "program": "examples/systems",
+          "reads_with_history": 44067,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 14347
+        },
+        {
+          "by_kind": {
+            "admission": 860,
+            "diagnostic": 760,
+            "packet": 9582,
+            "reply": 1580
+          },
+          "model_reads_once": 11202,
+          "model_turns": 12,
+          "model_writes": 1580,
+          "program": "examples/systems",
+          "reads_with_history": 139675,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 12782
+        },
+        {
+          "by_kind": {
+            "admission": 860,
+            "diagnostic": 760,
+            "expansion": 745,
+            "packet": 4824,
+            "reply": 1678
+          },
+          "model_reads_once": 7189,
+          "model_turns": 16,
+          "model_writes": 1678,
+          "program": "examples/systems",
+          "reads_with_history": 115239,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 8867
+        }
+      ],
+      "summary": {
+        "component edit/1 cold": {
+          "by_kind": {
+            "admission": 6531,
+            "diagnostic": 3906,
+            "packet": 276157,
+            "reply": 7348
+          },
+          "model_reads_once": 286594,
+          "model_turns": 60,
+          "model_writes": 7348,
+          "reads_with_history": 853986,
+          "total_once": 293942,
+          "vs_1_3": {
+            "model_reads_once": 1.0,
+            "model_turns": 1.0,
+            "model_writes": 1.0,
+            "reads_with_history": 1.0,
+            "total_once": 1.0
+          }
+        },
+        "component edit/2 cold": {
+          "by_kind": {
+            "admission": 4145,
+            "diagnostic": 3906,
+            "packet": 271073,
+            "reply": 5312
+          },
+          "model_reads_once": 279124,
+          "model_turns": 60,
+          "model_writes": 5312,
+          "reads_with_history": 833294,
+          "total_once": 284436,
+          "vs_1_3": {
+            "model_reads_once": 0.974,
+            "model_turns": 1.0,
+            "model_writes": 0.723,
+            "reads_with_history": 0.976,
+            "total_once": 0.968
+          }
+        },
+        "component edit/2 warm": {
+          "by_kind": {
+            "admission": 4145,
+            "diagnostic": 3906,
+            "packet": 210513,
+            "reply": 5312
+          },
+          "model_reads_once": 218564,
+          "model_turns": 60,
+          "model_writes": 5312,
+          "reads_with_history": 2418626,
+          "total_once": 223876,
+          "vs_1_3": {
+            "model_reads_once": 0.763,
+            "model_turns": 1.0,
+            "model_writes": 0.723,
+            "reads_with_history": 2.832,
+            "total_once": 0.762
+          }
+        },
+        "focused edit/2 cold": {
+          "by_kind": {
+            "admission": 4145,
+            "diagnostic": 3906,
+            "expansion": 2188,
+            "packet": 58416,
+            "reply": 5578
+          },
+          "model_reads_once": 68655,
+          "model_turns": 71,
+          "model_writes": 5578,
+          "reads_with_history": 223654,
+          "total_once": 74233,
+          "vs_1_3": {
+            "model_reads_once": 0.24,
+            "model_turns": 1.183,
+            "model_writes": 0.759,
+            "reads_with_history": 0.262,
+            "total_once": 0.253
+          }
+        },
+        "focused edit/2 warm": {
+          "by_kind": {
+            "admission": 4145,
+            "diagnostic": 3906,
+            "expansion": 1550,
+            "packet": 31613,
+            "reply": 5578
+          },
+          "model_reads_once": 41214,
+          "model_turns": 71,
+          "model_writes": 5578,
+          "reads_with_history": 565008,
+          "total_once": 46792,
+          "vs_1_3": {
+            "model_reads_once": 0.144,
+            "model_turns": 1.183,
+            "model_writes": 0.759,
+            "reads_with_history": 0.662,
+            "total_once": 0.159
+          }
+        }
+      },
+      "task_count": 30
+    },
+    "utf8_bytes": {
+      "rows": [
+        {
+          "by_kind": {
+            "admission": 4189,
+            "diagnostic": 3005,
+            "packet": 212297,
+            "reply": 3584
+          },
+          "model_reads_once": 219491,
+          "model_turns": 12,
+          "model_writes": 3584,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 652544,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 223075
+        },
+        {
+          "by_kind": {
+            "admission": 3211,
+            "diagnostic": 3005,
+            "packet": 210455,
+            "reply": 2828
+          },
+          "model_reads_once": 216671,
+          "model_turns": 12,
+          "model_writes": 2828,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 644906,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 219499
+        },
+        {
+          "by_kind": {
+            "admission": 3211,
+            "diagnostic": 3005,
+            "expansion": 652,
+            "packet": 47218,
+            "reply": 2986
+          },
+          "model_reads_once": 54086,
+          "model_turns": 14,
+          "model_writes": 2986,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 176017,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 57072
+        },
+        {
+          "by_kind": {
+            "admission": 3211,
+            "diagnostic": 3005,
+            "packet": 156805,
+            "reply": 2828
+          },
+          "model_reads_once": 163021,
+          "model_turns": 12,
+          "model_writes": 2828,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 1804628,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 165849
+        },
+        {
+          "by_kind": {
+            "admission": 3211,
+            "diagnostic": 3005,
+            "expansion": 652,
+            "packet": 24139,
+            "reply": 2986
+          },
+          "model_reads_once": 31007,
+          "model_turns": 14,
+          "model_writes": 2986,
+          "program": "examples/apps/kvstore",
+          "reads_with_history": 402451,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "new_store",
+            "digest",
+            "checksum",
+            "append",
+            "apply",
+            "owned"
+          ],
+          "total_once": 33993
+        },
+        {
+          "by_kind": {
+            "admission": 4291,
+            "diagnostic": 3157,
+            "packet": 341476,
+            "reply": 3126
+          },
+          "model_reads_once": 348924,
+          "model_turns": 12,
+          "model_writes": 3126,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 1039800,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 352050
+        },
+        {
+          "by_kind": {
+            "admission": 3313,
+            "diagnostic": 3157,
+            "packet": 339634,
+            "reply": 2370
+          },
+          "model_reads_once": 346104,
+          "model_turns": 12,
+          "model_writes": 2370,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 1032162,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 348474
+        },
+        {
+          "by_kind": {
+            "admission": 3313,
+            "diagnostic": 3157,
+            "packet": 59773,
+            "reply": 2370
+          },
+          "model_reads_once": 66243,
+          "model_turns": 12,
+          "model_writes": 2370,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 192579,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 68613
+        },
+        {
+          "by_kind": {
+            "admission": 3313,
+            "diagnostic": 3157,
+            "packet": 259039,
+            "reply": 2370
+          },
+          "model_reads_once": 265509,
+          "model_turns": 12,
+          "model_writes": 2370,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 2922168,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 267879
+        },
+        {
+          "by_kind": {
+            "admission": 3313,
+            "diagnostic": 3157,
+            "packet": 38689,
+            "reply": 2370
+          },
+          "model_reads_once": 45159,
+          "model_turns": 12,
+          "model_writes": 2370,
+          "program": "examples/apps/analytics",
+          "reads_with_history": 526962,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "analytics.agg.run_dyn",
+            "analytics.agg.run_plan",
+            "analytics.query.above",
+            "analytics.query.above_loop",
+            "analytics.query.checked_total",
+            "analytics.query.wrapping_total"
+          ],
+          "total_once": 47529
+        },
+        {
+          "by_kind": {
+            "admission": 4082,
+            "diagnostic": 3031,
+            "packet": 203251,
+            "reply": 3748
+          },
+          "model_reads_once": 210364,
+          "model_turns": 12,
+          "model_writes": 3748,
+          "program": "examples/apps/service",
+          "reads_with_history": 625597,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 214112
+        },
+        {
+          "by_kind": {
+            "admission": 3104,
+            "diagnostic": 3031,
+            "packet": 201409,
+            "reply": 2992
+          },
+          "model_reads_once": 207544,
+          "model_turns": 12,
+          "model_writes": 2992,
+          "program": "examples/apps/service",
+          "reads_with_history": 617959,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 210536
+        },
+        {
+          "by_kind": {
+            "admission": 3104,
+            "diagnostic": 3031,
+            "expansion": 1113,
+            "packet": 46892,
+            "reply": 3145
+          },
+          "model_reads_once": 54140,
+          "model_turns": 14,
+          "model_writes": 3145,
+          "program": "examples/apps/service",
+          "reads_with_history": 175602,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 57285
+        },
+        {
+          "by_kind": {
+            "admission": 3104,
+            "diagnostic": 3031,
+            "packet": 153299,
+            "reply": 2992
+          },
+          "model_reads_once": 159434,
+          "model_turns": 12,
+          "model_writes": 2992,
+          "program": "examples/apps/service",
+          "reads_with_history": 1760710,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 162426
+        },
+        {
+          "by_kind": {
+            "admission": 3104,
+            "diagnostic": 3031,
+            "expansion": 1113,
+            "packet": 21445,
+            "reply": 3145
+          },
+          "model_reads_once": 28693,
+          "model_turns": 14,
+          "model_writes": 3145,
+          "program": "examples/apps/service",
+          "reads_with_history": 391124,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "new_table",
+            "owned",
+            "put",
+            "find",
+            "erase",
+            "word_end"
+          ],
+          "total_once": 31838
+        },
+        {
+          "by_kind": {
+            "admission": 4240,
+            "diagnostic": 3060,
+            "packet": 117814,
+            "reply": 3356
+          },
+          "model_reads_once": 125114,
+          "model_turns": 12,
+          "model_writes": 3356,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 368914,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 128470
+        },
+        {
+          "by_kind": {
+            "admission": 3262,
+            "diagnostic": 3060,
+            "packet": 115972,
+            "reply": 2600
+          },
+          "model_reads_once": 122294,
+          "model_turns": 12,
+          "model_writes": 2600,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 361276,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 124894
+        },
+        {
+          "by_kind": {
+            "admission": 3262,
+            "diagnostic": 3060,
+            "expansion": 633,
+            "packet": 39068,
+            "reply": 2831
+          },
+          "model_reads_once": 46023,
+          "model_turns": 15,
+          "model_writes": 2831,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 155786,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 48854
+        },
+        {
+          "by_kind": {
+            "admission": 3262,
+            "diagnostic": 3060,
+            "packet": 83517,
+            "reply": 2600
+          },
+          "model_reads_once": 89839,
+          "model_turns": 12,
+          "model_writes": 2600,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 1005211,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 92439
+        },
+        {
+          "by_kind": {
+            "admission": 3262,
+            "diagnostic": 3060,
+            "expansion": 633,
+            "packet": 17482,
+            "reply": 2831
+          },
+          "model_reads_once": 24437,
+          "model_turns": 15,
+          "model_writes": 2831,
+          "program": "examples/apps/simulator",
+          "reads_with_history": 363435,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "interior",
+            "step_loop",
+            "step_threads",
+            "step_device",
+            "seed",
+            "report"
+          ],
+          "total_once": 27268
+        },
+        {
+          "by_kind": {
+            "admission": 4361,
+            "diagnostic": 3015,
+            "packet": 68488,
+            "reply": 5312
+          },
+          "model_reads_once": 75864,
+          "model_turns": 12,
+          "model_writes": 5312,
+          "program": "examples/systems",
+          "reads_with_history": 223901,
+          "setting": "component edit/1 cold",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 81176
+        },
+        {
+          "by_kind": {
+            "admission": 3383,
+            "diagnostic": 3015,
+            "packet": 66646,
+            "reply": 4556
+          },
+          "model_reads_once": 73044,
+          "model_turns": 12,
+          "model_writes": 4556,
+          "program": "examples/systems",
+          "reads_with_history": 216263,
+          "setting": "component edit/2 cold",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 77600
+        },
+        {
+          "by_kind": {
+            "admission": 3383,
+            "diagnostic": 3015,
+            "expansion": 5063,
+            "packet": 38899,
+            "reply": 4883
+          },
+          "model_reads_once": 50360,
+          "model_turns": 16,
+          "model_writes": 4883,
+          "program": "examples/systems",
+          "reads_with_history": 172753,
+          "setting": "focused edit/2 cold",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 55243
+        },
+        {
+          "by_kind": {
+            "admission": 3383,
+            "diagnostic": 3015,
+            "packet": 32441,
+            "reply": 4556
+          },
+          "model_reads_once": 38839,
+          "model_turns": 12,
+          "model_writes": 4556,
+          "program": "examples/systems",
+          "reads_with_history": 487142,
+          "setting": "component edit/2 warm",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 43395
+        },
+        {
+          "by_kind": {
+            "admission": 3383,
+            "diagnostic": 3015,
+            "expansion": 2334,
+            "packet": 18407,
+            "reply": 4883
+          },
+          "model_reads_once": 27139,
+          "model_turns": 16,
+          "model_writes": 4883,
+          "program": "examples/systems",
+          "reads_with_history": 430104,
+          "setting": "focused edit/2 warm",
+          "tasks": [
+            "decimal",
+            "observe_decimal",
+            "decimal_kind",
+            "sort_bytes",
+            "sorted_even",
+            "main"
+          ],
+          "total_once": 32022
+        }
+      ],
+      "summary": {
+        "component edit/1 cold": {
+          "by_kind": {
+            "admission": 21163,
+            "diagnostic": 15268,
+            "packet": 943326,
+            "reply": 19126
+          },
+          "model_reads_once": 979757,
+          "model_turns": 60,
+          "model_writes": 19126,
+          "reads_with_history": 2910756,
+          "total_once": 998883,
+          "vs_1_3": {
+            "model_reads_once": 1.0,
+            "model_turns": 1.0,
+            "model_writes": 1.0,
+            "reads_with_history": 1.0,
+            "total_once": 1.0
+          }
+        },
+        "component edit/2 cold": {
+          "by_kind": {
+            "admission": 16273,
+            "diagnostic": 15268,
+            "packet": 934116,
+            "reply": 15346
+          },
+          "model_reads_once": 965657,
+          "model_turns": 60,
+          "model_writes": 15346,
+          "reads_with_history": 2872566,
+          "total_once": 981003,
+          "vs_1_3": {
+            "model_reads_once": 0.986,
+            "model_turns": 1.0,
+            "model_writes": 0.802,
+            "reads_with_history": 0.987,
+            "total_once": 0.982
+          }
+        },
+        "component edit/2 warm": {
+          "by_kind": {
+            "admission": 16273,
+            "diagnostic": 15268,
+            "packet": 685101,
+            "reply": 15346
+          },
+          "model_reads_once": 716642,
+          "model_turns": 60,
+          "model_writes": 15346,
+          "reads_with_history": 7979859,
+          "total_once": 731988,
+          "vs_1_3": {
+            "model_reads_once": 0.731,
+            "model_turns": 1.0,
+            "model_writes": 0.802,
+            "reads_with_history": 2.742,
+            "total_once": 0.733
+          }
+        },
+        "focused edit/2 cold": {
+          "by_kind": {
+            "admission": 16273,
+            "diagnostic": 15268,
+            "expansion": 7461,
+            "packet": 231850,
+            "reply": 16215
+          },
+          "model_reads_once": 270852,
+          "model_turns": 71,
+          "model_writes": 16215,
+          "reads_with_history": 872737,
+          "total_once": 287067,
+          "vs_1_3": {
+            "model_reads_once": 0.276,
+            "model_turns": 1.183,
+            "model_writes": 0.848,
+            "reads_with_history": 0.3,
+            "total_once": 0.287
+          }
+        },
+        "focused edit/2 warm": {
+          "by_kind": {
+            "admission": 16273,
+            "diagnostic": 15268,
+            "expansion": 4732,
+            "packet": 120162,
+            "reply": 16215
+          },
+          "model_reads_once": 156435,
+          "model_turns": 71,
+          "model_writes": 16215,
+          "reads_with_history": 2114076,
+          "total_once": 172650,
+          "vs_1_3": {
+            "model_reads_once": 0.16,
+            "model_turns": 1.183,
+            "model_writes": 0.848,
+            "reads_with_history": 0.726,
+            "total_once": 0.173
+          }
+        }
+      },
+      "task_count": 30
+    }
+  },
+  "tokenizer": "tiktoken/o200k_base",
+  "units": [
+    "utf8_bytes",
+    "tiktoken/o200k_base"
+  ]
+}

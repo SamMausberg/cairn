@@ -150,7 +150,11 @@ def test_density(tmp_path):
     result = json.loads((tmp_path / "density.json").read_text())
     assert len(result["algorithm_pairs"]) == 9
     assert result["aggregate_algorithms"]["cpp_over_cairn"] > 1
-    assert "ByT5" in parsed(printed)["tokenizer"]
+    from support import tokenizer  # A real BPE vocabulary counts when one is cached; bytes stand in, and say so.
+
+    assert parsed(printed)["tokenizer"] == (
+        "tiktoken/o200k_base" if tokenizer() else "ByT5 plain UTF-8 bytes, no special tokens"
+    )
 
 
 @needs_clang
@@ -181,6 +185,14 @@ def test_measure_context(tmp_path):
     assert result["current_only"] and all(row["legacy_comparison"] is None for row in result["current_only"])
     assert any(set(row["cards"]) - prior for row in result["current_only"])
     assert printed["aggregate"]["current_only_packet_count"] == len(result["current_only"])
+    from cairn.agent.teaching import CARDS
+    from support import tokenizer
+
+    assert result["units"] == ["utf8_bytes", *(["tiktoken/o200k_base"] if tokenizer() else [])]
+    assert set(result["card_sizes"]) == set(CARDS) and result["diagnostic_sizes"]["total"] > 0
+    focused = result["tasks"]["utf8_bytes"]["summary"]["focused edit/2 cold"]
+    assert set(focused["by_kind"]) == {"packet", "reply", "diagnostic", "expansion", "admission"}
+    assert sum(focused["by_kind"].values()) == focused["total_once"]
 
 
 @needs_clang

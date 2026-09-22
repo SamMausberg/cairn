@@ -153,6 +153,28 @@ def settled(value, erased: frozenset[str]):
     return "".join([*parts, value[at:]])
 
 
+TOKENIZER = "o200k_base"  # a real BPE vocabulary, and not the tokenizer of every model
+
+
+def tokenizer(name: str = TOKENIZER):
+    """`(label, count)` for the tiktoken encoding `name`, or None when the package or its cached vocabulary is
+    absent. It never downloads: tiktoken fetches a vocabulary it has not cached, so the cache is looked up first,
+    where tiktoken itself looks."""
+    import hashlib
+
+    try:
+        import tiktoken
+    except ImportError:
+        return None
+    url = f"https://openaipublic.blob.core.windows.net/encodings/{name}.tiktoken"
+    cache = os.environ.get("TIKTOKEN_CACHE_DIR") or os.environ.get("DATA_GYM_CACHE_DIR")
+    folder = Path(cache) if cache else Path(tempfile.gettempdir()) / "data-gym-cache"
+    if not (folder / hashlib.sha1(url.encode()).hexdigest()).is_file():
+        return None
+    encoding = tiktoken.get_encoding(name)
+    return f"tiktoken/{name}", lambda text: len(encoding.encode(text, disallowed_special=()))
+
+
 def drift(fresh: Path, committed: Path, erased: frozenset[str] = frozenset(), by_name: tuple[str, ...] = ()) -> list:
     """What a committed generated tree lacks or holds differently from a fresh run of its generator.
 

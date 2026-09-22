@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Reproducible lexical density accounting; no model-success claim.
 
-Default: ByT5 plain UTF-8 byte IDs (byte+3), without special tokens.
-Optional: --tiktoken o200k_base, requiring independently available package/vocab.
-All text whitespace/comments retained; a sha256 identifies every exact input.
+Default: the BPE encoding tiktoken/o200k_base, when tiktoken and its cached vocabulary are present (nothing is
+downloaded), else ByT5 plain UTF-8 byte IDs (byte+3). --tiktoken picks another cached encoding, --bytes forces
+the byte IDs. Special tokens are excluded, whitespace and comments retained; a sha256 identifies every input.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pathlib import Path
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
 from cairn.agent.teaching import CARDS
-from support import generate
+from support import TOKENIZER, generate, tokenizer
 
 RECIPE_SECTION = "Closed generator contracts"
 CARD = "src/cairn/agent/teaching.py: CARDS"
@@ -27,18 +27,15 @@ RECIPE = f"docs/agents.md: {RECIPE_SECTION}"
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--tiktoken")
+    ap.add_argument("--tiktoken", help=f"A cached tiktoken encoding; default {TOKENIZER} when it is present.")
+    ap.add_argument("--bytes", action="store_true", help="Count ByT5 byte IDs even when a BPE vocabulary is present.")
     ap.add_argument("--output", type=Path, default=R / "results/density/density.json")
     args = ap.parse_args()
-    if args.tiktoken:
-        try:
-            import tiktoken
-
-            enc = tiktoken.get_encoding(args.tiktoken)
-        except Exception as exc:
-            raise SystemExit(f"No measurement: tiktoken package/vocabulary unavailable: {exc}") from exc
-        encode = enc.encode
-        label = "tiktoken/" + args.tiktoken
+    found = None if args.bytes else tokenizer(args.tiktoken or TOKENIZER)
+    if args.tiktoken and not found:
+        raise SystemExit(f"No measurement: tiktoken/{args.tiktoken} is not available offline.")
+    if found:
+        label, count = found
     else:
 
         def encode(text):
@@ -48,8 +45,8 @@ def main():
         sample = "source: alpha \u03b1, newline\n"
         assert bytes(i - 3 for i in encode(sample)).decode("utf-8") == sample
 
-    def count(t):
-        return len(encode(t))
+        def count(t):
+            return len(encode(t))
 
     names = ["saxpy", "dot", "sum_wrap", "prefix", "count_gt", "histogram", "compact_even", "lower_bound", "gcd"]
 

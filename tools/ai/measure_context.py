@@ -9,6 +9,9 @@ component packet over cairn.edit/1 (the 1.3 protocol), and component or focused 
 cold (a new host per task) or warm (one host per program, so cards and boundaries go once).
 
 `cards` keeps the 0.6 measurement: the same component packet with only the card texts swapped for 0.5's.
+Every total is also broken down by kind of message (packet, diagnostic, expansion, admission, reply), and
+`card_sizes` counts every rule card alone. Tokens are a real BPE vocabulary (`o200k_base` by default) when
+tiktoken and its cached vocabulary are present. Nothing is downloaded; without them only UTF-8 bytes count.
 """
 
 from __future__ import annotations
@@ -27,6 +30,9 @@ from cairn.agent.teaching import CARDS
 from cairn.compiler.cairnc import Diagnostic
 from cairn.compiler.syntax import Parser
 from cairn.projects.project import load_project
+
+sys.path.insert(0, str(ROOT / "tools"))
+from support import TOKENIZER, tokenizer
 
 PROGRAMS = ["examples/apps/kvstore", "examples/apps/analytics", "examples/apps/service", "examples/apps/simulator",
             "examples/systems"]  # fmt: skip
@@ -55,8 +61,8 @@ def tasks(source: str) -> list[tuple[str, str]]:
     return chosen
 
 
-def transcript(source: str, symbol: str, body: str, scope: str, wire: str, host: EditHost) -> list[tuple[str, str]]:
-    """(direction, message) pairs: `in` is what the model reads, `out` what it writes."""
+def transcript(source: str, symbol: str, body: str, scope: str, wire: str, host: EditHost) -> list[tuple]:
+    """(direction, kind, message): `in` is what the model reads, `out` what it writes."""
     wrong = "{ let cairn_probe:bool = 0;" + body[1:]  # The same type error in every setting.
     if wire == "edit/1":
         s = EditSession(source, symbol, scope=scope)
@@ -80,40 +86,42 @@ def transcript(source: str, symbol: str, body: str, scope: str, wire: str, host:
         def answer(request: dict) -> dict:
             return host.reply(stable_json(request))
 
-    messages = [("in", packet)]
+    messages = [("in", "packet", packet)]
     for request in [ask(wrong)]:
-        messages += [("out", request), ("in", answer(request))]
+        messages += [("out", "reply", request), ("in", "diagnostic", answer(request))]
     callees = [n for n in sorted(packet["dependencies"]) if n not in packet.get("callers", []) and "." not in n]
     if scope == "focused" and callees:  # Read the first callee written in this program before relying on it.
         grow = {"protocol": HANDLES, "handle": packet["handle"], "kind": "expand", "symbols": callees[:1]}
-        messages += [("out", grow), ("in", host.respond(grow))]
+        messages += [("out", "reply", grow), ("in", "expansion", host.respond(grow))]
     request = ask(body)
     receipt = answer(request)
     assert receipt["status"] == "typed", (symbol, receipt)
-    return [*messages, ("out", request), ("in", receipt)]
+    return [*messages, ("out", "reply", request), ("in", "admission", receipt)]
 
 
-def account(runs: list[list[tuple[str, str]]], count) -> dict:
+def account(runs: list[list[tuple]], count) -> dict:
     """Totals over conversations: each message once, and as read with the whole conversation before it."""
     sent = {"in": 0, "out": 0}
+    kinds: dict[str, int] = {}
     read = turns = 0
     for conversation in runs:
         seen = 0
-        for direction, message in conversation:
+        for direction, kind, message in conversation:
             size = count(stable_json(message))
             sent[direction] += size
+            kinds[kind] = kinds.get(kind, 0) + size
             seen += size
             read += seen if direction == "in" else 0  # The model rereads everything up to each message it reads.
             turns += direction == "out"
     return {"model_reads_once": sent["in"], "model_writes": sent["out"], "total_once": sent["in"] + sent["out"],
-            "reads_with_history": read, "model_turns": turns}  # fmt: skip
+            "reads_with_history": read, "model_turns": turns, "by_kind": dict(sorted(kinds.items()))}  # fmt: skip
 
 
-def measure_tasks(count) -> dict:
+def measure_tasks(count, root: Path) -> dict:
     rows = []
-    totals = {f"{scope} {wire} {warmth}": [] for scope, wire, warmth in SETTINGS}
+    totals: dict[str, list] = {f"{scope} {wire} {warmth}": [] for scope, wire, warmth in SETTINGS}
     for path in PROGRAMS:
-        source = load_project(ROOT / path).source
+        source = load_project(root / path).source
         chosen = tasks(source)
         for scope, wire, warmth in SETTINGS:
             host = EditHost()
@@ -131,7 +139,7 @@ def measure_tasks(count) -> dict:
     summary = {}
     for key, runs in totals.items():
         a = account(runs, count)
-        summary[key] = {**a, "vs_1_3": {k: round(a[k] / baseline[k], 3) for k in a}}
+        summary[key] = {**a, "vs_1_3": {k: round(a[k] / baseline[k], 3) for k in a if k != "by_kind"}}
     return {"rows": rows, "summary": summary, "task_count": sum(len(r["tasks"]) for r in rows) // len(SETTINGS)}
 
 
@@ -174,34 +182,76 @@ def measure_cards(count) -> dict:
     }
 
 
+DIAGNOSED = """struct Frame { head:u8; body:Buf[u8]; }
+fn send(f:Frame) -> usize = len(f.body);
+fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {
+  let mut sum:u32 = 0;
+  for i in 0..n { sum = add_wrap(sum, u32(bytes[i])); }
+  return sum;
+}
+fn relay(n:usize, bytes:ro<u8>[n]) -> u32 {
+  let f = Frame(1, Buf[u8](n));
+  let sent = send(f);
+  return checksum(bytes) + u32(sent);
+}
+"""
+WRONG = {  # A representative wrong body per diagnostic an edit commonly meets, for relay.
+    "E-TYPE-MISMATCH": "{ let f = Frame(1, Buf[u8](n)); let sent:bool = send(f); return checksum(bytes); }",
+    "E-UNBOUND": "{ return checksum(bytez); }",
+    "E-MOVED": "{ let f = Frame(1, Buf[u8](n)); let a = send(f); let b = send(f); return checksum(bytes); }",
+    "E-SHADOW": "{ let n = 2; return checksum(bytes); }",
+    "E-RETURN": "{ if n > 0 { return checksum(bytes); } }",
+    "E-PARSE": "{ return checksum(bytes) }",
+    "E-EFFECT-EXPANSION": "{ stack pad:u8[4] = zeroed; return checksum(bytes) + checksum(pad); }",
+    "E-CALLEE": "{ return crc32(bytes); }",
+}
+
+
+def measure_diagnostics(count) -> dict:
+    """What a model reads back for one wrong reply of each kind, from a host that already sent the packet."""
+    host = EditHost()
+    host.open(DIAGNOSED, "relay", contract={"allowed_effects": ["alloc", "ffi_precondition", "free", "read:bytes",
+                                                                "trap", "zero_init"]})  # fmt: skip
+    sizes = {}
+    for code, body in WRONG.items():
+        reply = host.reply(stable_json({"protocol": HANDLES, "handle": "e1", "kind": "body", "replacement": body}))
+        assert reply.get("code") == code, (code, reply)
+        sizes[code] = count(stable_json(reply))
+    return {"sizes": sizes, "total": sum(sizes.values())}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--tiktoken", default=None, help="Also count with this offline tiktoken encoding.")
+    ap.add_argument("--tiktoken", default=TOKENIZER, help="The offline tiktoken encoding to count tokens with.")
+    ap.add_argument("--programs", type=Path, default=ROOT, help="Read the example programs from this tree.")
     ap.add_argument("--output", type=Path, default=ROOT / "results/context/context.json")
     args = ap.parse_args()
     counters = {"utf8_bytes": lambda s: len(s.encode("utf-8"))}
-    if args.tiktoken:
-        import tiktoken
-
-        encoding = tiktoken.get_encoding(args.tiktoken)
-        counters["tiktoken/" + args.tiktoken] = lambda s: len(encoding.encode(s))
+    found = tokenizer(args.tiktoken)
+    if found:
+        counters[found[0]] = found[1]
+    unit = found[0] if found else "utf8_bytes"  # what the card breakdowns count in
     result = {
         "model_trials": 0,
         "units": list(counters),
+        "tokenizer": unit if found else f"tiktoken/{args.tiktoken} is not available offline; bytes only",
         "method": __doc__.strip(),
-        "tasks": {unit: measure_tasks(count) for unit, count in counters.items()},
-        **measure_cards(counters["utf8_bytes"]),
+        "tasks": {name: measure_tasks(count, args.programs) for name, count in counters.items()},
+        "card_sizes": {name: counters[unit](text) for name, text in CARDS.items()},
+        "diagnostic_sizes": measure_diagnostics(counters[unit]),
+        **measure_cards(counters[unit]),
         "limitations": [
             "Authored transcripts, not a model: one type error, at most one expansion, then the right body.",
             "A real agent may expand more, or less; the focused packet's saving shrinks with every expansion.",
-            "UTF-8 bytes are not model tokens; tiktoken encodings, where given, are not Claude's tokenizer.",
+            "UTF-8 bytes are not model tokens; a tiktoken encoding is one real BPE vocabulary, not every model's.",
             "Reading with history charges a whole reread per model turn; prompt caching changes that price.",
         ],
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text(result))
-    summary = {unit: result["tasks"][unit]["summary"] for unit in counters}
-    print(text({"aggregate": result["aggregate"], "tasks": summary,
+    summary = {name: result["tasks"][name]["summary"] for name in counters}
+    print(text({"tokenizer": result["tokenizer"], "aggregate": result["aggregate"], "tasks": summary,
+                "cards": sum(result["card_sizes"].values()), "diagnostics": result["diagnostic_sizes"]["total"],
                 "current_only": [{k: r[k] for k in ("symbol", "reason")} for r in result["current_only"]]}))  # fmt: skip
     return 0
 
