@@ -273,9 +273,9 @@ class Parser:
             body.append(self.stmt())
         return body
 
-    def generator(self) -> tuple[str, Expr]:
-        """`for i in n`, shared by the contracted forms."""
-        self.need("for")
+    def generator(self, opener: str = "for") -> tuple[str, Expr]:
+        """`for i in n`, shared by the contracted forms; a reduction may open with `parallel` instead."""
+        self.need(opener)
         binder = self.ident()
         self.need("in")
         return binder, self.expr()
@@ -298,11 +298,12 @@ class Parser:
             if op not in REDUCERS:
                 fail("E-REDUCE-OP", f"reduce accepts one of {sorted(REDUCERS)}.", self.t)
             self.i += 1
-            binder, hi = self.generator()
+            pooled = self.t.s == "parallel"
+            binder, hi = self.generator("parallel" if pooled else "for")
             self.need("yield")
             es = [hi, self.expr()]
         self.need(";")
-        return Stmt(form, name, typ, es, binder=binder, op=op, **at)
+        return Stmt(form, name, typ, es, binder=binder, op=op, pooled=form == "reduce" and pooled, **at)
 
     def after(self) -> list[Expr]:
         """`after a, b`: tickets whose queued work runs first. A word only here, not a reserved one."""

@@ -78,7 +78,7 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
     del c.env[binder], c.facts[known:]
     if s.tag != "parallel" and target == "device":  # The runtime's scan and reduction need device scratch.
         c.effects |= {"gpu_alloc", "gpu_free"}
-    if s.tag == "parallel" or target == "device":  # A host reduction is an ordinary in-order fold.
+    if s.tag == "parallel" or target == "device" or s.pooled:  # A host reduction folds in order unless pooled.
         c.effect("par:" + target)
         c.counts["parallel_regions"] = c.counts.get("parallel_regions", 0) + 1
     s.ref = target
@@ -106,6 +106,9 @@ def s_reduce(c: Checker, s: Stmt):
         fail("E-REDUCE-OP", f"reduce {s.op} takes {takes}{' and unsigned integers' * (s.op == '+')}, not "
              f"{ty.display()}: lanes combine in an unspecified order, and only unsigned + has an order-independent "
              "trap (signed + and integer * do not).", s)  # fmt: skip
+    if s.pooled and s.ref == "host" and ty.name in FLOAT:
+        fail("E-REDUCE-ORDER", f"reduce {s.op} parallel adds {ty.name} in blocks on the lane pool, and floating "
+             "addition in another order gives another answer: fold with for, or write the blocks yourself.", s)  # fmt: skip
     s.ty = ty
     c.bind(s.name, Binding(ty), s)
 

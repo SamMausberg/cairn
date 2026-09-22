@@ -217,8 +217,10 @@ FOLD = "fn f(n:usize, xs:ro<u8>[n]) -> u8 { let mut s:u8=SEED; for i in 0..n { s
         ("^", "0", "s^xs[i]"),
     ],
 )
-def test_reduce_is_the_fold_the_host_emits(op, seed, step):
-    check(REDUCE.replace("OP", op), FOLD.replace("SEED", seed).replace("STEP", step), assume="n<=2")
+@pytest.mark.parametrize("opener", ["for", "parallel"])  # On the pool the blocks give the in-order answer.
+def test_reduce_is_the_fold_the_host_emits(op, seed, step, opener):
+    reduce = REDUCE.replace("OP", op).replace("for i in n", f"{opener} i in n")
+    check(reduce, FOLD.replace("SEED", seed).replace("STEP", step), assume="n<=2")
 
 
 def test_checked_reduce_traps_exactly_when_the_total_does_not_fit():

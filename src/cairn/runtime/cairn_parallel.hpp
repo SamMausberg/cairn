@@ -300,11 +300,13 @@ inline Pool& shared() noexcept {
 // Everything a wide region needs, kept out of run() so that a region below the cutoff compiles to
 // the loop it replaces: only this function takes the body's address, and a body whose address is
 // never taken stays in registers.
-template<class F> void run_wide(std::size_t n, F& body) noexcept {
+// `grain` 0 claims GRAIN elements or more at a time, as a region does; a reduction claims its blocks one by one.
+template<class F> void run_wide(std::size_t n, F& body, std::size_t grain = 0) noexcept {
   using Body = std::remove_reference_t<F>;
   lanes::Pool& pool = lanes::shared();
-  const std::size_t crew = pool.lanes();
-  if(crew < 2) {
+  std::size_t use = grain ? n : n / lanes::GRAIN;  // a region below CUTOFF never gets here
+  if(use > pool.lanes()) use = pool.lanes();
+  if(use < 2) {
     for(std::size_t i = 0; i < n; ++i) body(i);
     return;
   }
@@ -315,11 +317,9 @@ template<class F> void run_wide(std::size_t n, F& body) noexcept {
   };
   region.body = const_cast<void*>(static_cast<const void*>(std::addressof(body)));
   region.n = n;
-  std::size_t use = n / lanes::GRAIN;  // n >= CUTOFF, so this is at least two
-  if(use > crew) use = crew;
   region.helpers = use - 1;
-  region.grain = n / (use * lanes::SPLIT);
-  if(region.grain < lanes::GRAIN) region.grain = lanes::GRAIN;
+  region.grain = grain ? grain : n / (use * lanes::SPLIT);
+  if(!grain && region.grain < lanes::GRAIN) region.grain = lanes::GRAIN;
   pool.execute(region);
 }
 
@@ -332,6 +332,27 @@ template<class F> inline void run(std::size_t n, F&& body) noexcept {
     return;
   }
   run_wide(n, body);
+}
+
+// reduce op parallel i in n yield value(i). The count alone fixes the blocks: one below CUTOFF, else n / GRAIN
+// runs of consecutive indices up to BLOCKS of them, each at least GRAIN long. Each block folds in index order into
+// a slot of its own and the slots fold in block order, so an associative operator gives the in-order answer on
+// any number of lanes, and which lane ran a block never changes the grouping. The slots live in this frame.
+inline constexpr std::size_t BLOCKS = 256;
+template<class T, class C, class F> T reduce(std::size_t n, T identity, C combine, F value) noexcept {
+  const std::size_t blocks = n < lanes::CUTOFF ? 1 : std::min(BLOCKS, n / lanes::GRAIN);
+  T slot[BLOCKS];
+  auto fold = [&](std::size_t b) noexcept {
+    const std::size_t lo = n / blocks * b + std::min(b, n % blocks);
+    const std::size_t hi = lo + n / blocks + (b < n % blocks);
+    T acc = identity;
+    for(std::size_t i = lo; i < hi; ++i) acc = combine(acc, value(i));
+    slot[b] = acc;
+  };
+  run_wide(blocks, fold, 1);
+  T total = identity;
+  for(std::size_t b = 0; b < blocks; ++b) total = combine(total, slot[b]);
+  return total;
 }
 
 // A linear ticket: exactly one wait() consumes it. The result cell is owned separately from the

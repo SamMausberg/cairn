@@ -106,7 +106,7 @@ KERNELS = {
         "why": "a dependent integer mix in registers, so a large region is bound by the cores",
     },
     "sum_u64_wrap": {
-        "cairn_arms": {"cairn": None, "cairn_atomic": "sum_u64_atomic"},
+        "cairn_arms": {"cairn": None, "cairn_atomic": "sum_u64_atomic", "cairn_pool": "sum_u64_pool"},
         "arms": ("plain", "omp", "tbb"),
         "claim": "ratio",
         "why": "wrapping addition is order independent, so a reassociating baseline is the same function",

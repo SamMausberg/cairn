@@ -131,6 +131,7 @@ class Stmt:
     op: str = ""
     ref: Any = None
     other_names: list[Expr] = field(default_factory=list)  # `after a, b` on a spawned region; the names of an unpack.
+    pooled: bool = False  # `reduce op parallel i in n`: the host fold runs on the lane pool.
 
 
 @dataclass

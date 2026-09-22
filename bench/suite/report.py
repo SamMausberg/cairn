@@ -102,7 +102,6 @@ def kernel_report(name: str, record: dict, out: list[str]) -> None:
 
     sizes = [row["n"] for row in timed[0]["timings"]["sweep"]]
     compilers = sorted({r["compiler"] for r in timed})
-    reference = {c: next((r for r in timed if r["compiler"] == c and r["arm"] == "cairn"), None) for c in compilers}
 
     for cxx in compilers:
         out.append("")
@@ -117,32 +116,44 @@ def kernel_report(name: str, record: dict, out: list[str]) -> None:
             lines.append(line)
         out.append(table(lines, ["n", *columns]))
 
-    out.append("")
-    out.append("ratio of baseline time to cairn time, above one favours cairn; equal boundaries only")
-    head = ["column", *compilers, "verdict"]
-    lines = []
-    for name_of in sorted({column(r) for r in timed if not r["arm"].startswith("cairn")}):
-        seen: dict[str, dict[int, float]] = {}
-        for cxx in compilers:
-            base = next((r for r in timed if r["compiler"] == cxx and column(r) == name_of), None)
-            mine = reference.get(cxx)
-            arm_key = f"{name_of.split('/')[0]}|{name_of.split('/')[1]}|{cxx}"
-            equal = safety["arms"].get(arm_key, {}).get("equal_to_cairn", False)
-            if base is None or mine is None or not equal:
-                continue
-            seen[cxx] = {
-                row["n"]: row["median_ms"] / mine["timings"]["sweep"][k]["median_ms"]
-                for k, row in enumerate(base["timings"]["sweep"])
-            }
-        if not seen:
-            lines.append([name_of, *["boundaries:unequal" for _ in compilers], "excluded"])
+    # One table per CAIRN arm: a baseline is divided into an arm only where their boundaries are equal. The
+    # primary arm's table is the preregistered one; the others apply the same rule to their own boundaries.
+    by_arm = safety.get("cairn_boundaries_by_arm") or {"cairn": safety["cairn_boundaries"]}
+    for mine_arm in sorted(by_arm, key=lambda a: (a != "cairn", a)):
+        reference = {
+            c: next((r for r in timed if r["compiler"] == c and r["arm"] == mine_arm), None) for c in compilers
+        }
+        if not any(reference.values()):
             continue
-        line = [name_of]
-        for cxx in compilers:
-            line.append(f"{seen[cxx][sizes[-1]]:.2f}" if cxx in seen else "-")
-        line.append(verdict(seen, sizes, compilers))
-        lines.append(line)
-    out.append(table(lines, head))
+        out.append("")
+        out.append(f"ratio of baseline time to {mine_arm} time, above one favours {mine_arm}; equal boundaries only")
+        lines = []
+        for name_of in sorted({column(r) for r in timed if not r["arm"].startswith("cairn")}):
+            seen: dict[str, dict[int, float]] = {}
+            for cxx in compilers:
+                base = next((r for r in timed if r["compiler"] == cxx and column(r) == name_of), None)
+                mine = reference.get(cxx)
+                arm = safety["arms"].get(f"{name_of.split('/')[0]}|{name_of.split('/')[1]}|{cxx}", {})
+                equal = (
+                    arm.get("boundaries") == by_arm[mine_arm]
+                    if "boundaries" in arm and mine_arm != "cairn"
+                    else arm.get("equal_to_cairn", False)
+                )
+                if base is None or mine is None or not equal:
+                    continue
+                seen[cxx] = {
+                    row["n"]: row["median_ms"] / mine["timings"]["sweep"][k]["median_ms"]
+                    for k, row in enumerate(base["timings"]["sweep"])
+                }
+            if not seen:
+                lines.append([name_of, *["boundaries:unequal" for _ in compilers], "excluded"])
+                continue
+            line = [name_of]
+            for cxx in compilers:
+                line.append(f"{seen[cxx][sizes[-1]]:.2f}" if cxx in seen else "-")
+            line.append(verdict(seen, sizes, compilers))
+            lines.append(line)
+        out.append(table(lines, ["column", *compilers, "verdict"]))
 
     out.append("")
     out.append("what the safety boundary costs: unguarded time divided by guarded time")

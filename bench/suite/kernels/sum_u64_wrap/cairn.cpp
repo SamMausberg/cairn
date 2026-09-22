@@ -2,12 +2,10 @@
 // selected by guards.hpp; they are in the generated code, and harness.py takes their count from the
 // build receipt rather than from this file.
 //
-// This arm runs on one thread, and that is the language and not an oversight. On the host a CAIRN
-// reduce is an ordinary in order fold: src/cairn/compiler/codegen.py s_reduce takes its else branch,
-// commented "On the host a reduction is an ordinary in-order fold: no threads, no hidden cost", and
-// docs/guide/language.md line 895 says the same. So this column is the cost of CAIRN's reduce and
-// not the cost of a CAIRN parallel reduction, and it is to be read against the plain column first.
-// The parallel host reduction the language does offer is the atomic form, which is cairn_atomic.cpp.
+// This arm runs on one thread, as the source says: a host `reduce ... for` is an in-order fold
+// (codegen.py, Emitter.s_reduce, and docs/concurrency.md under "reduce and compact"). So this column
+// is the cost of the sequential form, to be read against the plain column first. The parallel host
+// reductions are cairn_atomic.cpp, one relaxed Atomic, and cairn_pool.cpp, `reduce ... parallel`.
 #include "case.hpp"
 
 extern "C" std::uint64_t cf_sum_u64_wrap(std::size_t n, const std::uint64_t* x) noexcept;

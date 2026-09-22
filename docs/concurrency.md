@@ -231,6 +231,25 @@ Host lanes are a pool. The first host region of a process creates them and every
 
 Checked `+` is offered on unsigned integers, where no partial sum can overflow unless the total does, so the trap cannot depend on the order; on the device the sum carries an overflow flag through the reduction and the host traps. Signed `+` and integer `*` are not offered, because a partial result can overflow alone.
 
+Writing `parallel` in place of `for` runs a host reduction on the lane pool. The count alone fixes how the work splits: one block below 16384 elements, otherwise `n / 8192` runs of consecutive indices, at most 256 of them. Each block folds in index order into a slot on the caller's stack, and the slots fold in block order. Every operator the form admits is associative, so the answer is the in-order fold's on any number of lanes, and a checked `+` traps exactly when the in-order fold would. Floats are refused (`E-REDUCE-ORDER`): a sum in blocks is a different function of the same inputs. The row gains `par:host`, and every `yield` runs, in no promised order, under the rules of a lane.
+
+```cairn
+fn checksum(n:usize, bytes:ro<u8>[n]) -> u64 {
+  let total = reduce + parallel i in n yield u64(bytes[i]);    // on the lane pool, and still checked
+  let mixed = reduce ^ parallel i in n yield mul_wrap(u64(bytes[i]), 0x9e3779b97f4a7c15);
+  return total ^ mixed;
+}
+```
+
+```cairn rejects E-REDUCE-ORDER
+fn dot(n:usize, x:ro<f64>[n], y:ro<f64>[n]) -> f64 {
+  let s = reduce + parallel i in n yield x[i] * y[i];
+  return s;
+}
+```
+
+On the device a reduction is a tree either way, so `parallel` there changes nothing.
+
 ```cairn
 fn main() -> i32 {
   let n:usize = 10000;

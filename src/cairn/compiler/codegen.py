@@ -503,7 +503,12 @@ class Emitter:
             start = f"static_cast<{ty}>({identity})" if carried == ty else carried + "{}"
             total = f"cr::gpu::reduce<{carried}>({es[0]}, {start}, {fold}, {value})"
             self.put(f"const {ty} v_{s.name} = {total}{'' if carried == ty else '.checked()'};")
-        else:  # On the host a reduction is an ordinary in-order fold: no threads, no hidden cost.
+        elif s.pooled:  # Blocks the count alone fixes, each folded in order, then their totals in order.
+            value = self.lane(s, lambda: self.put(f"return {self.expr(s.exprs[1])};"))
+            fold = f"[]({ty} a, {ty} b) noexcept {{ return {combine}; }}"
+            self.put(f"const {ty} v_{s.name} = cr::par::reduce<{ty}>({es[0]}, static_cast<{ty}>({identity}), {fold}, "
+                     f"{value});")  # fmt: skip
+        else:  # A host reduction without `parallel` is an ordinary in-order fold: no threads, no hidden cost.
             count = self.fresh("n")[0]  # The extent is evaluated once, as written.
             self.put(f"{ty} v_{s.name} = static_cast<{ty}>({identity});")
             self.put(f"const std::size_t {count} = {es[0]};")

@@ -147,7 +147,9 @@ code cannot index @device memory and lanes cannot index the other side; a @pinne
 region of a process creates the lane pool and later ones reuse it; a small one is just the loop.
 Whatever any lane writes may be touched only at [i]; shared scalars cannot be assigned (use let s = reduce
 add_wrap for i in n yield x[i];, which is also the ordinary fold outside any region: i
-runs over 0..n and the operator is one of add_wrap mul_wrap min max & | ^, or + * on floats). Lanes cannot return, nest or move outer owners, and
+runs over 0..n and the operator is one of add_wrap mul_wrap min max & | ^, or + * on floats). reduce op parallel
+i in n yield e folds the same integers on the lane pool, in blocks n alone fixes, to the in-order answer; floats
+there are E-REDUCE-ORDER. Lanes cannot return, nest or move outer owners, and
 neither a lane nor anything it calls may do I/O, spawn, touch the machine or (on the
 device) allocate or use strings and host owners. A lane may call a fn parameter f of its
 function (effect lane:f): whoever finally passes a closure must not write what it
