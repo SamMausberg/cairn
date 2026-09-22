@@ -49,9 +49,9 @@ MACHINE = Profile(
             "x86-64-v4": {
                 "vector": {"f32": 0.01, "load": 0.01, "store": 0.01, "mul": 1.0, "int": 0.5},
                 "scalar": {"f32": 1.0, "load": 1.0, "store": 1.0, "mul": 2.0, "int": 1.0, "f64_fold": 3.0, "div": 20.0},
+                "keeps_scalar": ["div"],
             }
         },
-        scalarizing=["div"],
         pool={"fork_ns": 1000.0, "per_lane_ns": 100.0, "cutoff": 16384, "grain": 8192},
         spawn_ns=50_000.0,
         irregular_ns={"l1": 1.0, "l2": 2.0, "l3": 5.0, "dram": 50.0},
@@ -249,3 +249,26 @@ def test_an_agent_asks_what_its_admitted_candidate_is_predicted_to_change():
     assert after["schema"] == "cairn.predict.delta/1" and after["functions"]["fill"][0]["ratio"] < 1
     with pytest.raises(Diagnostic, match="sizes"):
         host.respond({**ask, "sizes": {"n": 1}})
+
+
+def test_a_parameter_no_count_depends_on_is_not_an_extent():
+    source = (ROOT / "examples/apps/simulator/src/stencil.cairn").read_text()
+    interior = costs(source)["interior"]  # interior(i, n) does the same work for every i and n
+    assert interior.extents == [] and model.formula(interior, MACHINE).endswith(" ns")
+    assert suite("saxpy_f32")["saxpy_f32"].extents == ["n"]
+
+
+def test_a_small_cost_per_element_is_never_printed_as_free():
+    cheap = costs("fn f(n:usize, o:rw<u8>[n]) { parallel i in n { o[i] = 1; } }")["f"]
+    shown = model.formula(cheap, MACHINE)
+    assert "0 ns*n" not in shown and ("ps*n" in shown or "ns*n" in shown)
+    assert all(piece["per_element_ns"] > 0 for piece in model.regimes(cheap, MACHINE))
+    blank = costs("fn g(a:f32, b:f32) -> f32 = a * b + a;")["g"]
+    assert model.predict(blank, MACHINE, {})["ns"] > 0  # a kind the fit left at zero still costs a fraction of a cycle
+
+
+def test_device_work_is_priced_from_the_specification_and_says_so():
+    source = "fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i]; } }\n"
+    small, large = (model.predict(costs(source)["scale"], MACHINE, {"n": n}) for n in (1e3, 1e8))
+    assert small["bound"] == "launch" and large["bound"] == "device memory" and large["ns"] > small["ns"]
+    assert large["confidence"] == "low" and any("specification" in w for w in large["why"])

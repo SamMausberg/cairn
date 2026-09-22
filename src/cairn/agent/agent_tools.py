@@ -338,7 +338,7 @@ class EditSession:
             isinstance(s, dict) and all(isinstance(k, str) and isinstance(v, int | float) for k, v in s.items())
             for s in sizes
         ):
-            fail("E-REQUEST", "sizes is a list of objects from an extent's name to a number, such as [{\"n\": 1e6}].")
+            fail("E-REQUEST", 'sizes is a list of objects from an extent\'s name to a number, such as [{"n": 1e6}].')
         given = [{k: float(v) for k, v in s.items()} for s in sizes]
         answer = report(self.source, given) if candidate is None else delta(self.source, candidate, given)
         answer["functions"] = {n: v for n, v in answer["functions"].items() if n in self.visible}

@@ -24,8 +24,9 @@ class Host:
     cache: dict[str, int]  # l1, l2 per core; l3 shared: bytes
     read: dict[str, dict[str, float]]  # level -> {"1": GB/s one thread, "all": GB/s every lane}
     write: dict[str, dict[str, float]]
-    ops: dict[str, dict[str, dict[str, float]]]  # -march profile -> "vector" / "scalar" -> kind -> ns per element
-    scalarizing: list[str]  # kinds whose presence keeps a loop scalar, as the calibration observed
+    # -march profile -> "vector" / "scalar" -> kind -> ns per element, and "keeps_scalar": the kinds whose presence
+    # kept a calibration loop scalar on that profile.
+    ops: dict[str, dict[str, Any]]
     pool: dict[str, float]  # fork_ns, per_lane_ns, cutoff, grain
     spawn_ns: float = 30_000.0
     alloc_ns: float = 200.0
@@ -66,6 +67,10 @@ class Host:
         if threads <= 1:
             return one
         return one + (every - one) * min(1.0, (threads - 1) / max(self.lanes - 1, 1))
+
+    def table(self, arch: str | None) -> dict[str, Any]:
+        """The operation costs measured for `arch`, or for the first profile measured when `arch` was not."""
+        return self.ops.get(arch or "") or next(iter(self.ops.values()))
 
     def fork(self, lanes: int) -> float:
         return self.pool["fork_ns"] + self.pool["per_lane_ns"] * max(lanes - 1, 0)

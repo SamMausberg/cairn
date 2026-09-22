@@ -368,7 +368,7 @@ fn walk(n:usize, out:rw<u64>[n]) { for i in 0..n { out[i] = 1; } }
 plan walk { grain 64; }
 ```
 
-Halide separated algorithms from schedules, and MLIR's transform dialect does the same inside a compiler. The open question for CAIRN is whether a schedule kept apart from the algorithm, where the checker holds it to the algorithm's ownership rules, makes tuning cheaper than rewriting the loop, for a person or an agent. Nothing about that has been measured.
+Halide separated algorithms from schedules, and MLIR's transform dialect does the same inside a compiler. The open question for CAIRN is whether a schedule kept apart from the algorithm, where the checker holds it to the algorithm's ownership rules, makes tuning cheaper than rewriting the loop, for a person or an agent. [`cairn tune`](tools.md#cairn-predict) is the search this makes possible: every plan it tries is one the checker accepts, it ranks them all by prediction and times only the best few. Whether that is cheaper than rewriting the loop has not been measured.
 
 ## reduce and compact
 

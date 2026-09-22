@@ -191,6 +191,20 @@ class Cost:
         out.waits = self.waits.subst(given) * times
         return out
 
+    def symbols(self) -> set[str]:
+        """Every size any count of this call depends on."""
+        found: set[str] = set()
+        for w in (self.seq, *(r.body for r in self.regions), *(t.seq for _, t in self.tasks)):
+            for table in (*w.tables(), w.footprint):
+                for n in table.values():
+                    found |= n.symbols()
+        for p in (*(r.count for r in self.regions), *(r.runs for r in self.regions), *(n for n, _ in self.tasks),
+                  *self.transfers.values(), self.allocated, self.allocations, self.waits):  # fmt: skip
+            found |= p.symbols()
+        for _, t in self.tasks:
+            found |= t.symbols()
+        return found
+
     def absorb(self, other: Cost) -> None:
         self.seq.merge(other.seq)
         self.regions += other.regions
@@ -252,6 +266,8 @@ class Counter:
         if f.extern:
             self.cost.unknown.append(f"{f.name} is foreign: its body is not visible")
         self.block(f.body, Frame(self.cost.seq, ONE, ()))
+        # An extent is a usize parameter some count depends on; `interior(i, n)` does the same work for every i and n.
+        self.cost.extents = [n for n in extents if n in self.cost.symbols()]
         cost, (self.values, self.cost, self.bound, self.data) = self.cost, saved
         self.open.discard(f.name)
         self.costs[f.name] = cost

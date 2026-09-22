@@ -250,8 +250,7 @@ def calibrate(cxx: str = "clang++", arch: str | None = None) -> dict[str, Any]:
             "cache": caches(),
             "read": read,
             "write": write,
-            "ops": {arch: ops},
-            "scalarizing": scalarizing,
+            "ops": {arch: {**ops, "keeps_scalar": scalarizing}},
             "pool": pool(cxx, arch, threads, write["l2"]["1"]),
             "spawn_ns": round(spawn, 1),
             "alloc_ns": round(allocation, 2),
@@ -275,7 +274,7 @@ def cpu_model() -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--out", type=Path, help="Where the new profile is written.")
     ap.add_argument("--cxx", default="clang++")
     ap.add_argument("--arch", help="The -march profile to measure; default: this host family's baseline.")
     ap.add_argument("--into", type=Path, metavar="PROFILE.json", help="Add this profile's operation costs for "
@@ -285,11 +284,13 @@ def main(argv: list[str] | None = None) -> int:
         existing = json.loads(a.into.read_text(encoding="utf-8"))
         arch = resolve_arch(a.arch)
         ops, scalarizing, fit = operations(a.cxx, arch)
-        existing["host"]["ops"][arch] = ops
+        existing["host"]["ops"][arch] = {**ops, "keeps_scalar": scalarizing}
         existing["measured"].setdefault("operation_fits", {})[arch] = fit
         a.into.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
         print(json.dumps({"status": "calibrated", "profile": str(a.into), "arch": arch, "scalarizing": scalarizing}))
         return 0
+    if not a.out:
+        ap.error("give --out for a new profile, or --into to add to one")
     result = calibrate(a.cxx, a.arch)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

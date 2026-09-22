@@ -99,18 +99,25 @@ COMMANDS = {
     "migrate": "Change one function's interface through every caller, in all the files or in none.",
     "explain": "Where each function pays at run time: guards, allocations, waits and loop vectorization.",
     "predict": "How long each function will take, from its checked work and a machine profile; nothing runs.",
+    "tune": "Choose a function's plan by prediction, and with --measure time only the best-ranked few on this host.",
     "doc": "Generate the API reference of the checked program, as Markdown.",
 }
 OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that take it, the option, its keywords)
-    ({"build", "run", "test", "explain"}, "--cxx", {"default": "clang++"}),
+    ({"build", "run", "test", "explain", "tune"}, "--cxx", {"default": "clang++"}),
     ({"explain", "predict"}, "--symbol", {"action": "append", "help": "This function only (repeatable)."}),
-    ({"predict"}, "--at", {"action": "append", "default": [], "metavar": "NAME=SIZE[,NAME=SIZE]", "help": "Price "
-                           "at these sizes (repeatable); a function of one extent defaults to 1e3, 1e5 and 1e7."}),
+    ({"tune"}, "--symbol", {"action": "append", "required": True, "help": "The function whose plan is chosen."}),
+    ({"predict", "tune"}, "--at", {"action": "append", "default": [], "metavar": "NAME=SIZE[,NAME=SIZE]", "help":
+                                   "Price at these sizes (repeatable); predict defaults a function of one extent to "
+                                   "1e3, 1e5 and 1e7."}),
+    ({"tune"}, "--measure", {"type": int, "default": 0, "metavar": "K", "help": "Time the K best-ranked plans and "
+                             "the current one on this host, halving each round."}),
+    ({"tune"}, "--write", {"action": "store_true", "help": "Write the chosen plan into the file that declares the "
+                           "function."}),
     ({"predict"}, "--against", {"type": Path, "metavar": "BEFORE", "help": "Predict what changing BEFORE into this "
                                 "program does to every function both have."}),
-    ({"predict"}, "--profile", {"type": Path, "help": "A cairn.machine/1 profile; default: the packaged one."}),
+    ({"predict", "tune"}, "--profile", {"type": Path, "help": "A cairn.machine/1 profile; default: the packaged one."}),
     ({"build", "run"}, "--out", {"type": Path}),
-    ({"build", "run", "explain", "predict"}, "--arch", {"choices": sorted(ARCHS)}),
+    ({"build", "run", "explain", "predict", "tune"}, "--arch", {"choices": sorted(ARCHS)}),
     ({"build", "run"}, "--target", {"choices": sorted(TARGETS), "help": "Freestanding profile; default hosted."}),
     ({"build", "run"}, "--timeout", {"type": int, "default": 60}),
     ({"build", "run"}, "--debug", {"action": "store_true", "help": "Debug symbols that point at the CAIRN source."}),
@@ -325,6 +332,24 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 answer = priced.report(project.source, sizes, chosen, supplied, arch)
             print(priced.lines(answer)) if terminal.human(FORMAT) else report(answer)
+            return 0
+        if a.command == "tune":
+            from .perf import report as priced
+            from .perf.profile import Profile
+            from .perf.tune import replanned, tune
+
+            supplied = Profile.load(a.profile) if a.profile else None
+            arch = resolve_arch(a.arch or project.arch)
+            answer = tune(project.source, a.symbol[0], priced.parse_sizes(a.at), supplied, arch, a.measure, a.cxx)
+            if a.write:  # Only the plan line changes: the file that declares the function gains or replaces it.
+                local = a.symbol[0].rsplit(".", 1)[-1]
+                home = next(u for u in project.units if re.search(rf"\bfn\s+{re.escape(local)}\b", read_text(
+                    contained_file(project.root, u.path, ".cairn"), 2_000_000)))  # fmt: skip
+                path = contained_file(project.root, home.path, ".cairn")
+                path.write_text(replanned(path.read_text(encoding="utf-8"), local, answer["chosen"]["plan"]
+                                          if answer["chosen"]["plan"].startswith("plan") else ""), encoding="utf-8")  # fmt: skip
+                answer["written"] = home.path
+            report(answer)
             return 0
         if a.command == "test":
             from .agent.agent_tools import load_json_strict
