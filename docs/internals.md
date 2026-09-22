@@ -54,6 +54,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::launch`
 | `cairn_parallel.hpp` | the host lane pool, linear tasks, task groups with a bounded completion ring, `Mutex` and `Atomic` with explicit orders |
 | `cairn_gpu.hpp` | scoped device, pinned and unified memory, lanes, linear stream tickets, reduction, stable compaction |
 | `cairn_io.hpp` | the I/O ring over io_uring: fixed berths that own each operation's `Buf`, completion-order collection, a wait that drains before it releases |
+| `cairn_assert.hpp` | `assert`: the message a failed one prints, on standard error, through the device's printf in a lane, or not at all in an image, before the trap |
 
 Generated code includes only the headers it needs. A freestanding image includes neither concurrent header: `toolchain.audit_effects` rejects every effect that reaches them, and `cairn_parallel.hpp` refuses to compile under `CAIRN_FREESTANDING`.
 
@@ -61,7 +62,7 @@ The one piece of global state is the lane pool, and it is visible in the source:
 
 `agent/projection.py` prints the canonical read-only projection of the whole language. `agent/agent_tools.py` supplies typed source sites, sealed edit sessions whose effect ceiling can name any effect and whose packet grows by `expand`, and the host that names sessions by handle. `agent/explain.py` reads the costs `cairn explain` reports from the emitted C++ and clang's optimization record. `agent/sketches.py` binds named choices to ranges and contracts the host owns, and `agent/teaching.py` selects rule cards from lexical tokens. Splicing preserves everything outside the authorized range, and the host rechecks the complete linked module, beyond what the packet displayed.
 
-`verify/linear_certificates.py` checks exact affine implications. `verify/scalar_values.py`, `scalar_symbolic.py`, `scalar_concrete.py` and `scalar_semantics.py` are the value model, the SMT translator, the concrete replay and the query. `verify/verification.py` owns aggregate coverage, and one passing function cannot mark a module checked. No agent, test generator or solver may rewrite the authority it is checked against. Native libraries never import the agent tooling or Z3.
+`verify/linear_certificates.py` checks exact affine implications. `verify/scalar_values.py`, `scalar_symbolic.py`, `scalar_concrete.py` and `scalar_semantics.py` are the value model, the SMT translator, the concrete replay and the query. `verify/verification.py` owns aggregate coverage, and one passing function cannot mark a module checked. `verify/testing.py` runs the JSON task contracts and `verify/runner.py` the test blocks, each in a process of its own. No agent, test generator or solver may rewrite the authority it is checked against. Native libraries never import the agent tooling or Z3.
 
 The wheel holds the compiler package, the runtime headers, the target support files, the `std` sources, the typed marker and the CLI metadata. Tests, benchmarks, proofs, evidence and historical specifications stay out of it. Ordinary compilation has no third-party Python dependency; Z3, Lean, CUDA and QEMU are optional local tools.
 

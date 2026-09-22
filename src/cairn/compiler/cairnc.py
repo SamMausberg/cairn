@@ -77,11 +77,11 @@ def certify_templates(source: str) -> dict[str, str]:
 
 
 def compile_units(
-    source: str, origin: Any = "", roots: tuple[str, ...] = (), keep_guards: bool = False
+    source: str, origin: Any = "", roots: tuple[str, ...] = (), keep_guards: bool = False, sites: Any = None
 ) -> tuple[dict[str, str], dict[str, Any]]:
     """The same program as one object per module: `program.hpp` (what every unit shares) and `<module>.cpp`
     files holding only bodies. A body-only change alters one file; a signature change alters the header."""
-    interface, bodies, manifest = generate(source, origin, roots, keep_guards)
+    interface, bodies, manifest = generate(source, origin, roots, keep_guards, sites)
     shared = "\n".join(
         ["#pragma once", *(line.replace("static const cdt_", "inline const cdt_") for line in interface)]
     )
@@ -93,20 +93,21 @@ def compile_units(
 
 
 def compile_source(
-    source: str, origin: Any = "", roots: tuple[str, ...] = (), keep_guards: bool = False
+    source: str, origin: Any = "", roots: tuple[str, ...] = (), keep_guards: bool = False, sites: Any = None
 ) -> tuple[str, dict[str, Any]]:
-    """Generated C++ and its receipt; `origin` names the source in #line directives for debug builds, and
-    `keep_guards` writes every guard, including the ones the checker showed cannot fail."""
-    interface, bodies, manifest = generate(source, origin, roots, keep_guards)
+    """Generated C++ and its receipt; `origin` names the source in #line directives for debug builds,
+    `keep_guards` writes every guard, including the ones the checker showed cannot fail, and `sites` maps a line to
+    the (file, line) a failed assert names."""
+    interface, bodies, manifest = generate(source, origin, roots, keep_guards, sites)
     return "\n".join([*interface, *(line for _, lines in bodies for line in lines)]) + "\n", manifest
 
 
 def generate(
-    source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool = False
+    source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool = False, sites: Any = None
 ) -> tuple[list[str], list[tuple[str, list[str]]], dict]:
     p, checker, receipts = compile_program(source)
     certificate = audit_collector()  # The collector's unchecked store is emitted only under this gate.
-    emitter = Emitter(p, checker, origin, roots, keep=keep_guards)
+    emitter = Emitter(p, checker, origin, roots, keep=keep_guards, sites=sites)
     for name, verdict in emitter.elision.items():  # What lowering leaves out is what the audit accepted.
         if name in receipts:
             receipts[name]["discharged_check_sites"] = verdict["accepted"]

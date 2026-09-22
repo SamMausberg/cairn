@@ -35,6 +35,7 @@ GUARDS = {  # The checker's name for each guard kind, and the runtime calls that
     "disjointness": ("cr::disjoint(",),  # One per pair of views where one writes; the checker does not count them.
     "tag": ("cr::trap()",),
     "callable": ("cr::callable(",),
+    "assert": ("cr::check(",),
 }
 SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and how the emitter spells it.
     "wait": ".wait()",
@@ -217,7 +218,7 @@ def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None
             "synchronization": synchronization,
         }
 
-    written = [f for f in p.functions if not f.extern]
+    written = [f for f in p.functions if not f.extern and not f.test]  # a test is emitted only where it runs
     functions = {f.name: costs(f, lines) for f, (_, lines) in zip(written, bodies, strict=True)
                  if symbols is None or f.name in symbols}  # fmt: skip
     cpp = "\n".join([*interface, *(line for _, lines in bodies for line in lines)]) + "\n"

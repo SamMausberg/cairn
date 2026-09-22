@@ -165,6 +165,7 @@ class Function:
     block: Any = None  # Which `impl { }` wrote this member: one Self type has one block, not a union of several.
     kernel: bool = False  # Runs on the device: callable only from device lanes and other kernels.
     symbol: str = ""  # The C symbol of an extern, when it differs from the CAIRN name.
+    test: bool = False  # `test name { }`: run by `cairn test` in a process of its own, emitted into no other build.
     captures: list[tuple[str, str]] = field(default_factory=list)  # A closure's (outer place, mode) accesses.
     row: tuple[set, set] = field(default_factory=lambda: (set(), set()))  # A closure's own (effects, callees).
 

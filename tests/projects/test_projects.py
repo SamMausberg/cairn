@@ -102,7 +102,7 @@ def test_project_is_ordered_and_pinned(tmp_path):
     p = load_project(root)
     assert [x.path for x in p.units] == ["src/math.cairn", "src/main.cairn"]
     functions = compile_source(p.source)[1]["functions"]
-    assert sorted(f for f in functions if not f.startswith("std.")) == ["average", "main"]
+    assert sorted(f for f in functions if not f.startswith("std.")) == ["average", "main", "test$average"]
     original = p.receipt()
     (root / "src/main.cairn").write_text("fn main()->i32=0;")
     assert load_project(root).receipt() != original

@@ -94,6 +94,13 @@ def summary(result: dict, stream: TextIO | None = None) -> None:
     for test in result.get("tests", []):
         if test.get("status") != "passed-finite-tests":
             print(f"  {test.get('contract')}: {test.get('status')} {test.get('message', '')}".rstrip(), file=stream)
+    blocks = result.get("blocks", {})
+    for test in blocks.get("tests", []):
+        if test.get("status") != "passed":
+            print(f"  test {test.get('name')}: {test.get('reason', '')}", file=stream)
+    if blocks.get("status") in {"native-build-failed", "unknown"}:
+        said = (blocks.get("build", {}).get("stderr") or blocks.get("build", {}).get("message") or "").strip()
+        print(f"  the tests did not build: {said.splitlines()[0] if said else blocks['status']}", file=stream)
     generics = {n: v for n, v in result.get("generics", {}).items() if v != "ok"}
     for name, verdict in generics.items():
         print(f"  {name}: {verdict}", file=stream)
@@ -107,8 +114,15 @@ def typed(result: dict) -> str:
 
 
 def cases(result: dict) -> str:
-    tests = result.get("tests", [])
-    return f"{plural(len(tests), 'contract')}, {plural(sum(t.get('cases', 0) for t in tests), 'case')}"
+    """`3 tests, 1 contract, 81 cases`, or `1 of 3 tests failed`; a count of nothing is left out."""
+    tests, blocks = result.get("tests", []), result.get("blocks", {}).get("tests", [])
+    failed = sum(test.get("status") != "passed" for test in blocks)
+    said = []
+    if blocks:
+        said.append(f"{failed} of {plural(len(blocks), 'test')} failed" if failed else plural(len(blocks), "test"))
+    if tests or not blocks:
+        said += [plural(len(tests), "contract"), plural(sum(t.get("cases", 0) for t in tests), "case")]
+    return ", ".join(said)
 
 
 def plural(count: int, noun: str) -> str:

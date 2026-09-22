@@ -18,6 +18,7 @@ import pytest
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project
+from cairn.verify.runner import run_tests
 from emitted import emit
 
 APP = Path(__file__).resolve().parents[2] / "examples" / "apps" / "wordfreq"
@@ -81,6 +82,19 @@ def test_it_is_clean_under_address_sanitizer(tmp_path):
     done = subprocess.run([executable, *map(str, files)], capture_output=True, timeout=120, env=env)
     assert done.returncode == 0 and b"Sanitizer" not in done.stderr, done.stderr[-3000:]
     assert done.stdout.decode() == oracle(files)
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_its_test_blocks_pass(tmp_path, cxx):
+    """words.cairn tests count_words through a Map, which no JSON contract can pass it."""
+    if not shutil.which(cxx):
+        pytest.skip(f"{cxx} unavailable")
+    record = run_tests(load_project(APP), cxx=cxx, jobs=2, output=tmp_path / "build")
+    assert record["status"] == "passed-test-blocks", record["tests"]
+    assert [t["name"] for t in record["tests"]] == [
+        "letters_and_case",
+        "count_words_folds_case_and_counts_each_word_once",
+    ]
 
 
 def test_it_says_what_went_wrong(tmp_path):

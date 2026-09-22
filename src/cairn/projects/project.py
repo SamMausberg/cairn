@@ -81,6 +81,11 @@ class Project:
         unit = self.unit_at(line)
         return (str(self.root / unit.path), line - unit.first_line + 1) if unit else (self.name, line)
 
+    def site(self, line: int) -> tuple[str, int]:
+        """The file, as the manifest names it, and the line behind a line of the combined source."""
+        unit = self.unit_at(line)
+        return (unit.path, line - unit.first_line + 1) if unit else (self.name, line)
+
     def wrote(self, line: int) -> bool:
         """True when the root project itself wrote this line of the combined source, not a vendored dependency."""
         unit = self.unit_at(line)

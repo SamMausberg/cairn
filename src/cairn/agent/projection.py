@@ -174,6 +174,8 @@ def related(table: dict[str, str], text: str) -> dict[str, str]:
 def function_source(f: Function) -> str:
     if f.extern:
         return signature(f) + ";"
+    if f.test:  # A test has no interface: its name and its body.
+        return f"test {local(f.name).removeprefix('test$')} " + format_block(f.body)
     return signature(f) + " " + format_block(f.body, 1 if f.owner else 0)
 
 

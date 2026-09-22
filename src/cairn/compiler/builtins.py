@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from . import facts, rings
 from .traits import vtable
 from .tree import (
+    BOOL,
     FLOAT,
     HOST_VISIBLE,
     INT,
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
 SOFT = {"take", "swap", "transfer", "mmio_read", "mmio_write", "asm", "wait", "collect"}
 MATH = {"sqrt", "floor", "ceil", "trunc", "abs", "to_bits"}  # 1.4: a program's own function of the name wins
-SOFT |= MATH | {"quantize", "from_bits"}
+SOFT |= MATH | {"quantize", "from_bits", "assert"}
 QUANTIZED = [*STORAGE, "i8", "u8", "i16", "u16"]  # where one rounding of x / scale is exact (cairn_float.hpp)
 PATTERN = {"f32": "u32", "f64": "u64", **{n: "u16" if STORAGE[n][0] + STORAGE[n][1] > 7 else "u8" for n in STORAGE}}
 F32 = Type("f32")
@@ -177,6 +178,22 @@ def check_quantize(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected
 def lower_math(g: Emitter, e: Expr) -> str:
     a, ty = g.expr(e.args[0]), g.type(e.ty)
     return f"cr::{'math::' if e.val in {'sqrt', 'floor', 'ceil', 'trunc'} else ''}{e.val}<{ty}>({a})"
+
+
+def check_assert(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    """assert(cond) and assert(cond, "why"): a guard the program writes. A false condition prints where it was
+    written, and the text when there is one, on standard error, then aborts as every failed guard does."""
+    if not 1 <= len(args) <= 2 or (len(args) == 2 and args[1].tag != "str"):
+        fail("E-ARITY", "assert takes a condition and, optionally, one string literal saying what failed.", e)
+    c.expect(c.expr(args[0], BOOL), BOOL, args[0])
+    c.guard("assert")
+    return VOID
+
+
+def lower_assert(g: Emitter, e: Expr) -> str:
+    g.need("cairn_assert.hpp")
+    said = f": {e.args[1].val}" if len(e.args) == 2 else ""
+    return f"cr::check({g.expr(e.args[0])}, {g.quoted(f'assertion failed {g.site(e.line)}{said}')})"
 
 
 def check_machine(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
@@ -354,6 +371,7 @@ def lower_float(g: Emitter, e: Expr) -> str:
 
 TABLE: dict[str, tuple[Any, Any]] = {
     "len": (check_len, lower_len),
+    "assert": (check_assert, lower_assert),
     **dict.fromkeys(NUMERIC, (check_convert, lower_convert)),
     **dict.fromkeys(WRAPPING | {"min", "max"}, (check_binary, lower_binary)),
     **dict.fromkeys(MATH, (check_math, lower_math)),

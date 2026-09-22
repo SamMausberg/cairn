@@ -46,3 +46,30 @@ fn count_words(counts:rw<Map[Word, u64]>, n:usize, s:ro<u8>[n]) -> u64 {
   }
   return words;
 }
+
+// The key the map holds for the word `text`: what a test looks a count up by.
+fn word(n:usize, text:ro<u8>[n]) -> Word {
+  let mut bytes = vec.new[u8]();
+  bytes.extend_from(text);
+  return Word(bytes);
+}
+
+test letters_and_case {
+  assert(letter('a') && letter('Z') && letter('7'));
+  assert(!letter('-') && !letter(' ') && !letter(0xc3), "a byte past ASCII separates words");
+  assert(lower('Q') == 'q' && lower('q') == 'q' && lower('1') == '1');
+}
+
+test count_words_folds_case_and_counts_each_word_once {
+  let mut counts = map.new[Word, u64]();
+  let total = count_words(counts, "The cat, the CAT: 2 cats.");
+  assert(total == 6, "six words");
+  assert(counts.count() == 4, "the, cat, 2 and cats");
+  let the = word("the");
+  match counts.get(the) {
+    Some(seen) => assert(seen == 2, "the, twice");
+    None => assert(false, "the is counted");
+  }
+  let more = count_words(counts, "");
+  assert(more == 0 && counts.count() == 4, "an empty text adds nothing");
+}

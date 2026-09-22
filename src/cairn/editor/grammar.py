@@ -26,7 +26,7 @@ from ..compiler.tree import INTRINSIC_TYPES, PLACES, SCALAR, STORAGE
 ROOT = Path(__file__).resolve().parents[3]
 
 # Words the parser reads in one position only; anywhere else they are ordinary names (syntax.py says where).
-CONTEXTUAL = {"after", "align", "fold", "grain", "into", "lanes", "packed", "plan", "recipe", "require"}
+CONTEXTUAL = {"after", "align", "fold", "grain", "into", "lanes", "packed", "plan", "recipe", "require", "test"}
 
 # class -> (TextMate scope, Vim group, words). Every reserved word is in exactly one class.
 WORDS: dict[str, tuple[str, str, set[str]]] = {
@@ -56,6 +56,7 @@ CONTEXT: dict[str, tuple[str, str]] = {
     "grain": ("keyword.other.plan.cairn", r"(?=\s+[0-9])"),
     "lanes": ("keyword.other.plan.cairn", r"(?=\s+[0-9])"),
     "plan": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*\{)"),
+    "test": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*\{)"),
     "recipe": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*[\[({]|\s+[A-Za-z_]\w*\s+for\b)"),
     "require": ("keyword.control.flow.cairn", r"(?=\s+\S[^;]*,\s*\")"),
     "packed": ("storage.modifier.layout.cairn", r"(?=\s*\{)"),
@@ -204,6 +205,7 @@ def textmate() -> dict:
                     "keyword.declaration.cairn",
                     "entity.name.function.cairn",
                 ),
+                captured(rf"\b(test)\s+({IDENT})(?=\s*\{{)", "keyword.declaration.cairn", "entity.name.function.cairn"),
                 captured(
                     rf"\b(derive)\s+({IDENT}(?:\.{IDENT})*)",
                     "keyword.declaration.cairn",
@@ -357,7 +359,7 @@ def vim() -> str:
         f"syntax keyword cairnVariant {' '.join(library_variants())}",
         f"syntax match cairnBuiltin /\\v<({'|'.join(BUILTINS)})>\\ze\\s*[[(]/",
         "syntax match cairnCall /\\v<\\l\\w*\\ze\\s*\\(/",  # of two matches at one place, Vim takes the later
-        "syntax match cairnFunction /\\v(<(fn|kernel)\\s+)@<=\\h\\w*/",
+        "syntax match cairnFunction /\\v(<(fn|kernel|test)\\s+)@<=\\h\\w*/",
         "syntax match cairnUserType /\\v<\\u\\w*>/",
         "syntax match cairnConstant /\\v<\\u[A-Z0-9_]*[A-Z0-9]>/",
         "syntax match cairnEnumMember /\\v(<\\u\\w*\\.)@<=\\u\\w*>/",

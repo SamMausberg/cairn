@@ -45,7 +45,9 @@ def objects(
     to the same key and the stored bytes still match the digest beside them, so nothing stale, truncated or replaced
     is ever linked. The cache is a directory of the project's own build output, never a link out of it. Missing
     objects compile concurrently."""
-    files, _ = compile_units(project.source, project.origin if debug else "", (entry,) if entry else (), keep)
+    files, _ = compile_units(
+        project.source, project.origin if debug else "", (entry,) if entry else (), keep, project.site
+    )
     files["0start.cpp"] = '#include "program.hpp"\n' + stub  # No module's unit can be named with a leading digit.
     compile_prefix, link = unit_commands(cxx, arch or project.arch, kind)
     compile_prefix += ["-g"] if debug else []
@@ -80,6 +82,27 @@ def objects(
     return [*link, *(unit["object"] for unit in units)], units
 
 
+def dispatcher(tests: tuple[str, ...]) -> str:
+    """The `main` of a test build: argv[1] is the index of the one test this process runs, so a test that traps
+    fails alone. A missing or bad index exits 2, which no passing test does."""
+    table = ", ".join(f"ctest_{mangle(name)}" for name in tests)
+    return f"""
+// tests
+int main(int argc, char** argv) {{
+  void (*const tests[])() noexcept = {{{table}}};
+  std::size_t which = 0;
+  if (argc != 2 || !argv[1][0]) return 2;
+  for (const char* p = argv[1]; *p; ++p) {{
+    if (*p < '0' || *p > '9' || which > 1000000) return 2;
+    which = which * 10 + static_cast<std::size_t>(*p - '0');
+  }}
+  if (which >= sizeof(tests) / sizeof(tests[0])) return 2;
+  tests[which]();
+  return 0;
+}}
+"""
+
+
 def build(
     project: Project,
     *,
@@ -92,8 +115,9 @@ def build(
     debug: bool = False,
     incremental: bool = False,
     keep_guards: bool = False,
+    tests: tuple[str, ...] = (),
 ) -> dict:
-    kind = kind or project.kind
+    kind = "exe" if tests else kind or project.kind  # A test build is an executable whose main runs one test.
     target = target or project.target
     bare = bool(profile(target))
     flags(arch or project.arch, kind, target)  # Reject an unknown kind, architecture or target before any work.
@@ -101,9 +125,11 @@ def build(
         raise ProjectError("Build timeout must be 1..300 seconds.")
     if bare and kind != "exe":
         raise ProjectError(f'Target {target} builds one image: set kind = "exe".')
+    if bare and tests:
+        raise ProjectError(f"Tests run as host processes; target {target} has no host to run them on.")
     compiler = find(cxx)
     entry = ""
-    if kind == "exe":  # The entry point is `main` of the root module, else the only module-level `main`.
+    if kind == "exe" and not tests:  # The entry point is `main` of the root module, else the only module-level `main`.
         # A vendored dependency is a library: it neither supplies the program's entry point nor denies it one.
         written = Parser(project.source).parse().functions
         mains = [f for f in written if f.name.rsplit(".", 1)[-1] == "main" and project.wrote(f.line)]
@@ -112,11 +138,12 @@ def build(
             raise ProjectError("An executable needs exactly one fn main() -> i32 with no arguments.")
         entry = main.name
     # A library exports everything; a program contains only what its entry point reaches.
-    roots = (entry,) if entry else ()
-    generated, receipt = compile_source(project.source, project.origin if debug else "", roots, keep_guards)
-    if bare:  # No hosted runtime stands behind the image, so no effect may assume one.
-        audit_effects(receipt["functions"])
-    generated += "\n// entry\n" if entry else ""
+    roots = tests or ((entry,) if entry else ())
+    origin = project.origin if debug else ""
+    generated, receipt = compile_source(project.source, origin, roots, keep_guards, sites=project.site)
+    if bare:  # No hosted runtime stands behind the image, so no effect may assume one; no test is in the image.
+        audit_effects({name: row for name, row in receipt["functions"].items() if not row.get("test")})
+    generated += "\n// entry\n" if entry else dispatcher(tests) if tests else ""
     if entry and entry != "main":  # Start-up code calls cf_main, wherever main was written.
         generated += f'\nextern "C" std::int32_t cf_main() noexcept {{ return cf_{mangle(entry)}(); }}\n'
     if entry and not bare:

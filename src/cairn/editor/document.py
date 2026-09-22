@@ -17,7 +17,7 @@ from ..compiler.cairnc import Diagnostic, compile_program
 from ..compiler.syntax import IDENT, RESERVED, Program
 from .formatting import CLOSERS, OPENERS, Item, roles, scan
 
-DECLARATIONS = {"fn": 12, "struct": 23, "enum": 10, "trait": 11, "const": 14, "impl": 5}
+DECLARATIONS = {"fn": 12, "test": 12, "struct": 23, "enum": 10, "trait": 11, "const": 14, "impl": 5}
 
 MODIFIERS = {"pub", "linear", "extern"}
 

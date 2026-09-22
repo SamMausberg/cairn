@@ -297,6 +297,17 @@
      }
     },
     {
+     "match": "\\b(test)\\s+([A-Za-z_]\\w*)(?=\\s*\\{)",
+     "captures": {
+      "1": {
+       "name": "keyword.declaration.cairn"
+      },
+      "2": {
+       "name": "entity.name.function.cairn"
+      }
+     }
+    },
+    {
      "match": "\\b(derive)\\s+([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*)",
      "captures": {
       "1": {
@@ -453,6 +464,10 @@
     {
      "name": "keyword.control.flow.cairn",
      "match": "\\brequire\\b(?=\\s+\\S[^;]*,\\s*\\\")"
+    },
+    {
+     "name": "keyword.declaration.cairn",
+     "match": "\\btest\\b(?=\\s+[A-Za-z_]\\w*\\s*\\{)"
     }
    ]
   },
@@ -554,7 +569,7 @@
    "patterns": [
     {
      "name": "support.function.builtin.cairn",
-     "match": "\\b(?:mmio_write|from_bits|mmio_read|add_wrap|mul_wrap|quantize|shl_wrap|sub_wrap|transfer|collect|to_bits|floor|trunc|ceil|sqrt|swap|take|wait|abs|asm|len|max|min|shr)\\b(?=(?:\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])?\\s*\\()"
+     "match": "\\b(?:mmio_write|from_bits|mmio_read|add_wrap|mul_wrap|quantize|shl_wrap|sub_wrap|transfer|collect|to_bits|assert|floor|trunc|ceil|sqrt|swap|take|wait|abs|asm|len|max|min|shr)\\b(?=(?:\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])?\\s*\\()"
     },
     {
      "name": "entity.name.function.member.cairn",

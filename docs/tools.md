@@ -78,6 +78,23 @@ A template that reaches past its bounds is named with what it needed, and the co
 {"generics": {"ranking.widest": "E-TRAIT-IMPL: ?ranking.widest.T does not implement std.core.Ord."}}
 ```
 
+## cairn test
+
+```sh
+cairn test demo                    # every test block and every contract of the manifest
+cairn test demo --filter average   # only the tests and contracts whose name contains average
+cairn test demo --jobs 4 --timeout 10
+```
+
+`cairn test` builds one executable that holds every selected test block ([language.md](language.md#tests-and-assert)) and runs each test in a process of its own, several at once, in source order. A test passes only when its process exits with status 0: a failed `assert` or guard, a signal, any other status and a timeout each fail that test alone, whatever it printed first. The processes run in the project's directory under the limits `cairn run` applies, which stop runaway programs and are not a sandbox. The manifest's JSON contracts run beside the blocks, `--contract FILE` runs one contract alone, and a run that finds no test at all fails.
+
+```text
+tests-not-passed: 1 of 3 tests failed, 1 contract, 81 cases
+  test wrong: assertion failed at src/main.cairn:13: four is not five
+```
+
+Piped, the record gives each test its file and line, its status, why it failed and what it printed. A test runs only as a host process, so a freestanding project's tests are refused (`E-TEST`), and its image holds none of them.
+
 ## cairn doc
 
 `cairn doc [path] [--module m]` prints a Markdown reference taken from the checked program: every public type, recipe and function of the project's modules with its bounds, the `//` comment written above it, and the effect row the checker inferred.

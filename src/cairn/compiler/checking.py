@@ -434,8 +434,10 @@ class Checker:
         self.bodies()
         planned = concurrency.plans(self)
         effects = self.judge()
+        tests = {f.name for f in self.p.functions if f.test}  # `cairn test` runs them; no other build holds one
         return {
             n: {
+                **({"test": True} if n in tests else {}),
                 "effects": sorted(effects[n]),
                 "calls": sorted(self.calls[n]),
                 "syntactic_check_sites": self.checks[n],

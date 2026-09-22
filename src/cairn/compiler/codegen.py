@@ -43,12 +43,19 @@ def bare(condition: str) -> str:
 
 class Emitter:
     def __init__(
-        self, p: Program, checker: Checker | None = None, origin: Any = "", roots: tuple[str, ...] = (), keep=False
+        self,
+        p: Program,
+        checker: Checker | None = None,
+        origin: Any = "",
+        roots: tuple[str, ...] = (),
+        keep=False,
+        sites: Any = None,
     ):
         self.p, self.ind, self.counter = p, 0, 0
         self.lines: list[str] = []
         # A source name, or a function from a line to (file, line), turns on #line directives.
         self.origin = (lambda line: (origin, line)) if isinstance(origin, str) and origin else origin
+        self.sites = sites  # A line to (file, line), for the messages a program prints; directives stay off.
         self.loops: list[int] = []
         self.headers = ["cairn_runtime.hpp"]
         self.roots = roots  # An executable emits only what its entry points reach.
@@ -90,6 +97,15 @@ class Emitter:
     def need(self, header: str):
         if header not in self.headers:
             self.headers.append(header)
+
+    def site(self, line: int) -> str:
+        """Where the function being lowered wrote `line`, as a message the program prints says it: `at file:line`
+        when the build knows the project's files, else `in` the function, which reads the same however the source
+        is laid out, so the canonical projection still lowers to identical C++."""
+        f = self.f
+        if self.sites and f.module not in self.p.sources:  # A linked library module's lines are its own file's.
+            return "at {}:{}".format(*self.sites(line))
+        return "in " + (f"test {f.name.replace('test$', '')}" if f.test else f.name)
 
     def fresh(self, prefix: str) -> tuple[str, int]:
         self.counter += 1
@@ -351,7 +367,9 @@ class Emitter:
         linkage = "inline " if f.kernel else 'extern "C" ' if exported or f.extern else ""
         device = "CR_HD " if f.name in self.c.device_functions else ""
         symbol = f' __asm__("{f.symbol or local(f.name)}")' if f.extern else ""  # Whatever header declares it.
-        return f"{linkage}{device}{self.type(f.ret)} cf_{mangle(f.name)}({ps}) noexcept{symbol}"
+        return (
+            f"{linkage}{device}{self.type(f.ret)} {'ctest' if f.test else 'cf'}_{mangle(f.name)}({ps}) noexcept{symbol}"
+        )
 
     def interfaces(self) -> tuple[list[str], list[str]]:
         """For each trait used behind dyn: the two-word reference (declared before any layout that
@@ -377,9 +395,11 @@ class Emitter:
         """The interface every unit shares (types, tables, prototypes) and each function's body with the module
         that owns it, so a build may compile one object per module and relink only what changed."""
         symbols: dict[str, str] = {}
+        tests = {f.name for f in self.p.functions if f.test}  # ctest_ symbols, which no cf_ or ct_ symbol can meet
         for name in [*(f.name for f in self.p.functions), *(t.display() for t in self.c.layouts), *self.p.traits]:
-            if symbols.setdefault(mangle(name), name) != name:
-                fail("E-MANGLE", f"{name} and {symbols[mangle(name)]} would share the C symbol {mangle(name)}; "
+            key = "\0" * (name in tests) + mangle(name)
+            if symbols.setdefault(key, name) != name:
+                fail("E-MANGLE", f"{name} and {symbols[key]} would share the C symbol {mangle(name)}; "
                      "rename one.")  # fmt: skip
         self.layouts()
         types, self.lines = self.lines, []
@@ -388,7 +408,8 @@ class Emitter:
             if (name := todo.pop()) not in reached:
                 reached.add(name)
                 todo += self.c.calls.get(name, ())
-        functions = [f for f in self.p.functions if not self.roots or f.name in reached]
+        # A test is emitted only into the build that runs it, where it is a root; nothing else can call one.
+        functions = [f for f in self.p.functions if (f.name in reached if self.roots else not f.test)]
         bodies: list[tuple[str, list[str]]] = []
         for f in functions:
             if not f.extern:

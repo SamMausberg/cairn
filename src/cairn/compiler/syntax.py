@@ -695,6 +695,19 @@ class Parser:
                 text = " ".join(x.s for x in self.ts[first : self.i])
                 recipe.digest = hashlib.sha256(text.encode()).hexdigest()
                 p.recipes[name] = recipe
+            elif self.t.s == "test" and IDENT.fullmatch(self.ahead(1)):  # A word only here: `test sums { ... }`.
+                self.i += 1
+                n, head = self.ident(), self.t
+                if head.s != "{" or f"{self.module}.test${n}".lstrip(".") in p.modules:
+                    fail(
+                        "E-TEST",
+                        f"A test is `test {n} {{ ... }}`: one name per module, no parameters, no result.",
+                        head,
+                    )
+                f = Function(f"test${n}", [], VOID, self.block(), source_name=n, line=t.line, col=t.col, start=t.start,
+                             body_start=head.start, end=self.ts[self.i - 1].end, module=self.module, test=True)  # fmt: skip
+                f.name = f.source_name = declare(f.name, t)
+                p.functions.append(f)
             elif self.t.s == "plan" and IDENT.fullmatch(self.ahead(1)):  # A word only here: `plan f { grain 64; }`.
                 self.i += 1
                 name, chosen = self.path(), {}

@@ -37,6 +37,11 @@ The sources are compiled together, in manifest order, as one program:
 // Floor average without overflowing the intermediate sum.
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
 
+test average {
+  assert(average(10, 20) == 15);
+  assert(average(1, 2) == 1, "rounds down");
+}
+
 import std.io;
 
 // Prints the average it checks, and exits 0 only when it is right.
@@ -50,7 +55,7 @@ fn main() -> i32 {
 }
 ```
 
-`u64` is a fixed-width integer, `+` traps on overflow, `&` and `^` are unsigned, `shr` takes a count below the width, and `= expression;` is a one-return body. `import std.io;` brings in the standard library's output, a `let` is immutable, and a call whose result is nothing is a statement. `main` returns the process exit status.
+`u64` is a fixed-width integer, `+` traps on overflow, `&` and `^` are unsigned, `shr` takes a count below the width, and `= expression;` is a one-return body. `test average { ... }` is a test, which only `cairn test` runs, and `assert` traps when its condition is false. `import std.io;` brings in the standard library's output, a `let` is immutable, and a call whose result is nothing is a statement. `main` returns the process exit status.
 
 ## Check, run, test
 
@@ -59,14 +64,14 @@ cairn check demo
 ```
 
 ```text
-typed: 2 functions, and 69 from the library
+typed: 3 functions, and 69 from the library
 ```
 
 ```json
-{"status": "typed", "functions": 71, "library_functions": 69, "formal_status": "not-verified"}
+{"status": "typed", "functions": 72, "library_functions": 69, "formal_status": "not-verified"}
 ```
 
-`typed` means the program passed every static rule: syntax, types, ownership, leases, lanes, placement and effects. Two functions are the program's; the other 69 are the parts of `std.io`, `std.text`, `std.vec` and `std.sys` that the import brings in, checked the same way. `formal_status` is `not-verified` here and everywhere, because acceptance is not a proof.
+`typed` means the program passed every static rule: syntax, types, ownership, leases, lanes, placement and effects. Three functions are the program's, the test among them; the other 69 are the parts of `std.io`, `std.text`, `std.vec` and `std.sys` that the import brings in, checked the same way. `formal_status` is `not-verified` here and everywhere, because acceptance is not a proof.
 
 ```sh
 cairn run demo
@@ -86,7 +91,7 @@ Piped, the record carries what it printed:
 
 `cairn run demo -- one two` starts the program with the arguments `one` and `two`, which `std.env` reads.
 
- The directory holds the generated `program.cpp`, the runtime headers it includes and `receipt.json`, which records what was compiled, with what, and the effect row of every function:
+The directory holds the generated `program.cpp`, the runtime headers it includes and `receipt.json`, which records what was compiled, with what, and the effect row of every function:
 
 ```json
 "average": {"effects": ["trap"], "calls": [], "syntactic_check_sites": {"shift": 1, "overflow": 1}, "discharged_check_sites": {}}
@@ -99,10 +104,10 @@ cairn test demo
 ```
 
 ```text
-passed-finite-tests: 1 contract, 81 cases
+passed-finite-tests: 1 test, 1 contract, 81 cases
 ```
 
-A contract names a symbol and finite cases. `test` builds a shared library and calls the symbol for each case from Python. A case that disagrees, or a child that exits abnormally, fails the run whatever was printed.
+`test` runs every test block in a process of its own, so a failed assert fails that test alone, and then the manifest's contracts. A contract names a symbol and finite cases: `test` builds a shared library and calls the symbol for each case from Python. A test or a case that disagrees, or a child that exits abnormally, fails the run whatever was printed.
 
 ```json
 {"schema": "cairn.task/1", "symbol": "average",

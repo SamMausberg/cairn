@@ -760,6 +760,35 @@ fn main() -> i32 {
 "say": ["ffi:write", "ffi_precondition", "io", "read:text", "trap"]
 ```
 
+## Tests and assert
+
+`assert(cond)` is a guard the program writes: it traps when `cond` is false, and `assert(cond, "why")` also says why. The condition is a `bool` and the text one string literal (`E-ARITY`), and the row gains `trap`. A failed assert prints where it was written, `assertion failed at src/main.cairn:12: why`, and aborts as every failed guard does. A build that knows the project's files names the file and line; a plain compile names the function, so the canonical projection still lowers to the same C++.
+
+`test name { ... }` is a test: a body checked like a void function with any effects, which `cairn test` runs in a process of its own ([tools.md](tools.md#cairn-test)). It takes nothing and returns nothing, and a module declares each test name once (`E-TEST`). No other build holds a test and nothing can call one, so a test may share its name with the function it tests, and `test` is an ordinary name everywhere else.
+
+```cairn
+fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
+
+test average {
+  assert(average(10, 20) == 15);
+  assert(average(1, 2) == 1, "rounds down");
+}
+
+fn main() -> i32 {
+  let test = average(2, 4);                  // an ordinary name here
+  if test != 3 { return 1; }
+  return 0;
+}
+```
+
+```cairn rejects E-TEST
+test average(x:u64) { assert(x > 0); }
+```
+
+```text
+A test is `test average { ... }`: one name per module, no parameters, no result.
+```
+
 ## What the language does not have
 
 No inheritance and no implicit boxing. No lifetime annotations: a borrow cannot outlive the call it is written in. No implicit conversion, no operator overloading, no shadowing, no block-tail return. No wildcard arm, and no propagation form other than `try`. No exception, no unwinding and no rollback: a failed guard aborts. No orphan rule, because coherence is judged over the whole program. No cancellation of a task or of queued device work. No loop that implies parallelism. No downloads: dependencies are vendored sources.

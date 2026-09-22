@@ -50,6 +50,11 @@ arch = "baseline"
 ''')
     (destination / "src/math.cairn").write_text("""// Floor average without overflowing the intermediate sum.
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
+
+test average {
+  assert(average(10, 20) == 15);
+  assert(average(1, 2) == 1, "rounds down");
+}
 """)
     (destination / "src/main.cairn").write_text("""import std.io;
 
@@ -93,7 +98,7 @@ COMMANDS = {
     "expand": "Print what every derive generated, as CAIRN source.",
     "build": "Build a native artifact in a fresh directory, with a receipt.",
     "run": "Build, then run under process limits, or under the target's emulator; ARGS after -- go to the program.",
-    "test": "Run the project's finite task contracts against a native build.",
+    "test": "Run the project's test blocks, each in a process of its own, and its finite task contracts.",
     "inspect": "Print the packet an editing agent gets for one symbol.",
     "state": "Print the program's state for an agent: every signature and effect row by module, under a digest.",
     "migrate": "Change one function's interface through every caller, in all the files or in none.",
@@ -119,16 +124,20 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"build", "run"}, "--out", {"type": Path}),
     ({"build", "run", "explain", "predict", "tune"}, "--arch", {"choices": sorted(ARCHS)}),
     ({"build", "run"}, "--target", {"choices": sorted(TARGETS), "help": "Freestanding profile; default hosted."}),
-    ({"build", "run"}, "--timeout", {"type": int, "default": 60}),
+    ({"build", "run", "test"}, "--timeout", {"type": int, "default": 60}),
     ({"build", "run"}, "--debug", {"action": "store_true", "help": "Debug symbols that point at the CAIRN source."}),
     ({"build", "run"}, "--incremental", {"action": "store_true", "help": "One object per module, reused by content "
                                          "hash; gives up inlining across modules."}),
     ({"emit", "build", "run"}, "--keep-guards", {"action": "store_true", "help": "Write every guard, also those the "
                                                  "checker showed cannot fail: the conservative build."}),
-    ({"run"}, "--memory-mib", {"type": int, "default": 1024,
-                               "help": "Native address-space cap, 64..65536 MiB; not a sandbox."}),
+    ({"run", "test"}, "--memory-mib", {"type": int, "default": 1024,
+                                       "help": "Native address-space cap, 64..65536 MiB; not a sandbox."}),
     ({"build"}, "--kind", {"choices": ["library", "exe"]}),
     ({"test"}, "--contract", {"type": Path}),
+    ({"test"}, "--filter", {"default": "", "metavar": "TEXT", "help": "Run only the test blocks and contracts whose "
+                            "name contains TEXT."}),
+    ({"test"}, "--jobs", {"type": int, "default": 0, "help": "Test processes at once, 1..64; default: the cores, "
+                          "at most 8."}),
     ({"check"}, "--generics", {"action": "store_true", "help": "Also check each generic function once against its "
                                "bounds; fail if one needs more."}),
     ({"doc"}, "--module", {"action": "append",
@@ -252,7 +261,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             report(result)
             return 0 if result["status"] == "smt-equivalent" else 1 if result["status"] in REFUSED else 2
-        if a.command == "run" and not 64 <= a.memory_mib <= 65536:
+        if a.command == "test" and (not 0 <= a.jobs <= 64 or not 1 <= a.timeout <= 300):  # 0 jobs: as many as cores
+            raise ProjectError("A test run takes 1..64 jobs and a timeout of 1..300 seconds per test.")
+        if a.command in {"run", "test"} and not 64 <= a.memory_mib <= 65536:
             raise ProjectError("Native memory limit must be 64..65536 MiB.")
         if a.command == "doc" and a.std:  # The packaged library needs no project.
             from .editor.docs import standard_library
@@ -261,7 +272,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         project = load_project(a.path)
         if a.command in {"check", "emit"}:
-            generated, receipt = compile_source(project.source, keep_guards=getattr(a, "keep_guards", False))
+            generated, receipt = compile_source(
+                project.source, keep_guards=getattr(a, "keep_guards", False), sites=project.site
+            )
             if a.command == "emit":
                 print(generated, end="")
                 return 0
@@ -353,18 +366,26 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if a.command == "test":
             from .agent.agent_tools import load_json_strict
+            from .verify.runner import run_tests
             from .verify.testing import evaluate
 
             paths = (
                 [a.contract] if a.contract else [contained_file(project.root, x, ".json") for x in project.contracts]
             )
-            if not paths:
-                raise ProjectError("No test contracts. Add project.tests or supply --contract.")
+            paths = [path for path in paths if a.filter in path.name]
+            blocks = {"status": "no-test-blocks", "tests": []}  # --contract runs that contract alone
+            if not a.contract:
+                blocks = run_tests(project, cxx=a.cxx, chosen=a.filter, jobs=a.jobs, timeout=a.timeout,
+                                   memory_mib=a.memory_mib)  # fmt: skip
+            if not paths and not blocks["tests"] and blocks["status"] == "no-test-blocks":
+                named = f" whose name contains {a.filter!r}" if a.filter else ""
+                raise ProjectError(f"No tests{named}: write a test block, add project.tests or supply --contract.")
             results = [{"contract": path.name, **evaluate(project.source, load_json_strict(read_text(path, 2_000_000)),
                                                           a.cxx, project.libraries)} for path in paths]  # fmt: skip
             passed = all(x["status"] == "passed-finite-tests" for x in results)
+            passed &= blocks["status"] in {"passed-test-blocks", "no-test-blocks"}
             status = "passed-finite-tests" if passed else "tests-not-passed"
-            report({"status": status, "tests": results, "formal_status": "not-verified"}, brief=True)
+            report({"status": status, "tests": results, "blocks": blocks, "formal_status": "not-verified"}, brief=True)
             return 0 if passed else 1
         from .projects.build import build
 

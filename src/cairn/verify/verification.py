@@ -58,8 +58,8 @@ def verify_module(
     b = Parser(candidate).parse()
     result["public_types_match"] = (a.records, a.enums, a.sums) == (b.records, b.enums, b.sums)
     result["reference_intent_proved"] = False
-    names = set(ref["functions"])
-    present = set(cand["functions"])
+    names = {n for n, row in ref["functions"].items() if not row.get("test")}  # a test is run, never compared
+    present = {n for n, row in cand["functions"].items() if not row.get("test")}
     result.update(expected=sorted(names), missing=sorted(names - present), extra=sorted(present - names))
     if not names or len(names | present) > 128:
         return {**result, "reason": "Coverage requires 1..128 declared functions."}
