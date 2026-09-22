@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import functools
 import hashlib
 import json
 import sys
@@ -45,12 +46,12 @@ def text(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
 
 
-def tasks(source: str) -> list[tuple[str, str]]:
+def tasks(source: str, limit: int = PER_PROGRAM) -> list[tuple[str, str]]:
     """The first functions with a block body whose own text is an admitted edit: (symbol, body)."""
-    chosen = []
+    chosen: list[tuple[str, str]] = []
     for f in Parser(source).parse().functions:
         body = source[f.body_start : f.end]
-        if f.static or not body.startswith("{") or len(chosen) == PER_PROGRAM:
+        if f.static or not body.startswith("{") or len(chosen) == limit:
             continue
         try:
             session = EditSession(source, f.name)
@@ -117,12 +118,12 @@ def account(runs: list[list[tuple]], count) -> dict:
             "reads_with_history": read, "model_turns": turns, "by_kind": dict(sorted(kinds.items()))}  # fmt: skip
 
 
-def measure_tasks(count, root: Path) -> dict:
-    rows = []
-    totals: dict[str, list] = {f"{scope} {wire} {warmth}": [] for scope, wire, warmth in SETTINGS}
-    for path in PROGRAMS:
+def conversations(root: Path, programs: list[str], per_program: int) -> list[tuple[str, str, list[str], list]]:
+    """(program, setting, tasks, conversations): every transcript, built once whatever it is counted in."""
+    out = []
+    for path in programs:
         source = load_project(root / path).source
-        chosen = tasks(source)
+        chosen = tasks(source, per_program)
         for scope, wire, warmth in SETTINGS:
             host = EditHost()
             runs = []
@@ -130,17 +131,53 @@ def measure_tasks(count, root: Path) -> dict:
                 host = host if warmth == "warm" else EditHost()
                 runs.append(transcript(source, symbol, body, scope, wire, host))
             # A warm host is one conversation per program; cold hosts are one per task.
-            key = f"{scope} {wire} {warmth}"
-            conversations = [[m for r in runs for m in r]] if warmth == "warm" else runs
-            totals[key] += conversations
-            rows.append({"program": path, "setting": key, "tasks": [s for s, _ in chosen],
-                         **account(conversations, count)})  # fmt: skip
+            talks = [[m for r in runs for m in r]] if warmth == "warm" else runs
+            out.append((path, f"{scope} {wire} {warmth}", [s for s, _ in chosen], talks))
+    return out
+
+
+def measure_tasks(runs: list[tuple[str, str, list[str], list]], count) -> dict:
+    rows = []
+    totals: dict[str, list] = {f"{scope} {wire} {warmth}": [] for scope, wire, warmth in SETTINGS}
+    for path, key, chosen, talks in runs:
+        totals[key] += talks
+        rows.append({"program": path, "setting": key, "tasks": chosen, **account(talks, count)})
     baseline = account(totals["component edit/1 cold"], count)
     summary = {}
-    for key, runs in totals.items():
-        a = account(runs, count)
+    for key, talks in totals.items():
+        a = account(talks, count)
         summary[key] = {**a, "vs_1_3": {k: round(a[k] / baseline[k], 3) for k in a if k != "by_kind"}}
     return {"rows": rows, "summary": summary, "task_count": sum(len(r["tasks"]) for r in rows) // len(SETTINGS)}
+
+
+def remember(compile):
+    """`compile`, asked once per distinct call: a result is shared, a refusal is raised afresh each time."""
+    seen: dict = {}
+
+    def once(*args, **kwargs):
+        key = (args, tuple(sorted(kwargs.items())))
+        if key not in seen:
+            try:
+                seen[key] = (True, compile(*args, **kwargs))
+            except Diagnostic as e:
+                seen[key] = (False, e.data)
+        ok, value = seen[key]
+        if ok:
+            return value
+        error = Diagnostic(value["code"], value["message"])
+        error.data = copy.deepcopy(value)  # A host writes where in the reply it is into its own copy.
+        raise error
+
+    return once
+
+
+def compile_once() -> None:
+    """Every transcript recompiles the same few programs, so the process asks the compiler once per source text.
+    The answers, results and refusals alike, are the compiler's own."""
+    import cairn.agent.agent_tools as host
+
+    host.compile_source = remember(host.compile_source)
+    host.compile_program = remember(host.compile_program)
 
 
 def measure_cards(count) -> dict:
@@ -224,19 +261,24 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--tiktoken", default=TOKENIZER, help="The offline tiktoken encoding to count tokens with.")
     ap.add_argument("--programs", type=Path, default=ROOT, help="Read the example programs from this tree.")
+    ap.add_argument("--quick", action="store_true", help="Two programs, two tasks each: the shape, not the record.")
     ap.add_argument("--output", type=Path, default=ROOT / "results/context/context.json")
     args = ap.parse_args()
+    compile_once()
     counters = {"utf8_bytes": lambda s: len(s.encode("utf-8"))}
     found = tokenizer(args.tiktoken)
     if found:
         counters[found[0]] = found[1]
+    counters = {name: functools.lru_cache(maxsize=None)(count) for name, count in counters.items()}
     unit = found[0] if found else "utf8_bytes"  # what the card breakdowns count in
+    runs = conversations(args.programs, PROGRAMS[:2] if args.quick else PROGRAMS, 2 if args.quick else PER_PROGRAM)
     result = {
         "model_trials": 0,
         "units": list(counters),
         "tokenizer": unit if found else f"tiktoken/{args.tiktoken} is not available offline; bytes only",
         "method": __doc__.strip(),
-        "tasks": {name: measure_tasks(count, args.programs) for name, count in counters.items()},
+        **({"quick": "two programs, two tasks each; not a record"} if args.quick else {}),
+        "tasks": {name: measure_tasks(runs, count) for name, count in counters.items()},
         "card_sizes": {name: counters[unit](text) for name, text in CARDS.items()},
         "diagnostic_sizes": measure_diagnostics(counters[unit]),
         **measure_cards(counters[unit]),
