@@ -226,3 +226,12 @@ def test_the_task_runner_calls_a_module_function_by_its_c_symbol():
     result = evaluate(source, {"schema": "cairn.task/1", "symbol": "m.f", "cases": [{"args": {"x": 4}, "return": 5}]},
                       COMPILERS[0])  # fmt: skip
     assert result["status"] == "passed-finite-tests"
+
+
+def test_a_device_program_is_never_run_to_replay_a_witness():
+    device = "fn scale(n:usize, out:rw<f32>[n]@device) { parallel i in n { out[i] = 2.0; } }\n"
+    old, new = device + "fn bump(x:u32) -> u32 = x + 1;\n", device + "fn bump(x:u32) -> u32 = x + 2;\n"
+    entry = diff(old, new, predict=False)["functions"]["bump"]
+    assert entry["class"] == "behavior-changed"
+    assert {s for sides in entry["witness"]["native"].values() for s in sides.values()} <= {
+        "not replayed: a program with device code is compiled here, never run"}  # fmt: skip

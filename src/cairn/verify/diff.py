@@ -52,14 +52,16 @@ class Version:
     functions: dict[str, Function]
     own: set[str]  # the program's own functions: not linked from the package, not tests, not templates
     tests: set[str]
+    device: bool  # it holds device code, so no witness of it is ever run on this machine
 
 
 def version(source: str) -> Version:
     p, receipts, code, types = emitted(source)
+    device = receipts.pop("$device")
     functions = {f.name: f for f in p.functions}
     linked = set(p.sources)  # modules the package supplied, which are not this program's to report
     own = {f.name for f in p.functions if not f.test and p.modules.get(f.name, f.module) not in linked}
-    return Version(source, p, receipts, code, types, functions, own, {f.name for f in p.functions if f.test})
+    return Version(source, p, receipts, code, types, functions, own, {f.name for f in p.functions if f.test}, device)
 
 
 def signature(f: Function) -> dict[str, Any]:
@@ -172,6 +174,8 @@ def replay(v: Version, name: str, inputs: dict[str, Any], seen: dict[str, Any], 
     """Run `name` natively on the witness and say whether it did what the value model said it does."""
     from .testing import evaluate, validate_contract  # a native build; imported only when a witness exists
 
+    if v.device:
+        return "not replayed: a program with device code is compiled here, never run"
     f = v.functions[name]
     case: dict[str, Any] = {"args": inputs}
     rw = [p for p, t in f.params if t.mode == "rw"]

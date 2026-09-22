@@ -116,6 +116,7 @@ def emitted(source: str) -> tuple[Program, dict[str, Any], dict[str, str], dict[
     interface, bodies = emitter.units()
     written = [f for f in p.functions if not f.extern]
     code = {f.name: "\n".join(lines) for f, (_, lines) in zip(written, bodies, strict=True)}
+    receipts["$device"] = "cairn_gpu.hpp" in emitter.headers  # a device program is compiled here and never run
     return p, receipts, code, definitions(interface)
 
 
