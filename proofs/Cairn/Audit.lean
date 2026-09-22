@@ -79,12 +79,15 @@ namespace Cairn
 #print axioms Cairn.Ownership.accepted_race_free
 #print axioms Cairn.Ownership.accepted_threads_disjoint
 #print axioms Cairn.Ownership.accepted_no_leaked_ticket
+#print axioms Cairn.Ownership.accepted_no_use_after_wait
 #print axioms Cairn.Ownership.accepted_no_aliased_args
 #print axioms Cairn.Ownership.accepted_frees_each_allocation_once
 #print axioms Cairn.Ownership.accepted_progress
 #print axioms Cairn.Ownership.Ok_succ
 #print axioms Cairn.Ownership.Ok_start
-#print axioms Cairn.Ownership.checkBlock_mono
+#print axioms Cairn.Ownership.Checks.of_accepts
+#print axioms Cairn.Ownership.joinOf_le
+#print axioms Cairn.Ownership.Sync.weaken
 #print axioms Cairn.Ownership.releaseAll_final
 #print axioms Cairn.Ownership.lanesOf_pairwise
 #print axioms Cairn.Ownership.lane_borrows_dont_race
@@ -106,6 +109,11 @@ namespace Cairn
 #print axioms Cairn.Ownership.Regress.useAfterDrop_usesDeadPlace
 #print axioms Cairn.Ownership.Regress.unawaitedTicket_leaks
 #print axioms Cairn.Ownership.Regress.witnesses_are_rejected
+#print axioms Cairn.Ownership.Regress.groupNeverWaited_leaks
+#print axioms Cairn.Ownership.Regress.collectAfterWait_deadGroup
+#print axioms Cairn.Ownership.Regress.groupLeaseFromOnePath_races
+#print axioms Cairn.Ownership.Regress.groupFactFromOnePath_races
+#print axioms Cairn.Ownership.Regress.group_witnesses_are_rejected
 
 /-! The executable regression the Python gate asserts on. -/
 

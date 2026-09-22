@@ -32,15 +32,18 @@ inductive Err where
   | leak (t : Ticket)
   | race (p : Var)
   | aliasedArgs
+  | deadGroup (g : Ticket)
 deriving DecidableEq, Repr, Inhabited
 
-/-- The heap and the locals.  `frees a` counts how often `a` has been released, so
-"released exactly once" is a statement about numbers rather than about a log. -/
+/-- The heap, the locals and the live groups.  `frees a` counts how often `a` has been released,
+so "released exactly once" is a statement about numbers rather than about a log.  A group is
+its name and how many tasks it may hold at once. -/
 structure State where
   env : Var → Val
   live : AllocId → Bool
   next : AllocId
   frees : AllocId → Nat
+  groups : List (Ticket × Nat)
 
 /-- Point update of the local map. -/
 def upd (f : Var → Val) (x : Var) (v : Val) : Var → Val :=
@@ -78,8 +81,8 @@ def release (x : Var) (st : State) : Except Err State :=
   match st.env x with
   | .owner a =>
       if st.live a then
-        .ok { env := upd st.env x .moved, live := updL st.live a false,
-              next := st.next, frees := updN st.frees a (st.frees a + 1) }
+        .ok { st with env := upd st.env x .moved, live := updL st.live a false,
+                      frees := updN st.frees a (st.frees a + 1) }
       else .error (.doubleFree a)
   | .nil => .ok st
   | .moved => .ok st
@@ -91,8 +94,8 @@ def reallocAt (x : Var) (st : State) : Except Err State :=
   match release x st with
   | .error e => .error e
   | .ok st' =>
-      .ok { env := upd st'.env x (.owner st'.next), live := updL st'.live st'.next true,
-            next := st'.next + 1, frees := st'.frees }
+      .ok { st' with env := upd st'.env x (.owner st'.next), live := updL st'.live st'.next true,
+                     next := st'.next + 1 }
 
 /-- Put `v` in `y`, after releasing what `y` held. -/
 def bindAt (y : Var) (v : Val) (st : State) : Except Err State :=
@@ -157,9 +160,34 @@ thread, before the call is made or the task is started. -/
 def argsGuarded (ρ : Valuation) (args : List Borrow) : Bool :=
   args.all fun x => x.1.guard ρ
 
-/-- One step of the spawner.  It runs only while no region is live, so every
-configuration it produces has no lanes -- except the one a region starts, which forks
-one lane per index below `n` and leaves the spawner blocked until they are done. -/
+/-- Lend `args` to a call or a new task.  Forming every slice runs its guard first, and a full
+group traps before its task starts; then the footprint must not alias itself, nor race with any
+live thread. -/
+def lend (ρ : Valuation) (tasks : List Task) (st : State) (args : List Borrow) (full : Bool)
+    (k : List Cfg) : List Cfg :=
+  if !argsGuarded ρ args || full then [.trap]
+  else if !pairsOkAt ρ args then [.err .aliasedArgs]
+  else
+    match accessAll ρ tasks st args with
+    | some e => [.err e]
+    | none => k
+
+/-- How many tasks the live group `g` may hold, or `none` once it is gone. -/
+def capOf (g : Ticket) : List (Ticket × Nat) → Option Nat
+  | [] => none
+  | G :: rest => if G.1 = g then some G.2 else capOf g rest
+
+/-- Every way one task of `g` may have finished: the live tasks without it. -/
+def finishOne (g : Ticket) : List Task → List (List Task)
+  | [] => []
+  | T :: rest => (if T.1 = g then [rest] else []) ++ (finishOne g rest).map (T :: ·)
+
+/-- The tasks of `g` still running. -/
+def running (g : Ticket) (tasks : List Task) : Nat := (tasks.filter fun T => decide (T.1 = g)).length
+
+/-- One step of the spawner.  It runs only while no region is live, so every configuration it
+produces has no lanes, except the one a region starts: that forks one lane per index below `n`
+and leaves the spawner blocked until they are done. -/
 def stepStmt (ρ : Valuation) (s : Stmt) (rest : List Stmt) (tasks : List Task)
     (st : State) : List Cfg :=
   match s with
@@ -204,23 +232,25 @@ def stepStmt (ρ : Valuation) (s : Stmt) (rest : List Stmt) (tasks : List Task)
           match release x st with
           | .error e => [.err e]
           | .ok st' => [.run rest tasks [] st']
-  | .call args =>
-      if !argsGuarded ρ args then [.trap]
-      else if !pairsOkAt ρ args then [.err .aliasedArgs]
-      else
-        match accessAll ρ tasks st args with
-        | some e => [.err e]
-        | none => [.run rest tasks [] st]
-  | .spawn t args =>
-      if !argsGuarded ρ args then [.trap]
-      else if !pairsOkAt ρ args then [.err .aliasedArgs]
-      else
-        match accessAll ρ tasks st args with
-        | some e => [.err e]
-        | none => [.run rest ((t, args) :: tasks) [] st]
-  | .wait t => [.run rest (tasks.filter fun T => !(T.1 == t)) [] st]
+  | .call args => lend ρ tasks st args false [.run rest tasks [] st]
+  | .spawn t args => lend ρ tasks st args false [.run rest ((t, args) :: tasks) [] st]
+  | .wait t =>
+      [.run rest (tasks.filter fun T => !decide (T.1 = t)) []
+        { st with groups := st.groups.filter fun G => !decide (G.1 = t) }]
   | .ite thn els => [.run (thn ++ rest) tasks [] st, .run (els ++ rest) tasks [] st]
   | .parallel nb body => [.run rest tasks (lanesOf (nb.eval ρ) body) st]
+  | .group g nb => [.run rest tasks [] { st with groups := (g, nb.eval ρ) :: st.groups }]
+  | .submit g args =>
+      match capOf g st.groups with
+      | none => [.err (.deadGroup g)]
+      | some n => lend ρ tasks st args (decide (n ≤ running g tasks)) [.run rest ((g, args) :: tasks) [] st]
+  | .collect g =>
+      match capOf g st.groups with
+      | none => [.err (.deadGroup g)]
+      | some _ =>
+          match finishOne g tasks with
+          | [] => [.trap]
+          | ts :: more => (ts :: more).map fun tasks' => .run rest tasks' [] st
 
 /-- What a thread may do through a borrow it holds `rw`: replace the cell, if what it
 holds is the whole owner and the owner holds a cell -- that is what `swap` through a
@@ -255,15 +285,17 @@ def stepThread (ρ : Valuation) (code : List Stmt) (tasks lanes : List Task) (T 
         | .rw => taskWrite code tasks lanes x.1 st
         | .ro => [.run code tasks lanes st]
 
-/-- What the spawner does next: the next statement, or -- at the end of the body --
-the leak check and the implicit release of the scope. -/
+/-- What the spawner does next: the next statement, or at the end of the body the leak check
+and the implicit release of the scope.  A task still running or a group never waited is a
+leak. -/
 def stepMain (ρ : Valuation) (scope : List Var) (code : List Stmt) (tasks : List Task)
     (st : State) : List Cfg :=
   match code with
   | [] =>
-      match tasks with
-      | T :: _ => [.err (.leak T.1)]
-      | [] =>
+      match tasks, st.groups with
+      | T :: _, _ => [.err (.leak T.1)]
+      | [], G :: _ => [.err (.leak G.1)]
+      | [], [] =>
           match releaseAll scope st with
           | .ok st' => [.done st']
           | .error e => [.err e]
@@ -291,7 +323,7 @@ def succ (ρ : Valuation) (scope : List Var) : Cfg → List Cfg
 
 /-- The state a scope starts in: nothing bound, nothing allocated. -/
 def State.start : State :=
-  { env := fun _ => .nil, live := fun _ => false, next := 0, frees := fun _ => 0 }
+  { env := fun _ => .nil, live := fun _ => false, next := 0, frees := fun _ => 0, groups := [] }
 
 /-- The configuration a program starts in. -/
 def Cfg.start (p : Program) : Cfg := .run p.body [] [] State.start

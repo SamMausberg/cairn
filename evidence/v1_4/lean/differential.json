@@ -1,0 +1,19 @@
+{
+  "status": "agreed",
+  "programs": 20000,
+  "seed": 11,
+  "python_accepted": 3479,
+  "python_rejected": 16521,
+  "codes": {
+    "E-ALIAS": 4520,
+    "E-LEASED": 7453,
+    "E-LINEAR-BRANCH": 372,
+    "E-LINEAR-LEAK": 831,
+    "E-MOVED": 1709,
+    "E-PARALLEL-RACE": 1167,
+    "E-PARALLEL-WRITE": 469,
+    "accepted": 3479
+  },
+  "disagreements": [],
+  "outside_the_fragment": []
+}

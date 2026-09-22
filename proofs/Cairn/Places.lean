@@ -552,10 +552,11 @@ deriving DecidableEq, Repr, Inhabited
 /-- One borrow in an argument list: the place and the mode it is lent in. -/
 abbrev Borrow := Place × Mode
 
-/-- The name a `let t = spawn f(...)` binds. -/
+/-- The name a `let t = spawn f(...)` or a `let g = Group[T](n)` binds.  Every task of a group
+carries the group's name. -/
 abbrev Ticket := Nat
 
-/-- A live task: the ticket that must be waited, and the footprint it holds. -/
+/-- A live task: the ticket or group that must be waited, and the footprint it holds. -/
 abbrev Task := Ticket × List Borrow
 
 /-- **The checker's rule**: `overlaps(a, b, lent) and "rw" in (m, k)`. -/
@@ -643,6 +644,55 @@ theorem untouched_of_write_ok {inPlay : List Place} {tasks : List Task} {x : Var
   intro T hT y hy hc
   have := heldConflict_eq_false_iff.mp h T hT y hy
   simp [conflict, ovl_whole inPlay x y.1 hc] at this
+
+/-! ## What a lease keeps of a borrow
+
+After the branches of an `if` join, the checker may hold a lease that names more than the task
+behind it borrowed: a part lent on one path only keeps its root and its elements, and loses its
+bounds.  `Within` is that relation, and `races_within` is why it is enough. -/
+
+/-- `p` touches nothing `q` does not: the same place, or a part inside the elements `q` names. -/
+def Place.inside (p q : Place) : Prop :=
+  p = q ∨ ∃ r lo hi, p = .part r lo hi ∧ q = .elems r
+
+theorem Place.inside.trans {p q s : Place} (h1 : p.inside q) (h2 : q.inside s) : p.inside s := by
+  rcases h1 with rfl | ⟨r, lo, hi, rfl, rfl⟩
+  · exact h2
+  · rcases h2 with rfl | ⟨_, _, _, h, _⟩
+    · exact Or.inr ⟨r, lo, hi, rfl, rfl⟩
+    · exact Place.noConfusion h
+
+theorem Place.inside.root_eq {p q : Place} (h : p.inside q) : p.root = q.root := by
+  rcases h with rfl | ⟨r, lo, hi, rfl, rfl⟩ <;> rfl
+
+theorem Place.inside.meets {ρ : Valuation} {p q s : Place} (h : p.inside q)
+    (hm : meets ρ p s = true) : meets ρ q s = true := by
+  rcases h with rfl | ⟨r, lo, hi, rfl, rfl⟩
+  · exact hm
+  · exact meets_elems_of_part hm
+
+/-- A place with no visible bounds carries no guard. -/
+theorem Place.guard_of_range {ρ : Valuation} {p : Place} (h : p.range = none) : p.guard ρ = true := by
+  cases p <;> simp_all [Place.range, Place.guard]
+
+/-- A borrow held through a lease: the same mode, and a place inside the leased one. -/
+def Within (y z : Borrow) : Prop := y.2 = z.2 ∧ y.1.inside z.1
+
+theorem Within.refl (y : Borrow) : Within y y := ⟨rfl, Or.inl rfl⟩
+
+theorem Within.trans {x y z : Borrow} (h1 : Within x y) (h2 : Within y z) : Within x z :=
+  ⟨h1.1.trans h2.1, h1.2.trans h2.2⟩
+
+/-- **What does not race with a lease does not race with anything held through it.** -/
+theorem races_within {ρ : Valuation} {x y z : Borrow} (h : Within y z) (hr : races ρ x z = false) :
+    races ρ x y = false := by
+  unfold races at hr ⊢
+  rw [h.1]
+  cases hm : meets ρ x.1 y.1
+  · rfl
+  · have hz : meets ρ x.1 z.1 = true := by
+      rw [meets_symm] at hm ⊢; exact h.2.meets hm
+    rw [hz] at hr; exact hr
 
 end Ownership
 end Cairn

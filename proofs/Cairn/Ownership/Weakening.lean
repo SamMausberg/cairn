@@ -1,195 +1,180 @@
 /-
-Weakening.  A branch join throws locals away, so whatever checks from the joined state
-must check from either branch's stronger state; this is what stepping into a branch needs.
+Forgetting.  After an `if` the checker goes on from the join, which claims no more than the path
+the machine took.  `Le` is "claims no more than", `Checks` is acceptance that may forget between
+two statements, and every accepted program has such a derivation.
 -/
 import Cairn.Ownership.Checker
 
 namespace Cairn
 namespace Ownership
 
-/-! ## Weakening
+/-! ## Claiming less
 
-A branch join throws locals away, so after `if` the checker holds a *weaker* state
-than either branch produced.  Stepping into a branch therefore has to know that
-whatever checks from the join also checks from the branch. -/
+A state claims less when it knows fewer live locals and holds more leases.  A lease may name more
+than the borrow it stands for (`Within`), and a part keeps its bounds only if the stronger state
+lent it too: the chain may use the bounds of a part only where its guard ran. -/
 
-/-- `c` claims no more than `d` does. -/
-structure Le (c d : CState) : Prop where
-  scope_eq : c.scope = d.scope
-  scalars : ∀ p, p ∈ c.scalars → p ∈ d.scalars
-  owners : ∀ p, p ∈ c.owners → p ∈ d.owners
-  leases_eq : c.leases = d.leases
+/-- Every task of `M` is held through a lease of `L` under the same name. -/
+def Covers (L M : List Task) : Prop :=
+  ∀ T ∈ M, ∃ U ∈ L, U.1 = T.1 ∧ ∀ y ∈ T.2, ∃ z ∈ U.2, Within y z
 
-theorem Le.refl (c : CState) : Le c c := ⟨rfl, fun _ h => h, fun _ h => h, rfl⟩
+theorem Covers.refl (L : List Task) : Covers L L :=
+  fun T hT => ⟨T, hT, rfl, fun y hy => ⟨y, hy, Within.refl y⟩⟩
 
-@[simp] theorem contains_iff_mem {l : List Var} {p : Var} : l.contains p = true ↔ p ∈ l := by
-  simp
+theorem Covers.trans {L M N : List Task} (h1 : Covers L M) (h2 : Covers M N) : Covers L N := by
+  intro T hT
+  obtain ⟨U, hU, hUT, hy⟩ := h2 T hT
+  obtain ⟨V, hV, hVU, hz⟩ := h1 U hU
+  refine ⟨V, hV, hVU.trans hUT, fun y hy' => ?_⟩
+  obtain ⟨z, hz', hyz⟩ := hy y hy'
+  obtain ⟨w, hw, hzw⟩ := hz z hz'
+  exact ⟨w, hw, hyz.trans hzw⟩
 
-theorem mayAccess_congr {c d : CState} (h : Le c d) (x : Borrow) :
-    d.mayAccess x = c.mayAccess x := by
-  simp [CState.mayAccess, CState.inPlay, h.leases_eq]
+theorem Covers.sub {L M N : List Task} (h : Covers L M) (hsub : ∀ T ∈ N, T ∈ M) : Covers L N :=
+  fun T hT => h T (hsub T hT)
 
-theorem livePlace_mono {c d : CState} (h : Le c d) {p : Var} (hp : c.livePlace p = true) :
-    d.livePlace p = true := by
-  simp only [CState.livePlace, Bool.or_eq_true, contains_iff_mem] at hp ⊢
-  exact hp.imp (h.scalars p) (h.owners p)
+theorem Covers.cons {L M : List Task} (T : Task) (h : Covers L M) : Covers (T :: L) (T :: M) := by
+  intro U hU
+  rcases List.mem_cons.mp hU with rfl | hU
+  · exact ⟨U, List.mem_cons_self .., rfl, fun y hy => ⟨y, hy, Within.refl y⟩⟩
+  · obtain ⟨V, hV, h1, h2⟩ := h U hU
+    exact ⟨V, List.mem_cons_of_mem _ hV, h1, h2⟩
 
-theorem guard_mono {c d : CState} (h : Le c d) {s : Stmt} (hs : guardOf c s = true) :
-    guardOf d s = true := by
-  have hsc : d.scope = c.scope := h.scope_eq.symm
-  have hlc : d.leases = c.leases := h.leases_eq.symm
-  have hmw : ∀ p, d.mayWrite p = c.mayWrite p := fun p => mayAccess_congr h _
-  have hma : ∀ x, d.mayAccess x = c.mayAccess x := mayAccess_congr h
-  have hargs : ∀ args : List Borrow,
-      (args.all fun x => c.livePlace x.1.base && c.mayAccess x) = true →
-      (args.all fun x => d.livePlace x.1.base && d.mayAccess x) = true := by
-    intro args ha
-    simp only [List.all_eq_true, Bool.and_eq_true] at ha ⊢
-    intro x hx
-    exact ⟨livePlace_mono h (ha x hx).1, by rw [hma]; exact (ha x hx).2⟩
-  cases s with
-  | alloc x => simpa only [guardOf, hsc, hmw] using hs
-  | mkScalar x => simpa only [guardOf, hsc, hmw] using hs
-  | copy y x =>
-      simp only [guardOf, Bool.and_eq_true, contains_iff_mem, hsc, hmw, hma] at hs ⊢
-      exact ⟨⟨⟨⟨hs.1.1.1.1, hs.1.1.1.2⟩, h.scalars x hs.1.1.2⟩, hs.1.2⟩, hs.2⟩
-  | move y x =>
-      simp only [guardOf, Bool.and_eq_true, contains_iff_mem, hsc, hmw] at hs ⊢
-      exact ⟨⟨⟨⟨hs.1.1.1.1, hs.1.1.1.2⟩, h.owners x hs.1.1.2⟩, hs.1.2⟩, hs.2⟩
-  | drop x =>
-      simp only [guardOf, Bool.and_eq_true, contains_iff_mem, hmw] at hs ⊢
-      exact ⟨h.owners x hs.1, hs.2⟩
-  | call args =>
-      simp only [guardOf, Bool.and_eq_true] at hs ⊢
-      exact ⟨hs.1, hargs args hs.2⟩
-  | spawn t args =>
-      simp only [guardOf, Bool.and_eq_true, hlc] at hs ⊢
-      exact ⟨⟨hs.1.1, hs.1.2⟩, hargs args hs.2⟩
-  | wait t => simpa only [guardOf, hlc] using hs
-  | ite thn els => rfl
-  | parallel nb body =>
-      simp only [guardOf, Bool.and_eq_true, List.all_eq_true] at hs ⊢
-      refine ⟨hs.1, fun a ha => ?_⟩
-      exact ⟨livePlace_mono h (hs.2 a ha).1, by rw [hma]; exact (hs.2 a ha).2⟩
+/-- Waiting for `t` removes the same tasks on both sides, since a lease carries its task's name. -/
+theorem Covers.filter {L M : List Task} (h : Covers L M) (t : Ticket) :
+    Covers (L.filter fun T => !decide (T.1 = t)) (M.filter fun T => !decide (T.1 = t)) := by
+  intro T hT
+  have hT' := List.mem_filter.mp hT
+  obtain ⟨U, hU, hUT, hy⟩ := h T hT'.1
+  exact ⟨U, List.mem_filter.mpr ⟨hU, by rw [hUT]; exact hT'.2⟩, hUT, hy⟩
 
-theorem eff_mono {c d : CState} (h : Le c d) (s : Stmt) : Le (effOf c s) (effOf d s) := by
-  have hs := h.scalars
-  have ho := h.owners
-  cases s <;> refine ⟨h.scope_eq, ?_, ?_, by simp [effOf, h.leases_eq]⟩ <;> intro p hp <;>
-    (try simp only [effOf, mem_del, mem_add] at hp ⊢) <;>
-    first
-      | exact hs p hp
-      | exact ho p hp
-      | exact ⟨hs p hp.1, hp.2⟩
-      | exact ⟨ho p hp.1, hp.2⟩
-      | exact hp.imp id (hs p)
-      | exact hp.imp id (ho p)
-      | exact hp.imp id (fun hq => ⟨ho p hq.1, hq.2⟩)
+/-- `c'` claims no more than `c`. -/
+structure Le (c' c : CState) : Prop where
+  scalars : ∀ p ∈ c'.scalars, p ∈ c.scalars
+  owners : ∀ p ∈ c'.owners, p ∈ c.owners
+  groups : ∀ g, g ∈ c'.groups ↔ g ∈ c.groups
+  leases : Covers c'.leases c.leases
+  exact : ∀ T ∈ c'.leases, ∀ y ∈ T.2, y.1.range = none ∨ ∃ U ∈ c.leases, y ∈ U.2
 
-mutual
-/-- A structural measure that does not depend on `sizeOf`'s exact shape. -/
-def stmtSize : Stmt → Nat
-  | .ite thn els => blockSize thn + blockSize els + 1
-  | _ => 1
-def blockSize : List Stmt → Nat
-  | [] => 0
-  | s :: rest => stmtSize s + blockSize rest + 1
-end
+theorem Le.refl (c : CState) : Le c c :=
+  ⟨fun _ h => h, fun _ h => h, fun _ => Iff.rfl, Covers.refl _, fun T hT _ hy => Or.inr ⟨T, hT, hy⟩⟩
 
-@[simp] theorem blockSize_nil : blockSize [] = 0 := rfl
-@[simp] theorem blockSize_cons (s : Stmt) (rest : List Stmt) :
-    blockSize (s :: rest) = stmtSize s + blockSize rest + 1 := rfl
-@[simp] theorem stmtSize_ite (thn els : List Stmt) :
-    stmtSize (.ite thn els) = blockSize thn + blockSize els + 1 := rfl
+/-! ## The join claims no more than either path -/
 
-theorem joinOf_mono {c d c1 d1 c2 d2 j : CState} (h : Le c d) (h1 : Le c1 d1) (h2 : Le c2 d2)
-    (hj : joinOf c c1 c2 = some j) : ∃ k, joinOf d d1 d2 = some k ∧ Le j k := by
-  unfold joinOf at hj ⊢
-  split at hj
-  · next heq =>
-      have hd : d1.leases = d2.leases := by
-        rw [← h1.leases_eq, ← h2.leases_eq]
-        exact of_decide_eq_true (by simpa using heq)
-      rw [show (d1.leases == d2.leases) = true by simpa using hd]
-      refine ⟨_, rfl, ?_⟩
-      have hjv := Option.some.inj hj
-      rw [← hjv]
-      refine ⟨h.scope_eq, ?_, ?_, h1.leases_eq⟩
-      · intro p hp
-        simp only [mem_keepIn] at hp ⊢
-        exact ⟨h1.scalars p hp.1, h2.scalars p hp.2⟩
-      · intro p hp
-        simp only [mem_keepIn] at hp ⊢
-        exact ⟨h1.owners p hp.1, h2.owners p hp.2⟩
-  · exact absurd hj (by simp)
+theorem within_vague (y : Borrow) : Within y y.vague := by
+  rcases y with ⟨p, m⟩
+  cases p <;> first | exact Within.refl _ | exact ⟨rfl, Or.inr ⟨_, _, _, rfl, rfl⟩⟩
 
-/-- The straight-line half of weakening: a guard that passes in `c` passes in `d`, and
-the two effects stay ordered. -/
-theorem guardAux {c d : CState} {s : Stmt} (hle : Le c d) (hg : guardOf c s = true)
-    (hne : ∀ thn els, s ≠ .ite thn els) :
-    ∃ d1, checkStmt d s = some d1 ∧ Le (effOf c s) d1 ∧ (effOf c s).scope = c.scope :=
-  ⟨effOf d s, by simp [checkStmt_of_ne_ite d s hne, guard_mono hle hg], eff_mono hle s,
-    effOf_scope c s⟩
+theorem vague_range (y : Borrow) : y.vague.1.range = none := by
+  rcases y with ⟨p, m⟩
+  cases p <;> rfl
 
-/-- **Weakening.**  What checks from a weaker ownership state checks from a stronger
-one, and the result stays weaker. -/
-theorem checkBlock_mono : ∀ (n : Nat) (ss : List Stmt), blockSize ss < n →
-    ∀ {c d c' : CState}, Le c d → checkBlock c ss = some c' →
-      ∃ d', checkBlock d ss = some d' ∧ Le c' d' ∧ c'.scope = c.scope := by
-  intro n
-  induction n with
-  | zero => intro ss hss; exact absurd hss (Nat.not_lt_zero _)
-  | succ n ih =>
-      intro ss hss c d c' hle hs
-      cases ss with
-      | nil => exact ⟨d, rfl, by rw [← Option.some.inj hs]; exact hle, by rw [← Option.some.inj hs]⟩
-      | cons s rest =>
-          have hrest : blockSize rest < n := by simp only [blockSize_cons] at hss; omega
-          rw [checkBlock_cons] at hs
-          cases hc1 : checkStmt c s with
-          | none => rw [hc1] at hs; exact absurd hs (by simp)
-          | some c1 =>
-              rw [hc1] at hs
-              have hstep : ∃ d1, checkStmt d s = some d1 ∧ Le c1 d1 ∧ c1.scope = c.scope := by
-                cases s
-                case ite thn els =>
-                  have hthn : blockSize thn < n := by
-                    simp only [blockSize_cons, stmtSize_ite] at hss; omega
-                  have hels : blockSize els < n := by
-                    simp only [blockSize_cons, stmtSize_ite] at hss; omega
-                  rw [checkStmt_ite] at hc1
-                  split at hc1
-                  · next a1 a2 h1 h2 =>
-                      obtain ⟨d1, hd1, hle1, _⟩ := ih thn hthn hle h1
-                      obtain ⟨d2, hd2, hle2, _⟩ := ih els hels hle h2
-                      obtain ⟨k, hk, hlek⟩ := joinOf_mono hle hle1 hle2 hc1
-                      refine ⟨k, by rw [checkStmt_ite, hd1, hd2]; exact hk, hlek, ?_⟩
-                      unfold joinOf at hc1
-                      split at hc1
-                      · rw [← Option.some.inj hc1]
-                      · exact absurd hc1 (by simp)
-                  · exact absurd hc1 (by simp)
-                all_goals
-                  obtain ⟨hg, rfl⟩ := checkStmt_straight hc1 nofun
-                  exact guardAux hle hg nofun
-              obtain ⟨d1, hd1, hle1, hsc1⟩ := hstep
-              obtain ⟨d', hd', hled, hscd⟩ := ih rest hrest hle1 hs
-              exact ⟨d', by rw [checkBlock_cons, hd1]; exact hd', hled, by rw [hscd, hsc1]⟩
+/-- One side of the join: every lease of `L1` survives under its name, and a borrow the join
+keeps exact was lent in `L1`. -/
+theorem settle_le {L1 L2 L : List Task} (hc : L = L1 ∨ L = L2)
+    (hs : ∀ T ∈ L2, T ∈ L1 ∨ T ∈ L2.filter fun T => !has L1 T) :
+    Covers (settle L1 L2) L ∧ ∀ T ∈ settle L1 L2, ∀ y ∈ T.2, y.1.range = none ∨ ∃ U ∈ L, y ∈ U.2 := by
+  constructor
+  · intro T hT
+    have hin : T ∈ L1 ++ L2.filter fun T => !has L1 T := by
+      rcases hc with hc | hc <;> rw [hc] at hT
+      · exact List.mem_append_left _ hT
+      · rcases hs T hT with h | h
+        · exact List.mem_append_left _ h
+        · exact List.mem_append_right _ h
+    refine ⟨_, List.mem_map_of_mem hin, rfl, fun y hy => ⟨_, List.mem_map_of_mem hy, ?_⟩⟩
+    split
+    · exact Within.refl y
+    · exact within_vague y
+  · intro T hT y hy
+    obtain ⟨T0, _, rfl⟩ := List.mem_map.mp hT
+    obtain ⟨y0, _, rfl⟩ := List.mem_map.mp hy
+    split
+    · next hboth =>
+        right
+        have hlent : lentIn L1 T0.1 y0 = true ∧ lentIn L2 T0.1 y0 = true := by simpa using hboth
+        have found : ∀ L, lentIn L T0.1 y0 = true → ∃ U ∈ L, y0 ∈ U.2 := fun L hL => by
+          obtain ⟨U, hU, hUy⟩ := List.any_eq_true.mp hL
+          exact ⟨U, hU, has_iff.mp (Bool.and_eq_true_iff.mp hUy).2⟩
+        rcases hc with hc | hc <;> rw [hc]
+        · exact found L1 hlent.1
+        · exact found L2 hlent.2
+    · exact Or.inl (vague_range y0)
 
-theorem checkBlock_append (c : CState) : ∀ (l₁ l₂ : List Stmt),
-    checkBlock c (l₁ ++ l₂) =
-      match checkBlock c l₁ with
-      | some c' => checkBlock c' l₂
-      | none => none := by
-  intro l₁
-  induction l₁ generalizing c with
-  | nil => intro l₂; rfl
-  | cons s rest ih =>
-      intro l₂
-      rw [List.cons_append, checkBlock_cons, checkBlock_cons]
-      cases h : checkStmt c s with
-      | none => rfl
-      | some c' => exact ih c' l₂
+/-- **The join claims no more than either path.** -/
+theorem joinOf_le {c1 c2 j : CState} (h : joinOf c1 c2 = some j) : Le j c1 ∧ Le j c2 := by
+  unfold joinOf at h
+  split at h
+  · next hcond =>
+      have hj := (Option.some.inj h).symm
+      simp only [Bool.and_eq_true, List.all_eq_true, has_iff, decide_eq_true_eq] at hcond
+      obtain ⟨⟨h12, h21⟩, _⟩ := hcond
+      have hs : ∀ T ∈ c2.leases, T ∈ c1.leases ∨ T ∈ c2.leases.filter fun T => !has c1.leases T := by
+        intro T hT
+        cases hh : has c1.leases T
+        · exact Or.inr (List.mem_filter.mpr ⟨hT, by rw [hh]; rfl⟩)
+        · exact Or.inl (has_iff.mp hh)
+      subst hj
+      obtain ⟨cov1, ex1⟩ := settle_le (L := c1.leases) (Or.inl rfl) hs
+      obtain ⟨cov2, ex2⟩ := settle_le (L := c2.leases) (Or.inr rfl) hs
+      exact ⟨⟨fun p hp => (mem_keepIn.mp hp).1, fun p hp => (mem_keepIn.mp hp).1, fun _ => Iff.rfl,
+          cov1, ex1⟩,
+        ⟨fun p hp => (mem_keepIn.mp hp).2, fun p hp => (mem_keepIn.mp hp).2,
+          fun g => ⟨h12 g, h21 g⟩, cov2, ex2⟩⟩
+  · exact absurd h nofun
+
+/-! ## Acceptance that may forget -/
+
+/-- `Checks scope c code`: the checker accepts `code` from `c`, and may forget between two
+statements.  An `if` is where it forgets: the code after it is checked from the join. -/
+inductive Checks (scope : List Var) : CState → List Stmt → Prop where
+  | nil {c : CState} : c.leases = [] → c.groups = [] → Checks scope c []
+  | cons {c c' : CState} {s : Stmt} {rest : List Stmt} :
+      checkStmt scope c s = some c' → Checks scope c' rest → Checks scope c (s :: rest)
+  | weaken {c c' : CState} {code : List Stmt} : Le c' c → Checks scope c' code → Checks scope c code
+
+/-- A block the checker accepts, followed by code that checks from a state claiming no more than
+where the block ends. -/
+theorem checks_append {scope : List Var} {j : CState} {rest : List Stmt} (hj : Checks scope j rest) :
+    ∀ (ss : List Stmt) (c a : CState), checkBlock scope c ss = some a → Le j a →
+      Checks scope c (ss ++ rest)
+  | [], c, a, h, hle => by
+      rw [checkBlock_nil, Option.some.injEq] at h
+      subst h; exact .weaken hle hj
+  | s :: ss, c, a, h, hle => by
+      rw [checkBlock_cons] at h
+      cases h1 : checkStmt scope c s with
+      | none => rw [h1] at h; exact absurd h nofun
+      | some c1 => rw [h1] at h; exact .cons h1 (checks_append hj ss c1 a h hle)
+
+/-- Every accepted program has a derivation. -/
+theorem Checks.of_accepts {p : Program} (h : accepts p = true) : Checks p.scope CState.start p.body := by
+  unfold accepts at h
+  split at h
+  · next d hd =>
+      simp only [Bool.and_eq_true, List.isEmpty_iff] at h
+      simpa using checks_append (.nil h.1 h.2) p.body _ d hd (Le.refl d)
+  · exact absurd h nofun
+
+/-- A list with no member is empty; `List.eq_nil_iff_forall_not_mem` would reach for choice. -/
+theorem nil_of_forall {α : Type} {l : List α} (h : ∀ a ∈ l, False) : l = [] := by
+  cases l with
+  | nil => rfl
+  | cons a _ => exact (h a (List.mem_cons_self ..)).elim
+
+/-- Where the code ends, nothing is still lent and no group is live. -/
+theorem Checks.done {scope : List Var} {c : CState} {code : List Stmt} (h : Checks scope c code)
+    (hc : code = []) : c.leases = [] ∧ c.groups = [] := by
+  induction h with
+  | nil h1 h2 => exact ⟨h1, h2⟩
+  | cons _ _ _ => exact absurd hc nofun
+  | weaken hle _ ih =>
+      obtain ⟨h1, h2⟩ := ih hc
+      refine ⟨nil_of_forall fun T hT => ?_, nil_of_forall fun g hg => ?_⟩
+      · obtain ⟨U, hU, _⟩ := hle.leases T hT
+        rw [h1] at hU; exact List.not_mem_nil hU
+      · have := (hle.groups g).mpr hg
+        rw [h2] at this; exact List.not_mem_nil this
 
 end Ownership
 end Cairn

@@ -338,6 +338,81 @@ before the next statement. -/
 def twoRegions : Program :=
   ⟨[0], [alloc 0, parallel n [.elem data Mode.rw], parallel n [.elem data Mode.rw]]⟩
 
+/-! ### Task groups
+
+`let g = Group[T](k);` is `group`, `spawn f(...) into g;` is `submit`, `collect(g)` is `collect`
+and `wait(g)` is `wait`.  `fill` and `sum` are the helpers of `tests/soundness/test_concurrency.py`,
+and each program's `len(d)` extent is the header read written out in front of its submission. -/
+
+/-- The group. -/
+def g : Ticket := 7
+
+/-- Three visibly disjoint parts to one group, one collect, one wait: accepted. -/
+def groupSplit : Program :=
+  ⟨[0], [alloc 0, group g (.lit 3), submit g [(.part data (.lit 0) a, Mode.rw)],
+         submit g [(.part data a b, Mode.rw)], submit g [(.part data b n, Mode.rw)], collect g, wait g]⟩
+
+/-- `let g = Group[u64](2); return 0;`: E-LINEAR-LEAK. -/
+def groupNeverWaited : Program := ⟨[], [group g (.lit 2)]⟩
+
+/-- `if flag { wait(g); }`: E-LINEAR-BRANCH. -/
+def groupWaitedOnOnePath : Program := ⟨[], [group g (.lit 2), ite [wait g] [], wait g]⟩
+
+/-- `wait(g); let r = collect(g);`: E-MOVED. -/
+def collectAfterWait : Program := ⟨[], [group g (.lit 2), wait g, collect g]⟩
+
+/-- `wait(g); spawn tag(1) into g;`: E-MOVED. -/
+def submitAfterWait : Program := ⟨[], [group g (.lit 2), wait g, submit g []]⟩
+
+/-- `spawn fill(len(d), d, 0) into g; d[0] = 1; wait(g);`: E-LEASED. -/
+def groupLeased : Program :=
+  ⟨[0], [alloc 0, group g (.lit 2), call [(.hdr data, Mode.ro)], submit g [(.elems data, Mode.rw)],
+         call [(.elems data, Mode.rw)], wait g]⟩
+
+/-- The same write after a `collect(g)`: E-LEASED, since a collect returns no lease. -/
+def groupWriteAfterCollect : Program :=
+  ⟨[0], [alloc 0, group g (.lit 2), call [(.hdr data, Mode.ro)], submit g [(.elems data, Mode.rw)],
+         collect g, call [(.elems data, Mode.rw)], wait g]⟩
+
+/-- Two readers of one buffer, and a read beside them: accepted. -/
+def groupReaders : Program :=
+  ⟨[0], [alloc 0, group g (.lit 4), call [(.hdr data, Mode.ro)], submit g [(.elems data, Mode.ro)],
+         call [(.hdr data, Mode.ro)], submit g [(.elems data, Mode.ro)], call [(.elems data, Mode.ro)],
+         collect g, wait g]⟩
+
+/-- `if flag { spawn fill(len(a), a, 1) into g; } else { spawn fill(len(b), b, 2) into g; }
+a[0] = 7; wait(g);`: E-LEASED.  After the join the group holds what either path lent it. -/
+def groupLeaseFromOnePath : Program :=
+  ⟨[0, 1], [alloc 0, alloc 1, group g (.lit 1),
+            ite [call [(.hdr data, Mode.ro)], submit g [(.elems data, Mode.rw)]]
+                [call [(.hdr snd, Mode.ro)], submit g [(.elems snd, Mode.rw)]],
+            call [(.elems data, Mode.rw)], wait g]⟩
+
+/-- The same program with the write after `wait(g)`: accepted. -/
+def groupWriteAfterWait : Program :=
+  ⟨[0, 1], [alloc 0, alloc 1, group g (.lit 1),
+            ite [call [(.hdr data, Mode.ro)], submit g [(.elems data, Mode.rw)]]
+                [call [(.hdr snd, Mode.ro)], submit g [(.elems snd, Mode.rw)]],
+            wait g, call [(.elems data, Mode.rw)]]⟩
+
+/-- `if flag { spawn fill(b - a, d[a..b], 1) into g; } spawn fill(a, d[0..a], 2) into g;
+spawn fill(n - b, d[b..n], 3) into g;`: E-LEASED.  `d[a..b]` orders the other two parts only
+where it was formed, and so guarded. -/
+def groupFactFromOnePath : Program :=
+  ⟨[0], [alloc 0, group g (.lit 3), ite [submit g [(.part data a b, Mode.rw)]] [],
+         submit g [(.part data (.lit 0) a, Mode.rw)], submit g [(.part data b n, Mode.rw)], wait g]⟩
+
+/-- The same part lent on both paths orders the other two: accepted. -/
+def groupFactFromBothPaths : Program :=
+  ⟨[0], [alloc 0, group g (.lit 3),
+         ite [submit g [(.part data a b, Mode.rw)]] [submit g [(.part data a b, Mode.rw)]],
+         submit g [(.part data (.lit 0) a, Mode.rw)], submit g [(.part data b n, Mode.rw)], wait g]⟩
+
+/-- A region over what a group holds: E-LEASED, like any other access. -/
+def laneUnderGroup : Program :=
+  ⟨[0], [alloc 0, group g (.lit 1), call [(.hdr data, Mode.ro)], submit g [(.elems data, Mode.rw)],
+         parallel n [.elem data Mode.ro], wait g]⟩
+
 /-- Every line of the regression: the program, and whether the Python checker accepts
 the CAIRN source it encodes. -/
 def lines : List (String × Bool × Program) :=
@@ -390,7 +465,20 @@ def lines : List (String × Bool × Program) :=
    ("laneBesideTask", true, laneBesideTask),
    ("laneUnderLease", false, laneUnderLease),
    ("laneUnderPartLease", false, laneUnderPartLease),
-   ("twoRegions", true, twoRegions)]
+   ("twoRegions", true, twoRegions),
+   ("groupSplit", true, groupSplit),
+   ("groupNeverWaited", false, groupNeverWaited),
+   ("groupWaitedOnOnePath", false, groupWaitedOnOnePath),
+   ("collectAfterWait", false, collectAfterWait),
+   ("submitAfterWait", false, submitAfterWait),
+   ("groupLeased", false, groupLeased),
+   ("groupWriteAfterCollect", false, groupWriteAfterCollect),
+   ("groupReaders", true, groupReaders),
+   ("groupLeaseFromOnePath", false, groupLeaseFromOnePath),
+   ("groupWriteAfterWait", true, groupWriteAfterWait),
+   ("groupFactFromOnePath", false, groupFactFromOnePath),
+   ("groupFactFromBothPaths", true, groupFactFromBothPaths),
+   ("laneUnderGroup", false, laneUnderGroup)]
 
 /-- The lines this checker classifies differently from the Python checker. -/
 def failures : List String :=
@@ -538,6 +626,33 @@ theorem useAfterDrop_usesDeadPlace :
 theorem unawaitedTicket_leaks :
     Reach anyVal unawaitedTicket.scope (Cfg.start unawaitedTicket) (Cfg.err (Err.leak 0)) :=
   reach_fault 3 (by decide)
+
+/-- **A group never waited leaks.** -/
+theorem groupNeverWaited_leaks :
+    Reach anyVal groupNeverWaited.scope (Cfg.start groupNeverWaited) (Cfg.err (Err.leak g)) :=
+  reach_fault 2 (by decide)
+
+/-- **A group used after `wait(g)` is gone.** -/
+theorem collectAfterWait_deadGroup :
+    Reach anyVal collectAfterWait.scope (Cfg.start collectAfterWait) (Cfg.err (Err.deadGroup g)) :=
+  reach_fault 3 (by decide)
+
+/-- **A lease lent on one path only still races.** The machine takes the first branch, lends `a`
+to the group, and the write after the join finds the task there. -/
+theorem groupLeaseFromOnePath_races :
+    Reach anyVal groupLeaseFromOnePath.scope (Cfg.start groupLeaseFromOnePath) (Cfg.err (Err.race 0)) :=
+  reach_fault 7 (by decide)
+
+/-- **A fact from one path only is not a fact.** Under `a = 6`, `b = 3`, `n = 9` the machine takes
+the empty branch, so `d[6..3]` is never formed, and `d[0..6]` and `d[3..9]` overlap. -/
+theorem groupFactFromOnePath_races :
+    Reach badVal groupFactFromOnePath.scope (Cfg.start groupFactFromOnePath) (Cfg.err (Err.race 0)) :=
+  reach_fault 5 (by decide)
+
+/-- The group witnesses are rejected too. -/
+theorem group_witnesses_are_rejected :
+    (accepts groupNeverWaited || accepts collectAfterWait || accepts groupLeaseFromOnePath
+      || accepts groupFactFromOnePath) = false := by decide
 
 /-- Each fault witness above is about a program the checker rejects, which is what makes them
 consistent with the soundness theorems. `backwardsPart` is accepted, and it reaches a trap. -/

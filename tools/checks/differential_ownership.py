@@ -52,6 +52,10 @@ FRAGMENT = (
     ("a call", "hSIG(args);", "Stmt.call args"),
     ("a task", "let tK = spawn hSIG(args);", "Stmt.spawn t args"),
     ("a join", "wait(tK);", "Stmt.wait t"),
+    ("a task group", "let gK = Group[void](4);", "Stmt.group g (Bound.lit 4)"),
+    ("a task of a group, on any path", "spawn hSIG(args) into gK;", "Stmt.submit g args"),
+    ("a collect, on any path", "collect(gK);", "Stmt.collect g"),
+    ("a group's join, on one path or both", "wait(gK);", "Stmt.wait g"),
     ("two paths", "if flag { ... } else { ... }", "Stmt.ite thn els"),
     ("a region", "parallel i in n { ... }", "Stmt.parallel n body"),
     ("a lane's own element", "dJ[i] = 1;", "Touch.elem r Mode.rw"),
@@ -76,8 +80,12 @@ EXCLUDED = (
     "closures and their captures, placement, `reduce`, `compact`",
     "`take`, `swap`, loops, `return` inside a branch, `break`, `continue`, traits, generics",
     "re-binding a local: every name is declared exactly once, by one alloc, scalar, copy or move",
-    "`spawn` and `wait` inside a branch, and a branch-local name used after the branch: "
-    "CAIRN blocks are scopes and the Lean model has one flat scope",
+    "`spawn` of a ticket inside a branch, a group declared inside a branch, and a branch-local name used after "
+    "the branch: CAIRN blocks are scopes and the Lean model has one flat scope",
+    "a group or a ticket passed to a callee: the model has no callee bodies, and the checker refuses the "
+    "parameter (`E-PINNED`)",
+    "a group submitted to inside a loop: the model has no loops, so the rule for what an earlier iteration "
+    "lent the group is tested, not compared",
 )
 
 # The diagnostics the Lean calculus models.  Anything else means the generator left the fragment,
@@ -147,6 +155,22 @@ class Spawn:
 @dataclass(frozen=True)
 class Wait:
     ticket: str
+
+
+@dataclass(frozen=True)
+class GroupDecl:
+    group: str
+
+
+@dataclass(frozen=True)
+class Submit:
+    group: str
+    borrows: tuple[tuple[Place, str], ...]
+
+
+@dataclass(frozen=True)
+class Collect:
+    group: str
 
 
 @dataclass(frozen=True)
@@ -256,6 +280,10 @@ def render_cairn(prog: Prog, scalars: frozenset[str]) -> str:
                 lines.append(indent + "let " + statement.dst + " = len(" + statement.var + ");")
             elif isinstance(statement, Wait):
                 lines.append(indent + "wait(" + statement.ticket + ");")
+            elif isinstance(statement, GroupDecl):
+                lines.append(indent + "let " + statement.group + " = Group[void](4);")
+            elif isinstance(statement, Collect):
+                lines.append(indent + "collect(" + statement.group + ");")
             elif isinstance(statement, Ite):
                 lines.append(indent + "if flag {")
                 lines.extend(statements(statement.thn, indent + "  "))
@@ -275,6 +303,8 @@ def render_cairn(prog: Prog, scalars: frozenset[str]) -> str:
                 call = name + "(" + arguments(borrows) + ");"
                 if isinstance(statement, Spawn):
                     call = "let " + statement.ticket + " = spawn " + call
+                elif isinstance(statement, Submit):
+                    call = "spawn " + call[:-1] + " into " + statement.group + ";"
                 lines.append(indent + call)
         return lines
 
@@ -312,6 +342,10 @@ def render_lean(prog: Prog, numbering: dict[str, int], tickets: dict[str, int]) 
                 written.append("Stmt.call [(Place.hdr ⟨" + str(numbering[statement.var]) + ", []⟩, Mode.ro)]")
             elif isinstance(statement, Wait):
                 written.append("Stmt.wait " + str(tickets[statement.ticket]))
+            elif isinstance(statement, GroupDecl):
+                written.append("Stmt.group " + str(tickets[statement.group]) + " (Bound.lit 4)")
+            elif isinstance(statement, Collect):
+                written.append("Stmt.collect " + str(tickets[statement.group]))
             elif isinstance(statement, Ite):
                 written.append("Stmt.ite [" + ", ".join(statements(statement.thn)) + "] ["
                                + ", ".join(statements(statement.els)) + "]")  # fmt: skip
@@ -327,6 +361,8 @@ def render_lean(prog: Prog, numbering: dict[str, int], tickets: dict[str, int]) 
                 borrows = lean_borrows(statement.borrows, numbering)
                 if isinstance(statement, Spawn):
                     written.append("Stmt.spawn " + str(tickets[statement.ticket]) + " " + borrows)
+                elif isinstance(statement, Submit):
+                    written.append("Stmt.submit " + str(tickets[statement.group]) + " " + borrows)
                 else:
                     written.append("Stmt.call " + borrows)
         return written
@@ -343,8 +379,9 @@ class Generator:
         self.owners: list[str] = []
         self.scalars: list[str] = []
         self.variables: list[str] = []
-        self.tickets: list[str] = []
+        self.tickets: list[str] = []  # Tickets and groups: one namespace, as in the Lean model.
         self.live: list[str] = []
+        self.groups: list[str] = []
         self.fresh = 0
 
     def name(self, prefix: str) -> str:
@@ -371,7 +408,10 @@ class Generator:
         body: list = []
         for _ in range(self.rng.randint(1, 2)):
             choice = self.rng.random()
-            if choice < 0.5:
+            if self.groups and choice < 0.3:  # A group declared outside the branch, used on one path.
+                group = self.rng.choice(self.groups)
+                body.append(Submit(group, self.borrows(1)) if choice < 0.22 else Collect(group))
+            elif choice < 0.5:
                 body.append(Call(self.borrows(self.rng.randint(1, 2))))
             elif choice < 0.7:
                 body.append(Len(self.name("k"), self.rng.choice(self.owners)))
@@ -398,11 +438,15 @@ class Generator:
             self.scalars.append(var)
             self.variables.append(var)
             body.append(MkScalar(var))
+        for _ in range(self.rng.randint(0, 2)):
+            group = self.name("g")
+            self.tickets.append(group)
+            self.groups.append(group)
+            body.append(GroupDecl(group))
         for _ in range(self.rng.randint(2, 7)):
             body.extend(self.step())
-        for ticket in list(self.live):
+        for ticket in [*self.live, *self.groups]:
             if self.rng.random() < 0.85:  # The rest leak, which both checkers must refuse.
-                self.live.remove(ticket)
                 body.append(Wait(ticket))
         return Prog(name, tuple(self.variables), tuple(self.tickets), tuple(body))
 
@@ -417,6 +461,9 @@ class Generator:
         cuts = sorted(self.rng.sample(range(len(BOUNDS)), self.rng.randint(3, 4)))
         pieces = [Place("part", var, BOUNDS[lo], BOUNDS[hi]) for lo, hi in itertools.pairwise(cuts)]
         self.rng.shuffle(pieces)
+        if self.groups and self.rng.random() < 0.4:
+            group = self.rng.choice(self.groups)
+            return [Submit(group, ((piece, "rw"),)) for piece in pieces]
         if self.rng.random() < 0.5:
             return [Call(tuple((piece, "rw") for piece in pieces))]
         statements: list = []
@@ -441,7 +488,38 @@ class Generator:
                 touches.append((kind, self.rng.choice(self.owners), self.rng.choice(("ro", "rw"))))
         return [Region(tuple(touches))]
 
+    def group_step(self) -> list:
+        """A task of a live group, a collect, or the group's join on one path, on both, or after the branches."""
+        group = self.rng.choice(self.groups)
+        choice = self.rng.random()
+        if choice < 0.55:
+            return [Submit(group, self.borrows(self.rng.randint(1, 2)))]
+        if choice < 0.75:
+            return [Collect(group)]
+        self.groups.remove(group)
+        if choice < 0.85:  # Waited on every path the group is consumed; on one path it is E-LINEAR-BRANCH.
+            return [Ite((Wait(group),), (Wait(group),) if self.rng.random() < 0.5 else ())]
+        return [Wait(group), *([Collect(group)] if self.rng.random() < 0.15 else [])]  # A use after wait.
+
+    def split_across_paths(self) -> list:
+        """The middle piece of a three-way split lent to a group on one path or on both, then the two ends.
+
+        The ends are disjoint only by chaining through the middle piece, and its `lo <= hi` guard ran only on
+        the paths that formed it: `checking.py:settle` keeps its bounds only when every path lent it.
+        """
+        var, group = self.rng.choice(self.owners), self.rng.choice(self.groups)
+        c0, c1, c2, c3 = sorted(self.rng.sample(range(len(BOUNDS)), 4))
+        middle = ((Place("part", var, BOUNDS[c1], BOUNDS[c2]), "rw"),)
+        both = self.rng.random() < 0.5
+        return [
+            Ite((Submit(group, middle),), (Submit(group, middle),) if both else ()),
+            Submit(group, ((Place("part", var, BOUNDS[c0], BOUNDS[c1]), "rw"),)),
+            Submit(group, ((Place("part", var, BOUNDS[c2], BOUNDS[c3]), "rw"),)),
+        ]
+
     def step(self) -> list:
+        if self.groups and self.rng.random() < 0.3:
+            return self.group_step() if self.rng.random() < 0.8 else self.split_across_paths()
         choice = self.rng.random()
         if choice < 0.26:
             return [Call(self.borrows(self.rng.randint(1, 3)))]

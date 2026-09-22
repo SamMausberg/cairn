@@ -26,6 +26,11 @@ structure MemOk (st : State) (scope : List Var) : Prop where
   /-- Nothing beyond the allocation frontier exists. -/
   beyond : ∀ a, st.next ≤ a → st.live a = false ∧ st.frees a = 0
 
+/-- The heap invariant does not look at the live groups. -/
+theorem MemOk.regroup {st : State} {scope} (h : MemOk st scope) (G : List (Ticket × Nat)) :
+    MemOk { st with groups := G } scope :=
+  ⟨h.liveOfEnv, h.uniq, h.covered, h.liveUnfreed, h.freedOnce, h.beyond⟩
+
 theorem MemOk.lt_next {st : State} {scope} (h : MemOk st scope) {a : AllocId}
     (ha : st.live a = true) : a < st.next := by
   rcases Nat.lt_or_ge a st.next with hlt | hge
@@ -53,7 +58,7 @@ theorem memOk_env {st : State} {scope : List Var} (h : MemOk st scope) {f : Var 
     (hheld : ∀ p a, f p = .owner a → ∃ q, st.env q = .owner a)
     (huniq : ∀ p q a, f p = .owner a → f q = .owner a → p = q)
     (hcover : ∀ a, st.live a = true → ∃ p ∈ scope, f p = .owner a) :
-    MemOk ⟨f, st.live, st.next, st.frees⟩ scope :=
+    MemOk { st with env := f } scope :=
   ⟨fun p a hp => (hheld p a hp).elim fun q hq => h.liveOfEnv q a hq, huniq, hcover,
     h.liveUnfreed, h.freedOnce, h.beyond⟩
 
@@ -64,8 +69,8 @@ place held. -/
 theorem release_cases {st st' : State} {x : Var} (hr : release x st = .ok st') :
     (st' = st ∧ ∀ a, st.env x ≠ .owner a) ∨
     (∃ a, st.env x = .owner a ∧ st.live a = true ∧
-      st' = ⟨upd st.env x .moved, updL st.live a false, st.next,
-             updN st.frees a (st.frees a + 1)⟩) := by
+      st' = { st with env := upd st.env x .moved, live := updL st.live a false,
+                      frees := updN st.frees a (st.frees a + 1) }) := by
   revert hr
   unfold release
   split
@@ -160,8 +165,8 @@ theorem memOk_tail {st : State} {p : Var} {rest : List Var}
 new cell is live and held by `x` alone, and every old cell is where it was. -/
 theorem memOk_fresh {st : State} {scope} {x : Var} (h : MemOk st scope) (hx : x ∈ scope)
     (hnx : ∀ a, st.env x ≠ .owner a) :
-    MemOk ⟨upd st.env x (.owner st.next), updL st.live st.next true, st.next + 1, st.frees⟩
-      scope := by
+    MemOk { st with env := upd st.env x (.owner st.next), live := updL st.live st.next true,
+                    next := st.next + 1 } scope := by
   have hnl : st.live st.next = false := (h.beyond st.next (Nat.le_refl _)).1
   have henv : ∀ p b, upd st.env x (.owner st.next) p = .owner b ↔
       (p = x ∧ st.next = b) ∨ (p ≠ x ∧ st.env p = .owner b) := by
@@ -212,8 +217,8 @@ theorem reallocAt_ok {st : State} {scope} (h : MemOk st scope) (x : Var) :
 
 theorem reallocAt_spec {st st' : State} {x : Var} (hr : reallocAt x st = .ok st') :
     ∃ st1, release x st = .ok st1 ∧
-      st' = ⟨upd st1.env x (.owner st1.next), updL st1.live st1.next true,
-             st1.next + 1, st1.frees⟩ := by
+      st' = { st1 with env := upd st1.env x (.owner st1.next), live := updL st1.live st1.next true,
+                       next := st1.next + 1 } := by
   unfold reallocAt at hr
   split at hr
   · exact absurd hr (by simp)
@@ -235,6 +240,17 @@ theorem reallocAt_env_self {st st' : State} {x : Var} (hr : reallocAt x st = .ok
   obtain ⟨st1, h1, rfl⟩ := reallocAt_spec hr
   exact ⟨st1.next, upd_same _ _ _⟩
 
+/-! ### What the heap steps leave alone -/
+
+theorem release_groups {st st' : State} {x : Var} (hr : release x st = .ok st') :
+    st'.groups = st.groups := by
+  rcases release_cases hr with ⟨rfl, _⟩ | ⟨_, _, _, rfl⟩ <;> rfl
+
+theorem reallocAt_groups {st st' : State} {x : Var} (hr : reallocAt x st = .ok st') :
+    st'.groups = st.groups := by
+  obtain ⟨st1, h1, rfl⟩ := reallocAt_spec hr
+  exact (release_groups h1 : st1.groups = st.groups)
+
 /-! ### Binding a value -/
 
 theorem bindAt_ok {st : State} {scope} (h : MemOk st scope) (y : Var) (v : Val) :
@@ -243,11 +259,16 @@ theorem bindAt_ok {st : State} {scope} (h : MemOk st scope) (y : Var) (v : Val) 
   exact ⟨_, by unfold bindAt; rw [h1]⟩
 
 theorem bindAt_spec {st st' : State} {y : Var} {v : Val} (hb : bindAt y v st = .ok st') :
-    ∃ st1, release y st = .ok st1 ∧ st' = ⟨upd st1.env y v, st1.live, st1.next, st1.frees⟩ := by
+    ∃ st1, release y st = .ok st1 ∧ st' = { st1 with env := upd st1.env y v } := by
   unfold bindAt at hb
   split at hb
   · exact absurd hb (by simp)
   · next st1 h1 => exact ⟨st1, h1, (Except.ok.inj hb).symm⟩
+
+theorem bindAt_groups {st st' : State} {y : Var} {v : Val} (hb : bindAt y v st = .ok st') :
+    st'.groups = st.groups := by
+  obtain ⟨st1, h1, rfl⟩ := bindAt_spec hb
+  exact (release_groups h1 : st1.groups = st.groups)
 
 theorem bindAt_env_ne {st st' : State} {y p : Var} {v : Val} (hb : bindAt y v st = .ok st')
     (hne : p ≠ y) : st'.env p = st.env p := by
@@ -279,7 +300,7 @@ state would break the invariant, which is why it is proved in one piece. -/
 theorem memOk_move {st st1 : State} {scope} {y x : Var} {a : AllocId} (h : MemOk st scope)
     (hy : y ∈ scope) (hxy : y ≠ x) (hx : st.env x = .owner a)
     (hb : bindAt y (st.env x) st = .ok st1) :
-    MemOk ⟨upd st1.env x .moved, st1.live, st1.next, st1.frees⟩ scope := by
+    MemOk { st1 with env := upd st1.env x .moved } scope := by
   obtain ⟨st2, h2r, rfl⟩ := bindAt_spec hb
   have h2 := memOk_release h h2r
   have h2x : st2.env x = .owner a := (release_env_ne h2r (Ne.symm hxy)).trans hx

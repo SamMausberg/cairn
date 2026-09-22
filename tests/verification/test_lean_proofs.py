@@ -48,6 +48,7 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Ownership.lane_borrows_dont_race",
     "Cairn.Ownership.races_borrow_of_lease",
     "Cairn.Ownership.accepted_no_leaked_ticket",
+    "Cairn.Ownership.accepted_no_use_after_wait",
     "Cairn.Ownership.accepted_no_aliased_args",
     "Cairn.Ownership.accepted_frees_each_allocation_once",
     "Cairn.Ownership.accepted_progress",
@@ -68,6 +69,16 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Ownership.Regress.useAfterDrop_usesDeadPlace",
     "Cairn.Ownership.Regress.unawaitedTicket_leaks",
     "Cairn.Ownership.Regress.witnesses_are_rejected",
+    # Task groups: a group never waited leaks, a waited one is gone, and what one path lent it or
+    # ordered by a part it formed stays lent after the join.
+    "Cairn.Ownership.Regress.groupNeverWaited_leaks",
+    "Cairn.Ownership.Regress.collectAfterWait_deadGroup",
+    "Cairn.Ownership.Regress.groupLeaseFromOnePath_races",
+    "Cairn.Ownership.Regress.groupFactFromOnePath_races",
+    "Cairn.Ownership.Regress.group_witnesses_are_rejected",
+    # The join claims no more than either path, and forgetting keeps the invariant.
+    "Cairn.Ownership.joinOf_le",
+    "Cairn.Ownership.Sync.weaken",
 )
 
 # `#print axioms` prints one line per declaration; names may end in a prime.

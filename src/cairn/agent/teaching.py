@@ -173,7 +173,7 @@ box.a = Buf[u64](2) under a lease of box.a is E-LEASED.
 let g = Group[u64](4); holds up to 4 tasks at once: spawn f(args) into g; hands the task to g
 (no ticket), let r = collect(g); is the result of whichever task finishes next (an empty g
 traps, a full g traps), and wait(g); joins the rest and drops their results. Every place lent
-to any task of g is leased until wait(g); collect returns none, so a loop lends g only ro places.
+to any task of g, on any path, is leased until wait(g); collect returns none, so a loop lends g only ro places.
 Atomic[u64] and Mutex[T] are declared in place and shared by ro borrow: a.fetch_add(1,
 Order.relaxed) always names its memory order; m.with(|s:rw<T>| { ... }) is the only way
 into a mutex. Tickets, groups, atomics and mutexes are never stored, passed by value or returned.

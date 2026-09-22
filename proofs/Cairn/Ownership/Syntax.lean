@@ -121,7 +121,8 @@ inductive Stmt where
   | call (args : List Borrow)
   /-- `let t = spawn f(borrows...);`: the places stay lent until `wait t`. -/
   | spawn (t : Ticket) (args : List Borrow)
-  /-- `wait(t)`: the only thing that returns a task's borrows. -/
+  /-- `wait(t)` or `wait(g)`: the only thing that returns a task's borrows.  On a group it
+  joins every task still running and consumes the group. -/
   | wait (t : Ticket)
   /-- `if c { thn } else { els }`: the condition is opaque, so both branches are
   always reachable and the join is what makes a one-sided move dead. -/
@@ -130,7 +131,21 @@ inductive Stmt where
   and the spawner blocked until every one is done.  `n` is read from the valuation,
   exactly as a part bound is. -/
   | parallel (n : Bound) (body : List Touch)
+  /-- `let g = Group[T](n);`: an empty group of at most `n` tasks in flight.  Like a ticket
+  it is linear, and only `wait(g)` consumes it. -/
+  | group (g : Ticket) (n : Bound)
+  /-- `spawn f(borrows...) into g;`: a task of the group `g`.  The places stay lent to `g`
+  until `wait(g)`, whichever task finishes first. -/
+  | submit (g : Ticket) (args : List Borrow)
+  /-- `collect(g)`: joins one finished task of `g`.  The checker cannot know which one, so
+  its leases stay with the group. -/
+  | collect (g : Ticket)
 deriving Repr, Inhabited
+
+/-- Everything but `if` is checked by its guard and continues in its effect. -/
+def Stmt.isIte : Stmt → Bool
+  | .ite _ _ => true
+  | _ => false
 
 /-- A scope: the locals it declares and the statements it runs.  Every owner still
 held by one of `scope`'s locals is released when the body falls off the end. -/

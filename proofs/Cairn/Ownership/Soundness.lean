@@ -20,14 +20,9 @@ theorem memOk_start (scope : List Var) : MemOk State.start scope := by
   · intro a _; exact ⟨rfl, rfl⟩
 
 theorem Ok_start {p : Program} {ρ : Valuation} (h : accepts p = true) :
-    Ok ρ p.scope (Cfg.start p) := by
-  unfold accepts at h
-  split at h
-  · next c hc =>
-      refine ⟨CState.start p, ⟨memOk_start p.scope, List.Pairwise.nil, nofun, nofun, rfl,
-        nofun, nofun, rfl⟩, c, hc, ?_⟩
-      exact List.eq_nil_of_length_eq_zero (by simpa using h)
-  · exact Bool.noConfusion h
+    Ok ρ p.scope (Cfg.start p) :=
+  ⟨CState.start, ⟨memOk_start p.scope, List.Pairwise.nil, nofun, nofun, nofun,
+    ⟨nofun, nofun, fun _ => by simp [CState.start, State.start], nofun⟩⟩, Checks.of_accepts h⟩
 
 theorem Ok_reach {ρ : Valuation} {scope : List Var} : ∀ {a b : Cfg},
     Reach ρ scope a b → Ok ρ scope a → Ok ρ scope b := by
@@ -36,12 +31,11 @@ theorem Ok_reach {ρ : Valuation} {scope : List Var} : ∀ {a b : Cfg},
   | refl c => exact fun h => h
   | step hm _ ih => exact fun h => ih (Ok_succ h hm)
 
-/-- **Soundness.**  No execution of an accepted program, under any interleaving of
-the spawner with its tasks and under EVERY valuation of the immutable part bounds,
-reaches any fault: no use of a moved place, no use of a released cell, no double
-free, no leaked ticket, no data race and no aliased call arguments.  A trap -- the
-defined abort of a slice whose bounds are backwards -- is not a fault and is not
-excluded. -/
+/-- **Soundness.**  No execution of an accepted program, under any interleaving of the spawner
+with its tasks and lanes and under every valuation of the immutable part bounds, reaches a fault:
+no use of a moved place, no use of a released cell, no double free, no leaked ticket or group, no
+use of a group after `wait`, no data race and no aliased call arguments.  A trap, the defined
+abort of a failed guard, is not a fault and is not excluded. -/
 theorem accepted_no_fault {p : Program} (hp : accepts p = true) {ρ : Valuation} {cfg : Cfg}
     (hr : Reach ρ p.scope (Cfg.start p) cfg) (e : Err) : cfg ≠ Cfg.err e := by
   intro hc
@@ -68,7 +62,7 @@ theorem accepted_no_double_free {p : Program} (hp : accepts p = true) {ρ : Valu
   accepted_no_fault hp hr _
 
 /-- **Race freedom**, over the full interleaving and for every valuation: no
-reachable state has the spawner and a task, or two tasks, touching a common
+reachable state has two threads, the spawner, a task or a lane, touching a common
 location of one local with a write among them.  For two parts of one array that is
 "their index ranges meet under the valuation", which is the question the checker
 answers syntactically by chaining the guarded bounds. -/
@@ -77,10 +71,16 @@ theorem accepted_race_free {p : Program} (hp : accepts p = true) {ρ : Valuation
     cfg ≠ Cfg.err (.race q) :=
   accepted_no_fault hp hr _
 
-/-- No ticket is still live where the scope ends. -/
+/-- No ticket or group is still live where the scope ends. -/
 theorem accepted_no_leaked_ticket {p : Program} (hp : accepts p = true) {ρ : Valuation}
     {cfg : Cfg} (hr : Reach ρ p.scope (Cfg.start p) cfg) (t : Ticket) :
     cfg ≠ Cfg.err (.leak t) :=
+  accepted_no_fault hp hr _
+
+/-- No task is submitted to, and nothing is collected from, a group after `wait(g)`. -/
+theorem accepted_no_use_after_wait {p : Program} (hp : accepts p = true) {ρ : Valuation}
+    {cfg : Cfg} (hr : Reach ρ p.scope (Cfg.start p) cfg) (g : Ticket) :
+    cfg ≠ Cfg.err (.deadGroup g) :=
   accepted_no_fault hp hr _
 
 /-- No call ever receives two overlapping borrows with a write among them -- where
@@ -117,18 +117,22 @@ and so does the end of the body.  What progress adds to that is the other half -
 that a reachable configuration of an accepted program is never an error -- which is
 `accepted_no_fault` above. -/
 
+theorem lend_ne_nil (ρ : Valuation) (tasks : List Task) (st : State) (args : List Borrow)
+    (full : Bool) (k : List Cfg) (hk : k ≠ []) : lend ρ tasks st args full k ≠ [] := by
+  unfold lend; (repeat' split) <;> first | exact hk | exact List.cons_ne_nil _ _
+
 theorem stepStmt_ne_nil (ρ : Valuation) (s : Stmt) (rest : List Stmt) (tasks : List Task)
     (st : State) : stepStmt ρ s rest tasks st ≠ [] := by
-  cases s <;> simp only [stepStmt] <;> (repeat' split) <;> exact List.cons_ne_nil _ _
+  cases s <;> simp only [stepStmt] <;> (repeat' split) <;>
+    first
+      | exact List.cons_ne_nil _ _
+      | exact lend_ne_nil _ _ _ _ _ _ (List.cons_ne_nil _ _)
+      | simp
 
 theorem stepMain_ne_nil (ρ : Valuation) (scope : List Var) (code : List Stmt)
     (tasks : List Task) (st : State) : stepMain ρ scope code tasks st ≠ [] := by
   unfold stepMain
-  split
-  · split
-    · exact List.cons_ne_nil _ _
-    · split <;> exact List.cons_ne_nil _ _
-  · exact stepStmt_ne_nil ρ _ _ tasks st
+  (repeat' split) <;> first | exact List.cons_ne_nil _ _ | exact stepStmt_ne_nil ρ _ _ tasks st
 
 theorem stepHost_ne_nil (ρ : Valuation) (scope : List Var) (code : List Stmt)
     (tasks lanes : List Task) (st : State) : stepHost ρ scope code tasks lanes st ≠ [] := by
