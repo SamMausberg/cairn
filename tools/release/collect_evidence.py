@@ -76,7 +76,7 @@ def main() -> int:
             "compiler_package": lines("src/cairn/**/*.py"),
             "runtime_headers": lines("src/cairn/runtime/*.hpp"),
             "standard_library_cairn": lines("src/cairn/std/*.cairn"),
-            "lean_proofs": lines("proofs/Cairn/*.lean", "proofs/Cairn.lean"),
+            "lean_proofs": lines("proofs/Cairn/**/*.lean", "proofs/Cairn.lean"),
             "tests": lines("tests/**/*.py", "tests/native/*"),
         },
         "separately_recorded": ["lean/summary.json", "gpu/benchmark.json", "embedded/summary.json"],
