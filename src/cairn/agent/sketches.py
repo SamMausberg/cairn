@@ -54,9 +54,9 @@ class Sketch:
         if semantic is not None and semantic.symbol != symbol:
             fail("E-SKETCH-CONTRACT", "Semantic contract names a different target.")
         self._semantic = semantic
-        self._holes = {}
+        self._holes: dict[str, Any] = {}
         self._sealed = False
-        self._identity = None
+        self._identity: str | None = None
 
     @property
     def symbol(self):
@@ -281,8 +281,8 @@ def solve_finite(
         fail("E-SKETCH-BUDGET", "Candidate product exceeds the explicit search budget.", candidates=total)
     contract = sketch.semantic
     reference = Concrete(prepared(contract.reference))
-    witnesses = []
-    attempts = []
+    witnesses: list[Any] = []
+    attempts: list[Any] = []
     solver_calls = 0
     smt_queries = 0
     cache_rejections = 0

@@ -20,9 +20,7 @@ PYTHON = sys.executable
 GATES = {
     "format": [PYTHON, "-m", "ruff", "format", "--check", "."],
     "lint": [PYTHON, "-m", "ruff", "check", "."],
-    "types": [PYTHON, "-m", "mypy", "src/cairn/compiler", "src/cairn/projects/toolchain.py",
-              "src/cairn/verify/scalar_semantics.py", "src/cairn/verify/scalar_values.py",
-              "src/cairn/verify/scalar_symbolic.py", "src/cairn/verify/scalar_concrete.py"],
+    "types": [PYTHON, "-m", "mypy", "src/cairn"],
     "cairn_format": [PYTHON, "bin/cairn", "fmt", "--check", "examples", "src/cairn/std"],
     "tests": [PYTHON, "-m", "pytest", "-q", "tests", "-n", "16", "-rs"],
     "certificates": [PYTHON, "bin/cairn", "certificates"],

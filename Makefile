@@ -6,7 +6,7 @@ all: lint test proof
 
 help:
 	@echo 'all       lint, the test suite and the proofs'
-	@echo 'lint      ruff format --check, ruff check, cairn fmt --check'
+	@echo 'lint      ruff format --check, ruff check, mypy, cairn fmt --check'
 	@echo 'format    rewrite Python and CAIRN sources in place'
 	@echo 'test      the whole suite in parallel; tool-dependent parts skip with a reason'
 	@echo 'native    both compilers with sanitizers, and the codegen comparison'
@@ -27,6 +27,7 @@ check:
 lint:
 	$(PYTHON) -m ruff format --check .
 	$(PYTHON) -m ruff check .
+	$(PYTHON) -m mypy src/cairn
 	$(CAIRN) fmt --check examples src/cairn/std
 
 format:

@@ -64,7 +64,7 @@ The wheel holds the compiler package, the runtime headers, the target support fi
 Every gate runs locally, publishes nothing and needs no network. A gate whose tool is absent skips with a reason or reports `unknown`, which is never a pass.
 
 ```sh
-make lint          # ruff format --check, ruff check, cairn fmt --check
+make lint          # ruff format --check, ruff check, mypy over the package, cairn fmt --check
 make test          # the whole suite in parallel; hardware- and tool-dependent parts skip with a reason
 make proof         # certificates, the Lean export drift check, lake build, the differential run, scalar module equivalence
 make native        # both compilers with the sanitizers that bite, and the codegen comparison

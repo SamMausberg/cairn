@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import time
 from pathlib import Path
+from typing import Any
 
 from ..compiler.cairnc import Diagnostic, compile_source
 from ..compiler.syntax import Parser
@@ -24,7 +25,7 @@ from .scalar_semantics import equivalent
 def verify_module(
     reference: str, candidate: str, timeout_ms: int = 3000, preconditions: dict[str, str] | None = None
 ) -> dict:
-    result = {
+    result: dict[str, Any] = {
         "protocol": "cairn.verification-coverage/1",
         "status": "incomplete",
         "reference_sha256": hashlib.sha256(reference.encode()).hexdigest(),

@@ -21,13 +21,14 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import Any
 
 from ..agent.agent_tools import digest, explain, load_json_strict, stable_json
 from ..compiler.cairnc import RUNTIME_FILES, Diagnostic, Parser, compile_source
 from ..projects.toolchain import command as native_command
 from ..projects.toolchain import flags
 
-CTYPES = {
+CTYPES: dict[str, Any] = {
     "bool": C.c_bool,
     "u8": C.c_uint8,
     "u16": C.c_uint16,

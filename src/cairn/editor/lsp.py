@@ -387,8 +387,10 @@ def fields(p: Program, module: str, shown: str) -> list[tuple[str, str]]:
         return []
     put = dict(zip((g for g, _ in p.generics.get(name, [])), args, strict=False))
     carried = p.field_extents.get(name, {})  # `price:Buf[f64][rows]`: the extent is part of what the field says.
-    shown = ((n, re.sub(r"[\w.]+", lambda m: put.get(m.group(), m.group()), t.display())) for n, t in p.records[name])
-    return [(n, t + (f"[{carried[n]}]" if n in carried else "")) for n, t in shown]
+    substituted = (
+        (n, re.sub(r"[\w.]+", lambda m: put.get(m.group(), m.group()), t.display())) for n, t in p.records[name]
+    )
+    return [(n, t + (f"[{carried[n]}]" if n in carried else "")) for n, t in substituted]
 
 
 def methods(p: Program, module: str, shown: str) -> list[Function]:

@@ -169,8 +169,8 @@ def type_declarations(p: Program) -> str:
         out.append(f"{pub(n)}{linear}struct {local(n)}{generics(p.generics.get(n, []))}{layout} {{ {fields} }}")
     for n, vs in p.enums.items():
         out.append(f"{pub(n)}enum {local(n)} {{ {' '.join(v + ';' for v in vs)} }}")
-    for n, vs in p.sums.items():
-        variants = " ".join(v + (f"({t.display()})" if t else "") + ";" for v, t in vs)
+    for n, payloads in p.sums.items():
+        variants = " ".join(v + (f"({t.display()})" if t else "") + ";" for v, t in payloads)
         out.append(f"{pub(n)}enum {local(n)}{generics(p.generics.get(n, []))} {{ {variants} }}")
     for n, members in p.traits.items():
         out.append(f"{pub(n)}trait {local(n)} {{ {' '.join(signature(m) + ';' for m in members)} }}")
@@ -222,7 +222,7 @@ def expanded_source(source: str) -> str:
 def projection(p: Program, source: str) -> str:
     out = []
     for module in dict.fromkeys(p.modules.values()):
-        tables = {k: {n: v for n, v in getattr(p, k).items() if p.modules.get(n, "") == module}
+        tables: dict[str, Any] = {k: {n: v for n, v in getattr(p, k).items() if p.modules.get(n, "") == module}
                   for k in ("records", "enums", "sums", "traits", "consts")}  # fmt: skip
         out += [f"module {module};"] if module else []
         for importer, target, alias in p.imports:
@@ -244,8 +244,8 @@ def projection(p: Program, source: str) -> str:
             if members and (f is None or f.owner != members[0].owner):  # Close the impl block in its place.
                 shared = [g for g in members[0].generics if all(g in m.generics for m in members)]
                 bodies = ["  " + function_source(replace(m, generics=m.generics[len(shared) :])) for m in members]
-                trait, target = members[0].owner
-                out.append(f"impl{generics(shared)} {trait} for {target.display()} {{\n" + "\n".join(bodies) + "\n}")
+                trait, self_type = members[0].owner
+                out.append(f"impl{generics(shared)} {trait} for {self_type.display()} {{\n" + "\n".join(bodies) + "\n}")
                 members = []
             if f is not None and f.owner:
                 members.append(f)

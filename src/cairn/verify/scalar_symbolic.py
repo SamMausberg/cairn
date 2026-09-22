@@ -334,8 +334,8 @@ class Symbolic:
                     ok = conj(ok, self.apart(a.window, b.window))
         places = [a for a, (_, t) in zip(e.args, f.params, strict=True) if t.mode == "rw"]
         value, written = self.invoke(name, args, frame.stack, conj(frame.path, ok))
-        for a, final in zip(places, written, strict=True):
-            ok = conj(ok, self.store(a, env, frame, final))
+        for target, final in zip(places, written, strict=True):
+            ok = conj(ok, self.store(target, env, frame, final))
         return self.q.make(value.ty, value.parts, conj(ok, value.defined))
 
     def apart(self, a: Window, b: Window) -> str:
