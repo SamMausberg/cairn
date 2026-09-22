@@ -18,6 +18,7 @@
 - An edit packet starts with the target, its effect row and ceiling, and the interfaces of what it calls and what calls it, and grows by `expand` requests the host answers from the pinned program. A host names sessions by short handles (`cairn.edit/2`); `cairn.edit/1` still works. `--scope component` gives the 1.3 packet.
 - `cairn explain` shows where each function pays at run time, at its `.cairn` lines: the guards the emitted C++ still checks and the ones the checker discharged, allocations, calls that allocate, spawn, join, lock or do I/O, waits, and clang's verdict on every loop. An agent can ask for it after an edit.
 - Signature help in the language server offers the form of a call that leaves its extents out.
+- `examples/apps/service` serves many clients at once from one thread: one I/O ring holds the accept and every client's receive, and a client's `quit` cancels what is in flight. It used to serve one connection at a time. `std.net.send_all(fd, data)` sends on the raw descriptor a ring's accept returns, and `net.send` is written on it.
 - Device code runs only under `make gpu`, in one process, behind a machine-wide lock (`tools/support.py`). The everyday suite never touches the GPU: on the reference machine every run of the device tests reset the display GPU, and repeated resets crashed the host.
 
 ### Verification
