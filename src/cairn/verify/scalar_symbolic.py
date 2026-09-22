@@ -2,7 +2,8 @@
 
 `Formula` holds the declarations and the inputs of one query; `Symbolic` walks a body, splitting on
 every branch, unrolling loops to `MAX_UNROLL` and recording what would still be running as a
-residual obligation. Storage behind a view is an SMT array read and written inside its window.
+residual obligation. Storage behind a view is an SMT array read and written inside its window, and every
+view of one storage shares that array, so a write through one part is seen through the others.
 """
 
 from __future__ import annotations
@@ -326,15 +327,23 @@ class Symbolic:
     def apply(self, name: str, e: Expr, args: list[Term], env: dict[str, Term], frame: Frame, ok: str) -> Term:
         """A call, with what it wrote through each rw parameter stored back into the place that lent it."""
         f = self.source.functions[name]
-        lent = [a.window.root for a in args if a.window is not None]
-        shared = (a for a, (_, t) in zip(args, f.params, strict=True) if a.window and t.mode == "rw")
-        if any(lent.count(a.window.root) > 1 for a in shared):
-            raise Unsupported("Two views of one array passed to one call are not modeled.")
+        views = [(a, t) for a, (_, t) in zip(args, f.params, strict=True) if a.window is not None]
+        for i, (a, ta) in enumerate(views):  # The callee's entry guard: two windows into one storage stay apart.
+            for b, tb in views[i + 1 :]:
+                if a.window.root == b.window.root and "rw" in (ta.mode, tb.mode):
+                    ok = conj(ok, self.apart(a.window, b.window))
         places = [a for a, (_, t) in zip(e.args, f.params, strict=True) if t.mode == "rw"]
         value, written = self.invoke(name, args, frame.stack, conj(frame.path, ok))
         for a, final in zip(places, written, strict=True):
             ok = conj(ok, self.store(a, env, frame, final))
         return self.q.make(value.ty, value.parts, conj(ok, value.defined))
+
+    def apart(self, a: Window, b: Window) -> str:
+        """What `cr::disjoint` admits of two windows into one storage: one is empty, or no element is in both."""
+        empty = disj(same(a.extent, ZERO), same(b.extent, ZERO))
+        before = f"(bvule (bvadd {a.offset} {a.extent}) {b.offset})"
+        after = f"(bvule (bvadd {b.offset} {b.extent}) {a.offset})"
+        return disj(empty, before, after)
 
     def compose(self, ty: Type, index: int, payload: Term | None) -> Term:
         """A sum value: the tag beside every payload, the inactive ones zeroed as the emitter zeroes them."""
@@ -442,6 +451,10 @@ class Symbolic:
         if target.tag == "name":
             held = env[target.val]
             env[target.val] = Term(held.ty, value.parts, window=held.window)
+            if held.window is not None:  # Every other view of the same storage sees the write through its own window.
+                for n, other in list(env.items()):
+                    if n != target.val and other.window is not None and other.window.root == held.window.root:
+                        env[n] = Term(other.ty, value.parts, window=other.window)
             return "true"
         base = self.expr(target.args[0], env, frame)
         if target.tag == "slice":  # Writing through a part writes the storage it narrows.
