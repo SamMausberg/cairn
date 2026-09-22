@@ -21,29 +21,21 @@ def tokens(text):
 
 def main():
     rows = []
-    identity = 0
     durations = []
-    source = (R / "examples/basics/native.cairn").read_text()
-    generated, _ = compile_source(source)
-    for f in Parser(source).parse().functions:
-        if f.static:
-            continue
-        s = EditSession(source, f.name)
+    native = (R / "examples/basics/native.cairn").read_text()
+    generated, _ = compile_source(native)
+    for f in (f for f in Parser(native).parse().functions if not f.static):
+        s = EditSession(native, f.name)
         for site, info in s.sites.items():
-            req = {
-                "protocol": "cairn.edit/1",
-                "session": s.session,
-                "kind": "expr",
-                "site": site,
-                "replacement": info["source"],
-            }
+            req = {"protocol": "cairn.edit/1", "session": s.session, "kind": "expr", "site": site,
+                   "replacement": info["source"]}  # fmt: skip
             start = time.perf_counter()
             candidate, _ = s.check(req)
             durations.append(time.perf_counter() - start)
             assert compile_source(candidate)[0] == generated
-            identity += 1
+    identity = len(durations)
     for name, source, symbol in [
-        ("native_module", (R / "examples/basics/native.cairn").read_text(), "compact_even"),
+        ("native_module", native, "compact_even"),
         ("small_demo", (R / "examples/agent/selection_before.cairn").read_text(), "select_gt"),
         (
             "constructed_100_independent_functions",
@@ -81,9 +73,7 @@ def main():
                 "packet_comparisons": rows,
                 "teaching_cards_tokens": {k: tokens(v) for k, v in CARDS.items()},
                 "full_teaching_cards_tokens": tokens("\n\n".join(CARDS.values())),
-                "canonical_projection_tokens": tokens(
-                    canonical_source((R / "examples/basics/native.cairn").read_text())
-                ),
+                "canonical_projection_tokens": tokens(canonical_source(native)),
                 "identity_expression_edits": identity,
                 "all_identity_edits_preserve_generated_cpp": True,
                 "check_seconds_median": statistics.median(durations),

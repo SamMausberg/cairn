@@ -6,6 +6,7 @@ import pytest
 from cairn.agent.agent_tools import PROTOCOL, EditSession, explain, load_json_strict
 from cairn.agent.projection import canonical_source, semantic_ast
 from cairn.compiler.cairnc import Diagnostic, Parser, compile_source
+from emitted import code_of
 
 R = Path(__file__).resolve().parents[2]
 
@@ -22,9 +23,7 @@ def expression(s, old, new):
 
 
 def rejected(code, s, r):
-    with pytest.raises(Diagnostic) as e:
-        s.check(r)
-    assert e.value.data["code"] == code
+    assert code_of(lambda: s.check(r)) == code
 
 
 @pytest.mark.parametrize(
@@ -133,52 +132,36 @@ def test_request_unknown_key():
     rejected("E-REQUEST", s, r)
 
 
-def test_duplicate_json():
-    with pytest.raises(Diagnostic):
-        load_json_strict('{"kind":"body","kind":"expr"}')
+@pytest.mark.parametrize("text", ['{"kind":"body","kind":"expr"}', '{"n":NaN}'])
+def test_duplicate_and_nonfinite_json(text):
+    assert code_of(lambda: load_json_strict(text)) == "E-REQUEST"
 
 
-def test_effect_ceiling():
-    s = EditSession(S, "step")
-    rejected("E-EFFECT-EXPANSION", s, request(s, "{return x+1;}"))
+WRITES = "fn store(n:usize,b:rw<u64>[n]@host){b[0]=1;} fn top(n:usize,left:rw<u64>[n]@host,right:rw<u64>[n]@host){store(n,left);}"
 
 
-def test_hidden_callee():
-    s = EditSession(S, "step")
-    rejected("E-CONTEXT-CLOSURE", s, request(s, "{return other(x);}"))
-
-
-def test_changed_caller_effect():
-    s = EditSession(S, "step", {"allowed_effects": ["trap"]})
-    rejected("E-CALLER-EFFECT", s, request(s, "{return x+1;}"))
-
-
-def test_read_only_not_mutable():
-    s = EditSession("fn f(n:usize,a:ro<u64>[n]@host)->u64{return a[0];}", "f")
-    rejected("E-WRITE-LEASE", s, request(s, "{a[0]=1;return a[0];}"))
-
-
-def test_new_writes_to_different_array_are_visible():
-    text = "fn store(n:usize,b:rw<u64>[n]@host){b[0]=1;} fn top(n:usize,left:rw<u64>[n]@host,right:rw<u64>[n]@host){store(n,left);}"
-    s = EditSession(text, "top")
-    rejected("E-EFFECT-EXPANSION", s, request(s, "{store(n,right);}"))
-
-
-def test_body_keeps_parameters_immutable():
-    s = EditSession(S, "step")
-    rejected("E-IMMUTABLE", s, request(s, "{x=1;return x;}"))
+@pytest.mark.parametrize(
+    ("source", "symbol", "contract", "body", "error"),
+    [
+        (S, "step", None, "{return x+1;}", "E-EFFECT-EXPANSION"),  # The effect ceiling.
+        (S, "step", None, "{return other(x);}", "E-CONTEXT-CLOSURE"),  # A callee the packet does not show.
+        (S, "step", {"allowed_effects": ["trap"]}, "{return x+1;}", "E-CALLER-EFFECT"),  # A caller's row grows.
+        ("fn f(n:usize,a:ro<u64>[n]@host)->u64{return a[0];}", "f", None, "{a[0]=1;return a[0];}", "E-WRITE-LEASE"),
+        (WRITES, "top", None, "{store(n,right);}", "E-EFFECT-EXPANSION"),  # A write to another array is visible.
+        (S, "step", None, "{x=1;return x;}", "E-IMMUTABLE"),  # Parameters stay immutable.
+    ],
+)
+def test_an_edit_is_refused_with_its_code(source, symbol, contract, body, error):
+    s = EditSession(source, symbol, contract)
+    rejected(error, s, request(s, body))
 
 
 def test_expression_expected_type():
     s = EditSession(S, "step")
-    req = expression(s, "add_wrap(x,1)", "true")
-    try:
-        s.check(req)
-    except Diagnostic as e:
-        d = explain(e)
-        assert d["expected_type"] == "u64" and d["actual_type"] == "bool"
-    else:
-        assert False
+    with pytest.raises(Diagnostic) as e:
+        s.check(expression(s, "add_wrap(x,1)", "true"))
+    d = explain(e.value)
+    assert d["expected_type"] == "u64" and d["actual_type"] == "bool"
 
 
 def test_expression_parenthesized_insertion():
@@ -241,11 +224,6 @@ def test_unrelated_template_not_editable():
         EditSession("fn f[K:nat]()->usize{return K;}family x=f[1..3];", "f")
 
 
-def test_json_nonfinite():
-    with pytest.raises(Diagnostic):
-        load_json_strict('{"n":NaN}')
-
-
 def test_candidate_filter():
     s = EditSession(S, "step")
     k = next(k for k, v in s.sites.items() if v["source"] == "add_wrap(x,1)")
@@ -255,6 +233,4 @@ def test_candidate_filter():
 
 @pytest.mark.parametrize("contract", [[], False, 0, ""])
 def test_contract_must_be_an_object(contract):
-    with pytest.raises(Diagnostic) as exc:
-        EditSession("fn f(x:u64)->u64{return x;}", "f", contract)
-    assert exc.value.data["code"] == "E-CONTRACT"
+    assert code_of(lambda: EditSession("fn f(x:u64)->u64{return x;}", "f", contract)) == "E-CONTRACT"

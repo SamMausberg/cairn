@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 import subprocess
 import tempfile
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +51,7 @@ SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and h
 }
 ALLOCATION = re.compile(r"(cr::(?:gpu::)?(?:Buf|Buffer|Pinned|Unified)<[^()=;]*?>)\s*\w*\(")
 CALL = re.compile(r"\bcf_(\w+)\(")
+PAID = {"alloc", "gpu_alloc", "join", "spawn", "lock", "io"}  # With par: and transfer:, what makes a call costly.
 LINE = re.compile(r'^\s*#line (\d+) "(.*)"$')
 MAX_SOURCE = 2_000_000
 PACKAGE = Path(__file__).resolve().parents[1]
@@ -134,21 +136,21 @@ def function_of(symbol: str, names: dict[str, str]) -> str:
 
 def verdicts(entries: list[dict[str, Any]], show) -> list[dict[str, Any]]:
     """One verdict per loop: vectorized where clang says so, with its width; else the reasons clang gave."""
-    loops: dict[tuple, dict[str, Any]] = {}
+    loops: dict[tuple, tuple[set, set]] = defaultdict(lambda: (set(), set()))
     for r in entries:
-        loop = loops.setdefault((r["file"], r["line"], r["column"]), {"at": show(r["file"], r["line"], r["column"]),
-                                                                      "vectorized": [], "reasons": []})  # fmt: skip
+        passed, reasons = loops[r["file"], r["line"], r["column"]]
         if r["kind"] == "Passed":
-            loop["vectorized"].append(r["message"].removeprefix("vectorized loop "))
+            passed.add(r["message"].removeprefix("vectorized loop "))
         elif r["kind"] == "Analysis":
-            loop["reasons"].append(r["message"].removeprefix("loop not vectorized: "))
-    for loop in loops.values():
-        loop["vectorized"] = sorted(set(loop["vectorized"]))
-        loop["reasons"] = sorted(set(loop["reasons"]))
-        loop["verdict"] = "vectorized" if loop["vectorized"] else "not vectorized"
-        if not loop["vectorized"]:
-            del loop["vectorized"]
-    return sorted(loops.values(), key=lambda loop: loop["at"])
+            reasons.add(r["message"].removeprefix("loop not vectorized: "))
+    out = [{"at": show(*where), **({"vectorized": sorted(passed)} if passed else {}), "reasons": sorted(reasons),
+            "verdict": "vectorized" if passed else "not vectorized"}
+           for where, (passed, reasons) in loops.items()]  # fmt: skip
+    return sorted(out, key=lambda loop: loop["at"])
+
+
+def plain(tally: dict[str, Counter]) -> dict[str, dict[str, int]]:
+    return {k: dict(v) for k, v in tally.items()}
 
 
 def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None = None, cxx: str = "clang++",
@@ -162,9 +164,7 @@ def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None
         raise ValueError("Source exceeds the 2 MB limit.")
     p, checker, receipts = compile_program(source)
     at = (lambda line: (origin, line)) if isinstance(origin, str) else origin
-    emitter = Located(p, checker, at)
-    interface, bodies = emitter.units()
-    written = [f for f in p.functions if not f.extern]
+    interface, bodies = Located(p, checker, at).units()
     names = {mangle(f.name): f.name for f in p.functions}
 
     def show(file: str, line: int, column: int = 0) -> str:
@@ -176,13 +176,11 @@ def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None
             file = "cairn/" + str(path.relative_to(PACKAGE))
         return f"{file}:{line}" + (f":{column}" if column else "")
 
-    functions: dict[str, dict[str, Any]] = {}
-    for f, (_, lines) in zip(written, bodies, strict=True):
-        if symbols is not None and f.name not in symbols:
-            continue
+    def costs(f: Function, lines: list[str]) -> dict[str, Any]:
         home = library(p, f)
-        head = (show(str(home), f.line) if home else show(*at(f.line))) if f.line else f.name
-        guards: dict[str, dict[str, int]] = {}
+        place = (lambda line: show(str(home), line)) if home else (lambda line: show(*at(line)))
+        head = place(f.line) if f.line else f.name
+        guards: dict[str, Counter] = defaultdict(Counter)
         allocations, synchronization, costly = [], [], []
         here = head  # Entry guards sit before the first statement: they belong to the declaration.
         for text in lines:
@@ -191,61 +189,58 @@ def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None
                 continue
             for kind, spellings in GUARDS.items():
                 if n := sum(text.count(s) for s in spellings):
-                    guards.setdefault(here, {})[kind] = guards.get(here, {}).get(kind, 0) + n
+                    guards[here][kind] += n
             allocations += [{"at": here, "owner": m.group(1)} for m in ALLOCATION.finditer(text)]
             synchronization += [{"at": here, "kind": kind} for kind, s in SYNCHRONIZATION.items() if s in text]
             for callee in CALL.findall(text):
                 row = set(receipts.get(names.get(callee, ""), {}).get("effects", ()))
-                paid = sorted(row & {"alloc", "gpu_alloc", "join", "spawn", "lock", "io"} | {
-                    e for e in row if e.startswith(("par:", "transfer:"))})  # fmt: skip
+                paid = sorted(row & PAID | {e for e in row if e.startswith(("par:", "transfer:"))})
                 if paid and names[callee] != f.name:
                     costly.append({"at": here, "calls": names[callee], "effects": paid})
-        left_out: dict[str, dict[str, int]] = {}
+        left_out: dict[str, Counter] = defaultdict(Counter)
         for line, kind in discharged(f.body, []):
-            where = show(str(home), line) if home else show(*at(line))
-            left_out.setdefault(where, {})[kind] = left_out.get(where, {}).get(kind, 0) + 1
-        emitted: dict[str, int] = {}
-        for kinds in guards.values():
-            for kind, n in kinds.items():
-                emitted[kind] = emitted.get(kind, 0) + n
-        sites = receipts[f.name]["syntactic_check_sites"]
-        functions[f.name] = {
+            left_out[place(line)][kind] += 1
+        receipt = receipts[f.name]
+        sites = receipt["syntactic_check_sites"]
+        return {
             "at": head,
-            "effects": receipts[f.name]["effects"],
+            "effects": receipt["effects"],
             "guards": {
                 "sites": {k: v for k, v in sorted(sites.items()) if k in GUARDS},
-                "emitted": dict(sorted(emitted.items())),
-                "discharged": receipts[f.name].get("discharged_check_sites", {}),
-                "by_line": guards,
-                "discharged_by_line": left_out,
+                "emitted": dict(sorted(sum(guards.values(), Counter()).items())),
+                "discharged": receipt.get("discharged_check_sites", {}),
+                "by_line": plain(guards),
+                "discharged_by_line": plain(left_out),
             },
             "allocations": allocations,
             "costly_calls": costly,
             "synchronization": synchronization,
         }
-    report = {
+
+    written = [f for f in p.functions if not f.extern]
+    functions = {f.name: costs(f, lines) for f, (_, lines) in zip(written, bodies, strict=True)
+                 if symbols is None or f.name in symbols}  # fmt: skip
+    cpp = "\n".join([*interface, *(line for _, lines in bodies for line in lines)]) + "\n"
+    return {
         "schema": "cairn.explain/1",
         "observed": "Read from the emitted C++ and the compiler's optimization record; nothing was run or timed.",
         "functions": functions,
+        "vectorization": vectorize(cpp, names, cxx, arch, timeout, functions, show),
     }
-    report["vectorization"] = vectorize(p, interface, bodies, names, cxx, arch, show, symbols, functions, timeout)
-    return report
 
 
-def vectorize(p, interface, bodies, names, cxx, arch, show, symbols, functions, timeout) -> dict[str, Any]:
+def vectorize(cpp: str, names, cxx: str, arch, timeout: int, functions: dict, show) -> dict[str, Any]:
     """Compile once with the build's flags plus `REMARKS`, and hand each function the loop verdicts inside it."""
-    if "cairn_gpu.hpp" in "\n".join(interface):
+    if '#include "cairn_gpu.hpp"' in cpp:
         return {"status": "not-run", "reason": "A device program compiles under nvcc; remarks come from host clang."}
     if Path(cxx).name.split("-")[0] != "clang++":
         return {"status": "not-run", "reason": f"Optimization remarks are read from clang++; {cxx} was named."}
-    cpp = "\n".join([*interface, *(line for _, lines in bodies for line in lines)]) + "\n"
+    native = [f for f in flags(arch, "library") if f != "-shared"] + REMARKS
     with tempfile.TemporaryDirectory(prefix="cairn-explain-") as scratch:
-        directory = Path(scratch)
-        (directory / "program.cpp").write_text(cpp, encoding="utf-8")
-        for name, text in RUNTIME_FILES.items():
+        directory = Path(scratch).resolve()
+        for name, text in {"program.cpp": cpp, **RUNTIME_FILES}.items():
             (directory / name).write_text(text, encoding="utf-8")
         record = directory / "program.yaml"
-        native = [f for f in flags(arch, "library") if f != "-shared"] + REMARKS
         command = [find(cxx), *native, "-c", str(directory / "program.cpp"), "-o", str(directory / "program.o"),
                    f"-foptimization-record-file={record}"]  # fmt: skip
         done = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
@@ -253,16 +248,15 @@ def vectorize(p, interface, bodies, names, cxx, arch, show, symbols, functions, 
             return {"status": "compile-failed", "stderr": done.stderr[:4000]}
         entries = remarks(record.read_text(encoding="utf-8"), names)
     for r in entries:  # A runtime header was copied beside the program: name the packaged one instead.
-        if Path(r["file"]).parent.resolve() == directory.resolve():
+        if Path(r["file"]).parent.resolve() == directory:
             r["file"] = str(PACKAGE / "runtime" / Path(r["file"]).name)
-    version = subprocess.run([find(cxx), "--version"], capture_output=True, text=True, timeout=10).stdout
-    runtime = [r for r in entries if r["function"].startswith("(runtime)")]
     for name, entry in functions.items():
         entry["loops"] = verdicts([r for r in entries if r["function"] == name], show)
+    version = subprocess.run([find(cxx), "--version"], capture_output=True, text=True, timeout=10).stdout
     return {
         "status": "observed",
         "compiler": version.split("\n", 1)[0],
         "flags": native,
-        "outside_functions": len(runtime),
+        "outside_functions": sum(r["function"].startswith("(runtime)") for r in entries),
         "note": "A loop is reported where clang placed it; one inlined from the runtime or std shows that file.",
     }

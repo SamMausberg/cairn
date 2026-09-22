@@ -30,6 +30,13 @@ def refused(code: str, source: str, **options) -> dict:
     return error.value.data
 
 
+def code_of(call) -> str:
+    """The code of the diagnostic `call()` raises; the test fails when it raises none."""
+    with pytest.raises(Diagnostic) as error:
+        call()
+    return error.value.data["code"]
+
+
 def sanitized(cxx: str) -> list[str]:
     """`SANITIZED` under clang++; under g++ the same build without the sanitizers, run for its behaviour alone."""
     return SANITIZED if cxx == "clang++" else SANITIZED[:4]

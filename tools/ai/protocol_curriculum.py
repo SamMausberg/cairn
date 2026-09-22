@@ -34,19 +34,12 @@ def main():
         yes, no = expression(r["chosen"]), expression(r["rejected"])
         if yes is None or no is None:
             continue
-        sk = Sketch(
-            r["rejected"],
-            "task",
-            task={"symbol": "task", "task": r["task"]},
-            semantic=ScalarContract(r["reference"], "task"),
-        ).hole("value", no)
+        task = {"symbol": "task", "task": r["task"]}
+        sk = Sketch(r["rejected"], "task", task=task, semantic=ScalarContract(r["reference"], "task")).hole("value", no)
         packet = sk.packet()
-        bad = json.dumps({"value": no})
-        good = json.dumps({"value": yes})
-        bad_candidate = sk.fill_json(bad)
-        bad_receipt = sk.check_semantics(bad_candidate, timeout_ms=10000)
-        good_candidate = sk.fill_json(good)
-        good_receipt = sk.check_semantics(good_candidate, timeout_ms=10000)
+        bad, good = json.dumps({"value": no}), json.dumps({"value": yes})
+        bad_receipt = sk.check_semantics(sk.fill_json(bad), timeout_ms=10000)
+        good_receipt = sk.check_semantics(sk.fill_json(good), timeout_ms=10000)
         assert bad_receipt["status"] == "counterexample", (r["id"], bad_receipt)
         assert good_receipt["status"] == "smt-equivalent", (r["id"], good_receipt)
         lessons.append(
@@ -73,29 +66,14 @@ def main():
     # context only. Two role messages carry that completed prior interaction.
     sft = []
     for r in train:
-        context = (
-            r["messages"][0]["content"]
-            + "\nPrevious proposal: "
-            + r["messages"][1]["content"]
-            + "\nChecker feedback: "
-            + r["messages"][2]["content"]
-        )
-        sft.append(
-            {
-                "id": r["id"],
-                "family": r["family"],
-                "messages": [{"role": "user", "content": context}, r["messages"][3]],
-                "target_status": "smt-equivalent-scalar-only",
-                "contract_sha256": r["immutable_contract_sha256"],
-            }
-        )
+        packet, bad, feedback, good = (m["content"] for m in r["messages"])
+        context = f"{packet}\nPrevious proposal: {bad}\nChecker feedback: {feedback}"
+        sft.append({"id": r["id"], "family": r["family"], "messages": [{"role": "user", "content": context},
+                    r["messages"][3]], "target_status": "smt-equivalent-scalar-only",
+                    "contract_sha256": r["immutable_contract_sha256"]})  # fmt: skip
+    prompts = [{"id": r["id"], "family": r["family"], "messages": [r["messages"][0]]} for r in evaluation]
     (root / "train_repair_sft.jsonl").write_text("".join(json.dumps(r) + "\n" for r in sft))
-    (root / "protocol_evaluation_prompts.jsonl").write_text(
-        "".join(
-            json.dumps({"id": r["id"], "family": r["family"], "messages": [r["messages"][0]]}) + "\n"
-            for r in evaluation
-        )
-    )
+    (root / "protocol_evaluation_prompts.jsonl").write_text("".join(json.dumps(r) + "\n" for r in prompts))
     summary = {
         "status": "passed",
         "executed_protocol_lessons": len(lessons),

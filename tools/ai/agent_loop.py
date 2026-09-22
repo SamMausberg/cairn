@@ -26,6 +26,38 @@ from cairn.agent.agent_tools import EditHost, digest, explain, load_json_strict,
 from cairn.compiler.cairnc import Diagnostic
 
 
+def ask(command, encoded, host, public, source):
+    """One adapter call: its reply, the bytes it sent, the feedback it gets, and the candidate when that candidate
+    passed the public cases."""
+    try:
+        # The command is explicit argv, never a shell string. External adapter trust
+        # is separate from the parser's bounded edit request.
+        with tempfile.TemporaryDirectory(prefix="cairn-adapter-") as tmp:
+            cp = subprocess.run(command, input=encoded, text=True, capture_output=True, cwd=tmp, timeout=120)
+    except subprocess.TimeoutExpired:
+        return "", 0, {"status": "unknown", "stage": "adapter-timeout"}, None
+    except OSError as e:
+        return "", 0, {"status": "adapter-error", "message": str(e)}, None
+    raw, sent = cp.stdout, len(cp.stdout.encode())
+    if sent > 1000000:
+        return "", sent, {"status": "adapter-error", "message": "Adapter reply exceeds 1 MB."}, None
+    if cp.returncode:
+        return raw, sent, {"status": "adapter-failed", "exit_code": cp.returncode, "stderr": cp.stderr[:2000]}, None
+    try:
+        edit = load_json_strict(raw)
+        typed = host.respond(edit)
+        if typed.get("status") != "typed":  # An expansion or an explanation, not a candidate.
+            return raw, sent, typed, None
+        candidate = host.admitted[edit["handle"]][-1][0]
+        tests = evaluate(candidate, public)
+        passed = tests["status"] == "passed-finite-tests"
+        return raw, sent, {"admission": typed, "tests": tests}, candidate if passed else None
+    except Diagnostic as e:
+        return raw, sent, explain(e, source), None
+    except (ValueError, TypeError, KeyError, RecursionError) as e:
+        return raw, sent, {"status": "invalid-reply", "message": str(e)}, None
+
+
 def run(source, contract, command, attempts=4, public_cases=3, adapter_kind="external-unverified"):
     if not 1 <= attempts <= 20:
         raise ValueError("Attempt limit must be 1..20.")
@@ -45,8 +77,7 @@ def run(source, contract, command, attempts=4, public_cases=3, adapter_kind="ext
         {"role": "user", "content": stable_json(packet)},
     ]
     log = []
-    request_bytes = 0
-    response_bytes = 0
+    request_bytes = response_bytes = 0
     start = time.monotonic()
     final_source = None
     status = "attempt-budget-exhausted"
@@ -54,59 +85,16 @@ def run(source, contract, command, attempts=4, public_cases=3, adapter_kind="ext
         request = {"protocol": "cairn.adapter/1", "attempt": i, "messages": messages}
         encoded = stable_json(request)
         request_bytes += len(encoded.encode())
-        # The command is explicit argv, never a shell string. External adapter trust
-        # is separate from the parser's bounded edit request.
-        try:
-            with tempfile.TemporaryDirectory(prefix="cairn-adapter-") as tmp:
-                cp = subprocess.run(command, input=encoded, text=True, capture_output=True, cwd=tmp, timeout=120)
-            raw = cp.stdout
-            response_bytes += len(raw.encode())
-            if len(raw.encode()) > 1000000:
-                raise ValueError("Adapter reply exceeds 1 MB.")
-            if cp.returncode:
-                feedback = {"status": "adapter-failed", "exit_code": cp.returncode, "stderr": cp.stderr[:2000]}
-            else:
-                try:
-                    edit = load_json_strict(raw)
-                    typed = host.respond(edit)
-                    if typed.get("status") != "typed":  # An expansion or an explanation, not a candidate.
-                        feedback, tests = typed, {"status": "not-run"}
-                    else:
-                        candidate = host.admitted[edit["handle"]][-1][0]
-                        tests = evaluate(candidate, public)
-                        feedback = {"admission": typed, "tests": tests}
-                    if tests["status"] == "passed-finite-tests":
-                        # Check reserved cases once, without exposing their outcomes to the adapter.
-                        hidden = evaluate(candidate, reserved)
-                        status = (
-                            "passed-reserved-finite-tests"
-                            if hidden["status"] == "passed-finite-tests"
-                            else "reserved-tests-not-passed"
-                        )
-                        final_source = candidate if status == "passed-reserved-finite-tests" else None
-                        log.append(
-                            {
-                                "attempt": i,
-                                "request": request,
-                                "reply": raw,
-                                "feedback": feedback,
-                                "reserved_verdict": hidden,
-                            }
-                        )
-                        break
-                except Diagnostic as e:
-                    feedback = explain(e, source)
-                except (ValueError, TypeError, KeyError, RecursionError) as e:
-                    feedback = {"status": "invalid-reply", "message": str(e)}
-        except subprocess.TimeoutExpired:
-            raw = ""
-            feedback = {"status": "unknown", "stage": "adapter-timeout"}
-        except (OSError, ValueError) as e:
-            raw = ""
-            feedback = {"status": "adapter-error", "message": str(e)}
+        raw, sent, feedback, candidate = ask(command, encoded, host, public, source)
+        response_bytes += sent
         log.append({"attempt": i, "request": request, "reply": raw, "feedback": feedback})
-        messages.append({"role": "assistant", "content": raw})
-        messages.append({"role": "user", "content": stable_json(feedback)})
+        if candidate is not None:  # Reserved cases are checked once, and their outcome never reaches the adapter.
+            log[-1]["reserved_verdict"] = hidden = evaluate(candidate, reserved)
+            passed = hidden["status"] == "passed-finite-tests"
+            status = "passed-reserved-finite-tests" if passed else "reserved-tests-not-passed"
+            final_source = candidate if passed else None
+            break
+        messages += [{"role": "assistant", "content": raw}, {"role": "user", "content": stable_json(feedback)}]
     return final_source, {
         "status": status,
         "adapter_kind": adapter_kind,

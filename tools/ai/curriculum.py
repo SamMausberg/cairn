@@ -7,6 +7,7 @@ future evaluator must isolate held-out answers from the model's workspace.
 """
 
 import argparse
+import itertools
 import json
 import random
 import sys
@@ -31,87 +32,59 @@ def build():
         split = "train" if family in {"affine", "count_gt", "prefix", "compact_gt", "clamp"} else "heldout"
         for k in range(8):
             symbol = f"{family}_{k}"
-            cases = []
             A = k + 2
             B = k * 3 + 1
             if family == "affine":
                 text = f"fn {symbol}(x:u64)->u64{{return add_wrap(mul_wrap(x,{A}),{B});}}"
                 desc = f"Return ({A}*x+{B}) modulo 2^64. No trap or writes."
-                for x in [0, 1, 2, 17, MASK, MASK - 1, 2**63, *[rng.getrandbits(64) for _ in range(7)]]:
-                    cases.append({"args": {"x": x}, "return": (A * x + B) & MASK})
+                cases = [{"args": {"x": x}, "return": (A * x + B) & MASK}
+                         for x in [0, 1, 2, 17, MASK, MASK - 1, 2**63, *[rng.getrandbits(64) for _ in range(7)]]]  # fmt: skip
             elif family == "count_gt":
                 text = f"fn {symbol}(n:usize,x:ro<u64>[n]@host,threshold:u64)->usize{{let mut total:usize=0;for i in 0..n{{if x[i]>threshold{{total=add_wrap(total,1);}}}}return total;}}"
                 desc = "Count values strictly greater than threshold. Empty input returns zero."
-                for x in xs:
-                    cases.append({"args": {"n": len(x), "x": x, "threshold": B}, "return": sum(v > B for v in x)})
+                cases = [{"args": {"n": len(x), "x": x, "threshold": B}, "return": sum(v > B for v in x)} for x in xs]
             elif family == "prefix":
                 text = f"fn {symbol}(n:usize,out:rw<u64>[n]@host,x:ro<u64>[n]@host){{let mut total:u64=0;for i in 0..n{{total=add_wrap(total,x[i]);out[i]=total;}}}}"
                 desc = "Write inclusive prefix sums modulo 2^64; inputs and outputs are disjoint."
-                for x in xs:
-                    acc = 0
-                    out = []
-                    for v in x:
-                        acc = (acc + v) & MASK
-                        out.append(acc)
-                    cases.append({"args": {"n": len(x), "out": [123] * len(x), "x": x}, "after": {"out": out}})
+                cases = [{"args": {"n": len(x), "out": [123] * len(x), "x": x},
+                          "after": {"out": [v & MASK for v in itertools.accumulate(x)]}} for x in xs]  # fmt: skip
             elif family == "compact_gt":
                 text = f"fn {symbol}(n:usize,out:rw<u64>[n]@host,x:ro<u64>[n]@host,threshold:u64)->usize{{let used=compact out for i in n where x[i]>threshold yield x[i];return used;}}"
                 desc = "Stably select values strictly greater than threshold, return selected length, preserve the unwritten output tail."
-                for x in xs:
-                    selected = [v for v in x if v > B]
-                    out = selected + [123] * (len(x) - len(selected))
-                    cases.append(
-                        {
-                            "args": {"n": len(x), "out": [123] * len(x), "x": x, "threshold": B},
-                            "return": len(selected),
-                            "after": {"out": out},
-                        }
-                    )
+                picked = [[v for v in x if v > B] for x in xs]
+                cases = [{"args": {"n": len(x), "out": [123] * len(x), "x": x, "threshold": B}, "return": len(chosen),
+                          "after": {"out": chosen + [123] * (len(x) - len(chosen))}}
+                         for x, chosen in zip(xs, picked, strict=True)]  # fmt: skip
             elif family == "clamp":
                 text = f"fn {symbol}(x:u64)->u64{{return min(max(x,{A}),{A + B});}}"
                 desc = f"Clamp x to the inclusive interval [{A},{A + B}]."
-                for x in [0, 1, A - 1, A, A + 1, A + B - 1, A + B, A + B + 1, MASK]:
-                    cases.append({"args": {"x": x}, "return": min(max(x, A), A + B)})
+                cases = [{"args": {"x": x}, "return": min(max(x, A), A + B)}
+                         for x in [0, 1, A - 1, A, A + 1, A + B - 1, A + B, A + B + 1, MASK]]  # fmt: skip
             elif family == "interval":
                 text = f"fn {symbol}(n:usize,x:ro<u64>[n]@host,lo:u64,hi:u64)->usize{{let mut total:usize=0;for i in 0..n{{if x[i]>=lo && x[i]<hi{{total=add_wrap(total,1);}}}}return total;}}"
                 desc = "Count values in the half-open interval [lo,hi). Return zero for empty or reversed intervals."
-                for x in xs:
-                    for lo, hi in [(0, A), (A, A), (A + B, A), (A, A + B)]:
-                        cases.append(
-                            {"args": {"n": len(x), "x": x, "lo": lo, "hi": hi}, "return": sum(lo <= v < hi for v in x)}
-                        )
+                cases = [{"args": {"n": len(x), "x": x, "lo": lo, "hi": hi}, "return": sum(lo <= v < hi for v in x)}
+                         for x in xs for lo, hi in [(0, A), (A, A), (A + B, A), (A, A + B)]]  # fmt: skip
             elif family == "rotate_xor":
                 shift = k + 1
                 text = f"fn {symbol}(x:u64,key:u64)->u64{{return (shl_wrap(x,{shift}) | shr(x,{64 - shift})) ^ key;}}"
                 desc = f"Rotate x left by {shift} bits in 64-bit arithmetic, then XOR with key."
-                for x in [0, 1, MASK, 2**63, *[rng.getrandbits(64) for _ in range(12)]]:
-                    key = rng.getrandbits(64)
-                    cases.append(
-                        {"args": {"x": x, "key": key}, "return": (((x << shift) & MASK) | (x >> (64 - shift))) ^ key}
-                    )
+                pairs = [
+                    (x, rng.getrandbits(64)) for x in [0, 1, MASK, 2**63, *[rng.getrandbits(64) for _ in range(12)]]
+                ]
+                cases = [{"args": {"x": x, "key": key}, "return": (((x << shift) & MASK) | (x >> (64 - shift))) ^ key}
+                         for x, key in pairs]  # fmt: skip
             else:
                 text = f"fn {symbol}(n:usize,out:rw<u64>[n]@host,x:ro<u64>[n]@host){{for i in 0..n{{if i==0{{out[i]=x[i];}}else{{out[i]=sub_wrap(x[i],x[i-1]);}}}}}}"
                 desc = "For nonempty input, copy the first value and then write each adjacent difference modulo 2^64. Empty input writes nothing."
-                for x in xs:
-                    out = ([x[0]] + [(x[i] - x[i - 1]) & MASK for i in range(1, len(x))]) if x else []
-                    cases.append({"args": {"n": len(x), "out": [123] * len(x), "x": x}, "after": {"out": out}})
+                cases = [{"args": {"n": len(x), "out": [123] * len(x), "x": x},
+                          "after": {"out": [x[0], *((b - a) & MASK for a, b in itertools.pairwise(x))] if x else []}}
+                         for x in xs]  # fmt: skip
             text = canonical_source(text)
-            _, receipt = compile_source(text)
-            tasks.append(
-                {
-                    "id": symbol,
-                    "family": family,
-                    "split": split,
-                    "source": text,
-                    "contract": {
-                        "schema": "cairn.task/1",
-                        "symbol": symbol,
-                        "task": desc,
-                        "allowed_effects": receipt["functions"][symbol]["effects"],
-                        "cases": cases,
-                    },
-                }
-            )
+            effects = compile_source(text)[1]["functions"][symbol]["effects"]
+            contract = {"schema": "cairn.task/1", "symbol": symbol, "task": desc, "allowed_effects": effects,
+                        "cases": cases}  # fmt: skip
+            tasks.append({"id": symbol, "family": family, "split": split, "source": text, "contract": contract})
     return tasks
 
 
@@ -171,40 +144,20 @@ def main():
         except Diagnostic as e:
             # A changed code means the language moved and this pair teaches the wrong lesson.
             assert e.data["code"] == code, f"{family} is now {e.data['code']}, not {code}"
-            contrasts.append(
-                {
-                    "family": family,
-                    "rejected_source": bad,
-                    "diagnostic": explain(e, bad),
-                    "accepted_source": canonical_source(good),
-                    "scope": "Language-teaching pair; not an authorized semantic repair. Some pairs change the API or behavior and cannot be applied in a body-only session.",
-                }
-            )
+            contrasts.append({"family": family, "rejected_source": bad, "diagnostic": explain(e, bad),
+                              "accepted_source": canonical_source(good),
+                              "scope": "Language-teaching pair; not an authorized semantic repair. Some pairs change "
+                              "the API or behavior and cannot be applied in a body-only session."})  # fmt: skip
         else:
             raise AssertionError(f"The {family} negative example compiles now; the pair is stale: {bad}")
     for split in ["train", "heldout"]:
         rows = []
-        for t in tasks:
-            if t["split"] != split:
-                continue
-            row = {
-                "id": t["id"],
-                "family": t["family"],
-                "task": t["contract"]["task"],
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "\n\n".join(select_cards(t["source"], has_views="@host" in t["source"]).values()),
-                    },
-                    {
-                        "role": "user",
-                        "content": t["contract"]["task"] + "\nRequired signature: " + t["source"].split("{")[0].strip(),
-                    },
-                ],
-            }
-            if split == "train":
-                row["messages"].append({"role": "assistant", "content": t["source"]})
-            rows.append(row)
+        for t in (t for t in tasks if t["split"] == split):
+            cards = "\n\n".join(select_cards(t["source"], has_views="@host" in t["source"]).values())
+            asked = t["contract"]["task"] + "\nRequired signature: " + t["source"].split("{")[0].strip()
+            answer = [{"role": "assistant", "content": t["source"]}] if split == "train" else []
+            messages = [{"role": "system", "content": cards}, {"role": "user", "content": asked}, *answer]
+            rows.append({"id": t["id"], "family": t["family"], "task": t["contract"]["task"], "messages": messages})
         (root / (split + ".jsonl")).write_text("".join(stable_json(row) + "\n" for row in rows))
     (root / "contrastive.jsonl").write_text("".join(stable_json(row) + "\n" for row in contrasts))
     (root / "all_tasks_with_oracles.json").write_text(json.dumps(tasks, indent=2) + "\n")

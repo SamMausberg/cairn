@@ -7,9 +7,11 @@ import ctypes.util
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from . import __version__
 from .compiler.cairnc import Diagnostic, certify_templates, compile_source
@@ -24,8 +26,6 @@ def report(value: dict) -> None:
 def create_project(destination: Path) -> dict:
     """Create only; never overwrite a directory, even when it is empty."""
     name = destination.name
-    import re
-
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name):
         raise ProjectError("Choose an ASCII project name of 1..64 characters.")
     destination.mkdir(parents=True, exist_ok=False)
@@ -72,6 +72,46 @@ def preconditions(items: list[str]) -> dict[str, str]:
     return given
 
 
+COMMANDS = {
+    "check": "Accept or refuse a program: syntax, types, ownership, leases, lanes, placement, effects.",
+    "emit": "Print the C++ the program lowers to.",
+    "expand": "Print what every derive generated, as CAIRN source.",
+    "build": "Build a native artifact in a fresh directory, with a receipt.",
+    "run": "Build, then run under process limits, or under the target's emulator.",
+    "test": "Run the project's finite task contracts against a native build.",
+    "inspect": "Print the packet an editing agent gets for one symbol.",
+    "explain": "Where each function pays at run time: guards, allocations, waits and loop vectorization.",
+    "doc": "Generate the API reference of the checked program, as Markdown.",
+}
+OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that take it, the option, its keywords)
+    ({"build", "run", "test", "explain"}, "--cxx", {"default": "clang++"}),
+    ({"explain"}, "--symbol", {"action": "append", "help": "Explain this function only (repeatable)."}),
+    ({"build", "run"}, "--out", {"type": Path}),
+    ({"build", "run", "explain"}, "--arch", {"choices": sorted(ARCHS)}),
+    ({"build", "run"}, "--target", {"choices": sorted(TARGETS), "help": "Freestanding profile; default hosted."}),
+    ({"build", "run"}, "--timeout", {"type": int, "default": 60}),
+    ({"build", "run"}, "--debug", {"action": "store_true", "help": "Debug symbols that point at the CAIRN source."}),
+    ({"build", "run"}, "--incremental", {"action": "store_true", "help": "One object per module, reused by content "
+                                         "hash; gives up inlining across modules."}),
+    ({"run"}, "--memory-mib", {"type": int, "default": 1024,
+                               "help": "Native address-space cap, 64..65536 MiB; not a sandbox."}),
+    ({"build"}, "--kind", {"choices": ["library", "exe"]}),
+    ({"test"}, "--contract", {"type": Path}),
+    ({"check"}, "--generics", {"action": "store_true", "help": "Also check each generic function once against its "
+                               "bounds; fail if one needs more."}),
+    ({"doc"}, "--module", {"action": "append",
+                           "help": "Document this module (repeatable); default: the project's own."}),
+    ({"doc"}, "--std", {"action": "store_true", "help": "Document the packaged standard library instead."}),
+    ({"inspect"}, "--symbol", {"required": True}),
+    ({"inspect"}, "--scope", {"choices": ["focused", "component"], "default": "focused", "help": "focused: the symbol "
+                              "and the interfaces around it; component: its whole call graph."}),
+    ({"inspect"}, "--expand", {"action": "append", "default": [], "metavar": "NAME", "help": "Disclose this "
+                               "function's source or this type first, as an expand request would."}),
+    ({"inspect"}, "--explain", {"action": "store_true", "help": "Attach cairn explain for the disclosed functions."}),
+]  # fmt: skip
+REFUSED = {"counterexample", "rejected", "invalid-contract", "invalid-domain", "invalid-reference"}  # verify exits 1
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="cairn", description=__doc__)
     p.add_argument("--version", action="version", version=__version__)
@@ -79,58 +119,13 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("doctor", help="Report local tools; never downloads them.")
     new = sub.add_parser("new", help="Create a data-only example project.")
     new.add_argument("directory", type=Path)
-    commands = {
-        "check": "Accept or refuse a program: syntax, types, ownership, leases, lanes, placement, effects.",
-        "emit": "Print the C++ the program lowers to.",
-        "expand": "Print what every derive generated, as CAIRN source.",
-        "build": "Build a native artifact in a fresh directory, with a receipt.",
-        "run": "Build, then run under process limits, or under the target's emulator.",
-        "test": "Run the project's finite task contracts against a native build.",
-        "inspect": "Print the packet an editing agent gets for one symbol.",
-        "explain": "Where each function pays at run time: guards, allocations, waits and loop vectorization.",
-        "doc": "Generate the API reference of the checked program, as Markdown.",
-    }
-    for name, help in commands.items():
+    for name, help in COMMANDS.items():
         c = sub.add_parser(name, help=help)
         c.add_argument(
             "path", nargs="?", default=".", help="A .cairn file, a project directory or a manifest; default: here."
         )
-        if name in {"build", "run", "test", "explain"}:
-            c.add_argument("--cxx", default="clang++")
-        if name == "explain":
-            c.add_argument("--symbol", action="append", help="Explain this function only (repeatable).")
-            c.add_argument("--arch", choices=sorted(ARCHS))
-        if name == "doc":
-            c.add_argument(
-                "--module", action="append", help="Document this module (repeatable); default: the project's own."
-            )
-            c.add_argument("--std", action="store_true", help="Document the packaged standard library instead.")
-        if name == "check":
-            c.add_argument("--generics", action="store_true",
-                           help="Also check each generic function once against its bounds; fail if one needs more.")  # fmt: skip
-        if name in {"build", "run"}:
-            c.add_argument("--out", type=Path)
-            c.add_argument("--arch", choices=sorted(ARCHS))
-            c.add_argument("--target", choices=sorted(TARGETS), help="Freestanding profile; default hosted.")
-            c.add_argument("--timeout", type=int, default=60)
-            c.add_argument("--debug", action="store_true", help="Debug symbols that point at the CAIRN source.")
-            c.add_argument("--incremental", action="store_true",
-                           help="One object per module, reused by content hash; gives up inlining across modules.")  # fmt: skip
-        if name == "run":
-            c.add_argument(
-                "--memory-mib", type=int, default=1024, help="Native address-space cap, 64..65536 MiB; not a sandbox."
-            )
-        if name == "build":
-            c.add_argument("--kind", choices=["library", "exe"])
-        if name == "test":
-            c.add_argument("--contract", type=Path)
-        if name == "inspect":
-            c.add_argument("--symbol", required=True)
-            c.add_argument("--scope", choices=["focused", "component"], default="focused",
-                           help="focused: the symbol and the interfaces around it; component: its whole call graph.")  # fmt: skip
-            c.add_argument("--expand", action="append", default=[], metavar="NAME",
-                           help="Disclose this function's source or this type first, as an expand request would.")  # fmt: skip
-            c.add_argument("--explain", action="store_true", help="Attach cairn explain for the disclosed functions.")
+        for option, keywords in ((option, keywords) for names, option, keywords in OPTIONS if name in names):
+            c.add_argument(option, **keywords)
     v = sub.add_parser("verify", help="SMT source equivalence, not native or Lean verification.")
     v.add_argument("reference", type=Path)
     v.add_argument("candidate", type=Path)
@@ -138,8 +133,8 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--symbol")
     mode.add_argument("--all", action="store_true", help="Require scalar equivalence for every declared function.")
     v.add_argument("--timeout-ms", type=int, default=3000)
-    v.add_argument("--assume", action="append", default=[], metavar="SYMBOL=EXPRESSION",
-                   help="Compare one function only where this holds (repeatable); the receipt records every text.")  # fmt: skip
+    v.add_argument("--assume", action="append", default=[], metavar="SYMBOL=EXPRESSION", help="Compare one "
+                   "function only where this holds (repeatable); the receipt records every text.")  # fmt: skip
     sub.add_parser("certificates", help="Check collector arithmetic certificates; not a Lean/compiler proof.")
     f = sub.add_parser("fmt", help="Format CAIRN sources in place; refuses any change to the token stream.")
     f.add_argument("paths", nargs="+", type=Path, help="Files, or directories searched for *.cairn.")
@@ -197,22 +192,12 @@ def main(argv: list[str] | None = None) -> int:
 
             if set(assumed) - {a.symbol}:
                 raise ProjectError(f"--assume names a function other than the selected --symbol {a.symbol}.")
+            reference, candidate = read_text(a.reference, 64000), read_text(a.candidate, 64000)
             result = equivalent(
-                read_text(a.reference, 64000),
-                read_text(a.candidate, 64000),
-                a.symbol,
-                assume=assumed.get(a.symbol, "true"),
-                timeout_ms=a.timeout_ms,
+                reference, candidate, a.symbol, assume=assumed.get(a.symbol, "true"), timeout_ms=a.timeout_ms
             )
             report(result)
-            return (
-                0
-                if result["status"] == "smt-equivalent"
-                else 1
-                if result["status"]
-                in {"counterexample", "rejected", "invalid-contract", "invalid-domain", "invalid-reference"}
-                else 2
-            )
+            return 0 if result["status"] == "smt-equivalent" else 1 if result["status"] in REFUSED else 2
         if a.command == "run" and not 64 <= a.memory_mib <= 65536:
             raise ProjectError("Native memory limit must be 64..65536 MiB.")
         if a.command == "doc" and a.std:  # The packaged library needs no project.
@@ -228,13 +213,10 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
             result = {"status": "typed", "functions": receipt["function_count"], "formal_status": "not-verified",
                       "project": project.receipt()}  # fmt: skip
-            if (
-                a.generics
-            ):  # "ok": every instance that satisfies the bounds checks; else what the body needed beyond them.
+            if a.generics:  # "ok": every instance within the bounds checks; else what the body needed beyond them.
                 linked = tuple(module + "." for module in receipt["modules"] if module.startswith("std."))
-                result["generics"] = {
-                    n: v for n, v in certify_templates(project.source).items() if not n.startswith(linked)
-                }
+                verdicts = certify_templates(project.source).items()
+                result["generics"] = {n: v for n, v in verdicts if not n.startswith(linked)}
             report(result)
             return 1 if any(v != "ok" for v in result.get("generics", {}).values()) else 0
         if a.command == "expand":  # What the derivations generated, as source.
@@ -273,32 +255,16 @@ def main(argv: list[str] | None = None) -> int:
             )
             if not paths:
                 raise ProjectError("No test contracts. Add project.tests or supply --contract.")
-            results = []
-            for path in paths:
-                result = evaluate(project.source, load_json_strict(read_text(path, 2_000_000)), a.cxx)
-                results.append({"contract": path.name, **result})
+            results = [{"contract": path.name, **evaluate(project.source, load_json_strict(read_text(path, 2_000_000)),
+                                                          a.cxx)} for path in paths]  # fmt: skip
             passed = all(x["status"] == "passed-finite-tests" for x in results)
-            report(
-                {
-                    "status": "passed-finite-tests" if passed else "tests-not-passed",
-                    "tests": results,
-                    "formal_status": "not-verified",
-                }
-            )
+            status = "passed-finite-tests" if passed else "tests-not-passed"
+            report({"status": status, "tests": results, "formal_status": "not-verified"})
             return 0 if passed else 1
         from .projects.build import build
 
-        result = build(
-            project,
-            output=a.out,
-            cxx=a.cxx,
-            arch=a.arch,
-            kind="exe" if a.command == "run" else a.kind,
-            timeout=a.timeout,
-            target=a.target,
-            debug=a.debug,
-            incremental=a.incremental,
-        )
+        result = build(project, output=a.out, cxx=a.cxx, arch=a.arch, kind="exe" if a.command == "run" else a.kind,
+                       timeout=a.timeout, target=a.target, debug=a.debug, incremental=a.incremental)  # fmt: skip
         if a.command == "build" or result["status"] != "native-built":
             report(result)
             return 0 if result["status"] == "native-built" else 2
@@ -315,26 +281,11 @@ def main(argv: list[str] | None = None) -> int:
                 memory = a.memory_mib * 1024 * 1024
                 resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
 
-        cp = subprocess.run(
-            machine or [result["artifact"]],
-            capture_output=True,
-            text=True,
-            timeout=a.timeout,
-            stdin=subprocess.DEVNULL if machine else None,
-            preexec_fn=None if machine else limits,
-        )
-        report(
-            {
-                "status": "program-exited",
-                "exit_code": cp.returncode,
-                "stdout": cp.stdout,
-                "stderr": cp.stderr,
-                "build_directory": result["directory"],
-                "security_sandbox": False,
-                "memory_limit_mib": None if machine else a.memory_mib,
-                "emulator": machine,
-            }
-        )
+        run: dict = {"stdin": subprocess.DEVNULL} if machine else {"preexec_fn": limits}
+        cp = subprocess.run(machine or [result["artifact"]], capture_output=True, text=True, timeout=a.timeout, **run)
+        report({"status": "program-exited", "exit_code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr,
+                "build_directory": result["directory"], "security_sandbox": False,
+                "memory_limit_mib": None if machine else a.memory_mib, "emulator": machine})  # fmt: skip
         return 0 if cp.returncode == 0 else 1
     except Diagnostic as error:
         report(project.locate(error) if project else error.data)

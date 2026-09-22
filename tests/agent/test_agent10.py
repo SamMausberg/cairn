@@ -13,6 +13,7 @@ from cairn.agent.projection import canonical_source
 from cairn.agent.sketches import Sketch
 from cairn.agent.teaching import CARDS, select_cards
 from cairn.compiler.cairnc import Diagnostic, compile_source
+from emitted import code_of
 
 STD = Path(__file__).resolve().parents[2] / "src/cairn/std"
 PROGRAMS = {
@@ -59,9 +60,7 @@ def test_lane_edits_are_admitted_only_when_race_free_and_within_effects():
         ("{ let t = spawn weight(1); out[0] = wait(t); }", "E-EFFECT-EXPANSION"),
         ("{ out[0] = hidden(x[0]); }", "E-CONTEXT-CLOSURE"),
     ]:
-        with pytest.raises(Diagnostic) as e:
-            edit(session, body)
-        assert e.value.data["code"] == code
+        assert code_of(lambda body=body: edit(session, body)) == code
 
 
 def test_packets_disclose_generic_origins_and_feature_cards():
@@ -77,9 +76,7 @@ def test_packets_disclose_generic_origins_and_feature_cards():
 
 
 def test_templates_are_not_edit_targets_but_their_callers_are():
-    with pytest.raises(Diagnostic) as e:
-        EditSession(language.PRELUDE + language.MAIN, "push")
-    assert e.value.data["code"] == "E-EDIT-PROFILE"
+    assert code_of(lambda: EditSession(language.PRELUDE + language.MAIN, "push")) == "E-EDIT-PROFILE"
 
 
 def test_named_choice_inside_a_lane():

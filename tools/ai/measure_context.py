@@ -139,15 +139,15 @@ def measure_cards(count) -> dict:
     prior = json.loads((ROOT / "bench/cpu/fixtures/cards_05.json").read_text())
     source = (ROOT / "examples/basics/native.cairn").read_text()
     rows, current_only = [], []
-    for function in Parser(source).parse().functions:
-        if function.static:
-            continue
+
+    def unmatched(symbol: str, packet: dict, reason: str) -> None:
+        current_only.append({"symbol": symbol, "complete_packet_tokens": count(text(packet)), "reason": reason,
+                             "cards": list(packet["rule_cards"]), "legacy_comparison": None})  # fmt: skip
+
+    for function in (f for f in Parser(source).parse().functions if not f.static):
         packet = EditSession(source, function.name, scope="component").packet()
-        new = sorted(set(packet["rule_cards"]) - set(prior["cards"]))
-        if new:  # A card with no preserved 0.5 text has no counterfactual.
-            current_only.append({"symbol": function.name, "complete_packet_tokens": count(text(packet)),
-                                 "cards": list(packet["rule_cards"]), "legacy_comparison": None,
-                                 "reason": "Cards absent from the 0.5 curriculum: " + ", ".join(new) + "."})  # fmt: skip
+        if new := sorted(set(packet["rule_cards"]) - set(prior["cards"])):  # No 0.5 text, so no counterfactual.
+            unmatched(function.name, packet, "Cards absent from the 0.5 curriculum: " + ", ".join(new) + ".")
             continue
         old = copy.deepcopy(packet)
         old["rule_cards"] = {name: prior["cards"][name] for name in packet["rule_cards"]}
@@ -158,27 +158,19 @@ def measure_cards(count) -> dict:
     systems = load_project(ROOT / "examples/systems").source
     for symbol in ["decimal", "sort_bytes", "sorted_even"]:
         packet = EditSession(systems, symbol, scope="component").packet()
-        current_only.append({"symbol": symbol, "complete_packet_tokens": count(text(packet)),
-                             "cards": list(packet["rule_cards"]), "legacy_comparison": None,
-                             "reason": "Scoped storage or tagged sums were not accepted in 0.5."})  # fmt: skip
+        unmatched(symbol, packet, "Scoped storage or tagged sums were not accepted in 0.5.")
     before = sum(r["legacy_card_packet_tokens"] for r in rows)
     after = sum(r["current_packet_tokens"] for r in rows)
+    aggregate = {"packet_count": len(rows), "current_only_packet_count": len(current_only), "before": before,
+                 "after": after, "saving_fraction": 1 - after / before}  # fmt: skip
+    cards = {"baseline": count("\n\n".join(prior["cards"].values())), "current": count("\n\n".join(CARDS.values()))}
     return {
         "baseline_card_source_sha256": prior["source_sha256"],
         "current_card_source_sha256": hashlib.sha256((ROOT / "src/cairn/agent/teaching.py").read_bytes()).hexdigest(),
         "rows": rows,
         "current_only": current_only,
-        "aggregate": {
-            "packet_count": len(rows),
-            "current_only_packet_count": len(current_only),
-            "before": before,
-            "after": after,
-            "saving_fraction": 1 - after / before,
-        },
-        "full_card_text": {
-            "baseline": count("\n\n".join(prior["cards"].values())),
-            "current": count("\n\n".join(CARDS.values())),
-        },
+        "aggregate": aggregate,
+        "full_card_text": cards,
     }
 
 

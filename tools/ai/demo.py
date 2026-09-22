@@ -22,16 +22,10 @@ def main():
     source = (base / "selection_before.cairn").read_text()
     _, receipt = compile_source(source)
     values = [[], [2], [0, 2, 3, 2, 9], [2, 2, 2], [0, 1], [9, 8, 7], [2**64 - 1, 0, 2], list(range(19))]
-    cases = []
-    for x in values:
-        selected = [v for v in x if v > 2]
-        cases.append(
-            {
-                "args": {"n": len(x), "out": [123] * len(x), "x": x, "threshold": 2},
-                "return": len(selected),
-                "after": {"out": selected + [123] * (len(x) - len(selected))},
-            }
-        )
+    picked = [[v for v in x if v > 2] for x in values]
+    cases = [{"args": {"n": len(x), "out": [123] * len(x), "x": x, "threshold": 2}, "return": len(chosen),
+              "after": {"out": chosen + [123] * (len(x) - len(chosen))}}
+             for x, chosen in zip(values, picked, strict=True)]  # fmt: skip
     task = {
         "schema": "cairn.task/1",
         "symbol": "select_gt",
@@ -42,12 +36,8 @@ def main():
     (out / "task.json").write_text(json.dumps(task, indent=2) + "\n")
     session = EditSession(source, "select_gt", task)
     (out / "packet.json").write_text(json.dumps(session.packet(), indent=2) + "\n")
-    edit = {
-        "protocol": "cairn.edit/1",
-        "session": session.session,
-        "kind": "body",
-        "replacement": "{ let used=compact out for i in n where x[i]>threshold yield x[i]; return used; }",
-    }
+    body = "{ let used=compact out for i in n where x[i]>threshold yield x[i]; return used; }"
+    edit = {"protocol": "cairn.edit/1", "session": session.session, "kind": "body", "replacement": body}
     candidate, typed = session.check(edit)
     (out / "edit.json").write_text(json.dumps(edit, indent=2) + "\n")
     (out / "selection_after.cairn").write_text(candidate)

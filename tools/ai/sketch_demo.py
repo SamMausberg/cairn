@@ -58,13 +58,9 @@ def main():
     for i, q in enumerate(queries):
         (folder / f"average_{i}_{q['stage']}.smt2").write_text(q["smt2"])
     (folder / "semantic_receipt.json").write_text(json.dumps(certificate, indent=2) + "\n")
-    m = 2**64 - 1
-    edges = [0, 1, 2, 3, 2**32, 2**63 - 1, 2**63, m - 1, m]
-    task = {
-        "schema": "cairn.task/1",
-        **TASK,
-        "cases": [{"args": {"x": x, "y": y}, "return": (x + y) // 2} for x in edges for y in edges],
-    }
+    edges = [0, 1, 2, 3, 2**32, 2**63 - 1, 2**63, 2**64 - 2, 2**64 - 1]
+    cases = [{"args": {"x": x, "y": y}, "return": (x + y) // 2} for x in edges for y in edges]
+    task = {"schema": "cairn.task/1", **TASK, "cases": cases}
     native = evaluate(candidate, task)
     if native["status"] != "passed-finite-tests":
         raise AssertionError(native)
@@ -75,13 +71,8 @@ def main():
     site = next(k for k, v in old.sites.items() if v["source"] == "(x+y)/2")
     oldpacket = old.packet(site)
     oldpacket["semantic_contract"] = packet["semantic_contract"]
-    oldreply = {
-        "protocol": "cairn.edit/1",
-        "session": old.session,
-        "kind": "expr",
-        "site": site,
-        "replacement": outputs[-1]["choices"]["value"],
-    }
+    oldreply = {"protocol": "cairn.edit/1", "session": old.session, "kind": "expr", "site": site,
+                "replacement": outputs[-1]["choices"]["value"]}  # fmt: skip
 
     def tokens(x):
         return len((json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8"))
@@ -102,27 +93,12 @@ def main():
         "limitation": "Constructed transport comparison, not a model interaction or a full cold-start win. Host setup/reference authoring, semantic instructions and repair feedback are additional costs.",
     }
     (results / "sketch_density.json").write_text(json.dumps(density, indent=2) + "\n")
-    print(
-        json.dumps(
-            {
-                "status": "passed",
-                "searches": [
-                    {
-                        "cache": r["counterexample_cache"],
-                        "candidates": len(r["attempts"]),
-                        "semantic_checker_calls": r["solver_calls"],
-                        "smt_queries": r["smt_queries"],
-                        "cache_rejections": r["cache_rejections"],
-                    }
-                    for r in outputs
-                ],
-                "native_cases": len(task["cases"]),
-                "density": density,
-                "model_used": False,
-            },
-            indent=2,
-        )
-    )
+    searches = [{"cache": r["counterexample_cache"], "candidates": len(r["attempts"]), "semantic_checker_calls":
+                 r["solver_calls"], "smt_queries": r["smt_queries"], "cache_rejections": r["cache_rejections"]}
+                for r in outputs]  # fmt: skip
+    summary = {"status": "passed", "searches": searches, "native_cases": len(cases), "density": density,
+               "model_used": False}  # fmt: skip
+    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":

@@ -36,6 +36,8 @@ ARMS = {  # What PACKET.json shows under each arm.
     "it, the types those name, the rule cards, and the effects the function may have",
 }
 CALLS = 8  # Host calls a subject may make before it must submit.
+SUBMIT = {"kind": "submit"}
+METRICS = ("bytes_read", "bytes_written", "tokens_read", "tokens_written", "calls")  # Summed per arm.
 TASKS = {  # name -> (program, symbol, text as shipped, the planted bug, the bug report the subject gets)
     "above_loop": ("examples/apps/analytics", "analytics.query.above_loop",
                    "out[used] = price[i];", "out[used] = price[used];",
@@ -178,11 +180,9 @@ def prepare(out: Path, tasks: list[str] | None = None) -> None:
             (box / "state.json").write_text(json.dumps({"task": task, "arm": arm}) + "\n", encoding="utf-8")
             packet = host(box, None)
             (box / "PACKET.json").write_text(json.dumps(packet, indent=1) + "\n", encoding="utf-8")
-            (box / "host.py").write_text(
-                f"import subprocess, sys\nsys.exit(subprocess.run([{sys.executable!r}, {str(Path(__file__))!r}, "
-                f"'host', {str(box)!r}, *sys.argv[1:]]).returncode)\n",
-                encoding="utf-8",
-            )
+            call = [sys.executable, str(Path(__file__)), "host", str(box)]
+            (box / "host.py").write_text(f"import subprocess, sys\nsys.exit(subprocess.run([*{call!r}, "
+                                         "*sys.argv[1:]]).returncode)\n", encoding="utf-8")  # fmt: skip
 
 
 def session(box: Path) -> tuple[EditHost, dict, list[dict]]:
@@ -191,8 +191,8 @@ def session(box: Path) -> tuple[EditHost, dict, list[dict]]:
     task, arm = state["task"], state["arm"]
     edits = EditHost()
     packet = edits.open(planted(task), TASKS[task][1], {"task": TASKS[task][4]}, scope=arm)
-    log = [json.loads(line) for line in (box / "transcript.jsonl").read_text().splitlines()] if (
-        box / "transcript.jsonl").exists() else []  # fmt: skip
+    kept = box / "transcript.jsonl"
+    log = [json.loads(line) for line in kept.read_text().splitlines()] if kept.exists() else []
     for entry in log:
         if entry["response"].get("status") not in {"submitted", "budget-spent", "closed"}:
             edits.reply(entry["text"])  # Exactly what the subject sent, so a replay answers as the call did.
@@ -206,13 +206,13 @@ def host(box: Path, request: str | None) -> dict:
         return packet
     if request.endswith(".json") and (box / Path(request).name).is_file():  # A request written to a file here.
         request = (box / Path(request).name).read_text(encoding="utf-8")
-    if any(entry["request"] == {"kind": "submit"} for entry in log):
+    if submitted(log):
         return {"status": "closed", "message": "This repair was submitted."}
     try:
         parsed = json.loads(request)
     except json.JSONDecodeError:
         parsed = None
-    if parsed == {"kind": "submit"}:
+    if parsed == SUBMIT:
         answer = {"status": "submitted", "admitted_edits": len(edits.admitted.get("e1", []))}
     elif len(log) >= CALLS:
         answer = {"status": "budget-spent", "message": f"{CALLS} calls were made; submit now."}
@@ -223,6 +223,10 @@ def host(box: Path, request: str | None) -> dict:
     with (box / "transcript.jsonl").open("a", encoding="utf-8") as file:
         file.write(json.dumps(entry) + "\n")
     return answer
+
+
+def submitted(log: list[dict]) -> bool:
+    return any(entry["request"] == SUBMIT for entry in log)
 
 
 def rehearse(out: Path) -> None:
@@ -236,14 +240,11 @@ def rehearse(out: Path) -> None:
         f = next(f for f in Parser(source).parse().functions if f.name == symbol)
         needed = [n for n in compile_source(source)[1]["functions"][symbol]["calls"] if n not in packet["dependencies"]]
         written = [n for n in packet["dependencies"] if n not in packet.get("callers", []) and "." not in n]
+        steps = [{"protocol": HANDLES, "handle": "e1", "kind": "body", "replacement": source[f.body_start : f.end]}]
         if state["arm"] == "focused" and (needed or written):
-            host(
-                box,
-                stable_json({"protocol": HANDLES, "handle": "e1", "kind": "expand", "symbols": needed or written[:1]}),
-            )
-        edit = {"protocol": HANDLES, "handle": "e1", "kind": "body", "replacement": source[f.body_start : f.end]}
-        host(box, stable_json(edit))
-        host(box, stable_json({"kind": "submit"}))
+            steps.insert(0, {"protocol": HANDLES, "handle": "e1", "kind": "expand", "symbols": needed or written[:1]})
+        for request in [*steps, SUBMIT]:
+            host(box, stable_json(request))
 
 
 def count_tokens():
@@ -263,8 +264,7 @@ def score(out: Path, cxx: str = "clang++") -> dict:
         box = state_file.parent
         state = json.loads(state_file.read_text())
         edits, packet, log = session(box)
-        submitted = any(entry["request"] == {"kind": "submit"} for entry in log)
-        final = edits.admitted["e1"][-1][0] if submitted and edits.admitted.get("e1") else None
+        final = edits.admitted["e1"][-1][0] if submitted(log) and edits.admitted.get("e1") else None
         read = [stable_json(packet), *(stable_json(e["response"]) for e in log)]
         written = [stable_json(e["request"]) for e in log]
         rows.append({
@@ -280,18 +280,9 @@ def score(out: Path, cxx: str = "clang++") -> dict:
     arms = {}
     for arm in ARMS:
         mine = [r for r in rows if r["arm"] == arm]
-        keys = [
-            k
-            for k in ("bytes_read", "bytes_written", "tokens_read", "tokens_written", "calls")
-            if mine and k in mine[0]
-        ]
-        arms[arm] = {
-            "subjects": len(mine),
-            "solved": sum(r["solved"] for r in mine),
-            **{k: sum(r[k] for r in mine) for k in keys},
-        }
-    ratio = {k: arms["focused"][k] / arms["component"][k] for k in arms["component"] if k not in {"subjects", "solved"}
-             and arms["component"][k]}  # fmt: skip
+        sums = {k: sum(r[k] for r in mine) for k in METRICS if mine and k in mine[0]}
+        arms[arm] = {"subjects": len(mine), "solved": sum(r["solved"] for r in mine), **sums}
+    ratio = {k: arms["focused"][k] / arms["component"][k] for k in METRICS if arms["component"].get(k)}
     result = {"schema": "cairn.protocol-trial/1", "tokenizer": unit, "arms": arms, "focused_over_component": ratio,
               "rows": rows, "note": "Host-visible traffic only; a subject's own reasoning is recorded by whoever ran it."}  # fmt: skip
     (out / "results.json").write_text(json.dumps(result, indent=2) + "\n")

@@ -10,18 +10,13 @@ from test_agent10 import PROGRAMS
 
 from cairn.agent.agent_tools import HANDLES, PROTOCOL, EditHost, EditSession
 from cairn.compiler.cairnc import Diagnostic
+from emitted import code_of as code
 
 S = (
     "// Adds one, wrapping.\nfn step(x:u64)->u64 { return add_wrap(x,1); }\n"
     "fn caller(x:u64)->u64{return step(x);}\nfn other(x:u64)->u64{return mul_wrap(x,2);}\n"
     "struct Pair { a:u64; b:u64; }\nfn pair(p:Pair)->u64{return p.a;}\n"
 )
-
-
-def code(call):
-    with pytest.raises(Diagnostic) as e:
-        call()
-    return e.value.data["code"]
 
 
 def body(s, text):

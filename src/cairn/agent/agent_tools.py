@@ -8,12 +8,13 @@ they are not authentication.
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import VERSION, Diagnostic, Parser, compile_program, compile_source, fail
+from ..compiler.cairnc import VERSION, Diagnostic, Function, Parser, compile_program, compile_source, fail
 from ..compiler.effects import EFFECT_FAMILIES, EFFECTS
 from .projection import (
     comment_above,
@@ -78,19 +79,35 @@ def explain(error: Diagnostic, source: str = "") -> dict[str, Any]:
 
 def load_json_strict(text: str) -> Any:
     def pairs(items):
-        d = {}
-        for k, v in items:
-            if k in d:
-                fail("E-REQUEST", "Duplicate JSON field: " + k)
-            d[k] = v
-        return d
+        if len(keys := [k for k, _ in items]) != len(set(keys)):
+            fail("E-REQUEST", "Duplicate JSON field: " + next(k for k in keys if keys.count(k) > 1))
+        return dict(items)
 
     try:
         return json.loads(
-            text, object_pairs_hook=pairs, parse_constant=lambda s: fail("E-REQUEST", "Nonfinite JSON value")
+            text, object_pairs_hook=pairs, parse_constant=lambda _: fail("E-REQUEST", "Nonfinite JSON value")
         )
     except (json.JSONDecodeError, RecursionError) as e:
         fail("E-REQUEST", str(e))
+
+
+def shaped(request: Any, protocol: str, keys: set[str]) -> None:
+    """A request is an object of exactly `keys` under `protocol`; `kind` has already chosen the keys."""
+    if not isinstance(request, dict):
+        fail("E-REQUEST", "Edit request must be an object.")
+    if set(request) != keys:
+        fail("E-REQUEST", "Missing or unknown edit fields.", fields=sorted(set(request) ^ keys))
+    if request["protocol"] != protocol:
+        fail("E-REQUEST", "Unsupported edit protocol.")
+
+
+@functools.cache
+def implementation() -> str:
+    """The digest of every compiler, runtime and library file of the package, read once per process: the compiler
+    that judges an edit is the one that was loaded."""
+    files = sorted(p for p in Path(__file__).parents[1].rglob("*")
+                   if p.suffix in {".py", ".hpp", ".cairn"} and "__pycache__" not in p.parts)  # fmt: skip
+    return digest(b"".join(f.name.encode() + b"\0" + f.read_bytes() + b"\0" for f in files))
 
 
 BOUNDARIES = [
@@ -138,6 +155,7 @@ class EditSession:
             fail("E-EDIT-PROFILE", "Template-body editing is not implemented; edit ordinary functions.")
         self.cpp, self.receipt = compile_source(source)
         self.program, checker, _ = compile_program(source, capture_sites=True)
+        self.functions = {f.name: f for f in self.program.functions}
         fs = self.receipt["functions"]
         effects = fs[symbol]["effects"]
         allowed = self.contract.get("allowed_effects", effects)
@@ -173,12 +191,7 @@ class EditSession:
                 self.sites[key] = {**site, "site": key, "source": source[site["start"] : site["end"]]}
         ordered = sorted(self.sites, key=lambda k: (self.sites[k]["start"], self.sites[k]["end"]))
         self.site_names = {f"x{i}": key for i, key in enumerate(ordered)}  # Short names for handle requests.
-        files = sorted(
-            p
-            for p in Path(__file__).parents[1].rglob("*")
-            if p.suffix in {".py", ".hpp", ".cairn"} and "__pycache__" not in p.parts
-        )
-        self.implementation_hash = digest(b"".join(f.name.encode() + b"\0" + f.read_bytes() + b"\0" for f in files))
+        self.implementation_hash = implementation()
         self.seal()
 
     def seal(self) -> None:
@@ -187,19 +200,25 @@ class EditSession:
                  "visible": sorted(self.visible), "implementation": self.implementation_hash}  # fmt: skip
         self.session = digest(stable_json(bound if self.scope == "component" else {**bound, "scope": self.scope}))
 
+    def written(self, name: str) -> tuple[Function, Function | None]:
+        """A function of the program, and the declaration this source wrote for it (a template for an instance),
+        or None when a library, recipe or family wrote it."""
+        f = self.functions[name]
+        return f, next((g for g in self.parsed.functions if g.name in {f.source_name, name}), None)
+
+    def row(self, name: str) -> dict[str, Any]:
+        return {"signature": signature(self.functions[name]), "effects": self.receipt["functions"][name]["effects"]}
+
     def interface(self, name: str) -> dict[str, Any]:
         """What a caller may rely on: signature, effect row, the host's contract (None when it gave none), and the
         comment written above the declaration, which nothing checks."""
-        f = next(g for g in self.program.functions if g.name == name)
-        origin = next((g for g in self.parsed.functions if g.name in {f.source_name, name}), None)
+        f, origin = self.written(name)
         text, start = (self.source, origin.start) if origin else (self.program.sources.get(f.module, ""), f.start)
-        entry = {"signature": signature(f), "effects": self.receipt["functions"][name]["effects"]}
         comment = comment_above(text, start)
-        return {**entry, "contract": self.contracts.get(name), **({"comment": comment[0]} if comment else {})}
+        return {**self.row(name), "contract": self.contracts.get(name), **({"comment": comment[0]} if comment else {})}
 
     def cards(self, text: str, names: set[str], types: dict[str, str]) -> dict[str, str]:
-        functions = {f.name: f for f in self.program.functions}
-        views = any(t.mode != "value" for n in names for _, t in functions[n].params)
+        views = any(t.mode != "value" for n in names for _, t in self.functions[n].params)
         if self.scope == "component":
             return select_cards(text, views, bool(self.parsed.records or self.parsed.enums), bool(self.parsed.sums))
         records = any(n in self.program.records or n in self.program.enums for n in types)
@@ -230,8 +249,7 @@ class EditSession:
         }
 
     def component(self) -> dict[str, Any]:
-        names = {f.name: f for f in self.program.functions}
-        origins = {names[n].source_name for n in self.visible}
+        origins = {self.functions[n].source_name for n in self.visible}
         context = [{"symbol": f.name, "source": self.source[f.start : f.end]}
                    for f in self.parsed.functions if f.name in origins or f.name in self.visible]  # fmt: skip
         context += [{"family": prefix, "source": f"family {prefix} = {base}[{lo}..{hi}];"}
@@ -246,10 +264,7 @@ class EditSession:
             "types": type_declarations(self.parsed),
             "context": context,
             "rule_cards": self.cards("\n".join(x["source"] for x in context), self.visible, {}),
-            "dependencies": {
-                n: {"signature": signature(names[n]), "effects": self.receipt["functions"][n]["effects"]}
-                for n in sorted(self.visible)
-            },
+            "dependencies": {n: self.row(n) for n in sorted(self.visible)},
             "limits": {"replacement_bytes": MAX_REPLACEMENT, "one_authored_function": True},
             "scope": COMPONENT,
             "boundaries": BOUNDARIES,
@@ -281,8 +296,7 @@ class EditSession:
 
     def source_of(self, name: str) -> str:
         """A function as it was written, or, for one a recipe or family generated, as the projection shows it."""
-        f = next(g for g in self.program.functions if g.name == name)
-        origin = next((g for g in self.parsed.functions if g.name in {f.source_name, name}), None)
+        f, origin = self.written(name)
         if origin is None:
             return function_source(f)
         family = [
@@ -333,17 +347,13 @@ class EditSession:
 
     def check(self, request: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         """An edit/1 request: the session digest binds it to this source, contract, context and compiler."""
-        if not isinstance(request, dict):
-            fail("E-REQUEST", "Edit request must be an object.")
-        kind = request.get("kind")
-        keys = {"protocol", "session", "kind", "replacement"} | ({"site"} if kind == "expr" else set())
-        if set(request) != keys:
-            fail("E-REQUEST", "Missing or unknown edit fields.", fields=sorted(set(request) ^ keys))
-        if request.get("protocol") != PROTOCOL:
-            fail("E-REQUEST", "Unsupported edit protocol.")
-        if request.get("session") != self.session:
+        kind = request.get("kind") if isinstance(request, dict) else None
+        shaped(
+            request, PROTOCOL, {"protocol", "session", "kind", "replacement"} | ({"site"} if kind == "expr" else set())
+        )
+        if request["session"] != self.session:
             fail("E-SESSION", "Stale or mismatched source, policy, context, or toolchain.")
-        return self.admit(kind, request.get("replacement"), request.get("site"))
+        return self.admit(kind, request["replacement"], request.get("site"))
 
     def admit(self, kind: Any, text: Any, site: Any = None) -> tuple[str, dict[str, Any]]:
         if not isinstance(text, str) or len(text.encode()) > MAX_REPLACEMENT:
@@ -471,17 +481,10 @@ class EditHost:
 
     def respond(self, request: Any) -> dict[str, Any]:
         """An edit/2 request: `body`, `expr` (with a short site name), `expand` (with symbols) or `explain`."""
-        if not isinstance(request, dict):
-            fail("E-REQUEST", "Edit request must be an object.")
-        kind = request.get("kind")
-        extra = REQUESTS.get(kind) if isinstance(kind, str) else None
-        if extra is None:
+        kind = request.get("kind") if isinstance(request, dict) else None
+        if isinstance(request, dict) and not (isinstance(kind, str) and kind in REQUESTS):
             fail("E-REQUEST", "Expected body, expr, expand or explain.")
-        keys = {"protocol", "handle", "kind", *extra}
-        if set(request) != keys:
-            fail("E-REQUEST", "Missing or unknown edit fields.", fields=sorted(set(request) ^ keys))
-        if request["protocol"] != HANDLES:
-            fail("E-REQUEST", "Unsupported edit protocol.")
+        shaped(request, HANDLES, {"protocol", "handle", "kind", *REQUESTS.get(kind, ())})
         s = self.session(request["handle"])
         if kind == "explain":  # The latest admitted candidate of this session, else the original.
             return s.explain(self.admitted[request["handle"]][-1][0] if self.admitted.get(request["handle"]) else None)
