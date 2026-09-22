@@ -123,7 +123,7 @@ src/cairn/
   targets/          start-up code and linker script of the freestanding board
 proofs/             Lean 4: certificate checker, collector loop model, ownership and lease calculus
 examples/           basics/ hello/ systems/ apps/ embedded/ and inputs for the agent and proof tools
-tests/              language/ soundness/ verification/ projects/ runtime/ tooling/ agent/
+tests/              language/ soundness/ verification/ projects/ runtime/ tooling/ agent/ oracles/ native/
 tools/              checks/ ai/ release/
 bench/              cpu/ gpu/ host_regions/ suite/
 editors/            VS Code and Cursor extension
