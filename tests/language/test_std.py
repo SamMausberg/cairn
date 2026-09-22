@@ -766,6 +766,21 @@ fn main() -> i32 {
   }
   v.clear();
   if v.len != 0 { return 6; }
+  v.insert(0, 'q');
+  v.insert(1, 'r');
+  let q:u8 = 'q';
+  match v.find(q) {
+    Option.Some(at) => { if at != 0 { return 22; } }
+    Option.None => { return 23; }
+  }
+  match v.remove(0) {
+    Option.Some(b) => { if b != 'q' { return 24; } }
+    Option.None => { return 25; }
+  }
+  match v.swap_remove(0) {
+    Option.Some(b) => { if b != 'r' { return 26; } }
+    Option.None => { return 27; }
+  }
 
   buffer xs:u64[4] = zeroed;
   buffer ys:u64[4] = zeroed;
@@ -791,6 +806,7 @@ fn main() -> i32 {
     Option.Some(value) => { if value != 3 { return 12; } }
     Option.None => { return 13; }
   }
+  if m.contains(three) { return 28; }
 
   let mut a = arena.new[u64]();
   let mut last = a.insert(0);
