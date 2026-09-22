@@ -11,7 +11,7 @@ A project becomes a native artifact in nine stages. Each owns one question, and 
 | Load | `projects/project.py` | `load_project` | one combined source from the manifest's listed inputs, a sha256 per file, a line-to-file map |
 | Parse | `compiler/lexing.py`, `compiler/syntax.py` | `Parser.parse` | tokens, spans, a tree (`compiler/tree.py`) that resolves nothing |
 | Link modules | `compiler/modules.py` | `link` | the imported `std.*` modules, merged in; nothing else is importable and nothing is fetched |
-| Derive recipes | `compiler/expansion.py` | `derive` | each `derive`'s declarations, as ordinary code of the deriving module |
+| Derive recipes | `compiler/expansion.py`, `compiler/gradients.py` | `derive`, `differentiate` | each `derive`'s declarations, as ordinary code of the deriving module; `derive grad` writes a function's adjoint |
 | Specialize families | `compiler/expansion.py` | `specialize` | one function per variant of a family's natural range |
 | Check | `compiler/checking.py` and its rule modules | `Checker.bodies` | one typed tree, annotated in place (`Expr.ty`, `Expr.ref`) |
 | Judge | `compiler/checking.py` | `Checker.judge` | every effect row, and the rules that need all of them |

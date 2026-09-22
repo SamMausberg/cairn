@@ -470,3 +470,57 @@ fn main() -> i32 {
   return 0;
 }
 ```
+
+## Gradients
+
+`derive grad for f;` generates `f_grad`, the reverse-mode derivative of `f`, as an ordinary function: `cairn expand` prints it and the checker checks it like any other. `derive grad[w, b] for f;` differentiates with respect to the named parameters only. Without a list, every float parameter and every `ro` float view is differentiated.
+
+`f_grad` takes `f`'s parameters, then `seed` when `f` returns a float, then one adjoint for each parameter it differentiates: `d_x:rw<T>` or `d_x:rw<T>[n]`, into which it adds, and `d_out:ro<T>[n]` for each float view `f` writes, which it reads. It runs `f`, adds `seed` times each partial derivative into the adjoints, and returns `f`'s result. Adding rather than assigning is what lets gradients compose: a gradient that calls `g` hands `g_grad` its own adjoints.
+
+```cairn
+fn square(x:f64) -> f64 = x * x;
+
+fn loss(n:usize, w:ro<f64>[n], x:ro<f64>[n], bias:f64, target:f64) -> f64 {
+  let guess = reduce + for i in n yield w[i] * x[i];
+  return square(guess + bias - target);
+}
+
+derive grad for square;
+derive grad[w, bias] for loss;                     // x and target are data: no adjoint for them
+
+fn main() -> i32 {
+  let n:usize = 2;
+  buffer w:f64[n] = zeroed;
+  buffer x:f64[n] = zeroed;
+  buffer dw:f64[n] = zeroed;
+  x[0] = 1.0;
+  x[1] = 2.0;
+  let mut bias:f64 = 0.0;
+  for step in 0..100 {
+    for i in 0..n { dw[i] = 0.0; }
+    let mut dbias:f64 = 0.0;
+    let before = loss_grad(n, w, x, bias, 5.0, 1.0, dw, dbias);   // loss, and seed times its gradient
+    for i in 0..n { w[i] -= 0.05 * dw[i]; }
+    bias -= 0.05 * dbias;
+  }
+  if loss(n, w, x, bias, 5.0) > 0.000000001 { return 1; }
+  return 0;
+}
+```
+
+The differentiated fragment is one whose adjoint lies in the same fragment: immutable `let`s, `if` whose paths return, sums, loops and regions that write each output element once at their binder, `+ - * /`, `sqrt`, `abs` (whose derivative at zero is taken as 1), `floor ceil trunc` (whose derivative is 0), conversions between `f32` and `f64`, `std.math.exp` and `std.math.log`, and calls of functions that derive their own gradient. A sum is a `reduce +`, or a float `let mut` that one sequential loop adds into (`acc += e`, with `e` not reading `acc`) and that nothing reads before that loop ends: each step's `e` then takes the sum's own adjoint. A function that reaches libm cannot run inside a `reduce`, so its sums are loops. Any other `let mut`, `while`, a `reduce` other than `+`, and an output read or written twice are `E-GRAD-FORM`. A call of a function with no derived gradient, or one whose gradient leaves out a parameter the caller differentiates, is `E-GRAD-CALL`. A target that is not a plain function of this module, or a list naming something other than its float parameters, is `E-GRAD`.
+
+Nothing is taped. Each `return`, and the end of a function that writes views, carries its own backward sweep, which recomputes the `let`s on its path. A region's backward sweep is a region of its own, in which each lane adds into its own element of each adjoint. Whatever the lanes would add into a shared scalar is gathered by a sequential loop, so no lane writes a value another lane writes. A lane that reads a differentiated input at another lane's element would scatter its adjoint across lanes, so that is `E-GRAD-RACE`: read it at `[i]`, differentiate a sequential loop, or leave the input out of the list.
+
+```cairn rejects E-GRAD-RACE
+fn smooth(n:usize, x:ro<f64>[n], out:rw<f64>[n]) {
+  parallel i in n { out[i] = x[i] + x[(i + 1) % n]; }
+}
+derive grad for smooth;
+```
+
+```text
+The adjoint of x[(i + 1) % n] adds into d_x at another lane's element; read x at [i] in the region, or differentiate a sequential loop.
+```
+
+The derivative is the derivative of the formulas, not of their rounding: the float operations round as written, and the adjoint's own operations round too. The suite holds gradients to central differences of the compiled function and, where the system Python has torch, to torch's autograd over the same formulas, under both compilers, the sanitizers and ThreadSanitizer for a region. That is finite testing, not a proof, and the SMT model does not describe generated gradients any more than it describes the regions they contain.

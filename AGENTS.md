@@ -11,6 +11,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/syntax.py` | the parser and source ranges |
 | `compiler/modules.py` | linking the packaged `std` modules |
 | `compiler/expansion.py` | library recipes applied by `derive`, and static families |
+| `compiler/gradients.py` | reverse-mode differentiation applied by `derive grad`, generated as source |
 | `compiler/checking.py` | names, types, generic instances, the whole-program judge, the walk over bodies |
 | `compiler/scope.py` | what the checker knows inside one function and one region |
 | `compiler/statements.py` | statement rules: declarations, control flow, `match`, loops, `defer`, collectors |

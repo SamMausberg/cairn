@@ -124,6 +124,7 @@ def implementation_hash():
                 "compiler/concurrency.py",
                 "compiler/rings.py",
                 "compiler/expansion.py",
+                "compiler/gradients.py",
                 "compiler/codegen.py",
                 "compiler/modules.py",
                 "version.py",

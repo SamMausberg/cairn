@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from functools import reduce
 from typing import Any
 
+from .gradients import differentiate
 from .syntax import PREC
 from .tree import (
     FLOAT,
@@ -322,8 +323,12 @@ class Deriver:
 def derive(p: Program) -> Program:
     """Apply every `derive recipe[naturals] for Type;`. The generated declarations are ordinary code of the
     deriving module, checked like any other; a bare recipe name falls back to the packaged std.<name>.
-    A derivation for a record that another derivation generates waits for it, whatever the source order."""
-    names, waiting = declared(p), list(p.derivations)
+    A derivation for a record that another derivation generates waits for it, whatever the source order.
+    `derive grad for f;` names no recipe unless the program writes one: it is reverse-mode differentiation,
+    which walks a function's body as no recipe can (gradients.py), after every recipe has run."""
+    names = declared(p)
+    grads = [d for d in p.derivations if d[1] == "grad" and not visible(p, d[0], "grad", p.recipes)]
+    waiting = [d for d in p.derivations if d not in grads]
     while waiting:
         known = {**p.records, **p.sums, **p.enums}
         ready = [d for d in waiting if not d[3] or visible(p, d[0], d[3], known)] or waiting[:1]  # Else report it.
@@ -365,6 +370,8 @@ def derive(p: Program) -> Program:
                     carried = {n: extent for n, _, extent in made[1] if extent}
                     if carried:
                         p.field_extents[name] = carried
+    if grads:
+        differentiate(p, grads, names)
     return p
 
 
