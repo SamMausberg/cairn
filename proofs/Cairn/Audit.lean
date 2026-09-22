@@ -14,6 +14,7 @@ import Cairn.CollectorCertificates
 import Cairn.Collector
 import Cairn.Ownership
 import Cairn.Region
+import Cairn.Facts
 
 namespace Cairn
 
@@ -102,6 +103,15 @@ namespace Cairn
 #print axioms Cairn.Region.runs_once
 #print axioms Cairn.Region.quiet_when_back
 #print axioms Cairn.Region.finishes
+
+/-! ### The guard-elision rule -/
+
+#print axioms Cairn.Facts.distance_sound
+#print axioms Cairn.Facts.bounds_sound
+#print axioms Cairn.Facts.index_sound
+#print axioms Cairn.Facts.add_sound
+#print axioms Cairn.Facts.sub_sound
+#print axioms Cairn.Facts.atMostConst_sound
 
 /-! ### Non-vacuity: the faults are reachable for rejected programs -/
 

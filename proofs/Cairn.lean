@@ -4,4 +4,5 @@ import Cairn.CollectorCertificates
 import Cairn.Collector
 import Cairn.Ownership
 import Cairn.Region
+import Cairn.Facts
 import Cairn.Audit

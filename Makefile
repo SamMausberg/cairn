@@ -60,6 +60,7 @@ lean:
 	$(PYTHON) tools/checks/export_lean_certificates.py --check
 	cd proofs && PATH="$$HOME/.elan/bin:$$PATH" lake build
 	$(PYTHON) tools/checks/differential_ownership.py --count 200
+	$(PYTHON) tools/checks/differential_facts.py --count 2000
 
 # The only target that runs code on a CUDA device, in one process, one device run at a time
 # (tools/support.py: device_reason, device_lock). Everything else leaves the device alone.
