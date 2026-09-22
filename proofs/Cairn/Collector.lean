@@ -42,92 +42,68 @@ namespace Inv
 
 variable {K I N M : Int}
 
-theorem a0 (h : Inv K I N M) : 0 ≤ Form.eval ⟨0, 1, 0, 0, 0⟩ K I N M := by
-  have := h.emitted_nonneg; simp only [Form.eval]; omega
-
-theorem a1 (h : Inv K I N M) : 0 ≤ Form.eval ⟨0, -1, 1, 0, 0⟩ K I N M := by
-  have := h.emitted_le_visited; simp only [Form.eval]; omega
-
-theorem a2 (h : Inv K I N M) : 0 ≤ Form.eval ⟨0, 0, -1, 1, 0⟩ K I N M := by
-  have := h.visited_le_capacity; simp only [Form.eval]; omega
-
-theorem a3 (h : Inv K I N M) : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ K I N M := by
-  have := h.capacity_le_max; simp only [Form.eval]; omega
-
-/-- The loop body runs only while `I < N`; that is the fifth active assumption. -/
-theorem a4 (hlt : I < N) : 0 ≤ Form.eval ⟨-1, 0, -1, 1, 0⟩ K I N M := by
-  simp only [Form.eval]; omega
-
-/-- The five facts every obligation of the loop body assumes, in the order the rules list
-them: the invariant, and `I < N`. -/
+/-- The invariant and the loop condition `I < N`, as the five affine facts every obligation of
+the loop body assumes, in the order the rules list them. -/
 theorem body (h : Inv K I N M) (hlt : I < N) :
     satisfies K I N M [⟨0, 1, 0, 0, 0⟩, ⟨0, -1, 1, 0, 0⟩, ⟨0, 0, -1, 1, 0⟩, ⟨0, 0, 0, -1, 1⟩,
-      ⟨-1, 0, -1, 1, 0⟩] :=
-  ⟨h.a0, h.a1, h.a2, h.a3, a4 hlt, trivial⟩
+      ⟨-1, 0, -1, 1, 0⟩] := by
+  have := h.emitted_nonneg; have := h.emitted_le_visited; have := h.visited_le_capacity
+  have := h.capacity_le_max
+  refine ⟨?_, ?_, ?_, ?_, ?_, trivial⟩ <;> simp only [Form.eval] <;> omega
+
+/-- The invariant alone: the four facts the exit obligation assumes. -/
+theorem facts (h : Inv K I N M) :
+    satisfies K I N M [⟨0, 1, 0, 0, 0⟩, ⟨0, -1, 1, 0, 0⟩, ⟨0, 0, -1, 1, 0⟩, ⟨0, 0, 0, -1, 1⟩] := by
+  have := h.emitted_nonneg; have := h.emitted_le_visited; have := h.visited_le_capacity
+  have := h.capacity_le_max
+  refine ⟨?_, ?_, ?_, ?_, trivial⟩ <;> simp only [Form.eval] <;> omega
+
+open Lean in
+/-- `certified key hs` reads the obligation `obligation_key` back as an ordinary inequality: it
+applies the obligation to the facts `hs`, unfolds `rule_key`, and lets `omega` translate the
+affine form. The inequality comes from the certificate, never from `omega` alone. -/
+local macro "certified " key:ident hs:term : tactic => do
+  let o := mkIdentFrom key (key.getId.appendBefore "obligation_")
+  let r := mkIdentFrom key (key.getId.appendBefore "rule_")
+  `(tactic| (have h := $o _ _ _ _ $hs; simp only [$r:ident, Form.eval] at h; omega))
 
 /-- `initial.*`: the invariant holds on entry, where `K = I = 0`. -/
 theorem init {N M : Int} (hn : 0 ≤ N) (hm : N ≤ M) : Inv 0 0 N M := by
-  have b0 : 0 ≤ Form.eval ⟨0, 0, 0, 1, 0⟩ 0 0 N M := by simp only [Form.eval]; omega
-  have b1 : 0 ≤ Form.eval ⟨0, 0, 0, -1, 1⟩ 0 0 N M := by simp only [Form.eval]; omega
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · have := obligation_initial_nonnegative 0 0 N M ⟨b0, b1, trivial⟩
-    simp only [rule_initial_nonnegative, Form.eval] at this; omega
-  · have := obligation_initial_cursor_before_input 0 0 N M ⟨b0, b1, trivial⟩
-    simp only [rule_initial_cursor_before_input, Form.eval] at this; omega
-  · have := obligation_initial_input_before_capacity 0 0 N M ⟨b0, b1, trivial⟩
-    simp only [rule_initial_input_before_capacity, Form.eval] at this; omega
-  · have := obligation_initial_capacity_representable 0 0 N M ⟨b0, b1, trivial⟩
-    simp only [rule_initial_capacity_representable, Form.eval] at this; omega
+  have hs : satisfies 0 0 N M [⟨0, 0, 0, 1, 0⟩, ⟨0, 0, 0, -1, 1⟩] := by
+    refine ⟨?_, ?_, trivial⟩ <;> simp only [Form.eval] <;> omega
+  exact ⟨by certified initial_nonnegative hs, by certified initial_cursor_before_input hs,
+    by certified initial_input_before_capacity hs, by certified initial_capacity_representable hs⟩
 
 /-- `store.nonnegative`: the store index is nonnegative. -/
 theorem store_nonneg (h : Inv K I N M) (hlt : I < N) : 0 ≤ K := by
-  have := obligation_store_nonnegative K I N M (h.body hlt)
-  simp only [rule_store_nonnegative, Form.eval] at this; omega
+  certified store_nonnegative (h.body hlt)
 
-/-- `store.strictly_below_capacity`: the store index is strictly inside the
-buffer, which is what removes the dynamic bounds check. -/
+/-- `store.strictly_below_capacity`: the store index is strictly inside the buffer, which is what
+removes the dynamic bounds check. -/
 theorem store_lt_capacity (h : Inv K I N M) (hlt : I < N) : K < N := by
-  have := obligation_store_strictly_below_capacity K I N M (h.body hlt)
-  simp only [rule_store_strictly_below_capacity, Form.eval] at this; omega
+  certified store_strictly_below_capacity (h.body hlt)
 
 /-- `emit.cursor_increment_fits`: `++k` stays representable. -/
 theorem emit_increment_fits (h : Inv K I N M) (hlt : I < N) : K + 1 ≤ M := by
-  have := obligation_emit_cursor_increment_fits K I N M (h.body hlt)
-  simp only [rule_emit_cursor_increment_fits, Form.eval] at this; omega
+  certified emit_cursor_increment_fits (h.body hlt)
 
 /-- `step.input_increment_fits`: `++i` stays representable. -/
 theorem step_increment_fits (h : Inv K I N M) (hlt : I < N) : I + 1 ≤ M := by
-  have := obligation_step_input_increment_fits K I N M (h.body hlt)
-  simp only [rule_step_input_increment_fits, Form.eval] at this; omega
+  certified step_input_increment_fits (h.body hlt)
 
 /-- `emit.invariant.0-3`: the emitting branch `K' = K+1, I' = I+1` preserves it. -/
-theorem emit (h : Inv K I N M) (hlt : I < N) : Inv (K + 1) (I + 1) N M := by
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · have := obligation_emit_invariant_0 K I N M (h.body hlt)
-    simp only [rule_emit_invariant_0, Form.eval] at this; omega
-  · have := obligation_emit_invariant_1 K I N M (h.body hlt)
-    simp only [rule_emit_invariant_1, Form.eval] at this; omega
-  · have := obligation_emit_invariant_2 K I N M (h.body hlt)
-    simp only [rule_emit_invariant_2, Form.eval] at this; omega
-  · have := obligation_emit_invariant_3 K I N M (h.body hlt)
-    simp only [rule_emit_invariant_3, Form.eval] at this; omega
+theorem emit (h : Inv K I N M) (hlt : I < N) : Inv (K + 1) (I + 1) N M :=
+  ⟨by certified emit_invariant_0 (h.body hlt), by certified emit_invariant_1 (h.body hlt),
+    by certified emit_invariant_2 (h.body hlt), by certified emit_invariant_3 (h.body hlt)⟩
 
 /-- `skip.invariant.0-3`: the non-emitting branch `K' = K, I' = I+1` preserves it. -/
-theorem skip (h : Inv K I N M) (hlt : I < N) : Inv K (I + 1) N M := by
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · have := obligation_skip_invariant_0 K I N M (h.body hlt)
-    simp only [rule_skip_invariant_0, Form.eval] at this; omega
-  · have := obligation_skip_invariant_1 K I N M (h.body hlt)
-    simp only [rule_skip_invariant_1, Form.eval] at this; omega
-  · have := obligation_skip_invariant_2 K I N M (h.body hlt)
-    simp only [rule_skip_invariant_2, Form.eval] at this; omega
-  · have := obligation_skip_invariant_3 K I N M (h.body hlt)
-    simp only [rule_skip_invariant_3, Form.eval] at this; omega
+theorem skip (h : Inv K I N M) (hlt : I < N) : Inv K (I + 1) N M :=
+  ⟨by certified skip_invariant_0 (h.body hlt), by certified skip_invariant_1 (h.body hlt),
+    by certified skip_invariant_2 (h.body hlt), by certified skip_invariant_3 (h.body hlt)⟩
 
 /-- `exit.output_count_bounded`: on exit the emitted count is within capacity. -/
 theorem exit_le_capacity (h : Inv K I N M) : K ≤ N := by
-  have := obligation_exit_output_count_bounded K I N M ⟨h.a0, h.a1, h.a2, h.a3, trivial⟩
-  simp only [rule_exit_output_count_bounded, Form.eval] at this; omega
+  certified exit_output_count_bounded h.facts
 
 end Inv
 

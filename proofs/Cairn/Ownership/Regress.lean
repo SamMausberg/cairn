@@ -407,136 +407,140 @@ def line : String :=
 
 /-! ### The faults are reachable
 
-Every theorem above has the shape "accepted implies no reachable fault", which
-would be vacuous if the machine could never fault at all.  `report` rules out the
-other vacuity -- the checker is not simply always `false`.  These witnesses rule
-out this one: each names a program the checker REJECTS and exhibits the step
-sequence that drives the machine into the fault the rule exists to prevent.  The
-proofs are the raw `Reach` derivations; `List.Mem.head`/`.tail` pick which
-successor of the computed `succ` list the execution takes, so nothing is hidden
-behind a tactic. -/
+Every theorem above says that an accepted program reaches no fault, which would be vacuous if
+the machine could never fault. `report` rules out a checker that rejects everything; the
+witnesses below rule out a machine that never faults. Each takes a program the checker rejects
+and shows an interleaving that drives the machine into the fault its rule exists to prevent.
+
+`found` searches the successors of a configuration to a small depth and `found_reach` turns a
+successful search back into a `Reach` derivation, so each witness is one `decide` over the
+machine itself. -/
+
+/-- Some run of at most `n` steps from `c` ends in a configuration `goal` accepts. -/
+def found (ρ : Valuation) (scope : List Var) (goal : Cfg → Bool) : Nat → Cfg → Bool
+  | 0, c => goal c
+  | n + 1, c => goal c || (succ ρ scope c).any (found ρ scope goal n)
+
+theorem found_reach {ρ : Valuation} {scope : List Var} {goal : Cfg → Bool} :
+    ∀ (n : Nat) (c : Cfg), found ρ scope goal n c = true → ∃ d, Reach ρ scope c d ∧ goal d = true := by
+  intro n
+  induction n with
+  | zero => exact fun c h => ⟨c, .refl c, h⟩
+  | succ n ih =>
+      intro c h
+      rcases Bool.or_eq_true_iff.mp h with h | h
+      · exact ⟨c, .refl c, h⟩
+      · obtain ⟨b, hb, hf⟩ := List.any_eq_true.mp h
+        obtain ⟨d, hr, hd⟩ := ih b hf
+        exact ⟨d, .step hb hr, hd⟩
+
+/-- The configuration is the fault `e`. -/
+def faulted (e : Err) : Cfg → Bool
+  | .err e' => decide (e' = e)
+  | _ => false
+
+/-- The configuration is the defined abort of a failed guard. -/
+def trapped : Cfg → Bool
+  | .trap => true
+  | _ => false
+
+theorem reach_fault {ρ : Valuation} {scope : List Var} {c : Cfg} {e : Err} (n : Nat)
+    (h : found ρ scope (faulted e) n c = true) : Reach ρ scope c (.err e) := by
+  obtain ⟨d, hr, hd⟩ := found_reach n c h
+  cases d <;> simp only [faulted, Bool.false_eq_true, decide_eq_true_eq] at hd
+  exact hd ▸ hr
+
+theorem reach_trap {ρ : Valuation} {scope : List Var} {c : Cfg} (n : Nat)
+    (h : found ρ scope trapped n c = true) : Reach ρ scope c .trap := by
+  obtain ⟨d, hr, hd⟩ := found_reach n c h
+  cases d <;> simp only [trapped, Bool.false_eq_true] at hd
+  exact hr
 
 /-- Any valuation will do where the bounds are literals. -/
 def anyVal : Valuation := fun _ => 0
 
-/-- `a = 6`, `b = 3`, `n = 9`: the valuation `backwardsPart` is written for, under
-which `d[a..b]` is backwards and `d[0..a]` and `d[b..n]` overlap. -/
+/-- `a = 6`, `b = 3`, `n = 9`: the valuation `backwardsPart` is written for, under which `d[a..b]`
+is backwards and `d[0..a]` and `d[b..n]` overlap. -/
 def badVal : Valuation := fun v => if v = 0 then 6 else if v = 1 then 3 else 9
 
 /-- `n = 2`: two lanes, the smallest region in which lanes can race at all. -/
 def twoLanes : Valuation := fun _ => 2
 
-/-- **A data race is reachable.**  The spawner reads a place a live task writes:
+/-- **A data race is reachable.** The spawner reads a place a live task writes:
 `let t = spawn bump(c, 4); let seen = c;` in `tests/soundness/test_soundness.py`. -/
 theorem leasedRead_races :
     Reach anyVal leasedRead.scope (Cfg.start leasedRead) (Cfg.err (Err.race 0)) :=
-  Reach.step (List.Mem.head _)
-    (Reach.step (List.Mem.head _)
-      (Reach.step (List.Mem.head _) (Reach.refl _)))
+  reach_fault 3 (by decide)
 
-/-- **A data race is reachable** the other way: a second task would write what a
-live task already writes, so spawning it is the race. -/
+/-- A second task would write what a live task already writes, so spawning it is the race. -/
 theorem overlappingTasks_races :
     Reach anyVal overlappingTasks.scope (Cfg.start overlappingTasks) (Cfg.err (Err.race 0)) :=
-  Reach.step (List.Mem.head _)
-    (Reach.step (List.Mem.head _)
-      (Reach.step (List.Mem.head _) (Reach.refl _)))
+  reach_fault 3 (by decide)
 
-/-- **Two overlapping parts really race.**  `d[0..6]` and `d[3..9]` share the
-indices 3, 4 and 5, so the second spawn is a race under every valuation -- the
-checker rejects the program, and this is what it would cost to accept it. -/
+/-- `d[0..6]` and `d[3..9]` share the indices 3, 4 and 5, so the second spawn is a race under
+every valuation. -/
 theorem overlappingParts_races :
     Reach anyVal overlappingParts.scope (Cfg.start overlappingParts) (Cfg.err (Err.race 0)) :=
-  Reach.step (List.Mem.head _)
-    (Reach.step (List.Mem.head _)
-      (Reach.step (List.Mem.head _) (Reach.refl _)))
+  reach_fault 3 (by decide)
 
-/-- **Lending one field to two tasks really races.**  Two fields of one record are
-disjoint, so the checker accepts `box.a` and `box.b` going to two tasks; the SAME
-field twice is one piece of storage twice, and the second spawn is the race.  The
-header read that reaching `box.a` performs is not the race -- it steps through -- and
-the fault arrives at the spawn itself. -/
+/-- Two fields of one record are disjoint, but the same field lent twice is one piece of storage
+lent twice. The header read that reaching `box.a` performs steps through; the fault arrives at
+the second spawn. -/
 theorem sameFieldToTwoTasks_races :
     Reach anyVal sameFieldToTwoTasks.scope (Cfg.start sameFieldToTwoTasks) (Cfg.err (Err.race 4)) :=
-  Reach.step (List.Mem.head _)
-    (Reach.step (List.Mem.head _)
-      (Reach.step (List.Mem.head _)
-        (Reach.step (List.Mem.head _)
-          (Reach.step (List.Mem.head _) (Reach.refl _)))))
+  reach_fault 5 (by decide)
 
-/-- **Two overlapping parts of one field alias.**  `box.xs[0..6]` and `box.xs[3..9]`
-handed to one call reach the `AliasedArgs` configuration. -/
+/-- `box.xs[0..6]` and `box.xs[3..9]` handed to one call reach `AliasedArgs`. -/
 theorem fieldPartsOverlapInOneCall_aliases :
     Reach anyVal fieldPartsOverlapInOneCall.scope (Cfg.start fieldPartsOverlapInOneCall)
       (Cfg.err Err.aliasedArgs) :=
-  Reach.step (List.Mem.head _)
-    (Reach.step (List.Mem.head _)
-      (Reach.step (List.Mem.head _) (Reach.refl _)))
+  reach_fault 3 (by decide)
 
-/-- **The backwards part traps, and does not race.**  `backwardsPart` is ACCEPTED,
-and under the valuation it is written for the machine aborts at the guard of
-`d[6..3]` -- on the spawner's thread, before either of the two tasks that overlap
-has been started.  This is the execution `tests/soundness/test_soundness.py` observes as
-SIGABRT under ThreadSanitizer. -/
+/-- **The backwards part traps and does not race.** `backwardsPart` is accepted, and under the
+valuation it is written for the machine aborts at the guard of `d[6..3]`, on the spawner's
+thread, before either of the two overlapping tasks has started. `tests/soundness/test_soundness.py`
+observes this execution as SIGABRT under ThreadSanitizer. -/
 theorem backwardsPart_traps :
     Reach badVal backwardsPart.scope (Cfg.start backwardsPart) Cfg.trap :=
-  Reach.step (List.Mem.head _)
-    (Reach.step (List.Mem.head _) (Reach.refl _))
+  reach_trap 2 (by decide)
 
-/-- **Two lanes writing one element really race.**  `parallel i in n { out[0] = 1; }`
-forks two lanes that both hold every element of `out` for writing; the first lane to
-step finds the other one there. -/
+/-- `parallel i in n { out[0] = 1; }` forks two lanes that both hold every element of `out` for
+writing; the first lane to step finds the other one there. -/
 theorem laneWritesFixedIndex_races :
     Reach twoLanes laneWritesFixedIndex.scope (Cfg.start laneWritesFixedIndex)
       (Cfg.err (Err.race 0)) :=
-  Reach.step (List.Mem.head _)
-    (Reach.step (List.Mem.head _)
-      (Reach.step (List.Mem.tail _ (List.Mem.head _)) (Reach.refl _)))
+  reach_fault 3 (by decide)
 
-/-- **A lane writing a shared scalar really races.**  Every lane of
-`parallel i in n { total = total + out[i]; }` holds `total` for writing. -/
+/-- Every lane of `parallel i in n { total = total + out[i]; }` holds `total` for writing. -/
 theorem laneWritesShared_races :
     Reach twoLanes laneWritesShared.scope (Cfg.start laneWritesShared) (Cfg.err (Err.race 2)) :=
-  Reach.step (List.Mem.head _)
-    (Reach.step (List.Mem.head _)
-      (Reach.step (List.Mem.head _)
-        (Reach.step (List.Mem.tail _ (List.Mem.head _)) (Reach.refl _))))
+  reach_fault 4 (by decide)
 
-/-- **A lane reading at another index really races** with the lane that writes there:
-lane 0 holds every element of `out` to read, lane 1 holds element 1 to write. -/
+/-- Lane 0 holds every element of `out` to read, and lane 1 holds element 1 to write. -/
 theorem laneReadsOther_races :
     Reach twoLanes laneReadsOther.scope (Cfg.start laneReadsOther) (Cfg.err (Err.race 0)) :=
-  Reach.step (List.Mem.head _)
-    (Reach.step (List.Mem.head _)
-      (Reach.step (List.Mem.tail _ (List.Mem.head _)) (Reach.refl _)))
+  reach_fault 3 (by decide)
 
-/-- **A double free is reachable.**  Copying an owner duplicates the cell, and the
-implicit release at scope exit then frees it twice. -/
+/-- **A double free is reachable.** Copying an owner duplicates the cell, and the implicit
+release at scope exit frees it twice. -/
 theorem copyAnOwner_doubleFrees :
     Reach anyVal copyAnOwner.scope (Cfg.start copyAnOwner) (Cfg.err (Err.doubleFree 0)) :=
-  Reach.step (List.Mem.head _)
-    (Reach.step (List.Mem.head _)
-      (Reach.step (List.Mem.head _) (Reach.refl _)))
+  reach_fault 3 (by decide)
 
-/-- **A use after the cell is gone is reachable.**  Touching a place after its
-implicit release is exactly what the moved set forbids. -/
+/-- **A use of a released cell is reachable.** Touching a place after its implicit release is
+what the moved set forbids. -/
 theorem useAfterDrop_usesDeadPlace :
     Reach anyVal useAfterDrop.scope (Cfg.start useAfterDrop) (Cfg.err (Err.useAfterMove 0)) :=
-  Reach.step (List.Mem.head _)
-    (Reach.step (List.Mem.head _)
-      (Reach.step (List.Mem.head _) (Reach.refl _)))
+  reach_fault 3 (by decide)
 
-/-- **A leaked ticket is reachable.**  The scope ends while a task is still
-running: `let t = spawn sum(len(data), data); return 0;`. -/
+/-- **A leaked ticket is reachable.** The scope ends while a task still runs:
+`let t = spawn sum(len(data), data); return 0;`. -/
 theorem unawaitedTicket_leaks :
     Reach anyVal unawaitedTicket.scope (Cfg.start unawaitedTicket) (Cfg.err (Err.leak 0)) :=
-  Reach.step (List.Mem.head _)
-    (Reach.step (List.Mem.head _)
-      (Reach.step (List.Mem.head _) (Reach.refl _)))
+  reach_fault 3 (by decide)
 
-/-- None of the fault witnesses above is about an accepted program: each is
-rejected, which is what makes them consistent with the soundness theorems.  The one
-exception, `backwardsPart`, IS accepted -- and it reaches a trap, not a fault. -/
+/-- Each fault witness above is about a program the checker rejects, which is what makes them
+consistent with the soundness theorems. `backwardsPart` is accepted, and it reaches a trap. -/
 theorem witnesses_are_rejected :
     (accepts leasedRead || accepts overlappingTasks || accepts overlappingParts
       || accepts copyAnOwner || accepts useAfterDrop || accepts unawaitedTicket
