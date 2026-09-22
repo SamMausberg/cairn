@@ -93,6 +93,16 @@ The host names the function, its new signature, any function whose signature cha
 
 A reply maps function names to whole new declarations, `pub` included where the original has it. The tool refuses a reply for another authorization or a tree that changed since (`E-SESSION`), one that rewrites a function it did not authorize (`E-MIGRATION-SCOPE`), changes visibility or declares something else (`E-MIGRATION`), gives a migrated function any other signature or any other function a new one (`E-SIGNATURE`), adds or removes a declaration (`E-DECLARATION`), or gives any row an effect the host did not allow (`E-CALLER-EFFECT`). It rechecks the whole linked program with every replacement in place, and a refusal names the file and line of the text the reply wrote. Only then does it write: each file beside itself, then renamed into place, and a failure part way puts back every file already renamed, so the project holds all the changes or none. Nothing is built or tested, and the result says so.
 
+## Plan edits
+
+Tuning a function should not mean rewriting it. A plan edit (`cairn.plan/1`, `agent/plans.py`) is the narrowest authorization class: the agent changes how one function's regions are scheduled, and the host pins everything else, every body, signature, effect row, guard, the numerical contract and every other plan. The packet lists only the [plan items](concurrency.md#plans) the function's regions take, with their ranges, the plan it has now, and what `cairn predict` says it costs at the host's sizes.
+
+```json
+{"protocol": "cairn.plan/1", "session": "<the packet's digest>", "items": {"grain": 1, "lanes": 8}}
+```
+
+A reply names items and whole numbers, never source text, so nothing else can ride along. The host writes the plan into the source, rechecks the whole linked program, requires every function's receipt to be what it was apart from the plan, and answers with the plan it admitted and the predicted change at each size. It refuses an item the function's regions do not take and a value out of range (`E-PLAN`), anything in the reply beside the items or a value that is not a whole number (`E-REQUEST`), and a session that an earlier reply already spent or whose function the host has since reopened (`E-SESSION`). A plan reply sent to an edit host, or a body sent to a plan host, is `E-REQUEST`: neither class widens into the other. Because a plan changes no result, an admitted plan needs no test to be correct, only a measurement to be worth keeping, and the host decides what is measured.
+
 ## Named choices
 
 A host prepares a sketch in Python:
