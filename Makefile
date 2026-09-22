@@ -1,8 +1,25 @@
 PYTHON ?= python3
 CAIRN = $(PYTHON) bin/cairn
 
-.PHONY: docs all check lint format test native systems proof lean gpu embedded context wheel audit demo bench
+.PHONY: help docs all check lint format test native systems proof lean gpu embedded context wheel audit demo bench
 all: lint test proof
+
+help:
+	@echo 'all       lint, the test suite and the proofs'
+	@echo 'lint      ruff format --check, ruff check, cairn fmt --check'
+	@echo 'format    rewrite Python and CAIRN sources in place'
+	@echo 'test      the whole suite in parallel; tool-dependent parts skip with a reason'
+	@echo 'native    both compilers with sanitizers, and the codegen comparison'
+	@echo 'systems   the systems examples against independent oracles'
+	@echo 'proof     certificates, the Lean build, the differential run, scalar module equivalence'
+	@echo 'lean      the Lean half of proof alone'
+	@echo 'gpu       CUDA runtime, lanes and the device benchmark (needs nvcc and a device)'
+	@echo 'embedded  the freestanding image under QEMU (needs an AArch64 host)'
+	@echo 'bench     the preregistered CPU baseline suite (hours)'
+	@echo 'docs      regenerate docs/std_api.md'
+	@echo 'wheel     build the package offline into dist/'
+	@echo 'audit     scan the committed history for credentials and binaries'
+	@echo 'demo      run and test examples/hello'
 
 check:
 	$(CAIRN) check examples/hello
