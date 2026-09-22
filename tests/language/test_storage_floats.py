@@ -19,7 +19,16 @@ from cairn.compiler.cairnc import compile_source
 from cairn.projects.toolchain import command
 from cairn.verify.scalar_semantics import equivalent
 from emitted import WARNINGS, emit, native, refused, run, sanitized
-from oracles.float_formats import FORMATS, TRAP, Format, double_bits, f16_by_struct, from_double_bits, quantize_integer
+from oracles.float_formats import (
+    FORMATS,
+    TRAP,
+    Format,
+    double_bits,
+    f16_by_struct,
+    from_double_bits,
+    quantize_integer,
+    quantize_integer_stochastic,
+)
 
 PATTERN = {"f16": "u16", "bf16": "u16", "f8e4m3": "u8", "f8e5m2": "u8"}
 CTYPE = {"u8": C.c_uint8, "u16": C.c_uint16, "u32": C.c_uint32, "u64": C.c_uint64}
@@ -48,7 +57,18 @@ fn quantize_{name}(n:usize, xs:ro<u32>[n], scale:f32, out:rw<{name}>[n]) {{
 """
 
 
+def stochastic(name: str) -> str:
+    u = PATTERN.get(name, name)
+    wrap = "to_bits" if name in PATTERN else ""
+    return f"""
+fn stochastic_{name}(n:usize, xs:ro<u32>[n], scale:f32, noise:ro<u32>[n], out:rw<{u}>[n]) {{
+  for i in 0..n {{ out[i] = {wrap}(quantize_stochastic[{name}](from_bits[f32](xs[i]), scale, noise[i])); }}
+}}
+"""
+
+
 SOURCE = "".join(map(conversions, FORMATS)) + "".join(map(integer_quantizer, INTEGERS))
+SOURCE += "".join(map(stochastic, [*FORMATS, *INTEGERS]))
 
 
 @pytest.fixture(scope="module", params=["g++", "clang++"])
@@ -175,6 +195,45 @@ def test_integer_quantize_rounds_half_to_even_and_clamps(lib, name):
         assert not wrong, (scale, wrong[:5])
 
 
+@pytest.mark.parametrize("name", [*FORMATS, *INTEGERS])
+def test_stochastic_rounding_goes_up_exactly_where_the_noise_is_below_the_fraction(lib, name):
+    rng = random.Random(17)
+    xs, noise = [], []
+    for _ in range(6000):
+        xs.append(struct_single(rng.uniform(-1.2, 1.2) * rng.choice((1.0, 3.0, 200.0, 5e4)))[0])
+        noise.append(rng.getrandbits(32))
+    xs += [0.0, -0.0, 1.0, 2.5, -2.5, 1e30, -1e30]
+    noise += [0, 2**32 - 1, 0, 0, 2**32 - 1, 5, 5]
+    bits = [struct_single(x)[1] for x in xs]
+    for scale in (1.0, 0.03125, struct_single(0.37)[0]):
+        n = len(xs)
+        raw, grain = (C.c_uint32 * n)(*bits), (C.c_uint32 * n)(*noise)
+        if name in FORMATS:
+            fmt, out = Format(name), (CTYPE[PATTERN[name]] * n)()
+            getattr(lib, "cf_stochastic_" + name)(C.c_size_t(n), raw, C.c_float(scale), grain, out)
+            wanted = [fmt.stochastic(x, scale, k) for x, k in zip(xs, noise, strict=True)]
+            wrong = [(x, k, hex(g)) for x, k, g, w in zip(xs, noise, out, wanted, strict=True) if not agree(fmt, g, w)]
+        else:
+            low, high, ctype = INTEGERS[name]
+            out = (ctype * n)()
+            getattr(lib, "cf_stochastic_" + name)(C.c_size_t(n), raw, C.c_float(scale), grain, out)
+            wanted = [quantize_integer_stochastic(x, scale, low, high, k) for x, k in zip(xs, noise, strict=True)]
+            wrong = [(x, k, g) for x, k, g, w in zip(xs, noise, out, wanted, strict=True) if g != w]
+        assert not wrong, (scale, wrong[:5])
+
+
+def test_stochastic_rounding_is_unbiased_over_evenly_spread_noise(lib):
+    """Over 4096 noises spread evenly across the u32 range, a value 0.3 of the way from 1 to 2 rounds up 1229
+    times: the fraction to within one part in 4096."""
+    n = 4096
+    xs = (C.c_uint32 * n)(*[struct_single(1.3)[1]] * n)
+    grain = (C.c_uint32 * n)(*[k * 2**20 for k in range(n)])
+    out = (C.c_int8 * n)()
+    lib.cf_stochastic_i8(C.c_size_t(n), xs, C.c_float(1.0), grain, out)
+    ups = sum(v == 2 for v in out)
+    assert set(out) == {1, 2} and abs(ups / n - 0.3) <= 1 / n
+
+
 TRAPS = [
     ("f8e4m3(465.0)", "beyond 448, where IEEE would give infinity"),
     ("f8e4m3(-1e300)", "far beyond"),
@@ -255,6 +314,8 @@ def test_every_pattern_round_trips_under_the_sanitizers(tmp_path, cxx):
         ("E-TYPE-MISMATCH", "fn f(x:u32) -> f16 = from_bits[f16](x);"),  # the pattern of its own width
         ("E-MATH-TYPE", "fn f(x:f16) -> f16 = abs(x);"),
         ("E-CONST", "const HALF:f16 = f16(0.5);"),
+        ("E-ARITY", "fn f(x:f32) -> i8 = quantize_stochastic[i8](x, 1.0);"),  # the noise is the caller's to draw
+        ("E-TYPE-MISMATCH", "fn f(x:f32, k:u64) -> i8 = quantize_stochastic[i8](x, 1.0, k);"),
     ],
 )
 def test_what_the_storage_floats_refuse(code, source):
@@ -282,6 +343,8 @@ def test_the_receipt_states_each_rounding_the_source_wrote():
     assert rows["half"]["numerics"][0]["overflow"] == "infinity" and rows["half"]["effects"] == []
     assert rows["tight"]["numerics"][0]["overflow"] == "trap" and rows["tight"]["effects"] == ["trap"]
     assert "numerics" not in rows["wide"] and rows["wide"]["effects"] == []  # widening is exact
+    noisy = compile_source("fn f(x:f32, k:u32) -> i8 = quantize_stochastic[i8](x, 0.5, k);")[1]["functions"]["f"]
+    assert noisy["numerics"][0]["rounding"] == "stochastic-u32" and noisy["numerics"][0]["nan"] == "trap"
 
 
 def test_the_canonical_projection_emits_the_same_program():

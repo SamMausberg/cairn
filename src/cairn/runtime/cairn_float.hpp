@@ -48,8 +48,10 @@ template<int E, int M, bool INF> CR_HD inline Float<E, M, INF>::operator double(
 }
 
 // |x| rounded to nearest, ties to even, with the exponent unbounded above, as a pattern of T without its sign.
-// `over` says the result lies beyond T's largest finite value, which is where each conversion differs.
-template<class T> CR_HD inline typename T::Bits nearest(double x, bool& over) noexcept {
+// `over` says the result lies beyond T's largest finite value, which is where each conversion differs. Given
+// `noise`, it rounds away from zero instead when the dropped fraction, to 32 bits, exceeds the noise: stochastic
+// rounding, which moves up with the probability the fraction is and is exact where |x| is representable.
+template<class T> CR_HD inline typename T::Bits nearest(double x, bool& over, const std::uint32_t* noise = nullptr) noexcept {
   constexpr int M = T::fraction, emin = 1 - T::bias;
   const std::uint64_t u = pattern(x);
   const int stored = int((u >> 52) & 0x7ff);
@@ -66,13 +68,17 @@ template<class T> CR_HD inline typename T::Bits nearest(double x, bool& over) no
   std::uint64_t n;
   if (shift >= 0) {
     n = m << shift;  // exact: |x| has no bits below the spacing
-  } else if (-shift > 60) {
-    n = 0;  // below half a unit, since m < 2^53
   } else {
     const int r = -shift;
-    const std::uint64_t rest = m & ((std::uint64_t(1) << r) - 1), half = std::uint64_t(1) << (r - 1);
-    n = m >> r;
-    n += rest > half || (rest == half && (n & 1));
+    const std::uint64_t rest = r >= 64 ? m : m & ((std::uint64_t(1) << r) - 1);
+    n = r >= 64 ? 0 : m >> r;
+    if (noise) {
+      const std::uint64_t top = r <= 32 ? rest << (32 - r) : r - 32 >= 64 ? 0 : rest >> (r - 32);
+      n += top > *noise;
+    } else if (r <= 60) {  // with more dropped, the rest is below half a unit, since m < 2^53
+      const std::uint64_t half = std::uint64_t(1) << (r - 1);
+      n += rest > half || (rest == half && (n & 1));
+    }
   }
   int field = binade + T::bias;
   if (n >> (M + 1)) {  // rounding carried into the next binade
@@ -107,7 +113,7 @@ template<class T> CR_HD inline T narrow(double x) noexcept {
 // The quotient of two floats is exact in double to well within half a unit of every format here, so rounding
 // it again is the correctly rounded result. A scale that is not positive and finite traps, and so does a NaN
 // quantized to an integer, which has no NaN.
-template<class T> CR_HD inline T quantize(float x, float scale) noexcept {
+template<class T> CR_HD inline T quantized(float x, float scale, const std::uint32_t* noise) noexcept {
   if (!(scale > 0.0f) || !(scale <= 3.4028234663852886e38f)) trap();
   const double q = static_cast<double>(x) / static_cast<double>(scale);
   if constexpr (std::is_integral_v<T>) {
@@ -115,18 +121,28 @@ template<class T> CR_HD inline T quantize(float x, float scale) noexcept {
     constexpr double lo = double(std::numeric_limits<T>::min()), hi = double(std::numeric_limits<T>::max());
     if (q <= lo) return std::numeric_limits<T>::min();
     if (q >= hi) return std::numeric_limits<T>::max();
-    auto whole = static_cast<std::int64_t>(q);  // toward zero; |q| < 2^16 here, so the rest is exact
-    const double rest = q - static_cast<double>(whole);
-    if (rest > 0.5 || (rest == 0.5 && (whole & 1))) ++whole;
-    if (rest < -0.5 || (rest == -0.5 && (whole & 1))) --whole;
-    return static_cast<T>(whole);
+    const double magnitude = q < 0 ? -q : q;
+    auto whole = static_cast<std::int64_t>(magnitude);  // |q| < 2^16 here, so the rest is exact
+    const double rest = magnitude - static_cast<double>(whole);
+    if (noise) whole += static_cast<std::uint64_t>(rest * 4294967296.0) > *noise;
+    else whole += rest > 0.5 || (rest == 0.5 && (whole & 1));
+    return static_cast<T>(q < 0 ? -whole : whole);
   } else {
     const auto s = signed_of<T>(q);
     if (q != q) return T{typename T::Bits(s | T::nan)};
     bool over = false;
-    const auto b = nearest<T>(q, over);
+    const auto b = nearest<T>(q, over, noise);
     return T{typename T::Bits(s | (over ? T::largest : b))};
   }
+}
+
+template<class T> CR_HD inline T quantize(float x, float scale) noexcept { return quantized<T>(x, scale, nullptr); }
+
+// quantize_stochastic[T](x, scale, noise): the same, rounding away from zero with the probability the fraction
+// of the double quotient beyond T's precision is, to 32 bits, when noise is uniform: unbiased on average, and the
+// same bits for the same noise on every machine.
+template<class T> CR_HD inline T quantize_stochastic(float x, float scale, std::uint32_t noise) noexcept {
+  return quantized<T>(x, scale, &noise);
 }
 
 template<class T, class U> CR_HD inline T from_bits(U u) noexcept {

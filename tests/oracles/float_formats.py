@@ -87,6 +87,40 @@ class Format:
         found = self.nearest(abs(Fraction(x) / Fraction(scale)))
         return sign | (self.patterns[-2] if found is None else found)
 
+    def stochastic(self, x: float, scale: float, noise: int):
+        """quantize_stochastic: away from zero exactly when floor(fraction * 2^32) > noise, where the fraction is
+        how far the double quotient lies from the value below it, in units of the step to the value above."""
+        if not (scale > 0 and math.isfinite(scale)):
+            return TRAP
+        q = x / scale  # the double quotient, rounded as C++ rounds it
+        sign = self.sign if math.copysign(1.0, q) < 0 else 0
+        if math.isnan(q):
+            return ("nan", sign)
+        if math.isinf(q):
+            return sign | self.patterns[-2]
+        magnitude = abs(Fraction(q))
+        i = bisect.bisect_right(self.values, magnitude) - 1
+        if i == len(self.values) - 1 or self.values[i] == magnitude:
+            chosen = i
+        else:
+            below, above = self.values[i], self.values[i + 1]
+            chosen = i + (math.floor((magnitude - below) / (above - below) * 2**32) > noise)
+        return sign | self.patterns[min(chosen, len(self.values) - 2)]
+
+
+def quantize_integer_stochastic(x: float, scale: float, low: int, high: int, noise: int):
+    if not (scale > 0 and math.isfinite(scale)) or math.isnan(x):
+        return TRAP
+    q = x / scale
+    if q <= low:
+        return low
+    if q >= high:
+        return high
+    magnitude = abs(Fraction(q))
+    whole = math.floor(magnitude)
+    whole += math.floor((magnitude - whole) * 2**32) > noise
+    return -whole if q < 0 else whole
+
 
 def quantize_integer(x: float, scale: float, low: int, high: int):
     """quantize[i8] and the rest: x / scale to the nearest integer, ties to even, clamped to [low, high]."""

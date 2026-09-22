@@ -569,7 +569,7 @@
    "patterns": [
     {
      "name": "support.function.builtin.cairn",
-     "match": "\\b(?:mmio_write|from_bits|mmio_read|add_wrap|mul_wrap|quantize|shl_wrap|sub_wrap|transfer|collect|to_bits|assert|floor|trunc|ceil|sqrt|swap|take|wait|abs|asm|len|max|min|shr)\\b(?=(?:\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])?\\s*\\()"
+     "match": "\\b(?:quantize_stochastic|mmio_write|from_bits|mmio_read|add_wrap|mul_wrap|quantize|shl_wrap|sub_wrap|transfer|collect|to_bits|assert|floor|trunc|ceil|sqrt|swap|take|wait|abs|asm|len|max|min|shr)\\b(?=(?:\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])?\\s*\\()"
     },
     {
      "name": "entity.name.function.member.cairn",

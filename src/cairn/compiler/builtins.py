@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
 SOFT = {"take", "swap", "transfer", "mmio_read", "mmio_write", "asm", "wait", "collect"}
 MATH = {"sqrt", "floor", "ceil", "trunc", "abs", "to_bits"}  # 1.4: a program's own function of the name wins
-SOFT |= MATH | {"quantize", "from_bits", "assert"}
+SOFT |= MATH | {"quantize", "quantize_stochastic", "from_bits", "assert"}
 QUANTIZED = [*STORAGE, "i8", "u8", "i16", "u16"]  # where one rounding of x / scale is exact (cairn_float.hpp)
 PATTERN = {"f32": "u32", "f64": "u64", **{n: "u16" if STORAGE[n][0] + STORAGE[n][1] > 7 else "u8" for n in STORAGE}}
 F32 = Type("f32")
@@ -161,16 +161,23 @@ def check_from_bits(c: Checker, e: Expr, args: list[Expr], targs: tuple, expecte
 
 def check_quantize(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
     """quantize[T](x, scale): x / scale rounded once, to nearest with ties to even, and clamped to T's finite
-    range. The scale must be positive and finite, and an integer T has no NaN to give, so both are guards."""
+    range. quantize_stochastic[T](x, scale, noise) rounds away from zero with the probability the dropped
+    fraction is, by the u32 noise the caller draws. The scale must be positive and finite, and an integer T has
+    no NaN to give, so both are guards."""
     ty = c.resolve(targs[0], e) if len(targs) == 1 else expected
     if ty is None or ty.mode != "value" or ty.name not in QUANTIZED:
-        fail("E-QUANTIZE", f"Write quantize[T](x, scale) with T one of {' '.join(QUANTIZED)}.", e)
-    arity(e, args, 2, "quantize takes a value and its scale.")
-    for a in args:
-        c.expect(c.expr(a, F32), F32, a)
+        fail("E-QUANTIZE", f"Write {e.val}[T](x, scale) with T one of {' '.join(QUANTIZED)}.", e)
+    stochastic = e.val == "quantize_stochastic"
+    arity(
+        e, args, 2 + stochastic, f"{e.val} takes a value, its scale" + (" and 32 bits of noise." if stochastic else ".")
+    )
+    for a, want in zip(args, [F32, F32, Type("u32")], strict=False):
+        c.expect(c.expr(a, want), want, a)
     c.guard("quantize")
     contract(c, e, "quantize", "f32", ty.name, scale="positive-finite", overflow="saturate",
              nan="nan" if ty.name in STORAGE else "trap")  # fmt: skip
+    if stochastic:
+        c.numerics[c.f.name][-1]["rounding"] = "stochastic-u32"
     e.ref = ("builtin", ty)
     return ty
 
@@ -376,7 +383,7 @@ TABLE: dict[str, tuple[Any, Any]] = {
     **dict.fromkeys(WRAPPING | {"min", "max"}, (check_binary, lower_binary)),
     **dict.fromkeys(MATH, (check_math, lower_math)),
     **dict.fromkeys(STORAGE, (check_convert, lower_convert)),
-    "quantize": (check_quantize, lower_float),
+    **dict.fromkeys(("quantize", "quantize_stochastic"), (check_quantize, lower_float)),
     "from_bits": (check_from_bits, lower_float),
     **dict.fromkeys(("mmio_read", "mmio_write", "asm"), (check_machine, lower_machine)),
     "transfer": (check_transfer, lower_transfer),
