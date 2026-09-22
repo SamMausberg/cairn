@@ -7,12 +7,11 @@ call arguments only), so no lifetime annotations exist; owners are affine and
 
 The Checker holds the program-wide tables and the per-function Scope; the rules are
 functions in statements.py, expressions.py, calls.py, places.py and concurrency.py,
-bound as methods at the end of this file, so each lives in the file that owns its subject.
+bound as methods in the class, so each lives in the file that owns its subject.
 """
 
 from __future__ import annotations
 
-import inspect
 from contextlib import contextmanager
 from typing import Any
 
@@ -63,8 +62,42 @@ class Checker:
     touched: list[tuple[str, str, bool, Any]] | None
     facts: list[tuple[str, str, int]]
     discharged: dict[str, int]
-    # The rules are bound below the class; these three statements share one.
-    s_stack, s_reg, s_continue = statements.s_buffer, statements.s_let, statements.s_break
+    # The rules live one module per subject, each a function taking the checker as `c`, and are bound here as methods
+    # so that mypy checks every call; a statement or expression tag dispatches to `s_<tag>` or `e_<tag>`.
+    s_buffer, s_stack, s_let, s_reg, s_unpack = (statements.s_buffer, statements.s_buffer, statements.s_let,
+                                                 statements.s_let, statements.s_unpack)  # fmt: skip
+    s_compact, s_assign, s_break, s_continue = (statements.s_compact, statements.s_assign, statements.s_break,
+                                                statements.s_break)  # fmt: skip
+    s_return, s_if, s_match, s_while, s_for = (statements.s_return, statements.s_if, statements.s_match,
+                                               statements.s_while, statements.s_for)  # fmt: skip
+    s_expr, s_block, s_unsafe, s_defer = statements.s_expr, statements.s_block, statements.s_unsafe, statements.s_defer
+    leaving, branches, loop = statements.leaving, statements.branches, statements.loop
+
+    extent_of, declared_extent, writable = places.extent_of, places.declared_extent, places.writable
+    place, stable, where, identity = places.place, places.stable, places.where, places.identity
+    leased, capture, consume, intact = places.leased, places.capture, places.consume, places.intact
+    lend, disjoint, carried = places.lend, places.disjoint, places.carried
+
+    s_parallel, s_reduce, region, host_only = (concurrency.s_parallel, concurrency.s_reduce, concurrency.region,
+                                               concurrency.host_only)  # fmt: skip
+    e_spawn, shared, lane_callee, plans = (
+        concurrency.e_spawn,
+        concurrency.shared,
+        concurrency.lane_callee,
+        concurrency.plans,
+    )
+    judge_lane_callbacks, s_submit = concurrency.judge_lane_callbacks, concurrency.s_submit
+
+    e_int, e_float, e_bool, e_str, e_name = (expressions.e_int, expressions.e_float, expressions.e_bool,
+                                             expressions.e_str, expressions.e_name)  # fmt: skip
+    e_slice, e_index, e_field, e_lambda, e_try = (expressions.e_slice, expressions.e_index, expressions.e_field,
+                                                  expressions.e_lambda, expressions.e_try)  # fmt: skip
+    e_unary, e_binary, named_type, type_argument = (expressions.e_unary, expressions.e_binary, expressions.named_type,
+                                                    expressions.type_argument)  # fmt: skip
+    variant, function_value = expressions.variant, expressions.function_value
+
+    e_call, invoke, indirect, repeatable = calls.e_call, calls.invoke, calls.indirect, calls.repeatable
+    view_argument, construct, establish = calls.view_argument, calls.construct, calls.establish
 
     def __init__(self, program: Program, capture_sites: bool = False):
         self.p = program
@@ -560,12 +593,3 @@ class Checker:
         ty = self.expr(e, consume=False)
         self.early[id(e)] = e
         return ty
-
-
-# Every rule is a function whose first parameter is the checker, `c`, in the module that owns its subject, and each
-# becomes a method here: a statement or expression tag dispatches to `s_<tag>` or `e_<tag>`. No two share a name.
-for _m in (statements, expressions, calls, places, concurrency):
-    for _name, _f in vars(_m).items():
-        if inspect.isfunction(_f) and _f.__module__ == _m.__name__ and _f.__code__.co_varnames[:1] == ("c",):
-            assert not hasattr(Checker, _name), f"two rules are named {_name}"
-            setattr(Checker, _name, _f)
