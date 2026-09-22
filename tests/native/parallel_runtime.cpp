@@ -227,11 +227,18 @@ static int death(const char* name) {
     cr::par::run(2, [](std::size_t i) noexcept { (void)cr::add<std::uint64_t>(~std::uint64_t(0), i + 1); });
   } else if(!std::strcmp(name, "worker_overflow")) {
     // A guard that fails in a lane must end the process wherever that lane ran. With more than one
-    // lane the calling thread is excluded by name, so only a pool worker can reach the failure.
+    // lane the calling thread is excluded by name, so only a pool worker can reach the failure, and
+    // the caller parks in its first chunk so that a loaded machine cannot let it finish every chunk
+    // before a worker wakes. The park is bounded: a pool that never runs a chunk still fails the case.
     const bool alone = lane_count() < 2;
     const std::thread::id caller = std::this_thread::get_id();
-    cr::par::run(64 * CUT, [alone, caller](std::size_t i) noexcept {
+    bool parked = false;  // touched only by the calling thread
+    cr::par::run(64 * CUT, [alone, caller, &parked](std::size_t i) noexcept {
       if(alone || std::this_thread::get_id() != caller) (void)cr::add<std::uint64_t>(~std::uint64_t(0), i + 1);
+      else if(!parked) {
+        parked = true;
+        std::this_thread::sleep_for(std::chrono::seconds(60));
+      }
     });
   } else if(!std::strcmp(name, "lanes_not_a_number") || !std::strcmp(name, "lanes_zero") ||
             !std::strcmp(name, "lanes_too_many")) {
