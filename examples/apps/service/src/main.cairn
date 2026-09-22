@@ -3,6 +3,8 @@
 //   del <key>          ->  +ok/-missing quit       ->  +bye, and the service stops
 // One I/O ring holds the accept and every client's receive in flight together, and hands each back as
 // it finishes; nothing here is a thread. A reply is one blocking send, since a line fits the socket.
+// Overload is an answer, never a trap: a client past the table hears -busy, a failed accept (no
+// descriptor left) waits a moment before the next, and a kernel without io_uring is reported and ends it.
 import std.core (Option, Result);
 import std.io (IoError);
 import std.net (Socket);
@@ -14,6 +16,8 @@ const PORT:u16 = 39800;
 const LIMIT:usize = 4096;
 const CLIENTS:usize = 32;
 const ACCEPT:u64 = 0; // the tag of the one accept in flight; client k's receive is tagged k + 1
+const RETRY:u64 = u64(CLIENTS) + 1; // the pause after a failed accept, before the next one
+const PAUSE:u64 = 10000000; // ten milliseconds
 
 // One client: whether the slot is taken, its descriptor, and the bytes of a line not yet complete.
 struct Client { live:bool; fd:i32; have:usize; line:Buf[u8]; }
@@ -84,15 +88,19 @@ fn respond(fd:i32, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, IoError
   return Result.Ok(false);
 }
 
-// A slot for a client the ring's accept answered, and its first receive; a full table refuses it.
+// A slot for a client the ring's accept answered, and its first receive; a full table says so and closes.
 fn admit(q:rw<IoRing>, clients:rw<Buf[Client]>, fd:i32) {
   for k in 0..CLIENTS {
-    if !clients[k].live {
+    if !clients[k].live && q.room() > 0 {
       clients[k] = Client(true, fd, 0, Buf[u8](LIMIT));
       let first = Buf[u8](LIMIT);
       q.recv(fd, first, LIMIT, u64(k) + 1);
       return;
     }
+  }
+  match say(fd, "-busy") {
+    Result.Ok(sent) => {}
+    Result.Err(e) => {} // it is being turned away either way
   }
   unsafe { let refused = sys.close(fd); }
 }
@@ -131,21 +139,32 @@ fn take_in(c:rw<Client>, t:rw<Table>, n:usize, got:ro<u8>[n]) -> Result[bool, Io
 fn run() -> Result[usize, IoError] {
   let server = try net.listen_on("\x7f\x00\x00\x01", PORT, 16);
   defer net.close(server);
+  let mut q = IoRing(CLIENTS + 1);
+  defer wait(q); // after the cancels below, this collects what they stopped
+  match io.outcome(q.status()) {
+    Result.Ok(up) => {}
+    Result.Err(e) => { // a seccomp filter, a sysctl or no descriptor left: say so rather than serve nobody
+      io.print("service: no io_uring here, errno ");
+      io.print_u64(u64(e.code));
+      io.newline();
+      return Result.Ok(2);
+    }
+  }
   let mut t = new_table();
   io.print("service: listening on ");
   io.print_u64(u64(PORT));
   io.newline();
   let mut clients = Buf[Client](CLIENTS);
-  let mut q = IoRing(CLIENTS + 1);
-  defer wait(q); // after the cancels below, this collects what they stopped
   q.accept(server.fd, ACCEPT);
   let mut running = true;
   while running {
     let mut tag:u64 = 0;
     let mut result:i64 = 0;
     let data = q.next(tag, result); // whichever of them finished first
-    if tag == ACCEPT {
-      if result >= 0 { admit(q, clients, i32(result)); }
+    if tag == ACCEPT && result < 0 {
+      q.timeout(PAUSE, RETRY); // out of descriptors, most likely: an accept now would fail at once again
+    } else if tag == ACCEPT || tag == RETRY {
+      if tag == ACCEPT { admit(q, clients, i32(result)); }
       q.accept(server.fd, ACCEPT);
     } else {
       let k = usize(tag - 1);
@@ -158,6 +177,7 @@ fn run() -> Result[usize, IoError] {
     }
   }
   q.cancel(ACCEPT);
+  q.cancel(RETRY);
   for k in 0..CLIENTS {
     if clients[k].live {
       q.cancel(u64(k) + 1);

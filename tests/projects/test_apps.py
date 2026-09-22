@@ -8,7 +8,9 @@ std.io are built with clang++ only, because a sum carrying an owner (Result[File
 emits a designated initializer that g++ rejects under -Werror=missing-field-initializers.
 """
 
+import os
 import re
+import resource
 import shutil
 import socket
 import subprocess
@@ -24,6 +26,7 @@ from emitted import on_device
 
 APPS = Path(__file__).resolve().parents[2] / "examples" / "apps"
 NAMES = ["kvstore", "service", "simulator", "gpu_pipeline"]
+OPEN_FILES = resource.getrlimit(resource.RLIMIT_NOFILE)
 
 
 def built(root, tmp_path, cxx="clang++", timeout=240):
@@ -77,13 +80,19 @@ def talk(stream, line):
     return stream.readline().strip()
 
 
-def started_service(tmp_path, cxx="clang++"):
-    """The service built on a free port and running, with a client connection factory."""
+def started_service(tmp_path, cxx="clang++", clients=None, descriptors=None):
+    """The service built on a free port and running, with a client connection factory. `clients` shrinks its
+    table; `descriptors` is the soft limit on its open files from the start."""
     root = copied("service", tmp_path)
     source = root / "src" / "main.cairn"
     port = free_port()
-    source.write_text(re.sub(r"const PORT:u16 = \d+;", f"const PORT:u16 = {port};", source.read_text()))
-    server = subprocess.Popen([built(root, tmp_path, cxx)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    text = re.sub(r"const PORT:u16 = \d+;", f"const PORT:u16 = {port};", source.read_text())
+    if clients is not None:
+        text = re.sub(r"const CLIENTS:usize = \d+;", f"const CLIENTS:usize = {clients};", text)
+    source.write_text(text)
+    limit = (lambda: resource.setrlimit(resource.RLIMIT_NOFILE, (descriptors, OPEN_FILES[1]))) if descriptors else None
+    artifact = built(root, tmp_path, cxx)
+    server = subprocess.Popen([artifact], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, preexec_fn=limit)
 
     def connect():
         for _ in range(100):  # the listener is up within a few milliseconds of exec
@@ -119,6 +128,72 @@ def test_service_serves_clients_at_once_from_one_thread(tmp_path, cxx):
         if server.poll() is None:
             server.kill()
             server.wait(timeout=10)
+
+
+def stopped(server):
+    if server.poll() is None:
+        server.kill()
+        server.wait(timeout=10)
+
+
+def cpu_seconds(pid):
+    """User plus system time the process has used, from /proc (fields 14 and 15, in clock ticks)."""
+    fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+    return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+
+
+def test_service_turns_away_a_client_past_its_table(tmp_path):
+    """Overload is an answer: with a table of two, the third connection hears -busy and is closed, and the two
+    it holds are served on as before."""
+    server, connect, _ = started_service(tmp_path, clients=2)
+    try:
+        first, second = (connect().makefile("rw", newline="\n") for _ in range(2))
+        assert talk(first, "put a 1") == "+ok" and talk(second, "get a") == "= 1"
+        with connect() as third, third.makefile("r", newline="\n") as heard:
+            assert heard.readline().strip() == "-busy"
+            assert heard.readline() == ""  # and then the service closed it
+        assert talk(first, "get a") == "= 1"
+        assert talk(second, "quit") == "+bye"
+        assert server.wait(timeout=30) == 0
+    finally:
+        stopped(server)
+
+
+def test_service_waits_out_a_descriptor_shortage(tmp_path):
+    """With no descriptor left, an accept fails at once; the service pauses before the next instead of spinning
+    on it, and admits the waiting client as soon as another leaves."""
+    server, connect, _ = started_service(tmp_path)
+    try:
+        first = connect()
+        early = first.makefile("rw", newline="\n")
+        assert talk(early, "put k v") == "+ok"
+        held = len(list(Path(f"/proc/{server.pid}/fd").iterdir()))
+        resource.prlimit(server.pid, resource.RLIMIT_NOFILE, (held, OPEN_FILES[1]))  # not one more
+        waiting = connect()  # the kernel completes the handshake; the service cannot accept it yet
+        before = cpu_seconds(server.pid)
+        time.sleep(1.0)
+        spent = cpu_seconds(server.pid) - before
+        assert spent < 0.5, f"the service spent {spent:.2f}s of CPU in a second of refused accepts"
+        early.close()
+        first.close()  # its descriptor comes free, and the next attempt admits the waiting client
+        with waiting, waiting.makefile("rw", newline="\n") as late:
+            assert talk(late, "get k") == "= v"
+            assert talk(late, "quit") == "+bye"
+        assert server.wait(timeout=30) == 0
+    finally:
+        stopped(server)
+
+
+def test_service_says_when_the_kernel_has_no_ring_for_it(tmp_path):
+    """Descriptors 0 to 3 only: the listener takes the last, io_uring_setup fails with EMFILE, and the service
+    reports it and exits 2 instead of trapping."""
+    server, _, _ = started_service(tmp_path, descriptors=4)
+    try:
+        out, err = server.communicate(timeout=30)
+        assert server.returncode == 2, (server.returncode, out, err)
+        assert "no io_uring here, errno 24" in out and "listening" not in out
+    finally:
+        stopped(server)
 
 
 def test_service_speaks_its_line_protocol(tmp_path):

@@ -116,12 +116,14 @@ Parsing without substrings: a borrow cannot be returned, so `word_end` answers w
 ```text
 respond  alloc, ffi:send, free, io, mmio, read:line, read:t, trap, write:t, zero_init
 take_in  ... read:c, read:got, write:c, write:t
-admit    alloc, ffi:close, free, io, read:clients, read:q, write:clients, write:q, trap, zero_init
+admit    alloc, ffi:close, ffi:send, free, io, read:clients, read:q, write:clients, write:q, trap, zero_init
 hang_up  ffi:close, io, read:clients, trap, write:clients
 run      + ffi:socket, ffi:bind, ffi:listen, ffi:setsockopt, ffi:close, ffi:write
 ```
 
-`respond` reads the request and writes only the table, and the row says which argument each read and write belongs to. `admit` writes the ring it was lent, because every submission changes it. `alloc` is in `respond` because `get` builds its answer in a `Vec`; a reply of a fixed shape would not allocate. A reply is a blocking send, which a line always fits; a client that stops reading its replies can still stall the service. The table holds 32 clients, and a 33rd connection is closed as soon as it is accepted.
+`respond` reads the request and writes only the table, and the row says which argument each read and write belongs to. `admit` writes the ring it was lent, because every submission changes it, and sends `-busy` to a client it turns away. `alloc` is in `respond` because `get` builds its answer in a `Vec`; a reply of a fixed shape would not allocate. A reply is a blocking send, which a line always fits; a client that stops reading its replies can still stall the service.
+
+Overload is an answer, never a trap. The table holds 32 clients, and a 33rd connection hears `-busy` and is closed. An accept that fails, which is what running out of descriptors looks like, is not retried at once: `run` submits a ten-millisecond `q.timeout` under the tag `RETRY` and accepts again when it fires, so a shortage costs no CPU and the waiting client is admitted as soon as another leaves. A kernel with no io_uring for the service (a container's seccomp filter, a sysctl, no descriptor for the ring) makes `q.status()` negative, and the service says `service: no io_uring here, errno 24` and exits 2 before it listens. `tests/projects/test_apps.py` provokes all three: a table of two and a third client, a descriptor limit lowered on the running process, and a limit that leaves the ring no descriptor.
 
 ## examples/apps/analytics
 

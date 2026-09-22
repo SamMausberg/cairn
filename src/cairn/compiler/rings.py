@@ -31,6 +31,9 @@ OPERATIONS: dict[str, tuple[tuple[str, ...], str]] = {
     "timeout": (("ns", "tag"), "timeout"),  # finishes with -ETIME after ns nanoseconds
 }
 KINDS = {"fd": I32, "data": BYTES, "count": USIZE, "offset": U64, "ns": U64, "tag": U64}
+# What a ring says about itself, read without the kernel: whether it is up, how many submissions it still takes,
+# and how many `next` still owes.
+QUERIES: dict[str, Type] = {"status": I64, "room": USIZE, "pending": USIZE}
 
 
 def check_ring(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
@@ -50,11 +53,17 @@ def method(c: Checker, e: Expr, name: str, args: list[Expr]) -> Type:
     through `next`, with -ECANCELED or its own result, so cancelling releases nothing early."""
     c.host_only(e, "An I/O ring is a host object")
     b = c.env.get(root(e.args[0]).val) if root(e.args[0]).tag == "name" else None
+    e.ref = ("ring", name)
+    if name in QUERIES and b is not None:
+        if args:
+            fail("E-ARITY", f"q.{name}() takes nothing.", e)
+        c.leased(c.where(e.args[0]), "ro", e)
+        c.effect(f"read:{root(e.args[0]).val}" if b.ty.mode != "value" else "local_read")
+        return QUERIES[name]
     if b is None or b.ty.mode == "ro":
         fail("E-WRITE-LEASE", "Submitting to a ring or collecting from it changes it; name a ring or one lent rw.", e)
     c.leased(c.where(e.args[0]), "rw", e)  # A task the ring is lent to is the only one that may use it.
     c.effect(f"write:{root(e.args[0]).val}" if b.ty.mode == "rw" else "local_write")  # Every operation changes it.
-    e.ref = ("ring", name)
     if name == "next":
         if len(args) != 2:
             fail("E-ARITY", "q.next(tag, result) writes the finished operation's tag and result.", e)
@@ -70,7 +79,7 @@ def method(c: Checker, e: Expr, name: str, args: list[Expr]) -> Type:
         c.effect("io")
         return Type("void")
     if name not in OPERATIONS:
-        fail("E-CALLEE", f"A ring offers {', '.join(OPERATIONS)}, next and cancel.", e)
+        fail("E-CALLEE", f"A ring offers {', '.join(OPERATIONS)}, next, cancel, {', '.join(QUERIES)}.", e)
     names = OPERATIONS[name][0]
     if len(args) != len(names):
         fail("E-ARITY", f"q.{name} takes {', '.join(names)}.", e)
@@ -91,6 +100,8 @@ def waited(c: Checker, e: Expr) -> None:
 
 def lower(g: Emitter, e: Expr) -> str:
     ring, rest = g.expr(e.args[0]), e.args[1:]
+    if e.ref[1] in QUERIES:
+        return f"{ring}.{e.ref[1]}()"
     if e.ref[1] == "next":
         return f"{ring}.collect({g.expr(rest[0])}, {g.expr(rest[1])})"
     if e.ref[1] == "cancel":

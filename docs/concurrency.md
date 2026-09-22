@@ -150,9 +150,9 @@ A group holds tasks that run declared functions. Queued device work keeps its ti
 
 ## I/O rings
 
-A task is a thread. A ring keeps many kernel operations in flight from one thread, and hands them back in the order they finish. `let mut q = IoRing(n);` declares, in place, a ring of at most `n` operations, for `n` from 1 to 4096; any other `n` traps. It is Linux io_uring, set up here once, so the declaration carries `alloc`, `free` and `io`, and a kernel that refuses io_uring makes the declaration trap.
+A task is a thread. A ring keeps many kernel operations in flight from one thread, and hands them back in the order they finish. `let mut q = IoRing(n);` declares, in place, a ring of at most `n` operations, for `n` from 1 to 4096; any other `n` traps. It is Linux io_uring, set up here once, so the declaration carries `alloc`, `free` and `io`.
 
-An operation takes the bytes it works on by value. `q.read(fd, data, count, offset, tag)`, `q.write(fd, data, count, offset, tag)`, `q.recv(fd, data, count, tag)`, `q.send(fd, data, count, tag)` and `q.accept(fd, tag)` move the `Buf[u8]` called `data` into the ring, so the program cannot touch storage the kernel is using (`E-MOVED`). `let data = q.next(tag, result);` waits for the next operation to finish and hands its `Buf` back, with the tag it was given and the kernel's result: a byte count, a new descriptor, or a negative errno. `io.outcome(result)` turns that into a `Result[usize, IoError]`, so a failure is a value to match on. `count` may be less than `len(data)`, never more. A submission to a full ring, or a `next` with nothing in flight, traps.
+An operation takes the bytes it works on by value. `q.read(fd, data, count, offset, tag)`, `q.write(fd, data, count, offset, tag)`, `q.recv(fd, data, count, tag)`, `q.send(fd, data, count, tag)` and `q.accept(fd, tag)` move the `Buf[u8]` called `data` into the ring, so the program cannot touch storage the kernel is using (`E-MOVED`). `let data = q.next(tag, result);` waits for the next operation to finish and hands its `Buf` back, with the tag it was given and the kernel's result: a byte count, a new descriptor, or a negative errno. `io.outcome(result)` turns that into a `Result[usize, IoError]`, so a failure is a value to match on. `count` may be less than `len(data)`, never more.
 
 Nothing is borrowed across an operation, so a ring records no lease and may be lent `rw` to a callee or to a task, which then uses it alone until it returns. It is never stored, passed by value or returned (`E-PINNED`). It is linear: `wait(q)` consumes it in the function that declared it (`E-LINEAR-LEAK`), after every operation still in flight has finished, and releases every `Buf` nobody collected. `defer wait(q);` covers every exit.
 
@@ -202,6 +202,39 @@ data was moved.
 ```
 
 `q.timeout(ns, tag)` is an operation that finishes after `ns` nanoseconds with `-ETIME`, which bounds how long a `next` can wait. `q.cancel(tag)` asks the kernel to stop every operation in flight under that tag. Each still comes back through `next`, with `-ECANCELED` or with its own result if it finished first, and with its `Buf`, so cancelling releases nothing early and a cancel that finds nothing does nothing.
+
+Every submission comes back through `next` exactly once. What the environment decides is a value there: a submission the kernel refuses for want of memory returns at once with `-EAGAIN` or `-ENOMEM` and its `Buf`. A kernel that will not set a ring up at all (a container whose seccomp filter blocks io_uring, a sysctl that disables it, no descriptor left) leaves the ring down instead of stopping the program. `q.status()` is then that negative errno, and every submission comes straight back with it, so a program handles a missing backend on the path it already has for a failed operation. `q.status()` is 0 on a ring that is up.
+
+What the program decides stays a guard. A submission to a full ring, or a `next` with nothing in flight, traps, and `q.room()` and `q.pending()` say how many submissions the ring still takes and how many `next` still owes, so a program under load sees both coming. The three queries read the ring and never enter the kernel, so their row is a read of the ring and nothing more, and a ring lent to a task cannot be asked until `wait` (`E-LEASED`).
+
+```cairn
+import std.core (Result);
+import std.io as io;
+
+// Take work while there is room, and count what was turned away.
+fn submit_all(q:rw<IoRing>, jobs:usize) -> u64 {
+  let mut refused:u64 = 0;
+  for k in 0..jobs {
+    if q.room() == 0 { refused = refused + 1; } else { q.timeout(1000000, u64(k)); }   // a millisecond each
+  }
+  return refused;
+}
+
+fn main() -> i32 {
+  let mut q = IoRing(4);
+  defer wait(q);
+  match io.outcome(q.status()) {
+    Result.Ok(up) => {}
+    Result.Err(e) => { return 1; }                // no io_uring here: fall back or report it
+  }
+  let refused = submit_all(q, 6);
+  let mut tag:u64 = 0;
+  let mut result:i64 = 0;
+  while q.pending() > 0 { let back = q.next(tag, result); }
+  if refused != 2 { return 2; }
+  return 0;
+}
+```
 
 A ring is a host object (`E-PLACEMENT`), and a lane may not reach one (`E-PARALLEL-CALL`). The value model reports a function that uses one as `unknown`.
 

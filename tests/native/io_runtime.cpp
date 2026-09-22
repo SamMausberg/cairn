@@ -2,8 +2,11 @@
 // abort the process; tests/runtime/test_native_runtime.py drives those as subprocesses. Built with the language
 // contract flags. What it establishes: many operations in flight from one thread, results matched to their tags
 // in the order they finish, every Buf handed back intact, the kernel's errors returned as values, and the ring's
-// own limits enforced by traps.
+// own limits enforced by traps. CAIRN_IO_FAULTS adds the one test hook, a refusal the kernel is asked to
+// pretend; the environment's refusals (no descriptor for the ring) are provoked for real.
+#define CAIRN_IO_FAULTS 1
 #include <arpa/inet.h>
+#include <sys/resource.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -204,6 +207,118 @@ static void test_a_timeout_and_a_cancel() {
   close(s[1]);
 }
 
+// A kernel that will not set a ring up leaves it down instead of trapping. With every descriptor taken,
+// io_uring_setup fails with EMFILE; the ring says so, and each submission comes straight back with that errno
+// and its Buf, so a program handles an unavailable backend on the path it already has for a failed operation.
+static void test_a_ring_the_kernel_refuses() {
+  rlimit before;
+  CHECK(getrlimit(RLIMIT_NOFILE, &before) == 0);
+  const int lowest = dup(0);  // the descriptor the ring would get
+  CHECK(lowest >= 0);
+  close(lowest);
+  rlimit none = before;
+  none.rlim_cur = static_cast<rlim_t>(lowest);
+  CHECK(setrlimit(RLIMIT_NOFILE, &none) == 0);
+  {
+    Ring ring(4);
+    CHECK(setrlimit(RLIMIT_NOFILE, &before) == 0);
+    CHECK(ring.status() == -EMFILE && ring.room() == 4 && ring.pending() == 0);
+    ring.submit(Op::read, 0, filled(8, 1), 8, 0, 5);
+    ring.submit(Op::timeout, -1, Buf<std::uint8_t>(), 0, 1000, 6);
+    CHECK(ring.room() == 2 && ring.pending() == 2);
+    ring.cancel(5);  // nothing reached the kernel, so there is nothing to stop
+    std::uint64_t tag;
+    std::int64_t result;
+    Buf<std::uint8_t> back = ring.collect(tag, result);
+    CHECK(tag == 5 && result == -EMFILE && back.size() == 8 && back.data()[1] == 8);
+    (void)ring.collect(tag, result);
+    CHECK(tag == 6 && result == -EMFILE && ring.pending() == 0 && ring.room() == 4);
+    ring.submit(Op::write, 1, filled(3, 2), 3, 0, 7);
+    std::move(ring).wait();  // releases what nobody collected, and closes nothing it never opened
+  }
+  setrlimit(RLIMIT_NOFILE, &before);
+}
+
+// A submission the kernel refuses (for want of memory, which a test cannot provoke safely, so the test build's
+// hook stands in for it) comes back through collect with the errno and its Buf, and the next one goes through.
+// A cancel the kernel refuses is not sent, and asking again sends it.
+static void test_a_refused_submission_comes_back() {
+  int p[2];
+  CHECK(pipe(p) == 0);
+  Ring ring(2);
+  cr::io::faults::refuse = 1;
+  ring.submit(Op::read, p[0], filled(4, 9), 4, 0, 1);
+  CHECK(ring.pending() == 1 && ring.room() == 1);
+  std::uint64_t tag;
+  std::int64_t result;
+  Buf<std::uint8_t> back = ring.collect(tag, result);
+  CHECK(tag == 1 && result == -EAGAIN && back.size() == 4 && back.data()[0] == 9);
+  ring.submit(Op::read, p[0], std::move(back), 4, 0, 2);  // the same Buf, now in flight in the kernel
+  cr::io::faults::refuse = 1;
+  ring.cancel(2);  // refused: the read is still in flight and nothing was sent
+  ring.cancel(2);  // sent this time
+  back = ring.collect(tag, result);
+  CHECK(tag == 2 && result == -ECANCELED && back.size() == 4);
+  std::move(ring).wait();
+  close(p[0]);
+  close(p[1]);
+}
+
+// room() and pending() say how many submissions a ring still takes and how many collect() owes, so a program
+// that fills a ring sees it full before a submission would trap.
+static void test_room_and_pending() {
+  int p[2];
+  CHECK(pipe(p) == 0);
+  Ring ring(3);
+  for(std::uint64_t k = 0; ring.room() > 0; ++k) ring.submit(Op::read, p[0], Buf<std::uint8_t>(1), 1, 0, k);
+  CHECK(ring.room() == 0 && ring.pending() == 3);
+  CHECK(write(p[1], "xyz", 3) == 3);
+  std::uint64_t tag;
+  std::int64_t result;
+  for(int k = 0; k < 3; ++k) {
+    (void)ring.collect(tag, result);
+    CHECK(result == 1 && ring.room() == static_cast<std::size_t>(k + 1));
+  }
+  CHECK(ring.pending() == 0);
+  std::move(ring).wait();
+  close(p[0]);
+  close(p[1]);
+}
+
+// A cancel that races the operation's own completion: whichever wins, the operation comes back exactly once,
+// with its bytes if it finished and -ECANCELED if it did not, and the berth then serves a new operation that
+// no late answer to the cancel can reach.
+static void test_a_cancel_racing_a_completion() {
+  int p[2];
+  CHECK(pipe(p) == 0);
+  Ring ring(2);
+  int finished = 0, stopped = 0;
+  for(int round = 0; round < 200; ++round) {
+    ring.submit(Op::read, p[0], Buf<std::uint8_t>(4), 4, 0, 1);
+    if(round % 2) ring.cancel(1);  // odd rounds ask before the bytes arrive, even rounds after
+    CHECK(write(p[1], "abcd", 4) == 4);
+    if(round % 2 == 0) ring.cancel(1);
+    std::uint64_t tag;
+    std::int64_t result;
+    Buf<std::uint8_t> back = ring.collect(tag, result);
+    CHECK(tag == 1 && back.size() == 4 && ring.pending() == 0);
+    finished += result == 4;
+    stopped += result == -ECANCELED;
+    CHECK(result == 4 || result == -ECANCELED);
+    if(result == 4) CHECK(std::memcmp(back.data(), "abcd", 4) == 0);
+    if(result != 4) {  // the bytes are still in the pipe: a fresh read in the same berth takes them
+      ring.submit(Op::read, p[0], std::move(back), 4, 0, 2);
+      back = ring.collect(tag, result);
+      CHECK(tag == 2 && result == 4 && std::memcmp(back.data(), "abcd", 4) == 0);
+    }
+  }
+  CHECK(finished + stopped == 200);
+  std::printf("cancel race: %d finished first, %d stopped\n", finished, stopped);
+  std::move(ring).wait();
+  close(p[0]);
+  close(p[1]);
+}
+
 // Each case leaves through _Exit inside its own scope, so a guard that failed to fire cannot be rescued by the
 // destructor of an unwaited ring, which traps too.
 static void survived(const char* name) {
@@ -250,6 +365,10 @@ int main(int argc, char** argv) {
   test_an_error_is_a_result();
   test_wait_drains_before_it_releases();
   test_a_timeout_and_a_cancel();
+  test_a_ring_the_kernel_refuses();
+  test_a_refused_submission_comes_back();
+  test_room_and_pending();
+  test_a_cancel_racing_a_completion();
   if(failures) {
     std::fprintf(stderr, "%d of %ld checks failed\n", failures, checked);
     return 1;
