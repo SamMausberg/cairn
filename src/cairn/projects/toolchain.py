@@ -27,6 +27,7 @@ REMARKS = ["-gline-tables-only", "-fsave-optimization-record", "-foptimization-r
 # -Wno-unused-command-line-argument keeps -Werror from failing on the C++ options of the .S job.
 BARE = ["-DCAIRN_FREESTANDING=1", "-ffreestanding", "-nostdlib", "-static", "-fno-stack-protector"]
 BARE += ["-fno-threadsafe-statics", "-fno-PIC", "-fno-PIE", "-fno-unwind-tables"]
+BARE += ["-fno-math-errno"]  # no errno exists, so sqrt is the instruction, never a libm call
 BARE += ["-fno-asynchronous-unwind-tables", "-Wl,--build-id=none", "-Wno-unused-command-line-argument"]
 TARGET_ROOT = Path(__file__).parents[1] / "targets"
 # A target names a host family, a -march profile, extra flags, and the one command that runs its image.

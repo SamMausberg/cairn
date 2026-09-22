@@ -6,7 +6,7 @@
   "model_proficiency_measured": "pilot only: nine function-level tasks, one model family, rule cards and diagnostics as the only documentation, no comparison arm (evidence/v1_1/ai_pilot)",
   "implemented": {
     "native_cpu": "Linux x86-64 and AArch64, C++20 lowering, libraries and executables, clang++ and g++",
-    "scalars": "fixed integers (8..64 bit), bool, strict floating point, byte text and character literals",
+    "scalars": "fixed integers (8..64 bit), bool, strict floating point with the IEEE-exact builtins sqrt, floor, ceil, trunc, abs and to_bits (abs of a signed minimum traps), byte text and character literals",
     "types": "generic records and sums with any value payload, tag-only enums, inline arrays, layout attributes",
     "generics": "generic records, sums and functions with inference and on-demand monomorphization; bounds by trait, kind (copy, affine) and closed scalar class, checked at the call (E-BOUND); templates certified once against their bounds at opaque witnesses or every type of a class (all of std; cairn check --generics)",
     "traits": "static dispatch on Self, multi-trait bounds checked per instance, methods by receiver module, impls held to their trait's declaration, one implementation per type (overlap and ambiguity are errors), borrowed dyn references and owned Dyn[Trait] values served by concrete and generic impls alike; bounded generic impls that apply exactly where their bounds hold; derivable eq, ord and hash",

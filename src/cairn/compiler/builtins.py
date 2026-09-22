@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from . import facts, rings
 from .traits import vtable
-from .tree import FLOAT, HOST_VISIBLE, INT, NUMERIC, UNSIGNED, USIZE, VOID, Expr, Type, fail, is_view, root
+from .tree import FLOAT, HOST_VISIBLE, INT, NUMERIC, SIGNED, UNSIGNED, USIZE, VOID, Expr, Type, fail, is_view, root
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
 SOFT = {"take", "swap", "transfer", "mmio_read", "mmio_write", "asm", "wait", "collect"}
+MATH = {"sqrt", "floor", "ceil", "trunc", "abs", "to_bits"}  # 1.4: a program's own function of the name wins
+SOFT |= MATH
 SHARED = {"Ticket": "Task", "Atomic": "Atomic", "Mutex": "Mutex", "Group": "Group"}  # CAIRN name -> cr::par class
 
 
@@ -94,6 +96,25 @@ def lower_binary(g: Emitter, e: Expr) -> str:
     if e.established:  # A count the checker showed is below the width: the runtime's shift, unguarded.
         return f"static_cast<{g.type(e.ty)}>(std::uint64_t({a}) {'<<' if e.val == 'shl_wrap' else '>>'} {b})"
     return f"cr::{e.val}<{g.type(e.ty)}>({a}, {b})" if e.val in WRAPPING else f"std::{e.val}({a}, {b})"
+
+
+def check_math(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    """sqrt floor ceil trunc abs to_bits: IEEE 754 makes each correctly rounded or exact, so every compiler, the
+    host and the device agree on them; the libm functions whose results vary are not builtins."""
+    arity(e, args, 1, f"{e.val} takes one argument.")
+    t = c.expr(args[0], None if e.val == "to_bits" else expected)
+    if t.mode == "value" and t.name in FLOAT:
+        return Type("u32" if t.name == "f32" else "u64") if e.val == "to_bits" else t
+    if e.val == "abs" and t.mode == "value" and t.name in SIGNED:
+        c.guard("overflow")  # The minimum has no magnitude of its own type.
+        return t
+    kind = "a signed integer or a float" if e.val == "abs" else "f32 or f64"
+    fail("E-MATH-TYPE", f"{e.val} takes {kind}, not {t.display()}.", e)
+
+
+def lower_math(g: Emitter, e: Expr) -> str:
+    a, ty = g.expr(e.args[0]), g.type(e.ty)
+    return f"cr::{'math::' if e.val in {'sqrt', 'floor', 'ceil', 'trunc'} else ''}{e.val}<{ty}>({a})"
 
 
 def check_machine(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
@@ -267,6 +288,7 @@ TABLE: dict[str, tuple[Any, Any]] = {
     "len": (check_len, lower_len),
     **dict.fromkeys(NUMERIC, (check_convert, lower_convert)),
     **dict.fromkeys(WRAPPING | {"min", "max"}, (check_binary, lower_binary)),
+    **dict.fromkeys(MATH, (check_math, lower_math)),
     **dict.fromkeys(("mmio_read", "mmio_write", "asm"), (check_machine, lower_machine)),
     "transfer": (check_transfer, lower_transfer),
     "wait": (check_wait, lambda g, e: f"{g.expr(e.args[0])}.wait()"),

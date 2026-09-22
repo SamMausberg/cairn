@@ -45,6 +45,29 @@ Expected u32, got u64.
 
 Floats compile with `-ffp-contract=off -fno-fast-math` (and `--fmad=false` on the device): no contraction and no reassociation. A failed guard aborts the process. It does not unwind, and it rolls nothing back.
 
+Six builtins cover what IEEE 754 defines exactly. `sqrt(x)` is correctly rounded, and `floor`, `ceil` and `trunc` are exact, for `f32` and `f64`, so every compiler, the host and a device lane give the same bits. `abs(x)` takes a float, exactly, or a signed integer, and traps on the minimum, whose magnitude its type cannot hold. `to_bits(x)` is a float's IEEE pattern as a `u32` or `u64`. Any other argument is `E-MATH-TYPE`. The functions whose last bit depends on the math library, `exp`, `log`, `sin` and the rest, are not builtins, and a program that needs one declares it `extern` so its row says `ffi:exp`. A function of the program's own with one of these names is the one a call reaches.
+
+```cairn
+fn hypot(x:f64, y:f64) -> f64 = sqrt(x * x + y * y);   // no trap: its row is empty
+
+fn main() -> i32 {
+  if hypot(3.0, 4.0) != 5.0 || floor(-2.5) != -3.0 || trunc(-2.5) != -2.0 { return 1; }
+  let root:f32 = sqrt(2.0);
+  if to_bits(root) != 0x3fb504f3 { return 2; }          // the nearest f32 to the square root of 2
+  let drift:i32 = -7;
+  if abs(drift) != 7 { return 3; }
+  return 0;
+}
+```
+
+```cairn rejects E-MATH-TYPE
+fn f(x:u64) -> u64 = sqrt(x);
+```
+
+```text
+sqrt takes f32 or f64, not u64.
+```
+
 The compiler leaves a guard out of the emitted C++ where the checker has shown it cannot fail. Inside `for i in 0..n`, `parallel i in n` or a `reduce` over `n`, `x[i]` into a view of extent `n` needs no bounds check, and neither does `i + 1`. The same holds after `if k >= n { return 0; }` for `x[k]`, for `x[i - 1]` under `if i > 0`, for a bin `usize(v & 255)` into 256 counters, for `data[i]` below `len(data)` when `data` is an immutable owner, and for a row `p[b * 256 + v]` of a buffer of `k * 256` when `b < k` and `v < 256`. The facts come from loop and lane binders, immutable `let` bindings, conditions and early exits, the left side of `&&` or `||` for its right side (so `k < n && x[k] > 3` needs no check) and a collector's predicate for its projection, over `usize` values that cannot change, and nothing about `let mut` locals. Removing a guard never changes what a program does: the row still says `trap`, and the receipt counts each such site under `discharged_check_sites` beside `syntactic_check_sites`. [verification.md](verification.md#the-guard-elision-rule) says what of this is proved.
 
 ## Functions and control flow

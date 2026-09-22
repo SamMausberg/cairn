@@ -82,6 +82,37 @@ template<class T> CR_HD inline T remainder(T a,T b) noexcept {
   if constexpr(std::is_signed_v<T>) if(a==std::numeric_limits<T>::min() && b==T(-1)) trap();
   return a%b;
 }
+// IEEE 754 makes sqrt correctly rounded and floor, ceil and trunc exact, so they agree on every compiler,
+// on the host and in a device lane; the libm functions whose last bit varies (exp, log, sin) are not here.
+namespace math {
+#if defined(__CUDA_ARCH__)
+#define CR_MATH(name, f, d) template<class T> CR_HD inline T name(T x) noexcept { \
+  if constexpr(std::is_same_v<T,float>) return ::f(x); else return ::d(x); }
+#else
+#define CR_MATH(name, f, d) template<class T> CR_HD inline T name(T x) noexcept { \
+  if constexpr(std::is_same_v<T,float>) return __builtin_##f(x); else return __builtin_##d(x); }
+#endif
+CR_MATH(sqrt, sqrtf, sqrt)
+CR_MATH(floor, floorf, floor)
+CR_MATH(ceil, ceilf, ceil)
+CR_MATH(trunc, truncf, trunc)
+CR_MATH(fabs, fabsf, fabs)
+#undef CR_MATH
+} // namespace math
+// The magnitude: exact for a float, and a trap for the signed minimum, whose magnitude its type cannot hold.
+template<class T> CR_HD inline T abs(T x) noexcept {
+  if constexpr(std::is_floating_point_v<T>) return math::fabs(x);
+  else { if(x==std::numeric_limits<T>::min()) trap(); return x<0 ? static_cast<T>(-x) : x; }
+}
+// The IEEE bit pattern of a float, as the unsigned integer of its width.
+template<class U, class F> CR_HD inline U to_bits(F x) noexcept {
+  static_assert(sizeof(U)==sizeof(F));
+#if defined(__CUDA_ARCH__)
+  if constexpr(std::is_same_v<F,float>) return __float_as_uint(x); else return static_cast<U>(__double_as_longlong(x));
+#else
+  return __builtin_bit_cast(U, x);
+#endif
+}
 // An unsigned sum that remembers whether it ever overflowed: associative and commutative, so a device
 // reduction may combine it in any order and the host still traps exactly when the true total does not fit.
 template<class T> struct Sum {
