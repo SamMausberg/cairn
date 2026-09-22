@@ -67,7 +67,7 @@ pub fn write_i64(n:usize, out:rw<u8>[n], value:i64) -> usize {
   if value >= 0 { return write_u64(n, out, u64(value)); }
   let magnitude = u64(-(value + 1)) + 1;
   stack digits:u8[20] = zeroed;
-  let used = write_u64(len(digits), digits, magnitude);
+  let used = write_u64(digits, magnitude);
   if used + 1 > n { return 0; }
   out[0] = 45;
   for i in 0..used { out[i + 1] = digits[i]; }
@@ -86,13 +86,13 @@ pub fn write_hex(n:usize, out:rw<u8>[n], value:u64, width:usize) -> usize {
 
 pub fn push_u64(v:rw<Vec[u8]>, value:u64) {
   stack digits:u8[20] = zeroed;
-  let used = write_u64(len(digits), digits, value);
+  let used = write_u64(digits, value);
   vec.extend_from(v, used, digits[0..used]);
 }
 
 pub fn push_i64(v:rw<Vec[u8]>, value:i64) {
   stack digits:u8[21] = zeroed;
-  let used = write_i64(len(digits), digits, value);
+  let used = write_i64(digits, value);
   vec.extend_from(v, used, digits[0..used]);
 }
 

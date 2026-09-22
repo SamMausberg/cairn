@@ -246,7 +246,7 @@ fn main() -> i32 {
   let mut pipeline = Buf[Stage](2);
   pipeline[0] = Stage(twice);
   pipeline[1] = Stage(drop_low);
-  if run(len(pipeline), pipeline, 21) != 32 { return 1; }
+  if run(pipeline, 21) != 32 { return 1; }
   return 0;
 }
 ```
@@ -261,7 +261,7 @@ fn main() -> i32 {
   let gain:u64 = 3;
   let mut calls:u64 = 0;
   for i in 0..len(samples) { samples[i] = u64(i); }
-  scale(len(samples), samples, |x:u64| -> u64 { calls = calls + 1; return x * gain; });
+  scale(samples, |x:u64| -> u64 { calls = calls + 1; return x * gain; });
   if samples[3] != 9 || calls != 4 { return 1; }
   return 0;
 }

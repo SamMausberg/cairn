@@ -74,7 +74,7 @@ pub fn load_dataset(
 pub fn temp_path(n:usize, tail:ro<u8>[n]) -> Vec[u8] {
   let mut p = vec.new[u8]();
   let prefix = "/tmp/cairn-analytics-";
-  p.extend_from(len(prefix), prefix);
+  p.extend_from(prefix);
   unsafe { text.push_u64(p, u64(sys.getpid())); }
   p.extend_from(n, tail);
   p.push(0); // C reads a pointer, so the terminator lives in the storage

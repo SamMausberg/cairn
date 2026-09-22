@@ -2,7 +2,7 @@ fn main() -> i32 {
   stack text:u8[2] = zeroed;
   text[0] = 52;
   text[1] = 50;
-  match decimal(len(text), text) {
+  match decimal(text) {
     Parsed.Value(value) => { if value != 42 { return 1; } }
     Parsed.Invalid(offset) => { return 2; }
     Parsed.Overflow(offset) => { return 3; }

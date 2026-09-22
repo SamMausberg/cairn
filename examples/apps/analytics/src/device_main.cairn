@@ -84,6 +84,6 @@ pub fn main() -> i32 {
   report.micros("analytics: download          ", d3 - d2);
   report.micros("analytics: queued pipeline   ", q1 - q0);
   let done = "analytics: the device agrees with the host bit for bit";
-  report.say(len(done), done);
+  report.say(done);
   return 0;
 }

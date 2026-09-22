@@ -18,10 +18,10 @@ fn main() -> i32 {
   stack window:u8[4] = zeroed;
   window[0] = 4;
   let banner = "trap demo: reading window[4] of 4\n";
-  puts(len(banner), banner);
+  puts(banner);
   let index = usize(window[0]); // 4, read back from storage rather than written as a literal
   let byte = window[index]; // the bounds guard stops the machine on this line
   let after = "unreachable\n";
-  puts(len(after), after);
+  puts(after);
   return i32(byte);
 }

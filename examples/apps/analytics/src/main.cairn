@@ -37,7 +37,7 @@ pub fn main() -> i32 {
     Result.Ok(count) => { if count != rows { return 1; } }
     Result.Err(e) => {
       let why = "analytics: the dataset could not be written or read";
-      report.say(len(why), why);
+      report.say(why);
       return 2;
     }
   }
@@ -191,6 +191,6 @@ pub fn main() -> i32 {
   report.micros("analytics: derived columns   ", t5 - t4);
   report.micros("analytics: group by venue    ", t6 - t5);
   let done = "analytics: every cross-check passed on the host";
-  report.say(len(done), done);
+  report.say(done);
   return 0;
 }

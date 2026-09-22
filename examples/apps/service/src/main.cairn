@@ -111,7 +111,7 @@ fn run() -> Result[usize, IoError] {
   defer net.close(server);
   let mut t = new_table();
   let ready = "service: listening on ";
-  io.print(len(ready), ready);
+  io.print(ready);
   io.print_u64(u64(PORT));
   io.newline();
   let mut running = true;
@@ -129,7 +129,7 @@ fn main() -> i32 {
     Result.Ok(code) => { return i32(code); }
     Result.Err(e) => {
       let failed = "service: io error ";
-      io.print(len(failed), failed);
+      io.print(failed);
       io.print_u64(u64(e.code));
       io.newline();
       return 1;

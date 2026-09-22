@@ -37,7 +37,7 @@ fn main() -> i32 {
   if host_used == 0 || host_used >= n { return 4; }
 
   let title = "gpu_pipeline: 4194304 values, kept ";
-  io.print(len(title), title);
+  io.print(title);
   io.print_u64(u64(dev_used));
   io.newline();
   report(30, "gpu_pipeline: host pipeline   ", h1 - h0);
@@ -47,6 +47,6 @@ fn main() -> i32 {
   report(30, "gpu_pipeline: device reduce   ", d4 - d3);
   report(30, "gpu_pipeline: download        ", d5 - d4);
   let agree = "gpu_pipeline: device result matches the host";
-  io.println(len(agree), agree);
+  io.println(agree);
   return 0;
 }

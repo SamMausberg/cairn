@@ -108,11 +108,11 @@ fn field(n:usize, line:ro<u8>[n], from:usize) -> Result[u64, text.ParseError] {
 
 fn main() -> i32 {
   let line = "23,19,x9";
-  match field(len(line), line, 0) {
+  match field(line, 0) {
     Result.Ok(value) => { if value != 23 { return 1; } }
     Result.Err(why) => { return 2; }
   }
-  match field(len(line), line, 6) {
+  match field(line, 6) {
     Result.Ok(value) => { return 3; }
     Result.Err(why) => {
       match why {
@@ -123,7 +123,7 @@ fn main() -> i32 {
     }
   }
   stack out:u8[4] = zeroed;
-  let used = text.write_hex(len(out), out, 48879, 4);   // a writing call gets its own statement
+  let used = text.write_hex(out, 48879, 4);             // a writing call gets its own statement
   if used != 4 || out[0] != 98 { return 7; }            // "beef"
   return 0;
 }
@@ -206,7 +206,7 @@ fn tally(n:usize, line:ro<u8>[n], counts:rw<map.Map[u64, u64]>) {
 fn main() -> i32 {
   let mut counts = map.new[u64, u64]();
   let line = "put get put del get put";
-  tally(len(line), line, counts);
+  tally(line, counts);
   if map.count(counts) != 3 { return 1; }
   match map.find(counts, text.hash_bytes(3, "put")) {
     Option.Some(slot) => { if counts.vals[slot] != 3 { return 2; } }
@@ -269,14 +269,14 @@ fn main() -> i32 {
   book[1] = Trade(1, 700);
   book[2] = Trade(2, 100);
   book[3] = Trade(1, 50);
-  sort.sort(len(book), book);
+  sort.sort(book);
   if book[0].venue != 1 || book[0].cents != 50 || book[3].cents != 900 { return 1; }
   let wanted = Trade(2, 100);
-  match sort.search(len(book), book, wanted) {
+  match sort.search(book, wanted) {
     Option.Some(at) => { if at != 2 { return 2; } }
     Option.None => { return 3; }
   }
-  sort.sort_by(len(book), book, |a:ro<Trade>, b:ro<Trade>| -> bool { return a.cents > b.cents; });
+  sort.sort_by(book, |a:ro<Trade>, b:ro<Trade>| -> bool { return a.cents > b.cents; });
   if book[0].cents != 900 { return 4; }
   return 0;
 }
@@ -350,7 +350,7 @@ import std.mem as mem;
 fn main() -> i32 {
   stack pattern:u8[8] = zeroed;
   buffer frame:u8[16] = zeroed;
-  mem.fill(len(pattern), pattern, 255);
+  mem.fill(pattern, 255);
   mem.copy(8, frame[0..8], pattern);
   if !mem.equal(8, frame[0..8], len(pattern), pattern) { return 1; }
   if mem.equal(len(frame), frame, len(pattern), pattern) { return 2; }   // lengths differ

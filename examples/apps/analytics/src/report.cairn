@@ -16,7 +16,7 @@ pub fn micros(label:ro<u8>[LABEL], nanoseconds:u64) {
   io.print(LABEL, label);
   io.print_u64(nanoseconds / 1000);
   let unit = " us";
-  io.println(len(unit), unit);
+  io.println(unit);
 }
 
 pub fn say(n:usize, text:ro<u8>[n]) { io.println(n, text); }

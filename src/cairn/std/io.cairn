@@ -148,13 +148,13 @@ pub fn newline() { put(1, 1, "\n"); }
 
 pub fn print_u64(value:u64) {
   stack digits:u8[20] = zeroed;
-  let used = text.write_u64(len(digits), digits, value);
+  let used = text.write_u64(digits, value);
   put(1, used, digits[0..used]);
 }
 
 pub fn print_i64(value:i64) {
   stack digits:u8[21] = zeroed;
-  let used = text.write_i64(len(digits), digits, value);
+  let used = text.write_i64(digits, value);
   put(1, used, digits[0..used]);
 }
 

@@ -11,19 +11,19 @@ fn ingest(n:usize, text:ro<u8>[n], k:usize, out:rw<u64>[k]) -> usize {
         Reading.Value(value) => { if used < k { out[used] = value; used = used + 1; } }
         Reading.Invalid(offset) => {
           let m = "  bad digit at ";
-          puts(len(m), m);
+          puts(m);
           putu(u64(start + offset));
           putc(10);
         }
         Reading.Overflow(offset) => {
           let m = "  too large at ";
-          puts(len(m), m);
+          puts(m);
           putu(u64(start + offset));
           putc(10);
         }
         Reading.Empty => {
           let m = "  empty field at ";
-          puts(len(m), m);
+          puts(m);
           putu(u64(start));
           putc(10);
         }
@@ -53,11 +53,11 @@ fn sort_small(k:usize, values:rw<u64>[k], used:usize) {
 
 fn main() -> i32 {
   let banner = "cairn freestanding: qemu virt, pl011 uart\n";
-  puts(len(banner), banner);
+  puts(banner);
   let log = "23,19,31,7,42,19,x9,,99999999999999999999,";
   let label = "log ";
-  puts(len(label), label);
-  puts(len(log), log);
+  puts(label);
+  puts(log);
   putc(10);
 
   stack readings:u64[8] = zeroed;
@@ -74,22 +74,22 @@ fn main() -> i32 {
   if used == 0 { return 1; }
 
   let counted = "readings ";
-  puts(len(counted), counted);
+  puts(counted);
   putu(u64(used));
   let summed = " total ";
-  puts(len(summed), summed);
+  puts(summed);
   putu(total);
   let highest = " max ";
-  puts(len(highest), highest);
+  puts(highest);
   putu(peak);
   let averaged = " mean ";
-  puts(len(averaged), averaged);
+  puts(averaged);
   putu(total / u64(used));
   putc(10);
 
   sort_small(8, readings, used);
   let ordered = "sorted";
-  puts(len(ordered), ordered);
+  puts(ordered);
   for i in 0..used {
     putc(32);
     putu(readings[i]);
@@ -97,6 +97,6 @@ fn main() -> i32 {
   putc(10);
 
   let done = "ok\n";
-  puts(len(done), done);
+  puts(done);
   return 0;
 }

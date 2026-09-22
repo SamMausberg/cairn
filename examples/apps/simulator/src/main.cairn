@@ -49,12 +49,12 @@ fn main() -> i32 {
   if !(heat > 0.0) { return 3; }
 
   let title = "simulator: 1024x1024 grid, 16 Jacobi sweeps";
-  io.println(len(title), title);
+  io.println(title);
   report(22, "simulator: sequential ", t1 - t0);
   report(22, "simulator: threads    ", t2 - t1);
   report(22, "simulator: device up  ", t3 - t2);
   report(22, "simulator: device     ", t4 - t3);
   let agree = "simulator: all three back ends agree bit for bit";
-  io.println(len(agree), agree);
+  io.println(agree);
   return 0;
 }

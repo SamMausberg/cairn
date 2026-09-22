@@ -9,7 +9,7 @@ import std.vec (Vec);
 fn temp_path(n:usize, tail:ro<u8>[n]) -> Vec[u8] {
   let mut p = vec.new[u8]();
   let prefix = "/tmp/cairn-kvstore-";
-  p.extend_from(len(prefix), prefix);
+  p.extend_from(prefix);
   unsafe { text.push_u64(p, u64(sys.getpid())); }
   p.extend_from(n, tail);
   p.push(0); // C reads a pointer, so the terminator lives in the storage
@@ -110,18 +110,18 @@ fn main() -> i32 {
     Result.Ok(step) => {
       if step == 0 {
         let good = "kvstore: self-check passed";
-        io.println(len(good), good);
+        io.println(good);
         return 0;
       }
       let bad = "kvstore: failed check ";
-      io.print(len(bad), bad);
+      io.print(bad);
       io.print_u64(u64(step));
       io.newline();
       return i32(step);
     }
     Result.Err(e) => {
       let failed = "kvstore: io error ";
-      io.print(len(failed), failed);
+      io.print(failed);
       io.print_u64(u64(e.code));
       io.newline();
       return 100;

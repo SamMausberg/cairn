@@ -276,7 +276,7 @@ fn main() -> i32 {
   let mut cells = Buf[u64](4);
   let bias:u64 = 10;
   let mut calls:u64 = 0;
-  apply(len(cells), cells, |x:u64| -> u64 { calls = calls + 1; return x + bias; });
+  apply(cells, |x:u64| -> u64 { calls = calls + 1; return x + bias; });
   if cells[3] != 10 || calls != 4 { return 1; }
   return 0;
 }
@@ -301,7 +301,7 @@ fn main() -> i32 {
   wait(t1);
   wait(t2);
   wait(t3);
-  let sum = spawn total(len(data), data);
+  let sum = spawn total(data);
   let answer = wait(sum);
   if answer != 404550 { return 1; }
   return 0;
@@ -354,9 +354,9 @@ fn main() -> i32 {
   book[0] = Trade(5, 700);
   book[1] = Trade(2, 900);
   book[2] = Trade(2, 100);
-  let all = sum_Trade(len(book), book);
+  let all = sum_Trade(book);
   if !same(all, Trade(9, 1700)) { return 1; }
-  sort.sort(len(book), book);                       // lexicographic, by the derived Ord
+  sort.sort(book);                                  // lexicographic, by the derived Ord
   if book[0].cents != 100 || book[2].shares != 5 { return 2; }
   stack bytes:u8[12] = zeroed;
   encode_Trade(bytes, book[2]);

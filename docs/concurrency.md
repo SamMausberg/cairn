@@ -27,7 +27,7 @@ fn main() -> i32 {
   wait(first);
   wait(second);
   wait(third);
-  let sum = spawn total(len(samples), samples);            // a view lends the elements: len stays readable
+  let sum = spawn total(samples);                          // a view lends the elements: len stays readable
   if wait(sum) != 404550 { return 1; }
   return 0;
 }
@@ -59,8 +59,8 @@ fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u
 fn main() -> i32 {
   let n:usize = 64;
   let mut pair = Pair(Buf[u64](n), Buf[u64](n));
-  let left = spawn fill(len(pair.left), pair.left, 0);      // two fields, two threads
-  let right = spawn fill(len(pair.right), pair.right, 100);
+  let left = spawn fill(pair.left, 0);                      // two fields, two threads
+  let right = spawn fill(pair.right, 100);
   let k = len(pair.left);                                   // the field's header, which its elements do not cover
   wait(left);
   wait(right);
@@ -118,7 +118,7 @@ fn main() -> i32 {
   spawn fill(n - b, samples[b..n], 600) into writers;
   wait(writers);                                            // joins all three and returns the leases
   let readers = Group[u64](4);
-  for k in 0..4 { spawn work(len(samples), samples, k * 200, 200) into readers; }   // read-only: shared
+  for k in 0..4 { spawn work(samples, k * 200, 200) into readers; }  // read-only: shared
   let mut sum:u64 = 0;
   for k in 0..4 { sum = add_wrap(sum, collect(readers)); }  // in the order they finish
   wait(readers);
@@ -162,7 +162,7 @@ fn main() -> i32 {
   samples[1] = 7;
   samples[3] = 9;
   let live = Atomic[u64](0);
-  let t = spawn count_live(len(samples), samples, live);
+  let t = spawn count_live(samples, live);
   wait(t);
   if live.load(Order.seq_cst) != 2 { return 1; }
   return 0;
