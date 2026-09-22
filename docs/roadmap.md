@@ -50,7 +50,9 @@ Nothing is claimed against tuned C++ or CUDA. Nothing has run across more than o
 
 The edit protocol, the packets and the rule cards cover the whole language. One preregistered pilot has run (`evidence/v1_1/ai_pilot`): nine fresh subjects of one model family, given only the rule cards and compiler diagnostics, solved nine of nine small tasks against hidden tests. It had no comparison arm.
 
-Open: an experiment with equal budgets against C++ and Rust tooling, other model families and larger programs. Token counts are still byte counts.
+Packets now say how much of each callee's behaviour is established, from its interface alone to a reference Z3 checked when the session opened; `cairn state` stands in for a transcript when an agent resumes; and `cairn migrate` carries a signature change through every caller, in all files or none. Context is counted in `o200k_base` tokens, one real BPE vocabulary and not every model's. On thirty scripted edits a warm focused host now reads 0.84 of the tokens it read before these changes, and a refusal 0.68 (`evidence/v1_4/context/`). Every one of those numbers comes from authored transcripts: none shows that a model solves more tasks, or needs fewer turns, and no model has written a migration.
+
+Open: the preregistered packet trial (`tools/ai/protocol_trial.md`), which needs fresh model subjects, and an experiment with equal budgets against C++ and Rust tooling, other model families and larger programs.
 
 ## Packaging
 
