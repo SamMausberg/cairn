@@ -34,7 +34,7 @@ pub fn listen_on(ip:ro<u8>[4], port:u16, backlog:i32) -> Result[Socket, IoError]
     let fd = sys.socket(2, 1, 0);
     if fd < 0 { return error(); }
     // SO_REUSEADDR: a restart must not lose to the previous listener's TIME_WAIT.
-    let reused = sys.setsockopt(fd, 1, 2, "\x01\x00\x00\x00", 4);
+    sys.setsockopt(fd, 1, 2, "\x01\x00\x00\x00", 4);
     if sys.bind(fd, addr, 16) < 0 { return abandon(fd); }
     if sys.listen(fd, backlog) < 0 { return abandon(fd); }
     return Ok(Socket(fd));
@@ -86,4 +86,4 @@ pub fn recv(s:ro<Socket>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] {
   }
 }
 
-pub fn close(s:Socket) { unsafe { let closed = sys.close(s.fd); } }
+pub fn close(s:Socket) { unsafe { sys.close(s.fd); } }

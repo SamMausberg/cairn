@@ -50,7 +50,7 @@ pub fn write_dataset(n:usize, path:ro<u8>[n], rows:usize) -> Result[u64, IoError
     written += u64(sent);
     done += fill;
   }
-  let flushed = try io.sync(f);
+  try io.sync(f);
   return Ok(written);
 }
 

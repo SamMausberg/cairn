@@ -52,7 +52,7 @@ fn probe[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> usize {
 fn place[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:K, value:V) {
   let slot = probe(m, key);
   if m.state[slot] == 1 {
-    let replaced = take(m.vals[slot]); // released here, so the caller sees no old value
+    take(m.vals[slot]); // released here, so the caller sees no old value
   } else {
     if m.state[slot] == 0 { m.fill += 1; }
     m.state[slot] = 1;
@@ -139,7 +139,7 @@ pub fn contains[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> b
 pub fn remove[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:ro<K>) -> Option[V] {
   match find(m, key) {
     Some(slot) => {
-      let erased = take(m.keys[slot]);
+      take(m.keys[slot]);
       m.state[slot] = 2;
       m.count -= 1;
       return Some(take(m.vals[slot]));

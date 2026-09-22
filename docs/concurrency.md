@@ -176,7 +176,7 @@ fn main() -> i32 {
   q.write(fds[1], hello, 5, 0, 2);
   let mut tag:u64 = 0;
   let mut result:i64 = 0;
-  let wrote = q.next(tag, result);                // the write finishes first
+  q.next(tag, result);                            // the write finishes first
   let read = q.next(tag, result);                 // then the read, holding the five bytes
   match io.outcome(result) {
     Ok(n) => { if tag != 1 || n != 5 || read[0] != 104 { return 2; } }
@@ -230,7 +230,7 @@ fn main() -> i32 {
   let refused = submit_all(q, 6);
   let mut tag:u64 = 0;
   let mut result:i64 = 0;
-  while q.pending() > 0 { let back = q.next(tag, result); }
+  while q.pending() > 0 { q.next(tag, result); }
   if refused != 2 { return 2; }
   return 0;
 }
@@ -244,7 +244,7 @@ A ring is a host object (`E-PLACEMENT`), and a lane may not reach one (`E-PARALL
 
 ```cairn
 fn count_live(n:usize, xs:ro<u64>[n], live:ro<Atomic[u64]>) {
-  for i in 0..n { if xs[i] > 0 { let before = live.fetch_add(1, Order.relaxed); } }
+  for i in 0..n { if xs[i] > 0 { live.fetch_add(1, Order.relaxed); } }
 }
 
 fn main() -> i32 {

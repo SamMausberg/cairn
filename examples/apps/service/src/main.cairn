@@ -40,7 +40,7 @@ fn say(fd:i32, n:usize, message:ro<u8>[n]) -> Result[usize, IoError] {
 fn respond(fd:i32, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, IoError] {
   let verb = word_end(line, 0);
   if text.equal(line[0..verb], "quit") {
-    let bye = try say(fd, "+bye");
+    try say(fd, "+bye");
     return Ok(true);
   }
   if verb >= n {
@@ -78,9 +78,9 @@ fn respond(fd:i32, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, IoError
   }
   if text.equal(line[0..verb], "del") {
     if erase(t, k, line[key_lo..key_hi]) {
-      let ok = try say(fd, "+ok");
+      try say(fd, "+ok");
     } else {
-      let missing = try say(fd, "-missing");
+      try say(fd, "-missing");
     }
     return Ok(false);
   }
@@ -102,7 +102,7 @@ fn admit(q:rw<IoRing>, clients:rw<Buf[Client]>, fd:i32) {
     Ok(sent) => {}
     Err(e) => {} // it is being turned away either way
   }
-  unsafe { let refused = sys.close(fd); }
+  unsafe { sys.close(fd); }
 }
 
 fn hang_up(clients:rw<Buf[Client]>, k:usize) {
@@ -115,7 +115,7 @@ fn hang_up(clients:rw<Buf[Client]>, k:usize) {
 fn take_in(c:rw<Client>, t:rw<Table>, n:usize, got:ro<u8>[n]) -> Result[bool, IoError] {
   for i in 0..n {
     if c.have == LIMIT {
-      let bad = try say(c.fd, "-error");
+      try say(c.fd, "-error");
       c.have = 0;
     }
     c.line[c.have] = got[i];

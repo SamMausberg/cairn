@@ -36,7 +36,7 @@ pub fn open(n:usize, path:ro<u8>[n], flags:i32) -> Result[File, IoError] {
 
 // The consumer of the linear value. It cannot report a status: a function that returns one
 // has a `return` statement, and a `return` demands that every linear value be consumed first.
-pub fn close(f:File) { unsafe { let closed = sys.close(f.fd); } }
+pub fn close(f:File) { unsafe { sys.close(f.fd); } }
 
 pub fn read(f:ro<File>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] {
   unsafe {
@@ -80,7 +80,7 @@ pub fn seek(f:ro<File>, offset:i64, whence:i32) -> Result[u64, IoError] {
 
 pub fn size(f:ro<File>) -> Result[u64, IoError] {
   let end = try seek(f, 0, END);
-  let back = try seek(f, 0, SET);
+  try seek(f, 0, SET);
   return Ok(end);
 }
 

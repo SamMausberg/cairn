@@ -35,9 +35,9 @@ fn scenario() -> Result[usize, IoError] {
     let start = try replay(s, f);
     if start != 0 { return Ok(1); }
     let a = try put(s, f, "alpha", "1");
-    let b = try put(s, f, "beta", "22");
-    let c = try put(s, f, "gamma", "333");
-    let d = try erase(s, f, "beta");
+    try put(s, f, "beta", "22");
+    try put(s, f, "gamma", "333");
+    try erase(s, f, "beta");
     if s.index.count() != 2 { return Ok(2); }
   }
 
@@ -68,8 +68,8 @@ fn scenario() -> Result[usize, IoError] {
     if size != end { return Ok(8); }
     stack bad:u8[16] = zeroed;
     encode_Header(bad, Header(12345, 0, 1, 1));
-    let header = try io.write(f, bad);
-    let payload = try io.write(f, "xy");
+    try io.write(f, bad);
+    try io.write(f, "xy");
   }
 
   { // the corrupt record is ignored and cut away, and compaction rewrites the live records
@@ -86,7 +86,7 @@ fn scenario() -> Result[usize, IoError] {
     let f = try io.open(log.data[0..n], io.APPEND);
     defer io.close(f);
     let mut s = new_store();
-    let end = try replay(s, f);
+    try replay(s, f);
     if s.index.count() != 2 { return Ok(11); }
     match get(s, "alpha") {
       Some(slot) => { if !value_is(s, slot, "1") { return Ok(12); } }
@@ -96,11 +96,11 @@ fn scenario() -> Result[usize, IoError] {
       Some(slot) => return Ok(14);
       None => {}
     }
-    let after = try put(s, f, "new", "4444");
+    try put(s, f, "new", "4444");
     if s.index.count() != 3 { return Ok(15); }
   }
 
-  let gone = try io.remove(log.data[0..n]);
+  try io.remove(log.data[0..n]);
   return Ok(0);
 }
 

@@ -33,7 +33,7 @@ pub fn read(n:usize, path:ro<u8>[n]) -> Result[Vec[u8], IoError] {
   let f = try open(path, io.READ);
   defer io.close(f);
   let mut out = vec.new[u8]();
-  let got = try io.read_to_end(f, out);
+  try io.read_to_end(f, out);
   return Result.Ok(out);
 }
 

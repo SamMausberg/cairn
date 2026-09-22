@@ -128,8 +128,8 @@ pub fn replay(s:rw<Store>, f:ro<File>) -> Result[u64, IoError] {
     apply(s, h.kind, key, value);
     offset = offset + u64(HEAD) + u64(k) + u64(v);
   }
-  let cut = try io.truncate(f, offset);
-  let resumed = try io.seek(f, i64(offset), io.SET);
+  try io.truncate(f, offset);
+  try io.seek(f, i64(offset), io.SET);
   s.end = offset;
   return Ok(offset);
 }
@@ -153,8 +153,8 @@ pub fn compact_log(
         written += bytes;
       }
     }
-    let flushed = try io.sync(f);
+    try io.sync(f);
   }
-  let moved = try io.rename(temp, path);
+  try io.rename(temp, path);
   return Ok(written);
 }

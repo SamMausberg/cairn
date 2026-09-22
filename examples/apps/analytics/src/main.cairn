@@ -19,7 +19,7 @@ import analytics.table;
 fn ingest(rows:usize, c:rw<schema.Trade_table>) -> Result[usize, IoError] {
   let path = table.temp_path(".trades");
   let Vec(name, n) = path; // the path's storage, taken apart as it was built
-  let bytes = try table.write_dataset(name[0..n], rows);
+  try table.write_dataset(name[0..n], rows);
   match table.load_dataset(name[0..n], rows, c) {
     Done(count) => {
       let gone = io.remove(name[0..n]);

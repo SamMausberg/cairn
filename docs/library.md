@@ -151,7 +151,7 @@ fn record(path:ro<u8>[PATH], n:usize, data:ro<u8>[n]) -> Result[usize, io.IoErro
   let f = try io.open(PATH, path, io.TRUNCATE);
   defer io.close(f);                       // runs on every exit, including the ones `try` takes
   let wrote = try io.write(f, n, data);
-  let flushed = try io.sync(f);
+  try io.sync(f);
   return Ok(wrote);
 }
 
@@ -217,10 +217,10 @@ import std.fs;
 import std.io (IoError);
 
 fn log_twice(n:usize, path:ro<u8>[n]) -> Result[usize, IoError] {
-  let first = try fs.write(path, "started\n");    // create or cut to nothing
-  let then = try fs.append(path, "done\n");
+  try fs.write(path, "started\n");                // create or cut to nothing
+  try fs.append(path, "done\n");
   let back = try fs.read(path);                   // reads until the kernel says the file ended
-  let gone = try fs.remove(path);
+  try fs.remove(path);
   if fs.exists(path) { return Ok(0); }
   return Ok(back.len);
 }
@@ -540,10 +540,10 @@ fn echo_once(port:u16) -> Result[usize, IoError] {
   defer net.close(client);
   let session = try net.accept(server);
   defer net.close(session);
-  let sent = try net.send(client, 5, "ping\n");
+  try net.send(client, 5, "ping\n");
   stack heard:u8[5] = zeroed;
   let got = try net.recv(session, len(heard), heard);
-  let back = try net.send(session, got, heard[0..got]);
+  try net.send(session, got, heard[0..got]);
   stack echoed:u8[5] = zeroed;
   let last = try net.recv(client, len(echoed), echoed);
   if echoed[0] != 112 { return Err(IoError(71)); }   // 'p'
