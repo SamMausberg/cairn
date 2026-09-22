@@ -123,9 +123,10 @@ def test_every_reserved_word_has_exactly_one_class():
 
 
 def test_every_word_the_parser_reads_in_one_position_is_highlighted_there():
-    """A word compared against a token in syntax.py and not reserved is contextual, and needs a rule."""
-    parser = (ROOT / "src" / "cairn" / "compiler" / "syntax.py").read_text(encoding="utf-8")
-    compared = set(re.findall(r'(?:\.s ==|eat\(|need\(|ahead\(\d\) ==) "([a-z_]+)"', parser))
+    """A word the parser compares a token against, and the lexer does not reserve, is contextual and needs a rule."""
+    compiler = sorted((ROOT / "src" / "cairn" / "compiler").glob("*.py"))
+    parser = "\n".join(p.read_text(encoding="utf-8") for p in compiler)
+    compared = set(re.findall(r'(?:\.s == |eat\(|need\(|ahead\(\d\) == )"([a-z_]+)"', parser))
     compared |= {
         w for group in re.findall(r"\.s (?:not )?in \{([^}]*)\}", parser) for w in re.findall(r'"([a-z_]+)"', group)
     }
