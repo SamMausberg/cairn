@@ -137,7 +137,7 @@ Proved in Lean 4, with no `sorry` and no axioms beyond `propext` and `Quot.sound
 
 Tested, not proved: placement, effects, closures, what a lane may call, `reduce` and `compact`, queued device work, generics, traits, declared field extents. The suite holds about 1,800 tests, including rejection tables from five adversarial reviews, native runs under both compilers, Address, UndefinedBehavior, Leak and Thread sanitizers, CUDA runs and QEMU runs.
 
-`verify` trusts its translator and Z3. It compares a result together with what a call left in everything it was lent. It reports unknown for an owner that moves, a trip count it cannot bound without a precondition, concurrency, device memory and the foreign boundary. The foreign boundary is as safe as its declarations are true.
+`verify` trusts its translator and Z3. It compares a result together with what a call left in everything it was lent. It follows an owner that moves, and reports unknown for an owner held inside a record or an array, a trip count it cannot bound without a precondition, concurrency, device memory and the foreign boundary. The foreign boundary is as safe as its declarations are true.
 
 The performance numbers are from single machines. `evidence/v1_0/gpu/` has three kernels, and device wins depend on transfer cost. `evidence/v1_2/host_regions/` puts the size at which a host `parallel` region starts to beat a loop at about a hundred thousand cheap elements. The preregistered CPU baseline suite under `bench/suite/` states what it measures before it runs, and its results are recorded under `evidence/` with the losses beside the wins. Nothing is claimed against tuned C++ or CUDA.
 
