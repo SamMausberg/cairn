@@ -1,7 +1,9 @@
 """Focused packets that grow on request, and host handles in place of digests (cairn.edit/2)."""
 
+import ctypes.util
 import json
 import re
+import shutil
 from pathlib import Path
 
 import pytest
@@ -64,12 +66,48 @@ def test_host_contracts_and_comments_travel_with_an_interface():
     assert p["dependencies"]["step"] == {
         "signature": "fn step(x:u64) -> u64",
         "effects": [],
+        "evidence": "declared",
         "contract": "Returns x + 1 modulo 2^64.",
         "comment": "Adds one, wrapping.",
     }
+    assert set(p["terms"]["evidence"]) == {"interface", "declared", "finite-tested", "smt-equivalent", "comment"}
     assert code(lambda: EditSession(S, "caller", {"contracts": {"ghost": "x"}})) == "E-SYMBOL"
     assert code(lambda: EditSession(S, "caller", {"contracts": {"step": 1}})) == "E-CONTRACT"
     assert code(lambda: EditSession(S, "caller", scope="whole")) == "E-REQUEST"
+
+
+REFERENCE = "fn step(x:u64)->u64 { if x == 18446744073709551615 { return 0; } return x + 1; }"
+
+
+@pytest.mark.skipif(not ctypes.util.find_library("z3"), reason="libz3 is not installed")
+def test_a_callee_checked_against_a_reference_is_shown_by_its_reference():
+    checked = EditSession(S, "caller", {"references": {"step": {"reference": REFERENCE}}}).packet()
+    assert checked["dependencies"]["step"]["evidence"] == "smt-equivalent"
+    assert checked["dependencies"]["step"]["contract"] == {"reference": REFERENCE}
+    wrong = REFERENCE.replace("return 0;", "return 1;")  # Differs at the maximum: the check refuses the claim.
+    refused = EditSession(S, "caller", {"references": {"step": {"reference": wrong}}}).packet()["dependencies"]["step"]
+    assert refused["evidence"] == "declared" and refused["check"] == "counterexample"
+
+
+@pytest.mark.skipif(not shutil.which("clang++"), reason="finite tests build with clang++")
+def test_a_callee_whose_cases_pass_is_finite_tested_and_one_whose_cases_fail_is_not():
+    cases = [{"args": {"x": 1}, "return": 2}, {"args": {"x": 18446744073709551615}, "return": 0}]
+    task = {"schema": "cairn.task/1", "cases": cases}
+    passed = EditSession(S, "caller", {"tests": {"step": task}}).packet()["dependencies"]["step"]
+    assert passed["evidence"] == "finite-tested" and passed["contract"] == {"cases": 2, "shown": cases}
+    failing = {**task, "cases": [{"args": {"x": 1}, "return": 3}]}
+    refused = EditSession(S, "caller", {"tests": {"step": failing}}).packet()["dependencies"]["step"]
+    assert refused["evidence"] == "declared" and refused["check"] != "passed-finite-tests"
+
+
+@pytest.mark.parametrize(
+    "contract",
+    [{"references": {"step": "fn step..."}}, {"references": {"step": {"reference": REFERENCE, "domain": "x"}}},
+     {"tests": {"step": []}}, {"tests": {"step": {"symbol": "other"}}},
+     {"contracts": {"step": "text"}, "references": {"step": {"reference": REFERENCE}}}],
+)  # fmt: skip
+def test_evidence_requests_are_shaped_and_one_per_function(contract):
+    assert code(lambda: EditSession(S, "caller", contract)) == "E-CONTRACT"
 
 
 BODIES = ["{return x;}", "{return other(x);}", "{return caller(x);}", "{return step(x);}", "{return x+1;}"]
@@ -148,12 +186,19 @@ def test_host_admission_runs_every_session_check():
     assert host.reply("{not json")["code"] == "E-REQUEST"
 
 
-def test_a_warm_host_sends_each_card_and_the_boundaries_once():
+def test_a_warm_host_sends_each_card_and_the_terms_once():
     host = EditHost()
     first, second = host.open(S, "step"), host.open(S, "caller")
-    assert "base" in first["rule_cards"] and "boundaries" in first and "sent_before" not in first
-    assert "base" not in second["rule_cards"] and "boundaries" not in second
-    assert {"base", "boundaries"} <= set(second["sent_before"])
+    assert "base" in first["rule_cards"] and "terms" in first and "sent_before" not in first
+    assert "base" not in second["rule_cards"] and "terms" not in second
+    assert {"base", "terms"} <= set(second["sent_before"])
+    typed = host.respond({"protocol": HANDLES, "handle": "e1", "kind": "body", "replacement": "{return x;}"})
+    assert typed == {"status": "typed", "symbol": "step", "effects": [], "check_sites": {}}  # The rest is in terms.
+    refused = host.reply(
+        json.dumps({"protocol": HANDLES, "handle": "e1", "kind": "body", "replacement": "{return y;}"})
+    )
+    assert refused["code"] == "E-UNBOUND" and not {"trust", "automatic_edit", "acceptance_boundary"} & set(refused)
+    assert refused["source_line"] == "{return y;}" and (refused["line"], refused["column"]) == (1, 9)
     third = host.open(language.PRELUDE + language.MAIN, "main", scope="component")
     assert "generics" in third["rule_cards"] and "base" in third["sent_before"]
     expand = {"protocol": HANDLES, "handle": "e3", "kind": "expand", "symbols": ["push"]}

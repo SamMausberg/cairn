@@ -4,7 +4,7 @@ An agent edits CAIRN through a host. The host holds the program, shows the agent
 
 ## The rule cards
 
-`src/cairn/agent/teaching.py` holds eighteen rule cards: base, integers, views, compact, calls, floats, records, generators, memory, sums, generics, owners, effects, parallel, tasks, rings, closures and modules. Each is about a dozen lines saying what that part of the language accepts and refuses. `select_cards` picks the cards whose lexical tokens appear in the source at hand, so a packet carries only what its program uses. `cairn inspect --symbol f` prints the whole packet: source, scope, effects and cards.
+`src/cairn/agent/teaching.py` holds eighteen rule cards: base, integers, views, compact, calls, floats, records, generators, memory, sums, generics, owners, effects, parallel, tasks, rings, closures and modules. Each is a few paragraphs saying what that part of the language accepts and refuses, and names the diagnostic code of each rule it states, so a refusal leads back to its card. `base`, `integers` and `calls` go with every packet, and no other card repeats them. `select_cards` picks the others by the lexical tokens of the source at hand, so a packet carries only what its program uses. `cairn inspect --symbol f` prints the whole packet: source, scope, effects, evidence and cards.
 
 The full set of cards is what `tools/ai/ai_pilot.py prepare` gives a pilot subject as its only documentation, and what `tools/ai/measure_context.py` counts.
 
@@ -12,7 +12,29 @@ The full set of cards is what `tools/ai/ai_pilot.py prepare` gives a pilot subje
 
 The host chooses how much the agent may change. A full-function edit replaces one body, for changes to an algorithm's structure. Named expression slots replace one or more expressions, for local decisions. Slots may not overlap and are resolved against the exact original source.
 
-A packet starts focused. It holds the target's source, its effect row and ceiling, and the signature and effect row of every function it calls and every function that calls it, with the host's contract for each one and the comment written above it. Where the host gave no contract the field is `null`, and nothing stands in for the body. It holds the types those name, the cards the target selects, and, for slots, the expected type and the lexical bindings at each one. `not_shown` lists every other function of the program. A scalar contract attached to the task shows its full reference source, its input domain and its trap policy. The agent reads these facts and cannot replace them.
+A packet starts focused. It holds the target's source, its effect row and ceiling, and the signature and effect row of every function it calls and every function that calls it, each with its evidence class and the comment written above it. It holds the types those name, the cards the target selects, and, for slots, the expected type and the lexical bindings at each one. `not_shown` lists every other function of the program. A scalar contract attached to the task shows its full reference source, its input domain and its trap policy. The agent reads these facts and cannot replace them.
+
+The evidence class says how much of a callee's behaviour the agent may rely on without reading its body. The host asks for evidence in the contract, and the session establishes it when it opens, against the exact source, so it is never a claim carried in from elsewhere.
+
+| Class | Established by | What the packet shows | May the agent rely on it |
+|---|---|---|---|
+| `interface` | the compiler: signature, effect row, types, extents | nothing more | only for the interface; expand the body first |
+| `declared` | nobody: the host's text under `contracts` | the text | no; expand the body first |
+| `finite-tested` | the host's `cairn.task/1` cases under `tests`, run natively now | the case count and up to eight cases | for those inputs only |
+| `smt-equivalent` | Z3 over the host's `references`, checked now | the reference source and its precondition | yes, in place of the body |
+
+A check that does not pass leaves the class `declared` and names the status it reached (`counterexample`, `unknown`, `failed-tests`), because unknown is never success. The comment above a declaration is always the author's claim, and the packet's terms say so.
+
+```python
+from cairn.agent.agent_tools import EditSession
+
+source = "fn step(x:u64)->u64 { return add_wrap(x, 1); }\nfn caller(x:u64)->u64 { return step(x); }\n"
+reference = "fn step(x:u64)->u64 { if x == 18446744073709551615 { return 0; } return x + 1; }"
+packet = EditSession(source, "caller", {"references": {"step": {"reference": reference}}}).packet()
+assert packet["dependencies"]["step"]["evidence"] == "smt-equivalent"
+```
+
+Every packet carries `terms`: the scopes, the limits, the boundaries, what each evidence class means, what a refusal and an admission do and do not say, and the compiler profile. They are the same for every packet, so a packet names nothing they already state, and a missing `task` means the host gave none.
 
 The agent asks for more with `expand`, naming up to 32 functions or types. The host answers from the pinned program with each body as written, the types those bodies use, and any card they add. A function the agent has expanded may then be called. `cairn inspect --symbol f --expand g` prints the packet after the same request, and `--scope component` prints the 1.3 packet, which shows the whole call-graph component in both directions at once.
 
@@ -22,7 +44,9 @@ The agent asks for more with `expand`, naming up to 32 functions or types. The h
 
 An `explain` request returns [`cairn explain`](tools.md#cairn-explain) for the functions the packet discloses, in the candidate the host last admitted for that handle, or in the original before any. It is how an agent sees whether an edit left a guard in a loop or stopped it vectorizing without running anything.
 
-The host keeps the digests of source, contract, compiler and disclosed context behind each handle, so the agent never copies a hash. Expanding a function it had not disclosed changes the session digest, and an `edit/1` request made before is refused as stale. One host sends each card and the boundary text once, and later packets name them under `sent_before`. On thirty scripted edits of five example programs a focused packet with one expansion took about a quarter of the context of the component packet (`evidence/v1_4/context/`). No model took part in that measurement.
+The host keeps the digests of source, contract, compiler and disclosed context behind each handle, so the agent never copies a hash. Expanding a function it had not disclosed changes the session digest, and an `edit/1` request made before is refused as stale. One host sends each card and the terms once, and later packets name them under `sent_before`. Its admissions and refusals leave out what the terms say of every admission and every refusal: an admission gives the status, the symbol, the effect row and the check sites, and the check sites before the edit only where they differ.
+
+A refusal points into the reply the agent wrote: `line`, `column` and `source_line` are the reply's, and `in` is `reply`, unless the whole-module recheck found the fault elsewhere, when `source_line` is that line of the spliced program. Its `repair_hint` is the smallest fix the host can state without guessing, computed from the diagnostic's data where it can be: a close name for an unknown one, the construct that brings each effect the ceiling refuses, the expand request that discloses a callee, the conversion between two scalar types. A code whose message already says how to repair it carries no hint of its own. On thirty scripted edits of five example programs a focused packet with one expansion took about a quarter of the context of the component packet (`evidence/v1_4/context/`). No model took part in that measurement.
 
 When a reply arrives, the host splices it into the pinned original, leaves everything outside the authorized range untouched, and rechecks the complete linked module, whatever the packet showed. It refuses a changed signature (`E-SIGNATURE`), an added or removed declaration (`E-DECLARATION`), an effect beyond the ceiling (`E-EFFECT-EXPANSION`) and a call to a function the packet did not show (`E-CONTEXT-CLOSURE`). A stale session or an unknown handle is `E-SESSION`, and an expansion that names nothing, or two things, is `E-SYMBOL`. An accepted reply is `typed`, which says nothing yet about its behaviour. The functions a focused packet shows are a subset of what the component packet shows, so a reply admitted under the focused packet is admitted under the component one.
 

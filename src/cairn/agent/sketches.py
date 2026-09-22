@@ -18,7 +18,7 @@ from ..compiler.cairnc import IDENT, RESERVED, Diagnostic, Parser, fail
 from ..verify.scalar_concrete import Concrete
 from ..verify.scalar_semantics import equivalent, outcome_key, prepared
 from ..verify.scalar_values import Unsupported
-from .agent_tools import PROTOCOL, EditSession, digest, explain, load_json_strict, stable_json
+from .agent_tools import NO_TASK, PROTOCOL, EditSession, digest, explain, load_json_strict, stable_json
 
 MAX_HOLES = 16
 MAX_CHOICES = 4096
@@ -173,7 +173,7 @@ class Sketch:
         }  # fmt: skip
         return {
             "protocol": "cairn.choices/1",
-            "task": old["task"],
+            "task": old.get("task", NO_TASK),
             "source": source,
             "slots": slots,
             "allowed_effects": old["allowed_effects"],

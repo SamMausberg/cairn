@@ -16,6 +16,8 @@ from typing import Any
 
 from ..compiler.cairnc import VERSION, Diagnostic, Function, Parser, compile_program, compile_source, fail
 from ..compiler.effects import EFFECT_FAMILIES, EFFECTS
+from .diagnostics import explain, located
+from .evidence import MAX_EXPAND, MAX_REPLACEMENT, TERMS, classes, establish
 from .projection import (
     comment_above,
     declarations,
@@ -30,9 +32,8 @@ from .teaching import select_cards
 
 PROTOCOL = "cairn.edit/1"  # A request bound by the session digest.
 HANDLES = "cairn.edit/2"  # A request bound by a host handle; it may also ask to expand the context.
-MAX_REPLACEMENT = 64_000
-MAX_EXPAND = 32
 SCOPES = ("focused", "component")
+NO_TASK = "No behavioral task contract supplied; do not infer one."
 
 
 def digest(value: str | bytes) -> str:
@@ -41,40 +42,6 @@ def digest(value: str | bytes) -> str:
 
 def stable_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-
-
-HINTS = {
-    "E-MATCH-COVERAGE": "Handle the listed missing variants exactly once. Do not delete variants or weaken the task to silence coverage.",
-    "E-MATCH-BINDING": "Bind one fresh immutable value only for an arm that has a declared payload.",
-    "E-OWNER-EXTENT": "Bind a computed capacity to an immutable usize before declaring the buffer.",
-    "E-STACK-LIMIT": "Reduce explicit stack storage, or request an authorized heap-allocation effect. Do not hide the cost.",
-    "E-LOOP-CONTROL": "break and continue require an enclosing for or while loop.",
-    "E-TYPE-MISMATCH": "Use the expected type. An explicit conversion may trap; do not change the function signature to hide a mismatch.",
-    "E-UNBOUND": "Choose a name from the supplied lexical environment, or introduce a local before this use.",
-    "E-CALLEE": "Only declared callables and listed primitives are legal. Ask the host to expand a dependency instead of inventing an API.",
-    "E-IMMUTABLE": "Parameters and let bindings are immutable. Use a separate let mut local when mutation is required.",
-    "E-WRITE-LEASE": "This location is not writable. Do not change ro to rw inside a repair; the host owns that contract.",
-    "E-SHADOW": "Choose a fresh descriptive local name; this profile forbids shadowing.",
-    "E-EFFECT-ORDER": "Bind a writing call at statement level before using its result.",
-    "E-COLLECT-CAPACITY": "The collector extent must match the declared output capacity exactly in this profile.",
-    "E-RETURN": "Write an explicit return on every required path. Rust-style implicit tail returns are not supported.",
-    "E-PARSE": "Use braces, semicolons and the implemented grammar. This is not arbitrary Rust or Python.",
-    "E-SESSION": "Refresh the packet from the host. Never guess a session digest or a handle.",
-    "E-EFFECT-EXPANSION": "The candidate exceeds the host-owned effect ceiling. Change the implementation, not the contract.",
-    "E-CONTEXT-CLOSURE": "The candidate calls a function the packet does not disclose. Ask the host to expand it first.",
-    "E-SYMBOL": "Name a function or type of this program exactly as a packet or a body shows it.",
-}
-
-
-def explain(error: Diagnostic, source: str = "") -> dict[str, Any]:
-    d = dict(error.data)
-    d["repair_hint"] = HINTS.get(d["code"], "Repair the stated obligation without weakening the host-owned contract.")
-    d["automatic_edit"] = False
-    line = d.get("line", 0)
-    if 1 <= line <= len(source.splitlines()):
-        d["source_line"] = source.splitlines()[line - 1][:500]
-    d["acceptance_boundary"] = "frontend only; not a semantic or machine proof"
-    return d
 
 
 def load_json_strict(text: str) -> Any:
@@ -110,24 +77,14 @@ def implementation() -> str:
     return digest(b"".join(f.name.encode() + b"\0" + f.read_bytes() + b"\0" for f in files))
 
 
-BOUNDARIES = [
-    "No permission to change parameters, imports, target flags, tests or task contract.",
-    "Typed admission does not imply the requested behavior, termination, equivalence, or performance.",
-    "No fresh-model success rate has been measured.",
-]
-FOCUSED = (
-    "The target's source; the signature, effect row and host contract of everything it may call and everything"
-    " that calls it; the types those name. Expand any other function or type by name. The whole module is rechecked."
-)
-COMPONENT = "Entire static call-graph component plus all record/enum/sum definitions; full module rechecked."
-
-
 class EditSession:
     """One authored function, the host's contract for it, and what an edit of it may see and call.
 
     `focused` (the default) discloses the target, its direct callees and callers by interface, and grows by
     `expand`; `component` discloses the whole connected call graph. Both recheck the whole linked module, and
-    a candidate may call only what has been disclosed, so the focused boundary is never wider.
+    a candidate may call only what has been disclosed, so the focused boundary is never wider. The contract may
+    ask for evidence about other functions (`contracts`, `references`, `tests`), which is established when the
+    session opens and shown with each interface (`agent/evidence.py`).
     """
 
     def __init__(
@@ -169,11 +126,10 @@ class EditSession:
         if set(effects) - set(allowed):
             fail("E-CONTRACT", "Baseline itself exceeds the supplied effect ceiling.")
         self.allowed_effects = set(allowed)
-        self.contracts = self.contract.get("contracts", {})
-        if not isinstance(self.contracts, dict) or not all(isinstance(v, str) for v in self.contracts.values()):
-            fail("E-CONTRACT", "contracts maps a function name to the host's text for it.")
-        if set(self.contracts) - set(fs) or set(include) - set(fs):
+        requested = classes(self.contract, set(fs))
+        if set(include) - set(fs):
             fail("E-SYMBOL", "An included or contracted symbol is not in this module.")
+        self.evidence = establish(source, requested)
         self.callers = sorted(n for n, r in fs.items() if symbol in r["calls"] and n != symbol)
         selected = {symbol, *include, *fs[symbol]["calls"], *self.callers}
         while scope == "component":  # Both call directions: a connected component, not a minimum sufficient context.
@@ -210,12 +166,13 @@ class EditSession:
         return {"signature": signature(self.functions[name]), "effects": self.receipt["functions"][name]["effects"]}
 
     def interface(self, name: str) -> dict[str, Any]:
-        """What a caller may rely on: signature, effect row, the host's contract (None when it gave none), and the
-        comment written above the declaration, which nothing checks."""
+        """What a caller may rely on: signature and effect row, the evidence class the session established with the
+        host's contract behind it, and the comment written above the declaration, which nothing checks."""
         f, origin = self.written(name)
         text, start = (self.source, origin.start) if origin else (self.program.sources.get(f.module, ""), f.start)
         comment = comment_above(text, start)
-        return {**self.row(name), "contract": self.contracts.get(name), **({"comment": comment[0]} if comment else {})}
+        shown = self.evidence.get(name, {"evidence": "interface"})
+        return {**self.row(name), **shown, **({"comment": comment[0]} if comment else {})}
 
     def cards(self, text: str, names: set[str], types: dict[str, str]) -> dict[str, str]:
         views = any(t.mode != "value" for n in names for _, t in self.functions[n].params)
@@ -235,18 +192,21 @@ class EditSession:
         return p
 
     def header(self, protocol: str) -> dict[str, Any]:
+        """What names this session and its contract. The target's signature is the first line of its source, and
+        the profile and the meaning of a missing task are in the terms, so neither is repeated here."""
         return {
             "protocol": protocol,
             "session": self.session,
             "symbol": self.symbol,
-            "signature": signature(self.f),
-            "profile": VERSION,
-            "task": self.contract.get("task", "No behavioral task contract supplied; do not infer one."),
+            **({"task": self.contract["task"]} if "task" in self.contract else {}),
             "contract_sha256": digest(stable_json(self.contract)),
             "source_sha256": digest(self.source),
             "implementation_sha256": self.implementation_hash,
             "allowed_effects": sorted(self.allowed_effects),
         }
+
+    def terms(self) -> dict[str, Any]:
+        return {"profile": VERSION, **TERMS}
 
     def component(self) -> dict[str, Any]:
         origins = {self.functions[n].source_name for n in self.visible}
@@ -264,10 +224,9 @@ class EditSession:
             "types": type_declarations(self.parsed),
             "context": context,
             "rule_cards": self.cards("\n".join(x["source"] for x in context), self.visible, {}),
-            "dependencies": {n: self.row(n) for n in sorted(self.visible)},
-            "limits": {"replacement_bytes": MAX_REPLACEMENT, "one_authored_function": True},
-            "scope": COMPONENT,
-            "boundaries": BOUNDARIES,
+            "dependencies": {n: {**self.row(n), **self.evidence.get(n, {})} for n in sorted(self.visible)},
+            "scope": "component",
+            "terms": self.terms(),
         }
 
     def focused(self) -> dict[str, Any]:
@@ -289,9 +248,8 @@ class EditSession:
             "dependencies": dependencies,
             "callers": self.callers,
             "not_shown": written,
-            "limits": {"replacement_bytes": MAX_REPLACEMENT, "one_authored_function": True, "expand": MAX_EXPAND},
-            "scope": FOCUSED,
-            "boundaries": BOUNDARIES,
+            "scope": "focused",
+            "terms": self.terms(),
         }
 
     def source_of(self, name: str) -> str:
@@ -358,28 +316,35 @@ class EditSession:
     def admit(self, kind: Any, text: Any, site: Any = None) -> tuple[str, dict[str, Any]]:
         if not isinstance(text, str) or len(text.encode()) > MAX_REPLACEMENT:
             fail("E-REQUEST", "Replacement must be bounded UTF-8 source.")
-        parser = Parser(text)
-        if kind == "body":
-            if parser.eat("="):
+        if kind not in {"body", "expr"}:
+            fail("E-REQUEST", "Expected body or expr edit kind.")
+        if kind == "expr" and (not isinstance(site, str) or site not in self.sites):
+            fail("E-SITE", "Unknown or stale expression site.")
+        reply = text
+        try:
+            parser = Parser(text)
+            if kind == "body" and parser.eat("="):
                 if self.f.ret.name == "void":
                     fail("E-EXPRESSION-BODY", "Expression bodies cannot return void.")
                 parser.expr()
                 parser.need(";")
-            else:
+            elif kind == "body":
                 parser.block()
+            else:
+                parser.expr()
             parser.need("<eof>")
-            start, end = self.f.body_start, self.f.end
-        elif kind == "expr":
-            if not isinstance(site, str) or site not in self.sites:
-                fail("E-SITE", "Unknown or stale expression site.")
-            parser.expr()
-            parser.need("<eof>")
-            start, end = self.sites[site]["start"], self.sites[site]["end"]
+        except Diagnostic as e:
+            raise located(e, text, 0, text) from None
+        start, end = (
+            (self.f.body_start, self.f.end) if kind == "body" else (self.sites[site]["start"], self.sites[site]["end"])
+        )
+        if kind == "expr":
             text = "(" + text + ")"  # Operator binding at the insertion site must not change the tree around it.
-        else:
-            fail("E-REQUEST", "Expected body or expr edit kind.")
         candidate = self.source[:start] + text + self.source[end:]  # Every byte outside the span is preserved.
-        receipt = compile_source(candidate)[1]
+        try:
+            receipt = compile_source(candidate)[1]
+        except Diagnostic as e:  # Point into the reply the model wrote, not into the spliced whole.
+            raise located(e, candidate, start + (kind == "expr"), reply) from None
         f = next(f for f in Parser(candidate).parse().functions if f.name == self.symbol)
         if signature(f) != signature(self.f):
             fail("E-SIGNATURE", "Function signature changed.")
@@ -428,6 +393,11 @@ class EditSession:
 
 
 HOST_KEPT = ("session", "contract_sha256", "source_sha256", "implementation_sha256")
+# What every admission and every refusal says; a host that sent the terms says it there once.
+ADMISSION_TERMS = {"protocol", "session", "candidate_sha256", "runtime_cost", "source_outside_edit_unchanged",
+                   "contract_unchanged", "full_module_rechecked", "native_build", "behavioral_tests", "equivalence",
+                   "formal_status"}  # fmt: skip
+REFUSAL_TERMS = {"protocol", "trust", "automatic_edit", "acceptance_boundary"}
 REQUESTS = {"body": {"replacement"}, "expr": {"site", "replacement"}, "expand": {"symbols"}, "explain": set()}
 
 
@@ -466,10 +436,10 @@ class EditHost:
         if s.scope == "focused":
             p["expand_protocol"] = {"protocol": HANDLES, "handle": handle, "kind": "expand", "symbols": ["name"]}
         p["explain_protocol"] = {"protocol": HANDLES, "handle": handle, "kind": "explain"}  # Costs, after an edit too.
-        earlier = [n for n in [*p["rule_cards"], "boundaries"] if n in self.sent]
-        self.sent |= {*p["rule_cards"], "boundaries"}
+        earlier = [n for n in [*p["rule_cards"], "terms"] if n in self.sent]
+        self.sent |= {*p["rule_cards"], "terms"}
         p["rule_cards"] = {n: text for n, text in p["rule_cards"].items() if n not in earlier}
-        p.pop("boundaries") if "boundaries" in earlier else None
+        p.pop("terms") if "terms" in earlier else None
         if earlier:
             p["sent_before"] = earlier
         return p
@@ -498,10 +468,15 @@ class EditHost:
         site = s.site_names.get(request["site"]) if kind == "expr" and isinstance(request["site"], str) else None
         candidate, receipt = s.admit(kind, request["replacement"], site)
         self.admitted.setdefault(request["handle"], []).append((candidate, receipt))
-        return {k: v for k, v in receipt.items() if k not in {"session", "candidate_sha256"}}
+        said = ADMISSION_TERMS if "terms" in self.sent else {"session", "candidate_sha256"}
+        told = {k: v for k, v in receipt.items() if k not in said}
+        if told.get("check_sites_before") == told["check_sites"]:
+            told.pop("check_sites_before")
+        return told
 
     def reply(self, text: str) -> dict[str, Any]:
-        """A model's raw reply, parsed strictly; a refusal comes back as the diagnostic it would read."""
+        """A model's raw reply, parsed strictly; a refusal comes back as the diagnostic it would read, without
+        what the terms already said of every refusal."""
         request = None
         try:
             request = load_json_strict(text)
@@ -509,4 +484,5 @@ class EditHost:
         except Diagnostic as e:
             handle = request.get("handle") if isinstance(request, dict) else None
             s = self.sessions.get(handle) if isinstance(handle, str) else None
-            return explain(e, s.source if s else "")
+            d = explain(e, s.source if s else "", tuple(s.visible) if s else ())
+            return {k: v for k, v in d.items() if k not in REFUSAL_TERMS} if "terms" in self.sent else d
