@@ -1,6 +1,6 @@
 # Guide
 
-From a fresh checkout to a project that builds, runs and refuses a wrong edit, then twelve complete programs, one per idea. Every command prints JSON, so its output reads the same in a terminal, in a script and in an agent's transcript.
+From a fresh checkout to a project that builds, runs and refuses a wrong edit, then twelve complete programs, one per idea. At a terminal every command answers in lines written for a person. Piped, or with `--format json`, it prints a JSON record, the same one a script or an agent reads, and this guide shows both.
 
 ## Install
 
@@ -51,6 +51,10 @@ fn main() -> i32 {
 cairn check demo
 ```
 
+```text
+typed: 2 functions
+```
+
 ```json
 {"status": "typed", "functions": 2, "formal_status": "not-verified"}
 ```
@@ -61,11 +65,13 @@ cairn check demo
 cairn run demo
 ```
 
+`run` builds a native executable in a fresh directory under `build/` and runs it under an address-space cap. At a terminal the program gets the terminal's own streams, so `demo` prints nothing and `cairn` exits with its status; piped, the record carries what it printed:
+
 ```json
 {"status": "program-exited", "exit_code": 0, "build_directory": "demo/build/demo-38_uge7b", "memory_limit_mib": 1024}
 ```
 
-`run` builds a native executable in a fresh directory under `build/` and runs it under an address-space cap. The directory holds the generated `program.cpp`, the runtime headers it includes and `receipt.json`, which records what was compiled, with what, and the effect row of every function:
+ The directory holds the generated `program.cpp`, the runtime headers it includes and `receipt.json`, which records what was compiled, with what, and the effect row of every function:
 
 ```json
 "average": {"effects": ["trap"], "calls": [], "syntactic_check_sites": {"shift": 1, "overflow": 1}, "discharged_check_sites": {}}
@@ -77,8 +83,8 @@ cairn run demo
 cairn test demo
 ```
 
-```json
-{"status": "passed-finite-tests", "tests": [{"contract": "average.json", "cases": 81, "execution_exit_code": 0}]}
+```text
+passed-finite-tests: 1 contract, 81 cases
 ```
 
 A contract names a symbol and finite cases. `test` builds a shared library and calls the symbol for each case from Python. A case that disagrees, or a child that exits abnormally, fails the run whatever was printed.
@@ -98,6 +104,14 @@ fn main() -> i32 {
   let mean:u32 = average(10, 20);
   return 0;
 }
+```
+
+```text
+error[E-TYPE-MISMATCH]: Expected u32, got u64.
+  --> demo/src/main.cairn:3:18
+  |
+3 |   let mean:u32 = average(10, 20);
+  |                  ^^^^^^^
 ```
 
 ```json

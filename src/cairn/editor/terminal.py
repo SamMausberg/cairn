@@ -60,7 +60,9 @@ def diagnostic(data: dict, source: str, stream: TextIO | None = None) -> None:
             if near:
                 print(f"  {s('= help', '1;36')}: did you mean {near[0]}?", file=stream)
             continue
-        shown = ", ".join(map(str, value)) if isinstance(value, list) else value
+        shown = ", ".join(map(str, value)) if isinstance(value, list) else str(value)
+        if shown in data.get("message", ""):  # the message already says it
+            continue
         print(f"  {s('= note', '1;36')}: {key.replace('_', ' ')}: {shown}", file=stream)
 
 
