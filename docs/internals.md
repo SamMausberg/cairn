@@ -20,7 +20,7 @@ A project becomes a native artifact in nine stages. Each owns one question, and 
 
 `compiler/cairnc.py` is the facade. `compile_program` runs parse through judge; `generate` calls `audit_collector` (`verify/linear_certificates.py`) before it emits a line, so the collector's one unchecked store never reaches C++ without its seventeen certificates.
 
-Checking is one pass per function over one typed tree, and a generic instance is checked as ordinary monomorphic code. One `Checker` class holds the program-wide tables, name and type resolution, generic instances, the whole-program judge and the walk over bodies. Each rule group is a module of functions that take the checker, bound as methods by a short table, so `s_<tag>` and `e_<tag>` dispatch by the tree node's tag.
+Checking is one pass per function over one typed tree, and a generic instance is checked as ordinary monomorphic code. One `Checker` class holds the program-wide tables, name and type resolution, generic instances, the whole-program judge and the walk over bodies. Each rule group is a module of functions whose first parameter is the checker, and `checking.py` binds every one as a method when it loads, so `s_<tag>` and `e_<tag>` dispatch by the tree node's tag.
 
 | Rule | File | Functions |
 |---|---|---|

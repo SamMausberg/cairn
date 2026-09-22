@@ -7,11 +7,13 @@ call arguments only), so no lifetime annotations exist; owners are affine and
 
 The Checker holds the program-wide tables and the per-function Scope; the rules are
 functions in statements.py, expressions.py, calls.py, places.py and concurrency.py,
-bound as methods below, so each lives in the file that owns its subject.
+bound as methods at the end of this file, so each lives in the file that owns its subject.
 """
 
 from __future__ import annotations
 
+import inspect
+from contextlib import contextmanager
 from typing import Any
 
 from . import calls, concurrency, expressions, places, statements
@@ -61,39 +63,8 @@ class Checker:
     touched: list[tuple[str, str, bool, Any]] | None
     facts: list[tuple[str, str, int]]
     discharged: dict[str, int]
-
-    # The rules live one module per subject, each function taking the checker as `c`; a statement or
-    # expression tag dispatches to `s_<tag>` or `e_<tag>` through this table.
-    s_buffer, s_stack, s_let, s_reg, s_unpack = (statements.s_buffer, statements.s_buffer, statements.s_let,
-                                                 statements.s_let, statements.s_unpack)  # fmt: skip
-    s_compact, s_assign, s_break, s_continue = (statements.s_compact, statements.s_assign, statements.s_break,
-                                                statements.s_break)  # fmt: skip
-    s_return, s_if, s_match, s_while, s_for = (statements.s_return, statements.s_if, statements.s_match,
-                                               statements.s_while, statements.s_for)  # fmt: skip
-    s_expr, s_block, s_unsafe, s_defer = statements.s_expr, statements.s_block, statements.s_unsafe, statements.s_defer
-    leaving, branches, loop = statements.leaving, statements.branches, statements.loop
-
-    extent_of, declared_extent, writable = places.extent_of, places.declared_extent, places.writable
-    place, stable, where, identity = places.place, places.stable, places.where, places.identity
-    leased, capture, consume, intact = places.leased, places.capture, places.consume, places.intact
-    lend, disjoint, carried = places.lend, places.disjoint, places.carried
-
-    s_parallel, s_reduce, region, host_only = (concurrency.s_parallel, concurrency.s_reduce, concurrency.region,
-                                               concurrency.host_only)  # fmt: skip
-    e_spawn, effects_of, shared, lane_callee = (concurrency.e_spawn, concurrency.effects_of, concurrency.shared,
-                                                concurrency.lane_callee)  # fmt: skip
-    judge_lane_callbacks, s_submit = concurrency.judge_lane_callbacks, concurrency.s_submit
-
-    e_int, e_float, e_bool, e_str, e_name = (expressions.e_int, expressions.e_float, expressions.e_bool,
-                                             expressions.e_str, expressions.e_name)  # fmt: skip
-    e_slice, e_index, e_field, e_lambda, e_try = (expressions.e_slice, expressions.e_index, expressions.e_field,
-                                                  expressions.e_lambda, expressions.e_try)  # fmt: skip
-    e_unary, e_binary, named_type, type_argument = (expressions.e_unary, expressions.e_binary, expressions.named_type,
-                                                    expressions.type_argument)  # fmt: skip
-    variant, function_value = expressions.variant, expressions.function_value
-
-    e_call, invoke, indirect, repeatable = calls.e_call, calls.invoke, calls.indirect, calls.repeatable
-    view_argument, construct, establish = calls.view_argument, calls.construct, calls.establish
+    # The rules are bound below the class; these three statements share one.
+    s_stack, s_reg, s_continue = statements.s_buffer, statements.s_let, statements.s_break
 
     def __init__(self, program: Program, capture_sites: bool = False):
         self.p = program
@@ -107,9 +78,8 @@ class Checker:
                 fail("E-BUILTIN-NAME", f"Cannot redefine builtin {name}.")
         for module, name in program.uses:  # An imported name may not hide one the module declares.
             if f"{module}.{name}" in program.modules:
-                fail(
-                    "E-DUPLICATE", f"import ({name}) collides with {module}.{name}; drop one or use the qualified name."
-                )
+                fail("E-DUPLICATE", f"import ({name}) collides with {module}.{name}; drop one or use the qualified "
+                     "name.")  # fmt: skip
         self.aliases: dict[str, dict[str, str]] = {}
         for importer, target, alias in program.imports:
             self.aliases.setdefault(importer, {})[alias] = target
@@ -128,9 +98,8 @@ class Checker:
         self.unchecked: list[str] = []
         self.lane_calls: list[tuple[str, bool, Expr, str]] = []  # (callee, on the device, the call, its caller)
         self.judging = ""  # The function a whole-program rule is looking at: whom a failure there is about.
-        self.fn_sites: list[
-            tuple[Expr, set[str], str, str, str]
-        ] = []  # (argument, caller's parameters, callee, formal, caller)
+        # (argument, caller's parameters, callee, formal, caller) for every fn argument.
+        self.fn_sites: list[tuple[Expr, set[str], str, str, str]] = []
         self.impls: dict[tuple[str, Type], dict[str, Function] | None] = {}
         self.hostish: dict[str, str] = {}  # function -> the first host-only construct in its body
         self.bounds: dict[str, tuple[list[str], str]] = {}  # witness type -> (traits it promises, its kind)
@@ -171,20 +140,15 @@ class Checker:
                 return candidate
         return None
 
+    @contextmanager
     def within(self, module: str, tenv: dict[str, Any] | None = None):
         """Temporarily resolve names as another module (and generic instance) would."""
-        checker = self
-
-        class Scope:
-            def __enter__(self):
-                self.saved = checker.module, checker.tenv
-                checker.module = module
-                checker.tenv = checker.tenv if tenv is None else tenv
-
-            def __exit__(self, *_):
-                checker.module, checker.tenv = self.saved
-
-        return Scope()
+        saved = self.module, self.tenv
+        self.module, self.tenv = module, self.tenv if tenv is None else tenv
+        try:
+            yield
+        finally:
+            self.module, self.tenv = saved
 
     def resolve(self, ty: Type, node=None) -> Type:
         """Substitute generic parameters, qualify names and instantiate generic layouts."""
@@ -515,8 +479,9 @@ class Checker:
     def effect(self, name: str):
         self.effects.add(name)
 
-    def guard(self, kind: str):
-        self.effects.add("trap")
+    def guard(self, kind: str, *effects: str):
+        """A check site that traps when it fails, and whatever else the construct it guards costs."""
+        self.effects |= {"trap", *effects}
         self.counts[kind] = self.counts.get(kind, 0) + 1
 
     def expect(self, got: Type, want: Type, e: Any, declared: Type | None = None):
@@ -595,3 +560,12 @@ class Checker:
         ty = self.expr(e, consume=False)
         self.early[id(e)] = e
         return ty
+
+
+# Every rule is a function whose first parameter is the checker, `c`, in the module that owns its subject, and each
+# becomes a method here: a statement or expression tag dispatches to `s_<tag>` or `e_<tag>`. No two share a name.
+for _m in (statements, expressions, calls, places, concurrency):
+    for _name, _f in vars(_m).items():
+        if inspect.isfunction(_f) and _f.__module__ == _m.__name__ and _f.__code__.co_varnames[:1] == ("c",):
+            assert not hasattr(Checker, _name), f"two rules are named {_name}"
+            setattr(Checker, _name, _f)

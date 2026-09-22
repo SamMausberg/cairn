@@ -69,12 +69,8 @@ def fold(c: Checker, e: Expr, ty: Type, pending: list[str]) -> Any:
     args = [fold(c, a, inner, pending) for a in e.args]  # nothing is expected of it, so its floats are f64.
     numbers = all(not isinstance(a, bool) for a in args)
     if e.tag == "call" and e.val in NUMERIC and len(args) == 1 and numbers:  # u32(x), f64(n): checked like any literal.
-        low, high = (
-            (-(2 ** (BITS[e.val] - 1)), 2 ** (BITS[e.val] - 1) - 1)
-            if e.val in SIGNED
-            else (0, 2 ** BITS.get(e.val, 0) - 1)
-        )
-        if e.val in INT and not low <= int(args[0]) <= high:
+        signed, bits = e.val in SIGNED, BITS.get(e.val, 0)
+        if e.val in INT and not -(2 ** (bits - 1)) * signed <= int(args[0]) <= 2 ** (bits - signed) - 1:
             fail("E-CONST", f"{args[0]} does not fit {e.val}.", e)
         return single(float(args[0]), e.val == "f32") if e.val in FLOAT else int(args[0])
     if e.tag == "unary" and ((e.val == "-" and numbers) or (e.val == "!" and not numbers)):

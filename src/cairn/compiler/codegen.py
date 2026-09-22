@@ -18,6 +18,8 @@ RUNTIME_FILES = {
 }
 RUNTIME = RUNTIME_FILES["cairn_runtime.hpp"]
 CHECKED = {"+": "add", "-": "sub", "*": "mul", "/": "divide", "%": "remainder"}
+IDENTITY = {"*": "1", "mul_wrap": "1", "&": "max()", "min": "max()", "max": "lowest()"}  # Of a reduction; else 0.
+PLACED = {"device": "gpu::Buffer", "pinned": "gpu::Pinned", "unified": "gpu::Unified"}  # A buffer's owner by place.
 
 
 def mangle(name: str) -> str:
@@ -57,12 +59,27 @@ class Emitter:
     def put(self, s: str = ""):
         self.lines.append("  " * self.ind + s)
 
-    def nest(self, head: str, body, tail: str = "}"):
+    def puts(self, *lines: str):
+        for s in lines:
+            self.put(s)
+
+    def nest(self, head: str, body, tail: str | None = "}"):
         self.put(head)
         self.ind += 1
         body()
         self.ind -= 1
-        self.put(tail)
+        if tail is not None:
+            self.put(tail)
+
+    def inner(self, head, body) -> str:
+        """`head() {`, what `body` puts one level in, and the closing brace, as the text of one expression. The
+        head is written after the body, so a header either needs is included where the code first needs it."""
+        start = len(self.lines)
+        self.ind += 1
+        body()
+        self.ind -= 1
+        text, self.lines = self.lines[start:], self.lines[:start]
+        return "\n".join([head() + " {", *text, "  " * self.ind + "}"])
 
     def need(self, header: str):
         if header not in self.headers:
@@ -119,23 +136,14 @@ class Emitter:
             align = next((f"alignas({a[6:-1]}) " for a in attributes if a.startswith("align(")), "")
             if isinstance(layout, list):
                 packed = " __attribute__((packed))" if "packed" in attributes else ""
-                self.nest(f"struct {align}{name} {{", lambda layout=layout: [
-                    self.put(f"{self.type(t)} v_{f};") for f, t in layout], "}" + packed + ";")  # fmt: skip
+                self.puts(f"struct {align}{name} {{", *(f"  {self.type(t)} v_{f};" for f, t in layout), f"}}{packed};")
             elif ty.name in self.p.enums:
                 self.put(f"enum class {name} : std::uint32_t {{ {', '.join('v_' + v for v in layout)} }};")
-            else:
-                zero = "" if self.trivial(ty) else "{}"  # Side-by-side payloads each start as their zero.
-                members = [f"{self.type(t) if t else 'std::uint8_t'} v_{v}{zero};" for v, t in layout.items()]
-
-                # One active scalar payload keeps the 0.6 C union; owners cannot share storage, so a sum
-                # that carries one stores its payloads side by side and the inactive ones stay zero.
-                storage = "union {" if self.trivial(ty) else "struct {"
-
-                def body(members=members, storage=storage):
-                    self.put("std::uint32_t tag;")
-                    self.nest(storage, lambda: [self.put(m) for m in members], "} payload;")
-
-                self.nest(f"struct {name} {{", body, "};")
+            else:  # One active scalar payload keeps the 0.6 C union. Owners cannot share storage, so a sum that
+                zero = "" if (plain := self.trivial(ty)) else "{}"  # carries one keeps them side by side, each zero.
+                members = [f"    {self.type(t) if t else 'std::uint8_t'} v_{v}{zero};" for v, t in layout.items()]
+                self.puts(f"struct {name} {{", "  std::uint32_t tag;", "  union {" if plain else "  struct {", *members,
+                          "  } payload;", "};")  # fmt: skip
 
     # Expressions -------------------------------------------------------------------------------
 
@@ -215,13 +223,9 @@ class Emitter:
         return f"{name}{{{index}, {{.v_{e.val.rsplit('.', 1)[-1]} = {value}}}}}"
 
     def e_lambda(self, e: Expr) -> str:
-        f, start = e.ref, len(self.lines)
-        self.ind += 1
-        self.block(f.body)
-        self.ind -= 1
-        text, self.lines = self.lines[start:], self.lines[:start]
-        ps = ", ".join(f"{self.type(t)} v_{n}" for n, t in f.params)
-        return "\n".join([f"[&]({ps}) noexcept -> {self.type(f.ret)} {{", *text, "  " * self.ind + "}"])
+        f = e.ref
+        return self.inner(lambda: f"[&]({', '.join(f'{self.type(t)} v_{n}' for n, t in f.params)}) noexcept -> "
+                          f"{self.type(f.ret)}", lambda: self.block(f.body))  # fmt: skip
 
     def e_function(self, e: Expr) -> str:
         return "cf_" + mangle(e.ref.name)
@@ -239,12 +243,10 @@ class Emitter:
         for k, (a, (_, want)) in enumerate(zip(call.args, call.ref.params, strict=True)):
             place = want.mode != "value" and not want.extent and a.tag in {"name", "field", "index"}
             carried = want.mode == "value" or a.tag == "slice" or not (place or want.extent)  # A temporary rides along.
-            captures.append(
-                f"a{k} = {self.expr(a) if carried else '&' + self.expr(a) if place else self.pointer(a)[0]}"
-            )
-            passed.append(
-                f"*a{k}" if place else f"a{k}" if self.trivial(want) or want.mode != "value" else f"std::move(a{k})"
-            )
+            value = self.expr(a) if carried else "&" + self.expr(a) if place else self.pointer(a)[0]
+            captures.append(f"a{k} = {value}")
+            plain = self.trivial(want) or want.mode != "value"
+            passed.append(f"*a{k}" if place else f"a{k}" if plain else f"std::move(a{k})")
         body = f"return cf_{mangle(call.ref.name)}({', '.join(passed)});"
         thunk = f"[{', '.join(captures)}]() mutable noexcept {{ {body} }}"
         return thunk if e.val == "into" else f"{self.type(e.ty)}::spawn({thunk})"
@@ -367,16 +369,13 @@ class Emitter:
         symbols: dict[str, str] = {}
         for name in [*(f.name for f in self.p.functions), *(t.display() for t in self.c.layouts), *self.p.traits]:
             if symbols.setdefault(mangle(name), name) != name:
-                fail(
-                    "E-MANGLE",
-                    f"{name} and {symbols[mangle(name)]} would share the C symbol {mangle(name)}; rename one.",
-                )
+                fail("E-MANGLE", f"{name} and {symbols[mangle(name)]} would share the C symbol {mangle(name)}; "
+                     "rename one.")  # fmt: skip
         self.layouts()
         types, self.lines = self.lines, []
         reached, todo = set(), list(self.roots)
         while todo:
-            name = todo.pop()
-            if name not in reached:
+            if (name := todo.pop()) not in reached:
                 reached.add(name)
                 todo += self.c.calls.get(name, ())
         functions = [f for f in self.p.functions if not self.roots or f.name in reached]
@@ -415,19 +414,13 @@ class Emitter:
             getattr(self, "s_" + s.tag)(s, [self.expr(e) for e in s.exprs] if s.tag != "compact" else [])
 
     def s_buffer(self, s: Stmt, es: list[str]):
-        owner, _ = self.fresh("cr_owner_")
-        ty = self.type(s.ty)
-        if s.tag == "buffer" and s.ref != "host":
-            self.need("cairn_gpu.hpp")
-            self.put(
-                f"cr::gpu::{ {'device': 'Buffer', 'pinned': 'Pinned', 'unified': 'Unified'}[s.ref] }<{ty}> {owner}({es[0]});"
-            )
-        elif s.tag == "buffer":  # Scalars keep the 0.6 owner; any other element type needs a movable zero.
-            scalar = s.ty.name in CPP
-            self.need("cairn_runtime.hpp" if scalar else "cairn_owners.hpp")
-            self.put(f"cr::{'Buffer' if scalar else 'Buf'}<{ty}> {owner}({es[0]});")
-        else:
+        owner, ty = self.fresh("cr_owner_")[0], self.type(s.ty)
+        if s.tag == "stack":
             self.put(f"std::array<{ty}, {s.exprs[0].val}> {owner}{{}};")
+        else:  # Host scalars keep the 0.6 owner; any other host element type needs a movable zero.
+            held = PLACED.get(s.ref) or ("Buffer" if s.ty.name in CPP else "Buf")
+            self.need({"Buffer": "cairn_runtime.hpp", "Buf": "cairn_owners.hpp"}.get(held, "cairn_gpu.hpp"))
+            self.put(f"cr::{held}<{ty}> {owner}({es[0]});")
         self.put(f"{ty}* const v_{s.name} = {owner}.data();")
 
     s_stack = s_buffer
@@ -456,10 +449,8 @@ class Emitter:
             project = self.lane(s, lambda: self.put(f"return {value};"))
             return self.put(f"const std::size_t {used} = cr::gpu::compact({out}, {hi}, {keep}, {project});")
 
-        def selected():
-            # The only unchecked store: induction gives used <= i < n (Lean: store_index_lt_capacity).
-            self.put(f"{out}[{used}] = {value};")
-            self.put(f"++{used};")
+        def selected():  # The only unchecked store: induction gives used <= i < n (Lean: store_index_lt_capacity).
+            self.puts(f"{out}[{used}] = {value};", f"++{used};")
 
         self.put(f"std::size_t {used} = 0;")
         self.nest(f"for (std::size_t {i}=0; {i}<{hi}; ++{i}) {{", lambda: self.nest(f"if ({pred}) {{", selected))
@@ -468,15 +459,8 @@ class Emitter:
         """The lambda every lane runs; its body is identical for host threads and device lanes."""
         device = s.ref == "device"  # CUDA wants by-value capture and the annotation before the parameters.
         self.need("cairn_gpu.hpp" if device else "cairn_parallel.hpp")
-        start = len(self.lines)
-        self.ind += 1
-        body()
-        self.ind -= 1
-        text, self.lines = self.lines[start:], self.lines[:start]
-        head = (
-            f"{'[=] CR_DEVICE' if device else '[&]'}(std::size_t v_{s.binder or s.name}){'' if device else ' noexcept'}"
-        )
-        return "\n".join([head + " {", *text, "  " * self.ind + "}"])
+        binder = f"(std::size_t v_{s.binder or s.name})"
+        return self.inner(lambda: f"[=] CR_DEVICE{binder}" if device else f"[&]{binder} noexcept", body)
 
     def s_parallel(self, s: Stmt, es: list[str]):
         entry = "cr::gpu::launch" if s.ref == "device" else "cr::par::run"
@@ -487,45 +471,24 @@ class Emitter:
         self.put(f"{entry}({es[0]}, {self.lane(s, lambda: self.block(s.body))}{''.join(f', {x}' for x in schedule)});")
 
     def s_reduce(self, s: Stmt, es: list[str]):
-        ty, op = self.type(s.ty), s.op
-        combine = (
-            f"cr::{op}<{ty}>(a, b)"
-            if op in WRAPPING
-            else f"(a {'<' if op == 'min' else '>'} b ? a : b)"
-            if op in {"min", "max"}
-            else f"static_cast<{ty}>(a {op} b)"
-        )
-        limits = f"std::numeric_limits<{ty}>"
-        identity = {
-            "*": "1",
-            "mul_wrap": "1",
-            "&": f"{limits}::max()",
-            "min": f"{limits}::max()",
-            "max": f"{limits}::lowest()",
-        }.get(op, "0")
+        ty, op, device, i = self.type(s.ty), s.op, s.ref == "device", "v_" + s.binder
+        combine = (f"cr::{op}<{ty}>(a, b)" if op in WRAPPING else f"(a {'<' if op == 'min' else '>'} b ? a : b)"
+                   if op in {"min", "max"} else f"static_cast<{ty}>(a {op} b)")  # fmt: skip
+        identity, carried = IDENTITY.get(op, "0"), ty
+        identity = identity if identity.isdigit() else f"std::numeric_limits<{ty}>::{identity}"
         if op == "+" and s.ty.name in UNSIGNED:  # Checked: the total traps if it overflows, whatever the order.
-            combine, carried = ("a + b", f"cr::Sum<{ty}>") if s.ref == "device" else (f"cr::add<{ty}>(a, b)", ty)
-        else:
-            carried = ty
-        if s.ref == "device":
+            combine, carried = ("a + b", f"cr::Sum<{ty}>") if device else (f"cr::add<{ty}>(a, b)", ty)
+        if device or s.pooled:  # Pooled: blocks the count alone fixes, each folded in order, then their totals.
             value = self.lane(s, lambda: self.put(f"return {self.expr(s.exprs[1])};"))
-            fold = f"[] CR_DEVICE({carried} a, {carried} b) {{ return {combine}; }}"
+            where, marked, promise = ("gpu", " CR_DEVICE", "") if device else ("par", "", " noexcept")
+            fold = f"[]{marked}({carried} a, {carried} b){promise} {{ return {combine}; }}"
             start = f"static_cast<{ty}>({identity})" if carried == ty else carried + "{}"
-            total = f"cr::gpu::reduce<{carried}>({es[0]}, {start}, {fold}, {value})"
-            self.put(f"const {ty} v_{s.name} = {total}{'' if carried == ty else '.checked()'};")
-        elif s.pooled:  # Blocks the count alone fixes, each folded in order, then their totals in order.
-            value = self.lane(s, lambda: self.put(f"return {self.expr(s.exprs[1])};"))
-            fold = f"[]({ty} a, {ty} b) noexcept {{ return {combine}; }}"
-            self.put(f"const {ty} v_{s.name} = cr::par::reduce<{ty}>({es[0]}, static_cast<{ty}>({identity}), {fold}, "
-                     f"{value});")  # fmt: skip
-        else:  # A host reduction without `parallel` is an ordinary in-order fold: no threads, no hidden cost.
-            count = self.fresh("n")[0]  # The extent is evaluated once, as written.
-            self.put(f"{ty} v_{s.name} = static_cast<{ty}>({identity});")
-            self.put(f"const std::size_t {count} = {es[0]};")
-            self.put(f"for (std::size_t v_{s.binder} = 0; v_{s.binder} < {count}; ++v_{s.binder}) {{")
-            self.put(f"  const {ty} a = v_{s.name}, b = {es[1]};")
-            self.put(f"  v_{s.name} = {combine};")
-            self.put("}")
+            total = f"cr::{where}::reduce<{carried}>({es[0]}, {start}, {fold}, {value})"
+            return self.put(f"const {ty} v_{s.name} = {total}{'' if carried == ty else '.checked()'};")
+        count = self.fresh("n")[0]  # Without `parallel`, a host reduction is an in-order fold; its extent is read once.
+        self.puts(f"{ty} v_{s.name} = static_cast<{ty}>({identity});", f"const std::size_t {count} = {es[0]};",
+                  f"for (std::size_t {i} = 0; {i} < {count}; ++{i}) {{", f"  const {ty} a = v_{s.name}, b = {es[1]};",
+                  f"  v_{s.name} = {combine};", "}")  # fmt: skip
 
     def s_assign(self, s: Stmt, es: list[str]):
         self.put(f"{es[0]} = {es[1]};")
@@ -556,40 +519,35 @@ class Emitter:
         self.nest(f"const cr::Defer {guard}{{[&]() noexcept {{", lambda: self.block(s.body), "}};")
 
     def s_match(self, s: Stmt, es: list[str]):
-        temp, _ = self.fresh("cr_match_")
-        ty = s.exprs[0].ty
-        layout, tagged, plain = self.c.layouts[ty], ty.name not in self.p.enums, self.trivial(ty)
+        temp, ty = self.fresh("cr_match_")[0], s.exprs[0].ty
+        layout, plain = self.c.layouts[ty], self.trivial(ty)
+        selector = f"static_cast<std::uint32_t>({temp})" if ty.name in self.p.enums else temp + ".tag"
 
-        def arms():
-            for arm, variant in zip(s.arms, s.ref, strict=True):
-
-                def body(arm=arm, variant=variant):
-                    if arm.binder:
-                        payload = f"{temp}.payload.v_{variant}"
-                        const, value = ("const ", payload) if plain else ("", f"std::move({payload})")
-                        self.put(f"{const}{self.type(layout[variant])} v_{arm.binder} = {value};")
-                    self.block(arm.body)
-                    self.put("break;")
-
-                self.nest(f"case {list(layout).index(variant)}: {{", body)
-            self.put("default: cr::trap();")
+        def arm(arm, variant: str):
+            if arm.binder:
+                payload = f"{temp}.payload.v_{variant}"
+                const, value = ("const ", payload) if plain else ("", f"std::move({payload})")
+                self.put(f"{const}{self.type(layout[variant])} v_{arm.binder} = {value};")
+            self.block(arm.body)
+            self.put("break;")
 
         def whole():
             self.put(f"{'const ' if plain else ''}auto {temp} = {es[0]};")
-            selector = temp + ".tag" if tagged else f"static_cast<std::uint32_t>({temp})"
             self.nest(f"switch ({selector}) {{", arms)
+
+        def arms():
+            for a, variant in zip(s.arms, s.ref, strict=True):
+                self.nest(f"case {list(layout).index(variant)}: {{", lambda a=a, variant=variant: arm(a, variant))
+            self.put("default: cr::trap();")
 
         self.nest("{", whole)
 
     def controls(self, ss: list[Stmt]) -> set[str]:
-        found = set()
+        """Which of break and continue a loop body uses; a loop inside it answers for its own."""
+        found = {s.tag for s in ss if s.tag in {"break", "continue"}}
         for s in ss:
-            if s.tag in {"break", "continue"}:
-                found.add(s.tag)
             if s.tag not in {"for", "while"}:
-                found |= self.controls(s.body) | self.controls(s.other)
-                for arm in s.arms:
-                    found |= self.controls(arm.body)
+                found |= self.controls([*s.body, *s.other, *(x for arm in s.arms for x in arm.body)])
         return found
 
     def loop(self, head: str, s: Stmt, index: int):
@@ -614,23 +572,16 @@ class Emitter:
         self.loop(f"while ({bare(es[0])}) {{", s, self.fresh("")[1])
 
     def s_if(self, s: Stmt, es: list[str]):
-        self.put(f"if ({bare(es[0])}) {{")
-        self.ind += 1
-        self.block(s.body)
-        self.ind -= 1
+        self.nest(f"if ({bare(es[0])}) {{", lambda: self.block(s.body), None if s.other else "}")
         if s.other:
             self.nest("} else {", lambda: self.block(s.other))
-        else:
-            self.put("}")
 
     def s_for(self, s: Stmt, es: list[str]):
         _, index = self.fresh("")
         begin, limit, n = f"cr_begin_{index}", f"cr_limit_{index}", "v_" + s.name
 
-        def whole():
-            # Source order is lower bound, upper bound, then iteration.
-            self.put(f"const std::size_t {begin} = {es[0]};")
-            self.put(f"const std::size_t {limit} = {es[1]};")
+        def whole():  # Source order is lower bound, upper bound, then iteration.
+            self.puts(f"const std::size_t {begin} = {es[0]};", f"const std::size_t {limit} = {es[1]};")
             self.loop(f"for (std::size_t {n} = {begin}; {n} < {limit}; ++{n}) {{", s, index)
 
         self.nest("{", whole)

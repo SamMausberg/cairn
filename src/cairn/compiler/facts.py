@@ -175,11 +175,7 @@ def distance(c: Checker, source: str, target: str) -> int | None:
 def scaled(facts: list[tuple[str, str, int]], atoms: set[str]) -> list[tuple[str, str, int]]:
     """Each fact between plain atoms, multiplied by every stride a product atom names."""
     strides = {int(a.rsplit("*", 1)[1]) for a in {*atoms, *(a for f in facts for a in f[:2])} if "*" in a}
-    return [(times(a, n), times(b, n), k * n) for n in strides for a, b, k in facts if "*" not in a + b]
-
-
-def times(atom: str, stride: int) -> str:
-    return f"{atom}*{stride}" if atom else ZERO
+    return [(a and f"{a}*{n}", b and f"{b}*{n}", k * n) for n in strides for a, b, k in facts if "*" not in a + b]
 
 
 def at_most(c: Checker, x: Term, y: Term, slack: int = 0) -> bool:
@@ -221,11 +217,7 @@ def defined(c: Checker, name: str, value: Expr):
     """An immutable name bound to a usize value, or to a new owner of that many elements."""
     if value.tag == "call" and value.val == "Buf" and value.ty.name == "Buf" and len(value.args) == 1:
         name, value = f"len({name})", value.args[0]
-    high, low = bounds(c, value)
-    for y in high:
-        learn(c, (name, 0), y, False)
-    for x in low:
-        learn(c, x, (name, 0), False)
+    binder(c, name, value, value, strict=False)
 
 
 def index(c: Checker, e: Expr) -> bool:
@@ -265,13 +257,10 @@ def window(c: Checker, e: Expr, binder: str) -> int | None:
         return 1
     strides = {int(a.split("*")[1]) for fact in c.facts for a in fact[:2] if a.startswith(binder + "*")}
     strides |= {int(t[0].split("*")[1]) for x in [e, *e.args] for t in bounds(c, x)[1] if t[0].startswith(binder + "*")}
+    (low, high), room = (e.args[1:3], 0) if e.tag == "slice" else ((e, e), -1)  # A part may end where its block does.
     for stride in sorted(strides):
         base = (f"{binder}*{stride}", 0)
-        low, high = (e.args[1], e.args[2]) if e.tag == "slice" else (e, None)
-        above = any(at_most(c, base, x) for x in bounds(c, low)[1])
-        if high is None and above and below(c, e, base, stride - 1):
-            return stride
-        if high is not None and above and below(c, high, base, stride):
+        if any(at_most(c, base, x) for x in bounds(c, low)[1]) and below(c, high, base, stride + room):
             return stride
     return None
 

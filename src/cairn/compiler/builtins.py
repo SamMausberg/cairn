@@ -124,6 +124,11 @@ def lower_machine(g: Emitter, e: Expr) -> str:
     return f"static_cast<{g.type(e.ty)}>({register})" if e.val == "mmio_read" else f"({register} = {g.expr(e.args[1])})"
 
 
+def crossing(src: Type, dst: Type) -> str:
+    """Which way a transfer goes, `h2d` and the like, by where each end's memory can be reached."""
+    return "2".join("h" if t.place in HOST_VISIBLE else "d" for t in (src, dst))
+
+
 def check_transfer(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
     """The only way elements cross a placement boundary; extents agree by identity, a part's by its guard."""
     arity(e, args, 2, "transfer takes a destination and a source view.")
@@ -138,8 +143,7 @@ def check_transfer(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected
     written, read = c.lend(args[0], "rw", borrows), c.lend(args[1], "ro", borrows)
     c.disjoint(borrows, e)
     c.borrowed = borrows  # What a queued transfer holds until its wait.
-    ends = ["h" if t.place in HOST_VISIBLE else "d" for t in (src, dst)]
-    c.effects |= {f"transfer:{ends[0]}2{ends[1]}", "write:" + written} | ({"read:" + read} if read else set())
+    c.effects |= {"transfer:" + crossing(src, dst), "write:" + written} | ({"read:" + read} if read else set())
     return VOID
 
 
@@ -148,12 +152,11 @@ def lower_transfer(g: Emitter, e: Expr, queued: str | None = None) -> str:
     for a, peer in zip(e.args, reversed(sizes), strict=True):  # Each part is guarded against its peer's length.
         a.ref = peer if a.tag == "slice" else a.ref
     count, dst, src = sizes[0], g.pointer(e.args[0])[0], g.pointer(e.args[1])[0]
-    ends = ["h" if a.ty.place in HOST_VISIBLE else "d" for a in (e.args[1], e.args[0])]
-    if ends == ["h", "h"]:
+    if (way := crossing(e.args[1].ty, e.args[0].ty)) == "h2h":
         return f"std::copy_n({src}, {count}, {dst})"
     g.need("cairn_gpu.hpp")
     entry, order = ("copy", "") if queued is None else ("copy_async", queued)  # Queued on a stream of its own.
-    return f"cr::gpu::{entry}({dst}, {src}, {count}, cr::gpu::Dir::{ends[0]}2{ends[1]}{order})"
+    return f"cr::gpu::{entry}({dst}, {src}, {count}, cr::gpu::Dir::{way}{order})"
 
 
 def check_wait(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
@@ -181,8 +184,7 @@ def check_group(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: T
     ty = explicit(c, e, "Group", targs, expected, "Write Group[T](capacity).")
     arity(e, args, 1, "Group takes the most tasks it holds at once.")
     c.expr(args[0], USIZE)
-    c.effects |= {"alloc", "free"}
-    c.guard("allocation")
+    c.guard("allocation", "alloc", "free")
     return ty
 
 
@@ -235,8 +237,7 @@ def check_dyn(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Typ
     if c.kind(held) == "linear":  # The erased value is dropped with its box; a linear one may only be consumed.
         fail("E-LINEAR-STORAGE", f"Dyn[...] erases what it holds and drops it: {held.display()} is linear.", e)
     members = vtable(c, ty.args[0].name, held, e)
-    c.effects |= {"alloc", "free"}
-    c.guard("allocation")
+    c.guard("allocation", "alloc", "free")
     e.ref = ("builtin", members)
     return ty
 
@@ -254,8 +255,7 @@ def check_owner(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: T
     c.effect("zero_init")
     if heap:
         c.expr(args[0], USIZE)
-        c.effects |= {"alloc", "free"}
-        c.guard("allocation")
+        c.guard("allocation", "alloc", "free")
     return ty
 
 

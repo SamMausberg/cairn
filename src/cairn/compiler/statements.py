@@ -53,8 +53,7 @@ def s_buffer(c: Checker, s: Stmt):
     if s.tag == "buffer" and c.device_depth:
         fail("E-PLACEMENT", "A device lane cannot allocate; declare the buffer outside the region.", s)
     if s.tag == "buffer":
-        c.effects |= {"alloc", "free"} if place == "host" else {"gpu_alloc", "gpu_free"}
-        c.guard("allocation")
+        c.guard("allocation", *(("alloc", "free") if place == "host" else ("gpu_alloc", "gpu_free")))
     else:
         c.effect("stack_storage")
 

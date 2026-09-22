@@ -5,33 +5,20 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from . import facts
-from .builtins import WRAPPING
+from .builtins import WRAPPING, crossing
 from .effects import LANE_SAFE, PURE
 from .scope import Binding, Lanes
-from .tree import BOOL, FLOAT, HOST_VISIBLE, INT, UNSIGNED, USIZE, VOID, Expr, Function, Stmt, Type, fail, root
+from .tree import BOOL, FLOAT, INT, UNSIGNED, USIZE, VOID, Expr, Function, Stmt, Type, fail, root
 
 if TYPE_CHECKING:
     from .checking import Checker
 
 
-PINNED = {
-    "Ticket",
-    "Group",
-    "IoRing",
-    "Atomic",
-    "Mutex",
-}  # Declared and borrowed in place; never stored, passed or returned.
+# Declared and borrowed in place; never stored, passed or returned.
+PINNED = {"Ticket", "Group", "IoRing", "Atomic", "Mutex"}
 ORDERS = ["relaxed", "acquire", "release", "acquire_release", "seq_cst"]
-ATOMIC_OPS = {
-    "load": 0,
-    "store": 1,
-    "swap": 1,
-    "fetch_add": 1,
-    "fetch_sub": 1,
-    "fetch_and": 1,
-    "fetch_or": 1,
-    "fetch_xor": 1,
-}
+UPDATES = ("store", "swap", "fetch_add", "fetch_sub", "fetch_and", "fetch_or", "fetch_xor")
+ATOMIC_OPS = {"load": 0, **dict.fromkeys(UPDATES, 1)}  # How many values each operation takes before its order.
 
 
 def host_only(c: Checker, node: Any, what: str):
@@ -56,16 +43,12 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
 
     found = scan(s.body) | set().union(*(places(e) for e in exprs))
     target = target or ("device" if "device" in found else "host")
-    c.bind(s.binder or s.name, Binding(USIZE), s)
     binder, known = s.binder or s.name, len(c.facts)
+    c.bind(binder, Binding(USIZE), s)
     facts.binder(c, binder, None, s.exprs[s.tag == "compact"])  # Every lane's index is below the extent.
     saved = c.lanes, c.device_depth, c.loop_depth, set(c.moved), c.effects
-    c.lanes, c.device_depth, c.loop_depth, c.effects = (
-        Lanes(binder, set(c.env) - {binder}, c.closure),
-        int(target == "device"),
-        0,
-        set(),
-    )
+    c.lanes, c.device_depth = Lanes(binder, set(c.env) - {binder}, c.closure), int(target == "device")
+    c.loop_depth, c.effects = 0, set()
     result = run()
     if (c.moved - saved[3]) & c.lanes.outer:
         fail("E-MOVE-IN-LOOP", "An outer owner would be moved once per lane.", s)
@@ -153,18 +136,13 @@ def judge_lane_callbacks(c: Checker, effects: dict[str, set[str]]):
         c.judging = caller
         if "lane:" + formal in effects[callee] and not (a.tag == "name" and a.val in parameters):
             closure = a.ref if a.tag == "lambda" else None
-            known = (
-                [a.ref.name]
-                if a.tag == "function"
-                else [  # A stored fn value is some function whose address was taken.
-                    g for g in c.address_taken if (*(t for _, t in c.fs[g].params), c.fs[g].ret) == a.ty.args
-                ]
-            )
-            rows = (
-                [closure.row[0], *(effects[callee] for callee in closure.row[1])]
-                if closure
-                else [effects[g] for g in known]
-            )
+            if closure:
+                rows = [closure.row[0], *(effects[g] for g in closure.row[1])]
+            elif a.tag == "function":
+                rows = [effects[a.ref.name]]
+            else:  # A stored fn value is some function whose address was taken.
+                shape = a.ty.args
+                rows = [effects[g] for g in c.address_taken if (*(t for _, t in c.fs[g].params), c.fs[g].ret) == shape]
             allowed = LANE_SAFE | {"dispatch"}  # A dispatch's targets are in the row beside it.
             wrong = {x for row in rows for x in row if x not in allowed and not x.startswith(("read:", "write:"))}
             wrong |= {"write:" + place for place, mode in (closure.captures if closure else []) if mode == "rw"}
@@ -229,7 +207,8 @@ def e_spawn(c: Checker, e: Expr, expected: Type | None) -> Type:
     if name in ("", "<wait>") or (call is not None and call.tag != "call") or c.lanes or c.closure:
         fail("E-SPAWN", "Write `let t = spawn f(args);` in a function body; a task is always named.", e)
     c.spawning = ""
-    if e.val == "into" and (region is not None or (call.val == "transfer" and c.qualify("transfer", c.fs) is None)):
+    queued = region is not None or (call.val == "transfer" and c.qualify("transfer", c.fs) is None)
+    if e.val == "into" and queued:
         fail("E-SPAWN", "A group holds tasks that run declared functions; queued device work keeps its ticket.", e)
     earlier: set[str] = set()
     for ticket in after:  # Work queued after a ticket's work may touch what that ticket holds.
@@ -237,14 +216,12 @@ def e_spawn(c: Checker, e: Expr, expected: Type | None) -> Type:
             fail("E-SPAWN", f"after names live tickets of queued device work; {ticket.val} is not one.", ticket)
         earlier |= {ticket.val} | c.before[ticket.val]
     held, c.leases = c.leases, {t: places for t, places in c.leases.items() if t not in earlier}
-    queued = region is not None or (call.val == "transfer" and c.qualify("transfer", c.fs) is None)
     if region is not None:
         c.s_parallel(region, queued=True)
     result = VOID if region is not None else c.expr(call)
     c.leases = held
     if queued:
-        on_device = region.ref == "device" if region is not None else "transfer:h2h" not in c.effects_of(call)
-        if not on_device:
+        if (region.ref != "device") if region is not None else crossing(call.args[1].ty, call.args[0].ty) == "h2h":
             fail("E-SPAWN", "Only device work is queued; spawn a function to run host work as a task.", e)
         c.before[name] = earlier
     elif (
@@ -269,9 +246,3 @@ def e_spawn(c: Checker, e: Expr, expected: Type | None) -> Type:
     c.effect("spawn")
     e.val = "queue" if queued else ""
     return Type("Ticket", args=(result,), place="device" if queued else "host")
-
-
-def effects_of(c: Checker, call: Expr) -> set[str]:
-    """The transfer directions a just-checked `transfer(dst, src)` call crosses."""
-    ends = ["h" if a.ty.place in HOST_VISIBLE else "d" for a in (call.args[1], call.args[0])]
-    return {f"transfer:{ends[0]}2{ends[1]}"}
