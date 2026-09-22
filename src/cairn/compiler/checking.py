@@ -323,7 +323,7 @@ class Checker:
         if ty.name in self.bounds:  # A witness: exactly as owning as its template's bounds allow.
             return self.bounds[ty.name][1]
         if ty not in self.kinds:
-            linear = "linear" in self.p.attributes.get(ty.name, ()) or ty.name in {"Ticket", "Group"}
+            linear = "linear" in self.p.attributes.get(ty.name, ()) or ty.name in {"Ticket", "Group", "IoRing"}
             own = 2 if linear else int(ty.name in {"Buf", "dyn", "Dyn", "Atomic", "Mutex"})
             layout = self.layouts.get(ty, {} if ty.name in INTRINSIC_TYPES else None)
             if layout is None:  # Asked while its own definition is open: it reaches itself through a Buf.

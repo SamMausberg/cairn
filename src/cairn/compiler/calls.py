@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from . import rings
 from .builtins import SOFT, TABLE, WRAPPING
 from .scope import Binding
 from .traits import infer, instantiate, trait_member, unbound, unify, vtable
@@ -65,6 +66,8 @@ def e_call(c: Checker, e: Expr, expected: Type | None) -> Type:
     shared = c.peek(receiver) if receiver is not None else VOID
     if shared.name in {"Atomic", "Mutex"}:
         return c.shared(e, n, shared, args[1:])
+    if shared.name == "IoRing":
+        return rings.method(c, e, n, args[1:])
     home = c.p.modules.get(shared.name, "") if receiver is not None else ""
     with c.within(home or c.module):  # A method is found in its receiver's home module first.
         method = c.qualify(n, c.fs, node=e) if home else None

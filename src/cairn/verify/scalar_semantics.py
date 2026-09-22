@@ -121,6 +121,7 @@ def implementation_hash():
                 "compiler/calls.py",
                 "compiler/places.py",
                 "compiler/concurrency.py",
+                "compiler/rings.py",
                 "compiler/expansion.py",
                 "compiler/codegen.py",
                 "compiler/modules.py",

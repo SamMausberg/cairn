@@ -133,7 +133,7 @@ fn main() -> i32 {
 
 ## std.io
 
-A `File` is `linear`, so the checker requires every path to close it. A failure is an errno inside an `IoError`, because CAIRN cannot express the `int*` the C library keeps its error behind.
+A `File` is `linear`, so the checker requires every path to close it. A failure is an errno inside an `IoError`, because CAIRN cannot express the `int*` the C library keeps its error behind. `io.outcome(result)` reads the result an I/O ring reports ([concurrency.md](concurrency.md#io-rings)), a count or a negative errno, as a `Result[usize, IoError]`.
 
 ```cairn
 import std.core (Option, Result);

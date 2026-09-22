@@ -14,7 +14,13 @@ if TYPE_CHECKING:
     from .checking import Checker
 
 
-PINNED = {"Ticket", "Group", "Atomic", "Mutex"}  # Declared and borrowed in place; never stored, passed or returned.
+PINNED = {
+    "Ticket",
+    "Group",
+    "IoRing",
+    "Atomic",
+    "Mutex",
+}  # Declared and borrowed in place; never stored, passed or returned.
 ORDERS = ["relaxed", "acquire", "release", "acquire_release", "seq_cst"]
 ATOMIC_OPS = {
     "load": 0,

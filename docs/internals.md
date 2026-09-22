@@ -34,6 +34,7 @@ Checking is one pass per function over one typed tree, and a generic instance is
 | Effect vocabulary, fixed point, operand order | `compiler/effects.py` | `fixed_point`, `audit` |
 | Traits, bounds, overlap, dynamic tables | `compiler/traits.py` | `implemented`, `dispatch`, `vtable`, `certify` |
 | Constant folding | `compiler/constants.py` | `constant`, `fold` |
+| I/O rings: the declaration, the operations that move a `Buf` in and hand it back, their lowering | `compiler/rings.py` | `check_ring`, `method`, `waited`, `lower` |
 | Facts about `usize` values that let lowering drop a guard | `compiler/facts.py` | `binder`, `defined`, `assume`, `index`, `arithmetic`, `conversion` |
 | Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
 | Manifests, vendored dependencies | `projects/project.py` | `read_manifest`, `contained_file`, `claim`, `dependencies` |
@@ -51,6 +52,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::launch`
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
 | `cairn_parallel.hpp` | the host lane pool, linear tasks, task groups with a bounded completion ring, `Mutex` and `Atomic` with explicit orders |
 | `cairn_gpu.hpp` | scoped device, pinned and unified memory, lanes, linear stream tickets, reduction, stable compaction |
+| `cairn_io.hpp` | the I/O ring over io_uring: fixed berths that own each operation's `Buf`, completion-order collection, a wait that drains before it releases |
 
 Generated code includes only the headers it needs. A freestanding image includes neither concurrent header: `toolchain.audit_effects` rejects every effect that reaches them, and `cairn_parallel.hpp` refuses to compile under `CAIRN_FREESTANDING`.
 

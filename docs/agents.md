@@ -4,7 +4,7 @@ An agent edits CAIRN through a host. The host holds the program, shows the agent
 
 ## The rule cards
 
-`src/cairn/agent/teaching.py` holds seventeen rule cards: base, integers, views, compact, calls, floats, records, generators, memory, sums, generics, owners, effects, parallel, tasks, closures and modules. Each is about a dozen lines saying what that part of the language accepts and refuses. `select_cards` picks the cards whose lexical tokens appear in the source at hand, so a packet carries only what its program uses. `cairn inspect --symbol f` prints the whole packet: source, scope, effects and cards.
+`src/cairn/agent/teaching.py` holds eighteen rule cards: base, integers, views, compact, calls, floats, records, generators, memory, sums, generics, owners, effects, parallel, tasks, rings, closures and modules. Each is about a dozen lines saying what that part of the language accepts and refuses. `select_cards` picks the cards whose lexical tokens appear in the source at hand, so a packet carries only what its program uses. `cairn inspect --symbol f` prints the whole packet: source, scope, effects and cards.
 
 The full set of cards is what `tools/ai/ai_pilot.py prepare` gives a pilot subject as its only documentation, and what `tools/ai/measure_context.py` counts.
 

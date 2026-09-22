@@ -94,7 +94,7 @@ def test_every_card_is_reachable_from_tokens():
         "module m; import std.core (Option); pub trait T { fn f(self:ro<Self>) -> f32; } extern fn g() effects(io);"
         "fn h[K:nat](d:ro<dyn T>, n:usize, x:rw<u64>[n]@device) { unsafe { g(); } let t = spawn h(); wait(t);"
         " let b = Buf[u64](n); defer k(b); buffer s:u64[n] = zeroed; let c = compact x for i in n where true yield 1;"
-        " parallel i in n { } apply(|v:u64| -> u64 { return v; }); match o { Option.None => {} } }"
+        " parallel i in n { } apply(|v:u64| -> u64 { return v; }); match o { Option.None => {} } let r = IoRing(1); }"
         "family q = h[1..2]; derive wire for P;"
     )
     assert set(select_cards(sample, has_views=True, has_records=True, has_sums=True)) == set(CARDS)

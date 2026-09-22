@@ -148,6 +148,61 @@ samples[?..?] is lent to writers until wait(writers), and the next iteration wou
 
 A group holds tasks that run declared functions. Queued device work keeps its ticket and its `after` ordering (`E-SPAWN`), a result type that is `linear` cannot be dropped by `wait` and is refused (`E-LINEAR-STORAGE`), and a group is a host object (`E-PLACEMENT`).
 
+## I/O rings
+
+A task is a thread. A ring keeps many kernel operations in flight from one thread, and hands them back in the order they finish. `let mut q = IoRing(n);` declares, in place, a ring of at most `n` operations. It is Linux io_uring, set up here once, so the declaration carries `alloc`, `free` and `io`, and a kernel that refuses io_uring makes the declaration trap.
+
+An operation takes the bytes it works on by value. `q.read(fd, data, count, offset, tag)`, `q.write(fd, data, count, offset, tag)`, `q.recv(fd, data, count, tag)`, `q.send(fd, data, count, tag)` and `q.accept(fd, tag)` move the `Buf[u8]` called `data` into the ring, so the program cannot touch storage the kernel is using (`E-MOVED`). `let data = q.next(tag, result);` waits for the next operation to finish and hands its `Buf` back, with the tag it was given and the kernel's result: a byte count, a new descriptor, or a negative errno. `io.outcome(result)` turns that into a `Result[usize, IoError]`, so a failure is a value to match on. `count` may be less than `len(data)`, never more. A submission to a full ring, or a `next` with nothing in flight, traps.
+
+Nothing is borrowed across an operation, so a ring records no lease and may be lent `rw` to a callee or to a task, which then uses it alone until it returns. It is never stored, passed by value or returned (`E-PINNED`). It is linear: `wait(q)` consumes it in the function that declared it (`E-LINEAR-LEAK`), after every operation still in flight has finished, and releases every `Buf` nobody collected. `defer wait(q);` covers every exit.
+
+```cairn
+import std.core (Result);
+import std.io as io;
+extern fn pipe(fds:rw<i32>[2]) -> i32 effects(io);
+
+fn opened(fds:rw<i32>[2]) -> i32 { unsafe { return pipe(fds); } }
+
+fn main() -> i32 {
+  let mut fds = Array[i32, 2]();
+  let made = opened(fds);
+  if made != 0 { return 1; }
+  let mut q = IoRing(4);
+  defer wait(q);                                  // on every exit, after the kernel is done
+  let into = Buf[u8](16);
+  q.read(fds[0], into, 16, 0, 1);                 // waits in the kernel, not in a thread
+  let mut hello = Buf[u8](5);
+  hello[0] = 104;
+  q.write(fds[1], hello, 5, 0, 2);
+  let mut tag:u64 = 0;
+  let mut result:i64 = 0;
+  let wrote = q.next(tag, result);                // the write finishes first
+  let read = q.next(tag, result);                 // then the read, holding the five bytes
+  match io.outcome(result) {
+    Result.Ok(n) => { if tag != 1 || n != 5 || read[0] != 104 { return 2; } }
+    Result.Err(e) => { return 3; }
+  }
+  return 0;
+}
+```
+
+```cairn rejects E-MOVED
+fn main() -> i32 {
+  let mut q = IoRing(2);
+  let data = Buf[u8](8);
+  q.read(0, data, 8, 0, 1);
+  let first = data[0];                            // the kernel may be writing it
+  wait(q);
+  return 0;
+}
+```
+
+```text
+data was moved.
+```
+
+A ring is a host object (`E-PLACEMENT`), and a lane may not reach one (`E-PARALLEL-CALL`). The value model reports a function that uses one as `unknown`. Operations cannot yet be cancelled.
+
 ## Atomics and mutexes
 
 `Atomic[T]` (the integers and `bool`) and `Mutex[T]` are declared in place and shared by `ro` borrow. They are the only interior mutability in the language, and they are never stored in a record, passed by value or returned (`E-PINNED`). Every atomic access names its memory order: `load`, `store`, `swap`, `fetch_add`, `fetch_sub`, `fetch_and`, `fetch_or`, `fetch_xor` and `compare_exchange(expected, desired, Order.seq_cst, Order.seq_cst)`. The effects are `spawn`, `join`, `atomic` and `lock`.

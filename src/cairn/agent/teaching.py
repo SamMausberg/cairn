@@ -179,6 +179,14 @@ Device work can be queued: let up = spawn transfer(x, a); let k = spawn parallel
 after up { y[i] = x[i]; }; each returns at once with a linear ticket that leases the
 views it touches until wait; after orders it behind live tickets on the device and lets
 it share what they hold. Only device regions and transfers are queued.""",
+    "rings": """let mut q = IoRing(n); declares, in place, a kernel ring of up to n operations in flight
+with no thread each. q.read(fd, data, count, offset, tag), q.write(...), q.recv(fd, data, count,
+tag), q.send(...) and q.accept(fd, tag) move the Buf[u8] data into the ring: it is dead until
+let data = q.next(tag, result); hands the next finished one back with its tag and the kernel's
+result (a count, a descriptor or -errno; io.outcome(result) makes it a Result). wait(q), or
+defer wait(q), consumes the ring where it was declared, after every operation finishes. A ring
+may be lent rw to a callee or a task, never stored, passed by value or returned (E-PINNED). A
+full ring or an empty next traps. Host only; effects io, alloc, free.""",
     "closures": """fn(u64) -> u64 is a copyable code pointer to a plain declared function of values.
 ro<fn(u64) -> u64> is a borrowed callable: pass a declared function or write the closure
 in place, apply(n, xs, |x:u64| -> u64 { return x + bias; }). A closure captures its scope
@@ -213,6 +221,7 @@ def select_cards(
         "effects": words & {"extern", "unsafe", "pure", "effects"},
         "parallel": words & {"parallel", "reduce", "transfer", "device", "pinned", "unified"},
         "tasks": words & {"spawn", "wait", "collect", "Group", "Atomic", "Mutex"},
+        "rings": "IoRing" in words,
         "closures": words & {"|", "||", "dyn"} and ("dyn" in words or "fn" in words),
         "modules": words & {"module", "import", "pub"},
     }

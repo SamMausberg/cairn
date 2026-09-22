@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ..version import VERSION
+from . import rings
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import Checker
 from .expressions import COMPARISONS
@@ -90,6 +91,9 @@ class Emitter:
         elif t.name == "Buf":
             self.need("cairn_owners.hpp")
             base = f"cr::Buf<{self.type(t.args[0])}>"
+        elif t.name == "IoRing":  # io_uring: kernel operations in flight, the owners they use held by the ring
+            self.need("cairn_io.hpp")
+            return "cr::io::Ring" if t.mode == "value" else "cr::io::Ring&"
         elif t.name == "Ticket" and t.place == "device":  # Queued device work owns a stream, not a thread.
             self.need("cairn_gpu.hpp")
             base = "cr::gpu::Ticket"
@@ -310,6 +314,8 @@ class Emitter:
             orders = {i for i, a in enumerate(e.args) if a.ty.name == "Order"}
             texts = [f"static_cast<cr::par::Order>({t})" if i in orders else t for i, t in enumerate(texts)]
             return f"{texts[0]}.{e.val}({', '.join(texts[1:])})"
+        if kind == "ring":
+            return rings.lower(self, e)
         if kind == "indirect":  # A zeroed fn value is a valid value; calling it is a guard failure.
             callee = f"v_{e.val}" if e.ref[1].mode != "value" else f"cr::callable(v_{e.val})"
             return f"{callee}({', '.join(self.expr(a) for a in e.args)})"

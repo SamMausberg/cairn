@@ -176,3 +176,10 @@ pub fn monotonic_ns() -> u64 {
   }
   return u64(ts[0]) * 1000000000 + u64(ts[1]);
 }
+
+// What an I/O ring's `q.next(tag, result)` reported: a byte count or a new descriptor, or the error the
+// kernel gave, which a ring returns as a negative errno instead of setting errno.
+pub fn outcome(result:i64) -> Result[usize, IoError] {
+  if result < 0 { return Result.Err(IoError(i32(0 - result))); }
+  return Result.Ok(usize(result));
+}

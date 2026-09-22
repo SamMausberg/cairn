@@ -1,4 +1,4 @@
-"""Compile and run the native parallel and device runtime tests.
+"""Compile and run the native parallel, I/O ring and device runtime tests.
 
 The executables under tests/native are self checking: exit 0 is a pass. Each also runs one
 named death case per invocation, which must abort the process, so those are driven here as
@@ -69,6 +69,14 @@ def parallel_exe(tmp_path_factory: pytest.TempPathFactory) -> Path:
     exe = tmp_path_factory.mktemp("native") / "parallel_runtime"
     src = str(NATIVE / "parallel_runtime.cpp")
     build([HOSTS[0], *STRICT, *HOST, "-pthread", f"-I{RUNTIME}", src, "-o", str(exe)])
+    return exe
+
+
+@pytest.fixture(scope="session", params=HOSTS)
+def io_exe(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The ring's own test, under each host compiler with the contract flags, and once more under ASan and UBSan."""
+    exe = tmp_path_factory.mktemp("native") / f"io_runtime_{request.param}"
+    build([request.param, *STRICT, *HOST, f"-I{RUNTIME}", str(NATIVE / "io_runtime.cpp"), "-o", str(exe)])
     return exe
 
 
@@ -143,6 +151,27 @@ def test_parallel_runtime_is_clean_under_address_and_ub(sanitized_parallel: dict
     )
     assert done.returncode == 0, done.stdout + done.stderr[-4000:]
     assert "Sanitizer" not in done.stderr, done.stderr[-4000:]
+
+
+def test_io_runtime(io_exe: Path) -> None:
+    done = subprocess.run([str(io_exe)], capture_output=True, text=True, timeout=120)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "ok after" in done.stdout
+
+
+def test_io_runtime_deaths(io_exe: Path) -> None:
+    run_cases(io_exe)
+
+
+def test_io_runtime_is_clean_under_address_and_ub(tmp_path: Path) -> None:
+    """The kernel writes into storage the ring owns; a Buf released before its operation finished would show here."""
+    exe = tmp_path / "io_asan"
+    line = [HOSTS[-1], "-std=c++20", "-O1", "-g", *HOST, "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
+    build([*line, f"-I{RUNTIME}", str(NATIVE / "io_runtime.cpp"), "-o", str(exe)])
+    done = subprocess.run(
+        [str(exe)], capture_output=True, text=True, timeout=120, env={**os.environ, "ASAN_OPTIONS": "detect_leaks=1"}
+    )
+    assert done.returncode == 0 and "Sanitizer" not in done.stderr, done.stdout + done.stderr[-4000:]
 
 
 def test_gpu_runtime(gpu_exe: Path) -> None:

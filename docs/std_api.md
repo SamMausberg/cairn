@@ -268,6 +268,12 @@ pub fn monotonic_ns() -> u64
 CLOCK_MONOTONIC in nanoseconds: the only clock a measurement should trust.
 Effects: `ffi:clock_gettime`, `ffi_precondition`, `io`, `local_read`, `local_write`, `stack_storage`, `trap`, `zero_init`.
 
+```cairn
+pub fn outcome(result:i64) -> std.core.Result[usize, std.io.IoError]
+```
+What an I/O ring's `q.next(tag, result)` reported: a byte count or a new descriptor, or the error the kernel gave, which a ring returns as a negative errno instead of setting errno.
+Effects: `trap`.
+
 # std.map
 
 An open-addressed hash table with linear probing and tombstones. The map owns its keys and values, so Map[u64, Vec[u8]] is ordinary. A lookup answers with a *slot index* rather than the value: a borrow cannot be returned, so the caller reads m.vals[slot] itself, and the same index is what iteration uses. Cost: expected O(1) per operation; insert reallocates and rehashes past three quarters full, so `alloc`, `free` and `zero_init` appear in every caller's row.

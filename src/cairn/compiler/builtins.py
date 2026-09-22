@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import facts
+from . import facts, rings
 from .traits import vtable
 from .tree import FLOAT, HOST_VISIBLE, INT, NUMERIC, UNSIGNED, USIZE, VOID, Expr, Type, fail, is_view, root
 
@@ -163,8 +163,11 @@ def check_wait(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Ty
     c.spawning = "<wait>"
     ticket = c.expr(args[0])
     c.spawning = ""
-    if ticket.name not in {"Ticket", "Group"} or args[0].tag != "name":
-        fail("E-TYPE-MISMATCH", "wait takes the name of a ticket or of a group.", e)
+    if ticket.name not in {"Ticket", "Group", "IoRing"} or args[0].tag != "name":
+        fail("E-TYPE-MISMATCH", "wait takes the name of a ticket, a group or an I/O ring.", e)
+    if ticket.name == "IoRing":
+        rings.waited(c, args[0])
+        return VOID
     c.leases.pop(args[0].val, None)
     c.before.pop(args[0].val, None)
     c.effect("join")
@@ -269,6 +272,7 @@ TABLE: dict[str, tuple[Any, Any]] = {
     "wait": (check_wait, lambda g, e: f"{g.expr(e.args[0])}.wait()"),
     "collect": (check_collect, lambda g, e: f"{g.expr(e.args[0])}.collect()"),
     "Group": (check_group, lower_construct),
+    "IoRing": (rings.check_ring, lower_construct),
     **dict.fromkeys(("Atomic", "Mutex"), (check_shared, lower_construct)),
     **dict.fromkeys(("take", "swap"), (check_exchange, lower_exchange)),
     "Dyn": (check_dyn, lower_dyn),
