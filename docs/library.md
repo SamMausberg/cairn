@@ -1,6 +1,6 @@
 # The standard library
 
-Sixteen modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
+Seventeen modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
 
 [std_api.md](std_api.md) holds every signature and every effect row, generated from these sources by `cairn doc --std`. This file is the working guide: what each module is for, a program that uses it, and where it bites.
 
@@ -12,6 +12,7 @@ Three habits explain the API shape. A lookup answers with an index, never a borr
 | `std.vec` | the growable owner `Vec[T]` | yes |
 | `std.text` | integers to and from bytes, comparison, search, hashing | only `push_u64`, `push_i64` |
 | `std.io` | files, standard streams, a monotonic clock | only `read_file`, `read_to_end` |
+| `std.math` | the C math library on `f64`, whose last bit varies | no |
 | `std.time` | a monotonic clock, the date, sleeping | no |
 | `std.env` | the program's arguments and environment | yes |
 | `std.fs` | files by path, without a NUL to write | only `read` |
@@ -278,6 +279,21 @@ fn main() -> i32 {
   time.sleep(1000000);                            // a millisecond
   let took = time.since(start);
   if took < 1000000 { return 1; }
+  return 0;
+}
+```
+
+## std.math
+
+The C math library on `f64`: `exp`, `log`, `log2`, `pow`, `sin`, `cos`, `tan` and `atan2`, with `PI` and `E`. Their last bit depends on which libm links the program, glibc, musl or CUDA's, so a result is not reproducible across machines. The builtins `sqrt`, `floor`, `ceil`, `trunc` and `abs` are the other kind: IEEE 754 makes them the same everywhere ([language.md](language.md#values-and-arithmetic)). A call here is a foreign call, so its row says `ffi:exp` and the like, and, because the library may write `errno`, it stands in its own statement or initializer (`E-EFFECT-ORDER`).
+
+```cairn
+import std.math;
+
+fn main() -> i32 {
+  let half = math.sin(math.PI / 6.0);
+  let grown = math.exp(1.0);
+  if abs(half - 0.5) > 1e-15 || abs(grown - math.E) > 1e-15 { return 1; }
   return 0;
 }
 ```

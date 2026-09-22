@@ -49,7 +49,7 @@ Expected u32, got u64.
 
 Floats compile with `-ffp-contract=off -fno-fast-math` (and `--fmad=false` on the device): no contraction and no reassociation. A failed guard aborts the process. It does not unwind, and it rolls nothing back.
 
-Six builtins cover what IEEE 754 defines exactly. `sqrt(x)` is correctly rounded, and `floor`, `ceil` and `trunc` are exact, for `f32` and `f64`, so every compiler, the host and a device lane give the same bits. `abs(x)` takes a float, exactly, or a signed integer, and traps on the minimum, whose magnitude its type cannot hold. `to_bits(x)` is a float's IEEE pattern as a `u32` or `u64`. Any other argument is `E-MATH-TYPE`. The functions whose last bit depends on the math library, `exp`, `log`, `sin` and the rest, are not builtins, and a program that needs one declares it `extern` so its row says `ffi:exp`. A function of the program's own with one of these names is the one a call reaches.
+Six builtins cover what IEEE 754 defines exactly. `sqrt(x)` is correctly rounded, and `floor`, `ceil` and `trunc` are exact, for `f32` and `f64`, so every compiler, the host and a device lane give the same bits. `abs(x)` takes a float, exactly, or a signed integer, and traps on the minimum, whose magnitude its type cannot hold. `to_bits(x)` is a float's IEEE pattern as a `u32` or `u64`. Any other argument is `E-MATH-TYPE`. The functions whose last bit depends on the math library, `exp`, `log`, `sin` and the rest, are not builtins: `std.math` calls the C library for them, and its row says `ffi:exp` ([library.md](library.md#stdmath)). A function of the program's own with one of these names is the one a call reaches.
 
 ```cairn
 fn hypot(x:f64, y:f64) -> f64 = sqrt(x * x + y * y);   // no trap: its row is empty

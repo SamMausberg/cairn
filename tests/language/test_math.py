@@ -125,3 +125,35 @@ def test_the_value_model_does_not_claim_them():
 )
 def test_what_the_builtins_refuse(source):
     refused("E-ARITY" if "2.0" in source else "E-MATH-TYPE", source)
+
+
+LIBM = """
+import std.math;
+
+fn main() -> i32 {
+  let half = math.sin(math.PI / 6.0);
+  let one = math.exp(0.0);
+  let back = math.log(math.E);
+  let eight = math.pow(2.0, 3.0);
+  let three = math.log2(8.0);
+  let turn = math.atan2(1.0, 1.0);
+  let flat = math.cos(0.0);
+  let none = math.tan(0.0);
+  if abs(half - 0.5) > 1e-15 || one != 1.0 || abs(back - 1.0) > 1e-15 || eight != 8.0 { return 1; }
+  if three != 3.0 || abs(turn - math.PI / 4.0) > 1e-15 || flat != 1.0 || none != 0.0 { return 2; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_the_libm_module_links_the_c_library(tmp_path, cxx):
+    """std.math is libm itself: its results are the ones C gets here, near the exact values, not IEEE-exact ones."""
+    done = run(tmp_path, compile_source(LIBM)[0], *sanitized(cxx), *WARNINGS, cxx=cxx)
+    assert done.returncode == 0, done.stderr
+
+
+def test_a_libm_call_says_so_in_every_row():
+    rows = compile_source("import std.math;\nfn grow(x:f64) -> f64 = math.exp(x);\n")[1]["functions"]
+    assert "ffi:exp" in rows["grow"]["effects"] and "io" not in rows["grow"]["effects"]
+    refused("E-EFFECT-ORDER", "import std.math;\nfn both(x:f64) -> f64 = math.exp(x) + math.log(x);\n")

@@ -332,6 +332,32 @@ pub fn contains[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> b
 pub fn remove[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:ro<K>) -> Option[V]
 ```
 
+# std.math
+
+The C math library's functions on f64. Their last bit depends on which libm the program links (glibc, musl and CUDA's differ), unlike the builtins sqrt, floor, ceil, trunc and abs, which IEEE 754 makes the same everywhere. That dependency shows in every caller's row as ffi:<name>. Host only. Cost: one library call each, no allocation, no errno read.
+
+```cairn
+pub const PI:f64 = 3.141592653589793;
+
+pub const E:f64 = 2.718281828459045;
+
+pub fn exp(x:f64) -> f64  // effects: ffi:exp
+
+pub fn log(x:f64) -> f64  // effects: ffi:log
+
+pub fn log2(x:f64) -> f64  // effects: ffi:log2
+
+pub fn pow(x:f64, y:f64) -> f64  // effects: ffi:pow
+
+pub fn sin(x:f64) -> f64  // effects: ffi:sin
+
+pub fn cos(x:f64) -> f64  // effects: ffi:cos
+
+pub fn tan(x:f64) -> f64  // effects: ffi:tan
+
+pub fn atan2(y:f64, x:f64) -> f64  // effects: ffi:atan2
+```
+
 # std.mem
 
 Element-wise bulk operations on host views. Nothing here allocates or copies an owner: `fill` and `copy` assign, so they instantiate only for copyable elements, and an owner element is rejected where it would have to be moved out of a place. Cost: one pass over the destination; `equal` stops at the first difference.

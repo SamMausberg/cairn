@@ -1,0 +1,26 @@
+// The C math library's functions on f64. Their last bit depends on which libm the program links (glibc,
+// musl and CUDA's differ), unlike the builtins sqrt, floor, ceil, trunc and abs, which IEEE 754 makes the
+// same everywhere. That dependency shows in every caller's row as ffi:<name>. Host only.
+// Cost: one library call each, no allocation, no errno read.
+module std.math;
+
+pub const PI:f64 = 3.141592653589793;
+pub const E:f64 = 2.718281828459045;
+
+extern "exp" fn c_exp(x:f64) -> f64 effects();
+extern "log" fn c_log(x:f64) -> f64 effects();
+extern "log2" fn c_log2(x:f64) -> f64 effects();
+extern "pow" fn c_pow(x:f64, y:f64) -> f64 effects();
+extern "sin" fn c_sin(x:f64) -> f64 effects();
+extern "cos" fn c_cos(x:f64) -> f64 effects();
+extern "tan" fn c_tan(x:f64) -> f64 effects();
+extern "atan2" fn c_atan2(y:f64, x:f64) -> f64 effects();
+
+pub fn exp(x:f64) -> f64 { unsafe { return c_exp(x); } }
+pub fn log(x:f64) -> f64 { unsafe { return c_log(x); } }
+pub fn log2(x:f64) -> f64 { unsafe { return c_log2(x); } }
+pub fn pow(x:f64, y:f64) -> f64 { unsafe { return c_pow(x, y); } }
+pub fn sin(x:f64) -> f64 { unsafe { return c_sin(x); } }
+pub fn cos(x:f64) -> f64 { unsafe { return c_cos(x); } }
+pub fn tan(x:f64) -> f64 { unsafe { return c_tan(x); } }
+pub fn atan2(y:f64, x:f64) -> f64 { unsafe { return c_atan2(y, x); } }
