@@ -1,51 +1,53 @@
 # Remaining gates
 
-What is still missing is stated here as gates rather than plans, and [project/capabilities.json](project/capabilities.json) carries the same list as data. A gate closes only when its tests, its documentation and its evidence exist.
+Each gate below is open. A gate closes when its tests, its documentation and its evidence exist. [project/capabilities.json](project/capabilities.json) has the same list as data.
 
 ## Language
 
-Recipes are library code over record schemas, naturals and names of functions. They do not take arbitrary expression fragments, and no checked theorem is replayed per instance. A recipe may declare a field extent in a record it generates (`$f:Buf[$t][rows]`), which is how `examples/apps/analytics` passes its columns whole.
+Recipes are library code over record schemas, naturals and names of functions. They cannot take arbitrary expression fragments, and no checked theorem is replayed for each instance. A recipe may declare a field extent in a record it generates (`$f:Buf[$t][rows]`), which is how `examples/apps/analytics` passes its columns whole.
 
-The collector remains a closed, certified form: a user cannot write a loop that carries its own certificates.
+The collector is a closed, certified form. A user cannot write a loop that carries its own certificates.
 
-Asynchronous I/O is a task over blocking I/O. A task group (`Group[T](n)`, `spawn f(args) into g;`, `collect(g)`, `wait(g)`) awaits tasks in the order they finish, with linear groups and the same leases as tickets, and its storage taken where it is declared. What it does not have: a task cannot be cancelled, a `collect` returns no lease before `wait(g)`, a group is a host object, and the calculus does not model it. Device-loss recovery and multi-device collectives are absent. Device regions and transfers do queue as linear stream tickets ordered with `after`.
+Asynchronous I/O is a task over blocking I/O. A task group (`Group[T](n)`, `spawn f(args) into g;`, `collect(g)`, `wait(g)`) returns its tasks in the order they finish. Groups are linear, lease what their tasks borrow exactly as tickets do, and take their storage where they are declared. A task cannot be cancelled, `collect` releases no lease before `wait(g)`, a group lives on the host, and the calculus does not model groups. There is no recovery from device loss and no collective across devices. Device regions and transfers queue as linear stream tickets ordered with `after`.
 
-A lease names the place that was lent, so two tasks may take two fields of one record, and a `Buf` field may declare an earlier `usize` field as its extent, so `len(c.price)` and `c.rows` are one identity along a field path rooted in a local. An element of an array of records (`cs[0].price`) is still passed as a part and pays its guard.
+A lease names the place that was lent, so two tasks may take two fields of one record. A `Buf` field may declare an earlier `usize` field as its extent, which makes `len(c.price)` and `c.rows` one identity along a field path rooted in a local. An element of an array of records (`cs[0].price`) is still passed as a part and pays its guard.
 
-`alloc` is charged where storage is taken and `free` where the release runs, but a constructor's row still carries `free` beside `alloc`. Full independence of the two effects is a refinement, not a rule change, and is not taken.
+`alloc` is charged where storage is taken and `free` where it is released, but a constructor's row still carries `free` beside `alloc`. Separating the two effects completely would refine the rows without changing a rule, and has not been done.
 
-Separate compilation is opt-in: `--incremental` keeps one object per module, reused by content hash. Device programs and freestanding images are one translation unit, and no cross-module inlining is attempted in that mode.
+Separate compilation is opt-in: `--incremental` keeps one object per module and reuses it by content hash. Device programs and freestanding images are one translation unit, and that mode does no inlining across modules.
 
-Bounds cover traits, kinds and closed scalar classes, every template of `std` is certified once against its bounds, and `cairn check --generics` holds a project to the same on request. Nothing requires it: a program's unbounded templates are still accepted per instance.
+Bounds cover traits, kinds and closed scalar classes. Every template of `std` is certified once against its bounds, and `cairn check --generics` holds a project to the same standard on request. Nothing requires it: an unbounded template in a program is still accepted instance by instance.
 
 ## Proof
 
-The collector certificates and loop model are Lean-checked, and so is a core ownership and lease calculus over locals, record field paths, whole owners, headers, elements, array parts with visible bounds and `parallel` regions. An accepted program there has no use-after-move, use-after-free, double free, leaked ticket, aliased call argument or data race, never gets stuck, and frees every cell exactly once, under any interleaving and every valuation of those bounds and of the lane count.
+The collector certificates and the loop model are Lean-checked. So is a core calculus of ownership and leases over locals, record field paths, whole owners, headers, elements, array parts with visible bounds and `parallel` regions. An accepted program of that calculus has no use after move, use after free, double free, leaked ticket, aliased call argument or data race, never gets stuck, and frees every cell exactly once, under any interleaving and every valuation of the bounds and the lane count.
 
-That calculus is written by hand beside the checker, not extracted from it. `tools/checks/differential_ownership.py` requires the two to classify generated programs of a shared fragment identically, and twenty thousand programs have agreed; relating them by something stronger than that would close this.
+The calculus is written by hand beside the checker. `tools/checks/differential_ownership.py` requires the two to classify generated programs of a shared fragment identically, and twenty thousand programs have agreed. A stronger link than that between the two is open.
 
-It assumes of the emitter that a part's `lo <= hi` guard runs before the task that borrows it starts, and that a region completes before the next statement. Both are tested, not proved.
+The calculus assumes two things of the emitter: that a part's `lo <= hi` guard runs before the task that borrows it starts, and that a region completes before the next statement. Both are tested and neither is proved.
 
-A single element, a part of a part and a part with an invisible bound are modelled as the elements, conservatively, and the classifications agree with the checker on the programs the regression names. Closures, `lane:f` callbacks, device placement, `reduce`, `compact`, queued device work and declared field extents are outside the calculus.
+A single element, a part of a part and a part with an invisible bound are modelled conservatively as the whole element range, and the regression programs show the checker classifying them the same way. Closures, `lane:f` callbacks, device placement, `reduce`, `compact`, queued device work and declared field extents are outside the calculus.
 
-The emitter's correspondence to the loop model and native refinement are unproved. Proving that the emitted loop refines the model, or generating it from the model, would close the first.
+Nothing proves that the emitted collector loop refines the Lean model, or that native code refines the emitted C++. Proving the first, or generating the loop from the model, would close that gate.
 
-The SMT model covers records, tag-only enums and payload sums with `match` and `try`, IEEE `f32` and `f64`, fixed local storage, array views with their parts, `rw` borrows, function-local heap scratch, `compact`, host `reduce`, and loops it can unroll within a sixteen-iteration budget, with a per-function precondition where a symbolic extent needs one. It admits any tag in storage and any tag nested inside a value parameter, as the emitter does, and guards only the top-level tag of a value parameter, as the emitter does. It follows an owner that moves: `take` and `swap` on locals, an owner passed by value, and an owner that is returned, observed by its length and its elements. It still refuses an owner held inside a record, a sum or an array, recursion, tasks, lanes, device placement, closures, `dyn` and the foreign boundary, and reports as unknown an unbounded trip count and an observed NaN. An owner inside a value is the named next SMT step.
+The SMT model covers records, tag-only enums and payload sums with `match` and `try`, IEEE `f32` and `f64`, fixed local storage, array views and their parts, `rw` borrows, function-local heap scratch, `compact`, host `reduce`, and loops it can unroll within sixteen iterations, with a per-function precondition where a symbolic extent needs one. It admits any tag in storage and any tag nested inside a value parameter, and guards only the top-level tag of a value parameter, exactly as the emitter does. It follows an owner that moves: `take` and `swap` on locals, an owner passed by value, and an owner that is returned, observed by its length and elements. It refuses an owner held inside a record, a sum or an array, recursion, tasks, lanes, device placement, closures, `dyn` and the foreign boundary, and answers `unknown` for an unbounded trip count and an observed NaN. Owners inside values are the next SMT step.
 
-[verification.md](verification.md) states what each model contains, what it assumes and what it leaves out.
+[verification.md](verification.md) says what each model contains, what it assumes and what it leaves out.
 
 ## Performance
 
-`evidence/v1_0/gpu/benchmark.json` is one machine and three kernels; device wins depend on transfer cost. `evidence/v1_2/host_regions` puts the size at which a host region beats the loop at about a hundred thousand cheap elements, or thirty thousand dearer ones, on one machine under both compilers.
+`evidence/v1_0/gpu/benchmark.json` covers one machine and three kernels, and whether the device wins depends on transfer cost. `evidence/v1_2/host_regions` finds that a host region beats the loop from about a hundred thousand cheap elements, or thirty thousand dearer ones, on one machine under both compilers.
 
-`bench/suite/` is the preregistered CPU baseline suite: eight kernels against plain C++, OpenMP and oneTBB, each baseline built once guarded and once not, at equal worker counts, with safety boundaries counted from the build receipt and losses printed beside wins. Its first run, `evidence/v1_3/bench/` on a sixteen-thread x86-64 machine, found a CAIRN region level with OpenMP and oneTBB at equal guards on every kernel where a region applies, a win by the preregistered margin over the guarded sequential loop from ten million elements on four kernels, and the three losses the preregistration predicted: the host `reduce` is a sequential fold, and the lane rule keeps a shared-bin histogram sequential. The guards cost a few percent at those sizes. Nothing is claimed against tuned C++ or CUDA, nothing has run across more than one memory domain, and one x86-64 host and one AArch64 host are the only ones measured.
+`bench/suite/` is the preregistered CPU baseline suite: eight kernels against plain C++, OpenMP and oneTBB, each baseline built once with guards and once without, at equal worker counts, with safety boundaries counted from the build receipt and losses printed beside wins. Its first run, `evidence/v1_3/bench/` on a sixteen-thread x86-64 machine, found a CAIRN region level with OpenMP and oneTBB at equal guards wherever a region applies. It beat the guarded sequential loop by the preregistered margin from ten million elements on four kernels, and lost the three cases the preregistration predicted: the host `reduce` is a sequential fold, and the lane rule keeps a shared-bin histogram sequential. The guards cost a few percent at those sizes.
+
+Nothing is claimed against tuned C++ or CUDA. Nothing has run across more than one memory domain, and only one x86-64 host and one AArch64 host have been measured.
 
 ## AI evidence
 
-The edit protocol, packets and rule cards cover the whole language. One preregistered pilot has run (`evidence/v1_1/ai_pilot`): nine fresh subjects of one model family, given only the rule cards and compiler diagnostics, solved nine of nine small tasks against hidden tests. It shows the cards suffice for that; it shows no advantage over anything.
+The edit protocol, the packets and the rule cards cover the whole language. One preregistered pilot has run (`evidence/v1_1/ai_pilot`): nine fresh subjects of one model family, given only the rule cards and compiler diagnostics, solved nine of nine small tasks against hidden tests. It had no comparison arm.
 
-No experiment with equal budgets against C++ and Rust tooling, other model families or larger programs has run. Token counts are still byte counts. No corpus or deterministic search substitutes for that experiment.
+Open: an experiment with equal budgets against C++ and Rust tooling, other model families and larger programs. Token counts are still byte counts.
 
 ## Packaging
 
-A project can vendor other projects inside its root (`[dependencies]`), pinned by hash in every receipt. There is no registry, no version resolution and no fetching, by design. The package is installable from a checkout and builds as a wheel; it is not on any index.
+A project can vendor other projects inside its root (`[dependencies]`), pinned by hash in every receipt. There is no registry, no version resolution and no fetching. The package installs from a checkout and builds as a wheel, and is not on any package index.

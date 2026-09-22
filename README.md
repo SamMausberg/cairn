@@ -1,8 +1,8 @@
 # CAIRN
 
-CAIRN is a systems programming language. Its compiler emits guarded C++20 for CPUs, CUDA for GPUs from the same source, and a freestanding image for bare-metal AArch64. Every cost is visible: nothing allocates, synchronizes, copies an owner, runs in parallel or crosses a memory boundary unless the source says so, and every function carries an inferred effect row. Borrows are second class, so there are no lifetime annotations. The language was designed so that an edit made by an AI agent is checked by the compiler before anyone has to trust it.
+CAIRN is a systems programming language. Its compiler emits guarded C++20 for CPUs, CUDA for GPUs from the same source, and a freestanding image for bare-metal AArch64. A program allocates, synchronizes, copies an owner, runs in parallel or crosses a memory boundary only where its source says so, and every function carries an inferred effect row that shows those costs to its callers. Borrows exist only as parameters and arguments, so there are no lifetime annotations.
 
-The compiler is not proved correct. This file and [docs/](docs/README.md) keep apart what is proved, what is tested and what is only implemented.
+The language is built for edits made by AI agents. An agent proposes a function body or an expression, and the compiler checks it against a signature, an effect ceiling and a set of visible dependencies that the agent cannot change. The compiler itself is not proved correct. [What is established](#what-is-established) says which parts are proved, which are tested and which are only implemented.
 
 ## A first program
 
@@ -26,7 +26,7 @@ fn main() -> i32 {
 }
 ```
 
-`rw<u64>[n]` is a mutable borrow of `n` elements, and `n` is part of the type. Borrows exist only as parameters and arguments, so there are no lifetime annotations. The two tasks may run together because `data[0..mid]` and `data[mid..n]` visibly share a boundary. Each part carries one bounds guard, and every index is checked.
+`rw<u64>[n]` is a mutable borrow of `n` elements, and `n` is part of the type. The two tasks may run at once because `data[0..mid]` and `data[mid..n]` visibly meet at `mid` without overlapping. Each part carries one bounds guard, and every index is checked.
 
 A task leases what it borrows until `wait`. Touching the array in between is refused at compile time:
 
@@ -44,7 +44,7 @@ fn racy(n:usize, data:rw<u64>[n]) {
 E-LEASED: data is lent to left until wait(left).
 ```
 
-Every function has an inferred effect row. For `halves` it is `spawn`, `join`, `write:data`, `trap` and `ffi_precondition` (the entry guard of its view parameter). A function can cap its row with `pure` or `effects(...)`, and a caller sees the cost of everything it calls.
+The effect row of `halves` is `spawn`, `join`, `write:data`, `trap` and `ffi_precondition` (the entry guard of its view parameter). A function can cap its row with `pure` or `effects(...)`, and every caller's row includes the rows of what it calls.
 
 The same `parallel` body runs as CUDA lanes when its views are on the device and on a pool of host threads when they are not:
 
@@ -54,7 +54,7 @@ fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@devic
 }
 ```
 
-A lane may touch only element `[i]` of anything a lane writes, so lanes cannot race.
+Whatever a lane writes, it may touch only at element `[i]`, so two lanes never race.
 
 ## What the language has
 
@@ -107,7 +107,7 @@ cairn run examples/embedded                # bare-metal AArch64 under QEMU
 
 ## Documentation
 
-[docs/](docs/README.md) is the index. The [guide](docs/guide.md) takes a fresh checkout to a project that builds, runs and refuses a wrong edit, then walks twelve complete programs. [language.md](docs/language.md), [abstractions.md](docs/abstractions.md) and [concurrency.md](docs/concurrency.md) are the reference, stating every rule with a program that is accepted and one that is refused, and [library.md](docs/library.md), [tools.md](docs/tools.md) and [examples.md](docs/examples.md) cover the rest of using CAIRN. [verification.md](docs/verification.md) says what is proved, what is SMT-checked and what is only tested. [AGENTS.md](AGENTS.md) has the rules for anyone, human or agent, editing this repository, [CHANGELOG.md](CHANGELOG.md) is the release history, and [docs/project/capabilities.json](docs/project/capabilities.json) lists what is implemented and what is not, as data.
+Start with the [guide](docs/guide.md), which takes a fresh checkout to a working project and then walks through twelve complete programs. [docs/](docs/README.md) indexes the reference and everything else. [AGENTS.md](AGENTS.md) has the rules for anyone, human or agent, changing this repository, and [CHANGELOG.md](CHANGELOG.md) is the release history.
 
 ## Repository
 
@@ -131,17 +131,19 @@ docs/               the documentation, the generated std_api.md, project data, h
 evidence/           executed results by release, and their limits
 ```
 
-## What is established, and what is not
+## What is established
 
-Proved in Lean 4, with no `sorry` and no axioms beyond `propext` and `Quot.sound`: the certificate checker is sound, the seventeen collector certificates hold, the collector loop model stores in bounds and selects stably, and in a core ownership and lease calculus an accepted program has no use after move, use after free, double free, leaked ticket, aliased call argument or data race, under any interleaving, and never gets stuck. That calculus covers whole owners, record fields, lengths, elements, array parts with symbolic bounds, tasks, and `parallel` regions, where no two lanes race and no lane races a live task. It is written by hand beside the checker, not extracted from it, and a differential harness requires the two to classify generated programs alike. The Python checker, the emitter and the native code are not proved.
+[verification.md](docs/verification.md) has the details. In short:
 
-Tested, not proved: placement, effects, closures, what a lane may call, `reduce` and `compact`, queued device work, generics, traits, declared field extents. The suite holds about 1,800 tests, including rejection tables from five adversarial reviews, native runs under both compilers, Address, UndefinedBehavior, Leak and Thread sanitizers, CUDA runs and QEMU runs.
+Proved in Lean 4, with no `sorry` and no axioms beyond `propext` and `Quot.sound`: the collector's certificate checker is sound, its seventeen certificates hold, and its loop model stores in bounds and selects stably. A core calculus of ownership and leases is proved safe: an accepted program there has no use after move, use after free, double free, leaked ticket, aliased call argument or data race under any interleaving, and never gets stuck. The calculus covers whole owners, record fields, lengths, elements, array parts with symbolic bounds, tasks and `parallel` regions. It is written by hand beside the checker, and a differential harness requires the two to classify generated programs the same way. The Python checker, the emitter and the native code are not proved.
 
-`verify` trusts its translator and Z3. It compares a result together with what a call left in everything it was lent. It follows an owner that moves, and reports unknown for an owner held inside a record or an array, a trip count it cannot bound without a precondition, concurrency, device memory and the foreign boundary. The foreign boundary is as safe as its declarations are true.
+Tested: placement, effects, closures, what a lane may call, `reduce` and `compact`, queued device work, generics, traits and declared field extents. The suite has about 1,900 tests, including rejection tables from five adversarial reviews and native runs under both compilers, four sanitizers, CUDA and QEMU.
 
-The performance numbers are from single machines. `evidence/v1_3/bench/` is the first run of the preregistered CPU baseline suite: at equal guards and equal worker counts a CAIRN region is level with OpenMP and oneTBB, beats the guarded sequential loop by the preregistered margin from ten million elements on four kernels, and loses where the language keeps a reduction or a shared-bin histogram sequential, as the preregistration said it would. `evidence/v1_3/gpu/` and `evidence/v1_0/gpu/` show device kernels far ahead of the host and transfers often costing more than the kernel. `evidence/v1_2/host_regions/` puts the size at which a host `parallel` region starts to beat a loop at about a hundred thousand cheap elements. Nothing is claimed against tuned C++ or CUDA.
+SMT-checked: `cairn verify` asks Z3 whether two versions of a function can differ in their result or in anything they were lent. It trusts its translator and Z3. It follows an owner that moves, and answers `unknown` for an owner held inside a record or an array, a trip count it cannot bound, concurrency, device memory and the foreign boundary.
 
-One preregistered pilot has run (`evidence/v1_1/ai_pilot`): nine fresh subjects of one model family, given only the rule cards and compiler diagnostics, solved nine of nine small tasks against hidden tests. It shows the cards suffice for that. It shows no advantage over any other language, and no model was trained or evaluated beyond it.
+Measured, on single machines: at equal guards and worker counts a CAIRN parallel region runs level with OpenMP and oneTBB, and beats the guarded sequential loop from ten million elements on four kernels (`evidence/v1_3/bench/`). It loses where the language keeps a reduction or a shared-bin histogram sequential, as the preregistration predicted. Device kernels run far ahead of the host, and transfers often cost more than the kernel (`evidence/v1_3/gpu/`). Nothing is claimed against tuned C++ or CUDA.
+
+One preregistered pilot has run (`evidence/v1_1/ai_pilot`): nine fresh subjects of one model family, given only the rule cards and compiler diagnostics, solved nine of nine small tasks against hidden tests. There was no comparison arm, so it shows that the cards are enough for those tasks and nothing about other languages.
 
 ## License
 
