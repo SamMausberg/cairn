@@ -223,7 +223,7 @@ def e_spawn(c: Checker, e: Expr, expected: Type | None) -> Type:
         if again:
             fail("E-LEASED", f"{again[0].removesuffix('[]')} is lent to {name} until wait({name}), and the next "
                  "iteration would lend it again.", e)  # fmt: skip
-        c.leases.setdefault(name, []).extend(c.borrowed)
+        c.leases[name] = [*c.leases.get(name, ()), *c.borrowed]  # A new list: a sibling path shares the old one.
         c.effect("spawn")
         c.guard("submit")  # A full group traps rather than growing.
         return VOID

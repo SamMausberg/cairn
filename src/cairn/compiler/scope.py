@@ -29,6 +29,7 @@ class Scope:
     leases: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # ticket -> [(place, mode)]
     before: dict[str, set[str]] = field(default_factory=dict)  # device ticket -> tickets its work is queued after
     spawning: str = ""  # The name a `let t = spawn ...` is about to bind.
+    touched: list[tuple[str, str, bool, Any]] | None = None  # Every access of the loop body being checked.
 
 
 @dataclass

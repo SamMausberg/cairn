@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .places import settle
 from .scope import Binding
 from .tree import BOOL, USIZE, VOID, Expr, Stmt, Type, fail, is_view
 
@@ -168,7 +169,7 @@ def branches(c: Checker, node: Any, runs: list) -> Any:
     # A branch that returned cannot reach what follows; one that jumped (break/continue) can.
     onward = [o for o in outcomes if o[0] is not True]
     c.moved = set().union(before, *(moved for _, moved, *_ in onward))
-    c.leases = {t: places for o in onward for t, places in o[2].items()} if onward else held[0]
+    c.leases = settle([o[2] for o in onward]) if onward else held[0]
     c.before = {t: earlier for o in onward for t, earlier in o[3].items()} if onward else held[1]
     ends = [ended for ended, *_ in outcomes]
     return all(ends) and (True if all(e is True for e in ends) else "jump")
@@ -220,13 +221,16 @@ def s_match(c: Checker, s: Stmt):
 
 
 def loop(c: Checker, s: Stmt):
-    outer, before = set(c.env), set(c.moved)
-    c.loop_depth += 1
+    outer, before, held, around = set(c.env), set(c.moved), dict(c.leases), c.touched
+    c.loop_depth, c.touched = c.loop_depth + 1, []
     c.block(s.body)
-    c.loop_depth -= 1
+    c.loop_depth, touched, c.touched = c.loop_depth - 1, c.touched, around
     repeated = (c.moved - before) & outer
     if repeated:
         fail("E-MOVE-IN-LOOP", f"{sorted(repeated)[0]} would be moved once per iteration.", s)
+    c.carried(held, touched)
+    if around is not None:  # An inner loop runs inside every iteration of the one around it.
+        around.extend(touched)
 
 
 def s_while(c: Checker, s: Stmt):

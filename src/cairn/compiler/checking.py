@@ -58,6 +58,7 @@ class Checker:
     leases: dict[str, list[tuple[str, str]]]
     before: dict[str, set[str]]
     spawning: str
+    touched: list[tuple[str, str, bool, Any]] | None
 
     # The rules live one module per subject, each function taking the checker as `c`; a statement or
     # expression tag dispatches to `s_<tag>` or `e_<tag>` through this table.
@@ -73,7 +74,7 @@ class Checker:
     extent_of, declared_extent, writable = places.extent_of, places.declared_extent, places.writable
     place, stable, where, identity = places.place, places.stable, places.where, places.identity
     leased, capture, consume, intact = places.leased, places.capture, places.consume, places.intact
-    lend, disjoint = places.lend, places.disjoint
+    lend, disjoint, carried = places.lend, places.disjoint, places.carried
 
     s_parallel, s_reduce, region, host_only = (concurrency.s_parallel, concurrency.s_reduce, concurrency.region,
                                                concurrency.host_only)  # fmt: skip

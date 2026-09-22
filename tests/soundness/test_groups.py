@@ -124,6 +124,68 @@ def test_group_rejections(code, source):
     assert e.value.data["code"] == code
 
 
+SUBMITTED = "fn fill(n:usize, out:rw<u64>[n], s:u64) {} fn peek(n:usize, xs:ro<u64>[n]) -> u64 = xs[0]; fn flag() -> bool = true;"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        # Each branch lends the group a different buffer; the join used to keep only the last branch's lease.
+        "fn main() -> i32 { let mut a = Buf[u64](8); let mut b = Buf[u64](8); let g = Group[void](1);"
+        " if flag() { spawn fill(len(a), a, 1) into g; } else { spawn fill(len(b), b, 2) into g; }"
+        " a[0] = 7; wait(g); return 0; }",
+        # d[a..b] orders d[0..a] before d[b..n] only where it was formed, and so guarded; here it may not have been.
+        "fn main() -> i32 { let a:usize = 6; let b:usize = 3; let n:usize = 9; let mut d = Buf[u64](n);"
+        " let g = Group[void](3); if flag() { spawn fill(b - a, d[a..b], 1) into g; }"
+        " spawn fill(a, d[0..a], 2) into g; spawn fill(n - b, d[b..n], 3) into g; wait(g); return 0; }",
+        # The same fact from a loop that may run no iteration at all.
+        "fn main() -> i32 { let a:usize = 6; let b:usize = 3; let n:usize = 9; let k:usize = 0;"
+        " let mut d = Buf[u64](n); let h = Group[u64](4); let g = Group[void](2);"
+        " for i in 0..k { spawn peek(b - a, d[a..b]) into h; }"
+        " spawn fill(a, d[0..a], 2) into g; spawn fill(n - b, d[b..n], 3) into g; wait(g); wait(h); return 0; }",
+        # The second iteration writes what the first iteration's task still reads.
+        "fn main() -> i32 { let mut d = Buf[u64](8); let h = Group[u64](4);"
+        " for i in 0..4 { d[0] = u64(i); spawn peek(len(d), d) into h; } wait(h); return 0; }",
+    ],
+    ids=["one lease per branch", "a fact from one branch", "a fact from a loop", "a write before the next submission"],
+)
+def test_what_a_group_holds_survives_every_path(source):
+    """Soundness: a group keeps every lease any path lent it, and a part's bounds order other parts only where
+    every path formed it. Each of these ran under ThreadSanitizer and raced before the checker refused it."""
+    with pytest.raises(Diagnostic) as e:
+        compile_source(SUBMITTED + source)
+    assert e.value.data["code"] == "E-LEASED"
+
+
+BRANCHED = """
+fn flip() -> bool = true;
+fn main() -> i32 {
+  let n:usize = 64;
+  let mut x = Buf[u64](n);
+  let mut y = Buf[u64](n);
+  let chosen = Group[void](1);
+  if flip() { spawn fill(len(x), x, 1) into chosen; } else { spawn fill(len(y), y, 2) into chosen; }
+  wait(chosen);                                // both buffers are lent until here, whichever path ran
+  x[0] = 7;
+  let readers = Group[u64](4);
+  for i in 0..4 { spawn sum(len(x), x) into readers; }
+  let mut seen:u64 = 0;
+  for i in 0..4 { seen = seen + collect(readers); }
+  wait(readers);
+  if seen != 4 * 2086 { return 1; }            // 1..64 from fill, with x[0] now 7
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_group_filled_on_one_path_or_in_a_loop_runs_race_free(tmp_path, cxx):
+    """The accepted neighbours of the programs above: ThreadSanitizer watches a branch's task and four readers."""
+    ran = watched(tmp_path, compile_source(HELPERS + BRANCHED)[0], cxx, "thread")
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    assert "Sanitizer" not in ran.stderr, ran.stderr
+
+
 def test_a_loop_may_lend_a_group_what_tasks_only_read():
     """Read-only lending is shared, so the same view goes to every task of a loop; a writer would be lent twice."""
     source = (

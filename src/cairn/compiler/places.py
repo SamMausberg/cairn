@@ -30,6 +30,19 @@ def path(e: Expr, stable=lambda name: False) -> str:
     return e.val
 
 
+def vague(place: str) -> str:
+    """The same place without its bounds: `d[a..b]` becomes `d[?..?]`, which orders nothing."""
+    return place.partition("[")[0] + "[?..?]" if ".." in place else place
+
+
+def settle(paths: list[dict[str, list[tuple[str, str]]]]) -> dict[str, list[tuple[str, str]]]:
+    """The leases after alternatives join. What any path lent stays lent, but a part keeps its bounds only if
+    every path lent it: the `lo <= hi` guard that makes them a fact ran only where the slice was formed."""
+    names = dict.fromkeys(t for held in paths for t in held)
+    return {t: list(dict.fromkeys((p if all((p, m) in held.get(t, ()) for held in paths) else vague(p), m)
+                                  for held in paths for p, m in held.get(t, ()))) for t in names}  # fmt: skip
+
+
 def field_path(e: Expr) -> bool:
     """Is this a chain of fields on a local: `box.a`, `box.a.b`, and nothing computed on the way?
 
@@ -158,7 +171,23 @@ def leased(c: Checker, place: str, mode: str, node: Any, elements: bool = True):
     for ticket, held in c.leases.items():
         if any(overlaps(place, p, lent) and "rw" in (mode, m) and (elements or "[" not in p) for p, m in held):
             fail("E-LEASED", f"{place.removesuffix('[]')} is lent to {ticket} until wait({ticket}).", node)
+    if c.touched is not None:
+        c.touched.append((place, mode, elements, node))
     c.capture(place, mode)
+
+
+def carried(c: Checker, held: dict[str, list[tuple[str, str]]], touched: list[tuple[str, str, bool, Any]]):
+    """A group declared outside a loop keeps what every iteration lent it, so each later iteration runs while
+    those leases are held: nothing the body touches may conflict with them. They leave the loop without their
+    bounds, since the loop may not have run, and a bound the body names may differ between iterations."""
+    for group, places in c.leases.items():
+        kept = held.get(group, [])
+        new = [(vague(p), m) for p, m in places if (p, m) not in kept]
+        for place, mode, elements, node in touched:
+            if any(overlaps(place, p) and "rw" in (mode, m) and (elements or "[" not in p) for p, m in new):
+                fail("E-LEASED", f"{place.removesuffix('[]')} is lent to {group} by an earlier iteration, "
+                     f"until wait({group}).", node)  # fmt: skip
+        c.leases[group] = [*kept, *new]
 
 
 def capture(c: Checker, place: str, mode: str):
