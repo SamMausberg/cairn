@@ -1,0 +1,165 @@
+// Text built into a byte Vec: each call appends to `out`, so a line is a run of calls and one write.
+// Numbers are exact. Integers are decimal or hex; a float in fixed point is its exact binary value
+// rounded half to even at the last place, which is what printf's %.*f prints.
+// Cost: a call appends in place and may grow the Vec, so `alloc` and `free` are in the caller's row;
+// `fixed` works in 720 bytes of stack, and places past 40 are a guard failure.
+module std.fmt;
+import std.text;
+import std.vec (Vec);
+
+pub fn bytes(out:rw<Vec[u8]>, n:usize, s:ro<u8>[n]) { vec.extend_from(out, n, s); }
+pub fn uint[T:unsigned](out:rw<Vec[u8]>, value:T) { text.push_u64(out, u64(value)); }
+pub fn int[T:signed](out:rw<Vec[u8]>, value:T) { text.push_i64(out, i64(value)); }
+
+// `fill` repeated until `count` bytes are appended.
+fn repeat(out:rw<Vec[u8]>, count:usize, fill:u8) { for i in 0..count { vec.push(out, fill); } }
+
+// The digits of `value`, right-aligned in at least `width` bytes by `fill` in front: ' ' or '0'.
+pub fn padded[T:unsigned](out:rw<Vec[u8]>, value:T, width:usize, fill:u8) {
+  stack digits:u8[20] = zeroed;
+  let used = text.write_u64(digits, u64(value));
+  if width > used { repeat(out, width - used, fill); }
+  vec.extend_from(out, used, digits[0..used]);
+}
+
+// Lowercase hex, at least `width` digits, zero-padded: hex(out, 255, 4) is 00ff and hex(out, 255, 0) is ff.
+pub fn hex(out:rw<Vec[u8]>, value:u64, width:usize) {
+  let mut used:usize = 1;
+  while used < 16 && shr(value, used * 4) != 0 { used = used + 1; }
+  if width > used { repeat(out, width - used, '0'); }
+  stack digits:u8[16] = zeroed;
+  let wrote = text.write_hex(digits, value, used);
+  vec.extend_from(out, wrote, digits[0..wrote]);
+}
+
+// `s` and then `fill` up to `width` bytes, for a column that reads left to right.
+pub fn left(out:rw<Vec[u8]>, n:usize, s:ro<u8>[n], width:usize, fill:u8) {
+  vec.extend_from(out, n, s);
+  if width > n { repeat(out, width - n, fill); }
+}
+
+// `fill` and then `s`, so that `s` ends at `width` bytes.
+pub fn right(out:rw<Vec[u8]>, n:usize, s:ro<u8>[n], width:usize, fill:u8) {
+  if width > n { repeat(out, width - n, fill); }
+  vec.extend_from(out, n, s);
+}
+
+// A float's exact value needs as many bits as the number times ten to the places: 1024 for the largest
+// finite f64, 133 more for forty places, in 32-bit limbs held in u64s so that a product never overflows.
+const LIMBS:usize = 40;
+const LOW:u64 = 4294967295;
+
+// x * by, limb by limb, for `by` at most 2^31.
+fn times(x:rw<u64>[LIMBS], by:u64) {
+  let mut carry:u64 = 0;
+  for i in 0..LIMBS {
+    let t = x[i] * by + carry;
+    x[i] = t & LOW;
+    carry = shr(t, 32);
+  }
+}
+
+// x * 2^k.
+fn raise(x:rw<u64>[LIMBS], k:usize) {
+  let words = k / 32;
+  let bits = k % 32;
+  let mut i = LIMBS;
+  while i > 0 {
+    i = i - 1;
+    let mut v:u64 = 0;
+    if i >= words {
+      v = shl_wrap(x[i - words], bits) & LOW;
+      if bits > 0 && i > words { v = v | shr(x[i - words - 1], 32 - bits); }
+    }
+    x[i] = v;
+  }
+}
+
+// Bit j of x, and whether any bit below j is set.
+fn bit(x:ro<u64>[LIMBS], j:usize) -> bool = j / 32 < LIMBS && (shr(x[j / 32], j % 32) & 1) == 1;
+fn below(x:ro<u64>[LIMBS], j:usize) -> bool {
+  let word = min(j / 32, LIMBS);
+  for i in 0..word { if x[i] != 0 { return true; } }
+  if word == LIMBS { return false; }
+  return (x[word] & (shl_wrap(1, j % 32) - 1)) != 0;
+}
+
+// x / 2^k rounded to nearest, a tie to the even quotient.
+fn lower(x:rw<u64>[LIMBS], k:usize) {
+  let up = k > 0 && bit(x, k - 1);
+  let sticky = k > 1 && below(x, k - 1);
+  let words = k / 32;
+  let bits = k % 32;
+  for i in 0..LIMBS {
+    let from = i + words;
+    let mut v:u64 = 0;
+    if from < LIMBS { v = shr(x[from], bits); }
+    if bits > 0 && from + 1 < LIMBS { v = v | (shl_wrap(x[from + 1], 32 - bits) & LOW); }
+    x[i] = v;
+  }
+  if up && (sticky || (x[0] & 1) == 1) {
+    let mut i:usize = 0;
+    let mut carry = true;
+    while carry && i < LIMBS {
+      x[i] = (x[i] + 1) & LOW;
+      carry = x[i] == 0;
+      i = i + 1;
+    }
+  }
+}
+
+// The remainder of x / 10, leaving the quotient in x.
+fn tenth(x:rw<u64>[LIMBS]) -> u8 {
+  let mut rest:u64 = 0;
+  let mut i = LIMBS;
+  while i > 0 {
+    i = i - 1;
+    let t = shl_wrap(rest, 32) | x[i];
+    x[i] = t / 10;
+    rest = t % 10;
+  }
+  return u8(rest);
+}
+
+fn zero(x:ro<u64>[LIMBS]) -> bool {
+  for i in 0..LIMBS { if x[i] != 0 { return false; } }
+  return true;
+}
+
+// `value` with `places` digits after the point, the last one rounded half to even on the exact binary value;
+// nan, inf and -inf spelled out, and a negative zero keeps its sign, as printf does.
+pub fn fixed(out:rw<Vec[u8]>, value:f64, places:usize) {
+  stack bound:u8[41] = zeroed;
+  let checked = bound[places]; // at most forty places
+  let bits = to_bits(value);
+  let exponent = usize(shr(bits, 52) & 2047);
+  let fraction = bits & 4503599627370495;
+  if exponent == 2047 && fraction != 0 { vec.extend_from(out, 3, "nan"); return; }
+  if shr(bits, 63) == 1 { vec.push(out, '-'); }
+  if exponent == 2047 { vec.extend_from(out, 3, "inf"); return; }
+  // |value| is m * 2^e exactly: an integer m below 2^53 and e from -1074 to 971.
+  let mut m = fraction;
+  let mut scale:usize = 1074;
+  if exponent > 0 {
+    m = fraction | 4503599627370496;
+    scale = 1075 - min(exponent, 1075);
+  }
+  stack x:u64[LIMBS] = zeroed;
+  x[0] = m & LOW;
+  x[1] = shr(m, 32);
+  for p in 0..places { times(x, 10); }
+  if exponent > 1075 { raise(x, exponent - 1075); } else { lower(x, scale); }
+  stack digits:u8[400] = zeroed;
+  let mut used:usize = 0;
+  while used <= places || !zero(x) {
+    let digit = tenth(x);
+    digits[used] = 48 + digit;
+    used = used + 1;
+  }
+  let mut i = used;
+  while i > 0 {
+    i = i - 1;
+    if i + 1 == places { vec.push(out, '.'); }
+    vec.push(out, digits[i]);
+  }
+}

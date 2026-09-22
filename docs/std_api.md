@@ -71,6 +71,47 @@ pub recipe ord for R
 pub recipe hash for R
 ```
 
+# std.fmt
+
+Text built into a byte Vec: each call appends to `out`, so a line is a run of calls and one write. Numbers are exact. Integers are decimal or hex; a float in fixed point is its exact binary value rounded half to even at the last place, which is what printf's %.*f prints. Cost: a call appends in place and may grow the Vec, so `alloc` and `free` are in the caller's row; `fixed` works in 720 bytes of stack, and places past 40 are a guard failure.
+
+```cairn
+// effects: alloc, ffi_precondition, free, local_read, local_write, read:out, read:s, trap, write:out, zero_init
+pub fn bytes(out:rw<std.vec.Vec[u8]>, n:usize, s:ro<u8>[n]@host)
+
+// Lowercase hex, at least `width` digits, zero-padded: hex(out, 255, 4) is 00ff and hex(out, 255, 0) is ff.
+// effects: alloc, diverge, ffi_precondition, free, local_read, local_write, read:out, stack_storage, trap, write:out,
+// zero_init
+pub fn hex(out:rw<std.vec.Vec[u8]>, value:u64, width:usize)
+
+// `s` and then `fill` up to `width` bytes, for a column that reads left to right.
+// effects: alloc, ffi_precondition, free, local_read, local_write, read:out, read:s, trap, write:out, zero_init
+pub fn left(out:rw<std.vec.Vec[u8]>, n:usize, s:ro<u8>[n]@host, width:usize, fill:u8)
+
+// `fill` and then `s`, so that `s` ends at `width` bytes.
+// effects: alloc, ffi_precondition, free, local_read, local_write, read:out, read:s, trap, write:out, zero_init
+pub fn right(out:rw<std.vec.Vec[u8]>, n:usize, s:ro<u8>[n]@host, width:usize, fill:u8)
+
+// `value` with `places` digits after the point, the last one rounded half to even on the exact binary value; nan, inf
+// and -inf spelled out, and a negative zero keeps its sign, as printf does.
+// effects: alloc, diverge, ffi_precondition, free, local_read, local_write, read:out, stack_storage, trap, write:out,
+// zero_init
+pub fn fixed(out:rw<std.vec.Vec[u8]>, value:f64, places:usize)
+
+// effects: alloc, diverge, ffi_precondition, free, local_read, local_write, read:out, stack_storage, trap, write:out,
+// zero_init
+pub fn uint[T:unsigned](out:rw<Vec[u8]>, value:T)
+
+// effects: alloc, diverge, ffi_precondition, free, local_read, local_write, read:out, stack_storage, trap, write:out,
+// zero_init
+pub fn int[T:signed](out:rw<Vec[u8]>, value:T)
+
+// The digits of `value`, right-aligned in at least `width` bytes by `fill` in front: ' ' or '0'.
+// effects: alloc, diverge, ffi_precondition, free, local_read, local_write, read:out, stack_storage, trap, write:out,
+// zero_init
+pub fn padded[T:unsigned](out:rw<Vec[u8]>, value:T, width:usize, fill:u8)
+```
+
 # std.io
 
 Files and standard streams. A File is linear: the type system, not a convention, is what closes a descriptor, and `defer close(f)` is the one idiom that survives an early `try`. Errors are errno in an IoError, because CAIRN cannot express `int*` and the C library keeps its error behind one. Cost: one syscall per call except `write` and `read_full`, which loop until the kernel is done; nothing here buffers, so n bytes written is n bytes of syscall.

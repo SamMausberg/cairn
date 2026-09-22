@@ -1,6 +1,6 @@
 # The standard library
 
-Twelve modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
+Thirteen modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
 
 [std_api.md](std_api.md) holds every signature and every effect row, generated from these sources by `cairn doc --std`. This file is the working guide: what each module is for, a program that uses it, and where it bites.
 
@@ -12,6 +12,7 @@ Three habits explain the API shape. A lookup answers with an index, never a borr
 | `std.vec` | the growable owner `Vec[T]` | yes |
 | `std.text` | integers to and from bytes, comparison, search, hashing | only `push_u64`, `push_i64` |
 | `std.io` | files, standard streams, a monotonic clock | only `read_file` |
+| `std.fmt` | integers, hex, padding and exact fixed-point floats into a `Vec[u8]` | yes |
 | `std.map` | open-addressed `Map[K, V]` | yes |
 | `std.derived` | `derive eq`, `derive ord`, `derive hash` | no |
 | `std.sort` | in-place heapsort and search | no |
@@ -175,6 +176,31 @@ fn main() -> i32 {
 `defer io.close(f)` is the idiom: `try` refuses to leave a function while a linear value is unconsumed, so a File that is not deferred cannot be used with `try` at all (`E-LINEAR-LEAK`, "f is linear: consume it, or defer its consumer, on every path"). `close` reports nothing, because consuming a linear value requires a function that never reaches a `return`, and `return` demands that every linear value already be consumed. Report through a borrow if you need the status.
 
 Open flags are `READ`, `WRITE`, `APPEND` and `TRUNCATE`; `seek` takes `SET`, `CUR` or `END`; `sync` and `truncate` answer `Ok(0)`. A path ends in a NUL byte, since C reads a pointer and not a length. `read` is one syscall and answers 0 at end of file; `read_full` and `write` loop, and a short write is an error here even though it is not one to the kernel. Nothing buffers: n bytes written is n bytes of syscall. `print`, `println`, `eprintln`, `newline`, `print_u64` and `print_i64` are best effort and return nothing. `read_stdin` is one read from standard input, answering 0 at end of input. `monotonic_ns` reads CLOCK_MONOTONIC.
+
+## std.fmt
+
+Text built into a `Vec[u8]`: every call appends, so a line is a run of calls and one write. `uint` and `int` take any unsigned or signed integer type, `hex(out, v, width)` writes at least `width` lowercase digits, `padded(out, v, width, fill)` right-aligns a number, and `left` and `right` pad text. `fixed(out, x, places)` writes a float with that many digits after the point, rounding its exact binary value half to even, which is what printf's `%.*f` prints, for every finite `f64` and up to forty places; `nan`, `inf` and `-inf` are spelled out and a negative zero keeps its sign. `tests/language/test_std_fmt.py` checks every line against Python's own formatting.
+
+```cairn
+import std.fmt;
+import std.io;
+import std.vec (Vec);
+
+fn main() -> i32 {
+  let mut line = vec.new[u8]();
+  let count:usize = 7;
+  fmt.left(line, "mean", 6, ' ');
+  fmt.fixed(line, 2.0 / 3.0, 3);
+  fmt.bytes(line, " of ");
+  fmt.padded(line, count, 3, '0');
+  fmt.bytes(line, " at 0x");
+  fmt.hex(line, 48879, 8);
+  io.println(line.data[0..line.len]);              // mean  0.667 of 007 at 0x0000beef
+  return 0;
+}
+```
+
+The row of every call carries `alloc` and `free`, because appending may grow the `Vec`. `fixed` works in 720 bytes of its own stack and needs no allocation beyond the digits it appends.
 
 ## std.map
 
