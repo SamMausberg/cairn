@@ -51,7 +51,7 @@ SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and h
     "device compact reads back": "cr::gpu::compact",
 }
 ALLOCATION = re.compile(r"(cr::(?:gpu::)?(?:Buf|Buffer|Pinned|Unified)<[^()=;]*?>)\s*\w*\(")
-CALL = re.compile(r"\bcf_(\w+)\(")
+CALL = re.compile(r"\bc[fi]_(\w+)\(")  # A checked entry `cf_` or the lean body `ci_`.
 PAID = {"alloc", "gpu_alloc", "join", "spawn", "lock", "io"}  # With par: and transfer:, what makes a call costly.
 LINE = re.compile(r'^\s*#line (\d+) "(.*)"$')
 MAX_SOURCE = 2_000_000
@@ -127,11 +127,11 @@ def remarks(record: str, names: dict[str, str]) -> list[dict[str, Any]]:
 
 
 def function_of(symbol: str, names: dict[str, str]) -> str:
-    """The CAIRN function a C++ symbol belongs to: `cf_name`, `_Z<len>cf_name...`, or a lambda nested in one."""
-    for size, rest in re.findall(r"(\d+)(cf_\w+)", symbol) or [("", symbol)]:
-        found = rest[: int(size)] if size else rest
-        if found.removeprefix("cf_") in names:
-            return names[found.removeprefix("cf_")]
+    """The CAIRN function a C++ symbol belongs to: `cf_name`, `_Z<len>ci_name...`, or a lambda nested in one."""
+    for size, rest in re.findall(r"(\d+)(c[fi]_\w+)", symbol) or [("", symbol)]:
+        found = (rest[: int(size)] if size else rest)[3:] if rest[:3] in {"cf_", "ci_"} else rest
+        if found in names:
+            return names[found]
     return "(runtime) " + symbol
 
 

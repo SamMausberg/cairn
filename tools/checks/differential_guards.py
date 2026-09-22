@@ -38,7 +38,7 @@ SANITIZE = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=address,un
 HELPER = (
     "fn total(c:usize, v:ro<u64>[c]) -> u64 { let mut t:u64 = 0; for i in 0..c { t = add_wrap(t, v[i]); } return t; }\n"
 )
-BOUNDS = ["n", "m", "k", "n - 1", "k + 1", "n - k", "len(x)", "min(n, m)", "m / 2", "k % 4", "0", "1", "2"]
+BOUNDS = ["n", "m", "n - 1", "min(k, 6) + 1", "n - k", "len(x)", "min(n, m)", "m / 2", "k % 4", "0", "1", "2"]
 INDEXES = ["i", "i + 1", "i - 1", "k", "n - 1 - i", "n - i", "i / 2", "k + i", "a", "a - 1", "a + 1"]
 CONDITIONS = ["i < m", "i + 1 < n", "k < n", "i > 0 && i < m", "!(i >= m)", "i < n || k < m", "i != 0", "k + 1 < n",
               "a < n", "a > 0 && a - 1 < n", "k < n && k + 1 < n", "n > 0"]  # fmt: skip
@@ -51,7 +51,7 @@ def statement(rng: random.Random, depth: int = 0) -> str:
     view = rng.choice("xy")
     choice = rng.random()
     if choice < 0.3:
-        lo, hi = rng.choice(["0", "1", "k", "a"]), rng.choice([*BOUNDS, "a"])
+        lo, hi = rng.choice(["0", "1", "k", "a"]), rng.choice(BOUNDS)  # `a` may be near the largest usize
         read = f"t = add_wrap(t, {view}[{rng.choice(INDEXES)}]);"
         cond = rng.choice(CONDITIONS)
         step = rng.choice([read, f"if {cond} {{ {read} }}", f"if !({cond}) {{ return 7; }} {read}",
@@ -97,6 +97,7 @@ int main() {
     std::fflush(stdout);
     const pid_t child = fork();
     if(child == 0) {
+      alarm(20);  // a loop that runs this long is reported as a status, not waited for
       auto* x = new std::uint64_t[n ? n : 1]; auto* y = new std::uint64_t[m ? m : 1];
       for(std::size_t j = 0; j < n; ++j) x[j] = 3 * j + 1;
       for(std::size_t j = 0; j < m; ++j) y[j] = 5 * j + 2;

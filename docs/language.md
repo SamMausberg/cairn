@@ -489,7 +489,7 @@ fn main() -> i32 { let frame = "\x07\x00\x00\x00hi"; return i32(checksum(2, fram
 A part's bounds and extent are names, literals and arithmetic; bind a call first.
 ```
 
-Read-only borrows may alias. A mutable borrow must not overlap any other argument of the same call (`E-ALIAS`): distinct fields of one record are disjoint, and two parts of one array are disjoint only when they visibly share a boundary, as `bytes[0..mid]` and `bytes[mid..n]` do. The entry guards check null, alignment, length and overlap numerically as well.
+Read-only borrows may alias. A mutable borrow must not overlap any other argument of the same call (`E-ALIAS`): distinct fields of one record are disjoint, and two parts of one array are disjoint only when they visibly share a boundary, as `bytes[0..mid]` and `bytes[mid..n]` do. A function that takes views is emitted twice. Its C symbol `cf_f` is the checked entry: it checks null, alignment, length and overlap numerically, and then runs the body `ci_f`. A call from CAIRN code goes to `ci_f` directly, because each view such a call can pass is one its caller was given and checked, storage the caller holds, a string, or a part its guard keeps inside one of those, and `E-ALIAS` has already shown that a mutable one overlaps no other argument. A function type and a `dyn` member carry no array view, so the checked entry is what a foreign caller, a test driver or a `cf_main` reaches. `--keep-guards` sends every call through it.
 
 ```cairn rejects E-ALIAS
 fn swap_ends(n:usize, a:rw<u8>[n], b:rw<u8>[n]) { swap(a[0], b[0]); }

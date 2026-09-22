@@ -136,7 +136,7 @@ SUM = "fn sum(n:usize, xs:ro<u8>[n]) -> u64 { let mut t:u64 = 0; for i in 0..n {
 
 def calls(source: str, name: str = "f") -> str:
     cpp = compile_source(SUM + source)[0]
-    return re.search(rf"cf_{name}\([^;\n]*\{{\n(.*?)^\}}", cpp, re.S | re.M).group(1)
+    return "".join(re.findall(rf"c[fi]_{name}\([^;\n]*\{{\n(.*?)^\}}", cpp, re.S | re.M))
 
 
 def test_an_omitted_extent_costs_no_check_the_part_does_not_already_make():

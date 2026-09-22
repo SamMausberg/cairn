@@ -128,7 +128,7 @@ Outside `unsafe` and `extern`, an accepted program cannot use a moved owner, lea
 "process": { "effects": ["ffi:getpid", "io"], "syntactic_check_sites": { "unsafe_blocks": 1 } }
 ```
 
-An extern's signature and effects are trusted as written. Callers of exported functions must supply live, initialized, correctly typed storage for every borrow, and a valid tag and active payload for every sum; numerical entry guards cannot prove provenance or exclude concurrent foreign access.
+An extern's signature and effects are trusted as written. Callers of exported functions must supply live, initialized, correctly typed storage for every borrow, and a valid tag and active payload for every sum; numerical entry guards cannot prove provenance or exclude concurrent foreign access. Those guards run in the exported `cf_` symbol only: a call from CAIRN code reaches the lean body `ci_`, on the argument that every view CAIRN can pass is valid by construction and that `E-ALIAS` has excluded overlap, which is the rule `checked-entries/1` among the receipt's trusted lowering rules.
 
 Manifests are data and accept local listed paths only: no hooks, commands, downloads, arbitrary flags, traversal or symlinks. One checker reads every manifest of a build, so a dependency's `cairn.toml` is refused for the same reasons as the root's. Each rule is enforced in `projects/` and pinned in `tests/projects/test_projects.py`.
 

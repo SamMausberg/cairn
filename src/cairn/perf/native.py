@@ -131,8 +131,8 @@ def widths(record: str) -> dict[int, int]:
 
 
 def owner(symbol: str, names: set[str]) -> str | None:
-    for size, rest in re.findall(r"(\d+)(cf_\w+)", symbol) or [("", symbol)]:
-        found = (rest[: int(size)] if size else rest).removeprefix("cf_")
+    for size, rest in re.findall(r"(\d+)(c[fi]_\w+)", symbol) or [("", symbol)]:  # a checked entry or a lean body
+        found = (rest[: int(size)] if size else rest).removeprefix("cf_").removeprefix("ci_")
         if found in names:
             return found
     return None

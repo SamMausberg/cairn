@@ -34,8 +34,8 @@ def available() -> bool:
 
 
 def owner(symbol: str, names: set[str]) -> str | None:
-    for size, rest in re.findall(r"(\d+)(cf_\w+)", symbol):
-        found = rest[: int(size)].removeprefix("cf_")
+    for size, rest in re.findall(r"(\d+)(c[fi]_\w+)", symbol):  # a checked entry or the lean body a lane runs in
+        found = rest[: int(size)].removeprefix("cf_").removeprefix("ci_")
         if found in names:
             return found
     return None

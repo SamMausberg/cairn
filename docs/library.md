@@ -570,7 +570,7 @@ fn main() -> i32 {
 }
 ```
 
-`copy` takes two views of one extent, so it is not a memmove: overlapping parts of one array are refused at the call site with `E-ALIAS`, and the entry guard checks it numerically as well. Shift a buffer down with an ordinary loop. `equal` takes two extents, since a comparison is the one place where the lengths may differ, and it stops at the first difference.
+`copy` takes two views of one extent, so it is not a memmove: overlapping parts of one array are refused at the call site with `E-ALIAS`, and the checked entry that a caller outside CAIRN reaches checks it numerically as well. Shift a buffer down with an ordinary loop. `equal` takes two extents, since a comparison is the one place where the lengths may differ, and it stops at the first difference.
 
 ## std.net
 

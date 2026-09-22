@@ -277,7 +277,7 @@ def test_a_declared_field_extent_drops_the_part_guard_a_field_used_to_need():
     cpp, r = compile_source(EXTENTS)
     assert r["functions"]["guarded"]["syntactic_check_sites"] == {"bounds": 3}
     assert "bounds" not in r["functions"]["declared"]["syntactic_check_sites"]
-    assert "cf_both((v_c).v_rows, (v_c).v_price.data(), (v_c).v_qty.data())" in cpp
+    assert "ci_both((v_c).v_rows, (v_c).v_price.data(), (v_c).v_qty.data())" in cpp  # a call from CAIRN: lean
     assert "cr::part" not in cpp.split("double cf_declared")[2]  # The body, past its prototype.
     assert compile_source(canonical_source(EXTENTS))[0] == cpp  # The suffix survives the projection.
 

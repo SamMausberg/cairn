@@ -86,7 +86,7 @@ def program(pairs: dict) -> str:
 
 
 def guards(cpp: str, name: str) -> Counter:
-    body = re.search(rf"^[^;\n]*\bcf_{name}\([^;\n]*\{{\n(.*?)^\}}", cpp, re.S | re.M).group(1)
+    body = "".join(re.findall(rf"^[^;\n]*\bc[fi]_{name}\([^;\n]*\{{\n(.*?)^\}}", cpp, re.S | re.M))
     return Counter(GUARD.findall(body))
 
 

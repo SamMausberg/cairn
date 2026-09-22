@@ -133,6 +133,7 @@ def generate(
             "unsigned-little-endian-wire/1",
             "scoped-scalar-storage/1",
             "tagged-scalar-sums/1",
+            "checked-entries/1",
         ],
         "arithmetic_certificate": {
             k: certificate[k] for k in ("status", "sha256", "certificate_count", "checker_sha256", "lean_verified")

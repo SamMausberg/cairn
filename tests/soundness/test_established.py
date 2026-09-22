@@ -28,7 +28,8 @@ GUARDS = {
 
 
 def body(cpp: str, name: str) -> str:
-    return re.search(rf"^[^;\n]*\bcf_{name}\([^;\n]*\{{\n(.*?)^\}}", cpp, re.S | re.M).group(1)
+    """The checked entry and the lean body of `name`, together: what one call from outside CAIRN runs."""
+    return "".join(re.findall(rf"^[^;\n]*\bc[fi]_{name}\([^;\n]*\{{\n(.*?)^\}}", cpp, re.S | re.M))
 
 
 def guards(source: str, name: str) -> dict[str, int]:
