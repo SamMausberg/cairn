@@ -235,8 +235,9 @@ def lend(c: Checker, a: Expr, mode: str, borrows: list[tuple[str, str]], element
     place = c.where(a) + "[]" * (elements and a.tag != "slice")
     c.leased(place, mode, a)
     borrows.append((place, mode))
-    if c.lanes and root(a).val in c.lanes.outer:  # A part inside the lane's own block is that block.
-        block = facts.window(c, a, c.lanes.binder) if a.tag == "slice" and a.args[0].tag == "name" else None
+    if c.lanes and root(a).val in c.lanes.outer:  # A part, or an element, inside the lane's own block is that block.
+        shown = {"slice": a, "index": a.args[-1]}.get(a.tag) if a.args and a.args[0].tag == "name" else None
+        block = facts.window(c, shown, c.lanes.binder) if shown is not None else None
         c.lanes.accesses.append((root(a).val, block, mode == "rw", a))
     return root(a).val
 

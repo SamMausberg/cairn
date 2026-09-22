@@ -15,7 +15,10 @@ import pytest
 from cairn.compiler.cairnc import compile_source
 from emitted import contract, refused, watched
 
-HEAD = "const BLOCK:usize = 64;\nfn fill(n:usize, out:rw<u64>[n], v:u64) { for i in 0..n { out[i] = v; } }\n"
+HEAD = (
+    "const BLOCK:usize = 64;\nfn fill(n:usize, out:rw<u64>[n], v:u64) { for i in 0..n { out[i] = v; } }\n"
+    "fn bump(v:rw<u64>) { v = add_wrap(v, 1); }\n"
+)
 
 
 def region(body: str) -> str:
@@ -35,6 +38,8 @@ ACCEPTED = {
     "part_to_a_call": "let lo = b * BLOCK; let hi = min(lo + BLOCK, n); if lo < hi { fill(hi - lo, out[lo..hi], 1); }",
     "first_of_block": "out[b * BLOCK] = 1;",
     "own_element": "out[b] = x[b];",
+    "own_element_to_a_call": "bump(out[b]); bump(out[b * 1]);",
+    "row_element_to_a_call": "for j in 0..BLOCK { bump(out[b * BLOCK + j]); }",
 }
 
 
@@ -53,6 +58,7 @@ REFUSED = {
     "a_moved_base": "let mut lo = b * BLOCK; lo = lo + 1; out[lo] = 1;",
     "a_read_outside": "out[b * BLOCK] = out[0];",
     "the_whole_array": "fill(n, out, 1);",
+    "another_element_to_a_call": "bump(out[0]);",
     "a_part_of_another_lane": "let lo = b * BLOCK; fill(BLOCK, out[lo + BLOCK..lo + 2 * BLOCK], 1);",
 }
 
