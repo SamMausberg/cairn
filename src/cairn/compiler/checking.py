@@ -466,7 +466,8 @@ class Checker:
             f.ret = self.resolve(f.ret, f)
         if any(t.name in PINNED and t.mode == "value" for t in [f.ret, *(t for _, t in f.params)]):
             fail("E-PINNED", "Tickets, groups, atomics and mutexes cannot be passed or returned by value.", f)
-        if any(t.name in {"Ticket", "Group"} for _, t in f.params):  # A lease lent through a borrow would end at return.
+        # A lease lent through a borrow would end at return.
+        if any(t.name in {"Ticket", "Group"} for _, t in f.params):
             fail("E-PINNED", "A ticket or a group is used only where it is declared: its leases end at wait().", f)
         if f.ret.mode != "value":
             fail("E-ESCAPE", "Borrowed view returns are not in the native subset.", f)
