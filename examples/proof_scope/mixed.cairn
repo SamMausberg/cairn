@@ -2,3 +2,4 @@ fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
 fn smaller(x:u64, y:u64) -> u64 = min(x, y);
 fn total(x:u64, y:u64) -> u64 = add_wrap(y, x);
 fn moved(n:usize) -> usize { let mut data = Buf[u64](n); let held = take(data); return len(held); }
+fn applied(x:u64, step:ro<fn(u64) -> u64>) -> u64 = step(x);

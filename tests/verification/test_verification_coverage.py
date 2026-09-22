@@ -32,11 +32,17 @@ def test_wrong_unused_function_cannot_hide():
     assert r["results"]["twice"]["status"] == "counterexample"
 
 
-def test_moved_owner_function_is_not_covered():
+def test_moved_owner_function_is_covered():
     src = REF + " fn moved(n:usize)->usize {let mut b=Buf[u64](n);let c=take(b);return len(c);}"
     r = verify_module(src, src)
-    assert r["status"] == "incomplete" and "moved" in r["uncovered"]
-    assert r["results"]["moved"]["status"] == "unknown"
+    assert r["status"] == "smt-module-equivalent" and "moved" in r["covered"]
+
+
+def test_a_function_taking_a_callable_is_not_covered():
+    src = REF + " fn applied(x:u64, step:ro<fn(u64) -> u64>) -> u64 = step(x);"
+    r = verify_module(src, src)
+    assert r["status"] == "incomplete" and "applied" in r["uncovered"]
+    assert r["results"]["applied"]["status"] == "unknown"
 
 
 VALUES = (
