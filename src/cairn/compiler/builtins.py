@@ -10,7 +10,22 @@ from typing import TYPE_CHECKING, Any
 
 from . import facts, rings
 from .traits import vtable
-from .tree import FLOAT, HOST_VISIBLE, INT, NUMERIC, SIGNED, UNSIGNED, USIZE, VOID, Expr, Type, fail, is_view, root
+from .tree import (
+    FLOAT,
+    HOST_VISIBLE,
+    INT,
+    NUMERIC,
+    SIGNED,
+    STORAGE,
+    UNSIGNED,
+    USIZE,
+    VOID,
+    Expr,
+    Type,
+    fail,
+    is_view,
+    root,
+)
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -19,7 +34,10 @@ if TYPE_CHECKING:
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
 SOFT = {"take", "swap", "transfer", "mmio_read", "mmio_write", "asm", "wait", "collect"}
 MATH = {"sqrt", "floor", "ceil", "trunc", "abs", "to_bits"}  # 1.4: a program's own function of the name wins
-SOFT |= MATH
+SOFT |= MATH | {"quantize", "from_bits"}
+QUANTIZED = [*STORAGE, "i8", "u8", "i16", "u16"]  # where one rounding of x / scale is exact (cairn_float.hpp)
+PATTERN = {"f32": "u32", "f64": "u64", **{n: "u16" if STORAGE[n][0] + STORAGE[n][1] > 7 else "u8" for n in STORAGE}}
+F32 = Type("f32")
 SHARED = {"Ticket": "Task", "Atomic": "Atomic", "Mutex": "Mutex", "Group": "Group"}  # CAIRN name -> cr::par class
 
 
@@ -55,15 +73,32 @@ def lower_len(g: Emitter, e: Expr) -> str:
 def check_convert(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
     arity(e, args, 1, "Scalar conversion takes one argument.")
     src = c.expr(args[0])
-    if src.mode != "value" or src.name not in NUMERIC:
+    if src.mode != "value" or src.name not in NUMERIC | STORAGE.keys():
         fail("E-CAST", "Conversion requires numeric scalar.", e)
+    if e.val in STORAGE and src.name not in FLOAT:  # One rounding, from a value f32 or f64 holds exactly.
+        fail("E-CAST", f"{e.val} rounds from f32 or f64; convert {src.name} to f32 or f64 first.", e)
+    if src.name in STORAGE and e.val not in FLOAT:
+        fail("E-CAST", f"{src.name} widens exactly to f32 or f64 only; convert from there.", e)
+    if e.val in STORAGE:  # IEEE's conversion: infinity past the range, which f8e4m3 cannot hold, so it traps.
+        if not STORAGE[e.val][2]:
+            c.guard("conversion")
+        overflow = "infinity" if STORAGE[e.val][2] else "trap"
+        contract(c, e, "convert", src.name, e.val, overflow=overflow, nan="nan")
     if e.val in INT:  # Narrowing, and float to integer (truncation toward zero), are range checked.
         c.guard("conversion")
         facts.discharge(c, e, "conversion", facts.conversion(c, e))
     return Type(e.val)
 
 
+def contract(c: Checker, e: Expr, op: str, source: str, target: str, **terms: str):
+    """The numerical contract of a rounding the source wrote, as the receipt lists it beside the row."""
+    record = {"line": e.line, "op": op, "from": source, "to": target, "rounding": "nearest-even", **terms}
+    c.numerics.setdefault(c.f.name, []).append(record)
+
+
 def lower_convert(g: Emitter, e: Expr) -> str:
+    if e.val in STORAGE:
+        return f"cr::fp::narrow<{g.type(e.ty)}>({g.expr(e.args[0])})"
     exact = e.val in FLOAT or e.established
     guard = "static_cast" if exact else "cr::convert" if e.args[0].ty.name in INT else "cr::truncate"
     return f"{guard}<{g.type(e.ty)}>({g.expr(e.args[0])})"
@@ -103,13 +138,40 @@ def check_math(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Ty
     host and the device agree on them; the libm functions whose results vary are not builtins."""
     arity(e, args, 1, f"{e.val} takes one argument.")
     t = c.expr(args[0], None if e.val == "to_bits" else expected)
-    if t.mode == "value" and t.name in FLOAT:
-        return Type("u32" if t.name == "f32" else "u64") if e.val == "to_bits" else t
+    if t.mode == "value" and (t.name in FLOAT or (e.val == "to_bits" and t.name in STORAGE)):
+        return Type(PATTERN[t.name]) if e.val == "to_bits" else t
     if e.val == "abs" and t.mode == "value" and t.name in SIGNED:
         c.guard("overflow")  # The minimum has no magnitude of its own type.
         return t
     kind = "a signed integer or a float" if e.val == "abs" else "f32 or f64"
     fail("E-MATH-TYPE", f"{e.val} takes {kind}, not {t.display()}.", e)
+
+
+def check_from_bits(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    """from_bits[T](u): the float whose pattern is u, the inverse of to_bits; every pattern is some value."""
+    ty = c.resolve(targs[0], e) if len(targs) == 1 else expected
+    if ty is None or ty.mode != "value" or ty.name not in PATTERN:
+        fail("E-MATH-TYPE", "Write from_bits[T](u) with T one of f32 f64 f16 bf16 f8e4m3 f8e5m2.", e)
+    arity(e, args, 1, "from_bits takes the unsigned pattern.")
+    c.expect(c.expr(args[0], Type(PATTERN[ty.name])), Type(PATTERN[ty.name]), args[0])
+    e.ref = ("builtin", ty)
+    return ty
+
+
+def check_quantize(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    """quantize[T](x, scale): x / scale rounded once, to nearest with ties to even, and clamped to T's finite
+    range. The scale must be positive and finite, and an integer T has no NaN to give, so both are guards."""
+    ty = c.resolve(targs[0], e) if len(targs) == 1 else expected
+    if ty is None or ty.mode != "value" or ty.name not in QUANTIZED:
+        fail("E-QUANTIZE", f"Write quantize[T](x, scale) with T one of {' '.join(QUANTIZED)}.", e)
+    arity(e, args, 2, "quantize takes a value and its scale.")
+    for a in args:
+        c.expect(c.expr(a, F32), F32, a)
+    c.guard("quantize")
+    contract(c, e, "quantize", "f32", ty.name, scale="positive-finite", overflow="saturate",
+             nan="nan" if ty.name in STORAGE else "trap")  # fmt: skip
+    e.ref = ("builtin", ty)
+    return ty
 
 
 def lower_math(g: Emitter, e: Expr) -> str:
@@ -284,11 +346,20 @@ def lower_construct(g: Emitter, e: Expr) -> str:
     return f"{g.type(e.ty)}({g.expr(e.args[0])})" if e.args else f"{g.type(e.ty)}{{}}"
 
 
+def lower_float(g: Emitter, e: Expr) -> str:
+    """quantize and from_bits, which may name no storage type at all (quantize[i8], from_bits[f32])."""
+    g.need("cairn_float.hpp")
+    return f"cr::fp::{e.val}<{g.type(e.ty)}>({', '.join(map(g.expr, e.args))})"
+
+
 TABLE: dict[str, tuple[Any, Any]] = {
     "len": (check_len, lower_len),
     **dict.fromkeys(NUMERIC, (check_convert, lower_convert)),
     **dict.fromkeys(WRAPPING | {"min", "max"}, (check_binary, lower_binary)),
     **dict.fromkeys(MATH, (check_math, lower_math)),
+    **dict.fromkeys(STORAGE, (check_convert, lower_convert)),
+    "quantize": (check_quantize, lower_float),
+    "from_bits": (check_from_bits, lower_float),
     **dict.fromkeys(("mmio_read", "mmio_write", "asm"), (check_machine, lower_machine)),
     "transfer": (check_transfer, lower_transfer),
     "wait": (check_wait, lambda g, e: f"{g.expr(e.args[0])}.wait()"),

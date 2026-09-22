@@ -18,6 +18,7 @@ from .tree import (
     NUMERIC,
     SCALAR,
     SIGNED,
+    STORAGE,
     UNSIGNED,
     USIZE,
     VOID,
@@ -36,7 +37,14 @@ if TYPE_CHECKING:
 COMPARISONS = {"==", "!=", "<", "<=", ">", ">="}
 
 
+def stored(name: str) -> str:
+    """What to write instead of arithmetic, a comparison or a literal of a storage float."""
+    return f"{name} is a storage float: widen it with f32(x) to compute, and round back with {name}(y) or quantize."
+
+
 def e_int(c: Checker, e: Expr, expected: Type | None) -> Type:
+    if expected and expected.mode == "value" and expected.name in STORAGE:
+        fail("E-TYPE-MISMATCH", f"A literal is an f32 or an f64; write {expected.name}({e.val}.0) to round it.", e)
     ty = expected if expected and expected.mode == "value" and expected.name in NUMERIC else Type("u64")
     n = int(e.val)
     if ty.name in WIDTH:
@@ -48,6 +56,8 @@ def e_int(c: Checker, e: Expr, expected: Type | None) -> Type:
 
 
 def e_float(c: Checker, e: Expr, expected: Type | None) -> Type:
+    if expected and expected.mode == "value" and expected.name in STORAGE:
+        fail("E-TYPE-MISMATCH", f"A literal is an f32 or an f64; write {expected.name}({e.val}) to round it.", e)
     ty = expected if expected and expected.name in FLOAT else Type("f64")
     v = float(e.val)
     if not math.isfinite(v) or (ty.name == "f32" and abs(v) > 3.4028234663852886e38):
@@ -303,6 +313,8 @@ def e_unary(c: Checker, e: Expr, expected: Type | None) -> Type:
     ty = c.expr(e.args[0], BOOL if e.val == "!" else expected)
     if ty.mode != "value":
         fail("E-OPERATOR", "Unary operator on a view.", e)
+    if ty.name in STORAGE:
+        fail("E-OPERATOR", stored(ty.name), e)
     if e.val == "!":
         c.expect(ty, BOOL, e)
     elif e.val == "~":
@@ -334,6 +346,8 @@ def e_binary(c: Checker, e: Expr, expected: Type | None) -> Type:
     c.expect(right, left, e)
     if left.mode != "value":
         fail("E-OPERATOR", "View operators are not implicit loops.", e)
+    if left.name in STORAGE:
+        fail("E-OPERATOR", stored(left.name), e)
     if logical:
         c.expect(left, BOOL, e)
     elif compare:

@@ -26,6 +26,7 @@ from .tree import (
     CPP,
     INTRINSIC_TYPES,
     MAX_NODES,
+    STORAGE,
     USIZE,
     VOID,
     WIDTH,
@@ -131,6 +132,7 @@ class Checker:
         self.discharges: dict[str, dict[str, int]] = {}
         self.call_edges: dict[str, list[tuple[str, dict[str, str]]]] = {}
         self.resources: dict[str, list[dict[str, Any]]] = {}
+        self.numerics: dict[str, list[dict[str, Any]]] = {}  # each rounding the source wrote (builtins.contract)
         self.unchecked: list[str] = []
         self.lane_calls: list[tuple[str, bool, Expr, str]] = []  # (callee, on the device, the call, its caller)
         self.judging = ""  # The function a whole-program rule is looking at: whom a failure there is about.
@@ -356,6 +358,8 @@ class Checker:
 
     def sizeof(self, ty: Type) -> int:
         """A conservative byte size (8-byte alignment) for the explicit stack budget."""
+        if ty.name in STORAGE:
+            return (1 + STORAGE[ty.name][0] + STORAGE[ty.name][1]) // 8
         if ty.name in CPP:
             return 1 if ty.name == "bool" else WIDTH.get(ty.name, 32 if ty.name == "f32" else 64) // 8
         if ty.name == "Array":
@@ -437,6 +441,7 @@ class Checker:
                 "syntactic_check_sites": self.checks[n],
                 "discharged_check_sites": self.discharges[n],
                 **({"plan": planned[n]} if n in planned else {}),
+                **({"numerics": self.numerics[n]} if self.numerics.get(n) else {}),
                 "heap_allocations": sum(x["kind"] == "buffer" for x in self.resources[n]),
                 "allocation_count_kind": "syntactic-sites-not-dynamic-bound",
                 "local_storage": self.resources[n],

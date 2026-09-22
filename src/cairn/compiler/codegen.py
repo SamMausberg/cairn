@@ -12,7 +12,7 @@ from . import rings
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import Checker
 from .expressions import COMPARISONS
-from .tree import CPP, FLOAT, UNSIGNED, Expr, Function, Program, Stmt, Type, fail, is_view
+from .tree import CPP, FLOAT, STORAGE, UNSIGNED, Expr, Function, Program, Stmt, Type, fail, is_view
 
 RUNTIME_FILES = {
     p.name: p.read_text(encoding="utf-8") for p in sorted((Path(__file__).parents[1] / "runtime").glob("*.hpp"))
@@ -127,6 +127,8 @@ class Emitter:
         elif t.name == "Array":
             base = f"std::array<{self.type(t.args[0])}, {t.args[1]}>"
         else:
+            if t.name in STORAGE:
+                self.need("cairn_float.hpp")
             base = CPP.get(t.name) or "ct_" + mangle(t.value.display())
         if t.mode == "value":
             return base
@@ -426,7 +428,7 @@ class Emitter:
         if s.tag == "stack":
             self.put(f"std::array<{ty}, {s.exprs[0].val}> {owner}{{}};")
         else:  # Host scalars keep the 0.6 owner; any other host element type needs a movable zero.
-            held = PLACED.get(s.ref) or ("Buffer" if s.ty.name in CPP else "Buf")
+            held = PLACED.get(s.ref) or ("Buffer" if s.ty.name in CPP.keys() - STORAGE.keys() else "Buf")
             self.need({"Buffer": "cairn_runtime.hpp", "Buf": "cairn_owners.hpp"}.get(held, "cairn_gpu.hpp"))
             self.put(f"cr::{held}<{ty}> {owner}({es[0]});")
         self.put(f"{ty}* const v_{s.name} = {owner}.data();")

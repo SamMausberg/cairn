@@ -21,7 +21,7 @@ from ..compiler.lexing import RESERVED
 from ..compiler.modules import STD
 from ..compiler.syntax import Parser
 from ..compiler.traits import CLASSES, KINDS
-from ..compiler.tree import INTRINSIC_TYPES, PLACES, SCALAR
+from ..compiler.tree import INTRINSIC_TYPES, PLACES, SCALAR, STORAGE
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -62,7 +62,7 @@ CONTEXT: dict[str, tuple[str, str]] = {
     "align": ("storage.modifier.layout.cairn", r"(?=\s*\(\s*[0-9]+\s*\)\s*\{)"),
 }
 FAMILIES = (*(f.rstrip(":") for f in EFFECT_FAMILIES), "read", "write", "lane")  # as effects.py names them
-TYPES = sorted(SCALAR | {"void"} | {n for n in INTRINSIC_TYPES if n[0].isupper()})
+TYPES = sorted(SCALAR | STORAGE.keys() | {"void"} | {n for n in INTRINSIC_TYPES if n[0].isupper()})
 BUILTINS = sorted(n for n in TABLE if n not in TYPES)
 BOUNDS = sorted(set(KINDS) | set(CLASSES))
 

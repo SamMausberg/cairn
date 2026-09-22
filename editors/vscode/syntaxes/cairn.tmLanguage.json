@@ -538,7 +538,7 @@
     },
     {
      "name": "support.type.cairn",
-     "match": "\\b(?:Atomic|IoRing|Ticket|Array|Group|Mutex|usize|bool|void|Buf|Dyn|f32|f64|i16|i32|i64|u16|u32|u64|i8|u8)\\b"
+     "match": "\\b(?:Atomic|IoRing|Ticket|f8e4m3|f8e5m2|Array|Group|Mutex|usize|bf16|bool|void|Buf|Dyn|f16|f32|f64|i16|i32|i64|u16|u32|u64|i8|u8)\\b"
     },
     {
      "name": "variable.other.constant.cairn",
@@ -554,7 +554,7 @@
    "patterns": [
     {
      "name": "support.function.builtin.cairn",
-     "match": "\\b(?:mmio_write|mmio_read|add_wrap|mul_wrap|shl_wrap|sub_wrap|transfer|collect|to_bits|floor|trunc|ceil|sqrt|swap|take|wait|abs|asm|len|max|min|shr)\\b(?=(?:\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])?\\s*\\()"
+     "match": "\\b(?:mmio_write|from_bits|mmio_read|add_wrap|mul_wrap|quantize|shl_wrap|sub_wrap|transfer|collect|to_bits|floor|trunc|ceil|sqrt|swap|take|wait|abs|asm|len|max|min|shr)\\b(?=(?:\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])?\\s*\\()"
     },
     {
      "name": "entity.name.function.member.cairn",

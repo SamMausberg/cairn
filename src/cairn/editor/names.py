@@ -9,6 +9,7 @@ from typing import Any
 from ..agent.projection import local, signature
 from ..compiler.modules import STD
 from ..compiler.syntax import INTRINSIC_TYPES, SCALAR, Function, Program
+from ..compiler.tree import STORAGE
 from .document import Document, binders, enclosing, module_at
 
 ITEM = {  # LSP CompletionItemKind, by what the name is
@@ -19,7 +20,7 @@ ITEM = {  # LSP CompletionItemKind, by what the name is
 TABLES = (("records", "struct"), ("sums", "enum"), ("enums", "enum"), ("traits", "trait"),
           ("consts", "const"), ("recipes", "recipe"))  # fmt: skip
 
-TYPES = SCALAR | {"void"} | set(INTRINSIC_TYPES)
+TYPES = SCALAR | STORAGE.keys() | {"void"} | set(INTRINSIC_TYPES)
 
 BORROW = re.compile(r"(?:ro|rw)<(.*)>(?:\[[^\]]*\]@\w+)?\Z")
 

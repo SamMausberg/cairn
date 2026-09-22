@@ -74,6 +74,50 @@ sqrt takes f32 or f64, not u64.
 
 The compiler leaves a guard out of the emitted C++ where the checker has shown it cannot fail. Inside `for i in 0..n`, `parallel i in n` or a `reduce` over `n`, `x[i]` into a view of extent `n` needs no bounds check, and neither does `i + 1`. The same holds after `if k >= n { return 0; }` for `x[k]`, for `x[i - 1]` under `if i > 0`, for a bin `usize(v & 255)` into 256 counters, for `data[i]` below `len(data)` when `data` is an immutable owner, and for a row `p[b * 256 + v]` of a buffer of `k * 256` when `b < k` and `v < 256`. The facts come from loop and lane binders, immutable `let` bindings, conditions and early exits, the left side of `&&` or `||` for its right side (so `k < n && x[k] > 3` needs no check) and a collector's predicate for its projection, over `usize` values that cannot change, and nothing about `let mut` locals. A part `x[lo..hi]` loses its guard on the same terms once `lo <= hi <= len(x)` is established and its extent is `hi - lo`, as for `s[n - m..n]` after `if m > n { return 0; }`. An extent a call leaves out, or writes as `hi - lo` over the bounds of a part among its own arguments, costs no subtraction guard: the part's guard traps first when `lo > hi`, before the callee runs. Removing a guard never changes what a program does: the row still says `trap`, and the receipt counts each such site under `discharged_check_sites` beside `syntactic_check_sites`. Every removed guard carries the facts that justify it, and `src/cairn/verify/elision.py` checks each one on its own before a line is emitted. `cairn emit --keep-guards`, and the same flag on `build` and `run`, writes every guard. [verification.md](verification.md#the-guard-elision-rule) says what of this is proved.
 
+## Storage floats
+
+`f16`, `bf16`, `f8e4m3` and `f8e5m2` hold a value in 16 or 8 bits and convert. They never compute: arithmetic, a comparison or a literal of one is refused (`E-OPERATOR`, `E-TYPE-MISMATCH`), so a program widens, computes in `f32` or `f64`, and rounds back where it says so. `f16` is IEEE 754 binary16, `bf16` is the upper half of an `f32`, and the two 8-bit formats are OCP's E4M3, which reaches 448 and has no infinity, and E5M2, which reaches 57344.
+
+`f32(h)` and `f64(h)` are exact, since every value of the four formats is an `f32`. `f16(x)` rounds an `f32` or `f64` once, to nearest with ties to even, as IEEE 754 converts: a value past the range becomes infinity and a NaN stays a NaN. `f8e4m3` has no infinity to give, so there its conversion traps. An integer or another storage float converts through `f32` first (`E-CAST`), which is exact and keeps the rounding single.
+
+`quantize[T](x, scale)` is `x / scale` rounded once to nearest with ties to even and clamped to T's finite range, so the quotient is never rounded twice and saturation takes the place of overflow. T is a storage float or one of `i8 u8 i16 u16`, the widths where one rounding of the quotient of two `f32` values is exact, and `x` and `scale` are `f32` (`E-QUANTIZE`). A scale that is not positive and finite traps, and so does a NaN quantized to an integer, which has none. Dequantizing needs no builtin: `f32(q) * scale` widens exactly and rounds once. `to_bits(h)` and `from_bits[T](u)` move between a float and its pattern, for `f32` and `f64` as well.
+
+```cairn
+fn pack(n:usize, weights:ro<f32>[n], out:rw<f8e4m3>[n], scale:f32) {
+  for i in 0..n { out[i] = quantize[f8e4m3](weights[i], scale); }     // one rounding, saturating at 448
+}
+
+fn dot(n:usize, w:ro<f8e4m3>[n], xs:ro<f32>[n], scale:f32) -> f32 {
+  let mut sum:f32 = 0.0;
+  for i in 0..n { sum = sum + f32(w[i]) * scale * xs[i]; }           // widen exactly, compute in f32
+  return sum;
+}
+
+fn mean(a:bf16, b:bf16) -> bf16 = bf16((f32(a) + f32(b)) / 2.0);
+
+fn main() -> i32 {
+  let n:usize = 4;
+  buffer weights:f32[n] = zeroed;
+  buffer packed:f8e4m3[n] = zeroed;
+  for i in 0..n { weights[i] = f32(i) * 0.5; }
+  pack(n, weights, packed, 0.125);
+  if dot(n, packed, weights, 0.125) != 3.5 { return 1; }
+  if to_bits(f16(1.0 / 3.0)) != 0x3555 || f32(mean(bf16(1.0), bf16(0.5))) != 0.75 { return 2; }
+  if quantize[i8](-2.5, 1.0) != -2 || quantize[i8](500.0, 2.0) != 127 { return 3; }   // ties to even; saturates
+  return 0;
+}
+```
+
+```cairn rejects E-OPERATOR
+fn mean(a:bf16, b:bf16) -> bf16 = (a + b) / bf16(2.0);
+```
+
+```text
+bf16 is a storage float: widen it with f32(x) to compute, and round back with bf16(y) or quantize.
+```
+
+The build receipt lists every rounding the source writes under the function's `numerics`: the operation, its formats, the rounding, what happens past the range and what happens to a NaN. One routine rounds on the host and in a device lane alike, working on the bit pattern with integers, and the suite holds it to an independent model over every pattern of all four formats, every tie between two neighbours and random doubles from the subnormals up, under both compilers and the sanitizers. The SMT model does not describe storage floats, so it answers `unknown` for a function that uses one.
+
 ## Functions and control flow
 
 A block body needs explicit `return` statements, and every path of a non-void function must return one (`E-RETURN`). There is no block-tail return. An expression body, `fn payload(total:u32, header:u32) -> u32 = total - header;`, is that one return.
