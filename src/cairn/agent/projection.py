@@ -13,6 +13,7 @@ from ..compiler.cairnc import Expr, Function, Parser, Program, Stmt, Type, fail
 from ..compiler.expansion import declared, derive
 from ..compiler.lexing import lex
 from ..compiler.modules import link
+from ..compiler.syntax import ARM_STATEMENTS
 
 
 def generics(params: list[tuple[str, str]]) -> str:
@@ -81,6 +82,11 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
     def nested(body: list[Stmt]) -> str:
         return format_block(body, indent + 1)
 
+    def arm(body: list[Stmt]) -> str:  # One simple statement on one line is written without its braces.
+        lines = format_block(body, indent + 2).split("\n")
+        short = len(body) == 1 and body[0].tag in ARM_STATEMENTS and len(lines) == 3
+        return lines[1].strip() if short else "\n".join(lines)
+
     for s in ss:
         es = [format_expr(e) for e in s.exprs]
         typed = ":" + s.ty.display() if s.tag in {"let", "reg", "reduce"} and s.ty else ""
@@ -106,10 +112,7 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
         elif s.tag == "submit":
             line = f"{es[0]} into {s.name};"
         elif s.tag == "match":
-            arms = [
-                f"{pad}  {a.variant}{f'({a.binder})' if a.binder else ''} => {format_block(a.body, indent + 2)}"
-                for a in s.arms
-            ]
+            arms = [f"{pad}  {a.variant}{f'({a.binder})' if a.binder else ''} => {arm(a.body)}" for a in s.arms]
             line = "\n".join([f"match {es[0]} {{", *arms, pad + "}"])
         elif s.tag in {"if", "while"}:
             line = f"{s.tag} {es[0]} {nested(s.body)}" + (f"\n{pad}else {nested(s.other)}" if s.other else "")

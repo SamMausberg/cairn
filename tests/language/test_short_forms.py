@@ -1,5 +1,5 @@
-"""The short forms: a variant written without its type, and the rules that keep each one meaning exactly its long
-form. Every accepted program emits the C++ of its long form or runs natively under both compilers, and every
+"""The short forms: a variant written without its type, an arm without its braces, and the rules that keep each one
+meaning exactly its long form. Every accepted program emits the C++ of its long form or runs natively under both compilers, and every
 refusal names its code.
 """
 
@@ -137,3 +137,75 @@ def test_a_private_sum_keeps_its_variants_private():
     refused("E-PRIVATE", lib + "module app;\nimport lib;\npub fn main() -> i32 { let c = lib.cost(Fast); return 0; }")
     arms = "match lib.pick() { Fast => { return 0; } Slow => { return 1; } }"
     refused("E-PRIVATE", lib + f"module app;\nimport lib;\npub fn main() -> i32 {{ {arms} }}")
+
+
+ARMS = """
+enum Step { Skip; Stop; Add(u64); Note(u64); }
+fn record(log:rw<u64>, v:u64) { log = log * 10 + v; }
+fn run(n:usize, steps:ro<Step>[n]) -> u64 {
+  let mut total:u64 = 0;
+  let mut log:u64 = 0;
+  for i in 0..n {
+    match steps[i] {
+      Skip => continue;
+      Stop => break;
+      Add(v) => total = total + v;
+      Note(v) => record(log, v);
+    }
+  }
+  return total * 1000 + log;
+}
+fn first(n:usize, steps:ro<Step>[n]) -> u64 { match steps[0] { Add(v) => return v; Skip => return 1; Stop => return 2;
+  Note(v) => return v + 10; } }
+fn main() -> i32 {
+  let mut steps = Buf[Step](6);
+  steps[0] = Add(5);
+  steps[1] = Skip;
+  steps[2] = Note(3);
+  steps[3] = Add(7);
+  steps[4] = Stop;
+  steps[5] = Add(100);
+  if run(steps) != 12003 || first(steps) != 5 { return 1; }
+  return 0;
+}
+"""
+
+
+def braced(source: str) -> str:
+    """The same program with every arm written as a block."""
+    import re
+
+    return re.sub(r"=> ((?:return|continue|break|total|record)[^;{}]*;)", r"=> { \1 }", source)
+
+
+def test_an_arm_without_braces_is_its_block():
+    """`Skip => continue;` is `Skip => { continue; }`: the same tree, the same C++, and the projection prints the
+    short form for both, one line per arm."""
+    assert "=> {" not in ARMS and braced(ARMS).count("=> {") == 8
+    assert compile_source(ARMS)[0] == compile_source(braced(ARMS))[0]
+    assert canonical_source(ARMS) == canonical_source(braced(ARMS))
+    assert "      Note(v) => record(log, v);\n" in canonical_source(ARMS)
+    laid = format_source(ARMS)  # a match that does not fit one line gets one line per arm
+    assert "\n    Skip => return 1;\n    Stop => return 2;\n" in laid and format_source(laid) == laid
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_short_arms_run_natively(tmp_path, cxx):
+    assert run(tmp_path, compile_source(ARMS)[0], *sanitized(cxx), *WARNINGS, cxx=cxx).returncode == 0
+
+
+@pytest.mark.parametrize(
+    "arm",
+    [
+        "Add(v) => let w = v;",  # a binding would end with the arm that makes it
+        "Add(v) => if v > 1 { return 1; }",
+        "Add(v) => while v > 1 { break; }",
+        "Add(v) => for i in 0..v { }",
+        "Add(v) => defer record(log, v);",
+    ],
+)
+def test_an_arm_without_braces_is_one_simple_statement(arm):
+    head = "enum Step { Skip; Add(u64); }\nfn record(log:rw<u64>, v:u64) {}\n"
+    body = f"fn f(s:Step) -> u64 {{ let mut log:u64 = 0; match s {{ Skip => return 0; {arm} }} return 0; }}"
+    said = refused("E-PARSE", head + body)
+    assert "one return, break, continue, assignment or call" in said["message"]

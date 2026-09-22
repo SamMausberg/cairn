@@ -34,6 +34,7 @@ from .tree import SCALAR as SCALAR
 PREC = {"||": 1, "&&": 2, "|": 3, "^": 4, "&": 5, "==": 6, "!=": 6, "<": 7, "<=": 7, ">": 7, ">=": 7}
 PREC |= {"+": 8, "-": 8, "*": 9, "/": 9, "%": 9}
 REDUCERS = {"+", "*", "&", "|", "^", "add_wrap", "mul_wrap", "min", "max"}
+ARM_STATEMENTS = {"return", "break", "continue", "assign", "expr"}  # what an arm may be without braces
 
 
 class Parser:
@@ -264,6 +265,16 @@ class Parser:
 
     # Statements ------------------------------------------------------------------------------
 
+    def arm_body(self) -> list[Stmt]:
+        """A block, or one simple statement standing for it: `None => return 0;` is `None => { return 0; }`."""
+        if self.t.s == "{":
+            return self.block()
+        s = self.stmt()
+        if s.tag not in ARM_STATEMENTS:
+            fail("E-PARSE", "An arm without braces is one return, break, continue, assignment or call; "
+                 "write a block for anything else.", s)  # fmt: skip
+        return [s]
+
     def block(self) -> list[Stmt]:
         self.need("{")
         body = []
@@ -461,7 +472,7 @@ class Parser:
                     binder = self.ident()
                     self.need(")")
                 self.need("=>")
-                arms.append(Arm(name, binder, self.block(), a.line, a.col))
+                arms.append(Arm(name, binder, self.arm_body(), a.line, a.col))
             return Stmt("match", exprs=[scrutinee], arms=arms, **at)
         if self.eat("while"):
             e = self.expr()

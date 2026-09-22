@@ -150,7 +150,7 @@ The identity is a field path on a local, so a nested record carries it too (`box
 
 ## match and try
 
-`match` evaluates its subject once and needs exactly one arm per variant (`E-MATCH-COVERAGE`). There is no wildcard. A payload arm binds one fresh immutable value, and matching an owner consumes it.
+`match` evaluates its subject once and needs exactly one arm per variant (`E-MATCH-COVERAGE`). There is no wildcard. An arm names a variant of the subject, with or without its type. A payload arm binds one fresh immutable value, and matching an owner consumes it. An arm that is one `return`, `break`, `continue`, assignment or call may leave out its braces: `None => return 0;` is `None => { return 0; }`, and anything longer is a block (`E-PARSE`).
 
 ```cairn
 struct Header { kind:u8; size:u32; }
@@ -164,10 +164,10 @@ fn parse(n:usize, bytes:ro<u8>[n]) -> Parsed {
 fn main() -> i32 {
   match parse(len("\x07abcdefg"), "\x07abcdefg") {
     Ok(head) => { if head.kind != 7 || head.size != 3 { return 1; } }
-    Short(got) => { return 2; }
+    Short(got) => return 2;
   }
   match parse(2, "hi") {
-    Ok(head) => { return 3; }
+    Ok(head) => return 3;
     Short(got) => { if got != 2 { return 4; } }
   }
   return 0;
@@ -176,14 +176,23 @@ fn main() -> i32 {
 
 ```cairn rejects E-MATCH-COVERAGE
 enum Op { Read; Write; Flush; }
-fn cost(op:Op) -> u64 { match op { Read => { return 1; } Write => { return 2; } } }
+fn cost(op:Op) -> u64 { match op { Read => return 1; Write => return 2; } }
 ```
 
 ```text
 Every variant must have exactly one arm; missing Op.Flush.
 ```
 
-A variant may leave out its type wherever the context names the sum. An arm names a variant of the subject, so `Some(v) =>` needs nothing more. In an expression, `None`, `Some(x)` and `Ok(v)` belong to the sum the context expects: the return type, an annotated `let`, an assignment, a parameter, a field, the payload of another variant, or the other side of `==`. The bare form checks and emits exactly as the qualified one, which stays legal everywhere.
+```cairn rejects E-PARSE
+enum Op { Read; Write; }
+fn cost(op:Op) -> u64 { match op { Read => let c = 1; Write => return 2; } return 0; }
+```
+
+```text
+An arm without braces is one return, break, continue, assignment or call; write a block for anything else.
+```
+
+A variant may leave out its type wherever the context names the sum. In an expression, `None`, `Some(x)` and `Ok(v)` belong to the sum the context expects: the return type, an annotated `let`, an assignment, a parameter, a field, the payload of another variant, or the other side of `==`. The bare form checks and emits exactly as the qualified one, which stays legal everywhere.
 
 ```cairn
 import std.core (Option);
@@ -199,7 +208,7 @@ fn main() -> i32 {
   op = Write;                                     // the target is an Op
   match half(6) {
     Some(v) => { if v != 3 || op != Write { return 1; } }
-    None => { return 2; }
+    None => return 2;
   }
   return 0;
 }
