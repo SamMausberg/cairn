@@ -114,6 +114,24 @@ def test_semantic_tokens_read_an_effect_row(doc):
     assert ("parameter", frozenset()) in kinds(doc, "xs")
 
 
+def test_semantic_tokens_color_a_bare_variant_as_a_variant():
+    text = """import std.core (Option);
+fn find(n:usize, xs:ro<u64>[n], x:u64) -> Option[usize] {
+  for i in 0..n { if xs[i] == x { return Some(i); } }
+  return None;
+}
+fn main() -> i32 {
+  let xs = Buf[u64](4);
+  match find(xs, 0) { Some(at) => { return i32(at); } None => { return 1; } }
+}
+"""
+    doc = Document(text)
+    assert doc.diagnostics == [], doc.diagnostics
+    assert kinds(doc, "Some") == kinds(doc, "None") == {("enumMember", frozenset())}
+    assert kinds(doc, "Option") == {("enum", frozenset())}
+    assert kinds(doc, "at") == {("variable", frozenset({"readonly"}))}
+
+
 def test_semantic_tokens_of_a_buffer_that_does_not_compile_still_name_its_declarations():
     broken = Document("fn f(x:u64) -> u64 {\n  let mut y = x;\n  return missing;\n}\n")
     assert broken.diagnostics

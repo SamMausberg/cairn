@@ -127,7 +127,7 @@ examples/           basics/ hello/ systems/ apps/ embedded/ and inputs for the a
 tests/              language/ soundness/ verification/ projects/ runtime/ tooling/ agent/ oracles/ native/
 tools/              checks/ ai/ release/
 bench/              cpu/ gpu/ host_regions/ suite/
-editors/            VS Code and Cursor extension
+editors/            VS Code and Cursor extension, Vim runtime files, both generated from the compiler vocabulary
 docs/               the documentation, the generated std_api.md, project data, history/
 evidence/           executed results by release, and their limits
 ```

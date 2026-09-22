@@ -208,8 +208,8 @@ The server analyses the open buffer. Any compiler failure becomes a diagnostic r
 Install from a checkout by symlinking the directory into the editor's extension folder and reloading the window:
 
 ```sh
-ln -s "$PWD/editors/vscode" ~/.cursor/extensions/cairn-1.3.0          # Cursor
-ln -s "$PWD/editors/vscode" ~/.vscode/extensions/cairn-1.3.0          # VS Code
+ln -s "$PWD/editors/vscode" ~/.cursor/extensions/cairn-language.cairn   # Cursor
+ln -s "$PWD/editors/vscode" ~/.vscode/extensions/cairn-language.cairn   # VS Code
 ```
 
 Syntax highlighting works at once. The language server needs its dependency present, so run `npm install --omit=dev` inside `editors/vscode/` once; that is the only step that touches the network. To install as a package:
@@ -217,8 +217,8 @@ Syntax highlighting works at once. The language server needs its dependency pres
 ```sh
 cd editors/vscode
 npm install
-npx --yes @vscode/vsce package          # writes cairn-1.3.0.vsix
-code --install-extension cairn-1.3.0.vsix
+npx --yes @vscode/vsce package          # writes cairn-<version>.vsix
+code --install-extension cairn-*.vsix
 ```
 
 The client runs `cairn`, with `lsp` as its argument. When `cairn` is not on `PATH`, point the setting at the checkout's entry script, which needs a Python 3.11 or later interpreter on `PATH`:
