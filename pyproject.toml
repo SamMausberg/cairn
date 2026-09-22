@@ -18,7 +18,7 @@ Repository = "https://github.com/SamMausberg/cairn"
 Changelog = "https://github.com/SamMausberg/cairn/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-dev = ["pytest==9.0.2", "pytest-xdist==3.8.0", "ruff==0.16.8", "mypy"]
+dev = ["pytest==9.0.2", "pytest-xdist==3.8.0", "ruff==0.16.8", "mypy==2.3.1"]
 
 [project.scripts]
 cairn = "cairn.cli:main"
