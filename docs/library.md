@@ -1,6 +1,6 @@
 # The standard library
 
-Eighteen modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
+Twenty modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
 
 [std_api.md](std_api.md) holds every signature and every effect row, generated from these sources by `cairn doc --std`. This file is the working guide: what each module is for, a program that uses it, and where it bites.
 
@@ -14,6 +14,8 @@ Three habits explain the API shape. A lookup answers with an index, never a borr
 | `std.io` | files, standard streams, a monotonic clock | only `read_file`, `read_to_end` |
 | `std.math` | the C math library on `f64`, whose last bit varies | no |
 | `std.zlib` | the system zlib: whole-view streams, CRC-32, Adler-32 | only `compress` |
+| `std.image` | RGBA images, PNG and PPM files | yes |
+| `std.draw` | shapes, blending, text, layout records and frame capture on the CPU | only `Layout`, `capture` |
 | `std.time` | a monotonic clock, the date, sleeping | no |
 | `std.env` | the program's arguments and environment | yes |
 | `std.fs` | files by path, without a NUL to write | only `read` |
@@ -317,6 +319,54 @@ fn main() -> i32 {
 ```
 
 Only the calls that take a pointer and a length for the length of one call are bound. zlib's streaming interface keeps pointers into the caller's buffers inside a `z_stream` between calls, and a CAIRN borrow never outlives its call, so a C library built that way needs a wrapper that owns the buffers, or its one-shot entry points. The rows say `ffi:compress2`, `ffi:crc32_z` or `ffi:adler32_z` and `ffi_precondition`, with no `io`. A level outside -1 to 9 is `ZError(-2)`, a value and not a trap. A project whose own `extern` declarations call a system library names it under `[build]` as `libraries = ["z"]` ([abstractions.md](abstractions.md#projects)).
+
+## std.image
+
+`Image` is an RGBA picture held in one owned array: `struct Image { w:usize; h:usize; n:usize; px:Buf[u32][n]; }`, rows top first, so pixel `(x, y)` is `px[y * w + x]`. A pixel is written `0xRRGGBBAA`, so `0xff8800ff` is opaque orange, and `rgba`, `red`, `green`, `blue` and `alpha` build and read one. `new(w, h)` gives transparent black and traps on an empty size, `get` and `set` trap on a column past the width instead of reading the next row, and `differ` counts the pixels two images disagree on.
+
+```cairn
+import std.image (Image);
+
+fn main() -> i32 {
+  let mut img = image.new(64, 32);
+  image.shade(img, |x:usize, y:usize| -> u32 { return image.rgba(u8(x * 4), u8(y * 8), 96, 255); });
+  match image.save_png(img, "gradient.png") {
+    Ok(bytes) => return 0;
+    Err(e) => return 1;
+  }
+}
+```
+
+`png` writes 8-bit RGBA with its scanlines in stored zlib blocks, so it needs no library and every byte is where a reader can check it. `scanlines` gives the bytes PNG compresses and `packed` wraps a stream from `std.zlib` around them when the file's size matters. `ppm` writes the binary PPM, dropping alpha. `fill` and `shade` are parallel regions: `shade` calls its closure from the lanes, so the closure may read what it captured and write nothing (`E-PARALLEL-CALL`).
+
+## std.draw
+
+`std.draw` draws into an `Image` on the CPU: `rect`, `line`, `circle`, `plot`, `blit` of one image onto another, `layer` of a whole same-sized image as a parallel region, and `text` in a built-in 8 by 13 bitmap font with a whole-number `scale`. Every shape is clipped, so a shape partly outside the image draws its inside part and none traps. Coordinates are `i64`, so a shape may start left of or above the image.
+
+```cairn
+import std.draw;
+import std.image (Image);
+
+fn main() -> i32 {
+  let mut img = image.new(120, 40);
+  image.fill(img, 0x202830ff);
+  draw.rect(img, 8, 8, 104, 24, 0x3060c0ff);
+  draw.text(img, 16, 14, "Save", 0xffffffff, 1);
+  draw.circle(img, 100, 20, 6, 0xffcc00c0);   // translucent: it blends over what is there
+  let mut l = draw.layout();
+  draw.mark(l, "button", 8, 8, 104, 24);
+  match draw.capture(img, l, 0) {
+    Ok(shot) => return 0;
+    Err(e) => return 1;
+  }
+}
+```
+
+The rules are integer and exact, which is what lets a test hold them to an independent rasterizer pixel for pixel. Pixel `(x, y)` is in a rectangle when `x0 <= x < x0 + w` and `y0 <= y < y0 + h`, and in a circle when `dx * dx + dy * dy <= r * r`. A line visits every point Bresenham's steps give from one end to the other, both included, so its cost is its length, the part outside the image too. A colour blends source over destination: each colour channel becomes `(s * a + d * (255 - a) + 127) / 255` and alpha becomes `a + (d_a * (255 - a) + 127) / 255`, so an opaque colour replaces a pixel and a clear one leaves it. The glyphs are the public-domain X11 misc-fixed 8x13 font, and a byte outside printable ASCII draws as `?`.
+
+A `Layout` records named rectangles as the program draws them, and `json` writes them with the image's size: `{"width":120,"height":40,"at_ns":T,"elements":[{"name":"button","x":8,"y":8,"w":104,"h":24}]}`. `capture(img, l, k)` writes `frame-k.png` and `frame-k.json` into the directory the environment variable `CAIRN_SHOT` names, and does nothing when it names none, so a program keeps its captures in place and runs unchanged without them.
+
+Everything here is drawn on the CPU and nothing opens a window. A C graphics library such as raylib or SDL binds the way `std.zlib` does: an opaque handle it returns becomes an integer inside a `linear struct` whose one consumer calls the library's destroy function, a struct passed by value is a `packed` record of the same layout, and a call that takes a pointer and a length is an `extern` over a view. A callback into CAIRN, or a library that keeps a pointer into a caller's buffer after the call returns, needs a C wrapper that owns the buffer, because a CAIRN borrow ends with its call. libpng reports errors by `longjmp` across the caller's frames, which CAIRN code cannot survive soundly, so it is not bound. None of those libraries is installed here, so none is bound.
 
 ## std.map
 

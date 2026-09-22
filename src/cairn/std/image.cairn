@@ -1,0 +1,193 @@
+// RGBA images held in one owned array of pixels, and the files that hold them: PNG, which every viewer opens,
+// and the plain PPM. A pixel is a u32 written 0xRRGGBBAA, so a colour reads as the hex a designer writes, and
+// 0xff8800ff is opaque orange. Pixels run in rows, top row first: (x, y) is px[y * w + x], and n is w * h.
+// Cost: `new` allocates the pixels, the encoders append to a Vec and allocate as it grows, and `fill` and
+// `shade` run as parallel regions once an image passes the lane pool's cutoff.
+module std.image;
+import std.core (Result);
+import std.fs;
+import std.fmt;
+import std.io (IoError);
+import std.vec (Vec);
+
+pub struct Image { w:usize; h:usize; n:usize; px:Buf[u32][n]; }
+
+// A w by h image of transparent black. An image has at least one pixel, and w * h is checked, so an empty or
+// unaddressable size traps here instead of writing a file no reader accepts.
+pub fn new(w:usize, h:usize) -> Image {
+  let n = w * h;
+  let img = Image(w, h, n, Buf[u32](n));
+  if n == 0 { let none = img.px[0]; }
+  return img;
+}
+
+pub fn rgba(r:u8, g:u8, b:u8, a:u8) -> u32 = shl_wrap(u32(r), 24) | shl_wrap(u32(g), 16)
+  | shl_wrap(u32(b), 8) | u32(a);
+pub fn red(c:u32) -> u8 = u8(shr(c, 24));
+pub fn green(c:u32) -> u8 = u8(shr(c, 16) & 255);
+pub fn blue(c:u32) -> u8 = u8(shr(c, 8) & 255);
+pub fn alpha(c:u32) -> u8 = u8(c & 255);
+
+// The pixel at (x, y). A column past the width traps like an index past the end, instead of reading the row below.
+pub fn get(img:ro<Image>, x:usize, y:usize) -> u32 {
+  if x >= img.w { return img.px[img.n]; }
+  return img.px[y * img.w + x];
+}
+
+pub fn set(img:rw<Image>, x:usize, y:usize, c:u32) {
+  if x >= img.w { img.px[img.n] = c; return; }
+  img.px[y * img.w + x] = c;
+}
+
+// Every pixel `c`, as a parallel region.
+pub fn fill(img:rw<Image>, c:u32) { parallel i in img.n { img.px[i] = c; } }
+
+// Every pixel from `f(x, y)`, as a parallel region: `f` may read what it captured and write nothing.
+pub fn shade(img:rw<Image>, f:ro<fn(usize, usize) -> u32>) {
+  let w = img.w;
+  parallel i in img.n { img.px[i] = f(i % w, i / w); }
+}
+
+// How many pixels differ; images of different sizes differ everywhere.
+pub fn differ(a:ro<Image>, b:ro<Image>) -> usize {
+  if a.w != b.w || a.h != b.h { return max(a.n, b.n); }
+  let mut d:usize = 0;
+  for i in 0..a.n {
+    if a.px[i] != b.px[i] { d += 1; }
+  }
+  return d;
+}
+
+// The bytes PNG compresses: each row is a filter byte of 0 (none) and then its pixels as R, G, B, A.
+pub fn scanlines(img:ro<Image>) -> Vec[u8] {
+  let pitch = 1 + 4 * img.w;
+  let mut raw = vec.with_capacity[u8](img.h * pitch);
+  for y in 0..img.h {
+    let row = y * pitch;
+    for x in 0..img.w {
+      let c = img.px[y * img.w + x];
+      let at = row + 1 + 4 * x;
+      raw.data[at] = red(c);
+      raw.data[at + 1] = green(c);
+      raw.data[at + 2] = blue(c);
+      raw.data[at + 3] = alpha(c);
+    }
+  }
+  raw.len = img.h * pitch;
+  return raw;
+}
+
+// The PNG file of the image: 8-bit RGBA, no interlace, and a zlib stream of stored blocks, so no library and no
+// compression. `packed` wraps a stream from std.zlib instead when the size of the file matters.
+pub fn png(img:ro<Image>, out:rw<Vec[u8]>) {
+  let raw = scanlines(img);
+  let mut body = vec.new[u8]();
+  stored(body, raw.data[0..raw.len]);
+  packed(img.w, img.h, body.data[0..body.len], out);
+}
+
+// The PNG file of a w by h RGBA image whose scanlines `zstream` holds as a zlib stream.
+pub fn packed(w:usize, h:usize, n:usize, zstream:ro<u8>[n], out:rw<Vec[u8]>) {
+  stack table:u32[256] = zeroed;
+  crc_table(table);
+  out.extend_from("\x89PNG\r\n\x1a\n");
+  stack head:u8[13] = zeroed;
+  put(head, 0, u32(w));
+  put(head, 4, u32(h));
+  head[8] = 8; // bits per channel
+  head[9] = 6; // RGBA
+  chunk(out, table, "IHDR", head);
+  chunk(out, table, "IDAT", zstream);
+  chunk(out, table, "IEND", "");
+}
+
+// Write the PNG of `img` to `path`.
+pub fn save_png(img:ro<Image>, n:usize, path:ro<u8>[n]) -> Result[usize, IoError] {
+  let mut out = vec.new[u8]();
+  png(img, out);
+  return fs.write(path, out.data[0..out.len]);
+}
+
+// The binary PPM of the image: a short header and then R, G, B per pixel; alpha is dropped.
+pub fn ppm(img:ro<Image>, out:rw<Vec[u8]>) {
+  out.extend_from("P6\n");
+  fmt.uint(out, u64(img.w));
+  out.push(' ');
+  fmt.uint(out, u64(img.h));
+  out.extend_from("\n255\n");
+  for i in 0..img.n {
+    let c = img.px[i];
+    out.push(red(c));
+    out.push(green(c));
+    out.push(blue(c));
+  }
+}
+
+// A big-endian word at `at`, as PNG writes every length and dimension.
+fn put(into:rw<u8>[13], at:usize, v:u32) {
+  into[at] = u8(shr(v, 24));
+  into[at + 1] = u8(shr(v, 16) & 255);
+  into[at + 2] = u8(shr(v, 8) & 255);
+  into[at + 3] = u8(v & 255);
+}
+
+fn word(out:rw<Vec[u8]>, v:u32) {
+  out.push(u8(shr(v, 24)));
+  out.push(u8(shr(v, 16) & 255));
+  out.push(u8(shr(v, 8) & 255));
+  out.push(u8(v & 255));
+}
+
+// One chunk: its length, its four-letter type, its data, and the CRC-32 of the type and the data.
+fn chunk(out:rw<Vec[u8]>, table:ro<u32>[256], kind:ro<u8>[4], n:usize, data:ro<u8>[n]) {
+  word(out, u32(n));
+  out.extend_from(kind);
+  out.extend_from(data);
+  word(out, crc(table, crc(table, 0, kind), data));
+}
+
+// The zlib stream of `raw` in stored blocks of at most 65535 bytes each, closed by the Adler-32 of `raw`.
+fn stored(out:rw<Vec[u8]>, n:usize, raw:ro<u8>[n]) {
+  out.push(0x78); // deflate with a 32 KiB window, no preset dictionary
+  out.push(0x01);
+  let blocks = max(1, (n + 65534) / 65535);
+  for b in 0..blocks {
+    let lo = b * 65535;
+    let hi = min(lo + 65535, n);
+    let size = hi - lo;
+    if b + 1 == blocks { out.push(1); } else { out.push(0); } // the last block says so
+    out.push(u8(size & 255));
+    out.push(u8(shr(size, 8)));
+    out.push(u8(~size & 255));
+    out.push(u8(shr(~size, 8) & 255));
+    out.extend_from(raw[lo..hi]);
+  }
+  word(out, adler(raw));
+}
+
+// The CRC-32 table of the polynomial PNG and zlib share.
+fn crc_table(table:rw<u32>[256]) {
+  for k in 0..256 {
+    let mut c = u32(k);
+    for bit in 0..8 {
+      if (c & 1) != 0 { c = 0xedb88320 ^ shr(c, 1); } else { c = shr(c, 1); }
+    }
+    table[k] = c;
+  }
+}
+
+fn crc(table:ro<u32>[256], start:u32, n:usize, data:ro<u8>[n]) -> u32 {
+  let mut c = start ^ 0xffffffff;
+  for i in 0..n { c = table[usize((c ^ u32(data[i])) & 255)] ^ shr(c, 8); }
+  return c ^ 0xffffffff;
+}
+
+fn adler(n:usize, data:ro<u8>[n]) -> u32 {
+  let mut a:u32 = 1;
+  let mut b:u32 = 0;
+  for i in 0..n {
+    a = (a + u32(data[i])) % 65521;
+    b = (b + a) % 65521;
+  }
+  return shl_wrap(b, 16) | a;
+}

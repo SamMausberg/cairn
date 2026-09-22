@@ -71,6 +71,72 @@ pub recipe ord for R
 pub recipe hash for R
 ```
 
+# std.draw
+
+Drawing into an Image on the CPU: filled rectangles, lines, filled circles, source-over blending, blits of one image onto another, text in a built-in 8 by 13 bitmap font, and the layout record and frame capture that let a person or an agent see what a program drew. Every shape is clipped, so a shape partly outside draws its inside part and none traps. Coordinates are i64, so a shape may start left of or above the image. Pixel (x, y) belongs to a rectangle when x0 <= x < x0 + w and y0 <= y < y0 + h, and to a circle when dx * dx + dy * dy <= r * r. Colours blend source over destination with integer rounding: each colour channel becomes (s * a + d * (255 - a) + 127) / 255, and alpha becomes a + (d_a * (255 - a) + 127) / 255, so an opaque colour replaces a pixel and a clear one leaves it. The glyphs are the X11 misc-fixed 8x13 font, which is in the public domain, as console-setup ships it (Lat15-Fixed13.psf). Cost: a shape is a sequential loop over the pixels it covers; `layer` and image.fill are parallel regions. A Layout allocates as it grows, and `capture` allocates, reads the environment and writes files.
+
+```cairn
+// Named rectangles a program reports as it draws, so a person or an agent can check where things landed without reading
+// pixels: `json` gives {"width":W,"height":H,"at_ns":T,"elements":[{"name":"panel","x":0,...},...]}.
+pub struct Layout { text:Vec[u8]; count:usize; }
+
+pub const GLYPH_W:i64 = 8;
+
+pub const GLYPH_H:i64 = 13;
+
+// `s` over `d`.
+pub fn over(d:u32, s:u32) -> u32  // effects: trap
+
+// One pixel, blended; a pixel outside the image is not drawn.
+pub fn plot(img:rw<std.image.Image>, x:i64, y:i64, c:u32)  // effects: read:img, trap, write:img
+
+// The rectangle whose top left corner is (x, y), w wide and h high; a zero or negative size draws nothing.
+pub fn rect(img:rw<std.image.Image>, x:i64, y:i64, w:i64, h:i64, c:u32)  // effects: read:img, trap, write:img
+
+// The line from (x0, y0) to (x1, y1), both ends included, by Bresenham's integer steps. Its cost is its length,
+// including the part outside the image.
+// effects: diverge, read:img, trap, write:img
+pub fn line(img:rw<std.image.Image>, x0:i64, y0:i64, x1:i64, y1:i64, c:u32)
+
+// The filled circle of radius r around (cx, cy); a negative radius draws nothing and a radius of 0 is one pixel.
+pub fn circle(img:rw<std.image.Image>, cx:i64, cy:i64, r:i64, c:u32)  // effects: read:img, trap, write:img
+
+// `src` over `dst` with its top left corner at (x, y), clipped to `dst`.
+// effects: read:dst, read:src, trap, write:dst
+pub fn blit(dst:rw<std.image.Image>, src:ro<std.image.Image>, x:i64, y:i64)
+
+// `top` over `base`, pixel by pixel, as a parallel region: a whole layer composited at once. The two must be the same
+// size; different sizes are a guard failure.
+// effects: par:host, read:base, read:top, trap, write:base
+pub fn layer(base:rw<std.image.Image>, top:ro<std.image.Image>)
+
+// Text in the built-in font, each font pixel `scale` pixels square, with its top left corner at (x, y). A byte outside
+// printable ASCII draws as '?'. `text_width` says how far it reaches, for laying out what follows.
+// effects: ffi_precondition, local_read, read:img, read:s, trap, write:img
+pub fn text(img:rw<std.image.Image>, x:i64, y:i64, n:usize, s:ro<u8>[n]@host, c:u32, scale:i64)
+
+pub fn text_width(n:usize, scale:i64) -> i64  // effects: trap
+
+pub fn layout() -> std.draw.Layout  // effects: alloc, free, trap, zero_init
+
+// Report the rectangle `name` covers. The name is written as a JSON string, its quotes, backslashes and control bytes
+// escaped.
+// effects: alloc, diverge, ffi_precondition, free, local_read, local_write, read:l, read:name, stack_storage, trap,
+// write:l, zero_init
+pub fn mark(l:rw<std.draw.Layout>, n:usize, name:ro<u8>[n]@host, x:i64, y:i64, w:i64, h:i64)
+
+// The layout record of a frame of `img`, taken at monotonic time `at_ns`.
+// effects: alloc, diverge, ffi_precondition, free, local_read, local_write, read:img, read:l, read:out, stack_storage,
+// trap, write:out, zero_init
+pub fn json(l:ro<std.draw.Layout>, img:ro<std.image.Image>, at_ns:u64, out:rw<std.vec.Vec[u8]>)
+
+// Frame k of a shot: when the program runs under `cairn shot`, which names a directory in CAIRN_SHOT, write frame-k.png
+// and frame-k.json there and answer true; otherwise do nothing and answer false.
+// effects: alloc, diverge, ffi:__errno_location, ffi:clock_gettime, ffi:close, ffi:open, ffi:read, ffi:write,
+// ffi_precondition, free, io, local_read, local_write, mmio, read:img, read:l, stack_storage, trap, zero_init
+pub fn capture(img:ro<std.image.Image>, l:ro<std.draw.Layout>, k:usize) -> std.core.Result[bool, std.io.IoError]
+```
+
 # std.env
 
 The program's arguments and environment, as it was started. Linux keeps both under /proc/self exactly as the kernel passed them, so reading them needs no start-up code and works from any module. Cost: each call reads one small file into a Vec it returns; a program reads its arguments once.
@@ -174,6 +240,68 @@ pub fn rename(n:usize, from:ro<u8>[n]@host, k:usize, to:ro<u8>[k]@host) -> std.c
 // Whether anything is at `path` now; the answer can be stale by the time the next call runs.
 // effects: ffi:access, ffi_precondition, io, local_read, local_write, read:path, stack_storage, trap, zero_init
 pub fn exists(n:usize, path:ro<u8>[n]@host) -> bool
+```
+
+# std.image
+
+RGBA images held in one owned array of pixels, and the files that hold them: PNG, which every viewer opens, and the plain PPM. A pixel is a u32 written 0xRRGGBBAA, so a colour reads as the hex a designer writes, and 0xff8800ff is opaque orange. Pixels run in rows, top row first: (x, y) is px[y * w + x], and n is w * h. Cost: `new` allocates the pixels, the encoders append to a Vec and allocate as it grows, and `fill` and `shade` run as parallel regions once an image passes the lane pool's cutoff.
+
+```cairn
+pub struct Image { w:usize; h:usize; n:usize; px:Buf[u32]; }
+
+// A w by h image of transparent black. An image has at least one pixel, and w * h is checked, so an empty or
+// unaddressable size traps here instead of writing a file no reader accepts.
+pub fn new(w:usize, h:usize) -> std.image.Image  // effects: alloc, free, local_read, trap, zero_init
+
+pub fn rgba(r:u8, g:u8, b:u8, a:u8) -> u32  // effects: trap
+
+pub fn red(c:u32) -> u8  // effects: trap
+
+pub fn green(c:u32) -> u8  // effects: trap
+
+pub fn blue(c:u32) -> u8  // effects: trap
+
+pub fn alpha(c:u32) -> u8  // effects: trap
+
+// The pixel at (x, y). A column past the width traps like an index past the end, instead of reading the row below.
+pub fn get(img:ro<std.image.Image>, x:usize, y:usize) -> u32  // effects: read:img, trap
+
+pub fn set(img:rw<std.image.Image>, x:usize, y:usize, c:u32)  // effects: read:img, trap, write:img
+
+// Every pixel `c`, as a parallel region.
+pub fn fill(img:rw<std.image.Image>, c:u32)  // effects: par:host, read:img, trap, write:img
+
+// Every pixel from `f(x, y)`, as a parallel region: `f` may read what it captured and write nothing.
+// effects: indirect_call, lane:f, par:host, read:img, trap, write:img
+pub fn shade(img:rw<std.image.Image>, f:ro<fn(usize, usize) -> u32>)
+
+// How many pixels differ; images of different sizes differ everywhere.
+pub fn differ(a:ro<std.image.Image>, b:ro<std.image.Image>) -> usize  // effects: read:a, read:b, trap
+
+// The bytes PNG compresses: each row is a filter byte of 0 (none) and then its pixels as R, G, B, A.
+// effects: alloc, free, local_write, read:img, trap, zero_init
+pub fn scanlines(img:ro<std.image.Image>) -> std.vec.Vec[u8]
+
+// The PNG file of the image: 8-bit RGBA, no interlace, and a zlib stream of stored blocks, so no library and no
+// compression. `packed` wraps a stream from std.zlib instead when the size of the file matters.
+// effects: alloc, ffi_precondition, free, local_read, local_write, read:img, read:out, stack_storage, trap, write:out,
+// zero_init
+pub fn png(img:ro<std.image.Image>, out:rw<std.vec.Vec[u8]>)
+
+// The PNG file of a w by h RGBA image whose scanlines `zstream` holds as a zlib stream.
+// effects: alloc, ffi_precondition, free, local_read, local_write, read:out, read:zstream, stack_storage, trap,
+// write:out, zero_init
+pub fn packed(w:usize, h:usize, n:usize, zstream:ro<u8>[n]@host, out:rw<std.vec.Vec[u8]>)
+
+// Write the PNG of `img` to `path`.
+// effects: alloc, diverge, ffi:__errno_location, ffi:close, ffi:open, ffi:write, ffi_precondition, free, io,
+// local_read, local_write, mmio, read:img, read:path, stack_storage, trap, zero_init
+pub fn save_png(img:ro<std.image.Image>, n:usize, path:ro<u8>[n]@host) -> std.core.Result[usize, std.io.IoError]
+
+// The binary PPM of the image: a short header and then R, G, B per pixel; alpha is dropped.
+// effects: alloc, diverge, ffi_precondition, free, local_read, local_write, read:img, read:out, stack_storage, trap,
+// write:out, zero_init
+pub fn ppm(img:ro<std.image.Image>, out:rw<std.vec.Vec[u8]>)
 ```
 
 # std.io

@@ -1,0 +1,288 @@
+// Drawing into an Image on the CPU: filled rectangles, lines, filled circles, source-over blending, blits of one
+// image onto another, text in a built-in 8 by 13 bitmap font, and the layout record and frame capture that let a
+// person or an agent see what a program drew. Every shape is clipped, so a shape partly outside draws its inside
+// part and none traps. Coordinates are i64, so a shape may start left of or above the image. Pixel (x, y)
+// belongs to a rectangle when x0 <= x < x0 + w and y0 <= y < y0 + h, and to a circle when dx * dx + dy * dy <= r * r.
+// Colours blend source over destination with integer rounding: each colour channel becomes
+// (s * a + d * (255 - a) + 127) / 255, and alpha becomes a + (d_a * (255 - a) + 127) / 255, so an opaque colour
+// replaces a pixel and a clear one leaves it. The glyphs are the X11 misc-fixed 8x13 font, which is in the public
+// domain, as console-setup ships it (Lat15-Fixed13.psf).
+// Cost: a shape is a sequential loop over the pixels it covers; `layer` and image.fill are parallel regions. A
+// Layout allocates as it grows, and `capture` allocates, reads the environment and writes files.
+module std.draw;
+import std.core (Option, Result);
+import std.env;
+import std.fmt;
+import std.fs;
+import std.image (Image);
+import std.io (IoError);
+import std.time;
+import std.vec (Vec);
+
+pub const GLYPH_W:i64 = 8;
+pub const GLYPH_H:i64 = 13;
+
+// `s` over `d`.
+pub fn over(d:u32, s:u32) -> u32 {
+  let a = u32(image.alpha(s));
+  if a == 255 { return s; }
+  if a == 0 { return d; }
+  let k = 255 - a;
+  let r = (u32(image.red(s)) * a + u32(image.red(d)) * k + 127) / 255;
+  let g = (u32(image.green(s)) * a + u32(image.green(d)) * k + 127) / 255;
+  let b = (u32(image.blue(s)) * a + u32(image.blue(d)) * k + 127) / 255;
+  let o = a + (u32(image.alpha(d)) * k + 127) / 255;
+  return image.rgba(u8(r), u8(g), u8(b), u8(o));
+}
+
+// One pixel, blended; a pixel outside the image is not drawn.
+pub fn plot(img:rw<Image>, x:i64, y:i64, c:u32) {
+  if x < 0 || y < 0 || x >= i64(img.w) || y >= i64(img.h) { return; }
+  let at = usize(y) * img.w + usize(x);
+  img.px[at] = over(img.px[at], c);
+}
+
+// The rectangle whose top left corner is (x, y), w wide and h high; a zero or negative size draws nothing.
+pub fn rect(img:rw<Image>, x:i64, y:i64, w:i64, h:i64, c:u32) {
+  if w <= 0 || h <= 0 { return; }
+  let x0 = max(x, 0);
+  let y0 = max(y, 0);
+  let x1 = min(x + w, i64(img.w));
+  let y1 = min(y + h, i64(img.h));
+  if x0 >= x1 || y0 >= y1 { return; }
+  for row in usize(y0)..usize(y1) {
+    let base = row * img.w;
+    for col in usize(x0)..usize(x1) { img.px[base + col] = over(img.px[base + col], c); }
+  }
+}
+
+// The line from (x0, y0) to (x1, y1), both ends included, by Bresenham's integer steps. Its cost is its
+// length, including the part outside the image.
+pub fn line(img:rw<Image>, x0:i64, y0:i64, x1:i64, y1:i64, c:u32) {
+  let dx = abs(x1 - x0);
+  let dy = -abs(y1 - y0);
+  let mut sx:i64 = 1;
+  if x0 > x1 { sx = -1; }
+  let mut sy:i64 = 1;
+  if y0 > y1 { sy = -1; }
+  let mut err = dx + dy;
+  let mut x = x0;
+  let mut y = y0;
+  while true {
+    plot(img, x, y, c);
+    if x == x1 && y == y1 { break; }
+    let e2 = 2 * err;
+    if e2 >= dy {
+      err += dy;
+      x += sx;
+    }
+    if e2 <= dx {
+      err += dx;
+      y += sy;
+    }
+  }
+}
+
+// The filled circle of radius r around (cx, cy); a negative radius draws nothing and a radius of 0 is one pixel.
+pub fn circle(img:rw<Image>, cx:i64, cy:i64, r:i64, c:u32) {
+  if r < 0 { return; }
+  let x0 = max(cx - r, 0);
+  let y0 = max(cy - r, 0);
+  let x1 = min(cx + r + 1, i64(img.w));
+  let y1 = min(cy + r + 1, i64(img.h));
+  if x0 >= x1 || y0 >= y1 { return; }
+  for row in usize(y0)..usize(y1) {
+    let dy = i64(row) - cy;
+    for col in usize(x0)..usize(x1) {
+      let dx = i64(col) - cx;
+      if dx * dx + dy * dy <= r * r {
+        let at = row * img.w + col;
+        img.px[at] = over(img.px[at], c);
+      }
+    }
+  }
+}
+
+// `src` over `dst` with its top left corner at (x, y), clipped to `dst`.
+pub fn blit(dst:rw<Image>, src:ro<Image>, x:i64, y:i64) {
+  for sy in 0..src.h {
+    let ty = y + i64(sy);
+    if ty < 0 || ty >= i64(dst.h) { continue; }
+    for sx in 0..src.w {
+      let tx = x + i64(sx);
+      if tx >= 0 && tx < i64(dst.w) {
+        let at = usize(ty) * dst.w + usize(tx);
+        dst.px[at] = over(dst.px[at], src.px[sy * src.w + sx]);
+      }
+    }
+  }
+}
+
+// `top` over `base`, pixel by pixel, as a parallel region: a whole layer composited at once. The two must be
+// the same size; different sizes are a guard failure.
+pub fn layer(base:rw<Image>, top:ro<Image>) {
+  if base.w != top.w || base.h != top.h { base.px[base.n] = 0; }
+  parallel i in base.n { base.px[i] = over(base.px[i], top.px[i]); }
+}
+
+// Text in the built-in font, each font pixel `scale` pixels square, with its top left corner at (x, y). A byte
+// outside printable ASCII draws as '?'. `text_width` says how far it reaches, for laying out what follows.
+pub fn text(img:rw<Image>, x:i64, y:i64, n:usize, s:ro<u8>[n], c:u32, scale:i64) {
+  for k in 0..n {
+    let mut ch = s[k];
+    if ch < 32 || ch > 126 { ch = '?'; }
+    let g = usize(ch - 32);
+    let left = x + i64(k) * GLYPH_W * scale;
+    for row in 0..13 {
+      let bits = glyph(g, row);
+      for col in 0..8 {
+        if (shr(bits, 7 - col) & 1) != 0 {
+          rect(img, left + i64(col) * scale, y + i64(row) * scale, scale, scale, c);
+        }
+      }
+    }
+  }
+}
+
+pub fn text_width(n:usize, scale:i64) -> i64 = i64(n) * GLYPH_W * scale;
+
+// Named rectangles a program reports as it draws, so a person or an agent can check where things landed without
+// reading pixels: `json` gives {"width":W,"height":H,"at_ns":T,"elements":[{"name":"panel","x":0,...},...]}.
+pub struct Layout { text:Vec[u8]; count:usize; }
+
+pub fn layout() -> Layout {
+  let text = vec.new[u8]();
+  return Layout(text, 0);
+}
+
+// Report the rectangle `name` covers. The name is written as a JSON string, its quotes, backslashes and control
+// bytes escaped.
+pub fn mark(l:rw<Layout>, n:usize, name:ro<u8>[n], x:i64, y:i64, w:i64, h:i64) {
+  if l.count > 0 { l.text.push(','); }
+  fmt.bytes(l.text, "{\"name\":\"");
+  for i in 0..n {
+    let b = name[i];
+    if b == '"' || b == '\\' {
+      l.text.push('\\');
+      l.text.push(b);
+    } else if b < 32 {
+      fmt.bytes(l.text, "\\u00");
+      fmt.hex(l.text, u64(b), 2);
+    } else {
+      l.text.push(b);
+    }
+  }
+  fmt.bytes(l.text, "\",\"x\":");
+  fmt.int(l.text, x);
+  fmt.bytes(l.text, ",\"y\":");
+  fmt.int(l.text, y);
+  fmt.bytes(l.text, ",\"w\":");
+  fmt.int(l.text, w);
+  fmt.bytes(l.text, ",\"h\":");
+  fmt.int(l.text, h);
+  l.text.push('}');
+  l.count += 1;
+}
+
+// The layout record of a frame of `img`, taken at monotonic time `at_ns`.
+pub fn json(l:ro<Layout>, img:ro<Image>, at_ns:u64, out:rw<Vec[u8]>) {
+  fmt.bytes(out, "{\"width\":");
+  fmt.uint(out, img.w);
+  fmt.bytes(out, ",\"height\":");
+  fmt.uint(out, img.h);
+  fmt.bytes(out, ",\"at_ns\":");
+  fmt.uint(out, at_ns);
+  fmt.bytes(out, ",\"elements\":[");
+  fmt.bytes(out, l.text.data[0..l.text.len]);
+  fmt.bytes(out, "]}\n");
+}
+
+// Frame k of a shot: when the program runs under `cairn shot`, which names a directory in CAIRN_SHOT, write
+// frame-k.png and frame-k.json there and answer true; otherwise do nothing and answer false.
+pub fn capture(img:ro<Image>, l:ro<Layout>, k:usize) -> Result[bool, IoError] {
+  let at = time.now();
+  let named = try env.var("CAIRN_SHOT");
+  match named {
+    None => return Ok(false);
+    Some(dir) => {
+      let mut path = vec.new[u8]();
+      fmt.bytes(path, dir.data[0..dir.len]);
+      fmt.bytes(path, "/frame-");
+      fmt.uint(path, k);
+      let stem = path.len;
+      fmt.bytes(path, ".png");
+      let wrote = try image.save_png(img, path.data[0..path.len]);
+      vec.truncate(path, stem);
+      fmt.bytes(path, ".json");
+      let mut record = vec.new[u8]();
+      json(l, img, at.ns, record);
+      let saved = try fs.write(path.data[0..path.len], record.data[0..record.len]);
+      return Ok(true);
+    }
+  }
+}
+
+fn glyph(g:usize, row:usize) -> u8 {
+  let at = (g % 8) * 13 + row;
+  //   to '
+  if g < 8 {
+    let f = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10\x10\x10\x10\x10\x10\x10\x00\x10\x00\x00\x00\x00\x24\x24\x24\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x24\x24\x7e\x24\x7e\x24\x24\x00\x00\x00\x00\x00\x00\x10\x3c\x50\x38\x14\x78\x10\x00\x00\x00\x00\x00\x22\x52\x24\x08\x08\x10\x24\x2a\x44\x00\x00\x00\x00\x00\x00\x30\x48\x48\x30\x4a\x44\x3a\x00\x00\x00\x00\x38\x30\x40\x00\x00\x00\x00\x00\x00\x00\x00";
+    return f[at];
+  }
+  // ( to /
+  if g < 16 {
+    let f = "\x00\x00\x04\x08\x08\x10\x10\x10\x08\x08\x04\x00\x00\x00\x00\x20\x10\x10\x08\x08\x08\x10\x10\x20\x00\x00\x00\x00\x00\x00\x24\x18\x7e\x18\x24\x00\x00\x00\x00\x00\x00\x00\x00\x10\x10\x7c\x10\x10\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x38\x30\x40\x00\x00\x00\x00\x00\x00\x00\x7e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10\x38\x10\x00\x00\x00\x02\x02\x04\x08\x10\x20\x40\x80\x80\x00\x00";
+    return f[at];
+  }
+  // 0 to 7
+  if g < 24 {
+    let f = "\x00\x00\x18\x24\x42\x42\x42\x42\x42\x24\x18\x00\x00\x00\x00\x10\x30\x50\x10\x10\x10\x10\x10\x7c\x00\x00\x00\x00\x3c\x42\x42\x02\x04\x18\x20\x40\x7e\x00\x00\x00\x00\x7e\x02\x04\x08\x1c\x02\x02\x42\x3c\x00\x00\x00\x00\x04\x0c\x14\x24\x44\x44\x7e\x04\x04\x00\x00\x00\x00\x7e\x40\x40\x5c\x62\x02\x02\x42\x3c\x00\x00\x00\x00\x1c\x20\x40\x40\x5c\x62\x42\x42\x3c\x00\x00\x00\x00\x7e\x02\x04\x08\x08\x10\x10\x20\x20\x00\x00";
+    return f[at];
+  }
+  // 8 to ?
+  if g < 32 {
+    let f = "\x00\x00\x3c\x42\x42\x42\x3c\x42\x42\x42\x3c\x00\x00\x00\x00\x3c\x42\x42\x46\x3a\x02\x02\x04\x38\x00\x00\x00\x00\x00\x00\x10\x38\x10\x00\x00\x10\x38\x10\x00\x00\x00\x00\x00\x10\x38\x10\x00\x00\x38\x30\x40\x00\x00\x00\x02\x04\x08\x10\x20\x10\x08\x04\x02\x00\x00\x00\x00\x00\x00\x00\x7e\x00\x00\x7e\x00\x00\x00\x00\x00\x00\x40\x20\x10\x08\x04\x08\x10\x20\x40\x00\x00\x00\x00\x3c\x42\x42\x02\x04\x08\x08\x00\x08\x00\x00";
+    return f[at];
+  }
+  // @ to G
+  if g < 40 {
+    let f = "\x00\x00\x3c\x42\x42\x4e\x52\x56\x4a\x40\x3c\x00\x00\x00\x00\x18\x24\x42\x42\x42\x7e\x42\x42\x42\x00\x00\x00\x00\xfc\x42\x42\x42\x7c\x42\x42\x42\xfc\x00\x00\x00\x00\x3c\x42\x40\x40\x40\x40\x40\x42\x3c\x00\x00\x00\x00\xfc\x42\x42\x42\x42\x42\x42\x42\xfc\x00\x00\x00\x00\x7e\x40\x40\x40\x78\x40\x40\x40\x7e\x00\x00\x00\x00\x7e\x40\x40\x40\x78\x40\x40\x40\x40\x00\x00\x00\x00\x3c\x42\x40\x40\x40\x4e\x42\x46\x3a\x00\x00";
+    return f[at];
+  }
+  // H to O
+  if g < 48 {
+    let f = "\x00\x00\x42\x42\x42\x42\x7e\x42\x42\x42\x42\x00\x00\x00\x00\x7c\x10\x10\x10\x10\x10\x10\x10\x7c\x00\x00\x00\x00\x1e\x04\x04\x04\x04\x04\x04\x44\x38\x00\x00\x00\x00\x42\x44\x48\x50\x60\x50\x48\x44\x42\x00\x00\x00\x00\x40\x40\x40\x40\x40\x40\x40\x40\x7e\x00\x00\x00\x00\x82\x82\xc6\xaa\x92\x92\x82\x82\x82\x00\x00\x00\x00\x42\x42\x62\x52\x4a\x46\x42\x42\x42\x00\x00\x00\x00\x3c\x42\x42\x42\x42\x42\x42\x42\x3c\x00\x00";
+    return f[at];
+  }
+  // P to W
+  if g < 56 {
+    let f = "\x00\x00\x7c\x42\x42\x42\x7c\x40\x40\x40\x40\x00\x00\x00\x00\x3c\x42\x42\x42\x42\x42\x52\x4a\x3c\x02\x00\x00\x00\x7c\x42\x42\x42\x7c\x50\x48\x44\x42\x00\x00\x00\x00\x3c\x42\x40\x40\x3c\x02\x02\x42\x3c\x00\x00\x00\x00\xfe\x10\x10\x10\x10\x10\x10\x10\x10\x00\x00\x00\x00\x42\x42\x42\x42\x42\x42\x42\x42\x3c\x00\x00\x00\x00\x82\x82\x44\x44\x44\x28\x28\x28\x10\x00\x00\x00\x00\x82\x82\x82\x82\x92\x92\x92\xaa\x44\x00\x00";
+    return f[at];
+  }
+  // X to _
+  if g < 64 {
+    let f = "\x00\x00\x82\x82\x44\x28\x10\x28\x44\x82\x82\x00\x00\x00\x00\x82\x82\x44\x28\x10\x10\x10\x10\x10\x00\x00\x00\x00\x7e\x02\x04\x08\x10\x20\x40\x40\x7e\x00\x00\x00\x00\x3c\x20\x20\x20\x20\x20\x20\x20\x3c\x00\x00\x00\x00\x80\x80\x40\x20\x10\x08\x04\x02\x02\x00\x00\x00\x00\x78\x08\x08\x08\x08\x08\x08\x08\x78\x00\x00\x00\x00\x10\x28\x44\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xfe\x00";
+    return f[at];
+  }
+  // ` to g
+  if g < 72 {
+    let f = "\x00\x00\x38\x18\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x3c\x02\x3e\x42\x46\x3a\x00\x00\x00\x00\x40\x40\x40\x5c\x62\x42\x42\x62\x5c\x00\x00\x00\x00\x00\x00\x00\x3c\x42\x40\x40\x42\x3c\x00\x00\x00\x00\x02\x02\x02\x3a\x46\x42\x42\x46\x3a\x00\x00\x00\x00\x00\x00\x00\x3c\x42\x7e\x40\x42\x3c\x00\x00\x00\x00\x1c\x22\x20\x20\x7c\x20\x20\x20\x20\x00\x00\x00\x00\x00\x00\x00\x3a\x44\x44\x38\x40\x3c\x42\x3c";
+    return f[at];
+  }
+  // h to o
+  if g < 80 {
+    let f = "\x00\x00\x40\x40\x40\x5c\x62\x42\x42\x42\x42\x00\x00\x00\x00\x00\x10\x00\x30\x10\x10\x10\x10\x7c\x00\x00\x00\x00\x00\x04\x00\x0c\x04\x04\x04\x04\x44\x44\x38\x00\x00\x40\x40\x40\x44\x48\x70\x48\x44\x42\x00\x00\x00\x00\x30\x10\x10\x10\x10\x10\x10\x10\x7c\x00\x00\x00\x00\x00\x00\x00\xec\x92\x92\x92\x92\x82\x00\x00\x00\x00\x00\x00\x00\x5c\x62\x42\x42\x42\x42\x00\x00\x00\x00\x00\x00\x00\x3c\x42\x42\x42\x42\x3c\x00\x00";
+    return f[at];
+  }
+  // p to w
+  if g < 88 {
+    let f = "\x00\x00\x00\x00\x00\x5c\x62\x42\x62\x5c\x40\x40\x40\x00\x00\x00\x00\x00\x3a\x46\x42\x46\x3a\x02\x02\x02\x00\x00\x00\x00\x00\x5c\x22\x20\x20\x20\x20\x00\x00\x00\x00\x00\x00\x00\x3c\x42\x30\x0c\x42\x3c\x00\x00\x00\x00\x00\x20\x20\x7c\x20\x20\x20\x22\x1c\x00\x00\x00\x00\x00\x00\x00\x44\x44\x44\x44\x44\x3a\x00\x00\x00\x00\x00\x00\x00\x44\x44\x44\x28\x28\x10\x00\x00\x00\x00\x00\x00\x00\x82\x82\x92\x92\xaa\x44\x00\x00";
+    return f[at];
+  }
+  // x to ~
+  if g < 95 {
+    let f = "\x00\x00\x00\x00\x00\x42\x24\x18\x18\x24\x42\x00\x00\x00\x00\x00\x00\x00\x42\x42\x42\x46\x3a\x02\x42\x3c\x00\x00\x00\x00\x00\x7e\x04\x08\x10\x20\x7e\x00\x00\x00\x00\x0e\x10\x10\x08\x30\x08\x10\x10\x0e\x00\x00\x00\x00\x10\x10\x10\x10\x10\x10\x10\x10\x10\x00\x00\x00\x00\x70\x08\x08\x10\x0c\x10\x08\x08\x70\x00\x00\x00\x00\x24\x54\x48\x00\x00\x00\x00\x00\x00\x00\x00";
+    return f[at];
+  }
+  return 0;
+}
