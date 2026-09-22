@@ -20,6 +20,6 @@
   "independent_families": 8,
   "model_training_performed": false,
   "model_evaluations_performed": 0,
-  "native_validation": "run tools/curriculum_verify.py; generation checks frontend only",
+  "native_validation": "run tools/checks/curriculum_verify.py; generation checks frontend only",
   "note": "Several variants are alpha-renamings or parameter variants, not independent tasks; templates define the true diversity."
 }

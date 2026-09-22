@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import functools
+import json
 import os
 import platform
 import shutil
@@ -129,3 +130,63 @@ def device_lock():
             yield
         finally:
             fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def settled(value, erased: frozenset[str]):
+    """`value` without the keys named in `erased`, at any depth, including inside JSON written into a string."""
+    if isinstance(value, dict):
+        return {k: settled(v, erased) for k, v in value.items() if k not in erased}
+    if isinstance(value, list):
+        return [settled(v, erased) for v in value]
+    if not isinstance(value, str) or not erased or "{" not in value:
+        return value
+    parts, at, decoder = [], 0, json.JSONDecoder()
+    while (start := value.find("{", at)) >= 0:  # A message may hold a packet, a reply and a feedback object.
+        try:
+            found, end = decoder.raw_decode(value, start)
+        except ValueError:
+            parts.append(value[at : start + 1])
+            at = start + 1
+            continue
+        parts += [value[at:start], json.dumps(settled(found, erased), sort_keys=True)]
+        at = end
+    return "".join([*parts, value[at:]])
+
+
+def drift(fresh: Path, committed: Path, erased: frozenset[str] = frozenset(), by_name: tuple[str, ...] = ()) -> list:
+    """What a committed generated tree lacks or holds differently from a fresh run of its generator.
+
+    Every file the generator wrote must be committed with the same content. With `erased`, JSON and JSON Lines
+    are compared without those keys: what records the run (tool versions, build hashes, a solver's choice of
+    input) rather than the fixture. Under a `by_name` folder only the set of file names is compared.
+    """
+
+    def text(path: Path):
+        body = path.read_text(encoding="utf-8")
+        if not erased or path.suffix not in {".json", ".jsonl"}:
+            return body
+        rows = [json.loads(body)] if path.suffix == ".json" else [json.loads(line) for line in body.splitlines()]
+        return [settled(row, erased) for row in rows]
+
+    differ = []
+    for path in sorted(p for p in fresh.rglob("*") if p.is_file()):
+        name = path.relative_to(fresh)
+        mine = committed / name
+        if not mine.is_file():
+            differ.append(f"{name}: not committed")
+        elif name.parts[0] not in by_name and text(path) != text(mine):
+            differ.append(f"{name}: differs")
+    for folder in by_name:
+        stale = {p.name for p in (committed / folder).glob("*")} - {p.name for p in (fresh / folder).glob("*")}
+        differ += [f"{folder}/{n}: no longer generated" for n in sorted(stale)]
+    return differ
+
+
+def check_generated(generate, committed: Path, command: str, **compare) -> int:
+    """Run `generate(directory)` into a scratch directory and report its drift from `committed`, as JSON."""
+    with tempfile.TemporaryDirectory(prefix="cairn-fixtures-") as scratch:
+        summary = generate(Path(scratch))
+        differ = drift(Path(scratch), committed, **compare)
+    status = {"committed": str(committed.relative_to(ROOT)), "in_sync": not differ, "differ": differ}
+    print(json.dumps({**(summary or {}), **status, **({"regenerate": command} if differ else {})}, indent=2))
+    return 1 if differ else 0

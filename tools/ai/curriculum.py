@@ -14,11 +14,12 @@ import sys
 from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(R / "src"))
+sys.path[:0] = [str(R / "src"), str(R / "tools")]
 from cairn.agent.agent_tools import explain, stable_json
 from cairn.agent.projection import canonical_source
 from cairn.agent.teaching import CARDS, select_cards
 from cairn.compiler.cairnc import Diagnostic, compile_source
+from support import check_generated
 
 MASK = 2**64 - 1
 VALUES = [[], [0], [1], [MASK], [0, 1, 2, 3, MASK], [9, 9, 9], [5, 1, 8, 0, 2, 7]]
@@ -130,10 +131,7 @@ CONTRASTS = [
 ]
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--out", type=Path, default=R / "training/source", help="Where the teaching data is written.")
-    root = p.parse_args().out
+def write(root: Path) -> dict:
     root.mkdir(parents=True, exist_ok=True)
     tasks = build()
     contrasts = []
@@ -179,8 +177,19 @@ def main():
         "note": "Several variants are alpha-renamings or parameter variants, not independent tasks; templates define the true diversity.",
     }
     (root / "manifest.json").write_text(json.dumps(summary, indent=2) + "\n")
-    print(json.dumps(summary, indent=2))
+    return summary
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--out", type=Path, default=R / "training/source", help="Where the teaching data is written.")
+    p.add_argument("--check", action="store_true", help="Write nothing; exit 1 unless training/source is current.")
+    a = p.parse_args()
+    if a.check:
+        return check_generated(write, R / "training/source", "python3 tools/ai/curriculum.py")
+    print(json.dumps(write(a.out), indent=2))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

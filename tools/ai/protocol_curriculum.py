@@ -11,9 +11,11 @@ import sys
 from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(R / "src")]
+sys.path[:0] = [str(R / "src"), str(R / "tools")]
 from cairn.agent.sketches import ScalarContract, Sketch, public_feedback
 from cairn.compiler.cairnc import Parser
+from checks.semantic_corpus import RUN
+from support import check_generated
 
 
 def expression(source):
@@ -24,11 +26,8 @@ def expression(source):
     return source[e.start : e.end]
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--root", type=Path, default=R / "training/semantic", help="Audited corpus in, lessons out.")
-    root = p.parse_args().root
-    rows = json.loads((root / "audit.json").read_text())
+def write(root: Path, audit: Path) -> dict:
+    rows = json.loads(audit.read_text())
     lessons = []
     for r in rows:
         yes, no = expression(r["chosen"]), expression(r["rejected"])
@@ -86,8 +85,23 @@ def main():
         "model_or_training_run": False,
     }
     (root / "protocol_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-    print(json.dumps(summary, indent=2))
+    return summary
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--root", type=Path, default=R / "training/semantic", help="Audited corpus in, lessons out.")
+    p.add_argument(
+        "--check", action="store_true", help="Write nothing; exit 1 unless the committed lessons are current."
+    )
+    a = p.parse_args()
+    if a.check:  # The lessons of the committed audit, compared with the committed lessons.
+        audit = R / "training/semantic/audit.json"
+        command = "python3 tools/ai/protocol_curriculum.py"
+        return check_generated(lambda out: write(out, audit), audit.parent, command, erased=RUN)
+    print(json.dumps(write(a.root, a.root / "audit.json"), indent=2))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

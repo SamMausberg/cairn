@@ -39,7 +39,7 @@ def tool(*args, timeout=300, expect=0, env=None):
         timeout=timeout,
         env={**os.environ, **(env or {})},
     )
-    assert done.returncode == expect, (
+    assert expect is None or done.returncode == expect, (
         f"{args[0]} exited {done.returncode}\n{done.stdout[-2000:]}\n{done.stderr[-4000:]}"
     )
     return done.stdout
@@ -259,14 +259,46 @@ def test_check_compact_forms():
     )
 
 
-def test_curriculum(tmp_path):
-    result = parsed(tool("tools/ai/curriculum.py", "--out", tmp_path, timeout=600))
+def current(*args, timeout=600):
+    """A generator's --check: it regenerates into scratch, and the committed fixtures must match what it wrote."""
+    result = parsed(tool(*args, "--check", timeout=timeout, expect=None))
+    assert result["in_sync"], f"committed fixtures drifted: {result['differ']}; run {result['regenerate']}"
+    return result
+
+
+def test_curriculum():
+    result = current("tools/ai/curriculum.py")
     assert result["tasks"] == result["train"] + result["heldout"] and result["contrastive_pairs"] > 0
     assert not result["model_training_performed"]
-    assert len(json.loads((tmp_path / "all_tasks_with_oracles.json").read_text())) == result["tasks"]
+    committed = ROOT / "training/source"
+    assert len(json.loads((committed / "all_tasks_with_oracles.json").read_text())) == result["tasks"]
     # Every contrastive pair is a rejection the compiler still performs, with the code it still emits.
-    pairs = [json.loads(line) for line in (tmp_path / "contrastive.jsonl").read_text().splitlines()]
+    pairs = [json.loads(line) for line in (committed / "contrastive.jsonl").read_text().splitlines()]
     assert len(pairs) == result["contrastive_pairs"] and all(p["diagnostic"]["code"] for p in pairs)
+
+
+def test_drift_ignores_only_what_records_a_run(tmp_path):
+    from support import drift
+
+    fresh, committed = tmp_path / "fresh", tmp_path / "committed"
+    for root, seen in [(fresh, 7), (committed, 9)]:
+        (root / "queries").mkdir(parents=True)
+        (root / "queries/a.smt2").write_text(f"(assert {seen})")
+        packet = json.dumps({"rule_cards": {"base": "one"}, "values": seen})
+        row = {"task": "t", "receipt": {"status": "sat", "solver_version": str(seen)}, "counterexample": {"x": seen}}
+        (root / "rows.jsonl").write_text(json.dumps({**row, "message": f"{packet}\nFeedback: {packet}"}) + "\n")
+    erased = frozenset({"solver_version", "counterexample", "values"})
+    assert drift(fresh, committed, erased, by_name=("queries",)) == []
+    assert drift(fresh, committed) == ["queries/a.smt2: differs", "rows.jsonl: differs"]
+    rows = fresh / "rows.jsonl"
+    rows.write_text(rows.read_text().replace("one", "two"))  # A card's text inside a packet inside a message.
+    (fresh / "queries/b.smt2").write_text("")
+    (committed / "queries/c.smt2").write_text("")
+    assert drift(fresh, committed, erased, by_name=("queries",)) == [
+        "queries/b.smt2: not committed",
+        "rows.jsonl: differs",
+        "queries/c.smt2: no longer generated",
+    ]
 
 
 @needs_clang
@@ -283,18 +315,16 @@ def test_curriculum_verify():
 @needs_clang
 @needs_gcc
 @needs_z3
-def test_semantic_corpus(tmp_path):
-    result = parsed(tool("tools/checks/semantic_corpus.py", "--root", tmp_path, timeout=900))
+def test_semantic_corpus():
+    result = current("tools/checks/semantic_corpus.py", timeout=900)
     assert result["status"] == "passed" and result["tasks"] > 0
     assert result["positive_smt_labels"] == result["negative_smt_counterexamples"] == result["tasks"]
     assert len(result["native"]) == 2 and not result["fine_tuning_performed"]
-    assert json.loads((tmp_path / "audit.json").read_text())
 
 
 @needs_z3
-def test_protocol_curriculum(tmp_path):
-    shutil.copy(ROOT / "training/semantic/audit.json", tmp_path / "audit.json")
-    result = parsed(tool("tools/ai/protocol_curriculum.py", "--root", tmp_path, timeout=900))
+def test_protocol_curriculum():
+    result = current("tools/ai/protocol_curriculum.py", timeout=900)
     assert result["status"] == "passed" and result["executed_protocol_lessons"] > 0
     assert result["fresh_semantic_checks"] == 2 * result["executed_protocol_lessons"]
     assert result["wrong_turns_never_sft_targets"] and not result["model_or_training_run"]

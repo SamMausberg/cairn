@@ -20,6 +20,13 @@ sys.path[:0] = [str(R / "src"), str(R / "tools")]
 from cairn.verify.scalar_concrete import Concrete
 from cairn.verify.scalar_semantics import equivalent, outcome_key, prepared
 from checks.native_scalar import NativeScalar
+from support import check_generated
+
+# What records a run rather than a lesson: tool versions, build hashes, the SMT text's rendering, and the input the
+# solver happened to choose to tell two versions apart, with the outcomes computed from it. A drift check skips these.
+RUN = frozenset({"solver_version", "version", "library", "logic", "query_sha256", "implementation_sha256", "compiler",
+                 "instrumented_runtime_sha256", "generated_sha256", "counterexample", "values", "expected", "actual",
+                 "native_counterexample_replays"})  # fmt: skip
 
 
 def cases():
@@ -193,10 +200,7 @@ def cases():
     return rows
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--root", type=Path, default=R / "training/semantic", help="Where the audited corpus is written.")
-    root = p.parse_args().root
+def write(root: Path) -> dict:
     root.mkdir(parents=True, exist_ok=True)
     queries = root / "obligations"
     queries.mkdir(exist_ok=True)
@@ -313,8 +317,20 @@ def main():
         "width_variants_not_independent_algorithms": True,
     }
     (root / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-    print(json.dumps(summary, indent=2))
+    return summary
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--root", type=Path, default=R / "training/semantic", help="Where the audited corpus is written.")
+    p.add_argument("--check", action="store_true", help="Write nothing; exit 1 unless training/semantic is current.")
+    a = p.parse_args()
+    if a.check:
+        command = "python3 tools/checks/semantic_corpus.py, then python3 tools/ai/protocol_curriculum.py"
+        return check_generated(write, R / "training/semantic", command, erased=RUN, by_name=("obligations",))
+    print(json.dumps(write(a.root), indent=2))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
