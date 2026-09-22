@@ -6,7 +6,8 @@ import subprocess
 import pytest
 
 from cairn.agent.agent_tools import EditSession, canonical_source
-from cairn.compiler.cairnc import RUNTIME, Diagnostic, compile_source
+from cairn.compiler.cairnc import RUNTIME, compile_source
+from emitted import refused
 
 SOURCE = """
 enum Division { Value(u64); Zero; }
@@ -110,18 +111,14 @@ def test_projection_and_agent_scopes():
     ],
 )
 def test_reject(decl, body, code):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(decl + "fn f()->R {" + body + "}")
-    assert e.value.data["code"] == code
+    refused(code, decl + "fn f()->R {" + body + "}")
 
 
 @pytest.mark.parametrize(
     "decl", ["enum R { Bad(void); }", "enum R { Bad(ro<u64>[1]); }", "enum R { Bad(R); }", "enum R { Bad(rw<u64>); }"]
 )
 def test_payload_restrictions(decl):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(decl)
-    assert e.value.data["code"] == "E-SUM-PAYLOAD"
+    refused("E-SUM-PAYLOAD", decl)
 
 
 def test_sums_compose_with_records_and_views():
@@ -145,9 +142,7 @@ def test_arm_calls_participate_in_effect_analysis():
 
 def test_nested_writes_in_arm_rejected():
     src = "enum R {V(u64);} fn g(n:usize,x:rw<u64>[n])->u64{x[0]=1;return 0;} fn f(n:usize,out:rw<u64>[n])->u64{match R.V(0) {R.V(v)=>{return g(n,out)+v;}}}"
-    with pytest.raises(Diagnostic) as e:
-        compile_source(src)
-    assert e.value.data["code"] == "E-EFFECT-ORDER"
+    refused("E-EFFECT-ORDER", src)
 
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])

@@ -5,8 +5,8 @@ import shutil
 import pytest
 from test_soundness import FILL, MAP, SUM, TWO_TRAITS
 
-from cairn.compiler.cairnc import Diagnostic, compile_source
-from emitted import SANITIZED
+from cairn.compiler.cairnc import compile_source
+from emitted import SANITIZED, refused
 from emitted import run as native
 
 PLAIN = SANITIZED[:4]  # the sanitized build without its sanitizers; a test adds the one that bites
@@ -35,9 +35,7 @@ def test_an_indirect_call_charges_its_borrows_and_checks_aliasing():
     rows = compile_source(source)[1]["functions"]
     assert "write:v" in rows["twiddle"]["effects"] and "local_write" in rows["main"]["effects"]
     both = "fn pair(f:ro<fn(rw<u64>, rw<u64>) -> void>, v:rw<u64>) { f(v, v); }"
-    with pytest.raises(Diagnostic) as e:
-        compile_source(both)
-    assert e.value.data["code"] == "E-ALIAS"
+    refused("E-ALIAS", both)
 
 
 def test_sequenced_and_single_opaque_operands_remain_legal():
@@ -271,6 +269,4 @@ def test_a_backwards_part_used_to_order_two_others_aborts_at_its_spawn(tmp_path)
     late = source.replace("  let t2 = spawn fill(z, d[a..b], 2);\n", "").replace(
         "  wait(t1);", "  let t2 = spawn fill(z, d[a..b], 2);\n  wait(t1);"
     )
-    with pytest.raises(Diagnostic) as e:  # Without the earlier guard there is no fact to chain through.
-        compile_source(late)
-    assert e.value.data["code"] == "E-LEASED"
+    refused("E-LEASED", late)  # Without the earlier guard there is no fact to chain through.

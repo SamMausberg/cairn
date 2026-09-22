@@ -1,4 +1,5 @@
-"""Emitted C++ built beside the runtime headers and run: the one way a test does that by hand.
+"""What a test does by hand with a CAIRN program: require that it is refused with one code, or build the C++ it
+emits beside the runtime headers and run it.
 
 A test that wants the project's own build goes through `cairn.projects.build`; these helpers are for a test that
 names its compiler flags, a sanitizer or its own `main`.
@@ -12,13 +13,21 @@ from pathlib import Path
 
 import pytest
 
-from cairn.compiler.cairnc import RUNTIME_FILES
+from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
 from cairn.compiler.codegen import mangle
 from cairn.projects.toolchain import command
 from support import device_lock, device_reason
 
 SANITIZED = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
 WARNINGS = ["-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-unused-variable"]
+
+
+def refused(code: str, source: str, **options) -> dict:
+    """Require that `source` is refused with exactly `code`; the diagnostic, for anything else a test checks."""
+    with pytest.raises(Diagnostic) as error:
+        compile_source(source, **options)
+    assert error.value.data["code"] == code, error.value.data["message"]
+    return error.value.data
 
 
 def sanitized(cxx: str) -> list[str]:

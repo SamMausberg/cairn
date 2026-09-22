@@ -9,9 +9,9 @@ rejection naming its code.
 import pytest
 from test_concurrency import HELPERS, build_and_run
 
-from cairn.compiler.cairnc import Diagnostic, compile_source
+from cairn.compiler.cairnc import compile_source
 from cairn.projects.toolchain import audit_effects
-from emitted import watched
+from emitted import refused, watched
 
 NAP = """
 extern fn usleep(us:u32) -> i32 effects(io);
@@ -119,9 +119,7 @@ def test_a_full_or_empty_group_traps(tmp_path, cxx, program):
     ],
 )  # fmt: skip
 def test_group_rejections(code, source):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(source)
-    assert e.value.data["code"] == code
+    refused(code, source)
 
 
 SUBMITTED = "fn fill(n:usize, out:rw<u64>[n], s:u64) {} fn peek(n:usize, xs:ro<u64>[n]) -> u64 = xs[0]; fn flag() -> bool = true;"
@@ -152,9 +150,7 @@ SUBMITTED = "fn fill(n:usize, out:rw<u64>[n], s:u64) {} fn peek(n:usize, xs:ro<u
 def test_what_a_group_holds_survives_every_path(source):
     """Soundness: a group keeps every lease any path lent it, and a part's bounds order other parts only where
     every path formed it. Each of these ran under ThreadSanitizer and raced before the checker refused it."""
-    with pytest.raises(Diagnostic) as e:
-        compile_source(SUBMITTED + source)
-    assert e.value.data["code"] == "E-LEASED"
+    refused("E-LEASED", SUBMITTED + source)
 
 
 BRANCHED = """

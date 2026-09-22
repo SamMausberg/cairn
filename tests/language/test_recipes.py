@@ -13,7 +13,7 @@ import pytest
 from cairn.agent.agent_tools import canonical_source, expanded_source
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.editor.formatting import format_source
-from emitted import SANITIZED, WARNINGS, run, sanitized
+from emitted import SANITIZED, WARNINGS, refused, run, sanitized
 
 LAYOUT = """
 module layout;
@@ -270,9 +270,7 @@ REJECTED = {
 @pytest.mark.parametrize("name", REJECTED)
 def test_rejections(name):
     code, source = REJECTED[name]
-    with pytest.raises(Diagnostic) as e:
-        compile_source(source)
-    assert e.value.data["code"] == code, e.value.data["message"]
+    refused(code, source)
 
 
 def test_the_projection_and_the_formatter_keep_recipes_and_derivations():
@@ -309,9 +307,9 @@ def test_a_name_a_recipe_writes_means_what_it_means_in_the_recipes_module(tmp_pa
     assert "return lib.helper(v.x);" in shown and "impl lib.Same for app.P {" in shown
     cpp = compile_source(CAPTURE, roots=("app.main",))[0]
     assert run(tmp_path, cpp, "-std=c++20", "-O1", entry="app.main").returncode == 1  # lib.helper ran; P is lib.Same.
-    with pytest.raises(Diagnostic) as e:  # A private helper is private from where the code lands, and says so.
-        compile_source(CAPTURE.replace("pub fn helper(x:u64) -> u64 = 1;", "fn helper(x:u64) -> u64 = 1;"))
-    assert e.value.data["code"] == "E-PRIVATE"
+    refused(
+        "E-PRIVATE", CAPTURE.replace("pub fn helper(x:u64) -> u64 = 1;", "fn helper(x:u64) -> u64 = 1;")
+    )  # A private helper is private from where the code lands, and says so.
 
 
 NAMED = """
@@ -355,9 +353,7 @@ def test_a_recipe_takes_the_name_of_a_function(tmp_path):
         ("E-DERIVE-RECIPE", "derive m.fieldwise[3] for Q;"),
         ("E-DERIVE-RECIPE", "derive m.scaled[half, half] for Q;"),
     ]:
-        with pytest.raises(Diagnostic) as e:
-            compile_source(NAMED + more)
-        assert e.value.data["code"] == code, e.value.data["message"]
+        refused(code, NAMED + more)
 
 
 def test_a_diagnostic_inside_generated_code_names_its_derivation():
@@ -462,6 +458,4 @@ def test_derived_implementations_serve_generic_library_code(tmp_path, cxx):
     ],
 )  # fmt: skip
 def test_a_derived_impl_is_checked_like_a_written_one(code, source):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(source)
-    assert e.value.data["code"] == code, e.value.data["message"]
+    refused(code, source)

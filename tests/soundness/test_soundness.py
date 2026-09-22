@@ -6,7 +6,7 @@ under-report effects, or shown to emit invalid C++. They must stay rejected (or 
 
 import pytest
 
-from cairn.compiler.cairnc import Diagnostic, compile_source
+from emitted import refused
 
 FILL = "fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }\n"
 PAIR = "struct Pair { left:Buf[u64]; right:Buf[u64]; }\n"
@@ -515,14 +515,9 @@ REJECTED = {
 @pytest.mark.parametrize("name", REJECTED)
 def test_the_hole_stays_closed(name):
     code, source = REJECTED[name]
-    with pytest.raises(Diagnostic) as e:
-        compile_source(source)
-    assert e.value.data["code"] == code, e.value.data["message"]
+    refused(code, source)
 
 
 def test_a_dropped_owner_names_free_as_the_effect_the_ceiling_is_missing():
     """The diagnostic says which effect was added, so `pure` on a drop-only function names `free`."""
-    with pytest.raises(Diagnostic) as e:
-        compile_source("fn sink(b:Buf[u64]) pure {}\n")
-    assert e.value.data["code"] == "E-EFFECT-CEILING"
-    assert e.value.data["added_effects"] == ["free"]
+    assert refused("E-EFFECT-CEILING", "fn sink(b:Buf[u64]) pure {}\n")["added_effects"] == ["free"]

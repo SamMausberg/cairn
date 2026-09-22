@@ -4,8 +4,8 @@ the machine would compute.
 
 import pytest
 
-from cairn.compiler.cairnc import Diagnostic, compile_source
-from emitted import SANITIZED, run
+from cairn.compiler.cairnc import compile_source
+from emitted import SANITIZED, refused, run
 
 CONSTANTS = """
 const W:usize = 8;
@@ -38,9 +38,9 @@ def test_a_natural_is_inferred_from_the_extent_it_names(tmp_path):
     )
     rows = compile_source(source)[1]["functions"]
     assert {"say[15]", "say[3]", "total[4]", "total[3]"} <= set(rows)
-    with pytest.raises(Diagnostic) as e:  # A run-time extent names no natural.
-        compile_source(source + "fn f(n:usize, xs:ro<u64>[n]) -> u64 = total(xs);")
-    assert e.value.data["code"] == "E-INFER"
+    refused(
+        "E-INFER", source + "fn f(n:usize, xs:ro<u64>[n]) -> u64 = total(xs);"
+    )  # A run-time extent names no natural.
 
 
 NATURAL = """
@@ -62,9 +62,9 @@ fn main() -> i32 {
 def test_a_constant_is_a_natural_wherever_one_is_written(tmp_path):
     """`Array[u64, N]` in a local, in a field and as `scale[N](x)`: the same N that names a view's extent."""
     assert run(tmp_path, compile_source(NATURAL)[0], *SANITIZED).returncode == 0
-    with pytest.raises(Diagnostic) as e:  # Not any constant: a natural.
-        compile_source("const X:f64 = 1.5;\nfn main() -> i32 { let a = Array[u64, X](); return 0; }")
-    assert e.value.data["code"] == "E-TYPE"
+    refused(
+        "E-TYPE", "const X:f64 = 1.5;\nfn main() -> i32 { let a = Array[u64, X](); return 0; }"
+    )  # Not any constant: a natural.
 
 
 SINGLE = """
@@ -104,14 +104,12 @@ def test_an_f32_constant_is_what_the_machine_would_compute(tmp_path, cxx):
 
 def test_constants_fold_exactly_and_name_static_extents(tmp_path):
     assert run(tmp_path, compile_source(CONSTANTS)[0], *SANITIZED).returncode == 0
-    refused = {
+    wrong = {
         "const A:u32 = B + 1;\nconst B:u32 = A;": "E-CONST",  # defined in terms of itself
         "const A:u8 = 200 + 100;": "E-LITERAL-RANGE",  # the result must fit its type
         "const A:u32 = 1 / 0;": "E-CONST",
         "const A:u8 = u8(256);": "E-CONST",
         "const A:f64 = 1.0e308 * 10.0;": "E-CONST",  # not finite
     }
-    for source, code in refused.items():
-        with pytest.raises(Diagnostic) as e:
-            compile_source(source)
-        assert e.value.data["code"] == code, e.value.data["message"]
+    for source, code in wrong.items():
+        refused(code, source)

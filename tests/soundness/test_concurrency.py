@@ -13,7 +13,7 @@ from cairn.agent.agent_tools import canonical_source
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project
-from emitted import contract, on_device, watched
+from emitted import contract, on_device, refused, watched
 
 HELPERS = """
 struct Stats { hits:u64; total:u64; }
@@ -270,9 +270,7 @@ BODY = (
     ],
 )
 def test_rejections(code, body):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(HELPERS + "fn main() -> i32 {" + BODY + body + "}")
-    assert e.value.data["code"] == code
+    refused(code, HELPERS + "fn main() -> i32 {" + BODY + body + "}")
 
 
 @pytest.mark.parametrize(
@@ -295,9 +293,7 @@ def test_rejections(code, body):
     ],
 )  # fmt: skip
 def test_placement_and_sharing_rejections(code, source):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(source)
-    assert e.value.data["code"] == code
+    refused(code, source)
 
 
 def test_readers_may_share_what_a_task_reads():
@@ -403,9 +399,7 @@ def test_a_view_is_lent_as_what_its_memory_also_is(tmp_path):
         ("pinned", "device"),
         ("device", "unified"),
     ]:
-        with pytest.raises(Diagnostic) as e:
-            compile_source(declared.format(got=got, want=want))
-        assert e.value.data["code"] == "E-TYPE-MISMATCH"
+        refused("E-TYPE-MISMATCH", declared.format(got=got, want=want))
     for got, want in [("pinned", "host"), ("unified", "host"), ("unified", "device")]:
         compile_source(declared.format(got=got, want=want))
     with on_device():
@@ -530,9 +524,7 @@ DEVICE_HEAD = "fn main() -> i32 { let n:usize = 64; buffer a:f32[n]@pinned = zer
     ],
 )  # fmt: skip
 def test_queued_work_holds_what_it_touches_and_only_device_work_is_queued(code, body):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(DEVICE_HEAD + "  " + body)
-    assert e.value.data["code"] == code, e.value.data["message"]
+    refused(code, DEVICE_HEAD + "  " + body)
 
 
 CHECKED_SUM = """
@@ -558,9 +550,7 @@ def test_unsigned_reduce_plus_is_checked_in_any_order_on_host_and_device(tmp_pat
     signed = "fn f(n:usize, xs:ro<i64>[n]) -> i64 { let s = reduce + for i in n yield xs[i]; return s; }"
     product = "fn f(n:usize, xs:ro<u64>[n]) -> u64 { let s = reduce * for i in n yield xs[i]; return s; }"
     for source in (signed, product):  # A partial signed sum, or a product later multiplied by zero, may overflow alone.
-        with pytest.raises(Diagnostic) as e:
-            compile_source(source)
-        assert e.value.data["code"] == "E-REDUCE-OP"
+        refused("E-REDUCE-OP", source)
     with on_device():
         for name, source, status in (("fits", fits, (0,)), ("overflows", overflows, (-6, 134))):
             (tmp_path / name).mkdir()

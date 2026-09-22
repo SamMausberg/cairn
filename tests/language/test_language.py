@@ -5,8 +5,8 @@ Every accepted construct is executed natively under both compilers; every rule h
 
 import pytest
 
-from cairn.compiler.cairnc import Diagnostic, compile_source
-from emitted import SANITIZED, WARNINGS, run
+from cairn.compiler.cairnc import compile_source
+from emitted import SANITIZED, WARNINGS, refused, run
 
 PRELUDE = """
 const LIMIT:usize = 8;
@@ -139,9 +139,7 @@ def test_instances_are_monomorphic_and_named():
 )
 def test_rejections(code, body):
     helper = "fn swap_parts(n:usize, a:rw<u64>[n], b:rw<u64>[n]) { swap(a[0], b[0]); }"
-    with pytest.raises(Diagnostic) as e:
-        compile_source(PRELUDE + helper + "fn main() -> i32 {" + body + "}")
-    assert e.value.data["code"] == code
+    refused(code, PRELUDE + helper + "fn main() -> i32 {" + body + "}")
 
 
 def test_disjoint_parts_are_accepted_and_guarded():
@@ -171,9 +169,7 @@ def test_disjoint_parts_are_accepted_and_guarded():
     ],
 )
 def test_boundary_rejections(code, source):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(source)
-    assert e.value.data["code"] == code
+    refused(code, source)
 
 
 def test_foreign_calls_are_visible_effects():
@@ -245,9 +241,7 @@ def test_dynamic_interfaces_are_explicit_fat_references(tmp_path, cxx):
     ],
 )
 def test_dynamic_interface_rejections(code, tail):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(DYNAMIC + tail)
-    assert e.value.data["code"] == code
+    refused(code, DYNAMIC + tail)
 
 
 def test_owned_dynamic_values_hold_heterogeneous_owners(tmp_path):
@@ -270,9 +264,7 @@ def test_owned_dynamic_values_hold_heterogeneous_owners(tmp_path):
     ],
 )
 def test_owned_dynamic_rejections(code, tail):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(DYNAMIC + tail)
-    assert e.value.data["code"] == code
+    refused(code, DYNAMIC + tail)
 
 
 def test_an_empty_owned_dynamic_value_traps_when_lent(tmp_path):
@@ -301,6 +293,6 @@ def test_multiple_bounds_and_take_operand_order():
     assert "key[u64]" in compile_source(bounded)[1]["functions"]
     pair = "struct P { a:Buf[u64]; b:Buf[u64]; } fn f() -> P { let mut x = Buf[u64](1); let mut y = Buf[u64](2); "
     assert compile_source(pair + "return P(take(x), take(y)); }")
-    with pytest.raises(Diagnostic) as e:  # C++ leaves argument order open: which field would get the zero?
-        compile_source(pair + "return P(take(x), take(x)); }")
-    assert e.value.data["code"] == "E-EFFECT-ORDER"
+    refused(
+        "E-EFFECT-ORDER", pair + "return P(take(x), take(x)); }"
+    )  # C++ leaves argument order open: which field would get the zero?

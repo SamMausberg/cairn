@@ -12,6 +12,7 @@ from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.projects.build import build
 from cairn.projects.project import ProjectError, load_project
 from cairn.verify.scalar_semantics import equivalent
+from emitted import refused
 
 
 @pytest.mark.parametrize(
@@ -379,9 +380,7 @@ def test_vendored_dependencies_load_first_stay_private_and_are_pinned(tmp_path):
         "module app;\nimport geometry.shapes as shapes;\n"
         "pub fn main() -> i32 { return i32(shapes.secret(shapes.Rect(1, 1))); }\n"
     )
-    with pytest.raises(Diagnostic) as private:
-        compile_source(load_project(tmp_path).source)
-    assert private.value.data["code"] == "E-PRIVATE"
+    refused("E-PRIVATE", load_project(tmp_path).source)
 
 
 @pytest.mark.parametrize(

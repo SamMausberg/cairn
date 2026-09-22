@@ -4,7 +4,8 @@ import subprocess
 import pytest
 
 from cairn.agent.agent_tools import canonical_source
-from cairn.compiler.cairnc import RUNTIME, Diagnostic, compile_source
+from cairn.compiler.cairnc import RUNTIME, compile_source
+from emitted import refused
 
 SOURCE = """
 enum Result {Value(u64); Empty;}
@@ -65,15 +66,11 @@ def test_projection():
     ],
 )
 def test_errors(body, code):
-    with pytest.raises(Diagnostic) as e:
-        compile_source("fn f(){" + body + "}")
-    assert e.value.data["code"] == code
+    refused(code, "fn f(){" + body + "}")
 
 
 def test_loop_exit_is_not_a_function_return():
-    with pytest.raises(Diagnostic) as e:
-        compile_source("fn f()->u64 {while true {break;}}")
-    assert e.value.data["code"] == "E-RETURN"
+    refused("E-RETURN", "fn f()->u64 {while true {break;}}")
 
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])

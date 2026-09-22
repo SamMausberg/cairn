@@ -8,7 +8,7 @@ import pytest
 
 from cairn.agent.agent_tools import canonical_source
 from cairn.compiler.cairnc import Diagnostic, compile_source
-from emitted import SANITIZED, WARNINGS, run, sanitized
+from emitted import SANITIZED, WARNINGS, refused, run, sanitized
 
 FIRST_USERS_FOUND = """
 import std.vec;
@@ -134,9 +134,7 @@ def test_a_record_is_taken_apart_as_it_was_built(tmp_path, cxx):
     ],
 )  # fmt: skip
 def test_taking_apart_obeys_moves_privacy_and_linearity(code, body):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(UNPACK + f"fn probe() {{ {body} }}\n")
-    assert e.value.data["code"] == code, e.value.data["message"]
+    refused(code, UNPACK + f"fn probe() {{ {body} }}\n")
 
 
 @pytest.mark.parametrize(

@@ -7,8 +7,8 @@ if the length had been written by hand.
 import pytest
 
 from cairn.agent.agent_tools import canonical_source
-from cairn.compiler.cairnc import Diagnostic, compile_source
-from emitted import run, sanitized
+from cairn.compiler.cairnc import compile_source
+from emitted import refused, run, sanitized
 
 HELPERS = """
 import std.sort as sort;
@@ -92,6 +92,4 @@ def test_parts_of_different_lengths_still_trap(tmp_path):
 )
 def test_what_a_left_out_extent_still_refuses(code, call):
     extra = "extern fn write(fd:i32, data:ro<u8>[n], n:usize) -> i64 effects(io);\nfn pick() -> usize = 4;\n"
-    with pytest.raises(Diagnostic) as e:
-        compile_source(HELPERS + extra + "fn main() -> i32 { " + call + " }")
-    assert e.value.data["code"] == code, e.value.data["message"]
+    refused(code, HELPERS + extra + "fn main() -> i32 { " + call + " }")

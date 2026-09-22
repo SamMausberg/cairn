@@ -7,7 +7,7 @@ import pytest
 
 from cairn.agent.agent_tools import EditSession, canonical_source
 from cairn.compiler.cairnc import RUNTIME, Diagnostic, compile_source
-from emitted import SANITIZED, WARNINGS, run
+from emitted import SANITIZED, WARNINGS, refused, run
 
 SOURCE = """
 fn fill(n:usize,x:rw<u64>[n]) { for i in 0..n { x[i]=u64(i); } }
@@ -75,21 +75,15 @@ def test_effects_and_projection():
     ],
 )
 def test_reject(body, code):
-    with pytest.raises(Diagnostic) as e:
-        compile_source("fn f()->u64 {" + body + "}")
-    assert e.value.data["code"] == code
+    refused(code, "fn f()->u64 {" + body + "}")
 
 
 def test_owners_cannot_alias_in_calls():
-    with pytest.raises(Diagnostic) as e:
-        compile_source("fn copy(n:usize,x:rw<u64>[n],y:ro<u64>[n]){} fn f(){buffer b:u64[4] = zeroed;copy(4,b,b);}")
-    assert e.value.data["code"] == "E-ALIAS"
+    refused("E-ALIAS", "fn copy(n:usize,x:rw<u64>[n],y:ro<u64>[n]){} fn f(){buffer b:u64[4] = zeroed;copy(4,b,b);}")
 
 
 def test_allocating_call_cannot_be_hidden_in_expression():
-    with pytest.raises(Diagnostic) as e:
-        compile_source("fn g()->u64 {buffer b:u64[0]=zeroed;return 0;} fn f()->u64 = g()+1;")
-    assert e.value.data["code"] == "E-EFFECT-ORDER"
+    refused("E-EFFECT-ORDER", "fn g()->u64 {buffer b:u64[0]=zeroed;return 0;} fn f()->u64 = g()+1;")
 
 
 def test_shape_identity_is_immutable():
@@ -322,9 +316,7 @@ def test_a_declared_extent_is_established_once_and_never_broken(body, code):
     ],
 )
 def test_a_field_extent_names_an_earlier_usize_field_of_the_same_record(record, code):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(record + "\nfn main() -> i32 { return 0; }\n")
-    assert e.value.data["code"] == code
+    refused(code, record + "\nfn main() -> i32 { return 0; }\n")
 
 
 def test_the_ways_out_of_a_record_keep_a_declared_extent():
@@ -354,10 +346,8 @@ def test_a_field_extent_names_both_spellings_of_one_length():
     source = EXTENTS + "fn by_len(c:ro<Chart>) -> f64 = both(len(c.price), c.price, c.qty);\n"
     assert "bounds" not in compile_source(source)[1]["functions"]["by_len"]["syntactic_check_sites"]
     other = EXTENTS + "fn mixed(c:ro<Chart>, d:ro<Chart>) -> f64 = total(c.rows, d.price);\n"
-    with pytest.raises(Diagnostic) as e:
-        compile_source(other)
-    assert e.value.data["code"] == "E-TYPE-MISMATCH"
-    assert "ro<f64>[c.rows]@host" in e.value.data["message"] and "ro<f64>[d.rows]@host" in e.value.data["message"]
+    said = refused("E-TYPE-MISMATCH", other)["message"]
+    assert "ro<f64>[c.rows]@host" in said and "ro<f64>[d.rows]@host" in said
 
 
 def test_a_record_with_a_declared_extent_is_still_outside_the_scalar_model():

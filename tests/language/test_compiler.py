@@ -3,8 +3,10 @@ from pathlib import Path
 
 import pytest
 
+from emitted import refused
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-from cairn.compiler.cairnc import Diagnostic, compile_source
+from cairn.compiler.cairnc import compile_source
 
 BAD = [
     ("E-WRITE-LEASE", "fn f(n:usize,x:ro<u64>[n]@host) { x[0]=1; }"),
@@ -71,9 +73,7 @@ BAD = [
 
 @pytest.mark.parametrize("code,source", BAD)
 def test_rejections(code, source):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(source)
-    assert e.value.data["code"] == code
+    refused(code, source)
 
 
 def test_native_examples():
@@ -137,9 +137,7 @@ MORE_BAD = [
 
 @pytest.mark.parametrize("code,source", MORE_BAD)
 def test_new_rejections(code, source):
-    with pytest.raises(Diagnostic) as e:
-        compile_source(source)
-    assert e.value.data["code"] == code
+    refused(code, source)
 
 
 def test_wire_derivation():
@@ -160,6 +158,7 @@ def test_decimal_leading_zero_canonicalized():
 
 
 def test_global_family_budget_before_copying():
-    with pytest.raises(Diagnostic) as e:
-        compile_source("fn f[K:nat]()->usize{return K;} family a=f[0..1024];family b=f[0..1024];family c=f[0..1024];")
-    assert e.value.data["code"] == "E-EXPANSION-LIMIT"
+    refused(
+        "E-EXPANSION-LIMIT",
+        "fn f[K:nat]()->usize{return K;} family a=f[0..1024];family b=f[0..1024];family c=f[0..1024];",
+    )

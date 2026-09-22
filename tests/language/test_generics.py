@@ -2,10 +2,8 @@
 and templates certified once against their bounds.
 """
 
-import pytest
-
-from cairn.compiler.cairnc import Diagnostic, compile_source
-from emitted import SANITIZED, run
+from cairn.compiler.cairnc import compile_source
+from emitted import SANITIZED, refused, run
 
 ACROSS_MODULES = """
 module m;
@@ -52,9 +50,7 @@ def test_a_nat_parameter_is_a_static_extent_and_literals_take_the_expected_resul
         "  if a[3] != 7 || b[4] != 2 || y != 3 || z != 200 { return 1; }\n  return 0; }"
     )
     assert run(tmp_path, compile_source(source)[0], *SANITIZED).returncode == 0
-    with pytest.raises(Diagnostic) as wrong_extent:
-        compile_source(source.replace("fill[4](a, 7)", "fill[8](a, 7)"))
-    assert wrong_extent.value.data["code"] == "E-TYPE-MISMATCH"
+    refused("E-TYPE-MISMATCH", source.replace("fill[4](a, 7)", "fill[8](a, 7)"))
 
 
 GENERIC_BOUNDS = """
@@ -112,9 +108,9 @@ def test_a_verdict_covers_the_rules_that_need_every_row():
     assert verdicts["loose"].startswith("E-EFFECT-CEILING") and "give that member a ceiling" in verdicts["loose"]
     assert verdicts["lanes_loose"].startswith("E-PARALLEL-CALL") and "bound:Loud.pid" in verdicts["lanes_loose"]
     noisy = "struct C { v:u64; }\nimpl Loud for C { fn pid(self:ro<C>) -> u64 { unsafe { return u64(getpid()); } } }\n"
-    with pytest.raises(Diagnostic) as e:  # The instance the old verdict called fine.
-        compile_source(CEILINGS + noisy + "fn main() -> i32 { let c = C(1); return i32(loose(c)); }")
-    assert e.value.data["code"] == "E-EFFECT-CEILING"
+    refused(
+        "E-EFFECT-CEILING", CEILINGS + noisy + "fn main() -> i32 { let c = C(1); return i32(loose(c)); }"
+    )  # The instance the old verdict called fine.
     broken = certify_templates(CEILINGS + "fn main() -> i32 { let x:u64 = true; return 0; }")
     assert set(broken.values()) == {"unknown: the program does not check (E-TYPE-MISMATCH)"}  # Unknown is never ok.
 
@@ -147,16 +143,14 @@ def test_kind_and_class_bounds_are_promises_checked_at_the_call_and_certified_on
     from cairn.compiler.cairnc import certify_templates
 
     assert set(certify_templates(BOUNDED).values()) == {"ok"}  # `numeric` means: checked at every numeric type.
-    refused = {
+    promised = {
         "let b = Buf[u64](1); let r = twice(b);": "Buf[u64] is affine, not copy; twice needs [T:copy]",
         "let r = ignore(Token(1));": "Token is linear, not affine; ignore needs [T:affine]",
         "let r = clamp(1.5, 0.5, 2.5);": "f64 is not integer; clamp needs [T:integer]",
         "let p = Pair(Buf[u64](1), Buf[u64](1));": "Buf[u64] is affine, not copy; Pair needs [T:copy]",
     }
-    for call, why in refused.items():
-        with pytest.raises(Diagnostic) as e:
-            compile_source(BOUNDED.replace("fn main() -> i32 {", "fn main() -> i32 { " + call))
-        assert e.value.data["code"] == "E-BOUND" and why in e.value.data["message"]
+    for call, why in promised.items():
+        assert why in refused("E-BOUND", BOUNDED.replace("fn main() -> i32 {", "fn main() -> i32 { " + call))["message"]
     broken = BOUNDED.replace(
         "fn ignore[T: affine](x:T) -> u64 = 0;", "fn ignore[T: affine](x:T) -> u64 { let a = x; let b = x; return 0; }"
     )

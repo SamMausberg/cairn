@@ -18,6 +18,7 @@ import pytest
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project
+from emitted import refused
 
 BOTH = ["clang++", "g++"]
 
@@ -33,12 +34,6 @@ def native(tmp_path, source, cxx="clang++", timeout=180):
     done = subprocess.run([record["artifact"]], capture_output=True, text=True, timeout=120)
     assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     return done
-
-
-def rejects(code, source):
-    with pytest.raises(Diagnostic) as error:
-        compile_source(source)
-    assert error.value.data["code"] == code, error.value.data
 
 
 SIGNED_TEXT = """
@@ -668,7 +663,7 @@ fn main() -> i32 {
     ],
 )
 def test_the_type_system_protects_the_api(code, source):
-    rejects(code, source)
+    refused(code, source)
 
 
 # Effect rows are part of each module's contract ------------------------------------------------
