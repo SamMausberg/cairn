@@ -12,7 +12,9 @@ import std.vec (Vec);
 extern "compressBound" fn bound(n:usize) -> usize effects();
 // zlib reads the capacity of `dest` from `produced` and writes at most that many bytes from the pointer, so a
 // caller passes dest[0..1] of storage that holds `produced` bytes: that is the precondition `unsafe` owns here.
-extern "compress2" fn deflate_all(dest:rw<u8>[1], produced:rw<usize>, source:ro<u8>[n], n:usize, level:i32) -> i32 effects();
+extern "compress2" fn deflate_all(
+  dest:rw<u8>[1], produced:rw<usize>, source:ro<u8>[n], n:usize, level:i32
+) -> i32 effects();
 extern "crc32_z" fn crc_of(crc:u64, data:ro<u8>[n], n:usize) -> u64 effects();
 extern "adler32_z" fn adler_of(adler:u64, data:ro<u8>[n], n:usize) -> u64 effects();
 
@@ -29,7 +31,7 @@ pub fn compress(n:usize, data:ro<u8>[n], level:i32) -> Result[Vec[u8], ZError] {
   let mut code:i32 = 0;
   unsafe { code = deflate_all(out.data[0..1], produced, data, n, level); }
   if code != 0 { return Err(ZError(code)); }
-  if produced > room { return Err(ZError(-5)); }  // zlib never writes past what it was told it has
+  if produced > room { return Err(ZError(-5)); } // zlib never writes past what it was told it has
   out.len = produced;
   return Ok(out);
 }
