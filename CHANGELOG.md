@@ -20,11 +20,18 @@
 - Signature help in the language server offers the form of a call that leaves its extents out.
 - `examples/apps/service` serves many clients at once from one thread: one I/O ring holds the accept and every client's receive, and a client's `quit` cancels what is in flight. It used to serve one connection at a time. `std.net.send_all(fd, data)` sends on the raw descriptor a ring's accept returns, and `net.send` is written on it.
 - Device code runs only under `make gpu`, in one process, behind a machine-wide lock (`tools/support.py`). The everyday suite never touches the GPU: on the reference machine every run of the device tests reset the display GPU, and repeated resets crashed the host.
+- A preregistered trial (`tools/ai/protocol_trial.py` and its preregistration) puts twelve planted repairs to fresh subjects under the component packet and the focused one; it has not been run.
+- The teaching fixtures under `training/` carry today's rule cards, packets and receipts, and each generator's `--check` fails the suite when its committed files drift.
+- `tools/checks/emission_identity.py` compiles 1,044 programs (the examples, `std`, every program in the tests and every docs block) and requires the same C++ and effect rows before and after a source change.
 
 ### Verification
 
 - Each fault witness in the ownership regression is one decided search over the machine, and each collector invariant step reads its certified obligation through one tactic.
+- The ownership calculus models task groups (submissions and collects on any path, `wait`, what a group holds after a branch join) and lanes that own a block of one stride, with the same theorems and a new one that nothing is used after `wait(g)`. The differential run generates both and agreed on twenty thousand programs.
+- `proofs/Cairn/Region.lean` proves that the lane pool runs every index of a region exactly once, returns only when no worker is inside and never waits for a worker to arrive, so a region completing before the next statement is no longer an assumption about the emitter.
+- `proofs/Cairn/Facts.lean` proves that a guard the checker's facts discharge cannot fail where those facts hold, and `tools/checks/differential_facts.py` requires `facts.py` and the Lean rule to decide twenty thousand generated sites alike.
 - Tests build emitted C++ through one helper (`tests/emitted.py`) and require refusals through another, which removed 320 lines of repeated scaffolding.
+- Four reduction passes made the compiler, the agent layer, the verifiers, the editor, the tools, the tests, `std` and the examples shorter without changing what they do: the emitted C++ of every program the suite compiles is unchanged, except where a native test shows the behaviour is. The code was dense to begin with, so the gains are a few percent in tokens; features added this cycle more than made up the difference in lines.
 
 ### Documentation
 
