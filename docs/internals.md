@@ -48,7 +48,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::launch`
 |---|---|
 | `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard is host and device callable |
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
-| `cairn_parallel.hpp` | the host lane pool, linear tasks, `Mutex` and `Atomic` with explicit orders |
+| `cairn_parallel.hpp` | the host lane pool, linear tasks, task groups with a bounded completion ring, `Mutex` and `Atomic` with explicit orders |
 | `cairn_gpu.hpp` | scoped device, pinned and unified memory, lanes, linear stream tickets, reduction, stable compaction |
 
 Generated code includes only the headers it needs. A freestanding image includes neither concurrent header: `toolchain.audit_effects` rejects every effect that reaches them, and `cairn_parallel.hpp` refuses to compile under `CAIRN_FREESTANDING`.
