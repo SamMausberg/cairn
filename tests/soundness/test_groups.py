@@ -7,11 +7,11 @@ rejection naming its code.
 """
 
 import pytest
-from test_concurrency import HELPERS, build_and_run
+from test_concurrency import BACKWARDS_PART, HELPERS, build_and_run
 
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.toolchain import audit_effects
-from emitted import refused, watched
+from emitted import contract, refused, watched
 
 NAP = """
 extern fn usleep(us:u32) -> i32 effects(io);
@@ -201,3 +201,18 @@ def test_a_group_or_a_ticket_is_never_lent():
     main = "fn main() -> i32 { let mut d = Buf[u64](8); let mut g = Group[u64](2); helper(g, d); d[0] = 5; wait(g); return 0; }"
     refused("E-PINNED", fill + lent + main)
     refused("E-PINNED", fill + "fn peek(t:ro<Ticket[u64]>) -> u64 = 0;\n")
+
+
+def test_a_submitted_part_is_guarded_before_its_task_starts(tmp_path):
+    """The Lean calculus assumes of `submit` what it assumes of `spawn`: the `lo <= hi` of a lent part runs on the
+    submitting thread before the task starts. The capture list is evaluated where the lambda is written."""
+    source = BACKWARDS_PART.replace(
+        "let t = spawn work(0, d[lo..hi]);", "let g = Group[void](1);\n  spawn work(0, d[lo..hi]) into g;"
+    )
+    source = source.replace("wait(t);", "wait(g);")
+    cpp = compile_source(source)[0]
+    submit = next(line for line in cpp.splitlines() if ".submit(" in line)
+    captures, body = submit.split("]() mutable noexcept {")
+    assert "cr::part(" in captures and "cr::part(" not in body
+    done = contract(tmp_path, cpp, "clang++")
+    assert done.returncode == -6 and done.stdout == "spawning\n"  # Aborted at the slice: no task, no next statement.

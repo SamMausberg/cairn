@@ -26,7 +26,7 @@ The collector certificates and the loop model are Lean-checked. So is a core cal
 
 The calculus is written by hand beside the checker. `tools/checks/differential_ownership.py` requires the two to classify generated programs of a shared fragment identically. Twenty thousand programs agreed on the run recorded in `evidence/v1_4/lean/differential.json`; 13,384 of them declare a task group, and 3,738 submit to one inside a branch. A stronger link than that between the two is open.
 
-The calculus assumes two things of the emitter: that a part's `lo <= hi` guard runs before the task that borrows it starts, and that a region completes before the next statement. Both are tested and neither is proved.
+The calculus blocks the spawner while a region runs, and `proofs/Cairn/Region.lean` proves that the lane pool's protocol does so: every index runs once, no worker is inside when the region returns, and a region returns without waiting for a worker to arrive. What stays assumed is that `cairn_parallel.hpp` performs those steps under the memory orders it uses, and that a part's `lo <= hi` guard runs on the spawning thread before the task starts. The second rests on C++ evaluating a lambda's captures where the lambda is written, and `tests/soundness` pins the emitted shape for `spawn` and for `spawn ... into g`.
 
 A single element, a part of a part and a part with an invisible bound are modelled conservatively as the whole element range, and the regression programs show the checker classifying them the same way. Closures, `lane:f` callbacks, device placement, `reduce`, `compact`, queued device work and declared field extents are outside the calculus.
 

@@ -79,6 +79,10 @@ OWNERSHIP_THEOREMS = (
     # The join claims no more than either path, and forgetting keeps the invariant.
     "Cairn.Ownership.joinOf_le",
     "Cairn.Ownership.Sync.weaken",
+    # The lane pool's region protocol: every index once, no worker inside after return, never stuck.
+    "Cairn.Region.runs_once",
+    "Cairn.Region.quiet_when_back",
+    "Cairn.Region.finishes",
 )
 
 # `#print axioms` prints one line per declaration; names may end in a prime.

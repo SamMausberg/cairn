@@ -13,6 +13,7 @@ import Cairn.Places
 import Cairn.CollectorCertificates
 import Cairn.Collector
 import Cairn.Ownership
+import Cairn.Region
 
 namespace Cairn
 
@@ -93,6 +94,14 @@ namespace Cairn
 #print axioms Cairn.Ownership.lane_borrows_dont_race
 #print axioms Cairn.Ownership.races_borrow_of_lease
 #print axioms Cairn.Ownership.ownership_regression
+
+/-! ### The lane pool's region protocol -/
+
+#print axioms Cairn.Region.Lane.once
+#print axioms Cairn.Region.Inv.reach
+#print axioms Cairn.Region.runs_once
+#print axioms Cairn.Region.quiet_when_back
+#print axioms Cairn.Region.finishes
 
 /-! ### Non-vacuity: the faults are reachable for rejected programs -/
 
