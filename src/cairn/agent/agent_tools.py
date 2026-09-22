@@ -235,7 +235,10 @@ class EditSession:
         context = [{"symbol": self.symbol, "source": self.source[self.f.start : self.f.end]}, *self.expansions()]
         text = "\n".join([*(x["source"] for x in context), *(d["signature"] for d in dependencies.values())])
         types = related(declarations(self.program), text)
-        written = sorted(n for n in self.receipt["functions"] if n not in self.visible and not n.startswith("std."))
+        written: dict[str, list[str]] = {}  # By module, each name as its module writes it; expand takes either form.
+        for n in sorted(n for n in self.receipt["functions"] if n not in self.visible and not n.startswith("std.")):
+            module, short = self.written_name(n)
+            written.setdefault(module, []).append(short)
         effects = self.receipt["functions"][self.symbol]["effects"]
         return {
             **self.header("cairn.packet/2"),
@@ -265,6 +268,24 @@ class EditSession:
     def expansions(self) -> list[dict[str, str]]:
         return [{"symbol": n, "source": self.source_of(n)} for n in self.shown]
 
+    def written_name(self, name: str) -> tuple[str, str]:
+        """(module, the name as that module writes it): an impl method is Trait.Type.method, where the compiler's
+        own name repeats the module three times."""
+        f = self.functions[name]
+        if f.owner:
+            return f.module, f"{local(f.owner[0])}.{local(f.owner[1].name)}.{local(name)}"
+        return f.module, name.removeprefix(f.module + ".") if f.module else name
+
+    @functools.cache  # noqa: B019 (a session lives as long as its host, and its program never changes)
+    def aliases(self) -> dict[str, str]:
+        """Each written name, bare and module-qualified, for the one function it names; an ambiguous one is left out."""
+        seen: dict[str, set[str]] = {}
+        for n in self.receipt["functions"]:
+            module, short = self.written_name(n)
+            for alias in {short, f"{module}.{short}" if module else short}:
+                seen.setdefault(alias, set()).add(n)
+        return {alias: next(iter(full)) for alias, full in seen.items() if len(full) == 1}
+
     def expand(self, names: Any) -> dict[str, Any]:
         """Disclose more of the pinned program: a function's source, which the candidate may then call, or a type.
 
@@ -276,10 +297,11 @@ class EditSession:
         functions, types = [], {}
         for name in names:
             full = [n for n in table if name in {n, local(n)}]
+            called = name if name in self.receipt["functions"] else self.aliases().get(name)
             if len(full) == 1:
                 types[full[0]] = table[full[0]]
-            elif name in self.receipt["functions"] and name != self.symbol:
-                functions.append(name)
+            elif called and called != self.symbol:
+                functions.append(called)
             else:
                 fail("E-SYMBOL", "Nothing of that name to expand, or more than one thing.", symbol=name)
         fresh, cards = sorted(set(functions) - self.visible), self.focused()["rule_cards"]

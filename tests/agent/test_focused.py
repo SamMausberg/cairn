@@ -110,6 +110,19 @@ def test_evidence_requests_are_shaped_and_one_per_function(contract):
     assert code(lambda: EditSession(S, "caller", contract)) == "E-CONTRACT"
 
 
+def test_not_shown_names_functions_as_their_module_writes_them_and_expand_takes_that_name():
+    from cairn.projects.project import load_project
+
+    source = load_project(Path(__file__).resolve().parents[2] / "examples/apps/analytics").source
+    s = EditSession(source, "analytics.query.above")
+    hidden = s.packet()["not_shown"]
+    assert "Aggregator.CountAgg.absorb" in hidden["analytics.agg"] and "synth" in hidden["analytics.table"]
+    full = "analytics.agg.analytics.agg.Aggregator.analytics.agg.CountAgg.absorb"  # the compiler's own name
+    for written in ["Aggregator.CountAgg.absorb", "analytics.agg.Aggregator.CountAgg.absorb", full]:
+        grown = EditSession(source, "analytics.query.above").expand([written])
+        assert [c["symbol"] for c in grown["context"]] == [full]
+
+
 BODIES = ["{return x;}", "{return other(x);}", "{return caller(x);}", "{return step(x);}", "{return x+1;}"]
 
 

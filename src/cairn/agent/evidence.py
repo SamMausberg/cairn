@@ -19,31 +19,26 @@ MAX_REPLACEMENT = 64_000  # bytes of one reply
 MAX_EXPAND = 32  # names in one expand request
 TERMS = {
     "scopes": {
-        "focused": "The target's source; the signature, effect row and evidence of everything it may call and "
-        "everything that calls it; the types those name. Expand any further function or type by name.",
-        "component": "The whole static call-graph component of the target and every type declaration.",
+        "focused": "the target, and the interfaces of what it calls and what calls it; expand anything else by name",
+        "component": "the target's whole call-graph component and every type",
     },
     "limits": {"replacement_bytes": MAX_REPLACEMENT, "one_authored_function": True, "expand": MAX_EXPAND},
     "boundaries": [
-        "No permission to change parameters, imports, target flags, tests or the task contract.",
-        "The whole linked module is rechecked for every reply, beyond what the packet shows.",
-        "Typed admission does not imply the requested behaviour, termination, equivalence or performance.",
-        "No fresh-model success rate has been measured.",
+        "Never change parameters, imports, target flags, tests or the task.",
+        "Every reply is rechecked with the whole linked module, beyond what the packet shows.",
+        "Typed is not correct, terminating, equivalent or fast. No fresh-model success rate has been measured.",
     ],
     "evidence": {
-        "interface": "The compiler established the signature and effect row, nothing about what it computes: "
-        "expand the body before relying on its behaviour.",
-        "declared": "The host's text, which nothing checked: expand the body before relying on it.",
-        "finite-tested": "The host's cases passed natively in this session; inputs outside them are unchecked.",
-        "smt-equivalent": "Z3 found no input of the domain on which it differs from the reference shown: rely on "
-        "the reference, as the whole program was checked against it.",
-        "comment": "Written above the declaration by its author; nothing checks it.",
+        "interface": "only the signature and effect row are checked: read the body before relying on behaviour",
+        "declared": "the host's text, unchecked: read the body before relying on it",
+        "finite-tested": "the host's cases passed natively now; inputs outside them are unchecked",
+        "smt-equivalent": "Z3 found it equal to the reference shown on the domain: rely on the reference",
+        "comment": "the author's, unchecked",
     },
-    "task": "A packet without a task has none; infer none.",
-    "refusal": "Frontend only, not a semantic or machine proof; nothing is applied automatically.",
-    "admission": "typed means only that the whole linked module checks with the reply spliced in, the text "
-    "outside it and the contract unchanged. Nothing was built, tested, proved equivalent or measured, and check "
-    "sites are static counts, not costs.",
+    "task": "no task: none was given; infer none",
+    "refusal": "frontend only, not a proof; nothing is applied automatically",
+    "admission": "typed: the linked module checks with the reply in place and nothing outside it changed; nothing "
+    "was built, tested, proved or measured, and check sites are static counts",
 }
 
 

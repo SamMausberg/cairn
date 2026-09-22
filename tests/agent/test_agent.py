@@ -70,7 +70,7 @@ def test_component_packet_includes_callers_and_callees():
 def test_focused_packet_shows_the_target_and_interfaces():
     p = EditSession(S, "step").packet()
     assert p["protocol"] == "cairn.packet/2" and [c["symbol"] for c in p["context"]] == ["step"]
-    assert set(p["dependencies"]) == {"caller"} and p["callers"] == ["caller"] and p["not_shown"] == ["other"]
+    assert set(p["dependencies"]) == {"caller"} and p["callers"] == ["caller"] and p["not_shown"] == {"": ["other"]}
     assert p["dependencies"]["caller"]["evidence"] == "interface" and "contract" not in p["dependencies"]["caller"]
     assert "mul_wrap(x,2)" not in json.dumps(p)
 
