@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Language
+
+- A call may leave out the extent parameters its views carry. `checksum(frame)` is `checksum(len(frame), frame)`: every `usize` parameter that a later view names as its extent is written in by the checker as `len` of the first view argument that names it, or `hi - lo` for a part, so the emitted C++ and the effect row are those of the call written out. A call passes all such extents or none (`E-ARITY`), and an `extern` takes every argument. The library, the examples and the docs use the short form at 56 call sites whose emitted C++ did not change. `len` of an inline `Array` is now an extent identity, so `f(len(a), a)` of an `Array[T, N]` is accepted too.
+- The emitter leaves out a guard the checker proved cannot fail: an index below its extent, `usize` arithmetic that stays in range, a shift or a conversion that fits. The facts come from loop and lane binders, immutable `let`s, conditions and early exits (`compiler/facts.py`); the receipt counts the removed sites as `discharged_check_sites`.
+- `reduce op parallel i in n yield e` folds integers on the host lane pool in blocks fixed by the count, and returns what the in-order fold returns; a checked `+` traps exactly when the in-order fold would. Floats are refused (`E-REDUCE-ORDER`).
+- An I/O ring, `let mut q = IoRing(n);`, keeps up to `n` kernel operations in flight from one thread over io_uring. `q.read`, `q.write`, `q.recv`, `q.send` and `q.accept` move the `Buf[u8]` they work on into the ring, and `q.next(tag, result)` hands the next finished one back with its tag and the kernel's result; `std.io.outcome(result)` reads that as a `Result`. A ring records no lease, so it may be lent `rw` to a callee or a task; it is linear, pinned (`E-PINNED`), host only, and `wait(q)` lets every operation finish before it releases anything.
+- A ticket or a task group can no longer be a parameter in any mode (`E-PINNED`). 1.3 accepted a group lent `rw` to a callee that spawned into it, and the task's lease ended at the callee's return while the task still wrote.
+- A task group keeps every lease any path, or any earlier iteration of a loop, lent it, and a part orders other parts only where every path formed it. This closes three races 1.3 accepted.
+
+### Projects and tools
+
+- An edit packet starts with the target, its effect row and ceiling, and the interfaces of what it calls and what calls it, and grows by `expand` requests the host answers from the pinned program. A host names sessions by short handles (`cairn.edit/2`); `cairn.edit/1` still works. `--scope component` gives the 1.3 packet.
+- `cairn explain` shows where each function pays at run time, at its `.cairn` lines: the guards the emitted C++ still checks and the ones the checker discharged, allocations, calls that allocate, spawn, join, lock or do I/O, waits, and clang's verdict on every loop. An agent can ask for it after an edit.
+- Signature help in the language server offers the form of a call that leaves its extents out.
+- Device code runs only under `make gpu`, in one process, behind a machine-wide lock (`tools/support.py`). The everyday suite never touches the GPU: on the reference machine every run of the device tests reset the display GPU, and repeated resets crashed the host.
+
+### Verification
+
+- Each fault witness in the ownership regression is one decided search over the machine, and each collector invariant step reads its certified obligation through one tactic.
+- Tests build emitted C++ through one helper (`tests/emitted.py`) and require refusals through another, which removed 320 lines of repeated scaffolding.
+
+### Documentation
+
+- The agent chapter, the README, the roadmap and the verification chapter were rewritten in plain sentences that state each claim once.
+
 ## 1.3.0
 
 ### Language
