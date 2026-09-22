@@ -112,6 +112,44 @@ pub fn int[T:signed](out:rw<Vec[u8]>, value:T)
 pub fn padded[T:unsigned](out:rw<Vec[u8]>, value:T, width:usize, fill:u8)
 ```
 
+# std.fs
+
+Files by path. A path here is its bytes alone, without the NUL a C call needs: each function copies it into NUL-terminated storage of its own, so a path from the command line, from a Vec or from a literal goes straight in. A path of 4096 bytes or more is ENAMETOOLONG (36), and one holding a NUL is EINVAL (22): both are values, never guards. std.io has the calls on an open File. Cost: one system call per step, the whole-file forms loop until done; nothing is buffered.
+
+```cairn
+// effects: ffi:__errno_location, ffi:open, ffi_precondition, io, local_read, local_write, mmio, read:path,
+// stack_storage, trap, zero_init
+pub fn open(n:usize, path:ro<u8>[n]@host, flags:i32) -> std.core.Result[std.io.File, std.io.IoError]
+
+// The whole file, read until the kernel says it ended: a pipe or a /proc file whose size is 0 reads whole.
+// effects: alloc, diverge, ffi:__errno_location, ffi:close, ffi:open, ffi:read, ffi_precondition, free, io, local_read,
+// local_write, mmio, read:path, stack_storage, trap, zero_init
+pub fn read(n:usize, path:ro<u8>[n]@host) -> std.core.Result[std.vec.Vec[u8], std.io.IoError]
+
+// Create the file or cut it to nothing, then write all of `data`.
+// effects: diverge, ffi:__errno_location, ffi:close, ffi:open, ffi:write, ffi_precondition, io, local_read,
+// local_write, mmio, read:data, read:path, stack_storage, trap, zero_init
+pub fn write(n:usize, path:ro<u8>[n]@host, m:usize, data:ro<u8>[m]@host) -> std.core.Result[usize, std.io.IoError]
+
+// Create the file or keep it, and write all of `data` at its end.
+// effects: diverge, ffi:__errno_location, ffi:close, ffi:open, ffi:write, ffi_precondition, io, local_read,
+// local_write, mmio, read:data, read:path, stack_storage, trap, zero_init
+pub fn append(n:usize, path:ro<u8>[n]@host, m:usize, data:ro<u8>[m]@host) -> std.core.Result[usize, std.io.IoError]
+
+// effects: ffi:__errno_location, ffi:unlink, ffi_precondition, io, local_read, local_write, mmio, read:path,
+// stack_storage, trap, zero_init
+pub fn remove(n:usize, path:ro<u8>[n]@host) -> std.core.Result[usize, std.io.IoError]
+
+// One atomic replacement of `to` by `from`.
+// effects: ffi:__errno_location, ffi:rename, ffi_precondition, io, local_read, local_write, mmio, read:from, read:to,
+// stack_storage, trap, zero_init
+pub fn rename(n:usize, from:ro<u8>[n]@host, k:usize, to:ro<u8>[k]@host) -> std.core.Result[usize, std.io.IoError]
+
+// Whether anything is at `path` now; the answer can be stale by the time the next call runs.
+// effects: ffi:access, ffi_precondition, io, local_read, local_write, read:path, stack_storage, trap, zero_init
+pub fn exists(n:usize, path:ro<u8>[n]@host) -> bool
+```
+
 # std.io
 
 Files and standard streams. A File is linear: the type system, not a convention, is what closes a descriptor, and `defer close(f)` is the one idiom that survives an early `try`. Errors are errno in an IoError, because CAIRN cannot express `int*` and the C library keeps its error behind one. Cost: one syscall per call except `write` and `read_full`, which loop until the kernel is done; nothing here buffers, so n bytes written is n bytes of syscall.
@@ -175,6 +213,12 @@ pub fn remove(n:usize, path:ro<u8>[n]@host) -> std.core.Result[usize, std.io.IoE
 // One atomic replacement, which is how a compacted file becomes the live one.
 // effects: ffi:__errno_location, ffi:rename, ffi_precondition, io, mmio, read:from, read:to, trap
 pub fn rename(n:usize, from:ro<u8>[n]@host, m:usize, to:ro<u8>[m]@host) -> std.core.Result[usize, std.io.IoError]
+
+// Everything left to read, however it arrives: a pipe, a socket, /proc, a file whose size lies. Reads in 4096-byte
+// steps into the end of `into`, growing it as it goes; the count is what was added.
+// effects: alloc, diverge, ffi:__errno_location, ffi:read, ffi_precondition, free, io, local_read, local_write, mmio,
+// read:f, read:into, trap, write:into, zero_init
+pub fn read_to_end(f:ro<std.io.File>, into:rw<std.vec.Vec[u8]>) -> std.core.Result[usize, std.io.IoError]
 
 // The whole file, sized once and read in one pass; the Vec is exactly as large as the file.
 // effects: alloc, diverge, ffi:__errno_location, ffi:close, ffi:lseek, ffi:open, ffi:read, ffi_precondition, free, io,
@@ -356,6 +400,9 @@ pub extern fn unlink(path:ro<u8>[1]@host) -> i32 effects(io)
 
 // effects: ffi:rename, ffi_precondition, io, read:from, read:to, trap
 pub extern fn rename(from:ro<u8>[1]@host, to:ro<u8>[1]@host) -> i32 effects(io)
+
+// effects: ffi:access, ffi_precondition, io, read:path, trap
+pub extern fn access(path:ro<u8>[1]@host, mode:i32) -> i32 effects(io)
 
 // struct timespec is two 64-bit words on every supported target.
 // effects: ffi:clock_gettime, ffi_precondition, io, trap, write:ts

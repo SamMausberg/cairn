@@ -117,6 +117,20 @@ pub fn rename(n:usize, from:ro<u8>[n], m:usize, to:ro<u8>[m]) -> Result[usize, I
   }
 }
 
+// Everything left to read, however it arrives: a pipe, a socket, /proc, a file whose size lies. Reads in
+// 4096-byte steps into the end of `into`, growing it as it goes; the count is what was added.
+pub fn read_to_end(f:ro<File>, into:rw<Vec[u8]>) -> Result[usize, IoError] {
+  let start = into.len;
+  while true {
+    vec.reserve(into, into.len + 4096);
+    let lo = into.len;
+    let got = try read(f, into.data[lo..lo + 4096]);
+    if got == 0 { return Result.Ok(into.len - start); }
+    into.len = lo + got;
+  }
+  return Result.Ok(into.len - start);
+}
+
 // The whole file, sized once and read in one pass; the Vec is exactly as large as the file.
 pub fn read_file(n:usize, path:ro<u8>[n]) -> Result[Vec[u8], IoError] {
   let f = try open(path, READ);

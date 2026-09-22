@@ -1,6 +1,6 @@
 # The standard library
 
-Thirteen modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
+Fourteen modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
 
 [std_api.md](std_api.md) holds every signature and every effect row, generated from these sources by `cairn doc --std`. This file is the working guide: what each module is for, a program that uses it, and where it bites.
 
@@ -11,7 +11,8 @@ Three habits explain the API shape. A lookup answers with an index, never a borr
 | `std.core` | `Option`, `Result`, the `Ord`/`Eq`/`Hash` traits | no |
 | `std.vec` | the growable owner `Vec[T]` | yes |
 | `std.text` | integers to and from bytes, comparison, search, hashing | only `push_u64`, `push_i64` |
-| `std.io` | files, standard streams, a monotonic clock | only `read_file` |
+| `std.io` | files, standard streams, a monotonic clock | only `read_file`, `read_to_end` |
+| `std.fs` | files by path, without a NUL to write | only `read` |
 | `std.fmt` | integers, hex, padding and exact fixed-point floats into a `Vec[u8]` | yes |
 | `std.map` | open-addressed `Map[K, V]` | yes |
 | `std.derived` | `derive eq`, `derive ord`, `derive hash` | no |
@@ -175,7 +176,7 @@ fn main() -> i32 {
 
 `defer io.close(f)` is the idiom: `try` refuses to leave a function while a linear value is unconsumed, so a File that is not deferred cannot be used with `try` at all (`E-LINEAR-LEAK`, "f is linear: consume it, or defer its consumer, on every path"). `close` reports nothing, because consuming a linear value requires a function that never reaches a `return`, and `return` demands that every linear value already be consumed. Report through a borrow if you need the status.
 
-Open flags are `READ`, `WRITE`, `APPEND` and `TRUNCATE`; `seek` takes `SET`, `CUR` or `END`; `sync` and `truncate` answer `Ok(0)`. A path ends in a NUL byte, since C reads a pointer and not a length. `read` is one syscall and answers 0 at end of file; `read_full` and `write` loop, and a short write is an error here even though it is not one to the kernel. Nothing buffers: n bytes written is n bytes of syscall. `print`, `println`, `eprintln`, `newline`, `print_u64` and `print_i64` are best effort and return nothing. `read_stdin` is one read from standard input, answering 0 at end of input. `monotonic_ns` reads CLOCK_MONOTONIC.
+Open flags are `READ`, `WRITE`, `APPEND` and `TRUNCATE`; `seek` takes `SET`, `CUR` or `END`; `sync` and `truncate` answer `Ok(0)`. A path ends in a NUL byte, since C reads a pointer and not a length. `read` is one syscall and answers 0 at end of file; `read_full` and `write` loop, and a short write is an error here even though it is not one to the kernel. Nothing buffers: n bytes written is n bytes of syscall. `print`, `println`, `eprintln`, `newline`, `print_u64` and `print_i64` are best effort and return nothing. `read_stdin` is one read from standard input, answering 0 at end of input. `read_to_end(f, into)` appends everything left to read in 4096-byte steps, for a pipe, a socket or a `/proc` file whose size says 0. `monotonic_ns` reads CLOCK_MONOTONIC.
 
 ## std.fmt
 
@@ -201,6 +202,35 @@ fn main() -> i32 {
 ```
 
 The row of every call carries `alloc` and `free`, because appending may grow the `Vec`. `fixed` works in 720 bytes of its own stack and needs no allocation beyond the digits it appends.
+
+## std.fs
+
+The same files by path, where a path is its bytes alone. Each call copies the path into NUL-terminated storage of its own, so a path from the command line, from a `Vec` or from a literal goes straight in. A path of 4096 bytes or more is the error 36 (`ENAMETOOLONG`), and a NUL inside one is 22 (`EINVAL`): both are values, never guards.
+
+```cairn
+import std.core (Result);
+import std.fs;
+import std.io (IoError);
+
+fn log_twice(n:usize, path:ro<u8>[n]) -> Result[usize, IoError] {
+  let first = try fs.write(path, "started\n");    // create or cut to nothing
+  let then = try fs.append(path, "done\n");
+  let back = try fs.read(path);                   // reads until the kernel says the file ended
+  let gone = try fs.remove(path);
+  if fs.exists(path) { return Ok(0); }
+  return Ok(back.len);
+}
+
+fn main() -> i32 {
+  match log_twice("/tmp/cairn-fs-example.log") {
+    Ok(n) => { if n != 13 { return 1; } }
+    Err(e) => { return 2; }
+  }
+  return 0;
+}
+```
+
+`open` hands back the `std.io` `File`, and `read`, `write`, `append`, `remove`, `rename` and `exists` do one job each. `exists` answers for this instant; the next call may find something else.
 
 ## std.map
 

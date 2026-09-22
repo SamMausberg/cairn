@@ -1,0 +1,78 @@
+// Files by path. A path here is its bytes alone, without the NUL a C call needs: each function copies
+// it into NUL-terminated storage of its own, so a path from the command line, from a Vec or from a
+// literal goes straight in. A path of 4096 bytes or more is ENAMETOOLONG (36), and one holding a
+// NUL is EINVAL (22): both are values, never guards. std.io has the calls on an open File.
+// Cost: one system call per step, the whole-file forms loop until done; nothing is buffered.
+module std.fs;
+import std.core (Result);
+import std.io (IoError, File);
+import std.sys;
+import std.vec (Vec);
+
+const LONGEST:usize = 4096; // PATH_MAX, the NUL included
+
+// `path` and its NUL in `c`, or the error a C call would have given for it.
+fn terminated(n:usize, path:ro<u8>[n], c:rw<u8>[LONGEST]) -> Result[usize, IoError] {
+  if n >= LONGEST { return Result.Err(IoError(36)); }
+  for i in 0..n {
+    if path[i] == 0 { return Result.Err(IoError(22)); }
+    c[i] = path[i];
+  }
+  c[n] = 0;
+  return Result.Ok(n + 1);
+}
+
+pub fn open(n:usize, path:ro<u8>[n], flags:i32) -> Result[File, IoError] {
+  stack c:u8[LONGEST] = zeroed;
+  let m = try terminated(path, c);
+  return io.open(c[0..m], flags);
+}
+
+// The whole file, read until the kernel says it ended: a pipe or a /proc file whose size is 0 reads whole.
+pub fn read(n:usize, path:ro<u8>[n]) -> Result[Vec[u8], IoError] {
+  let f = try open(path, io.READ);
+  defer io.close(f);
+  let mut out = vec.new[u8]();
+  let got = try io.read_to_end(f, out);
+  return Result.Ok(out);
+}
+
+fn put(n:usize, path:ro<u8>[n], m:usize, data:ro<u8>[m], flags:i32) -> Result[usize, IoError] {
+  let f = try open(path, flags);
+  defer io.close(f);
+  return io.write(f, data);
+}
+
+// Create the file or cut it to nothing, then write all of `data`.
+pub fn write(
+  n:usize, path:ro<u8>[n], m:usize, data:ro<u8>[m]
+) -> Result[usize, IoError] = put(path, data, io.TRUNCATE);
+
+// Create the file or keep it, and write all of `data` at its end.
+pub fn append(
+  n:usize, path:ro<u8>[n], m:usize, data:ro<u8>[m]
+) -> Result[usize, IoError] = put(path, data, io.APPEND);
+
+pub fn remove(n:usize, path:ro<u8>[n]) -> Result[usize, IoError] {
+  stack c:u8[LONGEST] = zeroed;
+  let m = try terminated(path, c);
+  return io.remove(c[0..m]);
+}
+
+// One atomic replacement of `to` by `from`.
+pub fn rename(n:usize, from:ro<u8>[n], k:usize, to:ro<u8>[k]) -> Result[usize, IoError] {
+  stack a:u8[LONGEST] = zeroed;
+  stack b:u8[LONGEST] = zeroed;
+  let m = try terminated(from, a);
+  let l = try terminated(to, b);
+  return io.rename(a[0..m], b[0..l]);
+}
+
+// Whether anything is at `path` now; the answer can be stale by the time the next call runs.
+pub fn exists(n:usize, path:ro<u8>[n]) -> bool {
+  stack c:u8[LONGEST] = zeroed;
+  match terminated(path, c) {
+    Result.Ok(m) => { unsafe { return sys.access(c[0..1], 0) == 0; } }
+    Result.Err(e) => { return false; }
+  }
+}

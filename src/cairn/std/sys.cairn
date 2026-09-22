@@ -15,6 +15,7 @@ pub extern fn fsync(fd:i32) -> i32 effects(io);
 pub extern fn ftruncate(fd:i32, length:i64) -> i32 effects(io);
 pub extern fn unlink(path:ro<u8>[1]) -> i32 effects(io);
 pub extern fn rename(from:ro<u8>[1], to:ro<u8>[1]) -> i32 effects(io);
+pub extern fn access(path:ro<u8>[1], mode:i32) -> i32 effects(io);
 // struct timespec is two 64-bit words on every supported target.
 pub extern fn clock_gettime(clock:i32, ts:rw<i64>[2]) -> i32 effects(io);
 // errno is a macro over a thread-local int*, so its address arrives as an integer.
