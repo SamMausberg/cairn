@@ -59,13 +59,15 @@ Whatever a lane writes, it may touch only at element `[i]` or inside its own blo
 ## What the language has
 
 - Checked integer arithmetic, explicit conversions, wrapping forms that say so by name.
-- Records, sums with exhaustive `match`, `try` for error propagation.
+- Records, sums with exhaustive `match` whose variants go bare where the context names the sum, `try` for error propagation, compound assignment, call statements that may not drop an outcome unread.
 - Owners that move and are released at scope exit, `linear` values that must be consumed exactly once, `take`, `swap`, `defer`.
 - Generic types and functions with bounds on traits, kinds (`copy`, `affine`) and scalar classes; traits with static dispatch and explicit `dyn`.
 - Closures that borrow what they capture and never escape.
 - Tasks with leases, down to one field of a record; task groups collected in completion order; I/O rings that keep kernel operations in flight without a thread each; atomics; mutexes entered through a closure.
 - `parallel`, `reduce`, `compact`, placement types (`@host @pinned @unified @device`), kernels, transfers, queued device work.
-- Modules, a standard library written in CAIRN, projects with vendored dependencies.
+- Storage floats (`f16`, `bf16`, `f8e4m3`, `f8e5m2`) that convert by one stated rounding, `quantize` with saturation, and `derive grad`, which writes a reverse-mode derivative as ordinary checked code.
+- Test blocks and `assert` in the language, each test run in a process of its own.
+- Modules, a standard library written in CAIRN (collections, text, `fmt`, `fs`, `env`, `time`, `math`, sockets, `zlib`, images and 2D drawing), projects with vendored dependencies.
 - Recipes: generators written as library code and applied with `derive`.
 - `extern` with mandatory effects and an `unsafe` gate, MMIO, inline assembly, a freestanding target.
 
@@ -103,6 +105,9 @@ cairn run examples/embedded                # bare-metal AArch64 under QEMU
 | `check --generics` | Every generic function needs only what its bounds promise. |
 | `inspect --symbol f` | The packet an AI agent gets for an edit: its source, the interfaces around it, effects, rule cards; `--expand g` adds a body. |
 | `explain`, `explain --symbol f` | Where each function pays at run time, read from the emitted C++ and clang's optimization record: guards per line, allocations, waits, loop vectorization. Nothing runs. |
+| `predict`, `tune --symbol f` | What each function should cost on this machine, priced from its checked work and a calibrated profile, with what bounds it and how sure the model is; nothing is built. `tune` ranks every legal plan by prediction and times only the best few on the host. |
+| `shot` | Runs a program headless and returns each frame `std.draw` captured as a PNG, its layout record and its time, beside the effect rows an edit changed. |
+| `state`, `migrate` | The program as it stands under one digest, for an agent to resume from; one authorized signature change carried through every caller, every file or none. |
 | `fmt`, `doc`, `lsp` | A comment-preserving formatter, an API reference generated from the checked program, a language server. |
 
 `make lint test proof` are the everyday gates. `make gpu embedded` need the hardware and the emulator, and `make docs` regenerates [docs/std_api.md](docs/std_api.md).
