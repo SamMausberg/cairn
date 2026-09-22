@@ -4,7 +4,7 @@ enum Reading { Value(u64); Invalid(usize); Overflow(usize); Empty; }
 
 fn decimal(n:usize, input:ro<u8>[n]) -> Reading {
   if n == 0 { return Reading.Empty; }
-  let mut value:u64 = 0;
+  let mut value = 0;
   for i in 0..n {
     let byte = input[i];
     if byte < 48 || byte > 57 { return Reading.Invalid(i); }

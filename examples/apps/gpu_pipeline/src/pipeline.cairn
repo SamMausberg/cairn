@@ -38,8 +38,7 @@ fn sum_device(m:usize, src:ro<u64>[m]@device) -> u64 {
 }
 
 fn report(n:usize, label:ro<u8>[n], nanoseconds:u64) {
-  io.print(n, label);
+  io.print(label);
   io.print_u64(nanoseconds / 1000);
-  let unit = " us";
-  io.println(unit);
+  io.println(" us");
 }

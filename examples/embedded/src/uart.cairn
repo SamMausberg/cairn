@@ -20,7 +20,7 @@ fn putu(value:u64) {
   let mut rest = value;
   let mut used:usize = 0;
   while rest != 0 {
-    digits[used] = u8(48 + (rest % 10));
+    digits[used] = u8(48 + rest % 10);
     rest = rest / 10;
     used = used + 1;
   }

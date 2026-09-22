@@ -17,7 +17,7 @@ fn sort_bytes(n:usize, out:rw<u8>[n], input:ro<u8>[n]) {
 // One explicit temporary, no returned borrow, no implicit growth or parallelism.
 fn sorted_even(n:usize, out:rw<u8>[n], input:ro<u8>[n]) -> usize {
   buffer scratch:u8[n] = zeroed;
-  sort_bytes(n, scratch, input);
+  sort_bytes(scratch, input);
   let used = compact out for i in len(scratch) where (scratch[i] & 1) == 0 yield scratch[i];
   return used;
 }

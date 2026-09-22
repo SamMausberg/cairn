@@ -11,7 +11,7 @@ pub enum ParseError { Empty; Invalid(usize); Overflow(usize); }
 
 pub fn parse_u64(n:usize, s:ro<u8>[n]) -> Result[u64, ParseError] {
   if n == 0 { return Result.Err(ParseError.Empty); }
-  let mut value:u64 = 0;
+  let mut value = 0;
   for i in 0..n {
     let byte = s[i];
     if byte < 48 || byte > 57 { return Result.Err(ParseError.Invalid(i)); }
@@ -32,7 +32,7 @@ pub fn parse_i64(n:usize, s:ro<u8>[n]) -> Result[i64, ParseError] {
   if start == n { return Result.Err(ParseError.Invalid(start)); }
   let mut limit:u64 = 9223372036854775807;
   if negative { limit = 9223372036854775808; }
-  let mut value:u64 = 0;
+  let mut value = 0;
   for i in start..n {
     let byte = s[i];
     if byte < 48 || byte > 57 { return Result.Err(ParseError.Invalid(i)); }
@@ -64,7 +64,7 @@ pub fn write_u64(n:usize, out:rw<u8>[n], value:u64) -> usize {
 
 // A leading '-' and the magnitude, which is representable for every value, the minimum included.
 pub fn write_i64(n:usize, out:rw<u8>[n], value:i64) -> usize {
-  if value >= 0 { return write_u64(n, out, u64(value)); }
+  if value >= 0 { return write_u64(out, u64(value)); }
   let magnitude = u64(-(value + 1)) + 1;
   stack digits:u8[20] = zeroed;
   let used = write_u64(digits, magnitude);
@@ -108,11 +108,11 @@ pub fn compare(n:usize, a:ro<u8>[n], m:usize, b:ro<u8>[m]) -> i32 {
   return 0;
 }
 
-pub fn equal(n:usize, a:ro<u8>[n], m:usize, b:ro<u8>[m]) -> bool = compare(n, a, m, b) == 0;
+pub fn equal(n:usize, a:ro<u8>[n], m:usize, b:ro<u8>[m]) -> bool = compare(a, b) == 0;
 
 pub fn starts_with(n:usize, s:ro<u8>[n], m:usize, prefix:ro<u8>[m]) -> bool {
   if m > n { return false; }
-  return equal(m, s[0..m], m, prefix);
+  return equal(s[0..m], prefix);
 }
 
 pub fn ends_with(n:usize, s:ro<u8>[n], m:usize, suffix:ro<u8>[m]) -> bool {
@@ -138,7 +138,7 @@ pub fn find_last_byte(n:usize, s:ro<u8>[n], byte:u8) -> Option[usize] {
 // The first index where `needle` starts. Naive, because a line protocol's needles are short.
 pub fn find(n:usize, s:ro<u8>[n], m:usize, needle:ro<u8>[m]) -> Option[usize] {
   if m == 0 || m > n { return Option.None; }
-  for start in 0..(n - m + 1) {
+  for start in 0..n - m + 1 {
     let mut matched:usize = 0;
     while matched < m && s[start + matched] == needle[matched] { matched = matched + 1; }
     if matched == m { return Option.Some(start); }
@@ -148,7 +148,7 @@ pub fn find(n:usize, s:ro<u8>[n], m:usize, needle:ro<u8>[m]) -> Option[usize] {
 
 // FNV-1a: no table, no allocation, good enough to key a map or checksum a record.
 pub fn hash_bytes(n:usize, s:ro<u8>[n]) -> u64 {
-  let mut h:u64 = 14695981039346656037;
+  let mut h = 14695981039346656037;
   for i in 0..n { h = mul_wrap(h ^ u64(s[i]), 1099511628211); }
   return h;
 }

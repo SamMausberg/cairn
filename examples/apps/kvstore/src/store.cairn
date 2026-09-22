@@ -33,8 +33,8 @@ fn digest(seed:u64, n:usize, data:ro<u8>[n]) -> u64 {
 
 fn checksum(kind:u32, k:usize, key:ro<u8>[k], v:usize, value:ro<u8>[v]) -> u32 {
   let start = mul_wrap(14695981039346656037 ^ u64(kind), 1099511628211);
-  let after_key = digest(start, k, key);
-  return u32(digest(after_key, v, value) & 4294967295);
+  let after_key = digest(start, key);
+  return u32(digest(after_key, value) & 4294967295);
 }
 
 // One record: header, key, value. The caller decides when to sync.
@@ -42,18 +42,18 @@ fn append(
   f:ro<File>, kind:u32, k:usize, key:ro<u8>[k], v:usize, value:ro<u8>[v]
 ) -> Result[u64, IoError] {
   stack head:u8[16] = zeroed;
-  let sum = checksum(kind, k, key, v, value);
+  let sum = checksum(kind, key, value);
   encode_Header(head, Header(sum, kind, u32(k), u32(v)));
-  let a = try io.write(f, len(head), head);
-  let b = try io.write(f, k, key);
-  let c = try io.write(f, v, value);
+  let a = try io.write(f, head);
+  let b = try io.write(f, key);
+  let c = try io.write(f, value);
   return Result.Ok(u64(a + b + c));
 }
 
 // Apply a decoded record to the index; both owners move in, and a tombstone drops them.
 fn apply(s:rw<Store>, kind:u32, key:Vec[u8], value:Vec[u8]) {
   let k = key.len;
-  let id = text.hash_bytes(k, key.data[0..k]);
+  let id = text.hash_bytes(key.data[0..k]);
   if kind == ERASE {
     let gone = s.index.remove(id);
   } else {
@@ -70,19 +70,19 @@ fn owned(n:usize, data:ro<u8>[n]) -> Vec[u8] {
 pub fn put(
   s:rw<Store>, f:ro<File>, k:usize, key:ro<u8>[k], v:usize, value:ro<u8>[v]
 ) -> Result[u64, IoError] {
-  let bytes = try append(f, PUT, k, key, v, value);
+  let bytes = try append(f, PUT, key, value);
   let flushed = try io.sync(f);
-  let stored_key = owned(k, key);
-  let stored_value = owned(v, value);
+  let stored_key = owned(key);
+  let stored_value = owned(value);
   apply(s, PUT, stored_key, stored_value);
   s.end = s.end + bytes;
   return Result.Ok(bytes);
 }
 
 pub fn erase(s:rw<Store>, f:ro<File>, k:usize, key:ro<u8>[k]) -> Result[u64, IoError] {
-  let bytes = try append(f, ERASE, k, key, 0, "");
+  let bytes = try append(f, ERASE, key, "");
   let flushed = try io.sync(f);
-  let id = text.hash_bytes(k, key);
+  let id = text.hash_bytes(key);
   let gone = s.index.remove(id);
   s.end = s.end + bytes;
   return Result.Ok(bytes);
@@ -90,11 +90,11 @@ pub fn erase(s:rw<Store>, f:ro<File>, k:usize, key:ro<u8>[k]) -> Result[u64, IoE
 
 // The slot holding `key`, verified byte for byte because the index is keyed by a hash.
 pub fn get(s:ro<Store>, k:usize, key:ro<u8>[k]) -> Option[usize] {
-  let id = text.hash_bytes(k, key);
+  let id = text.hash_bytes(key);
   match s.index.find(id) {
     Option.Some(slot) => {
       let stored = s.index.vals[slot].key.len;
-      if text.equal(stored, s.index.vals[slot].key.data[0..stored], k, key) {
+      if text.equal(s.index.vals[slot].key.data[0..stored], key) {
         return Option.Some(slot);
       }
       return Option.None;
@@ -108,10 +108,10 @@ pub fn get(s:ro<Store>, k:usize, key:ro<u8>[k]) -> Option[usize] {
 // what a crash between two writes leaves behind.
 pub fn replay(s:rw<Store>, f:ro<File>) -> Result[u64, IoError] {
   let total = try io.size(f);
-  let mut offset:u64 = 0;
+  let mut offset = 0;
   stack head:u8[16] = zeroed;
   while offset < total {
-    let got = try io.read_full(f, len(head), head);
+    let got = try io.read_full(f, head);
     if got < HEAD { break; }
     let h = decode_Header(head);
     let k = usize(h.key_len);
@@ -119,8 +119,8 @@ pub fn replay(s:rw<Store>, f:ro<File>) -> Result[u64, IoError] {
     if u64(k) + u64(v) + u64(HEAD) > total - offset { break; }
     let mut key = vec.with_capacity[u8](k);
     let mut value = vec.with_capacity[u8](v);
-    let read_key = try io.read_full(f, k, key.data[0..k]);
-    let read_value = try io.read_full(f, v, value.data[0..v]);
+    let read_key = try io.read_full(f, key.data[0..k]);
+    let read_value = try io.read_full(f, value.data[0..v]);
     if read_key < k || read_value < v { break; }
     key.len = k;
     value.len = v;
@@ -139,22 +139,22 @@ pub fn replay(s:rw<Store>, f:ro<File>) -> Result[u64, IoError] {
 pub fn compact_log(
   s:ro<Store>, n:usize, path:ro<u8>[n], m:usize, temp:ro<u8>[m]
 ) -> Result[u64, IoError] {
-  let mut written:u64 = 0;
+  let mut written = 0;
   {
-    let f = try io.open(m, temp, io.TRUNCATE);
+    let f = try io.open(temp, io.TRUNCATE);
     defer io.close(f);
     for slot in 0..s.index.slots() {
       if s.index.live(slot) {
         let k = s.index.vals[slot].key.len;
         let v = s.index.vals[slot].value.len;
         let bytes = try append(
-          f, PUT, k, s.index.vals[slot].key.data[0..k], v, s.index.vals[slot].value.data[0..v]
+          f, PUT, s.index.vals[slot].key.data[0..k], s.index.vals[slot].value.data[0..v]
         );
         written = written + bytes;
       }
     }
     let flushed = try io.sync(f);
   }
-  let moved = try io.rename(m, temp, n, path);
+  let moved = try io.rename(temp, path);
   return Result.Ok(written);
 }

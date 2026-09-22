@@ -47,7 +47,7 @@ pub fn insert[T:affine](v:rw<Vec[T]>, i:usize, item:T) {
 pub fn remove[T:affine](v:rw<Vec[T]>, i:usize) -> Option[T] {
   if i >= v.len { return Option.None(); }
   let item = take(v.data[i]);
-  for k in i..(v.len - 1) { swap(v.data[k], v.data[k + 1]); }
+  for k in i..v.len - 1 { swap(v.data[k], v.data[k + 1]); }
   v.len = v.len - 1;
   return Option.Some(item);
 }

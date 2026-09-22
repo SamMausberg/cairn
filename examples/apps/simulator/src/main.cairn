@@ -10,33 +10,33 @@ fn main() -> i32 {
 
   buffer loop_a:f64[m] = zeroed;
   buffer loop_b:f64[m] = zeroed;
-  seed(m, loop_a, n);
+  seed(loop_a, n);
   let t0 = io.monotonic_ns();
   for r in 0..rounds {
-    step_loop(m, loop_b, loop_a, n);
-    step_loop(m, loop_a, loop_b, n);
+    step_loop(loop_b, loop_a, n);
+    step_loop(loop_a, loop_b, n);
   }
   let t1 = io.monotonic_ns();
 
   buffer par_a:f64[m] = zeroed;
   buffer par_b:f64[m] = zeroed;
-  seed(m, par_a, n);
+  seed(par_a, n);
   for r in 0..rounds {
-    step_threads(m, par_b, par_a, n);
-    step_threads(m, par_a, par_b, n);
+    step_threads(par_b, par_a, n);
+    step_threads(par_a, par_b, n);
   }
   let t2 = io.monotonic_ns();
 
   buffer gpu_a:f64[m] = zeroed;
-  seed(m, gpu_a, n);
+  seed(gpu_a, n);
   buffer dev_a:f64[m]@device = zeroed;
   buffer dev_b:f64[m]@device = zeroed;
   transfer(dev_a, gpu_a);
   // The first device allocation also creates the CUDA context, so setup is reported apart.
   let t3 = io.monotonic_ns();
   for r in 0..rounds {
-    step_device(m, dev_b, dev_a, n);
-    step_device(m, dev_a, dev_b, n);
+    step_device(dev_b, dev_a, n);
+    step_device(dev_a, dev_b, n);
   }
   transfer(gpu_a, dev_a);
   let t4 = io.monotonic_ns();
@@ -48,13 +48,11 @@ fn main() -> i32 {
   let heat = reduce + for i in m yield loop_a[i];
   if !(heat > 0.0) { return 3; }
 
-  let title = "simulator: 1024x1024 grid, 16 Jacobi sweeps";
-  io.println(title);
-  report(22, "simulator: sequential ", t1 - t0);
-  report(22, "simulator: threads    ", t2 - t1);
-  report(22, "simulator: device up  ", t3 - t2);
-  report(22, "simulator: device     ", t4 - t3);
-  let agree = "simulator: all three back ends agree bit for bit";
-  io.println(agree);
+  io.println("simulator: 1024x1024 grid, 16 Jacobi sweeps");
+  report("simulator: sequential ", t1 - t0);
+  report("simulator: threads    ", t2 - t1);
+  report("simulator: device up  ", t3 - t2);
+  report("simulator: device     ", t4 - t3);
+  io.println("simulator: all three back ends agree bit for bit");
   return 0;
 }

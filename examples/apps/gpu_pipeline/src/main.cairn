@@ -10,9 +10,9 @@ fn main() -> i32 {
   buffer host_mapped:u64[n] = zeroed;
   buffer host_kept:u64[n] = zeroed;
   let h0 = io.monotonic_ns();
-  map_host(n, host_mapped, input);
-  let host_used = keep_host(n, host_kept, host_mapped);
-  let host_total = sum_host(host_used, host_kept[0..host_used]);
+  map_host(host_mapped, input);
+  let host_used = keep_host(host_kept, host_mapped);
+  let host_total = sum_host(host_kept[0..host_used]);
   let h1 = io.monotonic_ns();
 
   buffer dev_in:u64[n]@device = zeroed;
@@ -21,11 +21,11 @@ fn main() -> i32 {
   let d0 = io.monotonic_ns(); // the first device allocation creates the CUDA context
   transfer(dev_in, input);
   let d1 = io.monotonic_ns();
-  map_device(n, dev_mapped, dev_in);
+  map_device(dev_mapped, dev_in);
   let d2 = io.monotonic_ns();
-  let dev_used = keep_device(n, dev_kept, dev_mapped);
+  let dev_used = keep_device(dev_kept, dev_mapped);
   let d3 = io.monotonic_ns();
-  let dev_total = sum_device(dev_used, dev_kept[0..dev_used]);
+  let dev_total = sum_device(dev_kept[0..dev_used]);
   let d4 = io.monotonic_ns();
   buffer back:u64[n] = zeroed;
   transfer(back, dev_kept);
@@ -36,17 +36,15 @@ fn main() -> i32 {
   for i in 0..host_used { if back[i] != host_kept[i] { return 3; } }
   if host_used == 0 || host_used >= n { return 4; }
 
-  let title = "gpu_pipeline: 4194304 values, kept ";
-  io.print(title);
+  io.print("gpu_pipeline: 4194304 values, kept ");
   io.print_u64(u64(dev_used));
   io.newline();
-  report(30, "gpu_pipeline: host pipeline   ", h1 - h0);
-  report(30, "gpu_pipeline: upload          ", d1 - d0);
-  report(30, "gpu_pipeline: device map      ", d2 - d1);
-  report(30, "gpu_pipeline: device compact  ", d3 - d2);
-  report(30, "gpu_pipeline: device reduce   ", d4 - d3);
-  report(30, "gpu_pipeline: download        ", d5 - d4);
-  let agree = "gpu_pipeline: device result matches the host";
-  io.println(agree);
+  report("gpu_pipeline: host pipeline   ", h1 - h0);
+  report("gpu_pipeline: upload          ", d1 - d0);
+  report("gpu_pipeline: device map      ", d2 - d1);
+  report("gpu_pipeline: device compact  ", d3 - d2);
+  report("gpu_pipeline: device reduce   ", d4 - d3);
+  report("gpu_pipeline: download        ", d5 - d4);
+  io.println("gpu_pipeline: device result matches the host");
   return 0;
 }

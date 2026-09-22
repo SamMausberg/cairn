@@ -7,16 +7,15 @@ import std.io;
 pub const LABEL:usize = 29;
 
 pub fn line(label:ro<u8>[LABEL], value:u64) {
-  io.print(LABEL, label);
+  io.print(label);
   io.print_u64(value);
   io.newline();
 }
 
 pub fn micros(label:ro<u8>[LABEL], nanoseconds:u64) {
-  io.print(LABEL, label);
+  io.print(label);
   io.print_u64(nanoseconds / 1000);
-  let unit = " us";
-  io.println(unit);
+  io.println(" us");
 }
 
-pub fn say(n:usize, text:ro<u8>[n]) { io.println(n, text); }
+pub fn say(n:usize, text:ro<u8>[n]) { io.println(text); }

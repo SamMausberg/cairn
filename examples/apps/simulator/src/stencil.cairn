@@ -53,8 +53,7 @@ fn seed(m:usize, grid:rw<f64>[m], n:usize) {
 }
 
 fn report(n:usize, label:ro<u8>[n], nanoseconds:u64) {
-  io.print(n, label);
+  io.print(label);
   io.print_u64(nanoseconds / 1000);
-  let unit = " us";
-  io.println(unit);
+  io.println(" us");
 }

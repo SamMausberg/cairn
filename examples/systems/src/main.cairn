@@ -14,7 +14,7 @@ fn main() -> i32 {
   data[2] = 8;
   data[3] = 1;
   buffer output:u8[4] = zeroed;
-  let used = sorted_even(len(data), output, data);
+  let used = sorted_even(output, data);
   if used == 2 && output[0] == 2 && output[1] == 8 { return 0; }
   return 5;
 }

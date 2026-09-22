@@ -48,13 +48,13 @@ pub recipe stats for R {
   each f in R where t = typeof(f) {
     pub fn $R_min_$f(n:usize, c:ro<$R_table>) -> $t {
       if n == 0 { return $t(0); }
-      let mut best:$t = c.$f[0];
+      let mut best = c.$f[0];
       for i in 1..n { best = min(best, c.$f[i]); }
       return best;
     }
     pub fn $R_max_$f(n:usize, c:ro<$R_table>) -> $t {
       if n == 0 { return $t(0); }
-      let mut best:$t = c.$f[0];
+      let mut best = c.$f[0];
       for i in 1..n { best = max(best, c.$f[i]); }
       return best;
     }
@@ -102,13 +102,13 @@ pub recipe unrolled[K:nat] for R {
   require K <= 16, "E-DERIVE-DOMAIN: unrolled/1 stops at sixteen accumulators.";
   each f in R {
     pub fn $R_unrolled_$f(n:usize, c:ro<$R_table>) -> u64 {
-      each k in 0..K { let mut acc_$k:u64 = 0; }
+      each k in 0..K { let mut acc_$k = 0; }
       let mut i:usize = 0;
       while i + $K <= n {
         each k in 0..K { acc_$k = add_wrap(acc_$k, u64(c.$f[i + $k])); }
         i = i + $K;
       }
-      let mut total:u64 = fold add_wrap each k in 0..K { acc_$k };
+      let mut total = fold add_wrap each k in 0..K { acc_$k };
       while i < n {
         total = add_wrap(total, u64(c.$f[i]));
         i = i + 1;

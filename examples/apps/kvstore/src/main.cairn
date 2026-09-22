@@ -8,8 +8,7 @@ import std.vec (Vec);
 // A path no other process in this test run shares. There is no argv, so the pid is the handle.
 fn temp_path(n:usize, tail:ro<u8>[n]) -> Vec[u8] {
   let mut p = vec.new[u8]();
-  let prefix = "/tmp/cairn-kvstore-";
-  p.extend_from(prefix);
+  p.extend_from("/tmp/cairn-kvstore-");
   unsafe { text.push_u64(p, u64(sys.getpid())); }
   p.extend_from(n, tail);
   p.push(0); // C reads a pointer, so the terminator lives in the storage
@@ -18,49 +17,49 @@ fn temp_path(n:usize, tail:ro<u8>[n]) -> Vec[u8] {
 
 fn value_is(s:ro<Store>, slot:usize, m:usize, want:ro<u8>[m]) -> bool {
   let have = s.index.vals[slot].value.len;
-  return text.equal(have, s.index.vals[slot].value.data[0..have], m, want);
+  return text.equal(s.index.vals[slot].value.data[0..have], want);
 }
 
 // Ok(0) is success; Ok(k) names the check that failed.
 fn scenario() -> Result[usize, IoError] {
-  let mut log = temp_path(4, ".log");
-  let mut tmp = temp_path(4, ".tmp");
+  let mut log = temp_path(".log");
+  let mut tmp = temp_path(".tmp");
   let n = log.len;
   let m = tmp.len;
-  let cleared = io.remove(n, log.data[0..n]); // it may not exist; that is not an error here
+  let cleared = io.remove(log.data[0..n]); // it may not exist; that is not an error here
 
   { // fill: three puts and one delete, each one record on disk
-    let f = try io.open(n, log.data[0..n], io.APPEND);
+    let f = try io.open(log.data[0..n], io.APPEND);
     defer io.close(f);
     let mut s = new_store();
     let start = try replay(s, f);
     if start != 0 { return Result.Ok(1); }
-    let a = try put(s, f, 5, "alpha", 1, "1");
-    let b = try put(s, f, 4, "beta", 2, "22");
-    let c = try put(s, f, 5, "gamma", 3, "333");
-    let d = try erase(s, f, 4, "beta");
+    let a = try put(s, f, "alpha", "1");
+    let b = try put(s, f, "beta", "22");
+    let c = try put(s, f, "gamma", "333");
+    let d = try erase(s, f, "beta");
     if s.index.count() != 2 { return Result.Ok(2); }
   }
 
   { // reopen: the index comes back from the log, then a crash tears the next record
-    let f = try io.open(n, log.data[0..n], io.APPEND);
+    let f = try io.open(log.data[0..n], io.APPEND);
     defer io.close(f);
     let mut s = new_store();
     let end = try replay(s, f);
     if s.index.count() != 2 { return Result.Ok(3); }
-    match get(s, 5, "gamma") {
-      Option.Some(slot) => { if !value_is(s, slot, 3, "333") { return Result.Ok(4); } }
+    match get(s, "gamma") {
+      Option.Some(slot) => { if !value_is(s, slot, "333") { return Result.Ok(4); } }
       Option.None => { return Result.Ok(5); }
     }
-    match get(s, 4, "beta") {
+    match get(s, "beta") {
       Option.Some(slot) => { return Result.Ok(6); }
       Option.None => {}
     }
-    let torn = try io.write(f, 9, "\x01\x02\x03\x04\x05\x06\x07\x08\x09");
+    let torn = try io.write(f, "\x01\x02\x03\x04\x05\x06\x07\x08\x09");
   }
 
   { // the torn header is ignored and cut away; now a whole record with a wrong checksum
-    let f = try io.open(n, log.data[0..n], io.APPEND);
+    let f = try io.open(log.data[0..n], io.APPEND);
     defer io.close(f);
     let mut s = new_store();
     let end = try replay(s, f);
@@ -69,39 +68,39 @@ fn scenario() -> Result[usize, IoError] {
     if size != end { return Result.Ok(8); }
     stack bad:u8[16] = zeroed;
     encode_Header(bad, Header(12345, 0, 1, 1));
-    let header = try io.write(f, len(bad), bad);
-    let payload = try io.write(f, 2, "xy");
+    let header = try io.write(f, bad);
+    let payload = try io.write(f, "xy");
   }
 
   { // the corrupt record is ignored and cut away, and compaction rewrites the live records
-    let f = try io.open(n, log.data[0..n], io.APPEND);
+    let f = try io.open(log.data[0..n], io.APPEND);
     defer io.close(f);
     let mut s = new_store();
     let end = try replay(s, f);
     if s.index.count() != 2 { return Result.Ok(9); }
-    let written = try compact_log(s, n, log.data[0..n], m, tmp.data[0..m]);
+    let written = try compact_log(s, log.data[0..n], tmp.data[0..m]);
     if written == 0 || written >= end { return Result.Ok(10); }
   }
 
   { // the compacted log holds exactly the live records
-    let f = try io.open(n, log.data[0..n], io.APPEND);
+    let f = try io.open(log.data[0..n], io.APPEND);
     defer io.close(f);
     let mut s = new_store();
     let end = try replay(s, f);
     if s.index.count() != 2 { return Result.Ok(11); }
-    match get(s, 5, "alpha") {
-      Option.Some(slot) => { if !value_is(s, slot, 1, "1") { return Result.Ok(12); } }
+    match get(s, "alpha") {
+      Option.Some(slot) => { if !value_is(s, slot, "1") { return Result.Ok(12); } }
       Option.None => { return Result.Ok(13); }
     }
-    match get(s, 4, "beta") {
+    match get(s, "beta") {
       Option.Some(slot) => { return Result.Ok(14); }
       Option.None => {}
     }
-    let after = try put(s, f, 3, "new", 4, "4444");
+    let after = try put(s, f, "new", "4444");
     if s.index.count() != 3 { return Result.Ok(15); }
   }
 
-  let gone = try io.remove(n, log.data[0..n]);
+  let gone = try io.remove(log.data[0..n]);
   return Result.Ok(0);
 }
 
@@ -109,19 +108,16 @@ fn main() -> i32 {
   match scenario() {
     Result.Ok(step) => {
       if step == 0 {
-        let good = "kvstore: self-check passed";
-        io.println(good);
+        io.println("kvstore: self-check passed");
         return 0;
       }
-      let bad = "kvstore: failed check ";
-      io.print(bad);
+      io.print("kvstore: failed check ");
       io.print_u64(u64(step));
       io.newline();
       return i32(step);
     }
     Result.Err(e) => {
-      let failed = "kvstore: io error ";
-      io.print(failed);
+      io.print("kvstore: io error ");
       io.print_u64(u64(e.code));
       io.newline();
       return 100;

@@ -20,7 +20,7 @@ struct Client { live:bool; fd:i32; have:usize; line:Buf[u8]; }
 
 // The end of the word starting at `from`: the next space, or the end of the line.
 fn word_end(n:usize, line:ro<u8>[n], from:usize) -> usize {
-  match text.find_byte(n, line, ' ', from) {
+  match text.find_byte(line, ' ', from) {
     Option.Some(at) => { return at; }
     Option.None => { return n; }
   }
@@ -34,30 +34,30 @@ fn say(fd:i32, n:usize, message:ro<u8>[n]) -> Result[usize, IoError] {
 
 // One request. The answer goes back on `fd`; `true` means the client asked the service to stop.
 fn respond(fd:i32, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, IoError] {
-  let verb = word_end(n, line, 0);
-  if text.equal(verb, line[0..verb], 4, "quit") {
-    let bye = try say(fd, 4, "+bye");
+  let verb = word_end(line, 0);
+  if text.equal(line[0..verb], "quit") {
+    let bye = try say(fd, "+bye");
     return Result.Ok(true);
   }
   if verb >= n {
-    let bad = try say(fd, 6, "-error");
+    let bad = try say(fd, "-error");
     return Result.Ok(false);
   }
   let key_lo = verb + 1;
-  let key_hi = word_end(n, line, key_lo);
+  let key_hi = word_end(line, key_lo);
   let k = key_hi - key_lo;
   if k == 0 {
-    let bad = try say(fd, 6, "-error");
+    let bad = try say(fd, "-error");
     return Result.Ok(false);
   }
-  if text.equal(verb, line[0..verb], 3, "put") && key_hi < n {
+  if text.equal(line[0..verb], "put") && key_hi < n {
     let value_lo = key_hi + 1;
     let v = n - value_lo;
     put(t, k, line[key_lo..key_hi], v, line[value_lo..n]);
-    let ok = try say(fd, 3, "+ok");
+    let ok = try say(fd, "+ok");
     return Result.Ok(false);
   }
-  if text.equal(verb, line[0..verb], 3, "get") {
+  if text.equal(line[0..verb], "get") {
     match find(t, k, line[key_lo..key_hi]) {
       Option.Some(slot) => {
         let mut out = vec.new[u8]();
@@ -66,21 +66,21 @@ fn respond(fd:i32, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, IoError
         let v = t.index.vals[slot].value.len;
         out.extend_from(v, t.index.vals[slot].value.data[0..v]);
         let m = out.len;
-        let sent = try say(fd, m, out.data[0..m]);
+        let sent = try say(fd, out.data[0..m]);
       }
-      Option.None => { let missing = try say(fd, 8, "-missing"); }
+      Option.None => { let missing = try say(fd, "-missing"); }
     }
     return Result.Ok(false);
   }
-  if text.equal(verb, line[0..verb], 3, "del") {
+  if text.equal(line[0..verb], "del") {
     if erase(t, k, line[key_lo..key_hi]) {
-      let ok = try say(fd, 3, "+ok");
+      let ok = try say(fd, "+ok");
     } else {
-      let missing = try say(fd, 8, "-missing");
+      let missing = try say(fd, "-missing");
     }
     return Result.Ok(false);
   }
-  let bad = try say(fd, 6, "-error");
+  let bad = try say(fd, "-error");
   return Result.Ok(false);
 }
 
@@ -107,7 +107,7 @@ fn hang_up(clients:rw<Buf[Client]>, k:usize) {
 fn take_in(c:rw<Client>, t:rw<Table>, n:usize, got:ro<u8>[n]) -> Result[bool, IoError] {
   for i in 0..n {
     if c.have == LIMIT {
-      let bad = try say(c.fd, 6, "-error");
+      let bad = try say(c.fd, "-error");
       c.have = 0;
     }
     c.line[c.have] = got[i];
@@ -117,7 +117,7 @@ fn take_in(c:rw<Client>, t:rw<Table>, n:usize, got:ro<u8>[n]) -> Result[bool, Io
   while !stop {
     match text.find_byte(c.have, c.line[0..c.have], '\n', 0) {
       Option.Some(at) => {
-        stop = try respond(c.fd, t, at, c.line[0..at]);
+        stop = try respond(c.fd, t, c.line[0..at]);
         let rest = c.have - (at + 1);
         for i in 0..rest { c.line[i] = c.line[at + 1 + i]; }
         c.have = rest;
@@ -132,8 +132,7 @@ fn run() -> Result[usize, IoError] {
   let server = try net.listen_on("\x7f\x00\x00\x01", PORT, 16);
   defer net.close(server);
   let mut t = new_table();
-  let ready = "service: listening on ";
-  io.print(ready);
+  io.print("service: listening on ");
   io.print_u64(u64(PORT));
   io.newline();
   let mut clients = Buf[Client](CLIENTS);
@@ -172,8 +171,7 @@ fn main() -> i32 {
   match run() {
     Result.Ok(code) => { return i32(code); }
     Result.Err(e) => {
-      let failed = "service: io error ";
-      io.print(failed);
+      io.print("service: io error ");
       io.print_u64(u64(e.code));
       io.newline();
       return 1;

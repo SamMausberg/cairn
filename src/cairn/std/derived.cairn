@@ -28,7 +28,7 @@ pub recipe ord for R {
 pub recipe hash for R {
   impl std.core.Hash for R {
     fn hash(value:ro<R>) -> u64 {
-      let mut h:u64 = 14695981039346656037;
+      let mut h = 14695981039346656037;
       each f in R { h = mul_wrap(h ^ std.core.Hash.hash(value.$f), 1099511628211); }
       return h;
     }

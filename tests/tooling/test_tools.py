@@ -277,6 +277,22 @@ def test_curriculum():
     assert len(pairs) == result["contrastive_pairs"] and all(p["diagnostic"]["code"] for p in pairs)
 
 
+def test_emission_identity(tmp_path):
+    from checks.emission_identity import NORMALIZE
+
+    record = tmp_path / "record.json"
+    taken = parsed(tool("tools/checks/emission_identity.py", "snapshot", record, "--normalize", "literals"))
+    assert taken["programs"] > 500
+    same = parsed(tool("tools/checks/emission_identity.py", "compare", record, "--normalize", "literals"))
+    assert same["changed"] == [] and same["new"] == []
+    tool("tools/checks/emission_identity.py", "compare", record, expect=2)  # a record is compared as it was taken
+    bound = 'f {\n  const std::uint8_t* const v_m = reinterpret_cast<const std::uint8_t*>("hi");\n  g(2, v_m);\n}\n'
+    assert NORMALIZE["literals"](bound) == 'f {\n  g(2, reinterpret_cast<const std::uint8_t*>("hi"));\n}\n'
+    twice = bound.replace("  g(2, v_m);\n", "  g(2, v_m);\n  h(v_m);\n")
+    assert NORMALIZE["literals"](twice) == twice  # read twice: the local stays
+    assert NORMALIZE["zero"]("g((v_n - static_cast<std::size_t>(0ULL)), (v_n - v_k))") == "g(v_n, (v_n - v_k))"
+
+
 def test_drift_ignores_only_what_records_a_run(tmp_path):
     from support import drift
 

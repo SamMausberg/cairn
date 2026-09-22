@@ -50,7 +50,7 @@ pub fn run_plan(plan:rw<Vec[Dyn[Aggregator]]>, n:usize, xs:ro<u64>[n], out:rw<u6
   let mut used:usize = 0;
   for p in 0..plan.len {
     if used < 4 {
-      let answer = run_dyn(plan.data[p], n, xs);
+      let answer = run_dyn(plan.data[p], xs);
       out[used] = answer;
       used = used + 1;
     }
@@ -80,7 +80,7 @@ pub fn bins_tally[T:Ord + affine](b:rw<Bins[T]>, n:usize, xs:ro<T>[n]) {
 }
 
 pub fn bins_total[T:Ord + affine](b:ro<Bins[T]>) -> u64 {
-  let mut total:u64 = 0;
+  let mut total = 0;
   for i in 0..len(b.counts) { total = add_wrap(total, b.counts[i]); }
   return total;
 }

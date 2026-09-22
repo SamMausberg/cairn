@@ -50,7 +50,7 @@ pub fn read(f:ro<File>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] {
 pub fn read_full(f:ro<File>, n:usize, into:rw<u8>[n]) -> Result[usize, IoError] {
   let mut done:usize = 0;
   while done < n {
-    let got = try read(f, n - done, into[done..n]);
+    let got = try read(f, into[done..n]);
     if got == 0 { return Result.Ok(done); }
     done = done + got;
   }
@@ -119,12 +119,12 @@ pub fn rename(n:usize, from:ro<u8>[n], m:usize, to:ro<u8>[m]) -> Result[usize, I
 
 // The whole file, sized once and read in one pass; the Vec is exactly as large as the file.
 pub fn read_file(n:usize, path:ro<u8>[n]) -> Result[Vec[u8], IoError] {
-  let f = try open(n, path, READ);
+  let f = try open(path, READ);
   defer close(f);
   let bytes = try size(f);
   let total = usize(bytes);
   let mut out = vec.with_capacity[u8](total);
-  let got = try read_full(f, total, out.data[0..total]);
+  let got = try read_full(f, out.data[0..total]);
   out.len = got;
   return Result.Ok(out);
 }
@@ -141,21 +141,21 @@ fn put(fd:i32, n:usize, data:ro<u8>[n]) {
   }
 }
 
-pub fn print(n:usize, data:ro<u8>[n]) { put(1, n, data); }
-pub fn println(n:usize, data:ro<u8>[n]) { put(1, n, data); put(1, 1, "\n"); }
-pub fn eprintln(n:usize, data:ro<u8>[n]) { put(2, n, data); put(2, 1, "\n"); }
-pub fn newline() { put(1, 1, "\n"); }
+pub fn print(n:usize, data:ro<u8>[n]) { put(1, data); }
+pub fn println(n:usize, data:ro<u8>[n]) { put(1, data); put(1, "\n"); }
+pub fn eprintln(n:usize, data:ro<u8>[n]) { put(2, data); put(2, "\n"); }
+pub fn newline() { put(1, "\n"); }
 
 pub fn print_u64(value:u64) {
   stack digits:u8[20] = zeroed;
   let used = text.write_u64(digits, value);
-  put(1, used, digits[0..used]);
+  put(1, digits[0..used]);
 }
 
 pub fn print_i64(value:i64) {
   stack digits:u8[21] = zeroed;
   let used = text.write_i64(digits, value);
-  put(1, used, digits[0..used]);
+  put(1, digits[0..used]);
 }
 
 // One read from standard input: 0 at end of input, as `read` answers for a file.

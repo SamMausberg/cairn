@@ -32,12 +32,12 @@ pub fn synth(i:usize) -> Trade {
 
 // One batch buffer, refilled and written; nothing here holds the whole dataset in memory.
 pub fn write_dataset(n:usize, path:ro<u8>[n], rows:usize) -> Result[u64, IoError] {
-  let f = try io.open(n, path, io.TRUNCATE);
+  let f = try io.open(path, io.TRUNCATE);
   defer io.close(f);
   let span = ROW * BATCH;
   let mut block = Buf[u8](span);
   let mut done:usize = 0;
-  let mut written:u64 = 0;
+  let mut written = 0;
   while done < rows {
     let mut fill:usize = 0;
     while fill < BATCH && done + fill < rows {
@@ -46,7 +46,7 @@ pub fn write_dataset(n:usize, path:ro<u8>[n], rows:usize) -> Result[u64, IoError
       fill = fill + 1;
     }
     let bytes = fill * ROW;
-    let sent = try io.write(f, bytes, block[0..bytes]);
+    let sent = try io.write(f, block[0..bytes]);
     written = written + u64(sent);
     done = done + fill;
   }
@@ -59,7 +59,7 @@ pub fn write_dataset(n:usize, path:ro<u8>[n], rows:usize) -> Result[u64, IoError
 pub fn load_dataset(
   n:usize, path:ro<u8>[n], rows:usize, c:rw<schema.Trade_table>
 ) -> Loaded[usize] {
-  let mut bytes = try io.read_file(n, path);
+  let mut bytes = try io.read_file(path);
   let have = bytes.len / ROW;
   let count = min(have, rows);
   for i in 0..count {
@@ -73,8 +73,7 @@ pub fn load_dataset(
 // A path no other process in this test run shares; there is no argv, so the pid is the handle.
 pub fn temp_path(n:usize, tail:ro<u8>[n]) -> Vec[u8] {
   let mut p = vec.new[u8]();
-  let prefix = "/tmp/cairn-analytics-";
-  p.extend_from(prefix);
+  p.extend_from("/tmp/cairn-analytics-");
   unsafe { text.push_u64(p, u64(sys.getpid())); }
   p.extend_from(n, tail);
   p.push(0); // C reads a pointer, so the terminator lives in the storage

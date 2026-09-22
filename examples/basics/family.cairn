@@ -1,5 +1,5 @@
 // One typed body, 256 explicit specializations. No textual substitution.
-fn scale[K:nat](n:usize, out:rw<f32>[n]@host, x:ro<f32>[n]@host) {
+fn scale[K:nat](n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
   each i in n { out[i] = x[i] * f32(K); }
 }
 family gain = scale[1..257];

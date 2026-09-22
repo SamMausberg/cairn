@@ -58,7 +58,7 @@ pub fn queued_notional(
     d_out[i] = notional_of(d_price[i], d_qty[i]);
   };
   let down = spawn transfer(back, d_out) after work;
-  let mut host_total:u64 = 0;
+  let mut host_total = 0;
   for i in 0..n { host_total = add_wrap(host_total, mul_wrap(price[i], u64(qty[i]))); }
   wait(up_price);
   wait(up_qty);

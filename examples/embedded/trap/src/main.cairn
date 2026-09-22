@@ -17,11 +17,9 @@ fn puts(n:usize, text:ro<u8>[n]) { for i in 0..n { putc(text[i]); } }
 fn main() -> i32 {
   stack window:u8[4] = zeroed;
   window[0] = 4;
-  let banner = "trap demo: reading window[4] of 4\n";
-  puts(banner);
+  puts("trap demo: reading window[4] of 4\n");
   let index = usize(window[0]); // 4, read back from storage rather than written as a literal
   let byte = window[index]; // the bounds guard stops the machine on this line
-  let after = "unreachable\n";
-  puts(after);
+  puts("unreachable\n");
   return i32(byte);
 }

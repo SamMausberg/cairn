@@ -14,7 +14,7 @@ import analytics.schema;
 import analytics.table;
 
 pub fn main() -> i32 {
-  let rows:usize = table.ROWS;
+  let rows = table.ROWS;
   let mut c = schema.Trade_table_new(rows);
   for i in 0..rows { schema.Trade_set(c, i, table.synth(i)); }
 
@@ -36,26 +36,24 @@ pub fn main() -> i32 {
   transfer(d_price[0..rows], c.price[0..rows]);
   transfer(d_qty[0..rows], c.qty[0..rows]);
   let d1 = io.monotonic_ns();
-  let device_total = device.wrapping_total(rows, d_price);
-  let device_qty = device.checked_total(rows, d_qty);
-  let device_used = device.above(rows, d_kept, d_price, table.LIMIT);
+  let device_total = device.wrapping_total(d_price);
+  let device_qty = device.checked_total(d_qty);
+  let device_used = device.above(d_kept, d_price, table.LIMIT);
   let d2 = io.monotonic_ns();
   if device_total != host_total { return 1; }
   if device_qty != host_qty { return 2; }
   if device_used != host_used { return 3; }
 
   // The generated reductions, one per column, host against device under the same name.
-  let generated_price = device.Trade_wrapping_price(rows, d_price);
-  let generated_qty = device.Trade_total_qty(rows, d_qty);
+  let generated_price = device.Trade_wrapping_price(d_price);
+  let generated_qty = device.Trade_total_qty(d_qty);
   if generated_price != schema.Trade_wrapping_price(rows, c) { return 7; }
   if generated_qty != schema.Trade_total_qty(rows, c) { return 8; }
 
   // The compacted prefix comes back and must be the host's, element for element.
   let mut back_kept = Buf[u64](rows);
   transfer(back_kept[0..device_used], d_kept[0..device_used]);
-  let kept_agrees = mem.equal(
-    device_used, back_kept[0..device_used], host_used, host_kept[0..host_used]
-  );
+  let kept_agrees = mem.equal(back_kept[0..device_used], host_kept[0..host_used]);
   if !kept_agrees { return 4; }
   let d3 = io.monotonic_ns();
 
@@ -68,11 +66,11 @@ pub fn main() -> i32 {
   mem.copy(rows, p_price, c.price[0..rows]);
   mem.copy(rows, p_qty, c.qty[0..rows]);
   let q0 = io.monotonic_ns();
-  let overlapped = device.queued_notional(rows, p_back, p_price, p_qty);
+  let overlapped = device.queued_notional(p_back, p_price, p_qty);
   let q1 = io.monotonic_ns();
-  let notional_agrees = mem.equal(rows, p_back, rows, host_notional[0..rows]);
+  let notional_agrees = mem.equal(p_back, host_notional[0..rows]);
   if !notional_agrees { return 5; }
-  let queued_total = query.wrapping_total(rows, p_back);
+  let queued_total = query.wrapping_total(p_back);
   if queued_total != overlapped { return 6; }
 
   report.line("analytics: rows on the GPU   ", u64(rows));
@@ -83,7 +81,6 @@ pub fn main() -> i32 {
   report.micros("analytics: device queries    ", d2 - d1);
   report.micros("analytics: download          ", d3 - d2);
   report.micros("analytics: queued pipeline   ", q1 - q0);
-  let done = "analytics: the device agrees with the host bit for bit";
-  report.say(done);
+  report.say("analytics: the device agrees with the host bit for bit");
   return 0;
 }
