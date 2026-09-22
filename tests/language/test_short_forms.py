@@ -1,5 +1,5 @@
 """The short forms: a variant written without its type, an arm without its braces, compound assignment, a call as a
-statement, and the rules that keep each one meaning exactly its long form. Every accepted program emits the C++ of its long form or runs natively under both compilers, and every
+statement, a loop over elements, and the rules that keep each one meaning exactly its long form. Every accepted program emits the C++ of its long form or runs natively under both compilers, and every
 refusal names its code.
 """
 
@@ -384,4 +384,104 @@ def test_a_call_statement_never_loses_an_outcome_or_a_linear_value(code, body):
     head = ("import std.core (Option, Result);\nimport std.vec;\nlinear struct Token { id:u64; }\n"
             "fn open(id:u64) -> Token = Token(id);\nfn check(v:u64) -> Result[u64, u8] = Ok(v);\n"
             "fn work(n:usize) -> u64 = 1;\n")  # fmt: skip
+    refused(code, head + f"fn main() -> i32 {{ {body} return 0; }}\n")
+
+
+ELEMENTS = """
+struct Chart { rows:usize; price:Buf[f64][rows]; }
+struct Pair { a:u64; b:u64; }
+fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut t:u64 = 0;
+  for x in xs { t += x; }
+  return t;
+}
+fn weighted(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut t:u64 = 0;
+  for i, x in xs { t += u64(i) * x; }
+  return t;
+}
+fn main() -> i32 {
+  let mut v = Buf[u64](4);
+  for i, x in v { v[i] = u64(i) + 1; }
+  stack s:u32[3] = zeroed;
+  let mut arr = Array[u8, 3]();
+  arr[1] = 7;
+  let mut c = Chart(2, Buf[f64](2));
+  c.price[1] = 2.5;
+  let mut ps = Buf[Pair](2);
+  ps[1] = Pair(3, 4);
+  let mut sum:f64 = 0.0;
+  for p in c.price { sum += p; }
+  let mut bytes:u64 = 0;
+  for b in arr { bytes += u64(b); }
+  for q in s { bytes += u64(q); }
+  let mut pairs:u64 = 0;
+  for p in ps { pairs += p.a * p.b; }
+  let text = "abc";
+  let mut chars:u64 = 0;
+  for ch in text { chars += u64(ch); }
+  let mut x_index:u64 = 0;
+  for x in v { x_index += x; }
+  if total(v) != 10 || weighted(v) != 20 || sum != 2.5 || bytes != 7 || pairs != 12 || chars != 294 { return 1; }
+  if x_index != 10 { return 2; }
+  return 0;
+}
+"""
+
+
+def test_an_element_loop_is_the_index_loop_it_stands_for():
+    """`for x in xs` emits what `for x_index in 0..len(xs) { let x = xs[x_index]; }` emits, so a view's reads keep no
+    guard and a mutable owner's keep theirs; `for i, x in xs` names the index, and a hidden index never takes a name
+    in use (`x_index2` beside a local `x_index`). The projection prints the short form back."""
+    written = """
+fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut t:u64 = 0;
+  for x_index in 0..len(xs) { let x = xs[x_index]; t += x; }
+  return t;
+}
+"""
+    short = ELEMENTS.split("fn weighted")[0].split("struct Pair { a:u64; b:u64; }\n")[1]
+    assert compile_source(short)[0] == compile_source(written)[0]
+    cpp = compile_source(ELEMENTS)[0]
+    assert "const std::uint64_t v_x = v_xs[v_x_index];" in cpp and "const std::uint64_t v_x = v_xs[v_i];" in cpp
+    assert "v_x = cr::at(v_v.data(), v_x_index2, v_v.size());" in cpp  # v is a mutable owner: its guard stays
+    assert "for i, x in v {" in canonical_source(ELEMENTS) and "for ch in text {" in canonical_source(ELEMENTS)
+    assert compile_source(canonical_source(ELEMENTS))[0] == cpp and format_source(
+        format_source(ELEMENTS)
+    ) == format_source(ELEMENTS)
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_element_loops_run_natively(tmp_path, cxx):
+    assert run(tmp_path, compile_source(ELEMENTS)[0], *sanitized(cxx), *WARNINGS, cxx=cxx).returncode == 0
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_an_owner_replaced_under_its_loop_is_still_guarded(tmp_path, cxx):
+    """The bounds are read once, as in any `for`, so replacing `b` with a shorter owner inside the loop makes the next
+    read trap instead of reading past the end, under AddressSanitizer as without it."""
+    shrink = "fn main() -> i32 { let mut b = Buf[u64](4); let mut t:u64 = 0; for x in b { t += x; b = Buf[u64](1); } return 0; }"
+    cpp = compile_source(shrink)[0]
+    assert "cr::at(v_b.data(), v_x_index, v_b.size())" in cpp
+    done = run(tmp_path, cpp, *sanitized(cxx), cxx=cxx)
+    assert done.returncode == -6 and "AddressSanitizer" not in done.stderr
+
+
+@pytest.mark.parametrize(
+    ("code", "body"),
+    [
+        ("E-ELEMENT-LOOP", "for x in make() { }"),  # bind the value first
+        ("E-ELEMENT-LOOP", "let b = Buf[u64](4); for x in b[0..2] { }"),  # a part is only a call argument
+        ("E-ELEMENT-LOOP", "let n:usize = 3; for x in n { }"),  # a count is a range
+        ("E-ELEMENT-LOOP", "let b = Buf[Buf[u8]](2); for x in b { }"),  # an owner is never copied out
+        ("E-SHADOW", "let x:u64 = 1; let b = Buf[u64](4); for x in b { }"),
+        ("E-SHADOW", "let i:u64 = 1; let b = Buf[u64](4); for i, x in b { }"),
+        ("E-MOVE-IN-LOOP", "let b = Buf[u64](4); for x in b { sink(b); }"),
+        ("E-IMMUTABLE", "let b = Buf[u64](4); for x in b { x = 1; }"),
+        ("E-IMMUTABLE", "let b = Buf[u64](4); for i, x in b { i = 1; }"),
+        ("E-PARSE", "let b = Buf[u64](4); for i, x in b..3 { }"),
+    ],
+)  # fmt: skip
+def test_an_element_loop_copies_named_elements_only(code, body):
+    head = "fn make() -> Buf[u64] = Buf[u64](2);\nfn sink(b:Buf[u64]) {}\n"
     refused(code, head + f"fn main() -> i32 {{ {body} return 0; }}\n")

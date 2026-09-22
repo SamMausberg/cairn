@@ -122,21 +122,25 @@ The build receipt lists every rounding the source writes under the function's `n
 
 A block body needs explicit `return` statements, and every path of a non-void function must return one (`E-RETURN`). There is no block-tail return. An expression body, `fn payload(total:u32, header:u32) -> u32 = total - header;`, is that one return.
 
-The control forms are `if / else if / else`, `while`, `for i in lo..hi`, `break`, `continue` (to the nearest loop, also from a match arm) and nested `{ }` blocks. A `for` evaluates `lo` and then `hi` once, and an empty or reversed range does nothing. `&&` and `||` short-circuit. No loop implies parallelism.
+The control forms are `if / else if / else`, `while`, `for i in lo..hi`, `for x in xs`, `break`, `continue` (to the nearest loop, also from a match arm) and nested `{ }` blocks. A `for` evaluates `lo` and then `hi` once, and an empty or reversed range does nothing. `&&` and `||` short-circuit. No loop implies parallelism.
+
+`for x in xs { }` walks the elements of a view, a `Buf`, an `Array` or a `stack` or `buffer` array, and `for i, x in xs { }` names the position too. It is `for i in 0..len(xs) { let x = xs[i]; }`: the length is read once, each element is copied into an immutable `x`, and the guards are the ones that loop has, so a read of an immutable view pays none and a mutable owner's keeps its bounds check. The array is written as a name or a field path, and its elements must be copyable (`E-ELEMENT-LOOP`); an owner in an array is taken, swapped or lent through `xs[i]`.
 
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {
   let mut sum:u32 = 0;
-  for i in 0..n {
-    if bytes[i] == 0 { continue; }                  // padding carries no checksum
-    sum = add_wrap(sum, u32(bytes[i]));
+  for b in bytes {                                  // b is bytes[i] for i in 0..len(bytes)
+    if b == 0 { continue; }                         // padding carries no checksum
+    sum = add_wrap(sum, u32(b));
   }
   return sum;
 }
 
 fn main() -> i32 {
   let frame = "GET /\0\0";
-  if checksum(len(frame), frame) != 71 + 69 + 84 + 32 + 47 { return 1; }
+  let mut v = Buf[u8](4);
+  for i, x in v { v[i] = u8(i) + 1; }               // v is a mutable owner: its reads keep their guard
+  if checksum(len(frame), frame) != 71 + 69 + 84 + 32 + 47 || checksum(len(v), v) != 10 { return 1; }
   return 0;
 }
 ```
@@ -147,6 +151,14 @@ fn kind(first:u8) -> u8 { if first == 71 { return 1; } }
 
 ```text
 Not all paths of kind return.
+```
+
+```cairn rejects E-ELEMENT-LOOP
+fn main() -> i32 { let rows = Buf[Buf[u8]](2); for row in rows { } return 0; }
+```
+
+```text
+for row in rows copies each element, and Buf[u8] is not copyable: write for i in 0..len(rows) and take, swap or lend rows[i].
 ```
 
 A call is a statement of its own: `count(log);` drops what `count` returns, and `try check(v);` drops the success payload. A dropped owner is released where the statement ends, so a call that makes a `Buf` and drops it charges `alloc` and `free` there, and a dropped linear value is `E-LINEAR-LEAK`. An outcome is never dropped in silence: a two-variant sum that `try` accepts, such as `Result` or `Option`, is handled with `try` or `match`, or let go by name with `let _ = check(v);` (`E-DISCARD`). A call that only computes, such as `min(a, b);` or `u64(x);`, does nothing as a statement and is `E-DISCARD` too. `let _ = e;` binds nothing, so it may repeat, and `_` cannot be read.
@@ -162,14 +174,6 @@ fn step(v:u64, log:rw<u64>) -> Result[u64, u8] {
   try check(v);                                    // or return the failure from here
   let _ = check(v + 100);                          // a failure let go on purpose
   return Ok(v);
-}
-
-fn main() -> i32 {
-  let mut log:u64 = 0;
-  let _ = step(3, log);
-  let _ = step(12, log);
-  if log != 2 { return 1; }
-  return 0;
 }
 ```
 

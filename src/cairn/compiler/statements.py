@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 from . import facts
 from .calls import COMPUTES
-from .places import settle
+from .places import field_path, path, settle
 from .scope import Binding
-from .tree import BOOL, USIZE, VOID, Expr, Stmt, Type, fail, is_view
+from .syntax import copied
+from .tree import BOOL, USIZE, VOID, Arm, Expr, Function, Stmt, Type, fail, is_view
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -268,7 +270,52 @@ def s_while(c: Checker, s: Stmt):
     c.loop(s)
 
 
+def elements(c: Checker, s: Stmt):
+    """`for i, x in xs { .. }` is `for i in 0..len(xs) { let x = xs[i]; .. }`, written here in place, so the facts
+    and the guards of the index loop are exactly those of the loop a person would write. Without `i`, the index
+    takes a name nothing in scope or in the body uses. Each element is copied out, so it must be copyable."""
+    xs = s.exprs[0]
+    if xs.tag not in {"name", "field"} or not field_path(xs):
+        fail("E-ELEMENT-LOOP", f"for {s.name} in ... walks a named array: bind the value to a name first.", xs)
+    ty, walked = c.peek(copied(xs)), path(xs)
+    if not is_view(ty) and ty.name not in {"Buf", "Array"}:
+        count = f"; a count is a range, for {s.name} in 0..{walked}" if ty == USIZE else ""
+        fail("E-ELEMENT-LOOP", f"for {s.name} in {walked} walks a view, a Buf or an Array, not {ty.display()}{count}.",
+             xs)  # fmt: skip
+    element = ty.value if is_view(ty) else ty.args[0]
+    if c.kind(element) != "copy":
+        fail("E-ELEMENT-LOOP", f"for {s.name} in {walked} copies each element, and {element.display()} is not "
+             f"copyable: write for i in 0..len({walked}) and take, swap or lend {walked}[i].", xs)  # fmt: skip
+    index = s.binder or fresh(c, s, s.name + "_index")
+    read = Expr("index", "", [copied(xs), Expr("name", index, [], xs.line, xs.col)], xs.line, xs.col)
+    s.body = [Stmt("let", s.name, exprs=[read], line=s.line, col=s.col), *s.body]
+    s.exprs = [Expr("int", "0", [], xs.line, xs.col), Expr("call", "len", [copied(xs)], xs.line, xs.col)]
+    s.name, s.op, s.binder = index, "", ""
+
+
+def fresh(c: Checker, s: Stmt, name: str) -> str:
+    """`name`, or `name2`, `name3`...: the first that nothing bound, declared or written in `s` uses."""
+    taken = set(c.env) | set(c.fs) | set(c.p.consts) | set(words(s))
+    return next(f"{name}{k or ''}" for k in range(len(taken) + 2) if f"{name}{k or ''}" not in taken and k != 1)
+
+
+def words(node: Any, seen: set[int] | None = None) -> Iterator[str]:
+    """Every name written anywhere in a statement, its closures included."""
+    seen = set() if seen is None else seen
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, list | tuple):
+        for x in node:
+            yield from words(x, seen)
+    elif isinstance(node, Expr | Stmt | Arm | Function) and id(node) not in seen:
+        seen.add(id(node))
+        for value in vars(node).values():
+            yield from words(value, seen)
+
+
 def s_for(c: Checker, s: Stmt):
+    if s.op == "elements":
+        elements(c, s)
     c.expr(s.exprs[0], USIZE)
     c.expr(s.exprs[1], USIZE)
     c.bind(s.name, Binding(USIZE), s, f"Loop binder {s.name} already exists.")

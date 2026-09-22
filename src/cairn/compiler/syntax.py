@@ -486,6 +486,9 @@ class Parser:
         if t.s in {"for", "parallel"}:
             self.i += 1
             n = self.ident()
+            index = ""
+            if t.s == "for" and self.eat(","):  # `for i, x in xs`: the position, then the element
+                index, n = n, self.ident()
             self.need("in")
             lo = self.expr()
             if t.s == "parallel":
@@ -493,6 +496,8 @@ class Parser:
                 region.other_names = self.after()  # Only `spawn parallel ... after t { }` may order itself.
                 region.body = self.block()
                 return region
+            if self.t.s == "{" or index:  # `for x in xs { }` walks the elements; the checker writes the index loop
+                return Stmt("for", n, exprs=[lo], body=self.block(), op="elements", binder=index, **at)
             self.need("..")
             return Stmt("for", n, exprs=[lo, self.expr()], body=self.block(), **at)
         if self.eat("each"):

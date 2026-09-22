@@ -116,6 +116,8 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
             line = "\n".join([f"match {es[0]} {{", *arms, pad + "}"])
         elif s.tag in {"if", "while"}:
             line = f"{s.tag} {es[0]} {nested(s.body)}" + (f"\n{pad}else {nested(s.other)}" if s.other else "")
+        elif s.tag == "for" and s.op == "elements":
+            line = f"for {s.binder + ', ' if s.binder else ''}{s.name} in {es[0]} {nested(s.body)}"
         elif s.tag == "for":
             line = f"for {s.name} in {es[0]}..{es[1]} {nested(s.body)}"
         elif s.tag == "parallel":
