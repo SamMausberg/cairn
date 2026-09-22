@@ -324,7 +324,13 @@ def test_what_the_storage_floats_refuse(code, source):
 
 @pytest.mark.parametrize(
     "source",
-    ["fn f(x:f32) -> f32 = f32(f16(x));", "fn f(x:f16) -> f32 = f32(x);", "fn f(x:f32) -> i8 = quantize[i8](x, 2.0);"],
+    [
+        "fn f(x:f32) -> f32 = f32(f16(x));",
+        "fn f(x:f16) -> f32 = f32(x);",
+        "fn f(x:f32) -> i8 = quantize[i8](x, 2.0);",
+        "fn f(x:f32, k:u32) -> i8 = quantize_stochastic[i8](x, 1.0, k);",
+        "fn f(n:usize, h:ro<f16>[n]) -> f32 = f32(h[0]);",
+    ],
 )
 def test_the_value_model_answers_unknown_and_never_equivalent(source):
     assert equivalent(source, source, "f")["status"] == "unknown"
