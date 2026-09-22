@@ -1,5 +1,6 @@
 # GitHub has no CAIRN grammar; Rust has the closest keywords and punctuation (fn, let mut, struct, enum, match, ->, =>).
-*.cairn linguist-language=Rust
+# Highlighted as Rust, but not counted as Rust in the repository's language bar.
+*.cairn linguist-language=Rust linguist-detectable=false
 
 # Written by generators; `make docs` and `make editors` rewrite them.
 docs/std_api.md linguist-generated

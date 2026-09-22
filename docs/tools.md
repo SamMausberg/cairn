@@ -246,7 +246,7 @@ vim.api.nvim_create_autocmd("FileType", { pattern = "cairn", callback = function
 end })
 ```
 
-GitHub has no CAIRN grammar, so `.gitattributes` asks it to render `.cairn` files as Rust, whose keywords and punctuation are the closest, and marks the generated grammars and `docs/std_api.md` as generated.
+GitHub has no CAIRN grammar, so `.gitattributes` asks it to render `.cairn` files as Rust, whose keywords and punctuation are the closest, without counting them as Rust in the repository's language bar, and marks the generated grammars and `docs/std_api.md` as generated.
 
 ## The freestanding target
 
