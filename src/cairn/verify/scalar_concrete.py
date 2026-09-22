@@ -12,6 +12,7 @@ from typing import Any
 from ..compiler.cairnc import SIGNED, WIDTH, Expr, Function, Type
 from ..compiler.tree import FLOAT, NUMERIC, VOID, is_view
 from .scalar_values import (
+    MAX_REPLAY,
     MAX_UNROLL,
     ConcreteTrap,
     Propagate,
@@ -20,21 +21,38 @@ from .scalar_values import (
     admissible,
     bounds,
     integral,
+    owned,
     rounded,
 )
 
 
-class Region:
-    """Concrete storage a view denotes: a window into one list, so a write is seen through every view of it."""
+class Zeroed:
+    """Zero-initialized storage of any length, held only where it was written: `Buf[T](n)` for a symbolic n."""
 
-    data: list
+    def __init__(self, count: int, zero):
+        self.count, self.zero, self.written = count, zero, {}
+
+    def __len__(self) -> int:
+        return self.count
+
+    def __getitem__(self, i: int):
+        return self.written[i] if i in self.written else self.zero()
+
+    def __setitem__(self, i: int, value):
+        self.written[i] = value
+
+
+class Region:
+    """Concrete storage a view denotes: a window into one store, so a write is seen through every view of it."""
+
+    data: list | Zeroed
     offset: int
     extent: int
 
-    def __init__(self, data: list | Region, offset: int = 0, extent: int | None = None):
+    def __init__(self, data: list | Zeroed | Region, offset: int = 0, extent: int | None = None):
         self.data = data.data if isinstance(data, Region) else data
         self.offset = offset + (data.offset if isinstance(data, Region) else 0)
-        self.extent = len(self.data) - self.offset if extent is None else extent
+        self.extent = size(self.data) - self.offset if extent is None else extent
 
     def part(self, lo: int, extent: int) -> Region:
         return Region(self, lo, extent)
@@ -42,14 +60,16 @@ class Region:
     def contents(self) -> list:
         return [self.data[self.offset + i] for i in range(self.extent)]
 
-    def __len__(self) -> int:
-        return self.extent
-
     def __getitem__(self, i: int):
         return self.data[self.offset + i]
 
     def __setitem__(self, i: int, value):
         self.data[self.offset + i] = value
+
+
+def size(x) -> int:
+    """How many elements storage or an inline array holds; a symbolic length may exceed what `len` can answer."""
+    return x.extent if isinstance(x, Region) else x.count if isinstance(x, Zeroed) else len(x)
 
 
 class Concrete:
@@ -119,13 +139,13 @@ class Concrete:
         if e.tag == "index":
             base = self.expr(e.args[0], env, stack)
             i = self.expr(e.args[1], env, stack)
-            if not 0 <= i < len(base):
+            if not 0 <= i < size(base):
                 raise ConcreteTrap("out-of-bounds")
             return base[i]
         if e.tag == "slice":
             base, lo, hi = (self.expr(a, env, stack) for a in e.args)
             want = self.expr(e.ref, env, stack) if isinstance(e.ref, Expr) else e.ref
-            if lo > hi or hi > len(base) or (str(want).isdigit() and hi - lo != int(want)):
+            if lo > hi or hi > size(base) or (str(want).isdigit() and hi - lo != int(want)):
                 raise ConcreteTrap("invalid-part")
             return Region(base).part(lo, hi - lo)
         if e.tag == "try":
@@ -197,9 +217,17 @@ class Concrete:
         if n == "Array":
             return self.zeros(e.ty)
         if n == "len":
-            return len(xs[0])
-        if n == "Buf":
-            return Region([self.zeros(e.ty.args[0]) for _ in range(xs[0])])
+            return size(xs[0])
+        if n == "Buf":  # Zeroed storage of any length; a failed allocation is outside this model.
+            return Region(Zeroed(xs[0], lambda: self.zeros(e.ty.args[0])))
+        if n == "take":  # The storage moves out; what is left is empty, as a moved-from cr::Buf is.
+            held = xs[0]
+            self.store(e.args[0], env, stack, Region([]) if isinstance(held, Region) else self.zeros(e.ty))
+            return held
+        if n == "swap":
+            self.store(e.args[0], env, stack, xs[1])
+            self.store(e.args[1], env, stack, xs[0])
+            return None
         n = e.ref.name if isinstance(e.ref, Function) else n
         if n in self.functions:
             lent = [(x, t) for x, (_, t) in zip(xs, self.functions[n].params, strict=True) if isinstance(x, Region)]
@@ -250,7 +278,7 @@ class Concrete:
             self.store(target.args[0], env, stack, {**base, target.val: value})
             return
         i = self.expr(target.args[1], env, stack)
-        if not 0 <= i < len(base):
+        if not 0 <= i < size(base):
             raise ConcreteTrap("out-of-bounds")
         if isinstance(base, Region):  # Shared storage: the write is seen through every view of it.
             base[i] = value
@@ -267,7 +295,7 @@ class Concrete:
             elif s.tag == "assign":
                 self.store(s.exprs[0], env, stack, self.expr(s.exprs[1], env, stack))
             elif s.tag in {"stack", "buffer"}:
-                env[s.name] = Region([self.zeros(s.ty) for _ in range(self.expr(s.exprs[0], env, stack))])
+                env[s.name] = Region(Zeroed(self.expr(s.exprs[0], env, stack), lambda item=s.ty: self.zeros(item)))
             elif s.tag in {"compact", "reduce"}:
                 self.fold(s, env, stack)
             elif s.tag == "expr":
@@ -360,11 +388,14 @@ class Concrete:
                 raise ValueError(f"Input {n} is not a value of {t.display()}.")
             if is_view(t) and len(args[n]) != (int(t.extent) if t.extent.isdigit() else args.get(t.extent)):
                 raise ValueError(f"Input {n} does not hold the {t.extent} elements its view lends.")
-        held = {n: Region(list(args[n])) if is_view(t) else args[n] for n, t in f.params}
+        held = {n: Region(list(args[n])) if is_view(t) or owned(t) else args[n] for n, t in f.params}
         try:
             value, written = self.invoke(name, [held[n] for n, _ in f.params])
         except ConcreteTrap as e:
             return {"defined": False, "trap": str(e)}
         rw = [n for n, t in f.params if t.mode == "rw"]
         final = {n: x.contents() if isinstance(x, Region) else x for n, x in zip(rw, written, strict=True)}
-        return {"defined": True, "return": value, "written": final}
+        if isinstance(value, Region) and value.extent > MAX_REPLAY:
+            raise Unsupported(f"A returned owner past {MAX_REPLAY} elements cannot be replayed.")
+        result = value.contents() if isinstance(value, Region) else value  # An owner comes back as its elements.
+        return {"defined": True, "return": result, "written": final}

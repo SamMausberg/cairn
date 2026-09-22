@@ -282,6 +282,8 @@ class Source:
             found = tuple(x for _, t in layout for x in self.leaves(t))
         elif isinstance(layout, dict):
             found = (TAG, *(x for t in layout.values() if t for x in self.leaves(t)))
+        elif owned(ty):  # An owner is storage: it lives in a local, a parameter or a result, nowhere inside a value.
+            raise Unsupported("An owner inside a record, a sum or an array is not modeled.")
         else:
             raise Unsupported(f"{ty.display()} is outside the modeled value fragment.")
         if len(found) > MAX_LEAVES:
@@ -319,6 +321,11 @@ class Source:
             kind = "enum" if ty.value.name in self.enums else "sum"
             return kind + "(" + ", ".join(f"{n}: {self.shape(t) if t else '-'}" for n, t in layout.items()) + ")"
         return ty.value.display()
+
+
+def owned(ty: Type) -> bool:
+    """A `Buf[T]` held by value: storage with a length of its own, moved rather than copied."""
+    return ty.mode == "value" and ty.name == "Buf"
 
 
 def components(src: Source, t: Term) -> tuple[Type, ...]:
@@ -412,8 +419,9 @@ def admissible(src: Source, ty: Type, value: Any, guarded: bool = True) -> bool:
     """
     array = src.elements(ty)
     layout = src.layout(ty)
-    if is_view(ty):  # Storage behind a view arrives as its elements; `outcome` holds it to the extent.
-        return isinstance(value, list) and all(admissible(src, ty.value, v, False) for v in value)
+    if is_view(ty) or owned(ty):  # Storage arrives as its elements; a view is held to its extent by `outcome`.
+        item = ty.args[0] if owned(ty) else ty.value
+        return isinstance(value, list) and all(admissible(src, item, v, False) for v in value)
     guarded = guarded and ty.mode == "value"
     if array is not None:
         return isinstance(value, list) and len(value) == array[1] and all(
@@ -446,8 +454,9 @@ def identical(src: Source, ty: Type, a: Any, b: Any) -> bool:
     """Concrete observation equality; floats compare by bit pattern, so +0 and -0 differ and NaNs do not tie."""
     array = src.elements(ty)
     layout = src.layout(ty)
-    if is_view(ty):
-        return len(a) == len(b) and all(identical(src, ty.value, x, y) for x, y in zip(a, b, strict=True))
+    if is_view(ty) or owned(ty):
+        item = ty.args[0] if owned(ty) else ty.value
+        return len(a) == len(b) and all(identical(src, item, x, y) for x, y in zip(a, b, strict=True))
     if array is not None:
         return all(identical(src, array[0], x, y) for x, y in zip(a, b, strict=True))
     if isinstance(layout, list):

@@ -47,6 +47,16 @@ fn halves(n:usize, xs:ro<u8>[n], mid:usize) -> u8 {
   return add_wrap(total(mid, xs[0..mid]), total(n-mid, xs[mid..n]));
 }
 fn bumped(p:rw<u64>, k:u64) -> u64 { p = add_wrap(p, k); return p; }
+fn moved(n:usize, xs:ro<u8>[n]) -> u8 {
+  let mut a = Buf[u8](n);
+  let mut b = Buf[u8](2);
+  for i in 0..n { a[i] = add_wrap(xs[i], 1); }
+  swap(a, b);
+  let c = take(b);
+  let mut t:u8 = u8(len(a));
+  for i in 0..len(c) { t = add_wrap(t, c[i]); }
+  return add_wrap(t, u8(len(b)));
+}
 fn pair(a:usize, xs:rw<u64>[a], b:usize, ys:rw<u64>[b]) { for i in 0..a { xs[i] = 1; } for i in 0..b { ys[i] = 2; } }
 fn split(n:usize, zs:rw<u64>[n], mid:usize) { if mid > n { return; } pair(mid, zs[0..mid], n - mid, zs[mid..n]); }
 fn scratch(n:usize, xs:ro<u8>[n]) -> u8 {
@@ -121,6 +131,7 @@ PERTURBED = [
     ("halves", "total(n-mid, xs[mid..n])", "total(n-mid, xs[0..n-mid])", "n<=3"),
     ("bumped", "p = add_wrap(p, k);", "p = add_wrap(k, 1);", "true"),
     ("split", "ys[i] = 2;", "ys[i] = 3;", "n<=3"),
+    ("moved", "a[i] = add_wrap(xs[i], 1);", "a[i] = add_wrap(xs[i], 2);", "n>=1 && n<=3"),
     ("scratch", "tmp[i] = add_wrap(xs[i], 1);", "tmp[i] = add_wrap(xs[i], 2);", "n<=2"),
 ]
 

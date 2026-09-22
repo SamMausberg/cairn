@@ -143,8 +143,6 @@ def test_user_call_and_early_return():
         fn("let mut a=x;while a>0{a=a-1;}return a;"),  # An unbounded trip count.
         fn("return f(x);"),
         "fn f(n:usize,xs:ro<u64>[n]@device,out:rw<u64>[n])->usize{return n;}",
-        "fn f(n:usize)->usize{let mut b=Buf[u64](n);let c=take(b);return len(c);}",  # An owner that moves.
-        "fn g(b:Buf[u64])->usize=len(b);\nfn f(n:usize)->usize{let b=Buf[u64](n);return g(b);}",
         "struct V{d:Buf[u64];k:usize;}\nfn f(n:usize)->usize{let v=V(Buf[u64](n),n);return v.k;}",
         "fn f(n:usize,xs:ro<f64>[n])->f64{let s=reduce + for i in n yield xs[i];return s;}",  # An unspecified order.
         "fn f(n:usize,xs:ro<u64>[n],out:rw<u64>[n]){parallel i in n{out[i]=xs[i];}}",

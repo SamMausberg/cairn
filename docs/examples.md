@@ -293,10 +293,10 @@ cairn verify examples/proof_scope/reference.cairn examples/proof_scope/candidate
 # "status": "smt-module-equivalent", covered: average, extent, shifted, smaller, total
 
 cairn verify examples/proof_scope/reference.cairn examples/proof_scope/mixed.cairn --all
-# "status": "incomplete", missing: extent, shifted; extra: moved; uncovered: extent, moved, shifted
+# "status": "incomplete", missing: extent, shifted; extra: applied, moved; uncovered: applied, extent, moved, shifted
 ```
 
-`moved` allocates a `Buf` and `take`s it, which the value model cannot express, so it is reported as uncovered rather than as equivalent. `native_proof` and `lean_proof` are `false` in both answers: this is SMT equivalence of two sources under a restricted value model, not a proof about the emitted machine code.
+`applied` takes a callable, which the value model cannot express, so it is reported as uncovered rather than as equivalent, and `mixed.cairn` compared with itself stays `incomplete` because of it; `moved` allocates a `Buf` and `take`s it, which the model does follow. `native_proof` and `lean_proof` are `false` in both answers: this is SMT equivalence of two sources under a restricted value model, not a proof about the emitted machine code.
 
 ## examples/sketch
 

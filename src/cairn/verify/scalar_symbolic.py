@@ -38,6 +38,7 @@ from .scalar_values import (
     lifted,
     neg,
     numeral,
+    owned,
     real,
     same,
     shifted,
@@ -57,9 +58,10 @@ class Formula:
         self.storages = 0
         for i, (name, ty) in enumerate(params):
             parts = []
-            for j, leaf in enumerate(source.leaves(ty)):
+            stored = is_view(ty) or owned(ty)  # Storage the caller lends or hands over: one array per component.
+            for j, leaf in enumerate(source.leaves(ty.args[0]) if owned(ty) else source.leaves(ty)):
                 n = f"arg_{i}_{j}"
-                if is_view(ty):  # Storage the caller lends: one array per component of its element.
+                if stored:
                     self.declarations.append(f"(declare-const {n} {arrayed(leaf)})")
                     parts.append(n)
                     continue
@@ -67,8 +69,14 @@ class Formula:
                 self.variables[n] = leaf.name
                 parts.append(self.bind(lifted(n, leaf), sort(leaf)) if leaf.name in FLOAT else n)
             self.track(ty)
-            self.arrays = self.arrays or is_view(ty)
-            window = Window(ZERO, extent_of(self.inputs, ty), self.storage()) if is_view(ty) else None
+            self.arrays = self.arrays or stored
+            window = None
+            if is_view(ty):
+                window = Window(ZERO, extent_of(self.inputs, ty), self.storage())
+            elif owned(ty):  # No entry guard reads an owner: any length, any contents, moved in whole.
+                self.declarations.append(f"(declare-const arg_{i}_len {sort(USIZE)})")
+                self.variables[f"arg_{i}_len"] = "usize"
+                window = Window(ZERO, f"arg_{i}_len", self.storage())
             self.inputs[name] = Term(ty, tuple(parts), window=window)
 
     def storage(self) -> int:
@@ -78,7 +86,8 @@ class Formula:
 
     def track(self, ty: Type):
         """Remember that a float exists, so the query names a logic whose theory has one."""
-        self.floating = self.floating or any(leaf.name in FLOAT for leaf in self.source.leaves(ty))
+        leaves = self.source.leaves(ty.args[0] if owned(ty) else ty)
+        self.floating = self.floating or any(leaf.name in FLOAT for leaf in leaves)
 
     def bind(self, expression: str, kind: str) -> str:
         if expression in {"true", "false"}:
@@ -147,8 +156,7 @@ class Symbolic:
         if e.ty is None:
             raise Unsupported("An untyped expression cannot be modeled.")
         ty = e.ty
-        if ty.name != "Buf":  # An owner is storage, not a value: `leaves` refuses it wherever one is stored.
-            self.source.leaves(ty)  # Refuse an unmodeled type before anything is built from it.
+        self.source.leaves(ty.args[0] if owned(ty) else ty)  # Refuse an unmodeled type before building from it.
         inner = frame.at(frame.path)  # A `try` is only itself, never an operand of something larger.
         if e.tag == "name" and isinstance(e.ref, int | Expr):  # A static natural or a module constant.
             return self.expr(Expr("int", str(e.ref), ty=ty) if isinstance(e.ref, int) else e.ref, env, inner)
@@ -306,10 +314,30 @@ class Symbolic:
         if n == "Buf":  # Zeroed heap storage; allocation failure is outside this model.
             window = Window(ZERO, args[0].value, self.q.storage())
             return Term(e.ty, self.empty(e.ty.args[0]), self.q.bind(ok, "Bool"), window)
+        if n in {"take", "swap"}:
+            return self.exchange(e, args, env, frame)
         n = e.ref.name if isinstance(e.ref, Function) else n  # The callee the checker resolved.
         if n in self.source.functions:
             return self.apply(n, e, args, env, frame, ok)
         raise Unsupported("Call is outside the supported value fragment.")
+
+    def exchange(self, e: Expr, args: list[Term], env: dict[str, Term], frame: Frame) -> Term:
+        """`take(x)` moves the storage out and leaves an empty owner; `swap(a, b)` exchanges two places.
+
+        A moved-from `cr::Buf` holds no elements, so `len` answers 0 and every index traps, which is what
+        the empty storage left behind says. A place that holds a value rather than storage is zeroed.
+        """
+        if e.val == "take":
+            held = args[0]
+            if held.window is not None:
+                left = self.q.make(held.ty, self.empty(held.ty.args[0]), window=Window(ZERO, ZERO, self.q.storage()))
+            else:
+                left = self.q.make(held.ty, self.zeros(held.ty))
+            ok = self.store(e.args[0], env, frame, left)
+            return self.q.make(held.ty, held.parts, conj(held.defined, ok), window=held.window)
+        a, b = args
+        ok = conj(a.defined, b.defined, self.store(e.args[0], env, frame, b), self.store(e.args[1], env, frame, a))
+        return self.q.make(VOID, (), ok)
 
     def hold(self, base: Term) -> Window:
         """Where a term's elements live, or a refusal: an inline array value is not storage."""
@@ -336,7 +364,7 @@ class Symbolic:
         value, written = self.invoke(name, args, frame.stack, conj(frame.path, ok))
         for target, final in zip(places, written, strict=True):
             ok = conj(ok, self.store(target, env, frame, final))
-        return self.q.make(value.ty, value.parts, conj(ok, value.defined))
+        return self.q.make(value.ty, value.parts, conj(ok, value.defined), window=value.window)
 
     def apart(self, a: Window, b: Window) -> str:
         """What `cr::disjoint` admits of two windows into one storage: one is empty, or no element is in both."""
@@ -420,8 +448,10 @@ class Symbolic:
         f = self.source.functions[name]
         if f.static:
             raise Unsupported("Static parameters are outside the modeled fragment.")
-        self.source.leaves(f.ret)
-        env = {n: Term(t.value, a.parts) for (n, t), a in zip(f.params, args, strict=True) if not is_view(t)}
+        item = f.ret.args[0] if owned(f.ret) else None
+        self.source.leaves(item or f.ret)
+        env = {n: Term(t.value, a.parts, window=a.window)
+               for (n, t), a in zip(f.params, args, strict=True) if not is_view(t)}  # fmt: skip
         for (n, t), a in zip(f.params, args, strict=True):  # A view is bounded by the extent its callee declares.
             if is_view(t):
                 lends = self.hold(a)
@@ -432,24 +462,30 @@ class Symbolic:
             raise Unsupported("A function fell through without returning.")
         for reached, inside in rest:  # A void function returns by reaching its end.
             frame.returns.append((reached, self.q.make(VOID, ()), self.outs(inside, frame)))
-        value = self.zeros(f.ret)
+        value, length = (self.empty(item), ZERO) if item else (self.zeros(f.ret), ZERO)
         finals = [list(x.parts) for x in self.outs(env, frame)]
         for path, v, written in reversed(frame.returns):
             value = tuple(ite(path, x, y) for x, y in zip(v.parts, value, strict=True))
+            length = ite(path, self.hold(v).extent, length) if item else length
             for k, out in enumerate(written):
                 finals[k] = [ite(path, x, y) for x, y in zip(out.parts, finals[k], strict=True)]
-        parts = tuple(self.q.bind(x, sort(t)) for x, t in zip(value, self.source.leaves(f.ret), strict=True))
+        leaves = self.source.leaves(item) if item else self.source.leaves(f.ret)
+        parts = tuple(self.q.bind(x, arrayed(t) if item else sort(t)) for x, t in zip(value, leaves, strict=True))
         held = []
         for seed, final in zip(self.outs(env, frame), finals, strict=True):
             joined = tuple(self.q.bind(x, k) for x, k in zip(final, kinds(self.source, seed), strict=True))
             held.append(Term(seed.ty, joined, window=seed.window))
         reached = self.q.bind(disj(*(path for path, _, _ in frame.returns)), "Bool")
-        return self.q.make(f.ret, parts, reached), tuple(held)
+        window = Window(ZERO, self.q.bind(length, sort(USIZE)), self.q.storage()) if item else None
+        return self.q.make(f.ret, parts, reached, window=window), tuple(held)
 
     def store(self, target: Expr, env: dict[str, Term], frame: Frame, value: Term) -> str:
         """Assign into a place; returns what the assignment needs in order to happen."""
         if target.tag == "name":
             held = env[target.val]
+            if value.window is not None and (held.window is None or value.window.root != held.window.root):
+                env[target.val] = Term(held.ty, value.parts, window=value.window)  # A moved owner: new storage.
+                return "true"
             env[target.val] = Term(held.ty, value.parts, window=held.window)
             if held.window is not None:  # Every other view of the same storage sees the write through its own window.
                 for n, other in list(env.items()):
