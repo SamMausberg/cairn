@@ -466,6 +466,18 @@ def test_signature_help_resolves_an_alias_and_shifts_for_method_syntax():
     assert signature_help(doc, PROGRAM.index("let op")) is None
 
 
+def test_signature_help_follows_a_call_that_leaves_its_extents_out():
+    """`dot(a, a)` leaves out `n`: a second signature without it becomes the active one, and counts from there."""
+    source = "fn dot(n:usize, xs:ro<u64>[n], ys:ro<u64>[n]) -> u64 = xs[0] * ys[0];\n"
+    short = source + "fn main() -> i32 { let a = Buf[u64](8); return i32(dot(a, a)); }\n"
+    full = source + "fn main() -> i32 { let a = Buf[u64](8); return i32(dot(len(a), a, a)); }\n"
+    left = signature_help(Document(short), short.index("dot(a, a)") + len("dot(a, "))
+    assert left["activeSignature"] == 1 and left["activeParameter"] == 1
+    assert [p["label"] for p in left["signatures"][1]["parameters"]] == ["xs:ro<u64>[n]@host", "ys:ro<u64>[n]@host"]
+    written = signature_help(Document(full), full.index("dot(len(a)") + len("dot(len(a), "))
+    assert written["activeSignature"] == 0 and written["activeParameter"] == 1
+
+
 # References, rename and definition -------------------------------------------------------------------
 
 

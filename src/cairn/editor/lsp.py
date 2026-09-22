@@ -22,6 +22,7 @@ from typing import Any, BinaryIO
 from ..agent.agent_tools import explain, local, signature
 from ..compiler.builtins import TABLE
 from ..compiler.cairnc import Diagnostic, compile_program
+from ..compiler.calls import extents
 from ..compiler.modules import STD, library_path
 from ..compiler.syntax import IDENT, INTRINSIC_TYPES, RESERVED, SCALAR, Function, Program
 from ..compiler.traits import CLASSES, KINDS
@@ -599,21 +600,27 @@ def signature_help(doc: Document, offset: int) -> dict | None:
     i = call_at(cs, before(cs, offset))
     if i <= 0 or doc.good is None or not IDENT.fullmatch(cs[i - 1].s) or cs[i - 1].s in RESERVED:
         return None
-    f, active = callee(doc, module_at(cs, offset), dotted(cs, i - 1), offset)
+    f, receiver = callee(doc, module_at(cs, offset), dotted(cs, i - 1), offset)
     if f is None:
         return None
-    depth = 0
+    depth, commas = 0, 0
     for t in cs[i + 1 :]:
         if t.start >= offset:
             break
         depth += (t.s in OPENERS) - (t.s in CLOSERS)
-        active += t.s == "," and depth == 0
+        commas += t.s == "," and depth == 0
     params = [{"label": n + ":" + t.display()} for n, t in f.params]
-    return {
-        "signatures": [{"label": signature(f), "parameters": params}],
-        "activeSignature": 0,
-        "activeParameter": active,  # Past the last parameter, the client highlights nothing.
-    }
+    # Past the last parameter, the client highlights nothing.
+    signatures = [{"label": signature(f), "parameters": params, "activeParameter": receiver + commas}]
+    implied = extents(f)  # `checksum(frame)`: a call may leave out the extents its views carry.
+    if implied and not receiver and f.params[0][0] in implied:
+        short = [p for p, (n, _) in zip(params, f.params, strict=True) if n not in implied]
+        label = f"{signature(f)}  // extents left out: {', '.join(implied)}"
+        signatures.append({"label": label, "parameters": short, "activeParameter": commas})
+    written = i + 1 < len(cs) and cs[i + 1].start < offset and cs[i + 1].s != ")"
+    short_form = len(signatures) > 1 and written and cs[i + 1].s != "len"
+    chosen = signatures[short_form]
+    return {"signatures": signatures, "activeSignature": int(short_form), "activeParameter": chosen["activeParameter"]}
 
 
 def occurrences(doc: Document, offset: int) -> list[Item]:
