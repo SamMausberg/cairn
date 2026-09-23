@@ -16,6 +16,7 @@ from cairn.perf.tune import write_plan
 from cairn.projects.project import ProjectError, load_project
 from cairn.projects.revision import read
 from cairn.verify.diff import single
+from emitted import watched
 
 
 def git(repo, *args, data=None):
@@ -114,3 +115,96 @@ def test_a_plan_the_project_would_refuse_is_not_written(tmp_path):
     with pytest.raises(ProjectError, match="nowhere to go"):
         write_plan(tmp_path, "std.vec.push", {"grain": 64})
     assert (tmp_path / "src/y.cairn").read_text() == before
+
+
+# --- Held: the reused task threads -----------------------------------------------------------------------------------
+
+# Each program reuses the same task threads round after round: a region started from a task, a task that spawns its
+# own, a group refilled with owners released on the worker, and owner results handed back. The runtime keeps no
+# per-thread state, so nothing a task leaves on its thread reaches the next one; these hold that under both
+# sanitizers with both compilers.
+REUSED = {
+    # A task that runs a host region on a reused thread, again and again, each time over a part the task was lent.
+    "regions_in_tasks": """
+fn fill(n:usize, out:rw<u64>[n], start:u64) { parallel i in n { out[i] = start + u64(i); } }
+fn main() -> i32 {
+  let n:usize = 70000;
+  let m:usize = 2 * n;
+  let mut data = Buf[u64](m);
+  for round in 0..40 {
+    let a = spawn fill(data[0..n], u64(round));
+    let b = spawn fill(data[n..m], u64(round) + 1);
+    wait(a);
+    wait(b);
+    if data[0] != u64(round) || data[n] != u64(round) + 1 { return 1; }
+  }
+  return 0;
+}
+""",
+    # A task that spawns and waits a task of its own, so a reused thread holds a worker while it runs.
+    "nested_spawns": """
+fn leaf(x:u64) -> u64 = x * 2;
+fn middle(x:u64) -> u64 {
+  let t = spawn leaf(x);
+  let got = wait(t);
+  return got + 1;
+}
+fn main() -> i32 {
+  let mut sum:u64 = 0;
+  for k in 0..300 {
+    let t = spawn middle(u64(k));
+    sum += wait(t);
+  }
+  if sum != 300 * 299 + 300 { return 1; }
+  return 0;
+}
+""",
+    # A group refilled round after round, each task taking and releasing an owner on its own thread.
+    "group_owners": """
+fn keep(k:u64, round:u64) -> u64 {
+  let mut b = Buf[u64](100);
+  b[0] = k;
+  let mut t:u64 = 0;
+  for x in b { t += x; }
+  return t + round;
+}
+fn main() -> i32 {
+  for round in 0..60 {
+    let g = Group[u64](8);
+    for k in 0..8 { spawn keep(u64(k), u64(round)) into g; }
+    let mut sum:u64 = 0;
+    for k in 0..8 { sum += collect(g); }
+    wait(g);
+    if sum != 28 + 8 * u64(round) { return 1; }
+  }
+  return 0;
+}
+""",
+    # A task whose result is an owner, returned to the spawner across a reused thread.
+    "owner_results": """
+fn make(n:usize, v:u64) -> Buf[u64] {
+  let mut b = Buf[u64](n);
+  for i in 0..n { b[i] = v; }
+  return b;
+}
+fn main() -> i32 {
+  let mut total:u64 = 0;
+  for k in 0..200 {
+    let t = spawn make(64, u64(k));
+    let b = wait(t);
+    total += b[63];
+  }
+  if total != 199 * 200 / 2 { return 1; }
+  return 0;
+}
+""",
+}
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+@pytest.mark.parametrize("sanitizer", ["thread", "address,undefined"])
+@pytest.mark.parametrize("name", sorted(REUSED))
+def test_a_reused_task_thread_carries_nothing_from_one_task_to_the_next(tmp_path, name, sanitizer, cxx):
+    done = watched(tmp_path, compile_source(REUSED[name])[0], cxx, sanitizer)
+    assert done.returncode == 0, done.stderr[-3000:]
+    assert "WARNING" not in done.stderr and "ERROR" not in done.stderr, done.stderr[-3000:]
