@@ -20,6 +20,10 @@ from .fixes import code_actions
 from .highlighting import LEGEND, semantic_tokens
 from .hints import inlay_hints
 from .navigation import definition, hover
+from .workspace import context, within, workspace
+from .workspace import prepare_rename as project_prepare_rename
+from .workspace import references as project_references
+from .workspace import rename as project_rename
 
 CAPABILITIES = {
     "positionEncoding": "utf-16",
@@ -35,6 +39,12 @@ CAPABILITIES = {
     "semanticTokensProvider": {"legend": LEGEND, "full": True},
     "inlayHintProvider": True,
     "codeActionProvider": {"codeActionKinds": ["quickfix"]},
+}
+# The same questions when the document belongs to a project: answered across every file of it.
+ACROSS: dict[str, Any] = {
+    "textDocument/references": lambda w, u, at, p: project_references(w, u, at),
+    "textDocument/prepareRename": lambda w, u, at, p: project_prepare_rename(w, u, at),
+    "textDocument/rename": lambda w, u, at, p: project_rename(w, u, at, str(p.get("newName") or "")),
 }
 IGNORED = {"initialized", "$/cancelRequest", "$/setTrace", "workspace/didChangeConfiguration"}
 UNSUPPORTED: Any = object()
@@ -94,8 +104,17 @@ class Server:
         write_message(self.sink, {"jsonrpc": "2.0", **payload})
 
     def refresh(self, uri: str, text: str) -> None:
-        self.docs[uri] = doc = Document(text, self.docs.get(uri))
-        self.send({"method": "textDocument/publishDiagnostics", "params": {"uri": uri, "diagnostics": doc.diagnostics}})
+        """Analyse the buffer, within its project when it has one; every open file of that project is analysed
+        again too, since an edit to one file can refuse or admit another."""
+        buffers = {u: d.text for u, d in self.docs.items()} | {uri: text}
+        held = context(uri, buffers)
+        again = [u for u in self.docs if u != uri and held and within(*held, u)] if held else []
+        for u in [uri, *again]:
+            inside = within(*held, u) if held else None
+            self.docs[u] = doc = Document(buffers[u], self.docs.get(u), within=inside)
+            self.send(
+                {"method": "textDocument/publishDiagnostics", "params": {"uri": u, "diagnostics": doc.diagnostics}}
+            )
 
     def handle(self, method: str, p: dict) -> Any:
         if method == "initialize":
@@ -120,8 +139,11 @@ class Server:
         doc = self.docs.get(uri)
         if doc is None:
             return None if method.startswith("textDocument/") else UNSUPPORTED
+        at = doc.offset(p.get("position") or {})
+        if method in ACROSS and (ws := workspace(uri, {u: d.text for u, d in self.docs.items()})) is not None:
+            return ACROSS[method](ws, uri, at, p)
         answer = ANSWERS.get(method)
-        return answer(doc, uri, doc.offset(p.get("position") or {}), p) if answer else UNSUPPORTED
+        return answer(doc, uri, at, p) if answer else UNSUPPORTED
 
     def dispatch(self, message: dict) -> bool:
         """Answer one message; True when the server must exit."""

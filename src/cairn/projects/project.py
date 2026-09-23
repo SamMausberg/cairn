@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from itertools import takewhile
 from pathlib import Path, PurePosixPath
@@ -24,6 +25,14 @@ def read_text(path: Path, limit: int) -> str:
     if len(data) > limit:
         raise ProjectError(f"{path.name} exceeds its {limit}-byte input limit.")
     return data.decode("utf-8")
+
+
+def source_of(path: Path, given: Mapping[Path, str] | None) -> str:
+    """A source file as an editor holds it when `given` has it, else as the disk does; either way under the limit."""
+    held = given.get(path.resolve()) if given else None
+    if held is not None and len(held.encode()) > MAX_SOURCE:
+        raise ProjectError(f"{path.name} exceeds its {MAX_SOURCE}-byte input limit.")
+    return held if held is not None else read_text(path, MAX_SOURCE)
 
 
 def canonical(value: str) -> bool:
@@ -194,14 +203,15 @@ def claim(owners: dict[str, str], names: list[str], project: str, relative: str)
             )
 
 
-def load_project(path: str | Path = ".") -> Project:
+def load_project(path: str | Path = ".", given: Mapping[Path, str] | None = None) -> Project:
+    """The project at `path`, its sources read through `given` (resolved path -> text) where an editor holds them."""
     target = Path(path).expanduser()
     if target.is_dir():
         target = target / "cairn.toml"
     target = target.resolve(strict=True)
     root = target.parent
     if target.suffix == ".cairn":
-        body = read_text(target, MAX_SOURCE)
+        body = source_of(target, given)
         claim({}, opened(body, ""), target.stem, target.name)  # One file is a project too, and declares no std.
         return Project(
             root,
@@ -212,8 +222,8 @@ def load_project(path: str | Path = ".") -> Project:
     if target.suffix != ".toml":  # A directory means its cairn.toml; a second configuration is named: app/gpu.toml.
         raise ProjectError("Pass a .cairn file, a project directory, or a manifest (cairn.toml).")
     manifest = read_manifest(target)
-    vendored, fragments = dependencies(root, manifest.table, {root: manifest.name})
-    own = [(r, read_text(contained_file(root, r, ".cairn"), MAX_SOURCE), manifest.name) for r in manifest.sources]
+    vendored, fragments = dependencies(root, manifest.table, {root: manifest.name}, given=given)
+    own = [(r, source_of(contained_file(root, r, ".cairn"), given), manifest.name) for r in manifest.sources]
     units, text, line, byte_count = [], [], 1, 0
     owners: dict[str, str] = {}
     current = ""
@@ -238,7 +248,7 @@ def load_project(path: str | Path = ".") -> Project:
 
 
 def dependencies(
-    root: Path, table: dict, seen: dict[Path, str], depth: int = 0
+    root: Path, table: dict, seen: dict[Path, str], depth: int = 0, given: Mapping[Path, str] | None = None
 ) -> tuple[list[dict], list[tuple[str, str, str]]]:
     """`[dependencies] geometry = "deps/geometry"`: a project vendored inside this one's root. Its sources load
     before ours (its own dependencies first), it contributes modules only, and only what it marks `pub` is
@@ -262,8 +272,8 @@ def dependencies(
         if name in seen.values():
             raise ProjectError(f"Two projects of this build are named {name}; a name pins one project.")
         seen[home] = name
-        inner, inner_fragments = dependencies(home, manifest.table, seen, depth + 1)
-        bodies = [(f"{where}/{s}", read_text(contained_file(home, s, ".cairn"), MAX_SOURCE)) for s in manifest.sources]
+        inner, inner_fragments = dependencies(home, manifest.table, seen, depth + 1, given)
+        bodies = [(f"{where}/{s}", source_of(contained_file(home, s, ".cairn"), given)) for s in manifest.sources]
         rooted = [path for path, body in bodies if "" in set(Parser(body).parse().modules.values())]
         if rooted:
             raise ProjectError(

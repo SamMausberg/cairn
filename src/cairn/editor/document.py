@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import bisect
 import re
+from typing import Any
 
 from ..agent.agent_tools import explain
 from ..compiler.cairnc import Diagnostic, compile_program
+from ..compiler.modules import library_path
 from ..compiler.syntax import IDENT, RESERVED, Program
 from .formatting import CLOSERS, OPENERS, Item, roles, scan
 
@@ -38,11 +40,13 @@ def _units(s: str) -> int:
 class Document:
     """One open buffer with its scan, its checker sites and its diagnostics.
 
-    `good` is the last analysis that compiled: this one, or the one an earlier edit left behind.
+    `good` is the last analysis that compiled: this one, or the one an earlier edit left behind. A document of a
+    project is analysed `within` it: (the project's combined source, where this text starts in it, and a function
+    naming the file and line of a combined line), so what it imports from the project's other files resolves.
     """
 
-    def __init__(self, text: str, previous: Document | None = None, analyse: bool = True):
-        self.text = text
+    def __init__(self, text: str, previous: Document | None = None, analyse: bool = True, within: Any = None):
+        self.text, self.within = text, within
         self.starts = line_starts(text)
         self.code = roles([t for t in scan(text) if not t.comment])
         self.program: Program | None = None
@@ -70,8 +74,9 @@ class Document:
 
     def _analyse(self) -> tuple[list[dict], list[dict]]:
         """The buffer's sites and diagnostics; its program and effect rows when it compiles."""
+        source, start = (self.within[0], self.within[1]) if self.within else (self.text, 0)
         try:
-            program, checker, receipts = compile_program(self.text, capture_sites=True)
+            program, checker, receipts = analysis(source)
         except Diagnostic as error:
             return [], [self._report(error)]
         except Exception as error:  # A compiler failure is reported, never raised at the client.
@@ -83,15 +88,27 @@ class Document:
         self.rows = {n: r["effects"] for n, r in receipts.items()}
         linked = tuple(module + "." for module in program.sources)
         sites = [
-            s
+            {**s, "start": s["start"] - start, "end": s["end"] - start}
             for s in checker.sites
-            if s["end"] > s["start"] >= 0 and s["end"] <= len(self.text) and not s["symbol"].startswith(linked)
+            if s["end"] > s["start"] >= start
+            and s["end"] <= start + len(self.text)
+            and not s["symbol"].startswith(linked)
         ]
         return sites, []
 
     def _report(self, error: Diagnostic) -> dict:
-        d = self.error = explain(error, self.text)
+        d = self.error = explain(error, self.within[0] if self.within else self.text)
         line, column = int(d.get("line") or 0), int(d.get("column") or 0)
+        if self.within and line > 0:  # a line of the project: this file's own, or another file's, said where
+            first = self.within[0].count("\n", 0, self.within[1])
+            if d.get("module") or not first < line <= first + len(self.starts):
+                file, at = (library_path(d["module"]), line) if d.get("module") else self.within[2](line)
+                where = f"{file}:{at}"
+                d = self.error = {**d, "message": f"{where}: {d['message']}", "line": 0, "column": 0}
+                line = column = 0
+            else:
+                line -= first
+                d = self.error = {**d, "line": line}
         start = end = 0
         if line > 0:
             start = min(self.starts[min(line, len(self.starts)) - 1] + max(column - 1, 0), len(self.text))
@@ -99,6 +116,23 @@ class Document:
         hint = d.get("repair_hint")
         shown = problem(self.span(start, end), d["code"], d["message"] + ("\n" + hint if hint else ""))
         return {**shown, "data": {k: d[k] for k in ("code", "repair_hint", "source_line") if k in d}}
+
+
+_LAST: list[Any] = []  # the one source analysed last, and its answer: the open files of a project share it
+
+
+def analysis(source: str) -> tuple[Any, Any, Any]:
+    """`compile_program` with its sites, once per distinct source, so every open file of a project reads one
+    analysis; a refusal is raised again for each of them."""
+    if not _LAST or _LAST[0] != source:
+        try:
+            answer: Any = compile_program(source, capture_sites=True)
+        except Diagnostic as error:
+            answer = error
+        _LAST[:] = [source, answer]
+    if isinstance(_LAST[1], Diagnostic):
+        raise _LAST[1]
+    return _LAST[1]
 
 
 def problem(where: dict, code: str, message: str) -> dict:
