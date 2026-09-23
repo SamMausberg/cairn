@@ -143,3 +143,14 @@ def test_inspect_attaches_the_explanation_on_request(tmp_path, capsys):
     packet = json.loads(capsys.readouterr().out)
     assert {"grow", "std.vec.push[u64]"} <= set(packet["performance"]["functions"])
     assert Path(packet["performance"]["functions"]["grow"]["at"]).name.startswith("program.cairn:")
+
+
+def test_a_compiler_symbol_is_read_back_to_the_function_it_belongs_to():
+    """explain, predict's loop reader and the device reader share one rule: a checked entry, a lean body, a lambda
+    nested in one, and a function whose own name starts as a lean body's symbol does."""
+    from cairn.compiler.codegen import demangled
+
+    names = {"sum", "m_dot", "ci_x"}
+    assert demangled("cf_sum", names) == demangled("ci_sum", names) == "sum"
+    assert demangled("_ZZ8ci_m_dotPKmmENKUlmE_clEm", names) == "m_dot"  # a lane's lambda inside ci_m_dot
+    assert demangled("cf_ci_x", names) == "ci_x" and demangled("cr_gpu_launch", names) is None

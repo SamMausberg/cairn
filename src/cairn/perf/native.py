@@ -125,20 +125,12 @@ def widths(record: str) -> dict[int, int]:
     return out
 
 
-def owner(symbol: str, names: set[str]) -> str | None:
-    for size, rest in re.findall(r"(\d+)(c[fi]_\w+)", symbol) or [("", symbol)]:  # a checked entry or a lean body
-        found = (rest[: int(size)] if size else rest).removeprefix("cf_").removeprefix("ci_")
-        if found in names:
-            return found
-    return None
-
-
 def loops(source: str, cxx: str = "clang++", arch: str | None = None, cpu: str = "native") -> dict[str, Any]:
     """Per CAIRN function, each innermost loop: its line, cycles per pass, elements per pass, whether it is vector."""
     if not mca() or Path(cxx).name.split("-")[0] != "clang++":
         return {"status": "not-run", "reason": "llvm-mca and clang++ are both needed to read a loop's cycles."}
     from ..compiler.cairnc import compile_program
-    from ..compiler.codegen import mangle
+    from ..compiler.codegen import demangled, mangle
 
     p, _, _ = compile_program(source)
     names = {mangle(f.name): f.name for f in p.functions}
@@ -147,7 +139,7 @@ def loops(source: str, cxx: str = "clang++", arch: str | None = None, cpu: str =
     files = {m.group(1) for line in asm.splitlines() if (m := FILE.match(line)) and m.group(2) == "program.cairn"}
     found: dict[str, list[dict[str, Any]]] = {}
     for symbol, body in functions(asm).items():
-        mangled = owner(symbol, set(names))
+        mangled = demangled(symbol, names)
         if mangled is None:
             continue
         for first, last in innermost(body):

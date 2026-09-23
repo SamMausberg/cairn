@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import compile_program, write_program
-from ..compiler.codegen import Emitter, mangle
+from ..compiler.codegen import Emitter, demangled, mangle
 from ..compiler.modules import library_path
 from ..compiler.tree import Expr, Function, Stmt
 from ..projects.toolchain import REMARKS, find, flags
@@ -127,12 +127,9 @@ def remarks(record: str, names: dict[str, str]) -> list[dict[str, Any]]:
 
 
 def function_of(symbol: str, names: dict[str, str]) -> str:
-    """The CAIRN function a C++ symbol belongs to: `cf_name`, `_Z<len>ci_name...`, or a lambda nested in one."""
-    for size, rest in re.findall(r"(\d+)(c[fi]_\w+)", symbol) or [("", symbol)]:
-        found = (rest[: int(size)] if size else rest)[3:] if rest[:3] in {"cf_", "ci_"} else rest
-        if found in names:
-            return names[found]
-    return "(runtime) " + symbol
+    """The CAIRN function a C++ symbol belongs to, or the runtime's."""
+    found = demangled(symbol, names)
+    return names[found] if found else "(runtime) " + symbol
 
 
 def verdicts(entries: list[dict[str, Any]], show) -> list[dict[str, Any]]:

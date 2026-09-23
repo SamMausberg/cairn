@@ -33,14 +33,6 @@ def available() -> bool:
     return bool(shutil.which("nvcc") and shutil.which("cuobjdump"))
 
 
-def owner(symbol: str, names: set[str]) -> str | None:
-    for size, rest in re.findall(r"(\d+)(c[fi]_\w+)", symbol):  # a checked entry or the lean body a lane runs in
-        found = rest[: int(size)].removeprefix("cf_").removeprefix("ci_")
-        if found in names:
-            return found
-    return None
-
-
 def resources(log: str) -> dict[str, dict[str, Any]]:
     """ptxas -v, one entry per kernel: registers, spilled bytes, stack frame, shared memory."""
     out: dict[str, dict[str, Any]] = {}
@@ -79,7 +71,7 @@ def kernels(source: str, arch: str = "sm_120", timeout: int = 600) -> dict[str, 
     if not available():
         return {"status": "not-run", "reason": "nvcc and cuobjdump are needed to read a kernel; neither was found."}
     from ..compiler.cairnc import compile_program
-    from ..compiler.codegen import mangle
+    from ..compiler.codegen import demangled, mangle
 
     cpp, receipt = compile_source(source)
     if "cuda" not in receipt["requires"]:
@@ -98,7 +90,7 @@ def kernels(source: str, arch: str = "sm_120", timeout: int = 600) -> dict[str, 
     used, counted = resources(done.stderr + done.stdout), mix(dump.stdout)
     found: dict[str, list[dict[str, Any]]] = {}
     for symbol, info in used.items():
-        mangled = owner(symbol, set(names))
+        mangled = demangled(symbol, names)
         opcodes = counted.get(symbol, Counter())
         entry = {**info, "instructions": sum(opcodes.values()), "memory": {k: opcodes[o] for o, k in MEMORY.items() if opcodes[o]},
                  "top": dict(opcodes.most_common(8))}  # fmt: skip

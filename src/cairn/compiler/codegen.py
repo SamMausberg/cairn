@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,17 @@ PLACED = {"device": "gpu::Buffer", "pinned": "gpu::Pinned", "unified": "gpu::Uni
 
 def mangle(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]+", "_", name).strip("_")
+
+
+def demangled(symbol: str, names: Collection[str]) -> str | None:
+    """Which of `names`, mangled CAIRN names, a compiler's symbol belongs to: `cf_name` and `ci_name` whole, or held
+    in an Itanium-mangled symbol, as a lambda in a function's body is (`_Z<len>ci_name...`)."""
+    for size, rest in re.findall(r"(\d+)(c[fi]_\w+)", symbol) or [("", symbol)]:
+        found = rest[: int(size)] if size else rest
+        found = found[3:] if found[:3] in {"cf_", "ci_"} else found
+        if found in names:
+            return found
+    return None
 
 
 def local(name: str) -> str:

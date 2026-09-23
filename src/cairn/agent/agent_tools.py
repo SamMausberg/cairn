@@ -245,22 +245,20 @@ class EditSession:
         context = [{"symbol": self.symbol, "source": self.source[self.f.start : self.f.end]}, *self.expansions()]
         text = "\n".join([*(x["source"] for x in context), *(d["signature"] for d in dependencies.values())])
         types = related(declarations(self.program), text)
-        written: dict[str, list[str]] = {}  # By module, each name as its module writes it; expand takes either form.
+        unshown: dict[str, list[str]] = {}  # By module, each name as its module writes it; expand takes either form.
         for n in sorted(n for n in self.receipt["functions"] if n not in self.visible and not n.startswith("std.")):
-            module, short = self.written_name(n)
-            written.setdefault(module, []).append(short)
+            module, short = written(self.functions[n])
+            unshown.setdefault(module, []).append(short)
         effects = self.receipt["functions"][self.symbol]["effects"]
         return {
             **self.header("cairn.packet/2"),
-            **(
-                {"effects": effects} if set(effects) != self.allowed_effects else {}
-            ),  # The row now, when below the ceiling.
+            **({"effects": effects} if set(effects) != self.allowed_effects else {}),  # the row now, below the ceiling
             "types": "\n".join(types.values()),
             "context": context,
             "rule_cards": self.cards(text, {self.symbol, *others}, types),
             "dependencies": dependencies,
             "callers": self.callers,
-            "not_shown": written,
+            "not_shown": unshown,
             "scope": "focused",
             "terms": self.terms(dependencies),
         }
@@ -278,17 +276,12 @@ class EditSession:
     def expansions(self) -> list[dict[str, str]]:
         return [{"symbol": n, "source": self.source_of(n)} for n in self.shown]
 
-    def written_name(self, name: str) -> tuple[str, str]:
-        """(module, the name as that module writes it): an impl method is Trait.Type.method, where the compiler's
-        own name repeats the module three times."""
-        return written(self.functions[name])
-
     @functools.cache  # noqa: B019 (a session lives as long as its host, and its program never changes)
     def aliases(self) -> dict[str, str]:
         """Each written name, bare and module-qualified, for the one function it names; an ambiguous one is left out."""
         seen: dict[str, set[str]] = {}
         for n in self.receipt["functions"]:
-            module, short = self.written_name(n)
+            module, short = written(self.functions[n])
             for alias in {short, f"{module}.{short}" if module else short}:
                 seen.setdefault(alias, set()).add(n)
         return {alias: next(iter(full)) for alias, full in seen.items() if len(full) == 1}
