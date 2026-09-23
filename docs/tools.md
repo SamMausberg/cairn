@@ -224,7 +224,7 @@ $ cairn tune blur.cairn --symbol blur --at n=1e7 --budget-compiles 4
 
 `--measure K` then times the best-ranked few and the current plan on this host, halving the field each round with more blocks for the survivors, and reports how many pairs ran in the predicted order; on a busy machine two close plans are within noise of each other. Timing device plans runs device code, so only the owner's targets do it: `make tune-device FILE=f.cairn SYMBOL=f AT=n=1e8`, which holds the device lock, rests after each run and stops after 64, and `make calibrate-device`, which replaces the device profile's assumed figures with measured ones. No agent runs either.
 
-`--compare A --compare B` reports how plan `B` differs from plan `A` instead of searching. A plan is written as its items, `grain 1; lanes 8`, or as `none`. Every line has one of five labels: a compiler observation (what ptxas, cuobjdump or the model said, with nothing run), a runtime measurement, a profiler observation, a hypothesis or a suggested experiment.
+`--compare A --compare B` reports how plan `B` differs from plan `A` instead of searching. A plan is written as its items, `grain 1; lanes 8`, or as `none`, and `use g` adds the selection of the implementation `g`, which is then priced and compiled as `g`; a side without `use` is the reference. Every line has one of five labels: a compiler observation (what ptxas, cuobjdump or the model said, with nothing run), a runtime measurement, a profiler observation, a hypothesis or a suggested experiment.
 
 ```text
 $ cairn tune blur.cairn --symbol blur --at n=1e7 --compare none --compare "stage 1; block 128"

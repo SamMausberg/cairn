@@ -21,9 +21,10 @@ from typing import Any
 from ..compiler.cairnc import compile_program
 from ..projects.target import DeviceTarget, resolve
 from . import model
-from .plan_source import Placement, Plan, contract, shown, written
+from .plan_source import Placement, Plan, contract, written
 from .profile import Profile, default
 from .resources import Inspector, device_identity, host_target
+from .tune import label, variant
 from .work import count
 
 COMPILER, MEASURED, PROFILER, HYPOTHESIS, EXPERIMENT = (
@@ -59,25 +60,39 @@ def parse_plan(text: str) -> Plan:
     return plan
 
 
+def parse_candidate(text: str) -> tuple[Plan, str | None]:
+    """A plan as `parse_plan` reads it, and `use g` or `plan f use g;` for the implementation it selects."""
+    import re
+
+    found = re.search(r"(?:\bplan\s+[A-Za-z_][\w.]*\s+)?\buse\s+([A-Za-z_][\w.]*)\s*;?", text)
+    rest = (text[: found.start()] + text[found.end() :]).strip(" ;") if found else text
+    return parse_plan(rest or "none"), found.group(1) if found else None
+
+
 def line(kind: str, by: str, text: str, **values: Any) -> dict[str, Any]:
     return {"kind": kind, "by": by, "text": text, **values}
 
 
-def compare(source: str, name: str, a: Plan, b: Plan, sizes: list[dict[str, float]], profile: Profile | None = None,
+def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]], profile: Profile | None = None,
             arch: str | None = None, history: Any = None, target: DeviceTarget | None = None, compiles: int = 2,
             artifacts: bool = False, cxx: str = "clang++") -> dict[str, Any]:  # fmt: skip
     """The difference report of candidate `b` against candidate `a` of `name` at `sizes`. Device candidates are
     compiled for `target` (at most `compiles` compiles; a kept inspection is free), and `history` is read for the
     measurements and profiles that still hold for this host (`arch`, `cxx`) or the device target, `target` or the
-    one resolved here."""
+    one resolved here. A candidate is a plan, or a plan and the implementation it selects (`parse_candidate`);
+    without one, the reference runs."""
     from ..agent import history as kept
+    from .tune import keyed
 
     chosen, card = profile or default(), target or resolve(required=False)
     placement = Placement(source, name)
-    sides = {"a": a, "b": b}
-    programs = {k: placement.apply(plan) for k, plan in sides.items()}
-    checked = {k: compile_program(text) for k, text in programs.items()}  # a refused plan raises its diagnostic
-    costs = {k: count(p, checker, {name})[name] for k, (p, checker, _) in checked.items()}
+    module = placement.f.module
+    sides = {k: (plan, f"{module}.{use}" if use and module and "." not in use else use)
+             for k, (plan, use) in (("a", keyed(a)), ("b", keyed(b)))}  # fmt: skip
+    runs = {k: use or name for k, (_, use) in sides.items()}  # whose code runs where it applies
+    programs = {k: placement.apply(plan, use.rsplit(".", 1)[-1] if use else None) for k, (plan, use) in sides.items()}
+    checked = {k: compile_program(text) for k, text in programs.items()}  # a refused candidate raises its diagnostic
+    costs = {k: count(p, checker, {runs[k]})[runs[k]] for k, (p, checker, _) in checked.items()}
     lines: list[dict[str, Any]] = []
     for s in sizes:
         pa, pb = (model.predict(costs[k], chosen, s, arch) for k in "ab")
@@ -92,10 +107,10 @@ def compare(source: str, name: str, a: Plan, b: Plan, sizes: list[dict[str, floa
 
         inspector = Inspector(card, kept.History(history) if history is not None else None) if card else None
         for k in "ab" if inspector else ():
-            found = inspector.kept(programs[k], name, checked[k][0])
+            found = inspector.kept(programs[k], runs[k], checked[k][0])
             if found is None and compiles > 0 and available():
                 compiles -= 1
-                found = inspector.inspect(programs[k], name, checked[k][0], checked[k][1])
+                found = inspector.inspect(programs[k], runs[k], checked[k][0], checked[k][1])
             if found is not None:
                 read[k] = found
         if set(read) == {"a", "b"} and all(r["status"] == "read" for r in read.values()):
@@ -118,25 +133,27 @@ def compare(source: str, name: str, a: Plan, b: Plan, sizes: list[dict[str, floa
             why = "nvcc and cuobjdump are needed, or the compile budget was spent" if card else "no device target"
             lines.append(line(COMPILER, "this report", f"no device resources for {missing}: {why}"))
     targets = {kept.digest(host_target(arch, cxx)), device_identity(card)}
-    held = history_lines(source, name, sides, sizes, history, targets) if history is not None else {}
+    table = checked["a"][2].get(name, {}).get("implementations", {})  # each implementation's identity
+    variants = {k: variant(key, table) for k, key in sides.items()}
+    held = history_lines(source, name, variants, sizes, history, targets) if history is not None else {}
     lines += held.get("lines", [])
     lines += reasoning(lines, read, device, sides, name)
     if history is not None:  # what the report only supposes goes into the history as that, and nothing more
-        variant = {"compare": [dict(a), dict(b)]}
-        made = kept.identity(kept.as_written(source, name), variant, contract(source, name),
+        pair = {"compare": [variants["a"], variants["b"]]}
+        made = kept.identity(kept.as_written(source, name), pair, contract(source, name),
                              device_identity(card) if device else kept.digest(host_target(arch, cxx)))  # fmt: skip
-        label = f"{shown(placement.name, b)} against {shown(placement.name, a)}"
-        claims = [kept.record(history, "hypothesis", name, label, made, {"claim": x["text"], "by": x["by"]}, variant)
+        named = f"{label(name, sides['b'])} against {label(name, sides['a'])}"
+        claims = [kept.record(history, "hypothesis", name, named, made, {"claim": x["text"], "by": x["by"]}, pair)
                   for x in lines if x["kind"] == HYPOTHESIS]  # fmt: skip
         for x in lines:
             if x["kind"] == EXPERIMENT:
                 tests = [c["id"] for c in claims] or ["which of a and b is faster"]
-                kept.record(history, "experiment", name, label, made, {"run": x["text"], "tests": tests}, variant)
+                kept.record(history, "experiment", name, named, made, {"run": x["text"], "tests": tests}, pair)
     report: dict[str, Any] = {
         "schema": "cairn.compare/1",
         "function": name,
-        "a": shown(placement.name, a),
-        "b": shown(placement.name, b),
+        "a": label(name, sides["a"]),
+        "b": label(name, sides["b"]),
         "lines": lines,
         "kinds": [COMPILER, MEASURED, PROFILER, HYPOTHESIS, EXPERIMENT],
     }
@@ -145,7 +162,7 @@ def compare(source: str, name: str, a: Plan, b: Plan, sizes: list[dict[str, floa
     return report
 
 
-def history_lines(source: str, name: str, sides: dict[str, Plan], sizes: list[dict[str, float]], where: Any,
+def history_lines(source: str, name: str, sides: dict[str, Any], sizes: list[dict[str, float]], where: Any,
                   targets: set[str]) -> dict[str, Any]:  # fmt: skip
     """The measurements and profiles the history holds for either candidate that still hold now, for one of
     `targets`, as report lines; a record for another target or an older program is counted as no longer holding."""
@@ -154,10 +171,9 @@ def history_lines(source: str, name: str, sides: dict[str, Plan], sizes: list[di
     records = kept.History(where)
     split = records.judged(name, kept.as_written(source, name), {kept.digest(contract(source, name))}, targets)
     out, ids = [], []
-    for k, plan in sides.items():
-        variant = {"plan": dict(plan)}
+    for k, made in sides.items():  # each side's variant, as a search records it
         for r in split["current"]:
-            if r["variant"] != variant or r["kind"] not in {"measurement", "profile"}:
+            if r["variant"] != made or r["kind"] not in {"measurement", "profile"}:
                 continue
             if r["kind"] == "measurement" and sizes and r["detail"].get("sizes") not in sizes:
                 continue
@@ -171,7 +187,7 @@ def history_lines(source: str, name: str, sides: dict[str, Plan], sizes: list[di
                 out.append(line(PROFILER, f"{d['tool']}, {d['run']}", f"{k}: {d.get('reading', d)}", side=k,
                                 record=r["id"]))  # fmt: skip
             ids.append(r["id"])
-    stale = [r["id"] for r in split["stale"] if r["variant"] in ({"plan": dict(p)} for p in sides.values())]
+    stale = [r["id"] for r in split["stale"] if r["variant"] in sides.values()]
     if stale:
         out.append(line(COMPILER, "the history", f"{len(stale)} earlier records of these candidates no longer hold "
                         "(the function, its contract, the target or the compiler differ) and are left out",
@@ -179,7 +195,7 @@ def history_lines(source: str, name: str, sides: dict[str, Plan], sizes: list[di
     return {"lines": out, "ids": ids}
 
 
-def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], device: bool, sides: dict[str, Plan],
+def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], device: bool, sides: dict[str, Any],
               name: str) -> list[dict[str, Any]]:  # fmt: skip
     """Hypotheses the observations allow, each with the experiment that would test it. None is stated as a cause."""
     from .profile import device as card
@@ -196,7 +212,7 @@ def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], devi
         a, b = got["a"], got["b"]
         spec = card()
         if spec is not None and a["registers"] != b["registers"]:
-            block = {k: dict(sides[k]).get("block", 256) for k in "ab"}
+            block = {k: dict(sides[k][0]).get("block", 256) for k in "ab"}
             resident = {k: spec.occupancy(got[k]["registers"], block[k], got[k]["shared_bytes"] +
                                           got[k]["dynamic_shared_bytes"]) for k in "ab"}  # fmt: skip
             if resident["a"] != resident["b"]:

@@ -174,9 +174,10 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"tune"}, "--no-history", {"action": "store_true", "help": "Record nothing and answer from nothing kept."}),
     ({"tune"}, "--since", {"type": Path, "metavar": "TUNE.json", "help": "Print only what changed since this saved "
                            "answer: the candidates whose row changed, and what else differs."}),
-    ({"tune"}, "--compare", {"action": "append", "default": [], "metavar": "PLAN", "help": "Give twice, as `none` or "
-                             "items such as `grain 1; lanes 8`: report how the second plan differs from the first, "
-                             "each line labelled by the kind of evidence it is, instead of searching."}),
+    ({"tune"}, "--compare", {"action": "append", "default": [], "metavar": "PLAN", "help": "Give twice, as `none`, "
+                             "items such as `grain 1; lanes 8`, or with `use g` for an implementation: report how the "
+                             "second differs from the first, each line labelled by the kind of evidence it is, "
+                             "instead of searching."}),
     ({"tune"}, "--artifacts", {"action": "store_true", "help": "With --compare, add the path of every file behind "
                                "the report."}),
     ({"predict", "shot"}, "--against", {"type": Path, "metavar": "BEFORE", "help": "What changing BEFORE into this "
@@ -597,7 +598,7 @@ def main(argv: list[str] | None = None) -> int:
 
                 if len(a.compare) != 2:
                     raise ProjectError("--compare names two plans: the one to compare against, then the other.")
-                first, second = (feedback.parse_plan(x) for x in a.compare)
+                first, second = (feedback.parse_candidate(x) for x in a.compare)
                 answer = feedback.compare(project.source, a.symbol[0], first, second, priced.parse_sizes(a.at),
                                           supplied, arch, kept, device, a.budget_compiles, a.artifacts, a.cxx)  # fmt: skip
                 print(feedback.lines_for_people(answer)) if terminal.human(FORMAT) else report(answer)

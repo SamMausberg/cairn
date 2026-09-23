@@ -53,6 +53,7 @@ def investigation(source: str, symbol: str, where: str | Path, targets: dict[str
     from ..compiler.cairnc import compile_program
     from ..perf.plan_source import Placement, contract, shown, written
     from ..perf.regions import identified
+    from ..perf.tune import label
     from .projection import signature
 
     placement = Placement(source, symbol)
@@ -78,7 +79,7 @@ def investigation(source: str, symbol: str, where: str | Path, targets: dict[str
     for x in experiments:  # done once both candidates it compares have a kept run of the kind it asks for
         pair = x.pop("variant", {}).get("compare")
         asks = "profiled" if "profil" in x["run"] else "measured"
-        labels = [shown(placement.name, written(p)) for p in pair] if pair else []
+        labels = [label(symbol, (written(v.get("plan", {})), v.get("use"))) for v in pair] if pair else []
         x["done"] = bool(labels) and all(candidates.get(label, {}).get(asks) for label in labels)
     recent = sorted(candidates, key=lambda c: max(e["at"] for es in candidates[c].values() for e in es), reverse=True)
     moved: dict[str, int] = {}

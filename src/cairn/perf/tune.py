@@ -52,11 +52,7 @@ class Recorder:
         self.implementations = implementations or {}  # the receipt's table: each implementation's identity
 
     def variant(self, key: Key) -> dict[str, Any]:
-        """What makes the candidate `key`: its plan, and the implementation it selects with that implementation's
-        identity, so an edit to the implementation leaves the records of the candidate stale."""
-        plan, use = key
-        chosen = {"use": use, "implementation": self.implementations.get(use, {}).get("identity")} if use else {}
-        return {"plan": dict(plan), **chosen}
+        return variant(key, self.implementations)
 
     def put(self, kind: str, key: Key, target: str, detail: dict, artifact: str | None = None) -> None:
         identity = kept.identity(self.base, self.variant(key), self.contract, target, artifact)
@@ -71,6 +67,14 @@ class Recorder:
 
 
 Key = tuple[Plan, str | None]  # a plan, and the implementation it selects by qualified name, or None
+
+
+def variant(key: Key, implementations: dict[str, Any]) -> dict[str, Any]:
+    """What makes the candidate `key`: its plan, and the implementation it selects with that implementation's
+    identity from the receipt's table, so an edit to the implementation leaves the records of the candidate stale."""
+    plan, use = key
+    chosen = {"use": use, "implementation": implementations.get(use, {}).get("identity")} if use else {}
+    return {"plan": dict(plan), **chosen}
 
 
 def label(name: str, key: Key) -> str:
@@ -359,7 +363,9 @@ def lines(result: dict[str, Any], shown_rows: int = 8) -> str:
     for i, row in enumerate(result["candidates"][:shown_rows], 1):
         read = row.get("resources", {})
         seen = f"  {read['registers']} registers, {read['spill_bytes']} spilled" if "registers" in read else ""
-        out.append(f"  {i:>2}  {row['plan']:<44} {duration(row['predicted_ns']):>10} predicted{seen}")
+        held = row.get("validated")
+        held = "" if held is None else f"  {held['evidence']}" if isinstance(held, dict) else "  not validated"
+        out.append(f"  {i:>2}  {row['plan']:<44} {duration(row['predicted_ns']):>10} predicted{seen}{held}")
     if len(result["candidates"]) > shown_rows:
         out.append(f"      and {len(result['candidates']) - shown_rows} more")
     out.append(f"chosen: {result['chosen']['plan']}")

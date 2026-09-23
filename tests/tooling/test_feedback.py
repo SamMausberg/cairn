@@ -10,7 +10,7 @@ from test_predict import MACHINE
 
 from cairn.agent.history import History, as_written, digest, identity, record
 from cairn.cli import main
-from cairn.perf.feedback import EXPERIMENT, HYPOTHESIS, compare, lines_for_people, parse_plan
+from cairn.perf.feedback import EXPERIMENT, HYPOTHESIS, compare, lines_for_people, parse_candidate, parse_plan
 from cairn.perf.plan_source import contract
 from cairn.perf.resources import device_identity, host_target
 from cairn.projects.target import parse
@@ -82,6 +82,20 @@ def test_a_timing_comes_from_the_history_with_its_procedure_and_only_while_it_ho
     again = compare(edited, "spread", (), FAST, [{"n": 1e6}], MACHINE, history=tmp_path)
     assert not [x for x in again["lines"] if x["kind"] == "runtime measurement"]
     assert any("no longer hold" in x["text"] for x in again["lines"])
+
+
+def test_an_implementation_is_compared_with_the_reference_as_its_own_code():
+    total = ("fn total(n:usize, xs:ro<u64>[n]) -> u64 effects(pure, par:host) {\n  let mut s:u64 = 0;\n"
+             "  for i in 0..n { s += xs[i]; }\n  return s;\n}\n")  # fmt: skip
+    lanes = ("fn total_lanes(n:usize, xs:ro<u64>[n]) -> u64 implements total when n >= 65536 {\n"
+             "  let s = reduce + parallel i in n yield xs[i];\n  return s;\n}\nplan total use total_lanes;\n")  # fmt: skip
+    assert parse_candidate("use total_lanes") == parse_candidate("plan total use total_lanes;") == ((), "total_lanes")
+    assert parse_candidate("grain 1; lanes 8") == (FAST, None)
+    report = compare(total + lanes, "total", parse_candidate("none"), parse_candidate("use total_lanes"),
+                     [{"n": 1e7}], MACHINE)  # fmt: skip
+    assert report["a"] == "(no plan for total)" and report["b"] == "plan total use total_lanes;"
+    predicted = report["lines"][0]
+    assert predicted["b"] < predicted["a"]  # b is priced as total_lanes, the code that runs where n >= 65536
 
 
 def test_the_command_compares_two_plans_instead_of_searching(tmp_path, capsys):
