@@ -98,7 +98,7 @@ Growth doubles and moves elements with `swap`, so an owner is never copied, and 
 
 ## std.text
 
-Numbers to bytes and back, and the searching a line protocol needs. A substring cannot be returned, so a search answers with an index and the caller passes `s[lo..hi]` on.
+Numbers to bytes and back, and the searching a line protocol needs. A search answers with an index, and the caller passes `s[lo..hi]` on.
 
 ```cairn
 import std.core (Option, Result);
