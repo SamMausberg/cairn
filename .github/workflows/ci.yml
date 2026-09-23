@@ -70,13 +70,14 @@ jobs:
           sudo apt-get install -y clang g++ libz3-4 python3-venv qemu-system-arm
           python3 -m venv .venv
           .venv/bin/python -m pip install -e '.[dev]'
-      # The sanitizers of the runner's clang 18 and g++ 13 cannot place their shadow memory under the kernel's 32
-      # bits of mmap randomness, and a sanitized program then loops instead of starting: the soundness part hung
-      # there for its whole limit, in a program that runs in a second and a half elsewhere. 28 bits is what they expect.
-      - name: Keep the sanitizers' address space where they expect it
-        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      # Ubuntu pipes every crash to apport, and a pipe takes a core whatever RLIMIT_CORE says unless
+      # it is 1. The sanitizers of the runner's clang 18 and g++ 13 set it to 0, so each expected trap in a sanitized
+      # test program waited for its core to be piped: 1.4 s a trap under clang 18 on a desktop, and the soundness part
+      # ran past its limit on the hundreds of traps in the elision test. Cores written to a file obey the limit.
+      - name: Write cores to a file, which RLIMIT_CORE of 0 turns off, instead of piping each one to apport
+        run: cat /proc/sys/kernel/core_pattern && sudo sysctl -w kernel.core_pattern=core
       - name: Unit, native, sanitizer and agent-layer tests (GPU, Lean and QEMU parts skip when absent)
-        run: .venv/bin/python -m pytest -q ${{ matrix.paths }} -n auto --durations=25
+        run: ulimit -c 0 && .venv/bin/python -m pytest -q ${{ matrix.paths }} -n auto --durations=25
   proofs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
