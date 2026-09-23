@@ -6,4 +6,5 @@ import Cairn.Ownership
 import Cairn.Region
 import Cairn.Facts
 import Cairn.Layout
+import Cairn.Cooperative
 import Cairn.Audit

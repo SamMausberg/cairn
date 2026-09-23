@@ -100,6 +100,15 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Layout.gappy_gap",
     "Cairn.Layout.doubled_overlap",
     "Cairn.Layout.cleared_clash",
+    # The phase rule of a cooperative region: no clashing steps, one result, and a refusal of each kind.
+    "Cairn.Cooperative.no_race",
+    "Cairn.Cooperative.deterministic",
+    "Cairn.Cooperative.block_deterministic",
+    "Cairn.Cooperative.omitted_barrier_refused",
+    "Cairn.Cooperative.barrier_orders",
+    "Cairn.Cooperative.conflict_refused",
+    "Cairn.Cooperative.reuse_refused",
+    "Cairn.Cooperative.divergent_barrier_refused",
 )
 
 # `#print axioms` prints one line per declaration; names may end in a prime.

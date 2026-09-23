@@ -1,0 +1,90 @@
+{
+  "ptx_command": "/usr/local/cuda/bin/nvcc -std=c++20 -O3 --fmad=false -arch=sm_120 --extended-lambda --expt-relaxed-constexpr -Werror all-warnings -ccbin /usr/bin/g++ -x cu -Xcompiler -ffp-contract=off,-fno-fast-math,-fexceptions,-fno-rtti,-Wall,-Wextra,-Werror,-Wno-unused-parameter,-Wno-unused-variable,-Wno-unused-but-set-variable,-march=x86-64,-fPIC p.cpp -ptx -o p.ptx",
+  "cubin_command": "/usr/local/cuda/bin/nvcc -std=c++20 -O3 --fmad=false -arch=sm_120 --extended-lambda --expt-relaxed-constexpr -Werror all-warnings -ccbin /usr/bin/g++ -x cu -Xcompiler -ffp-contract=off,-fno-fast-math,-fexceptions,-fno-rtti,-Wall,-Wextra,-Werror,-Wno-unused-parameter,-Wno-unused-variable,-Wno-unused-but-set-variable,-march=x86-64,-fPIC p.cpp -cubin -o p.cubin",
+  "resource_usage": [
+    {
+      "symbol": "_ZN2cr4coop6blocksILj256ELm8192EZ13ci_row_sums_3mmmPKmPmEUlRNS0_6DeviceEmmE_EEvmT1_",
+      "REG": 34,
+      "STACK": 0,
+      "SHARED": 9216,
+      "LOCAL": 0,
+      "CONSTANT[0]": 944
+    },
+    {
+      "symbol": "_ZN2cr4coop6blocksILj256ELm6144EZ13ci_row_sums_2mmmPKmPmEUlRNS0_6DeviceEmmE_EEvmT1_",
+      "REG": 44,
+      "STACK": 0,
+      "SHARED": 7168,
+      "LOCAL": 0,
+      "CONSTANT[0]": 944
+    },
+    {
+      "symbol": "_ZN2cr4coop6blocksILj256ELm2048EZ13ci_block_sumsmPKmmPmEUlRNS0_6DeviceEmmE_EEvmT1_",
+      "REG": 24,
+      "STACK": 0,
+      "SHARED": 3072,
+      "LOCAL": 0,
+      "CONSTANT[0]": 928
+    },
+    {
+      "symbol": "_ZN2cr4coop6blocksILj256ELm4224EZ12ci_transposemmmPfPKfEUlRNS0_6DeviceEmmE_EEvmT1_",
+      "REG": 40,
+      "STACK": 0,
+      "SHARED": 5248,
+      "LOCAL": 0,
+      "CONSTANT[0]": 952
+    }
+  ],
+  "ptx": [
+    {
+      "symbol": "_ZN2cr4coop6blocksILj256ELm4224EZ12ci_transposemmmPfPKfEUlRNS0_6DeviceEmmE_EEvmT1_",
+      "static_shared_bytes": [
+        4224
+      ],
+      "bar.sync": 3,
+      "shfl.sync": 0,
+      "cp.async": 0,
+      "cp.async.wait_group": [
+        "0"
+      ]
+    },
+    {
+      "symbol": "_ZN2cr4coop6blocksILj256ELm2048EZ13ci_block_sumsmPKmmPmEUlRNS0_6DeviceEmmE_EEvmT1_",
+      "static_shared_bytes": [
+        2048
+      ],
+      "bar.sync": 6,
+      "shfl.sync": 10,
+      "cp.async": 0,
+      "cp.async.wait_group": [
+        "0"
+      ]
+    },
+    {
+      "symbol": "_ZN2cr4coop6blocksILj256ELm6144EZ13ci_row_sums_2mmmPKmPmEUlRNS0_6DeviceEmmE_EEvmT1_",
+      "static_shared_bytes": [
+        6144
+      ],
+      "bar.sync": 8,
+      "shfl.sync": 10,
+      "cp.async": 16,
+      "cp.async.wait_group": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "symbol": "_ZN2cr4coop6blocksILj256ELm8192EZ13ci_row_sums_3mmmPKmPmEUlRNS0_6DeviceEmmE_EEvmT1_",
+      "static_shared_bytes": [
+        8192
+      ],
+      "bar.sync": 8,
+      "shfl.sync": 10,
+      "cp.async": 6,
+      "cp.async.wait_group": [
+        "0",
+        "2"
+      ]
+    }
+  ]
+}

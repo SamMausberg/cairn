@@ -16,6 +16,7 @@ import Cairn.Ownership
 import Cairn.Region
 import Cairn.Facts
 import Cairn.Layout
+import Cairn.Cooperative
 
 namespace Cairn
 
@@ -151,6 +152,17 @@ namespace Cairn
 #print axioms Cairn.Ownership.Regress.groupLeaseFromOnePath_races
 #print axioms Cairn.Ownership.Regress.groupFactFromOnePath_races
 #print axioms Cairn.Ownership.Regress.group_witnesses_are_rejected
+
+/-! ### The phase rule: an accepted phase has no clashing steps and one result, and a block of them one result -/
+
+#print axioms Cairn.Cooperative.no_race
+#print axioms Cairn.Cooperative.deterministic
+#print axioms Cairn.Cooperative.block_deterministic
+#print axioms Cairn.Cooperative.omitted_barrier_refused
+#print axioms Cairn.Cooperative.barrier_orders
+#print axioms Cairn.Cooperative.conflict_refused
+#print axioms Cairn.Cooperative.reuse_refused
+#print axioms Cairn.Cooperative.divergent_barrier_refused
 
 /-! The executable regression the Python gate asserts on. -/
 
