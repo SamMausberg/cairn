@@ -8,8 +8,8 @@ from typing import Any
 
 from ..compiler.cairnc import compile_program
 from ..projects.target import DeviceTarget
-from . import model
-from .profile import Profile, default, packaged
+from . import cooperative_model, model
+from .profile import Device, Profile, default, packaged
 from .work import Cost, Work, count
 
 LADDER = (1e3, 1e5, 1e7)  # the sizes a one-extent function is priced at when none are given
@@ -24,7 +24,7 @@ def work(w: Work) -> dict[str, Any]:
     }
 
 
-def described(c: Cost) -> dict[str, Any]:
+def described(c: Cost, card: Device | None = None, site: Any = None) -> dict[str, Any]:
     return {
         "extents": c.extents,
         "sequential": work(c.seq),
@@ -36,6 +36,7 @@ def described(c: Cost) -> dict[str, Any]:
                 "runs": r.runs.render(),
                 "per_index": work(r.body),
                 **({"plan": list(r.plan)} if any(r.plan) else {}),
+                **({"cooperative": cooperative_model.described(r, card, site)} if r.coop is not None else {}),
             }
             for r in c.regions
         ],
@@ -64,9 +65,9 @@ def costs(source: str, symbols: set[str] | None) -> dict[str, Cost]:
 def targeted(found: dict[str, Cost], profile: Profile, device: DeviceTarget | None) -> dict[str, Any]:
     """The device target a prediction with device work is for, held to the device card that prices that work: the
     profile's own, or the packaged one the model falls back to. Without a target it names the card alone."""
-    if not any(r.kind in {"device", "tensor"} for c in found.values() for r in c.regions) and not any(
-        c.transfers for c in found.values()
-    ):
+    device_work = any(r.kind in {"device", "tensor"} or (r.coop is not None and r.coop.device)
+                      for c in found.values() for r in c.regions)  # fmt: skip
+    if not device_work and not any(c.transfers for c in found.values()):
         return {}
     card = (profile if profile.device else packaged("rtx-5070-ti")).source["device"]
     if device is None:
@@ -76,16 +77,39 @@ def targeted(found: dict[str, Cost], profile: Profile, device: DeviceTarget | No
     return {"device_target": device.record()}
 
 
+def inspected(source: str, found: dict[str, Cost], device: DeviceTarget | None) -> dict[str, Any]:
+    """Compile `source`'s device code for `device` and give each cooperative region what ptxas read of its kernel."""
+    from .device import available, kernels
+
+    if device is None:
+        return {"status": "not-run", "reason": "--inspect compiles for a device target; name one with --device-target."}
+    if not available():
+        return {"status": "not-run", "reason": "nvcc and cuobjdump are needed to read a kernel; neither was found."}
+    read = kernels(source, device)
+    if read["status"] != "read":
+        return {"status": read["status"], "reason": read.get("stderr", read.get("reason", ""))[-2000:]}
+    return {"status": "read", "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+            "device_target": read["arch"], "regions": cooperative_model.read(found, read["kernels"])}  # fmt: skip
+
+
 def report(source: str, sizes: list[dict[str, float]] | None = None, symbols: set[str] | None = None,
            profile: Profile | None = None, arch: str | None = None,
-           device: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
-    """Every function of `source`, or `symbols` alone, priced at each of `sizes`, device work for `device`."""
+           device: DeviceTarget | None = None, inspect: bool = False, site: Any = None) -> dict[str, Any]:  # fmt: skip
+    """Every function of `source`, or `symbols` alone, priced at each of `sizes`, device work for `device`. With
+    `inspect`, the device code is compiled for `device` first and each cooperative region's kernel read by ptxas, so
+    its registers count toward how many blocks an SM holds; nothing runs. `site` names a program line's file."""
     chosen = profile or default()
     out: dict[str, Any] = {}
     found = costs(source, symbols)
     target = targeted(found, chosen, device)
+    if inspect:
+        target["inspection"] = inspected(source, found, device)
     for name, c in found.items():
-        entry = {"line": c.line, **described(c), "formula": model.formula(c, chosen, arch)}
+        entry = {
+            "line": c.line,
+            **described(c, chosen.device or packaged("rtx-5070-ti").device, site),
+            "formula": model.formula(c, chosen, arch),
+        }
         entry["predictions"] = [{"sizes": s, **model.predict(c, chosen, s, arch)} for s in ladder(c, sizes or [])]
         if c.unknown:
             entry["unknown"] = c.unknown
@@ -102,11 +126,14 @@ def report(source: str, sizes: list[dict[str, float]] | None = None, symbols: se
 
 def delta(before: str, after: str, sizes: list[dict[str, float]] | None = None, symbols: set[str] | None = None,
           profile: Profile | None = None, arch: str | None = None,
-          device: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
-    """What changing `before` into `after` is predicted to do to every function both have, at each size."""
+          device: DeviceTarget | None = None, inspect: bool = False) -> dict[str, Any]:  # fmt: skip
+    """What changing `before` into `after` is predicted to do to every function both have, at each size, with what
+    changes in each cooperative region's resources beside the time."""
     chosen = profile or default()
     old, new = costs(before, symbols), costs(after, symbols)
     target = targeted({**{f"old:{k}": v for k, v in old.items()}, **new}, chosen, device)
+    if inspect:
+        target["inspection"] = {"before": inspected(before, old, device), "after": inspected(after, new, device)}
     out: dict[str, Any] = {}
     for name in sorted(set(old) & set(new)):
         rows = []
@@ -116,6 +143,8 @@ def delta(before: str, after: str, sizes: list[dict[str, float]] | None = None, 
                          "ratio": round(b["ns"] / a["ns"], 3) if a["ns"] else None,
                          "bound": [a["bound"], b["bound"]], "confidence": min(a["confidence"], b["confidence"],
                                                                                  key=["low", "medium", "high"].index)})  # fmt: skip
+            if changed := cooperative_model.changed(a["parts"], b["parts"]):
+                rows[-1]["cooperative"] = changed
         out[name] = rows
     return {"schema": "cairn.predict.delta/1", "predicted": "Neither version was built or run.",
             "profile": chosen.describe(), "arch": arch or model.measured(chosen), **target, "functions": out,
@@ -140,12 +169,16 @@ def lines(result: dict[str, Any]) -> str:
                 ratio = f"x{row['ratio']}" if row["ratio"] is not None else ""
                 out.append(f"  {sizes:<12} {duration(row['before_ns']):>10} -> {duration(row['after_ns']):<10} {ratio}"
                            f"  {row['bound'][1]}, {row['confidence']}")  # fmt: skip
+                out += cooperative_model.said_changed(row.get("cooperative", []))
             continue
         out.append(f"{name}  {entry['formula']}")
+        for r in entry["regions"]:
+            out += cooperative_model.said(r) if "cooperative" in r else []
         for p in entry["predictions"]:
             sizes = ", ".join(f"{k}={v:g}" for k, v in p["sizes"].items()) or "-"
             light = f"{p['speed_of_light']:.0%} of speed of light" if p["speed_of_light"] else ""
             out.append(f"  {sizes:<12} {duration(p['ns']):>10}  {p['bound']:<20} {light:<24} {p['confidence']}")
+            out += [cooperative_model.said_at(part) for part in p["parts"] if "cooperative region" in part["what"]]
             out += [f"    because {why}" for why in p["why"] if p["confidence"] == "low"]
     return "\n".join(out)
 

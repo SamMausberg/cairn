@@ -194,6 +194,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"predict", "shot"}, "--against", {"type": Path, "metavar": "BEFORE", "help": "What changing BEFORE into this "
                                          "program does: predicted costs, or for shot the rows of --symbol."}),
     ({"predict", "tune"}, "--profile", {"type": Path, "help": "A cairn.machine/1 profile; default: the packaged one."}),
+    ({"predict"}, "--inspect", {"action": "store_true", "help": "Compile the device code for the device target and "
+                                "read each cooperative region's registers from ptxas; nothing runs."}),
     ({"build", "run", "export"}, "--out", {"type": Path}),
     ({"build", "run", "explain", "predict", "tune", "state", "export"}, "--arch", {"choices": sorted(ARCHS)}),
     ({"build", "run"}, "--target", {"choices": sorted(TARGETS), "help": "Freestanding profile; default hosted."}),
@@ -601,12 +603,12 @@ def main(argv: list[str] | None = None) -> int:
             chosen = set(a.symbol) if a.symbol else None
             sizes, supplied = priced.parse_sizes(a.at), Profile.load(a.profile) if a.profile else None
             arch = resolve_arch(a.arch or project.arch)
-            device = resolve_device(a.device_target, project.device_target, required=False)
+            device = resolve_device(a.device_target, project.device_target, required=a.inspect)
             if a.against:
                 before = load_project(a.against).source
-                answer = priced.delta(before, project.source, sizes, chosen, supplied, arch, device)
+                answer = priced.delta(before, project.source, sizes, chosen, supplied, arch, device, a.inspect)
             else:
-                answer = priced.report(project.source, sizes, chosen, supplied, arch, device)
+                answer = priced.report(project.source, sizes, chosen, supplied, arch, device, a.inspect, project.site)
             print(priced.lines(answer)) if terminal.human(FORMAT) else report(answer)
             return 0
         if a.command == "tune":

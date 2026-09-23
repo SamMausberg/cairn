@@ -33,6 +33,7 @@ class Piece:
     bound: str
     light_ns: float = 0.0
     detail: dict[str, Any] = field(default_factory=dict)
+    guesses: list[str] = field(default_factory=list)  # what makes this piece's number a guess, beyond its kind
 
 
 def value(p: Poly, sizes: dict[str, float], missing: set[str]) -> float:
@@ -181,6 +182,12 @@ def lanes(r: Region, card: Device | None, sizes: dict[str, float], missing: set[
 
 def region(r: Region, host: Host, arch: str, sizes: dict[str, float], missing: set[str],
            device: Device | None = None) -> Piece:  # fmt: skip
+    if r.kind == "cooperative":  # blocks of threads that share memory: perf/cooperative_model.py
+        from . import cooperative_model
+
+        if r.coop.device:
+            return cooperative_model.priced(r, device or packaged("rtx-5070-ti").device, sizes, missing)
+        return cooperative_model.on_host(r, host, arch, sizes, missing)
     n, runs = value(r.count, sizes, missing), value(r.runs, sizes, missing)
     each = dict(sizes)
     total = Work()
@@ -299,6 +306,7 @@ def confidence(c: Cost, missing: set[str], found: list[Piece], profile: Profile,
         approximations.append(STREAMED)
     if any(p.what.startswith(("device", "transfer h2d", "transfer d2h", "transfer d2d")) for p in found):
         guesses.append("device work is priced from the published specification, and no device run has checked it")
+    guesses += [g for p in found for g in p.guesses if g not in guesses]
     if any(p.what.startswith("device tensor-core") for p in found):
         guesses.append(
             "a tensor-core multiply is priced at the published tensor peak, its roofline; the kernel's own "

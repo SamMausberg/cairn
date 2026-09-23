@@ -163,6 +163,7 @@ class Region:
     vector: int = 0  # the vector its plan sets: adjacent indices a lane runs over chunks
     tensor: str = ""  # a tensor-core multiply's input format; its body holds the whole call's work, count one
     chunks: tuple = ()  # a device region's chunkable arrays: (element accesses per index, loaded, stored, bytes each)
+    coop: Any = None  # a cooperative region's shape (perf/cooperative_work.py): count is its blocks, body one thread's
 
 
 @dataclass
@@ -258,6 +259,7 @@ class Counter:
         self.cost = Cost("", 0, [])
         self.f: Function | None = None  # the function being counted, whose blocks fusion reads
         self.kept: set[str] = set()  # scratch a fused chain holds in its lanes: never allocated, never streamed
+        self.coop: Any = None  # the cooperative region being counted, which counts what its threads do apart
 
     def function(self, f: Function) -> Cost:
         if f.name in self.costs:
@@ -343,7 +345,7 @@ class Counter:
         for s in ss:
             if id(s) in chains:
                 self.fused(chains[id(s)], at)
-            elif id(s) not in inside:
+            elif id(s) not in inside and (self.coop is None or not self.coop.stmt(s, at)):
                 getattr(self, "s_" + s.tag, self.s_plain)(s, at)
 
     def fused(self, chain: fusion.Chain, at: Frame) -> None:
@@ -470,6 +472,11 @@ class Counter:
         self.cost.regions.append(Region(kind, s.line, count, at.times, body, s.block, s.plan, s.launch, fuse=s.fuse,
                                         vector=s.vector, chunks=found))  # fmt: skip
 
+    def s_blocks(self, s: Stmt, at: Frame) -> None:
+        from .cooperative_work import region
+
+        region(self, s, at)
+
     def s_reduce(self, s: Stmt, at: Frame) -> None:
         self.reduction(s, at, *s.exprs)
 
@@ -580,6 +587,8 @@ class Counter:
             at.work.op("bounds_guard", at.times)
         at.work.op("store" if write else "load", at.times)
         key, element = path(base), self.c.sizeof(e.ty) if e.ty and e.ty.name != "void" else 8
+        if self.coop is not None and self.coop.access(e, key, element, at, write):
+            return
         reach = self.extent(base.ty, key) * element if base.ty is not None else Poly()
         if data_dependent(index, self.data, at.binders):  # priced by latency at the level its own view lives in
             place = (key, spelled(index))  # reading a bin and writing it back is one trip to its line
@@ -599,6 +608,8 @@ class Counter:
     def call(self, e: Expr, at: Frame) -> None:
         for a in e.args:
             self.expr(a, at)
+        if self.coop is not None and self.coop.call(e, at):
+            return
         ref = e.ref
         if isinstance(ref, Function):
             self.inline(ref, e.args, at)

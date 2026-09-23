@@ -291,12 +291,15 @@ def test_the_receipt_states_each_fragment_step_s_contract_and_the_value_model_an
     assert equivalent(source, source, "tile32")["status"] == "unknown"
 
 
-def test_the_performance_model_says_a_fragment_step_is_not_priced():
+def test_the_performance_model_prices_each_fragment_step_by_its_multiply_adds():
     from cairn.compiler.cairnc import compile_program
     from cairn.perf.work import count
 
     p, checker, _ = compile_program((TENSOR / "tile64.cairn").read_text())
-    assert any("fragment step is not priced" in why for why in count(p, checker)["tile64"].unknown)
+    cost = count(p, checker, {"tile64"})["tile64"]
+    assert not any("fragment step" in why for why in cost.unknown)
+    (region,) = cost.regions  # four warps, each 16 steps of 2 x 16 x 16 x 16 a 32-deep step of k: 2 m n k a tile
+    assert region.kind == "cooperative" and region.body.ops["tensor"].terms[("k",)] * 128 == 2 * 64 * 64
 
 
 @pytest.mark.parametrize(("name", "target", "feature"), [("tile32", "sm_75", "mma_sync"), ("tile64", "sm_75", None)])

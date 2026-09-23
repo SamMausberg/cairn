@@ -22,8 +22,10 @@ from typing import Any
 from ..compiler import layouts
 from ..compiler.cairnc import compile_program, write_program
 from ..compiler.codegen import Emitter, demangled, mangle
+from ..compiler.cooperative import SHUFFLES
 from ..compiler.modules import library_path
 from ..compiler.tree import Expr, Function, Stmt
+from ..perf.regions import walked
 from ..projects.toolchain import REMARKS, find, flags
 from ..projects.toolchain import version as compiler_version
 
@@ -54,6 +56,13 @@ SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and h
     "device reduce reads back": "cr::gpu::reduce_on",
     "device scan reads back": "cr::gpu::scan_on",
     "device compact reads back": "cr::gpu::compact_on",
+    "cooperative region completes": "cr::coop::launch<",  # compiler/cooperative.py, on the execution context
+    "host cooperative region completes": "cr::coop::run<",
+    "barrier": "cr_blk.sync()",
+    "pipeline copies start": ".fill(cr_blk,",  # compiler/pipelines.py: cp.async, committed as one group
+    "pipeline wait": ".template wait<",  # cp.async.wait_group N, then the block's barrier
+    "warp shuffle": "cr_blk.shuffle",
+    "warp reduction": "cr_blk.reduce(",
 }
 ALLOCATION = re.compile(r"(cr::(?:gpu::)?(?:Buf|Buffer|Pinned|Unified)<[^()=;]*?>)\s*\w*\(")
 CALL = re.compile(r"\bc[fi]_(\w+)\(")  # A checked entry `cf_` or the lean body `ci_`.
@@ -152,6 +161,55 @@ def verdicts(entries: list[dict[str, Any]], show) -> list[dict[str, Any]]:
     return sorted(out, key=lambda loop: loop["at"])
 
 
+def cooperative(f: Function, place, sizeof) -> list[dict[str, Any]]:
+    """Each cooperative region of `f` as the checker laid it out, at its lines: its block, its shared arrays and
+    pipeline stages with their bytes, every barrier, every pipeline wait with the copies it leaves in flight
+    (`cp.async.wait_group N`), and every warp collective and fragment operation."""
+    out = []
+    for s in walked(f.body):
+        if s.tag != "blocks" or s.ref is None:
+            continue
+        block = s.ref
+        found: dict[str, Any] = {"at": place(s.line), "placement": "device" if block.device else "host",
+                                 "threads": block.count, "thread_extents": list(block.extents),
+                                 "shared_bytes": block.bytes, "shared": [], "pipelines": [], "barriers": [],
+                                 "waits": [], "copies": [], "warp_collectives": [], "fragments": []}  # fmt: skip
+        for x in walked(s.body):
+            if x.tag == "shared":
+                element, count, _ = block.shared[x.name]
+                found["shared"].append({"at": place(x.line), "name": x.name, "bytes": sizeof(element) * count})
+            elif x.tag == "pipeline":
+                p = block.pipelines[x.name]
+                stage = -(-p.size * sizeof(p.element) // 16) * 16
+                found["pipelines"].append({"at": place(x.line), "name": x.name, "depth": p.depth,
+                                           "stage_bytes": stage, "bytes": stage * p.depth})  # fmt: skip
+            elif x.tag == "barrier":
+                found["barriers"].append(place(x.line))
+            elif x.tag == "warp_reduce":
+                found["warp_collectives"].append({"at": place(x.line), "operation": f"reduce {x.op} warp"})
+            for e in (e for top in x.exprs for e in calls(top)):
+                ref = e.ref if isinstance(e.ref, tuple) else ()
+                if ref[:1] == ("stage",) and ref[2] == "wait":
+                    found["waits"].append({"at": place(e.line), "pipeline": ref[1],
+                                           "wait_group": ref[3] if len(ref) > 3 else 0})  # fmt: skip
+                elif ref[:1] == ("stage",) and ref[2] == "fill":
+                    found["copies"].append({"at": place(e.line), "pipeline": ref[1]})
+                elif e.val in SHUFFLES:
+                    found["warp_collectives"].append({"at": place(e.line), "operation": e.val})
+                elif e.val in {"mma_unordered", "mma_load", "mma_store"} and ref[:1] == ("builtin",):
+                    found["fragments"].append({"at": place(e.line), "operation": e.val})
+        out.append({k: v for k, v in found.items() if v != []})
+    return out
+
+
+def calls(e: Expr) -> list[Expr]:
+    found = [e] if e.tag == "call" else []
+    for a in e.args:
+        if isinstance(a, Expr):
+            found += calls(a)
+    return found
+
+
 def plain(tally: dict[str, Counter]) -> dict[str, dict[str, int]]:
     return {k: dict(v) for k, v in tally.items()}
 
@@ -186,7 +244,7 @@ def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None
         guards: dict[str, Counter] = defaultdict(Counter)
         allocations, synchronization, costly = [], [], []
         here = head  # Entry guards sit before the first statement: they belong to the declaration.
-        for text in lines:
+        for text in (part for chunk in lines for part in chunk.split("\n")):  # a region's lambda is one chunk
             if found := LINE.match(text):
                 here = show(found.group(2), int(found.group(1)))
                 continue
@@ -218,6 +276,7 @@ def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None
             "allocations": allocations,
             "costly_calls": costly,
             "synchronization": synchronization,
+            **({"cooperative": regions} if (regions := cooperative(f, place, checker.sizeof)) else {}),
         }
 
     written = [f for f in p.functions if not f.extern and not f.test]  # a test is emitted only where it runs

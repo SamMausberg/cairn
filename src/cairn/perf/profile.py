@@ -109,16 +109,29 @@ class Device:
     threads_per_sm: int = 1536
     shared_per_sm: int = 102400
     warp: int = 32
+    register_unit: int = 256  # registers are allocated a warp at a time, in units of this many
+    shared_reserved: int = 0  # shared memory the system keeps for each resident block, beside the block's own
+    shared_bytes_per_clock: int = 128  # what one SM's shared memory serves a clock: 32 banks of 4 bytes
+    memory_latency_ns: float = 0.0  # from a load's issue to its data, in device memory; 0 when not known
     compute_capability: str = ""  # of the device described: which device targets' code runs on it
     target: str = ""  # a measured card: the device target its figures were measured for (projects/target.py)
+
+    def resident(self, registers: int, block: int = 256, shared: int = 0) -> dict[str, int]:
+        """How many blocks of `block` threads one SM holds by each of its limits: its threads; its registers, when
+        `registers` a thread is known, allocated a warp at a time in units of `register_unit`; and its shared
+        memory, `shared` bytes a block and the `shared_reserved` the system keeps beside each."""
+        found = {"threads": self.threads_per_sm // block}
+        if registers:
+            per_warp = -(-registers * self.warp // self.register_unit) * self.register_unit
+            found["registers"] = self.registers_per_sm // per_warp // -(-block // self.warp)
+        if shared or self.shared_reserved:
+            found["shared memory"] = self.shared_per_sm // (shared + self.shared_reserved)
+        return found
 
     def occupancy(self, registers: int, block: int = 256, shared: int = 0) -> float:
         """The resident share of an SM's threads for blocks of `block` threads using `registers` each and `shared`
         bytes of shared memory a block."""
-        by_threads = self.threads_per_sm // block
-        by_registers = self.registers_per_sm // max(registers * block, 1)
-        by_shared = self.shared_per_sm // shared if shared else by_threads
-        return min(by_threads, by_registers, by_shared) * block / self.threads_per_sm
+        return min(self.resident(registers, block, shared).values()) * block / self.threads_per_sm
 
 
 @dataclass
