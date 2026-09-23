@@ -133,7 +133,7 @@ The compiler is not proved correct. The checker and the C++ emitter are about 8,
 
 What has not been validated:
 
-- Most of the GPU side has not run on a GPU. Device kernels, transfers and lanes ran on one RTX 5070 Ti in 1.3 (`evidence/v1_3/gpu`). Everything 1.4 added for the device (vector loads, shared-memory staging, device plans, `mma_unordered`, the device `scan`, the execution context) compiles for sm_120 and is checked on the host only. The device half of `cairn predict` is NVIDIA's published specification, not a measurement.
+- Most of the GPU side has not run on a GPU. Device lanes, transfers and three kernels ran on one RTX 5070 Ti (`evidence/v1_3/gpu`). Vector loads, shared-memory staging, device plans, `mma_unordered`, the device `scan` and the reusable execution context compile for sm_120 and are checked on the host only, and the execution context is not yet used by the generated code. The device half of `cairn predict` is NVIDIA's published specification, not a measurement.
 - Host performance was measured on one 16-thread x86-64 machine against plain C++, OpenMP and oneTBB at equal guards. Nothing is claimed against tuned C++ or CUDA.
 - SMT equivalence covers a fragment. An owner inside a record or an array, concurrency, device memory, the foreign boundary, storage floats and loops it cannot bound are `unknown`, and `unknown` is never reported as success.
 - The AI evidence is small. The equal-budget comparison with C++ and Rust has run only its pilot: six subjects, two tasks, one model (`evidence/v1_5/ai_benchmark/tables_pilot.md`). An earlier pilot had no comparison arm (`evidence/v1_1/ai_pilot`).
