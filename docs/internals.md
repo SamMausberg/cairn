@@ -4,7 +4,7 @@ Paths are under `src/cairn/` unless they say otherwise.
 
 ## Compiler architecture
 
-A project becomes a native artifact in nine stages. Each owns one question, and nothing but the emitter produces C++.
+A project becomes a native artifact in nine stages, and nothing but the emitter produces C++.
 
 | Stage | Module | Entry point | What it produces |
 |---|---|---|---|
@@ -26,37 +26,37 @@ Checking is one pass per function over one typed tree, and each generic instance
 |---|---|---|
 | Names, types, generic instances, signatures | `compiler/checking.py` | `resolve`, `define`, `signature`, `function`, `judge` |
 | Per-function and per-region state | `compiler/scope.py` | `Scope`, `Lanes` |
-| Statements: declarations, control flow, `match`, loops, `defer`, collectors | `compiler/statements.py` | `s_let`, `s_assign`, `s_if`, `s_match`, `s_for`, `s_defer`, `s_compact`, `branches` |
-| Expressions: literals, names, indexing, fields, variants, closures, `try`, operators | `compiler/expressions.py` | `e_name`, `e_index`, `e_field`, `e_lambda`, `e_try`, `e_binary` |
-| Calls, instances at the call, function values, construction and declared extents | `compiler/calls.py` | `e_call`, `invoke`, `view_argument`, `construct`, `establish` |
+| Statements | `compiler/statements.py` | `s_let`, `s_assign`, `s_if`, `s_match`, `s_for`, `s_defer`, `s_compact`, `branches` |
+| Expressions | `compiler/expressions.py` | `e_name`, `e_index`, `e_field`, `e_lambda`, `e_try`, `e_binary` |
+| Calls, construction and declared extents | `compiler/calls.py` | `e_call`, `invoke`, `view_argument`, `construct`, `establish` |
 | Places, second-class borrows, moves, leases, aliasing | `compiler/places.py` | `path`, `place`, `overlaps`, `leased`, `lend`, `consume`, `disjoint` |
 | Tasks and tickets, lanes and regions, atomics, placement | `compiler/concurrency.py` | `e_spawn`, `region`, `s_parallel`, `s_reduce`, `s_scan`, `judge_lane_callbacks`, `host_only` |
 | Effect vocabulary, fixed point, operand order | `compiler/effects.py` | `fixed_point`, `audit` |
 | Traits, bounds, overlap, dynamic tables | `compiler/traits.py` | `implemented`, `dispatch`, `vtable`, `certify` |
 | Constant folding | `compiler/constants.py` | `constant`, `fold` |
-| I/O rings: the declaration, the operations that move a `Buf` in and hand it back, their lowering | `compiler/rings.py` | `check_ring`, `method`, `waited`, `lower` |
-| Alternative implementations: the declaration, its condition, its reference's contract, the plan that selects one and the dispatch that lowers it | `compiler/implementations.py` | `declared`, `condition`, `select`, `joined`, `called`, `lower` |
+| I/O rings and their lowering | `compiler/rings.py` | `check_ring`, `method`, `waited`, `lower` |
+| Alternative implementations and their dispatch | `compiler/implementations.py` | `declared`, `condition`, `select`, `joined`, `called`, `lower` |
 | Facts about `usize` values that let lowering drop a guard | `compiler/facts.py` | `binder`, `defined`, `assume`, `index`, `arithmetic`, `conversion` |
 | The independent check of each guard lowering leaves out | `verify/elision.py` | `audit`, `decide`, `part` |
-| Which adjacent regions a plan's `fuse` joins, and the scratch they hold in their lanes | `compiler/fusion.py` | `chains`, `quiet`, `compatible`, `scratch` |
-| Which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering | `compiler/chunks.py` | `chunkable`, `vectored`, `lower` |
-| Which arrays a plan's `stage` loads into a device block's shared tile, and that lowering | `compiler/staging.py` | `stageable`, `staged`, `lower` |
-| Cooperative regions: shape, shared arrays, barriers, warp operations, who reaches a statement together, lowering | `compiler/cooperative.py` | `s_blocks`, `Reach`, `participation`, `collective`, `lower_blocks` |
-| Two threads of a block at one shared element between barriers | `compiler/phases.py` | `Phases`, `check`, `check_array` |
+| A plan's `fuse`: which regions join, and their scratch | `compiler/fusion.py` | `chains`, `quiet`, `compatible`, `scratch` |
+| A plan's `vector` and its lowering | `compiler/chunks.py` | `chunkable`, `vectored`, `lower` |
+| A plan's `stage` and its lowering | `compiler/staging.py` | `stageable`, `staged`, `lower` |
+| Cooperative regions, who reaches a statement, and their lowering | `compiler/cooperative.py` | `s_blocks`, `Reach`, `participation`, `collective`, `lower_blocks` |
+| The phase rule: no two threads of a block at one shared element between barriers | `compiler/phases.py` | `Phases`, `check`, `check_array` |
 | One writer for every element of an array from outside a cooperative region | `compiler/footprints.py` | `Poly`, `Globals`, `disjoint`, `radix` |
-| Pipeline stages: declaration, the states each stage goes through, the waits' counts, lowering | `compiler/pipelines.py` | `s_pipeline`, `method`, `Stages`, `lower` |
+| Pipeline stages and their lowering | `compiler/pipelines.py` | `s_pipeline`, `method`, `Stages`, `lower` |
 | The tensor-core multiply, its numerical contract and its lowering | `compiler/tensor.py` | `check_mma`, `lower_mma` |
-| Tensor-core fragments: their types, the warp operations on them, the layouts each family reads, their lowering | `compiler/fragments.py` | `valid`, `tile`, `consumer`, `check_mma`, `lower_load` |
-| `layout` declarations: storage layouts and spreads, coverage, owners, runs, bank conflicts, conversions, and `L.at(...)` in code | `compiler/layouts.py` | `value`, `cover`, `runs`, `conflicts`, `conversion`, `method`, `lower` |
+| Tensor-core fragments and their lowering | `compiler/fragments.py` | `valid`, `tile`, `consumer`, `check_mma`, `lower_load` |
+| `layout` declarations: coverage, owners, runs, bank conflicts, conversions, `L.at(...)` | `compiler/layouts.py` | `value`, `cover`, `runs`, `conflicts`, `conversion`, `method`, `lower` |
 | Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
-| Which runtime operation each piece of device work lowers to, on the thread's execution context | `compiler/execution.py` | `call`, `unrolled` |
-| The machine: `mmio_read`, `mmio_write`, `asm` and typed assembly with its operands, target and declared effects, beside their lowering | `compiler/machine.py` | `check_machine`, `s_asm`, `lower_asm`, `unbuildable` |
-| What each argument of `print`, `println`, `eprint`, `eprintln` and `format` writes, and their lowering | `compiler/printing.py` | `check_print`, `target`, `piece`, `lower_print` |
-| The C header of a library: declarations, layouts it states and checks, what cannot cross | `compiler/header.py` | `Header.render`, `shape`, `refusal` |
+| The runtime operation each piece of device work lowers to | `compiler/execution.py` | `call`, `unrolled` |
+| `mmio_read`, `mmio_write`, `asm` and typed assembly, beside their lowering | `compiler/machine.py` | `check_machine`, `s_asm`, `lower_asm`, `unbuildable` |
+| `print`, `println`, `eprint`, `eprintln`, `format` and their lowering | `compiler/printing.py` | `check_print`, `target`, `piece`, `lower_print` |
+| The C header of a library | `compiler/header.py` | `Header.render`, `shape`, `refusal` |
 | Manifests, vendored dependencies | `projects/project.py` | `read_manifest`, `contained_file`, `claim`, `dependencies` |
 | Native flags, the closed table of system libraries, the freestanding effect ban | `projects/toolchain.py` | `command`, `flags`, `LIBRARIES`, `audit_effects` |
-| The device target every device stage shares: its spelling, resolution, features, limits, and the records it refuses | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits` |
-| An export: the program a build compiles, the headers it includes, the record and identity that pin them, and the builds, runs, tests and comparisons that take it | `projects/export.py` | `export`, `check`, `build`, `run`, `test`, `compare` |
+| The device target | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits` |
+| Exports and the commands that take one | `projects/export.py` | `export`, `check`, `build`, `run`, `test`, `compare` |
 
 Per-function state lives in one `Scope`, swapped when an instance is checked in the middle of its caller, so instantiation is re-entrant. Every concrete signature is resolved before any body is checked.
 
@@ -70,21 +70,21 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
 | `cairn_parallel.hpp` | the host lane pool with its pooled reduction and two-pass scan, the crew of reusable task threads, linear tasks, task groups with a bounded completion ring, `Mutex` and `Atomic` with explicit orders |
 | `cairn_kernels.hpp` | the device side of every region in plain CUDA: the lane, chunk and staged-tile kernels, and their launch on a stream the caller names, with no execution context |
-| `cairn_gpu.hpp` | CUDA as the machine `cairn_exec.hpp` runs on: CUB's calls, streams, events, allocation and copies; and the older synchronous entry points (`launch`, `Ticket`, `reduce`, `scan`, `compact`), which wait for the whole device and which generated code no longer calls |
-| `cairn_exec.hpp` | what generated code calls for device work, written once for any machine: the calling thread's execution context, device owners, regions on its stream, reductions, scans and compactions in its arena, queued work on lent lanes, and a C caller's own stream |
-| `cairn_reuse.hpp` | execution contexts apart from the machine: lanes (a stream and its event) lent until their work completes, one scratch arena ordered between its users on the device, a declared budget, a caller's bound stream; and the reductions, scans and compactions written against the machine |
+| `cairn_gpu.hpp` | CUDA as the machine `cairn_exec.hpp` runs on: CUB's calls, streams, events, allocation and copies; and synchronous entry points (`launch`, `Ticket`, `reduce`, `scan`, `compact`) that wait for the whole device and that generated code does not call |
+| `cairn_exec.hpp` | what generated code calls for device work, written once for any machine: the calling thread's execution context, device owners, regions on its stream, reductions, scans and compactions in its arena, queued work on lent lanes, a C caller's own stream |
+| `cairn_reuse.hpp` | execution contexts apart from the machine: lanes (a stream and its event) lent until their work completes, one scratch arena ordered between its users, a declared budget, a caller's bound stream; and the reductions, scans and compactions written against the machine |
 | `cairn_io.hpp` | the I/O ring over io_uring: fixed berths that own each operation's `Buf`, completion-order collection, a wait that drains before it releases |
 | `cairn_fragment.hpp` | tensor-core fragments: on the host every thread of a warp holding each whole and storing its lane's elements, on the device WMMA and `mma.sync` with `ldmatrix` |
 | `cairn_layout.hpp` | a layout's coordinate checked against its extent, and CuTe's swizzle, on the host and in a device lane alike |
 | `cairn_float.hpp` | the storage floats `f16 bf16 f8e4m3 f8e5m2`: one integer routine that rounds on the host and in a device lane alike, `quantize` and `quantize_stochastic` |
 | `cairn_tensor.hpp` | `mma_unordered`: the reference loop on the host, and on the device 64 x 64 tensor-core tiles over two shared-memory stages, written once against the operations a tile is given so a host test runs every thread's phases |
 | `cairn_coop.hpp` | cooperative regions: on the host each block's threads as real threads at a `std::barrier`, two blocks at a time, with warp exchanges through per-warp slots; on the device one launch with static shared memory, `__syncthreads` and `__shfl_*_sync` |
-| `cairn_print.hpp` | `print` and `format`: every piece computed before a byte is written, one 4096-byte stack buffer, shortest round-trip floats through `std::to_chars`, a byte record grown as `std.vec` grows |
+| `cairn_print.hpp` | `print` and `format`: one 4096-byte stack buffer, shortest round-trip floats through `std::to_chars`, a byte record grown as `std.vec` grows |
 | `cairn_assert.hpp` | `assert`: the message a failed one prints, on standard error, through the device's printf in a lane, or not at all in an image, before the trap |
 
 Generated code includes only the headers it needs, and a freestanding image includes neither concurrent header.
 
-The lane pool is one of two pieces of global state. The first host region of a process creates it, with `hardware_concurrency()` threads or `CAIRN_LANES` (1 to 1024). A region below 16384 elements (`lanes::CUTOFF`) is the plain loop. Above that it engages one lane per 8192 elements (`lanes::GRAIN`), cuts its indices into one home per lane, and each lane claims chunks from its own home first, so a lane reruns the same indices from its own cache region after region. The thread that starts a region is one of its lanes and can finish it alone, so a busy or absent worker delays a region but cannot deadlock it; `proofs/Cairn/Region.lean` proves the protocol.
+The lane pool is one of two pieces of global state. The first host region of a process creates it, with `hardware_concurrency()` threads or `CAIRN_LANES` (1 to 1024). A region below 16384 elements (`lanes::CUTOFF`) is the plain loop. Above that it engages one lane per 8192 elements (`lanes::GRAIN`) and cuts its indices into one home per lane, which that lane claims from first. The thread that starts a region can finish it alone, so a busy or absent worker delays a region but cannot deadlock it. [verification.md](verification.md#the-lane-pool) has the protocol and its proof.
 
 The other is the crew of task threads. A spawn takes a parked thread or starts a new one, so a task never waits for a thread and tasks that wait on each other cannot deadlock the crew. At most `hardware_concurrency()` threads stay parked. The crew is separate from the lane pool, so a lane may spawn a task and wait for it.
 
@@ -103,9 +103,9 @@ What each operation takes when it runs, and gives back when it ends:
 | device `compact` | flags, offsets and CUB's storage in the arena, two launches, two one-element copies to the host, one stream wait | nothing |
 | a `@device`, `@pinned` or `@unified` buffer | one CUDA allocation, zeroed on the context's stream, which is waited for | freed at scope exit |
 
-Device work runs on the calling thread's execution context, `cr::gpu::here()`, which the thread's first device operation makes and the thread keeps; `compiler/execution.py` names it at every call. A pipeline run again therefore makes no stream, allocates no temporary and waits for nothing but its own stream after its first pass. The context's bookkeeping is tested against a mock device (`tests/runtime/reuse_runtime.cpp`), generated programs run on a host machine that counts every stream, allocation and wait (`tests/runtime/gpu_host.hpp`, `tests/runtime/test_execution.py`), and the CUDA build compiles for `sm_120`. No device run has checked it: `make gpu` runs the device tests, and has not run since. `mma_unordered` on the device still waits for the whole device (`cairn_tensor.hpp`).
+Device work runs on the calling thread's execution context, `cr::gpu::here()`, which `compiler/execution.py` names at every call. Its bookkeeping is tested against a mock device (`tests/runtime/reuse_runtime.cpp`), and generated programs against a host machine that counts every stream, allocation and wait (`tests/runtime/gpu_host.hpp`); [concurrency.md](concurrency.md#device-execution) says what that shows and what no device run has checked.
 
-The rest of the package, by folder, is in the ownership table of [AGENTS.md](../AGENTS.md): `agent/` the edit protocol, `perf/` the performance model (nothing in it runs a program except `measure.py` on the host and `on_device.py` under the owner's targets), `editor/` the formatter, language server and grammars, and `verify/` the certificates, the SMT model, the test runners and `cairn diff`. No agent, test generator or solver may rewrite the authority it is checked against, and native libraries never import the agent tooling or Z3.
+The rest of the package is in the ownership table of [AGENTS.md](../AGENTS.md). In `perf/` only `measure.py`, on the host, and `on_device.py`, under the owner's targets, run a program. No agent, test generator or solver may rewrite the authority it is checked against, and native libraries never import the agent tooling or Z3.
 
 The wheel holds the compiler package, the runtime headers, the target support files, the `std` sources and the CLI. Tests, benchmarks, proofs and evidence stay out of it.
 
@@ -121,18 +121,18 @@ make native        # both compilers with the sanitizers that bite, and the codeg
 make gpu embedded  # CUDA runtime and lanes, and the QEMU board, where the hardware is present
 ```
 
-`make gpu`, `make tune-device` and `make calibrate-device` are the only commands that run code on a CUDA device, and only the owner runs them. Each sets `CAIRN_GPU_TESTS=1` and holds `/tmp/cairn-gpu.lock` around every device run (`tools/support.py`), and `tests/tooling/test_on_device.py` holds the Makefile to those three. Everywhere else a device test compiles and skips the run. The reason is the reference machine: under WSL2 the GPU also drives the display, and repeated device test runs reset its driver and twice crashed the host.
+`make gpu`, `make tune-device` and `make calibrate-device` are the only commands that run code on a CUDA device, and only the owner runs them. Each sets `CAIRN_GPU_TESTS=1` and holds `/tmp/cairn-gpu.lock` around every device run (`tools/support.py`), `tests/tooling/test_on_device.py` holds the Makefile to those three, and everywhere else a device test compiles and skips the run. On the reference machine the GPU also drives the display, and repeated device test runs reset its driver and twice crashed the host.
 
 `make proof` needs `lake` on `PATH` (elan puts it in `~/.elan/bin`), and allows no axiom but `propext` and `Quot.sound`.
 
 | `tests/` folder | What it establishes |
 |---|---|
-| `language/` | the accepted breadth of the language, built and run natively under both compilers; the standard library module by module; the twelve tour programs; every `cairn` block in README.md and under `docs/` |
-| `soundness/` | every hole an adversarial review found stays closed; tasks, leases, atomics, mutexes, host and CUDA lanes, closures; guard elision against its independent audit; plans, fusion, `scan` and rings |
-| `verification/` | the certificates, `proofs/` in step with `collector_rules()` and building, the checker and the Lean calculus classifying generated programs alike, the SMT translator against concrete replay, coverage that no single function can confer, the classes of `cairn diff` |
-| `projects/` | manifests, vendored dependencies, incremental builds, every application under `examples/apps/`, the templates of `cairn new`, test blocks and their runner, a C++ host linking a CAIRN library, the freestanding image under QEMU with an exact UART transcript |
+| `language/` | the accepted language, built and run natively under both compilers; `std` module by module; the tour; every `cairn` block in README.md and under `docs/` |
+| `soundness/` | every hole an adversarial review found stays closed; tasks, leases, atomics, mutexes, host and CUDA lanes, closures; guard elision against its audit; plans, fusion, `scan` and rings |
+| `verification/` | the certificates, `proofs/` in step with `collector_rules()` and building, the checker and the Lean models deciding generated programs alike, the SMT translator against concrete replay, module coverage, the classes of `cairn diff` |
+| `projects/` | manifests, vendored dependencies, incremental builds, every application under `examples/apps/`, the `cairn new` templates, test blocks, a C++ host linking a CAIRN library, the freestanding image under QEMU with an exact UART transcript |
 | `runtime/` | the self-checking C++ and CUDA binaries beside it, at several `CAIRN_LANES` counts |
-| `tooling/` | `cairn fmt` over every `.cairn` in the checkout plus whitespace and comment fuzz, a real `cairn lsp` subprocess and the extension's client, the generated grammars against a TextMate engine, `predict` and `tune`, the terminal output and shell completions, the tree's own rules, publication against fakes, every script under `tools/` and `bench/` |
+| `tooling/` | `cairn fmt` over every `.cairn` in the checkout plus fuzz, a real `cairn lsp` and the extension's client, the grammars against a TextMate engine, `predict` and `tune`, terminal output and completions, the tree's own rules, publication against fakes, every script under `tools/` and `bench/` |
 | `agent/` | projections, packets and their evidence classes, rule cards, sketches, guarded edits, migrations, plan edits, state and deltas, and the canonical projection round-tripping every sample and `std` module to identical native code |
 | `oracles/` | not pytest modules: the Python oracles `tools/checks/verify.py` drives |
 
@@ -148,15 +148,15 @@ A rejection table maps a sentence naming a rule to a diagnostic code and a progr
 | `tools/checks/semantic_check.py`, `tools/corpus/semantic_corpus.py` | two scalar implementations against one immutable reference; same-contract pairs, every label decided and replayed |
 | `tools/corpus/curriculum_verify.py`, `mutation_checks.py` | teaching programs against independent finite oracles; one hand-authored defect per algorithm family, all of which the finite tests must catch |
 | `tools/checks/density.py`, `export_lean_certificates.py` | lexical density accounting over the whole compiler; `--check` fails when `collector_rules()` and `proofs/` have drifted |
-| `tools/checks/emission_identity.py` | whether a source change left the C++ and effect rows of every example, the whole `std`, every program written into a test and every `cairn` block of the docs as they were, optionally up to two named identities of C++, and with `--normalize guards` whether a change did nothing but discharge guards, counting each program's guards |
-| `tools/checks/differential_ownership.py` | generated programs of one shared fragment, rendered as CAIRN source and as Lean `Program` literals, classified identically by the checker and by the Lean `accepts` |
-| `tools/checks/differential_cooperative.py` | generated cooperative regions of one shared fragment, rendered as CAIRN source and as Lean terms of `Cooperative.lean`, decided alike by the phase rule of `compiler/phases.py` and the model's `program` |
+| `tools/checks/emission_identity.py` | whether a source change left the C++ and effect rows of every example, `std`, test program and docs block as they were, optionally up to two named C++ identities, and with `--normalize guards` whether it only discharged guards |
+| `tools/checks/differential_ownership.py` | generated programs of a shared fragment, as CAIRN source and Lean `Program` literals, classified alike by the checker and the Lean `accepts` |
+| `tools/checks/differential_cooperative.py` | generated cooperative regions of a shared fragment, as CAIRN source and `Cooperative.lean` terms, decided alike by `compiler/phases.py` and the model's `program` |
 | `tools/checks/differential_guards.py` | generated programs built as emitted and with every guard and checked entry kept, under both compilers and the sanitizers, returning the same value or trap on every input; a mismatch is minimized into a program to keep |
-| `bench/suite/harness.py`, `report.py` | the eight kernels of [bench/suite/PREREGISTRATION.md](../bench/suite/PREREGISTRATION.md), every arm built under both compilers with the project's own flags, each baseline once guarded and once not, safety boundaries counted against the build receipt, no result written when a case disagrees with its oracle; the report prints losses beside wins |
+| `bench/suite/harness.py`, `report.py` | the eight kernels of [bench/suite/PREREGISTRATION.md](../bench/suite/PREREGISTRATION.md) under both compilers with the project's flags, each baseline guarded and unguarded, safety boundaries counted against the receipt, no result written when a case disagrees with its oracle; losses printed beside wins |
 
 These harnesses write under `results/`, which is not tracked, one subdirectory per kind of output.
 
-`tools/corpus/` holds generated teaching fixtures beside the scripts that write and check them. No model was trained on them, and the answers ship beside the tasks. Each generator's `--check` fails when a committed file differs from a fresh run, so a changed rule card, packet or receipt shows up in `tests/tooling/test_tools.py` with the command that regenerates it.
+`tools/corpus/` holds generated teaching fixtures beside the scripts that write and check them; no model was trained on them. Each generator's `--check` fails when a committed file differs from a fresh run, so a changed rule card, packet or receipt fails `tests/tooling/test_tools.py` with the command that regenerates it.
 
 ## Safety and trust
 
@@ -170,7 +170,7 @@ Outside `unsafe` and `extern`, an accepted program cannot use a moved owner, lea
 "process": { "effects": ["ffi:getpid", "io"], "syntactic_check_sites": { "unsafe_blocks": 1 } }
 ```
 
-An extern's signature and effects are trusted as written, and so are the effects typed assembly declares: the checker checks its operands, target and lane placement, not what its instructions do, and the receipt lists each statement under `assembly` as `declared-not-checked`. A foreign caller of an exported function must supply live, initialized, correctly typed storage for every borrow; the entry guards cannot prove provenance or exclude concurrent foreign access. Those guards run in the exported `cf_` symbol only, and a call from CAIRN reaches the lean body `ci_` (`checked-entries/1` among the receipt's trusted lowering rules).
+An extern's signature and effects are trusted as written, and so are the effects [typed assembly](memory.md#layout-and-the-machine) declares. A foreign caller of an exported function must supply live, initialized, correctly typed storage for every borrow; the entry guards cannot prove provenance or exclude concurrent foreign access. Those guards run only in the exported `cf_` symbol (`checked-entries/1` among the receipt's trusted lowering rules).
 
 Manifests are data and accept local listed paths only: no hooks, commands, downloads, arbitrary flags, traversal or symlinks. Each rule is pinned in `tests/projects/test_projects.py`:
 
@@ -210,15 +210,15 @@ python3 tools/release/collect_lean_evidence.py --release "$RELEASE"
 make wheel audit
 ```
 
-`collect_evidence.py` runs the release gates and writes each gate's command, status and output, the commit and whether the tree was dirty to `evidence/<release>/summary.json`. `collect_lean_evidence.py` rebuilds `proofs/` from scratch and records the build and the axiom audit under `lean/`. `RUN_NOTES.md` beside them names what did not run and why: a gate whose tool is absent is `unavailable`, never passed.
+`collect_evidence.py` runs the release gates and writes each gate's command, status and output, the commit and whether the tree was dirty to `evidence/<release>/summary.json`, and `collect_lean_evidence.py` records a from-scratch build of `proofs/` and the axiom audit under `lean/`. `RUN_NOTES.md` beside them names what did not run and why: a gate whose tool is absent is `unavailable`, never passed.
 
-Tag the commit the evidence names with the version the six places state, and push `main` and the tag. A release that does not pass every gate on a committed tree is not tagged. A release claims only what its evidence shows: a speed, a GPU advantage or an AI result needs an executed run recorded under `evidence/`, with losses beside wins. `docs/project/capabilities.json` and [roadmap.md](roadmap.md) are rewritten at each release.
+Tag the commit the evidence names with the version the six places state, and push `main` and the tag; a release that does not pass every gate on a committed tree is not tagged. A release claims only what its evidence shows: a speed, a GPU advantage or an AI result needs an executed run recorded under `evidence/`, with losses beside wins. `docs/project/capabilities.json` and [roadmap.md](roadmap.md) are rewritten at each release.
 
-`tools/release/publish_private.py` is the one scripted path that touches a remote. It creates a new private personal repository and pushes `main` to it, nothing more:
+`tools/release/publish_private.py`, the one scripted path that touches a remote, creates a new private personal repository and pushes `main` to it:
 
 ```sh
 python tools/release/publish_private.py SamMausberg/cairn             # local-only dry run
 python tools/release/publish_private.py SamMausberg/cairn --execute   # needs an authenticated gh
 ```
 
-It first runs `tools/release/audit_repository.py`, which scans every committed blob for credential patterns and binaries (not an exhaustive detector), then requires a clean tree with no remote, creates the repository, checks it is private before and after a non-force push, and registers `origin`. It never asks for a token, forces, deletes or changes visibility. Its tests use fakes for every remote call, so they cannot show that a real account accepts the push.
+It first runs `tools/release/audit_repository.py`, which scans every committed blob for credential patterns and binaries (not an exhaustive detector). It then requires a clean tree with no remote, creates the repository, checks it is private before and after a non-force push, and registers `origin`; it never asks for a token, deletes or changes visibility. Its tests fake every remote call, so they cannot show that a real account accepts the push.
