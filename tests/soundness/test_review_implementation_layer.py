@@ -131,3 +131,13 @@ def test_an_implementation_cannot_print_its_own_validation():
     assert validate(forged, "f", "g")["status"] == "failed"
     chatty = reference + 'fn g(x:u64) -> u64 implements f { println("hello"); return x; }\n'
     assert validate(chatty, "f", "g")["status"] == "passed"
+
+
+def test_negative_zero_is_not_zero_without_a_tolerance():
+    """At the default zero tolerance, `x + 0.0` against `x` passed, although it turns -0.0 into 0.0 and Z3's answer in
+    the same record gave that counterexample."""
+    source = "fn f(x:f64) -> f64 = x;\nfn g(x:f64) -> f64 implements f = x + 0.0;\n"
+    record = validate(source, "f", "g")
+    assert record["status"] == "failed" and record["finite"]["failed"]["inputs"] == {"x": -0.0}
+    tolerant = {"tolerance": {"absolute": 1e-12, "relative": 0.0}}
+    assert validate(source, "f", "g", tolerant)["status"] == "passed"

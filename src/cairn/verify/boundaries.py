@@ -90,7 +90,7 @@ def edges(ty: str, lo: Any = None, hi: Any = None) -> list[Any]:
         found = [0.0, 1.0, -1.0, 0.5, -0.0, lo, hi, 1.0e-30, 3.0, 1.0e7]
     else:
         found = [0, 1, lo, hi, hi - 1, lo + 1, 2, -1, (lo + hi) // 2]
-    return list(dict.fromkeys(v for v in found if lo <= v <= hi))
+    return list({repr(v): v for v in found if lo <= v <= hi}.values())  # by repr: -0.0 is its own edge, not 0.0
 
 
 def literals(e: Any) -> list[tuple[str, int]]:

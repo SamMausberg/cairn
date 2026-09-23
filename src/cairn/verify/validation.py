@@ -82,6 +82,8 @@ def same(ty: str, a: Any, b: Any, tolerance: dict[str, float]) -> bool:
     x, y = float.fromhex(a), float.fromhex(b)
     if math.isnan(x) or math.isnan(y) or math.isinf(x) or math.isinf(y):
         return (math.isnan(x) and math.isnan(y)) or x == y
+    if x == y:  # -0.0 and 0.0: equal as numbers, not as bits, so only a tolerance lets them agree
+        return any(v > 0 for v in tolerance.values())
     return abs(x - y) <= tolerance.get("absolute", 0.0) + tolerance.get("relative", 0.0) * abs(y)
 
 
