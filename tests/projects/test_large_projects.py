@@ -1,6 +1,7 @@
-"""What large codebases lean on: `cairn graph`, the size limits, compile_commands.json, and precompiled headers."""
+"""What large codebases lean on: `cairn graph`, the size limits, compile_commands.json, and the Bazel rules."""
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -154,3 +155,43 @@ def test_many_units_compile_against_a_precompiled_header_and_mean_what_they_mean
     assert made & {"program.hpp.pch", "pch.hpp.gch"}, made  # the header was precompiled, not read as text
     ran = subprocess.run([record["artifact"]], capture_output=True, text=True, timeout=60)
     assert ran.returncode == 0 and ran.stdout == "sum = 190\n"
+
+
+def test_the_bazel_example_builds_runs_and_tests_its_cairn_targets(tmp_path):
+    """examples/bazel through rules_cairn (bazel/): a library checked as validation, a binary, a test."""
+    bazel = shutil.which("bazel") or shutil.which("bazelisk")
+    if not bazel or not shutil.which("clang++"):
+        pytest.skip("needs bazel and clang++")
+    workspace = tmp_path / "bazel"  # a copy, so nothing Bazel writes lands in the checkout
+    shutil.copytree(ROOT / "examples/bazel", workspace)
+    (workspace / "MODULE.bazel").write_text(
+        (workspace / "MODULE.bazel").read_text().replace('"../../bazel"', f'"{ROOT / "bazel"}"')
+        .replace('cairn.local(path = "../..")', f'cairn.local(path = "{ROOT}")')
+    )  # fmt: skip
+    root = ["--output_user_root", str(tmp_path / "root")]
+    env = {**os.environ, "HOME": os.environ.get("HOME", str(tmp_path))}
+
+    def bazel_do(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run([bazel, *root, *args], cwd=workspace, capture_output=True, text=True, env=env,
+                              timeout=900)  # fmt: skip
+
+    try:
+        built = bazel_do("build", "//...")
+        if "Failed to fetch" in built.stderr or "Unable to download" in built.stderr:
+            pytest.skip("Bazel could not fetch its own modules here: " + built.stderr[-400:])
+        assert built.returncode == 0, built.stderr[-4000:]
+        ran = bazel_do("run", "//:shop")
+        assert ran.returncode == 0 and "price = 30" in ran.stdout, ran.stderr[-4000:]
+        tested = bazel_do("test", "//:pricing_test", "--test_output=errors")
+        assert tested.returncode == 0, tested.stdout[-4000:] + tested.stderr[-4000:]
+        test_file = workspace / "pricing/pricing_test.cairn"
+        test_file.write_text(test_file.read_text().replace("5), 30)", "5), 31)"))
+        failed = bazel_do("test", "//:pricing_test", "--test_output=errors")  # a failing test block fails the target
+        assert failed.returncode != 0 and "prices_by_area" in failed.stdout + failed.stderr, failed.stderr[-4000:]
+        (workspace / "geometry/geometry.cairn").write_text(
+            (workspace / "geometry/geometry.cairn").read_text().replace("b.w * b.h", "b.w * b.missing")
+        )
+        refused_build = bazel_do("build", "//:geometry")  # the validation action runs cairn check
+        assert refused_build.returncode != 0 and "E-" in refused_build.stderr, refused_build.stderr[-4000:]
+    finally:
+        bazel_do("shutdown")

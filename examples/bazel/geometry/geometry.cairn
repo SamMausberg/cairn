@@ -1,0 +1,7 @@
+// Rectangles and their areas: the library both other targets depend on.
+module shop.geometry;
+
+pub struct Box { w:u64; h:u64; }
+
+// Checked: an area that does not fit in a u64 traps instead of wrapping.
+pub fn area(b:Box) -> u64 = b.w * b.h;

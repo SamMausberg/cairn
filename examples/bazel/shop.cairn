@@ -1,0 +1,10 @@
+// The program: price one box and print it.
+module shop;
+import shop.pricing;
+import shop.geometry (Box);
+
+pub fn main() -> i32 {
+  let p = pricing.price(Box(2, 3), 5);
+  println("price = ", p);
+  return 0;
+}

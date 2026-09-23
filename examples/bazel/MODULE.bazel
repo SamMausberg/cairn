@@ -1,0 +1,7 @@
+module(name = "cairn_bazel_example")
+
+bazel_dep(name = "rules_cairn", version = "0.9.0")
+local_path_override(module_name = "rules_cairn", path = "../../bazel")
+
+cairn = use_extension("@rules_cairn//:extensions.bzl", "cairn")
+cairn.local(path = "../..")  # this checkout; leave it out to use the `cairn` on PATH

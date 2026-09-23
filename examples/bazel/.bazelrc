@@ -1,0 +1,3 @@
+# The example writes nothing into the repository: no lockfile beside MODULE.bazel and no bazel-* links.
+common --lockfile_mode=off
+build --experimental_convenience_symlinks=ignore

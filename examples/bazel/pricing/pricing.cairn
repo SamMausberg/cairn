@@ -1,0 +1,5 @@
+// A price per unit of area.
+module shop.pricing;
+import shop.geometry (Box);
+
+pub fn price(b:Box, rate:u64) -> u64 = geometry.area(b) * rate;

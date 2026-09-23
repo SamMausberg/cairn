@@ -1,0 +1,25 @@
+load("@rules_cairn//:defs.bzl", "cairn_binary", "cairn_library", "cairn_test")
+
+cairn_library(
+    name = "geometry",
+    srcs = ["geometry/geometry.cairn"],
+)
+
+cairn_library(
+    name = "pricing",
+    srcs = ["pricing/pricing.cairn"],
+    deps = [":geometry"],
+)
+
+cairn_binary(
+    name = "shop",
+    srcs = ["shop.cairn"],
+    deps = [":pricing"],
+)
+
+cairn_test(
+    name = "pricing_test",
+    size = "small",
+    srcs = ["pricing/pricing_test.cairn"],
+    deps = [":pricing"],
+)

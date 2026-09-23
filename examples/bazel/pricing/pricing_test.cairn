@@ -1,0 +1,9 @@
+// The pricing library's tests; `bazel test //:pricing_test` runs each in a process of its own.
+module shop.pricing_test;
+import shop.pricing;
+import shop.geometry (Box);
+
+test prices_by_area {
+  assert_eq(pricing.price(Box(2, 3), 5), 30);
+  assert_eq(pricing.price(Box(0, 9), 5), 0, "an empty box is free");
+}
