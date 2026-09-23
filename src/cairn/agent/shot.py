@@ -21,7 +21,7 @@ from typing import Any
 from ..compiler.cairnc import compile_source
 from ..projects.build import build
 from ..projects.project import Project, ProjectError, load_project
-from ..verify.testing import resource
+from ..verify.testing import limited
 
 FRAME = re.compile(r"frame-(\d{1,9})\.png")
 LIMIT = 256  # frames collected from one run
@@ -73,14 +73,9 @@ def shot(project: Project, functions: list[str] | tuple[str, ...] = (), since: s
         return {"schema": "cairn.shot/1", **{k: record[k] for k in ("status", "stderr") if k in record}}
     directory = Path(tempfile.mkdtemp(prefix="shot-", dir=record["directory"]))
 
-    def limits():
-        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-        resource.setrlimit(resource.RLIMIT_CPU, (timeout, timeout))
-        resource.setrlimit(resource.RLIMIT_AS, (memory_mib << 20, memory_mib << 20))
-
     env = {**os.environ, "CAIRN_SHOT": str(directory)}
     done = subprocess.run([record["artifact"]], capture_output=True, text=True, errors="backslashreplace",
-                          timeout=timeout, env=env, preexec_fn=limits, stdin=subprocess.DEVNULL)  # fmt: skip
+                          timeout=timeout, env=env, preexec_fn=lambda: limited(timeout, memory_mib), stdin=subprocess.DEVNULL)  # fmt: skip
     result: dict[str, Any] = {
         "schema": "cairn.shot/1",
         "status": "shot" if done.returncode == 0 else "program-failed",

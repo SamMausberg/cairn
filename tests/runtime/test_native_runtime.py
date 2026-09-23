@@ -46,7 +46,7 @@ def build(command: list[str]) -> None:
 def drop_core_limit() -> None:
     import resource
 
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    resource.setrlimit(resource.RLIMIT_CORE, (1, 1))  # no core; a pipe to a crash helper takes one under 0
 
 
 def run_cases(exe: Path) -> None:

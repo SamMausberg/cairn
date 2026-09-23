@@ -87,7 +87,7 @@ def bits(x):
 
 
 def trap_case(name):
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    resource.setrlimit(resource.RLIMIT_CORE, (1, 1))  # no core; a pipe to a crash helper takes one under 0
     l = load()
     a = array(U64, [1, 2])
     b = array(F32, [1, 2, 3])

@@ -219,7 +219,7 @@ fn stack_load()->u64 {stack x:u64[0]=zeroed;return x[0];}"""
         result["expected_aborts"] = {}
 
         def no_core():
-            resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+            resource.setrlimit(resource.RLIMIT_CORE, (1, 1))  # no core; a pipe to a crash helper takes one under 0
 
         for cxx in COMPILERS:
             exe = t / "traps"

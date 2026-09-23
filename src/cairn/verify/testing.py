@@ -114,8 +114,10 @@ def diagnostic_value(value):
 
 
 def limited(seconds: int, memory_mib: int | None) -> None:
-    """A native child's limits: no core file, `seconds` of CPU, and `memory_mib` of address space when given."""
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    """A native child's limits: no core, `seconds` of CPU, and `memory_mib` of address space when given. The core
+    limit is 1, not 0: a crash helper behind a pipe, as systemd-coredump and apport are, takes a core under any other
+    limit, and each trap then waited for it."""
+    resource.setrlimit(resource.RLIMIT_CORE, (1, 1))
     resource.setrlimit(resource.RLIMIT_CPU, (seconds, seconds))
     if memory_mib:
         resource.setrlimit(resource.RLIMIT_AS, (memory_mib << 20, memory_mib << 20))
