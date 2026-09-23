@@ -1,0 +1,7 @@
+[project]
+name = "parallel"
+sources = ["src/squares.cairn", "src/main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

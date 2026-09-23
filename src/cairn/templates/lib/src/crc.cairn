@@ -1,0 +1,28 @@
+// A library other code links to: `cairn build . --header` writes the shared library and a C header of its checked
+// entry points beside it, and `cairn test .` runs the test blocks below. CRC-32 is the checksum zip, gzip and PNG use.
+
+// What one pass over some bytes finds: the checksum, and how many bytes it covered.
+struct Checksum { crc:u32; bytes:u64; }
+
+// The reflected CRC-32 of `data`, bit by bit, with no table: small, and slower than a table would be.
+fn crc32(n:usize, data:ro<u8>[n]) -> u32 {
+  let mut crc:u32 = 0xffffffff;
+  for b in data {
+    crc ^= u32(b);
+    for k in 0..8 {
+      let low = crc & 1;
+      crc = shr(crc, 1);
+      if low == 1 { crc ^= 0xedb88320; }
+    }
+  }
+  return ~crc;
+}
+
+fn checksum(n:usize, data:ro<u8>[n]) -> Checksum = Checksum(crc32(data), u64(n));
+
+test the_standard_check_value {
+  assert(crc32("123456789") == 0xcbf43926, "the check value every CRC-32 implementation publishes");
+  assert(crc32("") == 0);
+  let c = checksum("hello");
+  assert(c.bytes == 5 && c.crc == 0x3610a686);
+}

@@ -1,0 +1,25 @@
+// Work split across every core. A lane writes only its own element, so the checker proves the region race free;
+// `cairn predict .` prices it before anything runs, and `cairn tune . --symbol fill` picks its plan.
+
+// Every element its index squared, one lane per index on the host's lane pool.
+fn fill(n:usize, out:rw<u64>[n]) { parallel i in n { out[i] = u64(i) * u64(i); } }
+
+// How the region is split: at least this many indices per claim. It changes only how long fill takes.
+plan fill { grain 65536; }
+
+// The checked sum: it aborts if the total passes u64, which an unsigned sum cannot hide by reordering.
+fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let sum = reduce + parallel i in n yield xs[i];
+  return sum;
+}
+
+// The sum of i * i for i below n, in closed form, to hold the parallel answer to.
+fn expected(n:u64) -> u64 = n * (n - 1) * (2 * n - 1) / 6;
+
+test sums_squares_as_the_closed_form_says {
+  let mut xs = Buf[u64](1000);
+  fill(xs);
+  assert(xs[999] == 998001);
+  let sum = total(xs); // bound first: a region is observable, and expected's checked arithmetic could abort
+  assert(sum == expected(1000));
+}

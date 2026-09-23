@@ -1,0 +1,7 @@
+[project]
+name = "service"
+sources = ["src/lines.cairn", "src/main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

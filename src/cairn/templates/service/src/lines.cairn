@@ -1,0 +1,15 @@
+// The protocol, apart from the sockets: what a received chunk asks for. Keep the decisions here, where a test block
+// can hold them, and the ring in main.cairn.
+import std.text;
+
+// Whether a chunk a client sent asks the service to stop: the word quit, alone on its line.
+fn asks_to_stop(n:usize, got:ro<u8>[n]) -> bool {
+  let mut end = n;
+  while end > 0 && (got[end - 1] == '\n' || got[end - 1] == '\r') { end -= 1; }
+  return text.equal(got[0..end], "quit");
+}
+
+test quit_alone_stops_the_service {
+  assert(asks_to_stop("quit\n") && asks_to_stop("quit\r\n") && asks_to_stop("quit"));
+  assert(!asks_to_stop("quit now\n") && !asks_to_stop("hello\n") && !asks_to_stop(""));
+}

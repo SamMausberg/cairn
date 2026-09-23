@@ -57,6 +57,17 @@ fn main() -> i32 {
 
 `u64` is a fixed-width integer, `+` traps on overflow, `&` and `^` are unsigned, `shr` takes a count below the width, and `= expression;` is a one-return body. `test average { ... }` is a test, which only `cairn test` runs, and `assert` traps when its condition is false. `import std.io;` brings in the standard library's output, a `let` is immutable, and a call whose result is nothing is a statement. `main` returns the process exit status.
 
+That project is the default template. Four more are starting points for real programs, and each carries a test block:
+
+```sh
+cairn new tool --template cli        # counts the files named after --, as wc does: std.env, std.fs, std.fmt
+cairn new crc --template lib         # a library; cairn build crc --header writes its C header too
+cairn new echo --template service    # a server that keeps every client's receive in flight on one I/O ring
+cairn new squares --template parallel  # a host region, a checked reduce and a plan that splits it
+```
+
+The test suite creates every template, builds and runs it, and runs its tests, so a template cannot fall behind the language.
+
 ## Check, run, test
 
 ```sh

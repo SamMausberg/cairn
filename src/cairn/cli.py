@@ -32,11 +32,38 @@ def report(value: dict, brief: bool = False) -> None:
     print(json.dumps(value, indent=2, allow_nan=False))
 
 
-def create_project(destination: Path) -> dict:
-    """Create only; never overwrite a directory, even when it is empty."""
+TEMPLATES = Path(__file__).parent / "templates"  # each a whole project the suite builds, runs and tests as it is
+
+
+def templates() -> list[str]:
+    return ["default", *sorted(p.name for p in TEMPLATES.iterdir() if (p / "cairn.toml").is_file())]
+
+
+def create_project(destination: Path, template: str = "default") -> dict:
+    """Create only; never overwrite a directory, even when it is empty. `default` is the average project the guide
+    walks through; any other template is copied from `templates/`, under the new project's name."""
     name = destination.name
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name):
         raise ProjectError("Choose an ASCII project name of 1..64 characters.")
+    if template not in templates():
+        raise ProjectError(f"No template {template!r}; there are {', '.join(templates())}.")
+    if template != "default":
+        destination.mkdir(parents=True, exist_ok=False)
+        source = TEMPLATES / template
+        for path in sorted(p for p in source.rglob("*") if p.is_file() and "build" not in p.relative_to(source).parts):
+            target = destination / path.relative_to(source)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            text = path.read_text(encoding="utf-8")
+            if path.name == "cairn.toml":
+                text = text.replace(f'name = "{template}"', f'name = "{name}"', 1)
+            target.write_text(text, encoding="utf-8")
+        (destination / ".gitignore").write_text("build/\n")
+        return {
+            "status": "created",
+            "project": str(destination.resolve()),
+            "template": template,
+            "network_access": False,
+        }
     destination.mkdir(parents=True, exist_ok=False)
     (destination / "src").mkdir()
     (destination / "tests").mkdir()
@@ -184,8 +211,10 @@ def main(argv: list[str] | None = None) -> int:
                         "record. Default: human on a terminal, json when piped, or CAIRN_FORMAT.")  # fmt: skip
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor", help="Report local tools; never downloads them.", parents=[shared])
-    new = sub.add_parser("new", help="Create a data-only example project.", parents=[shared])
+    new = sub.add_parser("new", help="Create a project from a template; it is data only.", parents=[shared])
     new.add_argument("directory", type=Path)
+    new.add_argument("--template", choices=templates(), default="default", help="default: the average the guide "
+                     "walks through; cli, lib, service and parallel: a starting point for each kind of program.")  # fmt: skip
     for name, help in COMMANDS.items():
         c = sub.add_parser(name, help=help, parents=[shared])
         c.add_argument(
@@ -261,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
             report(audit_collector())
             return 0
         if a.command == "new":
-            report(create_project(a.directory), brief=True)
+            report(create_project(a.directory, a.template), brief=True)
             return 0
         if a.command == "fmt":
             from .editor.formatting import format_paths

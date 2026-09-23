@@ -1,0 +1,92 @@
+// An echo service on the loopback address, serving many clients at once from one thread: every chunk a client
+// sends comes back to it, and `quit` stops the service. One I/O ring keeps the accept and every client's receive in
+// flight together and hands each back as it finishes. Overload is an answer, never a trap: a client past the table
+// hears -busy, and a kernel without io_uring is reported. Try it with `nc 127.0.0.1 39900` in another terminal.
+import std.core (Result);
+import std.io (IoError);
+import std.net (Socket);
+import std.sys;
+
+const PORT:u16 = 39900;
+const LIMIT:usize = 4096;
+const CLIENTS:usize = 16;
+const ACCEPT:u64 = 0; // the tag of the one accept in flight; client k's receive is tagged k + 1
+
+struct Client { live:bool; fd:i32; }
+
+// A slot for a client the accept answered, and its first receive; a full table says so and closes it.
+fn admit(q:rw<IoRing>, clients:rw<Buf[Client]>, fd:i32) {
+  for k in 0..CLIENTS {
+    if !clients[k].live && q.room() > 0 {
+      clients[k] = Client(true, fd);
+      let first = Buf[u8](LIMIT);
+      q.recv(fd, first, LIMIT, u64(k) + 1);
+      return;
+    }
+  }
+  let _ = net.send_all(fd, "-busy\n"); // it is turned away either way
+  unsafe { sys.close(fd); }
+}
+
+fn hang_up(clients:rw<Buf[Client]>, k:usize) {
+  unsafe { sys.close(clients[k].fd); }
+  clients[k].live = false;
+}
+
+fn serve() -> Result[i32, IoError] {
+  let server = try net.listen_on("\x7f\x00\x00\x01", PORT, 16);
+  defer net.close(server);
+  let mut q = IoRing(CLIENTS + 1);
+  defer wait(q); // after the cancels below, this collects what they stopped
+  match io.outcome(q.status()) {
+    Ok(up) => {}
+    Err(e) => {
+      io.eprintln("no io_uring here: a seccomp filter or a sysctl turned it off");
+      return Ok(2);
+    }
+  }
+  io.print("echo: listening on 127.0.0.1:");
+  io.print_u64(u64(PORT));
+  io.newline();
+  let mut clients = Buf[Client](CLIENTS);
+  q.accept(server.fd, ACCEPT);
+  let mut running = true;
+  while running {
+    let mut tag:u64 = 0;
+    let mut result:i64 = 0;
+    let data = q.next(tag, result); // whichever finished first
+    if tag == ACCEPT {
+      if result >= 0 { admit(q, clients, i32(result)); }
+      q.accept(server.fd, ACCEPT);
+    } else {
+      let k = usize(tag - 1);
+      let n = usize(max(result, 0));
+      if n == 0 {
+        hang_up(clients, k); // the client closed its end, or its socket failed
+      } else if asks_to_stop(data[0..n]) {
+        running = false;
+      } else {
+        try net.send_all(clients[k].fd, data[0..n]);
+        q.recv(clients[k].fd, data, LIMIT, tag);
+      }
+    }
+  }
+  q.cancel(ACCEPT);
+  for k in 0..CLIENTS {
+    if clients[k].live {
+      q.cancel(u64(k) + 1);
+      hang_up(clients, k);
+    }
+  }
+  return Ok(0);
+}
+
+fn main() -> i32 {
+  match serve() {
+    Ok(code) => return code;
+    Err(e) => {
+      io.eprintln("echo: a socket failed");
+      return 1;
+    }
+  }
+}

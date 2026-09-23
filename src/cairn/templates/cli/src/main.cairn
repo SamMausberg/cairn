@@ -1,0 +1,53 @@
+// Prints the lines, words and bytes of each file named on the command line, then their totals, as wc does:
+//   cairn run . -- src/count.cairn src/main.cairn
+import std.core (Result);
+import std.env (Args);
+import std.fmt;
+import std.fs;
+import std.io (IoError);
+import std.vec (Vec);
+
+// One row of the table: three right-aligned counts and the name they belong to.
+fn row(out:rw<Vec[u8]>, c:ro<Counts>, n:usize, name:ro<u8>[n]) {
+  fmt.padded(out, c.lines, 8, ' ');
+  fmt.padded(out, c.words, 8, ' ');
+  fmt.padded(out, c.bytes, 8, ' ');
+  out.push(' ');
+  fmt.bytes(out, name);
+  out.push('\n');
+}
+
+fn run(a:ro<Args>) -> Result[i32, IoError] {
+  let mut out = vec.new[u8]();
+  let mut total = Counts(0, 0, 0);
+  for i in 1..a.count() {
+    let lo = a.begin(i);
+    let hi = a.end(i);
+    let body = try fs.read(a.text.data[lo..hi]);
+    let c = count(body.data[0..body.len]);
+    row(out, c, a.text.data[lo..hi]);
+    add(total, c);
+  }
+  if a.count() > 2 { row(out, total, "total"); }
+  io.print(out.data[0..out.len]);
+  return Ok(0);
+}
+
+fn main() -> i32 {
+  match env.args() {
+    Ok(a) => {
+      if a.count() < 2 {
+        io.eprintln("usage: give the files to count after --");
+        return 2;
+      }
+      match run(a) {
+        Ok(code) => return code;
+        Err(e) => {
+          io.eprintln("cannot read one of the files");
+          return 1;
+        }
+      }
+    }
+    Err(e) => return 1;
+  }
+}

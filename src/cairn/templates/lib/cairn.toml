@@ -1,0 +1,7 @@
+[project]
+name = "lib"
+sources = ["src/crc.cairn"]
+
+[build]
+kind = "library"
+arch = "baseline"

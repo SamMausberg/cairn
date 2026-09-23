@@ -31,11 +31,11 @@ lint:
 	$(PYTHON) -m ruff format --check .
 	$(PYTHON) -m ruff check .
 	$(PYTHON) -m mypy src/cairn
-	$(CAIRN) fmt --check examples src/cairn/std
+	$(CAIRN) fmt --check examples src/cairn/std src/cairn/templates
 
 format:
 	$(PYTHON) -m ruff format .
-	$(CAIRN) fmt examples src/cairn/std
+	$(CAIRN) fmt examples src/cairn/std src/cairn/templates
 
 test:
 	$(PYTHON) -m pytest -q tests -n auto

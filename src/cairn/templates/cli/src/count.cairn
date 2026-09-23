@@ -1,0 +1,30 @@
+// What wc counts in some text: its newlines, its words (runs of bytes that are not white space) and its bytes.
+struct Counts { lines:u64; words:u64; bytes:u64; }
+
+fn blank(b:u8) -> bool = b == ' ' || b == '\n' || b == '\t' || b == '\r';
+
+fn count(n:usize, text:ro<u8>[n]) -> Counts {
+  let mut c = Counts(0, 0, u64(n));
+  let mut inside = false;
+  for b in text {
+    if b == '\n' { c.lines += 1; }
+    if !blank(b) && !inside { c.words += 1; }
+    inside = !blank(b);
+  }
+  return c;
+}
+
+fn add(total:rw<Counts>, c:ro<Counts>) {
+  total.lines += c.lines;
+  total.words += c.words;
+  total.bytes += c.bytes;
+}
+
+test counts_what_wc_counts {
+  let c = count("two words\nand three more\n");
+  assert(c.lines == 2 && c.words == 5 && c.bytes == 25);
+  let empty = count("");
+  assert(empty.lines == 0 && empty.words == 0 && empty.bytes == 0);
+  let spaced = count("  a  \n\n b");
+  assert(spaced.lines == 2 && spaced.words == 2, "runs of white space are one gap");
+}
