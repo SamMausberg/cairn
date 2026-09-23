@@ -1,14 +1,13 @@
 """Scope-owned memory and its interfaces. Native checks are finite, not proofs."""
 
 import ctypes
-import subprocess
 
 import pytest
 
 from cairn.agent.agent_tools import EditSession
 from cairn.agent.projection import canonical_source
-from cairn.compiler.cairnc import RUNTIME, Diagnostic, compile_source
-from emitted import SANITIZED, WARNINGS, refused, run
+from cairn.compiler.cairnc import Diagnostic, compile_source
+from emitted import SANITIZED, WARNINGS, library, refused, run
 
 SOURCE = """
 fn fill(n:usize,x:rw<u64>[n]) { for i in 0..n { x[i]=u64(i); } }
@@ -103,27 +102,9 @@ def test_local_name_collision_does_not_hide_parameter_effect():
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_native(cxx, tmp_path):
-    cpp, _ = compile_source(SOURCE)
-    (tmp_path / "p.cpp").write_text(cpp)
-    (tmp_path / "cairn_runtime.hpp").write_text(RUNTIME)
-    subprocess.run(
-        [
-            cxx,
-            "-std=c++20",
-            "-O2",
-            "-fno-exceptions",
-            "-fno-rtti",
-            "-Werror",
-            "-shared",
-            "-fPIC",
-            str(tmp_path / "p.cpp"),
-            "-o",
-            str(tmp_path / "p.so"),
-        ],
-        check=True,
-        capture_output=True,
+    lib = library(
+        tmp_path, compile_source(SOURCE)[0], cxx, "-std=c++20", "-O2", "-fno-exceptions", "-fno-rtti", "-Werror"
     )
-    lib = ctypes.CDLL(str(tmp_path / "p.so"))
     for name in ["sum", "initial", "early", "local_select"]:
         f = getattr(lib, "cf_" + name)
         f.argtypes = [ctypes.c_size_t]

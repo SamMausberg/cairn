@@ -21,9 +21,8 @@ import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from cairn.projects.toolchain import command
 from cairn.verify.scalar_semantics import equivalent
-from emitted import contract, emit, on_device, refused, run
+from emitted import contract, emit, library, on_device, refused, run
 from oracles.float_formats import FORMATS, Format
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -43,12 +42,8 @@ fn mma_{name}(m:usize, n:usize, k:usize, cn:usize, c:rw<f32>[cn]{at}, an:usize, 
 
 @pytest.fixture(scope="module", params=["g++", "clang++"])
 def lib(request, tmp_path_factory):
-    if not shutil.which(request.param):
-        pytest.skip(f"{request.param} unavailable")
     directory = tmp_path_factory.mktemp(request.param.replace("+", "p"))
-    source, artifact = emit(directory, compile_source("".join(map(entry, FORMATS)))[0], entry=None)
-    subprocess.run(command(request.param, source, artifact + ".so", kind="library"), check=True, timeout=240)
-    return C.CDLL(artifact + ".so")
+    return library(directory, compile_source("".join(map(entry, FORMATS)))[0], request.param)
 
 
 def f32(x: float) -> float:

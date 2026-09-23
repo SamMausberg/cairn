@@ -16,10 +16,9 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from cairn.projects.build import build
 from cairn.projects.project import load_project
 from cairn.verify.runner import run_tests
-from emitted import emit
+from emitted import artifact, emit
 
 APP = Path(__file__).resolve().parents[2] / "examples" / "apps" / "wordfreq"
 
@@ -51,11 +50,7 @@ def corpus(tmp_path: Path) -> list[Path]:
 
 
 def built(tmp_path: Path, cxx: str) -> str:
-    if not shutil.which(cxx):
-        pytest.skip(f"{cxx} unavailable")
-    record = build(load_project(APP), output=tmp_path / "build", cxx=cxx, timeout=240)
-    assert record["status"] == "native-built", record.get("stderr", "")[:4000]
-    return record["artifact"]
+    return artifact(APP, cxx, 240, output=tmp_path / "build")
 
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])

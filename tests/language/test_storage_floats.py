@@ -18,7 +18,7 @@ from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.toolchain import command
 from cairn.verify.scalar_semantics import equivalent
-from emitted import WARNINGS, emit, native, refused, run, sanitized
+from emitted import WARNINGS, emit, library, native, refused, run, sanitized
 from oracles.float_formats import (
     FORMATS,
     TRAP,
@@ -73,12 +73,8 @@ SOURCE += "".join(map(stochastic, [*FORMATS, *INTEGERS]))
 
 @pytest.fixture(scope="module", params=["g++", "clang++"])
 def lib(request, tmp_path_factory):
-    if not shutil.which(request.param):
-        pytest.skip(f"{request.param} unavailable")
     directory = tmp_path_factory.mktemp(request.param.replace("+", "p"))
-    source, artifact = emit(directory, compile_source(SOURCE)[0], entry=None)
-    subprocess.run(command(request.param, source, artifact + ".so", kind="library"), check=True, timeout=240)
-    return C.CDLL(artifact + ".so")
+    return library(directory, compile_source(SOURCE)[0], request.param)
 
 
 def call(lib, symbol: str, inputs: list[int], in_type: str, out_type: str, *extra) -> list[int]:

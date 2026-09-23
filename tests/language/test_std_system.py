@@ -14,19 +14,9 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from cairn.projects.build import build
-from cairn.projects.project import load_project
-from emitted import refused
+from emitted import program, refused
 
 ROOT = Path(__file__).resolve().parents[2]
-
-
-def built(tmp_path: Path, source: str) -> str:
-    path = tmp_path / "program.cairn"
-    path.write_text(source, encoding="utf-8")
-    record = build(load_project(path), kind="exe", cxx="clang++", timeout=180)
-    assert record["status"] == "native-built", record.get("stderr", "")[:4000]
-    return record["artifact"]
 
 
 ECHO = """
@@ -64,7 +54,7 @@ fn main() -> i32 {
 
 
 def test_arguments_and_environment_are_what_the_program_was_started_with(tmp_path):
-    artifact = built(tmp_path, ECHO)
+    artifact = program(tmp_path, ECHO)
     arguments = ["plain", "two words", "", "=", "café"]
     env = {**os.environ, "CAIRN_PROBE": "a=b c"}
     done = subprocess.run([artifact, *arguments], capture_output=True, text=True, env=env, timeout=60)
@@ -139,7 +129,7 @@ fn main() -> i32 {
 def test_files_by_path_leave_what_python_finds(tmp_path):
     work = tmp_path / "work"
     work.mkdir()
-    artifact = built(tmp_path, FILES.replace("DIR", str(work)))
+    artifact = program(tmp_path, FILES.replace("DIR", str(work)))
     done = subprocess.run([artifact], capture_output=True, text=True, timeout=60)
     assert done.returncode == 0, done.stderr
     assert sorted(p.name for p in work.iterdir()) == ["kept.txt"]
@@ -151,7 +141,7 @@ def test_a_path_too_long_for_the_kernel_is_an_error_value(tmp_path):
         "fn main() -> i32 {\n  buffer long:u8[5000] = zeroed;\n  for i in 0..5000 { long[i] = 'a'; }\n"
         "  match fs.read(long) { Ok(b) => { return 1; } Err(e) => { if e.code != 36 { return 2; } } }\n  return 0;\n}\n"
     )
-    done = subprocess.run([built(tmp_path, source)], capture_output=True, text=True, timeout=60)
+    done = subprocess.run([program(tmp_path, source)], capture_output=True, text=True, timeout=60)
     assert done.returncode == 0, done.stderr
 
 
@@ -172,7 +162,7 @@ fn main() -> i32 {
 
 
 def test_the_clock_outlasts_a_sleep(tmp_path):
-    done = subprocess.run([built(tmp_path, CLOCK)], capture_output=True, text=True, timeout=60)
+    done = subprocess.run([program(tmp_path, CLOCK)], capture_output=True, text=True, timeout=60)
     assert done.returncode == 0, done.stderr
 
 

@@ -17,7 +17,7 @@ import pytest
 from cairn.agent.projection import canonical_source, expanded_source
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.toolchain import command
-from emitted import WARNINGS, emit, refused, run, sanitized, watched
+from emitted import WARNINGS, emit, library, refused, run, sanitized, watched
 
 MODEL = """
 fn square(x:f64) -> f64 = x * x;
@@ -64,12 +64,8 @@ P = C.POINTER(D)
 
 @pytest.fixture(scope="module", params=["g++", "clang++"])
 def lib(request, tmp_path_factory):
-    if not shutil.which(request.param):
-        pytest.skip(f"{request.param} unavailable")
     directory = tmp_path_factory.mktemp(request.param.replace("+", "p"))
-    source, artifact = emit(directory, compile_source(MODEL)[0], entry=None)
-    subprocess.run(command(request.param, source, artifact + ".so", kind="library"), check=True, timeout=240)
-    lib = C.CDLL(artifact + ".so")
+    lib = library(directory, compile_source(MODEL)[0], request.param)
     lib.cf_poly.restype = lib.cf_poly_grad.restype = lib.cf_energy.restype = lib.cf_energy_grad.restype = D
     lib.cf_poly.argtypes = [D, D]
     lib.cf_poly_grad.argtypes = [D, D, D, P, P]

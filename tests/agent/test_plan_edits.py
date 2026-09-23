@@ -9,7 +9,8 @@ import pytest
 
 from cairn.agent.agent_tools import HANDLES, EditHost
 from cairn.agent.plans import PROTOCOL, PlanHost
-from cairn.compiler.cairnc import Diagnostic, compile_source
+from cairn.compiler.cairnc import compile_source
+from emitted import code_of
 
 SPREAD = """fn mix(v:u64) -> u64 {
   let mut w = v;
@@ -24,12 +25,6 @@ DEVICE = "fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i]
 
 def reply(packet, **items):
     return {"protocol": PROTOCOL, "session": packet["session"], "items": items}
-
-
-def code_of(call) -> str:
-    with pytest.raises(Diagnostic) as caught:
-        call()
-    return caught.value.data["code"]
 
 
 def test_the_packet_opens_only_the_items_of_the_function_s_regions():

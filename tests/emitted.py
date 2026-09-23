@@ -5,6 +5,7 @@ The C++ helpers are for a test that names its compiler flags, a sanitizer or its
 """
 
 import contextlib
+import ctypes
 import os
 import shutil
 import subprocess
@@ -68,15 +69,42 @@ def run(tmp_path: Path, cpp: str, *flags: str, cxx="clang++", entry="main", time
     return subprocess.run([executable], capture_output=True, text=True, timeout=timeout, env=env)
 
 
-def native(tmp_path: Path, source: str, cxx="clang++", timeout=180):
-    """Build one CAIRN program in its own directory and run it; a nonzero exit is a failure."""
+def library(tmp_path: Path, cpp: str, cxx: str, *flags: str) -> ctypes.CDLL:
+    """`cpp` built as a shared library and loaded: with exactly `flags` when the test names them, otherwise by the
+    project's own command line for `cxx`. Skips the test when `cxx` is absent."""
     if not shutil.which(cxx):
         pytest.skip(f"{cxx} unavailable")
+    source, artifact = emit(tmp_path, cpp, entry=None)
+    shared = artifact + ".so"
+    line = (
+        [cxx, *flags, "-shared", "-fPIC", source, "-o", shared]
+        if flags
+        else command(cxx, source, shared, kind="library")
+    )
+    subprocess.run(line, check=True, timeout=240)
+    return ctypes.CDLL(shared)
+
+
+def artifact(project: Path, cxx: str = "clang++", timeout=240, **options) -> str:
+    """A project directory or one `.cairn` file built as `cairn build` builds it; the executable. Skips the test
+    when `cxx` is absent."""
+    if not shutil.which(cxx):
+        pytest.skip(f"{cxx} unavailable")
+    record = build_project(load_project(project), cxx=cxx, timeout=timeout, **options)
+    assert record["status"] == "native-built", record.get("stderr", "")[:4000]
+    return record["artifact"]
+
+
+def program(tmp_path: Path, source: str, cxx="clang++", timeout=180) -> str:
+    """One CAIRN program built in its own directory; the executable."""
     path = tmp_path / "program.cairn"
     path.write_text(source, encoding="utf-8")
-    record = build_project(load_project(path), kind="exe", cxx=cxx, timeout=timeout)
-    assert record["status"] == "native-built", record.get("stderr", "")[:4000]
-    done = subprocess.run([record["artifact"]], capture_output=True, text=True, timeout=120)
+    return artifact(path, cxx, timeout, kind="exe")
+
+
+def native(tmp_path: Path, source: str, cxx="clang++", timeout=180):
+    """Build one CAIRN program in its own directory and run it; a nonzero exit is a failure."""
+    done = subprocess.run([program(tmp_path, source, cxx, timeout)], capture_output=True, text=True, timeout=120)
     assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     return done
 

@@ -20,9 +20,8 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from cairn.projects.build import build
 from cairn.projects.project import load_project
-from emitted import on_device
+from emitted import artifact, on_device
 
 APPS = Path(__file__).resolve().parents[2] / "examples" / "apps"
 NAMES = ["kvstore", "service", "simulator", "gpu_pipeline", "wordfreq", "classifier", "panel", "matmul"]
@@ -30,11 +29,7 @@ OPEN_FILES = resource.getrlimit(resource.RLIMIT_NOFILE)
 
 
 def built(root, tmp_path, cxx="clang++", timeout=240):
-    if not shutil.which(cxx):
-        pytest.skip(f"{cxx} unavailable")
-    record = build(load_project(root), output=tmp_path / "build", cxx=cxx, timeout=timeout)
-    assert record["status"] == "native-built", record.get("stderr", "")[:4000]
-    return record["artifact"]
+    return artifact(root, cxx, timeout, output=tmp_path / "build")
 
 
 def copied(name, tmp_path):

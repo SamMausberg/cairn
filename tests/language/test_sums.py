@@ -1,14 +1,13 @@
 """Monomorphic tagged scalar results. No generics or unsafe payload projection."""
 
 import ctypes
-import subprocess
 
 import pytest
 
 from cairn.agent.agent_tools import EditSession
 from cairn.agent.projection import canonical_source
-from cairn.compiler.cairnc import RUNTIME, compile_source
-from emitted import refused
+from cairn.compiler.cairnc import compile_source
+from emitted import library, refused
 
 SOURCE = """
 enum Division { Value(u64); Zero; }
@@ -148,27 +147,9 @@ def test_nested_writes_in_arm_rejected():
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_native(cxx, tmp_path):
-    cpp, _ = compile_source(SOURCE)
-    (tmp_path / "p.cpp").write_text(cpp)
-    (tmp_path / "cairn_runtime.hpp").write_text(RUNTIME)
-    subprocess.run(
-        [
-            cxx,
-            "-std=c++20",
-            "-O2",
-            "-fno-exceptions",
-            "-fno-rtti",
-            "-Werror",
-            "-shared",
-            "-fPIC",
-            str(tmp_path / "p.cpp"),
-            "-o",
-            str(tmp_path / "p.so"),
-        ],
-        check=True,
-        capture_output=True,
+    lib = library(
+        tmp_path, compile_source(SOURCE)[0], cxx, "-std=c++20", "-O2", "-fno-exceptions", "-fno-rtti", "-Werror"
     )
-    lib = ctypes.CDLL(str(tmp_path / "p.so"))
     lib.cf_use.argtypes = [ctypes.c_uint64] * 2
     lib.cf_use.restype = ctypes.c_uint64
     lib.cf_assign.argtypes = [ctypes.c_uint64]
