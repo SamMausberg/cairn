@@ -436,6 +436,33 @@ A rename is one checked transaction: the edited project must compile again with 
 
 A compiler failure becomes a diagnostic, never an exception. Known limits: diagnostics stop at the first compiler error, as the compiler does; `definition` picks the first declaration with a matching name; there is no format-on-type; and no quick fix ever widens an effect ceiling, a borrow mode or a signature.
 
+## cairn mcp
+
+```sh
+cairn mcp      # speaks the Model Context Protocol: one JSON-RPC 2.0 message per line on stdin/stdout
+```
+
+`cairn mcp` serves the compiler's hosts to an agent that speaks the Model Context Protocol, whether or not it has a shell. The Claude Code plugin starts it; another client runs `bin/cairn` of a checkout with the argument `mcp`. It has eight tools, each a thin call into a host this page or [agents.md](agents.md) describes:
+
+| Tool | What it calls |
+|---|---|
+| `check` | `cairn check`: `typed`, or the refusal with its code, file, line and repair hint |
+| `edit_open`, `edit_request` | a [guarded edit session](agents.md#packets) and its `cairn.edit/2` requests |
+| `plan_open`, `plan_reply` | a [plan session](agents.md#plan-edits) and its `cairn.plan/1` replies |
+| `implementation_open`, `implementation_submit` | an [implementation session](agents.md#implementation-sessions) and its submissions |
+| `state` | `cairn state`: every signature and row under a digest, what changed since a digest this server sent, or with `symbol` one function's investigation |
+
+A tool takes `path`, a `.cairn` file, a project directory or a manifest as the command line takes it, relative to the directory the server started in, or `source`, the text of a program. A session opened on a path writes each change its host admits back to the files it came from: an edit into the function's file, a plan after the function's declaration and out of any file that named it elsewhere, a validated implementation beside its reference. It writes only while every file of the project and the manifest hold what the host judged the change against; otherwise the reply is refused as stale with `E-SESSION` and nothing is written, so a file saved in the meantime is never overwritten. It writes only the files the change touches, never a vendored one, each beside itself and then renamed into place, all of them or none. A session opened on `source` writes nothing.
+
+```json
+{"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "edit_request", "arguments": {"request":
+  {"protocol": "cairn.edit/2", "handle": "e1", "kind": "body", "replacement": "{ return add_wrap(x, 2); }"}}}}
+{"jsonrpc": "2.0", "id": 4, "result": {"isError": false, "content": [{"type": "text", "text":
+  "{\"status\":\"typed\",\"symbol\":\"lib.bump\",\"effects\":[],...,\"written\":[\"src/lib.cairn\"]}"}]}}
+```
+
+A result is an error exactly when the command line would exit nonzero: a refused program or request, a stale write, or an environment that cannot answer. Its text is then the CAIRN diagnostic record, with the code, the line and the fix the host can state. A message the server cannot read is a JSON-RPC error: -32700 for text that is not JSON, -32600 for one that is not a request, -32601 for an unknown method and -32602 for an unknown tool. The server speaks protocol versions 2024-11-05 through 2025-11-25, answers `initialize` with the client's version when it speaks it and with 2025-11-25 otherwise, and answers requests one at a time. Only the protocol reaches standard output: a build or a test the server starts writes to standard error and reads nothing from standard input. An implementation session on a project keeps failing cases in `regressions/<reference>.json` and every submission in `.cairn/history`, as [`cairn validate`](#cairn-validate) and [`cairn tune`](#cairn-tune) do, and uses the policy that regressions file pinned; asking for another is `E-TEST-POLICY`.
+
 ## The editor extension
 
 `editors/vscode/` is a VS Code and Cursor extension: a generated TextMate grammar, snippets, the semantic token legend and a client that starts `cairn lsp`, with no build step and no vendored `node_modules`. From a checkout, symlink it and reload the window:

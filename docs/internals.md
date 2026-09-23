@@ -136,7 +136,7 @@ make gpu embedded  # CUDA runtime and lanes, and the QEMU board, where the hardw
 | `projects/` | manifests, vendored dependencies, incremental builds, every application under `examples/apps/`, the `cairn new` templates, test blocks, a C++ host linking a CAIRN library, the freestanding image under QEMU with an exact UART transcript |
 | `runtime/` | the self-checking C++ and CUDA binaries beside it, at several `CAIRN_LANES` counts |
 | `tooling/` | `cairn fmt` over every `.cairn` in the checkout plus fuzz, a real `cairn lsp` and the extension's client, the grammars against a TextMate engine, `predict` and `tune`, terminal output and completions, the tree's own rules, publication against fakes, every script under `tools/` and `bench/` |
-| `agent/` | projections, packets and their evidence classes, rule cards, sketches, guarded edits, migrations, plan edits, state and deltas, and the canonical projection round-tripping every sample and `std` module to identical native code |
+| `agent/` | projections, packets and their evidence classes, rule cards, sketches, guarded edits, migrations, plan edits, state and deltas, a real `cairn mcp` writing admitted changes back and refusing stale ones, and the canonical projection round-tripping every sample and `std` module to identical native code |
 | `oracles/` | not pytest modules: the Python oracles `tools/checks/verify.py` drives |
 
 Sanitizers run where they bite: ownership under Address, Leak and UndefinedBehavior, tasks and lanes under Thread. A task whose child exits abnormally has failed, whatever it printed.

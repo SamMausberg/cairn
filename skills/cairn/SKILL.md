@@ -142,6 +142,7 @@ Every command takes `--format json`, the default when output is piped.
 | `cairn certificates` | Check collector arithmetic certificates; not a Lean/compiler proof. |
 | `cairn fmt` | Format CAIRN sources in place; refuses any change to the token stream. |
 | `cairn lsp` | Speak the Language Server Protocol over stdin/stdout. |
+| `cairn mcp` | Serve check, state and the edit, plan and implementation hosts to an agent over the Model Context Protocol on stdin/stdout; an admitted change is written back to its files. |
 | `cairn completions` | Print the completion script of a shell: bash or zsh. |
 
 ## More

@@ -58,6 +58,8 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `agent/implementations.py` | implementation sessions: a pinned reference, tolerance, test policy and inputs, and new implementations admitted only when they validate |
 | `agent/teaching.py` | the rule cards, selected from lexical tokens |
 | `agent/skill.py` | the agent skill under `skills/cairn/`, written from the cards, the fixes and the command line |
+| `agent/mcp.py`, `agent/mcp_tools.py` | `cairn mcp`: the Model Context Protocol over stdio, and the tools it serves from the hosts |
+| `agent/write_back.py` | a change a host admitted written back to the files a session read, only while they hold what it was judged against |
 | `editor/grammar.py` | the editor grammars, generated from the compiler's vocabulary |
 | `editor/terminal.py` | what a person at a terminal reads, beside the JSON record |
 | `perf/work.py` | what a function does each time it runs, counted from the typed tree, which a prediction prices |

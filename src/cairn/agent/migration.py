@@ -14,7 +14,6 @@ failure part way puts back every file already renamed.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +23,7 @@ from ..projects.project import Project, load_project
 from .agent_tools import digest, implementation, load_json_strict, stable_json
 from .projection import declarations, related, signature
 from .teaching import select_cards
+from .write_back import replace
 
 PROTOCOL = "cairn.migration/1"
 MAX_FUNCTIONS = 64  # authorized functions and callers one migration may carry
@@ -239,26 +239,7 @@ class Migration:
 
     def write(self, bodies: dict[str, str]) -> None:
         """Every file written beside itself, then renamed into place; a failure puts back what was renamed."""
-        root = self.project.root
-        staged = []
-        try:
-            for path, text in bodies.items():
-                target = root / path
-                beside = target.with_name(target.name + ".migration")
-                beside.write_text(text, encoding="utf-8")
-                staged.append((target, beside, target.read_text(encoding="utf-8")))
-            done: list[tuple[Path, str]] = []
-            try:
-                for target, beside, before in staged:
-                    os.replace(beside, target)
-                    done.append((target, before))
-            except OSError:
-                for target, before in reversed(done):
-                    target.write_text(before, encoding="utf-8")
-                raise
-        finally:
-            for _, beside, _ in staged:
-                beside.unlink(missing_ok=True)
+        replace(self.project.root, bodies, ".migration")
 
 
 def migrate(path: str | Path, symbol: str, to: str, also: dict[str, str] | None = None, effects: tuple[str, ...] = (),

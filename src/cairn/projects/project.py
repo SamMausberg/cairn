@@ -46,6 +46,15 @@ def source_of(path: Path, given: Mapping[Path, str] | None) -> str:
     return held if held is not None else read_text(path, MAX_SOURCE)
 
 
+def agree(a: str, b: str, most: int) -> int:
+    """How many leading characters `a` and `b` share, up to `most`: a binary search over slices compared in C."""
+    lo, hi = 0, most
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        lo, hi = (mid, hi) if a[:mid] == b[:mid] else (lo, mid - 1)
+    return lo
+
+
 def canonical(value: str) -> bool:
     """One spelling per file or directory: every segment is a plain name, never empty, `.` or `..`."""
     return all(SEGMENT.fullmatch(part) and part not in {".", ".."} for part in value.split("/"))
@@ -123,6 +132,56 @@ class Project:
         if unit:
             result.update(file=unit.path, line=result["line"] - unit.first_line + 1)
         return result
+
+    def layout(self) -> tuple[list[str], list[str]]:
+        """What the combined source holds between files, and each file's text: the source is `between[0] + texts[0]
+        + between[1] + ... + texts[-1] + between[-1]`. One file alone is its own text; each file of a manifest follows
+        a `// source:` line and ends with a newline of its own."""
+        lines = self.source.split("\n")
+        texts = ["\n".join(lines[u.first_line - 1 : u.first_line - 1 + u.lines]) for u in self.units]
+        if len(texts) == 1 and texts[0] == self.source:
+            return ["", ""], texts
+        paths = [u.path for u in self.units]
+        return [f"// source: {paths[0]}\n", *(f"\n// source: {p}\n" for p in paths[1:]), "\n"], texts
+
+    def split(self, candidate: str) -> dict[str, str]:
+        """Each file's text in `candidate`, a combined source laid out as this one is, by the file's path.
+
+        Each `// source:` line must occur as often in `candidate` as in this source, so text that names a file cannot
+        move a boundary. What stands between two files keeps its place where `candidate` agrees with this source at the
+        start or at the end; inside what differs, it is found by its text, which must occur there exactly once.
+        ProjectError when `candidate` does not split into this project's files that way."""
+        between, texts = self.layout()
+        if between == ["", ""]:
+            return {self.units[0].path: candidate}
+        source, grown = self.source, len(candidate) - len(self.source)
+        if named := next((b for b in between[:-1] if candidate.count(b) != source.count(b)), None):
+            raise ProjectError(f"The candidate writes `{named.strip()}` where no file begins, so it does not split "
+                               "into this project's files; nothing was written.")  # fmt: skip
+        head = agree(source, candidate, min(len(source), len(candidate)))
+        tail = agree(source[::-1], candidate[::-1], min(len(source), len(candidate)) - head)
+        starts, at = [], 0
+        for b, t in zip(between, [*texts, ""], strict=True):
+            starts.append(at)
+            at += len(b) + len(t)
+        placed: list[int | None] = [s if s + len(b) <= head else s + grown if s >= len(source) - tail else None
+                                    for s, b in zip(starts, between, strict=True)]  # fmt: skip
+        after = 0  # where the text after the last placed separator begins
+        for i, text in enumerate(between):
+            if placed[i] is None:
+                before = next((p for p in placed[i + 1 :] if p is not None), len(candidate))
+                found = candidate.find(text, after, before)
+                again = candidate.find(text, found + 1, before) if found >= 0 else -1
+                if found < 0 or again >= 0:
+                    raise ProjectError(f"The candidate does not split into this project's files: `{text.strip()}` is "
+                                       "not where one file ends and the next begins; nothing was written.")  # fmt: skip
+                placed[i] = found
+            after = (placed[i] or 0) + len(text)
+        cuts = [p for p in placed if p is not None]
+        split = {u.path: candidate[cuts[i] + len(between[i]) : cuts[i + 1]] for i, u in enumerate(self.units)}
+        if "".join(b + t for b, t in zip(between, [*split.values(), ""], strict=True)) != candidate:
+            raise ProjectError("The candidate does not split into this project's files; nothing was written.")
+        return split
 
     def receipt(self) -> dict:
         vendored = [{"path": p, "symbols": list(s), "sha256": digest(self.root / p)} for p, s in self.foreign]

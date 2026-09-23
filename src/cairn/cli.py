@@ -334,6 +334,11 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--check", action="store_true", help="Write nothing; exit 1 if any file would change.")
     f.add_argument("--diff", action="store_true", help="Write nothing; print a unified diff of what would change.")
     sub.add_parser("lsp", help="Speak the Language Server Protocol over stdin/stdout.")
+    sub.add_parser(
+        "mcp",
+        help="Serve check, state and the edit, plan and implementation hosts to an agent over the "
+        "Model Context Protocol on stdin/stdout; an admitted change is written back to its files.",
+    )
     s = sub.add_parser("completions", help="Print the completion script of a shell: bash or zsh.")
     s.add_argument("shell", choices=["bash", "zsh"])
     return p
@@ -401,6 +406,10 @@ def main(argv: list[str] | None = None) -> int:
             from .editor.lsp import serve
 
             return serve()
+        if a.command == "mcp":
+            from .agent.mcp import serve as serve_mcp
+
+            return serve_mcp()
         if a.command == "diff":
             from .editor import changes
             from .projects.revision import read
