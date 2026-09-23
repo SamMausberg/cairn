@@ -103,7 +103,8 @@ pub fn slot[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> Optio
 }
 
 // Where the entry `s` named is now: None once its key was removed or the map rehashed, when the
-// key has to be looked up again. A stale Slot is never taken for another entry.
+// key has to be looked up again. A stale Slot is never taken for another entry of the map that gave it; against
+// another map a Slot is only a number, since every map counts its stamps from zero.
 pub fn resolve[K:affine, V:affine](m:ro<Map[K, V]>, s:Slot) -> Option[usize] {
   if s.at >= len(m.state) { return Option.None; }
   if m.state[s.at] != 1 || m.stamps[s.at] != s.stamp { return Option.None; }

@@ -236,7 +236,7 @@ fn main() -> i32 {
 }
 ```
 
-A ring is a host object (`E-PLACEMENT`), and a lane may not reach one (`E-PARALLEL-CALL`). The value model reports a function that uses one as `unknown`.
+A ring is a host object (`E-PLACEMENT`). A host lane may read `q.status()`, `q.room()` and `q.pending()`, which only the thread that owns the ring changes and which no lane can change, but it may not submit, collect, cancel or wait (`E-PARALLEL-CALL`). The value model reports a function that uses one as `unknown`.
 
 ## Atomics and mutexes
 

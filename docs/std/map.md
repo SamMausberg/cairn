@@ -30,7 +30,8 @@ pub fn find[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> Optio
 pub fn slot[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> Option[Slot]
 
 // Where the entry `s` named is now: None once its key was removed or the map rehashed, when the key has to be looked up
-// again. A stale Slot is never taken for another entry.
+// again. A stale Slot is never taken for another entry of the map that gave it; against another map a Slot is only a
+// number, since every map counts its stamps from zero.
 pub fn resolve[K:affine, V:affine](m:ro<Map[K, V]>, s:Slot) -> Option[usize]  // effects: read:m, trap
 
 // A copy of the value under `key`.
