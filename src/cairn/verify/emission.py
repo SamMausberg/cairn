@@ -128,7 +128,8 @@ def definitions(interface: list[str]) -> dict[str, str]:
         if (line and line[0].isspace()) or line.startswith(("}", "};")):
             chunk.append(line)
             continue
-        if chunk and (m := re.search(r"\b(?:struct|union|enum)\s+(c(?:t|dt|vt)_\w+)|\b(c(?:t|dt|vt)_\w+)\s*(?:\[|=)",
+        # A tag-only enum is emitted as `enum class ct_E`, so the name may follow `class`.
+        if chunk and (m := re.search(r"\b(?:struct|union|enum(?:\s+class)?)\s+(c(?:t|dt|vt)_\w+)|\b(c(?:t|dt|vt)_\w+)\s*(?:\[|=)",
                                      chunk[0])):  # fmt: skip
             out.setdefault(m.group(1) or m.group(2), "\n".join(chunk))
         chunk = [line] if line else []
