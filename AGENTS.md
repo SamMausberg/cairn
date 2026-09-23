@@ -1,6 +1,6 @@
 # Working on CAIRN
 
-Read README.md, then [docs/language.md](docs/language.md) and the architecture section of [docs/internals.md](docs/internals.md). Start with `python3 bin/cairn doctor`, `make lint` and `python3 -m pytest -q tests -n auto`. Use the existing Python API and real CAIRN source; do not invent unsupported libraries or syntax.
+Read README.md, then [docs/language.md](docs/language.md) and the architecture section of [docs/internals.md](docs/internals.md). Start with `python3 bin/cairn doctor`, `make lint` and `python3 -m pytest -q tests -n 4`. Use the existing Python API and real CAIRN source; do not invent unsupported libraries or syntax.
 
 **Ownership of the code.** Keep every change small and in the file that owns the rule. Paths are under `src/cairn/`.
 
@@ -85,7 +85,7 @@ Project manifests are data, never build scripts. The formatter owns layout: `ruf
 
 **Do not weaken** a task, reference, input domain, numerical policy, alias rule, lease, lane rule, effect ceiling or test to make a candidate pass. Checked and wrapping arithmetic differ. Borrows are second class: a design that needs a stored or returned borrow needs an owner, an index or a handle. An owner moves; `take` and `swap` are the only ways out of a place. A linear value is consumed exactly once on every path. A lane touches only element `[i]` of what any lane writes. While a ticket is live its borrows are leased. `unsafe` is for the foreign boundary and the machine, never for silencing the checker.
 
-**Keep claims distinct**: accepted, typed, native-built, finite-tested, sanitizer-clean, SMT-equivalent, Lean-checked and benchmarked are different statements, and unknown is never success. The Lean result covers the certificate checker, the seventeen collector certificates, the collector loop model, a core ownership/lease calculus over locals, record field paths, whole owners, headers, elements, array parts with visible bounds and parallel regions (`proofs/Cairn/Places.lean` and `proofs/Cairn/Ownership/`), the lane pool's protocol (`Region.lean`), guard elision (`Facts.lean`), layout coverage (`Layout.lean`) and the cooperative phase rule (`Cooperative.lean`). Every model is hand-written, not extracted from `compiler/`; the receipt turns it off when the bundle changes, so regenerate with `tools/checks/export_lean_certificates.py` and rebuild `proofs/` when you touch a rule. Do not claim a speedup, GPU advantage or AI proficiency without executed evidence recorded under `evidence/`.
+**Keep claims distinct**: accepted, typed, native-built, finite-tested, sanitizer-clean, SMT-equivalent, Lean-checked and benchmarked are different statements, and unknown is never success. The Lean result covers the hand-written models [docs/verification.md](docs/verification.md#the-lean-project) lists, none extracted from `compiler/`; the receipt turns it off when the bundle changes, so regenerate with `tools/checks/export_lean_certificates.py` and rebuild `proofs/` when you touch a rule. Do not claim a speedup, GPU advantage or AI proficiency without executed evidence recorded under `evidence/`.
 
 **Every language change needs** all of these before it lands:
 
@@ -103,11 +103,11 @@ Count whole compiler dependencies in density measurements, not a facade alone.
 
 ## Development
 
-Work on a branch, one focused change at a time. Run the fast suite before and after you touch code, and both native compilers with the relevant sanitizers when you touch the runtime or the lowering. Never run code on the GPU outside `make gpu`, never set `CAIRN_GPU_TESTS` yourself, and never start `make gpu` while another agent may: repeated device runs have crashed the host. Several agents on one machine share its cores, so give pytest at most four workers each. Accepted examples are not evidence on their own: every rule needs a rejection test naming its diagnostic code and an independent behaviour oracle.
+Work on a branch, one focused change at a time. Run the fast suite before and after you touch code, and both native compilers with the relevant sanitizers when you touch the runtime or the lowering. Never run code on the GPU outside `make gpu`, never set `CAIRN_GPU_TESTS` yourself, and never start `make gpu` while another agent may: repeated device runs have crashed the host. Several agents on one machine share its cores, so give pytest at most four workers each.
 
 Source belongs in `src/cairn`, tests in `tests`, real programs in `examples`, and generated results under `results/`, which is not tracked. Do not reimplement a compiler rule in a script. `implementation_hash()` in `src/cairn/verify/scalar_semantics.py` lists the files a semantic receipt is pinned to; add a new parser, checker or emitter file to that list. Prefer removing repeated boilerplate to adding opaque punctuation, and do not shrink a source-token measurement by excluding semantics the program imports.
 
-Commit messages are one plain sentence saying what is now true, with no attribution trailer. The project is licensed MIT or Apache-2.0 at the recipient's option, and every contribution is accepted under the same terms. Publication to a package index or a change of hosting is an explicit owner action, never a side effect of a test or a script.
+Commit messages are one short, plain sentence saying what is now true, with a body only when a reviewer needs it, and no attribution trailer. The project is licensed MIT or Apache-2.0 at the recipient's option, and every contribution is accepted under the same terms. Publication to a package index or a change of hosting is an explicit owner action, never a side effect of a test or a script.
 
 ## Writing documentation
 
