@@ -297,12 +297,28 @@ class Parser:
         self.need("in")
         return binder, self.expr()
 
+    def scanning(self) -> bool:
+        """`scan op [exclusive] out for|parallel i in n yield v`: a word only here, an ordinary name elsewhere."""
+        k = 3 if self.ahead(2) == "exclusive" and self.ahead(3) not in {"for", "parallel"} else 2
+        return self.t.s == "scan" and self.ahead(1) in REDUCERS and self.ahead(k + 1) in {"for", "parallel"}
+
     def contracted(self, t: Token, tag: str, name: str, typ: Type | None) -> Stmt:
         form = self.t.s
         self.i += 1
         if tag != "let" or (form == "compact" and typ not in (None, USIZE)):
-            fail("E-COLLECT-BINDING", "Compaction binds an immutable usize result.", t)
+            fail("E-COLLECT-BINDING", f"{'A scan' if form == 'scan' else 'Compaction'} binds an immutable result.", t)
         at: dict[str, Any] = {"line": t.line, "col": t.col}
+        if form == "scan":  # The operator, then `exclusive` unless that is the output's own name.
+            op, self.i = self.t.s, self.i + 1
+            exclusive = self.t.s == "exclusive" and self.ahead(1) not in {"for", "parallel"}
+            self.i += exclusive
+            out, pooled = Expr("name", self.ident(), **at), self.t.s == "parallel"
+            binder, hi = self.generator("parallel" if pooled else "for")
+            self.need("yield")
+            store = Expr("index", "", [Expr("name", out.val, **at), Expr("name", binder, **at)], **at)  # out[i]
+            es = [out, hi, self.expr(), store]
+            self.need(";")
+            return Stmt(form, name, typ, es, binder=binder, op=op, pooled=pooled, exclusive=exclusive, **at)
         if form == "compact":
             out = Expr("name", self.ident(), **at)
             binder, hi = self.generator()
@@ -411,6 +427,8 @@ class Parser:
             return Stmt("each", ref=self.each(self.block), **at)
         if self.recipe and t.s == "require":
             return self.require(t)
+        if self.scanning():  # A scan whose total nobody reads.
+            return self.contracted(t, "let", "", None)
         if t.s in {"buffer", "stack"}:
             self.i += 1
             n = self.ident()
@@ -446,7 +464,7 @@ class Parser:
             n = self.ident()
             typ = self.ty() if self.eat(":") else None
             self.need("=")
-            if self.t.s in {"compact", "reduce"}:
+            if self.t.s in {"compact", "reduce"} or self.scanning():
                 return self.contracted(t, tag, n, typ)
             e = self.expr()
             self.need(";")

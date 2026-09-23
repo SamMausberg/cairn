@@ -245,6 +245,34 @@ template<class T, class Op, class F> inline T reduce(std::size_t n, T identity, 
   return host;
 }
 
+// What a scan carries, as the element its output holds: a checked sum's value without its overflow flag.
+template<class T> CR_HD inline T plain(T x) noexcept { return x; }
+template<class T> CR_HD inline T plain(Sum<T> x) noexcept { return x.v; }
+
+// Scan of value(i) over [0,n) into out: out[i] is op over value(0..i], or over value(0..i) when Exclusive, and
+// the answer is op over every value. The association order is CUB's, exact for the integer operators the language
+// admits here. The inclusive scan lands in device scratch first, so a value(i) that reads out[i] reads it before
+// anything writes it; one more pass writes out from the scratch, shifted by one place when Exclusive.
+template<bool Exclusive, class T, class R, class Op, class F>
+inline T scan(R* out, std::size_t n, T identity, Op op, F value) noexcept {
+  if(!n) return identity;
+  const Indexed<T, F> in{value};
+  const Binary<T, Op> fold{op};
+  Buffer<T> held(n);
+  T* h = held.data();
+  std::size_t need = 0;
+  check(cub::DeviceScan::InclusiveScan(nullptr, need, in, h, fold, n));
+  {
+    Buffer<char> temp(need ? need : 1);  // a null temp pointer would mean "query" to CUB
+    check(cub::DeviceScan::InclusiveScan(temp.data(), need, in, h, fold, n));
+    check(cudaDeviceSynchronize());
+  }
+  launch(n, [=] CR_DEVICE(std::size_t i) { out[i] = plain(Exclusive ? (i ? h[i - 1] : identity) : h[i]); });
+  T total = identity;
+  copy(&total, h + (n - 1), std::size_t(1), Dir::d2h);
+  return total;
+}
+
 // Stable compaction: value(i) for each selected i, in order, into the prefix of out; the tail of
 // out is left alone. pred runs exactly once per i (its answer is kept), value only when selected.
 template<class T, class P, class F>

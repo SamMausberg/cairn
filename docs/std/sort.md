@@ -12,6 +12,13 @@ pub fn sort_by[T](n:usize, xs:rw<T>[n]@host, less:ro<fn(ro<T>, ro<T>) -> bool>)
 // zero_init
 pub fn sort[T:Ord](n:usize, xs:rw<T>[n]@host)
 
+// Stable sort of unsigned keys, eight bits a pass, least significant first. Passes come in pairs, xs to scratch and
+// back, and stop once the largest key has no digit left, so small keys pay for their width only. Cost: O(n) per pass,
+// at most eight passes, no allocation: the caller lends scratch of the same extent.
+// effects: ffi_precondition, local_read, local_write, read:scratch, read:xs, stack_storage, trap, write:scratch,
+// write:xs, zero_init
+pub fn radix_sort[T:unsigned](n:usize, xs:rw<T>[n]@host, scratch:rw<T>[n]@host)
+
 // The index of a value equal to `key` in an already sorted view, if one is there.
 // effects: diverge, ffi_precondition, local_read, local_write, read:key, read:xs, stack_storage, trap, zero_init
 pub fn search[T:Ord](n:usize, xs:ro<T>[n]@host, key:ro<T>) -> Option[usize]

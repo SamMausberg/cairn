@@ -287,6 +287,13 @@ class Walk:
             self.expr(es[0])
             self.inside(s, s.binder, self.bound(s.binder, None, es[0], True), lambda: self.expr(es[1]))
             self.bind(s.name, True)
+        elif tag == "scan":  # The yield and the store out[i] it feeds, both below the count.
+            out, hi, value, store = es
+            self.expr(out)
+            self.expr(hi)
+            self.inside(s, s.binder, self.bound(s.binder, None, hi, True), lambda: [self.expr(value), self.expr(store)])
+            if s.name:
+                self.bind(s.name, True)
         elif tag == "compact":
             out, hi, pred, value = es
             self.expr(out)

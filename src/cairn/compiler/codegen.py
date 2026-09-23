@@ -472,7 +472,7 @@ class Emitter:
         for s in ss:
             if self.origin and s.line:
                 self.put('#line {1} "{0}"'.format(*self.origin(s.line)))
-            getattr(self, "s_" + s.tag)(s, [self.expr(e) for e in s.exprs] if s.tag != "compact" else [])
+            getattr(self, "s_" + s.tag)(s, [self.expr(e) for e in s.exprs] if s.tag not in {"compact", "scan"} else [])
 
     def s_buffer(self, s: Stmt, es: list[str]):
         owner, ty = self.fresh("cr_owner_")[0], self.type(s.ty)
@@ -538,25 +538,52 @@ class Emitter:
                 schedule.pop()
         self.put(f"{entry}({es[0]}, {self.lane(s, lambda: self.block(s.body))}{''.join(f', {x}' for x in schedule)});")
 
-    def s_reduce(self, s: Stmt, es: list[str]):
-        ty, op, device, i = self.type(s.ty), s.op, s.ref == "device", "v_" + s.binder
+    def folding(self, s: Stmt) -> tuple[str, str, str, str, str]:
+        """A reduction's or a scan's element type, its combine over `a` and `b`, its identity, the type it carries
+        and that type's start: a device sum carries its overflow flag, which the host checks at the end."""
+        ty, op, device = self.type(s.ty), s.op, s.ref == "device"
         combine = (f"cr::{op}<{ty}>(a, b)" if op in WRAPPING else f"(a {'<' if op == 'min' else '>'} b ? a : b)"
                    if op in {"min", "max"} else f"static_cast<{ty}>(a {op} b)")  # fmt: skip
         identity, carried = IDENTITY.get(op, "0"), ty
         identity = identity if identity.isdigit() else f"std::numeric_limits<{ty}>::{identity}"
         if op == "+" and s.ty.name in UNSIGNED:  # Checked: the total traps if it overflows, whatever the order.
             combine, carried = ("a + b", f"cr::Sum<{ty}>") if device else (f"cr::add<{ty}>(a, b)", ty)
-        if device or s.pooled:  # Pooled: blocks the count alone fixes, each folded in order, then their totals.
+        return ty, combine, identity, carried, f"static_cast<{ty}>({identity})" if carried == ty else carried + "{}"
+
+    def combiner(self, s: Stmt, carried: str, combine: str) -> str:
+        marked, promise = (" CR_DEVICE", "") if s.ref == "device" else ("", " noexcept")
+        return f"[]{marked}({carried} a, {carried} b){promise} {{ return {combine}; }}"
+
+    def s_reduce(self, s: Stmt, es: list[str]):
+        ty, combine, identity, carried, start = self.folding(s)
+        i = "v_" + s.binder
+        if s.ref == "device" or s.pooled:  # Pooled: blocks the count fixes, each folded in order, then their totals.
             value = self.lane(s, lambda: self.put(f"return {self.expr(s.exprs[1])};"))
-            where, marked, promise = ("gpu", " CR_DEVICE", "") if device else ("par", "", " noexcept")
-            fold = f"[]{marked}({carried} a, {carried} b){promise} {{ return {combine}; }}"
-            start = f"static_cast<{ty}>({identity})" if carried == ty else carried + "{}"
+            where, fold = "gpu" if s.ref == "device" else "par", self.combiner(s, carried, combine)
             total = f"cr::{where}::reduce<{carried}>({es[0]}, {start}, {fold}, {value})"
             return self.put(f"const {ty} v_{s.name} = {total}{'' if carried == ty else '.checked()'};")
         count = self.fresh("n")[0]  # Without `parallel`, a host reduction is an in-order fold; its extent is read once.
         self.puts(f"{ty} v_{s.name} = static_cast<{ty}>({identity});", f"const std::size_t {count} = {es[0]};",
                   f"for (std::size_t {i} = 0; {i} < {count}; ++{i}) {{", f"  const {ty} a = v_{s.name}, b = {es[1]};",
                   f"  v_{s.name} = {combine};", "}")  # fmt: skip
+
+    def s_scan(self, s: Stmt, _: list[str]):
+        ty, combine, identity, carried, start = self.folding(s)
+        out, hi, value, store = s.exprs
+        total, exclusive = ("v_" + s.name if s.name else self.fresh("cr_scan_")[0]), str(s.exclusive).lower()
+        if s.ref == "device" or s.pooled:  # The runtime writes each element; the yield is a lane's.
+            each = self.lane(s, lambda: self.put(f"return {self.expr(value)};"))
+            where, fold = "gpu" if s.ref == "device" else "par", self.combiner(s, carried, combine)
+            called = f"cr::{where}::scan<{exclusive}, {carried}>"
+            called += f"({self.expr(out)}, {self.expr(hi)}, {start}, {fold}, {each})"
+            return self.put(f"const {ty} {total} = {called}{'' if carried == ty else '.checked()'};")
+        count, i = self.fresh("n")[0], "v_" + s.binder  # In order: the yield, then the store it feeds, per index.
+        stored = f"{self.expr(store)} = {'a' if s.exclusive else total};"
+        self.puts(f"{ty} {total} = static_cast<{ty}>({identity});", f"const std::size_t {count} = {self.expr(hi)};",
+                  f"for (std::size_t {i} = 0; {i} < {count}; ++{i}) {{", f"  const {ty} a = {total}, b = {self.expr(value)};",
+                  f"  {total} = {combine};", f"  {stored}", "}")  # fmt: skip
+        if not s.name:
+            self.put(f"static_cast<void>({total});")
 
     def s_assign(self, s: Stmt, es: list[str]):
         at = s.exprs[0]

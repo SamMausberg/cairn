@@ -438,6 +438,10 @@
      "match": "\\bblock\\b(?=\\s+[0-9])"
     },
     {
+     "name": "keyword.control.concurrency.cairn",
+     "match": "\\bexclusive\\b(?=\\s+[A-Za-z_]\\w*\\s+(?:for|parallel)\\b)"
+    },
+    {
      "name": "keyword.control.flow.cairn",
      "match": "\\bfold\\b(?=\\s*(?:[-+*&|^]|[A-Za-z_][\\w.]*\\s+each\\b))"
     },
@@ -472,6 +476,10 @@
     {
      "name": "keyword.control.flow.cairn",
      "match": "\\brequire\\b(?=\\s+\\S[^;]*,\\s*\\\")"
+    },
+    {
+     "name": "keyword.control.concurrency.cairn",
+     "match": "\\bscan\\b(?=\\s+(?:[-+*&|^]|(?:min|max|add_wrap|mul_wrap)\\b)\\s*[A-Za-z_])"
     },
     {
      "name": "keyword.declaration.cairn",

@@ -437,6 +437,28 @@ class Counter:
         self.expr(s.exprs[1], inner)
         inner.work.op(combine, inner.times)
 
+    def s_scan(self, s: Stmt, at: Frame) -> None:
+        out, hi, value, store = s.exprs
+        count = self.size(hi) or Poly.var(f"?count@{s.line}")
+        combine = f"{s.ty.name}_fold" if s.ty.name in FLOAT else "int_fold"  # each step waits on the one before
+        if s.ref == "device" or s.pooled:
+            body = Work()
+            lane = Frame(body, ONE, (s.binder,), True)
+            self.expr(value, lane)
+            self.access(store, lane, write=True)
+            body.op(combine, ONE)
+            key, size = path(out), Poly.of(self.c.sizeof(out.ty.value) if out.ty else 8)
+            body.reads[key] = body.reads.get(key, Poly()) + size  # the second pass: each element read and written
+            body.writes[key] = body.writes.get(key, Poly()) + size  # once more, with its block's offset combined in
+            body.op("int", ONE)
+            self.cost.regions.append(Region("device" if s.ref == "device" else "pooled", s.line, count, at.times,
+                                            body))  # fmt: skip
+            return
+        inner = at.inner(count, s.binder)
+        self.expr(value, inner)
+        self.access(store, inner, write=True)
+        inner.work.op(combine, inner.times)
+
     def s_compact(self, s: Stmt, at: Frame) -> None:
         out, hi, predicate, value = s.exprs
         count = self.size(hi) or Poly.var(f"?count@{s.line}")

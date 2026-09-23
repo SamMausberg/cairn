@@ -81,8 +81,9 @@ class Checker:
     leased, capture, consume, intact = places.leased, places.capture, places.consume, places.intact
     lend, disjoint, carried = places.lend, places.disjoint, places.carried
 
-    s_parallel, s_reduce, region, host_only = (concurrency.s_parallel, concurrency.s_reduce, concurrency.region,
-                                               concurrency.host_only)  # fmt: skip
+    s_parallel, s_reduce, s_scan, region, host_only = (concurrency.s_parallel, concurrency.s_reduce,
+                                                       concurrency.s_scan, concurrency.region,
+                                                       concurrency.host_only)  # fmt: skip
     e_spawn, shared, lane_callee, plans = (
         concurrency.e_spawn,
         concurrency.shared,

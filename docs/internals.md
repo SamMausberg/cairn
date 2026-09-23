@@ -30,7 +30,7 @@ Checking is one pass per function over one typed tree, and a generic instance is
 | Expressions: literals, names, indexing, fields, variants, closures, `try`, operators | `compiler/expressions.py` | `e_name`, `e_index`, `e_field`, `e_lambda`, `e_try`, `e_binary` |
 | Calls, instances at the call, function values, construction and declared extents | `compiler/calls.py` | `e_call`, `invoke`, `view_argument`, `construct`, `establish` |
 | Places, second-class borrows, moves, leases, aliasing | `compiler/places.py` | `path`, `place`, `overlaps`, `leased`, `lend`, `consume`, `disjoint` |
-| Tasks and tickets, lanes and regions, atomics, placement | `compiler/concurrency.py` | `e_spawn`, `region`, `s_parallel`, `s_reduce`, `judge_lane_callbacks`, `host_only` |
+| Tasks and tickets, lanes and regions, atomics, placement | `compiler/concurrency.py` | `e_spawn`, `region`, `s_parallel`, `s_reduce`, `s_scan`, `judge_lane_callbacks`, `host_only` |
 | Effect vocabulary, fixed point, operand order | `compiler/effects.py` | `fixed_point`, `audit` |
 | Traits, bounds, overlap, dynamic tables | `compiler/traits.py` | `implemented`, `dispatch`, `vtable`, `certify` |
 | Constant folding | `compiler/constants.py` | `constant`, `fold` |
@@ -52,7 +52,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::launch`
 |---|---|
 | `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard is host and device callable |
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
-| `cairn_parallel.hpp` | the host lane pool, the crew of reusable task threads, linear tasks, task groups with a bounded completion ring, `Mutex` and `Atomic` with explicit orders |
+| `cairn_parallel.hpp` | the host lane pool with its pooled reduction and two-pass scan, the crew of reusable task threads, linear tasks, task groups with a bounded completion ring, `Mutex` and `Atomic` with explicit orders |
 | `cairn_gpu.hpp` | scoped device, pinned and unified memory, lanes, linear stream tickets, reduction, stable compaction, and execution contexts bound to CUDA |
 | `cairn_reuse.hpp` | execution contexts apart from the machine: lanes (a stream and its event) lent until their work completes, one scratch arena ordered between its users on the device, a declared budget |
 | `cairn_io.hpp` | the I/O ring over io_uring: fixed berths that own each operation's `Buf`, completion-order collection, a wait that drains before it releases |

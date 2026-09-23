@@ -8,7 +8,7 @@ from . import facts
 from .builtins import WRAPPING, crossing
 from .effects import LANE_SAFE, PURE
 from .scope import Binding, Lanes
-from .tree import BOOL, FLOAT, INT, UNSIGNED, USIZE, VOID, Expr, Function, Stmt, Type, fail, root
+from .tree import BOOL, FLOAT, INT, UNSIGNED, USIZE, VOID, Expr, Function, Stmt, Type, fail, is_view, root
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -45,7 +45,8 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
     target = target or ("device" if "device" in found else "host")
     binder, known = s.binder or s.name, len(c.facts)
     c.bind(binder, Binding(USIZE), s)
-    facts.binder(c, binder, None, s.exprs[s.tag == "compact"], origin=("binder", s))  # Each lane's index is below it.
+    count = s.exprs[1 if s.tag in {"compact", "scan"} else 0]
+    facts.binder(c, binder, None, count, origin=("binder", s))  # Each lane's index is below it.
     saved = c.lanes, c.device_depth, c.loop_depth, set(c.moved), c.effects
     c.lanes, c.device_depth = Lanes(binder, set(c.env) - {binder}, c.closure), int(target == "device")
     c.loop_depth, c.effects = 0, set()
@@ -137,25 +138,65 @@ def s_parallel(c: Checker, s: Stmt, queued: bool = False):
     c.region(s, [], lambda: c.block(s.body))
 
 
-def s_reduce(c: Checker, s: Stmt):
-    hi, value = s.exprs
-    c.expr(hi, USIZE)
-    declared = c.resolve(s.ty, s) if s.ty else None
-    ty = c.region(s, [value], lambda: c.expr(value, declared))
+def combining(c: Checker, s: Stmt, ty: Type, code: str):
+    """The operators a reduction and a scan share: every one associative on what it takes, and a checked + only
+    over unsigned integers, where no partial result overflows unless the whole does."""
     wanted = UNSIGNED if s.op in WRAPPING or s.op in {"&", "|", "^"} else INT if s.op in {"min", "max"} else FLOAT
     if s.op == "+" and ty.name in UNSIGNED:  # No partial sum of naturals overflows unless the total does.
         wanted = UNSIGNED
         c.guard("overflow")
     if ty.mode != "value" or ty.name not in wanted:
         takes = {id(UNSIGNED): "unsigned integers", id(INT): "integers"}.get(id(wanted), "floats")
-        fail("E-REDUCE-OP", f"reduce {s.op} takes {takes}{' and unsigned integers' * (s.op == '+')}, not "
+        fail(code, f"{s.tag} {s.op} takes {takes}{' and unsigned integers' * (s.op == '+')}, not "
              f"{ty.display()}: lanes combine in an unspecified order, and only unsigned + has an order-independent "
              "trap (signed + and integer * do not).", s)  # fmt: skip
+
+
+def s_reduce(c: Checker, s: Stmt):
+    hi, value = s.exprs
+    c.expr(hi, USIZE)
+    declared = c.resolve(s.ty, s) if s.ty else None
+    ty = c.region(s, [value], lambda: c.expr(value, declared))
+    combining(c, s, ty, "E-REDUCE-OP")
     if s.pooled and s.ref == "host" and ty.name in FLOAT:
         fail("E-REDUCE-ORDER", f"reduce {s.op} parallel adds {ty.name} in blocks on the lane pool, and floating "
              "addition in another order gives another answer: fold with for, or write the blocks yourself.", s)  # fmt: skip
     s.ty = ty
     c.bind(s.name, Binding(ty), s)
+
+
+def s_scan(c: Checker, s: Stmt):
+    """`scan op [exclusive] out for i in n yield v`: out[i] is op over the yields up to i (before i when exclusive)
+    and the total is op over all of them; each yield runs once, and may read out only at its own element."""
+    out, hi, value, store = s.exprs
+    if s.binder in c.env or s.name in c.env or s.name == s.binder:
+        fail("E-SHADOW", "A scan's total and its index need names of their own.", s)
+    target = c.env.get(out.val)
+    if target is None or not is_view(target.ty) or target.ty.mode != "rw":
+        fail("E-SCAN-TARGET", f"scan writes {out.val}[{s.binder}] for every {s.binder}: name an rw view or a "
+             "buffer the function holds.", out)  # fmt: skip
+    c.expr(out, consume=False)
+    c.expr(hi, USIZE)
+    if c.extent_of(hi) != target.ty.extent:
+        fail("E-SCAN-EXTENT", f"scan writes {out.val}[{s.binder}] for every {s.binder} it counts, so {out.val} "
+             f"must hold exactly that many elements; its extent is {target.ty.extent}.", hi)  # fmt: skip
+    declared = c.resolve(s.ty, s) if s.ty else target.ty.value
+    if declared != target.ty.value:
+        c.expect(declared, target.ty.value, s)
+
+    def lanes() -> Type:  # The yield first, as at run time, then the store it feeds.
+        ty = c.expr(value, target.ty.value)
+        c.place(store, write=True)
+        return ty
+
+    ty = c.region(s, [value, store], lanes, "device" if target.ty.place == "device" else "")
+    combining(c, s, ty, "E-SCAN-OP")
+    if ty.name in FLOAT and (s.pooled or s.ref == "device"):
+        fail("E-SCAN-ORDER", f"scan {s.op} over {ty.name} combines in the written order only: a {'device' if s.ref == 'device' else 'pooled'} "
+             "scan associates in blocks, and floating arithmetic in another order gives another answer.", s)  # fmt: skip
+    s.ty = ty
+    if s.name:
+        c.bind(s.name, Binding(ty), s)
 
 
 def judge_lane_callbacks(c: Checker, effects: dict[str, set[str]]):

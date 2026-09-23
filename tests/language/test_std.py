@@ -665,6 +665,7 @@ fn main() -> i32 {
   if !mem.equal(len(xs), xs, len(ys), ys) { return 7; }
   sort.sort(len(xs), xs);
   sort.sort_by(len(xs), xs, |a:ro<u64>, b:ro<u64>| -> bool { return a < b; });
+  sort.radix_sort(len(xs), xs, ys);
   let three:u64 = 3;
   match sort.search(len(xs), xs, three) {
     Option.Some(at) => {}

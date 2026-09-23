@@ -36,6 +36,31 @@ pub fn sort[T:Ord](n:usize, xs:rw<T>[n]) {
   sort_by(n, xs, |a:ro<T>, b:ro<T>| -> bool { return less(a, b); });
 }
 
+// Stable sort of unsigned keys, eight bits a pass, least significant first. Passes come in pairs, xs to
+// scratch and back, and stop once the largest key has no digit left, so small keys pay for their width only.
+// Cost: O(n) per pass, at most eight passes, no allocation: the caller lends scratch of the same extent.
+pub fn radix_sort[T:unsigned](n:usize, xs:rw<T>[n], scratch:rw<T>[n]) {
+  let top = reduce max for i in n yield xs[i];
+  for pair in 0..4 { // digits at 0 and 8, 16 and 24, 32 and 40, 48 and 56
+    if shr(u64(top), pair * 16) == 0 { return; }
+    radix_pass(xs, scratch, pair * 16);
+    radix_pass(scratch, xs, pair * 16 + 8);
+  }
+}
+
+// One pass: count each key's digit, make each digit's first place with an exclusive scan, move the keys there.
+fn radix_pass[T:unsigned](n:usize, from:ro<T>[n], to:rw<T>[n], shift:usize) {
+  stack counts:usize[256] = zeroed;
+  stack starts:usize[256] = zeroed;
+  for x in from { counts[usize(shr(u64(x), shift) & 255)] += 1; }
+  scan + exclusive starts for d in 256 yield counts[d];
+  for x in from {
+    let d = usize(shr(u64(x), shift) & 255);
+    to[starts[d]] = x;
+    starts[d] += 1;
+  }
+}
+
 // The index of a value equal to `key` in an already sorted view, if one is there.
 pub fn search[T:Ord](n:usize, xs:ro<T>[n], key:ro<T>) -> Option[usize] {
   let mut lo:usize = 0;

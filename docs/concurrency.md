@@ -446,6 +446,41 @@ fn main() -> i32 {
 }
 ```
 
+## scan
+
+`scan` writes every prefix of a sequence into an array. `let total = scan + out for i in n yield e;` sets `out[i]` to `e(0) + ... + e(i)` and binds the whole. `scan + exclusive out ...` sets `out[i]` to what came before `i`, so `out[0]` is the operator's identity, and the total is the same. A scan whose total nobody reads is a statement of its own. `scan` and `exclusive` are words only in this position, so both stay ordinary names everywhere else.
+
+The operators are `reduce`'s, for the same reasons: `add_wrap mul_wrap & | ^ min max` on integers, checked `+` on unsigned integers only, and `+ *` on floats (`E-SCAN-OP`). A checked `+` traps exactly when the in-order total overflows, because every prefix of an unsigned sum is at most the whole. The output is an `rw` view or a buffer of exactly the scan's count (`E-SCAN-TARGET`, `E-SCAN-EXTENT`). Each yield runs once, before the element it feeds is written, and may read the output only at its own element (`E-PARALLEL-RACE` otherwise), so `scan + xs for i in n yield xs[i];` scans in place.
+
+```cairn
+fn offsets(n:usize, starts:rw<usize>[n], sizes:ro<usize>[n]) -> usize {
+  let used = scan + exclusive starts for i in n yield sizes[i];   // where each piece begins, and the whole
+  return used;
+}
+
+fn main() -> i32 {
+  let n:usize = 4;
+  buffer sizes:usize[n] = zeroed;
+  buffer starts:usize[n] = zeroed;
+  for i in 0..n { sizes[i] = i + 1; }
+  let used = offsets(n, starts, sizes);
+  if used != 10 || starts[0] != 0 || starts[3] != 6 { return 1; }
+  scan max sizes for i in n yield sizes[i] * 2;                    // in place: each yield reads its own element
+  if sizes[0] != 2 || sizes[3] != 8 { return 2; }
+  return 0;
+}
+```
+
+`parallel` in place of `for` runs the scan on the lane pool in two passes over `reduce`'s blocks. The first pass writes each block's own prefixes and its total, the totals scan in block order into each block's offset, and the second pass combines every element of a later block with its offset. Every operator the form admits is associative, so the result is the in-order scan's on any number of lanes, and a checked `+` still traps exactly when the whole overflows. The block totals live on the caller's stack, as a pooled reduction's do, the row gains `par:host`, and each yield runs under the rules of a lane. Over `@device` views the scan is CUB's, which takes device scratch (`gpu_alloc`, `gpu_free`); it compiles for the device, and runs only under `make gpu`.
+
+Floats scan only in the written order, with `for` on the host (`E-SCAN-ORDER`), because a sum in blocks is a different function of the same inputs.
+
+```cairn rejects E-SCAN-ORDER
+fn running(n:usize, out:rw<f64>[n], x:ro<f64>[n]) { scan + out parallel i in n yield x[i]; }
+```
+
+`std.sort.radix_sort` is the library's use of the form: eight bits a pass, each pass counts its digit, turns the counts into each digit's first place with `scan + exclusive`, and moves the keys there in order, so the sort is stable and allocates nothing.
+
 ## Placement and device memory
 
 A view's placement is part of its type: `@host` (the default), `@pinned`, `@unified`, `@device`. A region whose body indexes a `@device` view runs as CUDA lanes, otherwise on host threads; the emitted lane body is the same lambda either way.

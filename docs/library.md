@@ -22,7 +22,7 @@ Three habits explain the API shape. A lookup answers with an index, never a borr
 | `std.fmt` | integers, hex, padding and exact fixed-point floats into a `Vec[u8]` | yes |
 | `std.map` | open-addressed `Map[K, V]` | yes |
 | `std.derived` | `derive eq`, `derive ord`, `derive hash` | no |
-| `std.sort` | in-place heapsort and search | no |
+| `std.sort` | in-place heapsort, a stable radix sort of unsigned keys, and search | no |
 | `std.wire` | `derive wire`: fixed-width records to bytes | no |
 | `std.arena` | generational `Arena[T]` with stale-handle detection | yes |
 | `std.mem` | `fill`, `copy`, `equal` over views | no |
@@ -495,6 +495,26 @@ fn main() -> i32 {
 ```
 
 `sort_by` takes a closure or a declared function; `sort` is `sort_by` with the trait's `less`. `search` binary-searches an already sorted view and answers the index of an element equal to the key, or `None`. The closure is a borrowed callable: it captures by reference, exists only as that argument, and cannot allocate or escape. The caller's row gains `indirect_call`.
+
+`radix_sort` sorts unsigned keys and keeps equal ones in order. It takes eight bits a pass, least significant first: each pass counts its digit, turns the counts into each digit's first place with a [`scan`](concurrency.md#scan), and moves the keys there. The passes go from the keys to a scratch view of the same extent and back, and stop once the largest key has no digit left, so small keys pay for their width only. It is O(n) a pass, at most eight passes, with no allocation: the caller lends the scratch, and the row shows the digit counts as `stack_storage`.
+
+```cairn
+import std.sort as sort;
+
+fn main() -> i32 {
+  let n:usize = 5;
+  buffer keys:u32[n] = zeroed;
+  buffer spare:u32[n] = zeroed;
+  keys[0] = 70000;
+  keys[1] = 3;
+  keys[2] = 512;
+  keys[3] = 3;
+  keys[4] = 0;
+  sort.radix_sort(keys, spare);
+  if keys[0] != 0 || keys[1] != 3 || keys[3] != 512 || keys[4] != 70000 { return 1; }
+  return 0;
+}
+```
 
 ## std.wire
 

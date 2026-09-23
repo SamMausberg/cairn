@@ -365,6 +365,50 @@ template<class T, class C, class F> T reduce(std::size_t n, T identity, C combin
   return total;
 }
 
+// scan op parallel i in n yield value(i) into out: out[i] is op over value(0..i], or over value(0..i) when
+// Exclusive, and the answer is op over every value. The blocks are reduce's. The first pass writes each block's
+// own prefix into its elements and its total into a slot, reading value(i) before out[i] is written, so a value
+// may read its own element. The slots then scan in block order into each block's offset, and the second pass
+// combines every element of a block after the first with its offset. value(i) runs once for each i, and an
+// associative operator gives the in-order answer on any number of lanes. The slots live in this frame.
+template<bool Exclusive, class T, class C, class F> T scan(T* out, std::size_t n, T identity, C combine, F value) noexcept {
+  const std::size_t blocks = n < lanes::CUTOFF ? 1 : std::min(BLOCKS, n / lanes::GRAIN);
+  T slot[BLOCKS];
+  auto own = [&](std::size_t b) noexcept {
+    const std::size_t lo = n / blocks * b + std::min(b, n % blocks);
+    const std::size_t hi = lo + n / blocks + (b < n % blocks);
+    T acc = identity;
+    for(std::size_t i = lo; i < hi; ++i) {
+      const T y = value(i);
+      if constexpr(Exclusive) {
+        out[i] = acc;
+        acc = combine(acc, y);
+      } else {
+        acc = combine(acc, y);
+        out[i] = acc;
+      }
+    }
+    slot[b] = acc;
+  };
+  run(blocks, own, n / blocks + (n == 0));
+  T carry = identity;
+  for(std::size_t b = 0; b < blocks; ++b) {
+    const T mine = slot[b];
+    slot[b] = carry;
+    carry = combine(carry, mine);
+  }
+  if(blocks > 1) {
+    auto shift = [&](std::size_t b) noexcept {
+      if(!b) return;
+      const std::size_t lo = n / blocks * b + std::min(b, n % blocks);
+      const std::size_t hi = lo + n / blocks + (b < n % blocks);
+      for(std::size_t i = lo; i < hi; ++i) out[i] = combine(slot[b], out[i]);
+    };
+    run(blocks, shift, n / blocks);
+  }
+  return carry;
+}
+
 // Task threads. A spawn takes a thread that is parked, or starts a new one when none is, so a task never
 // waits for a thread: every task starts at once, as it would on a thread made for it, and no arrangement of
 // tasks that block on one another, or that never end, can hold another back. Only the thread is reused. A

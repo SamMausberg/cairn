@@ -90,7 +90,7 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
 
     for s in ss:
         es = [format_expr(e) for e in s.exprs]
-        typed = ":" + s.ty.display() if s.tag in {"let", "reg", "reduce"} and s.ty else ""
+        typed = ":" + s.ty.display() if s.tag in {"let", "reg", "reduce", "scan"} and s.ty else ""
         if s.tag in {"buffer", "stack"}:
             place = "" if s.ty.place == "host" else "@" + s.ty.place
             line = f"{s.tag} {s.name}:{s.ty.value.display()}[{es[0]}]{place} = zeroed;"
@@ -102,6 +102,9 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
             line = f"let {s.name} = compact {es[0]} for {s.binder} in {es[1]} where {es[2]} yield {es[3]};"
         elif s.tag == "reduce":
             line = f"let {s.name}{typed} = reduce {s.op} {'parallel' if s.pooled else 'for'} {s.binder} in {es[0]} yield {es[1]};"
+        elif s.tag == "scan":
+            head = f"let {s.name}{typed} = scan" if s.name else "scan"
+            line = f"{head} {s.op}{' exclusive' * s.exclusive} {es[0]} {'parallel' if s.pooled else 'for'} {s.binder} in {es[1]} yield {es[2]};"
         elif s.tag == "assign":
             line = f"{es[0]} {s.op}= {format_expr(s.exprs[1].args[1])};" if s.op else f"{es[0]} = {es[1]};"
         elif s.tag in {"break", "continue"}:

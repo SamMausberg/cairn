@@ -139,6 +139,7 @@ class Stmt:
     ref: Any = None
     other_names: list[Expr] = field(default_factory=list)  # `after a, b` on a spawned region; the names of an unpack.
     pooled: bool = False  # `reduce op parallel i in n`: the host fold runs on the lane pool.
+    exclusive: bool = False  # `scan op exclusive out ...`: out[i] combines the yields before i, not up to it.
     block: int = 1  # The widest block of elements one index of a region owns (facts.window); it sizes claims.
     plan: tuple[int, int] = (0, 0)  # (grain, lanes) a `plan` fixes for a host region; 0 leaves the pool's choice.
     launch: tuple[int, int, int] = (0, 0, 0)  # (block, per_lane, unroll) a plan fixes for a device region.

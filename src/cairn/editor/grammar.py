@@ -27,7 +27,8 @@ from ..compiler.tree import INTRINSIC_TYPES, PLACES, SCALAR, STORAGE
 ROOT = Path(__file__).resolve().parents[3]
 
 # Words the parser reads in one position only; anywhere else they are ordinary names (syntax.py says where).
-CONTEXTUAL = {"after", "align", "fold", "into", "packed", "plan", "recipe", "require", "test", *PLAN_ITEMS}
+CONTEXTUAL = {"after", "align", "exclusive", "fold", "into", "packed", "plan", "recipe", "require", "scan", "test"}
+CONTEXTUAL |= set(PLAN_ITEMS)
 
 # class -> (TextMate scope, Vim group, words). Every reserved word is in exactly one class.
 WORDS: dict[str, tuple[str, str, set[str]]] = {
@@ -54,6 +55,8 @@ CONTEXT: dict[str, tuple[str, str]] = {
     "after": ("keyword.control.concurrency.cairn", r"(?=\s+[A-Za-z_])"),
     "into": ("keyword.control.concurrency.cairn", r"(?=\s+[A-Za-z_]\w*\s*;)"),
     "fold": ("keyword.control.flow.cairn", r"(?=\s*(?:[-+*&|^]|[A-Za-z_][\w.]*\s+each\b))"),
+    "scan": ("keyword.control.concurrency.cairn", r"(?=\s+(?:[-+*&|^]|(?:min|max|add_wrap|mul_wrap)\b)\s*[A-Za-z_])"),
+    "exclusive": ("keyword.control.concurrency.cairn", r"(?=\s+[A-Za-z_]\w*\s+(?:for|parallel)\b)"),
     "plan": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*\{)"),
     "test": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*\{)"),
     "recipe": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*[\[({]|\s+[A-Za-z_]\w*\s+for\b)"),
