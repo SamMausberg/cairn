@@ -1,4 +1,4 @@
-"""Tensor-core fragments: `WmmaA`, `WmmaB`, `WmmaAcc`, `MmaA`, `MmaB`, `MmaAcc`, `load`, `store` and
+"""Tensor-core fragments: `WmmaA`, `WmmaB`, `WmmaAcc`, `MmaA`, `MmaB`, `MmaAcc`, `mma_load`, `mma_store` and
 `mma_unordered(acc, a, b)` (compiler/fragments.py, runtime/cairn_fragment.hpp).
 
 On the host every thread of a warp holds each fragment whole and stores only the elements its lane holds on the
@@ -29,42 +29,42 @@ FRAGMENTS = "acc:WmmaAcc[f32, 16, 16, 16], a:WmmaA[f16, 16, 16, 16], b:WmmaB[f16
 @pytest.mark.parametrize(
     ("code", "source", "said"),
     [
-        ("E-FRAGMENT", TILE + "fn f(a:ro<f16>[256]@device) { let x = load[WmmaA[f16, 16, 16, 16]](a, SA, 0, 0); }",
+        ("E-FRAGMENT", TILE + "fn f(a:ro<f16>[256]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, SA, 0, 0); }",
          "inside a cooperative region"),
         ("E-FRAGMENT", "fn f() { let acc = WmmaAcc[f32, 16, 16, 16](0.0); }", "inside a cooperative region"),
         ("E-FRAGMENT", "fn f() { let acc = WmmaAcc[f32, 16, 8, 16](0.0); }", "shapes wmma has"),
         ("E-FRAGMENT", "fn f() { let acc = MmaAcc[f32, 16, 16, 16](0.0); }", "16 x 8 x 16"),
         ("E-FRAGMENT", "fn f() { let acc = WmmaAcc[f16, 16, 16, 16](0.0); }", "accumulate in f32"),
-        ("E-FRAGMENT", TILE + "fn f(a:ro<f8e4m3>[256]@device) { let x = load[WmmaA[f8e4m3, 16, 16, 16]](a, SA, 0, 0); }",
+        ("E-FRAGMENT", TILE + "fn f(a:ro<f8e4m3>[256]@device) { let x = mma_load[WmmaA[f8e4m3, 16, 16, 16]](a, SA, 0, 0); }",
          "operands are f16 or bf16"),
         ("E-FRAGMENT", "fn f() { let a = WmmaA[f16, 16, 16, 16](0.0); }", "loaded from a tile"),
-        ("E-FRAGMENT", TILE + "fn f(a:ro<f16>[256]) { let x = load[WmmaA[f16, 16, 16, 16]](a, SA, 0, 0); }",
+        ("E-FRAGMENT", TILE + "fn f(a:ro<f16>[256]) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, SA, 0, 0); }",
          "host memory"),
         ("E-TARGET-FEATURE", "fn f() { let acc = TmemAcc[f32, 128, 256, 16](0.0); }", "sm_100a"),
-        ("E-LAYOUT-CONSUMER", TILE + "fn f(a:ro<f16>[256]@device) { let x = load[WmmaA[f16, 16, 16, 16]](a, SW, 0, 0); }",
+        ("E-LAYOUT-CONSUMER", TILE + "fn f(a:ro<f16>[256]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, SW, 0, 0); }",
          "no swizzle"),
-        ("E-LAYOUT-CONSUMER", TILE + "fn f(a:ro<f16>[512]@device) { let x = load[WmmaA[f16, 16, 16, 16]](a, NARROW, 0, 0); }",
+        ("E-LAYOUT-CONSUMER", TILE + "fn f(a:ro<f16>[512]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, NARROW, 0, 0); }",
          "40 bytes apart"),
-        ("E-LAYOUT-CONSUMER", "layout T = cols(16, 16);\nfn f(a:ro<f16>[256]@device) { let x = load[WmmaB[f16, 16, 16, 16]](a, T, 0, 0); }",
+        ("E-LAYOUT-CONSUMER", "layout T = cols(16, 16);\nfn f(a:ro<f16>[256]@device) { let x = mma_load[WmmaB[f16, 16, 16, 16]](a, T, 0, 0); }",
          "row-major"),
-        ("E-LAYOUT-CONSUMER", "layout T = rows(16, 24);\nfn f(a:ro<f16>[384]@device) { let x = load[WmmaA[f16, 16, 16, 16]](a, T, 0, 0); }",
+        ("E-LAYOUT-CONSUMER", "layout T = rows(16, 24);\nfn f(a:ro<f16>[384]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, T, 0, 0); }",
          "whole 16 x 16 fragments"),
-        ("E-LAYOUT-CONSUMER", "fn f(a:ro<f16>[256]@device) { let x = load[WmmaA[f16, 16, 16, 16]](a, a, 0, 0); }",
+        ("E-LAYOUT-CONSUMER", "fn f(a:ro<f16>[256]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, a, 0, 0); }",
          "names none"),
-        ("E-LAYOUT-CONSUMER", TILE + "fn f(a:ro<f16>[100]@device) { let x = load[WmmaA[f16, 16, 16, 16]](a, SA, 0, 0); }",
+        ("E-LAYOUT-CONSUMER", TILE + "fn f(a:ro<f16>[100]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, SA, 0, 0); }",
          "past the 100 elements"),
-        ("E-TYPE-MISMATCH", TILE + "fn f(a:ro<bf16>[256]@device) { let x = load[WmmaA[f16, 16, 16, 16]](a, SA, 0, 0); }",
+        ("E-TYPE-MISMATCH", TILE + "fn f(a:ro<bf16>[256]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, SA, 0, 0); }",
          "array of f16"),
-        ("E-TYPE-MISMATCH", TILE + f"fn f(c:ro<f32>[256]@device, {FRAGMENTS}) {{ store(c, SA, 0, 0, acc); }}", "an rw array"),
-        ("E-TYPE-MISMATCH", TILE + f"fn f(c:rw<f32>[256]@device, {FRAGMENTS}) {{ store(c, SA, 0, 0, a); }}", "accumulator"),
+        ("E-TYPE-MISMATCH", TILE + f"fn f(c:ro<f32>[256]@device, {FRAGMENTS}) {{ mma_store(c, SA, 0, 0, acc); }}", "an rw array"),
+        ("E-TYPE-MISMATCH", TILE + f"fn f(c:rw<f32>[256]@device, {FRAGMENTS}) {{ mma_store(c, SA, 0, 0, a); }}", "accumulator"),
         ("E-MMA", "fn f(a:u32, b:u32, c:u32) { let x = mma_unordered(a, b, c); }", "multiplies fragments"),
         ("E-MMA", f"fn f({FRAGMENTS}) {{ let x = mma_unordered(a, acc, b); }}", "in that order"),
         ("E-MMA", f"fn f({FRAGMENTS.replace('WmmaB[f16', 'WmmaB[bf16')}) {{ let x = mma_unordered(acc, a, b); }}",
          "one format"),
         ("E-MMA", f"fn f({FRAGMENTS.replace('WmmaB', 'MmaB').replace('16, 16, 16], b', '16, 8, 16], b')}) "
          "{ let x = mma_unordered(acc, a, b); }", "one family"),
-        ("E-INFER", TILE + "fn f(a:ro<f16>[256]@device) { let x = load[u32](a, SA, 0, 0); }", "fragment type"),
-        ("E-ARITY", TILE + "fn f(a:ro<f16>[256]@device) { let x = load[WmmaA[f16, 16, 16, 16]](a, SA, 0); }", "coordinates"),
+        ("E-INFER", TILE + "fn f(a:ro<f16>[256]@device) { let x = mma_load[u32](a, SA, 0, 0); }", "fragment type"),
+        ("E-ARITY", TILE + "fn f(a:ro<f16>[256]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, SA, 0); }", "coordinates"),
     ],
 )  # fmt: skip
 def test_rejections(code, source, said):

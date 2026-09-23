@@ -1,10 +1,10 @@
 """Tensor-core fragments: a warp's operand A, operand B or accumulator, and what a warp does with them.
 
     let mut acc = WmmaAcc[f32, 16, 16, 16](0.0);       // every element 0
-    let a = load[WmmaA[f16, 16, 16, 16]](as, SA, i, q);   // fragment (i, q) of the shared tile `as`, laid out by SA
-    let b = load[WmmaB[f16, 16, 16, 16]](bs, SB, q, j);
+    let a = mma_load[WmmaA[f16, 16, 16, 16]](as, SA, i, q);   // fragment (i, q) of the shared tile `as`, laid out by SA
+    let b = mma_load[WmmaB[f16, 16, 16, 16]](bs, SB, q, j);
     acc = mma_unordered(acc, a, b);                      // acc + a * b, its sums in the hardware's order
-    store(cs, SC, i, j, acc);
+    mma_store(cs, SC, i, j, acc);
 
 A fragment type names its family, its role, its element and its shape `M, N, K`: `WmmaA`, `WmmaB` and `WmmaAcc`
 (nvcuda::wmma: 16 x 16 x 16, 32 x 8 x 16 or 8 x 32 x 16), `MmaA`, `MmaB` and `MmaAcc` (PTX mma.sync: 16 x 8 x 16),
@@ -112,7 +112,7 @@ def check_fill(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Ty
         fail("E-INFER", f"Write {e.val}[T, M, N, K](value).", e)
     _, role, _, _ = valid(ty, e)
     if role != "acc":
-        fail("E-FRAGMENT", f"An operand is loaded from a tile: write load[{ty.display()}](tile, LAYOUT, i, j).", e)
+        fail("E-FRAGMENT", f"An operand is loaded from a tile: write mma_load[{ty.display()}](tile, LAYOUT, i, j).", e)
     warp(c, e, f"{e.val}(...)")
     if len(args) != 1:
         fail("E-ARITY", f"{e.val} takes the f32 value every element starts at.", e)
@@ -141,6 +141,9 @@ def tile(c: Checker, e: Expr, array: Expr, written: Expr, coords: list[Expr], ty
     if not shared and kind.place not in {"device", "unified"}:
         fail("E-FRAGMENT", f"A fragment moves through a block's shared array or a device view; {root(array).val} "
              f"is {kind.place} memory.", array)  # fmt: skip
+    if not shared and (write or kind.mode != "ro"):  # nothing in the region can then write what a fragment reads
+        fail("E-FRAGMENT", "A fragment is stored into a block's shared array, and read from a shared array or a "
+             f"read-only device view; {root(array).val} is {'written' if write else 'an rw view'}.", array)  # fmt: skip
     if kind.extent.isdigit() and v.cosize > int(kind.extent):
         fail("E-LAYOUT-CONSUMER", f"{name} places elements up to offset {v.cosize - 1}, past the {kind.extent} "
              f"elements of {root(array).val}.", array)  # fmt: skip
@@ -173,29 +176,50 @@ def consumer(family: str, role: str, shared: bool, v: layouts.Layout, name: str,
              "bytes.", node)  # fmt: skip
 
 
+def footprint(c: Checker, e: Expr, i: int, j: int) -> list[tuple[int, int | None]]:
+    """The elements a fragment load or store at fragment coordinates (i, j) touches, each with the one lane that
+    writes it (a store: its holder on the device) or None (a load: every lane of the warp reads every element on the
+    host). The phase rule records them per thread (compiler/phases.py)."""
+    _, _, (_, role, _, shape, name, _) = e.ref
+    v = layouts.value(c, name)
+    assert isinstance(v, layouts.Layout)  # a fragment moves only through a storage layout (`tile`)
+    rows, cols = extent(role, shape)
+    store = e.val == "mma_store"
+    return [(v.offset((i * rows + r, j * cols + q)), (r % 8) * 4 + (q % 8) // 2 if store else None)
+            for r in range(rows) for q in range(cols)]  # fmt: skip
+
+
 def check_load(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
-    """`load[WmmaA[f16, 16, 16, 16]](tile, LAYOUT, i, j)`: fragment (i, j) of the tile."""
+    """`mma_load[WmmaA[f16, 16, 16, 16]](tile, LAYOUT, i, j)`: fragment (i, j) of the tile."""
     ty = c.resolve(targs[0], e) if len(targs) == 1 else expected
     if fragment(ty) is None:
-        fail("E-INFER", "Write load[F](tile, LAYOUT, i, j) with F a fragment type, as load[WmmaA[f16, 16, 16, 16]].", e)
+        fail(
+            "E-INFER",
+            "Write mma_load[F](tile, LAYOUT, i, j) with F a fragment type, as mma_load[WmmaA[f16, 16, 16, 16]].",
+            e,
+        )
     assert ty is not None
     if len(args) != 4:
-        fail("E-ARITY", "load takes the tile, its layout and the fragment's coordinates: load[F](tile, L, i, j).", e)
+        fail(
+            "E-ARITY",
+            "mma_load takes the tile, its layout and the fragment's coordinates: mma_load[F](tile, L, i, j).",
+            e,
+        )
     e.ref = ("builtin", ty, tile(c, e, args[0], args[1], args[2:], ty, False))
-    warp(c, e, "load")
+    warp(c, e, "mma_load")
     return ty
 
 
 def check_store(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
-    """`store(tile, LAYOUT, i, j, acc)`: the accumulator into fragment (i, j) of the tile."""
+    """`mma_store(tile, LAYOUT, i, j, acc)`: the accumulator into fragment (i, j) of the tile."""
     if len(args) != 5:
-        fail("E-ARITY", "store takes the tile, its layout, the fragment's coordinates and the accumulator.", e)
+        fail("E-ARITY", "mma_store takes the tile, its layout, the fragment's coordinates and the accumulator.", e)
     ty = c.expr(args[4])
     found = fragment(ty)
     if found is None or found[1] != "acc":
-        fail("E-TYPE-MISMATCH", f"store writes an accumulator; {ty.display()} is not one.", args[4])
+        fail("E-TYPE-MISMATCH", f"mma_store writes an accumulator; {ty.display()} is not one.", args[4])
     e.ref = ("builtin", ty, tile(c, e, args[0], args[1], args[2:4], ty, True))
-    warp(c, e, "store")
+    warp(c, e, "mma_store")
     return VOID
 
 

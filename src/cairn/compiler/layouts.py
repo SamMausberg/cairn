@@ -495,13 +495,23 @@ SHOWN = 4096  # the largest tile whose owner of every element `cairn explain` li
 
 
 def explained(c: Checker) -> dict[str, Any]:
-    """What `cairn explain` says of each declared layout: its facts, and for a spread over a tile of at most SHOWN
-    elements, the participant that holds each element, row by row."""
+    """What `cairn explain` says of each declared layout: its facts; for a spread over a tile of at most SHOWN
+    elements, the participant that holds each element, row by row; and what moving values held by one spread into
+    another of the same shape needs (`conversion`)."""
     out = {}
+    spreads = {name: v for name in sorted(c.p.layouts) if isinstance(v := value(c, name), Spread)}
     for name, facts_ in receipt(c).items():
         v = value(c, name)
-        if isinstance(v, Spread) and len(v.tile.shape) == 2 and v.tile.size <= SHOWN:
-            facts_["owners"] = owners(v)
+        if isinstance(v, Spread):
+            if len(v.tile.shape) == 2 and v.tile.size <= SHOWN:
+                facts_["owners"] = owners(v)
+            into = {
+                other: conversion(v, w)
+                for other, w in spreads.items()
+                if other != name and w.tile.shape == v.tile.shape
+            }
+            if into:
+                facts_["conversions"] = into
         out[name] = facts_
     return out
 
@@ -602,6 +612,23 @@ def consumer(c: Checker, v: Layout, layout: str, args: list[Expr], node: Any):
             fail("E-LAYOUT-CONSUMER", f"{name} spreads a {' x '.join(map(str, d.tile.shape))} tile, and {layout} "
                  f"lays out {' x '.join(map(str, v.shape))}: its coordinates name no element of {layout}.",
                  node)  # fmt: skip
+
+
+def apply(c: Checker, e: Expr, given: tuple[Any, ...]) -> int | None:
+    """What a checked `L.at(...)`, `D.row(t, v)`, `D.col(t, v)` or `D.at(t, v)` gives for these argument values,
+    for a rule that runs a body with numbers (compiler/phases.py): None when an argument is not a number, and
+    IndexError when one is outside its extent, where the program traps."""
+    if not all(isinstance(x, int) and not isinstance(x, bool) for x in given):
+        return None
+    _, layout, name = e.ref
+    v = value(c, layout)
+    limits = v.shape if isinstance(v, Layout) else (v.count, v.each)
+    if any(not 0 <= x < n for x, n in zip(given, limits, strict=True)):
+        raise IndexError(f"{layout}.{name}{tuple(given)} is outside {limits}")
+    if isinstance(v, Layout):
+        return v.offset(tuple(given))
+    at = v.coords(*given)
+    return at[0] if name == "row" else at[1] if name == "col" else v.tile.offset(at)
 
 
 # Lowering --------------------------------------------------------------------------------------------------------

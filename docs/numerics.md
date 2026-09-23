@@ -77,7 +77,7 @@ A fragment is one warp's share of a tensor-core instruction: an operand A, an op
 | `MmaA[T, M, N, K]`, `MmaB`, `MmaAcc` | PTX `mma.sync` | 16, 8, 16 | `mma_sync`, and `bf16` for bf16 |
 | `TmemAcc[T, M, N, K]` | tcgen05 tensor memory | none lowered | `tcgen05` |
 
-Operands hold `f16` or `bf16`, and accumulators `f32` (`E-FRAGMENT`). A is `M x K`, B is `K x N` and the accumulator `M x N`. `WmmaAcc[f32, 16, 16, 16](0.0)` fills an accumulator, `load[F](tile, L, i, j)` reads fragment `(i, j)` of a tile laid out by `L`, counting whole fragments, and `store(tile, L, i, j, acc)` writes one back. `acc = mma_unordered(acc, a, b)` adds `a * b` under the contract above: each output's `K` products and its old value, summed in f32 in an order the hardware picks.
+Operands hold `f16` or `bf16`, and accumulators `f32` (`E-FRAGMENT`). A is `M x K`, B is `K x N` and the accumulator `M x N`. `WmmaAcc[f32, 16, 16, 16](0.0)` fills an accumulator, `mma_load[F](tile, L, i, j)` reads fragment `(i, j)` of a tile laid out by `L`, counting whole fragments, and `mma_store(tile, L, i, j, acc)` writes one back. `acc = mma_unordered(acc, a, b)` adds `a * b` under the contract above: each output's `K` products and its old value, summed in f32 in an order the hardware picks.
 
 Every fragment operation is a warp operation. It is legal only inside a cooperative region, where each warp reaches it whole (`E-FRAGMENT` outside one, `E-COOP-WARP` under a condition that differs within a warp), and its tile is a shared array of the block or a device view.
 
@@ -85,7 +85,7 @@ Each family reads the layouts it can ([memory.md](memory.md#layouts)). WMMA take
 
 ```cairn rejects E-LAYOUT-CONSUMER
 layout SWIZZLED = swizzle(rows(16, 16), 1, 3, 3);
-fn first(a:ro<f16>[256]@device) { let x = load[WmmaA[f16, 16, 16, 16]](a, SWIZZLED, 0, 0); }
+fn first(a:ro<f16>[256]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, SWIZZLED, 0, 0); }
 ```
 
 The family is a capability the build's device target must provide ([tools.md](tools.md#the-device-target)). `TmemAcc` needs tcgen05 and tensor memory, which sm_120 does not have and which nothing here lowers, so it is refused rather than emulated.

@@ -280,3 +280,23 @@ def test_a_vector_plan_and_a_stage_plan_ask_the_layout_what_they_used_to_compute
             for high in range(low, 35, 6):
                 offsets = {low, high, (low + high) // 2}
                 assert L.halo(offsets, radius) == (max(abs(d) for d in offsets) <= radius), (offsets, radius)
+
+
+def test_a_rule_that_runs_the_body_with_numbers_gets_the_layout_s_answer():
+    """`layouts.apply` is what compiler/phases.py asks of `L.at(...)` and `D.row(t, v)` when it runs a cooperative
+    body thread by thread: the offset or coordinate, IndexError where the program traps, None for a symbol."""
+    from cairn.compiler.tree import Expr
+
+    source = transpose(TILES["swizzled"])
+    _, checker, _ = compile_program(source)
+    tile, load = L.value(checker, "TILE"), L.value(checker, "LOAD")
+
+    def call(layout, name):
+        return Expr("call", f"{layout}.{name}", ref=("layout", layout, name))
+
+    assert L.apply(checker, call("TILE", "at"), (3, 5)) == tile.offset((3, 5))
+    assert L.apply(checker, call("LOAD", "row"), (40, 2)) == load.coords(40, 2)[0]
+    assert L.apply(checker, call("LOAD", "at"), (40, 2)) == tile.offset(load.coords(40, 2))
+    assert L.apply(checker, call("TILE", "at"), (3, "t")) is None
+    with pytest.raises(IndexError):
+        L.apply(checker, call("LOAD", "col"), (256, 0))
