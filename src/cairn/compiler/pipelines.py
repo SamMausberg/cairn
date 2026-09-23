@@ -61,7 +61,7 @@ class Pipeline:
 
 def s_pipeline(c: Checker, s: Stmt):
     """`pipeline tiles:u64[256] depth 2;` declares `depth` stages of 256 elements in the block's shared memory."""
-    from .cooperative import SHARED_LIMIT
+    from .cooperative import ALIGN, SHARED_LIMIT
 
     if c.coop is None or id(s) not in c.coop.top:
         fail("E-COOP-SHARED", "A pipeline is declared directly in the body of a cooperative region, where every "
@@ -78,7 +78,7 @@ def s_pipeline(c: Checker, s: Stmt):
              f"{s.name} has {size} and {depth}.", s)  # fmt: skip
     stage = -(-size * ELEMENTS[element.name] // 16) * 16
     offset = c.coop.bytes
-    c.coop.bytes += stage * depth
+    c.coop.bytes += -(-stage * depth // ALIGN) * ALIGN  # what follows starts on ALIGN bytes, as after an array
     if c.coop.bytes > SHARED_LIMIT:
         fail("E-COOP-SHARED", f"A block's shared arrays and stages hold at most {SHARED_LIMIT} bytes; with {s.name}'s "
              f"{depth} stages of {stage} bytes they hold {c.coop.bytes}.", s)  # fmt: skip
@@ -108,7 +108,9 @@ def method(c: Checker, e: Expr, name: str, op: str, args: list[Expr]) -> Type:
         if not is_view(source) or source.value != pipeline.element:
             fail("E-TYPE-MISMATCH", f"{name} holds {pipeline.element.display()}; fill it from a view of them, not "
                  f"{source.display()}.", args[0])  # fmt: skip
-        c.lend(args[0], "ro", [])
+        read = c.lend(args[0], "ro", [])
+        if read:
+            c.effect("read:" + read)
         c.expr(args[1], USIZE)
         c.expr(args[2], USIZE)
         c.guard("stage")  # count at most the stage's length, and start + count within the source
@@ -293,7 +295,7 @@ def lower_pipeline(g: Emitter, s: Stmt, es: list[str]):
     ty = g.type(pipeline.element)
     g.put(f"cr::coop::Stages<{ty}, {pipeline.size}, {pipeline.depth}> cr_stages_{s.name}(cr_blk.shared + "
           f"{pipeline.offset});")  # fmt: skip
-    g.put(f"const {ty}* v_{s.name} = nullptr;  // the readable stage, once a wait has made one so")
+    g.put(f"[[maybe_unused]] const {ty}* v_{s.name} = nullptr;  // the readable stage, once a wait has made one so")
 
 
 def lower(g: Emitter, e: Expr) -> str:

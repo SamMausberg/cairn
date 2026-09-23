@@ -28,7 +28,8 @@ if nobody writes it (compiler/footprints.py: E-COOP-GLOBAL). Everything else a l
 
 On the device the region is one kernel launch: a block per grid block (strided when the grid passes 65535), its
 arrays in static shared memory, `barrier` as `__syncthreads()`, the warp operations as `__shfl_*_sync` over the
-whole warp, then a device synchronize, as `parallel` does. On the host every block's threads are real threads meeting
+whole warp, on the calling thread's execution context, returning once its stream has run the region, as `parallel`
+does. On the host every block's threads are real threads meeting
 at a `std::barrier`, two blocks at a time (runtime/cairn_coop.hpp), so the thread sanitizer sees the phase rule hold
 on real runs. Its cost row: `par:device` or `par:host`, `zero_init` for its arrays, and `trap` for its guards.
 """
@@ -403,18 +404,18 @@ def lower_blocks(g: Emitter, s: Stmt, es: list[str]):
 
     def body():
         grid = [f"cr_g{k}" for k in range(count)]
+        named = "[[maybe_unused]] const std::size_t"  # a body need not use every name; nvcc would refuse it unused
         if count == 1:
-            g.put(f"const std::size_t v_{block.grid[0]} = cr_b;")
+            g.put(f"{named} v_{block.grid[0]} = cr_b;")
         else:
             below = "cr_b"
             for k, name in enumerate(block.grid):
-                g.put(f"const std::size_t v_{name} = {below} % {grid[k]};" if k < count - 1 else
-                      f"const std::size_t v_{name} = {below};")  # fmt: skip
+                g.put(f"{named} v_{name} = {below} % {grid[k]};" if k < count - 1 else f"{named} v_{name} = {below};")
                 below = f"({below} / {grid[k]})"
         rest = "cr_t"
         for k, (name, extent) in enumerate(zip(block.threads, block.extents, strict=True)):
             last = k == len(block.threads) - 1
-            g.put(f"const std::size_t v_{name} = {rest if last else f'{rest} % {extent}'};")
+            g.put(f"{named} v_{name} = {rest if last else f'{rest} % {extent}'};")
             rest = f"{rest} / {extent}"
         g.block(s.body)
 
@@ -440,7 +441,7 @@ def lower_blocks(g: Emitter, s: Stmt, es: list[str]):
 def lower_shared(g: Emitter, s: Stmt, es: list[str]):
     element, _, offset = s.ref
     ty = g.type(element)
-    g.put(f"{ty}* const v_{s.name} = reinterpret_cast<{ty}*>(cr_blk.shared + {offset});")
+    g.put(f"[[maybe_unused]] {ty}* const v_{s.name} = reinterpret_cast<{ty}*>(cr_blk.shared + {offset});")
 
 
 def lower_barrier(g: Emitter, s: Stmt, es: list[str]):

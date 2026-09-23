@@ -207,3 +207,12 @@ def test_every_stage_rule_refuses_with_its_code(code, body, said):
 def test_a_pipeline_s_declaration_is_refused_outside_what_fits(source, said):
     program = "fn f(g:usize) {\n  blocks b in g threads t in 32 {\n    " + source + "\n  }\n}\n"
     assert said in refused("E-COOP-SHARED", program)["message"]
+
+
+def test_a_fill_reads_its_source_and_cairn_doc_shows_what_depth_holds():
+    """The row says the region reads x through its fills, and the reference shows each instance's shared memory, which
+    only the depth changes."""
+    from cairn.editor.docs import document
+
+    assert "read:x" in compile_source(ROWS)[1]["functions"]["row_sums[2]"]["effects"]
+    assert "shared memory a block: 6144 bytes in row_sums[2], 8192 bytes in row_sums[3]" in document(ROWS)

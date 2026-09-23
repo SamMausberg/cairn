@@ -309,3 +309,11 @@ def test_a_block_s_warp_names_are_warp_wide():
     refused("E-COOP-WARP", shape.replace("COND", "tx < 4"))
     compile_source(shape.replace("tx, ty in 32, 8", "tx, ty in 64, 2").replace("COND", "tx < 32"))
     refused("E-COOP-WARP", shape.replace("tx, ty in 32, 8", "tx, ty in 16, 4").replace("COND", "ty < 2"))
+
+
+def test_a_name_or_array_the_body_leaves_unused_still_compiles_for_the_device(tmp_path):
+    """nvcc treats an unused variable as an error under the project's flags; every name the lowering declares may go
+    unused."""
+    source = "fn f(n:usize, out:rw<u64>[n]@device) {\n  blocks g in 1 threads t in 32 {\n"
+    source += "    shared unused:u64[4] = zeroed;\n    if t < n { out[t] = 1; }\n  }\n}\n"
+    device_build(tmp_path, compile_source(source)[0])

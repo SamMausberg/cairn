@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import textwrap
+from typing import Any
 
 from ..agent.projection import generics, local, signature, type_declarations
 from ..compiler.cairnc import Checker, Parser, Program, derive, link, specialize
@@ -36,6 +37,18 @@ def document(source: str, modules: list[str] | None = None) -> str:
     """Every module's section in one document, under the note on generic rows when a template is among them."""
     chapters, generic = sections(source, modules)
     return "\n\n".join([NOTE, *chapters] if generic else chapters) + "\n"
+
+
+def shared_memory(c: Any, f: Any) -> list[str]:
+    """The shared memory each block of f's cooperative regions holds, by instance for a template, whose naturals (a
+    pipeline's depth among them) may change it: what a device inspector will find in the kernel."""
+    instances = [g for g in c.fs.values() if g.source_name == f.name and g.bindings] if f.generics else [f]
+    held = []
+    for g in instances:
+        sizes = [str(x["shared_bytes"]) for x in c.resources.get(g.name, []) if x.get("kind") == "blocks"]
+        if sizes:
+            held.append(f"{' and '.join(sizes)} bytes" + (f" in {g.name}" if f.generics else ""))
+    return [f"shared memory a block: {', '.join(held)}"] if held else []
 
 
 def sections(source: str, modules: list[str] | None = None) -> tuple[list[str], bool]:
@@ -78,10 +91,11 @@ def sections(source: str, modules: list[str] | None = None) -> tuple[list[str], 
             certified = verdicts.get(f.name, "ok") == "ok"
             effects = f"effects: {row}" if certified else f"checked per instance: {verdicts[f.name]}"
             declared = f"{impl}{signature(f)}"
+            told = [*comment_above(text, f.start), *shared_memory(c, f)]
             if len(declared) + len(effects) + 5 <= WIDTH:  # the row at the end of the line it describes
-                entries.append([*commented(comment_above(text, f.start)), f"{declared}  // {effects}"])
+                entries.append([*commented(told), f"{declared}  // {effects}"])
             else:
-                entries.append([*commented([*comment_above(text, f.start), effects]), declared])
+                entries.append([*commented([*told, effects]), declared])
         block = ""  # One-line declarations stack; a blank line sets off every declaration that carries a comment.
         for k, entry in enumerate(entries):
             apart = k > 0 and (len(entry) > 1 or len(entries[k - 1]) > 1)
