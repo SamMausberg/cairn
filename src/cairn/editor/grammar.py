@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 # Words the parser reads in one position only; anywhere else they are ordinary names (the parser says where).
 CONTEXTUAL = {"after", "align", "exclusive", "fold", "into", "lends", "packed", "plan", "recipe", "require", "scan"}
-CONTEXTUAL |= {"test", *PLAN_ITEMS}
+CONTEXTUAL |= {"test", "layout", *PLAN_ITEMS}
 
 # class -> (TextMate scope, Vim group, words). Every reserved word is in exactly one class.
 WORDS: dict[str, tuple[str, str, set[str]]] = {
@@ -59,6 +59,7 @@ CONTEXT: dict[str, tuple[str, str]] = {
     "exclusive": ("keyword.control.concurrency.cairn", r"(?=\s+[A-Za-z_]\w*\s+(?:for|parallel)\b)"),
     "plan": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*\{)"),
     "test": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*\{)"),
+    "layout": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*=)"),
     "recipe": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*[\[({]|\s+[A-Za-z_]\w*\s+for\b)"),
     "require": ("keyword.control.flow.cairn", r"(?=\s+\S[^;]*,\s*\")"),
     "packed": ("storage.modifier.layout.cairn", r"(?=\s*\{)"),
@@ -212,6 +213,9 @@ def textmate() -> dict:
                     "entity.name.function.cairn",
                 ),
                 captured(rf"\b(test)\s+({IDENT})(?=\s*\{{)", "keyword.declaration.cairn", "entity.name.function.cairn"),
+                captured(
+                    rf"\b(layout)\s+({IDENT})(?=\s*=)", "keyword.declaration.cairn", "variable.other.constant.cairn"
+                ),
                 captured(
                     rf"\b(derive)\s+({IDENT}(?:\.{IDENT})*)",
                     "keyword.declaration.cairn",

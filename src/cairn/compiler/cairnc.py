@@ -11,6 +11,7 @@ from typing import Any
 
 from ..verify.linear_certificates import audit_collector
 from ..version import VERSION
+from . import layouts
 from .checking import Binding, Checker
 from .codegen import RUNTIME, RUNTIME_FILES, Emitter
 from .expansion import derive, specialize
@@ -38,7 +39,9 @@ def compile_program(source: str, capture_sites: bool = False,
     """`parsed`, when given, is `Parser(source).parse()` already made by the caller, and is linked in place."""
     p = specialize(derive(link(parsed or Parser(source).parse())))
     checker = Checker(p, capture_sites)
-    return p, checker, checker.check()
+    receipts = checker.check()
+    layouts.settle(checker)  # a layout no function uses is still held to its rules
+    return p, checker, receipts
 
 
 def interfaces(p: Program, receipts: dict[str, Any]) -> dict[str, Any]:
@@ -136,6 +139,7 @@ def generate(source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool
             k: certificate[k] for k in ("status", "sha256", "certificate_count", "checker_sha256", "lean_verified")
         },
         "functions": receipts,
+        **({"layouts": layouts.receipt(checker)} if p.layouts else {}),
         "formal_status": "not-verified",
         "ffi_requires": "Each nonempty view describes live, initialized, correctly typed storage for its "
         "stated extent throughout the call; no concurrent external mutation.",

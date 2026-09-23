@@ -91,6 +91,15 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Facts.sub_sound",
     "Cairn.Facts.atMostConst_sound",
     "Cairn.Facts.part_sound",
+    # Layouts: a spread that passes gives each element one holder, and no two holders write one offset.
+    "Cairn.Layout.storage_distinct",
+    "Cairn.Layout.ok_one_holder",
+    "Cairn.Layout.ok_covers",
+    "Cairn.Layout.ok_one_writer",
+    "Cairn.Layout.ok_no_collision",
+    "Cairn.Layout.gappy_gap",
+    "Cairn.Layout.doubled_overlap",
+    "Cairn.Layout.cleared_clash",
 )
 
 # `#print axioms` prints one line per declaration; names may end in a prime.

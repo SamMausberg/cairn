@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import facts, rings
+from . import facts, layouts, rings
 from .builtins import SOFT, TABLE, WRAPPING
 from .scope import Binding
 from .syntax import copied, lent_part
@@ -67,6 +67,8 @@ def e_call(c: Checker, e: Expr, expected: Type | None) -> Type:
         enum = c.qualify(n.rsplit(".", 1)[0], c.p.sums, node=e)
         if enum:
             return c.variant(Type(enum, args=targs), n.rsplit(".", 1)[1], args, e, expected)
+        if (answer := layouts.method(c, e, n, args)) is not None:  # `T.at(r, c)`: compiler/layouts.py
+            return answer
     e.val = n
     shared = c.peek(receiver) if receiver is not None else VOID
     if shared.name in {"Atomic", "Mutex"}:

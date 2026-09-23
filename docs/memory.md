@@ -1,6 +1,6 @@
 # Memory, ownership and effects
 
-Where values live and what code may do with them: views and parts, owners and moves, linear values, layout, effect rows, operand order and the foreign boundary. As in [language.md](language.md), every example is compiled by the suite and every refused one fails with the code shown.
+Where values live and what code may do with them: views and parts, owners and moves, linear values, layout, the layouts of a tile, effect rows, operand order and the foreign boundary. As in [language.md](language.md), every example is compiled by the suite and every refused one fails with the code shown.
 
 ## Arrays, views and parts
 
@@ -305,6 +305,56 @@ fn wake(base:usize) {
   }
 }
 ```
+
+## Layouts
+
+A layout says where each element of a tile is stored, and a spread says which participant holds it. `layout NAME = ...;` declares one at the top of a module. The checker evaluates it there: a layout is a compile-time object, never a value.
+
+```cairn
+layout TILE = pad(rows(32, 32), 1);                 // 32 x 32, rows 33 elements apart
+layout LOAD = spread(TILE, 8, 32, 1, 1);            // 256 participants, 4 elements each
+layout STORE = spread(transpose(TILE), 8, 32, 1, 1);
+const CELLS:usize = TILE.cosize();                  // 1055
+
+fn through(out:rw<f32>[1024], x:ro<f32>[1024]) {
+  buffer s:f32[CELLS] = zeroed;
+  for t in 0..LOAD.participants() {
+    for v in 0..LOAD.values() { s[LOAD.at(t, v)] = x[LOAD.row(t, v) * 32 + LOAD.col(t, v)]; }
+  }
+  for t in 0..STORE.participants() {                // out is x transposed, whatever TILE's storage
+    for v in 0..STORE.values() { out[STORE.row(t, v) * 32 + STORE.col(t, v)] = s[STORE.at(t, v)]; }
+  }
+}
+```
+
+The storage layouts are `rows(R, C)`, `cols(R, C)` and `strided(R, C, SR, SC)`. `pad(L, P)` adds `P` to the larger stride. `swizzle(L, B, M, S)` flips bits `M` to `M + B` of each offset with the `B` bits `S` places above them, as CuTe's `Swizzle<B, M, S>` does. `transpose(L)` swaps the two dimensions, and `tile(L, TR, TC)` sees `L` as a grid of `TR x TC` tiles, with coordinates `(i, j, r, c)`.
+
+`spread(L, TR, TC, VR, VC)` gives `TR x TC` participants, numbered row by row, a `VR x VC` block of `L` each, and repeats that pattern down and across `L` as many whole times as fit. A participant's values run across its block, then down it, then over the repeats.
+
+In code, `L.at(r, c)` is an element's offset, `D.row(t, v)` and `D.col(t, v)` are the coordinate of participant `t`'s value `v`, and `D.at(t, v)` is that element's offset in `D`'s tile. Each argument is checked against its extent and traps outside it. `size()`, `cosize()`, `extent(k)`, `participants()` and `values()` are constants.
+
+Every declaration is held to two rules. A storage layout gives each element its own offset, and a spread gives each element of its tile exactly one holder, so writes through either never collide and never miss an element. A spread that leaves an element to nobody is `E-LAYOUT-GAP`. Two elements at one offset, or one element with two holders, is `E-LAYOUT-OVERLAP`.
+
+```cairn rejects E-LAYOUT-GAP
+layout TILE = rows(32, 32);
+layout LOAD = spread(TILE, 7, 32, 1, 1);            // 224 participants leave rows 28 to 31 to nobody
+```
+
+```cairn rejects E-LAYOUT-OVERLAP
+layout FRAGMENTS = rows(4, 4);
+layout WARPS = spread(FRAGMENTS, 2, 4, 2, 2);       // 8 participants of 4 fragments each, for 16 fragments
+```
+
+`L.at(D.row(t, v), D.col(t, v))` reads `D`'s tile through another layout of the same shape. A spread over another shape is `E-LAYOUT-CONSUMER`, and anything else malformed is `E-LAYOUT`.
+
+```cairn rejects E-LAYOUT-CONSUMER
+layout TILE = rows(32, 32);
+layout WIDE = rows(64, 32);
+layout LOAD = spread(TILE, 8, 32, 1, 1);
+fn at(t:usize, v:usize) -> usize = WIDE.at(LOAD.row(t, v), LOAD.col(t, v));
+```
+
+The build receipt lists each layout under `layouts`, and `cairn explain` adds, for a spread over a tile of at most 4096 elements, the participant that holds each element. For a spread they say whether it covers its tile exactly once, the widest run of adjacent values every participant's values fall into (`runs`, by element size: what one access of at most 16 bytes moves), and how many ways a warp's accesses split over shared memory's 32 banks (`bank_ways`). Reading the tile above a column at a time costs 32 ways row-major and 1 padded or swizzled. Every answer comes from enumerating the layout, so one holds at most 262,144 elements, and the SMT model answers `unknown` for a function that uses one.
 
 ## Effects
 

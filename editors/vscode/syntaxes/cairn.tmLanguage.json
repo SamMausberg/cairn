@@ -308,6 +308,17 @@
      }
     },
     {
+     "match": "\\b(layout)\\s+([A-Za-z_]\\w*)(?=\\s*=)",
+     "captures": {
+      "1": {
+       "name": "keyword.declaration.cairn"
+      },
+      "2": {
+       "name": "variable.other.constant.cairn"
+      }
+     }
+    },
+    {
      "match": "\\b(derive)\\s+([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*)",
      "captures": {
       "1": {
@@ -460,6 +471,10 @@
     {
      "name": "keyword.other.plan.cairn",
      "match": "\\blanes\\b(?=\\s+[0-9])"
+    },
+    {
+     "name": "keyword.declaration.cairn",
+     "match": "\\blayout\\b(?=\\s+[A-Za-z_]\\w*\\s*=)"
     },
     {
      "name": "storage.modifier.cairn",

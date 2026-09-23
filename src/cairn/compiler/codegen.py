@@ -9,7 +9,7 @@ from typing import Any
 
 from ..verify.elision import audit
 from ..version import VERSION
-from . import chunks, fusion, rings, staging
+from . import chunks, fusion, layouts, rings, staging
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import Checker
 from .expressions import COMPARISONS
@@ -368,6 +368,8 @@ class Emitter:
             return f"{texts[0]}.{e.val}({', '.join(texts[1:])})"
         if kind == "ring":
             return rings.lower(self, e)
+        if kind == "layout":
+            return layouts.lower(self, e)
         if kind == "indirect":  # A zeroed fn value is a valid value; calling it is a guard failure.
             callee = f"v_{e.val}" if e.ref[1].mode != "value" else f"cr::callable(v_{e.val})"
             return f"{callee}({', '.join(self.expr(a) for a in e.args)})"

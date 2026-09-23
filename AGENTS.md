@@ -24,6 +24,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/chunks.py` | which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering |
 | `compiler/staging.py` | which arrays a plan's `stage` loads into a device block's shared tile, and that lowering |
 | `compiler/tensor.py` | the tensor-core multiply `mma_unordered`: its rule, its numerical contract and its lowering |
+| `compiler/layouts.py` | `layout` declarations: storage layouts and spreads, what the checker answers from them, and `L.at(...)` in code |
 | `compiler/rings.py` | I/O rings: their declaration, the operations that move owners in and out, their lowering |
 | `compiler/effects.py` | the effect vocabulary, the fixed point, the operand-order audit |
 | `compiler/traits.py` | who implements what, what a bound promises, the one place an instance is made |

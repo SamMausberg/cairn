@@ -168,6 +168,7 @@ def declarations(p: Program) -> dict[str, str]:
     for n, members in p.traits.items():
         out[n] = f"{pub(n)}trait {local(n)} {{ {' '.join(signature(m) + ';' for m in members)} }}"
     out.update({n: f"{pub(n)}const {local(n)}:{t.display()} = {format_expr(e)};" for n, (t, e) in p.consts.items()})
+    out.update({n: f"{pub(n)}layout {local(n)} = {format_expr(e)};" for n, e in p.layouts.items()})
     return out
 
 
@@ -222,7 +223,7 @@ def projection(p: Program, source: str) -> str:
     out = []
     for module in dict.fromkeys(p.modules.values()):
         tables: dict[str, Any] = {k: {n: v for n, v in getattr(p, k).items() if p.modules.get(n, "") == module}
-                  for k in ("records", "enums", "sums", "traits", "consts")}  # fmt: skip
+                  for k in ("records", "enums", "sums", "traits", "consts", "layouts")}  # fmt: skip
         out += [f"module {module};"] if module else []
         for importer, target, alias in p.imports:
             if importer != module:

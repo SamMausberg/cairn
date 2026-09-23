@@ -7,6 +7,7 @@ import operator
 import struct
 from typing import TYPE_CHECKING, Any
 
+from . import layouts
 from .tree import BITS, FLOAT, INT, NUMERIC, SCALAR, SIGNED, Expr, Type, fail
 
 if TYPE_CHECKING:
@@ -60,6 +61,8 @@ def fold(c: Checker, e: Expr, ty: Type, pending: list[str]) -> Any:
         if e.tag == "bool":
             return e.val == "true"
         return single(float(e.val), f32) if e.tag == "float" or ty.name in FLOAT else int(e.val)
+    if e.tag == "call" and (known := layouts.query(c, e)) is not None:  # `T.cosize()`, a layout's count
+        return known
     if e.tag == "name":
         const = c.qualify(e.val, c.p.consts, node=e)
         if const is None:

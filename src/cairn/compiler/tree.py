@@ -254,6 +254,7 @@ class Program:
     attributes: dict[str, set[str]] = field(default_factory=dict)  # linear, packed, align(n)
     traits: dict[str, list[Function]] = field(default_factory=dict)
     consts: dict[str, tuple[Type, Expr]] = field(default_factory=dict)
+    layouts: dict[str, Expr] = field(default_factory=dict)  # `layout NAME = ...;`, which compiler/layouts.py folds
     imports: list[tuple[str, str, str]] = field(default_factory=list)  # (importer, path, alias)
     public: set[str] = field(default_factory=set)
     uses: dict[tuple[str, str], str] = field(default_factory=dict)  # (importer, bare name) -> full name

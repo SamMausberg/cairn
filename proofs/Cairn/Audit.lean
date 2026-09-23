@@ -15,6 +15,7 @@ import Cairn.Collector
 import Cairn.Ownership
 import Cairn.Region
 import Cairn.Facts
+import Cairn.Layout
 
 namespace Cairn
 
@@ -113,6 +114,20 @@ namespace Cairn
 #print axioms Cairn.Facts.sub_sound
 #print axioms Cairn.Facts.atMostConst_sound
 #print axioms Cairn.Facts.part_sound
+
+/-! ### Layouts: a declared spread gives each element one holder, a declared storage layout each its own offset -/
+
+#print axioms Cairn.Layout.number_lt
+#print axioms Cairn.Layout.unravel_number
+#print axioms Cairn.Layout.storage_distinct
+#print axioms Cairn.Layout.ok_one_holder
+#print axioms Cairn.Layout.ok_covers
+#print axioms Cairn.Layout.ok_one_writer
+#print axioms Cairn.Layout.ok_no_collision
+#print axioms Cairn.Layout.gappy_gap
+#print axioms Cairn.Layout.doubled_overlap
+#print axioms Cairn.Layout.fitted_ok
+#print axioms Cairn.Layout.cleared_clash
 
 /-! ### Non-vacuity: the faults are reachable for rejected programs -/
 

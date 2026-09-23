@@ -41,6 +41,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering | `compiler/chunks.py` | `chunkable`, `vectored`, `lower` |
 | Which arrays a plan's `stage` loads into a device block's shared tile, and that lowering | `compiler/staging.py` | `stageable`, `staged`, `lower` |
 | The tensor-core multiply, its numerical contract and its lowering | `compiler/tensor.py` | `check_mma`, `lower_mma` |
+| `layout` declarations: storage layouts and spreads, coverage, owners, runs, bank conflicts, conversions, and `L.at(...)` in code | `compiler/layouts.py` | `value`, `cover`, `runs`, `conflicts`, `conversion`, `method`, `lower` |
 | Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
 | The machine: `mmio_read`, `mmio_write` and `asm`, beside their lowering | `compiler/machine.py` | `check_machine`, `lower_machine` |
 | What each argument of `print`, `println`, `eprint`, `eprintln` and `format` writes, and their lowering | `compiler/printing.py` | `check_print`, `target`, `piece`, `lower_print` |
@@ -63,6 +64,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::launch`
 | `cairn_gpu.hpp` | scoped device, pinned and unified memory, lanes, linear stream tickets, reduction, stable compaction, and execution contexts bound to CUDA |
 | `cairn_reuse.hpp` | execution contexts apart from the machine: lanes (a stream and its event) lent until their work completes, one scratch arena ordered between its users on the device, a declared budget |
 | `cairn_io.hpp` | the I/O ring over io_uring: fixed berths that own each operation's `Buf`, completion-order collection, a wait that drains before it releases |
+| `cairn_layout.hpp` | a layout's coordinate checked against its extent, and CuTe's swizzle, on the host and in a device lane alike |
 | `cairn_float.hpp` | the storage floats `f16 bf16 f8e4m3 f8e5m2`: one integer routine that rounds on the host and in a device lane alike, `quantize` and `quantize_stochastic` |
 | `cairn_tensor.hpp` | `mma_unordered`: the reference loop on the host, and on the device 64 x 64 tensor-core tiles over two shared-memory stages, written once against the operations a tile is given so a host test runs every thread's phases |
 | `cairn_print.hpp` | `print` and `format`: every piece computed before a byte is written, one 4096-byte stack buffer, shortest round-trip floats through `std::to_chars`, a byte record grown as `std.vec` grows |

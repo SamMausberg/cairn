@@ -19,6 +19,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from ..compiler import layouts
 from ..compiler.cairnc import compile_program, write_program
 from ..compiler.codegen import Emitter, demangled, mangle
 from ..compiler.modules import library_path
@@ -37,6 +38,7 @@ GUARDS = {  # The checker's name for each guard kind, and the runtime calls that
     "tag": ("cr::trap()",),
     "callable": ("cr::callable(",),
     "assert": ("cr::check(", "cr::check_eq("),
+    "layout": ("cr::layout::within(",),  # A coordinate or participant checked against its layout (layouts.py).
 }
 SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and how the emitter spells it.
     "wait": ".wait()",
@@ -224,6 +226,7 @@ def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None
         "schema": "cairn.explain/1",
         "observed": "Read from the emitted C++ and the compiler's optimization record; nothing was run or timed.",
         "functions": functions,
+        **({"layouts": layouts.explained(checker)} if p.layouts else {}),
         "vectorization": vectorize(cpp, names, cxx, arch, timeout, functions, show),
     }
 

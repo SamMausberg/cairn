@@ -262,6 +262,12 @@ class Parser(StatementParser):
                              body_start=head.start, end=self.ts[self.i - 1].end, module=self.module, test=True)  # fmt: skip
                 f.name = f.source_name = declare(f.name, t)
                 p.functions.append(f)
+            elif self.t.s == "layout" and IDENT.fullmatch(self.ahead(1)) and self.ahead(2) == "=":  # A word only here:
+                self.i += 1  # `layout T = pad(rows(32, 32), 1);`, folded by compiler/layouts.py.
+                n = self.ident()
+                self.need("=")
+                p.layouts[declare(n, t)] = self.expr()
+                self.need(";")
             elif self.t.s == "plan" and IDENT.fullmatch(self.ahead(1)):  # A word only here: `plan f { grain 64; }`.
                 self.i += 1
                 name, chosen = self.path(), {}

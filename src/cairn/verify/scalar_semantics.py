@@ -133,6 +133,7 @@ def implementation_hash():
                 "compiler/chunks.py",
                 "compiler/staging.py",
                 "compiler/tensor.py",
+                "compiler/layouts.py",
                 "compiler/rings.py",
                 "compiler/effects.py",
                 "compiler/traits.py",

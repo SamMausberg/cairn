@@ -5,4 +5,5 @@ import Cairn.Collector
 import Cairn.Ownership
 import Cairn.Region
 import Cairn.Facts
+import Cairn.Layout
 import Cairn.Audit
