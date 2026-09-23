@@ -295,21 +295,28 @@ def promising(cs: list[Item], i: int) -> bool:
     )
 
 
-def binders(cs: list[Item], lo: int, hi: int) -> list[int]:
-    """Where `cs[lo:hi]` introduces a local: a binder word, a parameter, a match payload."""
-    out: list[int] = []
+def bound(cs: list[Item], lo: int, hi: int) -> list[tuple[int, str, bool]]:
+    """Where `cs[lo:hi]` introduces a local, as (its token, what it is, whether it may be assigned): a binder word's
+    name, the element of `for i, x in xs`, a parameter of a function or of a closure, a match payload."""
+    out: list[tuple[int, str, bool]] = []
     for i in range(max(lo, 1), min(hi, len(cs))):
         word, then = cs[i].s, cs[i + 1].s if i + 1 < hi else ""
         if word in BINDERS:
             j = i + 1 + (then == "mut")
-            out += [j] if j < hi and IDENT.fullmatch(cs[j].s) and cs[j].s not in RESERVED else []
+            if j < hi and IDENT.fullmatch(cs[j].s) and cs[j].s not in RESERVED:
+                out.append((j, "variable", then == "mut" or word in {"reg", "buffer", "stack"}))
             if word == "for" and j + 2 < hi and cs[j + 1].s == "," and IDENT.fullmatch(cs[j + 2].s):
-                out.append(j + 2)  # `for i, x in xs` binds the element too
+                out.append((j + 2, "element", False))
         elif then == ":" and cs[i - 1].s in {"(", ",", "|"} and IDENT.fullmatch(word) and word not in RESERVED:
-            out.append(i)  # a parameter of a function or of a closure
+            out.append((i, "parameter", i + 2 < hi and cs[i + 2].s == "rw"))
         elif word == "(" and i + 3 < hi and (cs[i + 2].s, cs[i + 3].s) == (")", "=>") and IDENT.fullmatch(then):
-            out.append(i + 1)  # a match payload binder
+            out.append((i + 1, "variable", False))
     return out
+
+
+def binders(cs: list[Item], lo: int, hi: int) -> list[int]:
+    """Where `cs[lo:hi]` introduces a local: a binder word, a parameter, a match payload."""
+    return [j for j, _, _ in bound(cs, lo, hi)]
 
 
 def enclosing(doc: Document, offset: int) -> tuple[dict | None, bool]:

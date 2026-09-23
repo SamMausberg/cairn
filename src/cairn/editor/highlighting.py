@@ -12,7 +12,7 @@ from ..agent.projection import local
 from ..compiler.builtins import TABLE
 from ..compiler.effects import EFFECTS
 from ..compiler.syntax import IDENT, RESERVED, Program
-from .document import BINDERS, Document, Item, _units, declarations, dotted, statement
+from .document import Document, Item, _units, bound, declarations, dotted, statement
 from .grammar import FAMILIES
 from .names import TYPES, declared, qualified, visible
 
@@ -73,18 +73,7 @@ def signature_binders(cs: list[Item], i: int, hi: int) -> tuple[Binders, int]:
 
 def body_binders(cs: list[Item], lo: int, hi: int) -> Binders:
     """Every local a body binds, and whether it may be assigned. CAIRN never shadows, so one name is one local."""
-    out: Binders = {}
-    for i in range(max(lo, 1), min(hi, len(cs))):
-        word, then = cs[i].s, cs[i + 1].s if i + 1 < hi else ""
-        if word in BINDERS:
-            j = i + 1 + (then == "mut")
-            if j < hi and IDENT.fullmatch(cs[j].s) and cs[j].s not in RESERVED:
-                out[cs[j].s] = ("variable", then == "mut" or word in {"reg", "buffer", "stack"})
-        elif then == ":" and cs[i - 1].s in {"(", ",", "|"} and IDENT.fullmatch(word) and word not in RESERVED:
-            out[word] = ("parameter", i + 2 < hi and cs[i + 2].s == "rw")  # a closure parameter
-        elif word == "(" and i + 3 < hi and (cs[i + 2].s, cs[i + 3].s) == (")", "=>") and IDENT.fullmatch(then):
-            out[then] = ("variable", False)  # a match payload
-    return out
+    return {cs[j].s: (kind, mutable) for j, kind, mutable in bound(cs, lo, hi) if kind != "element"}
 
 
 def declared_names(cs: list[Item]) -> tuple[dict[int, tuple[str, set[str]]], list[tuple[int, int, Binders]]]:
