@@ -8,7 +8,7 @@ from typing import Any
 
 from ..verify.elision import audit
 from ..version import VERSION
-from . import fusion, rings
+from . import chunks, fusion, rings
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import Checker
 from .expressions import COMPARISONS
@@ -586,6 +586,8 @@ class Emitter:
             while schedule and schedule[-1] == (1 if len(schedule) == 1 else 0):  # defaults say nothing
                 schedule.pop()
         lanes = self.lane(s, body or (lambda: self.block(s.body)))
+        if s.vector and body is None:  # Each lane runs W indices over chunks when every pointer sits on a chunk.
+            return chunks.lower(self, s, es[0], lanes, schedule, s.launch[2])
         self.put(f"{entry}({es[0]}, {lanes}{''.join(f', {x}' for x in schedule)});")
 
     def folding(self, s: Stmt) -> tuple[str, str, str, str, str]:

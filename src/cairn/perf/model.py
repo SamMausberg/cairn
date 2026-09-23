@@ -106,6 +106,12 @@ def settled(compute: float, memory: float, serial: float, irregular: float, leve
     return max(named, key=lambda k: named[k])
 
 
+def vector_saving(r: Region) -> float:
+    """The load and store instructions per index a vector plan saves: each chunked array's element accesses become
+    one load, when its chunk is loaded, and one store, when it is stored, for every W indices."""
+    return sum(uses - (loaded + stored) / r.vector for uses, loaded, stored, size in r.chunks if r.vector * size <= 16)
+
+
 def lanes(r: Region, card: Device | None, sizes: dict[str, float], missing: set[str]) -> Piece:
     """A device region by its roofline: a launch, then the larger of its bytes at the memory's sustained bandwidth
     and its instructions at the device's issue rate, both shared out over the part of the device its grid keeps
@@ -119,6 +125,7 @@ def lanes(r: Region, card: Device | None, sizes: dict[str, float], missing: set[
     moved = sum(value(b, sizes, missing) for b in (*total.reads.values(), *total.writes.values()))
     moved += 32 * sum(value(k, sizes, missing) for k in total.irregular.values())  # one sector per scattered access
     issued = sum(value(k, sizes, missing) for k in total.ops.values())
+    issued -= n * vector_saving(r) if r.vector else 0.0  # a chunk's one wide access stands for W narrow ones
     block, per_lane, _ = r.launch
     threads = min(n / (per_lane or 1), 65535 * (block or 256))  # the grid the runtime launches
     busy = min(1.0, threads / (card.sms * card.threads_per_sm * card.occupancy_to_saturate)) if n else 1.0

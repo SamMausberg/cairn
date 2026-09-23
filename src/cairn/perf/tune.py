@@ -29,6 +29,7 @@ SPACE = {  # the values tried for each item; 0 is the runtime's own choice
     "block": (0, 64, 128, 512, 1024),
     "per_lane": (0, 4, 16, 64),
     "unroll": (0, 4),
+    "vector": (0, 2, 4),
 }
 Plan = tuple[tuple[str, int], ...]  # the items a plan sets, in the checker's order, zeros left out
 
@@ -84,7 +85,8 @@ def space(kinds: set[str], host_lanes: int, regions: int = 1) -> list[Plan]:
     tried = {**SPACE, "fuse": (0, min(regions, PLAN_ITEMS["fuse"][2]))}
     items = [k for k in PLAN_ITEMS if PLAN_ITEMS[k][0] in kinds or (PLAN_ITEMS[k][0] == "either" and regions > 1)]
     values = [[v for v in tried[k] if k != "lanes" or v <= host_lanes] for k in items]
-    return [written(dict(zip(items, chosen, strict=True))) for chosen in itertools.product(*values)]
+    plans = [dict(zip(items, chosen, strict=True)) for chosen in itertools.product(*values)]
+    return [written(p) for p in plans if not (p.get("vector") and p.get("fuse"))]  # a plan takes one or the other
 
 
 def registers(source: str, name: str, unrolls: set[int]) -> dict[int, int]:
@@ -113,6 +115,7 @@ def priced(c: Cost, plan: Plan, profile: Profile, sizes: list[dict[str, float]],
         elif r.kind == "device":
             r.launch = (items.get("block", 0), items.get("per_lane", 0), items.get("unroll", 0))
             r.registers = held.get(max(items.get("unroll", 1), 1), 0)
+            r.vector = items.get("vector", 0)
     return sum(model.predict(trial, profile, s, arch)["ns"] for s in sizes)
 
 
@@ -141,6 +144,11 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
             counted[joined] = count(p2, checker2, {name})[name]
         except Diagnostic:  # no chain these rules allow: the plan is refused, so it is no candidate
             candidates = [plan for plan in candidates if dict(plan).get("fuse", 0) != joined]
+    for width in {dict(plan).get("vector", 0) for plan in candidates} - {0}:  # the widths the checker allows here
+        try:
+            compile_program(replanned(source, name, text(name, (("vector", width),))))
+        except Diagnostic:  # nothing to chunk, or a chunk wider than one access: the plan is refused
+            candidates = [plan for plan in candidates if dict(plan).get("vector", 0) != width]
     cost = {plan: priced(counted[dict(plan).get("fuse", 0)], plan, chosen, sizes, arch, held) for plan in candidates}
     ranked = sorted(candidates, key=lambda plan: cost[plan])
     rows = [{"plan": shown(name, plan), **dict(plan), "predicted_ns": model.significant(cost[plan])} for plan in ranked]

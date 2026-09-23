@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..compiler.cairnc import compile_source, fail
-from ..compiler.concurrency import PLAN_ITEMS
+from ..compiler.concurrency import PLAN_ITEMS, POWERS
 from ..perf.tune import now, regions, replanned, text, written
 from .agent_tools import digest, load_json_strict, shaped, stable_json
 from .projection import local, signature
@@ -56,7 +56,8 @@ class PlanSession:
     def packet(self) -> dict[str, Any]:
         from ..perf.report import report
 
-        items = {k: {"region": region, "least": least, "most": most, **({"multiple_of": step} if step > 1 else {})}
+        items = {k: {"region": region, "least": least, "most": most, **({"multiple_of": step} if step > 1 else {}),
+                     **({"power_of_two": True} if k in POWERS else {})}
                  for k, (region, least, most, step) in self.open.items()}  # fmt: skip
         packet = {
             "protocol": PROTOCOL,

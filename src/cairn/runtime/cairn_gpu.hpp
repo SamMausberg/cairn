@@ -141,6 +141,47 @@ inline void launch(std::size_t n, F body, unsigned block = BLOCK, std::size_t pe
   check(cudaDeviceSynchronize());
 }
 
+// `plan f { vector W; }` (compiler/chunks.py): a lane runs W adjacent indices over one W-wide chunk of each array
+// it touches only at [i], a single aligned load before its body and a single store after, where the scalar lanes
+// made W of each. One check at launch decides the whole region: every chunked pointer on its chunk's width, or the
+// scalar lanes run instead. The last indices past a whole chunk run one at a time, so every index runs once.
+template<class T, unsigned W> struct alignas(sizeof(T) * W) Chunk final {
+  static_assert((sizeof(T) * W & (sizeof(T) * W - 1)) == 0 && sizeof(T) * W <= 16, "one access of 16 bytes at most");
+  T v[W];
+  CR_HD static Chunk load(const T* p) noexcept { return *reinterpret_cast<const Chunk*>(p); }
+  CR_HD void store(T* p) const noexcept { *reinterpret_cast<Chunk*>(p) = *this; }
+  CR_HD T& operator[](unsigned k) noexcept { return v[k]; }
+};
+template<unsigned W, class... T> inline bool aligned(const T*... p) noexcept {
+  return ((reinterpret_cast<std::uintptr_t>(p) % (sizeof(T) * W) == 0) && ...);
+}
+template<unsigned W, unsigned U, class F, class G> __global__ void chunks(std::size_t n, F scalar, G chunk) {
+  const std::size_t step = std::size_t(gridDim.x) * blockDim.x * W;
+#pragma unroll U
+  for(std::size_t i = (blockIdx.x * std::size_t(blockDim.x) + threadIdx.x) * W; i < n; i += step) {
+    if(n - i >= W) chunk(i);
+    else for(std::size_t k = i; k < n; ++k) scalar(k);
+  }
+}
+template<unsigned W, unsigned U = 1, class F, class G>
+inline void launch_vector(std::size_t n, bool whole, F scalar, G chunk, unsigned block = BLOCK,
+                          std::size_t per_lane = 1) noexcept {
+  static_assert(std::is_trivially_copyable_v<F> && std::is_trivially_copyable_v<G>, "lanes cross as arguments");
+  if(!whole) return launch<U>(n, scalar, block, per_lane);  // a pointer off its chunk's width: the scalar lanes
+  if(!n) return;
+  static const unsigned most = [] {
+    cudaFuncAttributes held{};
+    check(cudaFuncGetAttributes(&held, chunks<W, U, F, G>));
+    return unsigned(held.maxThreadsPerBlock) / WARP * WARP;
+  }();
+  if(block > most) block = most;
+  const std::size_t each = std::size_t(block) * per_lane * W;
+  const std::size_t g = (n + each - 1) / each;
+  chunks<W, U><<<(g < MAX_GRID ? unsigned(g) : MAX_GRID), block>>>(n, scalar, chunk);
+  check(cudaGetLastError());
+  check(cudaDeviceSynchronize());
+}
+
 // A linear ticket owning one stream: exactly one wait() consumes it, and dropping it unawaited
 // traps. Ordering between tickets is recorded on the device through an event, never by stopping
 // the host. The lane body needs no keep-alive: CUDA copies kernel arguments at launch.

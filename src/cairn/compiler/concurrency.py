@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from . import facts, fusion
+from . import chunks, facts, fusion
 from .builtins import WRAPPING, crossing
 from .effects import LANE_SAFE, PURE
 from .scope import Binding, Lanes
@@ -89,14 +89,17 @@ PLAN_ITEMS = {
     "block": ("device", 32, 1024, 32),  # threads in one block: whole warps
     "per_lane": ("device", 1, 65536, 1),  # indices each thread runs before the grid wraps
     "unroll": ("device", 1, 32, 1),  # passes of a thread's index loop the compiler unrolls
+    "vector": ("device", 2, 16, 1),  # adjacent indices a lane runs over one W-wide chunk of each array (chunks.py)
     "fuse": ("either", 2, 16, 1),  # adjacent regions, over one extent, that run as one traversal at most
 }
+POWERS = {"vector"}  # items that are also a power of two: a chunk is one access, and accesses are powers of two
 
 
 def plans(c: Checker) -> dict[str, dict[str, int]]:
     """`plan f { grain G; lanes L; }` chooses how f's host regions are claimed: at least G indices at a time, on at
-    most L lanes; `block B; per_lane K; unroll U;` how f's device regions launch: B threads a block, a grid that
-    gives each thread K indices, its loop unrolled U times. Lanes are race free, every index runs exactly once and a
+    most L lanes; `block B; per_lane K; unroll U; vector W;` how f's device regions launch: B threads a block, a
+    grid that gives each thread K indices, its loop unrolled U times, W adjacent indices a lane over one chunk of
+    each array it touches only at [i] (compiler/chunks.py). Lanes are race free, every index runs exactly once and a
     region finishes before the next statement, so a plan only picks one of the schedules the region already allows;
     it changes no result and no effect row. What each function got."""
     chosen: dict[str, dict[str, int]] = {}
@@ -108,6 +111,8 @@ def plans(c: Checker) -> dict[str, dict[str, int]]:
             if not least <= value <= most or value % step:
                 multiple = f", a multiple of {step}" if step > 1 else ""
                 fail("E-PLAN", f"{item} runs from {least} to {most}{multiple}; {value} is outside.", token)
+            if item in POWERS and value & (value - 1):
+                fail("E-PLAN", f"{item} is a power of two from {least} to {most}; {value} is not one.", token)
         with c.within(module):
             target = c.qualify(name, c.fs)
         planned = [f for f in c.p.functions if target in (f.name, f.source_name)]
@@ -127,6 +132,8 @@ def plans(c: Checker) -> dict[str, dict[str, int]]:
                     s.launch = (given.get("block", 0), given.get("per_lane", 0), given.get("unroll", 0))
         for s in (s for f in planned for s in walk(f.body) if s.tag == "parallel"):
             s.fuse = items.get("fuse", 0)
+            if "vector" in items and s.ref == "device":
+                chunks.vectored(c, s, items["vector"], token)
         chosen |= {f.name: dict(items) for f in planned}
     return chosen
 

@@ -496,6 +496,10 @@
     {
      "name": "keyword.other.plan.cairn",
      "match": "\\bunroll\\b(?=\\s+[0-9])"
+    },
+    {
+     "name": "keyword.other.plan.cairn",
+     "match": "\\bvector\\b(?=\\s+[0-9])"
     }
    ]
   },

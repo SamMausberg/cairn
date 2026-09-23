@@ -38,6 +38,7 @@ Checking is one pass per function over one typed tree, and a generic instance is
 | Facts about `usize` values that let lowering drop a guard | `compiler/facts.py` | `binder`, `defined`, `assume`, `index`, `arithmetic`, `conversion` |
 | The independent check of each guard lowering leaves out | `verify/elision.py` | `audit`, `decide`, `part` |
 | Which adjacent regions a plan's `fuse` joins, and the scratch they hold in their lanes | `compiler/fusion.py` | `chains`, `quiet`, `compatible`, `scratch` |
+| Which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering | `compiler/chunks.py` | `chunkable`, `vectored`, `lower` |
 | Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
 | What each argument of `print`, `println`, `eprint`, `eprintln` and `format` writes, and their lowering | `compiler/printing.py` | `check_print`, `target`, `piece`, `lower_print` |
 | The C header of a library: declarations, layouts it states and checks, what cannot cross | `compiler/header.py` | `Header.render`, `shape`, `refusal` |

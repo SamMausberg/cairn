@@ -20,6 +20,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/places.py` | places, ownership, leases, aliasing |
 | `compiler/concurrency.py` | tasks and tickets, lanes and regions, atomics and mutexes, placement |
 | `compiler/fusion.py` | which adjacent regions a plan's `fuse` may run as one, and the scratch they need not keep |
+| `compiler/chunks.py` | which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering |
 | `compiler/rings.py` | I/O rings: their declaration, the operations that move owners in and out, their lowering |
 | `compiler/effects.py` | the effect vocabulary, the fixed point, the operand-order audit |
 | `compiler/traits.py` | who implements what, what a bound promises, the one place an instance is made |

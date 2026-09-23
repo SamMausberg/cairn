@@ -9,10 +9,10 @@ here is timed.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
-from ..compiler import fusion
+from ..compiler import chunks, fusion
 from ..compiler.builtins import WRAPPING
 from ..compiler.tree import FLOAT, INT, NUMERIC, Expr, Function, Stmt, Type, is_view
 
@@ -158,6 +158,8 @@ class Region:
     launch: tuple[int, int, int] = (0, 0, 0)  # a device region's (block, per_lane, unroll)
     registers: int = 0  # what ptxas said its kernel uses, when something asked; 0 is not known
     fuse: int = 0  # the fuse its plan sets, whether or not a chain formed
+    vector: int = 0  # the vector its plan sets: adjacent indices a lane runs over chunks
+    chunks: tuple = ()  # a device region's chunkable arrays: (element accesses per index, loaded, stored, bytes each)
 
 
 @dataclass
@@ -187,8 +189,7 @@ class Cost:
         for r in self.regions:
             body = Work()
             body.merge(r.body.subst(given), ONE, rename)
-            out.regions.append(Region(r.kind, r.line, r.count.subst(given), r.runs.subst(given) * times, body,
-                                      r.weight, r.plan, r.launch))  # fmt: skip
+            out.regions.append(replace(r, count=r.count.subst(given), runs=r.runs.subst(given) * times, body=body))
         out.tasks = [(n.subst(given) * times, t.subst(given, rename, ONE)) for n, t in self.tasks]
         out.transfers = {d: b.subst(given) * times for d, b in self.transfers.items()}
         out.allocated, out.allocations = self.allocated.subst(given) * times, self.allocations.subst(given) * times
@@ -459,7 +460,12 @@ class Counter:
         self.block(s.body, Frame(body, ONE, (*at.binders, s.name), True))
         self.bound.pop()
         kind = "device" if s.ref == "device" else "host"
-        self.cost.regions.append(Region(kind, s.line, count, at.times, body, s.block, s.plan, s.launch, fuse=s.fuse))
+        held = chunks.chunkable(s) if kind == "device" else {}  # what any vector plan would chunk, planned or not
+        found = tuple((sum(1 for u in chunks.exprs(s.body) if u.tag == "index" and u.args[0].tag == "name"
+                           and u.args[0].val == name), loaded, stored, self.c.sizeof(element))
+                      for name, (element, loaded, stored, _) in sorted(held.items()))  # fmt: skip
+        self.cost.regions.append(Region(kind, s.line, count, at.times, body, s.block, s.plan, s.launch, fuse=s.fuse,
+                                        vector=s.vector, chunks=found))  # fmt: skip
 
     def s_reduce(self, s: Stmt, at: Frame) -> None:
         count = self.size(s.exprs[0]) or Poly.var(f"?count@{s.line}")

@@ -369,7 +369,23 @@ fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i
 plan scale { block 128; per_lane 4; unroll 4; }   // 128 threads a block, about four indices each
 ```
 
-Without a plan a device region launches blocks of 256 threads and one index per thread, up to 65535 blocks. `grain` and `lanes` apply to host regions and `block`, `per_lane` and `unroll` to device regions, so one plan may set both for a function that has both.
+Without a plan a device region launches blocks of 256 threads and one index per thread, up to 65535 blocks. `grain` and `lanes` apply to host regions and `block`, `per_lane`, `unroll` and `vector` to device regions, so one plan may set both for a function that has both.
+
+`vector W` has each lane of a device region run `W` adjacent indices, a power of two from 2 to 16, over one chunk of each array it touches only as `x[i]` with a discharged guard: one `W`-wide load before the body when the body reads the array, one store after when it writes it, where the scalar lanes made `W` of each. A chunk is one access of at most 16 bytes, so an `f32` or `u32` array takes `vector 4` at most and an `f64` array `vector 2`. An array used any other way, at another index, in a part or lent to a helper, stays the pointer access it was. At launch one check decides the whole region: when every chunked pointer sits on its chunk's width the lanes run chunks, and the indices past the last whole chunk run one at a time; when any does not, as a part `x[1..n]` of a buffer may not, the region runs its scalar lanes. Every index runs once either way, so the result is the unplanned one. `E-PLAN` refuses a width that is no power of two, a chunk wider than 16 bytes, a region with no array to chunk, and `vector` beside `fuse`.
+
+```cairn
+fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
+  parallel i in n { out[i] = a * x[i] + y[i]; }
+}
+
+plan saxpy { vector 4; }   // two 128-bit loads and one 128-bit store for every four indices
+```
+
+```cairn rejects E-PLAN
+fn wide(n:usize, out:rw<f64>[n]@device) { parallel i in n { out[i] = 1.0; } }
+
+plan wide { vector 4; }    // four f64 are 32 bytes, and a lane moves 16 at once
+```
 
 `fuse K` runs up to `K` adjacent regions of a function as one traversal, from 2 to 16: each lane runs the first body at its index, then the next, in order. The regions must sit side by side in one block, share a placement and an extent spelled the same way, and have lanes that own element `[i]` rather than a block. Whatever one of them writes and another touches, both touch only at their own index, so no lane of a later body reads what another lane of an earlier body writes. No body may trap, loop without end or be observed from outside: every guard in it was discharged, and every function it calls is quiet in the same sense. A local `buffer` or `stack` array that only the chain touches, each lane at its own index and never lent, lives in each lane as one value and is never allocated. A host `reduce` over the same extent may end the chain: each step of its fold runs the fused bodies for that index first, and the fold keeps its order, so a checked fold still traps where it did. A sequential fold then runs the bodies on its own thread, in order, and `reduce op parallel` keeps them on the pool. A device `reduce` stays apart, because CUB does not promise to evaluate one index's value once.
 
