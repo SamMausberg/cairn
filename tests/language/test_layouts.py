@@ -300,3 +300,12 @@ def test_a_rule_that_runs_the_body_with_numbers_gets_the_layout_s_answer():
     assert L.apply(checker, call("TILE", "at"), (3, "t")) is None
     with pytest.raises(IndexError):
         L.apply(checker, call("LOAD", "col"), (256, 0))
+
+
+def test_a_transpose_through_a_tile_moves_every_element_between_warps():
+    """LOAD and STORE are one tile read two ways: an element is its offset, and a transpose sends it to another warp."""
+    for tile in TILES.values():
+        _, checker, _ = compile_program(transpose(tile))
+        load, store = L.value(checker, "LOAD"), L.value(checker, "STORE")
+        assert L.shares(load, store) and L.conversion(load, store) == "shared"
+        assert L.conversion(load, load) == "none"

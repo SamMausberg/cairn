@@ -405,14 +405,25 @@ def conflicts(d: Spread, size: int, width: int = 1) -> int:
     return worst
 
 
+def shares(held: Spread, wanted: Spread) -> bool:
+    """Whether two spreads are over one tile, or over a tile and its transpose: then an element is its offset,
+    whichever coordinates each spread names it by."""
+    return held.tile == wanted.tile or transposed(held.tile) == wanted.tile
+
+
 def conversion(held: Spread, wanted: Spread, warp: int = 32) -> str:
     """What values spread as `held` need to be spread as `wanted` instead: `none` when every participant holds the
     same element at the same value, `registers` when only the order of each participant's values changes,
     `shuffle` when every element stays inside its warp, `shared` when it crosses warps: a store, a barrier, a
-    load."""
-    if held.tile.shape != wanted.tile.shape:
+    load. Over one piece of storage an element is its offset; otherwise the tiles must have one shape and an element
+    is its coordinate."""
+    if shares(held, wanted):
+        pairs = [{o: sorted(h) for o, h in zip(d.tile.table(), cover(d).holders, strict=True)} for d in (held, wanted)]
+        before, after = [pairs[0][o] for o in sorted(pairs[0])], [pairs[1][o] for o in sorted(pairs[0])]
+    elif held.tile.shape != wanted.tile.shape:
         fail("E-LAYOUT-CONSUMER", f"A {held.tile.shape} spread cannot feed one over a {wanted.tile.shape} tile.")
-    before, after = cover(held).holders, cover(wanted).holders
+    else:
+        before, after = cover(held).holders, cover(wanted).holders
     if all(sorted(a) == sorted(b) for a, b in zip(before, after, strict=True)):
         return "none"
     if all({t for t, _ in a} == {t for t, _ in b} for a, b in zip(before, after, strict=True)):
@@ -497,7 +508,7 @@ SHOWN = 4096  # the largest tile whose owner of every element `cairn explain` li
 def explained(c: Checker) -> dict[str, Any]:
     """What `cairn explain` says of each declared layout: its facts; for a spread over a tile of at most SHOWN
     elements, the participant that holds each element, row by row; and what moving values held by one spread into
-    another of the same shape needs (`conversion`)."""
+    another over the same storage needs (`conversion`)."""
     out = {}
     spreads = {name: v for name in sorted(c.p.layouts) if isinstance(v := value(c, name), Spread)}
     for name, facts_ in receipt(c).items():
@@ -505,11 +516,7 @@ def explained(c: Checker) -> dict[str, Any]:
         if isinstance(v, Spread):
             if len(v.tile.shape) == 2 and v.tile.size <= SHOWN:
                 facts_["owners"] = owners(v)
-            into = {
-                other: conversion(v, w)
-                for other, w in spreads.items()
-                if other != name and w.tile.shape == v.tile.shape
-            }
+            into = {other: conversion(v, w) for other, w in spreads.items() if other != name and shares(v, w)}
             if into:
                 facts_["conversions"] = into
         out[name] = facts_
