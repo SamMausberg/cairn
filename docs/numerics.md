@@ -46,6 +46,29 @@ bf16 is a storage float: widen it with f32(x) to compute, and round back with bf
 
 The build receipt lists every rounding the source writes under the function's `numerics`: the operation, its formats, the rounding, what happens past the range and what happens to a NaN. One routine rounds on the host and in a device lane alike, working on the bit pattern with integers, and the suite holds it to an independent model over every pattern of all four formats, every tie between two neighbours and random doubles from the subnormals up, under both compilers and the sanitizers. The SMT model does not describe storage floats, so it answers `unknown` for a function that uses one.
 
+## The tensor-core multiply
+
+`mma_unordered(m, n, k, c, a, b)` adds the product of the row-major `m x k` matrix `a` and the row-major `k x n` matrix `b` into the row-major `m x n` matrix `c`. `a` and `b` are views of one storage float and `c` is an `rw` view of `f32`, the accumulator. It is the one operation in CAIRN whose float additions do not follow the written order, and its name says so, as `add_wrap` says it wraps. The receipt lists it under the function's `numerics` with `rounding: unordered-f32` and its bound.
+
+```cairn
+fn layer(m:usize, n:usize, k:usize, cn:usize, c:rw<f32>[cn]@device, an:usize, a:ro<f16>[an]@device,
+         bn:usize, b:ro<f16>[bn]@device) {
+  mma_unordered(m, n, k, c, a, b);                   // on the tensor cores: its sums in the hardware's order
+}
+```
+
+The contract is this, and nothing stronger. Every product `a[i][p] * b[p][j]` is exact in f32, which holds for every product of two `f16`, `f8e4m3` or `f8e5m2` values, and for two `bf16` values unless the product leaves f32's range. Every output is its old value plus its `k` products, each partial sum rounded to f32, in an order and grouping the hardware picks. Every finite output lies within `(k + 1) * 2^-22 * (|c[i][j]| + sum |a[i][p] * b[p][j]|)` of the exact sum, and an output any of whose products or partial sums is not finite is not finite either, with no promise which. Two runs on one device give the same bits; the host and the device need not.
+
+On the host the multiply is its reference loop: every output's products in increasing `p` after its old value, so `c` is exactly what the written loop would compute. On the device, where all three views must live (`E-PLACEMENT` otherwise), it runs 64 x 64 output tiles on four warps each, over `k` in steps of 32 staged through shared memory in two buffers, each warp multiplying 16 x 16 x 16 fragments on the tensor cores. An 8-bit float is widened to `f16` on its way into shared memory, which is exact. Where the format is 2 bytes, `k` and `n` are multiples of 8 and `a` and `b` sit on 16 bytes, the stages cross in asynchronous 16-byte copies while the warps multiply the previous one. The extents are checked once at the call: `len(c) == m * n`, `len(a) == m * k` and `len(b) == k * n`, or the call traps. The row says `read:a`, `read:b`, `write:c`, `trap`, and `par:device` on the device.
+
+`E-MMA` refuses a `c` that is not an `rw` view of `f32` and an `a` and `b` that are not views of one storage float; a multiply inside a lane is `E-PARALLEL-NEST`. `cairn verify` answers `unknown` for a function that multiplies, and `cairn predict` prices a device multiply at the published tensor peak, which is its roofline and says so: the kernel's own efficiency is measured only by the owner's device calibration.
+
+```cairn rejects E-MMA
+fn widened(n:usize, c:rw<f32>[n], a:ro<f32>[n], b:ro<f32>[n]) { mma_unordered(1, 1, n, c, a, b); }
+```
+
+The host suite replays the reference in Python and requires it bit for bit, and the contract's bound against the exact rational sum, over every format and shapes with tails in every direction. It also runs the device tile's phases thread by thread on the host, with a model of the tensor-core operations that adds in increasing `k`, and requires every output to equal the reference, so the tiling, the tails, the zero fill and the two stages are checked here, under the sanitizers. That the tensor cores meet the contract is checked only by `make gpu`, which compares them with the reference within its bound.
+
 ## Gradients
 
 `derive grad for f;` generates `f_grad`, the reverse-mode derivative of `f`, as an ordinary function: `cairn expand` prints it and the checker checks it like any other. `derive grad[w, b] for f;` differentiates with respect to the named parameters only. Without a list, every float parameter and every `ro` float view is differentiated.

@@ -112,6 +112,26 @@ def vector_saving(r: Region) -> float:
     return sum(uses - (loaded + stored) / r.vector for uses, loaded, stored, size in r.chunks if r.vector * size <= 16)
 
 
+def tensor(r: Region, card: Device, sizes: dict[str, float], missing: set[str]) -> Piece:
+    """A tensor-core multiply by its roofline: a launch, then the larger of its bytes at the memory's sustained
+    bandwidth and its operations at the published tensor peak. Every format mma_unordered takes runs at the f16
+    rate, since an 8-bit float is widened to f16. How close the kernel comes to that peak is not known until the
+    owner's device calibration runs, so the prediction is the roofline's, not the kernel's."""
+    runs = value(r.runs, sizes, missing)
+    moved = sum(value(b, sizes, missing) for b in (*r.body.reads.values(), *r.body.writes.values()))
+    work = sum(value(k, sizes, missing) for k in r.body.ops.values())
+    peak = card.flops.get("tensor_f16", card.flops["f32"])
+    memory, compute = moved / (card.dram_gbps * card.memory_efficiency), work / peak
+    ns = card.launch_ns + max(memory, compute)
+    bound = (
+        "launch" if card.launch_ns > max(memory, compute) else "device memory" if memory >= compute else "tensor cores"
+    )
+    light = max(moved / card.dram_gbps, work / peak)
+    detail = {"device": card.name, "format": r.tensor, "memory_ns": round(memory, 1), "compute_ns": round(compute, 1),
+              "launch_ns": card.launch_ns, "peak_ops_per_ns": peak}  # fmt: skip
+    return Piece(f"device tensor-core multiply at line {r.line}", ns * runs, bound, light * runs, detail)
+
+
 def lanes(r: Region, card: Device | None, sizes: dict[str, float], missing: set[str]) -> Piece:
     """A device region by its roofline: a launch, then the larger of its bytes at the memory's sustained bandwidth
     and its instructions at the device's issue rate, both shared out over the part of the device its grid keeps
@@ -158,6 +178,8 @@ def region(r: Region, host: Host, arch: str, sizes: dict[str, float], missing: s
     grain_given = r.plan[0] or 0
     if r.kind == "device":
         return lanes(r, device or packaged("rtx-5070-ti").device, sizes, missing)
+    if r.kind == "tensor":
+        return tensor(r, device or packaged("rtx-5070-ti").device, sizes, missing)
     if wide or (grain_given and n >= 2):
         least = grain_given or max(1, grain // max(r.weight, 1))
         used = min(host.lanes, max(1, int(n // least)), r.plan[1] or host.lanes)
@@ -254,6 +276,11 @@ def confidence(c: Cost, missing: set[str], found: list[Piece], profile: Profile,
         approximations.append(WIDE)
     if any(p.what.startswith(("device", "transfer h2d", "transfer d2h", "transfer d2d")) for p in found):
         guesses.append("device work is priced from the published specification, and no device run has checked it")
+    if any(p.what.startswith("device tensor-core") for p in found):
+        guesses.append(
+            "a tensor-core multiply is priced at the published tensor peak, its roofline; the kernel's own "
+            "efficiency, which only the owner's device calibration measures, makes it slower"
+        )
     if profile.origin != "measured":
         approximations.append(f"the machine profile is a {profile.origin}, not a measurement")
     if profile.host and arch not in profile.host.ops:

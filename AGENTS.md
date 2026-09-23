@@ -21,6 +21,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/concurrency.py` | tasks and tickets, lanes and regions, atomics and mutexes, placement |
 | `compiler/fusion.py` | which adjacent regions a plan's `fuse` may run as one, and the scratch they need not keep |
 | `compiler/chunks.py` | which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering |
+| `compiler/tensor.py` | the tensor-core multiply `mma_unordered`: its rule, its numerical contract and its lowering |
 | `compiler/rings.py` | I/O rings: their declaration, the operations that move owners in and out, their lowering |
 | `compiler/effects.py` | the effect vocabulary, the fixed point, the operand-order audit |
 | `compiler/traits.py` | who implements what, what a bound promises, the one place an instance is made |
@@ -30,7 +31,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/printing.py` | `print`, `println`, `eprint`, `eprintln` and `format`: what each argument writes, and their lowering |
 | `compiler/codegen.py` | lowering the typed tree; nothing else produces C++ |
 | `compiler/header.py` | the C header of a library build: its declarations, the layouts it states, what cannot cross |
-| `runtime/*.hpp` | guards, owners, threads, rings, storage floats, device calls, execution contexts |
+| `runtime/*.hpp` | guards, owners, threads, rings, storage floats, the tensor-core multiply, device calls, execution contexts |
 | `projects/project.py` | manifests, vendored dependencies, the line-to-file map |
 | `projects/toolchain.py` | every native flag, and the closed table of system libraries |
 | `projects/revision.py` | a program as a path or a git revision holds it |

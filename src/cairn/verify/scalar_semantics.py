@@ -124,6 +124,7 @@ def implementation_hash():
                 "compiler/concurrency.py",
                 "compiler/fusion.py",
                 "compiler/chunks.py",
+                "compiler/tensor.py",
                 "compiler/rings.py",
                 "compiler/effects.py",
                 "compiler/traits.py",

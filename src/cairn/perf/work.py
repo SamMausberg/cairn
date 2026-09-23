@@ -159,6 +159,7 @@ class Region:
     registers: int = 0  # what ptxas said its kernel uses, when something asked; 0 is not known
     fuse: int = 0  # the fuse its plan sets, whether or not a chain formed
     vector: int = 0  # the vector its plan sets: adjacent indices a lane runs over chunks
+    tensor: str = ""  # a tensor-core multiply's input format; its body holds the whole call's work, count one
     chunks: tuple = ()  # a device region's chunkable arrays: (element accesses per index, loaded, stored, bytes each)
 
 
@@ -625,6 +626,8 @@ class Counter:
                 self.cost.allocated = self.cost.allocated + n * element * at.times
             elif name == "transfer":
                 self.transfer(e, at)
+            elif name == "mma_unordered":
+                self.multiply(e, at)
             elif name in {"wait", "collect"}:
                 self.cost.waits = self.cost.waits + at.times
             elif name in {"take", "swap"}:
@@ -641,6 +644,29 @@ class Counter:
             self.note(f"line {e.line}: an atomic or a lock costs what its contention costs")
         elif kind == "ring":
             self.io(at, f"line {e.line}: an I/O ring operation costs what the kernel takes")
+
+    def multiply(self, e: Expr, at: Frame) -> None:
+        """mma_unordered: 2mnk operations over a and b, read once each on the device, where the tensor cores
+        take them, and c read and written once; on the host, the reference loop's own passes over b and c."""
+        m, n, k = (self.size(x) or Poly.var(f"?{name}@{e.line}") for x, name in zip(e.args[:3], "mnk", strict=True))
+        element, device = e.ref[1], e.ref[2]
+        size = self.c.sizeof(element)
+        c, a, b = (path(x) for x in e.args[3:])
+        if device:
+            body = Work()
+            body.op("tensor", m * n * k * 2.0)
+            body.reads |= {a: m * k * size, b: k * n * size, c: m * n * 4.0}
+            body.writes[c] = m * n * 4.0
+            self.cost.regions.append(Region("tensor", e.line, ONE, at.times, body, tensor=element.name))
+            return
+        at.work.op("f32", m * n * k * at.times * 2.0)
+        at.work.op("load", m * n * k * at.times * 2.0)
+        at.work.op("store", m * n * k * at.times)
+        for key, moved, reach in ((a, m * k * size, m * k * size), (b, m * n * k * size, k * n * size),
+                                  (c, m * n * k * 4.0, m * n * 4.0)):  # fmt: skip
+            at.work.reads[key] = at.work.reads.get(key, Poly()) + moved * at.times
+            at.work.footprint[key] = at.work.footprint.get(key, Poly()).join(reach)
+        at.work.writes[c] = at.work.writes.get(c, Poly()) + m * n * k * 4.0 * at.times
 
     def given(self, f: Function, args: list[Expr]) -> tuple[dict[str, Poly], dict[str, str]]:
         sizes, rename = {}, {}
