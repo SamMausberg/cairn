@@ -9,8 +9,10 @@ one-document rules of `edits.py`.
 A rename is a checked transaction. The new name must be an identifier that no file of the project writes at all,
 and not a reserved word, a builtin or a type, so no occurrence it adds can mean something already there. The edit is
 applied to the combined source, which must still compile, and every function's receipt entry (its effect row, its
-callees, its guard sites and its allocations) must be what it was, under the new name where the name changed. Any
-other answer refuses the rename whole, with the reason, and nothing is applied in part. A field or a variant is
+callees, its guard sites and its allocations) must be what it was, under the new name where the name changed: in
+the reference an implementation names, and in a reference's implementations and the one its plan runs. An
+implementation's identity digests the declarations' tokens, which a rename changes by design, so it is the one part
+of an entry left out. Any other answer refuses the rename whole, with the reason, and nothing is applied in part. A field or a variant is
 renamed the same way (`members.py` finds its tokens), and since a receipt names no field or variant, every entry
 must be exactly what it was.
 """
@@ -274,14 +276,11 @@ def rename(ws: Workspace, uri: str, offset: int, fresh: str) -> dict:
     # A declaration's receipt names change with it; a field or a variant names no function, so every entry stays.
     old, new = (named[1], renamed(named[1], fresh)) if named and named[0] not in MEMBERS else ("", "")
     try:
-        was, now = compile_source(before)[1]["functions"], compile_source(after)[1]["functions"]
+        was, now = (unidentified(compile_source(s)[1]["functions"]) for s in (before, after))
     except Diagnostic as error:
         raise Refused(f"After the rename the project would not compile: {error.data['code']}: {error}") from None
     if old:
-        was = {
-            rewrite(n, old, new): {**e, "calls": sorted(rewrite(c, old, new) for c in e["calls"])}
-            for n, e in was.items()
-        }
+        was = {rewrite(n, old, new): renaming(e, old, new) for n, e in was.items()}
     if named is None:  # a parameter's row names it: `read:p` of its own function, and of that function's instances
         home, name = owner(ws, at), tokens[0].s
         was = {n: {**e, "effects": [re.sub(rf":{re.escape(name)}\Z", ":" + fresh, x) for x in e["effects"]]}
@@ -325,6 +324,26 @@ def owner(ws: Workspace, offset: int) -> str:
     d = enclosing(ws.whole, offset)[0]
     module = ws.whole.module_at(d["head"] + 1) if d else ""
     return f"{module}.{d['name']}" if module and d else d["name"] if d else ""
+
+
+def renaming(entry: dict, old: str, new: str) -> dict:
+    """A receipt entry with `old` renamed `new` wherever it names a function: its callees, the reference it implements,
+    its implementations and the one a plan runs."""
+    out = {**entry, "calls": sorted(rewrite(c, old, new) for c in entry["calls"])}
+    for key in ("implements", "runs"):
+        if key in out:
+            out[key] = rewrite(out[key], old, new)
+    if "implementations" in out:
+        out["implementations"] = {rewrite(n, old, new): v for n, v in out["implementations"].items()}
+    return out
+
+
+def unidentified(entries: dict) -> dict:
+    """Receipt entries without their implementations' identities. An identity digests the declarations' tokens as
+    written, which a rename changes by design; what an implementation does and needs is the rest of its entry."""
+    return {n: {**e, "implementations": {i: {k: v for k, v in x.items() if k != "identity"}
+                                         for i, x in e["implementations"].items()}} if "implementations" in e else e
+            for n, e in entries.items()}  # fmt: skip
 
 
 def renamed(full: str, fresh: str) -> str:

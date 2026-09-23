@@ -16,6 +16,8 @@ from cairn.compiler.cairnc import compile_source
 from cairn.editor import workspace as ws_module
 from cairn.editor.document import Document
 from cairn.editor.edits import document_highlights
+from cairn.editor.edits import references as one_document_references
+from cairn.editor.edits import rename as one_document_rename
 from cairn.editor.lenses import code_lenses
 from cairn.editor.workspace import Refused, prepare_rename, references, rename, workspace
 from cairn.projects.build import build
@@ -339,3 +341,86 @@ def test_the_rule_read_from_tokens_is_the_compiler_s_on_every_example_project():
             inside = (project.source, f.start, project.site)
             asked, read = Document(f.text, within=inside), Document(f.text, analyse=False, within=inside)
             assert asked.program is not None and asked.modules() == read.modules(), (manifest, f.uri)
+
+
+IMPLEMENTED = """module lib;
+
+pub fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut s:u64 = 0;
+  for i in 0..n { s = add_wrap(s, xs[i]); }
+  return s;
+}
+
+pub fn total_by2(n:usize, xs:ro<u64>[n]) -> u64 implements total when n % 2 == 0 {
+  let mut s:u64 = 0;
+  for i in 0..n / 2 { s = add_wrap(s, add_wrap(xs[2 * i], xs[2 * i + 1])); }
+  return s;
+}
+
+plan total use total_by2;
+"""
+SELECTING = (
+    "module app;\nimport lib;\n\nfn main() -> i32 {\n  let mut xs = Buf[u64](4);\n  xs[1] = 5;\n"
+    "  if lib.total(xs) != 5 { return 1; }\n  return 0;\n}\n"
+)
+
+
+@pytest.fixture
+def implemented(tmp_path):
+    (tmp_path / "src").mkdir()
+    sources = '["src/lib.cairn", "src/main.cairn"]'
+    (tmp_path / "cairn.toml").write_text(f'[project]\nname = "impl"\nsources = {sources}\n[build]\nkind = "exe"\n')
+    (tmp_path / "src/lib.cairn").write_text(IMPLEMENTED)
+    (tmp_path / "src/main.cairn").write_text(SELECTING)
+    uri = (tmp_path / "src/lib.cairn").resolve().as_uri()
+    return tmp_path, workspace(uri, {uri: IMPLEMENTED}), uri
+
+
+@pytest.mark.parametrize(
+    "needle,offset,expected",
+    [
+        ("fn total(", 3, [("lib.cairn", 2), ("lib.cairn", 8), ("lib.cairn", 14), ("main.cairn", 6)]),
+        ("implements total", 11, [("lib.cairn", 2), ("lib.cairn", 8), ("lib.cairn", 14), ("main.cairn", 6)]),
+        ("plan total", 5, [("lib.cairn", 2), ("lib.cairn", 8), ("lib.cairn", 14), ("main.cairn", 6)]),
+        ("fn total_by2", 3, [("lib.cairn", 8), ("lib.cairn", 14)]),
+        ("use total_by2", 4, [("lib.cairn", 8), ("lib.cairn", 14)]),
+    ],
+)
+def test_references_follow_a_function_into_implements_and_plan_use(implemented, needle, offset, expected):
+    _, ws, uri = implemented
+    assert lines(references(ws, uri, IMPLEMENTED.index(needle) + offset)) == expected
+
+
+@pytest.mark.parametrize(
+    "needle,offset,fresh,reference,chosen",
+    [
+        ("implements total", 11, "sum_all", "lib.sum_all", "lib.total_by2"),  # the reference, from its clause
+        ("use total_by2", 4, "pairs", "lib.total", "lib.pairs"),  # the implementation, from the plan that selects it
+        ("let mut s", 8, "acc", "lib.total", "lib.total_by2"),  # a local of both: each function's own
+    ],
+)
+def test_a_rename_through_implements_and_plan_use_keeps_the_selection(implemented, needle, offset, fresh, reference,
+                                                                        chosen):  # fmt: skip
+    root, ws, uri = implemented
+    before = compile_source(load_project(root).source)[1]["functions"]
+    edits = rename(ws, uri, IMPLEMENTED.index(needle) + offset, fresh)["changes"]
+    for path in (root / "src/lib.cairn", root / "src/main.cairn"):
+        doc = Document(path.read_text(), analyse=False)
+        path.write_text(applied(doc, edits.get(path.resolve().as_uri(), [])))
+    rebuilt = load_project(root)
+    after = compile_source(rebuilt.source)[1]["functions"]
+    assert after[reference]["runs"] == chosen and after[chosen]["implements"] == reference
+    assert set(after[reference]["implementations"]) == {chosen}
+    old = before["lib.total"]["implementations"]["lib.total_by2"]["identity"]
+    assert after[reference]["implementations"][chosen]["identity"] != old  # the identity digests what is written
+    record = build(rebuilt, cxx="clang++", timeout=120)
+    assert subprocess.run([record["artifact"]], timeout=30).returncode == 0
+
+
+def test_one_document_alone_follows_implements_and_plan_use():
+    text = IMPLEMENTED.replace("module lib;\n\n", "")
+    doc = Document(text)
+    for needle, offset, count in (("implements total", 11, 3), ("use total_by2", 4, 2)):
+        assert len(one_document_references(doc, "file:///alone.cairn", text.index(needle) + offset)) == count
+        edits = one_document_rename(doc, "file:///alone.cairn", text.index(needle) + offset, "fresh")["changes"]
+        compile_source(applied(doc, edits["file:///alone.cairn"]))
