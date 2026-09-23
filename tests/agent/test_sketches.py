@@ -47,6 +47,17 @@ def test_reject_bad_choices(values):
         sketch().fill(**values)
 
 
+def test_a_choice_cannot_hide_the_code_after_its_slot():
+    """A choice ending in a line comment would swallow its own closing parenthesis and the rest of the line; here
+    the next line closes the parenthesis, so the call to h after the slot would vanish while the receipt says that
+    only the declared expression changed."""
+    s = Sketch("fn h() -> u64 = 5;\nfn f(x:u64)->u64 { let a = x + h(\n); return a; }\n", "f").hole("pick", "x")
+    with pytest.raises(Diagnostic) as refused:
+        s.fill(pick="0 //")
+    assert refused.value.data["code"] == "E-SKETCH-CHOICES"
+    assert "+ h(" in s.fill(pick="0").source
+
+
 def test_nested_slots_rejected():
     s = sketch()
     with pytest.raises(Diagnostic):

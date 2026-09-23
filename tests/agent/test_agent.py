@@ -111,6 +111,18 @@ def test_bad_bodies(body):
         s.check(request(s, body))
 
 
+@pytest.mark.parametrize("after", ["plan spread { grain 1; }", "const K:u64 = 3;", "fn g() -> u64 = 1;"])
+def test_a_reply_ending_in_a_comment_hides_nothing_after_its_span(after):
+    """A reply's trailing line comment would swallow whatever the file wrote after the function on that line; every
+    token outside the span must lex as it did, so the edit cannot reach a plan or a declaration it was not given."""
+    source = (
+        f"fn spread(n:usize, out:rw<u64>[n]) {{ parallel i in n {{ out[i] = 1; }} }} {after}\nfn main() -> i32 = 0;\n"
+    )
+    s = EditSession(source, "spread")
+    rejected("E-DECLARATION", s, request(s, "{ parallel i in n { out[i] = 2; } } //"))
+    assert s.check(request(s, "{ parallel i in n { out[i] = 2; } } // a comment that ends\n"))[0].count(after) == 1
+
+
 def test_stale_session():
     s = EditSession(S, "step")
     r = request(s, "{return x;}")
@@ -174,7 +186,7 @@ def test_expression_parenthesized_insertion():
     assert expr.val == "*" and expr.args[1].val == "+"
 
 
-@pytest.mark.parametrize("payload", ["x; return 0", "x) + 1", "x /*", "x; fn bad(){}"])
+@pytest.mark.parametrize("payload", ["x; return 0", "x) + 1", "x /*", "x; fn bad(){}", "x //"])
 def test_expression_injection(payload):
     s = EditSession(S, "step")
     with pytest.raises(Diagnostic):

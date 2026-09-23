@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..compiler.cairnc import IDENT, RESERVED, Diagnostic, Parser, fail
+from ..compiler.lexing import TOKEN
 from ..verify.scalar_concrete import Concrete
 from ..verify.scalar_semantics import equivalent, outcome_key, prepared
 from ..verify.scalar_values import Unsupported
@@ -130,6 +131,8 @@ class Sketch:
             total += len(text.encode())
             if total > 64000:
                 fail("E-SKETCH-CHOICES", "Combined choices exceed 64000 bytes.")
+            if any(m.group().startswith("//") for m in TOKEN.finditer(text)):  # it would run past its slot
+                fail("E-SKETCH-CHOICES", "A slot value carries no comment: it would hide the code after its slot.")
             parser = Parser(text)
             parser.expr()
             parser.need("<eof>")

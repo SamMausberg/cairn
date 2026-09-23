@@ -16,6 +16,7 @@ from typing import Any
 
 from ..compiler.cairnc import VERSION, Diagnostic, Function, Parser, compile_program, compile_source, fail
 from ..compiler.effects import EFFECT_FAMILIES, EFFECTS
+from ..compiler.lexing import lex
 from .diagnostics import explain, located
 from .evidence import MAX_EXPAND, MAX_REPLACEMENT, TERMS, classes, establish
 from .projection import (
@@ -57,6 +58,15 @@ def load_json_strict(text: str) -> Any:
         )
     except (json.JSONDecodeError, RecursionError) as e:
         fail("E-REQUEST", str(e))
+
+
+def outside(text: str, start: int, end: int) -> tuple[list[str], list[str]]:
+    """The tokens of `text` before `start` and from `end` on, which a reply spliced into [start, end) must keep."""
+    try:
+        tokens = lex(text)
+    except Diagnostic:
+        return [], []  # a candidate that does not lex is refused where it is compiled, with the reply's position
+    return [t.s for t in tokens if t.end <= start], [t.s for t in tokens if t.start >= end]
 
 
 def shaped(request: Any, protocol: str, keys: set[str]) -> None:
@@ -396,7 +406,10 @@ class EditSession:
         )
         if kind == "expr":
             text = "(" + text + ")"  # Operator binding at the insertion site must not change the tree around it.
-        candidate = self.source[:start] + text + self.source[end:]  # Every byte outside the span is preserved.
+        candidate = self.source[:start] + text + self.source[end:]  # Every byte outside the span is preserved,
+        if outside(candidate, start, start + len(text)) != outside(self.source, start, end):  # and every token.
+            fail("E-DECLARATION", "The replacement's last line comment would hide what follows its span on that "
+                 "line; end the comment with a newline.")  # fmt: skip
         try:
             receipt = compile_source(candidate)[1]
         except Diagnostic as e:  # Point into the reply the model wrote, not into the spliced whole.
