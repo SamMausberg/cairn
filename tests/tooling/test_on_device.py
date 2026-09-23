@@ -15,6 +15,7 @@ import pytest
 
 from cairn.perf import on_device
 from cairn.perf.tune import tune
+from cairn.projects.target import parse, toolkit
 from emitted import emit
 from support import DEVICE_LOCK
 
@@ -63,6 +64,7 @@ def test_a_timed_run_builds_beside_the_runtime_headers_and_runs_under_the_lock(m
     monkeypatch.setattr(on_device, "ran", 0)
     monkeypatch.setattr(on_device.clock, "sleep", lambda s: None)
     started, held = [], []
+    toolkit()  # asked of nvcc before every process below is replaced
 
     def run(command, **_):
         unit = next((Path(a) for a in command if a.endswith(".cu")), None)
@@ -78,9 +80,16 @@ def test_a_timed_run_builds_beside_the_runtime_headers_and_runs_under_the_lock(m
     monkeypatch.setattr(on_device.subprocess, "run", run)
     no_other_process(monkeypatch)
     monkeypatch.setattr(on_device, "locked", locked)
-    assert on_device.time_device(SCALE, "scale", {"n": 1024}) == {"status": "measured", "median_ns": 5.0, "min_ns": 4.0}
+    got = on_device.time_device(SCALE, "scale", {"n": 1024}, target=parse("sm_120"))
+    assert {k: v for k, v in got.items() if k != "device_target"} == {
+        "status": "measured",
+        "median_ns": 5.0,
+        "min_ns": 4.0,
+    }
+    assert got["device_target"]["name"] == "sm_120"  # what the time was measured for, carried with it
     (build, beside, locked_build), (timed, _, locked_run) = started
-    assert "nvcc" in build[0] and "timed.cu" in beside and "cairn_gpu.hpp" in beside and not locked_build
+    assert "nvcc" in build[0] and "-arch=sm_120" in build and "timed.cu" in beside and not locked_build
+    assert "cairn_gpu.hpp" in beside
     assert timed[0].endswith("/timed") and locked_run and on_device.ran == 1
 
 

@@ -1,9 +1,9 @@
 """A device kernel's resources and instruction mix, read from the CUDA toolchain's output without running it.
 
-`kernels` compiles a program's device code to a cubin for one architecture (`sm_120` unless told otherwise), never
-for `native`, which would ask the driver which device is present. ptxas reports each kernel's registers, spills,
+`kernels` compiles a program's device code to a cubin for one device target (projects/target.py), the one the
+caller resolved or else the one resolved here, never for `native`. ptxas reports each kernel's registers, spills,
 stack and shared memory, and cuobjdump disassembles it, so the model can count instructions and derive occupancy.
-Nothing is launched and no device is touched.
+A report ptxas makes for any other target is refused. Nothing is launched and no device is touched.
 """
 
 from __future__ import annotations
@@ -17,9 +17,10 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import compile_source, write_program
+from ..projects.target import DeviceTarget, resolve, supported
 from ..projects.toolchain import find
 
-ENTRY = re.compile(r"Compiling entry function '([^']+)' for '(sm_\d+)'")
+ENTRY = re.compile(r"Compiling entry function '([^']+)' for '(sm_\d+[af]?)'")
 USED = re.compile(r"Used (\d+) registers")
 SPILL = re.compile(r"(\d+) bytes spill stores, (\d+) bytes spill loads")
 STACK = re.compile(r"(\d+) bytes stack frame")
@@ -66,22 +67,25 @@ def mix(sass: str) -> dict[str, Counter]:
     return out
 
 
-def kernels(source: str, arch: str = "sm_120", timeout: int = 600) -> dict[str, Any]:
-    """Per CAIRN function with device lanes: each kernel's resources, instruction mix and memory instructions."""
+def kernels(source: str, target: DeviceTarget | None = None, timeout: int = 600) -> dict[str, Any]:
+    """Per CAIRN function with device lanes: each kernel's resources, instruction mix and memory instructions, for
+    `target`, or the target resolved here when none is given."""
     if not available():
         return {"status": "not-run", "reason": "nvcc and cuobjdump are needed to read a kernel; neither was found."}
+    chosen = supported(target or resolve())
     from ..compiler.cairnc import compile_program
     from ..compiler.codegen import demangled, mangle
 
     cpp, receipt = compile_source(source)
     if "cuda" not in receipt["requires"]:
-        return {"status": "no-device-code", "kernels": {}}
+        return {"status": "no-device-code", "kernels": {}, "device_target": chosen.record()}
+    chosen = chosen.require(receipt["device_features"])
     p, _, _ = compile_program(source)
     names = {mangle(f.name): f.name for f in p.functions}
     with tempfile.TemporaryDirectory(prefix="cairn-cubin-") as scratch:
         directory = Path(scratch)
         program, cubin = write_program(directory, "program.cu", cpp), directory / "program.cubin"
-        command = [find("nvcc"), "-std=c++20", "-O3", "--fmad=false", f"-arch={arch}", "--extended-lambda",
+        command = [find("nvcc"), "-std=c++20", "-O3", "--fmad=false", *chosen.flags(), "--extended-lambda",
                    "--expt-relaxed-constexpr", "-cubin", "-Xptxas", "-v", str(program), "-o", str(cubin)]  # fmt: skip
         done = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
         if done.returncode:
@@ -90,9 +94,10 @@ def kernels(source: str, arch: str = "sm_120", timeout: int = 600) -> dict[str, 
     used, counted = resources(done.stderr + done.stdout), mix(dump.stdout)
     found: dict[str, list[dict[str, Any]]] = {}
     for symbol, info in used.items():
+        chosen.accept(info["arch"], f"ptxas's report of {symbol}")
         mangled = demangled(symbol, names)
         opcodes = counted.get(symbol, Counter())
         entry = {**info, "instructions": sum(opcodes.values()), "memory": {k: opcodes[o] for o, k in MEMORY.items() if opcodes[o]},
                  "top": dict(opcodes.most_common(8))}  # fmt: skip
         found.setdefault(names[mangled] if mangled else "(runtime)", []).append(entry)
-    return {"status": "read", "arch": arch, "kernels": found}
+    return {"status": "read", "arch": chosen.name, "device_target": chosen.record(), "kernels": found}

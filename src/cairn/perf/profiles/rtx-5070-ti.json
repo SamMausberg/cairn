@@ -13,6 +13,7 @@
   "host": null,
   "device": {
     "name": "RTX 5070 Ti",
+    "compute_capability": "12.0",
     "sms": 70,
     "cores_per_sm": 128,
     "ghz": 2.452,

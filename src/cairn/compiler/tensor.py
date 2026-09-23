@@ -67,6 +67,8 @@ def lower_mma(g: Emitter, e: Expr) -> str:
     _, element, device = e.ref
     if device:
         g.need("cairn_gpu.hpp")
+        if element.name == "bf16":  # bf16 fragments start at sm_80; f16 and the widened 8-bit floats run on sm_75
+            g.feature("bf16")
     extents = ", ".join(g.expr(x) for x in e.args[:3])
     views = ", ".join(f"{data}, {count}" for data, count in (g.pointer(a) for a in e.args[3:]))
     return f"cr::tensor::{'launch' if device else 'multiply'}<{g.type(element)}>({extents}, {views})"

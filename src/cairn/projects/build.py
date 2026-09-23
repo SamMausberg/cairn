@@ -16,6 +16,7 @@ from ..compiler.cairnc import RUNTIME_FILES, Parser, generate, joined, units, wr
 from ..compiler.codegen import mangle
 from ..compiler.header import header as c_header
 from .project import Project, ProjectError
+from .target import resolve
 from .toolchain import audit_effects, find, flags, link_flags, linked, precompiled, profile, unit_commands
 from .toolchain import command as native_command
 from .toolchain import version as compiler_version
@@ -115,7 +116,7 @@ int main(int argc, char** argv) {{
 def build(project: Project, *, output: Path | None = None, cxx: str = "clang++", arch: str | None = None,
           kind: str | None = None, timeout: int = 60, target: str | None = None, debug: bool = False,
           incremental: bool = False, keep_guards: bool = False, tests: tuple[str, ...] = (),
-          header: bool = False) -> dict:  # fmt: skip
+          header: bool = False, device_target: str | None = None) -> dict:  # fmt: skip
     kind = "exe" if tests else kind or project.kind  # A test build is an executable whose main runs one test.
     target = target or project.target
     bare = bool(profile(target))
@@ -167,8 +168,11 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
     if declared:
         (directory / (name + ".h")).write_text(declared, encoding="utf-8")
     artifact = directory / (name + ".elf" if bare else "lib" + name + ".so" if kind == "library" else name)
+    device = None
+    if "cuda" in receipt["requires"]:  # One device target, resolved once, for the command line and the receipt.
+        device = resolve(device_target, project.device_target).require(receipt["device_features"])
     command = native_command(
-        cxx, str(cpp), str(artifact), arch or project.arch, kind, "cuda" in receipt["requires"], target
+        cxx, str(cpp), str(artifact), arch or project.arch, kind, device is not None, target, device
     )
     libraries = [] if bare else linked(project.libraries, receipt["modules"])  # an image refuses ffi effects above
     command += link_flags(libraries)
@@ -184,6 +188,7 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         "frontend": receipt,
         "kind": kind,
         "target": target,
+        **({"device_target": device.record()} if device else {}),
         **({"libraries": libraries} if libraries else {}),
         "command": command,
         "generated_sha256": hashlib.sha256(generated.encode()).hexdigest(),

@@ -373,6 +373,29 @@ end })
 
 GitHub has no CAIRN grammar, so `.gitattributes` has it highlight `.cairn` files as Rust without counting them as Rust in the language bar.
 
+## The device target
+
+A program that indexes `@device` views is built for one device target, spelled as nvcc spells it. `sm_120` is portable: its code runs on compute capability 12.0 and every later 12.x device. `sm_120f` adds the features the family shares and runs on the family's devices from 12.0. `sm_120a` adds every feature of exactly 12.0 and runs only there. The device target is not the CPU architecture, which `--arch` names.
+
+`--device-target` on `build`, `run`, `predict` and `tune` names the target, else `[build] device_target`, else the one GPU `nvidia-smi` reports, which asks the driver and launches nothing. With none of these a device build is refused with `E-TARGET`; nothing defaults to `-arch=native`.
+
+```toml
+[build]
+kind = "exe"
+device_target = "sm_120a"
+```
+
+The target is resolved once and every stage receives the same one: nvcc's `-arch`, the kernel reader behind `cairn tune`, the device card `cairn predict` prices on, a device timing and a measured device profile. The build receipt records it under `device_target`: its name, how it was resolved, the features it provides and those the program needs, its resource limits and the nvcc release.
+
+| Refused | Code |
+|---|---|
+| a spelling other than `sm_` and a compute capability with an optional `f` or `a`, `a` below sm_90 or `f` below sm_100, and GPUs of two capabilities with no target named | `E-TARGET` |
+| a target the installed nvcc does not compile | `E-TARGET-TOOLKIT` |
+| a program needing a feature the target lacks: `bf16` on sm_75, `mma_f8f6f4` on plain sm_120, `tcgen05` on any sm_120 | `E-TARGET-FEATURE` |
+| a result recorded for another target: a ptxas report, a timing, a measured device card, or a card for a device the target's code does not run on | `E-TARGET-MISMATCH` |
+
+The features are `FEATURES` in `src/cairn/projects/target.py`. `tests/tooling/test_target.py` assembles one probe instruction per feature for eleven targets and holds the table to what ptxas accepts. The limits (registers per thread, shared memory per block and per SM, threads per block, warps per SM) are the CUDA programming guide's for 7.5 through 12.0, a specification rather than a measurement; a target without a row has unknown limits, and its record says so.
+
 ## The freestanding target
 
 A freestanding build produces one ELF image that runs on bare hardware, with no operating system, C library, C++ runtime, loader or unwinder. `[build] target` selects it, and `--target` on `build` and `run` overrides it.

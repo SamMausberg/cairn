@@ -18,6 +18,7 @@ from typing import Any
 
 from ..compiler.cairnc import Diagnostic, compile_program
 from ..compiler.concurrency import PLAN_ITEMS
+from ..projects.target import DeviceTarget, resolve
 from . import model
 from .plan_source import Placement, Plan, shown, written
 from .profile import Profile, default
@@ -44,15 +45,15 @@ def space(kinds: set[str], host_lanes: int, regions: int = 1) -> list[Plan]:
     return [written(p) for p in plans if not (p.get("vector") and p.get("fuse"))]  # a plan takes one or the other
 
 
-def registers(source: str, name: str, unrolls: set[int]) -> dict[int, int]:
-    """ptxas's register count for `name`'s kernels at each unroll, compiled for the device and never run."""
+def registers(source: str, name: str, unrolls: set[int], target: DeviceTarget | None = None) -> dict[int, int]:
+    """ptxas's register count for `name`'s kernels at each unroll, compiled for `target` and never run."""
     from .device import available, kernels
 
     if not available():
         return {}
     found = {}
     for u in sorted(unrolls):
-        read = kernels(Placement(source, name).apply((("unroll", u),) if u > 1 else ()))
+        read = kernels(Placement(source, name).apply((("unroll", u),) if u > 1 else ()), target)
         used = [k["registers"] for k in read.get("kernels", {}).get(name, [])]
         if used:
             found[u] = max(used)
@@ -75,8 +76,12 @@ def priced(c: Cost, plan: Plan, profile: Profile, sizes: list[dict[str, float]],
 
 
 def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile | None = None,
-         arch: str | None = None, measure: int = 0, cxx: str = "clang++", device: bool = False) -> dict[str, Any]:  # fmt: skip
-    """Every legal plan of `name` ranked by prediction at `sizes`; with `measure`, that many of the best timed."""
+         arch: str | None = None, measure: int = 0, cxx: str = "clang++", device: bool = False,
+         device_target: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
+    """Every legal plan of `name` ranked by prediction at `sizes`; with `measure`, that many of the best timed. Device
+    plans are read, priced and timed for one device target: `device_target`, or the one resolved here."""
+    from .report import targeted
+
     chosen = profile or default()
     p, checker, _ = compile_program(source)
     costs = count(p, checker, {name})
@@ -90,7 +95,9 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
         raise ValueError("Give the sizes to tune for with --at, such as --at n=1e7.")
     current = written(now(c))
     placement = Placement(source, name)
-    held = registers(source, name, {max(u, 1) for u in SPACE["unroll"]}) if "device" in kinds else {}
+    target = (device_target or resolve(required=False)) if "device" in kinds else None
+    on = targeted({name: c}, chosen, target)  # the card that prices device plans runs the target's code
+    held = registers(source, name, {max(u, 1) for u in SPACE["unroll"]}, target) if "device" in kinds else {}
     candidates = space(kinds, chosen.host.lanes if chosen.host else 16, regions(p, name))
     counted: dict[int, Cost] = {}  # a fused chain is one region, not two, so each fuse is counted as written
     for joined in {dict(plan).get("fuse", 0) for plan in candidates}:
@@ -114,6 +121,7 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
         "sizes": sizes,
         "predicted": "Every plan is priced by cairn predict; a plan changes no result, so none needed checking.",
         "profile": chosen.describe(),
+        **on,
         **({"registers_by_unroll": held} if held else {}),
         "current": shown(name, current),
         "candidates": rows,
@@ -122,12 +130,12 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     if measure and "device" in kinds and not device:
         result["measured"] = "Not measured: device plans are timed only by `make tune-device`, which the owner runs."
     elif measure:
-        result.update(timed(source, name, ranked, current, sizes, measure, cxx, arch, device))
+        result.update(timed(source, name, ranked, current, sizes, measure, cxx, arch, device, target))
     return result
 
 
 def timed(source: str, name: str, ranked: list[Plan], current: Plan, sizes: list[dict[str, float]], keep: int,
-          cxx: str, arch: str | None, device: bool) -> dict[str, Any]:  # fmt: skip
+          cxx: str, arch: str | None, device: bool, target: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
     """Successive halving over the best-ranked `keep` distinct plans and the current one."""
     from ..projects.toolchain import resolve_arch
     from . import measure, on_device
@@ -142,7 +150,7 @@ def timed(source: str, name: str, ranked: list[Plan], current: Plan, sizes: list
             total = 0.0
             for s in sizes:
                 if device:
-                    got = on_device.time_device(variant, name, s, blocks=blocks)
+                    got = on_device.time_device(variant, name, s, blocks=blocks, target=target)
                 else:
                     got = measure.time(variant, name, s, cxx=cxx, arch=resolve_arch(arch), blocks=blocks)
                 if got["status"] != "measured":

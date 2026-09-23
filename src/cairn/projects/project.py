@@ -16,6 +16,7 @@ from ..compiler.lexing import lex
 from ..compiler.modules import library_path
 from ..compiler.syntax import Parser
 from ..compiler.tree import MAX_SOURCE, Diagnostic
+from .target import parse
 from .toolchain import ARCHS, KINDS, LIBRARIES, TARGETS, ProjectError
 
 SEGMENT = re.compile(r"[A-Za-z0-9_.-]+")
@@ -90,6 +91,7 @@ class Project:
     dependencies: tuple[dict, ...] = ()
     vendored_units: tuple[str, ...] = ()  # the unit paths a dependency contributed, never the root project's own
     libraries: tuple[str, ...] = ()  # the system libraries the root manifest names: rows of toolchain.LIBRARIES
+    device_target: str | None = None  # `[build] device_target`, as written: projects/target.py resolves it
 
     def unit_at(self, line: int) -> Unit | None:
         """The source file a line of the combined source comes from."""
@@ -142,6 +144,7 @@ class Manifest:
     table: dict  # the `[dependencies]` entries, name -> path, checked when each one is loaded
     sha256: str
     libraries: tuple[str, ...] = ()
+    device_target: str | None = None
 
 
 def read_manifest(target: Path) -> Manifest:
@@ -155,7 +158,13 @@ def read_manifest(target: Path) -> Manifest:
     project, build, table = data.get("project", {}), data.get("build", {}), data.get("dependencies", {})
     if not isinstance(project, dict) or not isinstance(build, dict) or not isinstance(table, dict):
         raise ProjectError("project, build and dependencies must be tables.")
-    if set(project) - {"name", "sources", "tests"} or set(build) - {"kind", "arch", "target", "libraries"}:
+    if set(project) - {"name", "sources", "tests"} or set(build) - {
+        "kind",
+        "arch",
+        "target",
+        "libraries",
+        "device_target",
+    }:
         raise ProjectError("Unknown manifest option.")
     name = project.get("name")
     if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name):
@@ -181,8 +190,13 @@ def read_manifest(target: Path) -> Manifest:
         raise ProjectError(f"libraries names each known library once; known: {', '.join(sorted(LIBRARIES))}.")
     if libraries and machine != "hosted":
         raise ProjectError("A freestanding image links no system library.")
+    device = build.get("device_target")  # the GPU's compilation target, never the CPU's: sm_120, sm_120f, sm_120a
+    if device is not None:
+        parse(device, "manifest")
     digest = hashlib.sha256(text.encode()).hexdigest()
-    return Manifest(name, tuple(sources), tuple(contracts), kind, arch, machine, table, digest, tuple(libraries))
+    return Manifest(
+        name, tuple(sources), tuple(contracts), kind, arch, machine, table, digest, tuple(libraries), device
+    )
 
 
 def opened(body: str, current: str) -> list[str]:
@@ -263,7 +277,7 @@ def load_project(path: str | Path = ".", given: Mapping[Path, str] | None = None
         contained_file(root, relative, ".json")
     return Project(root, manifest.name, combined, tuple(units), manifest.contracts, manifest.kind, manifest.arch,
                    manifest.target, manifest.sha256, tuple(vendored), tuple(p for p, _, _ in fragments),
-                   manifest.libraries)  # fmt: skip
+                   manifest.libraries, manifest.device_target)  # fmt: skip
 
 
 def dependencies(root: Path, table: dict, seen: dict[Path, str], depth: int = 0,

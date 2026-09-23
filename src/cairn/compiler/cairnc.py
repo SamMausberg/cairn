@@ -124,6 +124,7 @@ def generate(source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool
         "uninstantiated_templates": checker.unchecked,
         "modules": interfaces(p, receipts),
         "requires": ["cuda"] if "cairn_gpu.hpp" in emitter.headers else [],
+        "device_features": list(emitter.features),  # what the device target must provide (projects/target.py)
         "trusted_lowering_rules": [
             "bounded-collector/2",
             "unsigned-little-endian-wire/1",

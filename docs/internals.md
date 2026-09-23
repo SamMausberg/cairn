@@ -47,6 +47,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | The C header of a library: declarations, layouts it states and checks, what cannot cross | `compiler/header.py` | `Header.render`, `shape`, `refusal` |
 | Manifests, vendored dependencies | `projects/project.py` | `read_manifest`, `contained_file`, `claim`, `dependencies` |
 | Native flags, the closed table of system libraries, the freestanding effect ban | `projects/toolchain.py` | `command`, `flags`, `LIBRARIES`, `audit_effects` |
+| The device target every device stage shares: its spelling, resolution, features, limits, and the records it refuses | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits` |
 
 Per-function state lives in one `Scope`, swapped when an instance is checked in the middle of its caller, so instantiation is re-entrant. Every concrete signature is resolved before any body is checked.
 

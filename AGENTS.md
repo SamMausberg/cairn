@@ -37,6 +37,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `runtime/*.hpp` | guards, owners, threads, rings, storage floats, the tensor-core multiply, device calls, execution contexts |
 | `projects/project.py` | manifests, vendored dependencies, the line-to-file map |
 | `projects/toolchain.py` | every native flag, and the closed table of system libraries |
+| `projects/target.py` | the device target: its spelling, how it is resolved, the features and limits it has, and the results it refuses |
 | `projects/revision.py` | a program as a path or a git revision holds it |
 | `agent/agent_tools.py` | edit sessions, packets and the host that names them by handle |
 | `agent/evidence.py` | what a packet may say is established about a function |

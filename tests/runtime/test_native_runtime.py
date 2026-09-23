@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from cairn.projects.target import DeviceTarget, parse, resolve
 from support import device_lock, device_reason
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -31,8 +32,9 @@ STRICT = ["-std=c++20", "-O3"]
 HOST = ["-ffp-contract=off", "-fno-fast-math", "-fno-exceptions", "-fno-rtti"]
 HOST += ["-Wall", "-Wextra", "-Werror"]
 HOST += ["-Wno-unused-parameter", "-Wno-unused-variable", "-Wno-unused-but-set-variable"]
-# nvcc adds the device half of the same contract; see the note at the top of cairn_gpu.hpp.
-DEVICE = ["--fmad=false", "-arch=native", "--extended-lambda", "--expt-relaxed-constexpr"]
+# nvcc adds the device half of the same contract; see the note at the top of cairn_gpu.hpp. The device target is
+# named per build (projects/target.py), never native.
+DEVICE = ["--fmad=false", "--extended-lambda", "--expt-relaxed-constexpr"]
 DEVICE += ["-Werror", "all-warnings"]
 HOSTS = [cc for cc in ("g++", "g++-12", "clang++") if shutil.which(cc)]
 
@@ -216,18 +218,18 @@ def test_reuse_runtime_is_clean_under_address_leak_and_ub(tmp_path: Path) -> Non
     assert done.returncode == 0 and "Sanitizer" not in done.stderr, done.stdout + done.stderr[-4000:]
 
 
-def device_line(source: str, out: Path) -> list[str]:
+def device_line(source: str, out: Path, device: DeviceTarget | None = None) -> list[str]:
+    """nvcc's command for one device test, for `device`, or the target resolved here (the GPU make gpu runs on)."""
     host = ["-Xcompiler", ",".join(f.replace("-fno-exceptions", "-fexceptions") for f in HOST)]
-    return ["nvcc", *STRICT, *DEVICE, *host, f"-I{RUNTIME}", str(NATIVE / source), "-o", str(out)]
+    arch = (device or resolve()).flags()
+    return ["nvcc", *STRICT, *DEVICE, *arch, *host, f"-I{RUNTIME}", str(NATIVE / source), "-o", str(out)]
 
 
 @pytest.mark.skipif(not shutil.which("nvcc"), reason="nvcc is not installed")
 @pytest.mark.parametrize("source", ["gpu_runtime.cu", "gpu_reuse.cu"])
 def test_device_tests_compile_for_a_named_architecture(source: str, tmp_path: Path) -> None:
     """Compiled for sm_120 and never run: the device half is checked by `make gpu` alone."""
-    line = device_line(source, tmp_path / "device.o")
-    line[line.index("-arch=native")] = "-arch=sm_120"
-    build([*line, "-c"])
+    build([*device_line(source, tmp_path / "device.o", parse("sm_120")), "-c"])
 
 
 @pytest.fixture(scope="session")

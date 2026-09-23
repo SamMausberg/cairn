@@ -6,7 +6,7 @@
 // Build (CUDA 12.8 with CUB from the toolkit and CUDA 13.2 with CCCL 3 both pass; g++ and clang++
 // as -ccbin alike). One command; the lines below are joined by spaces:
 //
-//   nvcc -std=c++20 -O3 --fmad=false -arch=native
+//   nvcc -std=c++20 -O3 --fmad=false -arch=sm_120
 //        --extended-lambda --expt-relaxed-constexpr -Werror all-warnings
 //        -Xcompiler -Wall,-Wextra,-Werror,-Wno-unused-parameter,-Wno-unused-variable,
 //                   -Wno-unused-but-set-variable,-fexceptions,-fno-rtti,
@@ -24,8 +24,8 @@
 // --expt-relaxed-constexpr is required, not cosmetic: without it std::numeric_limits<T>::min()
 // and std::in_range in cr::divide/cr::convert are host-only and nvcc merely warns (#20013-D).
 // -Werror all-warnings promotes nvcc's own host/device warnings to errors; it is what turns a
-// silently skipped guard into a build failure. -arch=native works too but pins the build to the
-// machine that ran it. `#include <cub/cub.cuh>` is NOT usable: it drags in Thrust's
+// silently skipped guard into a build failure. -arch names the device target the build resolved
+// (projects/target.py), never native. `#include <cub/cub.cuh>` is NOT usable: it drags in Thrust's
 // system_error.inl, which needs -fexceptions. The four narrow CUB headers below do not.
 //
 // Device trap mechanism (measured, see tests/runtime/gpu_runtime.cu):

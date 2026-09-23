@@ -227,10 +227,11 @@ def test_llvm_mca_reads_a_dependent_chain_at_its_latency():
 @pytest.mark.skipif(not shutil.which("nvcc"), reason="reading a kernel needs nvcc and cuobjdump")
 def test_a_kernel_is_read_without_touching_a_device():
     from cairn.perf.device import kernels
+    from cairn.projects.target import parse
 
     source = "fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i]; } }\n"
-    read = kernels(source)
-    assert read["status"] == "read" and read["arch"] == "sm_120"
+    read = kernels(source, parse("sm_120"))
+    assert read["status"] == "read" and read["arch"] == "sm_120" and read["device_target"]["name"] == "sm_120"
     kernel = read["kernels"]["scale"][0]
     assert 0 < kernel["registers"] <= 64 and kernel["spill_bytes"] == 0
     assert kernel["memory"].get("global_load", 0) >= 1 and kernel["memory"].get("global_store", 0) >= 1

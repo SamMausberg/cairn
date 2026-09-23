@@ -13,6 +13,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .target import DeviceTarget, resolve, supported
+
 FAMILIES = {"x86-64": ("x86-64", "x86-64-v2", "x86-64-v3", "x86-64-v4"), "armv8-a": ("armv8-a", "armv8.2-a", "armv9-a")}
 MACHINES = {"x86_64": "x86-64", "AMD64": "x86-64", "aarch64": "armv8-a", "arm64": "armv8-a"}
 ARCHS = {"baseline", *(arch for family in FAMILIES.values() for arch in family)}
@@ -131,23 +133,31 @@ def flags(arch: str | None = None, kind: str = "library", target: str | None = N
 
 
 def command(cxx: str, source: str, artifact: str, arch: str | None = None, kind: str = "library", cuda=False,
-            target: str | None = None):  # fmt: skip
-    """The one native command line. Device programs go through nvcc with the same host contract."""
+            target: str | None = None, device: DeviceTarget | None = None):  # fmt: skip
+    """The one native command line. Device programs go through nvcc with the same host contract, for `device`, the
+    device target the caller resolved (projects/target.py), or the one detected here when it gives none. `arch`
+    is the CPU's, for the host pass; the two are never mixed."""
     if profile(target):
         start = TARGET_ROOT / str(target)
         script, boot = start / "link.ld", start / "start.S"
         return [find(cxx), *flags(arch, kind, target), f"-Wl,-T,{script}", source, str(boot), "-o", artifact]
     if not cuda:
         return [find(cxx), *flags(arch, kind), source, "-o", artifact]
+    chosen = supported(device or resolve())
+    return [*device_prefix(cxx, arch, kind, chosen), source, "-o", artifact]
+
+
+def device_prefix(cxx: str, arch: str | None, kind: str, device: DeviceTarget) -> list[str]:
+    """nvcc and every flag of a device program's build, for `device` and nothing else, up to the source."""
     host = [f for f in flags(arch, kind) if not f.startswith(("-std", "-O", "-shared"))]
     # CCCL 3 (CUDA 13) writes unguarded throw and catch inside headers CUB's dispatch requires, so a
     # device program's host pass must parse exceptions. Nothing in the runtime throws; guards still abort.
     host = [("-fexceptions" if f == "-fno-exceptions" else f) for f in host]
     # --fmad=false is the device half of -ffp-contract=off; relaxed constexpr lets guards use <limits>.
-    device = ["-std=c++20", "-O3", "--fmad=false", "-arch=native", "--extended-lambda", "--expt-relaxed-constexpr"]
+    nvcc = ["-std=c++20", "-O3", "--fmad=false", *device.flags(), "--extended-lambda", "--expt-relaxed-constexpr"]
     shared = ["-shared"] if kind == "library" else []
-    return [find("nvcc"), *device, "-Werror", "all-warnings", "-ccbin", find(cxx), "-x", "cu", *shared,
-            "-Xcompiler", ",".join(host), source, "-o", artifact]  # fmt: skip
+    return [find("nvcc"), *nvcc, "-Werror", "all-warnings", "-ccbin", find(cxx), "-x", "cu", *shared,
+            "-Xcompiler", ",".join(host)]  # fmt: skip
 
 
 def unit_commands(cxx: str, arch: str | None, kind: str) -> tuple[list[str], list[str]]:

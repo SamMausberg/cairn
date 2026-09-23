@@ -5,6 +5,8 @@ code unless `CAIRN_GPU_TESTS=1`, which only `make gpu`, `make tune-device` and `
 run holds the machine-wide device lock (`/tmp/cairn-gpu.lock`, the one `tools/support.py` holds). `program` writes the
 timed program without building or running it, which is what the suite compiles to check it. Device views are filled on
 the host and copied across once before timing; each timed call is the function's own launch and the wait after it.
+Every timing is built for one device target (projects/target.py) and carries its record, and a measured profile
+names the target it was measured for.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import compile_source, write_program
+from ..projects.target import DeviceTarget, resolve
 from ..projects.toolchain import command
 from .measure import driver, outcome, timed_function
 
@@ -60,24 +63,27 @@ def program(source: str, symbol: str, sizes: Mapping[str, float], fills: dict[st
 
 
 def time_device(source: str, symbol: str, sizes: Mapping[str, float], *, fills: dict[str, str] | None = None,
-                cxx: str = "g++", block_ns: float = 2e6, blocks: int = 9, timeout: int = 300) -> dict[str, Any]:  # fmt: skip
-    """The median time of one call of `symbol` at `sizes` on the device, only where `allowed()` says it may run."""
+                cxx: str = "g++", block_ns: float = 2e6, blocks: int = 9, timeout: int = 300,
+                target: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
+    """The median time of one call of `symbol` at `sizes` on the device, only where `allowed()` says it may run,
+    built for `target`, or the target resolved here, whose record the result carries."""
     global ran
     if reason := allowed():
         raise ValueError(reason)
     if ran >= BUDGET:
         raise ValueError(f"This process has made its {BUDGET} device runs; start another tuning round later.")
     text = program(source, symbol, sizes, fills, block_ns, blocks)
+    chosen = target or resolve()
     with tempfile.TemporaryDirectory(prefix="cairn-device-time-") as scratch:
         directory = Path(scratch)
         timed, exe = write_program(directory, "timed.cu", text), str(directory / "timed")
-        subprocess.run(command(cxx, str(timed), exe, kind="exe", cuda=True), check=True,
+        subprocess.run(command(cxx, str(timed), exe, kind="exe", cuda=True, device=chosen), check=True,
                        capture_output=True, text=True, timeout=600)  # fmt: skip
         with locked():
             ran += 1
             done = subprocess.run([exe], capture_output=True, text=True, timeout=timeout)
             clock.sleep(COOLDOWN_S)
-    return outcome(done)
+    return {**outcome(done), "device_target": chosen.record()}
 
 
 # What a device profile measures: a copy for the memory's sustained bandwidth, one element for a launch and the wait
@@ -89,19 +95,23 @@ fn cross(n:usize, dev:rw<f32>[n]@device, host:ro<f32>[n]@pinned) { transfer(dev,
 """
 
 
-def calibrate_device(base: str = "rtx-5070-ti") -> dict[str, Any]:
-    """The packaged specification with its assumed figures replaced by measured ones, where `allowed()` lets it run."""
+def calibrate_device(base: str = "rtx-5070-ti", target: DeviceTarget | None = None) -> dict[str, Any]:
+    """The packaged specification with its assumed figures replaced by measured ones, where `allowed()` lets it run,
+    for `target`, which must run on the device the specification describes."""
     from .profile import PROFILES
 
     profile = json.loads((PROFILES / f"{base}.json").read_text(encoding="utf-8"))
+    chosen = target or resolve()
+    chosen.fits(profile["device"], f"The {base} specification")
     big, small = 1 << 26, 1 << 16
-    copied = time_device(KERNELS, "stream", {"n": big})
-    launched = time_device(KERNELS, "touch", {"n": 1})
-    near, far = (time_device(KERNELS, "cross", {"n": n}) for n in (small, big))
+    copied = time_device(KERNELS, "stream", {"n": big}, target=chosen)
+    launched = time_device(KERNELS, "touch", {"n": 1}, target=chosen)
+    near, far = (time_device(KERNELS, "cross", {"n": n}, target=chosen) for n in (small, big))
     if any(r["status"] != "measured" for r in (copied, launched, near, far)):
         raise RuntimeError(f"A device calibration run failed: {[copied, launched, near, far]}")
     per_byte = (far["min_ns"] - near["min_ns"]) / ((big - small) * 4)
     card = profile["device"]
+    card["target"] = chosen.name  # what the measured figures are for; a run for another target refuses them
     card |= {"dram_gbps": round(big * 8 / copied["min_ns"], 1), "memory_efficiency": 1.0,
              "launch_ns": round(launched["min_ns"], 1), "link_gbps": round(1 / per_byte, 2),
              "link_ns": round(max(near["min_ns"] - small * 4 * per_byte, 0.0), 1)}  # fmt: skip

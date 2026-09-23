@@ -21,6 +21,7 @@ from .compiler.cairnc import Diagnostic, certify_templates, compile_source
 from .compiler.modules import library_source
 from .editor import terminal
 from .projects.project import ProjectError, contained_file, load_project, read_text
+from .projects.target import resolve as resolve_device
 from .projects.toolchain import ARCHS, TARGETS, emulator, host_family, resolve_arch
 
 FORMAT: str | None = None  # --format as given; None lets the stream decide (see editor/terminal.py)
@@ -156,6 +157,10 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"build", "run"}, "--out", {"type": Path}),
     ({"build", "run", "explain", "predict", "tune"}, "--arch", {"choices": sorted(ARCHS)}),
     ({"build", "run"}, "--target", {"choices": sorted(TARGETS), "help": "Freestanding profile; default hosted."}),
+    ({"build", "run", "predict", "tune"}, "--device-target", {"metavar": "SM", "help": "The GPU's compilation "
+                                                               "target, as sm_120, sm_120f or sm_120a; default: "
+                                                               "[build] device_target, else the GPU nvidia-smi "
+                                                               "reports."}),
     ({"build", "run", "test", "shot"}, "--timeout", {"type": int, "default": 60}),
     ({"build", "run"}, "--debug", {"action": "store_true", "help": "Debug symbols that point at the CAIRN source."}),
     ({"build", "run"}, "--incremental", {"action": "store_true", "help": "One object per module, reused by content "
@@ -509,11 +514,12 @@ def main(argv: list[str] | None = None) -> int:
             chosen = set(a.symbol) if a.symbol else None
             sizes, supplied = priced.parse_sizes(a.at), Profile.load(a.profile) if a.profile else None
             arch = resolve_arch(a.arch or project.arch)
+            device = resolve_device(a.device_target, project.device_target, required=False)
             if a.against:
                 before = load_project(a.against).source
-                answer = priced.delta(before, project.source, sizes, chosen, supplied, arch)
+                answer = priced.delta(before, project.source, sizes, chosen, supplied, arch, device)
             else:
-                answer = priced.report(project.source, sizes, chosen, supplied, arch)
+                answer = priced.report(project.source, sizes, chosen, supplied, arch, device)
             print(priced.lines(answer)) if terminal.human(FORMAT) else report(answer)
             return 0
         if a.command == "tune":
@@ -524,9 +530,9 @@ def main(argv: list[str] | None = None) -> int:
 
             supplied = Profile.load(a.profile) if a.profile else None
             arch = resolve_arch(a.arch or project.arch)
-            answer = tune(
-                project.source, a.symbol[0], priced.parse_sizes(a.at), supplied, arch, a.measure, a.cxx, a.device
-            )
+            device = resolve_device(a.device_target, project.device_target, required=False)
+            answer = tune(project.source, a.symbol[0], priced.parse_sizes(a.at), supplied, arch, a.measure, a.cxx,
+                          a.device, device)  # fmt: skip
             if a.write:  # Only the plan line changes, in the file that declares the function, and only if it checks.
                 answer["written"] = write_plan(a.path, a.symbol[0], answer["chosen"])
             report(answer)
@@ -558,7 +564,8 @@ def main(argv: list[str] | None = None) -> int:
 
         result = build(project, output=a.out, cxx=a.cxx, arch=a.arch, kind="exe" if a.command == "run" else a.kind,
                        timeout=a.timeout, target=a.target, debug=a.debug, incremental=a.incremental,
-                       keep_guards=a.keep_guards, header=getattr(a, "header", False))  # fmt: skip
+                       keep_guards=a.keep_guards, header=getattr(a, "header", False),
+                       device_target=a.device_target)  # fmt: skip
         if a.command == "build" or result["status"] != "native-built":
             report(result, brief=True)
             return 0 if result["status"] == "native-built" else 2

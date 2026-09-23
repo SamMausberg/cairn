@@ -22,6 +22,9 @@ RUNTIME = RUNTIME_FILES["cairn_runtime.hpp"]
 CHECKED = {"+": "add", "-": "sub", "*": "mul", "/": "divide", "%": "remainder"}
 IDENTITY = {"*": "1", "mul_wrap": "1", "&": "max()", "min": "max()", "max": "lowest()"}  # Of a reduction; else 0.
 PLACED = {"device": "gpu::Buffer", "pinned": "gpu::Pinned", "unified": "gpu::Unified"}  # A buffer's owner by place.
+# What a runtime header asks of the device target (projects/target.py FEATURES), so a build refuses a target that
+# lacks it before nvcc runs; a lowering that needs more calls Emitter.feature.
+HEADER_FEATURES = {"cairn_gpu.hpp": ("device_lanes",), "cairn_tensor.hpp": ("wmma",)}
 
 
 def mangle(name: str) -> str:
@@ -78,6 +81,7 @@ class Emitter:
         self.scalar: dict[str, str] = {}  # a fused chain's scratch array -> the lane-local value that holds it
         self.staged: dict[str, tuple[str, int]] = {}  # a staged array -> its block's tile, and the tile's reach
         self.fused: dict[str, list[dict[str, Any]]] = {}  # function -> the chains it runs as one region
+        self.features: dict[str, None] = {}  # what the device target must provide, in first-use order
 
     def put(self, s: str = ""):
         self.lines.append("  " * self.ind + s)
@@ -107,6 +111,11 @@ class Emitter:
     def need(self, header: str):
         if header not in self.headers:
             self.headers.append(header)
+            for name in HEADER_FEATURES.get(header, ()):
+                self.feature(name)
+
+    def feature(self, name: str):
+        self.features.setdefault(name, None)
 
     def site(self, line: int) -> str:
         """Where the function being lowered wrote `line`, as a message the program prints says it: `at file:line`

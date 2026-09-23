@@ -17,6 +17,7 @@ from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
 from cairn.compiler.codegen import mangle
 from cairn.projects.build import build as build_project
 from cairn.projects.project import load_project
+from cairn.projects.target import parse
 from cairn.projects.toolchain import command
 from support import device_lock, device_reason
 
@@ -127,8 +128,7 @@ def device_build(tmp_path: Path, cpp: str, entry: str | None = None, ptx=False, 
         pytest.skip("needs nvcc and g++")
     source, artifact = emit(tmp_path, cpp, entry)
     target = artifact + (".ptx" if ptx else ".o")
-    line = [part for part in command("g++", source, target, cuda=True) if part != "-shared"]
-    line[line.index("-arch=native")] = "-arch=sm_120"
+    line = [part for part in command("g++", source, target, cuda=True, device=parse("sm_120")) if part != "-shared"]
     line.insert(line.index("-o"), "-ptx" if ptx else "-c")
     done = subprocess.run(line, capture_output=True, text=True, timeout=timeout)
     assert done.returncode == 0, done.stderr[-3000:]

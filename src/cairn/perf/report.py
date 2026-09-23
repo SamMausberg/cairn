@@ -7,8 +7,9 @@ from __future__ import annotations
 from typing import Any
 
 from ..compiler.cairnc import compile_program
+from ..projects.target import DeviceTarget
 from . import model
-from .profile import Profile, default
+from .profile import Profile, default, packaged
 from .work import Cost, Work, count
 
 LADDER = (1e3, 1e5, 1e7)  # the sizes a one-extent function is priced at when none are given
@@ -60,12 +61,30 @@ def costs(source: str, symbols: set[str] | None) -> dict[str, Cost]:
     return found
 
 
+def targeted(found: dict[str, Cost], profile: Profile, device: DeviceTarget | None) -> dict[str, Any]:
+    """The device target a prediction with device work is for, held to the device card that prices that work: the
+    profile's own, or the packaged one the model falls back to. Without a target it names the card alone."""
+    if not any(r.kind in {"device", "tensor"} for c in found.values() for r in c.regions) and not any(
+        c.transfers for c in found.values()
+    ):
+        return {}
+    card = (profile if profile.device else packaged("rtx-5070-ti")).source["device"]
+    if device is None:
+        return {"device_target": None, "device_card": {"name": card["name"], "compute_capability":
+                                                       card.get("compute_capability")}}  # fmt: skip
+    device.fits(card, f"The device card {card['name']!r}")
+    return {"device_target": device.record()}
+
+
 def report(source: str, sizes: list[dict[str, float]] | None = None, symbols: set[str] | None = None,
-           profile: Profile | None = None, arch: str | None = None) -> dict[str, Any]:  # fmt: skip
-    """Every function of `source`, or `symbols` alone, priced at each of `sizes`."""
+           profile: Profile | None = None, arch: str | None = None,
+           device: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
+    """Every function of `source`, or `symbols` alone, priced at each of `sizes`, device work for `device`."""
     chosen = profile or default()
     out: dict[str, Any] = {}
-    for name, c in costs(source, symbols).items():
+    found = costs(source, symbols)
+    target = targeted(found, chosen, device)
+    for name, c in found.items():
         entry = {"line": c.line, **described(c), "formula": model.formula(c, chosen, arch)}
         entry["predictions"] = [{"sizes": s, **model.predict(c, chosen, s, arch)} for s in ladder(c, sizes or [])]
         if c.unknown:
@@ -76,15 +95,18 @@ def report(source: str, sizes: list[dict[str, float]] | None = None, symbols: se
         "predicted": "Priced from the checked program and a machine profile; nothing was built or run.",
         "profile": chosen.describe(),
         "arch": arch or model.measured(chosen),
+        **target,
         "functions": out,
     }
 
 
 def delta(before: str, after: str, sizes: list[dict[str, float]] | None = None, symbols: set[str] | None = None,
-          profile: Profile | None = None, arch: str | None = None) -> dict[str, Any]:  # fmt: skip
+          profile: Profile | None = None, arch: str | None = None,
+          device: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
     """What changing `before` into `after` is predicted to do to every function both have, at each size."""
     chosen = profile or default()
     old, new = costs(before, symbols), costs(after, symbols)
+    target = targeted({**{f"old:{k}": v for k, v in old.items()}, **new}, chosen, device)
     out: dict[str, Any] = {}
     for name in sorted(set(old) & set(new)):
         rows = []
@@ -96,7 +118,7 @@ def delta(before: str, after: str, sizes: list[dict[str, float]] | None = None, 
                                                                                  key=["low", "medium", "high"].index)})  # fmt: skip
         out[name] = rows
     return {"schema": "cairn.predict.delta/1", "predicted": "Neither version was built or run.",
-            "profile": chosen.describe(), "arch": arch or model.measured(chosen), "functions": out,
+            "profile": chosen.describe(), "arch": arch or model.measured(chosen), **target, "functions": out,
             "only_before": sorted(set(old) - set(new)), "only_after": sorted(set(new) - set(old))}  # fmt: skip
 
 

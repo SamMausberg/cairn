@@ -109,6 +109,8 @@ class Device:
     threads_per_sm: int = 1536
     shared_per_sm: int = 102400
     warp: int = 32
+    compute_capability: str = ""  # of the device described: which device targets' code runs on it
+    target: str = ""  # a measured card: the device target its figures were measured for (projects/target.py)
 
     def occupancy(self, registers: int, block: int = 256) -> float:
         """The resident share of an SM's threads for blocks of `block` threads using `registers` each."""
