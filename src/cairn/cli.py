@@ -81,8 +81,8 @@ arch = "baseline"
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
 
 test average {
-  assert(average(10, 20) == 15);
-  assert(average(1, 2) == 1, "rounds down");
+  assert_eq(average(10, 20), 15);
+  assert_eq(average(1, 2), 1, "rounds down");
 }
 """)
     (destination / "src/main.cairn").write_text("""// Prints the average it checks, and exits 0 only when it is right.

@@ -38,8 +38,8 @@ The sources are compiled together, in manifest order, as one program:
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
 
 test average {
-  assert(average(10, 20) == 15);
-  assert(average(1, 2) == 1, "rounds down");
+  assert_eq(average(10, 20), 15);
+  assert_eq(average(1, 2), 1, "rounds down");
 }
 
 // Prints the average it checks, and exits 0 only when it is right.
@@ -51,7 +51,7 @@ fn main() -> i32 {
 }
 ```
 
-`u64` is a fixed-width integer, `+` traps on overflow, `&` and `^` are unsigned, `shr` takes a count below the width, and `= expression;` is a one-return body. `test average { ... }` is a test, which only `cairn test` runs, and `assert` traps when its condition is false. `println` writes its arguments and a newline, a `let` is immutable, and a call whose result is nothing is a statement. `main` returns the process exit status.
+`u64` is a fixed-width integer, `+` traps on overflow, `&` and `^` are unsigned, `shr` takes a count below the width, and `= expression;` is a one-return body. `test average { ... }` is a test, which only `cairn test` runs, and `assert_eq` traps when its two values differ, printing both. `println` writes its arguments and a newline, a `let` is immutable, and a call whose result is nothing is a statement. `main` returns the process exit status.
 
 That project is the default template. Four more are starting points for real programs, and each carries a test block:
 

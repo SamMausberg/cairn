@@ -61,11 +61,11 @@ test letters_and_case {
 test count_words_folds_case_and_counts_each_word_once {
   let mut counts = map.new[Word, u64]();
   let total = count_words(counts, "The cat, the CAT: 2 cats.");
-  assert(total == 6, "six words");
-  assert(counts.count() == 4, "the, cat, 2 and cats");
+  assert_eq(total, 6, "six words");
+  assert_eq(counts.count(), 4, "the, cat, 2 and cats");
   let the = word("the");
   match counts.get(the) {
-    Some(seen) => assert(seen == 2, "the, twice");
+    Some(seen) => assert_eq(seen, 2, "the, twice");
     None => assert(false, "the is counted");
   }
   let more = count_words(counts, "");
