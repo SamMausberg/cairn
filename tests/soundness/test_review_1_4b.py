@@ -10,7 +10,10 @@ import tempfile
 
 import pytest
 
-from cairn.projects.project import ProjectError
+from cairn.cli import main
+from cairn.compiler.cairnc import compile_source
+from cairn.perf.tune import write_plan
+from cairn.projects.project import ProjectError, load_project
 from cairn.projects.revision import read
 from cairn.verify.diff import single
 
@@ -62,3 +65,52 @@ def test_a_reordered_enum_is_not_identical_code_to_a_function_that_names_it():
     assert single(old, new, "f")["class"] == "smt-equivalent"  # the same answer, from code that is not the same
     assert single(old, new, "pick")["class"] == "signature-changed"  # its result's type is defined differently
     assert single(old, old, "f")["class"] == "identical-code"
+
+
+# --- Fixed: cairn tune --write writes one plan, in the file that declares the function, or nothing -----------------
+
+
+def two_modules(root):
+    """Module x declares a sequential f and says so in a comment; module y declares the f with a region."""
+    (root / "src").mkdir(parents=True)
+    (root / "cairn.toml").write_text(
+        '[project]\nname = "tw"\nsources = ["src/x.cairn", "src/y.cairn", "src/main.cairn"]\n'
+    )
+    (root / "src/x.cairn").write_text(
+        "module x;\n// fn f is the sequential one.\npub fn f(n:usize, out:rw<u64>[n]) { for i in 0..n { out[i] = 1; } }\n"
+    )
+    (root / "src/y.cairn").write_text(
+        "module y;\npub fn f(n:usize, out:rw<u64>[n]) { parallel i in n { out[i] = u64(i) * 2; } }\n"
+    )
+    (root / "src/main.cairn").write_text(
+        "import x;\nimport y;\nfn main() -> i32 { let mut b = Buf[u64](4); x.f(b); y.f(b); return 0; }\n"
+    )
+
+
+def test_a_tuned_plan_goes_to_the_module_that_declares_the_function_and_replaces_its_old_one(tmp_path, capsys):
+    """The file was the first whose text matched `fn f`, a comment in another module included, and the plan was
+    written under its qualified name while only the short one was stripped: a second write added a second plan, and
+    the project was refused (E-PLAN)."""
+    two_modules(tmp_path)
+    before = (tmp_path / "src/x.cairn").read_text()
+    for lanes in (2, 4):
+        assert write_plan(tmp_path, "y.f", {"grain": 1, "lanes": lanes}) == "src/y.cairn"
+    written = (tmp_path / "src/y.cairn").read_text()
+    assert (tmp_path / "src/x.cairn").read_text() == before
+    assert written.count("plan") == 1 and "plan f { grain 1; lanes 4; }" in written
+    compile_source(load_project(tmp_path).source)  # still accepted
+    assert main(["tune", str(tmp_path), "--symbol", "y.f", "--at", "n=3000", "--write", "--format", "json"]) == 0
+    assert '"written": "src/y.cairn"' in capsys.readouterr().out
+    compile_source(load_project(tmp_path).source)
+
+
+def test_a_plan_the_project_would_refuse_is_not_written(tmp_path):
+    two_modules(tmp_path)
+    before = (tmp_path / "src/y.cairn").read_text()
+    with pytest.raises(ProjectError, match="E-PLAN"):
+        write_plan(tmp_path, "y.f", {"lanes": 5000})  # past the 1024 a plan may ask for
+    with pytest.raises(ProjectError, match="E-PLAN"):
+        write_plan(tmp_path, "x.f", {"grain": 64})  # x.f has no region to plan
+    with pytest.raises(ProjectError, match="nowhere to go"):
+        write_plan(tmp_path, "std.vec.push", {"grain": 64})
+    assert (tmp_path / "src/y.cairn").read_text() == before

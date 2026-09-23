@@ -52,6 +52,32 @@ def replanned(source: str, name: str, plan: str) -> str:
     return stripped if not plan else stripped.rstrip("\n") + "\n\n" + plan + "\n"
 
 
+def write_plan(manifest: Any, symbol: str, chosen: dict[str, Any]) -> str:
+    """Write `chosen` as `symbol`'s plan into the one file that declares it, and return that file's path.
+
+    The file is where the checked program places the function, never a text match: a comment or another module's
+    function of the same short name would claim it. The plan it has, written by its short or its qualified name, is
+    replaced by one under its short name, and the rewrite is written only when the whole project still checks."""
+    from ..compiler.cairnc import Diagnostic, compile_source
+    from ..projects.project import ProjectError, contained_file, load_project
+
+    project = load_project(manifest)
+    f = next((f for f in compile_program(project.source)[0].functions if f.name == symbol and not f.bindings), None)
+    unit = project.unit_at(f.line) if f else None
+    if unit is None or unit.path in project.vendored_units:
+        raise ProjectError(f"{symbol} is not declared in a file of this project, so its plan has nowhere to go.")
+    path = contained_file(project.root, unit.path, ".cairn")
+    local = symbol.rsplit(".", 1)[-1]
+    after = replanned(replanned(path.read_text(encoding="utf-8"), symbol, ""), local, text(local, written(chosen)))
+    try:
+        compile_source(load_project(manifest, given={path.resolve(): after}).source)
+    except Diagnostic as error:
+        raise ProjectError(f"The plan chosen for {symbol} would leave the project refused ({error.data['code']}: "
+                           f"{error.data['message']}); nothing was written.") from error  # fmt: skip
+    path.write_text(after, encoding="utf-8")
+    return unit.path
+
+
 def space(kinds: set[str], host_lanes: int) -> list[Plan]:
     """Every plan of the items the function's regions take, lane caps no wider than the host."""
     items = [k for k in PLAN_ITEMS if PLAN_ITEMS[k][0] in kinds]
