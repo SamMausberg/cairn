@@ -41,7 +41,7 @@ fn sort_small(k:usize, values:rw<u64>[k], used:usize) {
   }
   let mut cursor:usize = 0;
   for bucket in 0..64 {
-    for repeat in 0..counts[bucket] {
+    for _ in 0..counts[bucket] {
       values[cursor] = u64(bucket);
       cursor += 1;
     }

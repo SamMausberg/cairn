@@ -35,7 +35,7 @@ pub fn main() -> i32 {
   let mut c = schema.Trade_table_new(rows);
   match ingest(rows, c) {
     Ok(count) => { if count != rows { return 1; } }
-    Err(e) => {
+    Err(_) => {
       report.say("analytics: the dataset could not be written or read");
       return 2;
     }

@@ -231,10 +231,10 @@ fn parse(n:usize, bytes:ro<u8>[n]) -> Parsed {
 fn main() -> i32 {
   match parse(len("\x07abcdefg"), "\x07abcdefg") {
     Ok(head) => { if head.kind != 7 || head.size != 3 { return 1; } }
-    Short(got) => return 2;
+    Short(_) => return 2;
   }
   match parse(2, "hi") {
-    Ok(head) => return 3;
+    Ok(_) => return 3;
     Short(got) => { if got != 2 { return 4; } }
   }
   return 0;
@@ -341,8 +341,8 @@ fn body_size(n:usize, bytes:ro<u8>[n]) -> Sized {
 }
 
 fn main() -> i32 {
-  match body_size(7, "\x07abcdef") { Ok(size) => { if size != 2 { return 1; } } Err(e) => return 2; }
-  match body_size(2, "hi") { Ok(size) => return 3; Err(e) => { if e != 1 { return 4; } } }
+  match body_size(7, "\x07abcdef") { Ok(size) => { if size != 2 { return 1; } } Err(_) => return 2; }
+  match body_size(2, "hi") { Ok(_) => return 3; Err(e) => { if e != 1 { return 4; } } }
   return 0;
 }
 ```

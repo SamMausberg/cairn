@@ -65,9 +65,9 @@ fn main() -> i32 {
   stack frames:Frame[2] = zeroed;
   frames[0] = Frame(1, 512);
   frames[1] = Frame(2, 1400);
-  match headroom(2, frames) { Ok(spare) => { if spare != 100 { return 1; } } Err(s) => return 2; }
+  match headroom(2, frames) { Ok(spare) => { if spare != 100 { return 1; } } Err(_) => return 2; }
   frames[1] = Frame(2, 9000);
-  match headroom(2, frames) { Ok(spare) => return 3; Err(s) => { if s != 2 { return 4; } } }
+  match headroom(2, frames) { Ok(_) => return 3; Err(s) => { if s != 2 { return 4; } } }
   return 0;
 }
 ```
@@ -118,14 +118,14 @@ fn main() -> i32 {
   let line = "23,19,x9";
   match field(line, 0) {
     Ok(value) => { if value != 23 { return 1; } }
-    Err(why) => return 2;
+    Err(_) => return 2;
   }
   match field(line, 6) {
-    Ok(value) => return 3;
+    Ok(_) => return 3;
     Err(why) => {
       match why {
         Invalid(at) => { if at != 0 { return 4; } }   // offset of the byte at fault
-        Overflow(at) => return 5;
+        Overflow(_) => return 5;
         Empty => return 6;
       }
     }
@@ -168,13 +168,13 @@ fn main() -> i32 {
   let path = "readings.log\x00";
   match record(path, 14, "23,19\n31,7\n42\n") {
     Ok(wrote) => { if wrote != 14 { return 1; } }
-    Err(why) => return 2;
+    Err(_) => return 2;
   }
   match lines(path) {
     Ok(count) => { if count != 3 { return 3; } }
-    Err(why) => return 4;
+    Err(_) => return 4;
   }
-  match io.remove(PATH, path) { Ok(done) => {} Err(why) => return 5; }
+  match io.remove(PATH, path) { Ok(_) => {} Err(_) => return 5; }
   return 0;
 }
 ```
@@ -229,7 +229,7 @@ fn log_twice(n:usize, path:ro<u8>[n]) -> Result[usize, IoError] {
 fn main() -> i32 {
   match log_twice("/tmp/cairn-fs-example.log") {
     Ok(n) => { if n != 13 { return 1; } }
-    Err(e) => { return 2; }
+    Err(_) => { return 2; }
   }
   return 0;
 }
@@ -263,8 +263,8 @@ fn greet() -> Result[usize, IoError] {
 
 fn main() -> i32 {
   match greet() {
-    Ok(n) => { return 0; }
-    Err(e) => { return 1; }
+    Ok(_) => { return 0; }
+    Err(_) => { return 1; }
   }
 }
 ```
@@ -310,7 +310,7 @@ import std.zlib;
 fn main() -> i32 {
   match zlib.compress("hello hello hello hello", 9) {
     Ok(z) => { if z.len == 0 { return 1; } }
-    Err(e) => return 2;
+    Err(_) => return 2;
   }
   if zlib.crc32(0, "abc") != 891568578 { return 3; }
   return 0;
@@ -330,8 +330,8 @@ fn main() -> i32 {
   let mut img = image.new(64, 32);
   image.shade(img, |x:usize, y:usize| -> u32 { return image.rgba(u8(x * 4), u8(y * 8), 96, 255); });
   match image.save_png(img, "gradient.png") {
-    Ok(bytes) => return 0;
-    Err(e) => return 1;
+    Ok(_) => return 0;
+    Err(_) => return 1;
   }
 }
 ```
@@ -355,8 +355,8 @@ fn main() -> i32 {
   let mut l = draw.layout();
   draw.mark(l, "button", 8, 8, 104, 24);
   match draw.capture(img, l, 0) {
-    Ok(shot) => return 0;
-    Err(e) => return 1;
+    Ok(_) => return 0;
+    Err(_) => return 1;
   }
 }
 ```
@@ -425,7 +425,7 @@ fn main() -> i32 {
   match m.slot(1) { Option.Some(s) => { kept = s; } Option.None => { return 1; } }
   let gone = m.remove(1);
   m.insert(9, 90);                                   // may reuse the slot key 1 had
-  match m.resolve(kept) { Option.Some(at) => { return 2; } Option.None => {} }
+  match m.resolve(kept) { Option.Some(_) => { return 2; } Option.None => {} }
   let found = m.update(9, |v:rw<u64>| { v += 1; });
   match m.get(9) { Option.Some(v) => { if !found || v != 91 { return 3; } } Option.None => { return 4; } }
   return 0;
@@ -564,7 +564,7 @@ fn main() -> i32 {
     Some(dropped) => { if dropped.cost != 3 { return 2; } }
     None => return 3;
   }
-  match arena.find(plan, fetch) { Some(slot) => return 4; None => {} }  // stale
+  match arena.find(plan, fetch) { Some(_) => return 4; None => {} }  // stale
   return 0;
 }
 ```
@@ -622,7 +622,7 @@ fn echo_once(port:u16) -> Result[usize, IoError] {
 fn main() -> i32 {
   match echo_once(39812) {
     Ok(n) => { if n != 5 { return 1; } }
-    Err(why) => return 2;
+    Err(_) => return 2;
   }
   return 0;
 }

@@ -69,7 +69,7 @@ fn run(a:ro<Args>) -> i32 {
     let hi = a.end(2);
     match text.parse_u64(a.text.data[lo..hi]) {
       Ok(asked) => shown = usize(asked);
-      Err(e) => return usage();
+      Err(_) => return usage();
     }
     first = 3;
   }
@@ -107,7 +107,7 @@ fn run(a:ro<Args>) -> i32 {
 fn main() -> i32 {
   match env.args() {
     Ok(a) => return run(a);
-    Err(e) => {
+    Err(_) => {
       io.eprintln("wordfreq: cannot read the arguments");
       return 1;
     }

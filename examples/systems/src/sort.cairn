@@ -7,7 +7,7 @@ fn sort_bytes(n:usize, out:rw<u8>[n], input:ro<u8>[n]) {
   }
   let mut cursor:usize = 0;
   for bucket in 0..256 {
-    for repeat in 0..counts[bucket] {
+    for _ in 0..counts[bucket] {
       out[cursor] = u8(bucket);
       cursor += 1;
     }

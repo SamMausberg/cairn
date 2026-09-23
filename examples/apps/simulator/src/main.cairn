@@ -12,7 +12,7 @@ fn main() -> i32 {
   buffer loop_b:f64[m] = zeroed;
   seed(loop_a, n);
   let t0 = io.monotonic_ns();
-  for r in 0..rounds {
+  for _ in 0..rounds {
     step_loop(loop_b, loop_a, n);
     step_loop(loop_a, loop_b, n);
   }
@@ -21,7 +21,7 @@ fn main() -> i32 {
   buffer par_a:f64[m] = zeroed;
   buffer par_b:f64[m] = zeroed;
   seed(par_a, n);
-  for r in 0..rounds {
+  for _ in 0..rounds {
     step_threads(par_b, par_a, n);
     step_threads(par_a, par_b, n);
   }
@@ -34,7 +34,7 @@ fn main() -> i32 {
   transfer(dev_a, gpu_a);
   // The first device allocation also creates the CUDA context, so setup is reported apart.
   let t3 = io.monotonic_ns();
-  for r in 0..rounds {
+  for _ in 0..rounds {
     step_device(dev_b, dev_a, n);
     step_device(dev_a, dev_b, n);
   }

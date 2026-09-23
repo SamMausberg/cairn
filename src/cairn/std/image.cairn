@@ -169,7 +169,7 @@ fn stored(out:rw<Vec[u8]>, n:usize, raw:ro<u8>[n]) {
 fn crc_table(table:rw<u32>[256]) {
   for k in 0..256 {
     let mut c = u32(k);
-    for bit in 0..8 {
+    for _ in 0..8 {
       if (c & 1) != 0 { c = 0xedb88320 ^ shr(c, 1); } else { c = shr(c, 1); }
     }
     table[k] = c;

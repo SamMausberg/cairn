@@ -134,7 +134,7 @@ pub fn update[K:Hash + Eq + affine, V:affine](
 }
 
 pub fn contains[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> bool {
-  match find(m, key) { Some(slot) => return true; None => return false; }
+  match find(m, key) { Some(_) => return true; None => return false; }
 }
 
 pub fn remove[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:ro<K>) -> Option[V] {

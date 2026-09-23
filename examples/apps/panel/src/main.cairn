@@ -25,7 +25,7 @@ fn main() -> i32 {
     let marks = wait(job);
     match draw.capture(canvas, marks, k) {
       Ok(taken) => { if taken { shots += 1; } }
-      Err(e) => return 1;
+      Err(_) => return 1;
     }
   }
   let mut line = vec.new[u8]();

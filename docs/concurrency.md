@@ -120,7 +120,7 @@ fn main() -> i32 {
   let readers = Group[u64](4);
   for k in 0..4 { spawn work(samples, k * 200, 200) into readers; }  // read-only: shared
   let mut sum:u64 = 0;
-  for k in 0..4 { sum = add_wrap(sum, collect(readers)); }  // in the order they finish
+  for _ in 0..4 { sum = add_wrap(sum, collect(readers)); }  // in the order they finish
   wait(readers);
   if sum != total(800, samples[0..800]) { return 1; }
   return 0;
@@ -180,7 +180,7 @@ fn main() -> i32 {
   let read = q.next(tag, result);                 // then the read, holding the five bytes
   match io.outcome(result) {
     Ok(n) => { if tag != 1 || n != 5 || read[0] != 104 { return 2; } }
-    Err(e) => return 3;
+    Err(_) => return 3;
   }
   return 0;
 }
@@ -224,8 +224,8 @@ fn main() -> i32 {
   let mut q = IoRing(4);
   defer wait(q);
   match io.outcome(q.status()) {
-    Ok(up) => {}
-    Err(e) => return 1;                // no io_uring here: fall back or report it
+    Ok(_) => {}
+    Err(_) => return 1;                // no io_uring here: fall back or report it
   }
   let refused = submit_all(q, 6);
   let mut tag:u64 = 0;
@@ -351,7 +351,7 @@ A plan says how a function's host regions are split across the lane pool, apart 
 ```cairn
 fn mix(v:u64) -> u64 {
   let mut w = v;
-  for k in 0..20000 { w = mul_wrap(w ^ shr(w, 29), 0xbf58476d1ce4e5b9); }
+  for _ in 0..20000 { w = mul_wrap(w ^ shr(w, 29), 0xbf58476d1ce4e5b9); }
   return w;
 }
 fn spread(n:usize, out:rw<u64>[n]) { parallel i in n { out[i] = mix(u64(i)); } }

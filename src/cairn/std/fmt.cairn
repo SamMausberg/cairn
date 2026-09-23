@@ -12,7 +12,7 @@ pub fn uint[T:unsigned](out:rw<Vec[u8]>, value:T) { text.push_u64(out, u64(value
 pub fn int[T:signed](out:rw<Vec[u8]>, value:T) { text.push_i64(out, i64(value)); }
 
 // `fill` repeated until `count` bytes are appended.
-fn repeat(out:rw<Vec[u8]>, count:usize, fill:u8) { for i in 0..count { vec.push(out, fill); } }
+fn repeat(out:rw<Vec[u8]>, count:usize, fill:u8) { for _ in 0..count { vec.push(out, fill); } }
 
 // The digits of `value`, right-aligned in at least `width` bytes by `fill` in front: ' ' or '0'.
 pub fn padded[T:unsigned](out:rw<Vec[u8]>, value:T, width:usize, fill:u8) {
@@ -147,7 +147,7 @@ pub fn fixed(out:rw<Vec[u8]>, value:f64, places:usize) {
   stack x:u64[LIMBS] = zeroed;
   x[0] = m & LOW;
   x[1] = shr(m, 32);
-  for p in 0..places { times(x, 10); }
+  for _ in 0..places { times(x, 10); }
   if exponent > 1075 { raise(x, exponent - 1075); } else { lower(x, scale); }
   stack digits:u8[400] = zeroed;
   let mut used:usize = 0;

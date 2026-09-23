@@ -4,8 +4,8 @@ fn main() -> i32 {
   text[1] = 50;
   match decimal(text) {
     Value(value) => { if value != 42 { return 1; } }
-    Invalid(offset) => return 2;
-    Overflow(offset) => return 3;
+    Invalid(_) => return 2;
+    Overflow(_) => return 3;
     Empty => return 4;
   }
   buffer data:u8[4] = zeroed;

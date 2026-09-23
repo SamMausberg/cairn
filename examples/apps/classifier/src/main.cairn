@@ -64,7 +64,7 @@ fn accuracy(net:ro<Net>, n:usize, m:usize, xs:ro<f64>[m], ys:ro<f64>[n]) -> f64 
 // Plain gradient descent on the mean log-loss; each step starts the adjoints at zero.
 fn train(net:rw<Net>, xs:ro<f64>[PAIRS], ys:ro<f64>[TRAIN], steps:usize) -> f64 {
   let mut last:f64 = 0.0;
-  for step in 0..steps {
+  for _ in 0..steps {
     let mut dw = Array[f64, 16]();
     let mut dc = Array[f64, 8]();
     let mut dv = Array[f64, 8]();
@@ -146,10 +146,10 @@ fn steps() -> usize {
       let hi = a.end(1);
       match text.parse_u64(a.text.data[lo..hi]) {
         Ok(n) => return usize(n);
-        Err(e) => return STEPS;
+        Err(_) => return STEPS;
       }
     }
-    Err(e) => return STEPS;
+    Err(_) => return STEPS;
   }
 }
 

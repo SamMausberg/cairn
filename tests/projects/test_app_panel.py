@@ -140,7 +140,7 @@ def test_touching_the_canvas_while_a_frame_draws_is_refused(tmp_path):
 
 
 def test_a_frame_that_is_started_must_be_waited_for(tmp_path):
-    started = "    let marks = wait(job);\n    match draw.capture(canvas, marks, k) {\n      Ok(taken) => { if taken { shots += 1; } }\n      Err(e) => return 1;\n    }\n"
+    started = "    let marks = wait(job);\n    match draw.capture(canvas, marks, k) {\n      Ok(taken) => { if taken { shots += 1; } }\n      Err(_) => return 1;\n    }\n"
     assert refused(tmp_path, "main.cairn", started, "") == "E-LINEAR-LEAK"
 
 

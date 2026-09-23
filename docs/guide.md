@@ -245,10 +245,10 @@ fn manhattan(x:i64, y:i64) -> Checked { let p = try parse(x, y); return Ok(p.x +
 fn main() -> i32 {
   match manhattan(3, 4) {
     Ok(d) => { if d != 7 { return 1; } }
-    Err(code) => return 2;
+    Err(_) => return 2;
   }
   match manhattan(-1, 4) {
-    Ok(d) => return 3;
+    Ok(_) => return 3;
     Err(code) => { if code != 7 { return 4; } }
   }
   return 0;

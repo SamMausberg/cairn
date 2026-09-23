@@ -98,8 +98,8 @@ fn admit(q:rw<IoRing>, clients:rw<Buf[Client]>, fd:i32) {
     }
   }
   match say(fd, "-busy") {
-    Ok(sent) => {}
-    Err(e) => {} // it is being turned away either way
+    Ok(_) => {}
+    Err(_) => {} // it is being turned away either way
   }
   unsafe { sys.close(fd); }
 }
@@ -141,7 +141,7 @@ fn run() -> Result[usize, IoError] {
   let mut q = IoRing(CLIENTS + 1);
   defer wait(q); // after the cancels below, this collects what they stopped
   match io.outcome(q.status()) {
-    Ok(up) => {}
+    Ok(_) => {}
     Err(e) => { // a seccomp filter, a sysctl or no descriptor left: say so rather than serve nobody
       io.print("service: no io_uring here, errno ");
       io.print_u64(u64(e.code));

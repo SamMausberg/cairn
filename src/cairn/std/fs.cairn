@@ -72,7 +72,7 @@ pub fn rename(n:usize, from:ro<u8>[n], k:usize, to:ro<u8>[k]) -> Result[usize, I
 pub fn exists(n:usize, path:ro<u8>[n]) -> bool {
   stack c:u8[LONGEST] = zeroed;
   match terminated(path, c) {
-    Result.Ok(m) => { unsafe { return sys.access(c[0..1], 0) == 0; } }
-    Result.Err(e) => { return false; }
+    Result.Ok(_) => { unsafe { return sys.access(c[0..1], 0) == 0; } }
+    Result.Err(_) => { return false; }
   }
 }

@@ -43,7 +43,7 @@ fn find(t:ro<Table>, k:usize, key:ro<u8>[k]) -> Option[usize] {
 
 fn erase(t:rw<Table>, k:usize, key:ro<u8>[k]) -> bool {
   match find(t, key) {
-    Some(slot) => {
+    Some(_) => {
       let id = text.hash_bytes(key);
       let gone = t.index.remove(id);
       return true;
