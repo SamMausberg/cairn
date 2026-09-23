@@ -11,10 +11,11 @@ from test_predict import MACHINE
 from cairn.agent.history import History
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_program
+from cairn.perf.plan_source import written
 from cairn.perf.profile import packaged
 from cairn.perf.regions import identified
 from cairn.perf.resources import Inspector
-from cairn.perf.search import Budget, space
+from cairn.perf.search import Budget, Candidate, shaped, space
 from cairn.perf.tune import tune
 from cairn.projects.target import parse
 from emitted import code_of
@@ -80,6 +81,17 @@ def test_a_spent_clock_leaves_the_rest_unchecked_and_says_so(monkeypatch):
     assert result["budget"]["undone"] == {"not checked: out of time": result["space"]["configurations"] - 5}
     with pytest.raises(ValueError):
         Budget(compiles=-1)
+
+
+def test_among_plans_priced_alike_a_new_kernel_is_compiled_before_a_launch_variant():
+    def made(plan, ns):
+        return Candidate(written(plan), predicted_ns=ns)
+
+    ranked = [made({"block": 64}, 10), made({"block": 128}, 10), made({"unroll": 4}, 10),
+              made({"block": 64, "unroll": 4}, 10), made({"vector": 2}, 20), made({"block": 64}, 30)]  # fmt: skip
+    order = [dict(c.plan) for c in shaped(ranked)]
+    assert order == [{"block": 64}, {"unroll": 4}, {"block": 128}, {"block": 64, "unroll": 4}, {"vector": 2},
+                     {"block": 64}]  # fmt: skip
 
 
 def test_registers_and_shared_memory_bound_how_many_blocks_stay_resident():

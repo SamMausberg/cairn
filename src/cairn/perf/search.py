@@ -5,10 +5,12 @@
    does not decide which combinations are legal: each complete candidate is written into the source and checked, and
    a refused one is kept with the checker's code and message.
 2. Each legal candidate is counted from its own checked program and priced by the model.
-3. In predicted order, each device candidate is compiled for the target and read by ptxas and cuobjdump
-   (`perf/resources.py`) until the compile budget is spent. An inspection is kept by the key of what it compiled,
-   so a candidate that emits a program already compiled, in this search or an earlier one with the same history,
-   costs no compile. Registers and shared memory then enter its price through occupancy.
+3. In predicted order, ties broken toward kernel items no earlier compile covered, each device candidate is compiled
+   for the target and read by ptxas and cuobjdump (`perf/resources.py`) until the compile budget is spent. For
+   `blur` in evidence/v0_9/search, 32 compiles in plain predicted order read 8 distinct SASS: the model priced most
+   of its plans alike, and `per_lane` left the code as it was. An inspection is kept by the key of what
+   it compiled, so a candidate that emits a program already compiled, in this search or an earlier one with the same
+   history, costs no compile. Registers and shared memory then enter its price through occupancy.
 
 A budget bounds the whole search: `compiles` device compiles started, `seconds` of wall time checked between steps,
 and `runs` timed runs (`perf/tune.py` times; device plans only under the owner's make target). What a spent budget
@@ -159,11 +161,32 @@ def refusals(candidates: list[Candidate]) -> list[dict[str, Any]]:
             for (code, message), plans in sorted(grouped.items(), key=lambda kv: -len(kv[1]))]  # fmt: skip
 
 
+LAUNCH = {"grain", "lanes", "block", "per_lane"}  # items that say how a region is claimed or launched
+
+
+def shaped(ranked: list[Candidate]) -> list[Candidate]:
+    """`ranked` with each run of equal predicted times reordered: a candidate whose items apart from `LAUNCH` no
+    earlier candidate had comes before one whose items some earlier candidate had. Unequal times keep their order."""
+    out: list[Candidate] = []
+    seen: set[Plan] = set()
+    for _, tier in itertools.groupby(ranked, key=lambda c: model.significant(c.predicted_ns)):
+        fresh: list[Candidate] = []
+        again: list[Candidate] = []
+        for c in tier:
+            shape = tuple((k, v) for k, v in c.plan if k not in LAUNCH)
+            (again if shape in seen else fresh).append(c)
+            seen.add(shape)
+        out += fresh + again
+    return out
+
+
 def inspected(candidates: list[Candidate], name: str, inspector: Any, profile: Profile, sizes: list[dict[str, float]],
               arch: str | None, spent: Spent) -> None:  # fmt: skip
     """Compile the legal device candidates in predicted order for resource inspection, within the budget, and price
-    each inspected one again with what it uses."""
-    for c in sorted((c for c in candidates if not c.refused), key=lambda c: c.predicted_ns):
+    each inspected one again with what it uses. Among candidates the model prices alike, those whose kernel items
+    (unroll, vector, stage, fuse) the budget has not yet reached come first, so a small budget reads more distinct
+    kernels before it reads the launch variants of one; every candidate is still compiled on its own."""
+    for c in shaped(sorted((c for c in candidates if not c.refused), key=lambda c: c.predicted_ns)):
         if spent.out_of_time():
             spent.skip("not inspected: out of time")
             continue
