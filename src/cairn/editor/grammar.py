@@ -91,8 +91,18 @@ def alternation(words) -> str:
     return "|".join(sorted(words, key=lambda w: (-len(w), w)))
 
 
+def match(scope: str, pattern: str) -> dict:
+    return {"name": scope, "match": pattern}
+
+
 def keyword(words, scope: str) -> dict:
-    return {"name": scope, "match": rf"\b(?:{alternation(words)})\b"}
+    return match(scope, rf"\b(?:{alternation(words)})\b")
+
+
+def region(begin: str, opened: tuple[str, str], end: str, closed: str, patterns: list, **named: str) -> dict:
+    """A begin/end pair whose delimiters are captured: the begin's two groups, the whole end."""
+    return {**named, "begin": begin, "beginCaptures": {"1": {"name": opened[0]}, "2": {"name": opened[1]}},
+            "end": end, "endCaptures": {"0": {"name": closed}}, "patterns": patterns}  # fmt: skip
 
 
 def captured(match: str, *scopes: str) -> dict:
@@ -113,9 +123,7 @@ def textmate() -> dict:
                     "name": "comment.line.double-slash.cairn",
                     "begin": "//",
                     "end": "$",
-                    "patterns": [
-                        {"name": "constant.other.diagnostic-code.cairn", "match": r"\bE-[A-Z0-9]+(?:-[A-Z0-9]+)*\b"}
-                    ],
+                    "patterns": [match("constant.other.diagnostic-code.cairn", r"\bE-[A-Z0-9]+(?:-[A-Z0-9]+)*\b")],
                 }
             ]
         },
@@ -126,8 +134,8 @@ def textmate() -> dict:
                     "begin": quote,
                     "end": quote,
                     "patterns": [
-                        {"name": "constant.character.escape.cairn", "match": r"\\(?:x[0-9A-Fa-f]{2}|[ntr0\\\"'])"},
-                        {"name": "invalid.illegal.escape.cairn", "match": r"\\."},
+                        match("constant.character.escape.cairn", r"\\(?:x[0-9A-Fa-f]{2}|[ntr0\\\"'])"),
+                        match("invalid.illegal.escape.cairn", r"\\."),
                     ],
                 }
                 for kind, quote in (("double", '"'), ("single", "'"))
@@ -135,17 +143,14 @@ def textmate() -> dict:
         },
         "unsafe": {
             "patterns": [
-                {
-                    "name": "meta.block.unsafe.cairn",
-                    "begin": r"\b(unsafe)\s*(\{)",
-                    "beginCaptures": {
-                        "1": {"name": "keyword.other.unsafe.cairn"},
-                        "2": {"name": "punctuation.section.block.begin.cairn"},
-                    },
-                    "end": r"\}",
-                    "endCaptures": {"0": {"name": "punctuation.section.block.end.cairn"}},
-                    "patterns": [{"include": "#braces"}, {"include": "$self"}],
-                }
+                region(
+                    r"\b(unsafe)\s*(\{)",
+                    ("keyword.other.unsafe.cairn", "punctuation.section.block.begin.cairn"),
+                    r"\}",
+                    "punctuation.section.block.end.cairn",
+                    [{"include": "#braces"}, {"include": "$self"}],
+                    name="meta.block.unsafe.cairn",
+                )
             ]
         },
         "braces": {
@@ -162,15 +167,12 @@ def textmate() -> dict:
         },
         "effects": {
             "patterns": [
-                {
-                    "begin": r"\b(effects)\s*(\()",
-                    "beginCaptures": {
-                        "1": {"name": "storage.modifier.cairn"},
-                        "2": {"name": "punctuation.section.parens.begin.cairn"},
-                    },
-                    "end": r"\)",
-                    "endCaptures": {"0": {"name": "punctuation.section.parens.end.cairn"}},
-                    "patterns": [
+                region(
+                    r"\b(effects)\s*(\()",
+                    ("storage.modifier.cairn", "punctuation.section.parens.begin.cairn"),
+                    r"\)",
+                    "punctuation.section.parens.end.cairn",
+                    [
                         captured(
                             rf"\b({alternation(FAMILIES)})(:)({IDENT})",
                             "support.constant.effect.cairn",
@@ -178,9 +180,9 @@ def textmate() -> dict:
                             "variable.other.effect.cairn",
                         ),
                         keyword(EFFECTS, "support.constant.effect.cairn"),
-                        {"name": "punctuation.separator.comma.cairn", "match": ","},
+                        match("punctuation.separator.comma.cairn", ","),
                     ],
-                }
+                )
             ]
         },
         "declarations": {
@@ -248,40 +250,29 @@ def textmate() -> dict:
                     "variable.other.property.cairn",
                     "punctuation.separator.type.cairn",
                 ),
-                {
-                    "name": "support.type.bound.cairn",
-                    "match": rf"(?<=[:+])\s*(?:{alternation([*BOUNDS, 'nat', 'type'])})\b",
-                },
+                match("support.type.bound.cairn", rf"(?<=[:+])\s*(?:{alternation([*BOUNDS, 'nat', 'type'])})\b"),
             ]
         },
         "borrows": {
             "patterns": [
-                {
-                    "begin": r"\b(ro|rw)\s*(<)",
-                    "beginCaptures": {
-                        "1": {"name": "storage.modifier.borrow.cairn"},
-                        "2": {"name": "punctuation.definition.typeparameters.begin.cairn"},
-                    },
-                    "end": ">",
-                    "endCaptures": {"0": {"name": "punctuation.definition.typeparameters.end.cairn"}},
-                    "patterns": [{"include": "$self"}],
-                }
+                region(
+                    r"\b(ro|rw)\s*(<)",
+                    ("storage.modifier.borrow.cairn", "punctuation.definition.typeparameters.begin.cairn"),
+                    ">",
+                    "punctuation.definition.typeparameters.end.cairn",
+                    [{"include": "$self"}],
+                )
             ]
         },
         "context": {
-            "patterns": [
-                {"name": scope, "match": rf"\b{word}\b{ahead}"} for word, (scope, ahead) in sorted(CONTEXT.items())
-            ]
+            "patterns": [match(scope, rf"\b{word}\b{ahead}") for word, (scope, ahead) in sorted(CONTEXT.items())]
         },
         "keywords": {"patterns": [keyword(words, scope) for scope, _, words in WORDS.values()]},
         "numbers": {
             "patterns": [
-                {"name": "constant.numeric.integer.hexadecimal.cairn", "match": r"\b0x[0-9A-Fa-f]+\b"},
-                {
-                    "name": "constant.numeric.float.cairn",
-                    "match": r"\b[0-9]+(?:\.[0-9]+)?[eE][+-]?[0-9]+\b|\b[0-9]+\.[0-9]+\b",
-                },
-                {"name": "constant.numeric.integer.decimal.cairn", "match": r"\b[0-9]+\b"},
+                match("constant.numeric.integer.hexadecimal.cairn", r"\b0x[0-9A-Fa-f]+\b"),
+                match("constant.numeric.float.cairn", r"\b[0-9]+(?:\.[0-9]+)?[eE][+-]?[0-9]+\b|\b[0-9]+\.[0-9]+\b"),
+                match("constant.numeric.integer.decimal.cairn", r"\b[0-9]+\b"),
             ]
         },
         "variants": {
@@ -292,43 +283,40 @@ def textmate() -> dict:
                     "punctuation.accessor.cairn",
                     "variable.other.enummember.cairn",
                 ),
-                {"name": "variable.other.enummember.cairn", "match": rf"(?<![.\w$])(?:{alternation(variants)})\b"},
+                match("variable.other.enummember.cairn", rf"(?<![.\w$])(?:{alternation(variants)})\b"),
             ]
         },
         "types": {
             "patterns": [
-                {"name": "variable.language.self.cairn", "match": r"\b(?:self|Self)\b"},
-                {"name": "support.type.cairn", "match": rf"\b(?:{alternation(TYPES)})\b"},
-                {"name": "variable.other.constant.cairn", "match": r"\b[A-Z][A-Z0-9_]*[A-Z0-9]\b(?![\[(.])"},
-                {"name": "entity.name.type.cairn", "match": r"\b[A-Z]\w*\b"},
+                match("variable.language.self.cairn", r"\b(?:self|Self)\b"),
+                match("support.type.cairn", rf"\b(?:{alternation(TYPES)})\b"),
+                match("variable.other.constant.cairn", r"\b[A-Z][A-Z0-9_]*[A-Z0-9]\b(?![\[(.])"),
+                match("entity.name.type.cairn", r"\b[A-Z]\w*\b"),
             ]
         },
         "calls": {
             "patterns": [
-                {
-                    "name": "support.function.builtin.cairn",
-                    "match": rf"\b(?:{alternation(BUILTINS)})\b(?={GENERIC}\s*\()",
-                },
-                {"name": "entity.name.function.member.cairn", "match": rf"(?<=\.)[a-z_]\w*(?={GENERIC}\s*\()"},
-                {"name": "entity.name.function.call.cairn", "match": rf"\b[a-z_]\w*(?={GENERIC}\s*\()"},
-                {"name": "variable.other.metavariable.cairn", "match": r"\$[A-Za-z_]\w*"},
+                match("support.function.builtin.cairn", rf"\b(?:{alternation(BUILTINS)})\b(?={GENERIC}\s*\()"),
+                match("entity.name.function.member.cairn", rf"(?<=\.)[a-z_]\w*(?={GENERIC}\s*\()"),
+                match("entity.name.function.call.cairn", rf"\b[a-z_]\w*(?={GENERIC}\s*\()"),
+                match("variable.other.metavariable.cairn", r"\$[A-Za-z_]\w*"),
             ]
         },
         "operators": {
             "patterns": [
-                {"name": "keyword.operator.comparison.cairn", "match": r"==|!=|<=|>="},
-                {"name": "keyword.operator.arrow.cairn", "match": r"=>|->"},
-                {"name": "keyword.operator.assignment.compound.cairn", "match": r"[-+*/%&|^]="},
-                {"name": "keyword.operator.logical.cairn", "match": r"&&|\|\||!"},
-                {"name": "keyword.operator.range.cairn", "match": r"\.\."},
-                {"name": "keyword.operator.assignment.cairn", "match": r"="},
-                {"name": "keyword.operator.comparison.cairn", "match": r"[<>]"},
-                {"name": "keyword.operator.arithmetic.cairn", "match": r"[-+*/%]"},
-                {"name": "keyword.operator.bitwise.cairn", "match": r"[&|^~]"},
-                {"name": "punctuation.terminator.statement.cairn", "match": ";"},
-                {"name": "punctuation.separator.comma.cairn", "match": ","},
-                {"name": "punctuation.accessor.cairn", "match": r"\."},
-                {"name": "punctuation.separator.type.cairn", "match": ":"},
+                match("keyword.operator.comparison.cairn", r"==|!=|<=|>="),
+                match("keyword.operator.arrow.cairn", r"=>|->"),
+                match("keyword.operator.assignment.compound.cairn", r"[-+*/%&|^]="),
+                match("keyword.operator.logical.cairn", r"&&|\|\||!"),
+                match("keyword.operator.range.cairn", r"\.\."),
+                match("keyword.operator.assignment.cairn", r"="),
+                match("keyword.operator.comparison.cairn", r"[<>]"),
+                match("keyword.operator.arithmetic.cairn", r"[-+*/%]"),
+                match("keyword.operator.bitwise.cairn", r"[&|^~]"),
+                match("punctuation.terminator.statement.cairn", ";"),
+                match("punctuation.separator.comma.cairn", ","),
+                match("punctuation.accessor.cairn", r"\."),
+                match("punctuation.separator.type.cairn", ":"),
             ]
         },
     }
