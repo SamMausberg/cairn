@@ -50,6 +50,8 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `projects/export.py` | an export: the program a build compiles and the record pinning it, and the builds, runs, tests and comparisons that take it |
 | `projects/foreign.py` | vendored C++ and CUDA a manifest's `[foreign]` names: built by the project's command line, held to each extern's types, inspected |
 | `projects/revision.py` | a program as a path or a git revision holds it |
+| `projects/new.py` | what `cairn new` writes: the default project or a packaged template, and the AGENTS.md each gets |
+| `cli.py`, `commands.py` | the command line: `main` runs each command; `commands.py` declares every command and option it parses |
 | `agent/agent_tools.py` | edit sessions, packets and the host that names them by handle |
 | `agent/evidence.py` | what a packet may say is established about a function |
 | `agent/history.py` | what was tried, failed, measured or hypothesized for each candidate, under its identity, and analyses kept by key |

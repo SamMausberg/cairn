@@ -105,7 +105,7 @@ def codes() -> dict[str, list[str]]:
 
 
 def commands() -> list[tuple[str, str]]:
-    from ..cli import parser
+    from ..commands import parser
 
     sub = next(a for a in parser()._actions if isinstance(a, argparse._SubParsersAction))
     return [(c.dest, " ".join((c.help or "").split())) for c in sub._choices_actions]

@@ -11,9 +11,10 @@ from pathlib import Path
 import pytest
 
 from cairn.agent.skill import commands
-from cairn.cli import GUIDE, create_project, main, templates
+from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.build import build
+from cairn.projects.new import GUIDE, create_project, templates
 from cairn.projects.project import ProjectError, load_project
 from emitted import watched
 

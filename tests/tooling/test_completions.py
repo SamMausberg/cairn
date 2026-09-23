@@ -6,7 +6,8 @@ import subprocess
 
 import pytest
 
-from cairn.cli import main, parser
+from cairn.cli import main
+from cairn.commands import parser
 from cairn.editor.shells import commands, options, positionals
 
 

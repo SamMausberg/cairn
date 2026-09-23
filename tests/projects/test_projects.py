@@ -8,10 +8,11 @@ import pytest
 from cairn.agent.agent_tools import PROTOCOL, EditSession
 from cairn.agent.projection import canonical_source
 from cairn.agent.sketches import Sketch
-from cairn.cli import create_project, main
+from cairn.cli import main
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.editor.terminal import typed
 from cairn.projects.build import build
+from cairn.projects.new import create_project
 from cairn.projects.project import ProjectError, load_project
 from cairn.verify.scalar_semantics import equivalent
 from emitted import refused
