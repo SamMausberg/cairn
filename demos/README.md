@@ -1,6 +1,6 @@
 # Demos
 
-Three programs that show what CAIRN is for. Each runs from a fresh checkout with one command and prints what happened. `tests/projects/test_demos.py` runs each one again, so none of them can go stale without the suite failing.
+Each demo runs from a fresh checkout with one command and prints what happened, and `tests/projects/test_demos.py` runs each one again.
 
 | Demo | What it shows | Command |
 |---|---|---|

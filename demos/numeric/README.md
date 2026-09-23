@@ -51,7 +51,7 @@ The timings in [evidence/v0_9/demos](../../evidence/v0_9/demos/README.md) were t
 
 The device configuration compiles here for sm_120 with `nvcc -Werror`, and `tests/projects/test_demos.py` checks that. It runs only under `make gpu`, which only the repository's owner runs, because device runs on the reference machine have reset its display driver. That run checks that the device plate has the host's fingerprint and keeps the contract, and writes its output and times to `results/demos/numeric/device.json`. It has not run yet, so no device number for this plate exists.
 
-The closest measured evidence is `evidence/v1_3/gpu/benchmark.json`, from one RTX 5070 Ti: an elementwise f32 `saxpy` whose host and device results agreed bit for bit, with the kernel 25 times as fast as the sequential host at 10^8 elements and the whole run, transfers included, 0.47 times as fast. That is a different kernel, not this one.
+The closest measured evidence is `evidence/v1_3/gpu/benchmark.json`, from one RTX 5070 Ti: an elementwise f32 `saxpy` whose host and device results agreed bit for bit. Its kernel was 25 times as fast as the sequential host at 10^8 elements, and the whole run, transfers included, 0.47 times as fast. That is a different kernel, not this one.
 
 ## What is verified and what is not
 

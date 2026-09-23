@@ -33,7 +33,7 @@ The host opens a session on `bar_x` with the task "the colour bar hides the righ
     changed rows: {}
 ```
 
-The second shot shows the bar clear of the map. `changed rows: {}` says the edit left `frame`'s effect row as it was: drawing a frame allocates, frees and runs a host region exactly as before, and nothing new such as `io` crept in. The fixed program passes its test. These are its frames after 40, 1000 and 5000 sweeps:
+The second shot shows the bar clear of the map. `changed rows: {}` says the edit left `frame`'s effect row as it was: drawing a frame allocates, frees and runs a host region as before, and gains nothing such as `io`. The fixed program passes its test. These are its frames after 40, 1000 and 5000 sweeps:
 
 ![after 40 sweeps](frames/after-1.png)
 ![after 1000 sweeps](frames/after-3.png)
