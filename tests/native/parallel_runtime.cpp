@@ -3,13 +3,15 @@
 // Built with the language contract flags, so this file also proves the runtime headers still
 // compile without CUDA present. The lane pool is what most of this exercises: coverage and
 // exactly-once at many sizes, regions started at once from several threads, thousands of tiny
-// regions, a lane that blocks, and a lane that fails a guard.
+// regions, a lane that blocks, and a lane that fails a guard. The task threads are the rest:
+// that they are reused, and that reuse never makes one task wait for another to give a thread up.
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <set>
 #include <thread>
+#include <utility>
 #include <vector>
 #include "cairn_parallel.hpp"
 
@@ -155,6 +157,88 @@ static void test_task() {
   CHECK(std::move(outer).wait() == 22);
 }
 
+// A thread whose task was waited is parked and taken by the next spawn: a thousand spawns in a row
+// start no thread once one is warm, and a group refilled fifty times starts at most one per berth.
+static void test_task_threads_are_reused() {
+  cr::par::crew::Crew& crew = cr::par::crew::shared();
+  auto warm = cr::par::Task<int>::spawn([] { return 1; });
+  CHECK(std::move(warm).wait() == 1);
+  std::size_t mark = crew.started();
+  std::uint64_t total = 0;
+  for(std::uint64_t k = 0; k < 1000; ++k) {
+    auto t = cr::par::Task<std::uint64_t>::spawn([k] { return k * 2; });
+    total += std::move(t).wait();
+  }
+  CHECK(total == 999 * 1000);
+  CHECK(crew.started() == mark);
+  mark = crew.started();
+  cr::par::Group<std::uint64_t> g(8);
+  total = 0;
+  for(std::uint64_t round = 0; round < 50; ++round) {
+    for(std::uint64_t k = 0; k < 8; ++k) g.submit([round, k] { return round * 8 + k; });
+    for(int k = 0; k < 8; ++k) total += g.collect();
+  }
+  std::move(g).wait();
+  CHECK(total == 399 * 400 / 2);
+  CHECK(crew.started() - mark <= 8);
+  CHECK(crew.parked() <= cr::par::crew::Crew::keep());
+}
+
+// What a task captured ends on the task's own thread, when the task returns, before wait() does.
+struct Mark {
+  std::thread::id* where;
+  explicit Mark(std::thread::id* w) : where(w) {}
+  Mark(Mark&& o) noexcept : where(std::exchange(o.where, nullptr)) {}
+  ~Mark() { if(where) *where = std::this_thread::get_id(); }
+};
+static void test_captures_end_on_the_task_thread() {
+  std::thread::id where{};
+  auto t = cr::par::Task<int>::spawn([m = Mark(&where)] { return m.where != nullptr ? 1 : 0; });
+  CHECK(std::move(t).wait() == 1);
+  CHECK(where != std::thread::id{} && where != std::this_thread::get_id());
+}
+
+static std::uint64_t chain(std::size_t depth) {
+  if(depth == 0) return 1;
+  auto t = cr::par::Task<std::uint64_t>::spawn([depth] { return chain(depth - 1); });
+  return std::move(t).wait() + 1;
+}
+
+// Each of these deadlocks under a pool that holds a fixed number of threads, however large: a chain of
+// tasks each waiting for the one it started, deeper than the pool; a task waiting for a flag that a task
+// spawned after it sets, on a pool of one; and a group whose tasks meet at a barrier only all of them
+// running at once can pass. A spawn here never waits for a thread, so all three finish.
+static void test_no_task_waits_for_a_thread() {
+  CHECK(chain(64) == 65);
+  cr::par::Atomic<int> flag(0);
+  auto early = cr::par::Task<int>::spawn([&] {
+    while(flag.load(Order::acquire) == 0) std::this_thread::yield();
+    return 1;
+  });
+  auto late = cr::par::Task<void>::spawn([&] { flag.store(1, Order::release); });
+  std::move(late).wait();
+  CHECK(std::move(early).wait() == 1);
+  const std::size_t width = 32;
+  cr::par::Group<int> g(width);
+  cr::par::Atomic<std::size_t> arrived(0);
+  for(std::size_t k = 0; k < width; ++k)
+    g.submit([&] {
+      arrived.fetch_add(1, Order::acquire_release);
+      while(arrived.load(Order::acquire) < width) std::this_thread::yield();
+      return 1;
+    });
+  int met = 0;
+  for(std::size_t k = 0; k < width; ++k) met += g.collect();
+  std::move(g).wait();
+  CHECK(met == int(width));
+  // A group waited with results nobody collected still hands every thread back.
+  cr::par::Group<std::uint64_t> left(4);
+  for(std::uint64_t k = 0; k < 4; ++k) left.submit([k] { return k; });
+  CHECK(left.collect() < 4);
+  std::move(left).wait();
+  CHECK(cr::par::crew::shared().parked() <= cr::par::crew::Crew::keep());
+}
+
 static void test_mutex() {
   cr::par::Mutex<long> total(0);
   cr::par::run(4096, [&](std::size_t) noexcept {
@@ -271,10 +355,13 @@ int main(int argc, char** argv) {
   test_a_slow_lane_still_completes();
   test_a_lane_may_wait_for_a_task();
   test_task();
+  test_task_threads_are_reused();
+  test_captures_end_on_the_task_thread();
+  test_no_task_waits_for_a_thread();
   test_mutex();
   test_atomic();
-  // Returning from main is the last check: the exit handler must stop and join every lane, with no
-  // hang and nothing left for a sanitizer to report.
+  // Returning from main is the last check: the exit handlers must stop and join every lane and every
+  // parked task thread, with no hang and nothing left for a sanitizer to report.
   std::printf("parallel_runtime: %s after %ld checks on %zu lanes\n", failures ? "FAILED" : "ok", checked,
               lane_count());
   return failures ? 1 : 0;

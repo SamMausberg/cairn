@@ -51,7 +51,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::launch`
 |---|---|
 | `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard is host and device callable |
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
-| `cairn_parallel.hpp` | the host lane pool, linear tasks, task groups with a bounded completion ring, `Mutex` and `Atomic` with explicit orders |
+| `cairn_parallel.hpp` | the host lane pool, the crew of reusable task threads, linear tasks, task groups with a bounded completion ring, `Mutex` and `Atomic` with explicit orders |
 | `cairn_gpu.hpp` | scoped device, pinned and unified memory, lanes, linear stream tickets, reduction, stable compaction |
 | `cairn_io.hpp` | the I/O ring over io_uring: fixed berths that own each operation's `Buf`, completion-order collection, a wait that drains before it releases |
 | `cairn_float.hpp` | the storage floats `f16 bf16 f8e4m3 f8e5m2`: one integer routine that rounds on the host and in a device lane alike, `quantize` and `quantize_stochastic` |
@@ -59,7 +59,24 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::launch`
 
 Generated code includes only the headers it needs. A freestanding image includes neither concurrent header: `toolchain.audit_effects` rejects every effect that reaches them, and `cairn_parallel.hpp` refuses to compile under `CAIRN_FREESTANDING`.
 
-The one piece of global state is the lane pool, and it is visible in the source: the first host `parallel` statement of a process creates it, every later one reuses it. Its size is `std::thread::hardware_concurrency()`, or `CAIRN_LANES` when that names a count from 1 to 1024; anything else traps. A region below 16384 elements (`lanes::CUTOFF`) is the loop it replaces and never touches the pool. Above that it publishes a descriptor on its own stack, engages one lane per 8192 elements (`lanes::GRAIN`) up to the pool's size, and returns when every claimed chunk has run. The thread that starts a region is always one of its lanes and can finish it alone, so a blocked, busy or absent worker delays a region but cannot deadlock one; `proofs/Cairn/Region.lean` proves that of the protocol. The pool is never destroyed: an exit handler stops and joins its workers, after which a region still runs on the thread that starts it. Both numbers were measured on one machine; `evidence/v1_2/host_regions` records what was measured.
+The lane pool is one of two pieces of global state, and both are visible in the source. The first host `parallel` statement of a process creates the pool, and every later one reuses it. Its size is `std::thread::hardware_concurrency()`, or `CAIRN_LANES` when that names a count from 1 to 1024; anything else traps. A region below 16384 elements (`lanes::CUTOFF`) is the loop it replaces and never touches the pool. Above that it publishes a descriptor on its own stack, engages one lane per 8192 elements (`lanes::GRAIN`) up to the pool's size, and returns when every claimed chunk has run. The thread that starts a region is always one of its lanes and can finish it alone, so a blocked, busy or absent worker delays a region but cannot deadlock one; `proofs/Cairn/Region.lean` proves that of the protocol. The pool is never destroyed: an exit handler stops and joins its workers, after which a region still runs on the thread that starts it. Both numbers were measured on one machine; `evidence/v1_2/host_regions` records what was measured.
+
+The other is the crew of task threads, which the first `spawn` of a process creates. A spawn takes a thread that is parked there, or starts a new one when none is, so a task never waits for a thread: every task starts at once, and no pattern of tasks that wait on one another, or never end, can hold one back. A ticket's `wait` hands its thread back, and a group keeps the thread each berth first took until `wait(g)`. At most `hardware_concurrency()` threads stay parked, since a parked thread keeps its stack's address space under the run's memory limit, and an exit handler ends them. The crew is never the lane pool, so a lane may spawn a task and wait for it. `evidence/v1_4/runtime` records what reuse changed.
+
+What each operation takes when it runs, and gives back when it ends:
+
+| Operation | Takes | Gives back |
+|---|---|---|
+| host `parallel`, pooled `reduce` | a descriptor on the caller's stack, and a reduction's 256 block slots there too; the pool, once | nothing to release |
+| host `compact`, in-order `reduce` | nothing: the loop writes the output in place | nothing |
+| `spawn f(args)` | one heap cell for the result and one for the captured arguments; a parked thread, or a new one | the thread at `wait`, to the crew |
+| `Group[T](n)`, `spawn ... into g` | four arrays of `n` at the declaration; per submission one heap cell for the captures, and a thread the first time a berth runs | the berths' threads at `wait(g)` |
+| `IoRing(n)` | eight arrays of `n`, the io_uring descriptor and three mappings, at the declaration | all of it at `wait(q)`; nothing per operation |
+| device `parallel` | a launch, then a whole-device synchronize | nothing |
+| queued device work, `transfer` after a ticket | a new stream and a new event per ticket | both destroyed at its `wait`, after a stream synchronize |
+| device `reduce` | a device cell for the result, CUB's temporary storage, a synchronous copy of the result to the host | both freed before it returns |
+| device `compact` | two device arrays of `n` (flags, offsets), CUB's temporary storage, two launches, three synchronizations and two one-element copies to the host | all freed before it returns |
+| a `@device`, `@pinned` or `@unified` buffer | one CUDA allocation, zeroed | freed at scope exit |
 
 `agent/projection.py` prints the canonical read-only projection of the whole language. `agent/agent_tools.py` supplies typed source sites, sealed edit sessions whose effect ceiling can name any effect and whose packet grows by `expand`, and the host that names sessions by handle. `agent/explain.py` reads the costs `cairn explain` reports from the emitted C++ and clang's optimization record. `agent/sketches.py` binds named choices to ranges and contracts the host owns, and `agent/teaching.py` selects rule cards from lexical tokens. Splicing preserves everything outside the authorized range, and the host rechecks the complete linked module, beyond what the packet displayed.
 

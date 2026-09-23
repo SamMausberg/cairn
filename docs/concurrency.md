@@ -4,7 +4,7 @@ Tasks lease what they borrow, lanes are race free by construction, and placement
 
 ## Tasks and leases
 
-`let t = spawn f(args);` runs a declared function on its own thread. The arguments are evaluated at the spawn and carried by value, so a task never reads the spawner's locals. `t` is a linear ticket bound to its scope. `wait(t)` consumes it and returns `f`'s result, and it must do so on every path of the same function; the ticket cannot be stored, passed or returned.
+`let t = spawn f(args);` runs a declared function on its own thread. The thread is one an earlier task left parked, or a new one when none is, so a spawn never waits for another task to finish and a spawn in a loop pays for a thread only once ([internals](internals.md#compiler-architecture) has the policy). The arguments are evaluated at the spawn and carried by value, so a task never reads the spawner's locals. `t` is a linear ticket bound to its scope. `wait(t)` consumes it and returns `f`'s result, and it must do so on every path of the same function; the ticket cannot be stored, passed or returned.
 
 Until the `wait`, every place lent to the task is leased: nobody may write what the task reads or touch what it writes (`E-LEASED`), including by moving the owner. Read-only lending is shared freely. Visibly disjoint parts of one array may be lent mutably to different tasks. A part ends where the next begins, the bounds are literals or names that cannot change, and because every lent part was guarded `lo <= hi`, the order of the bounds chains through the parts in between, so a K-way split works.
 

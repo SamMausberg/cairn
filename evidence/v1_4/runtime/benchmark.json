@@ -1,0 +1,217 @@
+{
+  "schema": "cairn.bench.host_tasks/1",
+  "sessions": {
+    "loaded_1": {
+      "compiler": "clang version 21.1.8 (https://github.com/llvm/llvm-project 2078da43e25a4623cab2d0d60decddf709aaea28)",
+      "flags": [
+        "-std=c++20",
+        "-O3",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+        "-fno-exceptions",
+        "-fno-rtti",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wno-unused-parameter",
+        "-Wno-unused-variable",
+        "-Wno-unused-but-set-variable",
+        "-march=x86-64",
+        "-pthread"
+      ],
+      "machine": {
+        "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+        "cpus": 16
+      },
+      "note": "Before: cairn_parallel.hpp as of 89392ed, one thread per task. Shared machine: five other agents built and tested throughout, so the two arms ran in alternation; the load average read 17 to 20 on 16 lanes around the runs.",
+      "arms": {
+        "after": {
+          "runtime": "src/cairn/runtime",
+          "runs": [
+            {
+              "ns": {
+                "spawn_wait": 280.5,
+                "fork_join_4096": 739526.3,
+                "group_round_8": 2349748.1,
+                "nested_16": 4949987.5
+              },
+              "threads_started": {
+                "spawn_wait": 1,
+                "fork_join_4096": 1,
+                "group_round_8": 6,
+                "nested_16": 8
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 311.6,
+                "fork_join_4096": 1794.5,
+                "group_round_8": 1329230.0,
+                "nested_16": 4898547.9
+              },
+              "threads_started": {
+                "spawn_wait": 1,
+                "fork_join_4096": 1,
+                "group_round_8": 6,
+                "nested_16": 8
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 275.7,
+                "fork_join_4096": 100008.3,
+                "group_round_8": 1725974.3,
+                "nested_16": 7197082.8
+              },
+              "threads_started": {
+                "spawn_wait": 1,
+                "fork_join_4096": 1,
+                "group_round_8": 6,
+                "nested_16": 8
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 377.1,
+                "fork_join_4096": 103760.9,
+                "group_round_8": 1619133.8,
+                "nested_16": 7356422.2
+              },
+              "threads_started": {
+                "spawn_wait": 1,
+                "fork_join_4096": 1,
+                "group_round_8": 6,
+                "nested_16": 8
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 393.9,
+                "fork_join_4096": 1805.0,
+                "group_round_8": 1247795.1,
+                "nested_16": 5674618.1
+              },
+              "threads_started": {
+                "spawn_wait": 1,
+                "fork_join_4096": 1,
+                "group_round_8": 6,
+                "nested_16": 8
+              }
+            }
+          ],
+          "median_ns": {
+            "spawn_wait": 311.6,
+            "fork_join_4096": 100008.3,
+            "group_round_8": 1619133.8,
+            "nested_16": 5674618.1
+          },
+          "threads_started": {
+            "spawn_wait": 1,
+            "fork_join_4096": 1,
+            "group_round_8": 6,
+            "nested_16": 8
+          }
+        },
+        "before": {
+          "runtime": "results/rt/before",
+          "runs": [
+            {
+              "ns": {
+                "spawn_wait": 182182.2,
+                "fork_join_4096": 257353.9,
+                "group_round_8": 921224.2,
+                "nested_16": 7335709.2
+              },
+              "threads_started": {
+                "spawn_wait": -1,
+                "fork_join_4096": -1,
+                "group_round_8": -1,
+                "nested_16": -1
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 287807.7,
+                "fork_join_4096": 403360.2,
+                "group_round_8": 1533713.1,
+                "nested_16": 7142125.6
+              },
+              "threads_started": {
+                "spawn_wait": -1,
+                "fork_join_4096": -1,
+                "group_round_8": -1,
+                "nested_16": -1
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 320777.6,
+                "fork_join_4096": 559483.1,
+                "group_round_8": 2543738.3,
+                "nested_16": 9456504.1
+              },
+              "threads_started": {
+                "spawn_wait": -1,
+                "fork_join_4096": -1,
+                "group_round_8": -1,
+                "nested_16": -1
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 313976.0,
+                "fork_join_4096": 442180.6,
+                "group_round_8": 1060968.8,
+                "nested_16": 4290394.7
+              },
+              "threads_started": {
+                "spawn_wait": -1,
+                "fork_join_4096": -1,
+                "group_round_8": -1,
+                "nested_16": -1
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 386067.0,
+                "fork_join_4096": 517193.5,
+                "group_round_8": 1543934.2,
+                "nested_16": 4717867.5
+              },
+              "threads_started": {
+                "spawn_wait": -1,
+                "fork_join_4096": -1,
+                "group_round_8": -1,
+                "nested_16": -1
+              }
+            }
+          ],
+          "median_ns": {
+            "spawn_wait": 313976.0,
+            "fork_join_4096": 442180.6,
+            "group_round_8": 1533713.1,
+            "nested_16": 7142125.6
+          },
+          "threads_started": {
+            "spawn_wait": -1,
+            "fork_join_4096": -1,
+            "group_round_8": -1,
+            "nested_16": -1
+          }
+        }
+      },
+      "load_average": {
+        "before": [
+          18.77,
+          17.85,
+          16.91
+        ],
+        "after": [
+          21.8,
+          22.88,
+          19.59
+        ]
+      }
+    }
+  }
+}
