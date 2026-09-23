@@ -126,11 +126,11 @@ Every command takes `--format json`, the default when output is piped.
 | `cairn shot` | Run headless and collect every frame std.draw captured: its PNG, its layout record and its time. |
 | `cairn test` | Run the project's test blocks, each in a process of its own, and its finite task contracts. |
 | `cairn inspect` | Print the packet an editing agent gets for one symbol. |
-| `cairn state` | Print the program's state for an agent: every signature and effect row by module, under a digest. |
+| `cairn state` | Print the program's state for an agent: every signature and effect row by module, under a digest; with --symbol, one function's investigation from its candidate history. |
 | `cairn migrate` | Change one function's interface through every caller, in all the files or in none. |
 | `cairn explain` | Where each function pays at run time: guards, allocations, waits and loop vectorization. |
 | `cairn predict` | How long each function will take, from its checked work and a machine profile; nothing runs. |
-| `cairn tune` | Choose a function's plan by prediction, and with --measure time only the best-ranked few on this host. |
+| `cairn tune` | Search a function's plans within compile, time and run budgets; --measure times the best-ranked few on this host, and --compare reports how two plans differ. |
 | `cairn validate` | Test one implementation against its reference on boundary inputs its contract gives; finite, not proof. |
 | `cairn doc` | Generate the API reference of the checked program, as Markdown. |
 | `cairn graph` | Print the module graph: each file's modules, each module's imports, exports and dependents, hashes. |
