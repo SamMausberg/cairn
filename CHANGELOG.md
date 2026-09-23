@@ -32,6 +32,11 @@ The first public release. The sections below it are the internal milestones that
 
 ### Projects and tools
 
+- `cairn graph` prints a project's module graph with each file's source hash and each module's interface hash as JSON, so another build system can plan its actions and caches. `bazel/` holds `rules_cairn`: `cairn_library` is checked as a validation action, and `cairn_binary` and `cairn_test` build and test a program; `examples/bazel` builds, runs and tests with them offline.
+- A program may hold 16 MB of source, 32,768 functions and 3,200,000 syntax nodes, and a manifest 1,024 files and 64 dependencies; generated families keep their caps, and each refusal names what it counted. An incremental build runs the front end once, compiles 16 or more units against a precompiled header, and every build writes `compile_commands.json`. On a 77,000-line generated project on a shared machine, a cold incremental build went from 264 s to 82 s and a rebuild with nothing changed from 28 s to 13 s (`evidence/v0_9/scale`).
+- The compiler reads each imported library module's parse from a per-process cache and lexes in one pass, so the examples compile in 0.84 of the time with byte-identical C++, and each process asks a compiler its version once.
+- A counterexample is asked for again with every integer input near zero, so a witness in a refusal, a diff or a receipt reads as `x = 0, lo = 16, hi = 12` rather than twenty-digit numbers.
+- `cairn test FILE --contract` runs a finite task contract, and a program that `cairn run`, `cairn test` or `cairn shot` starts no longer wakes the system's crash handler when it traps.
 - An edit packet starts with the target, its effect row and ceiling, and the interfaces of what it calls and what calls it, and grows by `expand` requests the host answers from the pinned program. A host names sessions by short handles (`cairn.edit/2`); `cairn.edit/1` still works. `--scope component` gives the 1.3 packet.
 - `cairn explain` shows where each function pays at run time, at its `.cairn` lines: the guards the emitted C++ still checks and the ones the checker discharged, allocations, calls that allocate, spawn, join, lock or do I/O, waits, and clang's verdict on every loop. An agent can ask for it after an edit.
 - Signature help in the language server offers the form of a call that leaves its extents out.
@@ -53,6 +58,7 @@ The first public release. The sections below it are the internal milestones that
 
 ### Runtime
 
+- A host region is cut into one home range per lane, and each lane claims from its own home before the others', so a lane runs the same indices region after region: at 16 lanes and 1e6 elements the share a lane runs again rose from 0.14 to 0.50. `proofs/Cairn/Region.lean` proves the new protocol. Its timings were taken on a shared machine and are not quoted (`evidence/v0_9/perf`).
 - An I/O ring returns every submission exactly once with the kernel's errno, reports a ring the kernel would not create, and makes a full ring or an empty `next` visible before it traps; the service answers overload instead of trapping.
 - A spawn takes a parked task thread or starts one, so a pipeline pays for a thread once instead of per task, and no task ever waits for a thread.
 - A function that takes views has a checked C entry that checks every view once and a lean body that calls from CAIRN reach.
@@ -60,6 +66,10 @@ The first public release. The sections below it are the internal milestones that
 
 ### Verification
 
+- `bench/ai` is a preregistered equal-budget benchmark of CAIRN, C++ and Rust: ten small systems tasks with hidden checks under the sanitizers, sixty fresh `claude-sonnet-5` subjects. Every subject solved its task, so the run cannot tell the languages apart by tasks solved; CAIRN subjects used 11.6 times the tokens of C++ subjects, most of it reading the documentation (`evidence/v0_9/ai_benchmark`).
+- The whole release was held to its starting compiler: 1,541 programs emit the same C++, effect rows and refusal codes, and the editor features answer the same on 1,508.
+- The history audit reads every blob through one `git cat-file --batch`, lets a text record under `evidence/` reach 4 MB and holds everything else to 2 MB, judging a blob once per kind of path, and the benchmark's transcript audit reads a doubled leading slash as the path it names.
+- A test that opens the device gate fails before any process it did not replace can start.
 - Each fault witness in the ownership regression is one decided search over the machine, and each collector invariant step reads its certified obligation through one tactic.
 - The ownership calculus models task groups (submissions and collects on any path, `wait`, what a group holds after a branch join) and lanes that own a block of one stride, with the same theorems and a new one that nothing is used after `wait(g)`. The differential run generates both and agreed on twenty thousand programs.
 - `proofs/Cairn/Region.lean` proves that the lane pool runs every index of a region exactly once, returns only when no worker is inside and never waits for a worker to arrive, so a region completing before the next statement is no longer an assumption about the emitter.
@@ -74,11 +84,15 @@ The first public release. The sections below it are the internal milestones that
 
 ### Documentation
 
+- The README opens with what CAIRN is, why an agent would use it, a twenty-line example, install and run, then three demos and a table of what you trust and what has not been validated. The docs say the same in 30 percent fewer words (65,542 to 45,721), each limit once, in the file that owns it.
+- `demos/` holds three demos with one command each: an agent repairs a bug through the edit host and `cairn diff` reviews it, a heat-plate sweep runs on host lanes against an f64 contract and a C++ loop (its device half compiles and has not run), and an agent fixes a layout it sees in a `cairn shot`.
 - The agent chapter, the README, the roadmap and the verification chapter were rewritten in plain sentences that state each claim once.
 - The language reference is five chapters: `language.md`, `memory.md`, `abstractions.md`, `concurrency.md` and `numerics.md`. The API reference is an index, `docs/std_api.md`, and one generated page per module under `docs/std/`. The ownership tables, the roadmap and `capabilities.json` name every module and gate that exists.
 
 ### Repository
 
+- The teaching corpus lives in `tools/corpus`, `bench/` holds `suite`, `host`, `codegen`, `gpu`, `scale` and `ai`, the runtime's C++ tests sit in `tests/runtime`, test files are named by subject, and the 0.5 and 0.6 records and the early specifications left the tree (they are in the `v0.8.3` tag). Shared helpers replaced duplicated logic in the tests, the tools and `src/cairn`, with every output unchanged.
+- CI runs lint and the examples in one job and the suite in four, cancels a superseded run, and passes on GitHub's runner again: solver tests get thirty seconds, a compiler's version probe two minutes, and a test that traps on purpose no longer starts a crash handler.
 - The suite holds every tracked source file to 800 lines, the documentation to its writing rules, and every relative link to an existing file or heading.
 - Issue and pull request templates, package metadata, and an index of the evidence of each release.
 

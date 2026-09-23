@@ -11,7 +11,7 @@ CAIRN is a systems programming language for code that AI agents write and people
 - `cairn diff OLD NEW` says, function by function, whether a change compiled to identical code, is SMT-equivalent, or changed behaviour, with an input that shows the difference.
 - `cairn predict` prices a function on this machine without running it, and `cairn shot` returns the frames a UI drew as PNGs.
 
-These are properties of the design, checked by the tests and proofs listed under [limitations](#limitations-and-what-you-trust). Whether they help a model finish more tasks than in C++ or Rust is a separate question, measured by a preregistered equal-budget benchmark in [bench/ai](bench/ai/PREREGISTRATION.md). Its pilot gave two tasks to fresh subjects in each language: every subject solved its task, and the CAIRN subjects spent about seven times the tokens of the C++ ones. The counted run is in progress, and no claim rests on the pilot.
+These are properties of the design, checked by the tests and proofs listed under [limitations](#limitations-and-what-you-trust). They do not yet make a model cheaper to use. In a preregistered equal-budget benchmark ([bench/ai](bench/ai/PREREGISTRATION.md)), `claude-sonnet-5` solved all ten small systems tasks in CAIRN, C++ and Rust (20 of 20 in each), so the run cannot tell the languages apart by tasks solved. The CAIRN subjects, who had never seen the language and read its documentation inside the budget, used 11.6 times the tokens of the C++ subjects and 12.3 times those of the Rust subjects ([results](evidence/v0_9/ai_benchmark/RESULTS.md)).
 
 ## Example
 
@@ -98,9 +98,10 @@ cairn doc first.cairn              # each function's signature and effect row
 cairn new my_project && cairn run my_project
 cairn test examples/systems        # test blocks and finite task contracts, each in its own process
 cairn run examples/apps/kvstore    # a crash-safe storage engine
+cairn graph examples/apps/analytics  # the module graph with source and interface hashes, for other build systems
 ```
 
-[docs/tools.md](docs/tools.md) covers every command, and [the guide](docs/guide.md) goes from a fresh checkout to twelve complete programs.
+Bazel rules are in [bazel/](bazel/), with an example in [examples/bazel](examples/bazel). [docs/tools.md](docs/tools.md) covers every command, and [the guide](docs/guide.md) goes from a fresh checkout to twelve complete programs.
 
 ## Demos
 
@@ -136,7 +137,7 @@ What has not been validated:
 - Most of the GPU side has not run on a GPU. Device lanes, transfers and three kernels ran on one RTX 5070 Ti (`evidence/v1_3/gpu`). Vector loads, shared-memory staging, device plans, `mma_unordered`, the device `scan` and the reusable execution context compile for sm_120 and are checked on the host only, and the execution context is not yet used by the generated code. The device half of `cairn predict` is NVIDIA's published specification, not a measurement.
 - Host performance was measured on one 16-thread x86-64 machine against plain C++, OpenMP and oneTBB at equal guards. Nothing is claimed against tuned C++ or CUDA.
 - SMT equivalence covers a fragment. An owner inside a record or an array, concurrency, device memory, the foreign boundary, storage floats and loops it cannot bound are `unknown`, and `unknown` is never reported as success.
-- The AI evidence is small. The equal-budget comparison with C++ and Rust has run only its pilot: six subjects, two tasks, one model (`evidence/v1_5/ai_benchmark/tables_pilot.md`). An earlier pilot had no comparison arm (`evidence/v1_1/ai_pilot`).
+- The AI evidence is one model family on small tasks. The equal-budget benchmark gave ten single-file tasks to one model, which also wrote the language and the tasks; every subject solved its task, so it measured cost and not difficulty. Most of CAIRN's extra tokens went to reading its documentation. An earlier pilot had no comparison arm (`evidence/v1_1/ai_pilot`).
 - Linux only. There is no package registry and no fetching; the package is not on PyPI. The bare-metal AArch64 target runs only under QEMU on an AArch64 host.
 
 ## What is established
@@ -149,6 +150,7 @@ What has not been validated:
 | The collector's seventeen arithmetic certificates hold, and its loop model stores in bounds. | Lean-checked | `proofs/Cairn/Collector.lean` |
 | A host `parallel` region runs level with OpenMP and oneTBB at equal guards and worker counts. | Benchmarked, one machine | `evidence/v1_4/bench` |
 | `cairn predict` ranks held-out host timings with a Kendall tau of 0.87 to 0.92, at a median error of 28 to 44 percent. | Benchmarked, one machine | `evidence/v1_4/perf_model` |
+| At equal budgets on ten small tasks, `claude-sonnet-5` solved 20 of 20 in each of CAIRN, C++ and Rust, and used 11.6 times the tokens in CAIRN that it used in C++. | Benchmarked, one model, preregistered | `evidence/v0_9/ai_benchmark` |
 
 [docs/verification.md](docs/verification.md) says what each proof, model and test covers and what it leaves out.
 
@@ -173,7 +175,8 @@ What has not been validated:
 src/cairn/     compiler/ runtime/ std/ verify/ agent/ editor/ perf/ projects/ templates/ targets/
 proofs/        Lean 4: collector certificates, ownership and lease calculus, lane pool, guard elision
 demos/         the three demos above
-examples/      runnable projects: hello/ systems/ apps/ interop/ embedded/, and inputs for the tools
+examples/      runnable projects: hello/ systems/ apps/ interop/ embedded/ bazel/, and inputs for the tools
+bazel/         rules_cairn: Bazel rules for CAIRN libraries, binaries and tests
 tests/         the suite: language/ soundness/ verification/ projects/ runtime/ tooling/ agent/
 tools/         checks/ ai/ corpus/ release/
 bench/         suite/ host/ codegen/ gpu/ benchmark harnesses, and ai/, the equal-budget AI benchmark

@@ -10,6 +10,7 @@ Each gate below is open. A gate closes when its tests, its documentation and its
 - Recipes over arbitrary expression fragments, and a checked theorem replayed for each recipe instance. A user cannot write a loop that carries its own certificates, as the collector does.
 - Extent identity through an element of an array of records (`cs[0].price` is still a part), and `alloc` fully separate from `free` in effect rows (a constructor's row still carries `free`).
 - Requiring, not only reporting, that a program's own templates need only their bounds (`cairn check --generics` does it on request).
+- Writing the minimum of a signed type as a literal: `-9223372036854775808` and a constant `0 - MAX - 1` are both `E-LITERAL-RANGE` for `i64`, which cost the benchmark's subjects nine refusals.
 
 ## Proof
 
@@ -31,7 +32,7 @@ Each gate below is open. A gate closes when its tests, its documentation and its
 
 ## AI evidence
 
-- The equal-budget comparison with C++ and Rust, preregistered in [bench/ai/PREREGISTRATION.md](../bench/ai/PREREGISTRATION.md), with results in `evidence/v1_5/ai_benchmark/`. It uses one model family, which also wrote the language, and ten small tasks; other model families and larger programs are open.
+- An equal-budget comparison where the languages differ in what gets solved. The preregistered run ([bench/ai/PREREGISTRATION.md](../bench/ai/PREREGISTRATION.md), `evidence/v0_9/ai_benchmark/`) found every task solved in CAIRN, C++ and Rust, with CAIRN at 11.6 times the tokens of C++, mostly spent reading its documentation. Open: larger programs, other model families, and a CAIRN that costs a newcomer fewer tokens to learn.
 - The preregistered packet trial ([tools/ai/protocol_trial.md](../tools/ai/protocol_trial.md)), which needs fresh model subjects. The context savings in `evidence/v1_4/context/` come from authored transcripts and show nothing about how a model does.
 
 ## Packaging
