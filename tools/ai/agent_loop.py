@@ -21,9 +21,9 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
-from ai.task_eval import evaluate, validate_contract
 from cairn.agent.agent_tools import EditHost, digest, explain, load_json_strict, stable_json
 from cairn.compiler.cairnc import Diagnostic
+from cairn.verify.testing import evaluate, validate_contract
 
 
 def ask(command, encoded, host, public, source):

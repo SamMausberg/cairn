@@ -8,9 +8,9 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
-from ai.task_eval import evaluate
 from cairn.agent.agent_tools import EditSession
 from cairn.agent.sketches import ScalarContract, Sketch, solve_finite
+from cairn.verify.testing import evaluate
 
 REFERENCE = """fn average(x:u64,y:u64)->u64 {
   return (x/2)+(y/2)+((x%2+y%2)/2);

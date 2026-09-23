@@ -12,9 +12,11 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import functools
+import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -98,6 +100,37 @@ def generate(source: Path, out: Path) -> dict:
     runtime_headers(out)
     (out / (source.stem + ".cpp")).write_text(cpp)
     return receipt
+
+
+def compare_sections(names: list[str], run) -> list[dict]:
+    """Each function's section in results/native/native.o (`cf_`) beside the C++ reference's (`cc_`) in reference.o.
+
+    Built with -ffunction-sections, one function is one section. Two are identical only if their bytes and their
+    relocations (offset, type and target, with the prefix erased) both match. `run(argv)` returns the tool's stdout.
+    """
+    rows = []
+    for name in names:
+        data, relocations = [], []
+        for prefix, obj in (("cf", "native"), ("cc", "reference")):
+            section, dump = f".text.{prefix}_{name}", f"results/native/{obj}_{name}.bin"
+            run(["objcopy", f"--dump-section={section}={dump}", f"results/native/{obj}.o"])
+            data.append((ROOT / dump).read_bytes())
+            listed = run(["objdump", "-r", "-j", section, f"results/native/{obj}.o"]).splitlines()
+            found = (re.match(r"^([0-9a-f]+)\s+(R_\S+)\s+(\S+)", line) for line in listed)
+            relocations.append([tuple(re.sub("c[fc]_", "FUNC_", x) for x in m.groups()) for m in found if m])
+        rows.append(
+            {
+                "function": name,
+                "cairn_bytes": len(data[0]),
+                "cpp_bytes": len(data[1]),
+                "bytes_equal": data[0] == data[1],
+                "relocations_equal": relocations[0] == relocations[1],
+                "cairn_sha256": hashlib.sha256(data[0]).hexdigest(),
+                "cpp_sha256": hashlib.sha256(data[1]).hexdigest(),
+                "relocations": relocations,
+            }
+        )
+    return rows
 
 
 DEVICE_LOCK = Path("/tmp/cairn-gpu.lock")  # one path for every checkout and worktree on the machine

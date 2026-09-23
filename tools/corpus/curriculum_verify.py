@@ -8,6 +8,7 @@ independent tasks. All answer keys are shipped for audit, not secret evaluation.
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -17,9 +18,9 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
-from ai.task_eval import FLAGS, validate_contract
 from cairn.agent.agent_tools import digest, load_json_strict, stable_json
 from cairn.compiler.cairnc import compile_source
+from cairn.verify.testing import FLAGS, validate_contract
 from support import environment, runtime_headers
 
 
@@ -55,7 +56,8 @@ def main():
                 cp = subprocess.run(
                     [
                         sys.executable,
-                        str(R / "tools/ai/task_eval.py"),
+                        "-m",
+                        "cairn.verify.testing",
                         "--child",
                         str(t / "libcorpus.so"),
                         str(t / "source.cairn"),
@@ -64,6 +66,7 @@ def main():
                     text=True,
                     capture_output=True,
                     timeout=10,
+                    env={**os.environ, "PYTHONPATH": str(R / "src")},
                 )
                 events = [json.loads(line) for line in cp.stdout.splitlines()]
                 verdict = next((x for x in reversed(events) if "status" in x), {"status": "no-verdict"})

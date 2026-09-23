@@ -372,11 +372,9 @@ def test_semantic_check():
 
 
 @needs_clang
-def test_task_eval():
-    result = parsed(
-        tool("tools/ai/task_eval.py", "examples/agent/selection_after.cairn", "--contract", "examples/agent/task.json")
-    )
-    assert result["status"] == "passed-finite-tests" and result["cases"] > 0
+def test_the_agent_example_passes_its_task_contract():
+    result = parsed(tool("bin/cairn", "test", "examples/agent/selection_after.cairn", "--contract", "examples/agent/task.json"))  # fmt: skip
+    assert result["status"] == "passed-finite-tests" and result["tests"][0]["cases"] > 0
 
 
 def test_audit_repository():

@@ -1,8 +1,12 @@
+"""The finite task contracts `cairn test --contract` runs: what passes, what fails, and what is not a contract."""
+
 import copy
+import subprocess
 
 import pytest
 
-from ai.task_eval import evaluate
+import cairn.verify.testing as testing
+from cairn.verify.testing import evaluate
 
 SRC = "fn f(x:u64)->u64 { return add_wrap(x,1); }"
 TASK = {
@@ -74,3 +78,16 @@ def test_nonfinite_is_a_behavior_failure_not_a_runner_crash():
     t = {"schema": "cairn.task/1", "symbol": "f", "cases": [{"args": {"x": 0.0}, "return": 1.0}]}
     r = evaluate(s, t)
     assert r["status"] == "failed-tests" and r["actual_return"] == {"nonfinite": "nan"}
+
+
+def test_late_native_failure_invalidates_pass(monkeypatch):
+    """A printed pass cannot override process failure after that print."""
+    calls = iter(
+        [
+            subprocess.CompletedProcess([], 0, "", ""),
+            subprocess.CompletedProcess([], 7, '{"status":"passed-finite-tests","cases":1}\n', "late crash"),
+        ]
+    )
+    monkeypatch.setattr(testing.subprocess, "run", lambda *a, **k: next(calls))
+    r = evaluate("fn f()->u64=0;", {"schema": "cairn.task/1", "symbol": "f", "cases": [{"args": {}, "return": 0}]})
+    assert r["status"] == "native-trap-or-crash" and r["execution_exit_code"] == 7

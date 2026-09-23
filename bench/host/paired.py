@@ -7,11 +7,9 @@ here says nothing about another host, another compiler or an expert hand-tuned b
 """
 
 import csv
-import hashlib
 import json
 import os
 import platform
-import re
 import statistics
 import subprocess
 import sys
@@ -20,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.projects.toolchain import find
-from support import best_profile, environment, generate, profile_flags
+from support import best_profile, compare_sections, environment, generate, profile_flags
 
 os.chdir(ROOT)
 KERNELS = ["saxpy", "dot", "sum_wrap", "prefix", "count_gt", "histogram", "compact_even", "lower_bound", "gcd"]
@@ -80,35 +78,7 @@ for (name, n, pattern), rr in groups.items():
         }
     )
 (ROOT / "results/timing/timing_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-# Compare section bytes AND relocation targets/types/offsets, not disassembly text alone.
-equivalence = []
-for name in KERNELS:
-    extracts = []
-    rels = []
-    for prefix, obj in [("cf", "native"), ("cc", "reference")]:
-        out = f"results/native/{obj}_{name}.bin"
-        sec = f".text.{prefix}_{name}"
-        run(["objcopy", f"--dump-section={sec}={out}", f"results/native/{obj}.o"])
-        extracts.append((ROOT / out).read_bytes())
-        r = run(["objdump", "-r", "-j", sec, f"results/native/{obj}.o"]).stdout
-        rel = []
-        for line in r.splitlines():
-            m = re.match(r"^([0-9a-f]+)\s+(R_\S+)\s+(\S+)", line)
-            if m:
-                rel.append(tuple(x.replace("cf_", "FUNC_").replace("cc_", "FUNC_") for x in m.groups()))
-        rels.append(rel)
-    equivalence.append(
-        {
-            "kernel": name,
-            "cairn_bytes": len(extracts[0]),
-            "cpp_bytes": len(extracts[1]),
-            "bytes_equal": extracts[0] == extracts[1],
-            "relocations_equal": rels[0] == rels[1],
-            "cairn_sha256": hashlib.sha256(extracts[0]).hexdigest(),
-            "cpp_sha256": hashlib.sha256(extracts[1]).hexdigest(),
-            "relocations": rels,
-        }
-    )
+equivalence = compare_sections(KERNELS, lambda cmd: run(cmd).stdout)
 (ROOT / "results/timing/codegen_equivalence.json").write_text(json.dumps(equivalence, indent=2) + "\n")
 (ROOT / "results/timing/benchmark_environment.json").write_text(
     json.dumps(

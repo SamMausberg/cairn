@@ -9,7 +9,6 @@ import hashlib
 import json
 import os
 import platform
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -17,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.projects.toolchain import find
-from support import best_profile, generate, profile_flags
+from support import best_profile, compare_sections, generate, profile_flags
 
 os.chdir(ROOT)
 NAMES = ["saxpy", "dot", "sum_wrap", "prefix", "count_gt", "histogram", "compact_even", "lower_bound", "gcd"]
@@ -39,33 +38,7 @@ for src, out in [
     ("bench/host/reference.cpp", "results/native/reference.o"),
 ]:
     run([find("clang++"), *FLAGS, "-c", src, "-o", out])
-rows = []
-for name in NAMES:
-    data = []
-    rels = []
-    for prefix, obj in [("cf", "native"), ("cc", "reference")]:
-        out = f"results/native/{obj}_{name}.bin"
-        sec = f".text.{prefix}_{name}"
-        run(["objcopy", f"--dump-section={sec}={out}", f"results/native/{obj}.o"])
-        data.append((ROOT / out).read_bytes())
-        entries = []
-        for line in run(["objdump", "-r", "-j", sec, f"results/native/{obj}.o"]).splitlines():
-            m = re.match(r"^([0-9a-f]+)\s+(R_\S+)\s+(\S+)", line)
-            if m:
-                entries.append(tuple(x.replace("cf_", "FUNC_").replace("cc_", "FUNC_") for x in m.groups()))
-        rels.append(entries)
-    rows.append(
-        {
-            "function": name,
-            "cairn_bytes": len(data[0]),
-            "cpp_bytes": len(data[1]),
-            "bytes_equal": data[0] == data[1],
-            "relocations_equal": rels[0] == rels[1],
-            "cairn_sha256": hashlib.sha256(data[0]).hexdigest(),
-            "cpp_sha256": hashlib.sha256(data[1]).hexdigest(),
-            "relocations": rels,
-        }
-    )
+rows = compare_sections(NAMES, run)
 identical = sum(x["bytes_equal"] and x["relocations_equal"] for x in rows)
 result = {
     "generated_source_sha256": hashlib.sha256((ROOT / "results/native/native.cpp").read_bytes()).hexdigest(),
