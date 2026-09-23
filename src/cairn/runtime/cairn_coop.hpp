@@ -236,7 +236,8 @@ blocks(std::size_t grid, F body) {
   Device context(memory);
   const std::size_t t = threadIdx.x;
   for(std::size_t b = blockIdx.x; b < grid; b += gridDim.x) {  // the same trip count for the whole block
-    for(std::size_t e = t; e < BYTES; e += THREADS) memory[e] = 0;
+    if constexpr(BYTES > 0)  // a region without arrays zeroes nothing; nvcc refuses the comparison with 0
+      for(std::size_t e = t; e < BYTES; e += THREADS) memory[e] = 0;
     __syncthreads();
     body(context, b, t);
     __pipeline_wait_prior(0);  // a stage's fills still in flight land before the memory is zeroed again

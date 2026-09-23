@@ -18,7 +18,7 @@ from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
 from cairn.compiler.cooperative import participation
 from cairn.projects.toolchain import command
-from emitted import device_build, refused
+from emitted import device_build, refused, watched
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -344,3 +344,92 @@ def test_a_thread_may_read_what_it_writes_through_other_loops_over_the_same_rang
     compile_source(IN_PLACE.replace("READ", "16").replace("GUARD", BOTH))
     refused("E-COOP-GLOBAL", IN_PLACE.replace("READ", "17").replace("GUARD", BOTH))
     refused("E-COOP-GLOBAL", IN_PLACE.replace("READ", "16").replace("GUARD", "bx * 64 + tx + 32 * j < n"))
+
+
+SHUFFLES = """fn lanes(g:usize, n:usize, out:rw<u64>[n], most:rw<u64>[n], sums:rw<f32>[n]) {
+  blocks b in g threads t in 64 {
+    let v:u64 = u64(t) * 3 + 1;
+    let a = shuffle_xor(v, 5);
+    let c = shuffle_down(v, 7);
+    let d = shuffle(v, 31);
+    let top = reduce max warp yield v;
+    let total = reduce + warp yield f32(t) * 0.5;
+    let i = b * 64 + t;
+    if i < n {
+      out[i] = a * 1000000 + c * 1000 + d;
+      most[i] = top;
+      sums[i] = total;
+    }
+  }
+}
+
+fn main() -> i32 {
+  let n:usize = 128;
+  buffer out:u64[n] = zeroed;
+  buffer most:u64[n] = zeroed;
+  buffer sums:f32[n] = zeroed;
+  lanes(2, n, out, most, sums);
+  for i in 0..n {
+    let t = i % 64;
+    let lane = t % 32;
+    let base = t - lane;
+    let mut down = lane + 7;
+    if down >= 32 { down = lane; }
+    let want = u64(base + (lane ^ 5)) * 3 + 1;
+    let got = (u64(base + down) * 3 + 1) * 1000 + u64(base + 31) * 3 + 1;
+    if out[i] != want * 1000000 + got { return 1; }
+    if most[i] != u64(base + 31) * 3 + 1 { return 2; }
+    let mut half:f32 = 0.0;
+    for k in 0..32 { half = half + f32(base + k) * 0.5; }   // small halves: every order gives these bits
+    if to_bits(sums[i]) != to_bits(half) { return 3; }
+  }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_each_shuffle_moves_the_value_of_the_lane_it_names(tmp_path, cxx):
+    """shuffle(v, 31), shuffle_xor(v, 5) and shuffle_down(v, 7), which keeps its own value past the warp's end,
+    against the plain arithmetic of which lane each names, on host threads under the thread sanitizer."""
+    ran = watched(tmp_path, compile_source(SHUFFLES)[0], cxx, "thread")
+    assert ran.returncode == 0 and "ThreadSanitizer" not in ran.stderr, ran.stdout + ran.stderr[-3000:]
+
+
+def test_each_shuffle_is_one_warp_shuffle_on_the_device(tmp_path):
+    device = SHUFFLES.split("fn main")[0].replace("[n])", "[n]@device)").replace("[n],", "[n]@device,")
+    ptx = device_build(tmp_path, compile_source(device)[0], ptx=True).read_text()
+    assert "shfl.sync.bfly" in ptx and "shfl.sync.down" in ptx and "shfl.sync.idx" in ptx
+
+
+VARIETY = """fn variety(g:usize, h:usize, n:usize, out:rw<f32>[n]@device, flags:rw<u8>[n]@device) {
+  blocks bx, by, bz in g, h, 2 threads tx, ty, tz in 32, 2, 2 {
+    shared halves:f16[128] = zeroed;
+    shared marks:bool[128] = zeroed;
+    let t = tx + 32 * ty + 64 * tz;
+    halves[t] = f16(f32(t));
+    marks[t] = t % 2 == 0;
+    barrier;
+    let other = f32(halves[127 - t]);
+    let small:u8 = u8(tx);
+    let flip = shuffle_xor(marks[t], 1);
+    let low = shuffle_down(small, 3);
+    let wide:i16 = i16(tx) - 16;
+    let neg = shuffle(wide, 2);
+    let sum = reduce + warp yield small;
+    let block = (bz * h + by) * g + bx;
+    let i = block * 128 + t;
+    if i < n {
+      out[i] = other + f32(neg);
+      if flip { flags[i] = low + sum; } else { flags[i] = 0; }
+    }
+  }
+}
+"""
+
+
+def test_three_dimensional_shapes_and_narrow_values_compile_for_the_device(tmp_path):
+    """Three block and three thread names, f16 and bool shared arrays, shuffles of a bool, a u8 and an i16 (moved as
+    32 bits), and a u8 warp sum: compiled for sm_120, never run."""
+    ptx = device_build(tmp_path, compile_source(VARIETY)[0], ptx=True).read_text()
+    assert ptx.count("shfl.sync") == 8 and ptx.count("bar.sync") == 3
