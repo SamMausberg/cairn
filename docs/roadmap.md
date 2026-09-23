@@ -5,7 +5,6 @@ Each gate below is open. A gate closes when its tests, its documentation and its
 ## Language
 
 - Cancelling a task, recovering from the loss of a device, and collectives across devices. The last two cannot be exercised on the reference machine, which has one GPU and runs device code only under `make gpu`.
-- Device work drawing its streams, events and scratch from an execution context. `cr::gpu::Context` does this against a mock device, but the lowering still makes a stream per ticket and allocates per reduction until a `make gpu` run has checked it.
 - Plans that transform code beyond fusion, vector chunks and stencil tiles: host tiling, fusion of bodies that can trap, and plans for queued device regions.
 - Recipes over arbitrary expression fragments, and a checked theorem replayed for each recipe instance. A user cannot write a loop that carries its own certificates, as the collector does.
 - Extent identity through an element of an array of records (`cs[0].price` is still a part), and `alloc` fully separate from `free` in effect rows (a constructor's row still carries `free`).
