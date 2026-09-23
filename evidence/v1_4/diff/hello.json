@@ -1,0 +1,36 @@
+{
+  "schema": "cairn.diff/1",
+  "compiler": "cairn-native/1.3.0",
+  "compared": "two sources, each checked and lowered by this compiler; not two compilers",
+  "summary": {
+    "identical-code": 2
+  },
+  "functions": {
+    "average": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "main": {
+      "own_code": "identical",
+      "class": "identical-code"
+    }
+  },
+  "types": {},
+  "tests": {},
+  "semver": {
+    "level": "none",
+    "reasons": []
+  },
+  "formal_status": "not-verified",
+  "predicted": {},
+  "old": {
+    "named": "v1.3.0",
+    "kind": "revision",
+    "commit": "1daf0875fae976bf914984ce0fd66c8304bcaf67"
+  },
+  "new": {
+    "named": "13692b3e0333925b8f9fb2f2af2800a337360b05",
+    "kind": "revision",
+    "commit": "13692b3e0333925b8f9fb2f2af2800a337360b05"
+  }
+}

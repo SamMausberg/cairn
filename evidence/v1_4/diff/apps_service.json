@@ -1,0 +1,410 @@
+{
+  "schema": "cairn.diff/1",
+  "compiler": "cairn-native/1.3.0",
+  "compared": "two sources, each checked and lowered by this compiler; not two compilers",
+  "summary": {
+    "identical-code": 6,
+    "unknown": 2,
+    "signature-changed": 2,
+    "added": 3,
+    "removed": 1
+  },
+  "functions": {
+    "admit": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "q",
+            "rw<IoRing>"
+          ],
+          [
+            "clients",
+            "rw<Buf[Client]>"
+          ],
+          [
+            "fd",
+            "i32"
+          ]
+        ],
+        "returns": "void",
+        "public": false
+      }
+    },
+    "erase": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "find": {
+      "own_code": "identical",
+      "class": "identical-code",
+      "deltas": {
+        "syntactic_check_sites": {
+          "before": {
+            "view_entry": 1,
+            "bounds": 3,
+            "tag": 1
+          },
+          "after": {
+            "view_entry": 1,
+            "bounds": 3,
+            "overflow": 1,
+            "tag": 1
+          }
+        },
+        "discharged_check_sites": {
+          "before": {},
+          "after": {
+            "overflow": 1
+          }
+        }
+      }
+    },
+    "hang_up": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "clients",
+            "rw<Buf[Client]>"
+          ],
+          [
+            "k",
+            "usize"
+          ]
+        ],
+        "returns": "void",
+        "public": false
+      }
+    },
+    "main": {
+      "own_code": "changed",
+      "class": "unknown",
+      "reason": "Expression form 'str' is not modeled.",
+      "deltas": {
+        "effects": {
+          "added": [],
+          "removed": [
+            "ffi:accept",
+            "ffi:recv",
+            "stack_storage"
+          ]
+        },
+        "syntactic_check_sites": {
+          "before": {
+            "conversion": 2,
+            "tag": 1
+          },
+          "after": {
+            "conversion": 1,
+            "tag": 1
+          }
+        },
+        "emitted_guards": {
+          "before": 2,
+          "after": 1
+        }
+      }
+    },
+    "new_table": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "owned": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "put": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "respond": {
+      "own_code": "changed",
+      "class": "signature-changed",
+      "deltas": {
+        "signature": {
+          "before": {
+            "params": [
+              [
+                "c",
+                "ro<std.net.Socket>"
+              ],
+              [
+                "t",
+                "rw<Table>"
+              ],
+              [
+                "n",
+                "usize"
+              ],
+              [
+                "line",
+                "ro<u8>[n]@host"
+              ]
+            ],
+            "returns": "std.core.Result[bool, std.io.IoError]",
+            "public": false
+          },
+          "after": {
+            "params": [
+              [
+                "fd",
+                "i32"
+              ],
+              [
+                "t",
+                "rw<Table>"
+              ],
+              [
+                "n",
+                "usize"
+              ],
+              [
+                "line",
+                "ro<u8>[n]@host"
+              ]
+            ],
+            "returns": "std.core.Result[bool, std.io.IoError]",
+            "public": false
+          }
+        },
+        "effects": {
+          "added": [],
+          "removed": [
+            "read:c"
+          ]
+        },
+        "syntactic_check_sites": {
+          "before": {
+            "view_entry": 1,
+            "bounds": 12,
+            "overflow": 4,
+            "tag": 1
+          },
+          "after": {
+            "view_entry": 1,
+            "overflow": 9,
+            "bounds": 12,
+            "tag": 1
+          }
+        },
+        "discharged_check_sites": {
+          "before": {
+            "overflow": 3
+          },
+          "after": {
+            "overflow": 8,
+            "bounds": 3
+          }
+        },
+        "emitted_guards": {
+          "before": 15,
+          "after": 12
+        }
+      }
+    },
+    "run": {
+      "own_code": "changed",
+      "class": "unknown",
+      "reason": "Expression form 'str' is not modeled.",
+      "deltas": {
+        "effects": {
+          "added": [],
+          "removed": [
+            "ffi:accept",
+            "ffi:recv",
+            "stack_storage"
+          ]
+        },
+        "syntactic_check_sites": {
+          "before": {
+            "conversion": 1
+          },
+          "after": {
+            "overflow": 3,
+            "allocation": 2,
+            "tag": 1,
+            "ring": 4,
+            "collect": 1,
+            "conversion": 5,
+            "bounds": 4
+          }
+        },
+        "discharged_check_sites": {
+          "before": {
+            "conversion": 1
+          },
+          "after": {
+            "overflow": 1,
+            "conversion": 2
+          }
+        },
+        "emitted_guards": {
+          "before": 0,
+          "after": 10
+        }
+      }
+    },
+    "say": {
+      "own_code": "changed",
+      "class": "signature-changed",
+      "deltas": {
+        "signature": {
+          "before": {
+            "params": [
+              [
+                "c",
+                "ro<std.net.Socket>"
+              ],
+              [
+                "n",
+                "usize"
+              ],
+              [
+                "message",
+                "ro<u8>[n]@host"
+              ]
+            ],
+            "returns": "std.core.Result[usize, std.io.IoError]",
+            "public": false
+          },
+          "after": {
+            "params": [
+              [
+                "fd",
+                "i32"
+              ],
+              [
+                "n",
+                "usize"
+              ],
+              [
+                "message",
+                "ro<u8>[n]@host"
+              ]
+            ],
+            "returns": "std.core.Result[usize, std.io.IoError]",
+            "public": false
+          }
+        },
+        "effects": {
+          "added": [],
+          "removed": [
+            "read:c"
+          ]
+        }
+      }
+    },
+    "serve": {
+      "class": "removed",
+      "signature": {
+        "params": [
+          [
+            "c",
+            "ro<std.net.Socket>"
+          ],
+          [
+            "t",
+            "rw<Table>"
+          ]
+        ],
+        "returns": "std.core.Result[bool, std.io.IoError]",
+        "public": false
+      }
+    },
+    "take_in": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "c",
+            "rw<Client>"
+          ],
+          [
+            "t",
+            "rw<Table>"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "got",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "std.core.Result[bool, std.io.IoError]",
+        "public": false
+      }
+    },
+    "word_end": {
+      "own_code": "identical",
+      "class": "identical-code"
+    }
+  },
+  "types": {
+    "Client": "added"
+  },
+  "tests": {},
+  "semver": {
+    "level": "major",
+    "reasons": [
+      "respond's signature changed",
+      "say's signature changed",
+      "serve was removed",
+      "admit was added",
+      "hang_up was added",
+      "take_in was added",
+      "type Client was added"
+    ],
+    "unproven": [
+      "main",
+      "run"
+    ]
+  },
+  "formal_status": "not-verified",
+  "predicted": {
+    "predicted": "Neither version was built or run.",
+    "profile": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "functions": {
+      "main": [
+        {
+          "sizes": {},
+          "before_ns": 0.05481,
+          "after_ns": 0.05481,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "memory (l1)",
+            "memory (l1)"
+          ],
+          "confidence": "low"
+        }
+      ],
+      "run": [
+        {
+          "sizes": {},
+          "before_ns": 0.05481,
+          "after_ns": 0.05481,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "memory (l1)",
+            "memory (l1)"
+          ],
+          "confidence": "low"
+        }
+      ]
+    }
+  },
+  "old": {
+    "named": "v1.3.0",
+    "kind": "revision",
+    "commit": "1daf0875fae976bf914984ce0fd66c8304bcaf67"
+  },
+  "new": {
+    "named": "13692b3e0333925b8f9fb2f2af2800a337360b05",
+    "kind": "revision",
+    "commit": "13692b3e0333925b8f9fb2f2af2800a337360b05"
+  }
+}

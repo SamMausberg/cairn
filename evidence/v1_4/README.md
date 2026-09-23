@@ -15,3 +15,4 @@ Each directory is one record, taken on the reference machine while the 1.4 work 
 | `tokens/` | The library and the examples counted in lexer tokens before and after the reduction passes. |
 | `protocol_trial/` | What was checked before the preregistered edit-protocol trial may run; the trial itself has not run. |
 | `review/` | The adversarial reviews of what 1.4 added: what was attacked, what was found and fixed, and what held. |
+| `diff/` | `cairn diff v1.3.0` against a 1.4 commit, for the packaged library and every example project both hold: each function's class, its exact changes and the semantic-version verdict. |

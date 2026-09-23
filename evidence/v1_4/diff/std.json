@@ -1,0 +1,3614 @@
+{
+  "schema": "cairn.diff/1",
+  "compiler": "cairn-native/1.3.0",
+  "compared": "two sources, each checked and lowered by this compiler; not two compilers",
+  "summary": {
+    "identical-code": 60,
+    "identical-source": 21,
+    "smt-equivalent": 1,
+    "unknown": 40,
+    "added": 129
+  },
+  "functions": {
+    "std.core.Eq.T.same[u8]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "a",
+            "ro<u8>"
+          ],
+          [
+            "b",
+            "ro<u8>"
+          ]
+        ],
+        "returns": "bool",
+        "public": true
+      }
+    },
+    "std.core.Eq.bool.same": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.draw.apart": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "a",
+            "std.draw.Mark"
+          ],
+          [
+            "b",
+            "std.draw.Mark"
+          ]
+        ],
+        "returns": "bool",
+        "public": true
+      }
+    },
+    "std.draw.blit": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "dst",
+            "rw<std.image.Image>"
+          ],
+          [
+            "src",
+            "ro<std.image.Image>"
+          ],
+          [
+            "x",
+            "i64"
+          ],
+          [
+            "y",
+            "i64"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.draw.blit_part": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "dst",
+            "rw<std.image.Image>"
+          ],
+          [
+            "src",
+            "ro<std.image.Image>"
+          ],
+          [
+            "sx",
+            "usize"
+          ],
+          [
+            "sy",
+            "usize"
+          ],
+          [
+            "w",
+            "usize"
+          ],
+          [
+            "h",
+            "usize"
+          ],
+          [
+            "x",
+            "i64"
+          ],
+          [
+            "y",
+            "i64"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.draw.capture": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "ro<std.image.Image>"
+          ],
+          [
+            "l",
+            "ro<std.draw.Layout>"
+          ],
+          [
+            "k",
+            "usize"
+          ]
+        ],
+        "returns": "std.core.Result[bool, std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.draw.circle": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "rw<std.image.Image>"
+          ],
+          [
+            "cx",
+            "i64"
+          ],
+          [
+            "cy",
+            "i64"
+          ],
+          [
+            "r",
+            "i64"
+          ],
+          [
+            "c",
+            "u32"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.draw.find": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "l",
+            "ro<std.draw.Layout>"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "name",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "usize",
+        "public": false
+      }
+    },
+    "std.draw.glyph": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "g",
+            "usize"
+          ],
+          [
+            "row",
+            "usize"
+          ]
+        ],
+        "returns": "u8",
+        "public": false
+      }
+    },
+    "std.draw.inside": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "a",
+            "std.draw.Mark"
+          ],
+          [
+            "b",
+            "std.draw.Mark"
+          ]
+        ],
+        "returns": "bool",
+        "public": true
+      }
+    },
+    "std.draw.json": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "l",
+            "ro<std.draw.Layout>"
+          ],
+          [
+            "img",
+            "ro<std.image.Image>"
+          ],
+          [
+            "at_ns",
+            "u64"
+          ],
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.draw.layer": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "base",
+            "rw<std.image.Image>"
+          ],
+          [
+            "top",
+            "ro<std.image.Image>"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.draw.layout": {
+      "class": "added",
+      "signature": {
+        "params": [],
+        "returns": "std.draw.Layout",
+        "public": true
+      }
+    },
+    "std.draw.line": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "rw<std.image.Image>"
+          ],
+          [
+            "x0",
+            "i64"
+          ],
+          [
+            "y0",
+            "i64"
+          ],
+          [
+            "x1",
+            "i64"
+          ],
+          [
+            "y1",
+            "i64"
+          ],
+          [
+            "c",
+            "u32"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.draw.mark": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "l",
+            "rw<std.draw.Layout>"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "name",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "x",
+            "i64"
+          ],
+          [
+            "y",
+            "i64"
+          ],
+          [
+            "w",
+            "i64"
+          ],
+          [
+            "h",
+            "i64"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.draw.marked": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "l",
+            "ro<std.draw.Layout>"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "name",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "bool",
+        "public": true
+      }
+    },
+    "std.draw.over": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "d",
+            "u32"
+          ],
+          [
+            "s",
+            "u32"
+          ]
+        ],
+        "returns": "u32",
+        "public": true
+      }
+    },
+    "std.draw.place": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "l",
+            "ro<std.draw.Layout>"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "name",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "std.draw.Mark",
+        "public": true
+      }
+    },
+    "std.draw.plot": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "rw<std.image.Image>"
+          ],
+          [
+            "x",
+            "i64"
+          ],
+          [
+            "y",
+            "i64"
+          ],
+          [
+            "c",
+            "u32"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.draw.rect": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "rw<std.image.Image>"
+          ],
+          [
+            "x",
+            "i64"
+          ],
+          [
+            "y",
+            "i64"
+          ],
+          [
+            "w",
+            "i64"
+          ],
+          [
+            "h",
+            "i64"
+          ],
+          [
+            "c",
+            "u32"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.draw.text": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "rw<std.image.Image>"
+          ],
+          [
+            "x",
+            "i64"
+          ],
+          [
+            "y",
+            "i64"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "s",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "c",
+            "u32"
+          ],
+          [
+            "scale",
+            "i64"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.draw.text_width": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "scale",
+            "i64"
+          ]
+        ],
+        "returns": "i64",
+        "public": true
+      }
+    },
+    "std.env.args": {
+      "class": "added",
+      "signature": {
+        "params": [],
+        "returns": "std.core.Result[std.env.Args, std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.env.begin": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "a",
+            "ro<std.env.Args>"
+          ],
+          [
+            "i",
+            "usize"
+          ]
+        ],
+        "returns": "usize",
+        "public": true
+      }
+    },
+    "std.env.count": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "a",
+            "ro<std.env.Args>"
+          ]
+        ],
+        "returns": "usize",
+        "public": true
+      }
+    },
+    "std.env.end": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "a",
+            "ro<std.env.Args>"
+          ],
+          [
+            "i",
+            "usize"
+          ]
+        ],
+        "returns": "usize",
+        "public": true
+      }
+    },
+    "std.env.var": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "name",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "std.core.Result[std.core.Option[std.vec.Vec[u8]], std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.fmt.below": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "ro<u64>[40]@host"
+          ],
+          [
+            "j",
+            "usize"
+          ]
+        ],
+        "returns": "bool",
+        "public": false
+      }
+    },
+    "std.fmt.bit": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "ro<u64>[40]@host"
+          ],
+          [
+            "j",
+            "usize"
+          ]
+        ],
+        "returns": "bool",
+        "public": false
+      }
+    },
+    "std.fmt.bytes": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "s",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.fmt.fixed": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "value",
+            "f64"
+          ],
+          [
+            "places",
+            "usize"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.fmt.hex": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "value",
+            "u64"
+          ],
+          [
+            "width",
+            "usize"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.fmt.int[i64]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "value",
+            "i64"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.fmt.left": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "s",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "width",
+            "usize"
+          ],
+          [
+            "fill",
+            "u8"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.fmt.lower": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "rw<u64>[40]@host"
+          ],
+          [
+            "k",
+            "usize"
+          ]
+        ],
+        "returns": "void",
+        "public": false
+      }
+    },
+    "std.fmt.raise": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "rw<u64>[40]@host"
+          ],
+          [
+            "k",
+            "usize"
+          ]
+        ],
+        "returns": "void",
+        "public": false
+      }
+    },
+    "std.fmt.repeat": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "count",
+            "usize"
+          ],
+          [
+            "fill",
+            "u8"
+          ]
+        ],
+        "returns": "void",
+        "public": false
+      }
+    },
+    "std.fmt.right": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "s",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "width",
+            "usize"
+          ],
+          [
+            "fill",
+            "u8"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.fmt.tenth": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "rw<u64>[40]@host"
+          ]
+        ],
+        "returns": "u8",
+        "public": false
+      }
+    },
+    "std.fmt.times": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "rw<u64>[40]@host"
+          ],
+          [
+            "by",
+            "u64"
+          ]
+        ],
+        "returns": "void",
+        "public": false
+      }
+    },
+    "std.fmt.uint[u64]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "value",
+            "u64"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.fmt.uint[usize]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "value",
+            "usize"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.fmt.zero": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "ro<u64>[40]@host"
+          ]
+        ],
+        "returns": "bool",
+        "public": false
+      }
+    },
+    "std.fs.append": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "path",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "m",
+            "usize"
+          ],
+          [
+            "data",
+            "ro<u8>[m]@host"
+          ]
+        ],
+        "returns": "std.core.Result[usize, std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.fs.exists": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "path",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "bool",
+        "public": true
+      }
+    },
+    "std.fs.open": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "path",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "flags",
+            "i32"
+          ]
+        ],
+        "returns": "std.core.Result[std.io.File, std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.fs.put": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "path",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "m",
+            "usize"
+          ],
+          [
+            "data",
+            "ro<u8>[m]@host"
+          ],
+          [
+            "flags",
+            "i32"
+          ]
+        ],
+        "returns": "std.core.Result[usize, std.io.IoError]",
+        "public": false
+      }
+    },
+    "std.fs.read": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "path",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "std.core.Result[std.vec.Vec[u8], std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.fs.remove": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "path",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "std.core.Result[usize, std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.fs.rename": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "from",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "k",
+            "usize"
+          ],
+          [
+            "to",
+            "ro<u8>[k]@host"
+          ]
+        ],
+        "returns": "std.core.Result[usize, std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.fs.terminated": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "path",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "c",
+            "rw<u8>[4096]@host"
+          ]
+        ],
+        "returns": "std.core.Result[usize, std.io.IoError]",
+        "public": false
+      }
+    },
+    "std.fs.write": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "path",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "m",
+            "usize"
+          ],
+          [
+            "data",
+            "ro<u8>[m]@host"
+          ]
+        ],
+        "returns": "std.core.Result[usize, std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.image.adler": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "data",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "u32",
+        "public": false
+      }
+    },
+    "std.image.alpha": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "c",
+            "u32"
+          ]
+        ],
+        "returns": "u8",
+        "public": true
+      }
+    },
+    "std.image.blue": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "c",
+            "u32"
+          ]
+        ],
+        "returns": "u8",
+        "public": true
+      }
+    },
+    "std.image.chunk": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "table",
+            "ro<u32>[256]@host"
+          ],
+          [
+            "kind",
+            "ro<u8>[4]@host"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "data",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "void",
+        "public": false
+      }
+    },
+    "std.image.crc": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "table",
+            "ro<u32>[256]@host"
+          ],
+          [
+            "start",
+            "u32"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "data",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "u32",
+        "public": false
+      }
+    },
+    "std.image.crc_table": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "table",
+            "rw<u32>[256]@host"
+          ]
+        ],
+        "returns": "void",
+        "public": false
+      }
+    },
+    "std.image.differ": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "a",
+            "ro<std.image.Image>"
+          ],
+          [
+            "b",
+            "ro<std.image.Image>"
+          ]
+        ],
+        "returns": "usize",
+        "public": true
+      }
+    },
+    "std.image.fill": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "rw<std.image.Image>"
+          ],
+          [
+            "c",
+            "u32"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.image.get": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "ro<std.image.Image>"
+          ],
+          [
+            "x",
+            "usize"
+          ],
+          [
+            "y",
+            "usize"
+          ]
+        ],
+        "returns": "u32",
+        "public": true
+      }
+    },
+    "std.image.green": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "c",
+            "u32"
+          ]
+        ],
+        "returns": "u8",
+        "public": true
+      }
+    },
+    "std.image.new": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "w",
+            "usize"
+          ],
+          [
+            "h",
+            "usize"
+          ]
+        ],
+        "returns": "std.image.Image",
+        "public": true
+      }
+    },
+    "std.image.packed": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "w",
+            "usize"
+          ],
+          [
+            "h",
+            "usize"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "zstream",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.image.png": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "ro<std.image.Image>"
+          ],
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.image.ppm": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "ro<std.image.Image>"
+          ],
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.image.put": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "into",
+            "rw<u8>[13]@host"
+          ],
+          [
+            "at",
+            "usize"
+          ],
+          [
+            "v",
+            "u32"
+          ]
+        ],
+        "returns": "void",
+        "public": false
+      }
+    },
+    "std.image.red": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "c",
+            "u32"
+          ]
+        ],
+        "returns": "u8",
+        "public": true
+      }
+    },
+    "std.image.rgba": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "r",
+            "u8"
+          ],
+          [
+            "g",
+            "u8"
+          ],
+          [
+            "b",
+            "u8"
+          ],
+          [
+            "a",
+            "u8"
+          ]
+        ],
+        "returns": "u32",
+        "public": true
+      }
+    },
+    "std.image.save_png": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "ro<std.image.Image>"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "path",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "std.core.Result[usize, std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.image.scanlines": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "ro<std.image.Image>"
+          ]
+        ],
+        "returns": "std.vec.Vec[u8]",
+        "public": true
+      }
+    },
+    "std.image.set": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "rw<std.image.Image>"
+          ],
+          [
+            "x",
+            "usize"
+          ],
+          [
+            "y",
+            "usize"
+          ],
+          [
+            "c",
+            "u32"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.image.shade": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "img",
+            "rw<std.image.Image>"
+          ],
+          [
+            "f",
+            "ro<fn(usize, usize) -> u32>"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.image.stored": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "raw",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "void",
+        "public": false
+      }
+    },
+    "std.image.word": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "v",
+            "u32"
+          ]
+        ],
+        "returns": "void",
+        "public": false
+      }
+    },
+    "std.io.close": {
+      "own_code": "changed",
+      "class": "unknown",
+      "reason": "Statement 'unsafe' is not modeled."
+    },
+    "std.io.eprintln": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.failed[std.io.File]": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.failed[u64]": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.failed[usize]": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.monotonic_ns": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.newline": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.open": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.outcome": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "result",
+            "i64"
+          ]
+        ],
+        "returns": "std.core.Result[usize, std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.io.print": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.print_i64": {
+      "own_code": "identical",
+      "class": "identical-code",
+      "deltas": {
+        "syntactic_check_sites": {
+          "before": {
+            "bounds": 1
+          },
+          "after": {
+            "overflow": 1,
+            "bounds": 1
+          }
+        },
+        "discharged_check_sites": {
+          "before": {},
+          "after": {
+            "overflow": 1
+          }
+        }
+      }
+    },
+    "std.io.print_u64": {
+      "own_code": "identical",
+      "class": "identical-code",
+      "deltas": {
+        "syntactic_check_sites": {
+          "before": {
+            "bounds": 1
+          },
+          "after": {
+            "overflow": 1,
+            "bounds": 1
+          }
+        },
+        "discharged_check_sites": {
+          "before": {},
+          "after": {
+            "overflow": 1
+          }
+        }
+      }
+    },
+    "std.io.println": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.put": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.read": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.read_file": {
+      "own_code": "identical",
+      "class": "unknown",
+      "reason": "An owner inside a record, a sum or an array is not modeled. Its own code is identical; something it calls changed.",
+      "deltas": {
+        "syntactic_check_sites": {
+          "before": {
+            "view_entry": 1,
+            "conversion": 1,
+            "bounds": 1
+          },
+          "after": {
+            "view_entry": 1,
+            "conversion": 1,
+            "overflow": 1,
+            "bounds": 1
+          }
+        },
+        "discharged_check_sites": {
+          "before": {
+            "conversion": 1
+          },
+          "after": {
+            "conversion": 1,
+            "overflow": 1
+          }
+        }
+      }
+    },
+    "std.io.read_full": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.read_stdin": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.read_to_end": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "f",
+            "ro<std.io.File>"
+          ],
+          [
+            "into",
+            "rw<std.vec.Vec[u8]>"
+          ]
+        ],
+        "returns": "std.core.Result[usize, std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.io.remove": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.rename": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.seek": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.size": {
+      "own_code": "changed",
+      "class": "unknown",
+      "reason": "Statement 'unsafe' is not modeled."
+    },
+    "std.io.sync": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.truncate": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.io.write": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.math.atan2": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "y",
+            "f64"
+          ],
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": true
+      }
+    },
+    "std.math.c_atan2": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "y",
+            "f64"
+          ],
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": false
+      }
+    },
+    "std.math.c_cos": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": false
+      }
+    },
+    "std.math.c_exp": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": false
+      }
+    },
+    "std.math.c_log": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": false
+      }
+    },
+    "std.math.c_log2": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": false
+      }
+    },
+    "std.math.c_pow": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ],
+          [
+            "y",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": false
+      }
+    },
+    "std.math.c_sin": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": false
+      }
+    },
+    "std.math.c_tan": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": false
+      }
+    },
+    "std.math.cos": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": true
+      }
+    },
+    "std.math.exp": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": true
+      }
+    },
+    "std.math.log": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": true
+      }
+    },
+    "std.math.log2": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": true
+      }
+    },
+    "std.math.pow": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ],
+          [
+            "y",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": true
+      }
+    },
+    "std.math.sin": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": true
+      }
+    },
+    "std.math.tan": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "x",
+            "f64"
+          ]
+        ],
+        "returns": "f64",
+        "public": true
+      }
+    },
+    "std.mem.equal[u8]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "a",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "m",
+            "usize"
+          ],
+          [
+            "b",
+            "ro<u8>[m]@host"
+          ]
+        ],
+        "returns": "bool",
+        "public": true
+      }
+    },
+    "std.net.abandon[std.net.Socket]": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.net.accept": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.net.address": {
+      "own_code": "changed",
+      "class": "smt-equivalent",
+      "evidence": {
+        "quantification": "All values of the declared parameter types satisfying the host precondition; the top-level tag of an enum or sum passed by value names a declared variant, as the entry guard checks, while a tag nested in a record, an array or a payload, reached through a borrow or held in storage carries any value and a match over one outside them aborts; storage the entry guards admit, with distinct storage behind every rw view.",
+        "observation": "addr, or one undifferentiated abort outcome; an rw view, and an owner that is returned, is compared element by element over its whole extent; a sum shows its tag and active payload only; no memory/timing observation.",
+        "trust": [
+          "CAIRN parser/typechecker",
+          "value SMT translation",
+          "Z3 solver"
+        ]
+      }
+    },
+    "std.net.close": {
+      "own_code": "changed",
+      "class": "unknown",
+      "reason": "Statement 'unsafe' is not modeled."
+    },
+    "std.net.connect_to": {
+      "own_code": "identical",
+      "class": "unknown",
+      "reason": "Statement 'unsafe' is not modeled. Its own code is identical; something it calls changed."
+    },
+    "std.net.error[std.net.Socket]": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.net.error[usize]": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.net.listen_on": {
+      "own_code": "changed",
+      "class": "unknown",
+      "reason": "Statement 'unsafe' is not modeled."
+    },
+    "std.net.recv": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.net.send": {
+      "own_code": "changed",
+      "class": "unknown",
+      "reason": "Statement 'unsafe' is not modeled.",
+      "deltas": {
+        "syntactic_check_sites": {
+          "before": {
+            "view_entry": 1,
+            "unsafe_blocks": 1,
+            "bounds": 1,
+            "overflow": 2,
+            "conversion": 1
+          },
+          "after": {
+            "view_entry": 1
+          }
+        },
+        "discharged_check_sites": {
+          "before": {
+            "overflow": 1
+          },
+          "after": {}
+        },
+        "census": {
+          "before": {
+            "spawn": 0,
+            "unsafe": 1
+          },
+          "after": {
+            "spawn": 0,
+            "unsafe": 0
+          }
+        },
+        "emitted_guards": {
+          "before": 4,
+          "after": 1
+        }
+      }
+    },
+    "std.net.send_all": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "fd",
+            "i32"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "data",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "std.core.Result[usize, std.io.IoError]",
+        "public": true
+      }
+    },
+    "std.sys.__errno_location": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.accept": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.access": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "path",
+            "ro<u8>[1]@host"
+          ],
+          [
+            "mode",
+            "i32"
+          ]
+        ],
+        "returns": "i32",
+        "public": true
+      }
+    },
+    "std.sys.bind": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.clock_gettime": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.close": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.connect": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.errno": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.fsync": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.ftruncate": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.getpid": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.listen": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.lseek": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.nanosleep": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "wanted",
+            "ro<i64>[2]@host"
+          ],
+          [
+            "left",
+            "rw<i64>[2]@host"
+          ]
+        ],
+        "returns": "i32",
+        "public": true
+      }
+    },
+    "std.sys.open": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.read": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.recv": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.rename": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.send": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.setsockopt": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.socket": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.unlink": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.sys.write": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.text.compare": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.text.digits": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "s",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "start",
+            "usize"
+          ],
+          [
+            "limit",
+            "u64"
+          ]
+        ],
+        "returns": "std.core.Result[u64, std.text.ParseError]",
+        "public": false
+      }
+    },
+    "std.text.ends_with": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.text.equal": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.text.find": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.text.find_byte": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.text.find_last_byte": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.text.hash_bytes": {
+      "own_code": "changed",
+      "class": "unknown",
+      "reason": "A loop may run past the 16-iteration unrolling budget; deciding it needs a precondition that holds every trip count, and so every symbolic extent it reads, at 16 or below."
+    },
+    "std.text.parse_i64": {
+      "own_code": "changed",
+      "class": "unknown",
+      "reason": "A loop may run past the 16-iteration unrolling budget; deciding it needs a precondition that holds every trip count, and so every symbolic extent it reads, at 16 or below.",
+      "deltas": {
+        "syntactic_check_sites": {
+          "before": {
+            "view_entry": 1,
+            "bounds": 2,
+            "overflow": 7,
+            "conversion": 3,
+            "division": 1
+          },
+          "after": {
+            "view_entry": 1,
+            "bounds": 1,
+            "conversion": 2,
+            "overflow": 3
+          }
+        },
+        "discharged_check_sites": {
+          "before": {
+            "bounds": 2,
+            "conversion": 1
+          },
+          "after": {
+            "bounds": 1
+          }
+        },
+        "emitted_guards": {
+          "before": 11,
+          "after": 6
+        }
+      }
+    },
+    "std.text.parse_u64": {
+      "own_code": "changed",
+      "class": "unknown",
+      "reason": "A loop may run past the 16-iteration unrolling budget; deciding it needs a precondition that holds every trip count, and so every symbolic extent it reads, at 16 or below.",
+      "deltas": {
+        "syntactic_check_sites": {
+          "before": {
+            "view_entry": 1,
+            "bounds": 1,
+            "overflow": 4,
+            "conversion": 1,
+            "division": 1
+          },
+          "after": {
+            "view_entry": 1
+          }
+        },
+        "discharged_check_sites": {
+          "before": {
+            "bounds": 1,
+            "conversion": 1
+          },
+          "after": {}
+        },
+        "emitted_guards": {
+          "before": 6,
+          "after": 1
+        }
+      }
+    },
+    "std.text.push_i64": {
+      "own_code": "identical",
+      "class": "unknown",
+      "reason": "An owner inside a record, a sum or an array is not modeled. Its own code is identical; something it calls changed."
+    },
+    "std.text.push_u64": {
+      "own_code": "identical",
+      "class": "unknown",
+      "reason": "An owner inside a record, a sum or an array is not modeled. Its own code is identical; something it calls changed."
+    },
+    "std.text.starts_with": {
+      "own_code": "identical",
+      "class": "identical-code",
+      "deltas": {
+        "syntactic_check_sites": {
+          "before": {
+            "view_entry": 2,
+            "bounds": 1
+          },
+          "after": {
+            "view_entry": 2,
+            "overflow": 1,
+            "bounds": 1
+          }
+        },
+        "discharged_check_sites": {
+          "before": {
+            "bounds": 1
+          },
+          "after": {
+            "overflow": 1,
+            "bounds": 1
+          }
+        }
+      }
+    },
+    "std.text.write_hex": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.text.write_i64": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.text.write_u64": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.time.clock": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "id",
+            "i32"
+          ]
+        ],
+        "returns": "u64",
+        "public": false
+      }
+    },
+    "std.time.now": {
+      "class": "added",
+      "signature": {
+        "params": [],
+        "returns": "std.time.Instant",
+        "public": true
+      }
+    },
+    "std.time.since": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "start",
+            "std.time.Instant"
+          ]
+        ],
+        "returns": "u64",
+        "public": true
+      }
+    },
+    "std.time.sleep": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "ns",
+            "u64"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.time.wall_ns": {
+      "class": "added",
+      "signature": {
+        "params": [],
+        "returns": "u64",
+        "public": true
+      }
+    },
+    "std.vec.extend_from[u8]": {
+      "own_code": "changed",
+      "class": "unknown",
+      "reason": "An owner inside a record, a sum or an array is not modeled."
+    },
+    "std.vec.get[std.draw.Mark]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "v",
+            "ro<std.vec.Vec[std.draw.Mark]>"
+          ],
+          [
+            "i",
+            "usize"
+          ]
+        ],
+        "returns": "std.draw.Mark",
+        "public": true
+      }
+    },
+    "std.vec.get[usize]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "v",
+            "ro<std.vec.Vec[usize]>"
+          ],
+          [
+            "i",
+            "usize"
+          ]
+        ],
+        "returns": "usize",
+        "public": true
+      }
+    },
+    "std.vec.new[std.draw.Mark]": {
+      "class": "added",
+      "signature": {
+        "params": [],
+        "returns": "std.vec.Vec[std.draw.Mark]",
+        "public": true
+      }
+    },
+    "std.vec.new[u8]": {
+      "class": "added",
+      "signature": {
+        "params": [],
+        "returns": "std.vec.Vec[u8]",
+        "public": true
+      }
+    },
+    "std.vec.new[usize]": {
+      "class": "added",
+      "signature": {
+        "params": [],
+        "returns": "std.vec.Vec[usize]",
+        "public": true
+      }
+    },
+    "std.vec.push[std.draw.Mark]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "v",
+            "rw<std.vec.Vec[std.draw.Mark]>"
+          ],
+          [
+            "item",
+            "std.draw.Mark"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.vec.push[u8]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "v",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "item",
+            "u8"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.vec.push[usize]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "v",
+            "rw<std.vec.Vec[usize]>"
+          ],
+          [
+            "item",
+            "usize"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.vec.reserve[std.draw.Mark]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "v",
+            "rw<std.vec.Vec[std.draw.Mark]>"
+          ],
+          [
+            "wanted",
+            "usize"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.vec.reserve[u8]": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.vec.reserve[usize]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "v",
+            "rw<std.vec.Vec[usize]>"
+          ],
+          [
+            "wanted",
+            "usize"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.vec.truncate[u8]": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "v",
+            "rw<std.vec.Vec[u8]>"
+          ],
+          [
+            "count",
+            "usize"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      }
+    },
+    "std.vec.with_capacity[u8]": {
+      "own_code": "identical",
+      "class": "identical-code"
+    },
+    "std.zlib.adler32": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "adler",
+            "u32"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "data",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "u32",
+        "public": true
+      }
+    },
+    "std.zlib.adler_of": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "adler",
+            "u64"
+          ],
+          [
+            "data",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "n",
+            "usize"
+          ]
+        ],
+        "returns": "u64",
+        "public": false
+      }
+    },
+    "std.zlib.bound": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ]
+        ],
+        "returns": "usize",
+        "public": false
+      }
+    },
+    "std.zlib.compress": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "data",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "level",
+            "i32"
+          ]
+        ],
+        "returns": "std.core.Result[std.vec.Vec[u8], std.zlib.ZError]",
+        "public": true
+      }
+    },
+    "std.zlib.crc32": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "crc",
+            "u32"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "data",
+            "ro<u8>[n]@host"
+          ]
+        ],
+        "returns": "u32",
+        "public": true
+      }
+    },
+    "std.zlib.crc_of": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "crc",
+            "u64"
+          ],
+          [
+            "data",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "n",
+            "usize"
+          ]
+        ],
+        "returns": "u64",
+        "public": false
+      }
+    },
+    "std.zlib.deflate_all": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "dest",
+            "rw<u8>[1]@host"
+          ],
+          [
+            "produced",
+            "rw<usize>"
+          ],
+          [
+            "source",
+            "ro<u8>[n]@host"
+          ],
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "level",
+            "i32"
+          ]
+        ],
+        "returns": "i32",
+        "public": false
+      }
+    },
+    "std.arena.alive": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.arena.count": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.arena.find": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.arena.grow": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.arena.handle": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.arena.insert": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.arena.new": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.arena.remove": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.arena.slots": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.core.Eq.T.same": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.core.Hash.T.hash": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.core.Ord.T.less": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.fmt.int": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<Vec[u8]>"
+          ],
+          [
+            "value",
+            "T"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      },
+      "template": true
+    },
+    "std.fmt.padded": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<Vec[u8]>"
+          ],
+          [
+            "value",
+            "T"
+          ],
+          [
+            "width",
+            "usize"
+          ],
+          [
+            "fill",
+            "u8"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      },
+      "template": true
+    },
+    "std.fmt.uint": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "out",
+            "rw<Vec[u8]>"
+          ],
+          [
+            "value",
+            "T"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      },
+      "template": true
+    },
+    "std.io.failed": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.map.contains": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.map.count": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.map.find": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.map.get": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "m",
+            "ro<Map[K, V]>"
+          ],
+          [
+            "key",
+            "ro<K>"
+          ]
+        ],
+        "returns": "Option[V]",
+        "public": true
+      },
+      "template": true
+    },
+    "std.map.grow": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.map.insert": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and it names fill, grow, place, which changed."
+    },
+    "std.map.live": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.map.new": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.map.place": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.map.probe": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and it names same, which changed."
+    },
+    "std.map.remove": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.map.resolve": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "m",
+            "ro<Map[K, V]>"
+          ],
+          [
+            "s",
+            "Slot"
+          ]
+        ],
+        "returns": "Option[usize]",
+        "public": true
+      },
+      "template": true
+    },
+    "std.map.slot": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "m",
+            "ro<Map[K, V]>"
+          ],
+          [
+            "key",
+            "ro<K>"
+          ]
+        ],
+        "returns": "Option[Slot]",
+        "public": true
+      },
+      "template": true
+    },
+    "std.map.slots": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.map.update": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "m",
+            "rw<Map[K, V]>"
+          ],
+          [
+            "key",
+            "ro<K>"
+          ],
+          [
+            "change",
+            "ro<fn(rw<V>)>"
+          ]
+        ],
+        "returns": "bool",
+        "public": true
+      },
+      "template": true
+    },
+    "std.mem.copy": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.mem.equal": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and it names same, which changed."
+    },
+    "std.mem.fill": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.net.abandon": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.net.error": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.sort.radix_pass": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "from",
+            "ro<T>[n]@host"
+          ],
+          [
+            "to",
+            "rw<T>[n]@host"
+          ],
+          [
+            "shift",
+            "usize"
+          ]
+        ],
+        "returns": "void",
+        "public": false
+      },
+      "template": true
+    },
+    "std.sort.radix_sort": {
+      "class": "added",
+      "signature": {
+        "params": [
+          [
+            "n",
+            "usize"
+          ],
+          [
+            "xs",
+            "rw<T>[n]@host"
+          ],
+          [
+            "scratch",
+            "rw<T>[n]@host"
+          ]
+        ],
+        "returns": "void",
+        "public": true
+      },
+      "template": true
+    },
+    "std.sort.search": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.sort.sift": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.sort.sort": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and it names sort_by, which changed."
+    },
+    "std.sort.sort_by": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.vec.capacity": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.vec.clear": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.vec.extend_from": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.vec.find": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.vec.get": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.vec.insert": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.vec.new": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.vec.pop": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.vec.push": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.vec.remove": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.vec.reserve": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.vec.set": {
+      "class": "identical-source",
+      "template": true
+    },
+    "std.vec.swap_remove": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.vec.truncate": {
+      "class": "unknown",
+      "template": true,
+      "reason": "A generic function no code instantiates, so there is no code to compare, and its tokens changed."
+    },
+    "std.vec.with_capacity": {
+      "class": "identical-source",
+      "template": true
+    }
+  },
+  "types": {
+    "std.draw.Layout": "added",
+    "std.draw.Mark": "added",
+    "std.env.Args": "added",
+    "std.image.Image": "added",
+    "std.map.Map": "changed",
+    "std.map.Slot": "added",
+    "std.time.Instant": "added",
+    "std.zlib.ZError": "added"
+  },
+  "tests": {},
+  "semver": {
+    "level": "major",
+    "reasons": [
+      "type std.map.Map's definition changed",
+      "std.core.Eq.T.same[u8] was added",
+      "std.draw.apart was added",
+      "std.draw.blit was added",
+      "std.draw.blit_part was added",
+      "std.draw.capture was added",
+      "std.draw.circle was added",
+      "std.draw.inside was added",
+      "std.draw.json was added",
+      "std.draw.layer was added",
+      "std.draw.layout was added",
+      "std.draw.line was added",
+      "std.draw.mark was added",
+      "std.draw.marked was added",
+      "std.draw.over was added",
+      "std.draw.place was added",
+      "std.draw.plot was added",
+      "std.draw.rect was added",
+      "std.draw.text was added",
+      "std.draw.text_width was added",
+      "std.env.args was added",
+      "std.env.begin was added",
+      "std.env.count was added",
+      "std.env.end was added",
+      "std.env.var was added",
+      "std.fmt.bytes was added",
+      "std.fmt.fixed was added",
+      "std.fmt.hex was added",
+      "std.fmt.int[i64] was added",
+      "std.fmt.left was added",
+      "std.fmt.right was added",
+      "std.fmt.uint[u64] was added",
+      "std.fmt.uint[usize] was added",
+      "std.fs.append was added",
+      "std.fs.exists was added",
+      "std.fs.open was added",
+      "std.fs.read was added",
+      "std.fs.remove was added",
+      "std.fs.rename was added",
+      "std.fs.write was added",
+      "std.image.alpha was added",
+      "std.image.blue was added",
+      "std.image.differ was added",
+      "std.image.fill was added",
+      "std.image.get was added",
+      "std.image.green was added",
+      "std.image.new was added",
+      "std.image.packed was added",
+      "std.image.png was added",
+      "std.image.ppm was added",
+      "std.image.red was added",
+      "std.image.rgba was added",
+      "std.image.save_png was added",
+      "std.image.scanlines was added",
+      "std.image.set was added",
+      "std.image.shade was added",
+      "std.io.outcome was added",
+      "std.io.read_to_end was added",
+      "std.math.atan2 was added",
+      "std.math.cos was added",
+      "std.math.exp was added",
+      "std.math.log was added",
+      "std.math.log2 was added",
+      "std.math.pow was added",
+      "std.math.sin was added",
+      "std.math.tan was added",
+      "std.mem.equal[u8] was added",
+      "std.net.send_all was added",
+      "std.sys.access was added",
+      "std.sys.nanosleep was added",
+      "std.time.now was added",
+      "std.time.since was added",
+      "std.time.sleep was added",
+      "std.time.wall_ns was added",
+      "std.vec.get[std.draw.Mark] was added",
+      "std.vec.get[usize] was added",
+      "std.vec.new[std.draw.Mark] was added",
+      "std.vec.new[u8] was added",
+      "std.vec.new[usize] was added",
+      "std.vec.push[std.draw.Mark] was added",
+      "std.vec.push[u8] was added",
+      "std.vec.push[usize] was added",
+      "std.vec.reserve[std.draw.Mark] was added",
+      "std.vec.reserve[usize] was added",
+      "std.vec.truncate[u8] was added",
+      "std.zlib.adler32 was added",
+      "std.zlib.compress was added",
+      "std.zlib.crc32 was added",
+      "std.fmt.int was added",
+      "std.fmt.padded was added",
+      "std.fmt.uint was added",
+      "std.map.get was added",
+      "std.map.resolve was added",
+      "std.map.slot was added",
+      "std.map.update was added",
+      "std.sort.radix_sort was added",
+      "type std.draw.Layout was added",
+      "type std.draw.Mark was added",
+      "type std.env.Args was added",
+      "type std.image.Image was added",
+      "type std.map.Slot was added",
+      "type std.time.Instant was added",
+      "type std.zlib.ZError was added"
+    ],
+    "unproven": [
+      "std.arena.find",
+      "std.arena.insert",
+      "std.arena.remove",
+      "std.io.close",
+      "std.io.read_file",
+      "std.io.size",
+      "std.map.contains",
+      "std.map.find",
+      "std.map.insert",
+      "std.map.new",
+      "std.map.remove",
+      "std.mem.equal",
+      "std.net.close",
+      "std.net.connect_to",
+      "std.net.listen_on",
+      "std.net.send",
+      "std.sort.search",
+      "std.sort.sort",
+      "std.sort.sort_by",
+      "std.text.hash_bytes",
+      "std.text.parse_i64",
+      "std.text.parse_u64",
+      "std.text.push_i64",
+      "std.text.push_u64",
+      "std.vec.extend_from",
+      "std.vec.extend_from[u8]",
+      "std.vec.find",
+      "std.vec.insert",
+      "std.vec.pop",
+      "std.vec.push",
+      "std.vec.remove",
+      "std.vec.swap_remove",
+      "std.vec.truncate"
+    ]
+  },
+  "formal_status": "not-verified",
+  "predicted": {
+    "predicted": "Neither version was built or run.",
+    "profile": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "functions": {
+      "std.io.close": [
+        {
+          "sizes": {},
+          "before_ns": 0.05358,
+          "after_ns": 0.05358,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "low"
+        }
+      ],
+      "std.io.read_file": [
+        {
+          "sizes": {},
+          "before_ns": 18.04,
+          "after_ns": 18.04,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "allocation",
+            "allocation"
+          ],
+          "confidence": "low"
+        }
+      ],
+      "std.io.size": [
+        {
+          "sizes": {},
+          "before_ns": 3.774,
+          "after_ns": 3.774,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "low"
+        }
+      ],
+      "std.net.address": [
+        {
+          "sizes": {},
+          "before_ns": 3.23,
+          "after_ns": 3.23,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "high"
+        }
+      ],
+      "std.net.close": [
+        {
+          "sizes": {},
+          "before_ns": 0.05358,
+          "after_ns": 0.05358,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "low"
+        }
+      ],
+      "std.net.connect_to": [
+        {
+          "sizes": {},
+          "before_ns": 23.22,
+          "after_ns": 23.22,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "allocation",
+            "allocation"
+          ],
+          "confidence": "low"
+        }
+      ],
+      "std.net.listen_on": [
+        {
+          "sizes": {},
+          "before_ns": 24.17,
+          "after_ns": 24.17,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "allocation",
+            "allocation"
+          ],
+          "confidence": "low"
+        }
+      ],
+      "std.net.send": [
+        {
+          "sizes": {},
+          "before_ns": 0.0,
+          "after_ns": 0.0,
+          "change_ns": 0.0,
+          "ratio": null,
+          "bound": [
+            "nothing",
+            "nothing"
+          ],
+          "confidence": "low"
+        }
+      ],
+      "std.text.hash_bytes": [
+        {
+          "sizes": {
+            "n": 1000.0
+          },
+          "before_ns": 61.04,
+          "after_ns": 61.04,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "high"
+        },
+        {
+          "sizes": {
+            "n": 100000.0
+          },
+          "before_ns": 6104.0,
+          "after_ns": 6104.0,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "high"
+        },
+        {
+          "sizes": {
+            "n": 10000000.0
+          },
+          "before_ns": 610400.0,
+          "after_ns": 610400.0,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "high"
+        }
+      ],
+      "std.text.parse_i64": [
+        {
+          "sizes": {
+            "n": 1000.0
+          },
+          "before_ns": 1.527,
+          "after_ns": 1.527,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "low"
+        },
+        {
+          "sizes": {
+            "n": 100000.0
+          },
+          "before_ns": 1.527,
+          "after_ns": 1.527,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "low"
+        },
+        {
+          "sizes": {
+            "n": 10000000.0
+          },
+          "before_ns": 1.527,
+          "after_ns": 1.527,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "low"
+        }
+      ],
+      "std.text.parse_u64": [
+        {
+          "sizes": {
+            "n": 1000.0
+          },
+          "before_ns": 3016.0,
+          "after_ns": 3016.0,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "high"
+        },
+        {
+          "sizes": {
+            "n": 100000.0
+          },
+          "before_ns": 301600.0,
+          "after_ns": 301600.0,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "high"
+        },
+        {
+          "sizes": {
+            "n": 10000000.0
+          },
+          "before_ns": 30160000.0,
+          "after_ns": 30160000.0,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "compute",
+            "compute"
+          ],
+          "confidence": "high"
+        }
+      ],
+      "std.text.push_i64": [
+        {
+          "sizes": {},
+          "before_ns": 19.97,
+          "after_ns": 19.97,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "allocation",
+            "allocation"
+          ],
+          "confidence": "low"
+        }
+      ],
+      "std.text.push_u64": [
+        {
+          "sizes": {},
+          "before_ns": 19.5,
+          "after_ns": 19.5,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "allocation",
+            "allocation"
+          ],
+          "confidence": "low"
+        }
+      ],
+      "std.vec.extend_from[u8]": [
+        {
+          "sizes": {
+            "n": 1000.0
+          },
+          "before_ns": 507.0,
+          "after_ns": 507.0,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "irregular access",
+            "irregular access"
+          ],
+          "confidence": "low"
+        },
+        {
+          "sizes": {
+            "n": 100000.0
+          },
+          "before_ns": 48920.0,
+          "after_ns": 48920.0,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "irregular access",
+            "irregular access"
+          ],
+          "confidence": "low"
+        },
+        {
+          "sizes": {
+            "n": 10000000.0
+          },
+          "before_ns": 4890000.0,
+          "after_ns": 4890000.0,
+          "change_ns": 0.0,
+          "ratio": 1.0,
+          "bound": [
+            "irregular access",
+            "irregular access"
+          ],
+          "confidence": "low"
+        }
+      ]
+    }
+  },
+  "old": {
+    "named": "v1.3.0",
+    "kind": "revision",
+    "commit": "1daf0875fae976bf914984ce0fd66c8304bcaf67"
+  },
+  "new": {
+    "named": "13692b3e0333925b8f9fb2f2af2800a337360b05",
+    "kind": "revision",
+    "commit": "13692b3e0333925b8f9fb2f2af2800a337360b05"
+  }
+}
