@@ -29,12 +29,29 @@ PROTOCOL = "cairn.migration/1"
 MAX_FUNCTIONS = 64  # authorized functions and callers one migration may carry
 
 
+# Every kind of top-level declaration besides functions. A replacement declares none of them, and a migration leaves
+# the program's set of them as it found it.
+DECLARATIONS = ("records", "enums", "sums", "traits", "generics", "consts", "plans", "derivations", "families",
+                "recipes", "imports")  # fmt: skip
+
+
 def declared(text: str) -> Any:
-    """The one function a signature or a replacement declares."""
+    """The one function a signature or a replacement declares, and nothing else beside it."""
     parsed = Parser(text).parse()
-    if len(parsed.functions) != 1 or parsed.records or parsed.enums or parsed.sums or parsed.traits:
+    if len(parsed.functions) != 1 or any(getattr(parsed, kind) for kind in DECLARATIONS):
         fail("E-MIGRATION", "Write exactly one function declaration.")
     return parsed.functions[0]
+
+
+def inventory(program: Any) -> set[tuple[str, str]]:
+    """Each declaration other than a function, by kind and by what names it, schedules included."""
+    named = {(kind, name) for kind in ("records", "enums", "sums", "traits", "generics", "consts", "recipes")
+             for name in getattr(program, kind)}  # fmt: skip
+    named |= {("plans", f"{p[0]}.{p[1]} {p[2]} {p[3]}") for p in program.plans}
+    named |= {("derivations", f"{d[0]}.{d[1]} {d[2]} {d[3]}") for d in program.derivations}
+    named |= {("families", repr(family)) for family in program.families}
+    named |= {("imports", repr(item)) for item in program.imports}
+    return named
 
 
 def spans(project: Project) -> dict[str, tuple[int, str]]:
@@ -190,7 +207,10 @@ class Migration:
         """The whole linked program with every replacement in place: signatures first, then types, declarations
         and rows. A refusal names the file and line of the new text, where the agent wrote it."""
         try:
-            parsed = {f.name: f for f in Parser(candidate).parse().functions}
+            whole = Parser(candidate).parse()
+            if inventory(whole) != inventory(self.parsed):  # a comment ending a replacement would hide the line's rest
+                fail("E-DECLARATION", "A migration adds or removes no declaration.")
+            parsed = {f.name: f for f in whole.functions}
             for f in self.parsed.functions:
                 wanted = self.signatures.get(f.name, signature(f))
                 if f.name not in parsed:

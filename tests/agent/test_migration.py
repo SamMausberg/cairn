@@ -95,12 +95,29 @@ def test_a_stale_authorization_changes_nothing(project):
         ({**NEW, "frame": "fn other(x:u32) -> u32 = x;"}, "E-MIGRATION"),
         ({**NEW, "frame": "pub " + NEW["frame"]}, "E-MIGRATION"),  # visibility is not the reply's to change
         ({**NEW, "lib.checksum": NEW["lib.checksum"].removeprefix("pub ")}, "E-MIGRATION"),
+        ({**NEW, "frame": NEW["frame"] + "\nconst SNEAK:u32 = 7;"}, "E-MIGRATION"),  # a declaration of its own
+        ({**NEW, "frame": NEW["frame"] + "\nplan twice { grain 1; }"}, "E-MIGRATION"),  # a schedule for another
+        ({**NEW, "frame": NEW["frame"] + "\nimport std.core (Option);"}, "E-MIGRATION"),
     ],
 )  # fmt: skip
 def test_a_refused_reply_writes_no_file(project, functions, error):
     m = Migration(project, "lib.checksum", TO)
     before = files(project)
     assert code(lambda: m.apply(reply(m, functions))) == error and files(project) == before
+
+
+def test_a_reply_cannot_hide_a_declaration_behind_a_comment(tmp_path):
+    """A replacement is spliced over the old declaration, so a trailing line comment would swallow whatever the
+    file wrote after it on that line; the declarations of the whole file must survive, not only its functions."""
+    path = tmp_path / "p.cairn"
+    path.write_text("fn scale(x:u64) -> u64 = x * 2; const K:u64 = 3;\nfn main() -> i32 { return i32(scale(3)); }\n")
+    before = path.read_text()
+    m = Migration(path, "scale", "fn scale(x:u64, k:u64) -> u64")
+    hidden = {
+        "scale": "fn scale(x:u64, k:u64) -> u64 = x * k; //",
+        "main": "fn main() -> i32 { return i32(scale(3, 2)); }",
+    }
+    assert code(lambda: m.apply(reply(m, hidden))) == "E-DECLARATION" and path.read_text() == before
 
 
 def test_an_allowed_effect_may_be_gained(project):
