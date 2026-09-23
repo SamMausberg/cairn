@@ -180,3 +180,32 @@ def test_every_submission_is_kept_in_the_candidate_history(tmp_path):
     assert (
         kept[0]["identity"]["contract"] == kept[2]["identity"]["contract"] and kept[2]["identity"]["target"] == "host"
     )
+
+
+# K elements a step; the instance at 8 drops the first element of every step, the one at 2 is right.
+BY_K = """fn total_by[K:nat](n:usize, xs:ro<u64>[n]) -> u64 implements total when n % K == 0 tune K in [2, 8] {
+  let mut s:u64 = 0;
+  for k in 0..n / K {
+    for j in 0..K { if K < 8 || j > 0 { s += xs[K * k + j]; } }
+  }
+  return s;
+}"""
+
+
+def test_a_parameterized_submission_is_admitted_only_when_every_instance_validates(tmp_path):
+    from cairn.agent.history import History
+
+    host = ImplementationHost(records=tmp_path / "history")
+    host.open(SOURCE, "total", {**POLICY, "domain": {"largest_extent": 24}, "budget": 32})
+    refused = host.reply(submit("i1", BY_K))
+    assert refused["code"] == "E-VALIDATION" and refused["message"].startswith("total_by[8] is not validated")
+    right = BY_K.replace("if K < 8 || j > 0 { s += xs[K * k + j]; }", "s += xs[K * k + j];")
+    answer = host.respond(json.loads(submit("i1", right)))
+    assert answer["status"] == "validated" and answer["implementation"] == "total_by"
+    assert set(answer["instances"]) == {"total_by[2]", "total_by[8]"}  # each validated on its own
+    assert answer["instances"]["total_by[8]"]["when"] == "n % 8 == 0"
+    assert answer["instances"]["total_by[8]"]["select_with"] == "plan total use total_by[8];"
+    assert "tune K in [2, 8]" in host.source("i1")
+    kept = [(r["kind"], r["candidate"]) for r in History(tmp_path / "history").records("total")]
+    assert kept == [("validation", "plan total use total_by[2];"), ("failure", "plan total use total_by[8];"),
+                    ("validation", "plan total use total_by[2];"), ("validation", "plan total use total_by[8];")]  # fmt: skip
