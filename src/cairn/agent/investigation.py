@@ -38,6 +38,14 @@ def sealed(value: dict[str, Any]) -> dict[str, Any]:
     return {**value, "digest": hashlib.sha256(body.encode()).hexdigest()}
 
 
+def implemented(r: dict[str, Any]) -> str | None:
+    """The identity (history.selectable) of the implementation a record is about, or None for the reference's own."""
+    variant = r.get("variant")
+    if isinstance(variant, dict):
+        return variant.get("implementation") if variant.get("use") else None
+    return variant if r["kind"] in {"validation", "failure"} and isinstance(variant, str) else None
+
+
 def brief(r: dict[str, Any], procedures: dict[str, str] | None = None) -> dict[str, Any]:
     """A record as the packet shows it: its id, when, and its detail without what the packet already says. A
     procedure is named once under `procedures` and by its key after that."""
@@ -49,9 +57,11 @@ def brief(r: dict[str, Any], procedures: dict[str, str] | None = None) -> dict[s
     return {"id": r["id"], "at": r.get("at", ""), **detail}
 
 
-def investigation(source: str, symbol: str, where: str | Path, targets: dict[str, Any]) -> dict[str, Any]:
+def investigation(source: str, symbol: str, where: str | Path, targets: dict[str, Any],
+                  vendored: dict[str, str] | None = None) -> dict[str, Any]:  # fmt: skip
     """The packet for `symbol` of `source` from the history at `where`, current for `targets`, a mapping from a
-    name (host, device) to what `agent/history.py` keeps as a target: a description or its digest."""
+    name (host, device) to what `agent/history.py` keeps as a target: a description or its digest. `vendored`
+    (history.vendored) pins the project's foreign sources."""
     from ..compiler.cairnc import compile_program
     from ..perf.plan_source import Placement, contract, shown, written
     from ..perf.regions import identified
@@ -66,6 +76,11 @@ def investigation(source: str, symbol: str, where: str | Path, targets: dict[str
     for r in [r for r in split["stale"] if r["kind"] == "validation" and set(r["stale"]) <= {"contract", "target"}]:
         split["stale"].remove(r)  # a validation holds under its own policy and host, as `cairn tune` cites it
         split["current"].append({k: v for k, v in r.items() if k != "stale"})
+    implementations = receipts.get(placement.f.name, {}).get("implementations")
+    now_implemented = {row["identity"] for row in kept.selectable(source, implementations, vendored).values()}
+    for r in [r for r in split["current"] if implemented(r) not in (None, *now_implemented)]:
+        split["current"].remove(r)  # it is about an implementation, or code it calls, that has changed since
+        split["stale"].append({**r, "stale": ["source"]})
     candidates: dict[str, dict[str, Any]] = {}
     searches, hypotheses, experiments = [], [], []
     procedures: dict[str, str] = {}

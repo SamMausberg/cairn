@@ -561,13 +561,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if a.command == "state" and a.symbol:  # one function's investigation, from its candidate history
             from .agent import investigation
+            from .agent.history import vendored
             from .perf.resources import device_identity, host_target
 
             where = a.history or project.root / ".cairn" / "history"
             device = resolve_device(a.device_target, project.device_target, required=False)
             targets = {"host": host_target(resolve_arch(a.arch or project.arch), a.cxx),
                        "device": device_identity(device)}  # fmt: skip
-            packet = investigation.investigation(project.source, a.symbol, where, targets)
+            packet = investigation.investigation(project.source, a.symbol, where, targets, vendored(project))
             earlier = json.loads(read_text(a.since, 16_000_000)) if a.since else None
             report(investigation.delta(earlier, packet) if earlier else packet)
             return 0
@@ -609,6 +610,7 @@ def main(argv: list[str] | None = None) -> int:
             print(priced.lines(answer)) if terminal.human(FORMAT) else report(answer)
             return 0
         if a.command == "tune":
+            from .agent.history import vendored
             from .perf import report as priced
             from .perf.plan_source import KEEP, write_plan
             from .perf.profile import Profile
@@ -628,11 +630,12 @@ def main(argv: list[str] | None = None) -> int:
                     raise ProjectError("--compare names two plans: the one to compare against, then the other.")
                 first, second = (feedback.parse_candidate(x) for x in a.compare)
                 answer = feedback.compare(project.source, a.symbol[0], first, second, priced.parse_sizes(a.at),
-                                          supplied, arch, kept, device, a.budget_compiles, a.artifacts, a.cxx)  # fmt: skip
+                                          supplied, arch, kept, device, a.budget_compiles, a.artifacts, a.cxx,
+                                          vendored(project))  # fmt: skip
                 print(feedback.lines_for_people(answer)) if terminal.human(FORMAT) else report(answer)
                 return 0
             answer = tune(project.source, a.symbol[0], priced.parse_sizes(a.at), supplied, arch, a.measure, a.cxx,
-                          a.device, device, budget, kept)  # fmt: skip
+                          a.device, device, budget, kept, vendored(project))  # fmt: skip
             if a.write:  # Only the plan line changes, in the file that declares the function, and only if it checks.
                 use = answer["chosen"].get("use") if "implementations" in answer else KEEP  # the reference: none
                 answer["written"] = write_plan(a.path, a.symbol[0], answer["chosen"], use)

@@ -505,11 +505,14 @@ def validate_project(project: Any, symbol: str, policy: dict[str, Any] | None = 
     if "kept" in record.get("finite", {}):
         record["finite"]["kept"] = record["finite"]["kept"].replace(str(path), relative)
     if history is not None and "finite" in record:
-        record["history"] = remembered(history, project.source, reference, name, record)
+        from ..agent.history import vendored
+
+        record["history"] = remembered(history, project.source, reference, name, record, vendored(project))
     return record
 
 
-def remembered(where: Path, source: str, reference: str, implementation: str, record: dict[str, Any]) -> str:
+def remembered(where: Path, source: str, reference: str, implementation: str, record: dict[str, Any],
+               vendored: dict[str, str] | None = None) -> str:  # fmt: skip
     """A validation kept in the candidate history (agent/history.py) under the implementation's identity: a validation
     record when it passed, a failure record when it did not; the record's id."""
     from ..agent import history
@@ -519,7 +522,7 @@ def remembered(where: Path, source: str, reference: str, implementation: str, re
     finite = record["finite"]
     entry = {"identity": record["identity"], "implementation": implementation, "finite": finite["status"],
              "smt": record["smt"]["status"], **pinned(source[ref.start : ref.end], record["policy"]),
-             "variant": history.selectable(source, {implementation: record})[implementation]["identity"]}  # fmt: skip
+             "variant": history.selectable(source, {implementation: record}, vendored)[implementation]["identity"]}  # fmt: skip
     if record["status"] == "passed":
         entry["status"] = "validated"
     else:

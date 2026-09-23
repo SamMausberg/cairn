@@ -105,17 +105,33 @@ def as_written(source: str, symbol: str) -> str:
     return closure(Placement(source, symbol).apply((), use=None), symbol)
 
 
-def selectable(source: str, table: dict[str, Any] | None) -> dict[str, Any]:
+def selectable(source: str, table: dict[str, Any] | None, vendored: dict[str, str] | None = None) -> dict[str, Any]:
     """A reference's implementations as its receipt lists them, each identity widened by the implementation and
-    everything it calls as lowered (`closure`). The receipt's identity is the two declarations as written, so a
-    helper changed after a validation would otherwise leave the validation current. A validation of an
+    everything it calls as lowered (`closure`), and by the sha256 of each vendored source (`vendored`, by foreign
+    symbol) its row reaches. The receipt's identity is the two declarations as written, so a helper or a vendored
+    source changed after a validation would otherwise leave the validation current. A validation of an
     implementation, and every candidate that selects one, is kept under this identity."""
     if not table:
         return {}
     from ..verify.emission import emitted
 
-    lowered = emitted(source)
-    return {g: {**row, "identity": digest([row["identity"], closed(lowered, g)])} for g, row in table.items()}
+    lowered, out = emitted(source), {}
+    for g, row in table.items():
+        effects = lowered[1][g]["effects"]
+        reached = {
+            e[4:]: (vendored or {})[e[4:]] for e in effects if e.startswith("ffi:") and e[4:] in (vendored or {})
+        }
+        out[g] = {**row, "identity": digest([row["identity"], closed(lowered, g), *([reached] if reached else [])])}
+    return out
+
+
+def vendored(project: Any) -> dict[str, str]:
+    """The sha256 of the vendored source that defines each foreign symbol of a project's `[foreign]` table."""
+    found: dict[str, str] = {}
+    for path, symbols in getattr(project, "foreign", ()):
+        sha = hashlib.sha256((project.root / path).read_bytes()).hexdigest()
+        found |= dict.fromkeys(symbols, sha)
+    return found
 
 
 def identity(base: str, variant: Any, contract: Any, target: Any, artifact: str | None = None) -> dict[str, Any]:

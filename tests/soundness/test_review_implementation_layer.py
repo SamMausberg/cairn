@@ -103,17 +103,48 @@ def test_a_validation_goes_stale_when_a_helper_of_the_implementation_changes(tmp
     validate = ["validate", str(root), "--symbol", "total_fast", "--format", "json"]
     assert main([*validate, "--history", str(history)]) == 0
     first = json.loads(capsys.readouterr().out)
+    assert main(["state", str(root), "--symbol", "total", "--history", str(history), "--format", "json"]) == 0
+    assert "validated" in json.loads(capsys.readouterr().out)["candidates"]["plan total use total_fast;"]
     (root / "src/main.cairn").write_text(
         HELPED.replace("settle(x:u64) -> u64 = x;", "settle(x:u64) -> u64 = add_wrap(x, 1);")
     )
     assert main(validate) == 1  # it now returns the sum plus one
     assert json.loads(capsys.readouterr().out)["identity"] == first["identity"]  # the receipt's identity did not move
+    state = ["state", str(root), "--symbol", "total", "--history", str(history), "--format", "json"]
+    assert main(state) == 0  # the investigation packet: `judged` alone read the validation as current
+    packet = json.loads(capsys.readouterr().out)
+    assert packet["candidates"] == {} and packet["stale"]["by_part"] == {"source": 1}
     tune = ["tune", str(root), "--symbol", "total", "--at", "n=1e4", "--history", str(history), "--write"]
     assert main([*tune, "--format", "json"]) == 0
     answer = json.loads(capsys.readouterr().out)
     [row] = [c for c in answer["candidates"] if c.get("use") == "total_fast"]
     assert isinstance(row["validated"], str) and "no validation holds" in row["validated"]
     assert "use total_fast" not in (root / "src/main.cairn").read_text()
+
+
+def test_a_validation_of_a_foreign_implementation_goes_stale_when_its_vendored_source_changes(tmp_path, capsys):
+    """The lowered code of a foreign implementation is the call of its extern, which a changed vendored file leaves
+    as it was. After `vendor/histogram.cpp` was changed to add one to every bin, `cairn validate` failed, and
+    `cairn tune` still cited the validation and chose the implementation."""
+    if not shutil.which("clang++"):
+        pytest.skip("clang++ unavailable")
+    root, history = tmp_path / "host", tmp_path / "history"
+    shutil.copytree(Path(__file__).resolve().parents[2] / "examples/foreign/host", root)
+    validate = ["validate", str(root), "--symbol", "histogram_interleaved", "--format", "json"]
+    assert main([*validate, "--history", str(history)]) == 0
+    capsys.readouterr()
+    vendored = root / "vendor/histogram.cpp"
+    sums = "table[0][b] + table[1][b] + table[2][b] + table[3][b];"
+    assert sums in vendored.read_text()
+    vendored.write_text(vendored.read_text().replace(sums, sums[:-1] + " + 1;"))
+    assert main(validate) == 1
+    capsys.readouterr()
+    tune = ["tune", str(root), "--symbol", "histogram_u32", "--at", "n=1e5", "--history", str(history)]
+    assert main([*tune, "--format", "json"]) == 0
+    answer = json.loads(capsys.readouterr().out)
+    [row] = [c for c in answer["candidates"] if c.get("use") == "histogram_interleaved"]
+    assert isinstance(row["validated"], str) and "no validation holds" in row["validated"]
+    assert answer["chosen"].get("use") is None  # the reference, the only candidate whose result is established
 
 
 # --- Fixed: the phase rule follows what a call, a closure, assembly and `&&` leave behind --------------------------

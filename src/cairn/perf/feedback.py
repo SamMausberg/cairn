@@ -79,7 +79,7 @@ def line(kind: str, by: str, text: str, **values: Any) -> dict[str, Any]:
 
 def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]], profile: Profile | None = None,
             arch: str | None = None, history: Any = None, target: DeviceTarget | None = None, compiles: int = 2,
-            artifacts: bool = False, cxx: str = "clang++") -> dict[str, Any]:  # fmt: skip
+            artifacts: bool = False, cxx: str = "clang++", vendored: dict[str, str] | None = None) -> dict[str, Any]:  # fmt: skip
     """The difference report of candidate `b` against candidate `a` of `name` at `sizes`. Device candidates are
     compiled for `target` (at most `compiles` compiles; a kept inspection is free), and `history` is read for the
     measurements and profiles that still hold for this host (`arch`, `cxx`) or the device target, `target` or the
@@ -137,7 +137,9 @@ def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]
             why = "nvcc and cuobjdump are needed, or the compile budget was spent" if card else "no device target"
             lines.append(line(COMPILER, "this report", f"no device resources for {missing}: {why}"))
     targets = {kept.digest(host_target(arch, cxx)), device_identity(card)}
-    table = kept.selectable(source, checked["a"][2].get(name, {}).get("implementations"))  # with what each calls
+    table = kept.selectable(
+        source, checked["a"][2].get(name, {}).get("implementations"), vendored
+    )  # with what each calls
     variants = {k: variant(key, table) for k, key in sides.items()}
     held = history_lines(source, name, variants, sizes, history, targets) if history is not None else {}
     lines += held.get("lines", [])

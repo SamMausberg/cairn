@@ -279,6 +279,7 @@ class Tools:
         from ..perf.resources import device_identity, host_target
         from ..projects.target import resolve
         from ..projects.toolchain import resolve_arch
+        from .history import vendored
 
         if files is None:
             fail(
@@ -287,7 +288,8 @@ class Tools:
         project = files.project
         device = resolve(None, project.device_target, required=False)
         targets = {"host": host_target(resolve_arch(project.arch), "clang++"), "device": device_identity(device)}
-        packet = investigation.investigation(source, text(a, "symbol"), project.root / ".cairn" / "history", targets)
+        history = project.root / ".cairn" / "history"
+        packet = investigation.investigation(source, text(a, "symbol"), history, targets, vendored(project))
         self.states[packet["digest"]] = packet
         return (investigation.delta(earlier, packet) if earlier else packet), False
 

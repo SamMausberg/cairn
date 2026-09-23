@@ -132,10 +132,10 @@ def row(name: str, c: Candidate, regions: list[str], validated: dict[str, Any] |
 def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile | None = None,
          arch: str | None = None, measure: int = 0, cxx: str = "clang++", device: bool = False,
          device_target: DeviceTarget | None = None, budget: Budget | None = None,
-         history: str | Path | None = None) -> dict[str, Any]:  # fmt: skip
+         history: str | Path | None = None, vendored: dict[str, str] | None = None) -> dict[str, Any]:  # fmt: skip
     """Every legal plan of `name` ranked by prediction at `sizes`, device candidates compiled within `budget` for one
     device target, `device_target` or the one resolved here; with `measure`, that many of the best timed. `history`
-    is a directory to record into and answer from."""
+    is a directory to record into and answer from; `vendored` (history.vendored) pins the project's foreign sources."""
     from .report import targeted
 
     chosen, spent = profile or default(), Spent(budget or Budget())
@@ -173,7 +173,7 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
             contract(source, name),
             host_target(arch, cxx),
             target,
-            kept.selectable(source, receipts[name].get("implementations")),
+            kept.selectable(source, receipts[name].get("implementations"), vendored),
         )
     if "device" in kinds:
         from .device import available
