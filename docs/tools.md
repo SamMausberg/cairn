@@ -1,6 +1,6 @@
 # Tools and targets
 
-Every tool here ships with the compiler and needs no Python package outside the standard library. None of them changes what the compiler accepts. `cairn COMMAND --help` lists every option; this page says what each command is for and what its answer means.
+Every tool here ships with the compiler and needs no Python package outside the standard library. None of them changes what the compiler accepts. `cairn COMMAND --help` lists every option.
 
 ## Output for people and for programs
 
@@ -56,7 +56,7 @@ $ cairn fmt --diff sloppy.cairn
 
 The layout is two-space indentation, one statement per line, `key:Type` with no space after the colon, and lines wrapped at 100 columns. A block written on one line stays on one line if it fits, a block written over several lines is never collapsed, every comment stays where it was, and runs of blank lines collapse to one.
 
-The formatter never risks a change of meaning. It re-lexes its own output and compares the tokens and comments with the input. If either differs, or the input does not lex, the file is left alone and listed under `not_formatted` with the reason, and the exit code is 1:
+The formatter re-lexes its own output and compares the tokens and comments with the input. If either differs, or the input does not lex, the file is left alone and listed under `not_formatted` with the reason, and the exit code is 1:
 
 ```json
 {

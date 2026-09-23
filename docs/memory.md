@@ -1,6 +1,6 @@
 # Memory, ownership and effects
 
-Where values live and what code may do with them: views and parts, owners and moves, linear values, layout, the layouts of a tile, effect rows, operand order and the foreign boundary. As in [language.md](language.md), every example is compiled by the suite and every refused one fails with the code shown.
+Where values live and what code may do with them.
 
 ## Arrays, views and parts
 
@@ -36,7 +36,7 @@ fn main() -> i32 { let a = Buf[u8](8); let b = Buf[u8](8); return i32(checksum(l
 Expected ro<u8>[len(a)]@host, got ro<u8>[len(b)]@host.
 ```
 
-A call may leave out its extent parameters. A `usize` parameter that names a later view's extent can only be that view's length, so the checker writes it in as `len` of the first view argument, or `hi - lo` for a part, and everything after the checker sees the call written out. Every other view with that extent must still match. A call passes all its extents or none (`E-ARITY`), and an `extern` takes every argument.
+A call may leave out its extent parameters. A `usize` parameter that names a later view's extent can only be that view's length, so the checker writes it in as `len` of the first view argument, or `hi - lo` for a part. Everything after the checker sees the call written out. Every other view with that extent must still match. A call passes all its extents or none (`E-ARITY`), and an `extern` takes every argument.
 
 ```cairn
 fn dot(n:usize, xs:ro<u64>[n], ys:ro<u64>[n]) -> u64 {
@@ -330,7 +330,7 @@ The target is `ptx`, `x86_64` or `aarch64`. PTX runs only in device code, a devi
 
 Operands are numbered as written, outputs first, and the template names every one of them, `%0`, `%1`, with `%%` for a literal percent sign and on a host one modifier letter, `%k0` (`E-ASM-OPERANDS`). The register class follows from the type. On x86-64 and AArch64 an integer takes a general register and a float a vector register; in PTX `u16` and `i16` take `h`, 32-bit integers `r`, 64-bit ones and `usize` `l`, `f32` `f` and `f64` `d`. A `bool`, a storage float, a record, or a `u8` in PTX has no class (`E-ASM-CONSTRAINT`). `out name:T` binds a fresh immutable local after the statement, and `out name:T = e` starts it at `e`. `clobbers(rax, rdx)` names the host registers the instructions write besides their outputs (`E-ASM-CLOBBER`).
 
-A view or local array given as an input passes its address. The statement then declares `read:x` or `write:x` for it (`E-ASM-EFFECT`), which lends it for the statement as a call would, so a task's lease or an `ro` view refuses it. `effects(...)` may also name `fence`, `barrier`, `atomic`, `io` and `mmio`. Any declared effect makes the lowering `volatile` with a `"memory"` clobber, and so does a statement with no outputs; `asm volatile` keeps one whose outputs depend on more than its inputs, such as a clock read, from being merged or moved.
+A view or local array given as an input passes its address. The statement then declares `read:x` or `write:x` for it (`E-ASM-EFFECT`), which lends it for the statement as a call would, so a task's lease or an `ro` view refuses it. `effects(...)` may also name `fence`, `barrier`, `atomic`, `io` and `mmio`. Any declared effect makes the lowering `volatile` with a `"memory"` clobber, and so does a statement with no outputs. `asm volatile` keeps one whose outputs depend on more than its inputs, such as a clock read, from being merged or moved.
 
 The row gets `asm:TARGET` and the declared effects, and the receipt lists each statement under `assembly` as `declared-not-checked`. In device code typed PTX may declare reads, writes and `fence`, and nothing else (`E-ASM-LANE`). An address reaches the whole array, so the lane rule treats it as a whole-array access: through one a lane may read what no lane writes and write nothing outside itself (`E-PARALLEL-RACE`).
 

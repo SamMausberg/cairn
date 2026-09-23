@@ -537,7 +537,7 @@ fn running(n:usize, out:rw<f64>[n], x:ro<f64>[n]) { scan + out parallel i in n y
 
 ## Placement and device memory
 
-A view's placement is part of its type: `@host` (the default), `@pinned`, `@unified`, `@device`. A region whose body indexes a `@device` view runs as CUDA lanes, and otherwise on host threads, from the same lane body. Host code cannot index `@device` memory, and device lanes cannot index host memory (`E-PLACEMENT`); `@unified` is visible to both, and a `@pinned` view serves wherever a `@host` one is asked for. `transfer(dst, src)` is the only way elements cross, with extents that agree and sides that do not overlap.
+A view's placement is part of its type: `@host` (the default), `@pinned`, `@unified`, `@device`. A region whose body indexes a `@device` view runs as CUDA lanes, and otherwise on host threads, from the same lane body. Host code cannot index `@device` memory, and device lanes cannot index host memory (`E-PLACEMENT`). `@unified` is visible to both, and a `@pinned` view serves wherever a `@host` one is asked for. `transfer(dst, src)` is the only way elements cross, with extents that agree and sides that do not overlap.
 
 ```cairn
 fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
@@ -599,6 +599,7 @@ After its first pass, a pipeline run again makes no stream, allocates no tempora
 A region no longer waits for queued work it does not touch: each ticket is waited for at its own `wait`. On a device without concurrent managed access (Windows and WSL2), the host must not touch `@unified` memory while any kernel runs, and a live ticket's kernel may still be running after a region returns.
 
 A C program that owns a stream hands it to a device library with `NAME_device_stream(stream)`, which `cairn build --header` declares ([tools.md](tools.md#cairn-build---header)). The calling thread's synchronous device work then runs on that stream, after what the caller queued there, and queued work starts after it too; `NULL` gives the thread its own stream back. A device view the library takes is a pointer to memory the caller owns.
+
 ## Cooperative regions
 
 `blocks b in G threads t in T { body }` runs `G` blocks of `T` threads. The threads of one block share the arrays the body declares with `shared` and wait for each other at `barrier`. Where a `parallel` lane touches only its own element, threads of a block may read what others wrote once a barrier lies between them. A region runs on the device when a view it indexes is `@device`, and on host threads otherwise.

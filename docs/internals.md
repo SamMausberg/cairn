@@ -1,6 +1,6 @@
 # Internals
 
-How the compiler is built, how it is tested, what an accepted program promises, and how a release is cut. Paths are under `src/cairn/` unless they say otherwise.
+Paths are under `src/cairn/` unless they say otherwise.
 
 ## Compiler architecture
 
@@ -212,7 +212,7 @@ make wheel audit
 
 `collect_evidence.py` runs the release gates and writes each gate's command, status and output, the commit and whether the tree was dirty to `evidence/<release>/summary.json`. `collect_lean_evidence.py` rebuilds `proofs/` from scratch and records the build and the axiom audit under `lean/`. `RUN_NOTES.md` beside them names what did not run and why: a gate whose tool is absent is `unavailable`, never passed.
 
-Tag the commit the evidence names with the version the six places state, and push `main` and the tag. A release that does not pass every gate on a committed tree is not tagged. A release claims only what its evidence shows, a speed, a GPU advantage or an AI result only with an executed run recorded under `evidence/`, losses beside wins. `docs/project/capabilities.json` and [roadmap.md](roadmap.md) are rewritten at each release.
+Tag the commit the evidence names with the version the six places state, and push `main` and the tag. A release that does not pass every gate on a committed tree is not tagged. A release claims only what its evidence shows: a speed, a GPU advantage or an AI result needs an executed run recorded under `evidence/`, with losses beside wins. `docs/project/capabilities.json` and [roadmap.md](roadmap.md) are rewritten at each release.
 
 `tools/release/publish_private.py` is the one scripted path that touches a remote. It creates a new private personal repository and pushes `main` to it, nothing more:
 
