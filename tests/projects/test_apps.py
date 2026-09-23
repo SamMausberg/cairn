@@ -50,6 +50,11 @@ def free_port():
         return probe.getsockname()[1]
 
 
+def test_every_app_is_listed():
+    """An app under examples/apps that no test names would go unchecked; analytics has a module of its own."""
+    assert sorted([*NAMES, "analytics"]) == sorted(p.name for p in APPS.iterdir() if (p / "cairn.toml").is_file())
+
+
 @pytest.mark.parametrize("name", NAMES)
 def test_every_app_typechecks(name):
     generated, receipt = compile_source(load_project(APPS / name).source)
