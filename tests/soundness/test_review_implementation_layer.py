@@ -15,7 +15,7 @@ from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
 from cairn.projects import export as exported
 from cairn.projects.project import load_project
-from cairn.verify.validation import validate
+from cairn.verify.validation import replay, validate
 from emitted import code_of, refused
 
 # --- Fixed: an export's record is data, and a build runs only what toolchain.py gives for it -----------------------
@@ -226,6 +226,19 @@ def test_negative_zero_is_not_zero_without_a_tolerance():
     assert record["status"] == "failed" and record["finite"]["failed"]["inputs"] == {"x": -0.0}
     tolerant = {"tolerance": {"absolute": 1e-12, "relative": 0.0}}
     assert validate(source, "f", "g", tolerant)["status"] == "passed"
+
+
+def test_replaying_kept_cases_with_nothing_to_replay_them_against_is_unknown(tmp_path):
+    """`cairn test` replays a regressions file against every implementation of its reference. With the reference
+    renamed or its implementations removed, no case ran and the replay still said `passed-finite-tests`."""
+    total = "fn total(n:usize, xs:ro<u64>[n]) -> u64 { let mut s:u64 = 0; for i in 0..n { s = add_wrap(s, xs[i]); } return s; }\n"
+    wrong = "fn total_bad(n:usize, xs:ro<u64>[n]) -> u64 implements total { return 0; }\n"
+    kept = tmp_path / "total.json"
+    assert validate(total + wrong, "total", "total_bad", {"budget": 8}, regressions=kept)["status"] == "failed"
+    record = json.loads(kept.read_text())
+    assert replay(total + wrong, record)["status"] == "failed-tests"
+    assert replay(total, record)["status"] == "unknown"  # no implementation left
+    assert replay(total.replace("fn total(", "fn sum_all("), record)["status"] == "unknown"  # the reference renamed
 
 
 # --- Held: attacks the checker refused, each with the code it must keep ---------------------------------------------

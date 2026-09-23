@@ -450,6 +450,11 @@ def replay(source: str, record: dict[str, Any], cxx: str = "clang++", libraries:
     implementations = sorted(receipts.get(reference, {}).get("implementations", {}))
     policy = Policy.of({**record.get("policy", {}), "budget": 1})
     cases = [Case(c["args"], c.get("offsets", {}), c.get("why", "")) for c in record.get("cases", [])]
+    if not implementations or not cases:  # nothing ran: a renamed reference or one left alone is not a pass
+        why = (f"{reference or 'the reference it names'} has no implementation here to replay the kept cases against"
+               if not implementations else "the file keeps no case")  # fmt: skip
+        return {"status": "unknown", "reference": reference, "cases": len(cases), "implementations": {},
+                "reason": why + "; nothing was tested.", "claim": FINITE}  # fmt: skip
     results = {}
     for implementation in implementations:
         with tempfile.TemporaryDirectory(prefix="cairn-replay-") as tmp:
