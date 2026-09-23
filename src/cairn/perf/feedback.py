@@ -20,7 +20,7 @@ from typing import Any
 
 from ..compiler.cairnc import compile_program
 from ..projects.target import DeviceTarget, resolve
-from . import model
+from . import cooperative_model, model
 from .plan_source import Placement, Plan, contract, written
 from .profile import Profile, default
 from .resources import Inspector, device_identity, host_target
@@ -105,7 +105,11 @@ def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]
                 f"{pb['bound']}; confidence {pb['confidence']}")  # fmt: skip
         lines.append(line(COMPILER, "cairn predict (the model, not a run)", text, sizes=s, a=pa["ns"], b=pb["ns"]))
     read: dict[str, dict[str, Any]] = {}
-    device = any(r.kind == "device" for r in costs["a"].regions)
+    lines += [
+        line(COMPILER, "the checker", f"{what}: {x} -> {y}", a=x, b=y)
+        for what, x, y in cooperative_model.checked(costs)
+    ]
+    device = any(r.kind == "device" or (r.coop is not None and r.coop.device) for k in "ab" for r in costs[k].regions)
     if device:
         from .device import available
 
@@ -143,7 +147,8 @@ def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]
     variants = {k: variant(key, table) for k, key in sides.items()}
     held = history_lines(source, name, variants, sizes, history, targets) if history is not None else {}
     lines += held.get("lines", [])
-    lines += reasoning(lines, read, device, sides, name)
+    threads = {k: next((r.coop.threads for r in costs[k].regions if r.coop is not None), 0) for k in "ab"}
+    lines += reasoning(lines, read, device, sides, name, threads)
     if history is not None:  # what the report only supposes goes into the history as that, and nothing more
         pair = {"compare": [variants["a"], variants["b"]]}
         made = kept.identity(kept.as_written(source, name), pair, contract(source, name),
@@ -202,7 +207,7 @@ def history_lines(source: str, name: str, sides: dict[str, Any], sizes: list[dic
 
 
 def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], device: bool, sides: dict[str, Any],
-              name: str) -> list[dict[str, Any]]:  # fmt: skip
+              name: str, threads: dict[str, int] | None = None) -> list[dict[str, Any]]:  # fmt: skip
     """Hypotheses the observations allow, each with the experiment that would test it. None is stated as a cause."""
     from .profile import device as card
 
@@ -218,7 +223,9 @@ def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], devi
         a, b = got["a"], got["b"]
         spec = card()
         if spec is not None and a["registers"] != b["registers"]:
-            block = {k: dict(sides[k][0]).get("block", 256) for k in "ab"}
+            block = {
+                k: (threads or {}).get(k) or dict(sides[k][0]).get("block", 256) for k in "ab"
+            }  # a block's threads
             resident = {k: spec.occupancy(got[k]["registers"], block[k], got[k]["shared_bytes"] +
                                           got[k]["dynamic_shared_bytes"]) for k in "ab"}  # fmt: skip
             if resident["a"] != resident["b"]:

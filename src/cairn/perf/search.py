@@ -155,7 +155,8 @@ def priced(c: Cost, profile: Profile, sizes: list[dict[str, float]], arch: str |
     trial = copy.copy(c)
     trial.regions = [copy.copy(r) for r in c.regions]
     for r in trial.regions:
-        if r.kind == "device" and resources and resources.get("status") == "read":
+        if (r.kind == "device" or (r.coop is not None and r.coop.device)) and resources and resources.get(
+                "status") == "read":  # fmt: skip
             r.registers = resources["registers"]
             r.shared = resources["shared_bytes"] + resources["dynamic_shared_bytes"]
     return sum(model.predict(trial, profile, s, arch)["ns"] for s in sizes)

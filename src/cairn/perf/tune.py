@@ -103,6 +103,12 @@ def local(name: str) -> str:
     return name.rsplit(".", 1)[-1]
 
 
+def placed(r: Any) -> str:
+    """Where a region runs, for what a search compiles: a cooperative region takes no plan item, and its kernel is
+    inspected as a device region's is when it runs on the device."""
+    return ("device" if r.coop.device else "host") if r.coop is not None else r.kind
+
+
 def row(name: str, c: Candidate, regions: list[str], validated: dict[str, Any] | None = None) -> dict[str, Any]:
     """One candidate as the answer shows it: its plan, its price, what a compile read, what it did to which region,
     and for an implementation, the validation the history holds for it as it is now."""
@@ -148,7 +154,8 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     alternatives = list(getattr(checker, "alternatives", {}).get(name, []))  # its implementations (E-IMPL-*)
     if not kinds and not alternatives:
         raise ValueError(f"{name} has no parallel region and no implementation, so no plan applies to it (E-PLAN).")
-    kinds |= {r.kind for g in alternatives for r in count(p, checker, {g})[g].regions} & {"host", "device"}
+    kinds |= {placed(r) for r in c.regions} & {"host", "device"}
+    kinds |= {placed(r) for g in alternatives for r in count(p, checker, {g})[g].regions} & {"host", "device"}
     if not sizes:
         raise ValueError("Give the sizes to tune for with --at, such as --at n=1e7.")
     placement = Placement(source, name)

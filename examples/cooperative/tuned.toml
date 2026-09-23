@@ -1,0 +1,12 @@
+# Row sums with an implementation whose block shape and pipeline depth `cairn tune` searches: its four instances are
+# priced by `cairn predict` and compiled for their registers, and none is chosen until a validation of it holds,
+# which a device implementation gets only under `make gpu`. The suite compiles this for sm_120 and never runs it.
+#
+#   cairn tune examples/cooperative/tuned.toml --symbol row_totals --at rows=64,cols=1e5 --device-target sm_120
+[project]
+name = "cooperative-tuned"
+sources = ["src/tuned.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

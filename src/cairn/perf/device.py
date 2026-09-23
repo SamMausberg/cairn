@@ -8,6 +8,7 @@ A report ptxas makes for any other target is refused. Nothing is launched and no
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import subprocess
@@ -61,6 +62,20 @@ def resources(log: str) -> dict[str, dict[str, Any]]:
     return out
 
 
+def listings(sass: str) -> dict[str, str]:
+    """cuobjdump -sass, each kernel's instructions as a digest: its code, not its name, so two kernels that compile
+    alike have one digest wherever they sit in a program."""
+    out: dict[str, list[str]] = {}
+    current = None
+    for line in sass.splitlines():
+        if m := FUNCTION.match(line):
+            current = m.group(1)
+            out[current] = []
+        elif current and INSTRUCTION.search(line):
+            out[current].append(line.strip())
+    return {name: hashlib.sha256("\n".join(lines).encode()).hexdigest() for name, lines in out.items()}
+
+
 def mix(sass: str) -> dict[str, Counter]:
     """cuobjdump -sass, one opcode count per kernel."""
     out: dict[str, Counter] = {}
@@ -103,13 +118,14 @@ def kernels(source: str, target: DeviceTarget | None = None, timeout: int = 600,
         if keep is not None:
             keep |= {"program.cu": program.read_bytes(), "program.cubin": cubin.read_bytes(),
                      "ptxas.log": (done.stderr + done.stdout).encode(), "sass.txt": dump.stdout.encode()}  # fmt: skip
-    used, counted = resources(done.stderr + done.stdout), mix(dump.stdout)
+    used, counted, code = resources(done.stderr + done.stdout), mix(dump.stdout), listings(dump.stdout)
     found: dict[str, list[dict[str, Any]]] = {}
     for symbol, info in used.items():
         chosen.accept(info["arch"], f"ptxas's report of {symbol}")
         mangled = demangled(symbol, names)
         opcodes = counted.get(symbol, Counter())
-        entry = {**info, "instructions": sum(opcodes.values()), "memory": {k: opcodes[o] for o, k in MEMORY.items() if opcodes[o]},
+        entry = {**info, "symbol": symbol, "sass_sha256": code.get(symbol, ""), "instructions": sum(opcodes.values()),
+                 "memory": {k: opcodes[o] for o, k in MEMORY.items() if opcodes[o]},
                  "top": dict(opcodes.most_common(8))}  # fmt: skip
         found.setdefault(names[mangled] if mangled else "(runtime)", []).append(entry)
     return {"status": "read", "arch": chosen.name, "device_target": chosen.record(), "kernels": found}

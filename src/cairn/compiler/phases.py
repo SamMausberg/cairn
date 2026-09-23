@@ -216,6 +216,8 @@ class Phases:
         if tag == "name":
             if isinstance(e.ref, Expr):
                 return self.expr(e.ref, env, mask, now)
+            if isinstance(e.ref, int) and not isinstance(e.ref, bool) and e.ty == USIZE:  # a static natural, T of f[8]
+                return e.ref
             if e.val in env:
                 return env[e.val]
             if e.ty == USIZE and e.val in self.c.env:
