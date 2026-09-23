@@ -203,7 +203,7 @@ fn main() -> i32 {
 const N:usize = 4 * 2;
 
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
-fn total(n:usize, xs:ro<u64>[n]) -> u64 { let mut t:u64 = 0; for i in 0..n { t += xs[i]; } return t; }
+fn total(n:usize, xs:ro<u64>[n]) -> u64 { let mut t:u64 = 0; for x in xs { t += x; } return t; }
 fn last(xs:ro<u64>[N]) -> u64 = xs[N - 1];
 
 fn main() -> i32 {
@@ -330,7 +330,7 @@ fn main() -> i32 {
 
 ```cairn
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
-fn total(n:usize, xs:ro<u64>[n]) -> u64 { let mut t:u64 = 0; for i in 0..n { t = add_wrap(t, xs[i]); } return t; }
+fn total(n:usize, xs:ro<u64>[n]) -> u64 { let mut t:u64 = 0; for x in xs { t = add_wrap(t, x); } return t; }
 
 fn main() -> i32 {
   let n:usize = 900;
@@ -381,7 +381,7 @@ recipe sums for R {
   each f in R { require integer(f), "sums adds integer fields."; }
   pub fn sum_$R(n:usize, rows:ro<R>[n]) -> R = R(each f in R { total_$f(n, rows) });
   each f in R where t = typeof(f) {
-    fn total_$f(n:usize, rows:ro<R>[n]) -> $t { let mut s:$t = 0; for i in 0..n { s += rows[i].$f; } return s; }
+    fn total_$f(n:usize, rows:ro<R>[n]) -> $t { let mut s:$t = 0; for row in rows { s += row.$f; } return s; }
   }
 }
 

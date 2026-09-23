@@ -1,8 +1,8 @@
 // Input/output borrows stay disjoint. The histogram has explicit local storage.
 fn sort_bytes(n:usize, out:rw<u8>[n], input:ro<u8>[n]) {
   stack counts:usize[256] = zeroed;
-  for i in 0..n {
-    let bucket = usize(input[i]);
+  for x in input {
+    let bucket = usize(x);
     counts[bucket] += 1;
   }
   let mut cursor:usize = 0;

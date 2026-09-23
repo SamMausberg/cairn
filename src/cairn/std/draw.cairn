@@ -137,8 +137,8 @@ pub fn layer(base:rw<Image>, top:ro<Image>) {
 // Text in the built-in font, each font pixel `scale` pixels square, with its top left corner at (x, y). A byte
 // outside printable ASCII draws as '?'. `text_width` says how far it reaches, for laying out what follows.
 pub fn text(img:rw<Image>, x:i64, y:i64, n:usize, s:ro<u8>[n], c:u32, scale:i64) {
-  for k in 0..n {
-    let mut ch = s[k];
+  for k, v in s {
+    let mut ch = v;
     if ch < 32 || ch > 126 { ch = '?'; }
     let g = usize(ch - 32);
     let left = x + i64(k) * GLYPH_W * scale;
@@ -199,8 +199,8 @@ pub fn apart(a:Mark, b:Mark) -> bool = a.x + a.w <= b.x || b.x + b.w <= a.x || a
 pub fn mark(l:rw<Layout>, n:usize, name:ro<u8>[n], x:i64, y:i64, w:i64, h:i64) {
   if l.count > 0 { l.text.push(','); }
   fmt.bytes(l.text, "{\"name\":\"");
-  for i in 0..n {
-    let b = name[i];
+  for v in name {
+    let b = v;
     if b == '"' || b == '\\' {
       l.text.push('\\');
       l.text.push(b);

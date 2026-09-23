@@ -54,9 +54,9 @@ fn hit(z:f64, y:f64) -> f64 {
 // The fraction of the n points the network puts on the right side of the circle.
 fn accuracy(net:ro<Net>, n:usize, m:usize, xs:ro<f64>[m], ys:ro<f64>[n]) -> f64 {
   let mut right:f64 = 0.0;
-  for k in 0..n {
+  for k, y in ys {
     let z = model.logit(net.w, net.c, net.v, net.b, xs[2 * k], xs[2 * k + 1]);
-    right += hit(z, ys[k]);
+    right += hit(z, y);
   }
   return right / f64(n);
 }
@@ -84,7 +84,7 @@ fn train(net:rw<Net>, xs:ro<f64>[PAIRS], ys:ro<f64>[TRAIN], steps:usize) -> f64 
 // positive scale gives it zeros and quantize refuses a zero one.
 fn scale_of(n:usize, p:ro<f64>[n], top:f64) -> f32 {
   let mut largest:f64 = 0.0;
-  for i in 0..n { largest = max_f(largest, abs(p[i])); }
+  for x in p { largest = max_f(largest, abs(x)); }
   if largest == 0.0 { return 1.0; }
   return f32(largest / top);
 }

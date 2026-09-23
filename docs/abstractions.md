@@ -13,7 +13,7 @@ struct Column[T] { values:Buf[T]; used:usize; }
 
 fn mean[T:numeric](n:usize, xs:ro<T>[n]) -> T {
   let mut total:T = 0;
-  for i in 0..n { total += xs[i]; }
+  for x in xs { total += x; }
   return total / T(n);                          // T(n) converts at the instance's T
 }
 fn take_first[T:copy](c:ro<Column[T]>) -> T = c.values[0];
@@ -238,7 +238,7 @@ fn drop_low(x:u64) -> u64 = x & 0xfffffff0;
 
 fn run(n:usize, stages:ro<Stage>[n], x:u64) -> u64 {
   let mut value = x;
-  for i in 0..n { let step = stages[i].apply; value = step(value); }
+  for stage in stages { let step = stage.apply; value = step(value); }
   return value;
 }
 
@@ -433,7 +433,7 @@ derive layout.columns for Particle;
 
 fn heaviest(n:usize, mass:ro<f64>[n]) -> f64 {
   let mut top:f64 = 0.0;
-  for i in 0..n { if mass[i] > top { top = mass[i]; } }
+  for m in mass { if m > top { top = m; } }
   return top;
 }
 

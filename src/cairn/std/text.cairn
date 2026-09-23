@@ -147,6 +147,6 @@ pub fn find(n:usize, s:ro<u8>[n], m:usize, needle:ro<u8>[m]) -> Option[usize] {
 // FNV-1a: no table, no allocation, good enough to key a map or checksum a record.
 pub fn hash_bytes(n:usize, s:ro<u8>[n]) -> u64 {
   let mut h = 14695981039346656037;
-  for i in 0..n { h = mul_wrap(h ^ u64(s[i]), 1099511628211); }
+  for x in s { h = mul_wrap(h ^ u64(x), 1099511628211); }
   return h;
 }

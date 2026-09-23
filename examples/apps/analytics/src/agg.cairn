@@ -35,13 +35,13 @@ derive folded[counting] for CountAgg;
 
 // Static dispatch: one instance of this loop per aggregator type, nothing indirect in it.
 pub fn run_static[A:Aggregator](a:rw<A>, n:usize, xs:ro<u64>[n]) -> u64 {
-  for i in 0..n { a.absorb(xs[i]); }
+  for x in xs { a.absorb(x); }
   return a.total();
 }
 
 // The same loop through a fat reference; `dispatch` is what it costs.
 pub fn run_dyn(a:rw<dyn Aggregator>, n:usize, xs:ro<u64>[n]) -> u64 {
-  for i in 0..n { a.absorb(xs[i]); }
+  for x in xs { a.absorb(x); }
   return a.total();
 }
 
@@ -81,6 +81,6 @@ pub fn bins_tally[T:Ord + affine](b:rw<Bins[T]>, n:usize, xs:ro<T>[n]) {
 
 pub fn bins_total[T:Ord + affine](b:ro<Bins[T]>) -> u64 {
   let mut total = 0;
-  for i in 0..len(b.counts) { total = add_wrap(total, b.counts[i]); }
+  for count in b.counts { total = add_wrap(total, count); }
   return total;
 }

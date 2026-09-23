@@ -12,7 +12,7 @@ Until the `wait`, every place lent to the task is leased: nobody may write what 
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
 fn total(n:usize, xs:ro<u64>[n]) -> u64 {
   let mut sum:u64 = 0;
-  for i in 0..n { sum = add_wrap(sum, xs[i]); }
+  for x in xs { sum = add_wrap(sum, x); }
   return sum;
 }
 
@@ -102,7 +102,7 @@ Tickets are awaited in the order they are written. A group collects tasks in the
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
 fn total(n:usize, xs:ro<u64>[n]) -> u64 {
   let mut sum:u64 = 0;
-  for i in 0..n { sum = add_wrap(sum, xs[i]); }
+  for x in xs { sum = add_wrap(sum, x); }
   return sum;
 }
 fn work(n:usize, xs:ro<u64>[n], first:usize, count:usize) -> u64 = total(count, xs[first..first + count]);
@@ -244,7 +244,7 @@ A ring is a host object (`E-PLACEMENT`), and a lane may not reach one (`E-PARALL
 
 ```cairn
 fn count_live(n:usize, xs:ro<u64>[n], live:ro<Atomic[u64]>) {
-  for i in 0..n { if xs[i] > 0 { live.fetch_add(1, Order.relaxed); } }
+  for x in xs { if x > 0 { live.fetch_add(1, Order.relaxed); } }
 }
 
 fn main() -> i32 {

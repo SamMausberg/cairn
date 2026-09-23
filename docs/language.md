@@ -412,7 +412,7 @@ HEAD is defined in terms of itself.
 fn fill(n:usize, out:rw<u8>[n], value:u8) { for i in 0..n { out[i] = value; } }
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {
   let mut sum:u32 = 0;
-  for i in 0..n { sum = add_wrap(sum, u32(bytes[i])); }
+  for byte in bytes { sum = add_wrap(sum, u32(byte)); }
   return sum;
 }
 fn bump(seen:rw<u64>) { seen += 1; }              // a single borrow, assigned by name
@@ -470,7 +470,7 @@ A part `bytes[lo..hi]` goes wherever an array borrow is expected and carries one
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {
   let mut sum:u32 = 0;
-  for i in 0..n { sum = add_wrap(sum, u32(bytes[i])); }
+  for byte in bytes { sum = add_wrap(sum, u32(byte)); }
   return sum;
 }
 
@@ -521,7 +521,7 @@ Four forms of storage hold elements, and all four are zero-initialized, because 
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {
   let mut sum:u32 = 0;
-  for i in 0..n { sum = add_wrap(sum, u32(bytes[i])); }
+  for byte in bytes { sum = add_wrap(sum, u32(byte)); }
   return sum;
 }
 
@@ -700,7 +700,7 @@ Every function carries a row: the least fixed point of its own local effects and
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 pure {
   let mut sum:u32 = 0;
-  for i in 0..n { sum = add_wrap(sum, u32(bytes[i])); }
+  for byte in bytes { sum = add_wrap(sum, u32(byte)); }
   return sum;
 }
 

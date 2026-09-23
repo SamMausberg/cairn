@@ -122,7 +122,7 @@ fn tenth(x:rw<u64>[LIMBS]) -> u8 {
 }
 
 fn zero(x:ro<u64>[LIMBS]) -> bool {
-  for i in 0..LIMBS { if x[i] != 0 { return false; } }
+  for v in x { if v != 0 { return false; } }
   return true;
 }
 

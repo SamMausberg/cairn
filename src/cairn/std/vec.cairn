@@ -82,7 +82,7 @@ pub fn clear[T:affine](v:rw<Vec[T]>) {
 // have to be moved out of the source view, which no borrow allows.
 pub fn extend_from[T:copy](v:rw<Vec[T]>, n:usize, src:ro<T>[n]) {
   reserve(v, v.len + n);
-  for i in 0..n { v.data[v.len + i] = src[i]; }
+  for i, s in src { v.data[v.len + i] = s; }
   v.len += n;
 }
 

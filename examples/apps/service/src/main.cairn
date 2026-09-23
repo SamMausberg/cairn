@@ -113,12 +113,12 @@ fn hang_up(clients:rw<Buf[Client]>, k:usize) {
 // What one receive brought: appended to the client's pending line, then every complete line answered.
 // A line longer than LIMIT is answered with an error and dropped. `true` means a client said quit.
 fn take_in(c:rw<Client>, t:rw<Table>, n:usize, got:ro<u8>[n]) -> Result[bool, IoError] {
-  for i in 0..n {
+  for g in got {
     if c.have == LIMIT {
       try say(c.fd, "-error");
       c.have = 0;
     }
-    c.line[c.have] = got[i];
+    c.line[c.have] = g;
     c.have += 1;
   }
   let mut stop = false;

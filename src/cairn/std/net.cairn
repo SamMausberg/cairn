@@ -16,7 +16,7 @@ fn address(addr:rw<u8>[16], ip:ro<u8>[4], port:u16) {
   addr[0] = 2;
   addr[2] = u8(shr(port, 8));
   addr[3] = u8(port & 255);
-  for i in 0..4 { addr[4 + i] = ip[i]; }
+  for i, x in ip { addr[4 + i] = x; }
 }
 
 fn error[T]() -> Result[T, IoError] = Err(IoError(sys.errno()));

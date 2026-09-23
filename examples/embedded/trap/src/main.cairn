@@ -12,7 +12,7 @@ fn putc(byte:u8) {
   }
 }
 
-fn puts(n:usize, text:ro<u8>[n]) { for i in 0..n { putc(text[i]); } }
+fn puts(n:usize, text:ro<u8>[n]) { for t in text { putc(t); } }
 
 fn main() -> i32 {
   stack window:u8[4] = zeroed;
