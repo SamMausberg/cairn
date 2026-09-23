@@ -7,6 +7,7 @@ not offered: an architecture outside the host family is rejected, not guessed.
 
 from __future__ import annotations
 
+import functools
 import platform
 import shutil
 import subprocess
@@ -163,7 +164,9 @@ def find(compiler: str) -> str:
     return path
 
 
+@functools.cache
 def version(compiler: str) -> str:
-    """What `compiler --version` prints. A cold compiler on a loaded two-core runner took more than the five
-    seconds this once allowed, so it has two minutes."""
+    """What `compiler --version` prints, asked once a process: a suite of thousands of builds asked it for each.
+    A cold compiler on a loaded two-core runner took more than the five seconds this once allowed, so it has two
+    minutes."""
     return subprocess.run([compiler, "--version"], check=True, capture_output=True, text=True, timeout=120).stdout
