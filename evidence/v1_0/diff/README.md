@@ -1,6 +1,6 @@
 # What changed from 0.8.3, as cairn diff reads it
 
-`cairn diff v0.8.3 13692b3` was run on 2026-09-22 for the packaged library and for each of the eight example projects that 0.8.3 already held, by `cairn diff v1.3.0 REV --std --budget-s 600` and `cairn diff v1.3.0 REV --in examples/PROJECT --budget-s 120`. Each `.json` is the `cairn.diff/1` record and each `.md` the pull request section written beside it. Both versions were read from git objects into scratch directories, and both were checked and lowered by the compiler of `13692b3`, so this compares two sources, not two compilers. The machine was shared with other agents' builds and suites, which bears only on how far the solver got inside its budgets.
+`cairn diff v0.8.3 13692b3` was run on 2026-09-22 for the packaged library and for each of the eight example projects that 0.8.3 already held, by `cairn diff v0.8.3 REV --std --budget-s 600` and `cairn diff v0.8.3 REV --in examples/PROJECT --budget-s 120` (the tag then had its old name). Each `.json` is the `cairn.diff/1` record and each `.md` the pull request section written beside it. Both versions were read from git objects into scratch directories, and both were checked and lowered by the compiler of `13692b3`, so this compares two sources, not two compilers. The machine was shared with other agents' builds and suites, which bears only on how far the solver got inside its budgets.
 
 | side | identical-code | identical-source | smt-equivalent | behavior-changed | unknown | other | semantic version |
 |---|---|---|---|---|---|---|---|
