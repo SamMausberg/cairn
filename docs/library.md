@@ -179,7 +179,7 @@ fn main() -> i32 {
 
 `defer io.close(f)` is the idiom: `try` refuses to leave a function while a linear value is unconsumed, so without the `defer` a File cannot be used with `try` at all (`E-LINEAR-LEAK`). `close` reports nothing, because a consumer of a linear value cannot return a status; report through a borrow if you need it.
 
-A path here ends in a NUL byte, since C reads a pointer and not a length; [std.fs](#stdfs) takes paths without one. `read` is one syscall and answers 0 at end of file, and `read_full` and `write` loop. Nothing buffers. The [print builtins](language.md#print-and-format) are usually what a program wants for output.
+A path here ends in a NUL byte, since C reads a pointer and not a length; [std.fs](#stdfs) takes paths without one. `read` is one syscall and answers 0 at end of file, and `read_full` and `write` loop. Nothing buffers; for output, the [print builtins](language.md#print-and-format) usually serve.
 
 ## std.fmt
 
@@ -404,7 +404,7 @@ fn main() -> i32 {
 }
 ```
 
-`find` answers with the slot, not the value. `insert` releases the old value when it replaces one, and `remove` moves the value out.
+`insert` releases the old value when it replaces one, and `remove` moves the value out.
 
 A slot index is good only until the next `insert` or `remove`, since growth rehashes and a slot can be reused. `slot(m, key)` gives a `Slot` stamped when its key was placed, and `resolve(m, s)` answers `None` once that key is gone, never another entry's index. `update(m, key, f)` lends the value to a closure, which may not reach the map (`E-ALIAS`).
 

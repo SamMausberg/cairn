@@ -47,7 +47,7 @@ fn main() -> i32 { let header:u64 = 20; return i32(payload(1500, header)); }
 Expected u32, got u64.
 ```
 
-Floats compile with `-ffp-contract=off -fno-fast-math` (and `--fmad=false` on the device): no contraction and no reassociation. A failed guard aborts the process. It does not unwind, and it rolls nothing back.
+Floats compile with `-ffp-contract=off -fno-fast-math` (and `--fmad=false` on the device): no contraction and no reassociation. A failed guard aborts the process without unwinding or rolling anything back.
 
 Six builtins cover what IEEE 754 defines exactly, so every compiler, the host and a device lane give the same bits. They are `sqrt` (correctly rounded), `floor`, `ceil` and `trunc` for `f32` and `f64`; `abs` for a float or a signed integer, trapping on the signed minimum; and `to_bits`, a float's IEEE pattern. Any other argument is `E-MATH-TYPE`. `exp`, `log`, `sin` and the rest depend on the math library's last bit, so they are not builtins: [std.math](library.md#stdmath) calls the C library, and its row says so. A program's own function with one of these names is the one a call reaches.
 
@@ -80,7 +80,7 @@ Removing a guard never changes what a program does: the row still says `trap`, a
 
 A block body needs explicit `return` statements, and every path of a non-void function must return one (`E-RETURN`). There is no block-tail return. An expression body, `fn payload(total:u32, header:u32) -> u32 = total - header;`, is that one return.
 
-The control forms are `if / else if / else`, `while`, `for i in lo..hi`, `for x in xs`, `break`, `continue` and nested `{ }` blocks. A `for` evaluates `lo` and then `hi` once, and an empty or reversed range does nothing. `&&` and `||` short-circuit. No loop implies parallelism.
+The control forms are `if / else if / else`, `while`, `for i in lo..hi`, `for x in xs`, `break`, `continue` and nested `{ }` blocks. A `for` evaluates `lo` and then `hi` once, and an empty or reversed range does nothing. `&&` and `||` short-circuit.
 
 `for x in xs { }` walks the elements of a view, a `Buf`, an `Array` or a fixed array, and `for i, x in xs { }` names the position too. It means `for i in 0..len(xs) { let x = xs[i]; }` and pays the guards that loop pays. Each element is copied, so the elements must be copyable (`E-ELEMENT-LOOP`); an owner in an array is taken, swapped or lent through `xs[i]`.
 
@@ -324,7 +324,7 @@ fn thin() -> Shape = Line(Line(1));
 Line is both Shape.Line and a type; write Shape.Line.
 ```
 
-`try e` takes a two-variant sum, success first and failure second. It yields the success payload, or returns the failure from the enclosing function, whose return type must be a two-variant sum with the same failure payload (`E-TRY`); the two sums may be different types. It is the only propagation form.
+`try e` takes a two-variant sum, success first and failure second. It yields the success payload, or returns the failure from the enclosing function, whose return type must be a two-variant sum with the same failure payload (`E-TRY`); the two sums may be different types.
 
 ```cairn
 struct Header { kind:u8; size:u32; }

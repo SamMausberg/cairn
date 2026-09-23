@@ -1,6 +1,6 @@
 # Guide
 
-This guide takes a fresh checkout to a project that builds, runs, tests itself and refuses a wrong edit, then walks through twelve complete programs, one idea each. At a terminal every command prints lines for a person. Piped, or given `--format json`, it prints the JSON record a script or an agent reads. The guide shows both.
+This guide takes a fresh checkout to a project that builds, runs, tests itself and refuses a wrong edit, then walks through twelve complete programs. At a terminal every command prints lines for a person; piped, or given `--format json`, it prints the JSON record a script or an agent reads. The guide shows both.
 
 ## Install
 
@@ -178,7 +178,7 @@ cairn doc demo                 # a Markdown reference from the checked program, 
 cairn emit demo/src/math.cairn # the C++ one file lowers to
 ```
 
-`fmt` re-lexes its output and rewrites a file only if the tokens and comments come out unchanged. `doc` prints each public function's signature, comment and inferred effects. The [editor extension](tools.md#the-editor-extension) shows diagnostics as you type, types and effect rows on hover, completion and rename, all from the same language server.
+`fmt` re-lexes its output and rewrites a file only if the tokens and comments come out unchanged. The [editor extension](tools.md#the-editor-extension) shows diagnostics as you type, types and effect rows on hover, completion and rename, all from the same language server.
 
 ## The tour in twelve programs
 
@@ -186,7 +186,7 @@ The suite builds and runs every program below under the address and undefined-be
 
 ### 1. Values, checked arithmetic, explicit conversions
 
-Integers trap on overflow in every build. The wrapping forms say so by name. Nothing converts implicitly, and a narrowing conversion is a range check.
+Integers trap on overflow in every build, the wrapping forms say so by name, and a narrowing conversion is a range check.
 
 ```cairn
 fn mean(a:u32, b:u32) -> u32 = u32((u64(a) + u64(b)) / 2);   // widen, then narrow with a check

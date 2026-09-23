@@ -1,6 +1,6 @@
 # Numerics
 
-Numbers stored in fewer bits than they are computed in, the multiplies whose sums follow the hardware's order, whole or a fragment at a time, and derivatives the compiler writes for you. Every rounding a program performs is named in its source and listed in its build receipt under `numerics`.
+Every rounding a program performs is named in its source and listed in its build receipt under `numerics`.
 
 ## Storage floats
 
@@ -117,7 +117,7 @@ fn tensor_memory() { let acc = TmemAcc[f32, 128, 256, 16](0.0); }
 
 On the host every thread of a warp holds each fragment whole, adds in increasing k, and stores only the elements its lane holds on the device, so a warp's threads write each element once.
 
-Two matrix multiplies are written this way in `examples/tensor`: `tile64`, the tiling `mma_unordered` fixes (64 x 64 tiles, four warps of 2 x 2 WMMA fragments, k in steps of 32 through two padded stages), and `tile32`, another (64 x 32 tiles, eight warps of two `mma.sync` fragments, one stage whose A tile is swizzled). Neither needed a change to `cairn_tensor.hpp`. On generated shapes with partial tiles in every direction, each output of both lies within the contract's bound of the exact sum and equals the reference loop's bit for bit, under both compilers, and their threads run clean under the thread sanitizer. Both compile for sm_120, to `HMMA.16816.F32` and `HMMA.16816.F32.BF16` fed by `LDSM`, and have not run on a GPU ([evidence](../evidence/v0_9/tensor/README.md)).
+Two matrix multiplies are written this way in `examples/tensor`: `tile64`, the tiling `mma_unordered` fixes (64 x 64 tiles, four warps of 2 x 2 WMMA fragments, k in steps of 32 through two padded stages), and `tile32`, another (64 x 32 tiles, eight warps of two `mma.sync` fragments, one stage whose A tile is swizzled). On generated shapes with partial tiles in every direction, each output of both lies within the contract's bound of the exact sum and equals the reference loop's bit for bit, under both compilers, and their threads run clean under the thread sanitizer. Both compile for sm_120, to `HMMA.16816.F32` and `HMMA.16816.F32.BF16` fed by `LDSM`, and have not run on a GPU ([evidence](../evidence/v0_9/tensor/README.md)).
 
 ## Gradients
 

@@ -107,7 +107,7 @@ cairn check --generics frame.cairn
 }
 ```
 
-The verdict covers ceilings, operand order and what a lane may reach too. A trait member without a ceiling may do anything, which shows as `bound:Trait.member` in the row. The command exits 1 unless every template certifies, and every template of `std` does. Without the flag, templates are accepted instance by instance, and one nobody instantiates is listed in the receipt as `uninstantiated_templates`, never silently trusted.
+The verdict covers ceilings, operand order and what a lane may reach too. A trait member without a ceiling may do anything, which shows as `bound:Trait.member` in the row. The command exits 1 unless every template certifies, and every template of `std` does. Without the flag, templates are accepted instance by instance, and one nobody instantiates is listed in the receipt as `uninstantiated_templates`.
 
 ## Traits
 
@@ -276,7 +276,7 @@ A mutable view cannot be passed to overlapping call arguments.
 
 ## Implementations
 
-A function can have several implementations. The ordinary `fn` is the reference, the definition of what the function computes. An implementation is written as a function with exactly the reference's signature, says which function it implements, and may say with `when` on which inputs it applies. `plan f use g;` chooses which one runs.
+A function can have several implementations. The ordinary `fn` is the reference, which defines what the function computes. An implementation has exactly the reference's signature, names it after `implements`, and may say with `when` on which inputs it applies; `plan f use g;` chooses which one runs.
 
 ```cairn
 fn total(n:usize, xs:ro<u64>[n]) -> u64 {
@@ -303,7 +303,7 @@ fn main() -> i32 {
 }
 ```
 
-The selected implementation runs where its condition holds and the reference runs everywhere else, so every input the reference admits is still admitted. Without a plan the reference runs. `when` is a condition over the value parameters that cannot trap: comparisons, `&& || !`, `& | ^ ~`, `min`, `max`, the wrapping forms, `/` or `%` by a nonzero literal, `len` of a view parameter, literals and constants (`E-IMPL-WHEN`). Without `when` an implementation applies to every input and the dispatch tests nothing. A call whose arguments for the condition are literals or constants that make it true, such as `total(12, xs)` above, calls the implementation directly, the condition decided when the program is compiled.
+The selected implementation runs where its condition holds and the reference everywhere else, so every input the reference admits is still admitted; without a plan the reference runs. `when` is a condition over the value parameters that cannot trap: comparisons, `&& || !`, `& | ^ ~`, `min`, `max`, the wrapping forms, `/` or `%` by a nonzero literal, `shr` or `shl_wrap` by a literal below the width, `len` of a view parameter, literals and constants (`E-IMPL-WHEN`). Without `when` an implementation applies to every input and the dispatch tests nothing. A call whose literal or constant arguments make the condition true, such as `total(12, xs)` above, calls the implementation directly.
 
 An implementation keeps its reference's contract. Its parameters, types, extents, placements and result are the reference's (`E-IMPL-SIGNATURE`). Its row stays inside the reference's declared ceiling, or inside the reference's own row when it declares none (`E-IMPL-EFFECT`), and it writes no rounding the reference does not write (`E-IMPL-NUMERICS`). The reference's row joins every implementation's, so choosing one changes no row.
 
@@ -347,9 +347,9 @@ fn total_padded(n:usize, xs:ro<u64>[n]) -> u64 implements total when (n + 3) / 4
 A when is a condition over the value parameters that cannot trap: comparisons, && || !, & | ^ ~, min, max, the wrapping forms, / or % by a nonzero literal, shr or shl_wrap by a literal below the width, len of a view parameter, literals and constants.
 ```
 
-An implementation lives in its reference's module and is an ordinary function with a body, never generic or a kernel, and never an implementation of an implementation (`E-IMPLEMENTS`). Only a test block calls one by name, to compare it with its reference, and an implementation never reaches its reference, which could dispatch back to it (`E-IMPL-CALL`). A plan names one implementation of the function it plans (`E-IMPL-USE`). `needs(cp_async)` after the condition names the [device features](tools.md#the-device-target) an implementation's code uses, and only an implementation that runs device code may name them (`E-IMPLEMENTS`). A plan that selects it adds them to what the program asks of its device target, and a build for a target that lacks one is refused (`E-IMPL-TARGET`); the reference does not run in its place.
+An implementation lives in its reference's module and is an ordinary function with a body, never generic, a kernel or an implementation of an implementation (`E-IMPLEMENTS`). Only a test block calls one by name, and an implementation never reaches its reference, which could dispatch back to it (`E-IMPL-CALL`). A plan names one implementation of the function it plans (`E-IMPL-USE`). `needs(cp_async)` after the condition names the [device features](tools.md#the-device-target) an implementation's device code uses, and one without device code may name none (`E-IMPLEMENTS`). A plan that selects it adds them to what the program asks of its device target, and a build for a target that lacks one is refused (`E-IMPL-TARGET`) rather than running the reference in its place.
 
-The receipt lists each implementation under its reference with its condition, whether it is tested at entry, what it requires of the machine (host or device, lanes, tasks, allocation sites, stack bytes) and its identity, a digest of the two declarations' tokens, so a comment changes neither. The one a plan runs is `runs`. Being accepted says nothing about whether an implementation computes what its reference computes; [`cairn validate`](tools.md#cairn-validate) tests that.
+The receipt lists each implementation under its reference with its condition, whether it is tested at entry, what it requires of the machine (host or device, lanes, tasks, allocation sites, stack bytes) and its identity, a digest of the two declarations' tokens that no comment changes, and marks the one a plan runs as `runs`. Acceptance says nothing about whether an implementation computes what its reference computes; [`cairn validate`](tools.md#cairn-validate) tests that.
 
 ## Modules
 
