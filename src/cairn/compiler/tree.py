@@ -11,8 +11,9 @@ import pickle
 from dataclasses import dataclass, field
 from typing import Any, NoReturn, TypeVar
 
-# Size limits, measured in evidence/v1_5/scale: at them a program checks in about a minute and a gigabyte, so each
-# refuses a program that would cost more than that, with a code, instead of letting it run out of time or memory.
+# Size limits: past one, a program is refused with a code instead of running out of time or memory. On the reference
+# machine a program of 31,802 functions, 7 MB and 758,000 nodes checked in 33 s at 800 MiB (evidence/v1_5/scale);
+# the source and node limits admit about twice that, which was not measured.
 MAX_SOURCE = 16_000_000  # bytes of a program's combined source
 MAX_FUNCTIONS = 32_768  # functions a program holds: its own, its library's, and every copy and instance made
 MAX_NODES = 3_200_000  # syntax nodes of those functions before expansion

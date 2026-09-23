@@ -296,8 +296,9 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     global FORMAT
-    # A compile builds millions of tree objects that live until it ends: collect the young ones as usual and the
-    # old ones rarely, which takes a tenth to a fifth off a large check at the same peak memory (evidence/v1_5/scale).
+    # A compile builds millions of tree objects that live until it ends, so the collector looks at old ones rarely.
+    # Interleaved checks of a 77,000-line project ran 10 to 20 percent faster at the same peak memory; the loaded
+    # scale run of evidence/v1_5/scale does not separate that from its noise.
     gc.set_threshold(50_000, 50, 100)
     p = parser()
     argv = sys.argv[1:] if argv is None else argv

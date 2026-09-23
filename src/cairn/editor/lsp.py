@@ -210,6 +210,8 @@ class Server:
                 message = read_message(self.source)
             except ValueError:  # A malformed frame is skipped, not fatal.
                 continue
+            except Exception:  # A broken input ends the session as its end would, never a silent wait.
+                message = None
             inbox.put(message)
             if message is None:
                 return
