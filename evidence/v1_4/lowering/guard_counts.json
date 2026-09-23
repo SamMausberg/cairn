@@ -1,5 +1,5 @@
 {
-  "commit": "164b63efe211f4edecdb22b3d3c98cd686a659db",
+  "commit": "816afbd0a5a3cefe437de552acc4642e085526be",
   "programs": [
     {
       "program": "bench/suite/kernels/compact_even/kernel.cairn",
@@ -19,6 +19,8 @@
         "part": 0,
         "entry": 3
       },
+      "lean_call_sites": 0,
+      "entry_checks_skipped": 0,
       "discharged_check_sites": {
         "bounds": 2
       }
@@ -41,6 +43,8 @@
         "part": 0,
         "entry": 2
       },
+      "lean_call_sites": 0,
+      "entry_checks_skipped": 0,
       "discharged_check_sites": {
         "bounds": 2
       }
@@ -48,24 +52,27 @@
     {
       "program": "bench/suite/kernels/histogram_u32/kernel.cairn",
       "before": {
-        "bounds": 4,
-        "overflow": 0,
-        "conversion": 1,
-        "division": 0,
+        "bounds": 9,
+        "overflow": 10,
+        "conversion": 2,
+        "division": 1,
         "part": 0,
-        "entry": 3
+        "entry": 6
       },
       "after": {
         "bounds": 0,
-        "overflow": 0,
+        "overflow": 6,
         "conversion": 0,
-        "division": 0,
+        "division": 1,
         "part": 0,
-        "entry": 3
+        "entry": 6
       },
+      "lean_call_sites": 0,
+      "entry_checks_skipped": 0,
       "discharged_check_sites": {
-        "bounds": 4,
-        "conversion": 1
+        "bounds": 9,
+        "conversion": 2,
+        "overflow": 4
       }
     },
     {
@@ -86,6 +93,8 @@
         "part": 0,
         "entry": 3
       },
+      "lean_call_sites": 0,
+      "entry_checks_skipped": 0,
       "discharged_check_sites": {
         "shift": 1,
         "bounds": 2
@@ -109,6 +118,8 @@
         "part": 0,
         "entry": 5
       },
+      "lean_call_sites": 0,
+      "entry_checks_skipped": 0,
       "discharged_check_sites": {
         "bounds": 3
       }
@@ -131,6 +142,8 @@
         "part": 0,
         "entry": 6
       },
+      "lean_call_sites": 0,
+      "entry_checks_skipped": 0,
       "discharged_check_sites": {
         "overflow": 3,
         "bounds": 10
@@ -139,12 +152,12 @@
     {
       "program": "bench/suite/kernels/sum_u64_wrap/kernel.cairn",
       "before": {
-        "bounds": 2,
+        "bounds": 3,
         "overflow": 0,
         "conversion": 0,
         "division": 0,
         "part": 0,
-        "entry": 2
+        "entry": 3
       },
       "after": {
         "bounds": 0,
@@ -152,10 +165,12 @@
         "conversion": 0,
         "division": 0,
         "part": 0,
-        "entry": 2
+        "entry": 3
       },
+      "lean_call_sites": 0,
+      "entry_checks_skipped": 0,
       "discharged_check_sites": {
-        "bounds": 2
+        "bounds": 3
       }
     },
     {
@@ -170,138 +185,232 @@
       },
       "after": {
         "bounds": 0,
-        "overflow": 4,
+        "overflow": 2,
         "conversion": 0,
         "division": 1,
         "part": 4,
         "entry": 2
       },
+      "lean_call_sites": 0,
+      "entry_checks_skipped": 0,
       "discharged_check_sites": {
         "bounds": 1,
-        "conversion": 4
+        "conversion": 4,
+        "overflow": 1
       }
     },
     {
       "program": "examples/apps/analytics",
       "before": {
-        "bounds": 240,
-        "overflow": 173,
-        "conversion": 169,
-        "division": 13,
-        "part": 45,
-        "entry": 87
+        "bounds": 239,
+        "overflow": 209,
+        "conversion": 170,
+        "division": 12,
+        "part": 46,
+        "entry": 88
       },
       "after": {
         "bounds": 124,
-        "overflow": 165,
-        "conversion": 54,
-        "division": 13,
-        "part": 45,
-        "entry": 87
+        "overflow": 148,
+        "conversion": 56,
+        "division": 12,
+        "part": 40,
+        "entry": 88
       },
+      "lean_call_sites": 75,
+      "entry_checks_skipped": 103,
       "discharged_check_sites": {
-        "bounds": 116,
-        "conversion": 115,
-        "shift": 60,
-        "overflow": 8
+        "bounds": 121,
+        "conversion": 114,
+        "overflow": 35,
+        "shift": 60
+      }
+    },
+    {
+      "program": "examples/apps/classifier",
+      "before": {
+        "bounds": 117,
+        "overflow": 160,
+        "conversion": 23,
+        "division": 14,
+        "part": 25,
+        "entry": 170
+      },
+      "after": {
+        "bounds": 68,
+        "overflow": 100,
+        "conversion": 18,
+        "division": 14,
+        "part": 18,
+        "entry": 170
+      },
+      "lean_call_sites": 103,
+      "entry_checks_skipped": 243,
+      "discharged_check_sites": {
+        "shift": 12,
+        "bounds": 59,
+        "overflow": 42,
+        "conversion": 5
       }
     },
     {
       "program": "examples/apps/gpu_pipeline",
       "before": {
-        "bounds": 43,
-        "overflow": 61,
-        "conversion": 21,
-        "division": 5,
-        "part": 16,
-        "entry": 47
+        "bounds": 42,
+        "overflow": 79,
+        "conversion": 22,
+        "division": 4,
+        "part": 17,
+        "entry": 48
       },
       "after": {
         "bounds": 16,
-        "overflow": 55,
-        "conversion": 15,
-        "division": 5,
-        "part": 16,
-        "entry": 47
+        "overflow": 47,
+        "conversion": 17,
+        "division": 4,
+        "part": 11,
+        "entry": 48
       },
+      "lean_call_sites": 41,
+      "entry_checks_skipped": 52,
       "discharged_check_sites": {
-        "bounds": 27,
-        "conversion": 6,
-        "overflow": 6
+        "bounds": 32,
+        "conversion": 5,
+        "overflow": 21
       }
     },
     {
       "program": "examples/apps/kvstore",
       "before": {
         "bounds": 94,
-        "overflow": 76,
-        "conversion": 72,
-        "division": 4,
-        "part": 32,
-        "entry": 48
+        "overflow": 123,
+        "conversion": 73,
+        "division": 3,
+        "part": 33,
+        "entry": 49
       },
       "after": {
-        "bounds": 45,
-        "overflow": 70,
-        "conversion": 38,
-        "division": 4,
-        "part": 32,
-        "entry": 48
+        "bounds": 46,
+        "overflow": 63,
+        "conversion": 40,
+        "division": 3,
+        "part": 27,
+        "entry": 49
       },
+      "lean_call_sites": 80,
+      "entry_checks_skipped": 96,
       "discharged_check_sites": {
-        "bounds": 49,
-        "conversion": 34,
-        "overflow": 6,
+        "bounds": 54,
+        "conversion": 33,
+        "overflow": 35,
         "shift": 32
+      }
+    },
+    {
+      "program": "examples/apps/panel",
+      "before": {
+        "bounds": 129,
+        "overflow": 268,
+        "conversion": 103,
+        "division": 28,
+        "part": 33,
+        "entry": 72
+      },
+      "after": {
+        "bounds": 80,
+        "overflow": 185,
+        "conversion": 69,
+        "division": 28,
+        "part": 26,
+        "entry": 72
+      },
+      "lean_call_sites": 108,
+      "entry_checks_skipped": 135,
+      "discharged_check_sites": {
+        "overflow": 57,
+        "conversion": 34,
+        "bounds": 56,
+        "shift": 30
       }
     },
     {
       "program": "examples/apps/service",
       "before": {
-        "bounds": 61,
-        "overflow": 81,
-        "conversion": 28,
-        "division": 4,
-        "part": 29,
-        "entry": 47
+        "bounds": 70,
+        "overflow": 112,
+        "conversion": 37,
+        "division": 3,
+        "part": 30,
+        "entry": 50
       },
       "after": {
-        "bounds": 40,
-        "overflow": 71,
-        "conversion": 21,
-        "division": 4,
-        "part": 29,
-        "entry": 47
+        "bounds": 49,
+        "overflow": 63,
+        "conversion": 28,
+        "division": 3,
+        "part": 21,
+        "entry": 50
       },
+      "lean_call_sites": 67,
+      "entry_checks_skipped": 80,
       "discharged_check_sites": {
-        "bounds": 21,
-        "conversion": 7,
-        "overflow": 10,
+        "overflow": 32,
+        "bounds": 30,
+        "conversion": 9,
         "shift": 1
       }
     },
     {
       "program": "examples/apps/simulator",
       "before": {
-        "bounds": 58,
-        "overflow": 73,
-        "conversion": 19,
-        "division": 8,
-        "part": 14,
-        "entry": 43
+        "bounds": 57,
+        "overflow": 87,
+        "conversion": 20,
+        "division": 7,
+        "part": 15,
+        "entry": 44
       },
       "after": {
         "bounds": 20,
-        "overflow": 63,
-        "conversion": 15,
-        "division": 8,
-        "part": 14,
-        "entry": 43
+        "overflow": 55,
+        "conversion": 17,
+        "division": 7,
+        "part": 9,
+        "entry": 44
       },
+      "lean_call_sites": 42,
+      "entry_checks_skipped": 57,
       "discharged_check_sites": {
-        "overflow": 10,
-        "bounds": 38,
-        "conversion": 4
+        "overflow": 23,
+        "bounds": 43,
+        "conversion": 3
+      }
+    },
+    {
+      "program": "examples/apps/wordfreq",
+      "before": {
+        "bounds": 112,
+        "overflow": 182,
+        "conversion": 28,
+        "division": 15,
+        "part": 39,
+        "entry": 66
+      },
+      "after": {
+        "bounds": 77,
+        "overflow": 95,
+        "conversion": 18,
+        "division": 15,
+        "part": 32,
+        "entry": 66
+      },
+      "lean_call_sites": 81,
+      "entry_checks_skipped": 101,
+      "discharged_check_sites": {
+        "overflow": 56,
+        "bounds": 41,
+        "conversion": 10,
+        "shift": 11
       }
     },
     {
@@ -322,6 +431,8 @@
         "part": 0,
         "entry": 768
       },
+      "lean_call_sites": 0,
+      "entry_checks_skipped": 0,
       "discharged_check_sites": {
         "bounds": 512
       }
@@ -344,6 +455,8 @@
         "part": 0,
         "entry": 28
       },
+      "lean_call_sites": 2,
+      "entry_checks_skipped": 5,
       "discharged_check_sites": {
         "bounds": 17,
         "conversion": 5,
@@ -368,6 +481,8 @@
         "part": 0,
         "entry": 2
       },
+      "lean_call_sites": 0,
+      "entry_checks_skipped": 0,
       "discharged_check_sites": {
         "bounds": 72,
         "shift": 72,
@@ -377,7 +492,7 @@
     {
       "program": "examples/embedded",
       "before": {
-        "bounds": 14,
+        "bounds": 13,
         "overflow": 15,
         "conversion": 11,
         "division": 4,
@@ -385,13 +500,15 @@
         "entry": 6
       },
       "after": {
-        "bounds": 10,
+        "bounds": 9,
         "overflow": 14,
         "conversion": 2,
         "division": 4,
         "part": 1,
         "entry": 6
       },
+      "lean_call_sites": 15,
+      "entry_checks_skipped": 17,
       "discharged_check_sites": {
         "conversion": 9,
         "bounds": 4,
@@ -416,6 +533,8 @@
         "part": 0,
         "entry": 1
       },
+      "lean_call_sites": 2,
+      "entry_checks_skipped": 2,
       "discharged_check_sites": {
         "conversion": 3,
         "bounds": 3
@@ -439,6 +558,8 @@
         "part": 0,
         "entry": 0
       },
+      "lean_call_sites": 0,
+      "entry_checks_skipped": 0,
       "discharged_check_sites": {
         "shift": 1
       }
@@ -446,7 +567,7 @@
     {
       "program": "examples/systems",
       "before": {
-        "bounds": 16,
+        "bounds": 15,
         "overflow": 6,
         "conversion": 3,
         "division": 1,
@@ -461,6 +582,8 @@
         "part": 0,
         "entry": 9
       },
+      "lean_call_sites": 5,
+      "entry_checks_skipped": 9,
       "discharged_check_sites": {
         "bounds": 15,
         "conversion": 3
@@ -468,20 +591,24 @@
     }
   ],
   "total_before": {
-    "bounds": 1165,
-    "overflow": 500,
-    "conversion": 409,
-    "division": 43,
-    "part": 141,
-    "entry": 1112
+    "bounds": 1533,
+    "overflow": 1266,
+    "conversion": 577,
+    "division": 96,
+    "part": 243,
+    "entry": 1431
   },
   "total_after": {
-    "bounds": 265,
-    "overflow": 456,
-    "conversion": 180,
-    "division": 43,
-    "part": 141,
-    "entry": 1112
+    "bounds": 499,
+    "overflow": 792,
+    "conversion": 300,
+    "division": 96,
+    "part": 189,
+    "entry": 1431
   },
-  "measures": "guard calls in emitted C++ text, not guards executed at runtime"
+  "total_lean": {
+    "lean_call_sites": 621,
+    "entry_checks_skipped": 900
+  },
+  "measures": "guard calls in emitted C++ text, not guards executed at runtime; entry_checks_skipped counts per execution of each call site that reaches a lean body"
 }

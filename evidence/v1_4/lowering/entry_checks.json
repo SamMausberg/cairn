@@ -1,0 +1,68 @@
+{
+  "measures": "best wall time of one call of cf_run over 2^24 elements; lean: calls from CAIRN reach ci_, checked: they reach cf_, which runs the callee's view and disjointness checks first",
+  "repeat": 15,
+  "rounds": 5,
+  "flags": [
+    "-std=c++20",
+    "-O3",
+    "-ffp-contract=off",
+    "-fno-fast-math",
+    "-fno-exceptions",
+    "-fno-rtti",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-Wno-unused-parameter",
+    "-Wno-unused-variable",
+    "-Wno-unused-but-set-variable",
+    "-march=x86-64"
+  ],
+  "machine": {
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "processor": "x86_64"
+  },
+  "rows": [
+    {
+      "case": "windows",
+      "compiler": "g++",
+      "lean_ns": 4832487,
+      "checked_ns": 8107202,
+      "checked_over_lean": 1.678
+    },
+    {
+      "case": "windows",
+      "compiler": "clang++",
+      "lean_ns": 4466423,
+      "checked_ns": 4607959,
+      "checked_over_lean": 1.032
+    },
+    {
+      "case": "find",
+      "compiler": "g++",
+      "lean_ns": 4204876,
+      "checked_ns": 4201009,
+      "checked_over_lean": 0.999
+    },
+    {
+      "case": "find",
+      "compiler": "clang++",
+      "lean_ns": 5816369,
+      "checked_ns": 5771435,
+      "checked_over_lean": 0.992
+    },
+    {
+      "case": "pairs",
+      "compiler": "g++",
+      "lean_ns": 3559465,
+      "checked_ns": 4164545,
+      "checked_over_lean": 1.17
+    },
+    {
+      "case": "pairs",
+      "compiler": "clang++",
+      "lean_ns": 3753867,
+      "checked_ns": 6701259,
+      "checked_over_lean": 1.785
+    }
+  ]
+}

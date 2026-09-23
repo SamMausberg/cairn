@@ -1,0 +1,174 @@
+{
+  "src": "the compiler of 816afbd, with the src/cairn/std of ed5a179",
+  "corpus": "the examples and bench kernels of ed5a179 (git archive ed5a179)",
+  "programs": {
+    "bench/suite/kernels/compact_even/kernel.cairn": {
+      "bounds": 0,
+      "overflow": 0,
+      "conversion": 0,
+      "division": 0,
+      "part": 0,
+      "entry": 3
+    },
+    "bench/suite/kernels/dot_f64/kernel.cairn": {
+      "bounds": 0,
+      "overflow": 0,
+      "conversion": 0,
+      "division": 0,
+      "part": 0,
+      "entry": 2
+    },
+    "bench/suite/kernels/histogram_u32/kernel.cairn": {
+      "bounds": 0,
+      "overflow": 6,
+      "conversion": 0,
+      "division": 1,
+      "part": 0,
+      "entry": 6
+    },
+    "bench/suite/kernels/mixed_u64/kernel.cairn": {
+      "bounds": 0,
+      "overflow": 0,
+      "conversion": 0,
+      "division": 0,
+      "part": 0,
+      "entry": 3
+    },
+    "bench/suite/kernels/saxpy_f32/kernel.cairn": {
+      "bounds": 0,
+      "overflow": 0,
+      "conversion": 0,
+      "division": 0,
+      "part": 0,
+      "entry": 5
+    },
+    "bench/suite/kernels/stencil_1d/kernel.cairn": {
+      "bounds": 2,
+      "overflow": 0,
+      "conversion": 0,
+      "division": 0,
+      "part": 0,
+      "entry": 6
+    },
+    "bench/suite/kernels/sum_u64_wrap/kernel.cairn": {
+      "bounds": 0,
+      "overflow": 0,
+      "conversion": 0,
+      "division": 0,
+      "part": 0,
+      "entry": 3
+    },
+    "bench/suite/kernels/tasks_split/kernel.cairn": {
+      "bounds": 0,
+      "overflow": 2,
+      "conversion": 0,
+      "division": 1,
+      "part": 4,
+      "entry": 2
+    },
+    "examples/apps/analytics": {
+      "bounds": 124,
+      "overflow": 143,
+      "conversion": 56,
+      "division": 12,
+      "part": 39,
+      "entry": 88
+    },
+    "examples/apps/gpu_pipeline": {
+      "bounds": 16,
+      "overflow": 42,
+      "conversion": 17,
+      "division": 4,
+      "part": 10,
+      "entry": 48
+    },
+    "examples/apps/kvstore": {
+      "bounds": 45,
+      "overflow": 57,
+      "conversion": 40,
+      "division": 3,
+      "part": 26,
+      "entry": 49
+    },
+    "examples/apps/service": {
+      "bounds": 48,
+      "overflow": 57,
+      "conversion": 27,
+      "division": 3,
+      "part": 20,
+      "entry": 50
+    },
+    "examples/apps/simulator": {
+      "bounds": 20,
+      "overflow": 50,
+      "conversion": 17,
+      "division": 7,
+      "part": 8,
+      "entry": 44
+    },
+    "examples/basics/family.cairn": {
+      "bounds": 0,
+      "overflow": 0,
+      "conversion": 0,
+      "division": 0,
+      "part": 0,
+      "entry": 768
+    },
+    "examples/basics/native.cairn": {
+      "bounds": 6,
+      "overflow": 7,
+      "conversion": 1,
+      "division": 3,
+      "part": 0,
+      "entry": 28
+    },
+    "examples/basics/wire.cairn": {
+      "bounds": 0,
+      "overflow": 0,
+      "conversion": 34,
+      "division": 0,
+      "part": 0,
+      "entry": 2
+    },
+    "examples/embedded": {
+      "bounds": 10,
+      "overflow": 14,
+      "conversion": 2,
+      "division": 4,
+      "part": 1,
+      "entry": 6
+    },
+    "examples/embedded/trap": {
+      "bounds": 1,
+      "overflow": 0,
+      "conversion": 0,
+      "division": 0,
+      "part": 0,
+      "entry": 1
+    },
+    "examples/hello": {
+      "bounds": 0,
+      "overflow": 1,
+      "conversion": 0,
+      "division": 0,
+      "part": 0,
+      "entry": 0
+    },
+    "examples/systems": {
+      "bounds": 1,
+      "overflow": 6,
+      "conversion": 0,
+      "division": 1,
+      "part": 0,
+      "entry": 9
+    }
+  },
+  "total": {
+    "entry": 1123,
+    "overflow": 385,
+    "division": 39,
+    "bounds": 273,
+    "part": 108,
+    "conversion": 194
+  }
+}
