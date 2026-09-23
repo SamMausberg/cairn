@@ -59,3 +59,40 @@ def test_the_documentation_follows_the_writing_rules():
                 broken.append(f"{name}:{number}: a paragraph continues on a second line; one paragraph per line")
             previous = line if sentence else ""
     assert not broken, "\n".join(broken)
+
+
+def anchors(path: Path) -> set[str]:
+    """The fragments GitHub gives a Markdown file's headings: lowercased, punctuation dropped, spaces as hyphens."""
+    found: set[str] = set()
+    for _, line in prose(path.read_text(encoding="utf-8")):
+        if heading := re.match(r"#+ (.*)", line):
+            slug = re.sub(r"[^\w\- ]", "", heading.group(1).lower()).replace(" ", "-")
+            again = [f"{slug}-{k}" for k in range(1, 100) if f"{slug}-{k}" not in found]
+            found.add(slug if slug not in found else again[0])  # a repeated heading gets -1, -2, ...
+    return found
+
+
+def test_every_relative_link_names_a_file_and_heading_that_exist():
+    """A renamed file or heading must not leave a link to it behind, in the docs or in a record's notes."""
+    listed = subprocess.run(["git", "-C", str(ROOT), "ls-files", "*.md"], capture_output=True, text=True)
+    dangling = []
+    for name in listed.stdout.splitlines() or pytest.skip("the link check reads the tracked files"):
+        text = "\n".join(line for _, line in prose((ROOT / name).read_text(encoding="utf-8")))
+        for target in re.findall(r"\]\(([^)\s]+)\)", re.sub(r"`[^`\n]*`", "", text)):  # code is not a link
+            path, _, fragment = target.partition("#")
+            if re.match(r"[a-z]+:", path):
+                continue
+            file = (ROOT / name).parent.joinpath(path) if path else ROOT / name
+            if not file.exists():
+                dangling.append(f"{name}: {target}")
+            elif fragment and file.suffix == ".md" and fragment not in anchors(file):
+                dangling.append(f"{name}: {target} (no such heading)")
+    assert not dangling, "\n".join(dangling)
+
+
+def test_make_help_names_every_target():
+    """`make help` is how a newcomer finds the gates, so every target the Makefile declares is in it."""
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    declared = set(re.search(r"^\.PHONY:(.*)$", makefile, re.M).group(1).split()) - {"help"}
+    helped = set(re.findall(r"^\t@echo '([a-z-]+) ", makefile, re.M))
+    assert declared == helped, f"undocumented: {sorted(declared - helped)}, stale: {sorted(helped - declared)}"

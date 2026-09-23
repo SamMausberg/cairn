@@ -6,6 +6,7 @@ all: lint test proof
 
 help:
 	@echo 'all       lint, the test suite and the proofs'
+	@echo 'check     cairn check examples/hello, the quickest sign the checkout works'
 	@echo 'lint      ruff format --check, ruff check, mypy, cairn fmt --check'
 	@echo 'format    rewrite Python and CAIRN sources in place'
 	@echo 'test      the whole suite in parallel; tool-dependent parts skip with a reason'
@@ -20,6 +21,7 @@ help:
 	@echo 'bench     the preregistered CPU baseline suite (hours)'
 	@echo 'docs      regenerate docs/std_api.md and docs/std/'
 	@echo 'editors   regenerate the TextMate and Vim grammars from the compiler vocabulary'
+	@echo 'context   measure edit packets, cards and refusals in tokens, on scripted transcripts'
 	@echo 'wheel     build the package offline into dist/'
 	@echo 'audit     scan the committed history for credentials and binaries'
 	@echo 'demo      run and test examples/hello'
@@ -65,8 +67,8 @@ lean:
 	$(PYTHON) tools/checks/differential_ownership.py --count 200
 	$(PYTHON) tools/checks/differential_facts.py --count 2000
 
-# The only target that runs code on a CUDA device, in one process, one device run at a time
-# (tools/support.py: device_reason, device_lock). Everything else leaves the device alone.
+# The device test run, in one process, one device run at a time (tools/support.py: device_reason, device_lock).
+# It and the two targets after it are the only ones that run code on a CUDA device; everything else leaves it alone.
 gpu:
 	CAIRN_GPU_TESTS=1 $(PYTHON) -m pytest -q -p no:xdist tests/runtime/test_native_runtime.py \
 	  tests/soundness/test_concurrency.py tests/soundness/test_plans.py tests/soundness/test_scan.py \

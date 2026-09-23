@@ -144,7 +144,7 @@ proofs/             Lean 4: certificate checker, collector loop model, ownership
 examples/           basics/ hello/ systems/ apps/ interop/ embedded/ and inputs for the agent and proof tools
 tests/              language/ soundness/ verification/ projects/ runtime/ tooling/ agent/ oracles/ native/
 tools/              checks/ ai/ release/
-bench/              cpu/ gpu/ host_regions/ host_tasks/ suite/
+bench/              cpu/ gpu/ host_regions/ host_tasks/ scan/ suite/
 editors/            VS Code and Cursor extension, Vim runtime files, both generated from the compiler vocabulary
 docs/               the documentation, the generated std_api.md and std/, project data, history/
 evidence/           executed results by release, and their limits
