@@ -73,14 +73,15 @@ class Layout:
 
 @dataclass(frozen=True)
 class Spread:
-    """A spread over `tile`: participant `t` and value `v` name the coordinate that the digits of `t` in
-    `participants` and of `v` in `values`, times their stride vectors, sum to; with `wrap`, reduced modulo the
+    """A spread over `tile`: participant `t` and value `v` name the coordinate that `origin` and the digits of `t`
+    in `participants` and of `v` in `values`, times their stride vectors, sum to; with `wrap`, reduced modulo the
     tile's shape, so participants past the tile hold its elements again."""
 
     tile: Layout
     participants: tuple[tuple[int, tuple[int, ...]], ...]
     values: tuple[tuple[int, tuple[int, ...]], ...]
     wrap: bool = True
+    origin: tuple[int, ...] = ()  # where participant 0's value 0 sits; the tile's first element when empty
 
     @property
     def count(self) -> int:
@@ -91,7 +92,7 @@ class Spread:
         return math.prod(e for e, _ in self.values)
 
     def coords(self, t: int, v: int) -> tuple[int, ...]:
-        at = [0] * len(self.tile.shape)
+        at = list(self.origin or (0,) * len(self.tile.shape))
         for digits, modes in ((t, self.participants), (v, self.values)):
             for extent, stride in modes:
                 d = digits % extent
@@ -294,16 +295,28 @@ def build(kind: str, inner: Value | None, n: list[int], node: Any) -> Value:
 # The questions -------------------------------------------------------------------------------------------------
 
 
+def outside(d: Spread) -> tuple[int, int, tuple[int, ...]] | None:
+    """The first (participant, value) pair whose coordinate falls outside the tile, with that coordinate: only a
+    spread without wrap can name one."""
+    for t in range(d.count):
+        for v in range(d.each):
+            at = d.coords(t, v)
+            if any(not 0 <= a < n for a, n in zip(at, d.tile.shape, strict=True)):
+                return t, v, at
+    return None
+
+
 def cover(d: Spread) -> Cover:
-    """Every element of the tile with the (participant, value) pairs that hold it; a coordinate past the tile,
-    which only a spread without wrap can name, is refused."""
+    """Every element of the tile with the (participant, value) pairs that hold it; a coordinate past the tile is
+    refused."""
     shape = d.tile.shape
+    if (past := outside(d)) is not None:
+        t, v, at = past
+        fail("E-LAYOUT", f"participant {t}'s value {v} falls at {at}, outside the {shape} tile.")
     found = Cover(d, [[] for _ in range(d.tile.size)])
     for t in range(d.count):
         for v in range(d.each):
             at = d.coords(t, v)
-            if any(not 0 <= a < n for a, n in zip(at, shape, strict=True)):
-                fail("E-LAYOUT", f"participant {t}'s value {v} falls at {at}, outside the {shape} tile.")
             e = 0
             for a, n in zip(at, shape, strict=True):
                 e = e * n + a
@@ -491,6 +504,25 @@ def explained(c: Checker) -> dict[str, Any]:
             facts_["owners"] = owners(v)
         out[name] = facts_
     return out
+
+
+# What a plan's `vector` and `stage` ask of a region's lanes ------------------------------------------------------
+
+
+def moved(width: int, size: int) -> int:
+    """How many adjacent elements of `size` bytes one access moves for a lane that runs `width` adjacent indices
+    (compiler/chunks.py): the runs of a spread of 32 lanes over a line, each holding `width` in a row."""
+    return runs(spread(rows(1, 32 * width), 1, 32, 1, width), size)
+
+
+def halo(offsets: set[int], radius: int, block: int = 32) -> bool:
+    """Whether a block's tile, from `radius` before its first index to `radius` after its last, holds every element
+    its lanes read at `[i + d]` for the offsets d (compiler/staging.py): the reads, as a spread of the block's lanes
+    over the offsets from the least to the greatest, stay inside the tile. It holds at every block width alike."""
+    low, high = min(offsets), max(offsets)
+    tile = rows(1, block + 2 * radius)
+    reads = Spread(tile, ((block, (0, 1)),), ((high - low + 1, (0, 1)),), wrap=False, origin=(0, low + radius))
+    return low + radius >= 0 and outside(reads) is None
 
 
 # In code: `L.at(r, c)`, `D.row(t, v)`, `D.col(t, v)`, `D.at(t, v)`, and the counts ------------------------------

@@ -395,7 +395,7 @@ layout LOAD = spread(TILE, 8, 32, 1, 1);
 fn at(t:usize, v:usize) -> usize = WIDE.at(LOAD.row(t, v), LOAD.col(t, v));
 ```
 
-The build receipt lists each layout under `layouts`, and `cairn explain` adds, for a spread over a tile of at most 4096 elements, the participant that holds each element. For a spread they say whether it covers its tile exactly once, the widest run of adjacent values every participant's values fall into (`runs`, by element size: what one access of at most 16 bytes moves), and how many ways a warp's accesses split over shared memory's 32 banks (`bank_ways`). Reading the tile above a column at a time costs 32 ways row-major and 1 padded or swizzled. Every answer comes from enumerating the layout, so one holds at most 262,144 elements, and the SMT model answers `unknown` for a function that uses one.
+The build receipt lists each layout under `layouts`, and `cairn explain` adds, for a spread over a tile of at most 4096 elements, the participant that holds each element. For a spread they say whether it covers its tile exactly once, the widest run of adjacent values every participant's values fall into (`runs`, by element size: what one access of at most 16 bytes moves), and how many ways a warp's accesses split over shared memory's 32 banks (`bank_ways`). Reading the tile above a column at a time costs 32 ways row-major and 1 padded or swizzled. Every answer comes from enumerating the layout, so one holds at most 262,144 elements, and the SMT model answers `unknown` for a function that uses one. A plan's `vector` and `stage` ask the same questions of a device region's lanes: how many adjacent elements one access moves, and whether a block's tile holds every element its lanes read.
 
 ## Effects
 

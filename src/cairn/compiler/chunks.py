@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from . import layouts
 from .tree import FLOAT, INT, STORAGE, Expr, Stmt, fail, is_view, nested
 
 if TYPE_CHECKING:
@@ -88,9 +89,10 @@ def vectored(c: Checker, s: Stmt, width: int, token: Any):
         fail("E-PLAN", "vector chunks one region's lanes and fuse joins regions; a plan takes one or the other.", token)
     chosen = chunkable(s)
     for name, (element, *_) in chosen.items():
-        if width * c.sizeof(element) > WIDEST:
-            most = WIDEST // c.sizeof(element)
-            fail("E-PLAN", f"vector {width} would move {width * c.sizeof(element)} bytes of {name} at once; a lane "
+        size = c.sizeof(element)
+        if layouts.moved(width, size) < width:  # the lane's chunk is more than one access moves
+            most = layouts.moved(WIDEST, size)
+            fail("E-PLAN", f"vector {width} would move {width * size} bytes of {name} at once; a lane "
                  f"moves at most {WIDEST}, so {element.display()} takes vector {most} at most.", token)  # fmt: skip
     if not chosen:
         fail("E-PLAN", "vector chunks arrays a device region touches only at [i], each guard discharged, and this "

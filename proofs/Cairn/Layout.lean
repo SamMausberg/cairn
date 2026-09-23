@@ -4,8 +4,8 @@ offset, and a declared spread gives every element of its tile exactly one (parti
 
 A storage layout is transliterated from the Python: each dimension is a list of modes, an extent and a stride,
 and a coordinate's digits in its modes, fastest first, times their strides sum to an offset, which a swizzle then
-permutes.  A spread's modes carry a stride for every coordinate of its tile, and with `wrap` each coordinate is
-reduced modulo the tile.  Here every list of dimensions is written with the fastest dimension first, the reverse
+permutes.  A spread's modes carry a stride for every coordinate of its tile, added to its origin, and with `wrap`
+each coordinate is reduced modulo the tile.  Here every list of dimensions is written with the fastest dimension first, the reverse
 of the Python's row-major order, so an element's number is `c + C * r` either way.  The checks are written as
 their definitions, by counting holders element by element; the Python counts in one pass instead, and
 `tools/checks/differential_layouts.py` requires the two to give generated layouts the same verdict, the first
@@ -94,13 +94,15 @@ structure Spread where
   participants : List (Nat × List Nat)
   values : List (Nat × List Nat)
   wrap : Bool
+  /-- Where participant 0's value 0 sits. -/
+  origin : List Nat
 
 def Spread.count (d : Spread) : Nat := size (d.participants.map Prod.fst)
 def Spread.each (d : Spread) : Nat := size (d.values.map Prod.fst)
 
 /-- The coordinate participant `t`'s value `v` names. -/
 def Spread.coords (d : Spread) (t v : Nat) : List Nat :=
-  let raw := placeVec v d.values (placeVec t d.participants (d.tile.shape.map (fun _ => 0)))
+  let raw := placeVec v d.values (placeVec t d.participants d.origin)
   if d.wrap then List.zipWith (· % ·) raw d.tile.shape else raw
 
 /-- Every (participant, value) pair. -/
@@ -263,7 +265,7 @@ def gappy : Spread :=
   { tile := ⟨[[(4, 1)], [(4, 4)]], (0, 0, 0)⟩,
     participants := [(4, [1, 0]), (3, [0, 1])],
     values := [(1, [1, 0]), (1, [0, 1]), (1, [4, 0]), (1, [0, 3])],
-    wrap := true }
+    wrap := true, origin := [0, 0] }
 
 theorem gappy_gap : gappy.gap = some 12 := by decide
 
@@ -273,7 +275,7 @@ def doubled : Spread :=
   { tile := ⟨[[(2, 1)], [(2, 2)]], (0, 0, 0)⟩,
     participants := [(4, [1, 0]), (1, [0, 1])],
     values := [(1, [1, 0]), (1, [0, 1]), (1, [4, 0]), (2, [0, 1])],
-    wrap := true }
+    wrap := true, origin := [0, 0] }
 
 theorem doubled_overlap : doubled.overlap = some 0 := by decide
 

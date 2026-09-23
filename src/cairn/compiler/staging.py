@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from . import layouts
 from .chunks import ELEMENTS, assignments, exprs
 from .tree import Expr, Stmt, fail, is_view
 
@@ -64,8 +65,8 @@ def stageable(s: Stmt, radius: int) -> dict[str, tuple[Any, Expr, set[int]]]:
             continue
         if None in offsets or element is None or element.name not in ELEMENTS or not all(u.established for u in found):
             continue
-        if max(abs(d) for d in offsets if d is not None) > radius or offsets == {0}:
-            continue
+        if offsets == {0} or not layouts.halo({d for d in offsets if d is not None}, radius):
+            continue  # every read at [i]: nothing to share; or a read the block's tile would not hold
         chosen[name] = (element, view, {d for d in offsets if d is not None})
     return chosen
 

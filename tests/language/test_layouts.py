@@ -266,3 +266,17 @@ def run_ok(source: str) -> bool:
 
     with tempfile.TemporaryDirectory() as scratch:
         return run(Path(scratch), compile_source(source)[0], "-std=c++20").returncode == 0
+
+
+def test_a_vector_plan_and_a_stage_plan_ask_the_layout_what_they_used_to_compute():
+    """chunks.py and staging.py take these answers from layouts.py; they are the arithmetic the plans always used,
+    at every width, element size, radius and offset a plan admits, so no plan is accepted or refused anew."""
+    for size in (1, 2, 4, 8):
+        for width in (2, 4, 8, 16):
+            assert (L.moved(width, size) == width) == (width * size <= 16), (width, size)
+        assert L.moved(16, size) == 16 // size
+    for radius in (1, 2, 3, 8, 31, 32):
+        for low in range(-34, 35, 3):
+            for high in range(low, 35, 6):
+                offsets = {low, high, (low + high) // 2}
+                assert L.halo(offsets, radius) == (max(abs(d) for d in offsets) <= radius), (offsets, radius)

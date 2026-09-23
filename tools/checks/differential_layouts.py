@@ -4,7 +4,7 @@
 A declared spread must give every element of its tile exactly one holder, and a declared storage layout every element
 its own offset. `Layout.lean` writes both rules as their definitions and proves what a layout that passes promises;
 `layouts.py` counts holders in one pass and finds shared offsets with a table. This harness generates storage
-layouts and spreads, among them the ones `spread`, `transpose` and `swizzle` make, asks the real Python functions
+layouts and spreads, among them the ones `spread`, `transpose` and `swizzle` make and the reads `stage` places, asks the real Python functions
 (`cover`, `injective`) for their verdicts, renders the same layouts as Lean terms, and requires the verdicts to
 match on every input: a coordinate outside the tile, the first element held twice, the first left to nobody, and
 the first two elements that share an offset.
@@ -59,8 +59,19 @@ def made(rng: random.Random) -> L.Value:
     return L.transposed(d) if rng.random() < 0.3 else d
 
 
+def halo(rng: random.Random) -> L.Spread:
+    """What `stage R` asks of a block: its lanes' reads at [i + d], placed in a tile R either side of the block."""
+    block, radius = rng.randint(1, 8), rng.randint(0, 3)
+    low = rng.randint(-radius - 1, radius)
+    high = rng.randint(low, radius + 1)
+    tile = L.rows(1, block + 2 * radius)
+    return L.Spread(tile, ((block, (0, 1)),), ((high - low + 1, (0, 1)),), False, (0, max(0, low + radius)))
+
+
 def case(rng: random.Random) -> L.Value:
     choice = rng.random()
+    if choice < 0.1:
+        return halo(rng)
     if choice < 0.4:
         return made(rng)
     if choice < 0.6:
@@ -102,7 +113,9 @@ def lean_row(v: L.Value) -> str:
     if isinstance(v, L.Layout):
         return f"storageRow {lean_storage(v)}"
     wrap = "true" if v.wrap else "false"
-    return f"spreadRow (Spread.mk {lean_storage(v.tile)} {lean_modes(v.participants)} {lean_modes(v.values)} {wrap})"
+    origin = ", ".join(map(str, reversed(v.origin or (0,) * len(v.tile.shape))))
+    parts = f"{lean_storage(v.tile)} {lean_modes(v.participants)} {lean_modes(v.values)} {wrap} [{origin}]"
+    return f"spreadRow (Spread.mk {parts})"
 
 
 def lean_source(rows: list[str], chunk: int = 50) -> str:
