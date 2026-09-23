@@ -1,6 +1,6 @@
 # Numerics
 
-Numbers stored in fewer bits than they are computed in, the one multiply whose sums follow the hardware's order, and derivatives the compiler writes for you. Every rounding a program performs is named in its source and listed in its build receipt under `numerics`.
+Numbers stored in fewer bits than they are computed in, the multiplies whose sums follow the hardware's order, whole or a fragment at a time, and derivatives the compiler writes for you. Every rounding a program performs is named in its source and listed in its build receipt under `numerics`.
 
 ## Storage floats
 
@@ -66,6 +66,35 @@ fn widened(n:usize, c:rw<f32>[n], a:ro<f32>[n], b:ro<f32>[n]) { mma_unordered(1,
 ```
 
 The host suite checks the reference bit for bit against Python and the bound against the exact rational sum, and runs the device tiling thread by thread on the host under the sanitizers. That the tensor cores meet the contract is checked only by `make gpu`, which has not run on this release.
+
+## Tensor-core fragments
+
+A fragment is one warp's share of a tensor-core instruction: an operand A, an operand B or an accumulator. Where `mma_unordered(m, n, k, c, a, b)` runs one fixed tiling, fragments let a program write its own: the tile, the warps, the stages and the layouts are the program's, and the runtime header does not change.
+
+| Type | Family | `M, N, K` | Device capability |
+|---|---|---|---|
+| `WmmaA[T, M, N, K]`, `WmmaB`, `WmmaAcc` | `nvcuda::wmma` | 16, 16, 16; 32, 8, 16; 8, 32, 16 | `wmma`, and `bf16` for bf16 |
+| `MmaA[T, M, N, K]`, `MmaB`, `MmaAcc` | PTX `mma.sync` | 16, 8, 16 | `mma_sync`, and `bf16` for bf16 |
+| `TmemAcc[T, M, N, K]` | tcgen05 tensor memory | none lowered | `tcgen05` |
+
+Operands hold `f16` or `bf16`, and accumulators `f32` (`E-FRAGMENT`). A is `M x K`, B is `K x N` and the accumulator `M x N`. `WmmaAcc[f32, 16, 16, 16](0.0)` fills an accumulator, `load[F](tile, L, i, j)` reads fragment `(i, j)` of a tile laid out by `L`, counting whole fragments, and `store(tile, L, i, j, acc)` writes one back. `acc = mma_unordered(acc, a, b)` adds `a * b` under the contract above: each output's `K` products and its old value, summed in f32 in an order the hardware picks.
+
+Every fragment operation is a warp operation. It is legal only inside a cooperative region, where each warp reaches it whole (`E-FRAGMENT` outside one, `E-COOP-WARP` under a condition that differs within a warp), and its tile is a shared array of the block or a device view.
+
+Each family reads the layouts it can ([memory.md](memory.md#layouts)). WMMA takes a pointer and a leading dimension, so an operand's layout is row-major with its rows a multiple of 16 bytes apart, and a swizzled tile is `E-LAYOUT-CONSUMER`. `mma.sync` loads a shared tile with `ldmatrix`, one row address a lane, so a swizzle that keeps 16-byte runs together is readable and a pad that splits them is refused.
+
+```cairn rejects E-LAYOUT-CONSUMER
+layout SWIZZLED = swizzle(rows(16, 16), 1, 3, 3);
+fn first(a:ro<f16>[256]@device) { let x = load[WmmaA[f16, 16, 16, 16]](a, SWIZZLED, 0, 0); }
+```
+
+The family is a capability the build's device target must provide ([tools.md](tools.md#the-device-target)). `TmemAcc` needs tcgen05 and tensor memory, which sm_120 does not have and which nothing here lowers, so it is refused rather than emulated.
+
+```cairn rejects E-TARGET-FEATURE
+fn tensor_memory() { let acc = TmemAcc[f32, 128, 256, 16](0.0); }
+```
+
+On the host every thread of a warp holds each fragment whole, adds in increasing k, and stores only the elements its lane holds on the device, so a warp's threads write each element once. The suite runs a warp as 32 threads under the thread sanitizer and holds every output to the reference loop bit for bit. The device operations compile for sm_120 to `HMMA` and `LDSM` instructions and have not run on a GPU.
 
 ## Gradients
 

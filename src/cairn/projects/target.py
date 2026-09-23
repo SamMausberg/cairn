@@ -49,6 +49,12 @@ class Feature:
 FEATURES = {
     "device_lanes": Feature(75, what="CUDA lanes, the runtime's reductions, scans and compaction"),
     "wmma": Feature(75, what="warp matrix multiply on f16 inputs"),
+    "mma_sync": Feature(
+        80,
+        probe="{ .reg .f32 d<4>; .reg .b32 a<4>, b<2>; mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 "
+        "{d0, d1, d2, d3}, {a0, a1, a2, a3}, {b0, b1}, {d0, d1, d2, d3}; }",
+        what="warp matrix multiply-accumulate m16n8k16 by mma.sync, fragments loaded by ldmatrix",
+    ),
     "bf16": Feature(80, probe="{ .reg .b16 a; mov.b16 a, 0; fma.rn.bf16 a, a, a, a; }", what="bf16 arithmetic"),
     "cp_async": Feature(80, probe="cp.async.commit_group;", what="asynchronous copies into shared memory"),
     "clusters": Feature(90, probe="barrier.cluster.arrive;", what="thread block clusters"),

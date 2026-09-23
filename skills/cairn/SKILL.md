@@ -99,6 +99,7 @@ Each card states one part of the language and the codes of its rules. The compil
 | [implementations](cards/implementations.md) | `implements` |
 | [printing](cards/printing.md) | `eprint`, `eprintln`, `format`, `print`, `println` |
 | [layouts](cards/layouts.md) | `layout` |
+| [fragments](cards/fragments.md) | `MmaA`, `MmaAcc`, `MmaB`, `TmemAcc`, `WmmaA`, `WmmaAcc`, `WmmaB` |
 | [lends](cards/lends.md) | `lends` |
 | [modules](cards/modules.md) | `import`, `module`, `pub` |
 

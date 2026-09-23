@@ -42,6 +42,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering | `compiler/chunks.py` | `chunkable`, `vectored`, `lower` |
 | Which arrays a plan's `stage` loads into a device block's shared tile, and that lowering | `compiler/staging.py` | `stageable`, `staged`, `lower` |
 | The tensor-core multiply, its numerical contract and its lowering | `compiler/tensor.py` | `check_mma`, `lower_mma` |
+| Tensor-core fragments: their types, the warp operations on them, the layouts each family reads, their lowering | `compiler/fragments.py` | `valid`, `tile`, `consumer`, `check_mma`, `lower_load` |
 | `layout` declarations: storage layouts and spreads, coverage, owners, runs, bank conflicts, conversions, and `L.at(...)` in code | `compiler/layouts.py` | `value`, `cover`, `runs`, `conflicts`, `conversion`, `method`, `lower` |
 | Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
 | Which runtime operation each piece of device work lowers to, on the thread's execution context | `compiler/execution.py` | `call`, `unrolled` |
@@ -67,6 +68,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 | `cairn_exec.hpp` | what generated code calls for device work, written once for any machine: the calling thread's execution context, device owners, regions on its stream, reductions, scans and compactions in its arena, queued work on lent lanes, and a C caller's own stream |
 | `cairn_reuse.hpp` | execution contexts apart from the machine: lanes (a stream and its event) lent until their work completes, one scratch arena ordered between its users on the device, a declared budget, a caller's bound stream; and the reductions, scans and compactions written against the machine |
 | `cairn_io.hpp` | the I/O ring over io_uring: fixed berths that own each operation's `Buf`, completion-order collection, a wait that drains before it releases |
+| `cairn_fragment.hpp` | tensor-core fragments: on the host every thread of a warp holding each whole and storing its lane's elements, on the device WMMA and `mma.sync` with `ldmatrix` |
 | `cairn_layout.hpp` | a layout's coordinate checked against its extent, and CuTe's swizzle, on the host and in a device lane alike |
 | `cairn_float.hpp` | the storage floats `f16 bf16 f8e4m3 f8e5m2`: one integer routine that rounds on the host and in a device lane alike, `quantize` and `quantize_stochastic` |
 | `cairn_tensor.hpp` | `mma_unordered`: the reference loop on the host, and on the device 64 x 64 tensor-core tiles over two shared-memory stages, written once against the operations a tile is given so a host test runs every thread's phases |

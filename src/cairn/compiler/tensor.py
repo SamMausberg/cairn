@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from . import fragments
 from .tree import HOST_VISIBLE, STORAGE, USIZE, VOID, Expr, Type, fail, is_view
 
 if TYPE_CHECKING:
@@ -33,8 +34,10 @@ BOUND = "(k + 1) * 2^-22 * (|c| + sum |a * b|)"  # how far a finite output may l
 def check_mma(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
     from .builtins import arity, contract  # builtins registers this rule, so it is imported here, not above
 
+    if len(args) == 3:  # one warp's step on tensor-core fragments: compiler/fragments.py
+        return fragments.check_mma(c, e, args)
     arity(e, args, 6, "mma_unordered takes m, n and k, then the f32 matrix c[m * n] it adds into, and the row-major "
-          "a[m * k] and b[k * n].")  # fmt: skip
+          "a[m * k] and b[k * n]; or an accumulator fragment, an A and a B.")  # fmt: skip
     if c.lanes:
         fail("E-PARALLEL-NEST", "mma_unordered multiplies whole matrices; it cannot run inside a lane.", e)
     for extent in args[:3]:
@@ -63,6 +66,8 @@ def check_mma(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Typ
 
 
 def lower_mma(g: Emitter, e: Expr) -> str:
+    if e.ref[2] == "fragment":
+        return fragments.lower_mma(g, e)
     g.need("cairn_tensor.hpp")
     _, element, device = e.ref
     if device:

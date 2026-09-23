@@ -1,0 +1,7 @@
+# The fragments card
+
+Sent to an agent when the program uses `MmaA`, `MmaAcc`, `MmaB`, `TmemAcc`, `WmmaA`, `WmmaAcc`, `WmmaB`. Codes: `E-COOP-WARP`, `E-FRAGMENT`, `E-LAYOUT-CONSUMER`, `E-TARGET-FEATURE`.
+
+```text
+A tensor-core fragment is one warp's A, B or accumulator: WmmaA[T, M, N, K], WmmaB, WmmaAcc (nvcuda::wmma: 16,16,16 or 32,8,16 or 8,32,16) and MmaA, MmaB, MmaAcc (PTX mma.sync: 16,8,16); T is f16 or bf16 for A and B and f32 for the accumulator (E-FRAGMENT); TmemAcc needs tcgen05, which sm_120 lacks, and is refused (E-TARGET-FEATURE). let mut acc = WmmaAcc[f32, 16, 16, 16](0.0); fills one; load[WmmaA[f16, 16, 16, 16]](tile, L, i, j) reads fragment (i, j) of a shared array or device view laid out by the layout L, counting whole fragments; store(tile, L, i, j, acc) writes an accumulator back; acc = mma_unordered(acc, a, b) adds a * b, its K sums in f32 in the hardware's order (receipt: unordered-f32). Each is a warp operation: only inside blocks ... threads ... { }, reached by whole warps (E-FRAGMENT, E-COOP-WARP). WMMA needs an unswizzled row-major layout with rows a multiple of 16 bytes apart, mma.sync from shared memory rows whose 16-byte runs stay together (E-LAYOUT-CONSUMER). The build's device target must provide wmma or mma_sync, and bf16 for bf16.
+```

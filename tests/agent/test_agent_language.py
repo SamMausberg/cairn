@@ -94,6 +94,7 @@ def test_every_card_is_reachable_from_tokens():
         " parallel i in n { } apply(|v:u64| -> u64 { return v; }); match o { Option.None => {} } let r = IoRing(1);"
         " let root = sqrt(2.0); let h = f16(root); assert(true); scan + x for i in n yield 1; println(root); }"
         "family q = h[1..2]; derive wire for P; derive grad for h; struct L { data:Buf[u8]; len:usize; lends data[0..len]; }"
+        " fn w(acc:WmmaAcc[f32, 16, 16, 16]) {}"
         "layout T = rows(4, 4);"
         "fn j(x:u64) -> u64 implements i when x > 0 = x;"
     )

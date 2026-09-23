@@ -9,7 +9,7 @@ from typing import Any
 
 from ..verify.elision import audit
 from ..version import VERSION
-from . import chunks, execution, fusion, implementations, layouts, machine, rings, staging
+from . import chunks, execution, fragments, fusion, implementations, layouts, machine, rings, staging
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import Checker
 from .expressions import COMPARISONS
@@ -161,6 +161,8 @@ class Emitter:
             return base if t.mode == "value" else base + "&"
         elif t.name == "Array":
             base = f"std::array<{self.type(t.args[0])}, {t.args[1]}>"
+        elif t.name in fragments.TYPES:  # a warp's tensor-core fragment (compiler/fragments.py)
+            base = fragments.spelled(self, t)
         else:
             if t.name in STORAGE:
                 self.need("cairn_float.hpp")

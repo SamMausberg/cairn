@@ -632,7 +632,7 @@
     },
     {
      "name": "support.type.cairn",
-     "match": "\\b(?:Atomic|IoRing|Ticket|f8e4m3|f8e5m2|Array|Group|Mutex|usize|bf16|bool|void|Buf|Dyn|f16|f32|f64|i16|i32|i64|u16|u32|u64|i8|u8)\\b"
+     "match": "\\b(?:TmemAcc|WmmaAcc|Atomic|IoRing|MmaAcc|Ticket|f8e4m3|f8e5m2|Array|Group|Mutex|WmmaA|WmmaB|usize|MmaA|MmaB|bf16|bool|void|Buf|Dyn|f16|f32|f64|i16|i32|i64|u16|u32|u64|i8|u8)\\b"
     },
     {
      "name": "variable.other.constant.cairn",
@@ -648,7 +648,7 @@
    "patterns": [
     {
      "name": "support.function.builtin.cairn",
-     "match": "\\b(?:quantize_stochastic|mma_unordered|mmio_write|assert_eq|from_bits|mmio_read|add_wrap|eprintln|mul_wrap|quantize|shl_wrap|sub_wrap|transfer|collect|println|to_bits|assert|eprint|format|floor|print|trunc|ceil|sqrt|swap|take|wait|abs|asm|len|max|min|shr)\\b(?=(?:\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])?\\s*\\()"
+     "match": "\\b(?:quantize_stochastic|mma_unordered|mmio_write|assert_eq|from_bits|mmio_read|add_wrap|eprintln|mul_wrap|quantize|shl_wrap|sub_wrap|transfer|collect|println|to_bits|assert|eprint|format|floor|print|store|trunc|ceil|load|sqrt|swap|take|wait|abs|asm|len|max|min|shr)\\b(?=(?:\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])?\\s*\\()"
     },
     {
      "name": "entity.name.function.member.cairn",

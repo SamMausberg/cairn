@@ -16,6 +16,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-CALLEE` | [tests](cards/tests.md) |  |
 | `E-CAST` | [storage](cards/storage.md) |  |
 | `E-COLLECT-CAPACITY` |  | The collector's extent must be exactly the output's capacity. |
+| `E-COOP-WARP` | [fragments](cards/fragments.md) |  |
 | `E-DECLARATION` |  | Write only the one function's body; add or remove no declaration. |
 | `E-DISCARD` | [sums](cards/sums.md) |  |
 | `E-DOMAIN` |  | The permitted inputs are the host's: narrow where the implementation applies with when instead. |
@@ -25,6 +26,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-EXTENT` | [owners](cards/owners.md) |  |
 | `E-EXTENT-FIELD` | [owners](cards/owners.md) |  |
 | `E-FORMAT-TARGET` | [printing](cards/printing.md) |  |
+| `E-FRAGMENT` | [fragments](cards/fragments.md) |  |
 | `E-GRAD` | [gradients](cards/gradients.md) |  |
 | `E-GRAD-CALL` | [gradients](cards/gradients.md) |  |
 | `E-GRAD-FORM` | [gradients](cards/gradients.md) |  |
@@ -40,7 +42,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-IMPLEMENTS` | [implementations](cards/implementations.md) |  |
 | `E-IMPORT` |  | Only the project's modules and std.* can be imported. |
 | `E-LAYOUT` | [layouts](cards/layouts.md) |  |
-| `E-LAYOUT-CONSUMER` | [layouts](cards/layouts.md) |  |
+| `E-LAYOUT-CONSUMER` | [layouts](cards/layouts.md), [fragments](cards/fragments.md) |  |
 | `E-LAYOUT-GAP` | [layouts](cards/layouts.md) |  |
 | `E-LAYOUT-OVERLAP` | [layouts](cards/layouts.md) |  |
 | `E-LEASED` | [tasks](cards/tasks.md) | Touch it after the wait, or lend each task a part the other does not touch. |
@@ -81,6 +83,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-SIGNATURE` |  | Keep the parameters, return type and ceiling exactly as written; change only the body. |
 | `E-STACK-LIMIT` | [memory](cards/memory.md) | Declare less stack storage, or a buffer if the ceiling allows alloc. Do not hide the cost. |
 | `E-SYMBOL` |  | Name a function or type exactly as a packet or a body shows it. |
+| `E-TARGET-FEATURE` | [fragments](cards/fragments.md) |  |
 | `E-TEST` | [tests](cards/tests.md) |  |
 | `E-TEST-POLICY` |  | The cases, the seed and the tests are the host's: submit the implementation and its helpers. |
 | `E-TOLERANCE` |  | The tolerance is the host's: bring the implementation's result closer to the reference's. |

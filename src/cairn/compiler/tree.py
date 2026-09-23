@@ -98,6 +98,8 @@ WIDTH = BITS
 # name -> number of type arguments
 INTRINSIC_TYPES = {"Buf": 1, "Array": 2, "fn": None, "dyn": 1, "Dyn": 1, "Ticket": 1, "Atomic": 1, "Mutex": 1, "Group": 1,
                    "IoRing": 0}  # fmt: skip
+# Tensor-core fragments (compiler/fragments.py): an element type and M, N, K.
+INTRINSIC_TYPES |= dict.fromkeys(("WmmaA", "WmmaB", "WmmaAcc", "MmaA", "MmaB", "MmaAcc", "TmemAcc"), 4)
 VOID, BOOL, USIZE = Type("void"), Type("bool"), Type("usize")
 
 
