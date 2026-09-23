@@ -113,11 +113,17 @@ def diagnostic_value(value):
     return value
 
 
+def no_core() -> None:
+    """Write no core. The limit is 1 where the hard limit allows it, not 0: a crash helper behind a pipe, as
+    systemd-coredump and apport are, takes a core under any other limit, and each trap then waited for it."""
+    hard = resource.getrlimit(resource.RLIMIT_CORE)[1]
+    one = 1 if hard == resource.RLIM_INFINITY or hard >= 1 else 0
+    resource.setrlimit(resource.RLIMIT_CORE, (one, one))
+
+
 def limited(seconds: int, memory_mib: int | None) -> None:
-    """A native child's limits: no core, `seconds` of CPU, and `memory_mib` of address space when given. The core
-    limit is 1, not 0: a crash helper behind a pipe, as systemd-coredump and apport are, takes a core under any other
-    limit, and each trap then waited for it."""
-    resource.setrlimit(resource.RLIMIT_CORE, (1, 1))
+    """A native child's limits: no core, `seconds` of CPU, and `memory_mib` of address space when given."""
+    no_core()
     resource.setrlimit(resource.RLIMIT_CPU, (seconds, seconds))
     if memory_mib:
         resource.setrlimit(resource.RLIMIT_AS, (memory_mib << 20, memory_mib << 20))

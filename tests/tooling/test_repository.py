@@ -43,8 +43,8 @@ def test_a_test_module_is_named_by_its_subject_not_by_a_release():
 
 def test_a_forked_child_that_may_trap_starts_no_crash_handler():
     """A C++ driver that forks a child per case makes the child non-dumpable. Where core dumps go through a pipe, as
-    apport takes them on CI, a crash handler started for each trapping child kept the soundness tests past their
-    thirty minutes under clang 18."""
+    systemd-coredump takes them on CI, a crash handler started for each trapping child kept the soundness tests past
+    their thirty minutes under clang 18."""
     here = str(Path(__file__).relative_to(ROOT))
     forked = [n for n in tracked() if n.endswith(".py") and n != here and "fork()" in (ROOT / n).read_text()]
     assert forked, "the drivers this rule is about have moved"

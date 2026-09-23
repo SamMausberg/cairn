@@ -44,9 +44,9 @@ def build(command: list[str]) -> None:
 
 
 def drop_core_limit() -> None:
-    import resource
+    from cairn.verify.testing import no_core
 
-    resource.setrlimit(resource.RLIMIT_CORE, (1, 1))  # no core; a pipe to a crash helper takes one under 0
+    no_core()
 
 
 def run_cases(exe: Path) -> None:

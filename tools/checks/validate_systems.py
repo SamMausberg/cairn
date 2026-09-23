@@ -11,7 +11,6 @@ import importlib.util
 import json
 import os
 import random
-import resource
 import subprocess
 import sys
 import tempfile
@@ -23,6 +22,7 @@ from cairn.agent.agent_tools import PROTOCOL, EditSession
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.project import load_project
 from cairn.verify.linear_certificates import audit_collector
+from cairn.verify.testing import no_core
 from support import best_profile, environment, profile_flags, runtime_headers
 
 COMPILERS = ["clang++", "g++"]
@@ -217,9 +217,6 @@ fn stack_load()->u64 {stack x:u64[0]=zeroed;return x[0];}"""
             "#include \"traps.cpp\"\nint main(int argc,char**argv){switch(argv[1][0]){case 'a':cf_too_big();break;case 'b':cf_empty_load();break;case 'c':cf_stack_load();break;default:cf_consume(ct_R{9,{.v_V=0}});}}"
         )
         result["expected_aborts"] = {}
-
-        def no_core():
-            resource.setrlimit(resource.RLIMIT_CORE, (1, 1))  # no core; a pipe to a crash helper takes one under 0
 
         for cxx in COMPILERS:
             exe = t / "traps"
