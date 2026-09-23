@@ -15,9 +15,10 @@ from cairn.cli import main
 from cairn.compiler.cairnc import compile_program
 from cairn.perf import model
 from cairn.perf.calibrate import nnls
+from cairn.perf.counts import Poly
 from cairn.perf.profile import Host, Profile, packaged
 from cairn.perf.report import delta, parse_sizes, report
-from cairn.perf.work import Poly, count
+from cairn.perf.work import count
 
 ROOT = Path(__file__).resolve().parents[2]
 SUITE = ROOT / "bench/suite/kernels"

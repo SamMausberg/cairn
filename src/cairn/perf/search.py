@@ -28,9 +28,10 @@ from typing import Any
 from ..compiler.cairnc import Diagnostic, compile_program
 from ..compiler.concurrency import PLAN_ITEMS
 from . import model
+from .counts import Cost
 from .plan_source import KEEP, Placement, Plan, written
 from .profile import Profile
-from .work import Cost, count
+from .work import count
 
 SPACE = {  # the values tried for each item; 0 is the runtime's own choice
     "grain": (0, 1, 64, 1024, 8192, 65536),

@@ -30,8 +30,8 @@ from ..compiler import fragments, phases
 from ..compiler.cooperative import SHUFFLES, WARP_SIZE
 from ..compiler.footprints import Poly as Symbolic
 from ..compiler.tree import FLOAT, USIZE, Expr, Stmt, Type, nested, root
+from .counts import ONE, Frame, Poly, Region, Work, add, data_dependent, path, widen
 from .regions import walked
-from .work import ONE, Frame, Poly, Region, Work, add, data_dependent, path, widen
 
 PHASE_BYTES = 128  # what shared memory serves a warp in one wavefront: 32 banks of 4-byte words
 SECTOR = 32  # the bytes device memory moves for any access that touches them

@@ -9,8 +9,9 @@ from typing import Any
 from ..compiler.cairnc import compile_program
 from ..projects.target import DeviceTarget
 from . import cooperative_model, model
+from .counts import Cost, Work
 from .profile import Device, Profile, default, packaged
-from .work import Cost, Work, count
+from .work import count
 
 LADDER = (1e3, 1e5, 1e7)  # the sizes a one-extent function is priced at when none are given
 

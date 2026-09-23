@@ -30,9 +30,9 @@ import re
 from typing import Any
 
 from .cooperative_work import PHASE_BYTES, SECTOR
+from .counts import Cost, Region, Work
 from .model import Piece, footprint, price, value
 from .profile import Device, Host
-from .work import Cost, Region, Work
 
 # cr::coop::blocks<THREADS, BYTES, the lambda>: its closure type numbered among the function's device regions
 KERNEL = re.compile(r"6blocksILj(\d+)ELm(\d+)E.*?UlRNS\d+_6DeviceEmmE(\d*)_")

@@ -15,8 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .counts import Cost, Poly, Region, Work
 from .profile import Device, Host, Profile, packaged
-from .work import Cost, Poly, Region, Work
 
 # What calibration saw vectorize on the reference machine: anything else keeps a loop scalar, and so does anything a
 # profile's own calibration names in `keeps_scalar` for the -march profile the code is built for.

@@ -23,12 +23,13 @@ from ..agent import history as kept
 from ..compiler.cairnc import compile_program
 from ..projects.target import DeviceTarget, resolve
 from . import model
+from .counts import Cost
 from .plan_source import KEEP, Placement, Plan, contract, selecting, shown, text, written
 from .profile import Profile, default
 from .regions import applied, identified
 from .resources import Inspector, device_identity, host_target
 from .search import SPACE, Budget, Candidate, Spent, checked, inspected, priced, radii, refusals, space
-from .work import Cost, count
+from .work import count
 
 __all__ = ["SPACE", "Budget", "distinct", "now", "regions", "space", "tune"]
 PROCEDURE = {  # how a measurement was made, word for word: a kept one answers only for the same procedure

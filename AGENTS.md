@@ -63,6 +63,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `editor/grammar.py` | the editor grammars, generated from the compiler's vocabulary |
 | `editor/terminal.py` | what a person at a terminal reads, beside the JSON record |
 | `perf/work.py` | what a function does each time it runs, counted from the typed tree, which a prediction prices |
+| `perf/counts.py` | what a count is: polynomials in a function's extents, and the work, region and cost records the counting fills |
 | `perf/cooperative_work.py`, `perf/cooperative_model.py` | what a cooperative region's threads do, counted as their warps run it from the phase rule's run of one block; and its price: the blocks an SM holds, a pipeline's copies in flight, a launch and four rates |
 | `perf/model.py`, `perf/profile.py` | a predicted time, and what one machine can do |
 | `perf/on_device.py` | the only device timing, under the owner's make targets |
