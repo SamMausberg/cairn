@@ -212,6 +212,218 @@
           19.59
         ]
       }
+    },
+    "loaded_2": {
+      "compiler": "clang version 21.1.8 (https://github.com/llvm/llvm-project 2078da43e25a4623cab2d0d60decddf709aaea28)",
+      "flags": [
+        "-std=c++20",
+        "-O3",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+        "-fno-exceptions",
+        "-fno-rtti",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wno-unused-parameter",
+        "-Wno-unused-variable",
+        "-Wno-unused-but-set-variable",
+        "-march=x86-64-v4",
+        "-pthread"
+      ],
+      "machine": {
+        "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+        "cpus": 16
+      },
+      "load_average": {
+        "before": [
+          8.22,
+          9.35,
+          11.65
+        ],
+        "after": [
+          10.87,
+          9.81,
+          11.63
+        ]
+      },
+      "note": "Before: cairn_parallel.hpp as of 89392ed, one thread per task. Shared machine: other agents built and tested throughout; the two arms ran in alternation.",
+      "arms": {
+        "after": {
+          "runtime": "src/cairn/runtime",
+          "runs": [
+            {
+              "ns": {
+                "spawn_wait": 248.4,
+                "fork_join_4096": 929.4,
+                "group_round_8": 70997.6,
+                "nested_16": 845550.8
+              },
+              "threads_started": {
+                "spawn_wait": 1,
+                "fork_join_4096": 1,
+                "group_round_8": 6,
+                "nested_16": 8
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 265.1,
+                "fork_join_4096": 1016.9,
+                "group_round_8": 59234.9,
+                "nested_16": 887881.0
+              },
+              "threads_started": {
+                "spawn_wait": 1,
+                "fork_join_4096": 1,
+                "group_round_8": 6,
+                "nested_16": 8
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 281.7,
+                "fork_join_4096": 913.5,
+                "group_round_8": 214404.5,
+                "nested_16": 1011442.0
+              },
+              "threads_started": {
+                "spawn_wait": 1,
+                "fork_join_4096": 1,
+                "group_round_8": 6,
+                "nested_16": 8
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 273.4,
+                "fork_join_4096": 976.2,
+                "group_round_8": 202772.6,
+                "nested_16": 991188.0
+              },
+              "threads_started": {
+                "spawn_wait": 1,
+                "fork_join_4096": 1,
+                "group_round_8": 6,
+                "nested_16": 8
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 134.2,
+                "fork_join_4096": 777.2,
+                "group_round_8": 171473.4,
+                "nested_16": 1021615.3
+              },
+              "threads_started": {
+                "spawn_wait": 1,
+                "fork_join_4096": 1,
+                "group_round_8": 6,
+                "nested_16": 8
+              }
+            }
+          ],
+          "median_ns": {
+            "spawn_wait": 265.1,
+            "fork_join_4096": 929.4,
+            "group_round_8": 171473.4,
+            "nested_16": 991188.0
+          },
+          "threads_started": {
+            "spawn_wait": 1,
+            "fork_join_4096": 1,
+            "group_round_8": 6,
+            "nested_16": 8
+          }
+        },
+        "before": {
+          "runtime": "results/rt/before",
+          "runs": [
+            {
+              "ns": {
+                "spawn_wait": 84507.8,
+                "fork_join_4096": 124170.2,
+                "group_round_8": 415435.5,
+                "nested_16": 1818914.6
+              },
+              "threads_started": {
+                "spawn_wait": -1,
+                "fork_join_4096": -1,
+                "group_round_8": -1,
+                "nested_16": -1
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 91434.3,
+                "fork_join_4096": 127666.8,
+                "group_round_8": 413959.4,
+                "nested_16": 2918640.1
+              },
+              "threads_started": {
+                "spawn_wait": -1,
+                "fork_join_4096": -1,
+                "group_round_8": -1,
+                "nested_16": -1
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 100117.2,
+                "fork_join_4096": 146349.3,
+                "group_round_8": 528819.0,
+                "nested_16": 2068744.2
+              },
+              "threads_started": {
+                "spawn_wait": -1,
+                "fork_join_4096": -1,
+                "group_round_8": -1,
+                "nested_16": -1
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 101513.6,
+                "fork_join_4096": 149692.4,
+                "group_round_8": 484601.7,
+                "nested_16": 2153390.9
+              },
+              "threads_started": {
+                "spawn_wait": -1,
+                "fork_join_4096": -1,
+                "group_round_8": -1,
+                "nested_16": -1
+              }
+            },
+            {
+              "ns": {
+                "spawn_wait": 107555.0,
+                "fork_join_4096": 146991.6,
+                "group_round_8": 472857.3,
+                "nested_16": 2009312.6
+              },
+              "threads_started": {
+                "spawn_wait": -1,
+                "fork_join_4096": -1,
+                "group_round_8": -1,
+                "nested_16": -1
+              }
+            }
+          ],
+          "median_ns": {
+            "spawn_wait": 100117.2,
+            "fork_join_4096": 146349.3,
+            "group_round_8": 472857.3,
+            "nested_16": 2068744.2
+          },
+          "threads_started": {
+            "spawn_wait": -1,
+            "fork_join_4096": -1,
+            "group_round_8": -1,
+            "nested_16": -1
+          }
+        }
+      }
     }
   }
 }
