@@ -374,12 +374,16 @@ class Emitter:
 
     # Functions and statements ------------------------------------------------------------------
 
+    def exported(self, f: Function) -> bool:
+        """Whether the checked entry has C linkage: every type it takes and returns is copied, and none is a
+        function value. compiler/header.py declares exactly these."""
+        return all(self.trivial(t.value) and t.name != "fn" for t in [f.ret, *(t for _, t in f.params)])
+
     def signature(self, f: Function, lean: bool = False) -> str:
         """The checked entry `cf_`, C-callable where every type is; `lean` gives the body's own `ci_`, which only
         calls from CAIRN reach."""
         ps = ", ".join(f"{self.type(t)} v_{n}" for n, t in f.params)
-        exported = all(self.trivial(t.value) and t.name != "fn" for t in [f.ret, *(t for _, t in f.params)])
-        linkage = "" if lean else "inline " if f.kernel else 'extern "C" ' if exported or f.extern else ""
+        linkage = "" if lean else "inline " if f.kernel else 'extern "C" ' if self.exported(f) or f.extern else ""
         device = "CR_HD " if f.name in self.c.device_functions else ""
         symbol = f' __asm__("{f.symbol or local(f.name)}")' if f.extern else ""  # Whatever header declares it.
         prefix = "ci" if lean else "ctest" if f.test else "cf"  # A test takes no view, so it has one symbol.

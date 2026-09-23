@@ -219,6 +219,33 @@ A key names an object; only a digest identifies it. `<key>.o` is published by a 
 
 `build/objects`, an object and its digest must each be a plain entry of the project's own build output. A symbolic link, or a file where the directory belongs, is refused under the same fail-closed rule the build directory itself has. A unit whose compile times out or is killed leaves no object under its key, and still produces the `cairn.build/1` record and the `receipt.json` that a whole-program build produces.
 
+## cairn build --header
+
+A C or C++ program can call a CAIRN library with nothing from CAIRN in its own build. `cairn build --kind library --header` writes `NAME.h` beside `libNAME.so`, and `cairn emit --header` prints the same header. `examples/interop` is a statistics library and a C++ program that calls it:
+
+```sh
+cairn build examples/interop --header       # libstats.so and stats.h under examples/interop/build/stats-*/
+c++ -std=c++17 examples/interop/host/main.cpp -I"$DIR" -L"$DIR" -lstats -Wl,-rpath,"$DIR"
+```
+
+The header declares the checked entry `cf_NAME` of every function whose types all cross the boundary: scalars, copyable records, tag-only enums, copyable sums, and borrows of any of them. A view `xs:ro<i64>[n]` is `const int64_t *xs`, with its length in the parameter its extent names, in CAIRN's order. A single borrow `p:rw<Point>` is `ct_Point *p`. A record is a `ct_` struct with CAIRN's field names, a tag-only enum is a `uint32_t` with a constant per variant, and a sum is its tag and a union of its payloads. Each declaration carries the comment above the function, its CAIRN signature and its effect row:
+
+```c
+/*
+ * One pass over the samples. The total is checked: a sum past i64 aborts rather than wrap.
+ * CAIRN: summarize(n:usize, xs:ro<i64>[n]) -> Summary
+ * xs: n elements, read.
+ * Effects: ffi_precondition, read:xs, trap.
+ */
+ct_Summary cf_summarize(size_t n, const int64_t *xs);
+```
+
+A foreign caller meets the checked entry. Each view must be null only when it is empty, aligned for its element and inside the address space, and a view the function writes must overlap no other view argument; otherwise the process aborts, as it does when any guard of the body fails. A single borrow must point to live storage, which no entry can check. Calls between CAIRN functions reach the lean body `ci_` instead, because the checker has already shown what the entry would check (`checked-entries/1` in the manifest's trusted lowering rules).
+
+Every layout is stated once and checked on both sides. `_Static_assert` lines hold the C or C++ compiler that includes the header to each size, alignment and offset, and the same numbers are appended to the library's own C++ as `static_assert`, so a library and a header that disagree fail to build rather than corrupt a call. What cannot cross is listed at the end of the header with the reason: owners such as `Buf`, linear values, function values, `dyn` references, an Array passed by value, trait members and device kernels. A module's private functions, templates, tests, externs, `main` and vendored dependencies are left out. `--header` needs a hosted library built as one unit, so `--kind exe`, a freestanding target and `--incremental` refuse it.
+
+The two directions compose. `extern` brings a C function into CAIRN with its effects declared and every call inside `unsafe`, and the header takes a CAIRN function out to C with its checks at the entry. A library that does both keeps each boundary where its source shows it: the `ffi:` effects in its rows name the foreign code it reaches, and its entries state what it requires of whoever calls it. `tests/projects/test_interop.py` builds the example under both compilers, runs the host with AddressSanitizer and UndefinedBehaviorSanitizer, has a foreign caller pass overlapping, misaligned and null views and a zero divisor and requires each to abort, and compiles a header of nested, packed, aligned, array-holding and storage-float records as C11 and C++17 against the library that states the same layouts.
+
 ## A manifest is named by its path
 
 `check`, `build`, `run`, `test`, `doc` and `expand` take a directory holding `cairn.toml`, a single `.cairn` file, or the path of a manifest with any name. One project directory can therefore hold several configurations:

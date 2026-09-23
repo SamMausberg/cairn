@@ -16,19 +16,10 @@ from typing import Any
 
 from ..compiler.cairnc import VERSION, Diagnostic, Function, Parser, compile_program, compile_source, fail
 from ..compiler.effects import EFFECT_FAMILIES, EFFECTS
-from ..compiler.lexing import lex
+from ..compiler.lexing import comment_above, lex
 from .diagnostics import explain, located
 from .evidence import MAX_EXPAND, MAX_REPLACEMENT, TERMS, classes, establish
-from .projection import (
-    comment_above,
-    declarations,
-    derivation,
-    function_source,
-    local,
-    related,
-    signature,
-    type_declarations,
-)
+from .projection import declarations, derivation, function_source, local, related, signature, type_declarations
 from .state import delta, state, written
 from .teaching import select_cards
 

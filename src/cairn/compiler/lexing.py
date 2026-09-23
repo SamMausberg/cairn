@@ -66,3 +66,12 @@ def unescape(token: Token) -> str:
         return ESCAPES[body]
 
     return re.sub(r"\\(x[0-9A-Fa-f]{2}|.)", replace, token.s[1:-1])
+
+
+def comment_above(text: str, offset: int) -> list[str]:
+    """The `//` lines directly above a declaration, as one paragraph (or nothing)."""
+    lines = text[:offset].rstrip().split("\n") if offset > 0 else []
+    found: list[str] = []
+    while lines and lines[-1].lstrip().startswith("//"):
+        found.insert(0, lines.pop().lstrip()[2:].strip())
+    return [" ".join(found)] if found else []

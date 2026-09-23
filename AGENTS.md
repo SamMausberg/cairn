@@ -26,7 +26,8 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/facts.py` | what the checker established about `usize` values, which lowering uses to drop a guard |
 | `verify/elision.py` | the independent check of every guard lowering leaves out |
 | `compiler/builtins.py` | every primitive's rule, beside its lowering |
-| `compiler/codegen.py` | lowering the typed tree; nothing else produces text |
+| `compiler/codegen.py` | lowering the typed tree; nothing else produces C++ |
+| `compiler/header.py` | the C header of a library build: its declarations, the layouts it states, what cannot cross |
 | `runtime/*.hpp` | guards, owners, threads, device calls |
 | `projects/toolchain.py` | every native flag |
 | `agent/teaching.py` | the rule cards, selected from lexical tokens |

@@ -319,6 +319,19 @@ main         ... alloc, free, gpu_alloc, gpu_free, io, par:device, transfer:h2d,
 
 `keep_device` and `sum_device` say `gpu_alloc` and `gpu_free`, which is CUB's own temporary storage for the scan and the tree reduction, so the device buffers the program asks for are not the only device memory in the row. `main` carries no `par:host`, because the host `reduce` emits a sequential fold. Measured 2026-09-19 on a GH200 with CUDA 12.8: the device does map, compact and reduce in about 1 ms against 3.5 ms for the host pipeline, but the download of the whole capacity costs 1.6 ms on its own.
 
+## examples/interop
+
+A CAIRN library called from a C++ program that owns its data. `src/stats.cairn` summarizes a series in one pass, scales it in place, sums sliding windows and names its trend as a sum; `host/main.cpp` includes the header `cairn build --header` wrote and is built by the C++ compiler alone.
+
+```text
+count 6, min 4, max 42, total 108
+windows of 3: 0 0 27 39 54 81
+trend up by 38, spread 38
+scaled by 3/2: 6 .. 63
+```
+
+What it shows. `ct_Summary` and `ct_Trend` cross the boundary by value, laid out exactly as the header states and the library checks. A vector goes in as its `data()` and `size()`, and `cf_window_sums` refuses an output that overlaps its input by aborting at its entry. `spread` calls `summarize` inside CAIRN, and that call reaches the lean body with no entry checks. [tools.md](tools.md#cairn-build---header) has the rules.
+
 ## examples/embedded
 
 A sensor log arrives over a wire as comma-terminated decimal fields, some of them malformed. This program reports every bad field with the offset of the byte at fault, summarises the good ones with checked arithmetic, sorts them through a fixed histogram and prints all of it over a PL011 UART, on a machine with no operating system, no C library and no allocator.

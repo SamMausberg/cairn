@@ -1,0 +1,48 @@
+// Summary statistics over samples a C or C++ program owns: CAIRN computes, the host keeps its memory.
+// `cairn build examples/interop --header` writes stats.h beside libstats.so; host/main.cpp includes it.
+
+// What one pass over a series finds; an empty series has count 0 and zeros elsewhere.
+struct Summary { count:u64; min:i64; max:i64; total:i64; }
+
+// Which way a series moved from its first sample to its last, and by how much.
+enum Trend { Flat; Up(u64); Down(u64); }
+
+// One pass over the samples. The total is checked: a sum past i64 aborts rather than wrap.
+fn summarize(n:usize, xs:ro<i64>[n]) -> Summary {
+  if n == 0 { return Summary(0, 0, 0, 0); }
+  let mut s = Summary(u64(n), xs[0], xs[0], 0);
+  for x in xs {
+    s.min = min(s.min, x);
+    s.max = max(s.max, x);
+    s.total += x;
+  }
+  return s;
+}
+
+// Every sample scaled by num / den in place, toward zero; a den of 0 aborts.
+fn scale(n:usize, xs:rw<i64>[n], num:i64, den:i64) {
+  for i in 0..n { xs[i] = xs[i] * num / den; }
+}
+
+// The sum of each run of w samples ending at i, for every i from w - 1; out[i] is 0 before that.
+fn window_sums(n:usize, xs:ro<i64>[n], w:usize, out:rw<i64>[n]) {
+  let mut run:i64 = 0;
+  for i, x in xs {
+    run += x;
+    if i >= w { run -= xs[i - w]; }
+    out[i] = 0;
+    if w > 0 && i + 1 >= w { out[i] = run; }
+  }
+}
+
+fn trend(n:usize, xs:ro<i64>[n]) -> Trend {
+  if n < 2 || xs[0] == xs[n - 1] { return Flat; }
+  if xs[n - 1] > xs[0] { return Up(u64(xs[n - 1] - xs[0])); }
+  return Down(u64(xs[0] - xs[n - 1]));
+}
+
+// The spread between the largest and smallest sample, from one summary: a call inside CAIRN takes the lean body.
+fn spread(n:usize, xs:ro<i64>[n]) -> i64 {
+  let s = summarize(xs);
+  return s.max - s.min;
+}

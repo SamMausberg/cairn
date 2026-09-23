@@ -138,6 +138,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"run", "test"}, "--memory-mib", {"type": int, "default": 1024,
                                        "help": "Native address-space cap, 64..65536 MiB; not a sandbox."}),
     ({"build"}, "--kind", {"choices": ["library", "exe"]}),
+    ({"emit", "build"}, "--header", {"action": "store_true", "help": "The C header of a library: emit prints it, "
+                                     "build writes NAME.h beside the library and holds the library to its layouts."}),
     ({"test"}, "--contract", {"type": Path}),
     ({"test"}, "--filter", {"default": "", "metavar": "TEXT", "help": "Run only the test blocks and contracts whose "
                             "name contains TEXT."}),
@@ -324,6 +326,11 @@ def main(argv: list[str] | None = None) -> int:
             report({"status": "documented", "pages": sorted(pages)})
             return 0
         project = load_project(a.path)
+        if a.command == "emit" and a.header:  # What a C or C++ program includes to call the library.
+            from .compiler.header import header
+
+            print(header(project.source, project.name, lambda f: project.wrote(f.line))[0], end="")
+            return 0
         if a.command in {"check", "emit"}:
             generated, receipt = compile_source(
                 project.source, keep_guards=getattr(a, "keep_guards", False), sites=project.site
@@ -453,7 +460,7 @@ def main(argv: list[str] | None = None) -> int:
 
         result = build(project, output=a.out, cxx=a.cxx, arch=a.arch, kind="exe" if a.command == "run" else a.kind,
                        timeout=a.timeout, target=a.target, debug=a.debug, incremental=a.incremental,
-                       keep_guards=a.keep_guards)  # fmt: skip
+                       keep_guards=a.keep_guards, header=getattr(a, "header", False))  # fmt: skip
         if a.command == "build" or result["status"] != "native-built":
             report(result, brief=True)
             return 0 if result["status"] == "native-built" else 2

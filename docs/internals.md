@@ -4,7 +4,7 @@ How the compiler is built, how it is tested, what an accepted program promises, 
 
 ## Compiler architecture
 
-A project becomes a native artifact in nine stages. Each owns one question, and nothing but the emitter produces text.
+A project becomes a native artifact in nine stages. Each owns one question, and nothing but the emitter produces C++.
 
 | Stage | Module | Entry point | What it produces |
 |---|---|---|---|
@@ -38,6 +38,7 @@ Checking is one pass per function over one typed tree, and a generic instance is
 | I/O rings: the declaration, the operations that move a `Buf` in and hand it back, their lowering | `compiler/rings.py` | `check_ring`, `method`, `waited`, `lower` |
 | Facts about `usize` values that let lowering drop a guard | `compiler/facts.py` | `binder`, `defined`, `assume`, `index`, `arithmetic`, `conversion` |
 | Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
+| The C header of a library: declarations, layouts it states and checks, what cannot cross | `compiler/header.py` | `Header.render`, `shape`, `refusal` |
 | Manifests, vendored dependencies | `projects/project.py` | `read_manifest`, `contained_file`, `claim`, `dependencies` |
 | Native flags, the freestanding effect ban | `projects/toolchain.py` | `command`, `flags`, `audit_effects` |
 

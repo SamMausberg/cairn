@@ -1,0 +1,7 @@
+[project]
+name = "stats"
+sources = ["src/stats.cairn"]
+
+[build]
+kind = "library"
+arch = "baseline"

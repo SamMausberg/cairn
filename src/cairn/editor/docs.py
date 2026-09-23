@@ -12,8 +12,9 @@ from __future__ import annotations
 import re
 import textwrap
 
-from ..agent.projection import comment_above, generics, local, signature, type_declarations
+from ..agent.projection import generics, local, signature, type_declarations
 from ..compiler.cairnc import Checker, Parser, Program, derive, link, specialize
+from ..compiler.lexing import comment_above
 from ..compiler.traits import described
 
 TABLES = (("records", "struct"), ("sums", "enum"), ("enums", "enum"), ("traits", "trait"), ("consts", "const"))

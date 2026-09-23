@@ -14,6 +14,7 @@ from pathlib import Path
 
 from ..compiler.cairnc import RUNTIME_FILES, Parser, compile_source, compile_units
 from ..compiler.codegen import mangle
+from ..compiler.header import header as c_header
 from .project import Project, ProjectError
 from .toolchain import audit_effects, find, flags, link_flags, linked, profile, unit_commands
 from .toolchain import command as native_command
@@ -116,6 +117,7 @@ def build(
     incremental: bool = False,
     keep_guards: bool = False,
     tests: tuple[str, ...] = (),
+    header: bool = False,
 ) -> dict:
     kind = "exe" if tests else kind or project.kind  # A test build is an executable whose main runs one test.
     target = target or project.target
@@ -127,6 +129,8 @@ def build(
         raise ProjectError(f'Target {target} builds one image: set kind = "exe".')
     if bare and tests:
         raise ProjectError(f"Tests run as host processes; target {target} has no host to run them on.")
+    if header and (kind != "library" or bare or incremental):
+        raise ProjectError("--header describes a hosted library built as one unit: use --kind library.")
     compiler = find(cxx)
     entry = ""
     if kind == "exe" and not tests:  # The entry point is `main` of the root module, else the only module-level `main`.
@@ -144,6 +148,10 @@ def build(
     if bare:  # No hosted runtime stands behind the image, so no effect may assume one; no test is in the image.
         audit_effects({name: row for name, row in receipt["functions"].items() if not row.get("test")})
     generated += "\n// entry\n" if entry else dispatcher(tests) if tests else ""
+    declared = ""
+    if header:  # The library carries the layouts its header states, so the two cannot disagree and still link.
+        declared, checks = c_header(project.source, project.name, lambda f: project.wrote(f.line))
+        generated += "\n" + checks
     if entry and entry != "main":  # Start-up code calls cf_main, wherever main was written.
         generated += f'\nextern "C" std::int32_t cf_main() noexcept {{ return cf_{mangle(entry)}(); }}\n'
     if entry and not bare:
@@ -157,8 +165,10 @@ def build(
     directory = Path(tempfile.mkdtemp(prefix=name + "-", dir=out.resolve()))
     cpp = directory / "program.cpp"
     cpp.write_text(generated, encoding="utf-8")
-    for header, text in RUNTIME_FILES.items():
-        (directory / header).write_text(text, encoding="utf-8")
+    if declared:
+        (directory / (name + ".h")).write_text(declared, encoding="utf-8")
+    for runtime, text in RUNTIME_FILES.items():
+        (directory / runtime).write_text(text, encoding="utf-8")
     artifact = directory / (name + ".elf" if bare else "lib" + name + ".so" if kind == "library" else name)
     command = native_command(
         cxx, str(cpp), str(artifact), arch or project.arch, kind, "cuda" in receipt["requires"], target
@@ -182,6 +192,7 @@ def build(
         "generated_sha256": hashlib.sha256(generated.encode()).hexdigest(),
         "units": [],
         "artifact": str(artifact),
+        **({"header": str(directory / (name + ".h"))} if declared else {}),
         "directory": str(directory),
     }
     try:
