@@ -26,7 +26,7 @@ from ..compiler.tree import INTRINSIC_TYPES, PLACES, SCALAR, STORAGE
 
 ROOT = Path(__file__).resolve().parents[3]
 
-# Words the parser reads in one position only; anywhere else they are ordinary names (syntax.py says where).
+# Words the parser reads in one position only; anywhere else they are ordinary names (the parser says where).
 CONTEXTUAL = {"after", "align", "exclusive", "fold", "into", "lends", "packed", "plan", "recipe", "require", "scan"}
 CONTEXTUAL |= {"test", *PLAN_ITEMS}
 

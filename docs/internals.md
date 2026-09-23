@@ -9,7 +9,7 @@ A project becomes a native artifact in nine stages. Each owns one question, and 
 | Stage | Module | Entry point | What it produces |
 |---|---|---|---|
 | Load | `projects/project.py` | `load_project` | one combined source from the manifest's listed inputs, a sha256 per file, a line-to-file map |
-| Parse | `compiler/lexing.py`, `compiler/syntax.py` | `Parser.parse` | tokens, spans, a tree (`compiler/tree.py`) that resolves nothing |
+| Parse | `compiler/lexing.py`, `compiler/syntax.py` (with `syntax_expressions.py`, `syntax_statements.py`) | `Parser.parse` | tokens, spans, a tree (`compiler/tree.py`) that resolves nothing |
 | Link modules | `compiler/modules.py` | `link` | the imported `std.*` modules, merged in; nothing else is importable and nothing is fetched |
 | Derive recipes | `compiler/expansion.py`, `compiler/gradients.py` | `derive`, `differentiate` | each `derive`'s declarations, as ordinary code of the deriving module; `derive grad` writes a function's adjoint |
 | Specialize families | `compiler/expansion.py` | `specialize` | one function per variant of a family's natural range |

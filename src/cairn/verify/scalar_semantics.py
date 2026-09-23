@@ -119,6 +119,8 @@ def implementation_hash():
                 "compiler/lexing.py",
                 "compiler/tree.py",
                 "compiler/syntax.py",
+                "compiler/syntax_expressions.py",
+                "compiler/syntax_statements.py",
                 "compiler/scope.py",
                 "compiler/facts.py",
                 "compiler/checking.py",

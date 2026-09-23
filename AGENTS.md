@@ -8,7 +8,8 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 |---|---|
 | `compiler/lexing.py` | tokens and reserved words |
 | `compiler/tree.py` | the syntax tree, the scalar vocabulary, `Diagnostic` |
-| `compiler/syntax.py` | the parser and source ranges |
+| `compiler/syntax.py` | the parser's declarations and entry point, and source ranges |
+| `compiler/syntax_expressions.py`, `compiler/syntax_statements.py` | the parser's token cursor, types and expressions; its statements |
 | `compiler/modules.py` | linking the packaged `std` modules |
 | `compiler/expansion.py` | library recipes applied by `derive`, and static families |
 | `compiler/gradients.py` | reverse-mode differentiation applied by `derive grad`, generated as source |
