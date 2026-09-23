@@ -345,6 +345,13 @@ def joined(c: Checker, effects: dict[str, set[str]]) -> dict[str, set[str]]:
         for impl in impls:
             c.calls[name].add(impl)
             c.call_edges[name].append((impl, {n: n for n, _ in c.fs[name].params}))
+    for name, impls in c.alternatives.items():  # and through another reference, now that each dispatches
+        for impl in impls:
+            if name in reached(c, impl):
+                c.judging = impl
+                fail("E-IMPL-CALL", f"{impl} reaches {name}, its reference, through a function whose implementation "
+                     "calls back into it, and the dispatch could run them in a cycle; call a helper they share.",
+                     c.fs[impl])  # fmt: skip
     return fixed_point(c)
 
 
@@ -426,7 +433,7 @@ def receipt(c: Checker, name: str) -> dict[str, Any]:
         found[impl] = {
             "identity": clause.identity,
             "when": written(g) or "always",
-            "applies": "tested at entry" if params_named(g) else "always",
+            "applies": "tested at entry" if tested(g) else "always",
             **parameters(g),
             **({"needs": list(clause.needs)} if clause.needs else {}),
             "requires": requires(c, g),
@@ -454,6 +461,18 @@ def params_named(f: Function) -> bool:
     return e is not None and any(x.tag == "name" and x.val in dict(f.params) for x in walk(e))
 
 
+def floats(e: Expr) -> bool:
+    """Does the condition compute with a float anywhere? Folding it here would not round as the machine does."""
+    return any(x.ty is not None and x.ty.name in FLOAT for x in walk(e))
+
+
+def tested(f: Function) -> bool:
+    """Is `f`'s condition tested on entry: one that reads a parameter, or computes with a float, which only the
+    machine's own arithmetic decides."""
+    e = f.implements.when if f.implements else None
+    return e is not None and (params_named(f) or floats(e))
+
+
 def requires(c: Checker, f: Function, rows: dict[str, set[str]] | None = None) -> dict[str, Any]:
     """What running `f` takes from the machine, as its checked body says: where it runs, whose threads, and the
     storage it declares."""
@@ -479,7 +498,7 @@ def lower(g: Emitter, f: Function) -> None:
         return
     impl = g.c.fs[chosen]
     when = impl.implements.when if impl.implements else None
-    test = bare(g.expr(when)) if when is not None and params_named(impl) else "true"  # `if ((a == b))` warns
+    test = bare(g.expr(when)) if when is not None and tested(impl) else "true"  # `if ((a == b))` warns
     args = ", ".join(f"std::move(v_{n})" if t.mode == "value" and not g.trivial(t) else f"v_{n}" for n, t in f.params)
     call = f"{g.callee(impl)}({args})"
     g.put(f"if ({test}) {{ {call}; return; }}" if f.ret == VOID else f"if ({test}) return {call};")
@@ -495,8 +514,8 @@ def direct(g: Emitter, e: Expr, f: Function) -> Function:
     chosen = g.c.selected.get(f.name)
     impl = g.c.fs.get(chosen) if chosen else None
     when = impl.implements.when if impl is not None and impl.implements is not None else None
-    if impl is None or when is None or len(e.args) != len(f.params):
-        return f
+    if impl is None or when is None or len(e.args) != len(f.params) or floats(when):
+        return f  # a float comparison is left to the entry's test, in the machine's own arithmetic
     given = {n: a for (n, _), a in zip(f.params, e.args, strict=True)}
     named = {x.val for x in walk(when) if x.tag == "name" and x.val in given}
     known = {n: given[n] if given[n].tag == "int" else given[n].ref for n in named}

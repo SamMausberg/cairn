@@ -15,7 +15,7 @@ from cairn.editor.formatting import format_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project
 from cairn.projects.target import parse
-from emitted import refused, watched
+from emitted import contract, refused, watched
 
 TOTAL = """fn total(n:usize, xs:ro<u64>[n]) -> u64 {
   let mut s:u64 = 0;
@@ -194,6 +194,11 @@ REFUSED = [
         "fn f(x:u64) -> u64 = x;\nfn g(x:u64) -> u64 implements f = x;\n"
         "fn apply(h:fn(u64) -> u64, x:u64) -> u64 = h(x);\nfn main() -> i32 { return i32(apply(g, 1)); }",
     ),
+    (
+        "E-IMPL-CALL",  # through another reference, whose implementation calls back into the first
+        "fn f(n:u64) -> u64 = n;\nfn f2(n:u64) -> u64 implements f = k(n);\nfn k(n:u64) -> u64 = n;\n"
+        "fn k2(n:u64) -> u64 implements k = f(n);\nplan f use f2;\nplan k use k2;",
+    ),
     ("E-IMPL-USE", TOTAL + BY4 + "fn other(n:usize, xs:ro<u64>[n]) -> u64 = 0;\nplan total use other;"),
     ("E-IMPL-USE", TOTAL + BY4 + "plan nothing use total_by4;"),
     ("E-IMPL-USE", TOTAL + BY4 + PAIRS + "plan total use total_by4;\nplan total use total_pairs;"),
@@ -257,3 +262,34 @@ fn sums(n:usize, xs:ro<u64>[n], eight:ro<u64>[8], five:ro<u64>[5]) -> u64 {
     cpp, _ = compile_source(source)
     body = cpp.split("ci_sums(std::size_t v_n")[2].split("\n}\n")[0]
     assert body.count("ci_total_by4(") == 2 and body.count("ci_total(") == 2  # 8 is decided; 5 and n are tested
+
+
+# The condition is in f32, and folding it in f64 would call g for X, where the machine's -0.1f < -0.1f is false.
+FLOATS = """const X:f32 = -0.1;
+fn f(x:f32) -> f32 = x;
+fn g(x:f32) -> f32 implements f when x < -0.1 {
+  if x == -0.1 { return 7.0; }
+  return x;
+}
+plan f use g;
+fn h(x:f32) -> f32 = x;
+fn h_big(x:f32) -> f32 implements h when x < 16777217.0 { return 1.0; }
+plan h use h_big;
+fn main() -> i32 {
+  let y:f32 = -0.1;
+  if f(X) != f(y) || f(X) != -0.1 { return 1; }
+  let big:f32 = 16777216.0;
+  if h(16777216.0) != h(big) || h(big) != 16777216.0 { return 2; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_float_condition_is_tested_where_the_machine_computes_it(tmp_path, cxx):
+    cpp, receipt = compile_source(FLOATS)
+    main = cpp.split('extern "C" std::int32_t cf_main() noexcept {')[1]
+    assert "_g(" not in main and "_h_big(" not in main  # nothing is decided by folding a float comparison
+    assert receipt["functions"]["f"]["implementations"]["g"]["applies"] == "tested at entry"
+    done = contract(tmp_path, cpp, cxx, "-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all")
+    assert done.returncode == 0, done.stdout + done.stderr
