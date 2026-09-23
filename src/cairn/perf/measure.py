@@ -122,10 +122,7 @@ def time(source: str, symbol: str, sizes: Mapping[str, float], *, fills: dict[st
          cxx: str = "clang++", arch: str | None = None, extra: tuple[str, ...] = (), block_ns: float = 2e6,
          blocks: int = 9, lanes: int | None = None, timeout: int = 600) -> dict[str, Any]:  # fmt: skip
     """The median time of one call of `symbol` at `sizes`, in nanoseconds, measured on this host."""
-    p, _, _ = compile_program(source)
-    f = next((f for f in p.functions if f.name == symbol), None)
-    if f is None:
-        raise ValueError(f"No function {symbol} to time.")
+    f = timed_function(source, symbol)
     with tempfile.TemporaryDirectory(prefix="cairn-time-") as scratch:
         directory = Path(scratch)
         obj = build(source, cxx, arch, extra, directory)
@@ -134,8 +131,20 @@ def time(source: str, symbol: str, sizes: Mapping[str, float], *, fills: dict[st
         subprocess.run([find(cxx), *flags(arch, "exe"), *extra, str(directory / "driver.cpp"), str(obj), "-o", str(exe), "-pthread"],
                        check=True, capture_output=True, text=True, timeout=300)  # fmt: skip
         env = dict(os.environ, **({"CAIRN_LANES": str(lanes)} if lanes else {}))
-        done = subprocess.run([str(exe)], capture_output=True, text=True, timeout=timeout, env=env)
-        if done.returncode:
-            return {"status": "trapped" if done.returncode < 0 else "failed", "exit": done.returncode,
-                    "stderr": done.stderr[:2000]}  # fmt: skip
-        return {"status": "measured", **json.loads(done.stdout)}
+        return outcome(subprocess.run([str(exe)], capture_output=True, text=True, timeout=timeout, env=env))
+
+
+def timed_function(source: str, symbol: str) -> Any:
+    """The function of `source` a timer calls."""
+    f = next((f for f in compile_program(source)[0].functions if f.name == symbol), None)
+    if f is None:
+        raise ValueError(f"No function {symbol} to time.")
+    return f
+
+
+def outcome(done: subprocess.CompletedProcess) -> dict[str, Any]:
+    """What a timing program answered on its one line, or how it ended when it did not."""
+    if done.returncode:
+        return {"status": "trapped" if done.returncode < 0 else "failed", "exit": done.returncode,
+                "stderr": done.stderr[:2000]}  # fmt: skip
+    return {"status": "measured", **json.loads(done.stdout)}

@@ -20,9 +20,9 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import compile_program, compile_source, write_program
+from ..compiler.cairnc import compile_source, write_program
 from ..projects.toolchain import command
-from .measure import driver
+from .measure import driver, outcome, timed_function
 
 DEVICE_LOCK = Path("/tmp/cairn-gpu.lock")
 COOLDOWN_S = 2.0  # between two device runs: the driver's engine gets a rest
@@ -52,10 +52,7 @@ def locked():
 def program(source: str, symbol: str, sizes: Mapping[str, float], fills: dict[str, str] | None = None,
             block_ns: float = 2e6, blocks: int = 9) -> str:  # fmt: skip
     """The emitted program and its timing driver, as one CUDA translation unit; nothing is built or run."""
-    p, _, _ = compile_program(source)
-    f = next((f for f in p.functions if f.name == symbol), None)
-    if f is None:
-        raise ValueError(f"No function {symbol} to time.")
+    f = timed_function(source, symbol)
     cpp, receipt = compile_source(source)
     if "cuda" not in receipt["requires"]:
         raise ValueError(f"{symbol} has no device code; time it on the host with cairn.perf.measure.")
@@ -80,10 +77,7 @@ def time_device(source: str, symbol: str, sizes: Mapping[str, float], *, fills: 
             ran += 1
             done = subprocess.run([exe], capture_output=True, text=True, timeout=timeout)
             clock.sleep(COOLDOWN_S)
-    if done.returncode:
-        return {"status": "trapped" if done.returncode < 0 else "failed", "exit": done.returncode,
-                "stderr": done.stderr[:2000]}  # fmt: skip
-    return {"status": "measured", **json.loads(done.stdout)}
+    return outcome(done)
 
 
 # What a device profile measures: a copy for the memory's sustained bandwidth, one element for a launch and the wait
