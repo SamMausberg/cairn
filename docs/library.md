@@ -1,6 +1,6 @@
 # The standard library
 
-Twenty modules, written in CAIRN and shipped inside the package. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`, and a module you do not import is not in your program. [std_api.md](std_api.md) has every signature and effect row, generated from these sources; this page says what each module is for, shows a program that uses it, and says where it bites.
+Twenty modules, written in CAIRN and shipped inside the package. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`, and a module you do not import is not in your program. [std_api.md](std_api.md) has every signature and effect row, generated from these sources.
 
 Three habits explain the API. A lookup answers with an index, never a borrow: `map.find` returns `Option[usize]`, and the caller reads `m.vals[slot]` itself. A position kept across changes is a handle checked on use (`arena.Handle`, `map.Slot`). A function that allocates says `alloc` in its row, and so does everyone who calls it.
 

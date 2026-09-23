@@ -1,10 +1,10 @@
 # Language reference
 
-Every example here is compiled by the test suite, and every refused one must fail with the code shown. [verification.md](verification.md) says which parts are proved.
+Every example here is compiled by the test suite, and [verification.md](verification.md) says which parts are proved.
 
 Three rules explain most of the language. Costs are visible: nothing allocates, synchronizes, copies an owner, runs in parallel or crosses a memory boundary unless the source says so, and every function has an inferred effect row. Borrows are second class: a borrow exists only as a parameter or a call argument, so there are no lifetime annotations and no dangling references. Short forms are contracts: `compact`, `reduce`, `parallel`, `family`, `derive wire` and `try` expand to ordinary code with their obligations attached.
 
-This file covers values, control flow, records, sums, constants, tests and printing. [memory.md](memory.md) covers views, owners and effects, [abstractions.md](abstractions.md) generics, traits, closures and modules, [concurrency.md](concurrency.md) tasks, lanes and devices, and [numerics.md](numerics.md) storage floats and gradients.
+This file covers values, control flow, records, sums, constants, tests and printing; the [index](README.md) names the other four files of the reference.
 
 ## Values and arithmetic
 
@@ -49,7 +49,7 @@ Expected u32, got u64.
 
 Floats compile with `-ffp-contract=off -fno-fast-math` (and `--fmad=false` on the device): no contraction and no reassociation. A failed guard aborts the process. It does not unwind, and it rolls nothing back.
 
-Six builtins cover what IEEE 754 defines exactly, so every compiler, the host and a device lane give the same bits: `sqrt` (correctly rounded), `floor`, `ceil` and `trunc` for `f32` and `f64`; `abs` for a float or a signed integer, trapping on the signed minimum; and `to_bits`, a float's IEEE pattern. Any other argument is `E-MATH-TYPE`. `exp`, `log`, `sin` and the rest depend on the math library's last bit, so they are not builtins: [std.math](library.md#stdmath) calls the C library, and its row says so. A program's own function with one of these names is the one a call reaches.
+Six builtins cover what IEEE 754 defines exactly, so every compiler, the host and a device lane give the same bits. They are `sqrt` (correctly rounded), `floor`, `ceil` and `trunc` for `f32` and `f64`; `abs` for a float or a signed integer, trapping on the signed minimum; and `to_bits`, a float's IEEE pattern. Any other argument is `E-MATH-TYPE`. `exp`, `log`, `sin` and the rest depend on the math library's last bit, so they are not builtins: [std.math](library.md#stdmath) calls the C library, and its row says so. A program's own function with one of these names is the one a call reaches.
 
 ```cairn
 fn hypot(x:f64, y:f64) -> f64 = sqrt(x * x + y * y);   // no trap: its row is empty
@@ -119,7 +119,7 @@ fn main() -> i32 { let rows = Buf[Buf[u8]](2); for row in rows { } return 0; }
 for row in rows copies each element, and Buf[u8] is not copyable: write for i in 0..len(rows) and take, swap or lend rows[i].
 ```
 
-A call can be a statement: `count(log);` drops what `count` returns, and `try check(v);` drops the success payload. A dropped owner is released where the statement ends, and a dropped linear value is `E-LINEAR-LEAK`. An outcome is never dropped silently: a sum `try` accepts, such as `Result` or `Option`, is handled with `try` or `match`, or dropped on purpose with `let _ = check(v);`, and otherwise the call is `E-DISCARD`. A call that only computes, such as `min(a, b);`, is `E-DISCARD` too.
+A call can be a statement: `count(log);` drops what `count` returns, and `try check(v);` drops the success payload. A dropped owner is released where the statement ends, and a dropped linear value is `E-LINEAR-LEAK`. An outcome is never dropped silently. A sum `try` accepts, such as `Result` or `Option`, is handled with `try` or `match` or dropped on purpose with `let _ = check(v);`; otherwise the call is `E-DISCARD`. A call that only computes, such as `min(a, b);`, is `E-DISCARD` too.
 
 ```cairn
 import std.core (Result);

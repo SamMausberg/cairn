@@ -1,6 +1,6 @@
 # Examples
 
-Every project under `examples/` is built and run by the test suite. Commands are written as `cairn ...`; from a source checkout that is `python3 bin/cairn ...`. Start with `hello` for the smallest complete project and `apps/kvstore` to see how a real program is shaped. The three [demos](../demos/README.md) (an agent's repair reviewed by `cairn diff`, one numeric kernel on host and device lanes, and a UI an agent fixes from its frames) each run with one `make` target.
+Every project under `examples/` is built and run by the test suite. Start with `hello` for the smallest complete project and `apps/kvstore` to see how a real program is shaped. The three [demos](../demos/README.md) each run with one `make` target.
 
 | project | what it is | command |
 | --- | --- | --- |
@@ -27,8 +27,6 @@ Every project under `examples/` is built and run by the test suite. Commands are
 
 ## examples/hello
 
-The smallest complete project: a manifest, two modules and one finite task contract.
-
 ```sh
 cairn run  examples/hello     # "status": "program-exited", "exit_code": 0
 cairn test examples/hello     # "status": "passed-finite-tests", "cases": 81
@@ -37,8 +35,6 @@ cairn test examples/hello     # "status": "passed-finite-tests", "cases": 81
 `src/math.cairn` holds `average`, the floor of the mean computed without overflowing the intermediate sum. `tests/average.json` pins it at 81 boundary pairs, `u64` maxima included, and `cairn test` builds a shared library and calls the symbol for each one.
 
 ## examples/systems
-
-Two systems idioms in one project: a decimal parser that reports the offset of the byte at fault, and a counting sort whose input and output views stay disjoint.
 
 ```sh
 cairn run  examples/systems     # "status": "program-exited", "exit_code": 0
@@ -151,7 +147,7 @@ cairn run examples/apps/wordfreq -- -n 5 examples/apps/wordfreq/tale.txt
 119 words, 58 distinct
 ```
 
-What it shows: `std.env` and `std.fs` for arguments and files; a `Map` keyed by a `Word` that implements `Hash` and `Eq` over its bytes; `counts.update(word, |c:rw<u64>| { c += 1; })`, which lends the closure the count alone (a closure that reached for the map would be `E-ALIAS`); and `std.fmt` for the aligned table. An unreadable file exits 1 with its errno, and bad arguments print the usage and exit 2. `tests/projects/test_wordfreq.py` compares every line with Python's `Counter`, under both compilers and under AddressSanitizer.
+It reads arguments and files through `std.env` and `std.fs`, keys a `Map` by a `Word` that implements `Hash` and `Eq` over its bytes, and aligns the table with `std.fmt`. `counts.update(word, |c:rw<u64>| { c += 1; })` lends the closure the count alone; a closure that reached for the map would be `E-ALIAS`. An unreadable file exits 1 with its errno, and bad arguments print the usage and exit 2. `tests/projects/test_wordfreq.py` compares every line with Python's `Counter`, under both compilers and under AddressSanitizer.
 
 ## examples/apps/classifier
 
@@ -267,7 +263,7 @@ agg.run_dyn                             ... dispatch
 device.queued_notional                  ... spawn, join, par:device, transfer:h2d, transfer:d2h
 ```
 
-Measured 2026-09-19 on a GH200 with CUDA 12.8 and clang 15.0.7: ingest dominates, host lanes do not pay off over 10^6 cheap elements, and on the device the queries take 1 ms against 2.2 ms on the host but the download alone costs 1.9 ms. Moving the answer costs more than computing it, which is why the language makes you write the `transfer`.
+Measured 2026-09-19 on a GH200 with CUDA 12.8 and clang 15.0.7, ingest dominates and host lanes do not pay off over 10^6 cheap elements. On the device the queries take 1 ms against 2.2 ms on the host, but the download alone costs 1.9 ms. Moving the answer costs more than computing it, which is why the language makes you write the `transfer`.
 
 Still awkward: a recipe's run-time `fold` takes only an operator or a bare function name, a view's extent cannot be inferred from a literal, and a recipe cannot express arithmetic between two named fields, so `notional_of` is written by hand.
 
@@ -299,7 +295,7 @@ step_device   ffi_precondition, par:device, read:src, trap, write:out
 main          ... gpu_alloc, gpu_free, transfer:h2d, transfer:d2h, par:host, par:device
 ```
 
-Measured 2026-09-19 on a GH200, 64 cores, CUDA 12.8, clang 15.0.7: host threads beat the loop by about 10x and the device sweeps by about 85x, but the first device allocation pays 283 ms to create the CUDA context, which the program reports on its own line rather than hiding it.
+Measured 2026-09-19 on a GH200, 64 cores, CUDA 12.8, clang 15.0.7: host threads beat the loop by about 10x and the device sweeps by about 85x. The first device allocation pays 283 ms to create the CUDA context, which the program reports on its own line.
 
 ## examples/apps/gpu_pipeline
 
@@ -372,7 +368,7 @@ scaled by 3/2: 6 .. 63
 
 ## examples/embedded
 
-A sensor log arrives over a wire as comma-terminated decimal fields, some of them malformed. This program reports each bad field with the offset of the byte at fault, summarises the good ones with checked arithmetic, sorts them through a fixed histogram, and prints all of it over a PL011 UART, on a machine with no operating system, no C library and no allocator.
+A sensor log arrives over a wire as comma-terminated decimal fields, some of them malformed, on a machine with no operating system, no C library and no allocator. The program reports each bad field with the offset of the byte at fault, summarises the good ones with checked arithmetic, sorts them through a fixed histogram, and prints all of it over a PL011 UART.
 
 ```sh
 cairn run   examples/embedded     # builds the image and runs it under QEMU

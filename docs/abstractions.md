@@ -1,7 +1,5 @@
 # Generics, traits, closures, modules and recipes
 
-The ways a program abstracts: type and natural parameters with bounds, traits with static and dynamic dispatch, function values and closures, alternative implementations of one function, modules and vendored projects, and recipes that generate code.
-
 ## Generics
 
 A function takes type parameters and natural parameters. They are inferred from the arguments and the expected type, or written out (`largest[u64](3, 9)`, `scale[4](x)`, `Option[u64].None`). `T(x)` converts, or constructs, at the instance's `T`. Every instance is made on demand and checked as ordinary code, and the template's module decides what its own text means.

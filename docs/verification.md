@@ -155,13 +155,13 @@ A region's body is a list of lane accesses, as `checking.py:region` records them
 
 ### Task groups
 
-A group is a name many tasks share. `collect g` joins one finished task, which one unknown, so the machine has a successor per task that might have finished, and the checker keeps every lease until `wait g`. After a branch, a group holds what either path lent it, and a part keeps its bounds only if both paths formed it, since its guard ran only where it was formed; `tests/soundness/test_groups.py` has the programs that raced before this rule. Because a join claims more than either path, preservation is proved for acceptance that may forget between statements (`Checks`, `joinOf_le`, `Sync.weaken`).
+A group is a name many tasks share. `collect g` joins one finished task, which one unknown, so the machine has a successor per task that might have finished, and the checker keeps every lease until `wait g`. After a branch, a group holds what either path lent it, and a part keeps its bounds only if both paths formed it, since its guard ran only where it was formed. `tests/soundness/test_groups.py` has the programs that raced before this rule. Because a join claims more than either path, preservation is proved for acceptance that may forget between statements (`Checks`, `joinOf_le`, `Sync.weaken`).
 
 ### The lane pool
 
 `Cairn/Region.lean` models the lane pool behind `cr::par::run`. A wide region is cut into consecutive homes, one per lane it can use, each with a counter lanes claim chunks from. Every lane goes through the homes in an order of its own, and a worker starts on the same home in every region, so it runs the same indices from its own cache before it helps with the others. The starter takes every home, unlinks the region when it has been through them all, and returns once no worker is inside.
 
-Under every interleaving of any number of workers, with any claim size, any cut into consecutive homes and any order a worker takes them in, `runs_once` says every index below `n` has run exactly once when the starter returns, `quiet_when_back` that no worker is inside, and `finishes` that the region returns without waiting for a worker to arrive.
+The theorems hold under every interleaving of any number of workers, with any claim size, any cut into consecutive homes and any order a worker takes them in. `runs_once` says every index below `n` has run exactly once when the starter returns, `quiet_when_back` that no worker is inside, and `finishes` that the region returns without waiting for a worker to arrive.
 
 The model is sequentially consistent. The C++ bumps each counter with a relaxed `fetch_add` and orders a leaving worker against the waiting starter with sequentially consistent operations. That the header performs the modelled steps is review, not proof; `tests/runtime/parallel_runtime.cpp` checks that its cut is the one the model assumes. A region below `lanes::CUTOFF`, or in a process with one lane, is the plain loop on the thread that starts it.
 
@@ -204,7 +204,7 @@ theorem accepted_progress : Progress
 
 ### The regression, and that the faults are reachable
 
-`ownership_regression` checks that the Lean encodings of the programs pinned in `tests/soundness/` are classified as the Python checker classifies them, each rejected or accepted program written out with its CAIRN source in `Cairn/Ownership/Regress.lean`: moves, leases, overlapping parts, fields, groups and lane blocks. The build prints `ownership-regression: pass`, and the Python gate asserts on that line.
+`ownership_regression` checks that the Lean encodings of the programs pinned in `tests/soundness/` are classified as the Python checker classifies them. Each rejected or accepted program is written out with its CAIRN source in `Cairn/Ownership/Regress.lean`: moves, leases, overlapping parts, fields, groups and lane blocks. The build prints `ownership-regression: pass`, and the Python gate asserts on that line.
 
 The safety theorems would be vacuous if the machine could never fault, so sixteen witnesses drive it to `Race`, `AliasedArgs`, `DoubleFree`, `UseAfterMove`, `Leak` and `DeadGroup` for programs the checker rejects, and `witnesses_are_rejected` and `group_witnesses_are_rejected` confirm the rejections. `UseAfterFree` is the one error with no witness. `backwardsPart_traps` shows an accepted program reaching `Trap` at the guard of `d[6..3]` before any race.
 
@@ -244,7 +244,7 @@ Lowering leaves a guard out where `compiler/facts.py` shows it cannot fail, and 
 
 The Lean functions are transliterations of the Python ones, and `tools/checks/differential_facts.py` asks both the same generated questions. Twenty thousand inputs agreed on the run in `evidence/v1_4/lean/facts_differential.json`, and a planted off-by-one is caught within a few hundred.
 
-That the facts in scope are true where they are used is checked at every site but not proved. `src/cairn/verify/elision.py` walks each function independently, without importing `facts.py`, and requires every fact a discharged guard cites to come from an origin in force at that site (a loop binder, an immutable `let`, a condition, an early exit, the left side of `&&`) and to name only values that cannot have changed. It then decides the guard again from those facts alone. The emitter keeps any guard whose proof the audit refuses, counted under `refused_discharges`.
+That the facts in scope are true where they are used is checked at every site but not proved. `src/cairn/verify/elision.py` walks each function independently, without importing `facts.py`. It requires every fact a discharged guard cites to come from an origin in force at that site (a loop binder, an immutable `let`, a condition, an early exit, the left side of `&&`) and to name only values that cannot have changed. It then decides the guard again from those facts alone. The emitter keeps any guard whose proof the audit refuses, counted under `refused_discharges`.
 
 Across the library, the examples and the docs the audit refuses nothing. `tests/soundness/test_elision.py` requires every single-point tampering of a proof to be refused, and an off-by-one planted in `facts.py` to reach no emitted program. `tools/checks/differential_guards.py` builds generated programs with and without every guard, under both compilers and the sanitizers, and requires the same value or the same trap: 1,821 functions and 174,816 cases per compiler agreed (`evidence/v1_4/guards/`). The audit's own rules are hand-written and not in Lean, and the model has no `usize(x)` of a narrower integer.
 
@@ -301,7 +301,7 @@ Much of `checking.py` is outside the calculus: linear values, leases over parts 
 
 ## Validating an implementation
 
-`cairn validate` and the implementation session hold an implementation to its reference by running both. The reference is an independent algorithm, written apart, which is what makes it an oracle; it is not an independent compiler, so the two share the parser, the checker, the lowering and the runtime, and a fault there can make both wrong alike. The inputs come from the contract (tiles, the condition, plan items, type edges), a pass covers exactly the cases that ran, an implementation no case reached is `unknown`, and so is a call that ran past its limit. The record labels the result finite testing. Z3's answer on the same pair is reported beside it, never merged into it, and a loop is decided only up to the unrolling bound, which the record names.
+`cairn validate` and the implementation session hold an implementation to its reference by running both. The reference is an independent algorithm, written apart, which is what makes it an oracle. It is not an independent compiler: the two share the parser, the checker, the lowering and the runtime, and a fault there can make both wrong alike. The inputs come from the contract (tiles, the condition, plan items, type edges), and a pass covers exactly the cases that ran. An implementation no case reached is `unknown`, and so is a call that ran past its limit. The record labels the result finite testing. Z3's answer on the same pair is reported beside it, never merged into it, and a loop is decided only up to the unrolling bound, which the record names.
 
 ## Pinned versions and the audit
 

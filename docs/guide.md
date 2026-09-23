@@ -62,7 +62,7 @@ cairn new echo --template service    # a server that keeps every client's receiv
 cairn new squares --template parallel  # a host region, a checked reduce and a plan that splits it
 ```
 
-The test suite creates, builds, runs and tests every template, so none can fall behind the language.
+The test suite creates, builds, runs and tests every template.
 
 ## Check, run, test
 
@@ -463,7 +463,7 @@ pub fn main() -> i32 {
 
 ### 12. The foreign boundary states its effects
 
-The checker cannot read an `extern` function's body, so the declaration states what it may do, and a call to it needs `unsafe`. The effect reaches every caller. `pure` and `effects(...)` are checked ceilings.
+The checker cannot read an `extern` function's body, so the declaration states what it may do, a call to it needs `unsafe`, and the effect reaches every caller. `pure` and `effects(...)` are checked ceilings.
 
 ```cairn
 extern fn getpid() -> i32 effects(io);
@@ -481,4 +481,4 @@ The device half of the language (placement types, `kernel fn`, device `reduce` a
 
 ## Where to go next
 
-[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md), [concurrency.md](concurrency.md) and [numerics.md](numerics.md) are the reference: every rule with a program it accepts and one it refuses. [library.md](library.md) covers the standard library, [tools.md](tools.md) every command and the editors, and [examples.md](examples.md) real programs from a storage engine to a bare-metal image. [agents.md](agents.md) is the edit protocol an AI agent works through, and [verification.md](verification.md) says which claims are proved, which are SMT-checked and which are only tested.
+[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md), [concurrency.md](concurrency.md) and [numerics.md](numerics.md) are the reference: every rule with a program it accepts and one it refuses. The [index](README.md) gives the rest in reading order.
