@@ -40,6 +40,12 @@ TEMPLATES = Path(__file__).parent / "templates"  # each a whole project the suit
 GUIDE = TEMPLATES / "AGENTS.md"  # what every new project tells an agent: the loop, the rules, what not to widen
 
 
+def guide(destination: Path) -> None:
+    """AGENTS.md for any agent, and a CLAUDE.md that imports it, since Claude Code reads that file instead."""
+    (destination / "AGENTS.md").write_text(GUIDE.read_text(encoding="utf-8"), encoding="utf-8")
+    (destination / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
+
+
 def templates() -> list[str]:
     return ["default", *sorted(p.name for p in TEMPLATES.iterdir() if (p / "cairn.toml").is_file())]
 
@@ -63,7 +69,7 @@ def create_project(destination: Path, template: str = "default") -> dict:
                 text = text.replace(f'name = "{template}"', f'name = "{name}"', 1)
             target.write_text(text, encoding="utf-8")
         (destination / ".gitignore").write_text("build/\n")
-        (destination / "AGENTS.md").write_text(GUIDE.read_text(encoding="utf-8"), encoding="utf-8")
+        guide(destination)
         return {
             "status": "created",
             "project": str(destination.resolve()),
@@ -106,7 +112,7 @@ fn main() -> i32 {
     }
     (destination / "tests/average.json").write_text(json.dumps(contract, indent=2) + "\n")
     (destination / ".gitignore").write_text("build/\n")
-    (destination / "AGENTS.md").write_text(GUIDE.read_text(encoding="utf-8"), encoding="utf-8")
+    guide(destination)
     return {"status": "created", "project": str(destination.resolve()), "network_access": False}
 
 

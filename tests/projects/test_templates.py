@@ -35,6 +35,7 @@ def test_every_template_is_a_project_whose_tests_pass_as_created(tmp_path, templ
     assert record["blocks"]["tests"], "every template carries at least one test block"
     guide = (root / "AGENTS.md").read_text()  # what the project tells an agent, the same for every template
     assert guide == GUIDE.read_text() and len(guide.splitlines()) < 25
+    assert (root / "CLAUDE.md").read_text() == "@AGENTS.md\n"  # Claude Code reads CLAUDE.md, which imports it
     for said in ("cairn check . --format json", "cairn test .", "cairn run .", "cairn doc --std", "effect ceiling"):
         assert said in guide
     named = {name for name, _ in commands()}
