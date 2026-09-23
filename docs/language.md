@@ -1,14 +1,14 @@
 # Language reference
 
-This reference describes what the compiler implements. The test suite runs every construct natively, compiles every accepted example and requires every refused one to fail with the code shown. [verification.md](verification.md) says which of it is proved.
+Every example here is compiled by the test suite, and every refused one must fail with the code shown. [verification.md](verification.md) says which parts are proved.
 
-Three rules explain most of the language. Costs are visible: nothing allocates, synchronizes, copies an owner, runs in parallel or crosses a memory boundary unless the source says so, and every function carries an inferred effect row. Borrows are second class: a borrow exists only as a parameter or a call argument, so there are no lifetime annotations and no dangling references. Short forms are contracts: `compact`, `reduce`, `parallel`, `family`, `derive wire` and `try` expand to ordinary inspectable code with their obligations attached to the expansion.
+Three rules explain most of the language. Costs are visible: nothing allocates, synchronizes, copies an owner, runs in parallel or crosses a memory boundary unless the source says so, and every function has an inferred effect row. Borrows are second class: a borrow exists only as a parameter or a call argument, so there are no lifetime annotations and no dangling references. Short forms are contracts: `compact`, `reduce`, `parallel`, `family`, `derive wire` and `try` expand to ordinary code with their obligations attached.
 
-This file covers values, control flow, records, sums, constants and tests. [memory.md](memory.md) covers views, owners, linear values, layout, effects and the foreign boundary, [abstractions.md](abstractions.md) generics, traits, closures, modules and recipes, [concurrency.md](concurrency.md) tasks, lanes and devices, and [numerics.md](numerics.md) storage floats, quantization and derived gradients.
+This file covers values, control flow, records, sums, constants, tests and printing. [memory.md](memory.md) covers views, owners and effects, [abstractions.md](abstractions.md) generics, traits, closures and modules, [concurrency.md](concurrency.md) tasks, lanes and devices, and [numerics.md](numerics.md) storage floats and gradients.
 
 ## Values and arithmetic
 
-Identifiers are ASCII, comments (`//` to the end of the line) are UTF-8. Parameters and `let` locals are immutable, `let mut` is mutable, and no name may shadow another (`E-SHADOW`). `reg x = 0;` and `each i in n { }` are older spellings of `let mut x = 0;` and `for i in 0..n { }`.
+Identifiers are ASCII, and comments (`//` to the end of the line) are UTF-8. Parameters and `let` locals are immutable, `let mut` is mutable, and no name may shadow another (`E-SHADOW`). `reg x = 0;` and `each i in n { }` are older spellings of `let mut x = 0;` and `for i in 0..n { }`.
 
 The scalars are `bool`, the unsigned `u8 u16 u32 u64 usize` (`usize` is 64-bit), the signed `i8 i16 i32 i64`, and `f32 f64`. Literals are decimal and `0x` integers, floats with a point or an exponent, `true` and `false`, `'c'` (one byte, compatible with `u8`) and `"text"`, a static `ro<u8>[n]` view with the escapes `\n \t \r \0 \\ \" \' \xNN`. A literal takes the type expected of it, `u64` or `f64` when nothing expects one.
 
@@ -49,7 +49,7 @@ Expected u32, got u64.
 
 Floats compile with `-ffp-contract=off -fno-fast-math` (and `--fmad=false` on the device): no contraction and no reassociation. A failed guard aborts the process. It does not unwind, and it rolls nothing back.
 
-Six builtins cover what IEEE 754 defines exactly. `sqrt(x)` is correctly rounded, and `floor`, `ceil` and `trunc` are exact, for `f32` and `f64`, so every compiler, the host and a device lane give the same bits. `abs(x)` takes a float, exactly, or a signed integer, and traps on the minimum, whose magnitude its type cannot hold. `to_bits(x)` is a float's IEEE pattern as a `u32` or `u64`. Any other argument is `E-MATH-TYPE`. The functions whose last bit depends on the math library, `exp`, `log`, `sin` and the rest, are not builtins: `std.math` calls the C library for them, and its row says `ffi:exp` ([library.md](library.md#stdmath)). A function of the program's own with one of these names is the one a call reaches.
+Six builtins cover what IEEE 754 defines exactly, so every compiler, the host and a device lane give the same bits: `sqrt` (correctly rounded), `floor`, `ceil` and `trunc` for `f32` and `f64`; `abs` for a float or a signed integer, trapping on the signed minimum; and `to_bits`, a float's IEEE pattern. Any other argument is `E-MATH-TYPE`. `exp`, `log`, `sin` and the rest depend on the math library's last bit, so they are not builtins: [std.math](library.md#stdmath) calls the C library, and its row says so. A program's own function with one of these names is the one a call reaches.
 
 ```cairn
 fn hypot(x:f64, y:f64) -> f64 = sqrt(x * x + y * y);   // no trap: its row is empty
@@ -72,17 +72,17 @@ fn f(x:u64) -> u64 = sqrt(x);
 sqrt takes f32 or f64, not u64.
 ```
 
-The compiler leaves a guard out of the emitted C++ where the checker has shown it cannot fail. Inside `for i in 0..n`, `parallel i in n` or a `reduce` over `n`, `x[i]` into a view of extent `n` needs no bounds check, and neither does `i + 1`. The same holds after `if k >= n { return 0; }` for `x[k]`, for `x[i - 1]` under `if i > 0`, for a bin `usize(v & 255)` into 256 counters, for `data[i]` below `len(data)` when `data` is an immutable owner, and for a row `p[b * 256 + v]` of a buffer of `k * 256` when `b < k` and `v < 256`. The facts come from loop and lane binders, immutable `let` bindings, conditions and early exits, the left side of `&&` or `||` for its right side (so `k < n && x[k] > 3` needs no check) and a collector's predicate for its projection, over `usize` values that cannot change, and nothing about `let mut` locals. A part `x[lo..hi]` loses its guard on the same terms once `lo <= hi <= len(x)` is established and its extent is `hi - lo`, as for `s[n - m..n]` after `if m > n { return 0; }`. An extent a call leaves out, or writes as `hi - lo` over the bounds of a part among its own arguments, costs no subtraction guard: the part's guard traps first when `lo > hi`, before the callee runs. Removing a guard never changes what a program does: the row still says `trap`, and the receipt counts each such site under `discharged_check_sites` beside `syntactic_check_sites`. Every removed guard carries the facts that justify it, and `src/cairn/verify/elision.py` checks each one on its own before a line is emitted. `cairn emit --keep-guards`, and the same flag on `build` and `run`, writes every guard. [verification.md](verification.md#the-guard-elision-rule) says what of this is proved.
+The compiler leaves a guard out where the checker has shown it cannot fail. Inside `for i in 0..n`, `parallel i in n` or a `reduce` over `n`, `x[i]` into a view of extent `n` needs no bounds check, and neither does `i + 1`. The same holds for `x[k]` after `if k >= n { return 0; }`, for `x[i - 1]` under `if i > 0`, for a bin `usize(v & 255)` into 256 counters, and for `x[k]` on the right of `k < n && x[k] > 3`. The facts come from loop and lane binders, immutable `let` bindings, conditions, early exits and a collector's predicate, over `usize` values that cannot change, never from `let mut` locals. A part `x[lo..hi]` loses its guard once `lo <= hi <= len(x)` is established.
 
-Storage floats (`f16`, `bf16`, `f8e4m3`, `f8e5m2`) hold a value in fewer bits and convert by one stated rounding; [numerics.md](numerics.md) has their rules, `quantize` and `derive grad`.
+Removing a guard never changes what a program does: the row still says `trap`, and the receipt counts the site under `discharged_check_sites`. Every removed guard carries the facts that justify it, and an independent audit checks each one before a line is emitted. `--keep-guards` on `emit`, `build` and `run` writes every guard. [verification.md](verification.md#the-guard-elision-rule) says what of this is proved.
 
 ## Functions and control flow
 
 A block body needs explicit `return` statements, and every path of a non-void function must return one (`E-RETURN`). There is no block-tail return. An expression body, `fn payload(total:u32, header:u32) -> u32 = total - header;`, is that one return.
 
-The control forms are `if / else if / else`, `while`, `for i in lo..hi`, `for x in xs`, `break`, `continue` (to the nearest loop, also from a match arm) and nested `{ }` blocks. A `for` evaluates `lo` and then `hi` once, and an empty or reversed range does nothing. `&&` and `||` short-circuit. No loop implies parallelism.
+The control forms are `if / else if / else`, `while`, `for i in lo..hi`, `for x in xs`, `break`, `continue` and nested `{ }` blocks. A `for` evaluates `lo` and then `hi` once, and an empty or reversed range does nothing. `&&` and `||` short-circuit. No loop implies parallelism.
 
-`for x in xs { }` walks the elements of a view, a `Buf`, an `Array` or a `stack` or `buffer` array, and `for i, x in xs { }` names the position too. It is `for i in 0..len(xs) { let x = xs[i]; }`: the length is read once, each element is copied into an immutable `x`, and the guards are the ones that loop has, so a read of an immutable view pays none and a mutable owner's keeps its bounds check. The array is written as a name or a field path, and its elements must be copyable (`E-ELEMENT-LOOP`); an owner in an array is taken, swapped or lent through `xs[i]`.
+`for x in xs { }` walks the elements of a view, a `Buf`, an `Array` or a fixed array, and `for i, x in xs { }` names the position too. It means `for i in 0..len(xs) { let x = xs[i]; }` and pays the guards that loop pays. Each element is copied, so the elements must be copyable (`E-ELEMENT-LOOP`); an owner in an array is taken, swapped or lent through `xs[i]`.
 
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {
@@ -119,7 +119,7 @@ fn main() -> i32 { let rows = Buf[Buf[u8]](2); for row in rows { } return 0; }
 for row in rows copies each element, and Buf[u8] is not copyable: write for i in 0..len(rows) and take, swap or lend rows[i].
 ```
 
-A call is a statement of its own: `count(log);` drops what `count` returns, and `try check(v);` drops the success payload. A dropped owner is released where the statement ends, so a call that makes a `Buf` and drops it charges `alloc` and `free` there, and a dropped linear value is `E-LINEAR-LEAK`. An outcome is never dropped in silence: a two-variant sum that `try` accepts, such as `Result` or `Option`, is handled with `try` or `match`, or let go by name with `let _ = check(v);` (`E-DISCARD`). A call that only computes, such as `min(a, b);` or `u64(x);`, does nothing as a statement and is `E-DISCARD` too. `let _ = e;` binds nothing, so it may repeat, and `_` cannot be read.
+A call can be a statement: `count(log);` drops what `count` returns, and `try check(v);` drops the success payload. A dropped owner is released where the statement ends, and a dropped linear value is `E-LINEAR-LEAK`. An outcome is never dropped silently: a sum `try` accepts, such as `Result` or `Option`, is handled with `try` or `match`, or dropped on purpose with `let _ = check(v);`, and otherwise the call is `E-DISCARD`. A call that only computes, such as `min(a, b);`, is `E-DISCARD` too.
 
 ```cairn
 import std.core (Result);
@@ -147,7 +147,7 @@ This call returns std.core.Result[u64, u8], an outcome to handle: use try or mat
 
 ## Records and sums
 
-`struct` is a record, `enum` a tagged sum with zero or one payload per variant. Fields and payloads may be any value type (scalars, records, sums, owners), never a borrow, never `void`, and never their own type by value, directly or through an inline `Array` (`E-RECORD-TYPE`). A record is copyable when all of its fields are. A tag-only enum may be compared with `==`.
+`struct` is a record, and `enum` a tagged sum with zero or one payload per variant. Fields and payloads may be any value type, owners included, but never a borrow, `void`, or their own type by value (`E-RECORD-TYPE`). A record is copyable when all its fields are, and a tag-only enum may be compared with `==`.
 
 ```cairn
 struct Header { kind:u8; size:u32; }
@@ -171,7 +171,7 @@ struct Frame { head:u8; next:Frame; }
 Record fields cannot contain their own type by value; reach it through a Buf.
 ```
 
-A `Buf` field may name an earlier `usize` field of the same record as its extent. Then `len(c.price)` and `c.rows` are one identity, and the column goes to a call whole. The name must be an earlier `usize` field (`E-EXTENT`), and the field that declares it must be a `Buf`.
+A `Buf` field may name an earlier `usize` field of the same record as its extent (`E-EXTENT` otherwise). Then `len(c.price)` and `c.rows` are one identity, and the column goes to a call whole, with no part and no guard.
 
 ```cairn
 struct Chart { rows:usize; price:Buf[f64][rows]; qty:Buf[f64][rows]; }
@@ -193,7 +193,7 @@ fn main() -> i32 {
 }
 ```
 
-Nothing checks the relation at run time, so it is established once and never broken. A constructor writes the carrier inline as `Buf[T](n)` on the same expression the extent field is given; anything else is `E-EXTENT-FIELD`. Neither the extent field nor a carrier is assigned on its own, moved out by `take` or `swap`, or lent as a whole `rw` place. Moving the record, `take`, `swap` and zeroed storage carry both halves together and cost nothing.
+Nothing checks the relation at run time, so it is established once and never broken. A constructor builds the column inline as `Buf[T](n)` from the same `n` it gives the extent field, and neither half is ever assigned, taken, swapped or lent `rw` on its own (`E-EXTENT-FIELD`). Moving the whole record keeps both halves together.
 
 ```cairn rejects E-EXTENT-FIELD
 struct Chart { rows:usize; price:Buf[f64][rows]; }
@@ -213,11 +213,11 @@ fn main() -> i32 { let mut c = Chart(4, Buf[f64](4)); c.rows = 0; return 0; }
 rows takes part in the declared extent of Chart.price; assign, take or swap the whole record.
 ```
 
-The identity is a field path on a local, so a nested record carries it too (`box.chart.price` has the extent `box.chart.rows`). An element of an array of records does not: `cs[0].price` is passed as a part, like any other `Buf`.
+A nested record carries the identity too (`box.chart.price` has the extent `box.chart.rows`), but an element of an array of records does not: `cs[0].price` is passed as a part and pays its guard.
 
 ## match and try
 
-`match` evaluates its subject once and needs exactly one arm per variant (`E-MATCH-COVERAGE`). There is no wildcard. An arm names a variant of the subject, with or without its type. A payload arm binds one fresh immutable value, and matching an owner consumes it. An arm that is one `return`, `break`, `continue`, assignment or call may leave out its braces: `None => return 0;` is `None => { return 0; }`, and anything longer is a block (`E-PARSE`).
+`match` evaluates its subject once and needs exactly one arm per variant, with no wildcard (`E-MATCH-COVERAGE`). A payload arm binds one fresh immutable value, and matching an owner consumes it. An arm that is one `return`, `break`, `continue`, assignment or call may leave out its braces, and anything longer is a block (`E-PARSE`).
 
 ```cairn
 struct Header { kind:u8; size:u32; }
@@ -259,7 +259,7 @@ fn cost(op:Op) -> u64 { match op { Read => let c = 1; Write => return 2; } retur
 An arm without braces is one return, break, continue, assignment or call; write a block for anything else.
 ```
 
-`_` binds nothing. `Err(_) => return 1;` drops the payload it matches: a copyable one costs nothing, an owner is released where the arm ends and the row says `free`, as `let _ = e;` releases one, and a linear one is refused (`E-LINEAR-LEAK`), because only a consumer may end it. Nothing can read `_` (`E-UNBOUND`), so it repeats freely, in nested arms and as the binder of a loop that only counts, `for _ in 0..3`.
+`_` binds nothing. `Err(_) => return 1;` drops the payload: an owner is released where the arm ends, and a linear one is refused (`E-LINEAR-LEAK`), because only a consumer may end it. Nothing can read `_` (`E-UNBOUND`), so it may repeat, as in `for _ in 0..3`.
 
 ```cairn
 import std.core (Option);
@@ -290,7 +290,7 @@ fn gone(l:Option[Lease]) -> u64 { match l { Some(_) => return 1; None => return 
 Some(_) would drop a linear Lease: bind it and consume it.
 ```
 
-A variant may leave out its type wherever the context names the sum. In an expression, `None`, `Some(x)` and `Ok(v)` belong to the sum the context expects: the return type, an annotated `let`, an assignment, a parameter, a field, the payload of another variant, or the other side of `==`. The bare form checks and emits exactly as the qualified one, which stays legal everywhere.
+A variant may leave out its type wherever the context names the sum: the return type, an annotated `let`, an assignment, a parameter, a field, another variant's payload, or the other side of `==`. The bare form compiles exactly as the qualified one, which stays legal everywhere.
 
 ```cairn
 import std.core (Option);
@@ -312,7 +312,7 @@ fn main() -> i32 {
 }
 ```
 
-A bare name is a variant only when nothing else of that name is visible. A local, constant, function or type of the same name is `E-VARIANT-AMBIGUOUS`, and where no sum is expected, `let x = None;` is `E-UNBOUND` with a message that names the sum declaring it. A sum another module keeps private keeps its variants private too (`E-PRIVATE`).
+A bare name is a variant only when nothing else of that name is visible; otherwise it is `E-VARIANT-AMBIGUOUS`. Where no sum is expected, `let x = None;` is `E-UNBOUND`, and a private sum keeps its variants private (`E-PRIVATE`).
 
 ```cairn rejects E-VARIANT-AMBIGUOUS
 struct Line { width:u64; }
@@ -324,7 +324,7 @@ fn thin() -> Shape = Line(Line(1));
 Line is both Shape.Line and a type; write Shape.Line.
 ```
 
-`try e` takes a two-variant sum, success first and failure second. It yields the success payload, or returns the failure from the enclosing function or closure, whose return type must be a two-variant sum with the same failure payload (`E-TRY`). The families may differ, so a `Done[E]` failure propagates out of a function returning `Result[T, E]`. It is the only propagation form, and it is always written out.
+`try e` takes a two-variant sum, success first and failure second. It yields the success payload, or returns the failure from the enclosing function, whose return type must be a two-variant sum with the same failure payload (`E-TRY`); the two sums may be different types. It is the only propagation form.
 
 ```cairn
 struct Header { kind:u8; size:u32; }
@@ -347,7 +347,7 @@ fn main() -> i32 {
 }
 ```
 
-Inside a larger expression, a `try` may not sit beside an operand that already owns something, because leaving from there would abandon it. Bind the `try` first.
+A `try` may not sit beside an operand that already owns something, because leaving from there would abandon it. Bind the `try` first.
 
 ```cairn rejects E-EFFECT-ORDER
 struct Frame { body:Buf[u8]; size:usize; }
@@ -362,9 +362,7 @@ Bind this try first: leaving from here would abandon an owner that another opera
 
 ## Constants
 
-A `const` folds at compile time, from literals, other constants in any order of declaration, arithmetic, comparison, `&&`, `||`, `!` and the scalar conversions. The folding is exact: integer division and remainder go toward zero as at run time, and in an `f32` constant every literal, conversion and operation rounds once, as the machine will. The result must fit its type and be finite. Division by zero and a constant defined through itself are `E-CONST`.
-
-A constant natural may stand wherever a natural is written: a static extent in a declaration or a signature, `Array[u64, N]`, `scale[N](x)`.
+A `const` folds at compile time from literals, other constants in any order, arithmetic, comparisons and conversions, exactly as the machine would compute it. The result must fit its type and be finite, and division by zero or a constant defined through itself is `E-CONST`. A constant natural may stand wherever a natural is written: an extent, `Array[u64, N]`, `scale[N](x)`.
 
 ```cairn
 const WIDTH:usize = 8;
@@ -395,11 +393,9 @@ HEAD is defined in terms of itself.
 
 ## Tests and assert
 
-`assert(cond)` is a guard the program writes: it traps when `cond` is false, and `assert(cond, "why")` also says why. The condition is a `bool` and the text one string literal (`E-ARITY`), and the row gains `trap`. A failed assert prints where it was written, `assertion failed at src/main.cairn:12: why`, and aborts as every failed guard does. A build that knows the project's files names the file and line; a plain compile names the function, so the canonical projection still lowers to the same C++.
+`assert(cond)` traps when `cond` is false, and `assert(cond, "why")` also says why (`E-ARITY` for anything else). A failed assert prints where it was written, `assertion failed at src/main.cairn:12: why`, and aborts as every failed guard does. `assert_eq(a, b)` also prints both values, `left 1, right 2`, and takes only integers, bools and floats (`E-ASSERT-EQ`; write `assert(a == b)` for anything else).
 
-`assert_eq(a, b)` is `assert(a == b)` that prints both values when they differ: `assertion failed at src/main.cairn:14: rounds down: left 1, right 2`. Its operands are checked as `a == b` is, so a literal takes the other side's type, and only an integer, a `bool` or a float prints (`E-ASSERT-EQ` for anything else; write `assert(a == b)` there). A float prints with the digits that read back as the same value, so `0.1 + 0.2` shows as `0.30000000000000004`. There is no `assert_ne`: when `a != b` fails the two values are the same, and `assert` already says where.
-
-`test name { ... }` is a test: a body checked like a void function with any effects, which `cairn test` runs in a process of its own ([tools.md](tools.md#cairn-test)). It takes nothing and returns nothing, and a module declares each test name once (`E-TEST`). No other build holds a test and nothing can call one, so a test may share its name with the function it tests, and `test` is an ordinary name everywhere else.
+`test name { ... }` is a body with no parameters or result that only [`cairn test`](tools.md#cairn-test) runs, each in its own process. A module declares each test name once (`E-TEST`). Nothing can call a test, so it may share its name with the function it tests, and `test` is an ordinary name everywhere else.
 
 ```cairn
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
@@ -435,9 +431,7 @@ assert_eq prints what it compares, and Op is not an integer, bool or float: writ
 
 ## print and format
 
-`println("total ", n, ' ', ok)` writes its arguments in turn, then a newline. An integer prints in decimal and a bool as `true` or `false`. A character literal written as the argument prints as its byte, while a `u8` held anywhere, a constant included, prints as its number. An `f32` or `f64` prints the shortest digits that read back to the same value, laid out as JavaScript lays out a number: plain digits while the point falls within 21 places of them (`100000`, `1.5`, `1`), a leading `0.` down to six zeros (`0.000001`), and an exponent beyond (`1e+21`, `1e-7`), with `-0`, `nan` and `inf` as they are. A string, a `u8` view, a part, a `Buf` or `Array` of `u8`, and a record that lends a `u8` view, a `Vec[u8]` among them, print as their bytes. A negated literal with nothing else to say its type, `println(-1)`, is an `i64`.
-
-`print` writes without the newline, and `eprint` and `eprintln` write to standard error. `format(out, ...)` appends the same text to `out`, a `Vec[u8]` or any record whose `lends buf[0..len]` names a `Buf[u8]` and its length, growing it as `vec.push` does.
+`println("total ", n, ' ', ok)` writes its arguments in turn, then a newline. Integers print in decimal, bools as `true` or `false`, a character literal as its byte, and byte strings, views and `Vec[u8]` as their bytes. A float prints the shortest digits that read back to the same value, laid out as JavaScript lays out a number (`100000`, `1.5`, `0.000001`, `1e-7`). `print` leaves out the newline, `eprint` and `eprintln` write to standard error, and `format(out, ...)` appends the same text to a `Vec[u8]`.
 
 ```cairn
 import std.vec (Vec);
@@ -453,9 +447,9 @@ fn main() -> i32 {
 }
 ```
 
-Every argument is computed, left to right, before a byte is written, so an argument whose guard fails aborts the program with nothing of that line written. The operand-order rules still apply to the arguments, as to any call's (`E-EFFECT-ORDER`). The four print forms write through one buffer of 4096 bytes on the stack, so a line up to that length leaves in one `write`, which a pipe keeps whole. They allocate nothing, and their row is `io` and `ffi:write`, with `read:x` for a view they are lent. `format` writes `out`, charges `alloc` and `free` for the growth, and allocates at most once a call. A write the kernel refuses, to a closed pipe or a full disk, ends that print where it stopped and traps nothing.
+Every argument is computed, left to right, before a byte is written, so a failed guard leaves nothing of the line written. A line of up to 4096 bytes goes out in one `write` from a stack buffer, so a pipe keeps it whole. Printing allocates nothing and its row is `io` and `ffi:write`; `format` charges `alloc` and `free` for the growth. A write the kernel refuses ends that print and traps nothing.
 
-Anything else is `E-PRINT-ARG`: a record, a sum, a view of another element type, or a storage float, which widens with `f32(x)` first. A target `format` cannot grow is `E-FORMAT-TARGET`. A device lane cannot print (`E-PLACEMENT`), and neither can a host lane, whose row may not hold `io` (`E-PARALLEL-CALL`); a freestanding image has no stream to write to, and its build refuses the row. A program's own function named `print` or `format` wins, as it does for the math builtins, and `std.io`'s functions stay.
+A record, a sum or a storage float is `E-PRINT-ARG`, and a target `format` cannot grow is `E-FORMAT-TARGET`. A device lane cannot print (`E-PLACEMENT`), and neither can a host lane (`E-PARALLEL-CALL`).
 
 ```cairn rejects E-PRINT-ARG
 struct Point { x:u64; y:u64; }
@@ -468,4 +462,4 @@ print writes integers, bools, character literals, floats and bytes; format a Poi
 
 ## What the language does not have
 
-No inheritance and no implicit boxing. No lifetime annotations: a borrow cannot outlive the call it is written in. No implicit conversion, no operator overloading, no shadowing, no block-tail return. No wildcard arm, and no propagation form other than `try`. No exception, no unwinding and no rollback: a failed guard aborts. No orphan rule, because coherence is judged over the whole program. No cancellation of a task or of queued device work. No loop that implies parallelism. No downloads: dependencies are vendored sources.
+No inheritance, implicit boxing, lifetime annotations, implicit conversion, operator overloading, shadowing or block-tail return. No wildcard arm, and no propagation form but `try`. No exceptions, unwinding or rollback: a failed guard aborts. No orphan rule, because coherence is judged over the whole program. No cancellation of a task or of queued device work. No loop that implies parallelism. No downloads: dependencies are vendored sources.
