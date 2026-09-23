@@ -164,6 +164,61 @@ def transposed(v: Value) -> Value:
     return Layout(v.dims[::-1], v.swizzle)
 
 
+def inverse(v: Value, node: Any) -> Spread:
+    """Who holds each element, as a spread of its own. `inverse(D)` of a spread over an R x C tile is a spread over
+    the grid of D's (participant, value) pairs whose participant r and value c name the pair holding element (r, c):
+    `INV.row(r, c)` is its participant, `INV.col(r, c)` its value. `inverse(L)` of a storage layout takes an offset,
+    as its participant, to the element stored there: `INV.row(o, 0)` and `INV.col(o, 0)`. It exists where each mode
+    moves one coordinate and the modes of each coordinate, taken by stride, count it in mixed radix."""
+    if isinstance(v, Layout):
+        if v.swizzle[0] or len(v.dims) != 2:
+            fail("E-LAYOUT", "inverse takes a spread, or a 2-D storage layout with no swizzle.", node)
+        digits = [(s_, e, (k, place)) for k, dim in enumerate(v.dims) for e, s_, place in placed(dim)]
+        return Spread(v, counted(digits, v.size, "the offsets", node), ((1, (0, 0)),), wrap=False)
+    if len(v.tile.shape) != 2:
+        fail("E-LAYOUT", "inverse takes a spread over a 2-D tile.", node)
+    per: list[list[tuple[int, int, tuple[int, int]]]] = [[], []]
+    for side, group in enumerate((v.participants, v.values)):
+        for extent, place, stride in ((e, pl, st) for (e, st), pl in zip(group, weights(group), strict=True)):
+            moved = [k for k, x in enumerate(stride) if x]
+            if extent > 1 and len(moved) != 1:
+                fail("E-LAYOUT", "inverse needs every mode of a spread to move one coordinate.", node)
+            if extent > 1:
+                per[moved[0]].append((stride[moved[0]], extent, (side, place)))
+    grid = rows(v.count, v.each)
+    down, across = (counted(per[k], v.tile.shape[k], f"coordinate {k}", node) for k in (0, 1))
+    return Spread(grid, down, across, wrap=False)
+
+
+def weights(modes: Any) -> list[int]:
+    """What one step of each mode is worth in the number its modes count, fastest first."""
+    out, below = [], 1
+    for extent, _ in modes:
+        out.append(below)
+        below *= extent
+    return out
+
+
+def placed(modes: Any) -> list[tuple[int, int, int]]:
+    """(extent, stride, place) of each mode of one dimension of a storage layout."""
+    return [(e, s_, pl) for (e, s_), pl in zip(modes, weights(modes), strict=True)]
+
+
+def counted(digits: list, total: int, what: str, node: Any) -> tuple:
+    """The modes that count `what` back: its digits, taken by stride, each worth its place in the pair (side 0 the
+    participant or row, side 1 the value or column), in mixed radix up to `total`."""
+    out, below = [], 1
+    for stride, extent, (side, place) in sorted(digits, key=lambda d: d[0]):
+        if stride != below:
+            fail("E-LAYOUT", f"inverse needs {what} to be counted in mixed radix by the modes that move them; they "
+                 f"step by {stride} where {below} is next.", node)  # fmt: skip
+        out.append((extent, (place, 0) if side == 0 else (0, place)))
+        below *= extent
+    if below != total:
+        fail("E-LAYOUT", f"inverse needs the modes to count all {total} of {what}; they count {below}.", node)
+    return tuple(out) or ((1, (0, 0)),)
+
+
 def split(modes: tuple[Mode, ...], inner: int) -> tuple[tuple[Mode, ...], tuple[Mode, ...]] | None:
     """The modes of one dimension cut into its first `inner` values and the rest, or None where no mode boundary
     or divisor falls there."""
@@ -201,7 +256,8 @@ def tiled(v: Layout, tr: int, tc: int, node: Any) -> Layout:
 # Evaluating a declaration --------------------------------------------------------------------------------------
 
 ARITY = {"rows": 2, "cols": 2, "strided": 4, "pad": 2, "swizzle": 4, "transpose": 1, "tile": 3, "spread": 5}
-LAYOUT_FIRST = {"pad", "swizzle", "transpose", "tile", "spread"}  # constructors that take a layout first
+ARITY["inverse"] = 1
+LAYOUT_FIRST = {"pad", "swizzle", "transpose", "tile", "spread", "inverse"}  # constructors that take a layout first
 LEAST = {"strided": (1, 1, 0, 0), "pad": (0,), "swizzle": (1, 0, 0)}  # the least each natural may be; else 1
 
 
@@ -270,6 +326,9 @@ def storage(inner: Value | None, what: str, node: Any) -> Layout:
 def build(kind: str, inner: Value | None, n: list[int], node: Any) -> Value:
     if kind in {"rows", "cols", "strided"}:
         return rows(*n) if kind == "rows" else cols(*n) if kind == "cols" else strided(*n)
+    if kind == "inverse":
+        assert inner is not None
+        return inverse(inner, node)
     if kind == "transpose":
         assert inner is not None
         if isinstance(inner, Layout) and len(inner.dims) != 2:

@@ -309,3 +309,51 @@ def test_a_transpose_through_a_tile_moves_every_element_between_warps():
         load, store = L.value(checker, "LOAD"), L.value(checker, "STORE")
         assert L.shares(load, store) and L.conversion(load, store) == "shared"
         assert L.conversion(load, load) == "none"
+
+
+def test_the_inverse_of_a_spread_says_which_pair_holds_each_element():
+    source = """layout T = pad(rows(32, 32), 1);
+layout D = spread(T, 8, 32, 1, 1);
+layout INV = inverse(D);
+layout E = transpose(spread(rows(8, 16), 2, 4, 2, 2));
+layout IE = inverse(E);
+layout R = cols(4, 8);
+layout IR = inverse(R);
+"""
+    _, checker, _ = compile_program(source)
+    for spread, back in (("D", "INV"), ("E", "IE")):
+        d, inv = L.value(checker, spread), L.value(checker, back)
+        rows, cols = d.tile.shape
+        for r in range(rows):
+            for c in range(cols):
+                assert [inv.coords(r, c)] == L.owner(d, (r, c)), (spread, r, c)
+    r, ir = L.value(checker, "R"), L.value(checker, "IR")
+    assert all(r.offset(ir.coords(o, 0)) == o for o in range(32))
+
+
+def test_the_inverse_in_code_names_the_owner(tmp_path):
+    source = """layout T = rows(32, 32);
+layout D = spread(T, 8, 8, 1, 4);
+layout OWNER = inverse(D);
+fn main() -> i32 {
+  for t in 0..D.participants() {
+    for v in 0..D.values() {
+      if OWNER.row(D.row(t, v), D.col(t, v)) != t || OWNER.col(D.row(t, v), D.col(t, v)) != v { return 1; }
+    }
+  }
+  return 0;
+}
+"""
+    assert run(tmp_path, compile_source(source)[0], "-std=c++20", "-O1").returncode == 0
+
+
+@pytest.mark.parametrize(
+    ("source", "said"),
+    [
+        ("layout X = inverse(pad(rows(4, 8), 1));", "mixed radix"),
+        ("layout X = inverse(swizzle(rows(8, 8), 1, 0, 3));", "no swizzle"),
+        ("layout X = inverse(tile(rows(8, 8), 4, 4));", "2-D storage layout"),
+    ],
+)
+def test_an_inverse_that_does_not_exist_is_refused(source, said):
+    assert said in refused("E-LAYOUT", source)["message"]

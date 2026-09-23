@@ -4,7 +4,7 @@
 A declared spread must give every element of its tile exactly one holder, and a declared storage layout every element
 its own offset. `Layout.lean` writes both rules as their definitions and proves what a layout that passes promises;
 `layouts.py` counts holders in one pass and finds shared offsets with a table. This harness generates storage
-layouts and spreads, among them the ones `spread`, `transpose` and `swizzle` make and the reads `stage` places, asks the real Python functions
+layouts and spreads, among them the ones `spread`, `transpose`, `swizzle` and `inverse` make and the reads `stage` places, asks the real Python functions
 (`cover`, `injective`) for their verdicts, renders the same layouts as Lean terms, and requires the verdicts to
 match on every input: a coordinate outside the tile, the first element held twice, the first left to nobody, and
 the first two elements that share an offset.
@@ -56,7 +56,13 @@ def made(rng: random.Random) -> L.Value:
     if rng.random() < 0.3:
         return tile
     d = L.spread(tile, rng.randint(1, 4), rng.randint(1, 4), rng.randint(1, 2), rng.randint(1, 2))
-    return L.transposed(d) if rng.random() < 0.3 else d
+    d = L.transposed(d) if rng.random() < 0.3 else d
+    if rng.random() < 0.25:  # the owner of each element, as `inverse` makes it where it exists
+        try:
+            return L.inverse(d, None)
+        except Diagnostic:
+            return d
+    return d
 
 
 def halo(rng: random.Random) -> L.Spread:

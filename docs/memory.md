@@ -368,7 +368,7 @@ fn through(out:rw<f32>[1024], x:ro<f32>[1024]) {
 }
 ```
 
-The storage layouts are `rows(R, C)`, `cols(R, C)` and `strided(R, C, SR, SC)`. `pad(L, P)` adds `P` to the larger stride. `swizzle(L, B, M, S)` flips bits `M` to `M + B` of each offset with the `B` bits `S` places above them, as CuTe's `Swizzle<B, M, S>` does. `transpose(L)` swaps the two dimensions, and `tile(L, TR, TC)` sees `L` as a grid of `TR x TC` tiles, with coordinates `(i, j, r, c)`.
+The storage layouts are `rows(R, C)`, `cols(R, C)` and `strided(R, C, SR, SC)`. `pad(L, P)` adds `P` to the larger stride. `swizzle(L, B, M, S)` flips bits `M` to `M + B` of each offset with the `B` bits `S` places above them, as CuTe's `Swizzle<B, M, S>` does. `transpose(L)` swaps the two dimensions, and `tile(L, TR, TC)` sees `L` as a grid of `TR x TC` tiles, with coordinates `(i, j, r, c)`. `inverse(D)` answers which participant holds an element: over the grid of `D`'s pairs, `INV.row(r, c)` is the participant holding element `(r, c)` and `INV.col(r, c)` its value. It exists where every mode moves one coordinate and counts it in mixed radix, and `inverse(L)` of a compact storage layout takes an offset back to its element.
 
 `spread(L, TR, TC, VR, VC)` gives `TR x TC` participants, numbered row by row, a `VR x VC` block of `L` each, and repeats that pattern down and across `L` as many whole times as fit. A participant's values run across its block, then down it, then over the repeats.
 

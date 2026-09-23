@@ -300,3 +300,24 @@ def test_the_performance_model_says_a_fragment_step_is_not_priced():
 
     p, checker, _ = compile_program((TENSOR / "tile64.cairn").read_text())
     assert any("fragment step is not priced" in why for why in count(p, checker)["tile64"].unknown)
+
+
+@pytest.mark.parametrize(("name", "target", "feature"), [("tile32", "sm_75", "mma_sync"), ("tile64", "sm_75", None)])
+def test_a_build_for_a_target_without_a_kernel_s_family_is_refused_before_nvcc(tmp_path, name, target, feature):
+    """The family a fragment needs is a feature the device target must provide (projects/target.py): mma.sync starts
+    at sm_80, and WMMA on f16 at sm_75, which therefore builds tile64 as far as nvcc."""
+    from cairn.compiler.cairnc import Diagnostic
+    from cairn.projects.build import build
+    from cairn.projects.project import load_project
+
+    path = tmp_path / f"{name}.cairn"
+    path.write_text((TENSOR / f"{name}.cairn").read_text())
+    if feature is None:
+        from cairn.projects.target import parse
+
+        assert parse(target).require(compile_source(path.read_text())[1]["device_features"])
+        return
+    with pytest.raises(Diagnostic) as refused_build:
+        build(load_project(path), output=tmp_path / "build", cxx="g++", device_target=target)
+    said = refused_build.value.data
+    assert said["code"] == "E-TARGET-FEATURE" and said["feature"] == feature
