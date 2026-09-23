@@ -51,7 +51,7 @@ def main():
 
     py = sys.executable
     for stem in ["native", "family", "wire"]:
-        run([py, "tools/release/build.py", f"examples/basics/{stem}.cairn", "--out", "results/native", "--arch", arch])
+        run([py, "tools/checks/build_library.py", f"examples/basics/{stem}.cairn", "--out", "results/native", "--arch", arch])
     run(command("clang++", "bench/codegen/family_template.cpp", "results/native/libtemplate.so", arch, "library"))
     # The suite's own smoke test runs this script; the flag stops it re-entering and rewriting results/.
     run([py, "-m", "pytest", a.tests, "-q"], "results/checks/compiler_tests.txt", dict(os.environ, CAIRN_VERIFY="1"))

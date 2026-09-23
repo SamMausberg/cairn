@@ -146,7 +146,7 @@ The reference is the host's executable definition of the task, and it can missta
 ```sh
 python3 tools/ai/sketch_demo.py
 python3 tools/checks/semantic_check.py examples/sketch/reference.cairn examples/sketch/after.cairn --symbol average --obligations build/obligations
-python3 tools/release/build.py examples/sketch/after.cairn
+python3 tools/checks/build_library.py examples/sketch/after.cairn
 ```
 
 The receipt's status is `smt-equivalent`. It records the reference and candidate hashes, the model profile, the domain, the query hashes and the Z3 version, and `--obligations` saves the SMT-LIB queries so anyone can rerun them. Nothing is reconstructed in Lean. A nontrivial `--assume` is a precondition on callers: the native build emits no guard for it and removes no check because of it.

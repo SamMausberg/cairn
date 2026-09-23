@@ -91,7 +91,7 @@ def test_no_architecture_is_hard_wired(path):
 
 @needs_clang
 def test_build(tmp_path):
-    out = parsed(tool("tools/release/build.py", "examples/basics/native.cairn", "--out", tmp_path))
+    out = parsed(tool("tools/checks/build_library.py", "examples/basics/native.cairn", "--out", tmp_path))
     assert out["status"] == "built" and Path(out["library"]).exists()
     receipt = json.loads((tmp_path / "native_receipt.json").read_text())
     assert receipt["native_build"]["arch"] == out["arch"] and receipt["function_count"] > 0
