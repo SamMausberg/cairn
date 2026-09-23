@@ -1,4 +1,4 @@
-// out = c + a * b with mma.sync fragments, a tiling of its own: 64 x 32 output tiles, one block
+// c += a * b with mma.sync fragments, a tiling of its own: 64 x 32 output tiles, one block
 // of eight warps each, every warp two 16 x 8 fragments side by side, k in steps of 32 through one
 // shared stage whose a is swizzled, which the ldmatrix loads of mma.sync read.
 layout A_TILE = swizzle(rows(64, 32), 2, 3, 3); // each row's four 16-byte runs permuted
@@ -12,8 +12,8 @@ const B_CELLS:usize = B_TILE.cosize();
 const C_CELLS:usize = C_TILE.cosize();
 
 fn tile32(
-  m:usize, n:usize, k:usize, cn:usize, out:rw<f32>[cn]@device, c:ro<f32>[cn]@device, an:usize,
-  a:ro<bf16>[an]@device, bn:usize, b:ro<bf16>[bn]@device
+  m:usize, n:usize, k:usize, cn:usize, c:rw<f32>[cn]@device, an:usize, a:ro<bf16>[an]@device,
+  bn:usize, b:ro<bf16>[bn]@device
 ) {
   let across = (n + 31) / 32;
   let down = (m + 63) / 64;
@@ -62,7 +62,7 @@ fn tile32(
     barrier;
     for i in 0..8 { // the tile's outputs back, only inside the matrix
       if by * 64 + ty + 8 * i < m && bx * 32 + tx < n {
-        out[(by * 64 + ty + 8 * i) * n + bx * 32 + tx] = sc[C_TILE.at(ty + 8 * i, tx)];
+        c[(by * 64 + ty + 8 * i) * n + bx * 32 + tx] = sc[C_TILE.at(ty + 8 * i, tx)];
       }
     }
   }

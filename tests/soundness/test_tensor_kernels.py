@@ -2,7 +2,7 @@
 
 `tile64` is the tiling `mma_unordered` fixes, 64 x 64 tiles, four warps, K in steps of 32 through two stages, with
 WMMA fragments over padded tiles; `tile32` is another, 64 x 32 tiles, eight warps, one stage, with mma.sync fragments
-over a swizzled tile. Both compute out = c + a * b. On the host every output must lie within the contract's bound
+over a swizzled tile. Both add a * b into c, as mma_unordered does. On the host every output must lie within the contract's bound
 of the exact sum, measured here with Python's rationals, and equal the reference loop's bit for bit, since both add
 in increasing k; the shapes are generated, partial tiles in every direction included. The host run is a real one,
 each block's threads real threads, and runs again under the thread sanitizer. The device build is compiled for
@@ -76,11 +76,10 @@ def test_each_kernel_keeps_the_contract_and_equals_the_reference_loop(built, nam
         cv = [f32(rng.uniform(-4, 4)) for _ in range(m * n)]
         a = (C.c_uint16 * max(1, m * k))(*(pattern(element, x) for x in av))
         b = (C.c_uint16 * max(1, k * n))(*(pattern(element, x) for x in bv))
-        c = (C.c_float * max(1, m * n))(*cv)
-        out = (C.c_float * max(1, m * n))()
+        out = (C.c_float * max(1, m * n))(*cv)
         ref = (C.c_float * max(1, m * n))(*cv)
         s = C.c_size_t
-        getattr(lib, f"cf_{name}")(s(m), s(n), s(k), s(m * n), out, c, s(m * k), a, s(k * n), b)
+        getattr(lib, f"cf_{name}")(s(m), s(n), s(k), s(m * n), out, s(m * k), a, s(k * n), b)
         lib.cf_reference(s(m), s(n), s(k), s(m * n), ref, s(m * k), a, s(k * n), b)
         for i in range(m):
             for j in range(n):
@@ -102,13 +101,12 @@ fn main() -> i32 {
   let mn = m * n;
   buffer a:T[mk] = zeroed;
   buffer b:T[kn] = zeroed;
-  buffer c:f32[mn] = zeroed;
   buffer out:f32[mn] = zeroed;
   buffer want:f32[mn] = zeroed;
   for e in 0..mk { a[e] = T(f32(i64(e % 13) - 6) / 4.0); }
   for e in 0..kn { b[e] = T(f32(i64(e % 7) - 3) / 8.0); }
-  for e in 0..mn { c[e] = f32(e % 5); want[e] = c[e]; }
-  NAME(m, n, k, mn, out, c, mk, a, kn, b);
+  for e in 0..mn { out[e] = f32(e % 5); want[e] = out[e]; }
+  NAME(m, n, k, mn, out, mk, a, kn, b);
   mma_unordered(m, n, k, want, a, b);
   for e in 0..mn { if out[e] != want[e] { return 1; } }
   return 0;
@@ -166,13 +164,12 @@ fn check(m:usize, n:usize, k:usize) -> i32 {
   buffer da:T[mk]@device = zeroed;
   buffer db:T[kn]@device = zeroed;
   buffer dc:f32[mn]@device = zeroed;
-  buffer dout:f32[mn]@device = zeroed;
   transfer(da, a);
   transfer(db, b);
   transfer(dc, c);
-  NAME(m, n, k, mn, dout, dc, mk, da, kn, db);
+  NAME(m, n, k, mn, dc, mk, da, kn, db);
   buffer got:f32[mn] = zeroed;
-  transfer(got, dout);
+  transfer(got, dc);
   for i in 0..m {
     for j in 0..n {
       let mut size:f64 = abs(f64(c[i * n + j]));

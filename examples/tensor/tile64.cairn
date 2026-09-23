@@ -1,4 +1,4 @@
-// out = c + a * b with WMMA fragments, in the shape mma_unordered's own tiling fixes: 64 x 64
+// c += a * b with WMMA fragments, in the shape mma_unordered's own tiling fixes: 64 x 64
 // output tiles, one block of four warps each, every warp 2 x 2 fragments of 16 x 16, k in steps
 // of 32 through two shared stages. It keeps the contract of mma_unordered, and the runtime header
 // was not edited for it.
@@ -13,8 +13,8 @@ const B_CELLS:usize = B_STAGES.cosize();
 const C_CELLS:usize = C_TILE.cosize();
 
 fn tile64(
-  m:usize, n:usize, k:usize, cn:usize, out:rw<f32>[cn]@device, c:ro<f32>[cn]@device, an:usize,
-  a:ro<f16>[an]@device, bn:usize, b:ro<f16>[bn]@device
+  m:usize, n:usize, k:usize, cn:usize, c:rw<f32>[cn]@device, an:usize, a:ro<f16>[an]@device,
+  bn:usize, b:ro<f16>[bn]@device
 ) {
   let across = (n + 63) / 64;
   let down = (m + 63) / 64;
@@ -101,7 +101,7 @@ fn tile64(
     for i in 0..16 { // the tile's outputs back, only inside the matrix
       for j in 0..2 {
         if by * 64 + ty + 4 * i < m && bx * 64 + tx + 32 * j < n {
-          out[
+          c[
             (by * 64 + ty + 4 * i) * n + bx * 64 + tx + 32 * j
           ] = sc[C_TILE.at(ty + 4 * i, tx + 32 * j)];
         }

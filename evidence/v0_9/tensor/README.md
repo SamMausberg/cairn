@@ -9,7 +9,7 @@ Machine: one x86-64 host with an RTX 5070 Ti (sm_120) under WSL2, shared with fi
 | `tile64` | 64 x 64 | 4, each 2 x 2 fragments | 2 | WMMA 16 x 16 x 16, f16 | `pad(rows(128, 32), 8)`, both stages |
 | `tile32` | 64 x 32 | 8, each 1 x 2 fragments | 1 | `mma.sync` 16 x 8 x 16, bf16 | `swizzle(rows(64, 32), 2, 3, 3)` |
 
-Both compute `out = c + a * b` rather than adding into `c` in place: the cooperative region's rule for outside arrays accepts a read of an array the region writes only at the element the reading thread writes, and an in-place read in one loop and write in another does not yet meet it.
+Both add `a * b` into `c` in place, with the signature of `mma_unordered(m, n, k, c, a, b)`.
 
 ## What ran on the host
 
@@ -19,7 +19,7 @@ That is finite testing on the host. The tensor cores add in an order of their ow
 
 ## What compiled for sm_120
 
-`sm_120.json` records the device build of each kernel, compiled by the project's device command line with `-arch=sm_120 -cubin` and read back with `cuobjdump -sass`. `tile64` compiles to 16 `HMMA.16816.F32` fed by `LDSM`, 102 registers and 36,864 bytes of shared memory; `tile32` to 4 `HMMA.16816.F32.BF16` fed by `LDSM.16.M88.4` for its swizzled A and `LDSM.16.MT88.2` for B, 98 registers and 14,848 bytes. Neither spills. These are compiler observations, not measurements, and say nothing about speed.
+`sm_120.json` records the device build of each kernel, compiled by the project's device command line with `-arch=sm_120 -cubin` and read back with `cuobjdump -sass`. `tile64` compiles to 16 `HMMA.16816.F32` fed by `LDSM`, 102 registers and 36,864 bytes of shared memory; `tile32` to 4 `HMMA.16816.F32.BF16` fed by `LDSM.16.M88.4` for its swizzled A and `LDSM.16.MT88.2` for B, 103 registers and 14,848 bytes. Neither spills. These are compiler observations, not measurements, and say nothing about speed.
 
 ## What the layouts established
 
