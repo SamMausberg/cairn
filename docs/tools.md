@@ -272,6 +272,23 @@ Beside the class, each function lists what the compiler established differently:
 
 `--require equivalent` exits 1 unless every function is identical or `smt-equivalent`, and `--require identical` refuses `smt-equivalent` too, so a refactoring's pull request can require proof that it only refactored. `--markdown FILE` writes a section for a pull request description. The solver has `--timeout-ms` per query and `--budget-s` for the whole diff (60 s by default), and each function runs in its own process that is stopped at its limit, because Z3 cannot be interrupted while it reads a large query. Both versions are lowered by this compiler, so the diff compares two sources, never two compilers. `evidence/v1_4/diff/` records a `cairn diff` of the library and every example project across two revisions.
 
+## cairn export
+
+`cairn export PATH --out DIR` writes the program `cairn build` would compile into a new directory: the generated C++ (`program.cu` for a device program), exactly the runtime headers it includes, the C header with `--kind library --header`, and `export.json`. The record holds the command line `toolchain.py` gives for the files, the device target, each compiler's path and version, a sha256 per file, the canonical emission of each function, and one identity over all of it.
+
+```sh
+cairn export examples/systems --out out/systems     # the program and its record
+cairn export out/systems                            # {"status": "export-intact", "identity": "596d...", "files": 2}
+cairn build out/systems                             # the recorded command, in a fresh copy under out/systems/build/
+cairn run out/systems
+```
+
+`build`, `run` and `test` take the export directory itself. Each first checks every file against its hash, refuses a file added or removed, and refuses a record whose identity no longer covers it (`E-EXPORT-TAMPERED`), then builds with exactly the recorded command and compilers (`E-EXPORT-TOOLCHAIN` when the compiler here is another version). Every record they write carries the export's identity, so a later rewrite of the output is visibly not what was built, run or tested. `--tests` exports the test blocks' program, which `cairn test DIR` runs one process per test. `--time f --at n=1e6` exports `f` beside the timing driver of `cairn tune --measure`, so `cairn run DIR` measures exactly the exported code. A device export builds here and runs only under the owner's make targets.
+
+Each runtime header of an export has a role in the record. `cairn_kernels.hpp` and the guards a lane calls are the device implementation: the kernels launch on a stream the caller names, with no execution context. `cairn_gpu.hpp`, `cairn_exec.hpp` and `cairn_reuse.hpp` are the CAIRN launch wrappers, which an application can point at its own stream (`NAME_device_stream`) or replace with another machine, as the suite's host machine does.
+
+`cairn export DIR --compare OTHER` says whether two exports are the same code: each function's canonical emission, as `cairn diff` compares it, each runtime header, the command, the compilers and the target. It exits 1 when they differ, which is how a change is held to a known-fast implementation. Same code is not the same speed: compare timings only between exports built alike, holding the same `--time` harness, run on the same machine.
+
 ## cairn build --incremental
 
 `--incremental` compiles one object per module against a shared interface header and caches it under `build/objects/`, keyed by a hash of everything that went into it: the unit, the header, the command line, the runtime headers and the compiler version. It is opt-in because separate objects give up inlining across modules. Device programs and freestanding images are always one unit.

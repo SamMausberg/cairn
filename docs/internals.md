@@ -56,6 +56,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Manifests, vendored dependencies | `projects/project.py` | `read_manifest`, `contained_file`, `claim`, `dependencies` |
 | Native flags, the closed table of system libraries, the freestanding effect ban | `projects/toolchain.py` | `command`, `flags`, `LIBRARIES`, `audit_effects` |
 | The device target every device stage shares: its spelling, resolution, features, limits, and the records it refuses | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits` |
+| An export: the program a build compiles, the headers it includes, the record and identity that pin them, and the builds, runs, tests and comparisons that take it | `projects/export.py` | `export`, `check`, `build`, `run`, `test`, `compare` |
 
 Per-function state lives in one `Scope`, swapped when an instance is checked in the middle of its caller, so instantiation is re-entrant. Every concrete signature is resolved before any body is checked.
 
@@ -68,7 +69,8 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 | `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard is host and device callable |
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
 | `cairn_parallel.hpp` | the host lane pool with its pooled reduction and two-pass scan, the crew of reusable task threads, linear tasks, task groups with a bounded completion ring, `Mutex` and `Atomic` with explicit orders |
-| `cairn_gpu.hpp` | CUDA as the machine `cairn_exec.hpp` runs on: the kernels, CUB's calls, streams, events, allocation and copies; and the older synchronous entry points (`launch`, `Ticket`, `reduce`, `scan`, `compact`), which wait for the whole device and which generated code no longer calls |
+| `cairn_kernels.hpp` | the device side of every region in plain CUDA: the lane, chunk and staged-tile kernels, and their launch on a stream the caller names, with no execution context |
+| `cairn_gpu.hpp` | CUDA as the machine `cairn_exec.hpp` runs on: CUB's calls, streams, events, allocation and copies; and the older synchronous entry points (`launch`, `Ticket`, `reduce`, `scan`, `compact`), which wait for the whole device and which generated code no longer calls |
 | `cairn_exec.hpp` | what generated code calls for device work, written once for any machine: the calling thread's execution context, device owners, regions on its stream, reductions, scans and compactions in its arena, queued work on lent lanes, and a C caller's own stream |
 | `cairn_reuse.hpp` | execution contexts apart from the machine: lanes (a stream and its event) lent until their work completes, one scratch arena ordered between its users on the device, a declared budget, a caller's bound stream; and the reductions, scans and compactions written against the machine |
 | `cairn_io.hpp` | the I/O ring over io_uring: fixed berths that own each operation's `Buf`, completion-order collection, a wait that drains before it releases |

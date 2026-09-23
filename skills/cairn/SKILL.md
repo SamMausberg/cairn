@@ -134,6 +134,7 @@ Every command takes `--format json`, the default when output is piped.
 | `cairn validate` | Test one implementation against its reference on boundary inputs its contract gives; finite, not proof. |
 | `cairn doc` | Generate the API reference of the checked program, as Markdown. |
 | `cairn graph` | Print the module graph: each file's modules, each module's imports, exports and dependents, hashes. |
+| `cairn export` | Write the program a build compiles, the runtime headers it includes and a record pinning them to --out; given an export, check it. build, run and test take an export too. |
 | `cairn verify` | SMT source equivalence, not native or Lean verification. |
 | `cairn diff` | What changed between two versions, function by function, and on what evidence. |
 | `cairn certificates` | Check collector arithmetic certificates; not a Lean/compiler proof. |

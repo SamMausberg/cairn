@@ -139,9 +139,11 @@ COMMANDS = {
     "validate": "Test one implementation against its reference on boundary inputs its contract gives; finite, not proof.",
     "doc": "Generate the API reference of the checked program, as Markdown.",
     "graph": "Print the module graph: each file's modules, each module's imports, exports and dependents, hashes.",
+    "export": "Write the program a build compiles, the runtime headers it includes and a record pinning them to "
+    "--out; given an export, check it. build, run and test take an export too.",
 }
 OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that take it, the option, its keywords)
-    ({"build", "run", "test", "explain", "tune", "shot", "validate", "state"}, "--cxx", {"default": "clang++"}),
+    ({"build", "run", "test", "explain", "tune", "shot", "validate", "state", "export"}, "--cxx", {"default": "clang++"}),
     ({"validate"}, "--symbol", {"required": True, "help": "The implementation; its reference is what it implements."}),
     ({"validate"}, "--policy", {"type": Path, "metavar": "POLICY.json", "help": "Tolerance, domain, budget, seed, "
                                 "probes and seconds; default: what the regressions file pinned, else the defaults."}),
@@ -152,7 +154,7 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"explain", "predict", "shot"}, "--symbol", {"action": "append", "help": "This function only (repeatable); "
                                                   "for shot, a function whose effect row is reported."}),
     ({"tune"}, "--symbol", {"action": "append", "required": True, "help": "The function whose plan is chosen."}),
-    ({"predict", "tune"}, "--at", {"action": "append", "default": [], "metavar": "NAME=SIZE[,NAME=SIZE]", "help":
+    ({"predict", "tune", "export"}, "--at", {"action": "append", "default": [], "metavar": "NAME=SIZE[,NAME=SIZE]", "help":
                                    "Price at these sizes (repeatable); predict defaults a function of one extent to "
                                    "1e3, 1e5 and 1e7."}),
     ({"tune"}, "--measure", {"type": int, "default": 0, "metavar": "K", "help": "Time the K best-ranked plans and "
@@ -180,10 +182,10 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"predict", "shot"}, "--against", {"type": Path, "metavar": "BEFORE", "help": "What changing BEFORE into this "
                                          "program does: predicted costs, or for shot the rows of --symbol."}),
     ({"predict", "tune"}, "--profile", {"type": Path, "help": "A cairn.machine/1 profile; default: the packaged one."}),
-    ({"build", "run"}, "--out", {"type": Path}),
-    ({"build", "run", "explain", "predict", "tune", "state"}, "--arch", {"choices": sorted(ARCHS)}),
+    ({"build", "run", "export"}, "--out", {"type": Path}),
+    ({"build", "run", "explain", "predict", "tune", "state", "export"}, "--arch", {"choices": sorted(ARCHS)}),
     ({"build", "run"}, "--target", {"choices": sorted(TARGETS), "help": "Freestanding profile; default hosted."}),
-    ({"build", "run", "predict", "tune", "state"}, "--device-target", {"metavar": "SM", "help": "The GPU's compilation "
+    ({"build", "run", "predict", "tune", "state", "export"}, "--device-target", {"metavar": "SM", "help": "The GPU's compilation "
                                                                "target, as sm_120, sm_120f or sm_120a; default: "
                                                                "[build] device_target, else the GPU nvidia-smi "
                                                                "reports."}),
@@ -191,16 +193,21 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"build", "run"}, "--debug", {"action": "store_true", "help": "Debug symbols that point at the CAIRN source."}),
     ({"build", "run"}, "--incremental", {"action": "store_true", "help": "One object per module, reused by content "
                                          "hash; gives up inlining across modules."}),
-    ({"emit", "build", "run"}, "--keep-guards", {"action": "store_true", "help": "Write every guard, also those the "
+    ({"emit", "build", "run", "export"}, "--keep-guards", {"action": "store_true", "help": "Write every guard, also those the "
                                                  "checker showed cannot fail: the conservative build."}),
     ({"run", "test"}, "--memory-mib", {"type": int, "default": 1024,
                                        "help": "Native address-space cap, 64..65536 MiB; not a sandbox."}),
-    ({"build"}, "--kind", {"choices": ["library", "exe"]}),
-    ({"emit", "build"}, "--header", {"action": "store_true", "help": "The C header of a library: emit prints it, "
+    ({"build", "export"}, "--kind", {"choices": ["library", "exe"]}),
+    ({"emit", "build", "export"}, "--header", {"action": "store_true", "help": "The C header of a library: emit prints it, "
                                      "build writes NAME.h beside the library and holds the library to its layouts."}),
     ({"emit"}, "--ctypes", {"action": "store_true", "help": "Print a Python module that loads the library through "
                             "ctypes with the header's layouts asserted at import."}),
     ({"test"}, "--contract", {"type": Path}),
+    ({"export"}, "--tests", {"action": "store_true", "help": "Export the test blocks' program; cairn test runs it."}),
+    ({"export"}, "--time", {"metavar": "SYMBOL", "help": "Export SYMBOL beside a timing driver at the --at sizes; "
+                            "cairn run of the export measures it."}),
+    ({"export"}, "--compare", {"type": Path, "metavar": "OTHER", "help": "With an export: whether OTHER is the same "
+                               "code, function by function; exit 1 when it is not."}),
     ({"test"}, "--test", {"default": "", "metavar": "NAME", "help": "Run the one test block of exactly this name "
                            "(`sums`, or `store.sums` in module store), and no contract."}),
     ({"test"}, "--filter", {"default": "", "metavar": "TEXT", "help": "Run only the test blocks and contracts whose "
@@ -449,6 +456,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if a.command == "check" and a.watch:  # before the project loads: a broken manifest is watched until fixed
             return watch(a.path, [*(["--format", FORMAT] if FORMAT else []), *(["--generics"] if a.generics else [])])
+        if a.command == "export" or (
+            a.command in {"build", "run", "test"} and (Path(a.path) / "export.json").is_file()
+        ):
+            from .projects import export
+
+            exported, exit_status = export.command(a)
+            report(exported)
+            return exit_status
         project = load_project(a.path)
         if a.command == "emit" and (a.header or a.ctypes):  # What a C, C++ or Python program uses to call it.
             from .compiler.header import binding, header

@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 
 from ..compiler.cairnc import RUNTIME_FILES, Parser, generate, joined, units, write_program
@@ -116,23 +117,23 @@ int main(int argc, char** argv) {{
 """
 
 
-def build(project: Project, *, output: Path | None = None, cxx: str = "clang++", arch: str | None = None,
-          kind: str | None = None, timeout: int = 60, target: str | None = None, debug: bool = False,
-          incremental: bool = False, keep_guards: bool = False, tests: tuple[str, ...] = (),
-          header: bool = False, device_target: str | None = None) -> dict:  # fmt: skip
-    kind = "exe" if tests else kind or project.kind  # A test build is an executable whose main runs one test.
-    target = target or project.target
-    bare = bool(profile(target))
-    flags(arch or project.arch, kind, target)  # Reject an unknown kind, architecture or target before any work.
-    if type(timeout) is not int or not 1 <= timeout <= 300:
-        raise ProjectError("Build timeout must be 1..300 seconds.")
-    if bare and kind != "exe":
-        raise ProjectError(f'Target {target} builds one image: set kind = "exe".')
-    if bare and tests:
-        raise ProjectError(f"Tests run as host processes; target {target} has no host to run them on.")
-    if header and (kind != "library" or bare or incremental):
-        raise ProjectError("--header describes a hosted library built as one unit: use --kind library.")
-    compiler = find(cxx)
+@dataclass
+class Emitted:
+    """What a build compiles, before any compiler runs: the one C++ file, its receipt, the C header, the entry."""
+
+    kind: str
+    generated: str
+    receipt: dict
+    declared: str
+    entry: str
+    interface: list[str]
+    bodies: list[tuple[str, list[str]]]
+
+
+def emitted(project: Project, *, kind: str, tests: tuple[str, ...] = (), header: bool = False,
+            keep_guards: bool = False, debug: bool = False, bare: bool = False) -> Emitted:  # fmt: skip
+    """The program `cairn build` compiles for `project`, and `cairn export` writes out: the front end's one pass,
+    then the entry point, the test dispatcher or the C header's layout checks."""
     entry = ""
     parsed = None
     if kind == "exe" and not tests:  # The entry point is `main` of the root module, else the only module-level `main`.
@@ -161,6 +162,29 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         generated += f'\nextern "C" std::int32_t cf_main() noexcept {{ return cf_{mangle(entry)}(); }}\n'
     if entry and not bare:
         generated += "\nint main() { return static_cast<int>(cf_" + mangle(entry) + "()); }\n"
+    return Emitted(kind, generated, receipt, declared, entry, interface, bodies)
+
+
+def build(project: Project, *, output: Path | None = None, cxx: str = "clang++", arch: str | None = None,
+          kind: str | None = None, timeout: int = 60, target: str | None = None, debug: bool = False,
+          incremental: bool = False, keep_guards: bool = False, tests: tuple[str, ...] = (),
+          header: bool = False, device_target: str | None = None) -> dict:  # fmt: skip
+    kind = "exe" if tests else kind or project.kind  # A test build is an executable whose main runs one test.
+    target = target or project.target
+    bare = bool(profile(target))
+    flags(arch or project.arch, kind, target)  # Reject an unknown kind, architecture or target before any work.
+    if type(timeout) is not int or not 1 <= timeout <= 300:
+        raise ProjectError("Build timeout must be 1..300 seconds.")
+    if bare and kind != "exe":
+        raise ProjectError(f'Target {target} builds one image: set kind = "exe".')
+    if bare and tests:
+        raise ProjectError(f"Tests run as host processes; target {target} has no host to run them on.")
+    if header and (kind != "library" or bare or incremental):
+        raise ProjectError("--header describes a hosted library built as one unit: use --kind library.")
+    compiler = find(cxx)
+    made = emitted(project, kind=kind, tests=tests, header=header, keep_guards=keep_guards, debug=debug, bare=bare)
+    interface, bodies, receipt = made.interface, made.bodies, made.receipt
+    generated, declared = made.generated, made.declared
     # No manifest can select a compiler executable, flags, build script, or output path.
     out = output or project.root / "build"
     if out.is_symlink():

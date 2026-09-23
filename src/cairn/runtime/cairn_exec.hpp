@@ -16,12 +16,9 @@
 namespace cr::gpu {
 
 using reuse::Allocation;
-using reuse::BLOCK;
 using reuse::Budget;
 using reuse::Dir;
-using reuse::MAX_GRID;
 using reuse::Scratch;
-using reuse::WARP;
 using reuse::Where;
 using Context = reuse::Context<Machine>;
 using Lent = reuse::Lent<Machine>;
@@ -72,7 +69,7 @@ template<class T> using Unified = Owner<T, Where::unified>;
 // `parallel i in n` over device views: every i below n runs exactly once, whatever the block and the indices per
 // thread a plan chose, and the call returns once the context's stream has run them.
 template<unsigned U = 1, class F>
-inline void run(Context& ctx, std::size_t n, F body, unsigned block = BLOCK, std::size_t per_lane = 1) noexcept {
+inline void run(Context& ctx, std::size_t n, F body, unsigned block = reuse::BLOCK, std::size_t per_lane = 1) noexcept {
   static_assert(std::is_trivially_copyable_v<F>, "a lane body crosses over as kernel arguments");
   if(!n) return;
   reuse::synchronous(ctx, [&](typename Machine::Stream s) { ctx.api().template lanes<U>(n, body, s, block, per_lane); });
@@ -93,7 +90,7 @@ template<unsigned W, class... T> inline bool aligned(const T*... p) noexcept {
   return ((reinterpret_cast<std::uintptr_t>(p) % (sizeof(T) * W) == 0) && ...);
 }
 template<unsigned W, unsigned U = 1, class F, class G>
-inline void run_vector(Context& ctx, std::size_t n, bool whole, F scalar, G chunk, unsigned block = BLOCK,
+inline void run_vector(Context& ctx, std::size_t n, bool whole, F scalar, G chunk, unsigned block = reuse::BLOCK,
                        std::size_t per_lane = 1) noexcept {
   static_assert(std::is_trivially_copyable_v<F> && std::is_trivially_copyable_v<G>, "lanes cross as arguments");
   if(!whole) return run<U>(ctx, n, scalar, block, per_lane);  // a pointer off its chunk's width: the scalar lanes
@@ -111,7 +108,7 @@ template<class T> CR_HD constexpr std::size_t tile_bytes(std::size_t width) noex
   return (width * sizeof(T) + 15) / 16 * 16;  // each tile starts on 16 bytes
 }
 template<std::size_t R, unsigned U = 1, class L, class F, class S>
-inline void run_staged(Context& ctx, std::size_t n, L load, F body, S bytes, unsigned block = BLOCK,
+inline void run_staged(Context& ctx, std::size_t n, L load, F body, S bytes, unsigned block = reuse::BLOCK,
                        std::size_t per_lane = 1) noexcept {
   static_assert(std::is_trivially_copyable_v<L> && std::is_trivially_copyable_v<F>, "lanes cross as arguments");
   if(!n) return;
@@ -153,7 +150,7 @@ template<class F, class... After> inline Lent queue(Context& ctx, std::size_t n,
   static_assert(std::is_trivially_copyable_v<F>, "a lane body crosses over as kernel arguments");
   Lent t(ctx);
   (t.follow(after.mark()), ...);
-  if(n) ctx.api().template lanes<1>(n, body, t.stream(), BLOCK, 1);
+  if(n) ctx.api().template lanes<1>(n, body, t.stream(), reuse::BLOCK, 1);
   return t;
 }
 template<class T, class... After>
