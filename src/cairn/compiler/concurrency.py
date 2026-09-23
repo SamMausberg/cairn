@@ -9,7 +9,7 @@ from . import chunks, facts, fusion, staging
 from .builtins import WRAPPING, crossing
 from .effects import LANE_SAFE, PURE
 from .scope import Binding, Lanes
-from .tree import BOOL, FLOAT, INT, UNSIGNED, USIZE, VOID, Expr, Function, Stmt, Type, fail, is_view, root
+from .tree import BOOL, FLOAT, INT, UNSIGNED, USIZE, VOID, Expr, Function, Stmt, Type, fail, is_view, nested, root
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -40,7 +40,7 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
 
     def scan(ss: list[Stmt]) -> set[str]:
         found = set().union(*(places(e) for x in ss for e in x.exprs))
-        return found.union(*(scan(x.body) | scan(x.other) | scan([b for a in x.arms for b in a.body]) for x in ss))
+        return found.union(*(scan(nested(x)) for x in ss))
 
     found = scan(s.body) | set().union(*(places(e) for e in exprs))
     target = target or ("device" if "device" in found else "host")
@@ -159,7 +159,7 @@ def fusions(c: Checker, rows: dict[str, set[str]]):
 def walk(ss: list[Stmt]):
     for s in ss:
         yield s
-        yield from walk([*s.body, *s.other, *(x for arm in s.arms for x in arm.body)])
+        yield from walk(nested(s))
 
 
 def s_parallel(c: Checker, s: Stmt, queued: bool = False):

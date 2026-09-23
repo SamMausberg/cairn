@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .tree import FLOAT, INT, STORAGE, Expr, Stmt, fail, is_view
+from .tree import FLOAT, INT, STORAGE, Expr, Stmt, fail, is_view, nested
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -46,14 +46,14 @@ def exprs(ss: list[Stmt]):
     for s in ss:
         for e in s.exprs:
             yield from under(e)
-        yield from exprs([*s.body, *s.other, *(x for arm in s.arms for x in arm.body)])
+        yield from exprs(nested(s))
 
 
 def assignments(ss: list[Stmt]):
     for s in ss:
         if s.tag == "assign":
             yield s
-        yield from assignments([*s.body, *s.other, *(x for arm in s.arms for x in arm.body)])
+        yield from assignments(nested(s))
 
 
 def chunkable(s: Stmt) -> dict[str, tuple[Any, bool, bool, Expr]]:

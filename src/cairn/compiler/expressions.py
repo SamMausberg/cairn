@@ -123,11 +123,8 @@ def e_index(c: Checker, e: Expr, expected: Type | None, read: bool = True) -> Ty
     outer = c.lanes.outer if c.lanes else {n for n, _ in c.f.params}
     private = c.device_depth and root(a).tag == "name" and root(a).val not in outer
     if (ty.place == "device") != bool(c.device_depth) and ty.place != "unified" and not private:
-        fail(
-            "E-PLACEMENT",
-            f"{ty.place} memory is not addressable from {'device' if c.device_depth else 'host'} code.",
-            e,
-        )
+        fail("E-PLACEMENT", f"{ty.place} memory is not addressable from {'device' if c.device_depth else 'host'} "
+             "code.", e)  # fmt: skip
     c.expr(i, USIZE)
     c.guard("bounds")
     facts.discharge(c, e, "bounds", facts.index(c, e))
@@ -215,11 +212,9 @@ def adapts(c: Checker, e: Expr) -> bool:
 def unexpected(c: Checker, name: str) -> str:
     """Why a bare variant did not resolve: nothing here expects its sum, so it has to say which one."""
     sums = [s for s, vs in c.p.sums.items() if name in dict(vs)] + [s for s, vs in c.p.enums.items() if name in vs]
-    return (
-        f" {name} is a variant of {sums[0].rsplit('.', 1)[-1]}: nothing here expects that sum, so qualify it."
-        if sums
-        else ""
-    )
+    if not sums:
+        return ""
+    return f" {name} is a variant of {sums[0].rsplit('.', 1)[-1]}: nothing here expects that sum, so qualify it."
 
 
 def variant(c: Checker, enum: Type, variant: str, args: list[Expr], e: Expr, expected: Type | None) -> Type:

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from . import facts, rings
 from .builtins import SOFT, TABLE, WRAPPING
 from .scope import Binding
-from .syntax import copied
+from .syntax import copied, lent_part
 from .traits import infer, instantiate, trait_member, unbound, unify, vtable
 from .tree import INTRINSIC_TYPES, NUMERIC, USIZE, VISIBLE_AS, VOID, Expr, Function, Type, fail, is_view, root
 
@@ -151,12 +151,8 @@ def lent(c: Checker, f: Function, args: list[Expr]) -> None:
         for kept, saved in ((c.counts, counted), (c.discharged, discharged)):
             kept.clear()
             kept.update(saved)
-        if is_view(ty) or ty.name not in c.p.lends:
-            continue
-        carrier, lo, hi = c.p.lends[ty.name]
-        field = [Expr("field", name, [copied(a)], a.line, a.col) for name in (carrier, lo, hi)]
-        bound = [Expr("int", b, [], a.line, a.col) if b.isdigit() else field[j + 1] for j, b in enumerate((lo, hi))]
-        args[k] = Expr("slice", "", [field[0], *bound], a.line, a.col, start=a.start, end=a.end)
+        if not is_view(ty) and ty.name in c.p.lends:
+            args[k] = lent_part(a, c.p.lends[ty.name])
 
 
 def same(a: Expr, b: Expr) -> bool:

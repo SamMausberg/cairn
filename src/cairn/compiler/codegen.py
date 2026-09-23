@@ -12,7 +12,7 @@ from . import chunks, fusion, rings, staging
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import Checker
 from .expressions import COMPARISONS
-from .tree import CPP, FLOAT, STORAGE, UNSIGNED, VOID, Expr, Function, Program, Stmt, Type, fail, is_view
+from .tree import CPP, FLOAT, STORAGE, UNSIGNED, VOID, Expr, Function, Program, Stmt, Type, fail, is_view, nested
 
 RUNTIME_FILES = {
     p.name: p.read_text(encoding="utf-8") for p in sorted((Path(__file__).parents[1] / "runtime").glob("*.hpp"))
@@ -42,15 +42,8 @@ def bare(condition: str) -> str:
 
 
 class Emitter:
-    def __init__(
-        self,
-        p: Program,
-        checker: Checker | None = None,
-        origin: Any = "",
-        roots: tuple[str, ...] = (),
-        keep=False,
-        sites: Any = None,
-    ):
+    def __init__(self, p: Program, checker: Checker | None = None, origin: Any = "", roots: tuple[str, ...] = (),
+                 keep=False, sites: Any = None):  # fmt: skip
         self.p, self.ind, self.counter = p, 0, 0
         self.lines: list[str] = []
         # A source name, or a function from a line to (file, line), turns on #line directives.
@@ -364,9 +357,8 @@ class Emitter:
         return TABLE[e.val][1](self, e)
 
     def invoke(self, e: Expr, f: Function) -> str:
-        args = []
-        for a, (_, declared) in zip(e.args, f.params, strict=True):
-            args.append(self.pointer(a)[0] if declared.extent and a.tag != "slice" else self.expr(a))
+        args = (self.pointer(a)[0] if t.extent and a.tag != "slice" else self.expr(a)
+                for a, (_, t) in zip(e.args, f.params, strict=True))  # fmt: skip
         return f"{self.callee(f)}({', '.join(args)})"
 
     def checked(self, f: Function) -> bool:
@@ -623,9 +615,8 @@ class Emitter:
         count = self.fresh("n")[0]  # Without `parallel`, a host reduction is an in-order fold; its extent is read once.
         self.puts(f"{ty} v_{s.name} = static_cast<{ty}>({identity});", f"const std::size_t {count} = {es[0]};")
         step = [f"const {ty} a = v_{s.name}, b = {es[1]};", f"v_{s.name} = {combine};"]
-        self.nest(
-            f"for (std::size_t {i} = 0; {i} < {count}; ++{i}) {{", lambda: [before and before(), self.puts(*step)]
-        )
+        self.nest(f"for (std::size_t {i} = 0; {i} < {count}; ++{i}) {{",
+                  lambda: [before and before(), self.puts(*step)])  # fmt: skip
 
     def s_scan(self, s: Stmt, _: list[str]):
         ty, combine, identity, carried, start = self.folding(s)
@@ -712,7 +703,7 @@ class Emitter:
         found = {s.tag for s in ss if s.tag in {"break", "continue"}}
         for s in ss:
             if s.tag not in {"for", "while"}:
-                found |= self.controls([*s.body, *s.other, *(x for arm in s.arms for x in arm.body)])
+                found |= self.controls(nested(s))
         return found
 
     def loop(self, head: str, s: Stmt, index: int):

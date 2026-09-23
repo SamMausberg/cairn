@@ -43,6 +43,14 @@ def copied(e: Expr) -> Expr:
     return Expr(e.tag, e.val, [copied(a) for a in e.args], e.line, e.col, ref=e.ref)
 
 
+def lent_part(a: Expr, lends: tuple[str, str, str]) -> Expr:
+    """`a.data[a.lo..a.hi]`, the part a record that `lends data[lo..hi]` stands for, a literal bound as written."""
+    carrier, lo, hi = lends
+    field = [Expr("field", name, [copied(a)], a.line, a.col) for name in (carrier, lo, hi)]
+    bound = [Expr("int", b, [], a.line, a.col) if b.isdigit() else field[j + 1] for j, b in enumerate((lo, hi))]
+    return Expr("slice", "", [field[0], *bound], a.line, a.col, start=a.start, end=a.end)
+
+
 class Parser:
     def __init__(self, source: str):
         self.ts = lex(source)
@@ -56,6 +64,11 @@ class Parser:
 
     def ahead(self, k: int) -> str:
         return self.ts[min(self.i + k, len(self.ts) - 1)].s
+
+    def take(self) -> str:
+        """The current token's text, then move past it."""
+        self.i += 1
+        return self.ts[self.i - 1].s
 
     def eat(self, s: str) -> bool:
         if self.t.s == s:
@@ -96,8 +109,7 @@ class Parser:
     def integer(self) -> int:
         if not self.t.s.isdigit():
             fail("E-STATIC", "Expected a nonnegative integer literal.", self.t)
-        self.i += 1
-        return int(self.ts[self.i - 1].s)
+        return int(self.take())
 
     def listed(self, close: str, item):
         """Comma-separated items up to `close`; the opener was already consumed."""
@@ -114,13 +126,11 @@ class Parser:
             return "host"
         if self.t.s not in PLACES:
             fail("E-PLACE", f"Unknown placement {self.t.s!r}; expected one of {PLACES}.", self.t)
-        self.i += 1
-        return self.ts[self.i - 1].s
+        return self.take()
 
     def ty(self) -> Type:
         if self.t.s in {"ro", "rw"}:
-            mode = self.t.s
-            self.i += 1
+            mode = self.take()
             self.need("<")
             inner = self.ty()
             self.need(">")
@@ -149,8 +159,7 @@ class Parser:
             if not self.eat(":"):
                 return name, "type"
             if self.t.s in {"nat", "type"} or (self.recipe and self.t.s == "fn"):
-                self.i += 1
-                return name, self.ts[self.i - 1].s
+                return name, self.take()
             bounds = [self.path()]
             while self.eat("+"):  # K: Hash + Eq
                 bounds.append(self.path())
@@ -312,13 +321,12 @@ class Parser:
         return self.t.s == "scan" and self.ahead(1) in REDUCERS and self.ahead(k + 1) in {"for", "parallel"}
 
     def contracted(self, t: Token, tag: str, name: str, typ: Type | None) -> Stmt:
-        form = self.t.s
-        self.i += 1
+        form = self.take()
         if tag != "let" or (form == "compact" and typ not in (None, USIZE)):
             fail("E-COLLECT-BINDING", f"{'A scan' if form == 'scan' else 'Compaction'} binds an immutable result.", t)
         at: dict[str, Any] = {"line": t.line, "col": t.col}
         if form == "scan":  # The operator, then `exclusive` unless that is the output's own name.
-            op, self.i = self.t.s, self.i + 1
+            op = self.take()
             exclusive = self.t.s == "exclusive" and self.ahead(1) not in {"for", "parallel"}
             self.i += exclusive
             out, pooled = Expr("name", self.ident(), **at), self.t.s == "parallel"
@@ -591,11 +599,9 @@ class Parser:
         )  # fmt: skip
 
     def effect(self) -> str:
-        self.i += 1
-        name = self.ts[self.i - 1].s
+        name = self.take()
         while self.eat(":"):
-            self.i += 1
-            name += ":" + self.ts[self.i - 1].s
+            name += ":" + self.take()
         return name
 
     def parse(self) -> Program:

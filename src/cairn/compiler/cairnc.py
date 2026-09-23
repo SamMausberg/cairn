@@ -20,34 +20,9 @@ from .syntax import Parser
 from .traits import certify
 from .tree import INT, SIGNED, WIDTH, Diagnostic, Expr, Function, Program, Stmt, Type, fail
 
-__all__ = [
-    "IDENT",
-    "INT",
-    "RESERVED",
-    "RUNTIME",
-    "RUNTIME_FILES",
-    "SIGNED",
-    "VERSION",
-    "WIDTH",
-    "Binding",
-    "Checker",
-    "Diagnostic",
-    "Emitter",
-    "Expr",
-    "Function",
-    "Parser",
-    "Program",
-    "Stmt",
-    "Type",
-    "certify_templates",
-    "compile_program",
-    "compile_source",
-    "compile_units",
-    "derive",
-    "fail",
-    "specialize",
-    "write_program",
-]  # fmt: skip
+__all__ = ["IDENT", "INT", "RESERVED", "RUNTIME", "RUNTIME_FILES", "SIGNED", "VERSION", "WIDTH", "Binding", "Checker",
+           "Diagnostic", "Emitter", "Expr", "Function", "Parser", "Program", "Stmt", "Type", "certify_templates",
+           "compile_program", "compile_source", "compile_units", "derive", "fail", "specialize", "write_program"]  # fmt: skip
 
 
 def write_program(directory: Path, name: str, cpp: str) -> Path:

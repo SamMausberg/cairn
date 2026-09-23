@@ -83,18 +83,9 @@ FLOAT = {"f32", "f64"}
 NUMERIC = INT | FLOAT
 SCALAR = NUMERIC | {"bool"}
 WIDTH = BITS
-INTRINSIC_TYPES = {
-    "Buf": 1,
-    "Array": 2,
-    "fn": None,
-    "dyn": 1,
-    "Dyn": 1,
-    "Ticket": 1,
-    "Atomic": 1,
-    "Mutex": 1,
-    "Group": 1,
-    "IoRing": 0,
-}  # name -> number of type arguments
+# name -> number of type arguments
+INTRINSIC_TYPES = {"Buf": 1, "Array": 2, "fn": None, "dyn": 1, "Dyn": 1, "Ticket": 1, "Atomic": 1, "Mutex": 1, "Group": 1,
+                   "IoRing": 0}  # fmt: skip
 VOID, BOOL, USIZE = Type("void"), Type("bool"), Type("usize")
 
 
@@ -145,9 +136,7 @@ class Stmt:
     plan: tuple[int, int] = (0, 0)  # (grain, lanes) a `plan` fixes for a host region; 0 leaves the pool's choice.
     launch: tuple[int, int, int] = (0, 0, 0)  # (block, per_lane, unroll) a plan fixes for a device region.
     fuse: int = 0  # How many adjacent regions, this one first, a plan lets run as one traversal (compiler/fusion.py).
-    vector: int = (
-        0  # Adjacent indices each lane of a device region runs over chunks of W elements (compiler/chunks.py).
-    )
+    vector: int = 0  # Adjacent indices each lane of a device region runs over W-element chunks (compiler/chunks.py).
     chunked: tuple = ()  # The arrays a vectored region moves W at a time: (name, element, loaded, stored, view).
     stage: int = 0  # How far either side of a device block's indices its tiles reach (compiler/staging.py).
     staged: tuple = ()  # The arrays a staged region reads from its block's tiles: (name, element, view).
@@ -264,6 +253,11 @@ class Program:
 
 def is_view(ty: Type) -> bool:
     return ty.mode != "value" and ty.extent != ""
+
+
+def nested(s: Stmt) -> list[Stmt]:
+    """The statements directly inside `s`: its body, its other branch and every arm's body."""
+    return [*s.body, *s.other, *(x for arm in s.arms for x in arm.body)]
 
 
 def root(e: Expr) -> Expr:

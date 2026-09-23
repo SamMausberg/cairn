@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .syntax import copied
+from .syntax import copied, lent_part
 from .tree import BOOL, FLOAT, INT, SIGNED, STORAGE, VOID, Expr, Type, fail, is_view
 
 if TYPE_CHECKING:
@@ -76,10 +76,7 @@ def piece(c: Checker, args: list[Expr], k: int, borrows: list[tuple[str, str]]) 
         return "signed" if a.args[0].tag == "int" else "f64"
     ty = viewed = c.view_argument(a) if a.tag in {"str", "slice"} else c.peek(a)
     if not is_view(ty) and ty.name in c.p.lends:  # `print(line)`: the part the record lends, written out
-        carrier, lo, hi = c.p.lends[ty.name]
-        field = [Expr("field", name, [copied(a)], a.line, a.col) for name in (carrier, lo, hi)]
-        bound = [Expr("int", b, [], a.line, a.col) if b.isdigit() else field[j + 1] for j, b in enumerate((lo, hi))]
-        a = args[k] = Expr("slice", "", [field[0], *bound], a.line, a.col, start=a.start, end=a.end)
+        a = args[k] = lent_part(a, c.p.lends[ty.name])
         viewed = c.view_argument(a)
     elif not is_view(ty) and ty.name in {"Buf", "Array"}:
         viewed = c.view_argument(a)

@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .tree import FLOAT, INT, SIGNED, STORAGE, Expr, Function, Stmt
+from .tree import FLOAT, INT, SIGNED, STORAGE, Expr, Function, Stmt, nested
 
 # What a function a fused body calls may do: read and write what it was lent, and work on its own storage. Its row
 # may also say trap and ffi_precondition, for guards the checker discharged and for views an entry would check;
@@ -208,6 +208,6 @@ def uses(body: list[Stmt], run: list[Stmt]):
             inside = s if any(s is r for r in run) else region
             for e in s.exprs:
                 yield from walk(e, None, inside, False)
-            yield from stmts([*s.body, *s.other, *(x for arm in s.arms for x in arm.body)], inside)
+            yield from stmts(nested(s), inside)
 
     yield from stmts(body, None)

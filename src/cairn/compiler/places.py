@@ -12,6 +12,8 @@ from .tree import USIZE, Expr, Type, fail, is_view, root
 if TYPE_CHECKING:
     from .checking import Checker
 
+FORGED = "Zeroed storage cannot hold linear values: a zero would be a forged one."
+
 
 def path(e: Expr, stable=lambda name: False) -> str:
     """A syntactic place identity for alias checks: a.b, a[], a[lo..hi].

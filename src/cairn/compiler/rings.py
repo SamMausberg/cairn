@@ -21,14 +21,14 @@ if TYPE_CHECKING:
 RING = Type("IoRing")
 BYTES = Type("Buf", args=(Type("u8"),))
 I32, I64, U64 = Type("i32"), Type("i64"), Type("u64")
-# What each operation takes after the ring, and the runtime operation it lowers to.
-OPERATIONS: dict[str, tuple[tuple[str, ...], str]] = {
-    "read": (("fd", "data", "count", "offset", "tag"), "read"),
-    "write": (("fd", "data", "count", "offset", "tag"), "write"),
-    "recv": (("fd", "data", "count", "tag"), "recv"),
-    "send": (("fd", "data", "count", "tag"), "send"),
-    "accept": (("fd", "tag"), "accept"),
-    "timeout": (("ns", "tag"), "timeout"),  # finishes with -ETIME after ns nanoseconds
+# What each operation takes after the ring; it lowers to the runtime operation of the same name.
+OPERATIONS: dict[str, tuple[str, ...]] = {
+    "read": ("fd", "data", "count", "offset", "tag"),
+    "write": ("fd", "data", "count", "offset", "tag"),
+    "recv": ("fd", "data", "count", "tag"),
+    "send": ("fd", "data", "count", "tag"),
+    "accept": ("fd", "tag"),
+    "timeout": ("ns", "tag"),  # finishes with -ETIME after ns nanoseconds
 }
 KINDS = {"fd": I32, "data": BYTES, "count": USIZE, "offset": U64, "ns": U64, "tag": U64}
 # What a ring says about itself, read without the kernel: whether it is up, how many submissions it still takes,
@@ -80,7 +80,7 @@ def method(c: Checker, e: Expr, name: str, args: list[Expr]) -> Type:
         return Type("void")
     if name not in OPERATIONS:
         fail("E-CALLEE", f"A ring offers {', '.join(OPERATIONS)}, next, cancel, {', '.join(QUERIES)}.", e)
-    names = OPERATIONS[name][0]
+    names = OPERATIONS[name]
     if len(args) != len(names):
         fail("E-ARITY", f"q.{name} takes {', '.join(names)}.", e)
     for a, part in zip(args, names, strict=True):
@@ -106,9 +106,9 @@ def lower(g: Emitter, e: Expr) -> str:
         return f"{ring}.collect({g.expr(rest[0])}, {g.expr(rest[1])})"
     if e.ref[1] == "cancel":
         return f"{ring}.cancel({g.expr(rest[0])})"
-    named: dict[str, Any] = dict(zip(OPERATIONS[e.ref[1]][0], rest, strict=True))
+    named: dict[str, Any] = dict(zip(OPERATIONS[e.ref[1]], rest, strict=True))
     data = g.expr(named["data"]) if "data" in named else "cr::Buf<std::uint8_t>()"
     count = g.expr(named["count"]) if "count" in named else "0"
     offset = g.expr(named.get("offset") or named["ns"]) if {"offset", "ns"} & set(named) else "0"
     fd, tag = g.expr(named["fd"]) if "fd" in named else "-1", g.expr(named["tag"])
-    return f"{ring}.submit(cr::io::Op::{OPERATIONS[e.ref[1]][1]}, {fd}, {data}, {count}, {offset}, {tag})"
+    return f"{ring}.submit(cr::io::Op::{e.ref[1]}, {fd}, {data}, {count}, {offset}, {tag})"

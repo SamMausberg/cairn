@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from . import facts
 from .calls import COMPUTES
-from .places import field_path, path, settle
+from .places import FORGED, field_path, path, settle
 from .scope import Binding
 from .syntax import copied
 from .tree import BOOL, USIZE, VOID, Arm, Expr, Function, Stmt, Type, fail, is_view
@@ -23,7 +23,7 @@ def s_buffer(c: Checker, s: Stmt):
     if element == VOID:
         fail("E-OWNER-ELEMENT", "Local buffers hold values; void has none.", s)
     if c.kind(element) == "linear":
-        fail("E-LINEAR-STORAGE", "Zeroed storage cannot hold linear values: a zero would be a forged one.", s)
+        fail("E-LINEAR-STORAGE", FORGED, s)
     extent = s.exprs[0]
     c.expr(extent, USIZE)
     if isinstance(extent.ref, Expr):  # A named constant is its literal, here and in the extent identity.

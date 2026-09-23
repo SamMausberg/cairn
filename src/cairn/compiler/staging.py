@@ -73,9 +73,8 @@ def stageable(s: Stmt, radius: int) -> dict[str, tuple[Any, Expr, set[int]]]:
 def staged(c: Checker, s: Stmt, radius: int, token: Any):
     """Choose what `stage R` loads for the device region s, or refuse the plan."""
     if s.fuse or s.vector:
-        fail(
-            "E-PLAN", "stage loads one region's tiles; fuse and vector reshape the region, and a plan takes one.", token
-        )
+        fail("E-PLAN", "stage loads one region's tiles; fuse and vector reshape the region, and a plan takes one.",
+             token)  # fmt: skip
     chosen = stageable(s, radius)
     if not chosen:
         fail("E-PLAN", f"stage {radius} loads a tile of an array the region only reads, each read at [i + d] with |d| at "

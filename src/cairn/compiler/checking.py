@@ -20,6 +20,7 @@ from .builtins import SOFT, TABLE
 from .concurrency import ORDERS, PINNED
 from .constants import constant
 from .effects import LANE_SAFE, PURE, audit, exposed, fixed_point
+from .places import FORGED
 from .scope import SCOPED, Binding, Lanes, Scope
 from .traits import KINDS, connect_dispatches, hold_impls, satisfies
 from .tree import (
@@ -39,6 +40,11 @@ from .tree import (
     fail,
     is_view,
 )
+
+
+def parts(layout: Any) -> list[Type]:
+    """What a record's fields or a sum's payloads hold by value."""
+    return [t for _, t in layout] if isinstance(layout, list) else [t for t in (layout or {}).values() if t]
 
 
 class Checker:
@@ -84,12 +90,8 @@ class Checker:
     s_parallel, s_reduce, s_scan, region, host_only = (concurrency.s_parallel, concurrency.s_reduce,
                                                        concurrency.s_scan, concurrency.region,
                                                        concurrency.host_only)  # fmt: skip
-    e_spawn, shared, lane_callee, plans = (
-        concurrency.e_spawn,
-        concurrency.shared,
-        concurrency.lane_callee,
-        concurrency.plans,
-    )
+    e_spawn, shared, lane_callee, plans = (concurrency.e_spawn, concurrency.shared, concurrency.lane_callee,
+                                           concurrency.plans)  # fmt: skip
     judge_lane_callbacks, s_submit = concurrency.judge_lane_callbacks, concurrency.s_submit
 
     e_int, e_float, e_bool, e_str, e_name = (expressions.e_int, expressions.e_float, expressions.e_bool,
@@ -206,11 +208,8 @@ class Checker:
         elif ty.name == "dyn":
             trait = self.qualify(ty.args[0].name, self.p.traits, node=node)
             if trait is None or ty.mode == "value" or ty.extent:
-                fail(
-                    "E-DYN",
-                    "Write ro<dyn Trait> or rw<dyn Trait>: a dynamic interface is a borrowed fat reference.",
-                    node,
-                )
+                fail("E-DYN", "Write ro<dyn Trait> or rw<dyn Trait>: a dynamic interface is a borrowed fat "
+                     "reference.", node)  # fmt: skip
             return Type("dyn", ty.mode, args=(Type(trait),))
         else:
             args = tuple(self.static(a, node) for a in ty.args)
@@ -234,9 +233,7 @@ class Checker:
                         fail(code, f"{value.display()} {broken}; {name} needs [{g}:{constraint}].", node)
             self.define(base, node)
             if name in {"Buf", "Array"} and self.kind(args[0]) == "linear":
-                fail(
-                    "E-LINEAR-STORAGE", "Zeroed storage cannot hold linear values: a zero would be a forged one.", node
-                )
+                fail("E-LINEAR-STORAGE", FORGED, node)
             if name == "Group" and self.kind(args[0]) == "linear":
                 fail("E-LINEAR-STORAGE", "A group drops every result nobody collects; a linear one cannot be.", node)
         if ty.mode == "value":
@@ -344,8 +341,7 @@ class Checker:
             if layout is None:  # Asked while its own definition is open: it reaches itself through a Buf.
                 return KINDS[max(own, 1)]
             self.kinds[ty] = "affine"
-            parts = [t for _, t in layout] if isinstance(layout, list) else [t for t in layout.values() if t]
-            inline = parts or (ty.args[:1] if ty.name == "Array" else [])
+            inline = parts(layout) or (ty.args[:1] if ty.name == "Array" else [])
             self.kinds[ty] = KINDS[max([own, *(KINDS.index(self.kind(t)) for t in inline)])]
         return self.kinds[ty]
 
@@ -364,8 +360,7 @@ class Checker:
             if layout is None:  # Asked while its own definition is open: it reaches itself through a Buf.
                 return True
             self.frees[ty] = False
-            parts = [t for _, t in layout] if isinstance(layout, list) else [t for t in layout.values() if t]
-            inline = parts or (ty.args[:1] if ty.name in {"Array", "Mutex"} else [])
+            inline = parts(layout) or (ty.args[:1] if ty.name in {"Array", "Mutex"} else [])
             self.frees[ty] = any(self.releases(t) for t in inline)
         return self.frees[ty]
 
@@ -378,8 +373,7 @@ class Checker:
         if ty.name == "Array":
             return self.sizeof(ty.args[0]) * ty.args[1]
         layout = self.layouts.get(ty)
-        parts = [t for _, t in layout] if isinstance(layout, list) else [t for t in (layout or {}).values() if t]
-        return 8 * isinstance(layout, dict) + sum(-(-self.sizeof(t) // 8) * 8 for t in parts) or 16
+        return 8 * isinstance(layout, dict) + sum(-(-self.sizeof(t) // 8) * 8 for t in parts(layout)) or 16
 
     # Whole program -----------------------------------------------------------------------------
 
@@ -425,9 +419,7 @@ class Checker:
         kernels = [(f.name, True, f, f.name) for f in self.p.functions if f.kernel]
         for callee, device, node, caller in [*self.lane_calls, *kernels]:
             self.judging = caller
-            allowed = (
-                PURE if device else LANE_SAFE | {"dispatch", "indirect_call"}
-            )  # Their targets' rows are joined in.
+            allowed = PURE if device else LANE_SAFE | {"dispatch", "indirect_call"}  # Their targets' rows join in.
             # A callee writes only through what it was lent, and the lane's race rule judged each lent place where
             # the lane lent it: its own element, its own block, or nothing lanes write.
             reach = ("read:", "write:") if not device or callee in {k for k, *_ in kernels} else ("read:",)
