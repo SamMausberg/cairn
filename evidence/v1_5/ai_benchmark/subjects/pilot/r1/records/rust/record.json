@@ -1,0 +1,107 @@
+{
+ "task": "records",
+ "language": "rust",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 142.3,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 7,
+  "duration_ms": 155642,
+  "duration_api_ms": 153485,
+  "total_cost_usd": 0.25065800000000005,
+  "usage": {
+   "input_tokens": 14,
+   "cache_creation_input_tokens": 18154,
+   "cache_read_input_tokens": 144120,
+   "output_tokens": 14919,
+   "output_tokens_details": {
+    "thinking_tokens": 11695
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 18154,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 153,
+     "cache_read_input_tokens": 29748,
+     "cache_creation_input_tokens": 899,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 899
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 14,
+    "outputTokens": 14919,
+    "cacheReadInputTokens": 144120,
+    "cacheCreationInputTokens": 18154,
+    "webSearchRequests": 0,
+    "costUSD": 0.25065800000000005,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 11695,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/pilot/records/rust",
+ "phase": "pilot",
+ "infrastructure": false,
+ "source_bytes": 3950,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 29,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 1,
+   "Bash": 4,
+   "Write": 1
+  },
+  "compile_runs": 1,
+  "compile_runs_failed": 0,
+  "flags": []
+ },
+ "replicate": 1,
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_benchmark/pilot/r1/records/rust/transcript.jsonl",
+  "sha256": "b0c31f59d6f1cb9358e63589c7b728cd451e588038fe4444ca441bcc85857e6c",
+  "bytes": 109698
+ },
+ "given_sha256": "9041b0b330a81aac85565659ae0d8cc5f34c2b9b5b6af344e1c006a76c166238"
+}

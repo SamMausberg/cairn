@@ -1,0 +1,215 @@
+import std.io as io;
+import std.vec as vec;
+import std.text as text;
+import std.core (Option, Result);
+
+// First index where a byte outside '0'..'9' occurs.
+fn first_non_digit(n:usize, field:ro<u8>[n]) -> Option[usize] {
+  let mut i:usize = 0;
+  while i < n {
+    let c = field[i];
+    if c < '0' || c > '9' { return Some(i); }
+    i += 1;
+  }
+  return None;
+}
+
+// First index where a byte outside '0'..'9' and '.' occurs.
+fn first_invalid_price_byte(n:usize, field:ro<u8>[n]) -> Option[usize] {
+  let mut i:usize = 0;
+  while i < n {
+    let c = field[i];
+    if !((c >= '0' && c <= '9') || c == '.') { return Some(i); }
+    i += 1;
+  }
+  return None;
+}
+
+// Some(dot index) when the field is digits, one '.', exactly two digits; None otherwise.
+fn price_shape(n:usize, field:ro<u8>[n]) -> Option[usize] {
+  match text.find_byte(field, '.', 0) {
+    None => return None;
+    Some(dp) => {
+      match text.find_byte(field, '.', dp + 1) {
+        Some(_) => return None;
+        None => {
+          if dp == 0 { return None; }
+          if n - dp - 1 != 2 { return None; }
+          return Some(dp);
+        }
+      }
+    }
+  }
+}
+
+// Whether the decimal digits in `field` (leading zeros allowed) are at most the decimal `max`.
+fn in_range(n:usize, field:ro<u8>[n], m:usize, max:ro<u8>[m]) -> bool {
+  let mut p:usize = 0;
+  while p < n && field[p] == '0' { p += 1; }
+  let stripped:usize = n - p;
+  if stripped < m { return true; }
+  if stripped > m { return false; }
+  let mut i:usize = 0;
+  while i < m {
+    if field[p + i] < max[i] { return true; }
+    if field[p + i] > max[i] { return false; }
+    i += 1;
+  }
+  return true;
+}
+
+// Whether the cents value of dollars-digits line[s..dp] and two fraction digits line[dp+1..e]
+// is at most 9223372036854775807, without ever forming the (possibly huge) magnitude.
+fn price_in_range(n:usize, line:ro<u8>[n], s:usize, dp:usize, e:usize) -> bool {
+  let cents_max = "9223372036854775807";
+  let cm:usize = len(cents_max);
+  let mut p:usize = s;
+  while p < dp && line[p] == '0' { p += 1; }
+  let dollars_len:usize = dp - p;
+  let full_len:usize = dollars_len + 2;
+  if full_len < cm { return true; }
+  if full_len > cm { return false; }
+  let mut i:usize = 0;
+  while i < dollars_len {
+    if line[p + i] < cents_max[i] { return true; }
+    if line[p + i] > cents_max[i] { return false; }
+    i += 1;
+  }
+  let mut j:usize = 0;
+  while j < 2 {
+    if line[dp + 1 + j] < cents_max[dollars_len + j] { return true; }
+    if line[dp + 1 + j] > cents_max[dollars_len + j] { return false; }
+    j += 1;
+  }
+  return true;
+}
+
+fn parse_u32(n:usize, field:ro<u8>[n]) -> u32 {
+  let mut v:u32 = 0;
+  let mut i:usize = 0;
+  while i < n {
+    v = v * 10 + (u32(field[i]) - u32('0'));
+    i += 1;
+  }
+  return v;
+}
+
+fn parse_u16(n:usize, field:ro<u8>[n]) -> u16 {
+  let mut v:u16 = 0;
+  let mut i:usize = 0;
+  while i < n {
+    v = v * 10 + (u16(field[i]) - u16('0'));
+    i += 1;
+  }
+  return v;
+}
+
+fn parse_u64(n:usize, field:ro<u8>[n]) -> u64 {
+  let mut v:u64 = 0;
+  let mut i:usize = 0;
+  while i < n {
+    v = v * 10 + (u64(field[i]) - u64('0'));
+    i += 1;
+  }
+  return v;
+}
+
+fn process_line(line_no:u64, n:usize, line:ro<u8>[n]) {
+  match text.find_byte(line, ',', 0) {
+    None => { println("err ", line_no, " ", n + 1, " missing"); return; }
+    Some(c1) => {
+      match text.find_byte(line, ',', c1 + 1) {
+        None => { println("err ", line_no, " ", n + 1, " missing"); return; }
+        Some(c2) => {
+          match text.find_byte(line, ',', c2 + 1) {
+            Some(c3) => { println("err ", line_no, " ", c3 + 1, " extra"); return; }
+            None => {
+              let id_start:usize = 0;
+              let qty_start:usize = c1 + 1;
+              let price_start:usize = c2 + 1;
+              let id_len:usize = c1;
+              let qty_len:usize = c2 - c1 - 1;
+              let price_len:usize = n - c2 - 1;
+
+              if id_len == 0 { println("err ", line_no, " ", id_start + 1, " empty"); return; }
+              match first_non_digit(line[id_start..c1]) {
+                Some(p) => { println("err ", line_no, " ", id_start + p + 1, " digit"); return; }
+                None => {}
+              }
+              if !in_range(line[id_start..c1], "4294967295") {
+                println("err ", line_no, " ", id_start + 1, " range");
+                return;
+              }
+
+              if qty_len == 0 { println("err ", line_no, " ", qty_start + 1, " empty"); return; }
+              match first_non_digit(line[qty_start..c2]) {
+                Some(p) => { println("err ", line_no, " ", qty_start + p + 1, " digit"); return; }
+                None => {}
+              }
+              if !in_range(line[qty_start..c2], "65535") {
+                println("err ", line_no, " ", qty_start + 1, " range");
+                return;
+              }
+
+              if price_len == 0 { println("err ", line_no, " ", price_start + 1, " empty"); return; }
+              match first_invalid_price_byte(line[price_start..n]) {
+                Some(p) => { println("err ", line_no, " ", price_start + p + 1, " digit"); return; }
+                None => {}
+              }
+              match price_shape(line[price_start..n]) {
+                None => { println("err ", line_no, " ", price_start + 1, " format"); return; }
+                Some(dp_rel) => {
+                  let dp:usize = price_start + dp_rel;
+                  if !price_in_range(line, price_start, dp, n) {
+                    println("err ", line_no, " ", price_start + 1, " range");
+                    return;
+                  }
+                  let id_val = parse_u32(line[id_start..c1]);
+                  let qty_val = parse_u16(line[qty_start..c2]);
+                  let dollars = parse_u64(line[price_start..dp]);
+                  let frac = parse_u64(line[dp + 1..n]);
+                  let cents = dollars * 100 + frac;
+                  println("ok ", id_val, " ", qty_val, " ", cents);
+                  return;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn main() -> i32 {
+  let mut buf = vec.new[u8]();
+  stack chunk:u8[8192] = zeroed;
+  while true {
+    match io.read_stdin(len(chunk), chunk) {
+      Ok(got) => {
+        if got == 0 { break; }
+        vec.extend_from(buf, got, chunk[0..got]);
+      }
+      Err(_) => { return 1; }
+    }
+  }
+
+  let total = buf.len;
+  let mut start:usize = 0;
+  let mut line_no:u64 = 0;
+  while true {
+    if start >= total { break; }
+    line_no += 1;
+    match text.find_byte(buf, '\n', start) {
+      Some(idx) => {
+        process_line(line_no, idx - start, buf.data[start..idx]);
+        start = idx + 1;
+      }
+      None => {
+        process_line(line_no, total - start, buf.data[start..total]);
+        break;
+      }
+    }
+  }
+  return 0;
+}

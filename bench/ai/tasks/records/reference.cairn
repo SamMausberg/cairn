@@ -1,0 +1,130 @@
+// Parses order records, one per line, and reports the first fault of each by kind and column.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+enum Kind { Missing; Extra; Empty; Digit; Format; Range; }
+struct Fault { column:usize; kind:Kind; }
+struct Rec { id:u64; qty:u64; cents:u64; }
+
+// The value of the digits s[lo..hi], or None when it passes `limit`.
+fn value(n:usize, s:ro<u8>[n], lo:usize, hi:usize, limit:u64) -> Option[u64] {
+  let mut v:u64 = 0;
+  for i in lo..hi {
+    let d = u64(s[i] - 48);
+    if v > (limit - d) / 10 { return None; }
+    v = v * 10 + d;
+  }
+  return Some(v);
+}
+
+// id or qty: the field s[lo..hi], which starts at `column`.
+fn number(n:usize, s:ro<u8>[n], lo:usize, hi:usize, column:usize, limit:u64) -> Result[u64, Fault] {
+  if lo == hi { return Err(Fault(column, Empty)); }
+  for i in lo..hi {
+    if s[i] < 48 || s[i] > 57 { return Err(Fault(column + (i - lo), Digit)); }
+  }
+  match value(s, lo, hi, limit) {
+    Some(v) => return Ok(v);
+    None => return Err(Fault(column, Range));
+  }
+}
+
+// price: digits, one point and two digits, as cents no larger than the i64 maximum.
+fn price(n:usize, s:ro<u8>[n], lo:usize, hi:usize, column:usize) -> Result[u64, Fault] {
+  if lo == hi { return Err(Fault(column, Empty)); }
+  let mut dots:usize = 0;
+  let mut dot = hi;
+  for i in lo..hi {
+    if s[i] == '.' {
+      dots += 1;
+      if dot == hi { dot = i; }
+    } else if s[i] < 48 || s[i] > 57 {
+      return Err(Fault(column + (i - lo), Digit));
+    }
+  }
+  if dots != 1 || dot == lo || hi - dot != 3 { return Err(Fault(column, Format)); }
+  let max:u64 = 9223372036854775807;
+  match value(s, lo, dot, max / 100) {
+    Some(whole) => {
+      match value(s, dot + 1, hi, 99) {
+        Some(cents) => {
+          if whole * 100 > max - cents { return Err(Fault(column, Range)); }
+          return Ok(whole * 100 + cents);
+        }
+        None => return Err(Fault(column, Range));
+      }
+    }
+    None => return Err(Fault(column, Range));
+  }
+}
+
+// The record in the line s[lo..hi], or its first fault.
+fn parse(n:usize, s:ro<u8>[n], lo:usize, hi:usize) -> Result[Rec, Fault] {
+  let mut commas:usize = 0;
+  let mut first = hi;
+  let mut second = hi;
+  let mut third = hi;
+  for i in lo..hi {
+    if s[i] == ',' {
+      commas += 1;
+      if commas == 1 { first = i; }
+      if commas == 2 { second = i; }
+      if commas == 3 { third = i; }
+    }
+  }
+  if commas < 2 { return Err(Fault(hi - lo + 1, Missing)); }
+  if commas > 2 { return Err(Fault(third - lo + 1, Extra)); }
+  let id = try number(s, lo, first, 1, 4294967295);
+  let qty = try number(s, first + 1, second, first - lo + 2, 65535);
+  let cents = try price(s, second + 1, hi, second - lo + 2);
+  return Ok(Rec(id, qty, cents));
+}
+
+fn report(line:usize, f:Fault) {
+  match f.kind {
+    Missing => println("err ", line, " ", f.column, " missing");
+    Extra => println("err ", line, " ", f.column, " extra");
+    Empty => println("err ", line, " ", f.column, " empty");
+    Digit => println("err ", line, " ", f.column, " digit");
+    Format => println("err ", line, " ", f.column, " format");
+    Range => println("err ", line, " ", f.column, " range");
+  }
+}
+
+fn main() -> i32 {
+  let inp = read_input();
+  let n = inp.bytes.len;
+  let mut lo:usize = 0;
+  let mut line:usize = 0;
+  while lo < n {
+    let mut hi = lo;
+    while hi < n && inp.bytes.data[hi] != 10 { hi += 1; }
+    line += 1;
+    match parse(inp.bytes, lo, hi) {
+      Ok(r) => println("ok ", r.id, " ", r.qty, " ", r.cents);
+      Err(f) => report(line, f);
+    }
+    lo = hi + 1;
+  }
+  return 0;
+}

@@ -1,0 +1,82 @@
+// Adds n unsigned 64-bit values modulo 2^64, one contiguous chunk per task.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The sum of values[lo..hi] modulo 2^64.
+fn chunk_sum(n:usize, values:ro<u64>[n], lo:usize, hi:usize) -> u64 {
+  let mut total:u64 = 0;
+  for i in lo..hi { total = add_wrap(total, values[i]); }
+  return total;
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let k_in = next_u64(inp);
+  let n_in = next_u64(inp);
+  let k = usize(k_in);
+  let n = usize(n_in);
+  let mut values = Buf[u64](n);
+  for i in 0..n {
+    let v = next_u64(inp);
+    values[i] = v;
+  }
+  let size = n / k;
+  let partial = Group[u64](k);
+  for j in 0..k {
+    let lo = j * size;
+    let mut hi = lo + size;
+    if j + 1 == k { hi = n; }
+    spawn chunk_sum(values, lo, hi) into partial;
+  }
+  let mut total:u64 = 0;
+  for _ in 0..k { total = add_wrap(total, collect(partial)); }
+  wait(partial);
+  println("sum ", total);
+  return 0;
+}

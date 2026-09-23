@@ -1,0 +1,108 @@
+// Decodes a run-length encoded byte stream into an output of bounded size.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+fn nibble(c:u8) -> u8 {
+  if c <= '9' { return c - '0'; }
+  return c - 'a' + 10;
+}
+
+// The bytes the hexadecimal digits hex[lo..hi] spell.
+fn from_hex(n:usize, hex:ro<u8>[n], lo:usize, hi:usize) -> Buf[u8] {
+  let m = (hi - lo) / 2;
+  let mut out = Buf[u8](m);
+  for i in 0..m { out[i] = nibble(hex[lo + 2 * i]) * 16 + nibble(hex[lo + 2 * i + 1]); }
+  return out;
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let cap_in = next_u64(inp);
+  let cap = usize(cap_in);
+  let mut lo = inp.at;
+  let mut hi = lo;
+  match next_token(inp) {
+    Some(s) => { lo = s.lo; hi = s.hi; }
+    None => {}
+  }
+  let packed = from_hex(inp.bytes, lo, hi);
+  let m = len(packed);
+  let mut out = Buf[u8](cap);
+  let mut used:usize = 0;
+  let mut pos:usize = 0;
+  while pos < m {
+    let c = usize(packed[pos]);
+    let mut body = c + 1;
+    let mut run = c + 1;
+    if c >= 128 {
+      body = 1;
+      run = c - 126;
+    }
+    if m - pos - 1 < body {
+      println("err truncated ", pos);
+      return 0;
+    }
+    if run > cap - used {
+      println("err full ", pos);
+      return 0;
+    }
+    for t in 0..run {
+      if c < 128 { out[used + t] = packed[pos + 1 + t]; } else { out[used + t] = packed[pos + 1]; }
+    }
+    used += run;
+    pos += 1 + body;
+  }
+  let mut hash:u64 = 14695981039346656037;
+  for i in 0..used { hash = mul_wrap(hash ^ u64(out[i]), 1099511628211); }
+  stack digits:u8[16] = zeroed;
+  let wrote = text.write_hex(digits, hash, 16);
+  if wrote != 16 { return 1; }
+  println("ok ", used, " ", digits);
+  return 0;
+}

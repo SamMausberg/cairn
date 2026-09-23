@@ -1,0 +1,156 @@
+// A pool of byte buffers named by generation-checked handles.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// A slot keeps its generation after its buffer is freed, so an old handle can never name the next buffer.
+struct Slot { generation:u64; live:bool; bytes:Vec[u8]; }
+
+// Whether the token s is the word w.
+fn is(inp:ro<Input>, s:Span, n:usize, w:ro<u8>[n]) -> bool = text.equal(
+  s.hi - s.lo, inp.bytes.data[s.lo..s.hi], n, w
+);
+
+// Whether slot i holds a live buffer of generation g.
+fn live(slots:ro<Vec[Slot]>, i:u64, g:u64) -> bool {
+  if i >= u64(slots.len) { return false; }
+  let at = usize(i);
+  return slots.data[at].live && slots.data[at].generation == g;
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let mut slots = vec.new[Slot]();
+  let mut more = true;
+  while more {
+    match next_token(inp) {
+      None => more = false;
+      Some(op) => {
+        if is(inp, op, 3, "new") {
+          let size_in = next_u64(inp);
+          let size = usize(size_in);
+          let mut i:usize = 0;
+          while i < slots.len && slots.data[i].live { i += 1; }
+          if i == slots.len {
+            let empty = vec.new[u8]();
+            let fresh = Slot(0, false, empty);
+            vec.push(slots, fresh);
+          }
+          slots.data[i].generation += 1;
+          slots.data[i].live = true;
+          let zeros = Vec(Buf[u8](size), size);
+          slots.data[i].bytes = zeros;
+          println("h ", i, " ", slots.data[i].generation);
+        } else if is(inp, op, 3, "set") {
+          let i = next_u64(inp);
+          let g = next_u64(inp);
+          let off = next_u64(inp);
+          let v = next_u64(inp);
+          if !live(slots, i, g) {
+            println("stale");
+          } else if off >= u64(slots.data[usize(i)].bytes.len) {
+            println("bounds");
+          } else {
+            slots.data[usize(i)].bytes.data[usize(off)] = u8(v);
+            println("ok");
+          }
+        } else if is(inp, op, 3, "sum") {
+          let i = next_u64(inp);
+          let g = next_u64(inp);
+          if !live(slots, i, g) {
+            println("stale");
+          } else {
+            let at = usize(i);
+            let mut total:u64 = 0;
+            for b in 0..slots.data[at].bytes.len { total += u64(slots.data[at].bytes.data[b]); }
+            println(total);
+          }
+        } else if is(inp, op, 4, "move") {
+          let i = next_u64(inp);
+          let g = next_u64(inp);
+          let j = next_u64(inp);
+          let h = next_u64(inp);
+          if !live(slots, i, g) || !live(slots, j, h) {
+            println("stale");
+          } else if i == j {
+            println("same");
+          } else {
+            let from = usize(i);
+            let to = usize(j);
+            let moved = take(slots.data[from].bytes); // the source's buffer leaves its slot
+            slots.data[from].live = false;
+            vec.extend_from(slots.data[to].bytes, moved);
+            println("ok ", slots.data[to].bytes.len);
+          }
+        } else if is(inp, op, 4, "free") {
+          let i = next_u64(inp);
+          let g = next_u64(inp);
+          if !live(slots, i, g) {
+            println("stale");
+          } else {
+            let at = usize(i);
+            slots.data[at].live = false;
+            let empty = vec.new[u8]();
+            slots.data[at].bytes = empty;
+            println("ok");
+          }
+        }
+      }
+    }
+  }
+  let mut count:u64 = 0;
+  let mut held:u64 = 0;
+  for i in 0..slots.len {
+    if slots.data[i].live {
+      count += 1;
+      held += u64(slots.data[i].bytes.len);
+    }
+  }
+  println("live ", count, " ", held);
+  return 0;
+}
