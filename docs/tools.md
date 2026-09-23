@@ -173,9 +173,11 @@ $ cairn explain examples/apps/analytics --symbol analytics.query.above_loop
 
 An agent gets the same report from `cairn inspect --symbol f --explain`, or by sending `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "explain"}` after an edit.
 
+For a [cooperative region](concurrency.md#cooperative-regions) the function's entry adds `cooperative`: the block's threads, each shared array and pipeline with its bytes, and at their lines every barrier, every pipeline copy and wait with the copies the wait leaves in flight (`wait_group`, the checker's count), and every warp collective and fragment operation. The same barriers, waits and warp operations appear under `synchronization`.
+
 ## cairn predict
 
-`cairn predict [path] [--symbol f] [--at n=1e6] [--against BEFORE]` says how long each function will take without building it, so an agent can price a change before compiling and timing it. The answer is a prediction, never a measurement, with a confidence.
+`cairn predict [path] [--symbol f] [--at n=1e6] [--against BEFORE] [--inspect]` says how long each function will take without building it, so an agent can price a change before compiling and timing it. The answer is a prediction, never a measurement, with a confidence.
 
 ```text
 $ cairn predict bench/suite/kernels/saxpy_f32/kernel.cairn --arch x86-64-v4
@@ -200,6 +202,24 @@ f
 
 Confidence is `high` when every count is a size and every access a stream, `medium` when something is approximated (a wide host region, a loop bounded by `min()`, an atomic), and `low` when a number is a guess (a `while` loop, an address from data, a foreign call, recursion). On timings it was not fitted to, the packaged profile came within a quarter at one lane and at a hundred million elements, and predicted wide regions of a hundred thousand to ten million elements badly, hence `medium` ([evidence/v1_4/perf_model](../evidence/v1_4/perf_model/README.md)). `python -m cairn.perf.calibrate --out PROFILE.json` measures another host, and `--profile` or `CAIRN_PROFILE` selects it.
 
+A [cooperative region](concurrency.md#cooperative-regions) is priced by its blocks. Each thread's work is counted between its barriers as its warp runs it: which lanes take part in an access or a branch, and which banks or 32-byte sectors they reach, come from the phase rule's run of one block. The region costs a launch and the largest of four times over the grid: device memory, issue, shared-memory wavefronts and tensor-core multiply-adds. An SM holds as many blocks as its threads, registers and shared memory allow, beside the 1 KB each block leaves the system. Registers count only after `--inspect` has compiled the kernels for the device target and ptxas has read them; nothing runs.
+
+A pipeline's copies go at most as fast as the bytes its stages keep in flight divided by the memory latency. A wait that leaves `N` copies in flight (`cp.async.wait_group N`) keeps `N + 1` stages in flight in each block, so a deeper pipeline copies faster until the bandwidth caps it, and holds more shared memory, which can leave fewer blocks on each SM. Each line says what it rests on: `[checked]` for the checker's counts, `[ptxas]` for the compiler's report, `[specification limits]` for NVIDIA's published figures and `[assumed]` for the profile's assumptions, among them the 500 ns latency. No device run has checked any of it, and the confidence is `low`.
+
+```text
+$ cairn predict examples/cooperative/gpu.toml --symbol "row_sums[3]" --at rows=3,cols=1e5 --inspect
+row_sums[3]  8.01 us + 8.09 ns*rows (launch, up to rows=512); 8.01 us + 8.11 ns*rows (device memory, ...)
+  cooperative region at src/device_kernels.cairn:48: rows blocks of 256 threads (256), on the device
+    [checked] shared memory a block: 8192 bytes (partial 2048, tiles 3 stages of 2048)
+    [checked] tiles, line 49: depth 3; the wait at line 59 leaves 2 in flight
+    [ptxas] registers a thread: 34
+    [specification limits] an SM holds 6 blocks, 100% of its threads: by threads 6, registers 6, shared memory 11, ...
+  rows=3, cols=100000    73.6 us  device memory        4% of speed of light     low
+    [model] 3 blocks in 1 wave, 1% of the device busy; memory 65.6 us, issue 7.23 us, shared 5.17 us beside a 8 us launch [assumed]; tiles keeps 3 stages in flight a block, 18432 bytes on the device: copies at 36.9 GB/s [assumed latency]
+```
+
+At depth 2 the same region holds 6144 bytes a block, keeps 2 stages in flight and is predicted at 106 us. `--against` names what a change did to each region: `tiles.depth 2 -> 3; shared_bytes_per_block 6144 -> 8192`.
+
 ## cairn tune
 
 `cairn tune [path] --symbol f --at n=1e7` chooses `f`'s [plan](concurrency.md#plans) by a bounded search. A plan changes no result, so every candidate the checker accepts is correct and the search only asks which is fastest. A function is named with its module, as in `--symbol lib.spread`. `--write` puts the chosen plan after the function's declaration and removes any plan that named it elsewhere, only if the whole project still checks.
@@ -209,6 +229,8 @@ The space is every combination of the items `f`'s regions take: `grain` and `lan
 When `f` has [implementations](abstractions.md#implementations), each is a candidate beside the reference, with every plan of the reference's regions: its row's `plan` reads `plan f use g;` and it is priced as `g`, the code that runs where the condition holds. A function with implementations and no region is searched over them alone. Because selecting an implementation could change a result, one is chosen or timed only while the history holds a validation of it as it is now, the record an [implementation session](agents.md#implementation-sessions) keeps; its row says `validated` with the evidence class, or that none holds. Editing the implementation makes its validation stale, and without a history no implementation is chosen. `--write` writes the chosen selection beside the plan, or removes it when the reference was chosen.
 
 An implementation with [natural parameters](abstractions.md#implementations) is searched over the values its `tune` clause lists. Each instance is a candidate of its own: checked, priced, compiled for its kernels when it runs device code, and chosen or timed only while the history holds a validation of that instance. Its row reads `plan prefix use prefix_by[16];` with its `parameters`, and `--write` writes that line. The checker has already held every listed instance to the implementation rules; the budgets bound how many the search compiles and times. `--compare "use prefix_by[8]" --compare "use prefix_by[32]"` compares two instances.
+
+A cooperative region's block shape and a pipeline's depth are such parameters: `threads t in T` and `pipeline tiles:u64[T] depth D;` take a natural, so `fn row_totals_tiled[T:nat, D:nat](...) implements row_totals tune T in [128, 256], D in [2, 3]` ([examples/cooperative/tuned.toml](../examples/cooperative/tuned.toml)) gives the search four instances. Each is priced as above and compiled for its own kernel, whose registers, shared memory and SASS digest its row shows; none is chosen until a validation of it holds, which a device implementation gets only under `make gpu`. `--compare` adds the checker's own difference between two instances: `tiles: stages: 2 -> 3`.
 
 Device candidates are then compiled for the [device target](#the-device-target) in predicted order; among candidates priced alike, one whose kernel items (`unroll`, `vector`, `stage`, `fuse`) no earlier compile covered goes first. Nothing runs: ptxas and cuobjdump report registers, spilled bytes, stack, static shared memory and instructions, and a staged tile's shared memory is computed from the plan. Registers and shared memory enter the price through occupancy, and `chosen` is the best-ranked candidate a compile read. Each compile is kept by the digest of what it read (the emitted program, the runtime headers, the target, the toolkit and the inspector), so a program already compiled costs nothing, and a kept reading for another target is refused (`E-TARGET-MISMATCH`). `resources.sass` digests the SASS, so candidates with the same device code show one digest, as `blur` with and without `block 128` does. Without a device target nothing is compiled, and the answer says so.
 
