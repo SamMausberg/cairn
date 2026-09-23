@@ -518,8 +518,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if a.command == "tune":
             from .perf import report as priced
+            from .perf.plan_source import write_plan
             from .perf.profile import Profile
-            from .perf.tune import tune, write_plan
+            from .perf.tune import tune
 
             supplied = Profile.load(a.profile) if a.profile else None
             arch = resolve_arch(a.arch or project.arch)

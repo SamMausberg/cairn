@@ -5,8 +5,13 @@ needs no equivalence check at all: the host pins the whole program, the numerica
 effect row, and a reply names plan items and values, never source text, so no other change can ride along. Only the
 items the checker declares for the kinds of region the function has are open (`concurrency.PLAN_ITEMS`). The host
 writes the plan into the source, rechecks the whole linked program, requires every function's receipt to be what it
-was apart from its plan, and admits the candidate with what `cairn predict` says it changes. A reply to a session
-whose source has moved on, including one already answered, is stale and changes nothing.
+was apart from this function's plan, and that plan to be the one the reply set, and admits the candidate with what
+`cairn predict` says it changes. A reply to a session whose source has moved on, including one already answered, is
+stale and changes nothing.
+
+A session opens on a function of any module of a project, named by its qualified name (`lib.spread`). The plan is
+written after the function's declaration under the name its own module gives it, and any plan the checker resolved
+to the function before is removed, wherever it was written (`perf/plan_source.py`).
 
     host = PlanHost()
     packet = host.open(source, "spread", sizes=[{"n": 1e7}])
@@ -19,29 +24,31 @@ from typing import Any
 
 from ..compiler.cairnc import compile_source, fail
 from ..compiler.concurrency import PLAN_ITEMS, POWERS
-from ..perf.tune import now, regions, replanned, text, written
+from ..perf.plan_source import Placement, text, written
+from ..perf.tune import now, regions
+from ..projects.project import Project
 from .agent_tools import digest, load_json_strict, shaped, stable_json
-from .projection import local, signature
+from .projection import signature
 
 PROTOCOL = "cairn.plan/1"
 PINNED = ("every function's body, signature, effect row and guards", "the numerical contract", "every other plan")
 
 
 class PlanSession:
-    """One function of one source, open to a new plan and to nothing else."""
+    """One function of one source, open to a new plan and to nothing else. The source is a program's text, or a
+    loaded project, whose files then say where the plan goes."""
 
-    def __init__(self, source: str, symbol: str, sizes: list[dict[str, float]] | None = None, generation: int = 0):
+    def __init__(self, source: str | Project, symbol: str, sizes: list[dict[str, float]] | None = None,
+                 generation: int = 0):  # fmt: skip
         from ..compiler.cairnc import compile_program
         from ..perf.work import count
 
-        self.source, self.symbol, self.sizes = source, symbol, sizes or []
-        p, checker, _ = compile_program(source)
-        found = [f for f in p.functions if symbol in (f.name, f.source_name) and not f.extern]
-        if len(found) != 1:
-            fail("E-SYMBOL", f"No function {symbol} to plan.")
-        self.f = found[0]
-        if self.f.module:  # A plan written after the source belongs to its last module, so sessions stay at the root.
-            fail("E-EDIT-PROFILE", "A plan session opens on a function of the root module of one source.")
+        self.project = source if isinstance(source, Project) else None
+        self.source = source.source if isinstance(source, Project) else source
+        self.symbol, self.sizes = symbol, sizes or []
+        p, checker, _ = compile_program(self.source)
+        self.placement = Placement(self.source, symbol)  # the qualified name, in whichever module declares it
+        self.f = self.placement.f
         cost = count(p, checker, {self.f.name})[self.f.name]
         kinds = {r.kind for r in cost.regions} & {"host", "device"}
         if not kinds:
@@ -49,9 +56,17 @@ class PlanSession:
         several = regions(p, self.f.name) > 1  # fuse joins two regions or more
         self.open = {k: v for k, v in PLAN_ITEMS.items() if v[0] in kinds or (v[0] == "either" and several)}
         self.current = written(now(cost))
-        self.receipt = compile_source(source)[1]["functions"]
+        self.receipt = compile_source(self.source)[1]["functions"]
         self.generation = generation  # how many replies this function's plan has taken: a spent session is stale
-        self.digest = digest(stable_json([PROTOCOL, digest(source), symbol, generation]))
+        self.digest = digest(stable_json([PROTOCOL, digest(self.source), symbol, generation]))
+
+    def where(self) -> dict[str, Any]:
+        """The module the plan is written in and, for a project, the file and line of the declaration it follows."""
+        place: dict[str, Any] = {"module": self.f.module or "(root)"}
+        if self.project is not None:
+            file, line = self.project.site(self.f.line)
+            place |= {"file": file, "after_line": line + self.source.count("\n", self.f.start, self.f.end)}
+        return place
 
     def packet(self) -> dict[str, Any]:
         from ..perf.report import report
@@ -67,6 +82,7 @@ class PlanSession:
             "effects": self.receipt[self.f.name]["effects"],
             "current": dict(self.current),
             "items": items,
+            "written_in": self.where(),
             "pinned": list(PINNED),
             "reply": {"protocol": PROTOCOL, "session": self.digest, "items": dict.fromkeys(self.open, 0)},
             "note": "A reply sets plan items and nothing else; 0 or a missing item leaves the runtime's choice.",
@@ -94,17 +110,21 @@ class PlanSession:
                     f"{k} runs from {least} to {most}{f', a multiple of {step}' * (step > 1)}; {v} is outside.",
                 )
         plan = written(items)
-        candidate = replanned(self.source, local(self.symbol), text(local(self.symbol), plan))
+        candidate = self.placement.apply(plan)
         receipt = compile_source(candidate)[1]["functions"]  # the whole linked program, checked again
         scheduled = {"plan", "fused"}  # what a plan sets, and the regions its fuse joined
-        unplanned = {n: {k: v for k, v in r.items() if k not in scheduled} for n, r in receipt.items()}
-        if unplanned != {n: {k: v for k, v in r.items() if k not in scheduled} for n, r in self.receipt.items()}:
-            fail("E-PLAN", "The candidate changed more than a plan.")  # unreachable while a reply is only items
+        mine = {k: v for k, v in receipt.get(self.f.name, {}).items() if k not in scheduled}
+        others = {n: r for n, r in receipt.items() if n != self.f.name}
+        if (mine != {k: v for k, v in self.receipt[self.f.name].items() if k not in scheduled}
+                or others != {n: r for n, r in self.receipt.items() if n != self.f.name}
+                or receipt[self.f.name].get("plan", {}) != dict(plan)):  # fmt: skip
+            fail("E-PLAN", "The candidate changed more than this function's plan.")  # unreachable: a reply is items
         admitted = {
             "protocol": PROTOCOL,
             "status": "admitted",
             "symbol": self.symbol,
-            "plan": text(local(self.symbol), plan) or f"(no plan for {self.symbol})",
+            "plan": text(self.placement.name, plan) or f"(no plan for {self.symbol})",
+            "written_in": self.where(),
             "candidate_sha256": digest(candidate),
             "rows_unchanged": True,
             "formal_status": "not-verified",
@@ -121,7 +141,7 @@ class PlanHost:
         self.sessions: dict[str, PlanSession] = {}
         self.current: dict[str, str] = {}  # symbol -> the digest of its live session; any other is stale
 
-    def open(self, source: str, symbol: str, sizes: list[dict[str, float]] | None = None) -> dict[str, Any]:
+    def open(self, source: str | Project, symbol: str, sizes: list[dict[str, float]] | None = None) -> dict[str, Any]:
         session = PlanSession(source, symbol, sizes)
         self.sessions[session.digest] = session
         self.current[symbol] = session.digest

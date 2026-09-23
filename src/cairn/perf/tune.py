@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import copy
 import itertools
-import re
 from typing import Any
 
 from ..compiler.cairnc import Diagnostic, compile_program
 from ..compiler.concurrency import PLAN_ITEMS
 from . import model
+from .plan_source import Placement, Plan, shown, written
 from .profile import Profile, default
 from .work import Cost, count
 
@@ -32,52 +32,6 @@ SPACE = {  # the values tried for each item; 0 is the runtime's own choice
     "vector": (0, 2, 4),
     "stage": (0,),  # the model prices a staged region as the unplanned one, so ranking cannot choose it
 }
-Plan = tuple[tuple[str, int], ...]  # the items a plan sets, in the checker's order, zeros left out
-
-
-def written(items: dict[str, int]) -> Plan:
-    return tuple((k, items[k]) for k in PLAN_ITEMS if items.get(k))
-
-
-def text(name: str, plan: Plan) -> str:
-    return f"plan {name} {{ {' '.join(f'{k} {v};' for k, v in plan)} }}" if plan else ""
-
-
-def shown(name: str, plan: Plan) -> str:
-    return text(name, plan) or f"(no plan for {name})"
-
-
-def replanned(source: str, name: str, plan: str) -> str:
-    """`source` with `name`'s plan replaced by `plan`, or its plan removed when `plan` is empty."""
-    found = re.compile(rf"^\s*plan\s+{re.escape(name)}\s*\{{[^}}]*\}}[ \t]*\n?", re.M)
-    stripped = found.sub("", source)
-    return stripped if not plan else stripped.rstrip("\n") + "\n\n" + plan + "\n"
-
-
-def write_plan(manifest: Any, symbol: str, chosen: dict[str, Any]) -> str:
-    """Write `chosen` as `symbol`'s plan into the one file that declares it, and return that file's path.
-
-    The file is where the checked program places the function, never a text match: a comment or another module's
-    function of the same short name would claim it. The plan it has, written by its short or its qualified name, is
-    replaced by one under its short name, and the rewrite is written only when the whole project still checks."""
-    from ..compiler.cairnc import Diagnostic, compile_source
-    from ..projects.project import ProjectError, contained_file, load_project
-
-    project = load_project(manifest)
-    f = next((f for f in compile_program(project.source)[0].functions if f.name == symbol and not f.bindings), None)
-    unit = project.unit_at(f.line) if f else None
-    if unit is None or unit.path in project.vendored_units:
-        raise ProjectError(f"{symbol} is not declared in a file of this project, so its plan has nowhere to go.")
-    path = contained_file(project.root, unit.path, ".cairn")
-    local = symbol.rsplit(".", 1)[-1]
-    after = replanned(replanned(path.read_text(encoding="utf-8"), symbol, ""), local, text(local, written(chosen)))
-    try:
-        compile_source(load_project(manifest, given={path.resolve(): after}).source)
-    except Diagnostic as error:
-        raise ProjectError(f"The plan chosen for {symbol} would leave the project refused ({error.data['code']}: "
-                           f"{error.data['message']}); nothing was written.") from error  # fmt: skip
-    path.write_text(after, encoding="utf-8")
-    return unit.path
 
 
 def space(kinds: set[str], host_lanes: int, regions: int = 1) -> list[Plan]:
@@ -98,7 +52,7 @@ def registers(source: str, name: str, unrolls: set[int]) -> dict[int, int]:
         return {}
     found = {}
     for u in sorted(unrolls):
-        read = kernels(replanned(source, name, text(name, (("unroll", u),)) if u > 1 else ""))
+        read = kernels(Placement(source, name).apply((("unroll", u),) if u > 1 else ()))
         used = [k["registers"] for k in read.get("kernels", {}).get(name, [])]
         if used:
             found[u] = max(used)
@@ -135,11 +89,12 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     if not sizes:
         raise ValueError("Give the sizes to tune for with --at, such as --at n=1e7.")
     current = written(now(c))
+    placement = Placement(source, name)
     held = registers(source, name, {max(u, 1) for u in SPACE["unroll"]}) if "device" in kinds else {}
     candidates = space(kinds, chosen.host.lanes if chosen.host else 16, regions(p, name))
     counted: dict[int, Cost] = {}  # a fused chain is one region, not two, so each fuse is counted as written
     for joined in {dict(plan).get("fuse", 0) for plan in candidates}:
-        again = replanned(source, name, text(name, (("fuse", joined),)) if joined else "")
+        again = placement.apply((("fuse", joined),) if joined else ())
         try:
             p2, checker2, _ = compile_program(again)
             counted[joined] = count(p2, checker2, {name})[name]
@@ -147,7 +102,7 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
             candidates = [plan for plan in candidates if dict(plan).get("fuse", 0) != joined]
     for width in {dict(plan).get("vector", 0) for plan in candidates} - {0}:  # the widths the checker allows here
         try:
-            compile_program(replanned(source, name, text(name, (("vector", width),))))
+            compile_program(placement.apply((("vector", width),)))
         except Diagnostic:  # nothing to chunk, or a chunk wider than one access: the plan is refused
             candidates = [plan for plan in candidates if dict(plan).get("vector", 0) != width]
     cost = {plan: priced(counted[dict(plan).get("fuse", 0)], plan, chosen, sizes, arch, held) for plan in candidates}
@@ -177,12 +132,13 @@ def timed(source: str, name: str, ranked: list[Plan], current: Plan, sizes: list
     from ..projects.toolchain import resolve_arch
     from . import measure, on_device
 
+    placement = Placement(source, name)
     field = list(dict.fromkeys([*distinct(ranked, keep), current]))
     blocks, rounds = 3, []
     times: dict[Plan, float] = {}
     while True:
         for plan in field:
-            variant = replanned(source, name, text(name, plan))
+            variant = placement.apply(plan)
             total = 0.0
             for s in sizes:
                 if device:

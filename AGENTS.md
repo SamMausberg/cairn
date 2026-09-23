@@ -46,6 +46,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `perf/work.py` | what a function does each time it runs, counted from the typed tree, which a prediction prices |
 | `perf/model.py`, `perf/profile.py` | a predicted time, and what one machine can do |
 | `perf/on_device.py` | the only device timing, under the owner's make targets |
+| `perf/plan_source.py` | a function's plan as source text: the plans the checker resolves to it, and where a new one is written |
 | `verify/elision.py` | the independent check of every guard lowering leaves out |
 | `verify/diff.py`, `verify/emission.py` | the class each function of two versions gets, and when two emissions are the same code |
 | `verify/runner.py` | test blocks, each run in a process of its own |

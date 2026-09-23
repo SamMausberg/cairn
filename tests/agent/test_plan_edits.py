@@ -10,6 +10,8 @@ import pytest
 from cairn.agent.agent_tools import HANDLES, EditHost
 from cairn.agent.plans import PROTOCOL, PlanHost
 from cairn.compiler.cairnc import compile_source
+from cairn.perf.plan_source import write_plan
+from cairn.projects.project import load_project
 from emitted import code_of
 
 SPREAD = """fn mix(v:u64) -> u64 {
@@ -48,7 +50,8 @@ def test_an_admitted_plan_changes_the_plan_and_nothing_else():
     before, after = compile_source(SPREAD)[1]["functions"], compile_source(now)[1]["functions"]
     assert after["spread"]["plan"] == {"grain": 1, "lanes": 8}
     assert {n: {k: v for k, v in r.items() if k != "plan"} for n, r in after.items()} == before
-    assert now.startswith(SPREAD.rstrip("\n"))  # the source is the original with one plan line after it
+    declared = "out[i] = mix(u64(i)); } }"  # the source is the original with one plan line after spread
+    assert now == SPREAD.replace(declared, declared + "\nplan spread { grain 1; lanes 8; }")
 
 
 @pytest.mark.parametrize(
@@ -81,9 +84,60 @@ def test_a_spent_or_stale_session_changes_nothing():
     assert code_of(lambda: host.respond({**reply(packet, lanes=2), "session": first["next_session"]})) == "E-SESSION"
 
 
-def test_a_function_without_a_region_or_outside_the_root_has_no_plan_session():
+def test_a_function_without_a_region_or_a_function_of_that_name_has_no_plan_session():
     assert code_of(lambda: PlanHost().open(SPREAD, "walk")) == "E-PLAN"
     assert code_of(lambda: PlanHost().open(SPREAD, "nothing")) == "E-SYMBOL"
+
+
+def project(root, main="import lib;\nimport other;\nfn main() -> i32 { return 0; }\n"):
+    """Two modules that each declare a spread with a region; other's already has a plan."""
+    (root / "src").mkdir(parents=True)
+    (root / "cairn.toml").write_text(
+        '[project]\nname = "twin"\nsources = ["src/lib.cairn", "src/other.cairn", "src/main.cairn"]\n'
+    )
+    (root / "src/lib.cairn").write_text("module lib;\n" + SPREAD.replace("fn spread", "pub fn spread"))
+    (root / "src/other.cairn").write_text(
+        "module other;\npub fn spread(n:usize, out:rw<u64>[n]) { parallel i in n { out[i] = u64(i); } }\n"
+        "plan spread { lanes 2; }\n"
+    )
+    (root / "src/main.cairn").write_text(main)
+    return load_project(root)
+
+
+def receipts(source):
+    return compile_source(source)[1]["functions"]
+
+
+def test_a_function_of_a_named_module_takes_a_plan_in_its_own_module(tmp_path):
+    loaded = project(tmp_path)
+    host = PlanHost()
+    packet = host.open(loaded, "lib.spread", sizes=[{"n": 1e6}])
+    assert set(packet["items"]) == {"grain", "lanes"} and packet["current"] == {}
+    assert packet["written_in"] == {"module": "lib", "file": "src/lib.cairn", "after_line": 7}
+    admitted = host.respond(reply(packet, grain=1, lanes=8))
+    assert admitted["plan"] == "plan spread { grain 1; lanes 8; }" and admitted["written_in"]["module"] == "lib"
+    before, after = receipts(loaded.source), receipts(host.source("lib.spread"))
+    assert after["lib.spread"]["plan"] == {"grain": 1, "lanes": 8} and after["other.spread"]["plan"] == {"lanes": 2}
+    assert {n: r for n, r in after.items() if n != "lib.spread"} == {
+        n: r for n, r in before.items() if n != "lib.spread"
+    }
+    assert host.open(host.source("lib.spread"), "lib.spread")["current"] == {"grain": 1, "lanes": 8}
+    assert code_of(lambda: host.open(loaded, "spread")) == "E-SYMBOL"  # two modules declare one: name its module
+
+
+def test_a_plan_written_elsewhere_under_the_qualified_name_is_replaced_not_doubled(tmp_path):
+    loaded = project(tmp_path, "import lib;\nfn main() -> i32 { return 0; }\nplan lib.spread { lanes 4; }\n")
+    host = PlanHost()
+    packet = host.open(loaded, "lib.spread")
+    assert packet["current"] == {"lanes": 4}
+    host.respond(reply(packet, grain=64))
+    now = host.source("lib.spread")
+    assert "plan lib.spread" not in now and now.count("plan spread { grain 64; }") == 1
+    assert receipts(now)["lib.spread"]["plan"] == {"grain": 64}
+    assert write_plan(tmp_path, "lib.spread", {"grain": 64}) == "src/lib.cairn"  # the files take the same edits
+    assert "plan" not in (tmp_path / "src/main.cairn").read_text()
+    assert "plan spread { grain 64; }" in (tmp_path / "src/lib.cairn").read_text()
+    assert receipts(load_project(tmp_path).source)["other.spread"]["plan"] == {"lanes": 2}
 
 
 def test_neither_protocol_widens_into_the_other():

@@ -18,7 +18,7 @@ from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.compiler.header import binding
 from cairn.editor.document import Document
 from cairn.editor.workspace import rename, workspace
-from cairn.perf.tune import write_plan
+from cairn.perf.plan_source import write_plan
 from cairn.projects.build import build
 from cairn.projects.project import ProjectError, load_project
 from cairn.projects.revision import read
