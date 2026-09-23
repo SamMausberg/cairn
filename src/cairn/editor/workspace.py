@@ -78,13 +78,18 @@ class Workspace:
         return {"uri": f.uri, "range": here.span(t.start - f.start, t.end - f.start)}
 
 
+def on_disk(buffers: dict[str, str]) -> dict[Path, str]:
+    """The open buffers of files on disk, by resolved path: what a project is loaded with in place of those files."""
+    return {p.resolve(): text for u, text in buffers.items() if (p := path_of(u)) and p.is_file()}
+
+
 def context(uri: str, buffers: dict[str, str]) -> tuple[Project, list[File]] | None:
     """The project holding the document at `uri` and its files, with `buffers` (uri -> text) in place of the files
     they hold: the nearest `cairn.toml` above it whose project lists it. None for a document in no project."""
     path = path_of(uri)
     if path is None or not path.is_file():
         return None
-    given = {p.resolve(): text for u, text in buffers.items() if (p := path_of(u)) and p.is_file()}
+    given = on_disk(buffers)
     for home in [path.parent, *path.parents][:LEVELS]:
         if not (home / MANIFEST).is_file():
             continue
@@ -111,7 +116,7 @@ def files_of(project: Project, given: dict[Path, str]) -> list[File]:
 def workspace_symbols(query: str, buffers: dict[str, str], roots: list[str]) -> list[dict]:
     """Every declaration whose name holds `query`, case aside, in the open documents, the projects they belong
     to and the projects at the workspace's roots; each named with its module as its container."""
-    given = {p.resolve(): text for u, text in buffers.items() if (p := path_of(u)) and p.is_file()}
+    given = on_disk(buffers)
     files: dict[str, File] = {}
     for root in roots:
         home = path_of(root)
