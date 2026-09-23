@@ -40,7 +40,7 @@ semver: major: bucket behaves differently at us = 100
   these public functions are unproven, and cannot raise it further: main
 ```
 
-The fix changed `bucket` on the input the bug report names, and that witness ran natively under both compilers. The tidy-up changed nothing `clamp` does. `count_below` and `percentile` compile to identical code. `main` is `unknown` because the value model has no strings, and its own code did not change. No effect row, guard count or signature moved, so the diff lists none. The version bump is major because a public function now behaves differently, which is what a bug fix is.
+The two `identical-code` functions are `count_below` and `percentile`, and `main` is `unknown` because the value model has no strings. No effect row, guard count or signature moved, so the diff lists none. The bump is major because a public function now behaves differently, which is what a bug fix is.
 
 ## A live model
 

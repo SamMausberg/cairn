@@ -43,15 +43,15 @@ plate: largest distance from the f64 reference 0.000014842041622387114, contract
 Every program printed the same fingerprint: yes.
 ```
 
-The largest error is 0.0000148, about 300 times inside the contract. `run.py` then builds `baseline/plate.cpp`, the same loop as a C++ programmer writes it, with the same compiler and the flags CAIRN builds with. With `-DGUARDS` it makes the same checks per cell that the CAIRN build keeps (`cairn explain demos/numeric --symbol sweep` lists them), and with `-fopenmp` it is an OpenMP parallel for over as many threads as the lane pool. It runs every program in interleaved rounds and prints the median sweep time of each. Every C++ build prints the fingerprint above, so all of them computed the same bits.
+The largest error is 0.0000148, about 300 times inside the contract. `run.py` then builds `baseline/plate.cpp`, the same loop as a C++ programmer writes it, with the same compiler and the flags CAIRN builds with. With `-DGUARDS` it makes the same checks per cell that the CAIRN build keeps (`cairn explain demos/numeric --symbol sweep` lists them), and with `-fopenmp` it is an OpenMP parallel for over as many threads as the lane pool. It runs every program in interleaved rounds and prints the median sweep time of each. Every C++ build prints the fingerprint above: all of them computed the same bits.
 
 The timings in [evidence/v0_9/demos](../../evidence/v0_9/demos/README.md) were taken while five other agents loaded the machine, and they are not a performance comparison: under that load OpenMP's static schedule waits on its slowest thread. Run `make demo-numeric` on a quiet machine before you quote a ratio.
 
 ## The device
 
-The device configuration compiles here for sm_120 with `nvcc -Werror`, and `tests/projects/test_demos.py` checks that. It runs only under `make gpu`, which only the repository's owner runs, because device runs on the reference machine have reset its display driver. That run checks that the device plate has the host's fingerprint and keeps the contract, and writes its output and times to `results/demos/numeric/device.json`. It has not run yet, so no device number for this plate exists.
+The device configuration compiles for sm_120 with `nvcc -Werror`, which `tests/projects/test_demos.py` checks. It runs only under the owner's `make gpu`, which checks that the device plate has the host's fingerprint and keeps the contract, and writes its output and times to `results/demos/numeric/device.json`. That has not run, so no device number for this plate exists.
 
-The closest measured evidence is `evidence/v1_3/gpu/benchmark.json`, from one RTX 5070 Ti: an elementwise f32 `saxpy` whose host and device results agreed bit for bit. Its kernel was 25 times as fast as the sequential host at 10^8 elements, and the whole run, transfers included, 0.47 times as fast. That is a different kernel, not this one.
+The closest measured evidence is a different kernel, `evidence/v1_3/gpu/benchmark.json` from one RTX 5070 Ti: an elementwise f32 `saxpy` whose host and device results agreed bit for bit. Its kernel was 25 times as fast as the sequential host at 10^8 elements, and the whole run, transfers included, 0.47 times as fast.
 
 ## What is verified and what is not
 
