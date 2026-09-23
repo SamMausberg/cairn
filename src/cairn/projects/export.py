@@ -62,9 +62,13 @@ def closure(text: str) -> list[str]:
     return found
 
 
-def role(name: str, program: str) -> str:
+def role(name: str, program: str, cuda: bool) -> str:
+    """What a file of an export is: the program, or a runtime header of the device implementation, of the CAIRN launch
+    wrappers or of the host runtime; a host program has only the program and its runtime."""
     if name == program or name.endswith(".h"):
         return "program"
+    if not cuda:
+        return "runtime"
     return "device" if name in DEVICE_SIDE else "launch" if name in LAUNCH else "host runtime"
 
 
@@ -142,7 +146,7 @@ def export(project: Project, out: Path, *, cxx: str = "clang++", arch: str | Non
         "project": project.receipt(),
         "kind": kind,
         "files": files,
-        "roles": {n: role(n, program) for n in files},
+        "roles": {n: role(n, program, cuda) for n in files},
         "command": line,
         "compilers": compilers,
         "device_target": device.name if device else None,

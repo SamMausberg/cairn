@@ -76,6 +76,7 @@ def test_an_export_holds_the_program_exactly_the_headers_it_includes_and_its_rec
     headers = exported.closure(program)
     assert set(record["files"]) == {"program.cpp", *headers} and set(headers) < set(RUNTIME_FILES)
     assert "cairn_gpu.hpp" not in headers and "cairn_runtime.hpp" in headers  # a host program: no device runtime
+    assert set(record["roles"].values()) == {"program", "runtime"}
     assert record["command"][0] == shutil.which("g++") and record["command"][-3:] == ["program.cpp", "-o", "summed"]
     assert record["compilers"]["cxx"]["version"].startswith("g++") and record["device_target"] is None
     assert record["identity"] == exported.identity(record) and set(record["functions"]) >= {"total", "main"}

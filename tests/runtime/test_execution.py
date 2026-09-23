@@ -20,7 +20,7 @@ from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
 from cairn.compiler.header import header
 from cairn.projects.build import build
 from cairn.projects.project import load_project
-from emitted import device_build, sanitized
+from emitted import contract, device_build, on_device, sanitized
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME, HOST = ROOT / "src/cairn/runtime", ROOT / "tests/runtime"
@@ -210,6 +210,46 @@ def test_the_pipeline_compiles_for_sm_120_and_never_waits_for_the_whole_device(t
     called = {line.split()[-1] for line in listed.splitlines() if line.split()[-1].startswith("cuda")}
     assert {"cudaStreamSynchronize", "cudaStreamCreate", "cudaMemcpyAsync", "cudaMemsetAsync"} <= called, called
     assert not called & {"cudaDeviceSynchronize", "cudaMemcpy", "cudaMemset"}, called
+
+
+CHECKED = """
+fn expected(n:usize, round:u32, hx:rw<u32>[n], hs:rw<u32>[n]) -> u64 {
+  let mut total:u64 = 0;
+  for i in 0..n { hx[i] = u32((u64(i) * 2654435761 + u64(round)) % 1000); total += u64(hx[i]); }
+  let mut run:u32 = 0;
+  for i in 0..n { hs[i] = run; run += hx[i] % 16; }
+  let mut used:u64 = 0;
+  for i in 0..n { if hx[i] % 3 == 0 { used += 1; } }
+  return total + u64(run) * 1000000 + used * 1000000000000;
+}
+
+fn main() -> i32 {
+  let n:usize = 20011;
+  buffer x:u32[n]@device = zeroed;
+  buffer sums:u32[n]@device = zeroed;
+  buffer kept:u32[n]@device = zeroed;
+  buffer hx:u32[n] = zeroed;
+  buffer hs:u32[n] = zeroed;
+  buffer back:u32[n] = zeroed;
+  for k in 0..20 {
+    let got = pass(n, x, sums, kept, u32(k));
+    let want = expected(n, u32(k), hx, hs);
+    if got != want { return 1; }
+    transfer(back, sums);
+    for i in 0..n { if back[i] != hs[i] { return 2; } }
+  }
+  return 0;
+}
+"""
+
+
+def test_the_pipeline_keeps_its_results_on_the_device(tmp_path):
+    """Twenty passes on the device, each held to the host's own loops over the same data: typed here, and run only
+    under `make gpu`."""
+    cpp = compile_source(PIPELINE + CHECKED)[0]
+    with on_device():
+        done = contract(tmp_path, cpp, "g++", cuda=True, timeout=600)
+    assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
 
 
 def test_runtime_files_include_the_execution_header():
