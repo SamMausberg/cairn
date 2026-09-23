@@ -99,6 +99,20 @@ cairn run examples/apps/kvstore    # a crash-safe storage engine
 
 [docs/tools.md](docs/tools.md) covers every command, and [the guide](docs/guide.md) goes from a fresh checkout to twelve complete programs.
 
+## Demos
+
+Three demos, each one command from a fresh checkout. `tests/projects/test_demos.py` runs them again, so they cannot go stale.
+
+| Demo | What you see | Command |
+|---|---|---|
+| [repair](demos/repair/README.md) | An agent fixes a bug through the edit host. The host refuses a debug print (`E-EFFECT-EXPANSION`) and a tidy-up that changes behaviour (`E-PRESERVE`, with the input `x = 0, lo = 16, hi = 12`). `cairn diff` then reports the fixed function as changed at `us = 100`, the tidied one as SMT-equivalent, and a major version bump. | `make demo-repair` |
+| [numeric](demos/numeric/README.md) | A 1024 x 1024 heat-plate sweep written once runs on host threads and as CUDA lanes. The host result stays within 0.0000148 of an f64 reference, against a stated bound of 0.0048, and has the same bits as a plain C++ loop. The device half compiles for sm_120 and has not run yet. | `make demo-numeric` |
+| [visual](demos/visual/README.md) | An agent asks what a program draws, reads in the layout record that a colour bar covers the plot, moves it, and gets back the new frames and the effect rows the edit changed (none). | `make demo-visual` |
+
+![the visual demo's plate viewer after 5000 sweeps](demos/visual/frames/after-4.png)
+
+The agents in the demos are scripted replies, replayed; everything the host, the compiler, Z3 and the programs say is computed on each run. `python3 demos/repair/run.py --live MODEL` sends the same packets to a real model.
+
 ## Limitations and what you trust
 
 CAIRN is beta software, developed and measured on one machine. The language can still change between releases.
@@ -155,10 +169,11 @@ What has not been validated:
 ```
 src/cairn/     compiler/ runtime/ std/ verify/ agent/ editor/ perf/ projects/ templates/ targets/
 proofs/        Lean 4: collector certificates, ownership and lease calculus, lane pool, guard elision
+demos/         the three demos above
 examples/      runnable projects: hello/ systems/ apps/ interop/ embedded/, and inputs for the tools
 tests/         the suite: language/ soundness/ verification/ projects/ runtime/ tooling/ agent/
 tools/         checks/ ai/ corpus/ release/
-bench/         the CPU and GPU benchmark harnesses and the preregistered suite
+bench/         suite/ host/ codegen/ gpu/ benchmark harnesses, and ai/, the equal-budget AI benchmark
 editors/       VS Code and Vim support, generated from the compiler's vocabulary
 docs/          the documentation
 evidence/      executed results by release, with their limits
