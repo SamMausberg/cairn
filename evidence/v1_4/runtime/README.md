@@ -26,7 +26,7 @@ Both sessions ran while other agents built and tested on the same sixteen-lane m
 | group of eight, refilled | 1,533,714 | 1,619,134 | 472,857 | 171,473 |
 | chain of sixteen | 7,142,126 | 5,674,618 | 2,068,744 | 991,188 |
 
-A spawn followed at once by its wait finds its thread still spinning, so the round costs a hand-off instead of a thread, two to three orders of magnitude less in both sessions. The other cases wake threads that may have gone to sleep, and how long a woken thread waits for a core depends on the load: at 8 to 11 the fork-join gained a factor of 150, the group round almost three and the chain two, while at 17 to 23 the group round came out level although it started 6 threads where it had started 28,000. Nothing here was measured on a quiet machine, and nothing is claimed for one.
+A spawn followed at once by its wait finds its thread still spinning, so the round costs a hand-off instead of a thread, two to three orders of magnitude less in both sessions. The other cases wake threads that may have gone to sleep, and how long a woken thread waits for a core depends on the load. At a load of 8 to 11 the fork-join gained a factor of 150, the group round almost three and the chain two; at 17 to 23 the group round came out level although it started 6 threads where it had started 28,000. Nothing here was measured on a quiet machine, and nothing is claimed for one.
 
 ## What this does not show
 
