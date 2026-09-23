@@ -6,7 +6,7 @@ The attacks were CAIRN programs, crafted project and export directories, and scr
 
 ## Fixed
 
-Twelve defects are fixed on main. Each fix is in the file that owns the rule, and `tests/soundness/test_review_implementation_layer.py` keeps the program or request that showed it, except the two PARAMS fixed, whose tests are in `tests/language/test_implementations.py`, and the MCP fix, tested in `tests/agent/test_mcp.py`.
+Seventeen defects are fixed on main. Each fix is in the file that owns the rule, and `tests/soundness/test_review_implementation_layer.py` keeps the program or request that showed it, except those fixed by another track: PARAMS's in `tests/language/test_implementations.py`, the MCP fix in `tests/agent/test_mcp.py`, and TENSOR's in `tests/soundness/test_fragments.py` and `tests/language/test_layouts.py`.
 
 | defect | what went wrong | fix |
 |---|---|---|
@@ -22,10 +22,15 @@ Twelve defects are fixed on main. Each fix is in the file that owns the rule, an
 | `cairn mcp` wrote outside its directory | A session opened on an absolute path or `../other` wrote an admitted edit into that project. | `a52726b` (AGENT-TOOLS): a path outside the served directory is `E-REQUEST` |
 | The direct dispatch ignored float rounding | `f(X)` with `const X:f32 = -0.1` called `g ... when x < -0.1` directly: the fold compared in exact arithmetic, the entry in f32, where the condition is false. The program returned 7.0 against -0.1 under both compilers; `when x < 16777217.0` with `f(16777216)` did the same. | `ac93762` (PARAMS): a condition that computes with a float is tested on entry |
 | `E-IMPL-CALL` missed a cycle through two references | `f2 implements f = k(n)` and `k2 implements k = f(n)`, both selected, were accepted, and `f(3)` recursed until AddressSanitizer reported a stack overflow (g++; clang++ exited 56). | `ac93762` (PARAMS): the cycle check runs again once the dispatch edges are in |
+| A fragment tile had no run-time bound | A load or store through a view whose extent is not a literal, `a:ro<f16>[n]@unified` with `n = 16` and a 16 x 16 layout, was a heap-buffer-overflow in `cr::frag::load` under both compilers. | `970328e` (TENSOR): `cr::layout::holding` traps when the view holds fewer elements than the layout's cosize, on the host and in device lanes; the program now stops at the guard (exit -6) with no sanitizer report |
+| Layout offsets wrapped past 2^64 | `strided(3, 1, 2^63, 1)` passed the distinctness check while element (2, 0) landed on offset 0 in C++, and two threads writing through it raced; `swizzle(rows(32, 32), 3, 4, 64)` shifted by 64. | `970328e` (TENSOR): `E-LAYOUT` for an offset of 2^63 - 1 or more, and for a swizzle with `B + M + S` over 63 |
+| Fragment arguments could differ within a warp | WMMA loads and stores at `(t % 2, 0)`, `WmmaAcc(f32(t))` and an `MmaA` load at `t % 2` were accepted; WMMA leaves them undefined on the device, and the host emulation answered per lane. | `970328e` (TENSOR): `E-COOP-WARP` for a thread-level coordinate, fill value, operand or WMMA accumulator |
+| A device fragment load ran on host threads | A region whose only device view was read through `mma_load` was placed on the host, where it dereferenced the device pointer. | `970328e` (TENSOR): a fragment's view places the region (`E-PLACEMENT`) |
+| A WMMA store named a writer lane WMMA does not | The phase rule took a WMMA store's writer from the `mma.sync` share, so a thread reading its own lane's elements after a store, with no barrier, was accepted. | `970328e` (TENSOR): a WMMA store is one write by its warp with no lane named (`E-COOP-UNORDERED`); an `mma.sync` store keeps the ISA's share |
 
 ## Found and handed to their owners
 
-Nine more defects are in files that PROOFS and TENSOR were changing while this ran, so the reviewer sent each owner the program and did not edit the file. When this was written none of their fixes had landed on main, so each is open until its owner's commit says otherwise.
+Four more defects are in files PROOFS was changing while this ran, so the reviewer sent it the programs and did not edit the files. When this was written its fix had not landed on main, so each is open until its commit says otherwise.
 
 | owner | defect | shown by |
 |---|---|---|
@@ -33,11 +38,6 @@ Nine more defects are in files that PROOFS and TENSOR were changing while this r
 | PROOFS, `cooperative.py` | A closure that writes `out[0] = u64(t)`, passed to a call in every thread, is accepted and races under both compilers; `parallel` refuses the same with `E-PARALLEL-RACE`. A closure writing a shared array races the same way. | ThreadSanitizer, both compilers |
 | PROOFS, `pipelines.py` | A stage read before its `wait` through anything but `tiles[i]` is accepted: `first(64, tiles)` and `first(tiles[0..4])` dereference the null stage pointer (AddressSanitizer SEGV under g++, unknown-crash under clang++). A closure capture and a fill from a pipeline never waited on crash the same way (a helper's runs). | AddressSanitizer, both compilers |
 | PROOFS, `pipelines.py` | A fill from a `@device` source in a host region, or from a host view in a device region, is accepted: the fill's source placement is not checked. | acceptance |
-| TENSOR, `fragments.py`, `cairn_fragment.hpp` | A fragment load or store through a view whose extent is not a literal has no guard: `a:ro<f16>[n]@unified` with `n = 16` and a 16 x 16 layout is a heap-buffer-overflow in `cr::frag::load`. | AddressSanitizer, both compilers |
-| TENSOR, `layouts.py` | Offsets are unbounded in the checker and computed mod 2^64 in C++: `strided(3, 1, 2^63, 1)` passes the distinctness check while element (2, 0) lands on offset 0, and two threads writing through it race. `swizzle(rows(32, 32), 3, 4, 64)` shifts by 64. | ThreadSanitizer and UndefinedBehaviorSanitizer, both compilers |
-| TENSOR, `fragments.py` | Fragment arguments may differ within a warp: WMMA loads and stores at `(t % 2, 0)`, `WmmaAcc(f32(t))` and an `MmaA` load at `t % 2` are accepted, which WMMA leaves undefined on the device and the host emulation answers per lane. | acceptance, host runs |
-| TENSOR, `cooperative.py` placements | A region whose only device view is read through `mma_load` runs on host threads and dereferences the device pointer. | acceptance, emitted code read |
-| TENSOR, `phases.py` fragment footprint | A WMMA store is recorded as written by the lane the `mma.sync` share names, though WMMA leaves the share unspecified; a thread reading its own lane's elements after a store, with no barrier, is accepted. Not confirmed against the SASS. | acceptance |
 
 ## What held
 
@@ -63,7 +63,7 @@ None lets anything unsafe through, and none was changed. `cairn tune --write` re
 
 ## What this does not show
 
-One reviewer and three helpers wrote every attack, on one x86-64 machine, and nothing ran on a device: the device lowering of cooperative regions, fragments, pipelines and typed PTX is compiled at most, and typed PTX attacks were checked for acceptance only. The nine defects handed to PROOFS and TENSOR were open when this was written.
+One reviewer and three helpers wrote every attack, on one x86-64 machine, and nothing ran on a device: the device lowering of cooperative regions, fragments, pipelines and typed PTX is compiled at most, and typed PTX attacks were checked for acceptance only. The four defects handed to PROOFS were open when this was written.
 
 Not examined: `launch(threads, block)` with blocks that are not whole warps, zero or symbolic, or called from a lane or a cooperative thread; one symbol defined by two vendored sources, a `.cu` source in a host build, and injection through extern names beyond reading; `unbuildable` for PTX of another architecture and for host assembly of another family; the `E-COOP-GLOBAL` weight rule beyond two attacks, and the `d799762` relaxation, which was read and not run (PROOFS found two radix holes in `footprints.py` while modelling it, fixed in `7ab0561`); warp operations under split conditions beyond the fragment cases; shared arrays declared in loops and conditions; the execution contexts and scratch reuse of `cairn_exec.hpp` and `cairn_reuse.hpp`; the device target beyond reading `projects/target.py`; implementation-session requests beyond the submission checks; routes to a reference through `dyn` or a trait method.
 
