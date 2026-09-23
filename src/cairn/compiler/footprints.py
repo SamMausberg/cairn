@@ -14,9 +14,11 @@ element it is.
 A weight is compared with a sum by sign: the difference must have no negative coefficient on anything but its
 constant, and be positive where every atom is at its least (0, or 1 for a grid extent, since a block runs only when
 every extent is at least 1). A condition `a < b` the write sits under bounds `a` when `a` is exactly a sum of the
-digits placed so far, which is how a guarded transpose `if col < h { out[row * h + col] = v; }` is shown. A loop
-counter is a digit the thread may repeat, so a thread may rewrite its own element; a block or thread name the index
-does not use is refused unless a condition pins it (`if t == 0 { out[b] = total; }`).
+digits placed so far, all counting the same way, which is how a guarded transpose `if col < h { out[row * h + col] =
+v; }` is shown. A digit's range may not move with another digit (`for c in l..l + 2`), since then two threads' values
+of it lie in two different ranges. A loop counter is a digit the thread may repeat, so a thread may rewrite its own
+element; a block or thread name the index does not use is refused unless a condition pins it (`if t == 0 { out[b] =
+total; }`).
 
 A read of an array the region writes must name the element its own thread writes: a write's polynomial, its loop
 counters renamed to the read's over the same ranges, standing under every condition the write does (`own`). Another
@@ -459,61 +461,71 @@ def disjoint(writes: list[Site], digits: dict[str, Digit], least: dict[str, int]
         inside = [a for a in m if a in digits]
         if len(inside) > 1:
             return f"{' * '.join(inside)} multiplies two of the region's names."
-    items: list[tuple[str, Poly, Poly]] = []  # (digit, weight, the most it rises above its least)
+    items: list[tuple[str, Poly, Poly, bool]] = []  # (digit, weight, the most it rises above its least, counts down)
     for name, digit in digits.items():
         weight = base.weight(name)
-        span = narrowed(name, digit, common, least)
+        span = narrowed(name, digit, common, least, digits)
         if not weight.terms:
             if digit.agent and (span is None or span.constant != 0):
                 return f"the index does not depend on {name}, so every {name} writes the same element."
             continue
-        if all(k <= 0 for k in weight.terms.values()):
+        down = all(k <= 0 for k in weight.terms.values())
+        if down:
             weight = -weight  # counts down: the same digit, read from the other end
         elif any(k < 0 for k in weight.terms.values()):
             return f"{name} is both added and taken away in one index."
-        if span is None:
+        if span is None or digit.lo is None:
             return f"the checker cannot bound {name} where it is written."
-        items.append((name, weight, span))
+        moving = sorted(a.partition("#")[0] for a in (digit.lo.atoms() | span.atoms()) & set(digits))
+        if moving:  # two threads' ranges for it differ, so its span says nothing of how far apart their values are
+            return f"the range of {name.partition('#')[0]} moves with {', '.join(moving)}."
+        items.append((name, weight, span, down))
     if max(offsets) > min(offsets):
-        items.append(("#site", Poly.of(1), Poly.of(max(offsets) - min(offsets))))
+        items.append(("#site", Poly.of(1), Poly.of(max(offsets) - min(offsets)), False))
     return radix(items, common, digits, least)
 
 
-def narrowed(name: str, digit: Digit, facts: list[tuple[Poly, Poly]], least: dict[str, int]) -> Poly | None:
-    """The most a digit rises above its least value: its range, or less where a condition bounds it."""
+def narrowed(name: str, digit: Digit, facts: list[tuple[Poly, Poly]], least: dict[str, int],
+             digits: dict[str, Digit]) -> Poly | None:  # fmt: skip
+    """The most a digit rises above its least value: its range, or less where a condition bounds it by values that
+    are the same in every thread."""
     span = digit.hi - digit.lo - Poly.of(1) if digit.hi is not None and digit.lo is not None else None
     for lhs, bound in facts:
         rest = (lhs - Poly.of(name)).constant
         if rest is not None and digit.lo is not None:
             candidate = bound - Poly.of(rest) - digit.lo
+            if candidate.atoms() & set(digits):
+                continue
             if span is None or positive(span - candidate + Poly.of(1), least):
                 span = candidate
     return span
 
 
-def radix(items: list[tuple[str, Poly, Poly]], facts: list[tuple[Poly, Poly]], digits: dict[str, Digit],
+def radix(items: list[tuple[str, Poly, Poly, bool]], facts: list[tuple[Poly, Poly]], digits: dict[str, Digit],
           least: dict[str, int]) -> str:  # fmt: skip
     """Order the digits lightest first, each weight above the most the lighter ones add up to: then the index names
-    every digit. A condition on exactly the digits placed so far may bound their sum more tightly than their ranges."""
-    placed: list[tuple[str, Poly]] = []
+    every digit. A condition on exactly the digits placed so far may bound their sum more tightly than their ranges,
+    while they all count the same way: `t + 32 k < 40` says nothing of how far apart two values of `32 k - t` are."""
+    placed: list[tuple[str, Poly, bool]] = []
     bounds = [Poly()]  # the most the placed digits rise above their least, each way the checker knows it
     prefix = Poly()  # the placed digits' own sum, which a condition may bound
     remaining = list(items)
     while remaining:
         fits = [x for x in remaining if any(positive(x[1] - b, least) for b in bounds)]
         if not fits:
-            name, weight, _ = remaining[0]
+            name, weight, *_ = remaining[0]
             return f"the weight of {name}, {weight!r}, is not shown to exceed what the lighter terms add up to."
-        name, weight, span = min(fits, key=lambda x: sum(heavier(x[1], y[1], least) for y in fits))
-        remaining.remove((name, weight, span))
-        placed.append((name, weight))
+        chosen = min(fits, key=lambda x: sum(heavier(x[1], y[1], least) for y in fits))
+        name, weight, span, down = chosen
+        remaining.remove(chosen)
+        placed.append((name, weight, down))
         prefix = prefix + weight * Poly.of(name)
         grown = [b + weight * span for b in bounds]
-        for lhs, bound in facts:
+        for lhs, bound in facts if len({d for *_, d in placed}) == 1 else []:
             rest = (lhs - prefix).constant
             if rest is not None:
                 lows = Poly()
-                for other, w in placed:
+                for other, w, _ in placed:
                     lo = digits[other].lo if other in digits else Poly()
                     lows = lows + w * (lo if lo is not None else Poly())
                 grown.append(bound - Poly.of(rest) - lows)

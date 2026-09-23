@@ -346,6 +346,32 @@ def test_a_thread_may_read_what_it_writes_through_other_loops_over_the_same_rang
     refused("E-COOP-GLOBAL", IN_PLACE.replace("READ", "16").replace("GUARD", "bx * 64 + tx + 32 * j < n"))
 
 
+COUNTED = """fn f(g:usize, n:usize, out:rw<u64>[n]) {
+  blocks b in g threads t in 32 {
+    for k in 0..2 {
+      if t + 32 * k < 40 { out[INDEX + 32 * k + 40 * b] = 1; }
+    }
+  }
+}
+"""
+
+
+def test_a_condition_bounds_a_sum_of_digits_only_while_they_count_one_way():
+    """Under t + 32 k < 40, t + 32 k stays below 40, so blocks 40 apart never meet. With 31 - t in its place the lighter
+    part reaches 0 to 63, and blocks 0 and 1 both write element 63: (b, t, k) = (0, 0, 1) and (1, 8, 0)."""
+    compile_source(COUNTED.replace("INDEX", "t"))
+    refused("E-COOP-GLOBAL", COUNTED.replace("INDEX", "31 - t"))
+
+
+def test_a_digit_whose_range_moves_with_another_is_not_bounded_by_it():
+    """c runs from l to l + 1, so l + 3 c reaches 0 to 11 while the ranges add up to 5: threads 0 and 1 both write
+    element 7, at (t, l, c) = (1, 0, 0) and (0, 1, 2)."""
+    source = "fn f(n:usize, out:rw<u64>[n]) {\n  blocks b in 1 threads t in 32 {\n    for l in 0..3 {\n"
+    source += "      for c in RANGE { out[l + 3 * c + 7 * t] = 1; }\n    }\n  }\n}\n"
+    assert "moves with l" in refused("E-COOP-GLOBAL", source.replace("RANGE", "l..l + 2"))["message"]
+    compile_source(source.replace("RANGE", "0..2"))
+
+
 SHUFFLES = """fn lanes(g:usize, n:usize, out:rw<u64>[n], most:rw<u64>[n], sums:rw<f32>[n]) {
   blocks b in g threads t in 64 {
     let v:u64 = u64(t) * 3 + 1;
