@@ -17,7 +17,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import RUNTIME_FILES, compile_source
+from ..compiler.cairnc import compile_source, write_program
 from ..projects.toolchain import find, flags
 
 MCA_PATHS = ("llvm-mca", "/opt/llvm-21.1.8/bin/llvm-mca")
@@ -43,18 +43,13 @@ def mca() -> str | None:
 def compiled(source: str, cxx: str, arch: str | None, directory: Path) -> tuple[str, str]:
     """(assembly, optimization record) of `source` built with the build's flags, lines placed in `program.cairn`."""
     cpp, _ = compile_source(source, "program.cairn")
-    (directory / "program.cpp").write_text(cpp, encoding="utf-8")
-    for name, text in RUNTIME_FILES.items():
-        (directory / name).write_text(text, encoding="utf-8")
-    base = [f for f in flags(arch, "library") if f not in {"-shared", "-fPIC"}]
-    record = directory / "program.yaml"
-    command = [find(cxx), *base, "-S", "-gline-tables-only", "-fno-asynchronous-unwind-tables",
+    program, record = write_program(directory, "program.cpp", cpp), directory / "program.yaml"
+    command = [find(cxx), *flags(arch, "exe"), "-S", "-gline-tables-only", "-fno-asynchronous-unwind-tables",
                "-fsave-optimization-record", f"-foptimization-record-passes={REMARK_PASSES}",
-               f"-foptimization-record-file={record}", str(directory / "program.cpp"), "-o", str(directory / "p.s")]  # fmt: skip
+               f"-foptimization-record-file={record}", str(program), "-o", str(directory / "p.s")]  # fmt: skip
     subprocess.run(command, check=True, capture_output=True, text=True, timeout=300)
-    return (directory / "p.s").read_text(encoding="utf-8"), record.read_text(
-        encoding="utf-8"
-    ) if record.exists() else ""
+    optimized = record.read_text(encoding="utf-8") if record.exists() else ""
+    return (directory / "p.s").read_text(encoding="utf-8"), optimized
 
 
 def functions(asm: str) -> dict[str, list[str]]:

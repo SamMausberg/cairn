@@ -16,7 +16,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import RUNTIME_FILES, compile_source
+from ..compiler.cairnc import compile_source, write_program
 from ..projects.toolchain import find
 
 ENTRY = re.compile(r"Compiling entry function '([^']+)' for '(sm_\d+)'")
@@ -88,12 +88,9 @@ def kernels(source: str, arch: str = "sm_120", timeout: int = 600) -> dict[str, 
     names = {mangle(f.name): f.name for f in p.functions}
     with tempfile.TemporaryDirectory(prefix="cairn-cubin-") as scratch:
         directory = Path(scratch)
-        (directory / "program.cu").write_text(cpp, encoding="utf-8")
-        for name, text in RUNTIME_FILES.items():
-            (directory / name).write_text(text, encoding="utf-8")
-        cubin = directory / "program.cubin"
+        program, cubin = write_program(directory, "program.cu", cpp), directory / "program.cubin"
         command = [find("nvcc"), "-std=c++20", "-O3", "--fmad=false", f"-arch={arch}", "--extended-lambda",
-                   "--expt-relaxed-constexpr", "-cubin", "-Xptxas", "-v", str(directory / "program.cu"), "-o", str(cubin)]  # fmt: skip
+                   "--expt-relaxed-constexpr", "-cubin", "-Xptxas", "-v", str(program), "-o", str(cubin)]  # fmt: skip
         done = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
         if done.returncode:
             return {"status": "compile-failed", "stderr": done.stderr[-4000:]}

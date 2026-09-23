@@ -12,7 +12,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ..compiler.cairnc import RUNTIME_FILES, Parser, compile_source, compile_units
+from ..compiler.cairnc import RUNTIME_FILES, Parser, compile_source, compile_units, write_program
 from ..compiler.codegen import mangle
 from ..compiler.header import header as c_header
 from .project import Project, ProjectError
@@ -163,12 +163,9 @@ def build(
     out.mkdir(parents=True, exist_ok=True)
     name = re.sub(r"[^A-Za-z0-9_-]", "_", project.name)[:64] or "program"
     directory = Path(tempfile.mkdtemp(prefix=name + "-", dir=out.resolve()))
-    cpp = directory / "program.cpp"
-    cpp.write_text(generated, encoding="utf-8")
+    cpp = write_program(directory, "program.cpp", generated)
     if declared:
         (directory / (name + ".h")).write_text(declared, encoding="utf-8")
-    for runtime, text in RUNTIME_FILES.items():
-        (directory / runtime).write_text(text, encoding="utf-8")
     artifact = directory / (name + ".elf" if bare else "lib" + name + ".so" if kind == "library" else name)
     command = native_command(
         cxx, str(cpp), str(artifact), arch or project.arch, kind, "cuda" in receipt["requires"], target

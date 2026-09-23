@@ -96,6 +96,15 @@ class Poly:
 ONE = Poly.of(1)
 
 
+def add(table: dict[str, Poly], key: str, n: Poly) -> None:
+    table[key] = table.get(key, Poly()) + n
+
+
+def widen(table: dict[str, Poly], key: str, n: Poly) -> None:
+    """The larger of what `key` could touch and `n`: a footprint is the most distinct bytes, never a sum."""
+    table[key] = table.get(key, Poly()).join(n)
+
+
 @dataclass
 class Work:
     """Operations and bytes, each a count per run of the piece of code that holds them."""
@@ -107,7 +116,7 @@ class Work:
     irregular: dict[str, Poly] = field(default_factory=dict)  # view -> accesses whose address depends on data
 
     def op(self, kind: str, times: Poly) -> None:
-        self.ops[kind] = self.ops.get(kind, Poly()) + times
+        add(self.ops, kind, times)
 
     def tables(self) -> tuple[dict[str, Poly], ...]:
         return self.ops, self.reads, self.writes, self.irregular
@@ -116,11 +125,9 @@ class Work:
         rename = rename or {}
         for mine, theirs in zip(self.tables(), other.tables(), strict=True):
             for k, n in theirs.items():
-                key = rename.get(k, k) if mine is not self.ops else k
-                mine[key] = mine.get(key, Poly()) + n * times
+                add(mine, rename.get(k, k) if mine is not self.ops else k, n * times)
         for k, n in other.footprint.items():
-            key = rename.get(k, k)
-            self.footprint[key] = self.footprint.get(key, Poly()).join(n)
+            widen(self.footprint, rename.get(k, k), n)
 
     def join(self, other: Work) -> Work:
         both = Work()
@@ -136,12 +143,6 @@ class Work:
             for k, n in theirs.items():
                 mine[k] = n.subst(given)
         return out
-
-    def irregular_count(self) -> Poly:
-        total = Poly()
-        for n in self.irregular.values():
-            total = total + n
-        return total
 
 
 @dataclass
@@ -216,7 +217,7 @@ class Cost:
         self.regions += other.regions
         self.tasks += other.tasks
         for d, b in other.transfers.items():
-            self.transfers[d] = self.transfers.get(d, Poly()) + b
+            add(self.transfers, d, b)
         self.allocated, self.allocations = self.allocated + other.allocated, self.allocations + other.allocations
         self.waits = self.waits + other.waits
         self.unknown += [u for u in other.unknown if u not in self.unknown]
@@ -286,8 +287,6 @@ class Counter:
     def extent(self, ty: Type, base: str) -> Poly:
         if ty.extent.isdigit():
             return Poly.of(int(ty.extent))
-        if ty.extent.startswith("len("):
-            return self.values.get(ty.extent, Poly.var(ty.extent))
         if ty.extent:
             return self.values.get(ty.extent, Poly.var(ty.extent))
         if ty.name == "Array" and len(ty.args) > 1 and isinstance(ty.args[1], int):
@@ -362,7 +361,7 @@ class Counter:
             lane.seen |= {(k, False) for k in body.writes}
         if folds:
             self.expr(tail.exprs[1], lane)
-            body.op(f"{tail.ty.name}_fold" if tail.ty.name in FLOAT else "int_fold" if tail.op == "+" else "int", ONE)
+            body.op(combining(tail), ONE)
         del self.bound[-len(binders) :]
         for name in chain.scratch:
             for table in (body.reads, body.writes, body.footprint):
@@ -469,42 +468,34 @@ class Counter:
                                         vector=s.vector, chunks=found))  # fmt: skip
 
     def s_reduce(self, s: Stmt, at: Frame) -> None:
-        count = self.size(s.exprs[0]) or Poly.var(f"?count@{s.line}")
-        # An in-order float fold and a checked sum wait on the previous step; wrapping, min and max reassociate.
-        combine = f"{s.ty.name}_fold" if s.ty.name in FLOAT else "int_fold" if s.op == "+" else "int"
-        if s.ref == "device" or s.pooled:
-            body = Work()
-            self.expr(s.exprs[1], Frame(body, ONE, (s.binder,), True))
-            body.op(combine, ONE)
-            self.cost.regions.append(Region("device" if s.ref == "device" else "pooled", s.line, count, at.times,
-                                            body))  # fmt: skip
-            return
-        inner = at.inner(count, s.binder)
-        self.expr(s.exprs[1], inner)
-        inner.work.op(combine, inner.times)
+        self.reduction(s, at, *s.exprs)
 
     def s_scan(self, s: Stmt, at: Frame) -> None:
         out, hi, value, store = s.exprs
+        self.reduction(s, at, hi, value, store, out)
+
+    def reduction(self, s: Stmt, at: Frame, hi: Expr, value: Expr, store: Expr | None = None,
+                  out: Expr | None = None) -> None:  # fmt: skip
+        """A reduction or a scan, priced as a written loop is: a checked or float step waits on the last, the rest
+        overlap. Pooled or on the device it is a region, and a scan's second pass reads and writes each element once
+        more, with its block's offset combined in."""
         count = self.size(hi) or Poly.var(f"?count@{s.line}")
-        # As a reduction and a written loop are priced: a checked or float step waits on the last, the rest overlap.
-        combine = f"{s.ty.name}_fold" if s.ty.name in FLOAT else "int_fold" if s.op == "+" else "int"
-        if s.ref == "device" or s.pooled:
-            body = Work()
-            lane = Frame(body, ONE, (s.binder,), True)
-            self.expr(value, lane)
-            self.access(store, lane, write=True)
-            body.op(combine, ONE)
-            key, size = path(out), Poly.of(self.c.sizeof(out.ty.value) if out.ty else 8)
-            body.reads[key] = body.reads.get(key, Poly()) + size  # the second pass: each element read and written
-            body.writes[key] = body.writes.get(key, Poly()) + size  # once more, with its block's offset combined in
-            body.op("int", ONE)
-            self.cost.regions.append(Region("device" if s.ref == "device" else "pooled", s.line, count, at.times,
-                                            body))  # fmt: skip
-            return
-        inner = at.inner(count, s.binder)
+        region = s.ref == "device" or s.pooled
+        inner = Frame(Work(), ONE, (s.binder,), True) if region else at.inner(count, s.binder)
         self.expr(value, inner)
-        self.access(store, inner, write=True)
-        inner.work.op(combine, inner.times)
+        if store is not None:
+            self.access(store, inner, write=True)
+        inner.work.op(combining(s), inner.times)
+        if not region:
+            return
+        if out is not None:
+            key, size = path(out), Poly.of(self.c.sizeof(out.ty.value) if out.ty else 8)
+            add(inner.work.reads, key, size)
+            add(inner.work.writes, key, size)
+            inner.work.op("int", ONE)
+        self.cost.regions.append(
+            Region("device" if s.ref == "device" else "pooled", s.line, count, at.times, inner.work)
+        )
 
     def s_compact(self, s: Stmt, at: Frame) -> None:
         out, hi, predicate, value = s.exprs
@@ -514,7 +505,7 @@ class Counter:
         self.expr(predicate, inner)
         self.expr(value, inner)
         size = self.c.sizeof(out.ty.value) if out.ty else 8
-        inner.work.writes[path(out)] = inner.work.writes.get(path(out), Poly()) + inner.times * size
+        add(inner.work.writes, path(out), inner.times * size)
         inner.work.op("collect", inner.times)  # a store at a count that moves with the data, one element at a time
         if s.ref == "device":
             self.cost.regions.append(Region("device", s.line, count, at.times, inner.work))
@@ -591,17 +582,16 @@ class Counter:
             place = (key, spelled(index))  # reading a bin and writing it back is one trip to its line
             if place not in at.seen:
                 at.seen.add(place)
-                at.work.irregular[key] = at.work.irregular.get(key, Poly()) + at.times
-            at.work.footprint[key] = at.work.footprint.get(key, Poly()).join(reach)
+                add(at.work.irregular, key, at.times)
+            widen(at.work.footprint, key, reach)
             return
         if not mentioned(index) & set(at.binders):
             return  # One element, the same on every pass: a register or the first cache line, not a stream.
         if (key, write) in at.seen:
             return  # A second access on the same pass is a neighbour of the first, already in cache.
         at.seen.add((key, write))
-        streams = at.work.writes if write else at.work.reads
-        streams[key] = streams.get(key, Poly()) + at.times * element
-        at.work.footprint[key] = at.work.footprint.get(key, Poly()).join(reach)
+        add(at.work.writes if write else at.work.reads, key, at.times * element)
+        widen(at.work.footprint, key, reach)
 
     def call(self, e: Expr, at: Frame) -> None:
         for a in e.args:
@@ -664,9 +654,9 @@ class Counter:
         at.work.op("store", m * n * k * at.times)
         for key, moved, reach in ((a, m * k * size, m * k * size), (b, m * n * k * size, k * n * size),
                                   (c, m * n * k * 4.0, m * n * 4.0)):  # fmt: skip
-            at.work.reads[key] = at.work.reads.get(key, Poly()) + moved * at.times
-            at.work.footprint[key] = at.work.footprint.get(key, Poly()).join(reach)
-        at.work.writes[c] = at.work.writes.get(c, Poly()) + m * n * k * 4.0 * at.times
+            add(at.work.reads, key, moved * at.times)
+            widen(at.work.footprint, key, reach)
+        add(at.work.writes, c, m * n * k * 4.0 * at.times)
 
     def given(self, f: Function, args: list[Expr]) -> tuple[dict[str, Poly], dict[str, str]]:
         sizes, rename = {}, {}
@@ -711,7 +701,7 @@ class Counter:
         count = (self.extent(src.ty, path(src)) if src.ty and src.tag != "slice" else self.span(src)) or Poly.var(
             f"?extent@{e.line}"
         )
-        self.cost.transfers[way] = self.cost.transfers.get(way, Poly()) + count * element * at.times
+        add(self.cost.transfers, way, count * element * at.times)
 
     def span(self, e: Expr) -> Poly | None:
         if e.tag != "slice":
@@ -729,6 +719,12 @@ def path(e: Expr) -> str:
     if e.tag in {"index", "slice"} and e.args:
         return path(e.args[0])
     return f"<{e.tag}@{e.line}>"
+
+
+def combining(s: Stmt) -> str:
+    """One step of a reduction or a scan: an in-order float fold and a checked sum wait on the step before; wrapping,
+    min and max reassociate."""
+    return f"{s.ty.name}_fold" if s.ty.name in FLOAT else "int_fold" if s.op == "+" else "int"
 
 
 def fold(target: Expr, value: Expr, binders: tuple[str, ...]) -> str | None:

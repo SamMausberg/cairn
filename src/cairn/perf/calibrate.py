@@ -18,6 +18,7 @@ import os
 import platform
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -152,6 +153,11 @@ def best(result: dict[str, Any]) -> float:
     return float(result["min_ns"])  # the least-disturbed block: a shared machine only ever adds time
 
 
+def timed(name: str, sizes: Mapping[str, float], cxx: str, arch: str, **options: Any) -> float:
+    """The least-disturbed time of one call of the bandwidth kernel `name`."""
+    return best(measure.time(BANDWIDTH, name, sizes, cxx=cxx, arch=arch, **options))
+
+
 def operations(cxx: str, arch: str) -> tuple[dict[str, dict[str, float]], list[str], dict[str, Any]]:
     p, c, _ = compile_program(OPERATIONS)
     costs = count(p, c)
@@ -179,19 +185,16 @@ def bandwidth(cxx: str, arch: str, threads: int, physical: int) -> tuple[dict, d
     irregular: dict[str, float] = {}
     for level, n in LEVEL_ELEMENTS.items():
         size = {"n": n}
-        one_read = n * 8 / best(measure.time(BANDWIDTH, "rd_seq", size, cxx=cxx, arch=arch))
-        one_write = n * 8 / best(measure.time(BANDWIDTH, "wr_seq", size, cxx=cxx, arch=arch))
+        one_read = n * 8 / timed("rd_seq", size, cxx, arch)
+        one_write = n * 8 / timed("wr_seq", size, cxx, arch)
         if level in {"l1", "l2"}:  # Private levels: every core has its own, and a sibling thread shares it.
             all_read, all_write = one_read * physical, one_write * physical
         else:
-            wide = {"n": n}
-            all_read = n * 8 / best(measure.time(BANDWIDTH, "rd_par", wide, cxx=cxx, arch=arch, lanes=threads))
-            all_write = n * 8 / best(measure.time(BANDWIDTH, "wr_par", wide, cxx=cxx, arch=arch, lanes=threads))
+            all_read = n * 8 / timed("rd_par", size, cxx, arch, lanes=threads)
+            all_write = n * 8 / timed("wr_par", size, cxx, arch, lanes=threads)
         read[level] = {"1": round(one_read, 2), "all": round(max(all_read, one_read), 2)}
         write[level] = {"1": round(one_write, 2), "all": round(max(all_write, one_write), 2)}
-        gathered = {"n": 4096, "m": n}
-        per = best(measure.time(BANDWIDTH, "gather", gathered, fills={"k": f"index:{n}"}, cxx=cxx, arch=arch)) / 4096
-        irregular[level] = round(per, 3)
+        irregular[level] = round(timed("gather", {"n": 4096, "m": n}, cxx, arch, fills={"k": f"index:{n}"}) / 4096, 3)
     return read, write, irregular
 
 
@@ -200,7 +203,7 @@ def pool(cxx: str, arch: str, threads: int, write_l2: float) -> dict[str, Any]:
     points = []
     for n in (16384, 32768, 65536, 131072, 262144):
         used = min(threads, max(1, n // 8192))
-        t = best(measure.time(BANDWIDTH, "wr_par", {"n": n}, cxx=cxx, arch=arch, lanes=threads))
+        t = timed("wr_par", {"n": n}, cxx, arch, lanes=threads)
         points.append((used, t - n * 8 / write_l2 / used))
     mean_l = sum(u for u, _ in points) / len(points)
     mean_t = sum(t for _, t in points) / len(points)
@@ -218,9 +221,9 @@ PAGE = 4096
 def allocation(cxx: str, arch: str, read: dict, write: dict) -> tuple[float, float]:
     """What one small allocation and its release cost, and what each 4 KiB page of an allocation the allocator maps
     afresh adds on its first touch. The kernel reads back what it allocated, so the compiler cannot elide it."""
-    small = best(measure.time(BANDWIDTH, "alloc", {"n": 1}, cxx=cxx, arch=arch))
+    small = timed("alloc", {"n": 1}, cxx, arch)
     n = 2 * MAPPED // 8
-    whole = best(measure.time(BANDWIDTH, "alloc", {"n": n}, cxx=cxx, arch=arch))
+    whole = timed("alloc", {"n": n}, cxx, arch)
     moved = n * 8 / read["dram"]["1"] + n * 8 / write["dram"]["1"]  # the zeroing, and the read back
     return small, max(0.0, whole - small - moved) / (n * 8 / PAGE)
 
@@ -237,10 +240,10 @@ def calibrate(cxx: str = "clang++", arch: str | None = None) -> dict[str, Any]:
     threads, physical = lanes(), cores()
     ops, scalarizing, fit = operations(cxx, arch)
     read, write, irregular = bandwidth(cxx, arch, threads, physical)
-    chain_ns = best(measure.time(BANDWIDTH, "chain", {"n": 100000}, cxx=cxx, arch=arch)) / 100000
+    chain_ns = timed("chain", {"n": 100000}, cxx, arch) / 100000
     cycles = mca_cycles(cxx, arch)
-    spawn = best(measure.time(BANDWIDTH, "spawn_one", {"n": 8}, cxx=cxx, arch=arch))
-    shared = best(measure.time(BANDWIDTH, "at_par", {"n": 1 << 20}, cxx=cxx, arch=arch, lanes=threads)) / (1 << 20)
+    spawn = timed("spawn_one", {"n": 8}, cxx, arch)
+    shared = timed("at_par", {"n": 1 << 20}, cxx, arch, lanes=threads) / (1 << 20)
     small, page = allocation(cxx, arch, read, write)
     model = cpu_model()
     return {

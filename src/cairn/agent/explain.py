@@ -19,7 +19,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import RUNTIME_FILES, compile_program
+from ..compiler.cairnc import compile_program, write_program
 from ..compiler.codegen import Emitter, mangle
 from ..compiler.modules import library_path
 from ..compiler.tree import Expr, Function, Stmt
@@ -239,8 +239,7 @@ def vectorize(cpp: str, names, cxx: str, arch, timeout: int, functions: dict, sh
     native = [f for f in flags(arch, "library") if f != "-shared"] + REMARKS
     with tempfile.TemporaryDirectory(prefix="cairn-explain-") as scratch:
         directory = Path(scratch).resolve()
-        for name, text in {"program.cpp": cpp, **RUNTIME_FILES}.items():
-            (directory / name).write_text(text, encoding="utf-8")
+        write_program(directory, "program.cpp", cpp)
         record = directory / "program.yaml"
         command = [find(cxx), *native, "-c", str(directory / "program.cpp"), "-o", str(directory / "program.o"),
                    f"-foptimization-record-file={record}"]  # fmt: skip

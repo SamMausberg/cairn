@@ -20,10 +20,9 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import RUNTIME_FILES, compile_program, compile_source
-from ..compiler.tree import CPP, FLOAT, is_view
+from ..compiler.cairnc import compile_program, compile_source, write_program
 from ..projects.toolchain import command
-from .measure import DRIVER, fill
+from .measure import driver
 
 DEVICE_LOCK = Path("/tmp/cairn-gpu.lock")
 COOLDOWN_S = 2.0  # between two device runs: the driver's engine gets a rest
@@ -50,38 +49,6 @@ def locked():
             fcntl.flock(held, fcntl.LOCK_UN)
 
 
-def driver(f: Any, sizes: Mapping[str, float], fills: dict[str, str], block_ns: float, blocks: int) -> str:
-    setup, args, params = [], [], []
-    for name, ty in f.params:
-        if is_view(ty):
-            extent = int(ty.extent) if ty.extent.isdigit() else int(sizes[ty.extent])
-            element = CPP[ty.name]
-            setup.append(f"  Held<{element}> h_{name}({extent});")
-            setup.append(f"  for(std::size_t k = 0; k < {extent}; ++k) h_{name}.p[k] = {fill(ty, fills.get(name))};")
-            if ty.place in MEMORY:
-                setup.append(f"  {element}* b_{name} = nullptr;")
-                setup.append(f"  if({MEMORY[ty.place]}(reinterpret_cast<void**>(&b_{name}), {extent} * sizeof({element}))"
-                             f" != cudaSuccess) return 3;")  # fmt: skip
-                setup.append(f"  if(cudaMemcpy(b_{name}, h_{name}.p, {extent} * sizeof({element}), cudaMemcpyDefault)"
-                             f" != cudaSuccess) return 3;")  # fmt: skip
-                args.append(f"b_{name}")
-            else:
-                args.append(f"h_{name}.p")
-            params.append(f"{'const ' if ty.mode == 'ro' else ''}{element}*")
-        elif ty.name in CPP and ty.name != "void":
-            value = int(sizes.get(name, 3)) if ty.name not in FLOAT else sizes.get(name, 3)
-            args.append(f"static_cast<{CPP[ty.name]}>({value})")
-            params.append(CPP[ty.name])
-        else:
-            raise ValueError(f"{f.name} takes {ty.display()}, which the device timer cannot supply.")
-    ret = CPP.get(f.ret.name, "void")
-    call = f"cf_{f.name}({', '.join(args)});"
-    if ret != "void":
-        call = f"sink = sink + static_cast<std::uint64_t>({call[:-1]});"
-    declaration = f'extern "C" {ret} cf_{f.name}({", ".join(params)}) noexcept;'
-    return DRIVER.format(declaration=declaration, setup="\n".join(setup), call=call, block_ns=block_ns, blocks=blocks)
-
-
 def program(source: str, symbol: str, sizes: Mapping[str, float], fills: dict[str, str] | None = None,
             block_ns: float = 2e6, blocks: int = 9) -> str:  # fmt: skip
     """The emitted program and its timing driver, as one CUDA translation unit; nothing is built or run."""
@@ -92,7 +59,7 @@ def program(source: str, symbol: str, sizes: Mapping[str, float], fills: dict[st
     cpp, receipt = compile_source(source)
     if "cuda" not in receipt["requires"]:
         raise ValueError(f"{symbol} has no device code; time it on the host with cairn.perf.measure.")
-    return cpp + driver(f, sizes, fills or {}, block_ns, blocks)
+    return cpp + driver(f, sizes, fills or {}, block_ns, blocks, MEMORY)
 
 
 def time_device(source: str, symbol: str, sizes: Mapping[str, float], *, fills: dict[str, str] | None = None,
@@ -106,11 +73,8 @@ def time_device(source: str, symbol: str, sizes: Mapping[str, float], *, fills: 
     text = program(source, symbol, sizes, fills, block_ns, blocks)
     with tempfile.TemporaryDirectory(prefix="cairn-device-time-") as scratch:
         directory = Path(scratch)
-        (directory / "timed.cu").write_text(text, encoding="utf-8")
-        for name, header in RUNTIME_FILES.items():
-            (directory / name).write_text(header, encoding="utf-8")
-        exe = str(directory / "timed")
-        subprocess.run(command(cxx, str(directory / "timed.cu"), exe, kind="exe", cuda=True), check=True,
+        timed, exe = write_program(directory, "timed.cu", text), str(directory / "timed")
+        subprocess.run(command(cxx, str(timed), exe, kind="exe", cuda=True), check=True,
                        capture_output=True, text=True, timeout=600)  # fmt: skip
         with locked():
             ran += 1

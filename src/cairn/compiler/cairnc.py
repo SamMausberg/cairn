@@ -46,7 +46,15 @@ __all__ = [
     "derive",
     "fail",
     "specialize",
+    "write_program",
 ]  # fmt: skip
+
+
+def write_program(directory: Path, name: str, cpp: str) -> Path:
+    """`cpp` written as `directory/name`, beside the runtime headers it includes."""
+    for file, text in {name: cpp, **RUNTIME_FILES}.items():
+        (directory / file).write_text(text, encoding="utf-8")
+    return directory / name
 
 
 def compile_program(source: str, capture_sites: bool = False) -> tuple[Program, Checker, dict[str, Any]]:
@@ -161,9 +169,7 @@ def main() -> int:
         cpp, receipt = compile_source(args.source.read_text(encoding="utf-8"))
         if args.output and not args.check:
             args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(cpp)
-            for name, text in RUNTIME_FILES.items():
-                (args.output.parent / name).write_text(text)
+            write_program(args.output.parent, args.output.name, cpp)
         if args.receipt:
             args.receipt.write_text(json.dumps(receipt, indent=2) + "\n")
         if not args.output or args.check:

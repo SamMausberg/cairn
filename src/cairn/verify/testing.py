@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from ..agent.agent_tools import digest, explain, load_json_strict, stable_json
-from ..compiler.cairnc import RUNTIME_FILES, Diagnostic, Parser, compile_source
+from ..compiler.cairnc import Diagnostic, Parser, compile_source, write_program
 from ..compiler.codegen import mangle
 from ..projects.toolchain import command as native_command
 from ..projects.toolchain import flags, link_flags, linked
@@ -178,9 +178,7 @@ def evaluate(source: str, contract: dict, cxx="clang++", libraries: tuple[str, .
         return {**common, "status": "unknown", "stage": "build", "message": "Compiler unavailable."}
     with tempfile.TemporaryDirectory(prefix="cairn-task-") as tmp:
         t = Path(tmp)
-        (t / "candidate.cpp").write_text(generated)
-        for header, text in RUNTIME_FILES.items():
-            (t / header).write_text(text)
+        write_program(t, "candidate.cpp", generated)
         (t / "source.cairn").write_text(source)
         (t / "contract.json").write_text(stable_json(contract))
         cuda = "cuda" in receipt["requires"]

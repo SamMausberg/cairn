@@ -76,8 +76,7 @@ def price(work: Work, host: Host, arch: str, sizes: dict[str, float], missing: s
     rest = max(sum(each.values()) - chain, sum(counted.values()) * floor(host, chosen))
     compute = max(chain, rest)
     level = host.level(reach, threads, threads <= 1)
-    read = sum(value(n, sizes, missing) for n in work.reads.values())
-    written = sum(value(n, sizes, missing) for n in work.writes.values())
+    read, written = (sum(value(n, sizes, missing) for n in t.values()) for t in (work.reads, work.writes))
     own = 1 / host.parallel(threads)  # the share of chunks a lane finds where its own core left them
 
     def moved(private: bool) -> float:
@@ -113,8 +112,7 @@ def light(work: Work, host: Host, arch: str, sizes: dict[str, float], reach: flo
     table = host.table(arch)
     compute = sum(value(n, sizes, missing) * min(table["vector"].get(k, 0.0) or table["scalar"].get(k, 0.0),
                   table["scalar"].get(k, 0.0) or table["vector"].get(k, 0.0)) for k, n in work.ops.items())  # fmt: skip
-    read = sum(value(n, sizes, missing) for n in work.reads.values())
-    written = sum(value(n, sizes, missing) for n in work.writes.values())
+    read, written = (sum(value(n, sizes, missing) for n in t.values()) for t in (work.reads, work.writes))
     memory = host.seconds("read", read, reach, host.lanes) + host.seconds("write", written, reach, host.lanes)
     return max(compute / host.parallel(host.lanes), memory)
 
@@ -131,6 +129,12 @@ def vector_saving(r: Region) -> float:
     return sum(uses - (loaded + stored) / r.vector for uses, loaded, stored, size in r.chunks if r.vector * size <= 16)
 
 
+def launched(card: Device, memory: float, compute: float, units: str) -> tuple[float, str]:
+    """A kernel's time, a launch and then the larger of its memory and its compute, and which of the three bounds it."""
+    bound = "launch" if card.launch_ns > max(memory, compute) else "device memory" if memory >= compute else units
+    return card.launch_ns + max(memory, compute), bound
+
+
 def tensor(r: Region, card: Device, sizes: dict[str, float], missing: set[str]) -> Piece:
     """A tensor-core multiply by its roofline: a launch, then the larger of its bytes at the memory's sustained
     bandwidth and its operations at the published tensor peak. Every format mma_unordered takes runs at the f16
@@ -141,10 +145,7 @@ def tensor(r: Region, card: Device, sizes: dict[str, float], missing: set[str]) 
     work = sum(value(k, sizes, missing) for k in r.body.ops.values())
     peak = card.flops.get("tensor_f16", card.flops["f32"])
     memory, compute = moved / (card.dram_gbps * card.memory_efficiency), work / peak
-    ns = card.launch_ns + max(memory, compute)
-    bound = (
-        "launch" if card.launch_ns > max(memory, compute) else "device memory" if memory >= compute else "tensor cores"
-    )
+    ns, bound = launched(card, memory, compute, "tensor cores")
     light = max(moved / card.dram_gbps, work / peak)
     detail = {"device": card.name, "format": r.tensor, "memory_ns": round(memory, 1), "compute_ns": round(compute, 1),
               "launch_ns": card.launch_ns, "peak_ops_per_ns": peak}  # fmt: skip
@@ -171,14 +172,7 @@ def lanes(r: Region, card: Device | None, sizes: dict[str, float], missing: set[
     if r.registers:  # a kernel whose registers keep few warps resident cannot keep the memory busy either
         busy = min(busy, card.occupancy(r.registers, block or 256) / card.occupancy_to_saturate)
     memory, compute = moved / (card.dram_gbps * card.memory_efficiency * busy), issued / (card.flops["i32"] * busy)
-    ns = card.launch_ns + max(memory, compute)
-    bound = (
-        "launch"
-        if card.launch_ns > max(memory, compute)
-        else "device memory"
-        if memory >= compute
-        else "device compute"
-    )
+    ns, bound = launched(card, memory, compute, "device compute")
     light = max(moved / card.dram_gbps, issued / card.flops["i32"])
     detail = {"count": r.count.render(), "device": card.name, "memory_ns": round(memory, 1), "compute_ns": round(compute, 1),
               "launch_ns": card.launch_ns, "threads": int(threads), "busy": round(busy, 3)}  # fmt: skip
