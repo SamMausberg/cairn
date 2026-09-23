@@ -39,6 +39,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `projects/revision.py` | a program as a path or a git revision holds it |
 | `agent/agent_tools.py` | edit sessions, packets and the host that names them by handle |
 | `agent/evidence.py` | what a packet may say is established about a function |
+| `agent/history.py` | what was tried, failed, measured or hypothesized for each candidate, under its identity, and analyses kept by key |
 | `agent/migration.py`, `agent/plans.py` | the two wider edit classes: interface migrations across files, and plan-only edits |
 | `agent/teaching.py` | the rule cards, selected from lexical tokens |
 | `editor/grammar.py` | the editor grammars, generated from the compiler's vocabulary |
@@ -47,6 +48,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `perf/model.py`, `perf/profile.py` | a predicted time, and what one machine can do |
 | `perf/on_device.py` | the only device timing, under the owner's make targets |
 | `perf/plan_source.py` | a function's plan as source text: the plans the checker resolves to it, and where a new one is written |
+| `perf/regions.py` | names for a function's parallel regions that survive edits which do not touch them |
 | `verify/elision.py` | the independent check of every guard lowering leaves out |
 | `verify/diff.py`, `verify/emission.py` | the class each function of two versions gets, and when two emissions are the same code |
 | `verify/runner.py` | test blocks, each run in a process of its own |
