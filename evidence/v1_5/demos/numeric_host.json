@@ -1,0 +1,100 @@
+{
+  "schema": "cairn.demo-numeric/1",
+  "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+  "cxx": "clang++",
+  "lanes": 16,
+  "rounds": 7,
+  "cells": 1048576,
+  "sweeps": 200,
+  "same_bits": true,
+  "load_average": [
+    [
+      10.50390625,
+      13.90087890625,
+      13.880859375
+    ],
+    [
+      16.224609375,
+      14.89892578125,
+      14.2099609375
+    ]
+  ],
+  "programs": [
+    {
+      "program": "cairn lanes",
+      "median_us": 194982,
+      "min_us": 141446,
+      "max_us": 232979,
+      "runs_us": [
+        194982,
+        161556,
+        154916,
+        141446,
+        232979,
+        231804,
+        225616
+      ]
+    },
+    {
+      "program": "cairn one lane",
+      "median_us": 395753,
+      "min_us": 352276,
+      "max_us": 455543,
+      "runs_us": [
+        395753,
+        446105,
+        352366,
+        352276,
+        455543,
+        394831,
+        455413
+      ]
+    },
+    {
+      "program": "c++ openmp, guards",
+      "median_us": 978184,
+      "min_us": 344680,
+      "max_us": 2376019,
+      "runs_us": [
+        344680,
+        827975,
+        1471146,
+        805145,
+        1384547,
+        978184,
+        2376019
+      ]
+    },
+    {
+      "program": "c++ one thread, guards",
+      "median_us": 396190,
+      "min_us": 325313,
+      "max_us": 513975,
+      "runs_us": [
+        396190,
+        333761,
+        513975,
+        325313,
+        400728,
+        391973,
+        442567
+      ]
+    },
+    {
+      "program": "c++ openmp, no guards",
+      "median_us": 1341955,
+      "min_us": 846566,
+      "max_us": 1958291,
+      "runs_us": [
+        846566,
+        1079067,
+        1746182,
+        979957,
+        1341955,
+        1772242,
+        1958291
+      ]
+    }
+  ],
+  "cairn_output": "plate: 1024 x 1024 cells, 200 sweeps on the host lanes in 194982 us\nplate: middle column 1, 4 and 16 rows below the hot edge: 92.045975, 68.95758, 10.992733\nplate: fingerprint of every cell's bits 13714961143245356297\nplate: largest distance from the f64 reference 0.000014842041622387114, contract 0.00476837158203125\n"
+}

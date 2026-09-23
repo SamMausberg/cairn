@@ -1,0 +1,11 @@
+# Demos
+
+Three programs that show what CAIRN is for. Each runs from a fresh checkout with one command and prints what happened. `tests/projects/test_demos.py` runs each one again, so none of them can go stale without the suite failing.
+
+| Demo | What it shows | Command |
+|---|---|---|
+| [repair](repair/README.md) | An agent fixes a bug through the edit host. The host refuses an edit that prints and a tidy-up that changes behaviour, and says why. `cairn diff` then names the one function that changed and the input where it differs. | `make demo-repair` |
+| [numeric](numeric/README.md) | A heat-plate sweep written once runs on host lanes and as CUDA lanes. The host result stays inside a stated error bound against an f64 reference and has the same bits as a C++ loop. | `make demo-numeric` |
+| [visual](visual/README.md) | An agent asks what a program draws, reads in the layout record that a colour bar covers the plot, moves it, and gets back the new frames and the effect rows the edit changed. | `make demo-visual` |
+
+The agents in these demos are scripted: their replies are written down and replayed. Everything the host, the compiler, Z3 and the programs say is computed on every run. `python3 demos/repair/run.py --live MODEL` sends the same packets to a real model through `claude -p`, and `demos/repair/live-sonnet-5.json` is one such run.

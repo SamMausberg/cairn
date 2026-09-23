@@ -1,0 +1,26 @@
+{
+  "program": "latency.cairn",
+  "sessions": [
+    {
+      "symbol": "bucket",
+      "task": "Bug report: a sample of exactly 100 us is counted under 100 us, so the report's two counts of fast samples disagree. The buckets are 0 under 100 us, 1 under 250 us, 2 under 1 ms and 3 from 1 ms. Fix bucket.",
+      "public": 4,
+      "cases": [
+        {"args": {"us": 99}, "return": 0},
+        {"args": {"us": 100}, "return": 1},
+        {"args": {"us": 249}, "return": 1},
+        {"args": {"us": 250}, "return": 2},
+        {"args": {"us": 0}, "return": 0},
+        {"args": {"us": 101}, "return": 1},
+        {"args": {"us": 999}, "return": 2},
+        {"args": {"us": 1000}, "return": 3},
+        {"args": {"us": 18446744073709551615}, "return": 3}
+      ]
+    },
+    {
+      "symbol": "clamp",
+      "task": "Tidy clamp so it reads shorter. It must do exactly what it does now.",
+      "preserve": "equivalent"
+    }
+  ]
+}

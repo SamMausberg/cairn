@@ -1,0 +1,87 @@
+// The temperature of a square plate whose top edge is held at 100 degrees and whose other edges are held at 0, found
+// by Jacobi relaxation: each sweep sets every interior cell to the mean of its four neighbours, and the edges keep
+// their value. The sweep is the one piece that runs on host lanes and on CUDA lanes; its arithmetic is `mean4`, a
+// pure function both call, and the lowering fixes its order (no fused multiply-add on either side), so a device
+// sweep is meant to give the host's bits exactly. `main` in src/main.cairn holds the host result to an f64 reference.
+
+const HOT:f32 = 100.0;
+const SIDE:usize = 1024;
+const CELLS:usize = SIDE * SIDE;
+
+// One cell's next temperature. 0.25 is exact in binary, so the only roundings are the three additions.
+fn mean4(n:f32, s:f32, w:f32, e:f32) -> f32 = 0.25 * ((n + s) + (w + e));
+
+// Is cell i on the plate's edge? SIDE is a power of two, so the division and the remainder are a shift and a mask.
+fn edge(i:usize) -> bool {
+  let r = i / SIDE;
+  let c = i % SIDE;
+  return r == 0 || c == 0 || r + 1 == SIDE || c + 1 == SIDE;
+}
+
+// The starting plate: the top row at HOT, everything else at 0.
+fn start(t:rw<f32>[CELLS]) {
+  for i in 0..CELLS {
+    if i < SIDE { t[i] = HOT; } else { t[i] = 0.0; }
+  }
+}
+
+// One sweep on the host lanes: `out` gets the next plate from `t`. A lane writes only out[i] and reads `t`, which
+// no lane writes, so the result does not depend on how many lanes run it.
+fn sweep(out:rw<f32>[CELLS], t:ro<f32>[CELLS]) {
+  parallel i in CELLS {
+    if edge(i) {
+      out[i] = t[i];
+    } else {
+      out[i] = mean4(t[i - SIDE], t[i + SIDE], t[i - 1], t[i + 1]);
+    }
+  }
+}
+
+// `steps` sweeps from `a`, back and forth through `b`; steps is even, so the last sweep writes `a`.
+fn relax(a:rw<f32>[CELLS], b:rw<f32>[CELLS], steps:usize) {
+  for _ in 0..steps / 2 {
+    sweep(b, a);
+    sweep(a, b);
+  }
+}
+
+// The same relaxation in f64, written as rows and columns on one thread: the reference the contract is stated
+// against, computed a different way from the code it checks.
+fn reference(a:rw<f64>[CELLS], b:rw<f64>[CELLS], steps:usize) {
+  for i in 0..CELLS {
+    if i < SIDE { a[i] = f64(HOT); } else { a[i] = 0.0; }
+  }
+  for _ in 0..steps {
+    for r in 1..SIDE - 1 {
+      for c in 1..SIDE - 1 {
+        let i = r * SIDE + c;
+        b[i] = (a[i - SIDE] + a[i + SIDE] + a[i - 1] + a[i + 1]) / 4.0;
+      }
+    }
+    for r in 1..SIDE - 1 {
+      for c in 1..SIDE - 1 { a[r * SIDE + c] = b[r * SIDE + c]; }
+    }
+  }
+}
+
+// The largest distance between the f32 plate and the f64 reference.
+fn worst(t:ro<f32>[CELLS], exact:ro<f64>[CELLS]) -> f64 {
+  let mut most:f64 = 0.0;
+  for i in 0..CELLS {
+    let d = abs(f64(t[i]) - exact[i]);
+    if d > most { most = d; }
+  }
+  return most;
+}
+
+// The contract: after `steps` sweeps every cell is within steps * 4 * 2^-24 * HOT of the f64 reference. Each sweep
+// takes a mean of values within the previous error, which keeps that error, and adds three f32 roundings of a value
+// at most HOT; the fourth unit covers the reference's own rounding and second-order terms.
+fn bound(steps:usize) -> f64 = f64(steps) * 4.0 * f64(HOT) / 16777216.0;
+
+// A fingerprint of the plate's exact bits, so two runs can be compared without printing a million cells.
+fn fingerprint(t:ro<f32>[CELLS]) -> u64 {
+  let mut h:u64 = 1469598103934665603;
+  for x in t { h = mul_wrap(h ^ u64(to_bits(x)), 1099511628211); }
+  return h;
+}

@@ -1,7 +1,7 @@
 PYTHON ?= python3
 CAIRN = $(PYTHON) bin/cairn
 
-.PHONY: help docs editors all check lint format test native systems proof lean gpu tune-device calibrate-device embedded context wheel audit demo bench
+.PHONY: help docs editors all check lint format test native systems proof lean gpu tune-device calibrate-device embedded context wheel audit demo demo-repair demo-numeric demo-visual bench
 all: lint test proof
 
 help:
@@ -25,6 +25,9 @@ help:
 	@echo 'wheel     build the package offline into dist/'
 	@echo 'audit     scan the committed history for credentials and binaries'
 	@echo 'demo      run and test examples/hello'
+	@echo 'demo-repair   an agent fixes a bug through the edit host, then cairn diff reviews it (demos/repair)'
+	@echo 'demo-numeric  the plate on the host lanes against f64 and a C++ loop (demos/numeric)'
+	@echo 'demo-visual   an agent sees a layout defect in a cairn shot and fixes it (demos/visual)'
 
 check:
 	$(CAIRN) check examples/hello
@@ -33,11 +36,11 @@ lint:
 	$(PYTHON) -m ruff format --check .
 	$(PYTHON) -m ruff check .
 	$(PYTHON) -m mypy src/cairn
-	$(CAIRN) fmt --check examples src/cairn/std src/cairn/templates
+	$(CAIRN) fmt --check examples demos src/cairn/std src/cairn/templates
 
 format:
 	$(PYTHON) -m ruff format .
-	$(CAIRN) fmt examples src/cairn/std src/cairn/templates
+	$(CAIRN) fmt examples demos src/cairn/std src/cairn/templates
 
 test:
 	$(PYTHON) -m pytest -q tests -n auto
@@ -74,7 +77,7 @@ gpu:
 	  tests/soundness/test_concurrency.py tests/soundness/test_plans.py tests/soundness/test_scan.py \
 	  tests/soundness/test_device_paths.py tests/soundness/test_staging.py tests/soundness/test_tensor.py \
 	  tests/projects/test_apps.py tests/projects/test_app_matmul.py \
-	  tests/projects/test_app_analytics.py
+	  tests/projects/test_app_analytics.py tests/projects/test_demos.py
 	CAIRN_GPU_TESTS=1 $(PYTHON) bench/gpu/parallel_gpu.py
 
 # The two other targets that run device code. Only the owner runs them, never while anything else uses the device:
@@ -106,3 +109,12 @@ audit:
 demo:
 	$(CAIRN) run examples/hello
 	$(CAIRN) test examples/hello
+
+demo-repair:
+	$(PYTHON) demos/repair/run.py
+
+demo-numeric:
+	$(PYTHON) demos/numeric/run.py
+
+demo-visual:
+	$(PYTHON) demos/visual/run.py

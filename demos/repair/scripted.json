@@ -1,0 +1,13 @@
+{
+  "agent": "scripted: these replies were written by hand to show one refusal of each kind; no model wrote them",
+  "replies": {
+    "bucket": [
+      "{\"protocol\": \"cairn.edit/2\", \"handle\": \"e1\", \"kind\": \"body\", \"replacement\": \"{\\n  println(\\\"bucket \\\", us);\\n  if us < 100 {\\n    return 0;\\n  } else if us >= 100 && us < 250 {\\n    return 1;\\n  } else if us >= 250 && us < 1000 {\\n    return 2;\\n  }\\n  return 3;\\n}\"}",
+      "{\"protocol\": \"cairn.edit/2\", \"handle\": \"e1\", \"kind\": \"body\", \"replacement\": \"{\\n  if us < 100 {\\n    return 0;\\n  } else if us >= 100 && us < 250 {\\n    return 1;\\n  } else if us >= 250 && us < 1000 {\\n    return 2;\\n  }\\n  return 3;\\n}\"}"
+    ],
+    "clamp": [
+      "{\"protocol\": \"cairn.edit/2\", \"handle\": \"e2\", \"kind\": \"body\", \"replacement\": \"{ return min(max(x, lo), hi); }\"}",
+      "{\"protocol\": \"cairn.edit/2\", \"handle\": \"e2\", \"kind\": \"body\", \"replacement\": \"{\\n  if x < lo {\\n    return lo;\\n  }\\n  return min(x, hi);\\n}\"}"
+    ]
+  }
+}

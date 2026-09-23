@@ -1,0 +1,36 @@
+// The plate viewer: relax the plate and draw it after 0, 40, 200, 1000 and 5000 sweeps. Under `cairn shot` each
+// frame is captured as a PNG with its layout record; `cairn run demos/visual` draws the same frames and prints a line.
+import heat.sim;
+import heat.view;
+import std.image (Image);
+
+// How many sweeps frame k shows.
+fn after(k:usize) -> usize {
+  if k == 0 { return 0; }
+  if k == 1 { return 40; }
+  if k == 2 { return 200; }
+  if k == 3 { return 1000; }
+  return 5000;
+}
+
+fn main() -> i32 {
+  buffer a:f32[sim.CELLS] = zeroed;
+  buffer b:f32[sim.CELLS] = zeroed;
+  sim.start(a);
+  sim.start(b);
+  let mut canvas = image.new(view.W, view.H);
+  let mut done:usize = 0;
+  let mut shots:usize = 0;
+  for k in 0..5 {
+    let target = after(k);
+    sim.relax(a, b, target - done);
+    done = target;
+    let marks = view.frame(canvas, a, sim.SIDE, u64(done));
+    match draw.capture(canvas, marks, k) {
+      Ok(taken) => { if taken { shots += 1; } }
+      Err(_) => return 1;
+    }
+  }
+  println("plate viewer: 5 frames drawn, ", shots, " captured, the last after ", done, " sweeps");
+  return 0;
+}

@@ -1,0 +1,14 @@
+{
+  "agent": "claude-sonnet-5 through claude -p, asked with --live sonnet",
+  "date": "2026-09-23",
+  "cost_usd": 0.053,
+  "replies": {
+    "bucket": [
+      "{\"handle\":\"e1\",\"kind\":\"body\",\"protocol\":\"cairn.edit/2\",\"replacement\":\"{\\n  if us < 100 {\\n    return 0;\\n  } else if us < 250 {\\n    return 1;\\n  } else if us < 1000 {\\n    return 2;\\n  }\\n  return 3;\\n}\"}"
+    ],
+    "clamp": [
+      "{\"handle\":\"e2\",\"kind\":\"body\",\"protocol\":\"cairn.edit/2\",\"replacement\":\"fn clamp(x:u64, lo:u64, hi:u64) -> u64 {\\n  if x < lo { return lo; }\\n  if x > hi { return hi; }\\n  return x;\\n}\"}",
+      "{\"handle\":\"e2\",\"kind\":\"body\",\"protocol\":\"cairn.edit/2\",\"replacement\":\"{\\n  if x < lo { return lo; }\\n  if x > hi { return hi; }\\n  return x;\\n}\"}"
+    ]
+  }
+}

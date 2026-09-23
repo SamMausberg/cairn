@@ -1,0 +1,120 @@
+// One frame of the plate viewer: the plate as a heat map, a colour bar beside it, and the temperature down the
+// plate's middle column as a line that shares the map's rows. `frame` marks each panel in a Layout, which is what
+// `cairn shot` reports beside the pixels, and the test at the end holds the panels to the screen and apart.
+//
+// `bar_x` has a planted defect: it puts the colour bar inside the map's last columns, so the bar hides the plate's
+// right edge. demos/visual/README.md follows an agent that sees it in a shot and moves the bar.
+module heat.view;
+import std.draw (Layout);
+import std.image (Image);
+
+pub const W:usize = 480;
+pub const H:usize = 330;
+const CELL:i64 = 3; // pixels per cell
+const MAP_X:i64 = 12;
+const MAP_Y:i64 = 22;
+const BAR_W:i64 = 14;
+const CHART_X:i64 = 360;
+const CHART_W:i64 = 108;
+
+// The colour of a temperature in 0..100, in bands of 5 degrees along a ramp from black through purple, red and
+// orange to pale yellow, so equal colours read as isotherms.
+pub fn colour(t:f32) -> u32 {
+  let v = min(max(i64(t / 5.0), 0), 20) * 5; // 0, 5, ..., 100
+  let s = min(v / 25, 3);
+  let f = v - s * 25;
+  let a = stop(s);
+  let b = stop(s + 1);
+  let r = lerp(image.red(a), image.red(b), f);
+  let g = lerp(image.green(a), image.green(b), f);
+  let bl = lerp(image.blue(a), image.blue(b), f);
+  return image.rgba(r, g, bl, 255);
+}
+
+fn stop(s:i64) -> u32 {
+  if s == 0 { return 0x000004ff; }
+  if s == 1 { return 0x57106eff; }
+  if s == 2 { return 0xbc3754ff; }
+  if s == 3 { return 0xf98e09ff; }
+  return 0xfcffa4ff;
+}
+
+fn lerp(a:u8, b:u8, f:i64) -> u8 = u8(i64(a) + (i64(b) - i64(a)) * f / 25);
+
+// Where the colour bar starts: a gap of 8 pixels right of a map `span` pixels wide.
+fn bar_x(span:i64) -> i64 = MAP_X + span - 8;
+
+// A whole number in decimal, drawn from a stack buffer, so a label costs no allocation; the x just past it.
+fn number(canvas:rw<Image>, x:i64, y:i64, v:u64, c:u32) -> i64 {
+  stack digits:u8[20] = zeroed;
+  let mut k:usize = 20;
+  let mut rest = v;
+  while k == 20 || rest > 0 {
+    k -= 1;
+    digits[k] = u8(rest % 10) + '0';
+    rest /= 10;
+  }
+  draw.text(canvas, x, y, digits[k..20], c, 1);
+  return x + i64(20 - k) * draw.GLYPH_W;
+}
+
+// The frame after `sweeps` sweeps of the plate `t`, a side x side grid.
+pub fn frame(canvas:rw<Image>, n:usize, t:ro<f32>[n], side:usize, sweeps:u64) -> Layout {
+  let mut l = draw.layout();
+  let span = i64(side) * CELL;
+  image.fill(canvas, 0x14161cff);
+  draw.text(canvas, MAP_X, 4, "plate after", 0xe8e8e8ff, 1);
+  let past = number(canvas, MAP_X + 12 * draw.GLYPH_W, 4, sweeps, 0xffffffff);
+  draw.text(canvas, past + draw.GLYPH_W, 4, "sweeps", 0xe8e8e8ff, 1);
+  draw.mark(l, "title", MAP_X, 4, past + 7 * draw.GLYPH_W - MAP_X, draw.GLYPH_H);
+  for i in 0..n {
+    let x = MAP_X + i64(i % side) * CELL;
+    let y = MAP_Y + i64(i / side) * CELL;
+    draw.rect(canvas, x, y, CELL, CELL, colour(t[i]));
+  }
+  let mid = side / 2;
+  draw.rect(canvas, MAP_X + i64(mid) * CELL + 1, MAP_Y, 1, span, 0xffffff40); // the column the chart follows
+  draw.mark(l, "map", MAP_X, MAP_Y, span, span);
+  let bar = bar_x(span);
+  for row in 0..usize(span) {
+    let heat = 100.0 - f32(row) * 100.0 / f32(span - 1);
+    draw.rect(canvas, bar, MAP_Y + i64(row), BAR_W, 1, colour(heat));
+  }
+  draw.mark(l, "bar", bar, MAP_Y, BAR_W, span);
+  let _ = number(canvas, bar + BAR_W + 4, MAP_Y, 100, 0xc8c8c8ff);
+  let _ = number(canvas, bar + BAR_W + 4, MAP_Y + span / 2 - 6, 50, 0xc8c8c8ff);
+  let _ = number(canvas, bar + BAR_W + 4, MAP_Y + span - draw.GLYPH_H, 0, 0xc8c8c8ff);
+  draw.rect(canvas, CHART_X, MAP_Y, CHART_W, span, 0x1f232cff);
+  draw.rect(canvas, CHART_X + CHART_W / 2, MAP_Y, 1, span, 0x343a47ff); // the 50 degree line
+  let mut px = CHART_X;
+  let mut py = MAP_Y;
+  for r in 0..side {
+    let x = CHART_X + i64(t[r * side + mid] * f32(CHART_W - 1) / 100.0);
+    let y = MAP_Y + i64(r) * CELL + CELL / 2;
+    if r > 0 { draw.line(canvas, px, py, x, y, 0xf98e09ff); }
+    px = x;
+    py = y;
+  }
+  draw.mark(l, "chart", CHART_X, MAP_Y, CHART_W, span);
+  draw.text(canvas, CHART_X, 4, "middle column", 0x9aa4b2ff, 1);
+  let _ = number(canvas, CHART_X, MAP_Y + span + 4, 0, 0x9aa4b2ff);
+  let _ = number(canvas, CHART_X + CHART_W - 3 * draw.GLYPH_W, MAP_Y + span + 4, 100, 0x9aa4b2ff);
+  return l;
+}
+
+// The panels are on the screen and none covers another, on the plate as it starts.
+test layout {
+  let mut canvas = image.new(W, H);
+  buffer t:f32[9216] = zeroed;
+  let marks = frame(canvas, t, 96, 0);
+  let screen = draw.Mark(0, 0, i64(W), i64(H));
+  let map = draw.place(marks, "map");
+  let bar = draw.place(marks, "bar");
+  let chart = draw.place(marks, "chart");
+  assert(
+    draw.inside(map, screen) && draw.inside(bar, screen) && draw.inside(chart, screen),
+    "on the screen"
+  );
+  assert(draw.apart(map, bar), "the colour bar does not cover the plate");
+  assert(draw.apart(bar, chart) && draw.apart(map, chart), "the chart stands apart");
+}

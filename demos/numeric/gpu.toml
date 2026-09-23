@@ -1,0 +1,12 @@
+# The device configuration: the host project with src/main.cairn replaced by the device entry, because any @device
+# view sends the whole program through nvcc and the host build must stay buildable where there is no GPU. It runs
+# only under `make gpu`:
+#
+#   cairn run demos/numeric/gpu.toml
+[project]
+name = "plate-gpu"
+sources = ["src/plate.cairn", "src/device_main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

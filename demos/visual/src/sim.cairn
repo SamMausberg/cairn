@@ -1,0 +1,43 @@
+// A small square plate relaxing toward its steady temperature, the simulation demos/visual draws. The top edge and a
+// heater block are held at HOT and the other edges at 0; every other cell becomes the mean of its four neighbours
+// each sweep, as in demos/numeric, on a plate small enough to draw at three pixels a cell.
+module heat.sim;
+
+pub const SIDE:usize = 96;
+pub const CELLS:usize = SIDE * SIDE;
+pub const HOT:f32 = 100.0;
+
+// Is cell i held at a fixed temperature: an edge, or the heater block low on the plate?
+pub fn held(i:usize) -> bool {
+  let r = i / SIDE;
+  let c = i % SIDE;
+  let heater = r >= 60 && r < 68 && c >= 20 && c < 36;
+  return heater || r == 0 || c == 0 || r + 1 == SIDE || c + 1 == SIDE;
+}
+
+// The starting plate: the top edge and the heater at HOT, everything else at 0.
+pub fn start(t:rw<f32>[CELLS]) {
+  for i in 0..CELLS {
+    let r = i / SIDE;
+    let c = i % SIDE;
+    if r == 0 || (r >= 60 && r < 68 && c >= 20 && c < 36) { t[i] = HOT; } else { t[i] = 0.0; }
+  }
+}
+
+pub fn sweep(out:rw<f32>[CELLS], t:ro<f32>[CELLS]) {
+  parallel i in CELLS {
+    if held(i) {
+      out[i] = t[i];
+    } else {
+      out[i] = 0.25 * ((t[i - SIDE] + t[i + SIDE]) + (t[i - 1] + t[i + 1]));
+    }
+  }
+}
+
+// `steps` sweeps from `a`, back and forth through `b`; steps is even, so the last sweep writes `a`.
+pub fn relax(a:rw<f32>[CELLS], b:rw<f32>[CELLS], steps:usize) {
+  for _ in 0..steps / 2 {
+    sweep(b, a);
+    sweep(a, b);
+  }
+}

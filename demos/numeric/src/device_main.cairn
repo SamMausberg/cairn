@@ -1,0 +1,58 @@
+// The plate on the device: the same sweep as `sweep` in src/plate.cairn, its two views placed @device, so each sweep runs as CUDA
+// lanes. It relaxes the plate on the host lanes too, and then checks that the device plate has the host's bits
+// exactly and keeps the contract against the f64 reference. `cairn run demos/numeric/gpu.toml` builds it with nvcc;
+// it runs only under `make gpu`, and nothing else in this repository runs it.
+import std.time;
+
+const STEPS:usize = 200;
+
+// sweep's body, word for word: only the placement of the views differs.
+fn sweep_device(out:rw<f32>[CELLS]@device, t:ro<f32>[CELLS]@device) {
+  parallel i in CELLS {
+    if edge(i) {
+      out[i] = t[i];
+    } else {
+      out[i] = mean4(t[i - SIDE], t[i + SIDE], t[i - 1], t[i + 1]);
+    }
+  }
+}
+
+fn main() -> i32 {
+  buffer a:f32[CELLS] = zeroed;
+  buffer b:f32[CELLS] = zeroed;
+  start(a);
+  start(b);
+  buffer da:f32[CELLS]@device = zeroed; // the first device allocation creates the CUDA context
+  buffer db:f32[CELLS]@device = zeroed;
+  let began = time.now();
+  transfer(da, a);
+  transfer(db, b);
+  let moved = time.now();
+  for _ in 0..STEPS / 2 {
+    sweep_device(db, da);
+    sweep_device(da, db);
+  }
+  let swept = time.now();
+  buffer back:f32[CELLS] = zeroed;
+  transfer(back, da);
+  let done = time.since(began);
+  let host_began = time.now();
+  relax(a, b, STEPS);
+  let host = time.since(host_began);
+  buffer ra:f64[CELLS] = zeroed;
+  buffer rb:f64[CELLS] = zeroed;
+  reference(ra, rb, STEPS);
+  let err = worst(back, ra);
+  let limit = bound(STEPS);
+  let same = fingerprint(back) == fingerprint(a);
+  println("plate on the device: ", SIDE, " x ", SIDE, " cells, ", STEPS, " sweeps");
+  println(
+    "device sweeps ", (swept.ns - moved.ns) / 1000, " us, with both transfers ", done / 1000, " us"
+  );
+  println("host lanes ", host / 1000, " us");
+  println("device bits equal host bits: ", same);
+  println("largest distance from the f64 reference ", err, ", contract ", limit);
+  if !same { return 2; }
+  if err > limit { return 1; }
+  return 0;
+}

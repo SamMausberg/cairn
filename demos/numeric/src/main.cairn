@@ -1,0 +1,33 @@
+// The plate on the host: SIDE x SIDE cells relaxed STEPS times on the host lanes, timed, then held to the f64
+// reference. `cairn run demos/numeric` runs it; demos/numeric/run.py also times the C++ loop in baseline/ beside it.
+import std.time;
+
+const STEPS:usize = 200;
+
+fn main() -> i32 {
+  buffer a:f32[CELLS] = zeroed;
+  buffer b:f32[CELLS] = zeroed;
+  start(a);
+  start(b);
+  let began = time.now();
+  relax(a, b, STEPS);
+  let took = time.since(began);
+  buffer ra:f64[CELLS] = zeroed;
+  buffer rb:f64[CELLS] = zeroed;
+  reference(ra, rb, STEPS);
+  let err = worst(a, ra);
+  let limit = bound(STEPS);
+  println(
+    "plate: ", SIDE, " x ", SIDE, " cells, ", STEPS, " sweeps on the host lanes in ", took / 1000,
+    " us"
+  );
+  let mid = SIDE / 2;
+  println(
+    "plate: middle column 1, 4 and 16 rows below the hot edge: ", a[SIDE + mid], ", ",
+    a[4 * SIDE + mid], ", ", a[16 * SIDE + mid]
+  );
+  println("plate: fingerprint of every cell's bits ", fingerprint(a));
+  println("plate: largest distance from the f64 reference ", err, ", contract ", limit);
+  if err > limit { return 1; }
+  return 0;
+}

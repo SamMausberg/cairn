@@ -1,0 +1,71 @@
+// A latency report over samples in microseconds, sorted ascending. `bucket` has a planted bug: a sample of exactly
+// 100 us lands in the "under 100 us" bucket, so the report's two counts of fast samples disagree and `main` fails.
+// demos/repair/README.md follows an agent that fixes `bucket` and tidies `clamp` through the edit host, and a
+// reviewer who reads the change with `cairn diff`.
+
+// The report's bucket for one sample: 0 under 100 us, 1 under 250 us, 2 under 1 ms, 3 from 1 ms.
+fn bucket(us:u64) -> usize {
+  if us <= 100 {
+    return 0;
+  } else if us > 100 && us < 250 {
+    return 1;
+  } else if us >= 250 && us < 1000 {
+    return 2;
+  }
+  return 3;
+}
+
+// x held to [lo, hi]; below lo it is lo, and lo wins when hi < lo.
+fn clamp(x:u64, lo:u64, hi:u64) -> u64 {
+  if x < lo {
+    return lo;
+  }
+  if x > hi {
+    return hi;
+  }
+  return x;
+}
+
+// How many samples are below `limit`: the first index whose sample is at least `limit`, found by bisection.
+fn count_below(n:usize, xs:ro<u64>[n], limit:u64) -> usize {
+  let mut lo:usize = 0;
+  let mut hi = n;
+  while lo < hi {
+    let mid = lo + (hi - lo) / 2;
+    if xs[mid] < limit { lo = mid + 1; } else { hi = mid; }
+  }
+  return lo;
+}
+
+// The nearest-rank percentile: the smallest sample with at least p percent of the samples at or below it.
+fn percentile(n:usize, xs:ro<u64>[n], p:u64) -> u64 {
+  if n == 0 { return 0; }
+  let mut rank = (u64(n) * p + 99) / 100;
+  if rank == 0 { rank = 1; }
+  return xs[usize(rank) - 1];
+}
+
+fn main() -> i32 {
+  stack xs:u64[10] = zeroed;
+  for i in 0..10 { xs[i] = 60 + u64(i * i) * 10; } // 60 70 100 150 220 310 420 550 700 870 us
+  stack buckets:usize[4] = zeroed;
+  for x in xs { buckets[bucket(x)] += 1; }
+  let fast = count_below(xs, 100);
+  let p50 = percentile(xs, 50);
+  let p90 = percentile(xs, 90);
+  println("samples ", len(xs), ", p50 ", p50, " us, p90 ", p90, " us");
+  for b in 0..4 {
+    if b == 0 { print("  under 100 us  "); }
+    if b == 1 { print("  under 250 us  "); }
+    if b == 2 { print("  under 1 ms    "); }
+    if b == 3 { print("  1 ms or more  "); }
+    let bar = clamp(u64(buckets[b]) * 3, 0, 30);
+    for _ in 0..usize(bar) { print('#'); }
+    println(" ", buckets[b]);
+  }
+  if buckets[0] != fast {
+    println("under 100 us: ", buckets[0], " by bucket but ", fast, " by count");
+    return 1;
+  }
+  return 0;
+}
