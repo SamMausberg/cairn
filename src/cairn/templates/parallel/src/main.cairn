@@ -1,5 +1,4 @@
 // Fills a million squares on every core, sums them, and prints how long it took.
-import std.io;
 import std.time;
 
 fn main() -> i32 {
@@ -9,12 +8,8 @@ fn main() -> i32 {
   fill(xs);
   let sum = total(xs);
   let took = time.since(start);
-  io.print("sum of the squares below a million: ");
-  io.print_u64(sum);
-  io.newline();
-  io.print("filled and summed in ");
-  io.print_u64(took / 1000);
-  io.print(" us\n");
+  println("sum of the squares below a million: ", sum);
+  println("filled and summed in ", took / 1000, " us");
   if sum != expected(u64(n)) { return 1; }
   return 0;
 }

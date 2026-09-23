@@ -143,16 +143,12 @@ fn run() -> Result[usize, IoError] {
   match io.outcome(q.status()) {
     Ok(_) => {}
     Err(e) => { // a seccomp filter, a sysctl or no descriptor left: say so rather than serve nobody
-      io.print("service: no io_uring here, errno ");
-      io.print_u64(u64(e.code));
-      io.newline();
+      println("service: no io_uring here, errno ", e.code);
       return Ok(2);
     }
   }
   let mut t = new_table();
-  io.print("service: listening on ");
-  io.print_u64(u64(PORT));
-  io.newline();
+  println("service: listening on ", PORT);
   let mut clients = Buf[Client](CLIENTS);
   q.accept(server.fd, ACCEPT);
   let mut running = true;
@@ -190,9 +186,7 @@ fn main() -> i32 {
   match run() {
     Ok(code) => return i32(code);
     Err(e) => {
-      io.print("service: io error ");
-      io.print_u64(u64(e.code));
-      io.newline();
+      println("service: io error ", e.code);
       return 1;
     }
   }

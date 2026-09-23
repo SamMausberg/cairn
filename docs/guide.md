@@ -42,20 +42,16 @@ test average {
   assert(average(1, 2) == 1, "rounds down");
 }
 
-import std.io;
-
 // Prints the average it checks, and exits 0 only when it is right.
 fn main() -> i32 {
   let mean = average(10, 20);
-  io.print("average(10, 20) = ");
-  io.print_u64(mean);
-  io.newline();
+  println("average(10, 20) = ", mean);
   if mean != 15 { return 1; }
   return 0;
 }
 ```
 
-`u64` is a fixed-width integer, `+` traps on overflow, `&` and `^` are unsigned, `shr` takes a count below the width, and `= expression;` is a one-return body. `test average { ... }` is a test, which only `cairn test` runs, and `assert` traps when its condition is false. `import std.io;` brings in the standard library's output, a `let` is immutable, and a call whose result is nothing is a statement. `main` returns the process exit status.
+`u64` is a fixed-width integer, `+` traps on overflow, `&` and `^` are unsigned, `shr` takes a count below the width, and `= expression;` is a one-return body. `test average { ... }` is a test, which only `cairn test` runs, and `assert` traps when its condition is false. `println` writes its arguments and a newline, a `let` is immutable, and a call whose result is nothing is a statement. `main` returns the process exit status.
 
 That project is the default template. Four more are starting points for real programs, and each carries a test block:
 
@@ -75,14 +71,14 @@ cairn check demo
 ```
 
 ```text
-typed: 3 functions, and 69 from the library
+typed: 3 functions
 ```
 
 ```json
-{"status": "typed", "functions": 72, "library_functions": 69, "formal_status": "not-verified"}
+{"status": "typed", "functions": 3, "library_functions": 0, "formal_status": "not-verified"}
 ```
 
-`typed` means the program passed every static rule: syntax, types, ownership, leases, lanes, placement and effects. Three functions are the program's, the test among them; the other 69 are the parts of `std.io`, `std.text`, `std.vec` and `std.sys` that the import brings in, checked the same way. `formal_status` is `not-verified` here and everywhere, because acceptance is not a proof.
+`typed` means the program passed every static rule: syntax, types, ownership, leases, lanes, placement and effects. All three are the program's, the test among them. A program that imports a module of the library is checked with the parts of it that the program reaches, and the count says how many those are. `formal_status` is `not-verified` here and everywhere, because acceptance is not a proof.
 
 ```sh
 cairn run demo
@@ -132,14 +128,10 @@ Change the annotation of a local and the compiler refuses the program with a cod
 ```cairn rejects E-TYPE-MISMATCH
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
 
-import std.io;
-
 // Prints the average it checks, and exits 0 only when it is right.
 fn main() -> i32 {
   let mean:u32 = average(10, 20);
-  io.print("average(10, 20) = ");
-  io.print_u64(mean);
-  io.newline();
+  println("average(10, 20) = ", mean);
   if mean != 15 { return 1; }
   return 0;
 }
@@ -147,14 +139,14 @@ fn main() -> i32 {
 
 ```text
 error[E-TYPE-MISMATCH]: Expected u32, got u64.
-  --> src/main.cairn:5:18
+  --> src/main.cairn:3:18
   |
-5 |   let mean:u32 = average(10, 20);
+3 |   let mean:u32 = average(10, 20);
   |                  ^^^^^^^
 ```
 
 ```json
-{"status": "rejected", "code": "E-TYPE-MISMATCH", "message": "Expected u32, got u64.", "line": 5, "column": 18, "file": "src/main.cairn"}
+{"status": "rejected", "code": "E-TYPE-MISMATCH", "message": "Expected u32, got u64.", "line": 3, "column": 18, "file": "src/main.cairn"}
 ```
 
 Nothing converts on its own; `u32(average(10, 20))` says the narrowing and checks it. The safety rules are refused the same way. A heap array is an owner, using it as a value moves it, and the old name is dead:

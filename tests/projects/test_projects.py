@@ -10,6 +10,7 @@ from cairn.agent.projection import canonical_source
 from cairn.agent.sketches import Sketch
 from cairn.cli import create_project, main
 from cairn.compiler.cairnc import Diagnostic, compile_source
+from cairn.editor.terminal import typed
 from cairn.projects.build import build
 from cairn.projects.project import ProjectError, load_project
 from cairn.verify.scalar_semantics import equivalent
@@ -487,7 +488,7 @@ def test_the_guide_shows_the_project_new_creates(tmp_path):
     assert f"```cairn\n{sources}```" in section
     functions = compile_source(load_project(root).source)[1]["functions"]
     library = sum(1 for name in functions if name.startswith("std."))
-    assert f"typed: {len(functions) - library} functions, and {library} from the library" in section
+    assert "typed: " + typed({"functions": len(functions), "library_functions": library}) + "\n" in section
     assert f'"functions": {len(functions)}, "library_functions": {library},' in section
     record = build(load_project(root), cxx="clang++", timeout=120)
     done = subprocess.run([record["artifact"]], capture_output=True, text=True, timeout=30)

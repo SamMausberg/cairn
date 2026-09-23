@@ -19,7 +19,7 @@ import std.vec (Vec);
 struct Row { count:u64; at:usize; }
 
 fn usage() -> i32 {
-  io.eprintln("usage: wordfreq [-n N] FILE...");
+  eprintln("usage: wordfreq [-n N] FILE...");
   return 2;
 }
 
@@ -51,7 +51,7 @@ fn report(counts:ro<Map[Word, u64]>, n:usize, rows:ro<Row>[n], shown:usize, word
   fmt.bytes(out, " words, ");
   fmt.uint(out, counts.count());
   fmt.bytes(out, " distinct\n");
-  io.print(out);
+  print(out);
 }
 
 // Whether argument i is exactly `name`.
@@ -85,12 +85,7 @@ fn run(a:ro<Args>) -> i32 {
         words += found;
       }
       Err(e) => {
-        let mut line = vec.new[u8]();
-        fmt.bytes(line, "wordfreq: cannot read ");
-        fmt.bytes(line, a.text.data[lo..hi]);
-        fmt.bytes(line, ": errno ");
-        fmt.int(line, e.code);
-        io.eprintln(line);
+        eprintln("wordfreq: cannot read ", a.text.data[lo..hi], ": errno ", e.code);
         return 1;
       }
     }
@@ -108,7 +103,7 @@ fn main() -> i32 {
   match env.args() {
     Ok(a) => return run(a);
     Err(_) => {
-      io.eprintln("wordfreq: cannot read the arguments");
+      eprintln("wordfreq: cannot read the arguments");
       return 1;
     }
   }

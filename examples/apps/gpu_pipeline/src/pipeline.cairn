@@ -1,7 +1,6 @@
 // upload -> map -> compact -> reduce -> download, with the same four stages written for the
 // host so the answers can be compared. Each stage is one statement; the placement of the views
 // is the only thing that decides where it runs.
-import std.io;
 
 // A cheap invertible mix, pure so that both a host lane and a device lane may call it.
 fn mix(x:u64) -> u64 = mul_wrap(x ^ 2654435769, 6364136223846793005);
@@ -37,8 +36,4 @@ fn sum_device(m:usize, src:ro<u64>[m]@device) -> u64 {
   return total;
 }
 
-fn report(n:usize, label:ro<u8>[n], nanoseconds:u64) {
-  io.print(label);
-  io.print_u64(nanoseconds / 1000);
-  io.println(" us");
-}
+fn report(n:usize, label:ro<u8>[n], nanoseconds:u64) { println(label, nanoseconds / 1000, " us"); }

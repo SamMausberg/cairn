@@ -2,7 +2,6 @@
 // once as host lanes, once as device lanes. Only the placement of the views differs; the
 // arithmetic lives in `blend`, which both the host and the device compile from one definition,
 // so the three back ends are the same floating-point program and must agree bit for bit.
-import std.io;
 
 fn interior(i:usize, n:usize) -> bool {
   let row = i / n;
@@ -52,8 +51,4 @@ fn seed(m:usize, grid:rw<f64>[m], n:usize) {
   }
 }
 
-fn report(n:usize, label:ro<u8>[n], nanoseconds:u64) {
-  io.print(label);
-  io.print_u64(nanoseconds / 1000);
-  io.println(" us");
-}
+fn report(n:usize, label:ro<u8>[n], nanoseconds:u64) { println(label, nanoseconds / 1000, " us"); }

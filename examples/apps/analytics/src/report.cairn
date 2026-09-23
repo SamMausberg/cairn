@@ -2,20 +2,11 @@
 // A label is exactly LABEL bytes wide, so the columns line up and the compiler, not the author,
 // is what checks that they do: a literal of any other length is E-TYPE-MISMATCH at the call.
 module analytics.report;
-import std.io;
 
 pub const LABEL:usize = 29;
 
-pub fn line(label:ro<u8>[LABEL], value:u64) {
-  io.print(label);
-  io.print_u64(value);
-  io.newline();
-}
+pub fn line(label:ro<u8>[LABEL], value:u64) { println(label, value); }
 
-pub fn micros(label:ro<u8>[LABEL], nanoseconds:u64) {
-  io.print(label);
-  io.print_u64(nanoseconds / 1000);
-  io.println(" us");
-}
+pub fn micros(label:ro<u8>[LABEL], nanoseconds:u64) { println(label, nanoseconds / 1000, " us"); }
 
-pub fn say(n:usize, text:ro<u8>[n]) { io.println(text); }
+pub fn say(n:usize, text:ro<u8>[n]) { println(text); }

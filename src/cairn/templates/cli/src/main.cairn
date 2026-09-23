@@ -29,7 +29,7 @@ fn run(a:ro<Args>) -> Result[i32, IoError] {
     add(total, c);
   }
   if a.count() > 2 { row(out, total, "total"); }
-  io.print(out.data[0..out.len]);
+  print(out);
   return Ok(0);
 }
 
@@ -37,13 +37,13 @@ fn main() -> i32 {
   match env.args() {
     Ok(a) => {
       if a.count() < 2 {
-        io.eprintln("usage: give the files to count after --");
+        eprintln("usage: give the files to count after --");
         return 2;
       }
       match run(a) {
         Ok(code) => return code;
         Err(e) => {
-          io.eprintln("cannot read one of the files");
+          eprintln("cannot read one of the files");
           return 1;
         }
       }

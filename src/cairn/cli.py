@@ -85,14 +85,10 @@ test average {
   assert(average(1, 2) == 1, "rounds down");
 }
 """)
-    (destination / "src/main.cairn").write_text("""import std.io;
-
-// Prints the average it checks, and exits 0 only when it is right.
+    (destination / "src/main.cairn").write_text("""// Prints the average it checks, and exits 0 only when it is right.
 fn main() -> i32 {
   let mean = average(10, 20);
-  io.print("average(10, 20) = ");
-  io.print_u64(mean);
-  io.newline();
+  println("average(10, 20) = ", mean);
   if mean != 15 { return 1; }
   return 0;
 }

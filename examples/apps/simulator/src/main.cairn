@@ -48,11 +48,11 @@ fn main() -> i32 {
   let heat = reduce + for i in m yield loop_a[i];
   if !(heat > 0.0) { return 3; }
 
-  io.println("simulator: 1024x1024 grid, 16 Jacobi sweeps");
+  println("simulator: 1024x1024 grid, 16 Jacobi sweeps");
   report("simulator: sequential ", t1 - t0);
   report("simulator: threads    ", t2 - t1);
   report("simulator: device up  ", t3 - t2);
   report("simulator: device     ", t4 - t3);
-  io.println("simulator: all three back ends agree bit for bit");
+  println("simulator: all three back ends agree bit for bit");
   return 0;
 }

@@ -8,7 +8,6 @@ import panel.ui (Ui);
 import std.draw;
 import std.fmt;
 import std.image (Image);
-import std.io;
 import std.vec (Vec);
 
 fn main() -> i32 {
@@ -34,6 +33,6 @@ fn main() -> i32 {
   fmt.bytes(line, " frames drawn, ");
   fmt.uint(line, shots);
   fmt.bytes(line, " captured");
-  io.println(line);
+  println(line);
   return 0;
 }

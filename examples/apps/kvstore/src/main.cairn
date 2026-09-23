@@ -106,18 +106,14 @@ fn main() -> i32 {
   match scenario() {
     Ok(step) => {
       if step == 0 {
-        io.println("kvstore: self-check passed");
+        println("kvstore: self-check passed");
         return 0;
       }
-      io.print("kvstore: failed check ");
-      io.print_u64(u64(step));
-      io.newline();
+      println("kvstore: failed check ", step);
       return i32(step);
     }
     Err(e) => {
-      io.print("kvstore: io error ");
-      io.print_u64(u64(e.code));
-      io.newline();
+      println("kvstore: io error ", e.code);
       return 100;
     }
   }

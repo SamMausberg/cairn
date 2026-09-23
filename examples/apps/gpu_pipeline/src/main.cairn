@@ -36,15 +36,13 @@ fn main() -> i32 {
   for i in 0..host_used { if back[i] != host_kept[i] { return 3; } }
   if host_used == 0 || host_used >= n { return 4; }
 
-  io.print("gpu_pipeline: 4194304 values, kept ");
-  io.print_u64(u64(dev_used));
-  io.newline();
+  println("gpu_pipeline: 4194304 values, kept ", dev_used);
   report("gpu_pipeline: host pipeline   ", h1 - h0);
   report("gpu_pipeline: upload          ", d1 - d0);
   report("gpu_pipeline: device map      ", d2 - d1);
   report("gpu_pipeline: device compact  ", d3 - d2);
   report("gpu_pipeline: device reduce   ", d4 - d3);
   report("gpu_pipeline: download        ", d5 - d4);
-  io.println("gpu_pipeline: device result matches the host");
+  println("gpu_pipeline: device result matches the host");
   return 0;
 }

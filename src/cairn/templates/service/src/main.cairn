@@ -41,13 +41,11 @@ fn serve() -> Result[i32, IoError] {
   match io.outcome(q.status()) {
     Ok(up) => {}
     Err(e) => {
-      io.eprintln("no io_uring here: a seccomp filter or a sysctl turned it off");
+      eprintln("no io_uring here: a seccomp filter or a sysctl turned it off");
       return Ok(2);
     }
   }
-  io.print("echo: listening on 127.0.0.1:");
-  io.print_u64(u64(PORT));
-  io.newline();
+  println("echo: listening on 127.0.0.1:", PORT);
   let mut clients = Buf[Client](CLIENTS);
   q.accept(server.fd, ACCEPT);
   let mut running = true;
@@ -85,7 +83,7 @@ fn main() -> i32 {
   match serve() {
     Ok(code) => return code;
     Err(e) => {
-      io.eprintln("echo: a socket failed");
+      eprintln("echo: a socket failed");
       return 1;
     }
   }

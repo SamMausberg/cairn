@@ -189,7 +189,6 @@ Text built into a `Vec[u8]`: every call appends, so a line is a run of calls and
 
 ```cairn
 import std.fmt;
-import std.io;
 import std.vec (Vec);
 
 fn main() -> i32 {
@@ -201,7 +200,7 @@ fn main() -> i32 {
   fmt.padded(line, count, 3, '0');
   fmt.bytes(line, " at 0x");
   fmt.hex(line, 48879, 8);
-  io.println(line);              // mean  0.667 of 007 at 0x0000beef
+  println(line);                 // mean  0.667 of 007 at 0x0000beef
   return 0;
 }
 ```
@@ -251,12 +250,11 @@ fn greet() -> Result[usize, IoError] {
   for i in 1..a.count() {
     let lo = a.begin(i);
     let hi = a.end(i);
-    io.print("argument: ");
-    io.println(a.text.data[lo..hi]);
+    println("argument: ", a.text.data[lo..hi]);
   }
   match try env.var("HOME") {
-    Some(home) => { io.println(home); }
-    None => { io.println("no HOME"); }
+    Some(home) => println(home);
+    None => println("no HOME");
   }
   return Ok(a.count());
 }
