@@ -2,10 +2,10 @@
 
 The shortest decimal that reads back to the same f32 or f64 is found by trying one significant digit, then two,
 each time the two decimals of that length that bracket the value, keeping those that round back to it and the
-nearer of them (an even last digit on a tie). Written out it is the fixed form or the exponent form (`e+NN`, at
-least two digits), whichever has fewer characters, the fixed one on a tie; the fixed form of an integer is its
-exact digits, since among the forms of that length they are the nearest. That is what std::to_chars promises
-without a precision, restated from the standard's words rather than from any library's code.
+nearer of them (an even last digit on a tie). They are laid out as ECMAScript's Number::toString lays out a number
+(ECMA-262, Number::toString, radix 10): with the value 0.d1...dk times ten to the n, plain digits and zeros while
+k <= n <= 21, a point inside the digits while 0 < n <= 21, 0.000d1...dk while -6 < n <= 0, and an exponent
+otherwise, restated from the standard's words rather than from any library's code.
 """
 
 import math
@@ -61,12 +61,11 @@ def printed(x: float, bits: int = 64) -> str:
     if x == 0:
         return sign + "0"
     digits, power = shortest(abs(x), bits)
-    top = power + len(digits) - 1
-    exponent = digits[0] + ("." + digits[1:] if len(digits) > 1 else "") + f"e{'-' if top < 0 else '+'}{abs(top):02d}"
-    if power >= 0:
-        fixed = str(int(Fraction(abs(x))))
-    elif (point := len(digits) + power) > 0:
-        fixed = digits[:point] + "." + digits[point:]
-    else:
-        fixed = "0." + "0" * -point + digits
-    return sign + (fixed if len(fixed) <= len(exponent) else exponent)
+    k, n = len(digits), len(digits) + power
+    if k <= n <= 21:
+        return sign + digits + "0" * (n - k)
+    if 0 < n <= 21:
+        return sign + digits[:n] + "." + digits[n:]
+    if -6 < n <= 0:
+        return sign + "0." + "0" * -n + digits
+    return sign + digits[0] + ("." + digits[1:] if k > 1 else "") + f"e{'-' if n - 1 < 0 else '+'}{abs(n - 1)}"

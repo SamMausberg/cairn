@@ -1,8 +1,9 @@
 // CAIRN print and format: every piece a call names is computed, left to right, before one byte is written, so an
 // argument whose guard fails aborts with nothing written. print, println, eprint and eprintln write through one
 // buffer of PIPE_BUF (4096) bytes on the caller's stack: a line of at most that many bytes leaves in one write(2),
-// which a pipe keeps whole. A float is written in the shortest form that reads back to the same value, as
-// std::to_chars writes it without a precision: fixed or exponent, whichever is shorter, fixed on a tie. format
+// which a pipe keeps whole. A float is written as the shortest digits that read back to the same value, laid out
+// as ECMAScript's Number::toString lays out a number: plain digits while the point falls within 21 places of them
+// (100000, 1.5), 0.000ddd down to six zeros, and an exponent beyond (1e+21, 1e-7). format
 // appends to a growable byte record and allocates at most once a call. A write the kernel refuses (a closed pipe,
 // a full disk) ends that print where it stopped; nothing traps for it. Host only: a lane or an image never gets here.
 #pragma once
@@ -35,14 +36,49 @@ inline Piece real(double v) noexcept { Piece x; x.kind = Kind::f64; x.d = v; ret
 constexpr std::size_t WIDEST = 32;    // -2.2250738585072014e-308 is 24 characters, the widest a number renders
 constexpr std::size_t BUFFER = 4096;  // PIPE_BUF on Linux: what one write to a pipe keeps whole
 
+// The shortest digits std::to_chars finds, and where the point falls among them (n), laid out as described above.
+template <typename F> inline std::size_t shortest(F v, char* out) noexcept {
+  char s[WIDEST], digits[WIDEST];
+  char* end = std::to_chars(s, s + WIDEST, v, std::chars_format::scientific).ptr;
+  const std::size_t sign = s[0] == '-';
+  const char* mark = static_cast<const char*>(std::memchr(s, 'e', static_cast<std::size_t>(end - s)));
+  if (!mark) {  // nan, -nan, inf, -inf
+    std::memcpy(out, s, static_cast<std::size_t>(end - s));
+    return static_cast<std::size_t>(end - s);
+  }
+  int k = 0, exponent = 0;
+  for (const char* q = s + sign; q < mark; ++q) {
+    if (*q != '.') digits[k++] = *q;
+  }
+  std::from_chars(mark + 1 + (mark[1] == '+'), end, exponent);
+  const int n = exponent + 1;  // the value is 0.d1d2...dk times ten to the n
+  char* o = out;
+  if (sign) *o++ = '-';
+  auto put = [&o](const char* p, int count) { std::memcpy(o, p, static_cast<std::size_t>(count)); o += count; };
+  auto zeros = [&o](int count) { std::memset(o, '0', static_cast<std::size_t>(count)); o += count; };
+  if (k <= n && n <= 21) {
+    put(digits, k), zeros(n - k);
+  } else if (0 < n && n <= 21) {
+    put(digits, n), *o++ = '.', put(digits + n, k - n);
+  } else if (-6 < n && n <= 0) {
+    *o++ = '0', *o++ = '.', zeros(-n), put(digits, k);
+  } else {
+    *o++ = digits[0];
+    if (k > 1) *o++ = '.', put(digits + 1, k - 1);
+    *o++ = 'e', *o++ = n - 1 < 0 ? '-' : '+';
+    o = std::to_chars(o, out + WIDEST, n - 1 < 0 ? 1 - n : n - 1).ptr;
+  }
+  return static_cast<std::size_t>(o - out);
+}
+
 // The characters of a piece that is not text, into `out`, which holds WIDEST.
 inline std::size_t render(const Piece& x, char* out) noexcept {
   char* end = out + WIDEST;
   switch (x.kind) {
     case Kind::sint: return static_cast<std::size_t>(std::to_chars(out, end, x.s).ptr - out);
     case Kind::uint: return static_cast<std::size_t>(std::to_chars(out, end, x.u).ptr - out);
-    case Kind::f32: return static_cast<std::size_t>(std::to_chars(out, end, x.f).ptr - out);
-    case Kind::f64: return static_cast<std::size_t>(std::to_chars(out, end, x.d).ptr - out);
+    case Kind::f32: return shortest(x.f, out);
+    case Kind::f64: return shortest(x.d, out);
     case Kind::boolean: std::memcpy(out, x.u ? "true" : "false", x.u ? 4 : 5); return x.u ? 4 : 5;
     case Kind::byte: out[0] = static_cast<char>(x.u); return 1;
     case Kind::text: break;

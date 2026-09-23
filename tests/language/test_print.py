@@ -4,6 +4,8 @@ The integer and text expectations are Python's own formatting; the float ones ar
 shortest round-trip decimal worked out with exact rationals. Every program runs natively under both compilers.
 """
 
+import json
+import math
 import random
 import shutil
 import struct
@@ -108,7 +110,30 @@ def test_a_float_prints_in_the_shortest_form_that_reads_back(tmp_path, cxx):
     want += [printed(struct.unpack("<f", struct.pack("<I", p))[0], 32) for p in single]
     assert done.stdout.splitlines() == want
     assert want[:13] == ["0", "-0", "inf", "-inf", "nan", "-nan", "5e-324", "2.225073858507201e-308",
-                         "2.2250738585072014e-308", "1.7976931348623157e+308", "0.1", "1e+05", "1e+20"]  # fmt: skip
+                         "2.2250738585072014e-308", "1.7976931348623157e+308", "0.1", "100000",
+                         "100000000000000000000"]  # fmt: skip
+
+
+def test_the_oracle_lays_out_a_float_as_javascript_does():
+    """A second, unrelated implementation of the layout rule: node's own Number.prototype.toString."""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed; the exact-rational oracle alone holds the native output")
+    rng = random.Random(11)
+    xs = [struct.unpack("<d", struct.pack("<Q", rng.getrandbits(64)))[0] for _ in range(4000)]
+    xs = [x for x in xs if math.isfinite(x) and x != 0] + [
+        1.0,
+        1e5,
+        1e20,
+        1e21,
+        1e-6,
+        1e-7,
+        0.1,
+        123456789012345680000.0,
+    ]
+    script = "const xs = JSON.parse(require('fs').readFileSync(0, 'utf8')); console.log(JSON.stringify(xs.map(String)))"
+    said = subprocess.run([node, "-e", script], input=json.dumps(xs), capture_output=True, text=True, check=True)
+    assert [printed(x) for x in xs] == json.loads(said.stdout)
 
 
 LONG = """
