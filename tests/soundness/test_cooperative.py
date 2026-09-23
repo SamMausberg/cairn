@@ -317,3 +317,30 @@ def test_a_name_or_array_the_body_leaves_unused_still_compiles_for_the_device(tm
     source = "fn f(n:usize, out:rw<u64>[n]@device) {\n  blocks g in 1 threads t in 32 {\n"
     source += "    shared unused:u64[4] = zeroed;\n    if t < n { out[t] = 1; }\n  }\n}\n"
     device_build(tmp_path, compile_source(source)[0])
+
+
+IN_PLACE = """fn scale(m:usize, n:usize, across:usize, down:usize, k:usize, c:rw<f32>[k]) {
+  blocks bx, by in across, down threads tx, ty in 32, 4 {
+    let mut held:f32 = 0.0;
+    for i in 0..READ {
+      for j in 0..2 {
+        if GUARD { held = held + c[(by * 64 + ty + 4 * i) * n + bx * 64 + tx + 32 * j]; }
+      }
+    }
+    for i in 0..16 {
+      for j in 0..2 {
+        if by * 64 + ty + 4 * i < m && bx * 64 + tx + 32 * j < n { c[(by * 64 + ty + 4 * i) * n + bx * 64 + tx + 32 * j] = held; }
+      }
+    }
+  }
+}
+"""
+BOTH = "by * 64 + ty + 4 * i < m && bx * 64 + tx + 32 * j < n"
+
+
+def test_a_thread_may_read_what_it_writes_through_other_loops_over_the_same_range():
+    """c += ...: a read in one loop nest and the write in another, over the same ranges and under the same
+    conditions, is the thread's own element. A read over a longer range, or without the write's conditions, is not."""
+    compile_source(IN_PLACE.replace("READ", "16").replace("GUARD", BOTH))
+    refused("E-COOP-GLOBAL", IN_PLACE.replace("READ", "17").replace("GUARD", BOTH))
+    refused("E-COOP-GLOBAL", IN_PLACE.replace("READ", "16").replace("GUARD", "bx * 64 + tx + 32 * j < n"))

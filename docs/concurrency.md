@@ -665,7 +665,7 @@ fn shift(g:usize, out:rw<u64>[g]) {
 }
 ```
 
-An array from outside the region is shared by every block, and no barrier orders two blocks. Each of its elements may be written by at most one thread of one block, and read by another only if nobody writes it (`E-COOP-GLOBAL`). The checker shows this when the index is a sum of the block, thread and loop names, each times a weight larger than everything the lighter terms add up to, as `b * 256 + t` is, or as the transpose's `(bx * 32 + ty + 8 * k) * h + by * 32 + tx` is when `h` is `32 * gy`. A condition on the index, `if col < h`, counts toward that bound.
+An array from outside the region is shared by every block, and no barrier orders two blocks. Each of its elements may be written by at most one thread of one block, and read by another only if nobody writes it (`E-COOP-GLOBAL`). The checker shows this when the index is a sum of the block, thread and loop names, each times a weight larger than everything the lighter terms add up to, as `b * 256 + t` is, or as the transpose's `(bx * 32 + ty + 8 * k) * h + by * 32 + tx` is when `h` is `32 * gy`. A condition on the index, `if col < h`, counts toward that bound. A thread may read the elements it writes, as `c += ...` does, when the read's index is the write's, in the same loop or in another over the same range, under the write's conditions.
 
 ```cairn
 // out is x transposed: x has 32 * gy rows of 32 * gx elements.

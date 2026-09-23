@@ -18,15 +18,16 @@ digits placed so far, which is how a guarded transpose `if col < h { out[row * h
 counter is a digit the thread may repeat, so a thread may rewrite its own element; a block or thread name the index
 does not use is refused unless a condition pins it (`if t == 0 { out[b] = total; }`).
 
-A read of an array the region writes must name the element its own thread writes, the same polynomial as a write:
-another block may be writing any other element, and no barrier orders two blocks. Anything else, an index the
+A read of an array the region writes must name the element its own thread writes: a write's polynomial, its loop
+counters renamed to the read's over the same ranges, standing under every condition the write does (`own`). Another
+block may be writing any other element, and no barrier orders two blocks. Anything else, an index the
 checker cannot put in this form among them, is refused with E-COOP-GLOBAL: the rule never guesses.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from itertools import count
+from itertools import count, permutations
 from typing import TYPE_CHECKING, Any
 
 from .tree import USIZE, Expr, Function, Stmt, fail, is_view, nested, root
@@ -394,18 +395,47 @@ def check(c: Checker, s: Stmt, block: Block, outer: set[str], grid: list[Poly | 
             fail("E-COOP-GLOBAL", f"{name} is written at line {writes[0].node.line} by the threads of every block, "
                  f"and the checker cannot show that no two of them write one element: {why}", writes[0].node,
                  array=name)  # fmt: skip
-        # A read names its own thread's element when it is a write's index and that index holds every block and
-        # thread name that has more than one value: then equal indexes mean one thread. An index a condition pins
-        # a name in (`if t == 0 { out[b] = v; }`) says nothing of which thread reads it.
-        agents = {
-            n for n, d in walk.digits.items() if d.agent and not (d.hi is not None and (d.hi - d.lo).constant == 1)
-        }
-        mine = {x.index for x in writes if x.index is not None and agents <= x.index.atoms()}
         for read in (x for x in sites if not x.write):
-            if read.index is None or read.index not in mine:
+            if not any(own(read, w, walk.digits) for w in writes):
                 fail("E-COOP-GLOBAL", f"{name} is written by the threads of this region, so a thread reads it only "
                      f"at the element it writes itself; the read at line {read.node.line} may reach an element "
                      "another thread writes, and no barrier orders two blocks.", read.node, array=name)  # fmt: skip
+
+
+def own(read: Site, write: Site, digits: dict[str, Digit]) -> bool:
+    """Whether a read names an element only its own thread may write: the write's index, its loop counters renamed to
+    the read's over the same ranges, under every condition the write sits under. The write's index holds every block
+    and thread name with more than one value, so one index is one thread; a name a condition pins (`if t == 0 {
+    out[b] = v; }`) says nothing of which thread reads. The conditions are what showed no two threads write one
+    element, so the read must stand where they hold."""
+    agents = {n for n, d in digits.items() if d.agent and not (d.hi is not None and (d.hi - d.lo).constant == 1)}
+    if read.index is None or write.index is None or not agents <= write.index.atoms():
+        return False
+
+    def counters(site: Site) -> list[str]:
+        found = site.index.atoms() if site.index is not None else set()
+        found |= {a for lhs, bound in site.facts for a in lhs.atoms() | bound.atoms()}
+        return sorted(a for a in found if a in digits and not digits[a].agent)
+
+    mine, theirs = counters(read), counters(write)
+    if len(mine) != len(theirs) or len(mine) > 6:
+        return False
+    for order in permutations(theirs):
+        mapping = dict(zip(mine, order, strict=True))
+        if any(digits[a].lo != digits[b].lo or digits[a].hi != digits[b].hi for a, b in mapping.items()):
+            continue
+        facts = {(renamed(lhs, mapping), renamed(bound, mapping)) for lhs, bound in read.facts}
+        if renamed(read.index, mapping) == write.index and all(f in facts for f in write.facts):
+            return True
+    return False
+
+
+def renamed(p: Poly, mapping: dict[str, str]) -> Poly:
+    out: dict[Monomial, int] = {}
+    for m, k in p.terms.items():
+        key = tuple(sorted(mapping.get(a, a) for a in m))
+        out[key] = out.get(key, 0) + k
+    return Poly(out)
 
 
 def disjoint(writes: list[Site], digits: dict[str, Digit], least: dict[str, int]) -> str:
