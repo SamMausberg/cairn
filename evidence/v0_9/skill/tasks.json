@@ -1,0 +1,5 @@
+{
+ "collatz": "Write a CAIRN program in collatz.cairn: a function steps(n:u64) -> u64 that returns how many Collatz steps n takes to reach 1, a test block checking steps(27) == 111, and a main that prints the n below 10000 with the most steps and that step count. Make it compile, run its test, and run it.",
+ "stats": "Write a CAIRN program in stats.cairn that fills an array of 1000000 u64 values with (i * 7919) % 1000003 for i = 0, 1, 2, ..., then computes the minimum, the maximum and the sum, and prints them on one line separated by spaces. Add a test block that checks the three values for the first 10 elements. Make it compile, run its test, and run it.",
+ "parse": "Write a CAIRN program in parse.cairn with a function that parses a decimal u32 from a byte string and returns either the value or an error that says whether the input was empty, contained a non-digit, or overflowed u32. Add test blocks for each of the four outcomes, and a main that prints the result of parsing \"4096\" and of parsing \"4294967296\". Make it compile, run its tests, and run it."
+}

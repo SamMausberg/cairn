@@ -183,6 +183,8 @@ claude plugin install cairn@cairn
 
 The plugin adds the skill, puts `bin/cairn` on the session's `PATH`, and runs `cairn lsp` on `.cairn` files, so each edit returns the compiler's diagnostics to the agent. It needs Python 3.11 or later and a C++20 compiler and downloads nothing. Another agent that reads Agent Skills can load `skills/cairn/` directly, with `bin/cairn` of a checkout on its `PATH`.
 
+In a six-run smoke comparison (three small tasks, one `claude-sonnet-5` session each with and without the plugin), every session solved its task, and the sessions with the plugin cost 0.51 times as much and took 40 turns instead of 70, because they read two cards instead of searching the checkout ([evidence/v0_9/skill](../evidence/v0_9/skill/README.md)). One run per cell is not a benchmark.
+
 ## Training material and trials
 
 `tools/corpus/` holds hand-written teaching material in the protocol's format: 40 tasks in 14 algorithm families, each with an equivalent and an inequivalent implementation, 28 preference pairs, and 29 executed repair transcripts. Its answers ship, so none of it is a held-out test. Solver timeouts, failed translations and tool errors never become positive labels, and edits that weaken a signature or empty a domain are not rewarded.

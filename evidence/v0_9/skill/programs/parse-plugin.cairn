@@ -1,0 +1,91 @@
+import std.core (Result);
+
+const U32_MAX:u64 = 4294967295;
+
+enum ParseError { Empty; NonDigit(usize); Overflow; }
+
+// Parses a decimal u32 from bytes, left to right, failing on the first problem found.
+fn parse_u32(n:usize, bytes:ro<u8>[n]) -> Result[u32, ParseError] {
+  if n == 0 { return Err(Empty); }
+  let mut value:u64 = 0;
+  for i in 0..n {
+    let b = bytes[i];
+    if b < 48 || b > 57 { return Err(NonDigit(i)); }
+    value = value * 10 + u64(b - 48);
+    if value > U32_MAX { return Err(Overflow); }
+  }
+  return Ok(u32(value));
+}
+
+fn print_parse(n:usize, bytes:ro<u8>[n]) {
+  match parse_u32(n, bytes) {
+    Ok(value) => println("ok: ", value);
+    Err(e) => {
+      match e {
+        Empty => println("error: empty input");
+        NonDigit(at) => println("error: non-digit byte at ", at);
+        Overflow => println("error: overflow");
+      }
+    }
+  }
+}
+
+test parses_valid_decimal {
+  match parse_u32("4096") {
+    Ok(value) => assert_eq(value, 4096);
+    Err(_) => assert(false, "expected Ok(4096)");
+  }
+}
+
+test empty_input_reports_empty {
+  let mut is_empty = false;
+  match parse_u32("") {
+    Ok(_) => is_empty = false;
+    Err(e) => {
+      match e {
+        Empty => is_empty = true;
+        NonDigit(_) => is_empty = false;
+        Overflow => is_empty = false;
+      }
+    }
+  }
+  assert(is_empty, "expected Empty error");
+}
+
+test non_digit_reports_offset {
+  let mut at:usize = 0;
+  let mut got_non_digit = false;
+  match parse_u32("40a6") {
+    Ok(_) => got_non_digit = false;
+    Err(e) => {
+      match e {
+        Empty => got_non_digit = false;
+        NonDigit(offset) => { got_non_digit = true; at = offset; }
+        Overflow => got_non_digit = false;
+      }
+    }
+  }
+  assert(got_non_digit, "expected NonDigit error");
+  assert_eq(at, 2);
+}
+
+test overflow_reports_overflow {
+  let mut overflowed = false;
+  match parse_u32("4294967296") {
+    Ok(_) => overflowed = false;
+    Err(e) => {
+      match e {
+        Empty => overflowed = false;
+        NonDigit(_) => overflowed = false;
+        Overflow => overflowed = true;
+      }
+    }
+  }
+  assert(overflowed, "expected Overflow error");
+}
+
+fn main() -> i32 {
+  print_parse("4096");
+  print_parse("4294967296");
+  return 0;
+}

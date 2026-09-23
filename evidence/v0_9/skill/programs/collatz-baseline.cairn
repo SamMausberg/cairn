@@ -1,0 +1,28 @@
+// Number of Collatz steps from n down to 1.
+fn steps(n:u64) -> u64 {
+  let mut count:u64 = 0;
+  let mut x:u64 = n;
+  while x != 1 {
+    if x % 2 == 0 { x = x / 2; } else { x = 3 * x + 1; }
+    count += 1;
+  }
+  return count;
+}
+
+test steps_27 {
+  assert_eq(steps(27), 111);
+}
+
+fn main() -> i32 {
+  let mut best_n:u64 = 1;
+  let mut best_steps:u64 = 0;
+  for n in 1..10000 {
+    let s = steps(u64(n));
+    if s > best_steps {
+      best_steps = s;
+      best_n = u64(n);
+    }
+  }
+  println(best_n, " ", best_steps);
+  return 0;
+}

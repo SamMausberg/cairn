@@ -1,0 +1,40 @@
+// Fills out[i] with (i * 7919) % 1000003 for i = 0, 1, 2, ...
+fn fill(n:usize, out:rw<u64>[n]) {
+  for i in 0..n { out[i] = (u64(i) * 7919) % 1000003; }
+}
+
+fn stats_min(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut lo = xs[0];
+  for x in xs { lo = min(lo, x); }
+  return lo;
+}
+
+fn stats_max(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut hi = xs[0];
+  for x in xs { hi = max(hi, x); }
+  return hi;
+}
+
+fn stats_sum(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut total:u64 = 0;
+  for x in xs { total += x; }
+  return total;
+}
+
+test first_ten_elements {
+  let mut data = Buf[u64](10);
+  fill(len(data), data);
+  assert_eq(stats_min(len(data), data), 0, "min of the first ten elements");
+  assert_eq(stats_max(len(data), data), 71271, "max of the first ten elements");
+  assert_eq(stats_sum(len(data), data), 356355, "sum of the first ten elements");
+}
+
+fn main() -> i32 {
+  let mut data = Buf[u64](1000000);
+  fill(len(data), data);
+  let lo = stats_min(len(data), data);
+  let hi = stats_max(len(data), data);
+  let total = stats_sum(len(data), data);
+  println(lo, " ", hi, " ", total);
+  return 0;
+}

@@ -1,0 +1,133 @@
+{
+ "collatz-plugin": {
+  "tool_calls": [
+   "Skill: cairn:cairn",
+   "Read: <checkout>/skills/cairn/cards/tests.md",
+   "Read: <checkout>/skills/cairn/cards/printing.md",
+   "Write: ./collatz.cairn",
+   "Bash: cairn check collatz.cairn --format json",
+   "Bash: cairn test collatz.cairn --format json",
+   "Bash: cairn run collatz.cairn --format json"
+  ],
+  "final_message": "Everything works: `collatz.cairn` compiles, the test (`steps(27) == 111`) passes, and running it prints `n = 6171 steps = 261` \u2014 the correct known answer for the longest Collatz chain below 10000."
+ },
+ "collatz-baseline": {
+  "tool_calls": [
+   "Bash: pwd && ls -la",
+   "Bash: which cairn cairnc 2>/dev/null; echo \"---\"; find / -iname \"*cairn*\" -maxdepth 4 -not -path \"*/proc/*\" 2>/dev/null | head -50",
+   "Bash: ls -la <checkout>; echo \"---bin---\"; ls -la <checkout>/bin; echo \"---help---\"; <checkout>/bin/cairn --help 2>&1 | head -100",
+   "Bash: find <checkout> -iname \"*.md\" -o -iname \"*example*\" -o -iname \"*.cairn\" 2>/dev/null | grep -v \"/target/\" | head -100",
+   "Bash: cat <checkout>/results/ai_benchmark/primary/r1/histogram/cairn/main.cairn",
+   "Bash: find <checkout>/examples -iname \"*.cairn\" | head -50",
+   "Bash: cat <checkout>/examples/hello/src/main.cairn; echo \"===math===\"; cat <checkout>/examples/hello/src/math.cairn",
+   "Bash: grep -rl \"test {\" <checkout>/examples <checkout>/tests 2>/dev/null | head -10",
+   "Bash: grep -rl \"^test\\b\\|test(\" <checkout>/examples <checkout>/tests 2>/dev/null | head -20",
+   "Bash: find <checkout>/docs -iname \"*.md\" | xargs grep -l \"^test\" 2>/dev/null | head -20",
+   "Bash: cat <checkout>/examples/bazel/pricing/pricing_test.cairn",
+   "Bash: grep -n \"^test\" -A 15 <checkout>/docs/guide.md | head -100",
+   "Bash: sed -n '1,40p' <checkout>/docs/guide.md",
+   "Bash: grep -n \"cairn run\\|cairn test\\|cairn build\\|cairn check\" <checkout>/docs/guide.md | head -40",
+   "Bash: <checkout>/bin/cairn check --help 2>&1; echo \"---run---\"; <checkout>/bin/cairn run --help 2>&1; echo \"---test---\"; <checkout>/bin/cairn test --help 2>&1; echo \"",
+   "Bash: grep -n \"while\\|for .* in\\|let mut\\|println\" <checkout>/docs/language.md | head -60",
+   "Bash: grep -n \"trap on overflow\\|integer division\\|`%`\\|mod(\\|floor division\\|wrapping\\|add_wrap\\|mul_wrap\\|/ \\|even\\|odd\" <checkout>/docs/language.md | head -60",
+   "Bash: sed -n '1,80p' <checkout>/docs/language.md",
+   "Bash: grep -rn \"for .* in .*\\.\\.\" <checkout>/examples/*.cairn <checkout>/examples/**/*.cairn 2>/dev/null | grep -v build | head -30",
+   "Bash: grep -n \"for i in\\|for n in\\|usize(\" <checkout>/docs/*.md | head -40",
+   "Write: ./collatz.cairn",
+   "Bash: <checkout>/bin/cairn check collatz.cairn 2>&1",
+   "Bash: <checkout>/bin/cairn test collatz.cairn 2>&1",
+   "Bash: <checkout>/bin/cairn run collatz.cairn 2>&1"
+  ],
+  "final_message": "6171 taking 261 steps matches the known Collatz result for n < 10000, confirming the program is correct.\n\n`collatz.cairn` is written and verified:\n- `steps(n:u64) -> u64` computes the Collatz step count.\n- `test steps_27` checks `steps(27) == 111` \u2014 passes.\n- `main` scans 1..10000 and prints the champion: **6171 261** (n=6171 takes 261 steps, the max below 10000).\n\nCompiles clean (`cairn check`), test passes (`cairn test`), and it runs correctly (`cairn run`)."
+ },
+ "stats-plugin": {
+  "tool_calls": [
+   "Skill: cairn:cairn",
+   "Read: <checkout>/skills/cairn/cards/printing.md",
+   "Read: <checkout>/skills/cairn/cards/tests.md",
+   "Read: <checkout>/skills/cairn/cards/owners.md",
+   "Read: <checkout>/skills/cairn/cards/parallel.md",
+   "Write: ./stats.cairn",
+   "Bash: cairn check stats.cairn --format json",
+   "Bash: cairn test stats.cairn --format json",
+   "Bash: cairn run stats.cairn --format json"
+  ],
+  "final_message": "All three steps succeeded: `stats.cairn` type-checks, its test passes, and running it over 1,000,000 elements prints `0 1000002 499999547508` (min max sum) on one line."
+ },
+ "stats-baseline": {
+  "tool_calls": [
+   "Bash: pwd && ls -la && find / -iname \"*cairn*\" -maxdepth 4 -not -path \"*/node_modules/*\" 2>/dev/null | head -100",
+   "Bash: ls -la <checkout> && echo \"---README---\" && find <checkout> -maxdepth 2 -iname \"*.md\" 2>/dev/null",
+   "Read: <checkout>/docs/guide.md",
+   "Read: <checkout>/README.md",
+   "Grep: %|rem\\(|mod\\(|modulo",
+   "Grep: println|print\\(",
+   "Grep: \\bmin\\(|\\bmax\\(",
+   "Grep: Buf\\[u64\\]\\(|assert_eq|test \\w+ \\{",
+   "Grep: reduce (\\+|max|min|\\*)|reduce op|reduce for|reduce and|yield",
+   "Grep: reduce min|reduce max",
+   "Grep: test \\w+ \\{[\\s\\S]{0,200}reduce",
+   "Grep: cairn test |cairn check |cairn run |single file|single-file",
+   "Bash: cd <checkout> && source .venv/bin/activate 2>/dev/null; python3 bin/cairn --help 2>&1 | head -50",
+   "Write: ./stats.cairn",
+   "Bash: cd <checkout> && source .venv/bin/activate 2>/dev/null; python3 bin/cairn check ./stats.cairn",
+   "Grep: Buf\\[u64\\]\\(n\\)|fn \\w+\\(n:usize, \\w+:r[ow]<u64>\\[n\\]\" |len\\(data\\)|Buf\\[.*\\]\\(.*n.*\\)\" ",
+   "Grep: Buf\\[u64\\]\\(n\\);[\\s\\S]{0,150}fill\\(n, |Buf\\[u64\\]\\(n\\);[\\s\\S]{0,150}\\(n, data\\)",
+   "Grep: = Buf\\[u64\\]\\(n\\)",
+   "Edit: ./stats.cairn",
+   "Bash: cd <checkout> && source .venv/bin/activate 2>/dev/null; python3 bin/cairn check ./stats.cairn",
+   "Bash: cd <checkout> && source .venv/bin/activate 2>/dev/null; python3 bin/cairn test ./stats.cairn",
+   "Bash: cd <checkout> && source .venv/bin/activate 2>/dev/null; python3 bin/cairn run ./stats.cairn",
+   "Bash: python3 -c \"\nvals = [(i*7919) % 1000003 for i in range(1000000)]\nprint(min(vals), max(vals), sum(vals))\n\"",
+   "Bash: cat ./stats.cairn"
+  ],
+  "final_message": "**stats.cairn** is written, typechecks, its test block passes, and running it prints `0 1000002 499999547508` \u2014 verified against an independent Python computation.\n\n- `fill` writes `(i * 7919) % 1000003` into a `Buf[u64]`\n- `stats_min`/`stats_max`/`stats_sum` reduce over a `ro<u64>[n]` view\n- `test first_ten_elements` checks min=0, max=71271, sum=356355 for the first 10 elements\n- `main` runs the same pipeline over 1,000,000 elements and prints the three values space-separated"
+ },
+ "parse-plugin": {
+  "tool_calls": [
+   "Skill: cairn:cairn",
+   "Read: <checkout>/skills/cairn/cards/sums.md",
+   "Read: <checkout>/skills/cairn/cards/tests.md",
+   "Read: <checkout>/skills/cairn/cards/printing.md",
+   "Read: <checkout>/skills/cairn/cards/records.md",
+   "Read: <checkout>/skills/cairn/cards/views.md",
+   "Read: <checkout>/skills/cairn/cards/owners.md",
+   "Grep: \"[^\"]*\"",
+   "Grep: ro<u8>\\[|string literal|byte string",
+   "Read: <checkout>/docs/language.md",
+   "Read: <checkout>/docs/library.md",
+   "Read: <checkout>/docs/std/core.md",
+   "Grep: parse_u64|ParseError|Invalid|Overflow|Empty",
+   "Read: <checkout>/skills/cairn/cards/effects.md",
+   "Write: ./parse.cairn",
+   "Bash: cairn check parse.cairn --format json",
+   "Bash: cairn test parse.cairn --format json",
+   "Bash: cairn run parse.cairn --format json"
+  ],
+  "final_message": "Everything works as expected: it compiles, all four test blocks pass, and running it prints `ok: 4096` and `error: overflow`.\n\n`/tmp/claude-1000/-home-sam-cairn/f9a3aa67-fe16-4e99-8a9d-225f433003b3/scratchpad/ab/parse-plugin/parse.cairn`:\n\n- `parse_u32(n, bytes) -> Result[u32, ParseError]` scans left to right, returning `Err(Empty)` on a zero-length input, `Err(NonDigit(i))` at the first non-digit byte (with its offset), `Err(Overflow)` as soon as the accumulated value would exceed `u32::MAX`, or `Ok(value)` otherwise. Overflow is checked against a `u64` accumulator before narrowing to `u32`, so no arithmetic trap ever fires.\n- Four test blocks cover each outcome: valid parse, empty input, a non-digit (checking both the variant and its offset), and overflow.\n- `main` calls a small `print_parse` helper on `\"4096\"` (\u2192 `ok: 4096`) and `\"4294967296\"` (\u2192 `error: overflow`, since that's `u32::MAX + 1`)."
+ },
+ "parse-baseline": {
+  "tool_calls": [
+   "Bash: pwd && ls -la && which cairn 2>/dev/null; echo \"---\"; find / -iname \"*cairn*\" -maxdepth 4 -not -path \"*/proc/*\" 2>/dev/null | head -50",
+   "Bash: ls -la <checkout>/ && echo \"---bin---\" && <checkout>/bin/cairn --help 2>&1 | head -80",
+   "Bash: ls <checkout>/docs/ && echo \"---examples---\" && ls <checkout>/examples/ && echo \"---AGENTS.md---\" && cat <checkout>/AGENTS.md",
+   "Read: <checkout>/docs/guide.md",
+   "Bash: ls <checkout>/examples/basics/ && echo --- && ls <checkout>/examples/apps/ 2>/dev/null",
+   "Grep: u8\\[|bytes|byte string|\"[^\"]*\"b|str\\.|parse",
+   "Read: ",
+   "Read: <checkout>/docs/language.md",
+   "Grep: checked_|overflow|_wrap|Option\\[|widen",
+   "Grep: MAX|max_value|limits|u32::|const.*u32",
+   "Grep: std\\.fmt|format\\(|println\\(|Result\\[|enum ParseError|std\\.core",
+   "Read: <checkout>/docs/library.md",
+   "Bash: grep -n \"## Tests and assert\\|^test \\|assert(\\|assert_eq(\\|## Print and format\" -A 30 <checkout>/docs/language.md | head -150",
+   "Bash: grep -n \"cairn check\\|cairn run\\|cairn test\\|single file\\|FILE\\b\\|\\.cairn\\b\" <checkout>/docs/tools.md | head -60",
+   "Grep: escape|\\\\\\\\x|\\\\\\\\n|\\\\\\\\0|\\\\\\\\\"|string literal|byte string",
+   "Write: ./parse.cairn",
+   "Bash: <checkout>/bin/cairn check parse.cairn",
+   "Bash: <checkout>/bin/cairn test parse.cairn",
+   "Bash: <checkout>/bin/cairn run parse.cairn"
+  ],
+  "final_message": "Everything works as expected: it type-checks, all four test blocks pass, and running it prints:\n\n```\nparse(\"4096\") = 4096\nparse(\"4294967296\") failed: overflow\n```\n\n`parse.cairn` defines `parse_u32(n, bytes)`, returning `Result[u32, ParseError]` with `ParseError` variants `Empty`, `NotDigit`, and `Overflow`. It accumulates in `u64`, checking against `u32`'s max after each digit so the accumulator itself can never trap, then narrows to `u32` once known safe. Four `test` blocks cover empty input, a non-digit byte, overflow, and a successful parse; `main` prints results for `\"4096\"` (succeeds) and `\"4294967296\"` (overflows u32 by one)."
+ }
+}

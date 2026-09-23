@@ -1,0 +1,116 @@
+{
+ "model": "claude-sonnet-5",
+ "claude_code": "2.1.280",
+ "runs": [
+  {
+   "task": "collatz",
+   "arm": "plugin",
+   "turns": 9,
+   "cost_usd": 0.187,
+   "seconds": 45,
+   "output_tokens": 2195,
+   "input_tokens": 313516,
+   "tool_calls": 7,
+   "skill": 1,
+   "tool_result_chars": 4097,
+   "typed": true,
+   "tests_pass": true,
+   "output_right": true,
+   "output": [
+    "n = 6171 steps = 261"
+   ]
+  },
+  {
+   "task": "collatz",
+   "arm": "baseline",
+   "turns": 25,
+   "cost_usd": 0.419,
+   "seconds": 79,
+   "output_tokens": 5020,
+   "input_tokens": 906209,
+   "tool_calls": 24,
+   "skill": 0,
+   "tool_result_chars": 53553,
+   "typed": true,
+   "tests_pass": true,
+   "output_right": true,
+   "output": [
+    "6171 261"
+   ]
+  },
+  {
+   "task": "stats",
+   "arm": "plugin",
+   "turns": 11,
+   "cost_usd": 0.246,
+   "seconds": 56,
+   "output_tokens": 4952,
+   "input_tokens": 379910,
+   "tool_calls": 9,
+   "skill": 1,
+   "tool_result_chars": 9106,
+   "typed": true,
+   "tests_pass": true,
+   "output_right": true,
+   "output": [
+    "0 1000002 499999547508"
+   ]
+  },
+  {
+   "task": "stats",
+   "arm": "baseline",
+   "turns": 25,
+   "cost_usd": 0.656,
+   "seconds": 137,
+   "output_tokens": 12499,
+   "input_tokens": 1455132,
+   "tool_calls": 24,
+   "skill": 0,
+   "tool_result_chars": 69422,
+   "typed": true,
+   "tests_pass": true,
+   "output_right": true,
+   "output": [
+    "0 1000002 499999547508"
+   ]
+  },
+  {
+   "task": "parse",
+   "arm": "plugin",
+   "turns": 20,
+   "cost_usd": 0.432,
+   "seconds": 116,
+   "output_tokens": 11173,
+   "input_tokens": 681185,
+   "tool_calls": 18,
+   "skill": 1,
+   "tool_result_chars": 30410,
+   "typed": true,
+   "tests_pass": true,
+   "output_right": true,
+   "output": [
+    "ok: 4096",
+    "error: overflow"
+   ]
+  },
+  {
+   "task": "parse",
+   "arm": "baseline",
+   "turns": 20,
+   "cost_usd": 0.634,
+   "seconds": 132,
+   "output_tokens": 12004,
+   "input_tokens": 1315401,
+   "tool_calls": 19,
+   "skill": 0,
+   "tool_result_chars": 83505,
+   "typed": true,
+   "tests_pass": true,
+   "output_right": true,
+   "output": [
+    "parse(\"4096\") = 4096",
+    "parse(\"4294967296\") failed: overflow"
+   ]
+  }
+ ]
+}

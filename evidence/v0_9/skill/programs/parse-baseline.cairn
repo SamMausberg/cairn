@@ -1,0 +1,61 @@
+import std.core (Result);
+
+enum ParseError { Empty; NotDigit; Overflow; }
+
+// acc stays in u64 and is checked against u32's range every step, so it can never itself overflow.
+fn parse_u32(n:usize, bytes:ro<u8>[n]) -> Result[u32, ParseError] {
+  if n == 0 { return Err(Empty); }
+  let mut acc:u64 = 0;
+  for b in bytes {
+    if b < 48 || b > 57 { return Err(NotDigit); }
+    acc = acc * 10 + (u64(b) - 48);
+    if acc > 4294967295 { return Err(Overflow); }
+  }
+  return Ok(u32(acc));
+}
+
+test parse_empty {
+  match parse_u32(0, "") {
+    Ok(_) => assert(false, "empty input should not parse");
+    Err(why) => assert(why == Empty, "empty input should report Empty");
+  }
+}
+
+test parse_non_digit {
+  match parse_u32(len("40a2"), "40a2") {
+    Ok(_) => assert(false, "non-digit input should not parse");
+    Err(why) => assert(why == NotDigit, "non-digit input should report NotDigit");
+  }
+}
+
+test parse_overflow {
+  match parse_u32(len("4294967296"), "4294967296") {
+    Ok(_) => assert(false, "overflowing input should not parse");
+    Err(why) => assert(why == Overflow, "overflowing input should report Overflow");
+  }
+}
+
+test parse_ok {
+  match parse_u32(len("4096"), "4096") {
+    Ok(v) => assert_eq(v, 4096, "4096 should parse to 4096");
+    Err(_) => assert(false, "4096 should parse");
+  }
+}
+
+fn main() -> i32 {
+  match parse_u32(len("4096"), "4096") {
+    Ok(v) => println("parse(\"4096\") = ", v);
+    Err(_) => println("parse(\"4096\") failed");
+  }
+  match parse_u32(len("4294967296"), "4294967296") {
+    Ok(v) => println("parse(\"4294967296\") = ", v);
+    Err(why) => {
+      match why {
+        Empty => println("parse(\"4294967296\") failed: empty");
+        NotDigit => println("parse(\"4294967296\") failed: non-digit");
+        Overflow => println("parse(\"4294967296\") failed: overflow");
+      }
+    }
+  }
+  return 0;
+}

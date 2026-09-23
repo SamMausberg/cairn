@@ -1,0 +1,39 @@
+// Fills an array with (i * 7919) % 1000003 and reports min, max, sum.
+fn fill(n:usize, out:rw<u64>[n]) {
+  for i in 0..n {
+    out[i] = (u64(i) * 7919) % 1000003;
+  }
+}
+
+fn min_of(n:usize, data:ro<u64>[n]) -> u64 {
+  let m = reduce min for i in n yield data[i];
+  return m;
+}
+
+fn max_of(n:usize, data:ro<u64>[n]) -> u64 {
+  let m = reduce max for i in n yield data[i];
+  return m;
+}
+
+fn sum_of(n:usize, data:ro<u64>[n]) -> u64 {
+  let s = reduce add_wrap for i in n yield data[i];
+  return s;
+}
+
+test first_ten_elements {
+  let mut data = Buf[u64](10);
+  fill(data);
+  assert_eq(min_of(data), 0);
+  assert_eq(max_of(data), 71271);
+  assert_eq(sum_of(data), 356355);
+}
+
+fn main() -> i32 {
+  let mut data = Buf[u64](1000000);
+  fill(data);
+  let mn = min_of(data);
+  let mx = max_of(data);
+  let sm = sum_of(data);
+  println(mn, ' ', mx, ' ', sm);
+  return 0;
+}

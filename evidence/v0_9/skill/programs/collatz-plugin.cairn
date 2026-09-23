@@ -1,0 +1,32 @@
+fn steps(n:u64) -> u64 {
+  let mut count: u64 = 0;
+  let mut cur: u64 = n;
+  while cur != 1 {
+    if cur % 2 == 0 {
+      cur = cur / 2;
+    } else {
+      cur = 3 * cur + 1;
+    }
+    count = count + 1;
+  }
+  return count;
+}
+
+test steps_27_is_111 {
+  assert_eq(steps(27), 111);
+}
+
+fn main() -> i32 {
+  let mut best_n: u64 = 1;
+  let mut best_steps: u64 = 0;
+  for i in 1..10000 {
+    let n = u64(i);
+    let s = steps(n);
+    if s > best_steps {
+      best_steps = s;
+      best_n = n;
+    }
+  }
+  println("n = ", best_n, " steps = ", best_steps);
+  return 0;
+}
