@@ -19,6 +19,12 @@ RULES = {
 }
 BAD_NAMES = {".env", ".netrc", ".npmrc", ".pypirc", "credentials.json", "id_rsa", "id_ed25519", "hosts.yml"}
 BAD_SUFFIXES = {".key", ".pem", ".p12", ".pfx", ".so", ".o", ".a", ".dll", ".exe", ".zip", ".whl", ".bundle"}
+PNG = b"\x89PNG\r\n\x1a\n"
+
+
+def picture(name: str, data: bytes) -> bool:
+    """A frame a demo's README shows: a PNG under demos/, which the demo's test draws again and compares."""
+    return name.startswith("demos/") and name.endswith(".png") and data.startswith(PNG) and len(data) < 200_000
 
 
 def audit(root: Path) -> dict:
@@ -62,7 +68,7 @@ def audit(root: Path) -> dict:
                 findings.append({"path": name, "rule": "large-file", "commit": commit})
                 continue
             count += len(data)
-            if b"\0" in data:
+            if b"\0" in data and not picture(name, data):
                 findings.append({"path": name, "rule": "binary-file", "commit": commit})
             for rule, pattern in RULES.items():
                 if pattern.search(data):

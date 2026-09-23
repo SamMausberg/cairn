@@ -56,6 +56,20 @@ def clean(root):
     return {"findings": []}
 
 
+def test_the_audit_admits_a_demo_frame_and_no_other_binary(tmp_path):
+    import subprocess
+
+    png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR"
+    (tmp_path / "demos/v/frames").mkdir(parents=True)
+    (tmp_path / "demos/v/frames/a.png").write_bytes(png)
+    (tmp_path / "b.png").write_bytes(png + b"b")  # a picture outside demos/
+    (tmp_path / "demos/v/c.png").write_bytes(b"GIF89a\0")  # named .png, and not one
+    git = ["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+    for args in (["init", "-q"], ["add", "."], ["commit", "-qm", "frames"]):
+        subprocess.run([*git, *args], check=True, capture_output=True)
+    assert {f["path"] for f in audit(tmp_path)["findings"]} == {"b.png", "demos/v/c.png"}
+
+
 def test_default_never_contacts_github(tmp_path):
     runner = Fake(tmp_path)
     result = publish(tmp_path, "TestOwner/cairn", run=runner, audit_fn=clean)
