@@ -328,6 +328,11 @@ class Walk:
                 self.env = env
         elif tag in {"block", "unsafe", "defer"}:
             self.block(s.body)
+        elif tag == "asm":  # Its outputs are fresh immutable names whose values nothing here knows.
+            for e in es:
+                self.expr(e)
+            for name, *_ in s.assembly.outputs:
+                self.bind(name, True)
         else:  # while, return, assign, expr, submit, break, continue, and anything newer: no origin of its own
             for e in es:
                 self.expr(e)

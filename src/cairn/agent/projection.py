@@ -83,6 +83,20 @@ def format_expr(e: Expr) -> str:
     fail("E-PROJECTION", "Cannot project unknown expression kind.")
 
 
+def assembly(s: Stmt, es: list[str]) -> str:
+    """Typed assembly as it was written: target, template, operands, clobbers, effects."""
+    a, starts = s.assembly, iter(es)
+    head = " ".join(["asm", *(["volatile"] * a.volatile), a.target, *([a.capability] if a.capability else [])])
+    operands = [
+        f"out {n}:{t.display()}" + (f" = {next(starts)}" if started else "") for n, t, started, _, _ in a.outputs
+    ]
+    operands += list(starts)
+    listed = f" ({', '.join(operands)})" if operands else ""
+    listed += f" clobbers({', '.join(a.clobbers)})" if a.clobbers else ""
+    listed += f" effects({', '.join(a.effects)})" if a.effects else ""
+    return f"{head} {quoted(a.template, chr(34))}{listed};"
+
+
 def format_block(ss: list[Stmt], indent: int = 0) -> str:
     lines = ["{"]
     pad = "  " * (indent + 1)
@@ -138,6 +152,8 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
             line = "defer " + format_block(s.body, indent).split("\n", 2)[1].strip()
         elif s.tag in {"unsafe", "block"}:
             line = ("unsafe " if s.tag == "unsafe" else "") + nested(s.body)
+        elif s.tag == "asm":
+            line = assembly(s, es)
         else:
             fail("E-PROJECTION", "Cannot project unknown statement kind.")
         lines.append(pad + line)

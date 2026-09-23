@@ -31,7 +31,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/constants.py` | constant folding |
 | `compiler/facts.py` | what the checker established about `usize` values, which lowering uses to drop a guard |
 | `compiler/builtins.py` | every primitive's rule, beside its lowering |
-| `compiler/machine.py` | the machine: `mmio_read`, `mmio_write` and `asm`, their rules beside their lowering |
+| `compiler/machine.py` | the machine: `mmio_read`, `mmio_write`, `asm` and typed assembly, their rules and target requirements beside their lowering |
 | `compiler/printing.py` | `print`, `println`, `eprint`, `eprintln` and `format`: what each argument writes, and their lowering |
 | `compiler/codegen.py` | lowering the typed tree; nothing else produces C++ |
 | `compiler/header.py` | the C header of a library build: its declarations, the layouts it states, what cannot cross |

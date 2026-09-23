@@ -21,7 +21,7 @@ syntax match cairnConstant /\v<\u[A-Z0-9_]*[A-Z0-9]>/
 syntax match cairnEnumMember /\v(<\u\w*\.)@<=\u\w*>/
 syntax match cairnSelf /\v<(self|Self)>/
 syntax match cairnPlacement /\v\@(host|device|pinned|unified)>/
-syntax match cairnContext /\v<(after|block|exclusive|fold|fuse|grain|into|lanes|layout|lends|per_lane|plan|recipe|require|scan|stage|test|unroll|vector)>\ze\s+[[:alnum:]_"$+*&|^-]/
+syntax match cairnContext /\v<(after|block|clobbers|exclusive|fold|fuse|grain|into|lanes|layout|lends|out|per_lane|plan|recipe|require|scan|stage|test|unroll|vector|volatile)>\ze\s+[[:alnum:]_"$+*&|^-]/
 syntax match cairnContext /\v<packed>\ze\s*\{/
 syntax match cairnContext /\v<align>\ze\s*\(/
 syntax match cairnNumber /\v<(0x\x+|\d+(\.\d+)?([eE][+-]?\d+)?)>/
@@ -30,7 +30,7 @@ syntax match cairnOperator /\v[-+*\/%&|^]\=|\=\>|-\>|\.\./
 syntax match cairnEscape /\v\\(x\x{2}|[ntr0\\"'])/ contained
 syntax region cairnString start=/"/ skip=/\\./ end=/"/ contains=cairnEscape
 syntax region cairnChar start=/'/ skip=/\\./ end=/'/ contains=cairnEscape
-syntax keyword cairnEffect contained alloc asm atomic dispatch diverge ffi ffi_precondition free gpu_alloc gpu_free indirect_call io join lane local_read local_write lock mmio par read spawn stack_storage transfer trap write zero_init
+syntax keyword cairnEffect contained alloc asm atomic barrier dispatch diverge fence ffi ffi_precondition free gpu_alloc gpu_free indirect_call io join lane local_read local_write lock mmio par read spawn stack_storage transfer trap write zero_init
 syntax region cairnEffects matchgroup=cairnModifier start=/\v<effects\s*\(/ end=/)/ contains=cairnEffect
 syntax match cairnDiagnostic /\v<E(-[A-Z0-9]+)+>/ contained
 syntax region cairnComment start=+//+ end=/$/ contains=cairnDiagnostic,@Spell

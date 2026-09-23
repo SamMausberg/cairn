@@ -16,11 +16,11 @@ from contextlib import contextmanager
 from operator import attrgetter
 from typing import Any
 
-from . import calls, concurrency, expressions, places, statements
+from . import calls, concurrency, expressions, machine, places, statements
 from .builtins import SOFT, TABLE
 from .concurrency import ORDERS, PINNED
 from .constants import constant
-from .effects import LANE_SAFE, PURE, audit, exposed, fixed_point
+from .effects import DEVICE_SAFE, LANE_SAFE, audit, exposed, fixed_point
 from .places import FORGED
 from .scope import SCOPED, Binding, Lanes, Scope
 from .traits import KINDS, connect_dispatches, hold_impls, satisfies
@@ -81,6 +81,7 @@ class Checker:
     s_return, s_if, s_match, s_while, s_for = (statements.s_return, statements.s_if, statements.s_match,
                                                statements.s_while, statements.s_for)  # fmt: skip
     s_expr, s_block, s_unsafe, s_defer = statements.s_expr, statements.s_block, statements.s_unsafe, statements.s_defer
+    s_asm = machine.s_asm
     leaving, branches, loop = statements.leaving, statements.branches, statements.loop
 
     extent_of, declared_extent, writable = places.extent_of, places.declared_extent, places.writable
@@ -409,7 +410,7 @@ class Checker:
         kernels = [(f.name, True, f, f.name) for f in self.p.functions if f.kernel]
         for callee, device, node, caller in [*self.lane_calls, *kernels]:
             self.judging = caller
-            allowed = PURE if device else LANE_SAFE | {"dispatch", "indirect_call"}  # Their targets' rows join in.
+            allowed = DEVICE_SAFE if device else LANE_SAFE | {"dispatch", "indirect_call"}  # Targets' rows join in.
             # A callee writes only through what it was lent, and the lane's race rule judged each lent place where
             # the lane lent it: its own element, its own block, or nothing lanes write.
             reach = ("read:", "write:") if not device or callee in {k for k, *_ in kernels} else ("read:",)

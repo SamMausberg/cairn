@@ -43,7 +43,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | The tensor-core multiply, its numerical contract and its lowering | `compiler/tensor.py` | `check_mma`, `lower_mma` |
 | `layout` declarations: storage layouts and spreads, coverage, owners, runs, bank conflicts, conversions, and `L.at(...)` in code | `compiler/layouts.py` | `value`, `cover`, `runs`, `conflicts`, `conversion`, `method`, `lower` |
 | Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
-| The machine: `mmio_read`, `mmio_write` and `asm`, beside their lowering | `compiler/machine.py` | `check_machine`, `lower_machine` |
+| The machine: `mmio_read`, `mmio_write`, `asm` and typed assembly with its operands, target and declared effects, beside their lowering | `compiler/machine.py` | `check_machine`, `s_asm`, `lower_asm`, `unbuildable` |
 | What each argument of `print`, `println`, `eprint`, `eprintln` and `format` writes, and their lowering | `compiler/printing.py` | `check_print`, `target`, `piece`, `lower_print` |
 | The C header of a library: declarations, layouts it states and checks, what cannot cross | `compiler/header.py` | `Header.render`, `shape`, `refusal` |
 | Manifests, vendored dependencies | `projects/project.py` | `read_manifest`, `contained_file`, `claim`, `dependencies` |
@@ -157,7 +157,7 @@ Outside `unsafe` and `extern`, an accepted program cannot use a moved owner, lea
 "process": { "effects": ["ffi:getpid", "io"], "syntactic_check_sites": { "unsafe_blocks": 1 } }
 ```
 
-An extern's signature and effects are trusted as written. A foreign caller of an exported function must supply live, initialized, correctly typed storage for every borrow; the entry guards cannot prove provenance or exclude concurrent foreign access. Those guards run in the exported `cf_` symbol only, and a call from CAIRN reaches the lean body `ci_` (`checked-entries/1` among the receipt's trusted lowering rules).
+An extern's signature and effects are trusted as written, and so are the effects typed assembly declares: the checker checks its operands, target and lane placement, not what its instructions do, and the receipt lists each statement under `assembly` as `declared-not-checked`. A foreign caller of an exported function must supply live, initialized, correctly typed storage for every borrow; the entry guards cannot prove provenance or exclude concurrent foreign access. Those guards run in the exported `cf_` symbol only, and a call from CAIRN reaches the lean body `ci_` (`checked-entries/1` among the receipt's trusted lowering rules).
 
 Manifests are data and accept local listed paths only: no hooks, commands, downloads, arbitrary flags, traversal or symlinks. Each rule is pinned in `tests/projects/test_projects.py`:
 

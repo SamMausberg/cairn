@@ -9,7 +9,7 @@ from typing import Any
 
 from ..verify.elision import audit
 from ..version import VERSION
-from . import chunks, fusion, layouts, rings, staging
+from . import chunks, fusion, layouts, machine, rings, staging
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import Checker
 from .expressions import COMPARISONS
@@ -691,6 +691,7 @@ class Emitter:
         self.nest("{", lambda: self.block(s.body))
 
     s_unsafe = s_block
+    s_asm = machine.lower_asm
 
     def s_defer(self, s: Stmt, _: list[str]):
         guard = self.fresh("cr_defer_")[0]

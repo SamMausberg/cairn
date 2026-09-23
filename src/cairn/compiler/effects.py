@@ -15,8 +15,13 @@ if TYPE_CHECKING:
 
 PURE = {"trap", "diverge", "local_read", "local_write", "stack_storage", "zero_init", "ffi_precondition"}
 LANE_SAFE = PURE | {"alloc", "free", "atomic", "lock"}  # What a host lane, and whatever it calls, may do.
-EFFECTS = LANE_SAFE | {"gpu_alloc", "gpu_free", "indirect_call", "dispatch", "spawn", "join", "io", "mmio", "asm"}
-EFFECT_FAMILIES = ("ffi:", "transfer:", "par:")  # With read:/write:/lane: of a parameter, the whole vocabulary.
+# What a device lane, and whatever it calls, may do: typed PTX (compiler/machine.py) whose declared effects stay
+# within this set and reads and writes the lane rule judged.
+DEVICE_SAFE = PURE | {"asm:ptx", "fence"}
+SYNCHRONIZATION = {"fence", "barrier"}  # declared by typed assembly, and trusted as written
+EFFECTS = LANE_SAFE | SYNCHRONIZATION | {"gpu_alloc", "gpu_free", "indirect_call", "dispatch", "spawn", "join", "io"}
+EFFECTS |= {"mmio", "asm"}
+EFFECT_FAMILIES = ("ffi:", "transfer:", "par:", "asm:")  # With read:/write:/lane: of a parameter, the vocabulary.
 
 
 def exposed(effect: str, borrowed: set[str]) -> str:
@@ -82,6 +87,8 @@ def fixed_point(c: Checker) -> dict[str, set[str]]:
 
 
 OBSERVABLE = {"io", "mmio", "asm", "atomic", "lock", "spawn", "join", "indirect_call", "gpu_alloc", "gpu_free"}
+OBSERVABLE |= SYNCHRONIZATION
+OBSERVED = ("ffi:", "transfer:", "par:", "asm:")  # families whose every member the outside world can observe
 
 
 def audit(c: Checker, effects: dict[str, set[str]]):
@@ -173,7 +180,7 @@ def audit(c: Checker, effects: dict[str, set[str]]):
             beside = [d for d in calls if d is not call and not within(call, d) and not within(d, call)]
             beside = [d for d in beside if not (isinstance(d.ref, tuple) and d.ref[0] in {"record", "variant"})]
             beside += [d for d in guarded(e, []) if not within(call, d) and not within(d, call)]
-            if beside and any(x in OBSERVABLE or x.startswith(("ffi:", "transfer:", "par:")) for x in row):
+            if beside and any(x in OBSERVABLE or x.startswith(OBSERVED) for x in row):
                 fail("E-EFFECT-ORDER", "Bind this call first: it can be observed from outside, and the operand beside "
                      "it could run, or abort, before or after it.", call)  # fmt: skip
 

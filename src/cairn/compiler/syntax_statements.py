@@ -7,7 +7,7 @@ from typing import Any
 
 from .lexing import COMPOUND, IDENT, Token, unescape
 from .syntax_expressions import ARM_STATEMENTS, REDUCERS, ExpressionParser, copied
-from .tree import USIZE, Arm, Diagnostic, Expr, Stmt, Type, fail
+from .tree import USIZE, Arm, Assembly, Diagnostic, Expr, Stmt, Type, fail
 
 
 class StatementParser(ExpressionParser):
@@ -88,8 +88,60 @@ class StatementParser(ExpressionParser):
         self.need(";")
         return Stmt("require", unescape(self.ts[self.i - 2]), exprs=[condition], line=t.line, col=t.col)
 
+    def assembly(self, t: Token) -> Stmt:
+        """`asm [volatile] target [capability] "template" (operands) [clobbers(...)] [effects(...)];`, typed assembly.
+        `asm`, `volatile`, `out` and `clobbers` are words only here: `asm("wfi")` and a program's `asm` keep theirs."""
+        self.i += 1
+        volatile = self.eat("volatile")
+        target = self.ident()
+        capability = self.ident() if IDENT.fullmatch(self.t.s) else ""
+        if self.t.s[0] != '"':
+            fail("E-PARSE", 'Typed assembly is asm target "instructions" (operands) effects(...);', self.t)
+        template = unescape(self.t)
+        self.i += 1
+        outputs: list[tuple[str, Type, bool, int, int]] = []
+        exprs: list[Expr] = []
+        if self.eat("("):
+            while self.t.s != ")":
+                at = self.t
+                if at.s == "out" and IDENT.fullmatch(self.ahead(1)) and self.ahead(2) == ":":
+                    if len(exprs) > sum(started for _, _, started, _, _ in outputs):
+                        fail("E-ASM-OPERANDS", "Outputs come before inputs, as the template numbers them.", at)
+                    self.i += 1
+                    name = self.ident()
+                    self.need(":")
+                    ty = self.ty()
+                    started = self.eat("=")
+                    exprs += [self.expr()] if started else []
+                    outputs.append((name, ty, started, at.line, at.col))
+                else:
+                    exprs.append(self.expr())
+                if not self.eat(","):
+                    break
+            self.need(")")
+        clobbers: list[str] = []
+        if self.t.s == "clobbers" and self.ahead(1) == "(":
+            self.i += 2
+            clobbers = self.listed(")", self.ident)
+        effects: list[str] = []
+        if self.eat("effects"):
+            self.need("(")
+            while not self.eat(")"):
+                name = self.take()
+                while self.eat(":"):
+                    name += ":" + self.take()
+                effects.append(name)
+                if self.t.s != ")":
+                    self.need(",")
+        self.need(";")
+        s = Stmt("asm", target, exprs=exprs, line=t.line, col=t.col)
+        s.assembly = Assembly(target, capability, template, outputs, tuple(effects), volatile, tuple(clobbers))
+        return s
+
     def stmt(self) -> Stmt:
         t = self.t
+        if t.s == "asm" and IDENT.fullmatch(self.ahead(1)):  # typed assembly; asm("wfi") stays a call
+            return self.assembly(t)
         at: dict[str, Any] = {"line": t.line, "col": t.col}
         if self.recipe and t.s == "each":
             return Stmt("each", ref=self.each(self.block), **at)

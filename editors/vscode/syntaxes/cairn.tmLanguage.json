@@ -181,7 +181,7 @@
      },
      "patterns": [
       {
-       "match": "\\b(transfer|write|lane|read|ffi|par)(:)([A-Za-z_]\\w*)",
+       "match": "\\b(transfer|write|lane|read|asm|ffi|par)(:)([A-Za-z_]\\w*)",
        "captures": {
         "1": {
          "name": "support.constant.effect.cairn"
@@ -196,7 +196,7 @@
       },
       {
        "name": "support.constant.effect.cairn",
-       "match": "\\b(?:ffi_precondition|indirect_call|stack_storage|local_write|local_read|gpu_alloc|zero_init|dispatch|gpu_free|diverge|atomic|alloc|spawn|free|join|lock|mmio|trap|asm|io)\\b"
+       "match": "\\b(?:ffi_precondition|indirect_call|stack_storage|local_write|local_read|gpu_alloc|zero_init|dispatch|gpu_free|barrier|diverge|atomic|alloc|fence|spawn|free|join|lock|mmio|trap|asm|io)\\b"
       },
       {
        "name": "punctuation.separator.comma.cairn",
@@ -449,6 +449,10 @@
      "match": "\\bblock\\b(?=\\s+[0-9])"
     },
     {
+     "name": "storage.modifier.cairn",
+     "match": "\\bclobbers\\b(?=\\s*\\(\\s*[a-z][a-z0-9]*\\s*[,)])"
+    },
+    {
      "name": "keyword.control.concurrency.cairn",
      "match": "\\bexclusive\\b(?=\\s+[A-Za-z_]\\w*\\s+(?:for|parallel)\\b)"
     },
@@ -479,6 +483,10 @@
     {
      "name": "storage.modifier.cairn",
      "match": "\\blends\\b(?=\\s+[A-Za-z_]\\w*\\s*\\[)"
+    },
+    {
+     "name": "storage.modifier.cairn",
+     "match": "\\bout\\b(?=\\s+[A-Za-z_]\\w*\\s*:)"
     },
     {
      "name": "storage.modifier.layout.cairn",
@@ -519,6 +527,10 @@
     {
      "name": "keyword.other.plan.cairn",
      "match": "\\bvector\\b(?=\\s+[0-9])"
+    },
+    {
+     "name": "storage.modifier.cairn",
+     "match": "\\bvolatile\\b(?=\\s+(?:ptx|x86_64|aarch64)\\b)"
     }
    ]
   },

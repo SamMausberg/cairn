@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from . import chunks, facts, fusion, staging
 from .builtins import WRAPPING, crossing
-from .effects import LANE_SAFE, PURE
+from .effects import DEVICE_SAFE, LANE_SAFE
 from .scope import Binding, Lanes
 from .tree import BOOL, FLOAT, INT, UNSIGNED, USIZE, VOID, Expr, Function, Stmt, Type, fail, is_view, nested, root
 
@@ -54,7 +54,7 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
     result = run()
     if (c.moved - saved[3]) & c.lanes.outer:
         fail("E-MOVE-IN-LOOP", "An outer owner would be moved once per lane.", s)
-    allowed = PURE if target == "device" else LANE_SAFE | {"indirect_call", "dispatch"}  # Judged at their calls.
+    allowed = DEVICE_SAFE if target == "device" else LANE_SAFE | {"indirect_call", "dispatch"}  # Judged at calls.
     excess = sorted(x for x in c.effects if x not in allowed and not x.startswith(("read:", "write:", "lane:")))
     if excess:  # A lane's own row obeys the rule its callees obey.
         fail("E-PARALLEL-CALL", f"A {target} lane cannot {', '.join(excess)}.", s)

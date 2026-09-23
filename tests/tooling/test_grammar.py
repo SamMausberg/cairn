@@ -205,6 +205,10 @@ PINNED = [
     ("  let v = vec.new[u64]();", "new", "entity.name.function.member.cairn"),
     ("  unsafe { asm(\"wfi\"); }", "unsafe", "keyword.other.unsafe.cairn"),
     ("  unsafe { asm(\"wfi\"); }", "asm", "support.function.builtin.cairn"),
+    ('  asm volatile x86_64 "rdtsc" (out t:u64) clobbers(rax, rdx);', "volatile", "storage.modifier.cairn"),
+    ('  asm volatile x86_64 "rdtsc" (out t:u64) clobbers(rax, rdx);', "out", "storage.modifier.cairn"),
+    ('  asm volatile x86_64 "rdtsc" (out t:u64) clobbers(rax, rdx);', "clobbers", "storage.modifier.cairn"),
+    ("  fill(out, 3);", "out", ""),  # an ordinary name everywhere else
     ("// E-LEASED: data is lent to left until wait(left).", "E-LEASED", "constant.other.diagnostic-code.cairn"),
     ("// E-LEASED: data is lent to left until wait(left).", "wait", "comment.line.double-slash.cairn"),
     ("import std.vec (Vec);", "std.vec", "entity.name.namespace.cairn"),

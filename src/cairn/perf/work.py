@@ -379,6 +379,10 @@ class Counter:
             self.expr(e, at)
         self.block(s.body, at)
 
+    def s_asm(self, s: Stmt, at: Frame) -> None:  # typed assembly: its operands, then instructions nobody counts
+        self.s_plain(s, at)
+        self.io(at, f"line {s.line}: asm reaches the machine")
+
     def s_let(self, s: Stmt, at: Frame) -> None:
         e = s.exprs[0]
         self.expr(e, at)

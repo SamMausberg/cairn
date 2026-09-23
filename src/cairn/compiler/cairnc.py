@@ -16,6 +16,7 @@ from .checking import Binding, Checker
 from .codegen import RUNTIME, RUNTIME_FILES, Emitter
 from .expansion import derive, specialize
 from .lexing import IDENT, RESERVED
+from .machine import records
 from .modules import link
 from .syntax import Parser
 from .traits import certify
@@ -113,6 +114,11 @@ def generate(source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool
     for name, chains in emitter.fused.items():  # What a plan's fuse joined, as it was emitted.
         if name in receipts:
             receipts[name]["fused"] = chains
+    for f in p.functions:  # What each typed asm declares, trusted as written, so an audit starts from the receipt.
+        if f.name in receipts and (declared := records(f)):
+            receipts[f.name]["assembly"] = declared
+    declared = [x for f in receipts.values() for x in f.get("assembly", ())]  # what builds it, and where it runs
+    needs = sorted({"ptx:" + x["needs"] if "needs" in x else "asm:" + x["target"] for x in declared})
     cpp = joined(interface, bodies)
     manifest = {
         "compiler": VERSION,
@@ -126,7 +132,7 @@ def generate(source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool
         "recipes": {name: recipe.digest for name, recipe in sorted(p.recipes.items())},
         "uninstantiated_templates": checker.unchecked,
         "modules": interfaces(p, receipts),
-        "requires": ["cuda"] if "cairn_gpu.hpp" in emitter.headers else [],
+        "requires": (["cuda"] if "cairn_gpu.hpp" in emitter.headers else []) + needs,
         "device_features": list(emitter.features),  # what the device target must provide (projects/target.py)
         "trusted_lowering_rules": [
             "bounded-collector/2",

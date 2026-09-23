@@ -15,9 +15,11 @@ from pathlib import Path
 from ..compiler.cairnc import RUNTIME_FILES, Parser, generate, joined, units, write_program
 from ..compiler.codegen import mangle
 from ..compiler.header import header as c_header
+from ..compiler.machine import unbuildable
+from ..compiler.tree import Diagnostic
 from .project import Project, ProjectError
 from .target import resolve
-from .toolchain import audit_effects, find, flags, link_flags, linked, precompiled, profile, unit_commands
+from .toolchain import audit_effects, find, flags, host_family, link_flags, linked, precompiled, profile, unit_commands
 from .toolchain import command as native_command
 from .toolchain import version as compiler_version
 
@@ -171,6 +173,8 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
     device = None
     if "cuda" in receipt["requires"]:  # One device target, resolved once, for the command line and the receipt.
         device = resolve(device_target, project.device_target).require(receipt["device_features"])
+    if why := unbuildable(receipt["requires"], host_family(), device.name if device else ""):
+        raise Diagnostic("E-ASM-TARGET", why)  # assembly builds only for the machine it names
     command = native_command(
         cxx, str(cpp), str(artifact), arch or project.arch, kind, device is not None, target, device
     )

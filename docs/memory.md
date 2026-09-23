@@ -306,6 +306,47 @@ fn wake(base:usize) {
 }
 ```
 
+Typed assembly states what the string form cannot: where the instructions run, the values they take and give back, and what they do to memory. The checker checks everything around the instructions and trusts the effects they declare.
+
+```cairn
+fn high(a:u64, b:u64) -> u64 {
+  unsafe {
+    asm x86_64 "movq %1, %%rax; mulq %2; movq %%rdx, %0" (out hi:u64, a, b) clobbers(rax, rdx);
+    return hi;
+  }
+}
+
+fn reversed(n:usize, out:rw<u32>[n]@device, xs:ro<u32>[n]@device) {
+  parallel i in n {
+    unsafe {
+      asm ptx sm_75 "brev.b32 %0, %1;" (out r:u32, xs[i]);
+      out[i] = r;
+    }
+  }
+}
+```
+
+The target is `ptx`, `x86_64` or `aarch64`. PTX runs only in device code, a device lane or a `kernel fn`, and names the architecture it needs: `sm_75` runs on sm_75 and later, `sm_90a` only on sm_90a, `sm_100f` on the sm_100 family from sm_100 on. A build for a [device target](tools.md#the-device-target) that does not satisfy it is refused, and the device pass tests it again, so an nvcc run for another architecture stops at the statement. Host assembly runs only in host code, and a build on a host of another family refuses it; checking accepts it anywhere (`E-ASM-TARGET`).
+
+Operands are numbered as written, outputs first, and the template names every one of them, `%0`, `%1`, with `%%` for a literal percent sign and on a host one modifier letter, `%k0` (`E-ASM-OPERANDS`). The register class follows from the type. On x86-64 and AArch64 an integer takes a general register and a float a vector register; in PTX `u16` and `i16` take `h`, 32-bit integers `r`, 64-bit ones and `usize` `l`, `f32` `f` and `f64` `d`. A `bool`, a storage float, a record, or a `u8` in PTX has no class (`E-ASM-CONSTRAINT`). `out name:T` binds a fresh immutable local after the statement, and `out name:T = e` starts it at `e`. `clobbers(rax, rdx)` names the host registers the instructions write besides their outputs (`E-ASM-CLOBBER`).
+
+A view or local array given as an input passes its address. The statement then declares `read:x` or `write:x` for it (`E-ASM-EFFECT`), which lends it for the statement as a call would, so a task's lease or an `ro` view refuses it. `effects(...)` may also name `fence`, `barrier`, `atomic`, `io` and `mmio`. Any declared effect makes the lowering `volatile` with a `"memory"` clobber, and so does a statement with no outputs; `asm volatile` keeps one whose outputs depend on more than its inputs, such as a clock read, from being merged or moved.
+
+The row gets `asm:TARGET` and the declared effects, and the receipt lists each statement under `assembly` as `declared-not-checked`. In device code typed PTX may declare reads, writes and `fence`, and nothing else (`E-ASM-LANE`). An address reaches the whole array, so the lane rule treats it as a whole-array access: through one a lane may read what no lane writes and write nothing outside itself (`E-PARALLEL-RACE`).
+
+```cairn rejects E-ASM-LANE
+fn settle(n:usize, out:rw<u32>[n]@device) {
+  parallel i in n {
+    unsafe { asm ptx sm_75 "bar.sync 0;" effects(barrier); }
+    out[i] = 0;
+  }
+}
+```
+
+```text
+Typed PTX in device code may declare reads, writes and fence; barrier is not lane-safe.
+```
+
 ## Layouts
 
 A layout says where each element of a tile is stored, and a spread says which participant holds it. `layout NAME = ...;` declares one at the top of a module. The checker evaluates it there: a layout is a compile-time object, never a value.
@@ -376,6 +417,8 @@ Every function has a row: its own effects joined with its callees' rows, with bo
 | `lane:f` | lanes call the `fn` parameter `f` |
 | `ffi:symbol`, `io` | a foreign symbol is called, under the labels its `extern` declares |
 | `mmio`, `asm` | the machine is reached |
+| `asm:ptx`, `asm:x86_64`, `asm:aarch64` | typed assembly for that target runs |
+| `fence`, `barrier` | typed assembly declares that it orders memory, or waits for its block |
 | `trap`, `diverge` | a guard may abort, the call graph has a cycle |
 | `ffi_precondition` | the caller must supply live, initialized storage for a borrow |
 

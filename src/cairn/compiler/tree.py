@@ -153,6 +153,22 @@ class Stmt:
     stage: int = 0  # How far either side of a device block's indices its tiles reach (compiler/staging.py).
     staged: tuple = ()  # The arrays a staged region reads from its block's tiles: (name, element, view).
     touched: tuple = ()  # A region's (outer name, block stride or None, written) accesses, as its lanes made them.
+    assembly: Assembly | None = None  # What a typed `asm` statement declares (compiler/machine.py).
+
+
+@dataclass
+class Assembly:
+    """`asm [volatile] target [capability] "template" (operands) effects(...);`, typed inline assembly. Operands are
+    numbered as written, outputs first. An output `out name:T` binds a fresh local, and `out name:T = e` starts it at
+    e; Stmt.exprs holds those starts, then the inputs."""
+
+    target: str  # ptx, x86_64 or aarch64
+    capability: str  # the device architecture PTX needs (sm_75, sm_90a); empty for host assembly
+    template: str
+    outputs: list[tuple[str, Type, bool, int, int]]  # (the local it binds, its type, whether it has a start, line, col)
+    effects: tuple[str, ...]  # declared, and trusted as written
+    volatile: bool = False
+    clobbers: tuple[str, ...] = ()  # host registers the instructions write besides their outputs
 
 
 @dataclass
