@@ -65,6 +65,10 @@ def extract(repo: Path, rev: str, within: str, into: Path) -> Path:
         mode, kind, oid = meta.split()
         if kind != "blob" or mode not in {"100644", "100755"}:
             raise ProjectError(f"{name} at {rev} is a link or a submodule, which a project may not hold.")
+        # A tree written by hand may name an entry `..`, which git itself never checks out; such a path would
+        # land outside the scratch directory, so every part must be an ordinary name.
+        if any(part in {"", ".", ".."} or "\\" in part for part in name.split("/")):
+            raise ProjectError(f"{name!r} at {rev} is not a path inside the tree, which a project may not hold.")
         data = git(repo, "cat-file", "blob", oid, raw=True)
         total += len(data)
         if total > MAX_BYTES:
