@@ -14,6 +14,7 @@ import pytest
 from cairn.cli import main
 from cairn.projects import export as exported
 from cairn.projects.project import load_project
+from cairn.verify.validation import validate
 from emitted import code_of
 
 # --- Fixed: an export's record is data, and a build runs only what toolchain.py gives for it -----------------------
@@ -112,3 +113,21 @@ def test_a_validation_goes_stale_when_a_helper_of_the_implementation_changes(tmp
     [row] = [c for c in answer["candidates"] if c.get("use") == "total_fast"]
     assert isinstance(row["validated"], str) and "no validation holds" in row["validated"]
     assert "use total_fast" not in (root / "src/main.cairn").read_text()
+
+
+# --- Fixed: validation compares what the code returns, and nothing the code prints ---------------------------------
+
+
+def test_an_implementation_cannot_print_its_own_validation():
+    """Each call ran in a fork that kept the child's stdout, which carries the answers to the validator: an
+    implementation printing `{"outcome": "return", ...}` lines had them read as every later call's answer, so one
+    returning 12345 for x passed, and one printing anything else broke the run with a JSONDecodeError."""
+    reference = "fn f(x:u64) -> u64 effects(io, ffi:write) = x;\n"
+    forged = reference + (
+        "fn g(x:u64) -> u64 implements f {\n"
+        '  for i in 0..900 { println("{\\"outcome\\": \\"return\\", \\"after\\": {}, \\"return\\": 0}"); }\n'
+        "  return 12345;\n}\n"
+    )
+    assert validate(forged, "f", "g")["status"] == "failed"
+    chatty = reference + 'fn g(x:u64) -> u64 implements f { println("hello"); return x; }\n'
+    assert validate(chatty, "f", "g")["status"] == "passed"

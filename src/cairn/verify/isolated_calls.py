@@ -74,6 +74,9 @@ def isolated(request: dict[str, Any]) -> dict[str, Any]:
     pid = os.fork()
     if pid == 0:  # pragma: no cover - the forked call
         os.close(read)
+        quiet = os.open(os.devnull, os.O_RDWR)  # the code under test never reads the requests or writes an answer
+        os.dup2(quiet, 0)
+        os.dup2(quiet, 1)
         C.CDLL(None).prctl(PR_SET_DUMPABLE, 0, 0, 0, 0)  # no crash handler starts for a call that traps
         signal.alarm(request.get("seconds", 5))
         code = 0
