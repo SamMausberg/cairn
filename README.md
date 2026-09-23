@@ -110,6 +110,7 @@ cairn run examples/embedded                # bare-metal AArch64 under QEMU
 | `shot` | Runs a program headless and returns each frame `std.draw` captured as a PNG, its layout record and its time, beside the effect rows an edit changed. |
 | `state`, `migrate` | The program as it stands under one digest, for an agent to resume from; one authorized signature change carried through every caller, every file or none. |
 | `fmt`, `doc`, `lsp` | A comment-preserving formatter, an API reference generated from the checked program, a language server. |
+| `check --watch`, `completions` | The same check again each time a file changes; a bash or zsh completion script from the command line's own parser. |
 
 `make lint test proof` are the everyday gates. `make gpu embedded` need the hardware and the emulator, and `make docs` regenerates the API reference, [docs/std_api.md](docs/std_api.md) and a page per module.
 

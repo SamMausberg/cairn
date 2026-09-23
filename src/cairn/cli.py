@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -176,6 +177,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                             "name contains TEXT."}),
     ({"test"}, "--jobs", {"type": int, "default": 0, "help": "Test processes at once, 1..64; default: the cores, "
                           "at most 8."}),
+    ({"check"}, "--watch", {"action": "store_true", "help": "Check again whenever a file the project reads "
+                            "changes, until interrupted."}),
     ({"check"}, "--generics", {"action": "store_true", "help": "Also check each generic function once against its "
                                "bounds; fail if one needs more."}),
     ({"doc"}, "--module", {"action": "append",
@@ -202,8 +205,37 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
 REFUSED = {"counterexample", "rejected", "invalid-contract", "invalid-domain", "invalid-reference"}  # verify exits 1
 
 
-def main(argv: list[str] | None = None) -> int:
-    global FORMAT
+def stamps(path: str) -> tuple:
+    """What a watched check compares between rounds: each file the project reads, with its time and size."""
+    try:
+        project = load_project(path)
+        files = [project.root / "cairn.toml", *(project.root / u.path for u in project.units)]
+    except (ProjectError, OSError, ValueError, Diagnostic):  # a broken manifest is watched too, until it is fixed
+        where = Path(path)
+        files = [where / "cairn.toml" if where.is_dir() else where]
+    return tuple((str(f), f.stat().st_mtime_ns, f.stat().st_size) if f.is_file() else (str(f),) for f in files)
+
+
+def watch(path: str, again: list[str]) -> int:
+    """`cairn check --watch`: the same check as without it, run again each time a file it reads changes."""
+    seen = None
+    try:
+        while True:
+            now = stamps(path)
+            if now != seen:
+                seen = now
+                if terminal.human(FORMAT):
+                    print(f"-- {time.strftime('%H:%M:%S')} {path}", flush=True)
+                main(["check", path, *again])
+                sys.stdout.flush()
+                sys.stderr.flush()
+            time.sleep(0.25)
+    except KeyboardInterrupt:
+        return 0
+
+
+def parser() -> argparse.ArgumentParser:
+    """Every command and option: what `main` parses, and what `cairn completions` offers a shell."""
     p = argparse.ArgumentParser(prog="cairn", description=__doc__)
     p.add_argument("--version", action="version", version=__version__)
     shared = argparse.ArgumentParser(add_help=False)
@@ -252,6 +284,14 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--check", action="store_true", help="Write nothing; exit 1 if any file would change.")
     f.add_argument("--diff", action="store_true", help="Write nothing; print a unified diff of what would change.")
     sub.add_parser("lsp", help="Speak the Language Server Protocol over stdin/stdout.")
+    s = sub.add_parser("completions", help="Print the completion script of a shell: bash or zsh.")
+    s.add_argument("shell", choices=["bash", "zsh"])
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    global FORMAT
+    p = parser()
     argv = sys.argv[1:] if argv is None else argv
     given = argv.index("--") if "--" in argv else len(argv)  # what follows is the program's, for `cairn run`
     a = p.parse_args(argv[:given])
@@ -296,6 +336,11 @@ def main(argv: list[str] | None = None) -> int:
             from .editor.formatting import format_paths
 
             return format_paths(a.paths, a.check, a.diff)
+        if a.command == "completions":
+            from .editor.shells import completion_script
+
+            print(completion_script(p, a.shell), end="")
+            return 0
         if a.command == "lsp":
             from .editor.lsp import serve
 
@@ -358,6 +403,8 @@ def main(argv: list[str] | None = None) -> int:
                 (a.pages / name).write_text(text, encoding="utf-8")
             report({"status": "documented", "pages": sorted(pages)})
             return 0
+        if a.command == "check" and a.watch:  # before the project loads: a broken manifest is watched until fixed
+            return watch(a.path, [*(["--format", FORMAT] if FORMAT else []), *(["--generics"] if a.generics else [])])
         project = load_project(a.path)
         if a.command == "emit" and (a.header or a.ctypes):  # What a C, C++ or Python program uses to call it.
             from .compiler.header import binding, header

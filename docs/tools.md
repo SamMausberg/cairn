@@ -16,6 +16,17 @@ error[E-LEASED]: data is lent to left until wait(left).
 
 A misspelled name is answered with the nearest one in scope (`= help: did you mean total?`), and a program stopped by a failed guard is reported as stopped by `SIGABRT`. The rendering is presentation only: the exit status, and the record behind `--format json`, are the same either way.
 
+## A watched check and shell completions
+
+```sh
+cairn check demo --watch            # check again each time a file the project reads changes; Ctrl-C ends it
+source <(cairn completions bash)    # or zsh; put the script on $fpath as _cairn to keep it
+```
+
+`--watch` runs the same check as without it, and again whenever the manifest or a source it lists changes its time or its size, polling four times a second with nothing to install. Each answer comes under a line with the time, the refusal rendered as above or the one line `check` gives. A manifest that is broken when the watch starts is watched until it is fixed, and the interrupt that ends a watch exits 0.
+
+`cairn completions bash` and `cairn completions zsh` print a completion script written from the command line's own parser, so every command, option and choice (`--format`, `--template`, `--arch`) is offered and nothing else is. The suite checks that each script names everything the parser declares, that it is valid in its shell, and that the bash one completes what a person types.
+
 ## cairn fmt
 
 ```sh
