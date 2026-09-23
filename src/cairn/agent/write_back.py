@@ -3,9 +3,10 @@
 A session opened on a path pins what it read: the manifest and every file of the project, by sha256. Its host judges
 the combined source a project's files make (`projects/project.py`), so an admitted candidate is split back into files
 by the layout that source has (`Project.split`). A candidate is written only when the files still hold exactly the
-source the host judged it against, else the write is refused as stale (E-SESSION) and nothing is written. Only the
-files the candidate changes are written, never a vendored one, and all of them or none: each is written beside itself
-and renamed into place, and a failure part way puts back every file already renamed.
+source the host judged it against, else the write is refused as stale (E-SESSION) and nothing is written; each file is
+compared again as its new text is staged, so a save between the check and the write is caught too. Only the files the
+candidate changes are written, never a vendored one, and all of them or none: each is written beside itself and
+renamed into place, and a failure part way puts back every file already renamed.
 """
 
 from __future__ import annotations
@@ -17,27 +18,34 @@ from ..compiler.cairnc import Diagnostic, fail
 from ..projects.project import Project, ProjectError, load_project
 
 
-def replace(root: Path, texts: dict[str, str], suffix: str = ".cairn-write") -> None:
+def replace(
+    root: Path, texts: dict[str, str], suffix: str = ".cairn-write", expected: dict[str, str] | None = None
+) -> None:
     """Every file of `texts` (a path under `root` -> its new text) written beside itself, then renamed into place; a
-    failure puts back what was renamed."""
-    staged = []
+    failure puts back what was renamed, byte for byte. With `expected`, a file that no longer holds its expected text
+    when its new text is staged is stale (E-SESSION), and nothing is renamed."""
+    staged, made = [], []
     try:
         for path, text in texts.items():
             target = root / path
             beside = target.with_name(target.name + suffix)
-            beside.write_text(text, encoding="utf-8")
-            staged.append((target, beside, target.read_text(encoding="utf-8")))
-        done: list[tuple[Path, str]] = []
+            beside.write_bytes(text.encode("utf-8"))
+            made.append(beside)
+            before = target.read_bytes()
+            if expected is not None and before != expected[path].encode("utf-8"):
+                fail("E-SESSION", f"{path} changed while it was being written; nothing was written.", files=[path])
+            staged.append((target, beside, before))
+        done: list[tuple[Path, bytes]] = []
         try:
             for target, beside, before in staged:
                 os.replace(beside, target)
                 done.append((target, before))
         except OSError:
             for target, before in reversed(done):
-                target.write_text(before, encoding="utf-8")
+                target.write_bytes(before)
             raise
     finally:
-        for _, beside, _ in staged:
+        for beside in made:
             beside.unlink(missing_ok=True)
 
 
@@ -84,7 +92,7 @@ class Files:
         if vendored := sorted(set(changed) & set(now.vendored_units)):
             raise ProjectError(f"The change reaches {vendored[0]}, a vendored file, which a session does not write; "
                                "nothing was written.")  # fmt: skip
-        replace(now.root, changed)
+        replace(now.root, changed, expected=before)
         self.project = load_project(self.path)
         self.pinned = pins(self.project)
         return sorted(changed)

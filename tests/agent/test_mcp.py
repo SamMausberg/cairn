@@ -15,8 +15,9 @@ from pathlib import Path
 
 import pytest
 
+from cairn.agent import write_back
 from cairn.agent.mcp import PROTOCOLS, Server
-from cairn.agent.mcp_tools import TOOLS
+from cairn.agent.mcp_tools import TOOLS, Tools
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.project import ProjectError, load_project
 
@@ -279,3 +280,40 @@ def test_an_implementation_session_writes_a_validated_implementation_beside_its_
         assert [json.loads(r)["kind"] for r in kept] == ["failure", "validation"]  # both submissions, as history
     finally:
         client.close()
+
+
+def test_a_session_writes_only_the_project_s_own_files_inside_the_served_directory(project, tmp_path_factory):
+    (project / "deps/geo/src").mkdir(parents=True)
+    (project / "deps/geo/cairn.toml").write_text('[project]\nname = "geo"\nsources = ["src/geo.cairn"]\n')
+    geo = "module geo;\n\npub fn twice(x:u64) -> u64 { return add_wrap(x, x); }\n"
+    (project / "deps/geo/src/geo.cairn").write_text(geo)
+    (project / "cairn.toml").write_text(MANIFEST + '\n[dependencies]\ngeo = "deps/geo"\n')
+    (project / "src/main.cairn").write_text("module app;\n" + MAIN)  # after geo's file, a file opens its own module
+    tools = Tools(project)
+    packet, failed = tools.call("edit_open", {"path": ".", "symbol": "geo.twice"})
+    assert not failed
+    request = {**packet["draft_protocol"], "replacement": "{ return add_wrap(x, add_wrap(x, 0)); }"}
+    answer, failed = tools.call("edit_request", {"request": request})
+    assert failed and "vendored" in answer["message"] and (project / "deps/geo/src/geo.cairn").read_text() == geo
+    assert tools.edits.admitted["e1"] == []  # the host keeps no change the files did not take
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    (elsewhere / "x.cairn").write_text("fn f() -> u64 = 1;\n")
+    answer, failed = tools.call("check", {"path": str(elsewhere / "x.cairn")})
+    assert failed and answer["code"] == "E-REQUEST" and "outside" in answer["message"]
+
+
+def test_a_file_saved_between_the_check_and_the_write_is_not_overwritten(project, monkeypatch):
+    tools = Tools(project)
+    packet, _ = tools.call("plan_open", {"path": ".", "symbol": "lib.spread"})
+    real = write_back.replace
+
+    def saved_meanwhile(root, texts, suffix=".cairn-write", expected=None):
+        (root / "src/lib.cairn").write_text(LIB + "// saved by a person\n")
+        return real(root, texts, suffix, expected)
+
+    monkeypatch.setattr(write_back, "replace", saved_meanwhile)
+    answer, failed = tools.call("plan_reply", {"reply": {**packet["reply"], "items": {"grain": 1}}})
+    assert failed and answer["code"] == "E-SESSION" and answer["files"] == ["src/lib.cairn"]
+    assert (project / "src/lib.cairn").read_text() == LIB + "// saved by a person\n"
+    assert not list((project / "src").glob("*.cairn-write"))
+    assert tools.plans.current["lib.spread"] == packet["session"]  # the host did not move on without the files

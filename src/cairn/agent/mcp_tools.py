@@ -135,7 +135,10 @@ class Tools:
             fail("E-REQUEST", "Give exactly one of path and source.")
         if "source" in a:
             return text(a, "source"), None
-        files = Files(self.root / text(a, "path"))
+        where = (self.root / text(a, "path")).resolve()
+        if not where.is_relative_to(self.root.resolve()):
+            fail("E-REQUEST", f"{a['path']} is outside {self.root}, the directory this server serves.")
+        files = Files(where)
         return files.project.source, files
 
     # The tools ------------------------------------------------------------------------------------------------------
@@ -203,7 +206,11 @@ class Tools:
             files.current(session.source)
         answer = self.plans.respond(reply)
         if files is not None and session is not None:
-            answer["written"] = files.write(session.source, self.plans.sessions[answer["next_session"]].source)
+            try:
+                answer["written"] = files.write(session.source, self.plans.sessions[answer["next_session"]].source)
+            except (Diagnostic, ProjectError):
+                self.plans.current[session.symbol] = session.digest  # the host keeps no plan the files did not take
+                raise
             self.files[answer["next_session"]] = files
         return answer, False
 
@@ -238,7 +245,8 @@ class Tools:
         request = document(a, "request")
         handle = request.get("handle")
         files = self.files.get(handle) if isinstance(handle, str) else None
-        base = self.implementations.sessions[handle].source if files is not None else None
+        session = self.implementations.sessions[handle] if files is not None else None
+        base = session.source if session is not None else None
         if files is not None and base is not None:
             files.current(base)
         self.implementations.records = files.project.root / ".cairn" / "history" if files is not None else None
@@ -247,8 +255,12 @@ class Tools:
         except Diagnostic as error:
             s = self.implementations.sessions.get(handle) if isinstance(handle, str) else None
             return explain(error, s.source if s else ""), True
-        if files is not None and base is not None:
-            answer["written"] = files.write(base, self.implementations.sessions[handle].source)
+        if files is not None and base is not None and session is not None:
+            try:
+                answer["written"] = files.write(base, self.implementations.sessions[handle].source)
+            except (Diagnostic, ProjectError):
+                self.implementations.sessions[handle] = session  # nor an implementation the files did not take
+                raise
         return answer, False
 
     def state(self, a: dict[str, Any]) -> tuple[dict[str, Any], bool]:
