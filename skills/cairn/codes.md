@@ -70,7 +70,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-OPERATOR` | [storage](cards/storage.md) |  |
 | `E-OWNER-EXTENT` | [memory](cards/memory.md) |  |
 | `E-PARALLEL-CALL` | [printing](cards/printing.md) |  |
-| `E-PARALLEL-RACE` | [assembly](cards/assembly.md) |  |
+| `E-PARALLEL-RACE` | [assembly](cards/assembly.md), [parallel](cards/parallel.md) |  |
 | `E-PARSE` |  | Use braces, semicolons and CAIRN's grammar, not Rust's or Python's. |
 | `E-PARTIAL-MOVE` | [owners](cards/owners.md) |  |
 | `E-PINNED` | [rings](cards/rings.md) |  |
