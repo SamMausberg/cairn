@@ -1,0 +1,356 @@
+{
+  "schema": "cairn.bench.fusion/1",
+  "host": "x86_64",
+  "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "compilers": [
+    "clang++",
+    "g++"
+  ],
+  "rounds": 3,
+  "sizes": [
+    100000.0,
+    1000000.0,
+    10000000.0,
+    30000000.0
+  ],
+  "seconds": 169.4,
+  "method": "cairn.perf.measure: the median of 5 blocks per timing, each block at least 2 ms; the median of the rounds per cell; written and fused alternate in order from one size and round to the next",
+  "rows": [
+    {
+      "compiler": "clang++",
+      "kernel": "blend",
+      "n": 100000.0,
+      "written_ns": 47925.234375,
+      "fused_ns": 13483.777344,
+      "measured_speedup": 3.554,
+      "predicted_written_ns": 35460.0,
+      "predicted_fused_ns": 11690.0,
+      "predicted_speedup": 3.033,
+      "rounds_written_ns": [
+        65896.1875,
+        47925.234375,
+        45399.890625
+      ],
+      "rounds_fused_ns": [
+        13389.414062,
+        13483.777344,
+        13508.144531
+      ]
+    },
+    {
+      "compiler": "clang++",
+      "kernel": "blend",
+      "n": 1000000.0,
+      "written_ns": 423156.0,
+      "fused_ns": 71711.0625,
+      "measured_speedup": 5.901,
+      "predicted_written_ns": 204400.0,
+      "predicted_fused_ns": 34400.0,
+      "predicted_speedup": 5.942,
+      "rounds_written_ns": [
+        410959.0,
+        455396.0,
+        423156.0
+      ],
+      "rounds_fused_ns": [
+        57271.46875,
+        99114.4375,
+        71711.0625
+      ]
+    },
+    {
+      "compiler": "clang++",
+      "kernel": "blend",
+      "n": 10000000.0,
+      "written_ns": 57643664.0,
+      "fused_ns": 2611336.0,
+      "measured_speedup": 22.074,
+      "predicted_written_ns": 7693000.0,
+      "predicted_fused_ns": 2253000.0,
+      "predicted_speedup": 3.415,
+      "rounds_written_ns": [
+        57560864.0,
+        61302081.0,
+        57643664.0
+      ],
+      "rounds_fused_ns": [
+        2611336.0,
+        2853144.0,
+        2568386.0
+      ]
+    },
+    {
+      "compiler": "clang++",
+      "kernel": "blend",
+      "n": 30000000.0,
+      "written_ns": 178866467.0,
+      "fused_ns": 12697476.0,
+      "measured_speedup": 14.087,
+      "predicted_written_ns": 44570000.0,
+      "predicted_fused_ns": 12350000.0,
+      "predicted_speedup": 3.609,
+      "rounds_written_ns": [
+        174997540.0,
+        178866467.0,
+        183906682.0
+      ],
+      "rounds_fused_ns": [
+        12697476.0,
+        13152649.0,
+        12145839.0
+      ]
+    },
+    {
+      "compiler": "clang++",
+      "kernel": "layers",
+      "n": 100000.0,
+      "written_ns": 48901.84375,
+      "fused_ns": 19805.117188,
+      "measured_speedup": 2.469,
+      "predicted_written_ns": 37440.0,
+      "predicted_fused_ns": 15180.0,
+      "predicted_speedup": 2.466,
+      "rounds_written_ns": [
+        48901.84375,
+        49925.0,
+        39549.3125
+      ],
+      "rounds_fused_ns": [
+        19805.117188,
+        21809.5625,
+        16744.820312
+      ]
+    },
+    {
+      "compiler": "clang++",
+      "kernel": "layers",
+      "n": 1000000.0,
+      "written_ns": 269600.4375,
+      "fused_ns": 125991.6875,
+      "measured_speedup": 2.14,
+      "predicted_written_ns": 154100.0,
+      "predicted_fused_ns": 95750.0,
+      "predicted_speedup": 1.609,
+      "rounds_written_ns": [
+        233877.6875,
+        269600.4375,
+        283396.0
+      ],
+      "rounds_fused_ns": [
+        108031.96875,
+        151779.15625,
+        125991.6875
+      ]
+    },
+    {
+      "compiler": "clang++",
+      "kernel": "layers",
+      "n": 10000000.0,
+      "written_ns": 13271119.0,
+      "fused_ns": 8791033.0,
+      "measured_speedup": 1.51,
+      "predicted_written_ns": 10930000.0,
+      "predicted_fused_ns": 8334000.0,
+      "predicted_speedup": 1.311,
+      "rounds_written_ns": [
+        12636155.0,
+        13271119.0,
+        13422093.0
+      ],
+      "rounds_fused_ns": [
+        8956539.0,
+        8791033.0,
+        8677113.0
+      ]
+    },
+    {
+      "compiler": "clang++",
+      "kernel": "layers",
+      "n": 30000000.0,
+      "written_ns": 53180385.0,
+      "fused_ns": 32512511.0,
+      "measured_speedup": 1.636,
+      "predicted_written_ns": 48360000.0,
+      "predicted_fused_ns": 31510000.0,
+      "predicted_speedup": 1.535,
+      "rounds_written_ns": [
+        53180385.0,
+        50249529.0,
+        53752079.0
+      ],
+      "rounds_fused_ns": [
+        32188183.0,
+        32512511.0,
+        32645316.0
+      ]
+    },
+    {
+      "compiler": "g++",
+      "kernel": "blend",
+      "n": 100000.0,
+      "written_ns": 54749.4375,
+      "fused_ns": 16566.140625,
+      "measured_speedup": 3.305,
+      "predicted_written_ns": 35460.0,
+      "predicted_fused_ns": 11690.0,
+      "predicted_speedup": 3.033,
+      "rounds_written_ns": [
+        69711.59375,
+        51548.71875,
+        54749.4375
+      ],
+      "rounds_fused_ns": [
+        16566.140625,
+        13289.921875,
+        38796.8125
+      ]
+    },
+    {
+      "compiler": "g++",
+      "kernel": "blend",
+      "n": 1000000.0,
+      "written_ns": 465710.0,
+      "fused_ns": 94252.21875,
+      "measured_speedup": 4.941,
+      "predicted_written_ns": 204400.0,
+      "predicted_fused_ns": 34400.0,
+      "predicted_speedup": 5.942,
+      "rounds_written_ns": [
+        465710.0,
+        545589.0,
+        402497.0
+      ],
+      "rounds_fused_ns": [
+        94252.21875,
+        120503.53125,
+        81154.5625
+      ]
+    },
+    {
+      "compiler": "g++",
+      "kernel": "blend",
+      "n": 10000000.0,
+      "written_ns": 58228355.0,
+      "fused_ns": 2881521.0,
+      "measured_speedup": 20.208,
+      "predicted_written_ns": 7693000.0,
+      "predicted_fused_ns": 2253000.0,
+      "predicted_speedup": 3.415,
+      "rounds_written_ns": [
+        58228355.0,
+        57316414.0,
+        68624691.0
+      ],
+      "rounds_fused_ns": [
+        2881521.0,
+        2748825.0,
+        2922749.0
+      ]
+    },
+    {
+      "compiler": "g++",
+      "kernel": "blend",
+      "n": 30000000.0,
+      "written_ns": 178263392.0,
+      "fused_ns": 12390399.0,
+      "measured_speedup": 14.387,
+      "predicted_written_ns": 44570000.0,
+      "predicted_fused_ns": 12350000.0,
+      "predicted_speedup": 3.609,
+      "rounds_written_ns": [
+        177313312.0,
+        178263392.0,
+        191579487.0
+      ],
+      "rounds_fused_ns": [
+        12248996.0,
+        12390399.0,
+        13281119.0
+      ]
+    },
+    {
+      "compiler": "g++",
+      "kernel": "layers",
+      "n": 100000.0,
+      "written_ns": 47986.984375,
+      "fused_ns": 20659.460938,
+      "measured_speedup": 2.323,
+      "predicted_written_ns": 37440.0,
+      "predicted_fused_ns": 15180.0,
+      "predicted_speedup": 2.466,
+      "rounds_written_ns": [
+        47986.984375,
+        38641.59375,
+        64756.625
+      ],
+      "rounds_fused_ns": [
+        20659.460938,
+        19332.070312,
+        30378.015625
+      ]
+    },
+    {
+      "compiler": "g++",
+      "kernel": "layers",
+      "n": 1000000.0,
+      "written_ns": 252240.0625,
+      "fused_ns": 120217.03125,
+      "measured_speedup": 2.098,
+      "predicted_written_ns": 154100.0,
+      "predicted_fused_ns": 95750.0,
+      "predicted_speedup": 1.609,
+      "rounds_written_ns": [
+        213236.0,
+        252240.0625,
+        342623.3125
+      ],
+      "rounds_fused_ns": [
+        120217.03125,
+        105775.5,
+        224497.25
+      ]
+    },
+    {
+      "compiler": "g++",
+      "kernel": "layers",
+      "n": 10000000.0,
+      "written_ns": 12772275.0,
+      "fused_ns": 8806485.0,
+      "measured_speedup": 1.45,
+      "predicted_written_ns": 10930000.0,
+      "predicted_fused_ns": 8334000.0,
+      "predicted_speedup": 1.311,
+      "rounds_written_ns": [
+        12715819.0,
+        12772275.0,
+        13561066.0
+      ],
+      "rounds_fused_ns": [
+        8681796.0,
+        8806485.0,
+        9437662.0
+      ]
+    },
+    {
+      "compiler": "g++",
+      "kernel": "layers",
+      "n": 30000000.0,
+      "written_ns": 49997383.0,
+      "fused_ns": 32546915.0,
+      "measured_speedup": 1.536,
+      "predicted_written_ns": 48360000.0,
+      "predicted_fused_ns": 31510000.0,
+      "predicted_speedup": 1.535,
+      "rounds_written_ns": [
+        49997383.0,
+        49783064.0,
+        52994885.0
+      ],
+      "rounds_fused_ns": [
+        32546915.0,
+        31045554.0,
+        33068706.0
+      ]
+    }
+  ]
+}

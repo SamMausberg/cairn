@@ -8,7 +8,7 @@ from typing import Any
 
 from ..verify.elision import audit
 from ..version import VERSION
-from . import rings
+from . import fusion, rings
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import Checker
 from .expressions import COMPARISONS
@@ -70,6 +70,8 @@ class Emitter:
         # and sends every call through the callee's checked entry.
         self.elision = audit(p, keep_all=keep)
         self.lean = not keep
+        self.scalar: dict[str, str] = {}  # a fused chain's scratch array -> the lane-local value that holds it
+        self.fused: dict[str, list[dict[str, Any]]] = {}  # function -> the chains it runs as one region
 
     def put(self, s: str = ""):
         self.lines.append("  " * self.ind + s)
@@ -222,6 +224,8 @@ class Emitter:
         return f"std::move({name})" if e.ref == "move" else name
 
     def e_index(self, e: Expr) -> str:
+        if e.args[0].tag == "name" and e.args[0].val in self.scalar:  # fusion keeps this element in the lane
+            return self.scalar[e.args[0].val]
         data, count = self.pointer(e.args[0])
         if e.established:  # The checker showed the index is below the extent (facts.py).
             return f"{data}[{self.expr(e.args[1])}]"
@@ -469,10 +473,49 @@ class Emitter:
         self.block(f.body)
 
     def block(self, ss: list[Stmt]):
+        # Chains a plan asked to fuse, decided after the elision audit, so a body is quiet as it will be emitted. The
+        # conservative emission, the reference a differential run compares with, writes every region apart.
+        found = fusion.chains(ss, self.c.rows, getattr(self, "f", None)) if self.lean else []
+        chains = {id(chain.regions[0]): chain for chain in found}
+        inside = {id(r) for chain in chains.values() for r in chain.regions[1:]}
+        kept = {name for chain in chains.values() for name in chain.scratch}
         for s in ss:
+            if id(s) in inside:
+                continue
             if self.origin and s.line:
                 self.put('#line {1} "{0}"'.format(*self.origin(s.line)))
-            getattr(self, "s_" + s.tag)(s, [self.expr(e) for e in s.exprs] if s.tag not in {"compact", "scan"} else [])
+            if s.tag in {"buffer", "stack"} and s.name in kept:  # Only the chain below touches it, one lane apiece.
+                self.put(f"// {s.name} lives in each lane of the fused regions below, never in memory")
+                continue
+            es = [self.expr(e) for e in s.exprs] if s.tag not in {"compact", "scan"} else []
+            if id(s) in chains:
+                self.chain(chains[id(s)], es, {x.name: x.ty for x in ss if x.name in kept and x.tag != "parallel"})
+                continue
+            getattr(self, "s_" + s.tag)(s, es)
+
+    def chain(self, chain: fusion.Chain, es: list[str], held: dict[str, Any]):
+        """One region whose lanes run each fused body at their own index, in order, each in a block of its own."""
+        head = chain.regions[0]
+        index = head.binder or head.name
+
+        def body():
+            for name in chain.scratch:
+                self.scalar[name] = f"s_{name}"
+                self.put(f"{self.type(held[name])} s_{name}{{}};")
+            for r in chain.regions:
+
+                def one(r: Stmt = r):
+                    if (r.binder or r.name) != index:
+                        self.put(f"const std::size_t v_{r.binder or r.name} = v_{index};")
+                    self.block(r.body)
+
+                self.nest("{", one)
+            for name in chain.scratch:
+                del self.scalar[name]
+
+        record = {"line": head.line, "regions": len(chain.regions), "scratch_in_lanes": chain.scratch}
+        self.fused.setdefault(self.f.name, []).append(record)
+        self.s_parallel(head, es, body)
 
     def s_buffer(self, s: Stmt, es: list[str]):
         owner, ty = self.fresh("cr_owner_")[0], self.type(s.ty)
@@ -526,7 +569,7 @@ class Emitter:
         binder = f"(std::size_t v_{s.binder or s.name})"
         return self.inner(lambda: f"[=] CR_DEVICE{binder}" if device else f"[&]{binder} noexcept", body)
 
-    def s_parallel(self, s: Stmt, es: list[str]):
+    def s_parallel(self, s: Stmt, es: list[str], body=None):
         entry = "cr::gpu::launch" if s.ref == "device" else "cr::par::run"
         if s.ref == "device":  # A plan fixes the block, the indices per thread and the unrolled passes of each thread.
             block, per_lane, unroll = s.launch
@@ -536,7 +579,8 @@ class Emitter:
             schedule = [s.block, *s.plan]
             while schedule and schedule[-1] == (1 if len(schedule) == 1 else 0):  # defaults say nothing
                 schedule.pop()
-        self.put(f"{entry}({es[0]}, {self.lane(s, lambda: self.block(s.body))}{''.join(f', {x}' for x in schedule)});")
+        lanes = self.lane(s, body or (lambda: self.block(s.body)))
+        self.put(f"{entry}({es[0]}, {lanes}{''.join(f', {x}' for x in schedule)});")
 
     def folding(self, s: Stmt) -> tuple[str, str, str, str, str]:
         """A reduction's or a scan's element type, its combine over `a` and `b`, its identity, the type it carries

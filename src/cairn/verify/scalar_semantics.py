@@ -122,6 +122,7 @@ def implementation_hash():
                 "compiler/calls.py",
                 "compiler/places.py",
                 "compiler/concurrency.py",
+                "compiler/fusion.py",
                 "compiler/rings.py",
                 "compiler/expansion.py",
                 "compiler/gradients.py",

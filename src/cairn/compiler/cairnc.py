@@ -114,6 +114,9 @@ def generate(
             if verdict["refused"]:
                 receipts[name]["refused_discharges"] = verdict["refused"]
     interface, bodies = emitter.units()
+    for name, chains in emitter.fused.items():  # What a plan's fuse joined, as it was emitted.
+        if name in receipts:
+            receipts[name]["fused"] = chains
     cpp = "\n".join([*interface, *(line for _, lines in bodies for line in lines)]) + "\n"
     manifest = {
         "compiler": VERSION,

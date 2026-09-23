@@ -143,6 +143,8 @@ class Stmt:
     block: int = 1  # The widest block of elements one index of a region owns (facts.window); it sizes claims.
     plan: tuple[int, int] = (0, 0)  # (grain, lanes) a `plan` fixes for a host region; 0 leaves the pool's choice.
     launch: tuple[int, int, int] = (0, 0, 0)  # (block, per_lane, unroll) a plan fixes for a device region.
+    fuse: int = 0  # How many adjacent regions, this one first, a plan lets run as one traversal (compiler/fusion.py).
+    touched: tuple = ()  # A region's (outer name, block stride or None, written) accesses, as its lanes made them.
 
 
 @dataclass

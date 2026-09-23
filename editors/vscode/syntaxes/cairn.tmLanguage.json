@@ -447,6 +447,10 @@
     },
     {
      "name": "keyword.other.plan.cairn",
+     "match": "\\bfuse\\b(?=\\s+[0-9])"
+    },
+    {
+     "name": "keyword.other.plan.cairn",
      "match": "\\bgrain\\b(?=\\s+[0-9])"
     },
     {

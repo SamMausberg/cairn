@@ -17,7 +17,7 @@ import itertools
 import re
 from typing import Any
 
-from ..compiler.cairnc import compile_program
+from ..compiler.cairnc import Diagnostic, compile_program
 from ..compiler.concurrency import PLAN_ITEMS
 from . import model
 from .profile import Profile, default
@@ -78,10 +78,12 @@ def write_plan(manifest: Any, symbol: str, chosen: dict[str, Any]) -> str:
     return unit.path
 
 
-def space(kinds: set[str], host_lanes: int) -> list[Plan]:
-    """Every plan of the items the function's regions take, lane caps no wider than the host."""
-    items = [k for k in PLAN_ITEMS if PLAN_ITEMS[k][0] in kinds]
-    values = [[v for v in SPACE[k] if k != "lanes" or v <= host_lanes] for k in items]
+def space(kinds: set[str], host_lanes: int, regions: int = 1) -> list[Plan]:
+    """Every plan of the items the function's regions take, lane caps no wider than the host; fuse, off or joining
+    as many regions as the function has, only where there are two to join."""
+    tried = {**SPACE, "fuse": (0, min(regions, PLAN_ITEMS["fuse"][2]))}
+    items = [k for k in PLAN_ITEMS if PLAN_ITEMS[k][0] in kinds or (PLAN_ITEMS[k][0] == "either" and regions > 1)]
+    values = [[v for v in tried[k] if k != "lanes" or v <= host_lanes] for k in items]
     return [written(dict(zip(items, chosen, strict=True))) for chosen in itertools.product(*values)]
 
 
@@ -130,8 +132,16 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
         raise ValueError("Give the sizes to tune for with --at, such as --at n=1e7.")
     current = written(now(c))
     held = registers(source, name, {max(u, 1) for u in SPACE["unroll"]}) if "device" in kinds else {}
-    candidates = space(kinds, chosen.host.lanes if chosen.host else 16)
-    cost = {plan: priced(c, plan, chosen, sizes, arch, held) for plan in candidates}
+    candidates = space(kinds, chosen.host.lanes if chosen.host else 16, regions(p, name))
+    counted: dict[int, Cost] = {}  # a fused chain is one region, not two, so each fuse is counted as written
+    for joined in {dict(plan).get("fuse", 0) for plan in candidates}:
+        again = replanned(source, name, text(name, (("fuse", joined),)) if joined else "")
+        try:
+            p2, checker2, _ = compile_program(again)
+            counted[joined] = count(p2, checker2, {name})[name]
+        except Diagnostic:  # no chain these rules allow: the plan is refused, so it is no candidate
+            candidates = [plan for plan in candidates if dict(plan).get("fuse", 0) != joined]
+    cost = {plan: priced(counted[dict(plan).get("fuse", 0)], plan, chosen, sizes, arch, held) for plan in candidates}
     ranked = sorted(candidates, key=lambda plan: cost[plan])
     rows = [{"plan": shown(name, plan), **dict(plan), "predicted_ns": model.significant(cost[plan])} for plan in ranked]
     result: dict[str, Any] = {
@@ -210,6 +220,13 @@ def distinct(ranked: list[Plan], keep: int) -> list[Plan]:
     return picked
 
 
+def regions(p: Any, name: str) -> int:
+    """How many parallel statements `name` has, fused or not: what a fuse could join."""
+    from ..compiler.concurrency import walk
+
+    return sum(s.tag == "parallel" for f in p.functions if name in (f.name, f.source_name) for s in walk(f.body))
+
+
 def now(c: Cost) -> dict[str, int]:
     """The plan the function has now, read back from its regions."""
     items: dict[str, int] = {}
@@ -218,4 +235,6 @@ def now(c: Cost) -> dict[str, int]:
             items |= {"grain": r.plan[0], "lanes": r.plan[1]}
         elif r.kind == "device":
             items |= dict(zip(("block", "per_lane", "unroll"), r.launch, strict=True))
+        if r.fuse:
+            items["fuse"] = r.fuse
     return items

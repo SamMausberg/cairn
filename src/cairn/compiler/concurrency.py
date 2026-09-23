@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import facts
+from . import facts, fusion
 from .builtins import WRAPPING, crossing
 from .effects import LANE_SAFE, PURE
 from .scope import Binding, Lanes
@@ -67,6 +67,7 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
             fail("E-PARALLEL-RACE", f"{name} is written by lanes, so every lane may touch only {name}[{binder}], "
                  f"or only its own block {name}[{binder} * S + j] with j below one constant S.", node)  # fmt: skip
     s.block = max((stride or 1 for _, stride, _, _ in c.lanes.accesses), default=1)  # A lane costs its block.
+    s.touched = tuple((name, stride, write) for name, stride, write, _ in c.lanes.accesses)  # what fusion reads
     c.lanes, c.device_depth, c.loop_depth, _, c.effects = saved
     del c.env[binder], c.facts[known:]
     if s.tag != "parallel" and target == "device":  # The runtime's scan and reduction need device scratch.
@@ -79,13 +80,15 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
 
 
 # Every item a plan may set: the regions it schedules, its least and greatest value, and what it must be a multiple of.
-# grain and lanes split a host region over the pool; block, per_lane and unroll shape a device region's launch.
+# grain and lanes split a host region over the pool; block, per_lane and unroll shape a device region's launch;
+# fuse runs adjacent regions of either kind as one (compiler/fusion.py).
 PLAN_ITEMS = {
     "grain": ("host", 1, 2**63 - 1, 1),  # indices one claim covers at least
     "lanes": ("host", 1, 1024, 1),  # lanes a region engages at most
     "block": ("device", 32, 1024, 32),  # threads in one block: whole warps
     "per_lane": ("device", 1, 65536, 1),  # indices each thread runs before the grid wraps
     "unroll": ("device", 1, 32, 1),  # passes of a thread's index loop the compiler unrolls
+    "fuse": ("either", 2, 16, 1),  # adjacent regions, over one extent, that run as one traversal at most
 }
 
 
@@ -121,8 +124,25 @@ def plans(c: Checker) -> dict[str, dict[str, int]]:
                     s.plan = (given.get("grain", 0), given.get("lanes", 0))
                 else:
                     s.launch = (given.get("block", 0), given.get("per_lane", 0), given.get("unroll", 0))
+        for s in (s for f in planned for s in walk(f.body) if s.tag == "parallel"):
+            s.fuse = items.get("fuse", 0)
         chosen |= {f.name: dict(items) for f in planned}
     return chosen
+
+
+def fusions(c: Checker, rows: dict[str, set[str]]):
+    """`fuse K` needs regions it can join once every row is known: adjacent, over one extent, lanes touching what
+    they share only at their own index, and bodies that cannot trap, loop or be seen (compiler/fusion.py)."""
+    for module, name, items, token in c.p.plans:
+        if "fuse" not in items:
+            continue
+        with c.within(module):
+            target = c.qualify(name, c.fs)
+        planned = [f for f in c.p.functions if target in (f.name, f.source_name)]
+        if not any(fusion.chains(ss, rows) for f in planned for ss in fusion.lists(f.body)):
+            fail("E-PLAN", f"fuse joins adjacent parallel regions over one extent whose bodies cannot trap, loop or be "
+                 f"seen, and whose shared arrays each lane touches only at its own index; {name} has no two such "
+                 "regions side by side.", token)  # fmt: skip
 
 
 def walk(ss: list[Stmt]):

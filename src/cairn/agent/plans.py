@@ -19,7 +19,7 @@ from typing import Any
 
 from ..compiler.cairnc import compile_source, fail
 from ..compiler.concurrency import PLAN_ITEMS
-from ..perf.tune import now, replanned, text, written
+from ..perf.tune import now, regions, replanned, text, written
 from .agent_tools import digest, load_json_strict, shaped, stable_json
 from .projection import local, signature
 
@@ -46,7 +46,8 @@ class PlanSession:
         kinds = {r.kind for r in cost.regions} & {"host", "device"}
         if not kinds:
             fail("E-PLAN", f"{symbol} has no parallel region, so a plan has nothing to schedule.")
-        self.open = {k: v for k, v in PLAN_ITEMS.items() if v[0] in kinds}
+        several = regions(p, self.f.name) > 1  # fuse joins two regions or more
+        self.open = {k: v for k, v in PLAN_ITEMS.items() if v[0] in kinds or (v[0] == "either" and several)}
         self.current = written(now(cost))
         self.receipt = compile_source(source)[1]["functions"]
         self.generation = generation  # how many replies this function's plan has taken: a spent session is stale
@@ -94,8 +95,9 @@ class PlanSession:
         plan = written(items)
         candidate = replanned(self.source, local(self.symbol), text(local(self.symbol), plan))
         receipt = compile_source(candidate)[1]["functions"]  # the whole linked program, checked again
-        unplanned = {n: {k: v for k, v in r.items() if k != "plan"} for n, r in receipt.items()}
-        if unplanned != {n: {k: v for k, v in r.items() if k != "plan"} for n, r in self.receipt.items()}:
+        scheduled = {"plan", "fused"}  # what a plan sets, and the regions its fuse joined
+        unplanned = {n: {k: v for k, v in r.items() if k not in scheduled} for n, r in receipt.items()}
+        if unplanned != {n: {k: v for k, v in r.items() if k not in scheduled} for n, r in self.receipt.items()}:
             fail("E-PLAN", "The candidate changed more than a plan.")  # unreachable while a reply is only items
         admitted = {
             "protocol": PROTOCOL,

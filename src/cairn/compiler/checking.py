@@ -146,6 +146,7 @@ class Checker:
         self.dispatches: list[tuple] = []
         self.borrowed: list[tuple[str, str]] = []
         self.device_functions: set[str] = set()
+        self.rows: dict[str, set[str]] = {}  # every function's row, once the judge has settled them
         self.address_taken: set[str] = set()
         self.nodes = self.unique = 0
         self.reaching = 0  # Depth inside a field path: its base is reached, not read whole.
@@ -448,7 +449,8 @@ class Checker:
     def check(self) -> dict[str, Any]:
         self.bodies()
         planned = concurrency.plans(self)
-        effects = self.judge()
+        effects = self.rows = self.judge()
+        concurrency.fusions(self, effects)
         tests = {f.name for f in self.p.functions if f.test}  # `cairn test` runs them; no other build holds one
         return {
             n: {

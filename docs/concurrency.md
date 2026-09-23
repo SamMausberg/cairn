@@ -371,7 +371,21 @@ plan scale { block 128; per_lane 4; unroll 4; }   // 128 threads a block, about 
 
 Without a plan a device region launches blocks of 256 threads and one index per thread, up to 65535 blocks. `grain` and `lanes` apply to host regions and `block`, `per_lane` and `unroll` to device regions, so one plan may set both for a function that has both.
 
-`E-PLAN` refuses a plan that names no function with a parallel region, an item whose kind of region the function lacks, a second plan for one function, an unknown or repeated item, and a value out of its range: a grain of 0, a lane count outside 1 to 1024, a block that is not whole warps from 32 to 1024, a `per_lane` outside 1 to 65536 and an `unroll` outside 1 to 32. `plan` is a keyword only at the top of a module, so it stays an ordinary name everywhere else, and so are its items.
+`fuse K` runs up to `K` adjacent regions of a function as one traversal, from 2 to 16: each lane runs the first body at its index, then the next, in order. The regions must sit side by side in one block, share a placement and an extent spelled the same way, and have lanes that own element `[i]` rather than a block. Whatever one of them writes and another touches, both touch only at their own index, so no lane of a later body reads what another lane of an earlier body writes. No body may trap, loop without end or be observed from outside: every guard in it was discharged, and every function it calls is quiet in the same sense. A local `buffer` or `stack` array that only the chain touches, each lane at its own index and never lent, lives in each lane as one value and is never allocated.
+
+```cairn
+fn blend(n:usize, out:rw<f64>[n], x:ro<f64>[n], a:f64, b:f64) {
+  buffer scaled:f64[n] = zeroed;
+  parallel i in n { scaled[i] = a * x[i]; }
+  parallel j in n { out[j] = scaled[j] + b; }
+}
+
+plan blend { fuse 2; }     // one pass over x and out; scaled lives in each lane, never in memory
+```
+
+The rule is strict about traps on purpose. A failed guard aborts the process, and which lane of a region fails first is already open. Fusing two trapping bodies would let the later body's guard fail before the earlier body's, so a program could end in a way it could not end before. Fusion is a plan item rather than something the compiler does whenever it may, because joining two passes is not always faster: two short loops each vectorize on their own, and one fused body may not. `cairn predict` prices a fused chain as one region without its scratch, `cairn tune` tries `fuse` beside the other items, and the receipt lists under `fused` every chain as emitted and the arrays it kept in its lanes. The conservative emission, `--keep-guards`, never fuses. On one shared host, three fused element-wise regions ran 1.45x to 2.5x faster than as written, and a chain that no longer allocates its scratch ran 3x to 22x faster, most of that the allocation and its first touch ([evidence/v1_4/fusion](../evidence/v1_4/fusion/README.md)).
+
+`E-PLAN` refuses a plan that names no function with a parallel region, an item whose kind of region the function lacks, a second plan for one function, an unknown or repeated item, and a value out of its range: a grain of 0, a lane count outside 1 to 1024, a block that is not whole warps from 32 to 1024, a `per_lane` outside 1 to 65536, an `unroll` outside 1 to 32 and a `fuse` outside 2 to 16. It refuses a `fuse` with no two regions it may join, such as bodies whose checked arithmetic can trap. `plan` is a keyword only at the top of a module, so it stays an ordinary name everywhere else, and so are its items.
 
 ```cairn rejects E-PLAN
 fn walk(n:usize, out:rw<u64>[n]) { for i in 0..n { out[i] = 1; } }
@@ -385,6 +399,14 @@ plan scale { block 100; }
 
 ```text
 block runs from 32 to 1024, a multiple of 32; 100 is outside.
+```
+
+```cairn rejects E-PLAN
+fn count(n:usize, out:rw<u64>[n], x:ro<u64>[n]) {
+  parallel i in n { out[i] = x[i] + 1; }       // checked: it traps if x[i] is the largest u64
+  parallel j in n { out[j] = out[j] * 2; }
+}
+plan count { fuse 2; }
 ```
 
 Halide separated algorithms from schedules, and MLIR's transform dialect does the same inside a compiler. The open question for CAIRN is whether a schedule kept apart from the algorithm, where the checker holds it to the algorithm's ownership rules, makes tuning cheaper than rewriting the loop, for a person or an agent. [`cairn tune`](tools.md#cairn-predict) is the search this makes possible: every plan it tries is one the checker accepts, it ranks them all by prediction and times only the best few. Whether that is cheaper than rewriting the loop has not been measured.

@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..compiler import fusion
 from ..compiler.builtins import WRAPPING
 from ..compiler.tree import FLOAT, INT, NUMERIC, Expr, Function, Stmt, Type, is_view
 
@@ -156,6 +157,7 @@ class Region:
     plan: tuple[int, int] = (0, 0)  # a host region's (grain, lanes)
     launch: tuple[int, int, int] = (0, 0, 0)  # a device region's (block, per_lane, unroll)
     registers: int = 0  # what ptxas said its kernel uses, when something asked; 0 is not known
+    fuse: int = 0  # the fuse its plan sets, whether or not a chain formed
 
 
 @dataclass
@@ -250,6 +252,8 @@ class Counter:
         self.bound: list[str] = []  # the loop and lane binders in scope, which sizes may mention
         self.data: set[str] = set()  # locals whose value was read from memory or computed from what was
         self.cost = Cost("", 0, [])
+        self.f: Function | None = None  # the function being counted, whose blocks fusion reads
+        self.kept: set[str] = set()  # scratch a fused chain holds in its lanes: never allocated, never streamed
 
     def function(self, f: Function) -> Cost:
         if f.name in self.costs:
@@ -257,8 +261,8 @@ class Counter:
         if f.name in self.open:
             return Cost(f.name, f.line, [], unknown=[f"{f.name} is recursive: its depth is not a size"])
         self.open.add(f.name)
-        saved = self.values, self.cost, self.bound, self.data
-        self.bound, self.data = [], set()
+        saved = self.values, self.cost, self.bound, self.data, self.f
+        self.bound, self.data, self.f = [], set(), f
         extents = [n for n, t in f.params if t == Type("usize")]
         self.values = {n: Poly.var(n) for n in extents}
         for n, t in f.params:
@@ -270,7 +274,7 @@ class Counter:
         self.block(f.body, Frame(self.cost.seq, ONE, ()))
         # An extent is a usize parameter some count depends on; `interior(i, n)` does the same work for every i and n.
         self.cost.extents = [n for n in extents if n in self.cost.symbols()]
-        cost, (self.values, self.cost, self.bound, self.data) = self.cost, saved
+        cost, (self.values, self.cost, self.bound, self.data, self.f) = self.cost, saved
         self.open.discard(f.name)
         self.costs[f.name] = cost
         return cost
@@ -331,8 +335,35 @@ class Counter:
     # Statements --------------------------------------------------------------------------------------------------
 
     def block(self, ss: list[Stmt], at: Frame) -> None:
+        chains = {id(chain.regions[0]): chain for chain in fusion.chains(ss, self.c.rows, self.f)}
+        inside = {id(r) for chain in chains.values() for r in chain.regions[1:]}
+        self.kept |= {name for chain in chains.values() for name in chain.scratch}
         for s in ss:
-            getattr(self, "s_" + s.tag, self.s_plain)(s, at)
+            if id(s) in chains:
+                self.fused(chains[id(s)], at)
+            elif id(s) not in inside:
+                getattr(self, "s_" + s.tag, self.s_plain)(s, at)
+
+    def fused(self, chain: fusion.Chain, at: Frame) -> None:
+        """A chain a plan fused is one region: one pass over the extent doing every body, sharing what it reads,
+        with its lane-held scratch neither streamed nor allocated."""
+        head, body = chain.regions[0], Work()
+        binders = tuple(r.name for r in chain.regions)
+        self.bound += binders
+        lane = Frame(body, ONE, (*at.binders, *binders), True)
+        for r in chain.regions:
+            self.block(r.body, lane)
+            # What this body wrote, a later body reads back only at the lane's own index: from a register or L1.
+            lane.seen |= {(k, False) for k in body.writes}
+        del self.bound[-len(binders) :]
+        for name in chain.scratch:
+            for table in (body.reads, body.writes, body.footprint):
+                table.pop(name, None)
+        count = self.size(head.exprs[0]) or Poly.var(f"?count@{head.line}")
+        kind = "device" if head.ref == "device" else "host"
+        self.cost.regions.append(
+            Region(kind, head.line, count, at.times, body, head.block, head.plan, head.launch, fuse=head.fuse)
+        )
 
     def s_plain(self, s: Stmt, at: Frame) -> None:
         for e in s.exprs:
@@ -368,7 +399,7 @@ class Counter:
     def s_buffer(self, s: Stmt, at: Frame) -> None:
         n = self.size(s.exprs[0]) or Poly.var(f"?capacity@{s.line}")
         self.values[f"len({s.name})"] = n
-        if s.tag == "buffer":
+        if s.tag == "buffer" and s.name not in self.kept:
             self.cost.allocations = self.cost.allocations + at.times
             self.cost.allocated = self.cost.allocated + n * self.c.sizeof(s.ty) * at.times
 
@@ -420,7 +451,7 @@ class Counter:
         self.block(s.body, Frame(body, ONE, (*at.binders, s.name), True))
         self.bound.pop()
         kind = "device" if s.ref == "device" else "host"
-        self.cost.regions.append(Region(kind, s.line, count, at.times, body, s.block, s.plan, s.launch))
+        self.cost.regions.append(Region(kind, s.line, count, at.times, body, s.block, s.plan, s.launch, fuse=s.fuse))
 
     def s_reduce(self, s: Stmt, at: Frame) -> None:
         count = self.size(s.exprs[0]) or Poly.var(f"?count@{s.line}")

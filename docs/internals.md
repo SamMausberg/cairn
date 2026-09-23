@@ -37,6 +37,7 @@ Checking is one pass per function over one typed tree, and a generic instance is
 | The independent check of each guard lowering leaves out | `verify/elision.py` | `audit`, `decide`, `part` |
 | I/O rings: the declaration, the operations that move a `Buf` in and hand it back, their lowering | `compiler/rings.py` | `check_ring`, `method`, `waited`, `lower` |
 | Facts about `usize` values that let lowering drop a guard | `compiler/facts.py` | `binder`, `defined`, `assume`, `index`, `arithmetic`, `conversion` |
+| Which adjacent regions a plan's `fuse` joins, and the scratch they hold in their lanes | `compiler/fusion.py` | `chains`, `quiet`, `compatible`, `scratch` |
 | Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
 | The C header of a library: declarations, layouts it states and checks, what cannot cross | `compiler/header.py` | `Header.render`, `shape`, `refusal` |
 | Manifests, vendored dependencies | `projects/project.py` | `read_manifest`, `contained_file`, `claim`, `dependencies` |
