@@ -1,12 +1,10 @@
 # Generics, traits, closures, modules and recipes
 
-The ways a program abstracts: type and natural parameters with bounds, traits with static and dynamic dispatch, function values and closures, modules and vendored projects, and recipes that generate code as library code. [language.md](language.md) covers values and control flow, [memory.md](memory.md) memory, ownership and effects; [concurrency.md](concurrency.md) covers tasks, lanes and devices.
+The ways a program abstracts: type and natural parameters with bounds, traits with static and dynamic dispatch, function values and closures, modules and vendored projects, and recipes that generate code.
 
 ## Generics
 
-A function takes type parameters and natural parameters. Arguments for them are inferred from the arguments, the literals and the expected type, or written out where nothing else says them (`largest[u64](3, 9)`, `scale[4](x)`, `Option[u64].None`). A literal argument takes its type from the other arguments and then from the expected result. `T(x)` converts, or constructs, at the instance's `T`.
-
-Every instance is monomorphized on demand and checked as ordinary code, so an instance, not its template, is what typechecks. Arguments are typed where they are written: the template's module decides what its own text means, never what the caller's expressions mean.
+A function takes type parameters and natural parameters. They are inferred from the arguments and the expected type, or written out (`largest[u64](3, 9)`, `scale[4](x)`, `Option[u64].None`). `T(x)` converts, or constructs, at the instance's `T`. Every instance is made on demand and checked as ordinary code, and the template's module decides what its own text means.
 
 ```cairn
 struct Column[T] { values:Buf[T]; used:usize; }
@@ -32,7 +30,7 @@ fn main() -> i32 {
 }
 ```
 
-A natural parameter may be a view's static extent, inferred from a literal, a fixed array or a literal extent passed there. `family` names a bounded range of instances of one natural template.
+A natural parameter may be a view's static extent, inferred from what is passed. `family` names a bounded range of instances of one natural template.
 
 ```cairn
 fn label[N:nat](text:ro<u8>[N]) -> usize = N;         // N comes from the literal
@@ -49,7 +47,7 @@ fn main() -> i32 {
 
 ## Bounds
 
-A parameter promises more with a bound: a trait, a kind, or a closed class of scalars. `[T:copy]` may be used many times and dropped. `[T:affine]` may be dropped and kept in zeroed storage. Saying nothing admits `linear` values too, which must be consumed exactly once. The classes are `integer unsigned signed float numeric scalar`, and a class licenses the operators and literals of its types. Bounds combine with `+`, and generic records take them too. A bound is checked where the instance is requested, so misuse is reported at the call, in the caller's terms (`E-BOUND`).
+A parameter promises more with a bound: a trait, a kind, or a class of scalars. `[T:copy]` may be used many times and dropped, `[T:affine]` may be dropped and kept in zeroed storage, and no bound admits `linear` values too, which must be consumed exactly once. The classes `integer unsigned signed float numeric scalar` allow the operators and literals of their types. Bounds combine with `+`, and a bound is checked at the call, in the caller's terms (`E-BOUND`).
 
 ```cairn
 import std.core (Ord);
@@ -88,7 +86,7 @@ Buf[u8] is affine, not copy; widest needs [T:copy].
 
 ## Certifying a template
 
-`cairn check --generics` checks each template once, at opaque witness types that offer only what its bounds promise and must be consumed exactly once; a parameter bounded by a scalar class is checked at every type of that class. `ok` means every instance whose arguments satisfy the bounds will check. Any other verdict names the first thing the body needed beyond its bounds: an operator on a bare `T`, a second use of a `T`, dropping one, zeroed storage of one.
+`cairn check --generics` checks each template once, at opaque types that offer only what its bounds promise. `ok` means every instance whose arguments satisfy the bounds will check. Any other verdict names the first thing the body needed beyond its bounds, such as an operator on a bare `T` or dropping one.
 
 ```cairn
 fn smaller[T:numeric](a:T, b:T) -> T { if a < b { return a; } return b; }
@@ -111,13 +109,11 @@ cairn check --generics frame.cairn
 }
 ```
 
-The verdict covers the rules that need every row as well: ceilings, operand order and what a lane may reach. At a witness, a bounded member may do what its trait's ceiling allows; a member without a ceiling may do anything, which shows as `bound:Trait.member` in the row and which no `pure` template and no lane can absorb. A program that does not check leaves its templates `unknown`, never `ok`.
-
-The command exits 1 unless every template certifies, and every template of `std` certifies. Without the flag, a program's own unbounded templates are still accepted per instance, and a template nobody instantiates is listed in the receipt as `uninstantiated_templates`, never silently trusted.
+The verdict covers ceilings, operand order and what a lane may reach too. A trait member without a ceiling may do anything, which shows as `bound:Trait.member` in the row. The command exits 1 unless every template certifies, and every template of `std` does. Without the flag, templates are accepted instance by instance, and one nobody instantiates is listed in the receipt as `uninstantiated_templates`, never silently trusted.
 
 ## Traits
 
-Dispatch is static, on the type of the `Self` argument, and a bound such as `[K:Hash + Eq]` is checked when the instance is made. An impl defines exactly its trait's members, with exactly their declared modes and types and `Self` replaced by the implementing type (`E-TRAIT-IMPL`), whether or not they are used, in one `impl` block. Two blocks for one `Self` type are `E-TRAIT-OVERLAP`, however they split the members. There is no inheritance and no implicit boxing.
+Dispatch is static, on the type of the `Self` argument. An impl defines exactly its trait's members, with their declared modes and types, in one `impl` block (`E-TRAIT-IMPL`), and a second block for the same `Self` is `E-TRAIT-OVERLAP`.
 
 ```cairn
 trait Frame { fn size(self:ro<Self>) -> u64; }
@@ -146,9 +142,9 @@ impl Frame for Packet { fn size(self:ro<Packet>) -> u32 = self.payload; }
 Frame.Packet.size does not match Frame.size(ro<Packet>).
 ```
 
-A ceiling on a trait's member (`fn size(self:ro<Self>) -> u64 pure;`) is part of the contract: every implementation is held to it (`E-EFFECT-CEILING`), and one that declares more is `E-TRAIT-IMPL`. That is what lets a bound promise it. `std.core` declares `less`, `same` and `hash` pure.
+A ceiling on a trait's member (`fn size(self:ro<Self>) -> u64 pure;`) holds every implementation to it (`E-EFFECT-CEILING`), which is what lets a bound promise it. `std.core` declares `less`, `same` and `hash` pure.
 
-Every generic parameter of an impl appears in its `Self` type, so an instance is made from the type alone, and a generic impl applies exactly where its bounds hold. That is how `std.core` covers every scalar class at once (`impl[T:integer] Ord for T`). One type has one implementation: a generic impl and a concrete impl that both match one type are refused, and so is a generic impl whose bound asks the question it answers (`impl[T:Frame] Frame for T`). Static calls, `dyn` borrows and `Dyn` values all resolve through that one answer.
+A generic impl applies exactly where its bounds hold, which is how `std.core` covers every integer type at once (`impl[T:integer] Ord for T`). One type has one implementation: a generic and a concrete impl that both match one type are refused.
 
 ```cairn rejects E-TRAIT-OVERLAP
 trait Frame { fn size(self:ro<Self>) -> u64; }
@@ -162,9 +158,9 @@ fn main() -> i32 { let packet = Packet(1); return i32(size(packet)); }
 Two impls of Frame match Packet: one Self type means one implementation.
 ```
 
-Coherence is judged over the whole program, which is always in hand, since dependencies are vendored sources. Any module may implement a trait it can name for a type it can name, by hand or by `derive`, and two modules that both do are told so (`E-TRAIT-OVERLAP`). There is no orphan rule.
+Coherence is judged over the whole program, which is always in hand, so any module may implement a trait for a type it can name, and there is no orphan rule.
 
-`value.f(args)` means `f(value, args)`, looked up first in the module that declares the receiver's type and before the builtins, so a type may have its own `len`. An unqualified `len(x)` is still the builtin; only the names that became builtins in 1.0 (`take swap transfer wait mmio_read mmio_write asm`) yield to a function the calling module can name. Privacy is judged from where the call is written. When two traits the type implements declare one member name, write the trait (`Frame.size(packet)`) or the call is `E-TRAIT-AMBIGUOUS`.
+`value.f(args)` means `f(value, args)`, looked up first in the module that declares the receiver's type, so a type may have its own `len`. When two traits the type implements declare one member name, write the trait (`Frame.size(packet)`), or the call is `E-TRAIT-AMBIGUOUS`.
 
 ```cairn
 module frames;
@@ -186,9 +182,7 @@ pub fn main() -> i32 {
 
 ## dyn and Dyn
 
-`ro<dyn Frame>` takes any named place whose type implements the trait. The call site builds a two-word reference (the object and a static table); members called on it go through the table, add the `dispatch` effect, and contribute the effect rows of every implementation. Dynamic references are borrows, so they are never values and nothing escapes through them. By-value owners pass through the table by move.
-
-A member is dyn-compatible when only its receiver is a borrow or mentions `Self`, which excludes returning `Self`. A trait goes behind `dyn` only if every member is (`E-DYN`), because the table has a slot for each.
+`ro<dyn Frame>` takes any named place whose type implements the trait, as a two-word reference to the object and a static table. A call through it adds `dispatch` and the rows of every implementation. A `dyn` reference is a borrow, so nothing escapes through it. A trait goes behind `dyn` only if no member but its receiver is a borrow or mentions `Self` (`E-DYN`).
 
 ```cairn rejects E-DYN
 trait Frame { fn size(self:ro<Self>) -> u64; fn dup(self:ro<Self>) -> Self; }
@@ -205,7 +199,7 @@ fn main() -> i32 { let packet = Packet(4); return i32(total(packet)); }
 Frame.dup is not dyn-compatible: only its receiver may be a borrow or mention Self.
 ```
 
-The owned form is explicit. `Dyn[Frame](Packet(40))` moves a value of any implementing type that is not `linear` to the heap (`alloc`, `free`). The box drops what it holds, so a `linear` value may not go in one (`E-LINEAR-STORAGE`). A `Dyn[Frame]` is an ordinary affine value that can live in a `Vec` or a record, its members dispatch, and it lends itself wherever a `dyn Frame` reference is expected. An empty one, moved from or out of zeroed storage, is a guard failure when it is lent, never a null call.
+The owned form is explicit: `Dyn[Frame](Packet(40))` moves the value to the heap (`alloc`, `free`). A `linear` value cannot go in one (`E-LINEAR-STORAGE`). A `Dyn[Frame]` is an ordinary affine value that can live in a `Vec` or a record and lends itself wherever a `dyn Frame` is expected. An empty one is a guard failure when lent, never a null call.
 
 ```cairn
 trait Frame { fn size(self:ro<Self>) -> u64; }
@@ -228,7 +222,7 @@ fn main() -> i32 {
 
 ## Function values and closures
 
-`fn(u64) -> u64` is a copyable code pointer to a plain declared function of values; an instantiated generic such as `ascending[u64]` qualifies. It can be stored in a record, its zero value is legal and calling it is a guard failure, and whoever calls through one inherits the effects of every function whose address is taken.
+`fn(u64) -> u64` is a copyable pointer to a declared function. It can be stored in a record, calling its zero value is a guard failure, and a call through one carries the effects of every function whose address is taken.
 
 ```cairn
 struct Stage { apply:fn(u64) -> u64; }
@@ -251,7 +245,7 @@ fn main() -> i32 {
 }
 ```
 
-`ro<fn(u64) -> u64>` is a borrowed callable: pass a declared function, or write a closure in place. A closure captures its enclosing scope by reference, exists only as that argument, and therefore never allocates and never escapes. Its effects belong to the function that wrote it, and the callee shows `indirect_call`. Function types carry values and single borrows, not array views (`E-FN-TYPE`).
+`ro<fn(u64) -> u64>` is a borrowed callable: pass a declared function, or write a closure in place. A closure exists only as that argument, so it never allocates and never escapes. Its effects belong to the function that wrote it, and the callee shows `indirect_call`. Function types take values and single borrows, not array views (`E-FN-TYPE`).
 
 ```cairn
 fn scale(n:usize, xs:rw<u64>[n], f:ro<fn(u64) -> u64>) { for i in 0..n { xs[i] = f(xs[i]); } }
@@ -267,7 +261,7 @@ fn main() -> i32 {
 }
 ```
 
-What a closure captures it borrows for that call, `rw` where it writes. The same call cannot also lend, move or write a place the closure touches (`E-ALIAS`), so a callee never sees a closure reach anything it was given.
+A closure borrows what it captures for that call, `rw` where it writes, so the same call cannot also lend a place the closure touches (`E-ALIAS`).
 
 ```cairn rejects E-ALIAS
 fn scale(n:usize, xs:rw<u64>[n], f:ro<fn(u64) -> u64>) { for i in 0..n { xs[i] = f(xs[i]); } }
@@ -284,9 +278,7 @@ A mutable view cannot be passed to overlapping call arguments.
 
 ## Modules
 
-`module net.http;` names the module of the declarations that follow; a file without one shares the root namespace. `pub` exports a declaration, and impl members are always public. `import net.http;` lets you write `http.get(...)` and `http.Request`, `import a.b as c;` renames, and `import std.core (Option, Result);` also brings those names in unqualified. An import may not hide a name the importing module declares (`E-DUPLICATE`). A private record's fields are as private as the record.
-
-A `family` over another module's template needs that template to be `pub`, and its instances belong to the module that wrote the family (`pub family` exports them). `derive wire for R;` is written in the module that declares `R`.
+`module net.http;` names the module of the declarations that follow. `pub` exports a declaration, and a private record's fields are private too. `import net.http;` gives `http.get(...)`, `import a.b as c;` renames, and `import std.core (Option, Result);` brings those names in unqualified. An import may not hide a name the module declares (`E-DUPLICATE`).
 
 ```cairn
 module codec;
@@ -323,11 +315,11 @@ pub fn main() -> i32 { return i32(LIMIT); }
 import (LIMIT) collides with app.LIMIT; drop one or use the qualified name.
 ```
 
-A project's files are compiled together in manifest order. The `std.*` modules ship inside the package and are linked on demand. Only project modules and `std.*` can be imported, and nothing is downloaded.
+Only project modules and the packaged `std.*` modules can be imported, and nothing is downloaded.
 
 ## Projects
 
-`cairn.toml` lists ordered sources and independent task files. It is data, never a build script. A command takes a source file, a project directory or a manifest by path, so one tree may hold a second configuration (`cairn run app/gpu.toml`).
+`cairn.toml` lists ordered sources and task files. It is data, never a build script, and a command may name any manifest by path (`cairn run app/gpu.toml`).
 
 ```toml
 [project]
@@ -344,29 +336,21 @@ target = "hosted"       # or a board such as "aarch64-virt"
 libraries = ["z"]       # system libraries this project's own externs call, by name
 ```
 
-A name under `libraries` is a row of the toolchain's closed table in `projects/toolchain.py`, never a flag or a path, and the library is found where the C compiler finds it. A packaged module that binds a library links it wherever it is imported (`std.zlib` links zlib), so only a project's own `extern` declarations need the line. An unknown or repeated name, and a library on a freestanding target, are refused when the manifest is read; a missing name fails at the link, naming the symbol, and the build record lists what was linked.
+A name under `libraries` is a row of the closed table in `projects/toolchain.py`, never a flag or a path. A packaged module links its own library (`std.zlib` links zlib), so only a project's own `extern` declarations need the line. An unknown name is refused when the manifest is read.
 
-A freestanding `target` refuses any program whose effect rows need a hosted runtime ([the freestanding target](tools.md#the-freestanding-target)). The host chooses trusted compilers (`clang++`, `g++`, and `nvcc` when a program uses the device), and builds use fresh directories. Generated C++ is readable and keeps the C ABI for every function whose signature is C compatible. A library exports every function; an executable contains only what its `main` reaches, and `main` may live in a module, while the receipt still covers everything that was checked.
-
-`--debug` adds symbols and `#line` maps to the authored files. `--incremental` compiles one object per module against a shared interface header and reuses an object only when its unit, that header, the command line, the runtime headers and the compiler version hash to the same key, and the stored object still matches the digest written beside it in `build/objects`. It gives up inlining across modules, and device programs and freestanding images stay one unit either way ([tools.md](tools.md#cairn-build---incremental) has the measured sessions).
+A [freestanding target](tools.md#the-freestanding-target) refuses any program whose rows need a hosted runtime. Builds use fresh directories, and the generated C++ keeps the C ABI for every function whose signature is C compatible. A library exports every function, and an executable holds what its `main` reaches. `--debug` adds symbols and `#line` maps, and [`--incremental`](tools.md#cairn-build---incremental) compiles one cached object per module.
 
 ## Dependencies
 
-`[dependencies] geometry = "deps/geometry"` names a project vendored inside this one's root, with its own `cairn.toml` and its own dependencies loaded first, at most 16 per manifest and 4 deep, a diamond loaded once. A dependency contributes modules only, and only what it marks `pub` is reachable. Nothing is fetched, no path leaves the root, no path has a `.` or `..` segment, no symbolic link is followed, and the receipt pins each dependency's manifest and sources by hash.
+`[dependencies] geometry = "deps/geometry"` names a project vendored inside this one's root. Its own dependencies load first, at most 16 per manifest and 4 deep, and a diamond loads once. A dependency contributes only the modules it marks `pub`. Nothing is fetched, no path leaves the root or follows a symbolic link, and the receipt pins each dependency by hash.
 
-A dependency's manifest is read by the same checker as yours, so an unknown table or option is refused there too, and its `[build]`, which the build ignores, must still name a known kind, architecture and target. One directory is one project under one name: a second name for it is an error, not a diamond, and one name is one project of the build, the root's own included.
-
-A module belongs to exactly one project. No project declares a `std.*` module, reopening a module another project declared names both projects and fails, and so does a file with no `module` header that would silently continue a dependency's. An executable's entry point is searched only in the sources this manifest lists, so a dependency neither supplies `main` nor denies you yours.
+A dependency's manifest is checked as strictly as yours. One directory is one project under one name, a module belongs to exactly one project, and no project declares a `std.*` module. A dependency never supplies `main`.
 
 ## Recipes
 
-A recipe is a generator written as library code: ordinary declarations (functions, records, trait `impl`s, `kernel fn`) over a record schema (`for R`), naturals (`recipe tiles[W:nat, H:nat]`) and names of functions (`recipe fieldwise[F:fn] for R`). `derive name[arguments] for Type;` applies one.
+A recipe is a generator written as library code: ordinary declarations over a record schema (`for R`), naturals (`recipe tiles[W:nat, H:nat]`) or function names (`recipe fieldwise[F:fn] for R`). `derive name[arguments] for Type;` applies one.
 
-Inside a recipe, `each f in R { }` iterates statically over a record's fields and `each k in lo..hi { }` over a natural range, at declaration level, at statement level, in a record's field list, or among the arguments of a call, where it splices one or several expressions per step (`each f in R { lo.$f, hi.$f }`). `fold | each ... { e }` joins the expansions with one operator, or with any function of two operands (`fold add_wrap each ...`, `fold lib.chain each ...`).
-
-`where a = offset(f), t = typeof(f)` names static values, computed from naturals, comparisons, `min`, `max`, a static `fold` over a static `each` (`where width = fold + each f in R { bytes(f) }`) and the facts `bytes bits offset index count typeof unsigned signed integer float scalar record`. Static values are naturals and booleans; a negative result or a division by zero is `E-RECIPE-STATIC`.
-
-`$name` splices one into an identifier (`encode_$R`, `value.$f`, `shift_$k`), and a whole `$name` is that natural or that type. The longest static name wins, so `$R_columns` is `$R` then `_columns`. Only the bare `for` parameter `R` is the type itself: every other static needs its `$`, so an ordinary identifier that shares a `where` name is left alone. `require condition, "message";` states the admissible inputs (`E-DERIVE-DOMAIN`, or the code the message opens with).
+Inside a recipe, `each f in R { }` iterates statically over a record's fields and `each k in lo..hi { }` over a natural range, in declarations, statements, field lists or call arguments. `fold | each ... { e }` joins the expansions with an operator or a two-argument function. `where t = typeof(f)` names static values, from naturals and the facts `bytes bits offset index count typeof unsigned signed integer float scalar record`; a negative result or a division by zero is `E-RECIPE-STATIC`. `$name` splices a static into an identifier (`encode_$R`, `value.$f`). `require condition, "message";` states the admissible inputs (`E-DERIVE-DOMAIN`).
 
 ```cairn
 module layout;
@@ -410,7 +394,7 @@ derive layout.columns for Frame;
 columns holds scalar fields.
 ```
 
-A generated record may declare a field extent as a written one does: `$f:Buf[$t][rows]` says the generated column holds `rows` elements, where `rows` is an earlier `usize` field of the same generated record. The rule is the written record's rule (`E-EXTENT` names the generated record), so a column goes to a call whole and pays no part guard, and the constructor writes each carrier inline as `Buf[$t](rows)` on the same `rows`.
+A generated record may declare a field extent as a written one does (`$f:Buf[$t][rows]`), under the same rule (`E-EXTENT`), so a generated column goes to a call whole and pays no part guard.
 
 ```cairn
 module layout;
@@ -445,13 +429,11 @@ pub fn main() -> i32 {
 }
 ```
 
-A function name is spliced as the deriving module wrote it (`$F(v.$f)` calls it; inside a longer identifier, `$F_$R`, it gives its last segment) and means what it means there, so one generic function serves fields of different types and privacy is judged from the deriving module. Recipes take types and naturals, not expressions: behavior reaches a generated function as a `fn` value or a closure. A recipe over a natural range generates one function per step, as `family` does for one template.
+Recipes take types, naturals and function names, not expressions: behaviour reaches generated code as a `fn` value or a closure. Expansion runs before checking and reads only the recipe and the schema, and `cairn expand` prints the result as source. It is hygienic: a name the recipe uses means what it means in the recipe's module (`helper(x)` becomes `lib.helper(x)`, and a private one is `E-PRIVATE` there), and only `$` splices belong to the deriving module. What a recipe generates is checked like any other code of the deriving module.
 
-Expansion happens before checking and reads nothing but the recipe and the schema, so it is a function of its inputs; `cairn expand` prints what it produced, as source. Expansion is hygienic: a function, type, trait or constant the recipe names means what it means in the recipe's own module and is spelled out in full where the code lands (`helper(x)` becomes `lib.helper(x)`, so the deriving module's own `helper` cannot capture it, and a private one is `E-PRIVATE` from there). Only `$` splices, and the names they build, belong to the deriving module. What a recipe generates is ordinary code of the deriving module, checked like any other; its signatures and effect ceilings are its contract.
+A generated name that already exists is `E-DERIVE-COLLISION`, and static iteration is bounded (`E-EXPANSION-LIMIT`). The receipt pins every recipe by the hash of its tokens.
 
-A generated name that already exists is `E-DERIVE-COLLISION`, and static iteration is bounded per level and in total (`E-EXPANSION-LIMIT`). A derivation for a record that another derivation generates waits for it, whatever order they are written in. The receipt pins every recipe by the hash of its tokens (`recipes`) beside the list of `derivations`.
-
-A bare recipe name the program does not declare falls back to the packaged `std.<name>`, then to `std.derived`. `derive wire` emits fixed-width unsigned little-endian codecs in declaration order with no padding, as the packaged recipe `std.wire`. `std.derived` holds `derive eq`, `derive ord` (lexicographic) and `derive hash`: impls of `std.core`'s traits for any record whose fields already have them, checked like impls written by hand.
+A bare recipe name falls back to the packaged `std.<name>`, then to `std.derived`. `derive wire` emits fixed-width little-endian codecs with no padding. `derive eq`, `derive ord` (lexicographic) and `derive hash` implement `std.core`'s traits for any record whose fields already have them.
 
 ```cairn
 import std.core (Eq, Ord);

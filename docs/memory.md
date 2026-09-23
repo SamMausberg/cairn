@@ -1,10 +1,10 @@
 # Memory, ownership and effects
 
-This part of the reference covers where values live and what code may do with them: views and parts, owners and moves, linear values, layout, effect rows, operand order and the foreign boundary. [language.md](language.md) covers values, control flow, records, sums and tests, [abstractions.md](abstractions.md) generics, traits, closures, modules and recipes, and [concurrency.md](concurrency.md) tasks, lanes and devices. As there, every construct runs natively in the suite, every accepted example compiles and every refused one fails with the code shown.
+Where values live and what code may do with them: views and parts, owners and moves, linear values, layout, effect rows, operand order and the foreign boundary. As in [language.md](language.md), every example is compiled by the suite and every refused one fails with the code shown.
 
 ## Arrays, views and parts
 
-`ro<T>[n]` and `rw<T>[n]` borrow `n` elements; `ro<T>` and `rw<T>` borrow one value, which the callee reads and assigns like the value itself. A borrow argument names a place (`frame`, `f.body`, `grid`), and an `ro<T>` parameter also accepts a temporary. An extent is a literal or an earlier immutable `usize` parameter, and `len(view)` reads that metadata.
+`ro<T>[n]` and `rw<T>[n]` borrow `n` elements, and `ro<T>` and `rw<T>` borrow one value, which the callee uses like the value itself. A borrow argument names a place (`frame`, `f.body`), and an `ro<T>` parameter also accepts a temporary. An extent is a literal or an earlier `usize` parameter, and `len(view)` reads it.
 
 ```cairn
 fn fill(n:usize, out:rw<u8>[n], value:u8) { for i in 0..n { out[i] = value; } }
@@ -25,7 +25,7 @@ fn main() -> i32 {
 }
 ```
 
-Extents agree by name and literal identity, not by value, and `len(v)` supplies the identity of `v`. `len("ready")` is the literal's byte count. A record may give one of its `Buf` fields the identity of an earlier `usize` field ([records and sums](language.md#records-and-sums)), and then `c.price` has the extent `c.rows` and goes to a call whole.
+Extents agree by name and literal identity, not by value, and `len(v)` is the identity of `v`. A record's `Buf` field can carry the identity of an earlier `usize` field ([records and sums](language.md#records-and-sums)).
 
 ```cairn rejects E-TYPE-MISMATCH
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 = u32(bytes[0]);
@@ -36,7 +36,7 @@ fn main() -> i32 { let a = Buf[u8](8); let b = Buf[u8](8); return i32(checksum(l
 Expected ro<u8>[len(a)]@host, got ro<u8>[len(b)]@host.
 ```
 
-A call may leave out its extent parameters. A `usize` parameter that a later view parameter names as its extent can only be that view's length, so when a call omits every such parameter the checker writes each one in as `len` of the first view argument that names it, or `hi - lo` for a part. Everything after the checker sees the call written out: the same C++, the same effect row. Every other view with that extent must match it, as it would a written length. A call passes all of its extents or none of them (`E-ARITY`), and an `extern` takes every argument, in the order C gives them.
+A call may leave out its extent parameters. A `usize` parameter that names a later view's extent can only be that view's length, so the checker writes it in as `len` of the first view argument, or `hi - lo` for a part, and everything after the checker sees the call written out. Every other view with that extent must still match. A call passes all its extents or none (`E-ARITY`), and an `extern` takes every argument.
 
 ```cairn
 fn dot(n:usize, xs:ro<u64>[n], ys:ro<u64>[n]) -> u64 {
@@ -63,7 +63,7 @@ fn main() -> i32 { let a = Buf[u64](8); let b = Buf[u64](8); return i32(dot(a, b
 Expected ro<u64>[len(a)]@host, got ro<u64>[len(b)]@host.
 ```
 
-A record may name the view it lends. `lends data[0..len];` in its body says that the record, named where an array view is expected, means the part `data[0..len]` of itself: `io.print(out)` is `io.print(out.data[0..out.len])`, the same C++, guard, row, lease and alias rules. A `for` over it is the index loop over that part, so `for b in line` is `for i in 0..line.len { let b = line.data[i]; }`. The bounds are read again at every call and nothing about them is assumed, so the length may change freely and a length past the storage traps at the part's guard. `std.vec` declares it, so a `Vec` goes to a call whole.
+A record may name the view it lends. With `lends data[0..len];` in its body, the record named where a view is expected means the part `data[0..len]` of itself, with that part's guard, row, lease and alias rules, and `for b in line` walks that part. The bounds are read again at every use, so the length may change freely and a length past the storage traps at the part's guard. `std.vec` declares it, so a `Vec` goes to a call whole.
 
 ```cairn
 struct Line { data:Buf[u8]; len:usize; lends data[0..len]; }
@@ -86,7 +86,7 @@ fn main() -> i32 {
 }
 ```
 
-A record lends one `Buf` field between two bounds, each a literal or a `usize` field of the record (`E-LENDS`). A task leases what it was lent, the elements, and not the length.
+The bounds are literals or `usize` fields of the record (`E-LENDS`). A task leases the elements it was lent, not the length.
 
 ```cairn rejects E-LENDS
 struct Line { data:Buf[u8]; len:u32; lends data[0..len]; }
@@ -97,7 +97,7 @@ fn main() -> i32 { let line = Line(Buf[u8](8), 2); return 0; }
 A lent view's bounds are literals or usize fields of Line; len is u32.
 ```
 
-A part `bytes[lo..hi]` goes wherever an array borrow is expected and carries one dynamic guard: `lo <= hi <= len`, and `hi - lo` equal to the callee's extent, which for a part may be any `usize` arithmetic. A part of a part guards once per level. Bounds and extents are written from names, literals, fields, elements, operators, `len` and the arithmetic builtins; a call is bound to a name first (`E-CALL-SHAPE`).
+A part `bytes[lo..hi]` goes wherever an array borrow is expected and carries one guard: `lo <= hi <= len`, and `hi - lo` equal to the callee's extent. A part of a part guards once per level. Bounds are names, literals, fields, elements and arithmetic; bind a call to a name first (`E-CALL-SHAPE`).
 
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {
@@ -125,7 +125,9 @@ fn main() -> i32 { let frame = "\x07\x00\x00\x00hi"; return i32(checksum(2, fram
 A part's bounds and extent are names, literals and arithmetic; bind a call first.
 ```
 
-Read-only borrows may alias. A mutable borrow must not overlap any other argument of the same call (`E-ALIAS`): distinct fields of one record are disjoint, and two parts of one array are disjoint only when they visibly share a boundary, as `bytes[0..mid]` and `bytes[mid..n]` do. A function that takes views is emitted twice. Its C symbol `cf_f` is the checked entry: it checks null, alignment, length and overlap numerically, and then runs the body `ci_f`. A call from CAIRN code goes to `ci_f` directly, because each view such a call can pass is one its caller was given and checked, storage the caller holds, a string, or a part its guard keeps inside one of those, and `E-ALIAS` has already shown that a mutable one overlaps no other argument. A function type and a `dyn` member carry no array view, so the checked entry is what a foreign caller, a test driver or a `cf_main` reaches. `--keep-guards` sends every call through it.
+Read-only borrows may alias. A mutable borrow must not overlap any other argument of the same call (`E-ALIAS`): distinct fields of one record are disjoint, and two parts of one array are disjoint only when they visibly share a boundary, as `bytes[0..mid]` and `bytes[mid..n]` do.
+
+A function that takes views is emitted twice. Its C symbol `cf_f` is the checked entry, which checks null, alignment, length and overlap before running the body `ci_f`. A foreign caller, a test driver and `cf_main` reach the entry. A call from CAIRN goes straight to `ci_f`, because every view it can pass was already checked and `E-ALIAS` has shown the mutable ones overlap nothing. `--keep-guards` sends every call through the entry.
 
 ```cairn rejects E-ALIAS
 fn swap_ends(n:usize, a:rw<u8>[n], b:rw<u8>[n]) { swap(a[0], b[0]); }
@@ -148,7 +150,7 @@ A part xs[lo..hi] is a borrow: it exists only as a view argument of a call.
 
 ## Owners and moves
 
-Four forms of storage hold elements, and all four are zero-initialized, because every type has an all-zero value.
+Four forms of storage hold elements, all zero-initialized, because every type has an all-zero value.
 
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {
@@ -171,7 +173,7 @@ fn main() -> i32 {
 }
 ```
 
-Owners are affine. Using one as a value (binding it, passing it by value, returning it, putting it in a field) moves it, and its name is dead afterwards (`E-MOVED`). Release at scope exit is implicit, and the `free` effect is charged where that release runs: the end of a block or match arm that still holds the owner, a `return` that leaves while it is held, a function handed one by value that passes it on to nobody, and the place a new value is assigned over. A function that only drops an owner carries `free` alone; one that hands the same owner on carries neither `free` nor `alloc`. An outer owner cannot be moved inside a loop (`E-MOVE-IN-LOOP`), a closure or a lane.
+Owners are affine. Using one as a value (binding, passing by value, returning, storing in a field) moves it, and its name is dead afterwards (`E-MOVED`). An owner is released at scope exit, and `free` is charged where that happens: the end of the block that still holds it, a `return`, or a place a new value is assigned over. A function that hands an owner on carries neither `free` nor `alloc`. An outer owner cannot be moved inside a loop (`E-MOVE-IN-LOOP`), a closure or a lane.
 
 ```cairn
 fn sink(b:Buf[u8]) {}                                  // its row is free
@@ -196,7 +198,7 @@ fn main() -> i32 { let body = Buf[u8](4); let once = send(body); let twice = sen
 body was moved.
 ```
 
-An owner cannot be moved out of a place (`E-PARTIAL-MOVE`). `take(place)` moves the value out and leaves the zero value behind, and `swap(a, b)` exchanges two places. Growth is library code: `std.vec` reallocates with `Buf`, `swap` and an assignment, so its allocation shows in every caller's row.
+An owner cannot be moved out of a place (`E-PARTIAL-MOVE`). `take(place)` moves it out and leaves the zero value behind, and `swap(a, b)` exchanges two places. Growth is library code built from these, so `std.vec`'s allocation shows in every caller's row.
 
 ```cairn
 struct Ring { slots:Buf[u8]; used:usize; }
@@ -226,7 +228,7 @@ fn main() -> i32 { let mut ring = Ring(Buf[u8](2), 0); let slots = ring.slots; r
 An owner cannot be moved out of a place; use take() or swap().
 ```
 
-A whole record is taken apart the way it was built. `let Ring(slots, used) = r;` consumes `r` and binds every field in declaration order (`let mut Ring(...)` binds them mutably), which is the way out for an owner or a linear value kept inside a record. Anything that is not that record by value with one name per field is `E-UNPACK`. A record of another module must be `pub`, and a `linear` record is taken apart only by the module that declares it (`E-PRIVATE`), so a protocol cannot be ended from outside.
+`let Ring(slots, used) = r;` consumes `r` and binds every field in order, which is how an owner or a linear value leaves a record whole. Anything but one name per field is `E-UNPACK`. A `linear` record is taken apart only by its own module (`E-PRIVATE`), so a protocol cannot be ended from outside.
 
 ```cairn
 struct Ring { slots:Buf[u8]; used:usize; }
@@ -246,7 +248,7 @@ fn main() -> i32 {
 
 ## Linear values and defer
 
-A `linear struct` must be consumed exactly once on every path: leaving one unconsumed is `E-LINEAR-LEAK`, consuming it on some paths only is `E-LINEAR-BRANCH`. `defer call(...);` schedules one visible call for every normal exit of its block and counts as that consumption. An abort promises no cleanup.
+A `linear struct` must be consumed exactly once on every path: leaving one unconsumed is `E-LINEAR-LEAK`, and consuming it on some paths only is `E-LINEAR-BRANCH`. `defer call(...);` runs one visible call at every normal exit of its block and counts as the consumption. An abort runs no cleanup.
 
 ```cairn
 linear struct Lease { id:u64; }
@@ -292,7 +294,7 @@ fn main() -> i32 {
 }
 ```
 
-`mmio_read[u32](address)`, `mmio_write[u32](address, value)` and `asm("wfi")` reach the machine from inside `unsafe { }`, and add `mmio` and `asm` to the row. A freestanding build produces one ELF image with no operating system, C library or C++ runtime under it; [tools.md](tools.md#the-freestanding-target) has the target table and what the profile guarantees.
+`mmio_read[u32](address)`, `mmio_write[u32](address, value)` and `asm("wfi")` reach the machine from inside `unsafe { }`, and add `mmio` and `asm` to the row. [The freestanding target](tools.md#the-freestanding-target) runs with no operating system under it.
 
 ```cairn
 fn wake(base:usize) {
@@ -306,7 +308,7 @@ fn wake(base:usize) {
 
 ## Effects
 
-Every function carries a row: the least fixed point of its own local effects and its callees' rows, with borrowed footprints renamed to the caller's arguments. A row says what may happen, never what is computed. The build receipt has it under `functions.<name>.effects`.
+Every function has a row: its own effects joined with its callees' rows, with borrowed footprints renamed to the caller's arguments. A row says what may happen, not what is computed. The build receipt lists it under `functions.<name>.effects`.
 
 | effect | appears when |
 | --- | --- |
@@ -327,7 +329,7 @@ Every function carries a row: the least fixed point of its own local effects and
 | `trap`, `diverge` | a guard may abort, the call graph has a cycle |
 | `ffi_precondition` | the caller must supply live, initialized storage for a borrow |
 
-`pure` and `effects(read:x, trap)` declare a ceiling, which is checked (`E-EFFECT-CEILING`). `pure` still allows `trap`, `diverge`, `local_read`, `local_write`, `stack_storage`, `zero_init`, `ffi_precondition` and the reads of what the function was lent, so `checksum` keeps `read:bytes` in its row.
+`pure` and `effects(read:x, trap)` declare a checked ceiling (`E-EFFECT-CEILING`). `pure` still allows `trap`, `diverge`, `local_read`, `local_write`, `stack_storage`, `zero_init`, `ffi_precondition` and reads of what the function was lent.
 
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 pure {
@@ -352,7 +354,7 @@ fill exceeds its declared effects.
 
 ## Operand order
 
-A call that writes through a borrow or allocates cannot be a nested operand (`E-EFFECT-ORDER`). Bind it to a name first, so the cost is a statement of its own. A call that only releases stays an ordinary operand: a drop runs where C++ ends the scope, and it writes no place another operand can name.
+A call that writes through a borrow or allocates cannot be a nested operand (`E-EFFECT-ORDER`). Bind it to a name first, so the cost is a statement of its own.
 
 ```cairn rejects E-EFFECT-ORDER
 fn fill(n:usize, out:rw<u8>[n], value:u8) -> usize { for i in 0..n { out[i] = value; } return n; }
@@ -363,7 +365,7 @@ fn main() -> i32 { let mut frame = Buf[u8](4); let done = fill(len(frame), frame
 Bind a writing call to its own statement before using its result.
 ```
 
-C++ leaves the order of operands open, so a call the outside world can observe (I/O, the machine, atomics and locks, a function value) may not sit beside another call in one expression, nor beside an operand whose own guard may abort: an element, a part, checked arithmetic. `&&`, `||` and a call's own arguments are sequenced and are not affected.
+C++ leaves the order of operands open, so a call the outside world can observe (I/O, the machine, atomics, locks, a function value) may not sit beside another call, or beside an operand that may abort. `&&`, `||` and a call's own arguments are sequenced and are not affected.
 
 ```cairn rejects E-EFFECT-ORDER
 extern fn putchar(c:i32) -> i32 effects(io);
@@ -377,9 +379,9 @@ Bind this call first: it can be observed from outside, and the operand beside it
 
 ## extern and unsafe
 
-An `extern` declaration names a C symbol, a signature and the effects the body may have; `extern "close" fn close_fd(fd:i32) -> i32 effects(io);` binds a symbol under another name. The body is invisible to the checker, so the effects are mandatory, and `ffi:write` propagates to every transitive caller. An extern's extent may name a later parameter, which is how C orders a pointer and its length.
+An `extern` declaration names a C symbol, a signature and the effects the body may have, and `extern "close" fn close_fd(...)` binds a symbol under another name. The checker cannot see the body, so the effects are mandatory and are trusted as written. An extern's extent may name a later parameter, as C orders a pointer and its length.
 
-Foreign calls, `mmio_read`, `mmio_write` and `asm` are legal only inside `unsafe { }`, which the receipt counts per function. A caller must supply live, initialized, correctly typed storage for each borrow: the numerical entry guards cannot establish provenance, and that obligation is the `ffi_precondition` in the row.
+Foreign calls, `mmio_read`, `mmio_write` and `asm` are legal only inside `unsafe { }`, which the receipt counts per function. The guards cannot establish where storage came from, so a caller must supply live, initialized storage for each borrow; that obligation is the `ffi_precondition` in the row.
 
 ```cairn
 extern fn write(fd:i32, data:ro<u8>[n], n:usize) -> i64 effects(io);
