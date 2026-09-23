@@ -1,9 +1,9 @@
 // dot_f64: total = sum over i of x[i] * y[i] in f64, folded strictly left to right.
 //
 // This kernel is preregistered as a semantic difference report, not a speed comparison. CAIRN's
-// host `reduce +` is a strict in-order fold: src/cairn/compiler/codegen.py s_reduce, whose host
-// branch is commented "On the host a reduction is an ordinary in-order fold: no threads, no hidden
-// cost", and docs/guide/language.md line 895. It is built with -ffp-contract=off -fno-fast-math, so
+// host `reduce +` is a strict in-order fold: s_reduce in src/cairn/compiler/region_lowering.py,
+// whose host branch is commented "Without `parallel`, a host reduction is an in-order fold", and
+// docs/concurrency.md, reduce and compact. It is built with -ffp-contract=off -fno-fast-math, so
 // it is exactly the sum the source writes and nothing else. An OpenMP `reduction(+:)` and a TBB
 // parallel_reduce reassociate, and floating point addition is not associative, so those arms
 // compute a DIFFERENT function of the same inputs. Dividing their times by CAIRN's would be

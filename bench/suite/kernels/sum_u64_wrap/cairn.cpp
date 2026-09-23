@@ -3,7 +3,7 @@
 // build receipt rather than from this file.
 //
 // This arm runs on one thread, as the source says: a host `reduce ... for` is an in-order fold
-// (codegen.py, Emitter.s_reduce, and docs/concurrency.md under "reduce and compact"). So this column
+// (region_lowering.py, s_reduce, and docs/concurrency.md under "reduce and compact"). So this column
 // is the cost of the sequential form, to be read against the plain column first. The parallel host
 // reductions are cairn_atomic.cpp, one relaxed Atomic, and cairn_pool.cpp, `reduce ... parallel`.
 #include "case.hpp"

@@ -1,8 +1,8 @@
 // A semantic difference report, not a speed comparison.
 //
 // On the host a CAIRN `reduce +` over f64 is a strict in-order fold on the calling thread: see
-// src/cairn/compiler/codegen.py s_reduce, whose host branch is commented "On the host a reduction
-// is an ordinary in-order fold: no threads, no hidden cost", and docs/concurrency.md, reduce and compact.
+// s_reduce in src/cairn/compiler/region_lowering.py, whose host branch is commented "Without
+// `parallel`, a host reduction is an in-order fold", and docs/concurrency.md, reduce and compact.
 // The fold is built with -ffp-contract=off -fno-fast-math, so it is the one sum the source names
 // and nothing else.
 //
