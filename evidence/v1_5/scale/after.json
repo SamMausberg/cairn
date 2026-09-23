@@ -1,0 +1,271 @@
+{
+  "started": "2026-09-23T07:47:24-0700",
+  "finished": "2026-09-23T07:57:01-0700",
+  "host": "Sam",
+  "machine": "x86_64",
+  "cpus": 16,
+  "python": "3.12.3",
+  "load_average_at_end": [
+    10.7412109375,
+    8.43359375,
+    9.3818359375
+  ],
+  "rows": [
+    {
+      "modules": 185,
+      "lines": 9643,
+      "bytes": 241087,
+      "files": 64,
+      "check": {
+        "status": 0,
+        "seconds": 1.231,
+        "peak_mib": 49.4,
+        "compiler_peak_mib": 0.0,
+        "tail": ""
+      },
+      "limits_lifted": false,
+      "lsp": {
+        "status": 0,
+        "seconds": 2.431,
+        "peak_mib": 116.4,
+        "open_seconds": 1.085,
+        "change_seconds": 1.288,
+        "diagnostics": 0
+      },
+      "build": {
+        "status": 0,
+        "seconds": 11.789,
+        "peak_mib": 50.7,
+        "compiler_peak_mib": 181.4,
+        "tail": ""
+      },
+      "incremental_cold": {
+        "status": 0,
+        "seconds": 11.556,
+        "peak_mib": 51.4,
+        "compiler_peak_mib": 132.2,
+        "tail": ""
+      },
+      "incremental_again": {
+        "status": 0,
+        "seconds": 1.412,
+        "peak_mib": 51.1,
+        "compiler_peak_mib": 50.6,
+        "tail": ""
+      },
+      "incremental_leaf_body": {
+        "status": 0,
+        "seconds": 2.114,
+        "peak_mib": 50.9,
+        "compiler_peak_mib": 120.3,
+        "tail": ""
+      },
+      "incremental_core_body": {
+        "status": 0,
+        "seconds": 2.022,
+        "peak_mib": 51.2,
+        "compiler_peak_mib": 114.3,
+        "tail": ""
+      },
+      "incremental_core_interface": {
+        "status": 0,
+        "seconds": 11.442,
+        "peak_mib": 51.3,
+        "compiler_peak_mib": 132.2,
+        "tail": ""
+      }
+    },
+    {
+      "modules": 370,
+      "lines": 19263,
+      "bytes": 485273,
+      "files": 64,
+      "check": {
+        "status": 0,
+        "seconds": 1.891,
+        "peak_mib": 76.4,
+        "compiler_peak_mib": 0.0,
+        "tail": ""
+      },
+      "limits_lifted": false,
+      "lsp": {
+        "status": 0,
+        "seconds": 4.55,
+        "peak_mib": 209.7,
+        "open_seconds": 2.037,
+        "change_seconds": 2.464,
+        "diagnostics": 0
+      },
+      "build": {
+        "status": 0,
+        "seconds": 23.342,
+        "peak_mib": 82.1,
+        "compiler_peak_mib": 240.4,
+        "tail": ""
+      },
+      "incremental_cold": {
+        "status": 0,
+        "seconds": 20.547,
+        "peak_mib": 85.3,
+        "compiler_peak_mib": 136.8,
+        "tail": ""
+      },
+      "incremental_again": {
+        "status": 0,
+        "seconds": 2.572,
+        "peak_mib": 82.9,
+        "compiler_peak_mib": 78.7,
+        "tail": ""
+      },
+      "incremental_leaf_body": {
+        "status": 0,
+        "seconds": 3.722,
+        "peak_mib": 83.2,
+        "compiler_peak_mib": 121.4,
+        "tail": ""
+      },
+      "incremental_core_body": {
+        "status": 0,
+        "seconds": 2.956,
+        "peak_mib": 82.9,
+        "compiler_peak_mib": 115.3,
+        "tail": ""
+      },
+      "incremental_core_interface": {
+        "status": 0,
+        "seconds": 22.34,
+        "peak_mib": 85.3,
+        "compiler_peak_mib": 136.8,
+        "tail": ""
+      }
+    },
+    {
+      "modules": 740,
+      "lines": 38503,
+      "bytes": 974413,
+      "files": 64,
+      "check": {
+        "status": 0,
+        "seconds": 4.516,
+        "peak_mib": 130.4,
+        "compiler_peak_mib": 0.0,
+        "tail": ""
+      },
+      "limits_lifted": false,
+      "lsp": {
+        "status": 0,
+        "seconds": 10.607,
+        "peak_mib": 397.3,
+        "open_seconds": 4.738,
+        "change_seconds": 5.799,
+        "diagnostics": 0
+      },
+      "build": {
+        "status": 0,
+        "seconds": 43.946,
+        "peak_mib": 133.0,
+        "compiler_peak_mib": 368.0,
+        "tail": ""
+      },
+      "incremental_cold": {
+        "status": 0,
+        "seconds": 40.461,
+        "peak_mib": 133.7,
+        "compiler_peak_mib": 148.7,
+        "tail": ""
+      },
+      "incremental_again": {
+        "status": 0,
+        "seconds": 5.03,
+        "peak_mib": 133.3,
+        "compiler_peak_mib": 132.0,
+        "tail": ""
+      },
+      "incremental_leaf_body": {
+        "status": 0,
+        "seconds": 6.732,
+        "peak_mib": 133.5,
+        "compiler_peak_mib": 131.5,
+        "tail": ""
+      },
+      "incremental_core_body": {
+        "status": 0,
+        "seconds": 5.613,
+        "peak_mib": 133.4,
+        "compiler_peak_mib": 132.0,
+        "tail": ""
+      },
+      "incremental_core_interface": {
+        "status": 0,
+        "seconds": 38.89,
+        "peak_mib": 134.0,
+        "compiler_peak_mib": 148.8,
+        "tail": ""
+      }
+    },
+    {
+      "modules": 1480,
+      "lines": 76983,
+      "bytes": 1964255,
+      "files": 64,
+      "check": {
+        "status": 0,
+        "seconds": 10.752,
+        "peak_mib": 238.3,
+        "compiler_peak_mib": 0.0,
+        "tail": ""
+      },
+      "limits_lifted": false,
+      "lsp": {
+        "status": 0,
+        "seconds": 22.123,
+        "peak_mib": 771.4,
+        "open_seconds": 9.849,
+        "change_seconds": 12.218,
+        "diagnostics": 0
+      },
+      "build": {
+        "status": 0,
+        "seconds": 91.728,
+        "peak_mib": 258.4,
+        "compiler_peak_mib": 631.2,
+        "tail": ""
+      },
+      "incremental_cold": {
+        "status": 0,
+        "seconds": 81.657,
+        "peak_mib": 268.0,
+        "compiler_peak_mib": 245.7,
+        "tail": ""
+      },
+      "incremental_again": {
+        "status": 0,
+        "seconds": 13.421,
+        "peak_mib": 262.3,
+        "compiler_peak_mib": 244.8,
+        "tail": ""
+      },
+      "incremental_leaf_body": {
+        "status": 0,
+        "seconds": 12.688,
+        "peak_mib": 262.3,
+        "compiler_peak_mib": 245.0,
+        "tail": ""
+      },
+      "incremental_core_body": {
+        "status": 0,
+        "seconds": 12.912,
+        "peak_mib": 262.3,
+        "compiler_peak_mib": 245.0,
+        "tail": ""
+      },
+      "incremental_core_interface": {
+        "status": 0,
+        "seconds": 90.162,
+        "peak_mib": 264.4,
+        "compiler_peak_mib": 245.6,
+        "tail": ""
+      }
+    }
+  ]
+}

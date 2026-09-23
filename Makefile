@@ -1,7 +1,7 @@
 PYTHON ?= python3
 CAIRN = $(PYTHON) bin/cairn
 
-.PHONY: help docs editors all check lint format test native systems proof lean gpu tune-device calibrate-device embedded context wheel audit demo demo-repair demo-numeric demo-visual bench
+.PHONY: help docs editors all check lint format test native systems proof lean gpu tune-device calibrate-device embedded context wheel audit demo demo-repair demo-numeric demo-visual bench scale
 all: lint test proof
 
 help:
@@ -19,6 +19,7 @@ help:
 	@echo 'calibrate-device measures the device into results/perf_model/device.json (runs device code)'
 	@echo 'embedded  the freestanding image under QEMU (needs an AArch64 host)'
 	@echo 'bench     the preregistered CPU baseline suite (hours)'
+	@echo 'scale     check, build, rebuild and editor times of generated projects of 10k to 77k lines (an hour)'
 	@echo 'docs      regenerate docs/std_api.md and docs/std/'
 	@echo 'editors   regenerate the TextMate and Vim grammars from the compiler vocabulary'
 	@echo 'context   measure edit packets, cards and refusals in tokens, on scripted transcripts'
@@ -54,6 +55,10 @@ native:
 bench:
 	$(PYTHON) bench/suite/harness.py
 	$(PYTHON) bench/suite/report.py
+
+# How the tools grow with a project's size: bench/scale/measure.py writes results/scale/measure.json and prints a table.
+scale:
+	$(PYTHON) bench/scale/measure.py --modules 185 370 740 1480 --native 185 370 740 1480
 
 systems:
 	$(PYTHON) tools/checks/validate_systems.py

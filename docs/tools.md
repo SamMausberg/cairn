@@ -267,6 +267,32 @@ cairn run examples/apps/analytics            # cairn.toml, the host engine
 cairn run examples/apps/analytics/gpu.toml   # the same sources plus the device entry
 ```
 
+## Large projects and Bazel
+
+A program may hold 16 MB of source, 32,768 functions and 3,200,000 syntax nodes, and a manifest may list 1,024 files and 64 dependencies. Past a limit the compiler refuses the program with `E-EXPANSION-LIMIT` or `E-SOURCE-LIMIT` and names what it counted. What code generates stays small: 1,024 copies per family, 2,048 across a program's families, 2,048 declarations per recipe.
+
+The checker judges the whole program, since effect rows are a fixed point over the call graph. So a check, an editor refresh and an incremental build each run the front end over every module, and their time grows about linearly. On a generated project of 77,000 lines a check took 11 s, an editor refresh 12 s, and an incremental rebuild after a body edit 13 s; one of 31,802 functions checked in 33 s at 800 MiB (`evidence/v1_5/scale`, on a loaded machine; `make scale` measures it again). An incremental build of 16 or more units precompiles the shared header, which made cold and interface-edit rebuilds about three times faster.
+
+`cairn graph` prints the module graph a build system or a CI job plans with: each file's modules, each module's imports, exports and dependents, a topological order and a source hash. `--interfaces` checks the program and adds each module's interface hash, which changes only when a public signature or effect row does. Every build writes `compile_commands.json` beside the C++ it generated, for clangd and other C++ tools.
+
+```sh
+cairn graph examples/apps/analytics --format human
+cairn graph examples/apps/analytics --interfaces --format json
+```
+
+`bazel/` is a Bazel module, `rules_cairn`. A library is checked on its own as a validation action, so `bazel build` refuses what `cairn check` refuses, and a binary or test builds all its sources and its dependencies' as one program:
+
+```starlark
+load("@rules_cairn//:defs.bzl", "cairn_binary", "cairn_library", "cairn_test")
+
+cairn_library(name = "geometry", srcs = ["geometry/geometry.cairn"])
+cairn_library(name = "pricing", srcs = ["pricing/pricing.cairn"], deps = [":geometry"])
+cairn_binary(name = "shop", srcs = ["shop.cairn"], deps = [":pricing"])
+cairn_test(name = "pricing_test", size = "small", srcs = ["pricing/pricing_test.cairn"], deps = [":pricing"])
+```
+
+`examples/bazel` is that workspace, and `bazel build //...`, `bazel run //:shop` and `bazel test //...` work there with nothing fetched. Its `MODULE.bazel` names this checkout with `cairn.local(path = "../..")`; without it the rules run the `cairn` on `PATH`. The rules use the host's Python and C++ compiler, not a hermetic toolchain. Each action copies its sources into a fresh directory and writes a manifest there, because a project refuses a source that is a symbolic link, which is how Bazel lays out inputs.
+
 ## cairn lsp
 
 ```sh
