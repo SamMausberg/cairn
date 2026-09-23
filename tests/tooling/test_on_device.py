@@ -37,6 +37,33 @@ def test_a_process_stops_at_its_device_budget(monkeypatch):
         on_device.time_device(SCALE, "scale", {"n": 1024})  # refused before anything is built or run
 
 
+@pytest.mark.skipif(not shutil.which("nvcc"), reason="the device command names nvcc")
+def test_a_timed_run_builds_beside_the_runtime_headers_and_runs_under_the_lock(monkeypatch):
+    """What time_device does past its gate, with every process it would start replaced: nothing is built or run."""
+    monkeypatch.setenv("CAIRN_GPU_TESTS", "1")
+    monkeypatch.setattr(on_device, "ran", 0)
+    monkeypatch.setattr(on_device.clock, "sleep", lambda s: None)
+    started, held = [], []
+
+    def run(command, **_):
+        unit = next((Path(a) for a in command if a.endswith(".cu")), None)
+        started.append((command, sorted(p.name for p in unit.parent.iterdir()) if unit else None, bool(held)))
+        return subprocess.CompletedProcess(command, 0, '{"median_ns": 5.0, "min_ns": 4.0}', "")
+
+    @on_device.contextlib.contextmanager
+    def locked():
+        held.append(True)
+        yield
+        held.pop()
+
+    monkeypatch.setattr(on_device.subprocess, "run", run)
+    monkeypatch.setattr(on_device, "locked", locked)
+    assert on_device.time_device(SCALE, "scale", {"n": 1024}) == {"status": "measured", "median_ns": 5.0, "min_ns": 4.0}
+    (build, beside, locked_build), (timed, _, locked_run) = started
+    assert "nvcc" in build[0] and "timed.cu" in beside and "cairn_gpu.hpp" in beside and not locked_build
+    assert timed[0].endswith("/timed") and locked_run and on_device.ran == 1
+
+
 def test_only_the_owner_s_make_targets_set_the_gate():
     makefile = (ROOT / "Makefile").read_text()
     targets = {m.group(1) for m in re.finditer(r"^([\w-]+):\n(?:\t.*\n)*?\t[^\n]*CAIRN_GPU_TESTS=1", makefile, re.M)}
