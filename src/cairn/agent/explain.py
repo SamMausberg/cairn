@@ -35,7 +35,7 @@ GUARDS = {  # The checker's name for each guard kind, and the runtime calls that
     "disjointness": ("cr::disjoint(",),  # One per pair of views where one writes; the checker does not count them.
     "tag": ("cr::trap()",),
     "callable": ("cr::callable(",),
-    "assert": ("cr::check(",),
+    "assert": ("cr::check(", "cr::check_eq("),
 }
 SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and how the emitter spells it.
     "wait": ".wait()",

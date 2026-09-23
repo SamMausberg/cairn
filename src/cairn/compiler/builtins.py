@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
 SOFT = {"take", "swap", "transfer", "mmio_read", "mmio_write", "asm", "wait", "collect"}
 MATH = {"sqrt", "floor", "ceil", "trunc", "abs", "to_bits"}  # 1.4: a program's own function of the name wins
-SOFT |= MATH | printing.NAMES | {"quantize", "quantize_stochastic", "from_bits", "assert"}
+SOFT |= MATH | printing.NAMES | {"quantize", "quantize_stochastic", "from_bits", "assert", "assert_eq"}
 QUANTIZED = [*STORAGE, "i8", "u8", "i16", "u16"]  # where one rounding of x / scale is exact (cairn_float.hpp)
 PATTERN = {"f32": "u32", "f64": "u64", **{n: "u16" if STORAGE[n][0] + STORAGE[n][1] > 7 else "u8" for n in STORAGE}}
 F32 = Type("f32")
@@ -201,6 +201,27 @@ def lower_assert(g: Emitter, e: Expr) -> str:
     g.need("cairn_assert.hpp")
     said = f": {e.args[1].val}" if len(e.args) == 2 else ""
     return f"cr::check({g.expr(e.args[0])}, {g.quoted(f'assertion failed {g.site(e.line)}{said}')})"
+
+
+def check_assert_eq(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    """assert_eq(a, b) and assert_eq(a, b, "why"): assert(a == b) that prints both values when they differ. The
+    operands are checked as `a == b` is, so a literal takes the other side's type; only a scalar prints."""
+    if not 2 <= len(args) <= 3 or (len(args) == 3 and args[2].tag != "str"):
+        fail("E-ARITY", "assert_eq takes two values and, optionally, one string literal saying what failed.", e)
+    c.expr(Expr("binary", "==", args[:2], e.line, e.col), BOOL)
+    shown = args[0].ty
+    if shown is None or shown.mode != "value" or shown.name not in NUMERIC | {"bool"}:
+        fail("E-ASSERT-EQ", f"assert_eq prints what it compares, and {shown.display() if shown else 'that'} is not "
+             "an integer, bool or float: write assert(a == b).", e)  # fmt: skip
+    c.guard("assert")
+    return VOID
+
+
+def lower_assert_eq(g: Emitter, e: Expr) -> str:
+    g.need("cairn_assert.hpp")
+    said = f": {e.args[2].val}" if len(e.args) == 3 else ""
+    where = g.quoted(f"assertion failed {g.site(e.line)}{said}")
+    return f"cr::check_eq({g.expr(e.args[0])}, {g.expr(e.args[1])}, {where})"
 
 
 def check_machine(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
@@ -379,6 +400,7 @@ def lower_float(g: Emitter, e: Expr) -> str:
 TABLE: dict[str, tuple[Any, Any]] = {
     "len": (check_len, lower_len),
     "assert": (check_assert, lower_assert),
+    "assert_eq": (check_assert_eq, lower_assert_eq),
     **dict.fromkeys(printing.NAMES, (printing.check_print, printing.lower_print)),
     **dict.fromkeys(NUMERIC, (check_convert, lower_convert)),
     **dict.fromkeys(WRAPPING | {"min", "max"}, (check_binary, lower_binary)),

@@ -397,6 +397,8 @@ HEAD is defined in terms of itself.
 
 `assert(cond)` is a guard the program writes: it traps when `cond` is false, and `assert(cond, "why")` also says why. The condition is a `bool` and the text one string literal (`E-ARITY`), and the row gains `trap`. A failed assert prints where it was written, `assertion failed at src/main.cairn:12: why`, and aborts as every failed guard does. A build that knows the project's files names the file and line; a plain compile names the function, so the canonical projection still lowers to the same C++.
 
+`assert_eq(a, b)` is `assert(a == b)` that prints both values when they differ: `assertion failed at src/main.cairn:14: rounds down: left 1, right 2`. Its operands are checked as `a == b` is, so a literal takes the other side's type, and only an integer, a `bool` or a float prints (`E-ASSERT-EQ` for anything else; write `assert(a == b)` there). A float prints with the digits that read back as the same value, so `0.1 + 0.2` shows as `0.30000000000000004`. There is no `assert_ne`: when `a != b` fails the two values are the same, and `assert` already says where.
+
 `test name { ... }` is a test: a body checked like a void function with any effects, which `cairn test` runs in a process of its own ([tools.md](tools.md#cairn-test)). It takes nothing and returns nothing, and a module declares each test name once (`E-TEST`). No other build holds a test and nothing can call one, so a test may share its name with the function it tests, and `test` is an ordinary name everywhere else.
 
 ```cairn
@@ -404,7 +406,7 @@ fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
 
 test average {
   assert(average(10, 20) == 15);
-  assert(average(1, 2) == 1, "rounds down");
+  assert_eq(average(1, 2), 1, "rounds down");
 }
 
 fn main() -> i32 {
@@ -420,6 +422,15 @@ test average(x:u64) { assert(x > 0); }
 
 ```text
 A test is `test average { ... }`: one name per module, no parameters, no result.
+```
+
+```cairn rejects E-ASSERT-EQ
+enum Op { Read; Write; }
+test ops { assert_eq(Op.Read, Op.Read); }
+```
+
+```text
+assert_eq prints what it compares, and Op is not an integer, bool or float: write assert(a == b).
 ```
 
 ## print and format
