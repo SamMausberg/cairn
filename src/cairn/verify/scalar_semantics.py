@@ -60,7 +60,7 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import Diagnostic, Parser
-from ..compiler.tree import BOOL, USIZE, VOID, is_view
+from ..compiler.tree import BOOL, SIGNED, USIZE, VOID, WIDTH, is_view
 from .scalar_concrete import Concrete
 from .scalar_symbolic import Formula, Symbolic
 from .scalar_values import (
@@ -87,6 +87,11 @@ from .scalar_values import (
     wellformed,
 )
 from .smt_bridge import Solver, SolverUnavailable
+
+# A witness is asked for again with every integer input within each bound of zero in turn, under a short timeout,
+# so it reads as small numbers; the first bound that holds one wins, and the solver's own witness stands otherwise.
+WITNESS_BOUNDS = (16, 256, 65536)
+WITNESS_MS = 500
 
 
 def prepared(source: str) -> Source:
@@ -259,14 +264,15 @@ def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "tr
         query_summaries = []
         with Solver(timeout_ms) as solver:
 
-            def run(stage, assertion):
+            def run(stage, assertion, using=None):
                 """Ask the solver for this fragment; a goal it reports incomplete goes to the general one."""
                 text = q.text(assertion)
                 for logic in [q.logic, None] if q.logic else [None]:
-                    result = solver.check(text, q.variables, logic)
-                    query_summaries.append({"stage": stage, **result})
-                    if query_log is not None:
-                        query_log.append({"stage": stage, "smt2": text + "(check-sat)\n", "result": result})
+                    result = (using or solver).check(text, q.variables, logic)
+                    if using is None:  # a narrowing query only picks which witness to show, and the replay checks it
+                        query_summaries.append({"stage": stage, **result})
+                        if query_log is not None:
+                            query_log.append({"stage": stage, "smt2": text + "(check-sat)\n", "result": result})
                     if result["status"] != "unknown" or "incomplete" not in result.get("reason", ""):
                         break
                 return result
@@ -298,12 +304,32 @@ def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "tr
                     out[n] = [rebuild(refs, item, x) for x in read]
                 return out
 
+            def modest(bound: int) -> str:
+                """Every integer input, array elements included, within `bound` of zero."""
+                terms = []
+                for n, t in q.variables.items():
+                    if t in WIDTH:
+                        top = constant(min(bound, (1 << (WIDTH[t] - (t in SIGNED))) - 1), t)
+                        if t in SIGNED:
+                            low = constant(-min(bound, 1 << (WIDTH[t] - 1)), t)
+                            terms.append(f"(and (bvsle {low} {n}) (bvsle {n} {top}))")
+                        else:
+                            terms.append(f"(bvule {n} {top})")
+                return conj(*terms)
+
             def shown(stage, assertion, result):
-                """Inputs a caller can rerun: with storage in play, ask again within the replay budget."""
+                """Inputs a caller can rerun: with storage in play, ask again within the replay budget, then in the
+                smallest numbers of WITNESS_BOUNDS the solver finds quickly."""
                 if small != "true":
                     result = run(stage + "-storage", conj(assertion, small))
                     if result["status"] != "sat":
                         return None
+                if modest(1) != "true":
+                    with Solver(min(timeout_ms, WITNESS_MS)) as quick:
+                        for bound in WITNESS_BOUNDS:
+                            tight = run(f"{stage}-within-{bound}", conj(assertion, small, modest(bound)), quick)
+                            if tight["status"] == "sat":
+                                return inputs(tight)
                 return inputs(result)
 
             def witnessed(stage, assertion, result) -> dict:

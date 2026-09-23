@@ -65,6 +65,22 @@ def test_wrap_and_checked_boundary(ty):
     assert r["expected"]["return"] == 0 and not r["actual"]["defined"]
 
 
+def test_a_witness_is_given_in_the_smallest_numbers_the_solver_finds_quickly():
+    """Z3's first witness may be any value of the type; the one shown is asked for again within 16, 256 and 65536
+    of zero, array elements included, so a difference that exists only at a boundary still shows that boundary."""
+    three = "x:u64,lo:u64,hi:u64"
+    r = refute(fn("if x<lo{return lo;} if x>hi{return hi;} return x;", three), fn("return min(max(x,lo),hi);", three))
+    assert max(r["counterexample"].values()) <= 16 and r["counterexample"]["lo"] > r["counterexample"]["hi"]
+    assert refute(fn("if x<100{return 0;} return 1;"), fn("if x<=100{return 0;} return 1;"))["counterexample"] == {
+        "x": 100
+    }
+    signed = refute(fn("return x;", "x:i64", "i64"), fn("if x<-3{return 0;} return x;", "x:i64", "i64"))
+    assert -16 <= signed["counterexample"]["x"] < -3
+    lent = "n:usize,xs:ro<u64>[n]"
+    view = refute(fn("if n==0{return 0;} return xs[0];", lent), fn("if n==0{return 0;} return min(xs[0],5);", lent))
+    assert 5 < view["counterexample"]["xs"][0] <= 16 and view["counterexample"]["n"] <= 16
+
+
 @pytest.mark.parametrize("ty", ["u8", "u16", "u32", "u64", "usize", "i32", "i64"])
 def test_min_branch(ty):
     check(fn("if x<y{return x;}else{return y;}", f"x:{ty},y:{ty}", ty), fn("return min(x,y);", f"x:{ty},y:{ty}", ty))
