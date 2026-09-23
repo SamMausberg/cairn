@@ -20,6 +20,8 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Programming Language :: C++",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Code Generators",
     "Topic :: Software Development :: Compilers",
 ]
 

@@ -12,4 +12,6 @@ What ran, on which machine, and what it found, one directory per release. A reco
 
 The 0.5 and 0.6 checkpoints (unit, native and sanitizer runs, codegen comparisons, wheel builds) are pre-1.0 records; they stay in `evidence/v0_5/` and `evidence/v0_6/` of the v1.3.0 tag.
 
+A record names the paths of the tree it ran in. Since 1.4.0 the harnesses under `bench/cpu/`, `bench/host_regions/`, `bench/host_tasks/` and `bench/scan/` live in `bench/host/` (`bench/cpu/run.py` is `paired.py`, `bench/scan/run.py` is `scan.py`) and `bench/codegen/`, the teaching corpus under `training/` is `tools/corpus/`, the C++ runtime tests under `tests/native/` are in `tests/runtime/`, and `tests/soundness/test_review_1_4.py` and `test_review_1_4b.py` are `test_review_forms.py` and `test_review_tools.py`.
+
 `tools/release/collect_evidence.py` and `collect_lean_evidence.py` write a release's gates and Lean build, and [docs/internals.md](../docs/internals.md#releasing) says how a release is cut.
