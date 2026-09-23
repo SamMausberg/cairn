@@ -40,10 +40,13 @@ fn main() -> i32 {
 
 `rw<u64>[n]` is a mutable borrow of `n` elements, and `n` is part of the type. The two tasks may run at once because `data[0..mid]` and `data[mid..n]` meet at `mid` without overlapping. `cairn doc` prints what each function costs:
 
-```text
+```cairn fragment
 fn fill(n:usize, out:rw<u64>[n]@host, start:u64)  // effects: ffi_precondition, trap, write:out
+
 fn halves(n:usize, data:rw<u64>[n]@host)  // effects: ffi_precondition, join, spawn, trap, write:data
-fn main() -> i32  // effects: alloc, ffi_precondition, free, join, local_read, local_write, spawn, trap, zero_init
+
+// effects: alloc, ffi:write, ffi_precondition, free, io, join, local_read, local_write, spawn, trap, zero_init
+fn main() -> i32
 ```
 
 Touch the array while a task still holds it, and the program does not compile:
