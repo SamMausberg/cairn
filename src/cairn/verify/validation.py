@@ -510,9 +510,9 @@ def validate_project(project: Any, symbol: str, policy: dict[str, Any] | None = 
     if "kept" in record.get("finite", {}):
         record["finite"]["kept"] = record["finite"]["kept"].replace(str(path), relative)
     if history is not None and "finite" in record:
-        from ..agent.history import vendored
+        from ..agent.history import vendored as pinned_sources
 
-        record["history"] = remembered(history, project.source, reference, name, record, vendored(project))
+        record["history"] = remembered(history, project.source, reference, name, record, pinned_sources(project))
     return record
 
 
