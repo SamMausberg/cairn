@@ -481,4 +481,4 @@ The device half of the language (placement types, `kernel fn`, device `reduce` a
 
 ## Where to go next
 
-[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md), [concurrency.md](concurrency.md) and [numerics.md](numerics.md) are the reference: every rule with a program it accepts and one it refuses. The [index](README.md) gives the rest in reading order.
+[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md), [concurrency.md](concurrency.md), [devices.md](devices.md) and [numerics.md](numerics.md) are the reference: every rule with a program it accepts and one it refuses. The [index](README.md) gives the rest in reading order.

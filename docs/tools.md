@@ -173,7 +173,7 @@ $ cairn explain examples/apps/analytics --symbol analytics.query.above_loop
 
 An agent gets the same report from `cairn inspect --symbol f --explain`, or by sending `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "explain"}` after an edit.
 
-For a [cooperative region](concurrency.md#cooperative-regions) the function's entry adds `cooperative`: the block's threads, each shared array and pipeline with its bytes, and at their lines every barrier, every pipeline copy and wait with the copies the wait leaves in flight (`wait_group`, the checker's count), and every warp collective and fragment operation. The same barriers, waits and warp operations appear under `synchronization`.
+For a [cooperative region](devices.md#cooperative-regions) the function's entry adds `cooperative`: the block's threads, each shared array and pipeline with its bytes, and at their lines every barrier, every pipeline copy and wait with the copies the wait leaves in flight (`wait_group`, the checker's count), and every warp collective and fragment operation. The same barriers, waits and warp operations appear under `synchronization`.
 
 ## cairn predict
 
@@ -202,7 +202,7 @@ f
 
 Confidence is `high` when every count is a size and every access a stream, `medium` when something is approximated (a wide host region, a loop bounded by `min()`, an atomic), and `low` when a number is a guess (a `while` loop, an address from data, a foreign call, recursion). On timings it was not fitted to, the packaged profile came within a quarter at one lane and at a hundred million elements, and predicted wide regions of a hundred thousand to ten million elements badly, hence `medium` ([evidence/v1_0/perf_model](../evidence/v1_0/perf_model/README.md)). `python -m cairn.perf.calibrate --out PROFILE.json` measures another host, and `--profile` or `CAIRN_PROFILE` selects it.
 
-A [cooperative region](concurrency.md#cooperative-regions) is priced by its blocks. Each thread's work is counted between its barriers as its warp runs it: which lanes take part in an access or a branch, and which banks or 32-byte sectors they reach, come from the phase rule's run of one block. The region costs a launch and the largest of four times over the grid: device memory, issue, shared-memory wavefronts and tensor-core multiply-adds. An SM holds as many blocks as its threads, registers and shared memory allow, beside the 1 KB each block leaves the system. Registers count only after `--inspect` has compiled the kernels for the device target and ptxas has read them; nothing runs.
+A [cooperative region](devices.md#cooperative-regions) is priced by its blocks. Each thread's work is counted between its barriers as its warp runs it: which lanes take part in an access or a branch, and which banks or 32-byte sectors they reach, come from the phase rule's run of one block. The region costs a launch and the largest of four times over the grid: device memory, issue, shared-memory wavefronts and tensor-core multiply-adds. An SM holds as many blocks as its threads, registers and shared memory allow, beside the 1 KB each block leaves the system. Registers count only after `--inspect` has compiled the kernels for the device target and ptxas has read them; nothing runs.
 
 A pipeline's copies go at most as fast as the bytes its stages keep in flight divided by the memory latency. A wait that leaves `N` copies in flight (`cp.async.wait_group N`) keeps `N + 1` stages in flight in each block, so a deeper pipeline copies faster until the bandwidth caps it, and holds more shared memory, which can leave fewer blocks on each SM. Each line says what it rests on: `[checked]` for the checker's counts, `[ptxas]` for the compiler's report, `[specification limits]` for NVIDIA's published figures and `[assumed]` for the profile's assumptions, among them the 500 ns latency. No device run has checked any of it, and the confidence is `low`.
 
@@ -366,7 +366,7 @@ assert lib.cf_summarize(6, samples).max == 42
 
 `tests/projects/test_interop.py` builds the example under both compilers, runs it under AddressSanitizer and UndefinedBehaviorSanitizer, requires overlapping, misaligned and null views to abort, and compiles headers of nested, packed, aligned and storage-float records as C11 and C++17.
 
-A library that runs device work also declares `void NAME_device_stream(void *stream)`, which puts the calling thread's device work on a `cudaStream_t` the caller owns ([concurrency.md](concurrency.md#device-execution)).
+A library that runs device work also declares `void NAME_device_stream(void *stream)`, which puts the calling thread's device work on a `cudaStream_t` the caller owns ([devices.md](devices.md#device-execution)).
 
 ## cairn foreign
 

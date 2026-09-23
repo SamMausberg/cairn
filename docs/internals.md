@@ -106,7 +106,7 @@ What each operation takes when it runs, and gives back when it ends:
 | device `compact` | flags, offsets and CUB's storage in the arena, two launches, two one-element copies to the host, one stream wait | nothing |
 | a `@device`, `@pinned` or `@unified` buffer | one CUDA allocation, zeroed on the context's stream, which is waited for | freed at scope exit |
 
-Device work runs on the calling thread's execution context, `cr::gpu::here()`, which `compiler/execution.py` names at every call. Its bookkeeping is tested against a mock device (`tests/runtime/reuse_runtime.cpp`), and generated programs against a host machine that counts every stream, allocation and wait (`tests/runtime/gpu_host.hpp`); [concurrency.md](concurrency.md#device-execution) says what that shows and what no device run has checked.
+Device work runs on the calling thread's execution context, `cr::gpu::here()`, which `compiler/execution.py` names at every call. Its bookkeeping is tested against a mock device (`tests/runtime/reuse_runtime.cpp`), and generated programs against a host machine that counts every stream, allocation and wait (`tests/runtime/gpu_host.hpp`); [devices.md](devices.md#device-execution) says what that shows and what no device run has checked.
 
 The rest of the package is in the ownership table of [AGENTS.md](../AGENTS.md). In `perf/` only `measure.py`, on the host, and `on_device.py`, under the owner's targets, run a program. No agent, test generator or solver may rewrite the authority it is checked against, and native libraries never import the agent tooling or Z3.
 

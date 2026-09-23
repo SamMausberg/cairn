@@ -149,4 +149,4 @@ Every command takes `--format json`, the default when output is piped.
 
 ## More
 
-The reference is the `docs/` directory of the CAIRN repository: `language.md`, `memory.md`, `abstractions.md`, `concurrency.md` and `numerics.md` for the language, `library.md` and `std/` for the standard library, `tools.md` for the commands, `agents.md` for the edit host. From a checkout or the Claude Code plugin it is `${CLAUDE_SKILL_DIR}/../../docs/`; otherwise https://github.com/SamMausberg/cairn/tree/main/docs. Every example there compiles, so copy from it rather than from memory of another language.
+The reference is the `docs/` directory of the CAIRN repository: `language.md`, `memory.md`, `abstractions.md`, `concurrency.md`, `devices.md` and `numerics.md` for the language, `library.md` and `std/` for the standard library, `tools.md` for the commands, `agents.md` for the edit host. From a checkout or the Claude Code plugin it is `${CLAUDE_SKILL_DIR}/../../docs/`; otherwise https://github.com/SamMausberg/cairn/tree/main/docs. Every example there compiles, so copy from it rather than from memory of another language.

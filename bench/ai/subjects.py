@@ -25,8 +25,8 @@ REPO = Path(__file__).resolve().parents[2]
 PROMPT = "Read TASK.md in this directory and do what it says."
 TOOLS = "Bash,Read,Write,Edit,Glob,Grep"
 # The reference a newcomer to CAIRN reads: the guide, the language reference, the library and the command line.
-CAIRN_DOCS = ["guide.md", "language.md", "memory.md", "abstractions.md", "concurrency.md", "numerics.md", "library.md",
-              "tools.md", "std_api.md"]  # fmt: skip
+CAIRN_DOCS = ["guide.md", "language.md", "memory.md", "abstractions.md", "concurrency.md", "devices.md",
+              "numerics.md", "library.md", "tools.md", "std_api.md"]  # fmt: skip
 LIMITS = {"model": "claude-sonnet-5", "effort": "high", "max_turns": 80, "max_budget_usd": 5.0, "wall_seconds": 2400}
 
 JUDGED = {

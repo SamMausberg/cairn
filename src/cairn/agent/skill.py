@@ -169,7 +169,7 @@ def skill_file() -> str:
         "## Commands", "", "Every command takes `--format json`, the default when output is piped.", "", *table, "",
         "## More", "",
         "The reference is the `docs/` directory of the CAIRN repository: `language.md`, `memory.md`, "
-        "`abstractions.md`, `concurrency.md` and `numerics.md` for the language, `library.md` and `std/` for the "
+        "`abstractions.md`, `concurrency.md`, `devices.md` and `numerics.md` for the language, `library.md` and `std/` for the "
         "standard library, `tools.md` for the commands, `agents.md` for the edit host. From a checkout or the "
         f"Claude Code plugin it is `${{CLAUDE_SKILL_DIR}}/../../docs/`; otherwise {REPOSITORY}/tree/main/docs. Every "
         "example there compiles, so copy from it rather than from memory of another language.",
