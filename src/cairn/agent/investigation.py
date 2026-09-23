@@ -4,8 +4,10 @@ began it and without running again what was already run.
 The packet names the function (signature, effect row, current plan, its regions by the names `perf/regions.py`
 gives them) and the identity that holds now (the function as written, its contract, the compiler, the targets).
 From the candidate history it takes only records that hold now: for each candidate, what was measured and how, what
-a compile read, what failed and why, what was validated or profiled; the searches that ran and what they ranked
-best; and the hypotheses and suggested experiments, an experiment marked done when the runs it asks for are kept.
+a compile read, what failed and why, what was validated or profiled; the searches that ran and what they ranked best;
+and the hypotheses and suggested experiments, an experiment marked done when the runs it asks for are kept. A
+validation holds while the implementation, its reference and the compiler are as they were, under the policy and on
+the host it names, as `cairn tune` cites it.
 Records that no longer hold are counted by the part of their identity that moved and never shown as facts.
 
 `delta` gives only what changed since an earlier packet, and `apply` rebuilds the newer packet from it, as
@@ -61,6 +63,9 @@ def investigation(source: str, symbol: str, where: str | Path, targets: dict[str
     base, promised = kept.as_written(source, symbol), contract(source, symbol)
     held = {name: t if isinstance(t, str) else kept.digest(t) for name, t in targets.items()}
     split = kept.History(where).judged(symbol, base, {kept.digest(promised)}, set(held.values()))
+    for r in [r for r in split["stale"] if r["kind"] == "validation" and set(r["stale"]) <= {"contract", "target"}]:
+        split["stale"].remove(r)  # a validation holds under its own policy and host, as `cairn tune` cites it
+        split["current"].append({k: v for k, v in r.items() if k != "stale"})
     candidates: dict[str, dict[str, Any]] = {}
     searches, hypotheses, experiments = [], [], []
     procedures: dict[str, str] = {}

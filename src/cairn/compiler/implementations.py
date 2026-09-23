@@ -87,6 +87,11 @@ def check(c: Checker) -> None:
             parameterized(c, f)
         elif f.implements is not None and not f.bindings:
             declared(c, f)
+    made = {n for impls in c.alternatives.values() for n in impls}
+    for f in c.p.functions:  # a copy a family made of a parameterized implementation is none of its instances
+        if f.implements is not None and f.bindings and f.name not in made:
+            fail("E-IMPL-PARAM", f"{f.name} copies the implementation {f.source_name}; its instances are the values "
+                 f"its tune clause lists, selected as {local(f.source_name)}[...].", f)  # fmt: skip
     for module, written, chosen, token in c.p.selections:
         select(c, module, written, chosen, token)
 

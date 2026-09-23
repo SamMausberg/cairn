@@ -21,7 +21,7 @@ The test suite builds and runs every project under `examples/`. Start with `hell
 | [proof_scope](#examplesproof_scope) | what `cairn verify` covers and what it cannot reach |
 | [sketch](#examplessketch) | one named choice settled by SMT, with no model |
 | [agent](#examplesagent) | the fixture behind the edit and repair loop |
-| [implementations](#examplesimplementations) | one prefix sum, two validated implementations, and a scripted agent session |
+| [implementations](#examplesimplementations) | one prefix sum, three validated implementations, one searched over its parameter, and a scripted agent session |
 
 `apps/simulator`, `apps/gpu_pipeline`, `apps/analytics/gpu.toml` and `apps/matmul/gpu.toml` need nvcc and a CUDA device, and the suite runs their device code only under `make gpu`. `embedded` needs `qemu-system-aarch64` on an AArch64 host. Everything else needs only a C++20 compiler.
 
@@ -429,15 +429,19 @@ python3 tools/ai/demo.py --out /tmp/agentdemo
 
 ## examples/implementations
 
-One reference, `prefix`, the inclusive prefix sum written as the loop that defines it, and two [implementations](abstractions.md#implementations): `prefix_by4`, four elements a step where `n % 4 == 0`, and `prefix_lanes`, a pooled `scan` once `n >= 65536`, which the reference's ceiling (`par:host`) admits. `plan prefix use prefix_by4;` selects the first, and `main` checks every length from 0 to 39 against `n * (n + 1) / 2`.
+One reference, `prefix`, the inclusive prefix sum written as the loop that defines it, and three [implementations](abstractions.md#implementations): `prefix_by4`, four elements a step where `n % 4 == 0`; `prefix_by[K]`, one part of `K` elements a step through `prefix_part[K]`, so a part's guard is checked once for its `K` elements, with `tune K in [4, 8, 16, 32]`; and `prefix_lanes`, a pooled `scan` once `n >= 65536`, which the reference's ceiling (`par:host`) admits. `plan prefix use prefix_by4;` selects the first, and `main` checks every length from 0 to 39 against `n * (n + 1) / 2`.
 
 ```sh
 cairn run examples/implementations        # prefix sums agree at every length from 0 to 39
 cairn validate examples/implementations --symbol prefix_by4
 # passed: prefix_by4 against prefix, 129 cases (46 ran it), finite-tested
 #   smt: smt-equivalent where ((((n % 4) == 0)) && (n >= 0 && n <= 4096)) && n <= 16
-cairn test examples/implementations       # replays regressions/prefix.json against both implementations
+cairn validate examples/implementations --symbol "prefix_by[16]"   # one instance at a time
+cairn tune examples/implementations --symbol prefix --at n=1e6      # every instance, chosen only once validated
+cairn test examples/implementations       # replays regressions/prefix.json against every implementation
 python3 examples/implementations/loop.py  # the scripted session below, as JSON
 ```
+
+`bench/search/instances.py` validates each instance, then lets `cairn tune` choose among them; [evidence/v0_9/search](../evidence/v0_9/search/README.md) records one run.
 
 `loop.py` opens an [implementation session](agents.md#implementation-sessions) on `prefix` under `policy.json` and replays four fixed replies. `candidates/prefix_blocks_wrong.cairn` restarts each block of eight at zero; validation refuses it with the input it shrank to, `n = 16` with a single 1 at `xs[7]`, and keeps that input in `regressions/prefix.json`. The same reply with a looser tolerance is `E-TOLERANCE`, and with a smaller domain `E-DOMAIN`. `candidates/prefix_blocks.cairn` carries the sum across blocks and validates. The replies are fixed text; everything the host, the compiler and the native runs say is computed on each run.

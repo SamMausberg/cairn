@@ -391,7 +391,7 @@ plan total use total_by[3];
 K = 3 is not a value total_by lists; K is one of 2, 4, 8.
 ```
 
-The receipt lists each instance under its reference with its values (`parameters`, `instance_of`) and its condition as the instance reads it, `n % 4 == 0`. An instance's identity is the declarations' identity with its values. The list is not part of it, so listing another value leaves every other instance's validation current. Each instance is built, so each can be validated on its own; a device implementation compiles every instance's kernels.
+The receipt lists each instance under its reference with its values (`parameters`, `instance_of`) and its condition as the instance reads it, `n % 4 == 0`. An instance's identity is the declarations' identity with its values. The list is not part of it, so listing another value leaves every other instance's validation current. Each instance is built, so each can be validated on its own: the build holds every listed instance's code, and a device implementation compiles every instance's kernels. The reference's row joins every instance's, as it joins every implementation's, so no instance widens it past the ceiling. `cairn check --generics` certifies a parameterized implementation at its listed values.
 
 ## Modules
 

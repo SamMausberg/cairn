@@ -339,8 +339,8 @@ def certify(make: Callable[[], Checker]) -> tuple[Checker, dict[str, str]]:
                 for g, constraint in f.generics:
                     words = [] if constraint == "type" else constraint.split("+")
                     classes = [CLASSES[w] for w in words if w in CLASSES]
-                    if constraint == "nat":
-                        choices.append([])
+                    if constraint == "nat":  # an implementation's are the values its `tune` clause lists
+                        choices.append(list(dict(f.implements.tune).get(g, ())) if f.implements else [])
                     elif classes:
                         choices.append([Type(n) for n in sorted(set.intersection(*classes))])
                     else:

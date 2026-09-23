@@ -109,6 +109,12 @@ def test_two_parameters_list_every_combination():
         "K": 4, "W": 3}  # fmt: skip
 
 
+def test_the_listed_values_certify_the_template():
+    from cairn.compiler.cairnc import certify_templates
+
+    assert certify_templates(TOTAL + BY)["total_by"] == "ok"  # every listed instance's body checks
+
+
 def test_a_test_block_calls_a_listed_instance_by_name():
     compile_source(TOTAL + BY + "test by4 { buffer xs:u64[4] = zeroed; assert_eq(total_by[4](4, xs), total(4, xs)); }")
 
@@ -151,6 +157,7 @@ REFUSED = [
     ),
     ("E-IMPL-PARAM", TOTAL + BY + "test by3 { buffer xs:u64[3] = zeroed; assert_eq(total_by[3](3, xs), 0); }"),
     ("E-IMPLEMENTS", TOTAL + BY.replace("[K:nat]", "[K:nat, T:integer]")),  # generic over a type
+    ("E-IMPL-PARAM", TOTAL + BY + "family by = total_by[2..4];"),  # a family's copies are no instances
     ("E-IMPL-CALL", TOTAL + BY + "fn main() -> i32 { buffer xs:u64[4] = zeroed; return i32(total_by[4](4, xs)); }"),
     ("E-IMPL-USE", TOTAL + BY + "plan total use total_by[4];\nplan total use total_by[8];"),
 ]
