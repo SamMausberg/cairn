@@ -417,6 +417,25 @@ def test_a_rename_through_implements_and_plan_use_keeps_the_selection(implemente
     assert subprocess.run([record["artifact"]], timeout=30).returncode == 0
 
 
+def test_a_rename_of_a_parameterized_implementation_renames_every_instance(implemented):
+    root, _, uri = implemented
+    tuned = IMPLEMENTED.replace("total_by2(", "total_by[K:nat](").replace(
+        "n % 2 == 0 {", "n % K == 0 tune K in [2, 4] {"
+    )
+    tuned = tuned.replace("n / 2 { s = add_wrap(s, add_wrap(xs[2 * i], xs[2 * i + 1])); }",
+                          "n / K { for j in 0..K { s = add_wrap(s, xs[K * i + j]); } }")  # fmt: skip
+    tuned = tuned.replace("use total_by2;", "use total_by[4];")
+    (root / "src/lib.cairn").write_text(tuned)
+    edits = rename(workspace(uri, {uri: tuned}), uri, tuned.index("use total_by") + 4, "blocked")["changes"]
+    for path in (root / "src/lib.cairn", root / "src/main.cairn"):
+        doc = Document(path.read_text(), analyse=False)
+        path.write_text(applied(doc, edits.get(path.resolve().as_uri(), [])))
+    after = compile_source(load_project(root).source)[1]["functions"]
+    assert after["lib.total"]["runs"] == "lib.blocked[4]" and "use blocked[4];" in (root / "src/lib.cairn").read_text()
+    assert set(after["lib.total"]["implementations"]) == {"lib.blocked[2]", "lib.blocked[4]"}
+    assert after["lib.blocked[4]"]["instance_of"] == "lib.blocked"
+
+
 def test_one_document_alone_follows_implements_and_plan_use():
     text = IMPLEMENTED.replace("module lib;\n\n", "")
     doc = Document(text)

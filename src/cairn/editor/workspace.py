@@ -328,13 +328,16 @@ def owner(ws: Workspace, offset: int) -> str:
 
 def renaming(entry: dict, old: str, new: str) -> dict:
     """A receipt entry with `old` renamed `new` wherever it names a function: its callees, the reference it implements,
-    its implementations and the one a plan runs."""
+    its implementations, the one a plan runs, and the template an implementation's instance comes from."""
     out = {**entry, "calls": sorted(rewrite(c, old, new) for c in entry["calls"])}
-    for key in ("implements", "runs"):
+    for key in ("implements", "runs", "instance_of"):
         if key in out:
             out[key] = rewrite(out[key], old, new)
     if "implementations" in out:
-        out["implementations"] = {rewrite(n, old, new): v for n, v in out["implementations"].items()}
+        out["implementations"] = {
+            rewrite(n, old, new): {**v, "instance_of": rewrite(v["instance_of"], old, new)} if "instance_of" in v else v
+            for n, v in out["implementations"].items()
+        }
     return out
 
 
