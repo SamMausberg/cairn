@@ -10,6 +10,7 @@ listed at the end with the reason, never declared.
 
 from __future__ import annotations
 
+import json
 import re
 import textwrap
 from dataclasses import dataclass, field
@@ -24,6 +25,10 @@ from .tree import BITS, STORAGE, Function, Type, is_view
 SCALARS = {"bool": ("bool", 1), "f32": ("float", 4), "f64": ("double", 8), "void": ("void", 0)}
 SCALARS |= {n: ("size_t" if n == "usize" else f"{'u' * (n[0] == 'u')}int{w}_t", w // 8) for n, w in BITS.items()}
 SCALARS |= {n: (f"cairn_{n}", 1 + (sum(STORAGE[n][:2]) + 1 > 8)) for n in STORAGE}  # a bit pattern, one field
+PY = {"bool": "C.c_bool", "f32": "C.c_float", "f64": "C.c_double", "void": "None", "usize": "C.c_size_t"}
+PY |= {n: f"C.c_{'u' * (n[0] == 'u')}int{w}" for n, w in BITS.items() if n != "usize"} | {
+    n: f"cairn_{n}" for n in STORAGE
+}
 RESERVED = set(  # C and C++ keywords a CAIRN name may spell; such a name gets a trailing underscore
     "alignas alignof and asm auto bool break case catch char class const constexpr continue default delete do "
     "double else enum explicit export extern false float for friend goto if inline int long mutable namespace new "
@@ -56,6 +61,8 @@ class Header:
         self.shapes: dict[Type, Layout] = {}
         self.types: list[str] = []  # C definitions, each after the ones it uses
         self.checks: list[str] = []  # static_assert lines for the library's own C++
+        self.order: list[tuple[Type, str, list[tuple[Any, Any]]]] = []  # (type, kind, members) as defined
+        self.exports: list[Function] = []
 
     def reason(self, t: Type, parameter: bool = True) -> str:
         """Why a type cannot appear in a C declaration, or "" when it can; a member may be an Array."""
@@ -115,6 +122,7 @@ class Header:
                 f"typedef uint32_t {name};",
                 f"enum {{ {constants} }};",
             ]
+            self.order.append((v, "enum", list(enumerate(layout))))
         elif isinstance(layout, list):
             offset, widest, members, offsets = 0, 1, [], []
             for member, ft in layout:
@@ -134,6 +142,7 @@ class Header:
                 *members,
                 "};",
             ]
+            self.order.append((v, "struct", [(cname(member), ft) for member, ft in layout]))
         else:  # A sum with payloads: its tag, then one payload at a time in a union, as the emitter lays it out.
             variants = [(variant, self.shape(pt) if pt else Layout(1, 1), pt) for variant, pt in layout.items()]
             inside = max(m[1].align for m in variants)
@@ -148,6 +157,7 @@ class Header:
             self.types += [*self.told(v, "enum", "A tag no variant has makes an entry abort."),
                            f"typedef struct {name} {name};", f"enum {{ {constants} }};", f"struct {name} {{",
                            "  uint32_t tag;", "  union {", *fields, "  } payload;", "};"]  # fmt: skip
+            self.order.append((v, "sum", [(cname(variant), pt) for variant, pt in layout.items()]))
         self.shapes[v] = shape
         self.types.append(f"CAIRN_LAYOUT(sizeof({name}) == {shape.size} && CAIRN_ALIGNOF({name}) == {shape.align});")
         self.checks.append(f"static_assert(sizeof({name}) == {shape.size} && alignof({name}) == {shape.align}, "
@@ -158,6 +168,26 @@ class Header:
             self.checks.append(f'static_assert(offsetof({name}, {member}) == {offset}, "{v.display()}.{member}");')
         self.types.append("")
         return shape
+
+    def pytype(self, t: Type) -> str:
+        v = t.value
+        if v.name == "Array":
+            return f"({self.pytype(v.args[0])} * {v.args[1]})"
+        return PY.get(v.name) or "ct_" + mangle(v.display())
+
+    def unbindable(self, v: Type, by_value: bool = False) -> str:
+        """Why ctypes would not pass or lay out `v` exactly as C does, or "" when it would."""
+        attributes = self.p.attributes.get(v.name, set())
+        if any(a.startswith("align(") for a in attributes):
+            return "ctypes cannot state an align(n) record"
+        if by_value and "packed" in attributes:
+            return "ctypes may pass a packed record by value otherwise than C does"
+        if by_value and isinstance(self.c.layouts.get(v), dict) and self.floating(v):
+            return "ctypes may pass a union that holds a float by value otherwise than C does"
+        return next(filter(None, (self.unbindable(part, by_value) for part in self.parts(v))), "")
+
+    def floating(self, v: Type) -> bool:
+        return v.name in {"f32", "f64", *STORAGE} or any(self.floating(part.value) for part in self.parts(v))
 
     def told(self, v: Type, kind: str, *more: str) -> list[str]:
         """The comment written above a type's declaration, and what else a C reader must know of it."""
@@ -204,6 +234,7 @@ class Header:
                 withheld.append(f"{f.name}: {why}.")
             else:
                 declared += self.declaration(f)
+                self.exports.append(f)
         guard = f"CAIRN_{mangle(self.name).upper()}_H"
         head = [f"/* Generated by {VERSION} from the CAIRN library {self.name}. Do not edit; edit the CAIRN source.",
                 *(" * " + line for line in PREAMBLE.split("\n")), " */", f"#ifndef {guard}", f"#define {guard}",
@@ -236,3 +267,81 @@ def wrap(text: str) -> list[str]:
 def header(source: str, name: str, mine: Any = None) -> tuple[str, str]:
     """The C header of the library `name` built from `source`, and the checks its own C++ carries."""
     return Header(source, name, mine).render()
+
+
+BINDING = """\
+ctypes bindings of the CAIRN library {name}, generated by {version}. Do not edit.
+
+load(path) opens the library and declares each entry its C header declares that ctypes passes exactly,
+with the header's layouts: a record ctypes would lay out otherwise fails the import, never a call. The
+entries are the checked ones, so a failed check or guard aborts the Python process too."""
+
+
+def binding(source: str, name: str, mine: Any = None) -> str:
+    """A Python module that loads the library through ctypes, with the header's layouts asserted at import."""
+    h = Header(source, name, mine)
+    h.render()
+    doc = BINDING.format(name=name, version=VERSION)
+    out = [f'"""{doc}"""', "", "import ctypes as C", "", "",
+           "def _layout(t, size, align, offsets):",
+           "    if C.sizeof(t) != size or C.alignment(t) != align or any(getattr(t, f).offset != at for f, at in offsets.items()):",
+           '        raise ImportError(f"{t.__name__} is not laid out as the library lays it out")', ""]  # fmt: skip
+    stored = {t.value.name for _, _, members in h.order for _, t in members if isinstance(t, Type)} & set(STORAGE)
+    stored |= {t.value.name for f in h.exports for t in [f.ret, *(t for _, t in f.params)] if t.value.name in STORAGE}
+    for n in sorted(stored):
+        bits = "C.c_uint16" if SCALARS[n][1] == 2 else "C.c_uint8"
+        out += ["", f"class cairn_{n}(C.Structure):", f'    _fields_ = [("bits", {bits})]', ""]
+    unbound = {v: why for v in h.shapes if (why := h.unbindable(v))}
+    for v, kind, members in h.order:
+        tname, shape = "ct_" + mangle(v.display()), h.shapes[v]
+        if v in unbound:
+            out += ["", f"# {tname} is not bound: {unbound[v]}.", ""]
+            continue
+        if kind == "enum":
+            out += ["", f"{tname} = C.c_uint32", *(f"{tname}_{variant} = {i}" for i, variant in members), ""]
+            continue
+        if kind == "sum":
+            union = ", ".join(f'("{m}", {h.pytype(t) if t else "C.c_uint8"})' for m, t in members)
+            out += ["", f"class {tname}_payload(C.Union):", f"    _fields_ = [{union}]", ""]
+            fields = f'("tag", C.c_uint32), ("payload", {tname}_payload)'
+            out += ["", f"class {tname}(C.Structure):", f"    _fields_ = [{fields}]"]
+        else:
+            packed = "packed" in h.p.attributes.get(v.name, set())
+            fields = ", ".join(f'("{m}", {h.pytype(t)})' for m, t in members)
+            out += [
+                "",
+                f"class {tname}(C.Structure):",
+                *(["    _pack_ = 1"] if packed else []),
+                f"    _fields_ = [{fields}]",
+            ]
+        offsets = {(m[2:] if m.startswith("v_") else m): at for m, at in shape.offsets}
+        offsets = {cname(m) if kind == "struct" else m: at for m, at in offsets.items()}
+        out += ["", "", f"_layout({tname}, {shape.size}, {shape.align}, {json.dumps(offsets)})"]
+        out += [*(f"{tname}_{variant} = {i}" for i, variant in enumerate(m for m, _ in members))] * (kind == "sum")
+        out += [""]
+    out += [
+        "",
+        "def load(path):",
+        '    """The library at `path`, every bound entry declared."""',
+        "    lib = C.CDLL(path)",
+    ]
+    skipped = []
+    for f in h.exports:
+        types = [f.ret, *(t for _, t in f.params)]
+        why = next(
+            (
+                h.unbindable(t.value, by_value=t.mode == "value")
+                for t in types
+                if h.unbindable(t.value, t.mode == "value")
+            ),
+            "",
+        )
+        if why:
+            skipped.append(f"cf_{mangle(f.name)}: {why}")
+            continue
+        args = ", ".join(h.pytype(t) if t.mode == "value" else f"C.POINTER({h.pytype(t)})" for _, t in f.params)
+        symbol = f"lib.cf_{mangle(f.name)}"
+        out += [f"    {symbol}.argtypes = [{args}]", f"    {symbol}.restype = {h.pytype(f.ret)}"]
+    out += ["    return lib", *(["", "", "# Not bound, because ctypes would not pass it exactly:"] if skipped else [])]
+    out += [f"#   {line}" for line in skipped]
+    return "\n".join(out).replace("\n\n\n\n", "\n\n\n") + "\n"

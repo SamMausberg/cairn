@@ -204,3 +204,50 @@ def test_emit_prints_the_header_build_writes_and_only_a_hosted_library_has_one(t
         build(load_project(EXAMPLE), kind="exe", header=True, output=tmp_path / "exe")
     with pytest.raises(ProjectError, match="--kind library"):
         build(load_project(EXAMPLE), kind="library", header=True, incremental=True, output=tmp_path / "inc")
+
+
+def imported(tmp_path: Path, text: str, name: str):
+    """The generated binding as a module of its own, imported from a file as a user would."""
+    import importlib.util
+
+    path = tmp_path / f"{name}.py"
+    path.write_text(text)
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_python_calls_the_library_through_its_generated_ctypes_binding(tmp_path, capsys):
+    import ctypes
+
+    built = library(tmp_path, "clang++")
+    assert main(["emit", str(EXAMPLE), "--ctypes"]) == 0
+    stats = imported(tmp_path, capsys.readouterr().out, "stats_binding")
+    lib = stats.load(str(built / "libstats.so"))
+    samples = (ctypes.c_int64 * 6)(4, 8, 15, 16, 23, 42)
+    s = lib.cf_summarize(6, samples)
+    assert (s.count, s.min, s.max, s.total) == (6, 4, 42, 108)
+    sums = (ctypes.c_int64 * 6)()
+    lib.cf_window_sums(6, samples, 3, sums)
+    assert list(sums) == [0, 0, 27, 39, 54, 81]
+    t = lib.cf_trend(6, samples)
+    assert t.tag == stats.ct_Trend_Up and t.payload.Up == 38 and lib.cf_spread(6, samples) == 38
+    lib.cf_scale(6, samples, 3, 2)
+    assert list(samples) == [6, 12, 22, 24, 34, 63]
+
+
+def test_the_binding_refuses_what_ctypes_would_not_pass_exactly_and_asserts_the_rest_at_import(tmp_path):
+    text = __import__("cairn.compiler.header", fromlist=["binding"]).binding(LAYOUTS, "layouts")
+    assert "# ct_Slot is not bound: ctypes cannot state an align(n) record." in text
+    unbound = text[text.index("# Not bound") :]
+    assert "cf_wire: ctypes may pass a packed record by value otherwise than C does" in unbound
+    assert "cf_event: ctypes may pass a union that holds a float by value otherwise than C does" in unbound
+    assert "cf_slot: ctypes cannot state an align(n) record" in unbound
+    assert "lib.cf_record.argtypes" in text and "lib.cf_cell.argtypes" in text and "lib.cf_outer.argtypes" in text
+    module = imported(tmp_path, text, "layouts_binding")  # every _layout call ran: ctypes agrees with the header
+    assert module.ct_Record and not hasattr(module, "ct_Slot")
+    lying = text.replace("_layout(ct_Outer, 32, 8,", "_layout(ct_Outer, 24, 8,")
+    assert lying != text
+    with pytest.raises(ImportError, match="ct_Outer is not laid out"):
+        imported(tmp_path, lying, "lying_binding")

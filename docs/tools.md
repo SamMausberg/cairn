@@ -245,6 +245,17 @@ A foreign caller meets the checked entry. Each view must be null only when it is
 
 Every layout is stated once and checked on both sides. `_Static_assert` lines hold the C or C++ compiler that includes the header to each size, alignment and offset, and the same numbers are appended to the library's own C++ as `static_assert`, so a library and a header that disagree fail to build rather than corrupt a call. What cannot cross is listed at the end of the header with the reason: owners such as `Buf`, linear values, function values, `dyn` references, an Array passed by value, trait members and device kernels. A module's private functions, templates, tests, externs, `main` and vendored dependencies are left out. `--header` needs a hosted library built as one unit, so `--kind exe`, a freestanding target and `--incremental` refuse it.
 
+Python gets the same library through `cairn emit --ctypes`, which prints a module whose `load(path)` opens it with every bound entry declared. The module states each layout the header states and checks it against ctypes when it is imported, so a layout ctypes would compute otherwise fails the import rather than a call. It leaves out what ctypes would not pass exactly, each with its reason: a record with `align(n)`, which ctypes cannot state, and, by value, a packed record or a sum whose union holds a float, which libffi may classify otherwise than the C compiler does.
+
+```python
+import ctypes
+
+stats = ...  # the module cairn emit examples/interop --ctypes printed
+lib = stats.load("examples/interop/build/stats-XXXX/libstats.so")
+samples = (ctypes.c_int64 * 6)(4, 8, 15, 16, 23, 42)
+assert lib.cf_summarize(6, samples).max == 42
+```
+
 The two directions compose. `extern` brings a C function into CAIRN with its effects declared and every call inside `unsafe`, and the header takes a CAIRN function out to C with its checks at the entry. A library that does both keeps each boundary where its source shows it: the `ffi:` effects in its rows name the foreign code it reaches, and its entries state what it requires of whoever calls it. `tests/projects/test_interop.py` builds the example under both compilers, runs the host with AddressSanitizer and UndefinedBehaviorSanitizer, has a foreign caller pass overlapping, misaligned and null views and a zero divisor and requires each to abort, and compiles a header of nested, packed, aligned, array-holding and storage-float records as C11 and C++17 against the library that states the same layouts.
 
 ## A manifest is named by its path

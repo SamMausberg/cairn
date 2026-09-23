@@ -140,6 +140,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"build"}, "--kind", {"choices": ["library", "exe"]}),
     ({"emit", "build"}, "--header", {"action": "store_true", "help": "The C header of a library: emit prints it, "
                                      "build writes NAME.h beside the library and holds the library to its layouts."}),
+    ({"emit"}, "--ctypes", {"action": "store_true", "help": "Print a Python module that loads the library through "
+                            "ctypes with the header's layouts asserted at import."}),
     ({"test"}, "--contract", {"type": Path}),
     ({"test"}, "--test", {"default": "", "metavar": "NAME", "help": "Run the one test block of exactly this name "
                            "(`sums`, or `store.sums` in module store), and no contract."}),
@@ -328,10 +330,16 @@ def main(argv: list[str] | None = None) -> int:
             report({"status": "documented", "pages": sorted(pages)})
             return 0
         project = load_project(a.path)
-        if a.command == "emit" and a.header:  # What a C or C++ program includes to call the library.
-            from .compiler.header import header
+        if a.command == "emit" and (a.header or a.ctypes):  # What a C, C++ or Python program uses to call it.
+            from .compiler.header import binding, header
 
-            print(header(project.source, project.name, lambda f: project.wrote(f.line))[0], end="")
+            mine = lambda f: project.wrote(f.line)  # noqa: E731
+            print(
+                binding(project.source, project.name, mine)
+                if a.ctypes
+                else header(project.source, project.name, mine)[0],
+                end="",
+            )
             return 0
         if a.command in {"check", "emit"}:
             generated, receipt = compile_source(
