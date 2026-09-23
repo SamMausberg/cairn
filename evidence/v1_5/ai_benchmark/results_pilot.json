@@ -12,7 +12,7 @@
    "sum_tokens_cost_usd": 1.547,
    "median_turns": 25.0,
    "sum_turns": 50,
-   "median_wall_seconds": 289.29999999999995,
+   "median_wall_seconds": 289.3,
    "sum_wall_seconds": 578.6,
    "median_compile_runs_failed": 0.0,
    "sum_compile_runs_failed": 0
@@ -24,7 +24,7 @@
    "sum_tokens_total": 370900,
    "median_tokens_output": 7048.0,
    "sum_tokens_output": 14096,
-   "median_tokens_cost_usd": 0.14735,
+   "median_tokens_cost_usd": 0.1474,
    "sum_tokens_cost_usd": 0.2947,
    "median_turns": 9.0,
    "sum_turns": 18,
@@ -40,11 +40,11 @@
    "sum_tokens_total": 284308,
    "median_tokens_output": 8105.5,
    "sum_tokens_output": 16211,
-   "median_tokens_cost_usd": 0.15009999999999998,
+   "median_tokens_cost_usd": 0.1501,
    "sum_tokens_cost_usd": 0.3002,
    "median_turns": 7.0,
    "sum_turns": 14,
-   "median_wall_seconds": 79.35000000000001,
+   "median_wall_seconds": 79.35,
    "sum_wall_seconds": 158.7,
    "median_compile_runs_failed": 0.0,
    "sum_compile_runs_failed": 0
@@ -117,7 +117,14 @@
    "tokens_total": 495765,
    "compile_runs": 6,
    "compile_runs_failed": 0,
-   "source_bytes": 2655
+   "source_bytes": 2655,
+   "exploratory": {
+    "docs_calls": 3,
+    "docs_chars": 25850,
+    "other_calls": 14,
+    "other_chars": 13520,
+    "diagnostics": {}
+   }
   },
   {
    "task": "dedupe",
@@ -138,7 +145,14 @@
    "tokens_total": 124522,
    "compile_runs": 1,
    "compile_runs_failed": 0,
-   "source_bytes": 1026
+   "source_bytes": 1026,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 7,
+    "other_chars": 3446,
+    "diagnostics": {}
+   }
   },
   {
    "task": "dedupe",
@@ -159,7 +173,14 @@
    "tokens_total": 107101,
    "compile_runs": 1,
    "compile_runs_failed": 0,
-   "source_bytes": 1073
+   "source_bytes": 1073,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 6,
+    "other_chars": 3538,
+    "diagnostics": {}
+   }
   },
   {
    "task": "records",
@@ -180,7 +201,14 @@
    "tokens_total": 2213157,
    "compile_runs": 5,
    "compile_runs_failed": 0,
-   "source_bytes": 6780
+   "source_bytes": 6780,
+   "exploratory": {
+    "docs_calls": 10,
+    "docs_chars": 88299,
+    "other_calls": 21,
+    "other_chars": 18614,
+    "diagnostics": {}
+   }
   },
   {
    "task": "records",
@@ -201,7 +229,14 @@
    "tokens_total": 246378,
    "compile_runs": 1,
    "compile_runs_failed": 0,
-   "source_bytes": 5690
+   "source_bytes": 5690,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 9,
+    "other_chars": 5035,
+    "diagnostics": {}
+   }
   },
   {
    "task": "records",
@@ -222,7 +257,14 @@
    "tokens_total": 177207,
    "compile_runs": 1,
    "compile_runs_failed": 0,
-   "source_bytes": 3950
+   "source_bytes": 3950,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 6,
+    "other_chars": 4729,
+    "diagnostics": {}
+   }
   }
  ],
  "audit_decisions": {}

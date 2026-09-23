@@ -1,0 +1,220 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The outcome of checking one field: a parsed value, or the kind and column of the first fault.
+enum FieldCheck { Good(u64); Empty(usize); Digit(usize); Format(usize); Range(usize); }
+
+// byte i of the virtual concatenation of spanA then spanB.
+fn digit_at(nA:usize, spanA:ro<u8>[nA], nB:usize, spanB:ro<u8>[nB], i:usize) -> u8 {
+  if i < nA { return spanA[i]; }
+  return spanB[i - nA];
+}
+
+// Whether the decimal digits of spanA followed by spanB, leading zeros aside, exceed max.
+fn digits_exceed(nA:usize, spanA:ro<u8>[nA], nB:usize, spanB:ro<u8>[nB], max_len:usize, max:ro<u8>[max_len]) -> bool {
+  let total = nA + nB;
+  let mut skip:usize = 0;
+  while skip < total {
+    let d = digit_at(nA, spanA, nB, spanB, skip);
+    if d != '0' { break; }
+    skip += 1;
+  }
+  let sig = total - skip;
+  if sig > max_len { return true; }
+  if sig < max_len { return false; }
+  let mut i:usize = 0;
+  while i < max_len {
+    let d = digit_at(nA, spanA, nB, spanB, skip + i);
+    let m = max[i];
+    if d != m { return d > m; }
+    i += 1;
+  }
+  return false;
+}
+
+// Checks a decimal field (id or qty): empty, a bad digit, or a value past max_bytes.
+fn check_uint_field(n:usize, field:ro<u8>[n], start_col:usize, max_len:usize, max:ro<u8>[max_len]) -> FieldCheck {
+  if n == 0 { return Empty(start_col); }
+  let mut i:usize = 0;
+  while i < n {
+    let b = field[i];
+    if b < '0' || b > '9' { return Digit(start_col + i); }
+    i += 1;
+  }
+  if digits_exceed(n, field, 0, field[0..0], max_len, max) { return Range(start_col); }
+  match text.parse_u64(n, field) {
+    Ok(v) => return Good(v);
+    Err(_) => { assert(false, "parse_u64 failed unexpectedly"); return Good(0); }
+  }
+}
+
+// Checks the price field: empty, a bad byte, a bad shape, or a value past the cents maximum.
+fn check_price(n:usize, field:ro<u8>[n], start_col:usize) -> FieldCheck {
+  if n == 0 { return Empty(start_col); }
+  let mut i:usize = 0;
+  while i < n {
+    let b = field[i];
+    if !(b == '.' || (b >= '0' && b <= '9')) { return Digit(start_col + i); }
+    i += 1;
+  }
+  let mut dot_count:usize = 0;
+  let mut dot_pos:usize = 0;
+  let mut j:usize = 0;
+  while j < n {
+    if field[j] == '.' { dot_count += 1; dot_pos = j; }
+    j += 1;
+  }
+  if dot_count != 1 { return Format(start_col); }
+  let int_len = dot_pos;
+  let frac_len = n - dot_pos - 1;
+  if int_len < 1 || frac_len != 2 { return Format(start_col); }
+  if digits_exceed(int_len, field[0..dot_pos], frac_len, field[dot_pos + 1..n], 19, "9223372036854775807") {
+    return Range(start_col);
+  }
+  let mut int_val:u64 = 0;
+  match text.parse_u64(int_len, field[0..dot_pos]) {
+    Ok(v) => { int_val = v; }
+    Err(_) => { assert(false, "parse_u64 failed unexpectedly"); }
+  }
+  let mut frac_val:u64 = 0;
+  match text.parse_u64(frac_len, field[dot_pos + 1..n]) {
+    Ok(v) => { frac_val = v; }
+    Err(_) => { assert(false, "parse_u64 failed unexpectedly"); }
+  }
+  return Good(int_val * 100 + frac_val);
+}
+
+fn main() -> i32 {
+  let inp = read_input();
+  let total:usize = inp.bytes.len;
+  let mut pos:usize = 0;
+  let mut lineno:u64 = 1;
+  while pos < total {
+    let mut line_hi:usize = total;
+    let mut next_pos:usize = total;
+    match text.find_byte(total, inp.bytes.data[0..total], '\n', pos) {
+      Some(idx) => { line_hi = idx; next_pos = idx + 1; }
+      None => { line_hi = total; next_pos = total; }
+    }
+    let line_lo = pos;
+    let line_len = line_hi - line_lo;
+    let this_lineno = lineno;
+    pos = next_pos;
+    lineno += 1;
+
+    let mut c1:usize = 0;
+    match text.find_byte(line_len, inp.bytes.data[line_lo..line_hi], ',', 0) {
+      Some(idx) => { c1 = idx; }
+      None => { println("err ", this_lineno, " ", line_len + 1, " missing"); continue; }
+    }
+    let mut c2:usize = 0;
+    match text.find_byte(line_len, inp.bytes.data[line_lo..line_hi], ',', c1 + 1) {
+      Some(idx) => { c2 = idx; }
+      None => { println("err ", this_lineno, " ", line_len + 1, " missing"); continue; }
+    }
+    match text.find_byte(line_len, inp.bytes.data[line_lo..line_hi], ',', c2 + 1) {
+      Some(idx) => { println("err ", this_lineno, " ", idx + 1, " extra"); continue; }
+      None => {}
+    }
+
+    let id_len = c1;
+    let qty_start = c1 + 1;
+    let qty_len = c2 - qty_start;
+    let price_start = c2 + 1;
+    let price_len = line_len - price_start;
+
+    let mut id_val:u64 = 0;
+    match check_uint_field(id_len, inp.bytes.data[line_lo..line_lo + id_len], 1, 10, "4294967295") {
+      Good(v) => { id_val = v; }
+      Empty(c) => { println("err ", this_lineno, " ", c, " empty"); continue; }
+      Digit(c) => { println("err ", this_lineno, " ", c, " digit"); continue; }
+      Format(c) => { println("err ", this_lineno, " ", c, " format"); continue; }
+      Range(c) => { println("err ", this_lineno, " ", c, " range"); continue; }
+    }
+
+    let mut qty_val:u64 = 0;
+    match check_uint_field(
+      qty_len, inp.bytes.data[line_lo + qty_start..line_lo + qty_start + qty_len], qty_start + 1, 5, "65535"
+    ) {
+      Good(v) => { qty_val = v; }
+      Empty(c) => { println("err ", this_lineno, " ", c, " empty"); continue; }
+      Digit(c) => { println("err ", this_lineno, " ", c, " digit"); continue; }
+      Format(c) => { println("err ", this_lineno, " ", c, " format"); continue; }
+      Range(c) => { println("err ", this_lineno, " ", c, " range"); continue; }
+    }
+
+    let mut cents_val:u64 = 0;
+    match check_price(
+      price_len, inp.bytes.data[line_lo + price_start..line_lo + price_start + price_len], price_start + 1
+    ) {
+      Good(v) => { cents_val = v; }
+      Empty(c) => { println("err ", this_lineno, " ", c, " empty"); continue; }
+      Digit(c) => { println("err ", this_lineno, " ", c, " digit"); continue; }
+      Format(c) => { println("err ", this_lineno, " ", c, " format"); continue; }
+      Range(c) => { println("err ", this_lineno, " ", c, " range"); continue; }
+    }
+
+    println("ok ", id_val, " ", qty_val, " ", cents_val);
+  }
+  return 0;
+}

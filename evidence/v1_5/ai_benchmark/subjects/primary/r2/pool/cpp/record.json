@@ -1,0 +1,108 @@
+{
+ "task": "pool",
+ "language": "cpp",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 50.1,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 8,
+  "duration_ms": 51569,
+  "duration_api_ms": 49639,
+  "total_cost_usd": 0.1076144,
+  "usage": {
+   "input_tokens": 16,
+   "cache_creation_input_tokens": 7840,
+   "cache_read_input_tokens": 134062,
+   "output_tokens": 4941,
+   "output_tokens_details": {
+    "thinking_tokens": 1894
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 7840,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 154,
+     "cache_read_input_tokens": 19899,
+     "cache_creation_input_tokens": 434,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 434
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 16,
+    "outputTokens": 4941,
+    "cacheReadInputTokens": 134062,
+    "cacheCreationInputTokens": 7840,
+    "webSearchRequests": 0,
+    "costUSD": 0.1076144,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 1894,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r2/pool/cpp",
+ "toolchain_commit": "b6e53c0ba5c6b6cc5972e9077ec7ee6e359dff02",
+ "phase": "primary",
+ "replicate": 2,
+ "infrastructure": false,
+ "source_bytes": 3428,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 1,
+   "Write": 1,
+   "Bash": 5
+  },
+  "compile_runs": 1,
+  "compile_runs_failed": 0,
+  "flags": []
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_benchmark/primary/r2/pool/cpp/transcript.jsonl",
+  "sha256": "326952e824a9eed7e1be5f73d8b12fa54e85bce0b5e2d22d2b28aaffc43bfe69",
+  "bytes": 55936
+ },
+ "given_sha256": "b92a8edccc3cb56d72be226d8db8a4ce3d1947291721abacd9d0f6b38366540d"
+}

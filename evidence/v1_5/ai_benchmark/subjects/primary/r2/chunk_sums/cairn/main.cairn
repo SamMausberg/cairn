@@ -1,0 +1,112 @@
+import std.io as io;
+import std.vec as vec;
+import std.text as text;
+
+const I64_MAX:i64 = 9223372036854775807;
+
+fn i64_min() -> i64 pure = -I64_MAX - 1;
+
+fn is_ws(b:u8) -> bool = b == ' ' || b == '\n' || b == '\t' || b == '\r';
+
+struct Span { lo:usize; hi:usize; }
+
+fn next_token(n:usize, s:ro<u8>[n], pos:rw<usize>) -> Span {
+  while pos < n && is_ws(s[pos]) { pos += 1; }
+  let start = pos;
+  if pos < n && s[pos] == '-' { pos += 1; }
+  while pos < n && !is_ws(s[pos]) { pos += 1; }
+  return Span(start, pos);
+}
+
+fn read_i64(n:usize, s:ro<u8>[n], pos:rw<usize>) -> i64 {
+  let sp = next_token(n, s, pos);
+  let mut value:i64 = 0;
+  match text.parse_i64(sp.hi - sp.lo, s[sp.lo..sp.hi]) {
+    Ok(v) => value = v;
+    Err(_) => assert(false, "bad integer");
+  }
+  return value;
+}
+
+fn read_usize(n:usize, s:ro<u8>[n], pos:rw<usize>) -> usize {
+  let sp = next_token(n, s, pos);
+  let mut value:u64 = 0;
+  match text.parse_u64(sp.hi - sp.lo, s[sp.lo..sp.hi]) {
+    Ok(v) => value = v;
+    Err(_) => assert(false, "bad integer");
+  }
+  return usize(value);
+}
+
+struct ChunkResult { index:usize; sum:i64; overflow:bool; }
+
+// Adds b into sum, in place, reporting whether that step's partial sum overflowed i64.
+fn add_checked(sum:rw<i64>, b:i64) -> bool {
+  let min = i64_min();
+  if b >= 0 {
+    if sum > I64_MAX - b { return true; }
+  } else {
+    if sum < min - b { return true; }
+  }
+  sum = sum + b;
+  return false;
+}
+
+fn sum_chunk(index:usize, len:usize, xs:ro<i64>[len]) -> ChunkResult {
+  let mut sum:i64 = 0;
+  let mut overflow:bool = false;
+  for x in xs {
+    if overflow { continue; }
+    if add_checked(sum, x) { overflow = true; }
+  }
+  return ChunkResult(index, sum, overflow);
+}
+
+fn run(n:usize, s:ro<u8>[n]) -> i32 {
+  let mut pos:usize = 0;
+  let k = read_usize(n, s, pos);
+  let count = read_usize(n, s, pos);
+  let mut data = Buf[i64](count);
+  for i in 0..count { data[i] = read_i64(n, s, pos); }
+
+  let g = Group[ChunkResult](k);
+  for j in 0..k {
+    let lo = j * count / k;
+    let hi = (j + 1) * count / k;
+    spawn sum_chunk(j, hi - lo, data[lo..hi]) into g;
+  }
+  let mut sums = Buf[i64](k);
+  let mut overflows = Buf[bool](k);
+  for _ in 0..k {
+    let r = collect(g);
+    sums[r.index] = r.sum;
+    overflows[r.index] = r.overflow;
+  }
+  wait(g);
+
+  for j in 0..k {
+    if overflows[j] { println("chunk ", j, " overflow"); }
+    else { println("chunk ", j, " ", sums[j]); }
+  }
+
+  let mut total:i64 = 0;
+  let mut total_overflow:bool = false;
+  for j in 0..k {
+    if total_overflow { continue; }
+    if overflows[j] { total_overflow = true; continue; }
+    if add_checked(total, sums[j]) { total_overflow = true; }
+  }
+  if total_overflow { println("total overflow"); } else { println("total ", total); }
+  return 0;
+}
+
+fn main() -> i32 {
+  let stdin_file = io.File(0);
+  let mut input = vec.new[u8]();
+  match io.read_to_end(stdin_file, input) {
+    Ok(_) => {}
+    Err(_) => { io.close(stdin_file); return 1; }
+  }
+  io.close(stdin_file);
+  return run(input);
+}

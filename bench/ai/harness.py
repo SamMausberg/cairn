@@ -22,7 +22,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from checking import EXTENSION, LANGUAGES, SOURCE, judge
-from scoring import audit, markdown, pairs, row, summary
+from scoring import audit, breakdown, markdown, pairs, row, summary
 from subjects import LIMITS, run_subject, toolchain
 from tasks import BY_NAME, TASKS, example
 
@@ -150,7 +150,7 @@ def report(phase: str, out: Path, root: Path | None = None) -> int:
         key = f"{phase}/r{record.get('replicate', 1)}/{record['task']}/{record['language']}"
         record["contaminated"] = decisions.get(key, {}).get("contaminated", False)
         records.append(record)
-    rows = [row(r) for r in records]
+    rows = [{**row(r), "exploratory": breakdown(Path(r["transcript"]), r["language"])} for r in records]
     table = {
         "phase": phase,
         "summary": summary(rows, LANGUAGES),

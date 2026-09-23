@@ -1,0 +1,143 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+import std.vec as vec;
+import std.fmt;
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The value of one lowercase hex digit; the caller guarantees it is '0'-'9' or 'a'-'f'.
+fn hex_digit(c:u8) -> u8 {
+  if c >= 97 { return c - 97 + 10; }
+  return c - 48;
+}
+
+// The bytes named by two lowercase hex digits each, over a span of the raw input.
+fn decode_hex(inp:rw<Input>, span:Span) -> Vec[u8] {
+  let mut out = vec.new[u8]();
+  let mut i = span.lo;
+  while i < span.hi {
+    let high = hex_digit(inp.bytes.data[i]);
+    let low = hex_digit(inp.bytes.data[i + 1]);
+    let b:u8 = high * 16 + low;
+    vec.push(out, b);
+    i += 2;
+  }
+  return out;
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let cap = next_u64(inp);
+
+  let mut hex_span = Span(inp.at, inp.at);
+  match next_token(inp) {
+    Some(s) => { hex_span = s; }
+    None => {}
+  }
+  let packets = decode_hex(inp, hex_span);
+
+  let n = packets.len;
+  let mut o:usize = 0;
+  let mut out_len:u64 = 0;
+  let mut hash:u64 = 14695981039346656037;
+  let mut err_kind:u8 = 0;
+  let mut err_off:usize = 0;
+
+  while o < n {
+    let c = packets.data[o];
+    if c < 128 {
+      let count:usize = usize(c) + 1;
+      if o + 1 + count > n { err_kind = 1; err_off = o; break; }
+      if out_len + u64(count) > cap { err_kind = 2; err_off = o; break; }
+      let mut k:usize = 0;
+      while k < count {
+        let b = packets.data[o + 1 + k];
+        hash = mul_wrap(hash ^ u64(b), 1099511628211);
+        k += 1;
+      }
+      out_len += u64(count);
+      o = o + 1 + count;
+    } else {
+      let times:usize = usize(c) - 126;
+      if o + 1 >= n { err_kind = 1; err_off = o; break; }
+      if out_len + u64(times) > cap { err_kind = 2; err_off = o; break; }
+      let b = packets.data[o + 1];
+      let mut k:usize = 0;
+      while k < times {
+        hash = mul_wrap(hash ^ u64(b), 1099511628211);
+        k += 1;
+      }
+      out_len += u64(times);
+      o = o + 2;
+    }
+  }
+
+  if err_kind == 1 {
+    println("err truncated ", err_off);
+  } else if err_kind == 2 {
+    println("err full ", err_off);
+  } else {
+    let mut hex_out = vec.new[u8]();
+    fmt.hex(hex_out, hash, 16);
+    println("ok ", out_len, " ", hex_out);
+  }
+  return 0;
+}

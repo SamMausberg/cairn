@@ -1,0 +1,207 @@
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The index of the first byte in s that is not an ASCII digit, or None.
+fn first_invalid_digit(n:usize, s:ro<u8>[n]) -> Option[usize] {
+  for i in 0..n {
+    let b = s[i];
+    if b < 48 || b > 57 { return Some(i); }
+  }
+  return None;
+}
+
+// Like first_invalid_digit, but a '.' is allowed too.
+fn first_invalid_price(n:usize, s:ro<u8>[n]) -> Option[usize] {
+  for i in 0..n {
+    let b = s[i];
+    if !((b >= 48 && b <= 57) || b == 46) { return Some(i); }
+  }
+  return None;
+}
+
+// The index of the first digit that is not a leading zero, or n - 1 when every digit is zero.
+fn sig_start(n:usize, s:ro<u8>[n]) -> usize {
+  let mut i:usize = 0;
+  while i < n - 1 && s[i] == 48 { i += 1; }
+  return i;
+}
+
+// True when the digits s[sig..n] (no leading zeros) denote a value greater than max.
+fn exceeds(n:usize, s:ro<u8>[n], sig:usize, mlen:usize, max:ro<u8>[mlen]) -> bool {
+  let sig_len = n - sig;
+  if sig_len > mlen { return true; }
+  if sig_len < mlen { return false; }
+  for i in 0..mlen {
+    let a = s[sig + i];
+    let b = max[i];
+    if a > b { return true; }
+    if a < b { return false; }
+  }
+  return false;
+}
+
+// True when the 19-digit value ip ++ dp (17 digits then 2) exceeds 9223372036854775807.
+fn exceeds_cents(n:usize, ip:ro<u8>[n], dp:ro<u8>[2]) -> bool {
+  let max = "9223372036854775807";
+  for i in 0..n {
+    let a = ip[i];
+    let b = max[i];
+    if a > b { return true; }
+    if a < b { return false; }
+  }
+  for i in 0..2 {
+    let a = dp[i];
+    let b = max[n + i];
+    if a > b { return true; }
+    if a < b { return false; }
+  }
+  return false;
+}
+
+fn parse_val(n:usize, s:ro<u8>[n]) -> u64 {
+  match text.parse_u64(n, s) {
+    Ok(v) => return v;
+    Err(_) => { assert(false, "expected digits"); return 0; }
+  }
+}
+
+// Validates id, qty and price in a line already known to have exactly three fields, and prints the result.
+fn check_fields(line_no:usize, n:usize, line:ro<u8>[n], c1:usize, c2:usize) -> i32 {
+  // id: line[0..c1]
+  if c1 == 0 { println("err ", line_no, " 1 empty"); return 0; }
+  match first_invalid_digit(c1, line[0..c1]) {
+    Some(off) => { println("err ", line_no, " ", off + 1, " digit"); return 0; }
+    None => {}
+  }
+  let id_sig = sig_start(c1, line[0..c1]);
+  if exceeds(c1, line[0..c1], id_sig, 10, "4294967295") {
+    println("err ", line_no, " 1 range");
+    return 0;
+  }
+  let id_val = parse_val(c1 - id_sig, line[id_sig..c1]);
+
+  // qty: line[qs..c2]
+  let qs = c1 + 1;
+  let qn = c2 - qs;
+  if qn == 0 { println("err ", line_no, " ", qs + 1, " empty"); return 0; }
+  match first_invalid_digit(qn, line[qs..c2]) {
+    Some(off) => { println("err ", line_no, " ", qs + off + 1, " digit"); return 0; }
+    None => {}
+  }
+  let qty_sig = sig_start(qn, line[qs..c2]);
+  if exceeds(qn, line[qs..c2], qty_sig, 5, "65535") {
+    println("err ", line_no, " ", qs + 1, " range");
+    return 0;
+  }
+  let qty_val = parse_val(qn - qty_sig, line[qs + qty_sig..c2]);
+
+  // price: line[ps..n]
+  let ps = c2 + 1;
+  let pn = n - ps;
+  if pn == 0 { println("err ", line_no, " ", ps + 1, " empty"); return 0; }
+  match first_invalid_price(pn, line[ps..n]) {
+    Some(off) => { println("err ", line_no, " ", ps + off + 1, " digit"); return 0; }
+    None => {}
+  }
+
+  let mut dot_count:usize = 0;
+  let mut dot_pos:usize = 0;
+  for i in 0..pn {
+    if line[ps + i] == 46 {
+      dot_count += 1;
+      if dot_count == 1 { dot_pos = i; }
+    }
+  }
+  if dot_count != 1 { println("err ", line_no, " ", ps + 1, " format"); return 0; }
+  let before = dot_pos;
+  let after = pn - dot_pos - 1;
+  if before < 1 || after != 2 { println("err ", line_no, " ", ps + 1, " format"); return 0; }
+
+  let int_lo = ps;
+  let int_hi = ps + dot_pos;
+  let dec_lo = ps + dot_pos + 1;
+  let dec_hi = n;
+
+  let int_sig = sig_start(before, line[int_lo..int_hi]);
+  let int_zero = line[int_lo + int_sig] == 48;
+
+  if int_zero {
+    let dec_sig = sig_start(2, line[dec_lo..dec_hi]);
+    let cents = parse_val(2 - dec_sig, line[dec_lo + dec_sig..dec_hi]);
+    println("ok ", id_val, " ", qty_val, " ", cents);
+    return 0;
+  } else {
+    let sig_len = (before - int_sig) + 2;
+    if sig_len > 19 { println("err ", line_no, " ", ps + 1, " range"); return 0; }
+    if sig_len == 19 {
+      if exceeds_cents(before - int_sig, line[int_lo + int_sig..int_hi], line[dec_lo..dec_hi]) {
+        println("err ", line_no, " ", ps + 1, " range");
+        return 0;
+      }
+    }
+    let ip_val = parse_val(before - int_sig, line[int_lo + int_sig..int_hi]);
+    let dp_val = parse_val(2, line[dec_lo..dec_hi]);
+    let cents = ip_val * 100 + dp_val;
+    println("ok ", id_val, " ", qty_val, " ", cents);
+    return 0;
+  }
+}
+
+// Finds the field boundaries of one line and reports missing, extra or a field error.
+fn process_line(line_no:usize, n:usize, line:ro<u8>[n]) -> i32 {
+  match text.find_byte(n, line, 44, 0) {
+    None => { println("err ", line_no, " ", n + 1, " missing"); return 0; }
+    Some(c1) => {
+      match text.find_byte(n, line, 44, c1 + 1) {
+        None => { println("err ", line_no, " ", n + 1, " missing"); return 0; }
+        Some(c2) => {
+          match text.find_byte(n, line, 44, c2 + 1) {
+            Some(c3) => { println("err ", line_no, " ", c3 + 1, " extra"); return 0; }
+            None => { return check_fields(line_no, n, line, c1, c2); }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn main() -> i32 {
+  let inp = read_input();
+  let n = inp.bytes.len;
+  let mut start:usize = 0;
+  let mut line_no:usize = 0;
+  let mut i:usize = 0;
+  while i < n {
+    if inp.bytes.data[i] == 10 {
+      line_no += 1;
+      process_line(line_no, i - start, inp.bytes.data[start..i]);
+      start = i + 1;
+    }
+    i += 1;
+  }
+  if start < n {
+    line_no += 1;
+    process_line(line_no, n - start, inp.bytes.data[start..n]);
+  }
+  return 0;
+}

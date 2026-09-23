@@ -1,0 +1,108 @@
+{
+ "task": "rle",
+ "language": "rust",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 41.2,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 9,
+  "duration_ms": 40824,
+  "duration_api_ms": 39665,
+  "total_cost_usd": 0.09695660000000002,
+  "usage": {
+   "input_tokens": 18,
+   "cache_creation_input_tokens": 7125,
+   "cache_read_input_tokens": 144103,
+   "output_tokens": 3960,
+   "output_tokens_details": {
+    "thinking_tokens": 1324
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 7125,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 81,
+     "cache_read_input_tokens": 19283,
+     "cache_creation_input_tokens": 335,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 335
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 18,
+    "outputTokens": 3960,
+    "cacheReadInputTokens": 144103,
+    "cacheCreationInputTokens": 7125,
+    "webSearchRequests": 0,
+    "costUSD": 0.09695660000000002,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 1324,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r2/rle/rust",
+ "toolchain_commit": "b6e53c0ba5c6b6cc5972e9077ec7ee6e359dff02",
+ "phase": "primary",
+ "replicate": 2,
+ "infrastructure": false,
+ "source_bytes": 2150,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 32,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 2,
+   "Bash": 5,
+   "Write": 1
+  },
+  "compile_runs": 1,
+  "compile_runs_failed": 0,
+  "flags": []
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_benchmark/primary/r2/rle/rust/transcript.jsonl",
+  "sha256": "f529cd64e572e79f10c787a0f603e2a50ac598e047759dd6c04de5de06013499",
+  "bytes": 51478
+ },
+ "given_sha256": "3e8a1226f7789bfe67dfecfae8aa91dafd7bb5a4efed6a5485047c78939eca68"
+}

@@ -1,0 +1,140 @@
+{
+ "task": "split_sum",
+ "language": "cairn",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 158.1,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 29,
+  "duration_ms": 171580,
+  "duration_api_ms": 107940,
+  "total_cost_usd": 0.325103,
+  "usage": {
+   "input_tokens": 58,
+   "cache_creation_input_tokens": 22184,
+   "cache_read_input_tokens": 708105,
+   "output_tokens": 9463,
+   "output_tokens_details": {
+    "thinking_tokens": 2353
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 22184,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 292,
+     "cache_read_input_tokens": 34314,
+     "cache_creation_input_tokens": 363,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 363
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 58,
+    "outputTokens": 9463,
+    "cacheReadInputTokens": 708105,
+    "cacheCreationInputTokens": 22184,
+    "webSearchRequests": 0,
+    "costUSD": 0.325103,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 2353,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r1/split_sum/cairn",
+ "toolchain_commit": "b6e53c0ba5c6b6cc5972e9077ec7ee6e359dff02",
+ "phase": "primary",
+ "replicate": 1,
+ "infrastructure": false,
+ "source_bytes": 2252,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 2,
+   "Bash": 25,
+   "Edit": 1
+  },
+  "compile_runs": 14,
+  "compile_runs_failed": 1,
+  "flags": [
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/proc/sys/kernel/threads-max",
+    "command": "ulimit -a 2>&1; echo \"---\"; cat /proc/sys/kernel/threads-max 2>/dev/null"
+   },
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/solution",
+    "command": "cd \"/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r1/split_sum/cairn\" && EXE=$(ls -t build/*/solution | head -1) && echo \"$EXE\" && for i in $(seq 1 20); do printf \"16 5\\n1 2 3 4 5\\n\" | \"$EXE\"; echo \"exit=$?\"; done"
+   },
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/solution",
+    "command": "cd \"/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r1/split_sum/cairn\" && EXE=$(ls -t build/*/solution | head -1) && for i in $(seq 1 10); do printf \"16 0\\n\" | \"$EXE\"; echo \"exit=$?\"; done"
+   },
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/program.cpp",
+    "command": "cd \"/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r1/split_sum/cairn\" && DIR=$(ls -td build/*/ | head -1) && mkdir -p /tmp/judge_asan /tmp/judge_tsan && cp \"$DIR\"/*.hpp \"$DIR\"/program.cpp /tmp/judge_asan/ && cp \"$DIR\"/*.hpp \"$DIR\"/program.cpp /"
+   },
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/program.cpp",
+    "command": "cd \"/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r1/split_sum/cairn\" && DIR=$(ls -td build/*/ | head -1) && mkdir -p /tmp/judge_asan /tmp/judge_tsan && cp \"$DIR\"/*.hpp \"$DIR\"/program.cpp /tmp/judge_asan/ && cp \"$DIR\"/*.hpp \"$DIR\"/program.cpp /"
+   }
+  ]
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_benchmark/primary/r1/split_sum/cairn/transcript.jsonl",
+  "sha256": "d0acaa19effce437cd125f5561427fd2d5ae52d56c0d3dfa61e3d65cc1d8addb",
+  "bytes": 206130
+ },
+ "given_sha256": "e0543f373b90a0b0d0406cb875214b89ca20621cf4e7b6f08ecdf6ecc045e127"
+}

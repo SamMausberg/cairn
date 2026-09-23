@@ -1,0 +1,115 @@
+{
+ "task": "rle",
+ "language": "rust",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 42.8,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 9,
+  "duration_ms": 44244,
+  "duration_api_ms": 43078,
+  "total_cost_usd": 0.1004876,
+  "usage": {
+   "input_tokens": 18,
+   "cache_creation_input_tokens": 7389,
+   "cache_read_input_tokens": 142428,
+   "output_tokens": 4241,
+   "output_tokens_details": {
+    "thinking_tokens": 1431
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 7389,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 140,
+     "cache_read_input_tokens": 19237,
+     "cache_creation_input_tokens": 645,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 645
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 18,
+    "outputTokens": 4241,
+    "cacheReadInputTokens": 142428,
+    "cacheCreationInputTokens": 7389,
+    "webSearchRequests": 0,
+    "costUSD": 0.1004876,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 1431,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r1/rle/rust",
+ "toolchain_commit": "b6e53c0ba5c6b6cc5972e9077ec7ee6e359dff02",
+ "phase": "primary",
+ "replicate": 1,
+ "infrastructure": false,
+ "source_bytes": 2028,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 32,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 2,
+   "Bash": 5,
+   "Write": 1
+  },
+  "compile_runs": 1,
+  "compile_runs_failed": 0,
+  "flags": [
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "~1000000",
+    "command": "cd /tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r1/rle/rust\necho \"---true truncated literal---\"\nprintf '5\\n03616263\\n' | ./target/debug/solution\necho \"---repeat exact fit cap---\"\nprintf '2\\n83ff\\n' | ./target/debug/solution\necho \"---repeat ful"
+   }
+  ]
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_benchmark/primary/r1/rle/rust/transcript.jsonl",
+  "sha256": "9dc863c619d5cbcb762eda3f0e72022534cc874072b2dc7222740e8b111128cc",
+  "bytes": 54778
+ },
+ "given_sha256": "3e8a1226f7789bfe67dfecfae8aa91dafd7bb5a4efed6a5485047c78939eca68"
+}

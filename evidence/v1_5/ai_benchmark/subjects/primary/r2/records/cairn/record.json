@@ -1,0 +1,109 @@
+{
+ "task": "records",
+ "language": "cairn",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 547.2,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 37,
+  "duration_ms": 597575,
+  "duration_api_ms": 582378,
+  "total_cost_usd": 1.4648056000000005,
+  "usage": {
+   "input_tokens": 62,
+   "cache_creation_input_tokens": 107247,
+   "cache_read_input_tokens": 2584768,
+   "output_tokens": 51874,
+   "output_tokens_details": {
+    "thinking_tokens": 41729
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 107247,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 195,
+     "cache_read_input_tokens": 119063,
+     "cache_creation_input_tokens": 677,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 677
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 62,
+    "outputTokens": 51874,
+    "cacheReadInputTokens": 2584768,
+    "cacheCreationInputTokens": 107247,
+    "webSearchRequests": 0,
+    "costUSD": 1.4648056000000005,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 41729,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r2/records/cairn",
+ "toolchain_commit": "b6e53c0ba5c6b6cc5972e9077ec7ee6e359dff02",
+ "phase": "primary",
+ "replicate": 2,
+ "infrastructure": false,
+ "source_bytes": 6292,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 29,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 11,
+   "Bash": 19,
+   "Grep": 5,
+   "Write": 1
+  },
+  "compile_runs": 9,
+  "compile_runs_failed": 0,
+  "flags": []
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_benchmark/primary/r2/records/cairn/transcript.jsonl",
+  "sha256": "9582702aee007bb3376d38be0451013124a2fadbc1abc9c6e4d7b57647b53c11",
+  "bytes": 581290
+ },
+ "given_sha256": "534c163ad4691d22d77c573399754f7a85cd6b0b8184a69d2f79bcba51a804c2"
+}

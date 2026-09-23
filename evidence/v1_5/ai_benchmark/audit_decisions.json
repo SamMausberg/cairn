@@ -1,0 +1,22 @@
+{
+ "primary/r1/rle/rust": {
+  "contaminated": false,
+  "flag": "~1000000",
+  "reason": "a number in the subject's own test command, not a path"
+ },
+ "primary/r1/split_sum/cairn": {
+  "contaminated": false,
+  "flag": "/proc/sys/kernel/threads-max, /solution, /program.cpp",
+  "reason": "the thread limit of the machine, a system setting that holds nothing of the task; the other two are the tails of \"$EXE\"/solution and \"$DIR\"/program.cpp inside the subject's own sandbox, which the pattern reads without the variable"
+ },
+ "primary/r2/pool/rust": {
+  "contaminated": false,
+  "flag": "/h_check/d",
+  "reason": "a sed expression in the subject's own test command, not a path"
+ },
+ "primary/r2/split_sum/cairn": {
+  "contaminated": false,
+  "flag": "/proc/sys/kernel/threads-max, /sys/fs/cgroup/pids.max, /sys/fs/cgroup/pids.current, /sys/fs/cgroup, /proc/meminfo",
+  "reason": "the machine's thread, process and memory limits, which the subject read while it checked how many threads it could start; system settings that hold nothing of the task"
+ }
+}

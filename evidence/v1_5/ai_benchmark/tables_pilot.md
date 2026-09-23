@@ -1,8 +1,8 @@
 | language | subjects | solved | median tokens | sum tokens | median turns | median seconds | sum cost (USD) |
 |---|---|---|---|---|---|---|---|
-| cairn | 2 | 2 | 1354461.0 | 2708922 | 25.0 | 289.29999999999995 | 1.547 |
+| cairn | 2 | 2 | 1354461.0 | 2708922 | 25.0 | 289.3 | 1.547 |
 | cpp | 2 | 2 | 185450.0 | 370900 | 9.0 | 76.3 | 0.2947 |
-| rust | 2 | 2 | 142154.0 | 284308 | 7.0 | 79.35000000000001 | 0.3002 |
+| rust | 2 | 2 | 142154.0 | 284308 | 7.0 | 79.35 | 0.3002 |
 
 | pair | cells | solved | only first | only second | McNemar p | tokens, all | tokens, both solved | per-cell median (range) |
 |---|---|---|---|---|---|---|---|---|
@@ -18,3 +18,14 @@
 | 1 | records | cairn | yes |  | success | 32 | 2213157 | 1.2964 | 513.3 | 5 (0) |
 | 1 | records | cpp | yes |  | success | 10 | 246378 | 0.232 | 126.1 | 1 (0) |
 | 1 | records | rust | yes |  | success | 7 | 177207 | 0.2507 | 142.3 | 1 (0) |
+
+Not preregistered, a description of where the calls went: calls that read the documentation and the characters they returned, the other calls and theirs, and the compiler diagnostics a subject saw outside the documentation.
+
+| replicate | task | language | docs calls | docs characters | other calls | other characters | diagnostics |
+|---|---|---|---|---|---|---|---|
+| 1 | dedupe | cairn | 3 | 25850 | 14 | 13520 |  |
+| 1 | dedupe | cpp | 0 | 0 | 7 | 3446 |  |
+| 1 | dedupe | rust | 0 | 0 | 6 | 3538 |  |
+| 1 | records | cairn | 10 | 88299 | 21 | 18614 |  |
+| 1 | records | cpp | 0 | 0 | 9 | 5035 |  |
+| 1 | records | rust | 0 | 0 | 6 | 4729 |  |

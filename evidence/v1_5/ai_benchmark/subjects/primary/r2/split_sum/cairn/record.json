@@ -1,0 +1,140 @@
+{
+ "task": "split_sum",
+ "language": "cairn",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 213.0,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 31,
+  "duration_ms": 217012,
+  "duration_api_ms": 143728,
+  "total_cost_usd": 0.43905960000000016,
+  "usage": {
+   "input_tokens": 62,
+   "cache_creation_input_tokens": 30805,
+   "cache_read_input_tokens": 858078,
+   "output_tokens": 14410,
+   "output_tokens_details": {
+    "thinking_tokens": 4826
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 30805,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 322,
+     "cache_read_input_tokens": 42928,
+     "cache_creation_input_tokens": 370,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 370
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 62,
+    "outputTokens": 14410,
+    "cacheReadInputTokens": 858078,
+    "cacheCreationInputTokens": 30805,
+    "webSearchRequests": 0,
+    "costUSD": 0.43905960000000016,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 4826,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r2/split_sum/cairn",
+ "toolchain_commit": "b6e53c0ba5c6b6cc5972e9077ec7ee6e359dff02",
+ "phase": "primary",
+ "replicate": 2,
+ "infrastructure": false,
+ "source_bytes": 2327,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 2,
+   "Bash": 26,
+   "Edit": 2
+  },
+  "compile_runs": 14,
+  "compile_runs_failed": 1,
+  "flags": [
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/proc/sys/kernel/threads-max",
+    "command": "ps aux | grep -c solution; ps aux | wc -l; cat /proc/sys/kernel/threads-max 2>/dev/null; ulimit -a"
+   },
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/sys/fs/cgroup/pids.max",
+    "command": "cat /sys/fs/cgroup/pids.max 2>/dev/null; cat /sys/fs/cgroup/pids.current 2>/dev/null; echo ---; find /sys/fs/cgroup -maxdepth 2 -name \"pids.*\" 2>/dev/null | xargs -I{} sh -c 'echo {}: $(cat {})' 2>/dev/null"
+   },
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/sys/fs/cgroup/pids.current",
+    "command": "cat /sys/fs/cgroup/pids.max 2>/dev/null; cat /sys/fs/cgroup/pids.current 2>/dev/null; echo ---; find /sys/fs/cgroup -maxdepth 2 -name \"pids.*\" 2>/dev/null | xargs -I{} sh -c 'echo {}: $(cat {})' 2>/dev/null"
+   },
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/sys/fs/cgroup",
+    "command": "cat /sys/fs/cgroup/pids.max 2>/dev/null; cat /sys/fs/cgroup/pids.current 2>/dev/null; echo ---; find /sys/fs/cgroup -maxdepth 2 -name \"pids.*\" 2>/dev/null | xargs -I{} sh -c 'echo {}: $(cat {})' 2>/dev/null"
+   },
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/proc/meminfo",
+    "command": "cat > /tmp/t.cpp <<'EOF'\n#include <thread>\n#include <vector>\n#include <cstdio>\nint main(){\n  std::vector<std::thread> v;\n  for(int i=0;i<16;i++) v.emplace_back([]{});\n  for(auto&t:v) t.join();\n  printf(\"ok\\n\");\n}\nEOF\ng++ -O1 -pthread /tmp/t.cpp -o /tmp/t && /tmp/t\nulimit -v\ncat /proc/meminfo | head "
+   }
+  ]
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_benchmark/primary/r2/split_sum/cairn/transcript.jsonl",
+  "sha256": "766b76f581b60d0796a28e3e40207723ddda36a0ee5f8ed99ebf7547025c29a8",
+  "bytes": 202568
+ },
+ "given_sha256": "e0543f373b90a0b0d0406cb875214b89ca20621cf4e7b6f08ecdf6ecc045e127"
+}

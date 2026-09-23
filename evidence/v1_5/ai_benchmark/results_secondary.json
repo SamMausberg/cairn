@@ -1,0 +1,100 @@
+{
+ "phase": "secondary",
+ "summary": {
+  "cairn": {
+   "subjects": 1,
+   "solved": 1,
+   "median_tokens_total": 224137,
+   "sum_tokens_total": 224137,
+   "median_tokens_output": 4484,
+   "sum_tokens_output": 4484,
+   "median_tokens_cost_usd": 0.3167,
+   "sum_tokens_cost_usd": 0.3167,
+   "median_turns": 12,
+   "sum_turns": 12,
+   "median_wall_seconds": 55.9,
+   "sum_wall_seconds": 55.9,
+   "median_compile_runs_failed": 1,
+   "sum_compile_runs_failed": 1
+  },
+  "cpp": {
+   "subjects": 0,
+   "solved": 0
+  },
+  "rust": {
+   "subjects": 0,
+   "solved": 0
+  }
+ },
+ "pairs": {
+  "cairn_vs_cpp": {
+   "cells": 0,
+   "solved_cairn": 0,
+   "solved_cpp": 0,
+   "only_cairn": 0,
+   "only_cpp": 0,
+   "mcnemar_p": 1.0,
+   "token_ratio_all": null,
+   "token_ratio_both_solved": null,
+   "token_ratio_median_per_cell": null,
+   "token_ratio_range_per_cell": null
+  },
+  "cairn_vs_rust": {
+   "cells": 0,
+   "solved_cairn": 0,
+   "solved_rust": 0,
+   "only_cairn": 0,
+   "only_rust": 0,
+   "mcnemar_p": 1.0,
+   "token_ratio_all": null,
+   "token_ratio_both_solved": null,
+   "token_ratio_median_per_cell": null,
+   "token_ratio_range_per_cell": null
+  },
+  "cpp_vs_rust": {
+   "cells": 0,
+   "solved_cpp": 0,
+   "solved_rust": 0,
+   "only_cpp": 0,
+   "only_rust": 0,
+   "mcnemar_p": 1.0,
+   "token_ratio_all": null,
+   "token_ratio_both_solved": null,
+   "token_ratio_median_per_cell": null,
+   "token_ratio_range_per_cell": null
+  }
+ },
+ "rows": [
+  {
+   "task": "histogram",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-opus-5-5",
+   "solved": true,
+   "verdict": "passed",
+   "contaminated": false,
+   "stop": "success",
+   "turns": 12,
+   "wall_seconds": 55.9,
+   "tokens_input": 22,
+   "tokens_cache_creation": 23463,
+   "tokens_cache_read": 196168,
+   "tokens_output": 4484,
+   "tokens_cost_usd": 0.3167,
+   "tokens_total": 224137,
+   "compile_runs": 3,
+   "compile_runs_failed": 1,
+   "source_bytes": 2824,
+   "exploratory": {
+    "docs_calls": 5,
+    "docs_chars": 34830,
+    "other_calls": 6,
+    "other_chars": 5154,
+    "diagnostics": {
+     "E-EFFECT-ORDER": 2
+    }
+   }
+  }
+ ],
+ "audit_decisions": {}
+}

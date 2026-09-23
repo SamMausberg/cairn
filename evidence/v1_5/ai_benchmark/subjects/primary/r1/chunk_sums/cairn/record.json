@@ -1,0 +1,120 @@
+{
+ "task": "chunk_sums",
+ "language": "cairn",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 566.5,
+ "wall_seconds_from": "the platform's duration_ms: the harness stopped on an audit bug before it recorded its own clock",
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 63,
+  "duration_ms": 566521,
+  "duration_api_ms": 545228,
+  "total_cost_usd": 2.3256398000000003,
+  "usage": {
+   "input_tokens": 126,
+   "cache_creation_input_tokens": 137865,
+   "cache_read_input_tokens": 6616789,
+   "output_tokens": 45057,
+   "output_tokens_details": {
+    "thinking_tokens": 29697
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 137865,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 445,
+     "cache_read_input_tokens": 147999,
+     "cache_creation_input_tokens": 2359,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 2359
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 126,
+    "outputTokens": 45057,
+    "cacheReadInputTokens": 6616789,
+    "cacheCreationInputTokens": 137865,
+    "webSearchRequests": 0,
+    "costUSD": 2.3256398000000003,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 29697,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [
+   {
+    "tool_name": "Bash",
+    "tool_use_id": "toolu_01DZaCQi4DVQRrw7fboTSRek",
+    "tool_input": {
+     "command": "rm -rf /tmp/cairn_test\nrm -rf /tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r1/chunk_sums/cairn/build\necho done",
+     "description": "Clean up scratch test files and build directory"
+    }
+   }
+  ],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r1/chunk_sums/cairn",
+ "toolchain_commit": "b6e53c0ba5c6b6cc5972e9077ec7ee6e359dff02",
+ "phase": "primary",
+ "replicate": 1,
+ "infrastructure": false,
+ "recovered": "judged after the harness stopped on an audit parsing bug; the session was not rerun",
+ "source_bytes": 3742,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 19,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 15,
+   "Bash": 43,
+   "Edit": 4
+  },
+  "compile_runs": 20,
+  "compile_runs_failed": 9,
+  "flags": []
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_benchmark/primary/r1/chunk_sums/cairn/transcript.jsonl",
+  "sha256": "396166ea9cfa45ece5d164735a5f4a49900487c4e8a80eea9e4bb0beb071f7ac",
+  "bytes": 809941
+ },
+ "given_sha256": "880bde2525e2c715d46b8fac8176bf406854f907bef15e45de99d3c8225e69cf"
+}

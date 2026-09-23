@@ -207,7 +207,7 @@ def summary(rows: list[dict], languages: tuple[str, ...]) -> dict:
         for key in ("tokens_total", "tokens_output", "tokens_cost_usd", "turns", "wall_seconds", "compile_runs_failed"):
             values = [r[key] for r in mine if r.get(key) is not None]
             if values:
-                entry[f"median_{key}"] = statistics.median(values)
+                entry[f"median_{key}"] = round(statistics.median(values), 4)
                 entry[f"sum_{key}"] = round(sum(values), 4)
         out[language] = entry
     return out
@@ -249,4 +249,52 @@ def markdown(table: dict) -> str:
             f"{r['stop']} | {r['turns']} | {r.get('tokens_total', '')} | {r.get('tokens_cost_usd', '')} | "
             f"{r['wall_seconds']} | {r['compile_runs']} ({r['compile_runs_failed']}) |"
         )
+    lines += [
+        "",
+        "Not preregistered, a description of where the calls went: calls that read the documentation and the characters "
+        "they returned, the other calls and theirs, and the compiler diagnostics a subject saw outside the documentation.",
+        "",
+        "| replicate | task | language | docs calls | docs characters | other calls | other characters | diagnostics |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for r in sorted(table["rows"], key=lambda r: (r["replicate"], r["task"], r["language"])):
+        if e := r.get("exploratory"):
+            seen = ", ".join(f"{code} {count}" for code, count in e["diagnostics"].items())
+            lines.append(
+                f"| {r['replicate']} | {r['task']} | {r['language']} | {e['docs_calls']} | {e['docs_chars']} | "
+                f"{e['other_calls']} | {e['other_chars']} | {seen} |"
+            )
     return "\n".join(lines) + "\n"
+
+
+DIAGNOSTIC = {
+    "cairn": re.compile(r"\berror\[(E-[A-Z0-9-]+)\]|\"code\": \"(E-[A-Z0-9-]+)\""),
+    "rust": re.compile(r"\berror\[(E\d{4})\]"),
+    "cpp": re.compile(r"\berror: ()"),
+}
+
+
+def breakdown(transcript: Path, language: str) -> dict:
+    """Where a subject's calls went, a description and not a preregistered measure: the calls that read the
+    documentation and the characters they returned, the other calls and theirs, and the compiler diagnostics seen."""
+    docs_calls = docs_chars = other_calls = other_chars = 0
+    codes: dict[str, int] = {}
+    for call in tool_calls(transcript):
+        given = call["input"]
+        target = str(given.get("file_path") or given.get("path") or given.get("command") or given.get("pattern") or "")
+        if "docs/" in target and not COMPILE.search(target):
+            docs_calls += 1
+            docs_chars += len(call["result"])
+            continue  # the documentation quotes diagnostics of its own
+        other_calls += 1
+        other_chars += len(call["result"])
+        for match in DIAGNOSTIC[language].finditer(call["result"]):
+            code = next((g for g in match.groups() if g), "error")
+            codes[code] = codes.get(code, 0) + 1
+    return {
+        "docs_calls": docs_calls,
+        "docs_chars": docs_chars,
+        "other_calls": other_calls,
+        "other_chars": other_chars,
+        "diagnostics": dict(sorted(codes.items(), key=lambda kv: -kv[1])),
+    }

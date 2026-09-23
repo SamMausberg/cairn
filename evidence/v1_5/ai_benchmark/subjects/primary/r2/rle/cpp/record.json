@@ -1,0 +1,108 @@
+{
+ "task": "rle",
+ "language": "cpp",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 46.8,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 8,
+  "duration_ms": 47860,
+  "duration_api_ms": 44727,
+  "total_cost_usd": 0.08519600000000001,
+  "usage": {
+   "input_tokens": 16,
+   "cache_creation_input_tokens": 6218,
+   "cache_read_input_tokens": 126860,
+   "output_tokens": 3492,
+   "output_tokens_details": {
+    "thinking_tokens": 802
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 6218,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 107,
+     "cache_read_input_tokens": 18194,
+     "cache_creation_input_tokens": 517,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 517
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 16,
+    "outputTokens": 3492,
+    "cacheReadInputTokens": 126860,
+    "cacheCreationInputTokens": 6218,
+    "webSearchRequests": 0,
+    "costUSD": 0.08519600000000001,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 802,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r2/rle/cpp",
+ "toolchain_commit": "b6e53c0ba5c6b6cc5972e9077ec7ee6e359dff02",
+ "phase": "primary",
+ "replicate": 2,
+ "infrastructure": false,
+ "source_bytes": 2226,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 32,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 1,
+   "Write": 1,
+   "Bash": 5
+  },
+  "compile_runs": 1,
+  "compile_runs_failed": 0,
+  "flags": []
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_benchmark/primary/r2/rle/cpp/transcript.jsonl",
+  "sha256": "53f996f4ac01e71632dd29995ef274864e924731bd57277042d9c7ed658a626e",
+  "bytes": 46192
+ },
+ "given_sha256": "bde71fe58b215e7dde4b6b6c0a49525d013bb59e0404641e2e190ae94df6f6d4"
+}

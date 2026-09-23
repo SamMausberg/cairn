@@ -1,0 +1,118 @@
+{
+ "task": "pool",
+ "language": "cairn",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 677.8,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 42,
+  "duration_ms": 739159,
+  "duration_api_ms": 609261,
+  "total_cost_usd": 1.8929054000000003,
+  "usage": {
+   "input_tokens": 84,
+   "cache_creation_input_tokens": 130572,
+   "cache_read_input_tokens": 4146347,
+   "output_tokens": 54118,
+   "output_tokens_details": {
+    "thinking_tokens": 38488
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 130572,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 389,
+     "cache_read_input_tokens": 142805,
+     "cache_creation_input_tokens": 260,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 260
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 84,
+    "outputTokens": 54118,
+    "cacheReadInputTokens": 4146347,
+    "cacheCreationInputTokens": 130572,
+    "webSearchRequests": 0,
+    "costUSD": 1.8929054000000003,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 38488,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [
+   {
+    "tool_name": "Write",
+    "tool_use_id": "toolu_01TqXTMDbV4YaZ1154TEcQjg",
+    "tool_input": {
+     "file_path": "/tmp/ref_pool.py",
+     "content": "import sys, random\n\ndef run(cmds):\n    slots = []  # each: {'buf': bytearray or None, 'gen': int, 'occupied': bool}\n    free = []\n    import heapq\n    out = []\n    live_count = 0\n    live_bytes = 0\n\n    def is_live(i, g):\n        if i >= len(slots):\n            return False\n        return slots[i]['occupied'] and slots[i]['gen'] == g\n\n    for line in cmds:\n        parts = line.split()\n        if not parts:\n            continue\n        cmd = parts[0]\n        if cmd == 'new':\n            s = int(parts[1])\n            if free:\n                slot = heapq.heappop(free)\n            else:\n                slot = len(slots)\n                slots.append({'buf': None, 'gen': 0, 'occupied': False})\n            slots[slot]['gen'] += 1\n            slots[slot]['occupied'] = True\n            slots[slot]['buf'] = bytearray(s)\n            live_count += 1\n            live_bytes += s\n            out.append(f\"h {slot} {slots[slot]['gen']}\")\n        elif cmd == 'set':\n            i, g, off, v = int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])\n            if not is_live(i, g):\n                out.append(\"stale\")\n                continue\n            if off >= len(slots[i]['buf']):\n                out.append(\"bounds\")\n                continue\n            slots[i]['buf'][off] = v\n            out.append(\"ok\")\n        elif cmd == 'sum':\n            i, g = int(parts[1]), int(parts[2])\n            if not is_live(i, g):\n                out.append(\"stale\")\n                continue\n            out.append(str(sum(slots[i]['buf'])))\n        elif cmd == 'move':\n            i, g, j, h = int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])\n            if not is_live(i, g) or not is_live(j, h):\n                out.append(\"stale\")\n                continue\n            if i == j and g == h:\n                out.append(\"same\")\n                continue\n            slots[j]['buf'].extend(slots[i]['buf'])\n            slots[i]['occupied'] = False\n            slots[i]['buf'] = None\n            live_count -= 1\n            heapq.heappush(free, i)\n            out.append(f\"ok {len(slots[j]['buf'])}\")\n        elif cmd == 'free':\n            i, g = int(parts[1]), int(parts[2])\n            if not is_live(i, g):\n                out.append(\"stale\")\n                continue\n            live_count -= 1\n            live_bytes -= len(slots[i]['buf'])\n            slots[i]['occupied'] = False\n            slots[i]['buf'] = None\n            heapq.heappush(free, i)\n            out.append(\"ok\")\n    out.append(f\"live {live_count} {live_bytes}\")\n    return \"\\n\".join(out) + \"\\n\"\n\nif __name__ == \"__main__\":\n    with open(sys.argv[1]) as f:\n        lines = f.read().splitlines()\n    sys.stdout.write(run(lines))\n"
+    }
+   }
+  ],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/claude-1000/-home-sam-cairn/eb266778-a204-4786-a394-1a989ad4cf8f/scratchpad/aibench/runs/primary/r2/pool/cairn",
+ "toolchain_commit": "b6e53c0ba5c6b6cc5972e9077ec7ee6e359dff02",
+ "phase": "primary",
+ "replicate": 2,
+ "infrastructure": false,
+ "source_bytes": 6976,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 12,
+   "Bash": 23,
+   "Write": 5,
+   "Edit": 1
+  },
+  "compile_runs": 6,
+  "compile_runs_failed": 0,
+  "flags": []
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_benchmark/primary/r2/pool/cairn/transcript.jsonl",
+  "sha256": "f78b4951d747fe3d4641b850055ab799844e106e22ea31e1a0bca55d71f256b6",
+  "bytes": 735790
+ },
+ "given_sha256": "6455ca308b1e961f35b7acc7093e361950d2596a5b7a06dbb28eb0b67d38bd7a"
+}
