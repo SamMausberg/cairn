@@ -6,8 +6,10 @@ showed it, and the attacks that were correctly refused or held, kept so that a l
 
 import importlib.util
 import shutil
+import struct
 import subprocess
 import tempfile
+from fractions import Fraction
 
 import pytest
 
@@ -325,3 +327,122 @@ def test_what_a_group_still_holds_is_still_refused(source, code):
     with pytest.raises(Diagnostic) as refused:
         compile_source(source)
     assert refused.value.data["code"] == code, refused.value.data
+
+
+# --- Held: derived gradients outside their own tests, and quantization at its boundaries ---------------------------
+
+# Each f is differentiated by `derive grad` and its gradient compared, natively, with a central difference.
+GRADIENTS = {
+    "nested derived calls": "fn g(y:f64) -> f64 = y * y * y;\nfn h(y:f64) -> f64 = g(y) + 3.0 * y;\n"
+    "derive grad for g;\nderive grad for h;\nfn f(x:f64) -> f64 = h(g(x)) / (1.0 + x * x);",
+    "returning branches": "fn f(x:f64) -> f64 { if x > 1.0 { return x * x; } if x < -1.0 { return -x; } "
+    "return 2.0 * x - 1.0; }",
+    "a sum a loop adds into": "fn f(x:f64) -> f64 {\n  let mut t:f64 = 0.0;\n  for k in 0..5 { t += x * f64(k) + x * x; }"
+    "\n  return t;\n}",
+    "sqrt and division": "fn f(x:f64) -> f64 = sqrt(x * x + 1.0) / (x + 3.0);",
+    "a chain of lets": "fn f(x:f64) -> f64 {\n  let a = x * 2.0;\n  let b = a * a - x;\n  let c = b / (a + 10.0);\n"
+    "  return c * c + a;\n}",
+    "abs and floor": "fn f(x:f64) -> f64 = abs(x) * 3.0 + floor(x);",
+}
+POINTS = (0.3, -1.7, 2.6, 0.55, -0.45)
+CHECK = """
+derive grad for f;
+fn close(x:f64) -> bool {
+  let h:f64 = 0.000001;
+  let mut d:f64 = 0.0;
+  let got = f_grad(x, 1.0, d);
+  let fd = (f(x + h) - f(x - h)) / (2.0 * h);
+  return abs(d - fd) <= 0.0001 * (1.0 + abs(fd)) && got == f(x);
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+@pytest.mark.parametrize("name", sorted(GRADIENTS))
+def test_a_derived_gradient_agrees_with_a_central_difference(tmp_path, name, cxx):
+    tests = "".join(f"  if !close({x}) {{ return {k + 1}; }}\n" for k, x in enumerate(POINTS))
+    source = GRADIENTS[name] + "\n" + CHECK + "fn main() -> i32 {\n" + tests + "  return 0;\n}\n"
+    done = watched(tmp_path, compile_source(source)[0], cxx, "address,undefined")
+    assert done.returncode == 0, f"point {done.returncode}: {done.stderr[-2000:]}"
+
+
+@pytest.mark.parametrize(
+    "form",
+    [
+        "fn f(x:f64) -> f64 {\n  let mut t:f64 = x * x;\n  t = t * x;\n  return t;\n}",  # overwritten, not a sum
+        "fn f(x:f64) -> f64 {\n  let mut t:f64 = x;\n  let mut k:u32 = 0;\n  while k < 3 { t = t * x; k += 1; }\n"
+        "  return t;\n}",  # a counter beside the sum
+    ],
+)
+def test_a_gradient_form_the_generator_cannot_write_is_refused_not_guessed(form):
+    with pytest.raises(Diagnostic) as refused:
+        compile_source(form + "\nderive grad for f;\n")
+    assert refused.value.data["code"] == "E-GRAD-FORM"
+
+
+def rational_quantize(x: float, scale: float, lo: int, hi: int) -> int:
+    """x / scale in exact rationals, rounded to nearest with ties to even, clamped: the rule docs/numerics.md states."""
+    q = Fraction(f32(x)) / Fraction(f32(scale))
+    whole = q.numerator // q.denominator
+    rest = q - whole
+    rounded = whole + 1 if rest > Fraction(1, 2) or (rest == Fraction(1, 2) and whole % 2) else whole
+    return max(lo, min(hi, rounded))
+
+
+def f32(v: float) -> float:
+    return struct.unpack("f", struct.pack("f", v))[0]
+
+
+QUANTIZED = [  # (type, x, scale): ties at both ends, saturation, an overflowing quotient, subnormals, signed zero
+    ("i8", 63.75, 0.5), ("i8", -64.25, 0.5), ("i8", 127.5, 1.0), ("i8", -128.5, 1.0), ("i8", 3e38, 1e-38),
+    ("i8", -3e38, 1e-38), ("u8", -0.4, 1.0), ("u8", 255.5, 1.0), ("u8", 254.5, 1.0), ("i16", 2.5, 1.0),
+    ("i16", -2.5, 1.0), ("u16", 65535.49, 1.0), ("i8", 1.401298464324817e-45, 1.401298464324817e-45),
+    ("i8", 0.0, 3.0), ("i8", -0.0, 3.0),
+]  # fmt: skip
+RANGE = {"i8": (-128, 127), "u8": (0, 255), "i16": (-32768, 32767), "u16": (0, 65535)}
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_quantize_at_its_boundaries_is_the_rational_rule(tmp_path, cxx):
+    checks = "".join(
+        f"  if i64(quantize[{t}]({x!r}, {s!r})) != {rational_quantize(x, s, *RANGE[t])} {{ return {k + 1}; }}\n"
+        for k, (t, x, s) in enumerate(QUANTIZED)
+    )
+    done = watched(tmp_path, compile_source("fn main() -> i32 {\n" + checks + "  return 0;\n}\n")[0], cxx, "undefined")
+    assert done.returncode == 0, (
+        f"point {done.returncode}: {QUANTIZED[done.returncode - 1] if done.returncode > 0 else ''}"
+    )
+
+
+# --- Refused or stopped: what the review tried that the rules already answer ---------------------------------------
+
+
+@pytest.mark.parametrize(
+    "fresh,why",
+    [("average", "already written"), ("len", "builtin"), ("fn", "reserved word"), ("2x", "not an identifier")],
+)
+def test_a_rename_that_could_change_a_name_s_meaning_is_refused(tmp_path, fresh, why):
+    root = tmp_path / "demo"
+    create_project(root)
+    main_file = root / "src/main.cairn"
+    text = main_file.read_text()
+    ws = workspace(main_file.as_uri(), {})
+    with pytest.raises(ValueError, match=why):
+        rename(ws, main_file.as_uri(), text.index("mean"), fresh)
+    with pytest.raises(ValueError, match="entry point"):
+        rename(ws, main_file.as_uri(), text.index("fn main") + 3, "start")
+
+
+DRAWN = "import std.image;\nimport std.draw;\n"
+STOPPED = {  # each stops at a guard: an image has at least one pixel, and a coordinate sum is checked
+    "an empty image": "fn main() -> i32 { let a = image.new(0, 4); return 0; }\n",
+    "a corner past the largest coordinate": "fn main() -> i32 {\n  let mut a = image.new(8, 8);\n"
+    "  draw.rect(a, 9223372036854775807, 0, 9223372036854775807, 1, 7);\n  return 0;\n}\n",
+}
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+@pytest.mark.parametrize("name", sorted(STOPPED))
+def test_a_drawing_the_library_cannot_address_stops_at_a_guard(tmp_path, name, cxx):
+    done = watched(tmp_path, compile_source(DRAWN + STOPPED[name])[0], cxx, "address,undefined")
+    assert done.returncode == -6, (done.returncode, done.stderr[-1500:])  # SIGABRT from the guard, nothing else
