@@ -5,6 +5,7 @@ the gate that refuses outside `make tune-device` and `make calibrate-device`, th
 the budget and cooldown, and that the timed program and the calibration kernels compile for the device.
 """
 
+import os
 import re
 import shutil
 import subprocess
@@ -21,6 +22,23 @@ ROOT = Path(__file__).resolve().parents[2]
 SCALE = "fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i]; } }\n"
 
 
+def no_other_process(monkeypatch):
+    """A test that opens the device gate must start nothing but what it replaced: any other way to start a process
+    fails before the process exists, so a later change to time_device cannot reach the device from the everyday suite."""
+
+    def refuse(*args, **_):
+        raise AssertionError(f"a process was started past the device gate: {args[:1]}")
+
+    for module, name in (
+        (subprocess, "Popen"),
+        (os, "system"),
+        (os, "posix_spawn"),
+        (os, "posix_spawnp"),
+        (os, "fork"),
+    ):
+        monkeypatch.setattr(module, name, refuse)
+
+
 def test_nothing_runs_on_the_device_outside_the_owner_s_targets(monkeypatch):
     monkeypatch.delenv("CAIRN_GPU_TESTS", raising=False)
     assert "make tune-device" in on_device.allowed()
@@ -32,6 +50,7 @@ def test_nothing_runs_on_the_device_outside_the_owner_s_targets(monkeypatch):
 
 def test_a_process_stops_at_its_device_budget(monkeypatch):
     monkeypatch.setenv("CAIRN_GPU_TESTS", "1")
+    no_other_process(monkeypatch)
     monkeypatch.setattr(on_device, "ran", on_device.BUDGET)
     with pytest.raises(ValueError, match="device runs"):
         on_device.time_device(SCALE, "scale", {"n": 1024})  # refused before anything is built or run
@@ -57,6 +76,7 @@ def test_a_timed_run_builds_beside_the_runtime_headers_and_runs_under_the_lock(m
         held.pop()
 
     monkeypatch.setattr(on_device.subprocess, "run", run)
+    no_other_process(monkeypatch)
     monkeypatch.setattr(on_device, "locked", locked)
     assert on_device.time_device(SCALE, "scale", {"n": 1024}) == {"status": "measured", "median_ns": 5.0, "min_ns": 4.0}
     (build, beside, locked_build), (timed, _, locked_run) = started
