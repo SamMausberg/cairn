@@ -16,10 +16,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.projects.toolchain import find
-from support import best_profile, compare_sections, generate, profile_flags
+from support import REFERENCE_FUNCTIONS, best_profile, compare_sections, generate, profile_flags
 
 os.chdir(ROOT)
-NAMES = ["saxpy", "dot", "sum_wrap", "prefix", "count_gt", "histogram", "compact_even", "lower_bound", "gcd"]
 ARCH = best_profile("clang++")
 # -ffunction-sections is what makes one function one comparable section.
 FLAGS = profile_flags("exe", ARCH, add=["-ffunction-sections"])
@@ -38,7 +37,7 @@ for src, out in [
     ("bench/host/reference.cpp", "results/native/reference.o"),
 ]:
     run([find("clang++"), *FLAGS, "-c", src, "-o", out])
-rows = compare_sections(NAMES, run)
+rows = compare_sections(REFERENCE_FUNCTIONS, run)
 identical = sum(x["bytes_equal"] and x["relocations_equal"] for x in rows)
 result = {
     "generated_source_sha256": hashlib.sha256((ROOT / "results/native/native.cpp").read_bytes()).hexdigest(),

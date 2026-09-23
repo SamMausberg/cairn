@@ -18,7 +18,7 @@ from pathlib import Path
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
 from cairn.agent.teaching import CARDS
-from support import TOKENIZER, generate, tokenizer
+from support import REFERENCE_FUNCTIONS, TOKENIZER, generate, tokenizer
 
 RECIPE_SECTION = "Closed generator contracts"
 CARD = "src/cairn/agent/teaching.py: CARDS"
@@ -48,8 +48,6 @@ def main():
         def count(t):
             return len(encode(t))
 
-    names = ["saxpy", "dot", "sum_wrap", "prefix", "count_gt", "histogram", "compact_even", "lower_bound", "gcd"]
-
     def extract(src, pattern):
         m = re.search(pattern, src)
         if not m:
@@ -69,7 +67,7 @@ def main():
     native = (R / "examples/basics/native.cairn").read_text()
     ref = (R / "bench/host/reference.cpp").read_text()
     pairs = []
-    for n in names:
+    for n in REFERENCE_FUNCTIONS:
         a = extract(native, r"fn " + n + r"\(")
         b = extract(ref, r'extern "C" [^\n]*?cc_' + n + r"\(")
         pairs.append(

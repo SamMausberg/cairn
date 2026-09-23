@@ -133,6 +133,20 @@ def compare_sections(names: list[str], run) -> list[dict]:
     return rows
 
 
+# The functions of examples/basics/native.cairn that bench/host/reference.cpp writes again as ordinary C++.
+REFERENCE_FUNCTIONS = [
+    "saxpy",
+    "dot",
+    "sum_wrap",
+    "prefix",
+    "count_gt",
+    "histogram",
+    "compact_even",
+    "lower_bound",
+    "gcd",
+]
+
+
 DEVICE_LOCK = Path("/tmp/cairn-gpu.lock")  # one path for every checkout and worktree on the machine
 
 

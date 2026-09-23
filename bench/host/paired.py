@@ -18,10 +18,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.projects.toolchain import find
-from support import best_profile, compare_sections, environment, generate, profile_flags
+from support import REFERENCE_FUNCTIONS, best_profile, compare_sections, environment, generate, profile_flags
 
 os.chdir(ROOT)
-KERNELS = ["saxpy", "dot", "sum_wrap", "prefix", "count_gt", "histogram", "compact_even", "lower_bound", "gcd"]
 ARCH = best_profile("clang++")
 FLAGS = profile_flags("exe", ARCH, add=["-ffunction-sections"])
 commands = []
@@ -78,7 +77,7 @@ for (name, n, pattern), rr in groups.items():
         }
     )
 (ROOT / "results/timing/timing_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-equivalence = compare_sections(KERNELS, lambda cmd: run(cmd).stdout)
+equivalence = compare_sections(REFERENCE_FUNCTIONS, lambda cmd: run(cmd).stdout)
 (ROOT / "results/timing/codegen_equivalence.json").write_text(json.dumps(equivalence, indent=2) + "\n")
 (ROOT / "results/timing/benchmark_environment.json").write_text(
     json.dumps(
