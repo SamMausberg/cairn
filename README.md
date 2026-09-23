@@ -126,7 +126,7 @@ The demo agents are scripted replies; what the host, the compiler, Z3 and the pr
 
 ## Limitations and what you trust
 
-CAIRN is beta software, developed and measured on one machine. The language can still change between releases.
+CAIRN 1.0 was developed and measured on one machine. A later major version may still change the language.
 
 The compiler is not proved correct. The checker and the C++ emitter are about 8,100 lines of Python (`src/cairn/compiler`), and the runtime is about 2,600 lines of C++ headers (`src/cairn/runtime`). The Lean proofs are about models written by hand beside that code. Differential tests compare the models with the checker on generated programs, which shows agreement on samples, not that the Python implements the model.
 
