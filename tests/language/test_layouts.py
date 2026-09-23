@@ -13,7 +13,7 @@ import pytest
 from cairn.agent.projection import canonical_source
 from cairn.compiler import layouts as L
 from cairn.compiler.cairnc import compile_program, compile_source
-from emitted import refused, run, sanitized, watched
+from emitted import contract, device_build, on_device, refused, run, sanitized, watched
 
 TILES = {"rows": "rows(32, 32)", "padded": "pad(rows(32, 32), 1)", "swizzled": "swizzle(rows(32, 32), 5, 0, 5)"}
 
@@ -357,3 +357,25 @@ fn main() -> i32 {
 )
 def test_an_inverse_that_does_not_exist_is_refused(source, said):
     assert said in refused("E-LAYOUT", source)["message"]
+
+
+LANE_DEATH = """layout T = rows(4, 4);
+fn pick(n:usize, out:rw<f32>[n]@device, x:ro<f32>[16]@device) { parallel i in n { out[i] = x[T.at(i, 0)]; } }
+fn main() -> i32 {
+  buffer x:f32[16]@device = zeroed;
+  buffer out:f32[8]@device = zeroed;
+  pick(8, out, x);
+  return 0;
+}
+"""
+
+
+def test_a_coordinate_outside_its_layout_traps_in_a_device_lane(tmp_path):
+    """Lanes 4 to 7 name row 4 and past: the coordinate's guard ends the kernel and the process aborts. Compiled for
+    sm_120 here; the run is `make gpu`'s."""
+    cpp = compile_source(LANE_DEATH)[0]
+    (tmp_path / "build").mkdir()
+    device_build(tmp_path / "build", cpp, entry="main", timeout=900)
+    with on_device():
+        done = contract(tmp_path, cpp, "g++", cuda=True)
+        assert done.returncode == -signal.SIGABRT, (done.returncode, done.stderr[-2000:])
