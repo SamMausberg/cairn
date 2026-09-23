@@ -52,8 +52,7 @@ fn append(
 
 // Apply a decoded record to the index; both owners move in, and a tombstone drops them.
 fn apply(s:rw<Store>, kind:u32, key:Vec[u8], value:Vec[u8]) {
-  let k = key.len;
-  let id = text.hash_bytes(key.data[0..k]);
+  let id = text.hash_bytes(key);
   if kind == ERASE {
     let gone = s.index.remove(id);
   } else {

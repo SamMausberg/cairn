@@ -69,8 +69,7 @@ fn respond(fd:i32, t:rw<Table>, n:usize, line:ro<u8>[n]) -> Result[bool, IoError
         out.push(' ');
         let v = t.index.vals[slot].value.len;
         out.extend_from(v, t.index.vals[slot].value.data[0..v]);
-        let m = out.len;
-        let sent = try say(fd, out.data[0..m]);
+        let sent = try say(fd, out);
       }
       None => { let missing = try say(fd, "-missing"); }
     }

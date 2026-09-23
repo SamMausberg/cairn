@@ -76,7 +76,7 @@ fn main() -> i32 {
 
 ## std.vec
 
-`struct Vec[T:affine] { data:Buf[T]; len:usize; }`, a growable owner. Both fields are public, because passing `v.data[0..n]` to a view parameter is the normal way to hand a Vec to anything.
+`struct Vec[T:affine] { data:Buf[T]; len:usize; lends data[0..len]; }`, a growable owner. A Vec named where a view is expected lends its elements, so `io.print(line)` passes `line.data[0..line.len]` ([memory.md](memory.md#arrays-views-and-parts)), and a `for` walks them. Both fields are public, so a part of the storage, `v.data[lo..hi]`, can be lent too.
 
 ```cairn
 import std.vec as vec;
@@ -159,9 +159,8 @@ fn record(path:ro<u8>[PATH], n:usize, data:ro<u8>[n]) -> Result[usize, io.IoErro
 
 fn lines(path:ro<u8>[PATH]) -> Result[u64, io.IoError] {
   let bytes = try io.read_file(PATH, path);
-  let n = bytes.len;
   let mut count:u64 = 0;
-  for i in 0..n { if bytes.data[i] == 10 { count += 1; } }
+  for b in bytes { if b == 10 { count += 1; } }
   return Ok(count);
 }
 
@@ -202,7 +201,7 @@ fn main() -> i32 {
   fmt.padded(line, count, 3, '0');
   fmt.bytes(line, " at 0x");
   fmt.hex(line, 48879, 8);
-  io.println(line.data[0..line.len]);              // mean  0.667 of 007 at 0x0000beef
+  io.println(line);              // mean  0.667 of 007 at 0x0000beef
   return 0;
 }
 ```
@@ -256,7 +255,7 @@ fn greet() -> Result[usize, IoError] {
     io.println(a.text.data[lo..hi]);
   }
   match try env.var("HOME") {
-    Some(home) => { io.println(home.data[0..home.len]); }
+    Some(home) => { io.println(home); }
     None => { io.println("no HOME"); }
   }
   return Ok(a.count());

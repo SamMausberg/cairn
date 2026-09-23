@@ -34,6 +34,6 @@ fn main() -> i32 {
   fmt.bytes(line, " frames drawn, ");
   fmt.uint(line, shots);
   fmt.bytes(line, " captured");
-  io.println(line.data[0..line.len]);
+  io.println(line);
   return 0;
 }

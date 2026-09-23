@@ -51,7 +51,7 @@ fn report(counts:ro<Map[Word, u64]>, n:usize, rows:ro<Row>[n], shown:usize, word
   fmt.bytes(out, " words, ");
   fmt.uint(out, counts.count());
   fmt.bytes(out, " distinct\n");
-  io.print(out.data[0..out.len]);
+  io.print(out);
 }
 
 // Whether argument i is exactly `name`.
@@ -81,7 +81,7 @@ fn run(a:ro<Args>) -> i32 {
     let hi = a.end(i);
     match fs.read(a.text.data[lo..hi]) {
       Ok(body) => {
-        let found = count_words(counts, body.data[0..body.len]);
+        let found = count_words(counts, body);
         words += found;
       }
       Err(e) => {
@@ -90,7 +90,7 @@ fn run(a:ro<Args>) -> i32 {
         fmt.bytes(line, a.text.data[lo..hi]);
         fmt.bytes(line, ": errno ");
         fmt.int(line, e.code);
-        io.eprintln(line.data[0..line.len]);
+        io.eprintln(line);
         return 1;
       }
     }
@@ -99,9 +99,8 @@ fn run(a:ro<Args>) -> i32 {
   for slot in 0..counts.slots() {
     if counts.live(slot) { rows.push(Row(counts.vals[slot], slot)); }
   }
-  let n = rows.len;
-  sort.sort_by(rows.data[0..n], |x:ro<Row>, y:ro<Row>| -> bool { return before(counts, x, y); });
-  report(counts, rows.data[0..n], shown, words);
+  sort.sort_by(rows, |x:ro<Row>, y:ro<Row>| -> bool { return before(counts, x, y); });
+  report(counts, rows, shown, words);
   return 0;
 }
 

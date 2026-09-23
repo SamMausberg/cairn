@@ -8,11 +8,9 @@ import std.vec (Vec);
 
 struct Word { bytes:Vec[u8]; }
 
-impl Hash for Word { fn hash(w:ro<Word>) -> u64 = text.hash_bytes(w.bytes.data[0..w.bytes.len]); }
+impl Hash for Word { fn hash(w:ro<Word>) -> u64 = text.hash_bytes(w.bytes); }
 impl Eq for Word {
-  fn same(a:ro<Word>, b:ro<Word>) -> bool = text.equal(
-    a.bytes.data[0..a.bytes.len], b.bytes.data[0..b.bytes.len]
-  );
+  fn same(a:ro<Word>, b:ro<Word>) -> bool = text.equal(a.bytes, b.bytes);
 }
 
 fn letter(c:u8) -> bool = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')

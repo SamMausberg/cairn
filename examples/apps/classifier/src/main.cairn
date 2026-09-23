@@ -191,7 +191,7 @@ fn main() -> i32 {
   say(out, "i8 drift        ", low_drift);
   say(out, "f8e4m3 accuracy ", tiny_hit);
   say(out, "f8e4m3 drift    ", tiny_drift);
-  io.print(out.data[0..out.len]);
+  io.print(out);
   if last >= first { return 1; }
   return 0;
 }

@@ -82,8 +82,8 @@ pub fn scanlines(img:ro<Image>) -> Vec[u8] {
 pub fn png(img:ro<Image>, out:rw<Vec[u8]>) {
   let raw = scanlines(img);
   let mut body = vec.new[u8]();
-  stored(body, raw.data[0..raw.len]);
-  packed(img.w, img.h, body.data[0..body.len], out);
+  stored(body, raw);
+  packed(img.w, img.h, body, out);
 }
 
 // The PNG file of a w by h RGBA image whose scanlines `zstream` holds as a zlib stream.
@@ -105,7 +105,7 @@ pub fn packed(w:usize, h:usize, n:usize, zstream:ro<u8>[n], out:rw<Vec[u8]>) {
 pub fn save_png(img:ro<Image>, n:usize, path:ro<u8>[n]) -> Result[usize, IoError] {
   let mut out = vec.new[u8]();
   png(img, out);
-  return fs.write(path, out.data[0..out.len]);
+  return fs.write(path, out);
 }
 
 // The binary PPM of the image: a short header and then R, G, B per pixel; alpha is dropped.

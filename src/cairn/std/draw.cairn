@@ -235,7 +235,7 @@ pub fn json(l:ro<Layout>, img:ro<Image>, at_ns:u64, out:rw<Vec[u8]>) {
   fmt.bytes(out, ",\"at_ns\":");
   fmt.uint(out, at_ns);
   fmt.bytes(out, ",\"elements\":[");
-  fmt.bytes(out, l.text.data[0..l.text.len]);
+  fmt.bytes(out, l.text);
   fmt.bytes(out, "]}\n");
 }
 
@@ -248,17 +248,17 @@ pub fn capture(img:ro<Image>, l:ro<Layout>, k:usize) -> Result[bool, IoError] {
     None => return Ok(false);
     Some(dir) => {
       let mut path = vec.new[u8]();
-      fmt.bytes(path, dir.data[0..dir.len]);
+      fmt.bytes(path, dir);
       fmt.bytes(path, "/frame-");
       fmt.uint(path, k);
       let stem = path.len;
       fmt.bytes(path, ".png");
-      let wrote = try image.save_png(img, path.data[0..path.len]);
+      let wrote = try image.save_png(img, path);
       vec.truncate(path, stem);
       fmt.bytes(path, ".json");
       let mut record = vec.new[u8]();
       json(l, img, at.ns, record);
-      let saved = try fs.write(path.data[0..path.len], record.data[0..record.len]);
+      let saved = try fs.write(path, record);
       return Ok(true);
     }
   }
