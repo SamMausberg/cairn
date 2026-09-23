@@ -338,7 +338,7 @@ fn main() -> i32 {
 shade calls f from parallel lanes, where it cannot write:calls.
 ```
 
-Host lanes are a pool of one thread per core, or `CAIRN_LANES`, created by the first region and reused by every later one. A region of fewer than sixteen thousand elements runs as the ordinary loop on the calling thread. The number of lanes never shows in a result, only in the time.
+Host lanes are one pool of a thread per core, or `CAIRN_LANES`, made by the first region; a region below 16384 elements runs as the ordinary loop on the calling thread. The number of lanes shows only in the time, never in a result.
 
 ## Plans
 
@@ -417,7 +417,7 @@ fn energy(n:usize, x:ro<f64>[n]) -> f64 {
 plan energy { fuse 2; }    // one fold that squares as it adds
 ```
 
-The no-trap rule is strict on purpose: fusing two trapping bodies would let the later body's guard fail first, so a program could end in a way it could not end before. Fusion is a plan item rather than automatic because one fused body is not always faster than two short loops that each vectorize. `--keep-guards` never fuses, and the receipt lists every chain under `fused`. On one shared host, fused element-wise regions ran 1.1x to 2.6x faster than as written, and chains that no longer allocate their scratch 1.5x to 62x faster, most of that at ten million elements and more ([evidence/v1_4/fusion](../evidence/v1_4/fusion/README.md)).
+No body may trap, because fusing two trapping bodies could let the later body's guard fail first. Fusion is a plan item rather than automatic because one fused body is not always faster than two short loops that each vectorize. `--keep-guards` never fuses, and the receipt lists every chain under `fused`. On one shared host, fused element-wise regions ran 1.1x to 2.6x faster than as written, and chains that no longer allocate their scratch 1.5x to 62x faster, most of that at ten million elements and more ([evidence/v1_4/fusion](../evidence/v1_4/fusion/README.md)).
 
 `E-PLAN` refuses a plan for a function without the kind of region an item needs, a second plan for one function, an unknown or repeated item, a value out of range (a grain of 0, lanes outside 1 to 1024, `per_lane` outside 1 to 65536), and a `fuse` with no two regions it may join. `plan` is a keyword only at the top of a module.
 
