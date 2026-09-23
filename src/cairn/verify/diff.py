@@ -419,9 +419,10 @@ def semver(o: Version, n: Version, functions: dict[str, Any], types: dict[str, A
     level = max((lvl for lvl, _ in reasons), key=LEVELS.index, default="patch" if changed else "none")
     shown = [why for _, why in sorted(reasons, key=lambda r: -LEVELS.index(r[0]))]
     verdict: dict[str, Any] = {"level": level, "reasons": shown}
-    if unproven:
+    if unproven:  # unknown is never success: an unproven public function may be a change of any size
         verdict["unproven"] = sorted(unproven)
-        verdict["holds"] = "only if the unproven public functions behave as they did"
+        if level != "major":  # below the top, what the proven facts give is a lower bound, not the level
+            verdict["level"], verdict["at_least"] = "unknown", level
     return verdict
 
 

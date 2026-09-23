@@ -99,7 +99,8 @@ def test_an_unbounded_loop_is_unknown_and_never_counted_as_unchanged():
     entry = record["functions"]["spin"]
     assert entry["class"] == "unknown" and "unrolling budget" in entry["reason"]
     assert entry["bounded"] == {"where": "n <= 16", "status": "smt-equivalent"}  # evidence, and only inside the bound
-    assert record["semver"]["unproven"] == ["spin"] and not holds(record, "equivalent")
+    assert record["semver"] == {"level": "unknown", "at_least": "patch", "reasons": [], "unproven": ["spin"]}
+    assert not holds(record, "equivalent")
 
 
 def test_a_difference_inside_the_bound_is_a_behaviour_change():
@@ -252,7 +253,8 @@ def test_a_template_no_code_instantiates_is_compared_by_its_tokens_and_never_lef
         changed["functions"]["pick"]["class"] == "unknown"
         and "tokens changed" in changed["functions"]["pick"]["reason"]
     )
-    assert changed["semver"]["unproven"] == ["pick"] and not holds(changed, "equivalent")
+    assert changed["semver"]["unproven"] == ["pick"] and changed["semver"]["level"] == "unknown"
+    assert not holds(changed, "equivalent")
     used = "fn use() -> u64 = pick(1, 2, true);\n"  # an instance has code, and is compared as a function
     instanced = diff(PICK + used, rewritten + used, predict=False)["functions"]
     assert instanced["pick[u64]"]["class"] == "smt-equivalent" and instanced["use"]["class"] == "smt-equivalent"
@@ -271,3 +273,23 @@ def test_a_program_past_the_value_model_s_limit_is_compared_through_the_modules_
     assert len(old.encode()) > 64000
     entry = diff(old, new, predict=False)["functions"]["m.f"]
     assert entry["class"] == "smt-equivalent"
+
+
+def test_an_unproven_public_function_makes_the_level_unknown_unless_it_is_already_major(tmp_path, capsys):
+    spun = LOOP.replace("return t;", "return t + 0;")
+    minor = diff(LOOP, spun + "fn more() -> u64 = 1;\n", predict=False)["semver"]
+    assert minor["level"] == "unknown" and minor["at_least"] == "minor" and minor["unproven"] == ["spin"]
+    major = diff(LOOP + "fn gone() -> u64 = 1;\n", spun, predict=False)["semver"]
+    assert major["level"] == "major" and "at_least" not in major and major["unproven"] == ["spin"]
+    old, new, page = tmp_path / "old.cairn", tmp_path / "new.cairn", tmp_path / "pr.md"
+    old.write_text(LOOP)
+    new.write_text(spun)
+    assert main(["diff", str(old), str(new), "--format", "human", "--no-predict", "--markdown", str(page)]) == 0
+    said = capsys.readouterr().out.splitlines()
+    assert said[-2:] == [
+        "semver: unknown (at least patch)",
+        "  unknown, because these public functions are unproven: spin",
+    ]
+    text = page.read_text()
+    assert "Semantic version: **unknown (at least patch)**." in text
+    assert "It is unknown, because these public functions are unproven: `spin`." in text

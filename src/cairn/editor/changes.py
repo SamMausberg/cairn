@@ -107,10 +107,20 @@ def lines(record: dict[str, Any], old: str, new: str) -> str:
     if said := forecast(record):
         out.append(said)
     verdict = record["semver"]
-    out.append(f"semver: {verdict['level']}" + (f": {'; '.join(verdict['reasons'])}" if verdict["reasons"] else ""))
+    out.append(f"semver: {level(verdict)}" + (f": {'; '.join(verdict['reasons'])}" if verdict["reasons"] else ""))
     if verdict.get("unproven"):
-        out.append(f"  holds {verdict['holds']}: {', '.join(verdict['unproven'])}")
+        out.append(f"  {unproven(verdict)}: {', '.join(verdict['unproven'])}")
     return "\n".join(out)
+
+
+def level(verdict: dict[str, Any]) -> str:
+    return verdict["level"] + (f" (at least {verdict['at_least']})" if "at_least" in verdict else "")
+
+
+def unproven(verdict: dict[str, Any]) -> str:
+    if verdict["level"] == "unknown":
+        return "unknown, because these public functions are unproven"
+    return "these public functions are unproven, and cannot raise it further"
 
 
 def forecast(record: dict[str, Any]) -> str:
@@ -140,7 +150,7 @@ def markdown(record: dict[str, Any], old: str, new: str) -> str:
         out += [said[0].upper() + said[1:] + ".", ""]
     verdict = record["semver"]
     reasons = "; ".join(verdict["reasons"])
-    out.append(f"Semantic version: **{verdict['level']}**" + (f", because {reasons}." if reasons else "."))
+    out.append(f"Semantic version: **{level(verdict)}**" + (f", because {reasons}." if reasons else "."))
     if verdict.get("unproven"):
-        out += ["", f"That holds {verdict['holds']}: {', '.join(f'`{n}`' for n in verdict['unproven'])}."]
+        out += ["", f"It is {unproven(verdict)}: {', '.join(f'`{n}`' for n in verdict['unproven'])}."]
     return "\n".join(out) + "\n"
