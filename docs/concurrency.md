@@ -1,12 +1,12 @@
 # Tasks, lanes and devices
 
-Tasks lease what they borrow, lanes are race free by construction, and placement is part of a view's type. [language.md](language.md) covers values and control flow, [memory.md](memory.md) memory, ownership and effects; [abstractions.md](abstractions.md) covers generics, traits, closures, modules and recipes, and [numerics.md](numerics.md) the storage floats a region may hold and convert, quantization and derived gradients.
+Tasks lease what they borrow, lanes are race free by construction, and placement is part of a view's type.
 
 ## Tasks and leases
 
-`let t = spawn f(args);` runs a declared function on its own thread. The thread is one an earlier task left parked, or a new one when none is, so a spawn never waits for another task to finish and a spawn in a loop pays for a thread only once ([internals](internals.md#compiler-architecture) has the policy). The arguments are evaluated at the spawn and carried by value, so a task never reads the spawner's locals. `t` is a linear ticket bound to its scope. `wait(t)` consumes it and returns `f`'s result, and it must do so on every path of the same function; the ticket cannot be stored, passed or returned.
+`let t = spawn f(args);` runs a declared function on its own thread, reusing a parked one when there is one. The arguments are evaluated at the spawn. `t` is a linear ticket: `wait(t)` consumes it and returns `f`'s result, on every path of the same function, and the ticket cannot be stored, passed or returned.
 
-Until the `wait`, every place lent to the task is leased: nobody may write what the task reads or touch what it writes (`E-LEASED`), including by moving the owner. Read-only lending is shared freely. Visibly disjoint parts of one array may be lent mutably to different tasks. A part ends where the next begins, the bounds are literals or names that cannot change, and because every lent part was guarded `lo <= hi`, the order of the bounds chains through the parts in between, so a K-way split works.
+Until the `wait`, every place lent to the task is leased: nobody may write what the task reads or touch what it writes, the owner included (`E-LEASED`). Read-only lending is shared freely. Visibly disjoint parts of one array may go mutably to different tasks when each part ends where the next begins, so a K-way split works.
 
 ```cairn
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
@@ -33,7 +33,7 @@ fn main() -> i32 {
 }
 ```
 
-An owner lent whole (`rw<Buf[T]>`) lends its `len` too. A temporary given to a task's single borrow rides along by value. A closure cannot follow a task to another thread (`E-SPAWN`).
+A closure cannot follow a task to another thread (`E-SPAWN`).
 
 ```cairn rejects E-LEASED
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
@@ -50,7 +50,7 @@ fn main() -> i32 {
 samples is lent to t until wait(t).
 ```
 
-A lease names the place that was lent, not the local it is rooted in. Lending `box.a` leases `box.a`, so another task may take `box.b` at the same time, and `len(box.a)` still reads while a task holds that field's elements. Lending the record itself leases every field inside it, and a field of a record a task holds is not readable.
+A lease names the place that was lent, not the local it is rooted in, so two tasks may take two fields of one record, and `len(box.a)` still reads while a task holds `box.a`'s elements. Lending the record itself leases every field.
 
 ```cairn
 struct Pair { left:Buf[u64]; right:Buf[u64]; }
@@ -69,7 +69,7 @@ fn main() -> i32 {
 }
 ```
 
-The same field twice is one piece of storage twice, and replacing a lent field's cell (`pair.left = Buf[u64](2)`) is refused for the same reason: the task's view lives in that cell.
+The same field lent twice is one piece of storage twice, and so is refused, as is replacing a lent field (`pair.left = Buf[u64](2)`).
 
 ```cairn rejects E-LEASED
 struct Pair { left:Buf[u64]; right:Buf[u64]; }
@@ -92,11 +92,11 @@ pair.left is lent to left until wait(left).
 
 ## Task groups
 
-Tickets are awaited in the order they are written. A group collects tasks in the order they finish. `let g = Group[T](n);` declares a group of at most `n` tasks in flight whose results have type `T`. It is declared in place and used only there: never stored in a record, passed by value, lent to a callee or returned (`E-PINNED`), since a lease recorded in a callee would end at its return while the task still runs. Like a ticket it is linear: `wait(g)` must consume it on every path of the same function (`E-LINEAR-LEAK`, `E-LINEAR-BRANCH`). The declaration takes the group's whole storage, so its row carries `alloc` and `free`, and nothing after it allocates.
+A group collects tasks in the order they finish, where tickets are awaited in the order they are written. `let g = Group[T](n);` declares, in place, a group of at most `n` tasks in flight with results of type `T`, and takes all its storage there. It is never stored, passed, lent to a callee or returned (`E-PINNED`), and like a ticket it is linear: `wait(g)` consumes it on every path (`E-LINEAR-LEAK`, `E-LINEAR-BRANCH`).
 
-`spawn f(args) into g;` runs a declared function on its own thread, exactly as `spawn` does, and hands the task to the group instead of naming a ticket. `f` must return `T` (`E-TYPE-MISMATCH`), and a closure cannot follow it (`E-SPAWN`). Every place the task borrows is leased to the group until `wait(g)`, and touching one in between is `E-LEASED` with the group as the holder. A submission when `n` tasks are already outstanding is a guard failure at run time, never silent growth.
+`spawn f(args) into g;` starts a task as `spawn` does and hands it to the group. `f` must return `T` (`E-TYPE-MISMATCH`). Every place the task borrows is leased to the group until `wait(g)`. A submission beyond `n` tasks is a guard failure, never silent growth.
 
-`let r = collect(g);` blocks until some task of the group has finished and yields its result, whichever task that was. Collecting from a group with nothing outstanding is a guard failure. A collect returns no lease, because the checker cannot know which task finished; only `wait(g)` returns them. `wait(g)` joins every task still running, drops every result nobody collected, releases the leases and consumes the group. Submitting and collecting are `spawn` and `join`, and each carries the `trap` of its guard.
+`let r = collect(g);` waits for whichever task finishes next and yields its result; with nothing outstanding it is a guard failure. A collect returns no lease, since the checker cannot know which task finished. `wait(g)` joins every task, drops uncollected results, releases the leases and consumes the group.
 
 ```cairn
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
@@ -127,9 +127,7 @@ fn main() -> i32 {
 }
 ```
 
-A loop may lend a group what its tasks only read, since read-only lending is shared. Lending a place `rw` inside a loop is refused, because the next iteration would lend it to the group again while the group still holds it. For the same reason nothing a loop body touches may conflict with what an earlier iteration lent the group, so writing `d[0]` before submitting a reader of `d` is `E-LEASED` too. An owner passed by value is not lent: it moves into the task, which releases it, so a loop may make a fresh `Buf` and move it into the group each time round, and the moved name is `E-MOVED` afterwards.
-
-After an `if` or a `match` the group holds what every path lent it. A part's bounds order other parts only when every path formed that part, because its `lo <= hi` guard ran only where it was formed, and the same holds for a part lent inside a loop, which may run no iteration at all.
+A loop may lend a group what its tasks only read. Lending a place `rw` inside a loop is refused, because the next iteration would lend it again while the group still holds it. An owner passed by value is not lent but moved into the task, so a loop may move a fresh `Buf` into the group each time round. After an `if` or a `match`, the group holds what any path lent it.
 
 ```cairn rejects E-LEASED
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
@@ -146,15 +144,15 @@ fn main() -> i32 {
 samples[?..?] is lent to writers until wait(writers), and the next iteration would lend it again.
 ```
 
-A group holds tasks that run declared functions. Queued device work keeps its ticket and its `after` ordering (`E-SPAWN`), a result type that is `linear` cannot be dropped by `wait` and is refused (`E-LINEAR-STORAGE`), and a group is a host object (`E-PLACEMENT`).
+Queued device work cannot join a group (`E-SPAWN`), a `linear` result type is refused because `wait` might drop it (`E-LINEAR-STORAGE`), and a group is a host object (`E-PLACEMENT`).
 
 ## I/O rings
 
-A task is a thread. A ring keeps many kernel operations in flight from one thread, and hands them back in the order they finish. `let mut q = IoRing(n);` declares, in place, a ring of at most `n` operations, for `n` from 1 to 4096; any other `n` traps. It is Linux io_uring, set up here once, so the declaration carries `alloc`, `free` and `io`.
+A task is a thread. A ring keeps many kernel operations in flight from one thread and hands them back in the order they finish. `let mut q = IoRing(n);` declares, in place, a Linux io_uring of at most `n` operations, from 1 to 4096.
 
-An operation takes the bytes it works on by value. `q.read(fd, data, count, offset, tag)`, `q.write(fd, data, count, offset, tag)`, `q.recv(fd, data, count, tag)`, `q.send(fd, data, count, tag)` and `q.accept(fd, tag)` move the `Buf[u8]` called `data` into the ring, so the program cannot touch storage the kernel is using (`E-MOVED`). `let data = q.next(tag, result);` waits for the next operation to finish and hands its `Buf` back, with the tag it was given and the kernel's result: a byte count, a new descriptor, or a negative errno. `io.outcome(result)` turns that into a `Result[usize, IoError]`, so a failure is a value to match on. `count` may be less than `len(data)`, never more.
+An operation takes its bytes by value: `q.read`, `q.write`, `q.recv` and `q.send` move a `Buf[u8]` into the ring, so the program cannot touch storage the kernel is using (`E-MOVED`), and `q.accept` takes none. `let data = q.next(tag, result);` waits for the next operation to finish and hands its `Buf` back, with its tag and the kernel's result, a count or a negative errno, which `io.outcome(result)` turns into a `Result`.
 
-Nothing is borrowed across an operation, so a ring records no lease and may be lent `rw` to a callee or to a task, which then uses it alone until it returns. It is never stored, passed by value or returned (`E-PINNED`). It is linear: `wait(q)` consumes it in the function that declared it (`E-LINEAR-LEAK`), after every operation still in flight has finished, and releases every `Buf` nobody collected. `defer wait(q);` covers every exit.
+A ring records no lease, so it may be lent `rw` to a callee or a task. It is never stored, passed by value or returned (`E-PINNED`), and it is linear: `wait(q)` consumes it in its function (`E-LINEAR-LEAK`) once every operation has finished, and releases every uncollected `Buf`. `defer wait(q);` covers every exit.
 
 ```cairn
 import std.core (Result);
@@ -201,11 +199,11 @@ fn main() -> i32 {
 data was moved.
 ```
 
-`q.timeout(ns, tag)` is an operation that finishes after `ns` nanoseconds with `-ETIME`, which bounds how long a `next` can wait. `q.cancel(tag)` asks the kernel to stop every operation in flight under that tag. Each still comes back through `next`, with `-ECANCELED` or with its own result if it finished first, and with its `Buf`, so cancelling releases nothing early and a cancel that finds nothing does nothing.
+`q.timeout(ns, tag)` finishes after `ns` nanoseconds with `-ETIME`, which bounds a wait. `q.cancel(tag)` stops every operation under that tag; each still comes back through `next`, with `-ECANCELED` or its own result, and with its `Buf`.
 
-Every submission comes back through `next` exactly once. What the environment decides is a value there: a submission the kernel refuses for want of memory returns at once with `-EAGAIN` or `-ENOMEM` and its `Buf`. A kernel that will not set a ring up at all (a container whose seccomp filter blocks io_uring, a sysctl that disables it, no descriptor left) leaves the ring down instead of stopping the program. `q.status()` is then that negative errno, and every submission comes straight back with it, so a program handles a missing backend on the path it already has for a failed operation. `q.status()` is 0 on a ring that is up.
+Every submission comes back through `next` exactly once, and what the environment decides is a value there. A kernel short of memory returns a submission at once with `-EAGAIN` or `-ENOMEM`. A kernel that will not set up a ring at all, as under some container filters, leaves `q.status()` negative and returns every submission with that errno, so a missing backend takes the path a failed operation takes.
 
-What the program decides stays a guard. A submission to a full ring, or a `next` with nothing in flight, traps, and `q.room()` and `q.pending()` say how many submissions the ring still takes and how many `next` still owes, so a program under load sees both coming. The three queries read the ring and never enter the kernel, so their row is a read of the ring and nothing more, and a ring lent to a task cannot be asked until `wait` (`E-LEASED`).
+What the program decides stays a guard: a submission to a full ring, or a `next` with nothing in flight, traps. `q.room()` and `q.pending()` say how many submissions the ring still takes and how many `next` still owes, without entering the kernel.
 
 ```cairn
 import std.core (Result);
@@ -236,11 +234,11 @@ fn main() -> i32 {
 }
 ```
 
-A ring is a host object (`E-PLACEMENT`). A host lane may read `q.status()`, `q.room()` and `q.pending()`, which only the thread that owns the ring changes and which no lane can change, but it may not submit, collect, cancel or wait (`E-PARALLEL-CALL`). The value model reports a function that uses one as `unknown`.
+A ring is a host object (`E-PLACEMENT`). A host lane may read its three queries but not submit, collect, cancel or wait (`E-PARALLEL-CALL`).
 
 ## Atomics and mutexes
 
-`Atomic[T]` (the integers and `bool`) and `Mutex[T]` are declared in place and shared by `ro` borrow. They are the only interior mutability in the language, and they are never stored in a record, passed by value or returned (`E-PINNED`). Every atomic access names its memory order: `load`, `store`, `swap`, `fetch_add`, `fetch_sub`, `fetch_and`, `fetch_or`, `fetch_xor` and `compare_exchange(expected, desired, Order.seq_cst, Order.seq_cst)`. The effects are `spawn`, `join`, `atomic` and `lock`.
+`Atomic[T]` (integers and `bool`) and `Mutex[T]` are declared in place and shared by `ro` borrow. They are the only interior mutability, and they are never stored, passed by value or returned (`E-PINNED`). Every atomic access names its memory order.
 
 ```cairn
 fn count_live(n:usize, xs:ro<u64>[n], live:ro<Atomic[u64]>) {
@@ -259,7 +257,7 @@ fn main() -> i32 {
 }
 ```
 
-A mutex has one operation, and it may return a value. No guard object exists to escape, the closure cannot name the mutex it holds (`E-ALIAS`), and a thread that reaches the same mutex again through another borrow traps instead of relocking. Lanes may use atomics and mutexes.
+A mutex has one operation, `with`, which may return a value. No guard object exists to escape, the closure cannot name the mutex it holds (`E-ALIAS`), and a thread that reaches the same mutex again traps instead of deadlocking.
 
 ```cairn
 fn main() -> i32 {
@@ -273,7 +271,7 @@ fn main() -> i32 {
 
 ## Parallel regions
 
-`parallel i in n { body }` runs one lane per index and completes before the next statement. Whatever any lane writes may be touched only at element `[i]` or inside the lane's own block (`E-PARALLEL-RACE`), a shared scalar cannot be assigned (`E-PARALLEL-WRITE`: use `reduce`), and lanes cannot return, nest or move an outer owner. A lane's own row, and the row of everything it calls, must be pure-like (`E-PARALLEL-CALL`); a host lane may also allocate, use atomics and lock, and call a function that writes through what the lane lends it.
+`parallel i in n { body }` runs one lane per index and completes before the next statement. Whatever any lane writes may be touched only at element `[i]` or inside the lane's own block (`E-PARALLEL-RACE`), a shared scalar cannot be assigned (`E-PARALLEL-WRITE`: use `reduce`), and lanes cannot return, nest or move an outer owner. What a lane calls must be pure-like (`E-PARALLEL-CALL`), though a host lane may also allocate, use atomics and lock.
 
 ```cairn
 fn shade(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) { parallel i in n { out[i] = f(u64(i)); } }
@@ -296,7 +294,7 @@ fn shade(n:usize, out:rw<u64>[n]) { parallel i in n { out[0] = u64(i); } }
 out is written by lanes, so every lane may touch only out[i], or only its own block out[i * S + j] with j below one constant S.
 ```
 
-A lane may own a block instead of an element. With a constant stride `S`, lane `b` may touch `out[b * S + j]` for any `j` the checker can show is below `S`, or any index it can place in `[b * S, b * S + S)` from a loop, a `let` or a condition, and it may lend a part inside that block to a helper that writes it. Every access a lane makes to an array lanes write must stay inside that lane's block, all with one stride, so two lanes never meet; an access the checker cannot place is still `E-PARALLEL-RACE`. The element rule is the block of stride 1. The pool sizes its claims by the block, so a region of a few hundred heavy lanes still spreads across the cores.
+A lane may own a block instead of an element. With a constant stride `S`, lane `b` may touch `out[b * S + j]` for any `j` the checker can show is below `S`, and may lend a part inside its block to a helper. An access the checker cannot place inside the lane's block is `E-PARALLEL-RACE`.
 
 ```cairn
 const BLOCK:usize = 4096;
@@ -325,7 +323,7 @@ fn spill(k:usize, n:usize, out:rw<u64>[n]) {
 }
 ```
 
-A lane may call, or hand on to a helper, a `fn` parameter of its function. That leaves `lane:f` in the row, and in a declared ceiling, renamed up the call graph like `read:x`. Whatever is finally passed is judged where it is written: a closure that reads its captures is accepted, a closure that writes what it captured is not, and a stored `fn` value counts as any function of its type whose address was taken. Dispatch from a host lane, from a function it calls, or from such a closure is judged against every implementation.
+A lane may call a `fn` parameter of its function, which leaves `lane:f` in the row. What is finally passed is judged where it is written: a closure that reads its captures is accepted, and one that writes them is not.
 
 ```cairn rejects E-PARALLEL-CALL
 fn shade(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) { parallel i in n { out[i] = f(u64(i)); } }
@@ -342,11 +340,11 @@ fn main() -> i32 {
 shade calls f from parallel lanes, where it cannot write:calls.
 ```
 
-Host lanes are a pool. The first host region of a process creates them and every later one reuses them, so a region costs a hand-off rather than a thread, and a region of fewer than sixteen thousand elements is compiled as the ordinary loop it replaces and starts nothing. The pool holds one thread per core, or the number `CAIRN_LANES` names. How many lanes there are is never observable in a result, only in the time a region takes; `evidence/v1_2/host_regions` records where a region starts to pay off.
+Host lanes are a pool of one thread per core, or `CAIRN_LANES`, created by the first region and reused by every later one. A region of fewer than sixteen thousand elements runs as the ordinary loop on the calling thread. The number of lanes never shows in a result, only in the time.
 
 ## Plans
 
-A plan says how a function's host regions are split across the lane pool, apart from the code that says what they compute. `plan f { grain G; lanes L; }` makes every host `parallel` region in `f` hand out at least `G` indices per claim and run on at most `L` lanes; either item may be left out. A region's lanes are race free and finish before the next statement, so every split of its indices is one the region already allows. A plan changes how long a region takes, and not its result, its effect row or its guards. The receipt records it beside the function's row.
+A plan says how a function's regions run, apart from the code that says what they compute. Every split of a region's indices is one its race-free lanes already allow, so a plan changes how long a region takes and never its result, row or guards. `plan f { grain G; lanes L; }` has every host region in `f` claim at least `G` indices at a time on at most `L` lanes.
 
 ```cairn
 fn mix(v:u64) -> u64 {
@@ -359,9 +357,9 @@ fn spread(n:usize, out:rw<u64>[n]) { parallel i in n { out[i] = mix(u64(i)); } }
 plan spread { grain 1; lanes 8; }     // a few dozen slow lanes: one index per claim, eight threads
 ```
 
-Without a plan the pool claims at least 8192 elements' work at a time, and runs a region with less than 16384 elements' work on the thread that starts it; a lane that owns a block counts as its block. That suits cheap bodies. A body that costs microseconds per index wants a grain of 1.
+Without a plan the pool claims at least 8192 elements at a time, which suits cheap bodies. A body that costs microseconds per index wants a grain of 1.
 
-A device region takes three items of its own. `block B` launches blocks of `B` threads, whole warps from 32 to 1024. `per_lane K` sizes the grid so that each thread runs about `K` indices before the grid wraps, and `unroll U` unrolls each thread's loop over its indices `U` times, from 1 to 32. Every index below the count still runs exactly once, on whatever thread the grid gives it, which is why none of the three can change a result. A block wider than the kernel's registers allow runs in the widest whole warps that fit.
+A device region takes `block B` (threads per block, whole warps from 32 to 1024), `per_lane K` (about `K` indices per thread) and `unroll U` (from 1 to 32). Every index still runs exactly once. Without a plan a device region launches blocks of 256 threads and one index per thread.
 
 ```cairn
 fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i]; } }
@@ -369,9 +367,7 @@ fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i
 plan scale { block 128; per_lane 4; unroll 4; }   // 128 threads a block, about four indices each
 ```
 
-Without a plan a device region launches blocks of 256 threads and one index per thread, up to 65535 blocks. `grain` and `lanes` apply to host regions and `block`, `per_lane`, `unroll` and `vector` to device regions, so one plan may set both for a function that has both.
-
-`vector W` has each lane of a device region run `W` adjacent indices, a power of two from 2 to 16, over one chunk of each array it touches only as `x[i]` with a discharged guard: one `W`-wide load before the body when the body reads the array, one store after when it writes it, where the scalar lanes made `W` of each. A chunk is one access of at most 16 bytes, so an `f32` or `u32` array takes `vector 4` at most and an `f64` array `vector 2`. An array used any other way, at another index, in a part or lent to a helper, stays the pointer access it was. At launch one check decides the whole region: when every chunked pointer sits on its chunk's width the lanes run chunks, and the indices past the last whole chunk run one at a time; when any does not, as a part `x[1..n]` of a buffer may not, the region runs its scalar lanes. Every index runs once either way, so the result is the unplanned one. `E-PLAN` refuses a width that is no power of two, a chunk wider than 16 bytes, a region with no array to chunk, and `vector` beside `fuse`.
+`vector W` has each device lane run `W` adjacent indices with one load and one store of at most 16 bytes per array it touches only at `x[i]`, so an `f32` array takes `vector 4` at most. When a pointer is not aligned to the chunk width, the region runs its scalar lanes instead, so the result is always the unplanned one. `E-PLAN` refuses a width that is not a power of two, a chunk wider than 16 bytes, and `vector` beside `fuse`.
 
 ```cairn
 fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
@@ -387,7 +383,7 @@ fn wide(n:usize, out:rw<f64>[n]@device) { parallel i in n { out[i] = 1.0; } }
 plan wide { vector 4; }    // four f64 are 32 bytes, and a lane moves 16 at once
 ```
 
-`stage R` has each block of a device region load, into shared memory, the elements its lanes read near their own index, from 1 to 32 either side, and read them there. An array is staged when the region never writes it and every read of it is `x[i]`, `x[i + d]` or `x[i - d]` for the lane's index and a literal `d` of at most `R`, with its guard discharged, and at least one at `d` other than 0. The lane rule already refuses reading a written array off `[i]`, so a tile is never stale. A block then runs its indices tile by tile: a barrier, its threads loading the tile of every staged array from `R` before its first index to `R` after its last, only where the array has elements, a barrier, and the body at each index. Every index runs once and reads what the array holds, so the result is the unplanned one. `E-PLAN` refuses a region with nothing to stage, and `stage` beside `vector` or `fuse`.
+`stage R` has each block of a device region load once into shared memory the elements its lanes read at `x[i + d]` with `|d|` at most `R`, from 1 to 32, for every array the region only reads. The lanes then read the tile between two barriers. `E-PLAN` refuses a region with nothing to stage, and `stage` beside `vector` or `fuse`.
 
 ```cairn
 fn blur(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
@@ -400,9 +396,9 @@ fn blur(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
 plan blur { stage 1; block 128; }   // each element of x crosses from memory once per block
 ```
 
-`cairn predict` prices a staged region as the unplanned one, because the model already counts a read beside the lane's own as a cache hit, and `cairn tune` does not try `stage`. What a tile saves is what the device's own caches would have missed, and only a device run measures that.
+`cairn predict` prices a staged region as the unplanned one, and `cairn tune` does not try `stage`: what a tile saves is what the device's caches would have missed, which only a device run measures.
 
-`fuse K` runs up to `K` adjacent regions of a function as one traversal, from 2 to 16: each lane runs the first body at its index, then the next, in order. The regions must sit side by side in one block, share a placement and an extent spelled the same way, and have lanes that own element `[i]` rather than a block. Whatever one of them writes and another touches, both touch only at their own index, so no lane of a later body reads what another lane of an earlier body writes. No body may trap, loop without end or be observed from outside: every guard in it was discharged, and every function it calls is quiet in the same sense. A local `buffer` or `stack` array that only the chain touches, each lane at its own index and never lent, lives in each lane as one value and is never allocated. A host `reduce` over the same extent may end the chain: each step of its fold runs the fused bodies for that index first, and the fold keeps its order, so a checked fold still traps where it did. A sequential fold then runs the bodies on its own thread, in order, and `reduce op parallel` keeps them on the pool. A device `reduce` stays apart, because CUB does not promise to evaluate one index's value once.
+`fuse K` runs up to `K` adjacent regions, from 2 to 16, as one traversal: each lane runs the first body at its index, then the next. The regions must share a placement and an extent, touch what they write only at their own index, and have bodies that cannot trap or be observed from outside. A local array only the chain touches then lives in each lane as one value and is never allocated. A host `reduce` over the same extent may end the chain, keeping its fold order.
 
 ```cairn
 fn blend(n:usize, out:rw<f64>[n], x:ro<f64>[n], a:f64, b:f64) {
@@ -423,9 +419,9 @@ fn energy(n:usize, x:ro<f64>[n]) -> f64 {
 plan energy { fuse 2; }    // one fold that squares as it adds
 ```
 
-The rule is strict about traps on purpose. A failed guard aborts the process, and which lane of a region fails first is already open. Fusing two trapping bodies would let the later body's guard fail before the earlier body's, so a program could end in a way it could not end before. Fusion is a plan item rather than something the compiler does whenever it may, because joining two passes is not always faster: two short loops each vectorize on their own, and one fused body may not. `cairn predict` prices a fused chain as one region without its scratch, `cairn tune` tries `fuse` beside the other items, and the receipt lists under `fused` every chain as emitted and the arrays it kept in its lanes. The conservative emission, `--keep-guards`, never fuses. On one shared host, three fused element-wise regions ran 1.1x to 2.6x faster than as written, and chains that no longer allocate their scratch ran 1.5x to 62x faster, most of that at ten million elements and more, where the written version maps and faults a fresh buffer on every call ([evidence/v1_4/fusion](../evidence/v1_4/fusion/README.md)). The model still predicts that fusing a map into a sequential fold loses below that size, where it measured a win, so `cairn tune` can keep such a chain apart when it should not.
+The no-trap rule is strict on purpose: fusing two trapping bodies would let the later body's guard fail first, so a program could end in a way it could not end before. Fusion is a plan item rather than automatic because one fused body is not always faster than two short loops that each vectorize. `--keep-guards` never fuses, and the receipt lists every chain under `fused`. On one shared host, fused element-wise regions ran 1.1x to 2.6x faster than as written, and chains that no longer allocate their scratch 1.5x to 62x faster, most of that at ten million elements and more ([evidence/v1_4/fusion](../evidence/v1_4/fusion/README.md)).
 
-`E-PLAN` refuses a plan that names no function with a parallel region, an item whose kind of region the function lacks, a second plan for one function, an unknown or repeated item, and a value out of its range: a grain of 0, a lane count outside 1 to 1024, a block that is not whole warps from 32 to 1024, a `per_lane` outside 1 to 65536, an `unroll` outside 1 to 32 and a `fuse` outside 2 to 16. It refuses a `fuse` with no two regions it may join, such as bodies whose checked arithmetic can trap. `plan` is a keyword only at the top of a module, so it stays an ordinary name everywhere else, and so are its items.
+`E-PLAN` refuses a plan for a function without the kind of region an item needs, a second plan for one function, an unknown or repeated item, a value out of range (a grain of 0, lanes outside 1 to 1024, `per_lane` outside 1 to 65536), and a `fuse` with no two regions it may join. `plan` is a keyword only at the top of a module.
 
 ```cairn rejects E-PLAN
 fn walk(n:usize, out:rw<u64>[n]) { for i in 0..n { out[i] = 1; } }
@@ -449,15 +445,15 @@ fn count(n:usize, out:rw<u64>[n], x:ro<u64>[n]) {
 plan count { fuse 2; }
 ```
 
-Halide separated algorithms from schedules, and MLIR's transform dialect does the same inside a compiler. The open question for CAIRN is whether a schedule kept apart from the algorithm, where the checker holds it to the algorithm's ownership rules, makes tuning cheaper than rewriting the loop, for a person or an agent. [`cairn tune`](tools.md#cairn-predict) is the search this makes possible: every plan it tries is one the checker accepts, it ranks them all by prediction and times only the best few. Whether that is cheaper than rewriting the loop has not been measured.
+Keeping the schedule apart from the algorithm, as Halide does, is what makes [`cairn tune`](tools.md#cairn-tune) possible: every plan it tries is correct, so it only ranks them. Whether that makes tuning cheaper than rewriting the loop has not been measured.
 
 ## reduce and compact
 
 `reduce` combines with one of `add_wrap mul_wrap & | ^ min max` on integers, or `+ *` on floats. On the host it is an in-order fold. Over device views it is a tree whose association order is unspecified, which is exact for the integer operators and explicitly not for floats.
 
-Checked `+` is offered on unsigned integers, where no partial sum can overflow unless the total does, so the trap cannot depend on the order; on the device the sum carries an overflow flag through the reduction and the host traps. Signed `+` and integer `*` are not offered, because a partial result can overflow alone.
+Checked `+` is allowed on unsigned integers, where no partial sum can overflow unless the total does, so whether it traps cannot depend on the order. Signed `+` and integer `*` are not, because a partial result can overflow alone.
 
-Writing `parallel` in place of `for` runs a host reduction on the lane pool. The count alone fixes how the work splits: one block below 16384 elements, otherwise `n / 8192` runs of consecutive indices, at most 256 of them. Each block folds in index order into a slot on the caller's stack, and the slots fold in block order. Every operator the form admits is associative, so the answer is the in-order fold's on any number of lanes, and a checked `+` traps exactly when the in-order fold would. Floats are refused (`E-REDUCE-ORDER`): a sum in blocks is a different function of the same inputs. The row gains `par:host`, and every `yield` runs, in no promised order, under the rules of a lane.
+`parallel` in place of `for` runs a host reduction on the lane pool, in blocks fixed by the count alone. Every operator allowed is associative, so the answer is the in-order fold's on any number of lanes, and a checked `+` traps exactly when the in-order fold would. Floats are refused (`E-REDUCE-ORDER`), because a sum in blocks is a different function of the same inputs. Each `yield` runs under the rules of a lane.
 
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u64 {
@@ -488,7 +484,7 @@ fn main() -> i32 {
 }
 ```
 
-`compact` writes the stable selected prefix into existing storage of capacity exactly `n`. It evaluates the predicate once per input and the projection only when selected, never reads its output, leaves the tail unchanged and allocates nothing on the host. Over a `@device` output it is stable stream compaction whose scan needs device scratch, which shows as `gpu_alloc` and `gpu_free`; a device `reduce` likewise. Its one unchecked store is justified by seventeen affine certificates, checked before every emission and proved sound in Lean together with in-bounds stores and stable selection for the loop model ([verification.md](verification.md)).
+`compact` writes the stable selected prefix into storage of capacity exactly `n`, evaluating the predicate once per input and the projection only when selected. It leaves the tail unchanged and allocates nothing on the host. Over a `@device` output it is stream compaction with device scratch (`gpu_alloc`, `gpu_free`). Its one unchecked store rests on seventeen certificates proved in Lean ([verification.md](verification.md)).
 
 ```cairn
 fn keep_live(n:usize, out:rw<u64>[n], xs:ro<u64>[n]) -> usize {
@@ -510,9 +506,7 @@ fn main() -> i32 {
 
 ## scan
 
-`scan` writes every prefix of a sequence into an array. `let total = scan + out for i in n yield e;` sets `out[i]` to `e(0) + ... + e(i)` and binds the whole. `scan + exclusive out ...` sets `out[i]` to what came before `i`, so `out[0]` is the operator's identity, and the total is the same. A scan whose total nobody reads is a statement of its own. `scan` and `exclusive` are words only in this position, so both stay ordinary names everywhere else.
-
-The operators are `reduce`'s, for the same reasons: `add_wrap mul_wrap & | ^ min max` on integers, checked `+` on unsigned integers only, and `+ *` on floats (`E-SCAN-OP`). A checked `+` traps exactly when the in-order total overflows, because every prefix of an unsigned sum is at most the whole. The output is an `rw` view or a buffer of exactly the scan's count (`E-SCAN-TARGET`, `E-SCAN-EXTENT`). Each yield runs once, before the element it feeds is written, and may read the output only at its own element (`E-PARALLEL-RACE` otherwise), so `scan + xs for i in n yield xs[i];` scans in place.
+`scan` writes every prefix into an array. `let total = scan + out for i in n yield e;` sets `out[i]` to `e(0) + ... + e(i)` and binds the whole, and `scan + exclusive out ...` sets `out[i]` to what came before `i`. The operators are `reduce`'s (`E-SCAN-OP`). The output is an `rw` view or buffer of exactly the scan's count (`E-SCAN-TARGET`, `E-SCAN-EXTENT`), and a yield may read it only at its own element (`E-PARALLEL-RACE`), so a scan may run in place.
 
 ```cairn
 fn offsets(n:usize, starts:rw<usize>[n], sizes:ro<usize>[n]) -> usize {
@@ -533,25 +527,17 @@ fn main() -> i32 {
 }
 ```
 
-`parallel` in place of `for` runs the scan on the lane pool in two passes over `reduce`'s blocks. The first pass writes each block's own prefixes and its total, the totals scan in block order into each block's offset, and the second pass combines every element of a later block with its offset. Every operator the form admits is associative, so the result is the in-order scan's on any number of lanes, and a checked `+` still traps exactly when the whole overflows. The block totals live on the caller's stack, as a pooled reduction's do, the row gains `par:host`, and each yield runs under the rules of a lane. Over `@device` views the scan is CUB's, which takes device scratch (`gpu_alloc`, `gpu_free`); it compiles for the device, and runs only under `make gpu`.
-
-Floats scan only in the written order, with `for` on the host (`E-SCAN-ORDER`), because a sum in blocks is a different function of the same inputs.
+`parallel` in place of `for` runs the scan on the lane pool in two passes, with the in-order result on any number of lanes. Floats scan only in the written order (`E-SCAN-ORDER`). Over `@device` views the scan is CUB's; it compiles for the device and runs only under `make gpu`.
 
 ```cairn rejects E-SCAN-ORDER
 fn running(n:usize, out:rw<f64>[n], x:ro<f64>[n]) { scan + out parallel i in n yield x[i]; }
 ```
 
-`std.sort.radix_sort` is the library's use of the form: eight bits a pass, each pass counts its digit, turns the counts into each digit's first place with `scan + exclusive`, and moves the keys there in order, so the sort is stable and allocates nothing.
-
-On one shared sixteen-lane machine, the pooled scan ran 1.3 to 1.7 times faster than the loop it replaces from a hundred thousand to ten million `u64` elements, and the sequential one ran level with that loop; a prefix sum streams its array in both passes, so the gain stays modest. The radix sort sorted a hundred thousand to a million `u64` keys 5.6 to 10.5 times faster than the heapsort. `evidence/v1_4/scan/` has the timings, the run notes and what `cairn predict` said beforehand.
+`std.sort.radix_sort` uses `scan + exclusive` to place each digit, so it is stable and allocates nothing. On one shared sixteen-lane machine the pooled scan ran 1.3 to 1.7 times faster than the loop from a hundred thousand to ten million `u64` elements, and the radix sort 5.6 to 10.5 times faster than the heapsort (`evidence/v1_4/scan/`).
 
 ## Placement and device memory
 
-A view's placement is part of its type: `@host` (the default), `@pinned`, `@unified`, `@device`. A region whose body indexes a `@device` view runs as CUDA lanes, otherwise on host threads; the emitted lane body is the same lambda either way.
-
-Host code cannot index `@device` memory and device lanes cannot index host memory (`E-PLACEMENT`); `@unified` is visible to both. A view may be lent as what its memory also is: `@pinned` or `@unified` where a `@host` view is asked for, `@unified` where a `@device` view is, never the other way, so host helpers serve page-locked staging buffers unchanged.
-
-`transfer(dst, src)` is the only way elements cross a placement boundary. Extents agree by identity, parts such as `transfer(a[0..k], b[2..6])` by one length guard, and the two sides may not overlap.
+A view's placement is part of its type: `@host` (the default), `@pinned`, `@unified`, `@device`. A region whose body indexes a `@device` view runs as CUDA lanes, and otherwise on host threads, from the same lane body. Host code cannot index `@device` memory, and device lanes cannot index host memory (`E-PLACEMENT`); `@unified` is visible to both, and a `@pinned` view serves wherever a `@host` one is asked for. `transfer(dst, src)` is the only way elements cross, with extents that agree and sides that do not overlap.
 
 ```cairn
 fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
@@ -568,7 +554,7 @@ fn run(n:usize, host_x:ro<f32>[n], host_out:rw<f32>[n]) {
 }
 ```
 
-Whatever a device lane reaches is device code. A helper with a host view parameter, or a host-only construct in its body, is refused there (`E-PLACEMENT`), while plain pure helpers run on either side. String literals and host owners are host memory and stay out of device code. A device `compact` checks its predicate and its projection as device lanes.
+Whatever a device lane reaches is device code. A helper with a host view parameter or a host-only construct is refused there (`E-PLACEMENT`), and pure helpers run on either side.
 
 ```cairn rejects E-PLACEMENT
 fn peek(m:usize, host_side:ro<u64>[m]) -> u64 = host_side[0];
@@ -581,7 +567,7 @@ fn go(n:usize, d:rw<u64>[n]@device, m:usize, host_side:ro<u64>[m]) {
 A device lane reaches peek, where host_side is a host view.
 ```
 
-`kernel fn` declares a device helper. Its body is device code, it may be called only from device lanes and other kernels (`E-PLACEMENT` anywhere else), and it obeys the device lane rules.
+`kernel fn` declares a device helper, callable only from device lanes and other kernels (`E-PLACEMENT` anywhere else).
 
 ```cairn
 kernel fn at(w:usize, n:usize, grid:ro<f32>[n]@device, x:usize, y:usize) -> f32 = grid[y * w + x];
@@ -593,9 +579,7 @@ fn blur(w:usize, n:usize, out:rw<f32>[n]@device, grid:ro<f32>[n]@device) {
 
 ## Queued device work
 
-Device work can be queued instead of awaited. `spawn transfer(...)` and `spawn parallel ... after t { }` put a transfer or a device region on a stream of its own and return at once, so the host and other queued work go on. The ticket is the same linear, scope-bound value (its type is `Ticket[void]@device`): it holds a lease on every view the work touches, `rw` where it writes, until `wait`, and only completion restores ordinary access.
-
-`after a, b` orders the new work behind live tickets by device events, never by stopping the host. Work queued after a ticket may touch what that ticket, and whatever it was itself queued after, holds; nothing else may. Only device work is queued this way (`E-SPAWN`). Host work and blocking I/O become asynchronous by spawning the function that does them, which leases their buffers the same way. A failed enqueue or a lost device traps, and there is no cancellation.
+`spawn transfer(...)` and `spawn parallel ... after t { }` queue a transfer or a device region on its own stream and return at once. The ticket is linear and leases every view the work touches until `wait`. `after a, b` orders the new work behind live tickets by device events, never by stopping the host, and work queued after a ticket may touch what that ticket holds. Only device work is queued this way (`E-SPAWN`). A failed enqueue or a lost device traps, and there is no cancellation.
 
 ```cairn
 fn stage(n:usize, host_x:ro<f32>[n], x:rw<f32>[n]@device, out:rw<f32>[n]@device) {
