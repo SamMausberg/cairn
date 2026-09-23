@@ -111,11 +111,13 @@ def compare(op: str, a: Any, b: Any) -> Any:
 
 
 def logic(op: str, a: Any, b: Any) -> Any:
+    """`a && b` or `a || b` for one thread. Where `a` is unknown and `b` traps, the thread either stops at `b` or
+    goes on with what `a` alone decides, false for `&&` and true for `||`, so that arm still runs."""
     if a is TRAP:
         return TRAP
     if op == "&&":
-        return False if a is False else b if a is True else (False if b is False else TRAP if b is TRAP else None)
-    return True if a is True else b if a is False else (True if b is True else TRAP if b is TRAP else None)
+        return False if a is False else b if a is True else (False if b is False or b is TRAP else None)
+    return True if a is True else b if a is False else (True if b is True or b is TRAP else None)
 
 
 @dataclass
@@ -204,7 +206,7 @@ class Phases:
         """The value of `e` for each thread, recording every shared array element it reads."""
         tag = e.tag
         if tag == "lambda":
-            return None
+            return self.closure(e, env, mask)
         if tag == "int":
             return int(e.val) if e.ty == USIZE else None
         if tag == "bool":
@@ -247,7 +249,7 @@ class Phases:
         values = []
         for a in e.args:
             mode = given.get(id(a))
-            if mode is None:
+            if mode is None or a.tag == "lambda":
                 values.append(self.expr(a, env, mask, now))
                 continue
             values.append(None)
@@ -255,6 +257,8 @@ class Phases:
             if name not in self.counts:
                 for x in a.args[1:]:
                     self.expr(x, env, mask, now)
+                if mode == "rw" and name in env:  # a local lent to be written holds what the callee left
+                    self.assign(env, name, None, mask)
                 continue
             if a.tag == "slice":
                 lo, hi = (self.expr(x, env, mask, now) for x in a.args[1:3])
@@ -280,6 +284,15 @@ class Phases:
             return values[0]
         if len(values) == 2 and e.val in {"min", "max", "shr", "shl_wrap", "add_wrap", "sub_wrap", "mul_wrap"}:
             return self.each(lambda x, y: arith(e.val, x, y), *values)
+        return None
+
+    def closure(self, e: Expr, env: dict[str, Any], mask: list[int] | None) -> None:
+        """A closure runs when, and as often as, the callee calls it: a local it writes holds an unknown value from
+        here on. One that reaches a shared array is refused by cooperative.py before this rule runs."""
+        for place, mode in getattr(e.ref, "captures", ()):
+            name = place.split(".", 1)[0].split("[", 1)[0]
+            if mode == "rw" and name in env:
+                self.assign(env, name, None, mask)
         return None
 
     def fragment(self, e: Expr, values: list[Any], mask: list[int] | None, now: float):
@@ -356,6 +369,14 @@ class Phases:
                     env[name] = self.each(join, env[name], inner.get(name))
         elif tag in {"block", "unsafe"}:
             self.stmts(s.body, env, mask)
+        elif tag == "asm" and s.assembly is not None:  # an address reaches the whole array (compiler/machine.py)
+            for effect in s.assembly.effects:
+                kind, _, name = effect.partition(":")
+                if kind in {"read", "write"} and name in self.counts:
+                    whole = ("part", 0, self.counts[name])
+                    self.record(name, whole, kind == "write", s, now + 0.5 * (kind == "write"), mask)
+            for name, *_ in s.assembly.outputs:
+                env[name] = None
         elif tag in {"break", "continue"} and self.loops:
             loop = self.loops[-1]
             held = loop.broken if tag == "break" else loop.skipped

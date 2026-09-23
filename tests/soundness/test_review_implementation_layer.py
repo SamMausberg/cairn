@@ -12,10 +12,11 @@ from pathlib import Path
 import pytest
 
 from cairn.cli import main
+from cairn.compiler.cairnc import compile_source
 from cairn.projects import export as exported
 from cairn.projects.project import load_project
 from cairn.verify.validation import validate
-from emitted import code_of
+from emitted import code_of, refused
 
 # --- Fixed: an export's record is data, and a build runs only what toolchain.py gives for it -----------------------
 
@@ -113,6 +114,59 @@ def test_a_validation_goes_stale_when_a_helper_of_the_implementation_changes(tmp
     [row] = [c for c in answer["candidates"] if c.get("use") == "total_fast"]
     assert isinstance(row["validated"], str) and "no validation holds" in row["validated"]
     assert "use total_fast" not in (root / "src/main.cairn").read_text()
+
+
+# --- Fixed: the phase rule follows what a call, a closure, assembly and `&&` leave behind --------------------------
+
+PUT = "fn put(x:rw<usize>, v:usize) { x = v; }\n"
+CALL = "fn call(f:ro<fn()>) { f(); }\n"
+PHASES = {  # each was accepted; the first three raced under ThreadSanitizer with both compilers
+    "a shared index a callee rewrote": (
+        "E-COOP-UNDECIDED",
+        PUT + "fn f(g:usize, out:rw<u64>[g]) { blocks b in g threads t in 64 { shared s:u64[64] = zeroed;\n"
+        "  let mut k:usize = t; put(k, 0); s[k] = u64(t); barrier; if t == 0 { out[b] = s[0]; } } }",
+    ),
+    "a shared index swap rewrote": (
+        "E-COOP-UNDECIDED",
+        "fn f(g:usize, out:rw<u64>[g]) { blocks b in g threads t in 64 { shared s:u64[64] = zeroed;\n"
+        "  let mut k:usize = t; let mut z:usize = 0; swap(k, z); s[k] = u64(t); barrier; if t == 0 { out[b] = s[0]; } } }",
+    ),
+    "the else arm of an && whose right side traps": (
+        "E-COOP-CONFLICT",
+        "fn f(g:usize, n:usize, x:ro<u64>[n], out:rw<u64>[g]) { blocks b in g threads t in 64 { shared s:u64[64] = zeroed;\n"
+        "  if x[0] == 7 && t - 5 > 100 { } else { s[max(t, 4)] = u64(t); } barrier; if t == 0 { out[b] = s[4]; } } }",
+    ),
+    "a closure rewriting a local that indexes a shared array": (
+        "E-COOP-UNDECIDED",
+        CALL + "fn f(g:usize, out:rw<u64>[g]) { blocks b in g threads t in 64 { shared s:u64[64] = zeroed;\n"
+        "  let mut k:usize = t; call(|| { k = 0; }); s[k] = u64(t); barrier; if t == 0 { out[b] = s[0]; } } }",
+    ),
+    "typed PTX writing a shared array in every thread": (
+        "E-COOP-CONFLICT",
+        "fn f(out:rw<u32>[64]@device) { blocks g in 1 threads t in 64 { shared sc:u32[64] = zeroed;\n"
+        '  unsafe { asm ptx sm_75 "st.shared.u32 [%0], %1;" (sc, 7) effects(write:sc); } out[t] = 1; } }',
+    ),
+    "typed PTX writing a shared array another thread reads": (
+        "E-COOP-UNORDERED",
+        "fn f(out:rw<u32>[64]@device) { blocks g in 1 threads t in 64 { shared sc:u32[64] = zeroed;\n"
+        '  if t == 0 { unsafe { asm ptx sm_75 "st.shared.u32 [%0], %1;" (sc, 7) effects(write:sc); } }\n'
+        "  out[t] = sc[t]; } }",
+    ),
+}
+
+
+@pytest.mark.parametrize("name", PHASES)
+def test_the_phase_rule_follows_calls_closures_assembly_and_short_circuits(name):
+    code, source = PHASES[name]
+    refused(code, source)
+
+
+def test_typed_ptx_one_thread_writes_before_a_barrier_is_still_accepted():
+    compile_source(
+        "fn f(out:rw<u32>[64]@device) { blocks g in 1 threads t in 64 { shared sc:u32[64] = zeroed;\n"
+        '  if t == 0 { unsafe { asm ptx sm_75 "st.shared.u32 [%0], %1;" (sc, 7) effects(write:sc); } }\n'
+        "  barrier; out[t] = sc[t]; } }"
+    )
 
 
 # --- Fixed: validation compares what the code returns, and nothing the code prints ---------------------------------
