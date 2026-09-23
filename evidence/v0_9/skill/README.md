@@ -27,6 +27,10 @@ Every run solved its task, so this cannot say whether the plugin changes what ge
 
 One run per cell cannot separate the plugin's effect from run-to-run variance, and the tasks are small single-file programs. The sessions without the plugin could read an untracked `results/` directory on this machine that holds earlier benchmark programs, which a fresh checkout does not have; that can only have helped them. The preregistered benchmark in `bench/ai` is the comparison to rerun with the plugin before any claim beyond this one.
 
+## The MCP server's cost
+
+The plugin gained `cairn mcp` after these runs (f0bfadf). A one-turn `claude-haiku-4-5` session with the plugin as of 99c2b33 (no MCP server) read 25,344 input tokens, and one with it as of a52726b read 25,460: the eight tools add about 116 tokens, because Claude Code 2.1.280 lists MCP tools by name and loads a schema only when a tool is searched for. `claude plugin details` does not count inline MCP servers, so this is the measured figure.
+
 ## Files
 
 `tasks.json` holds the prompts, `results.json` the metrics and grades, `traces.json` each session's tool calls and final message (paths shortened, no raw transcript), and `programs/` the six programs as written.
