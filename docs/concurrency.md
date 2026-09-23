@@ -1,12 +1,10 @@
 # Tasks, lanes and devices
 
-Tasks lease what they borrow, lanes are race free by construction, and placement is part of a view's type.
-
 ## Tasks and leases
 
-`let t = spawn f(args);` runs a declared function on its own thread, reusing a parked one when there is one. The arguments are evaluated at the spawn. `t` is a linear ticket: `wait(t)` consumes it and returns `f`'s result, on every path of the same function, and the ticket cannot be stored, passed or returned.
+`let t = spawn f(args);` evaluates the arguments and runs a declared function on its own thread, a parked one when there is one. `t` is a linear ticket: `wait(t)` consumes it on every path of the same function and returns `f`'s result, and the ticket cannot be stored, passed or returned.
 
-Until the `wait`, every place lent to the task is leased: nobody may write what the task reads or touch what it writes, the owner included (`E-LEASED`). Read-only lending is shared freely. Visibly disjoint parts of one array may go mutably to different tasks when each part ends where the next begins, so a K-way split works.
+Until the `wait`, every place lent to the task is leased: nobody may write what the task reads or touch what it writes, the owner included (`E-LEASED`). Read-only lending is shared freely. Parts of one array may go mutably to different tasks when each visibly ends where the next begins, so a K-way split works.
 
 ```cairn
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
@@ -69,7 +67,7 @@ fn main() -> i32 {
 }
 ```
 
-The same field lent twice is one piece of storage twice, and so is refused, as is replacing a lent field (`pair.left = Buf[u64](2)`).
+Lending one field twice is refused, as is replacing a lent field (`pair.left = Buf[u64](2)`).
 
 ```cairn rejects E-LEASED
 struct Pair { left:Buf[u64]; right:Buf[u64]; }
@@ -92,11 +90,11 @@ pair.left is lent to left until wait(left).
 
 ## Task groups
 
-A group collects tasks in the order they finish, where tickets are awaited in the order they are written. `let g = Group[T](n);` declares, in place, a group of at most `n` tasks in flight with results of type `T`, and takes all its storage there. It is never stored, passed, lent to a callee or returned (`E-PINNED`), and like a ticket it is linear: `wait(g)` consumes it on every path (`E-LINEAR-LEAK`, `E-LINEAR-BRANCH`).
+A group collects tasks in the order they finish, where tickets are awaited in the order written. `let g = Group[T](n);` declares in place, with all its storage, a group of at most `n` tasks in flight with results of type `T`. It is never stored, passed, lent to a callee or returned (`E-PINNED`), and it is linear: `wait(g)` consumes it on every path (`E-LINEAR-LEAK`, `E-LINEAR-BRANCH`).
 
-`spawn f(args) into g;` starts a task as `spawn` does and hands it to the group. `f` must return `T` (`E-TYPE-MISMATCH`). Every place the task borrows is leased to the group until `wait(g)`. A submission beyond `n` tasks is a guard failure, never silent growth.
+`spawn f(args) into g;` hands a task to the group, where `f` returns `T` (`E-TYPE-MISMATCH`), and leases what it borrows to the group until `wait(g)`. A submission beyond `n` tasks is a guard failure, never growth.
 
-`let r = collect(g);` waits for whichever task finishes next and yields its result; with nothing outstanding it is a guard failure. A collect returns no lease, since the checker cannot know which task finished. `wait(g)` joins every task, drops uncollected results, releases the leases and consumes the group.
+`let r = collect(g);` yields the result of whichever task finishes next, and with nothing outstanding is a guard failure. It returns no lease, since the checker cannot know which task finished. `wait(g)` joins every task, drops uncollected results, releases the leases and consumes the group.
 
 ```cairn
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
@@ -127,7 +125,7 @@ fn main() -> i32 {
 }
 ```
 
-A loop may lend a group what its tasks only read. Lending a place `rw` inside a loop is refused, because the next iteration would lend it again while the group still holds it. An owner passed by value is not lent but moved into the task, so a loop may move a fresh `Buf` into the group each time round. After an `if` or a `match`, the group holds what any path lent it.
+Inside a loop a group may be lent only what its tasks read, since the next iteration would lend an `rw` place again while the group still holds it. An owner passed by value moves into the task, so a loop may hand the group a fresh `Buf` each time round. After an `if` or a `match`, the group holds what any path lent it.
 
 ```cairn rejects E-LEASED
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
@@ -148,11 +146,11 @@ Queued device work cannot join a group (`E-SPAWN`), a `linear` result type is re
 
 ## I/O rings
 
-A task is a thread. A ring keeps many kernel operations in flight from one thread and hands them back in the order they finish. `let mut q = IoRing(n);` declares, in place, a Linux io_uring of at most `n` operations, from 1 to 4096.
+A ring keeps many kernel operations in flight from one thread and hands them back in the order they finish. `let mut q = IoRing(n);` declares in place a Linux io_uring of 1 to 4096 operations.
 
-An operation takes its bytes by value: `q.read`, `q.write`, `q.recv` and `q.send` move a `Buf[u8]` into the ring, so the program cannot touch storage the kernel is using (`E-MOVED`), and `q.accept` takes none. `let data = q.next(tag, result);` waits for the next operation to finish and hands its `Buf` back, with its tag and the kernel's result, a count or a negative errno, which `io.outcome(result)` turns into a `Result`.
+`q.read`, `q.write`, `q.recv` and `q.send` move a `Buf[u8]` into the ring, so the program cannot touch storage the kernel is using (`E-MOVED`), and `q.accept` takes none. `let data = q.next(tag, result);` waits for the next operation to finish and hands its `Buf` back with its tag and the kernel's result, a count or a negative errno, which `io.outcome(result)` turns into a `Result`.
 
-A ring records no lease, so it may be lent `rw` to a callee or a task. It is never stored, passed by value or returned (`E-PINNED`), and it is linear: `wait(q)` consumes it in its function (`E-LINEAR-LEAK`) once every operation has finished, and releases every uncollected `Buf`. `defer wait(q);` covers every exit.
+A ring records no lease, so it may be lent `rw` to a callee or a task. It is never stored, passed by value or returned (`E-PINNED`), and it is linear: `wait(q)` consumes it in its function (`E-LINEAR-LEAK`) once every operation has finished, releasing every uncollected `Buf`. `defer wait(q);` covers every exit.
 
 ```cairn
 import std.core (Result);
@@ -201,7 +199,7 @@ data was moved.
 
 `q.timeout(ns, tag)` finishes after `ns` nanoseconds with `-ETIME`, which bounds a wait. `q.cancel(tag)` stops every operation under that tag; each still comes back through `next`, with `-ECANCELED` or its own result, and with its `Buf`.
 
-Every submission comes back through `next` exactly once, and what the environment decides is a value there. A kernel short of memory returns a submission at once with `-EAGAIN` or `-ENOMEM`. A kernel that will not set up a ring at all, as under some container filters, leaves `q.status()` negative and returns every submission with that errno, so a missing backend takes the path a failed operation takes.
+Every submission comes back through `next` exactly once, and what the environment decides is a value there: a kernel short of memory returns it at once with `-EAGAIN` or `-ENOMEM`, and one that will not set up a ring, as under some container filters, leaves `q.status()` negative and returns every submission with that errno.
 
 What the program decides stays a guard: a submission to a full ring, or a `next` with nothing in flight, traps. `q.room()` and `q.pending()` say how many submissions the ring still takes and how many `next` still owes, without entering the kernel.
 
@@ -294,7 +292,7 @@ fn shade(n:usize, out:rw<u64>[n]) { parallel i in n { out[0] = u64(i); } }
 out is written by lanes, so every lane may touch only out[i], or only its own block out[i * S + j] with j below one constant S.
 ```
 
-A lane may own a block instead of an element. With a constant stride `S`, lane `b` may touch `out[b * S + j]` for any `j` the checker can show is below `S`, and may lend a part inside its block to a helper. An access the checker cannot place inside the lane's block is `E-PARALLEL-RACE`.
+A lane may own a block instead: with a constant stride `S`, lane `b` may touch `out[b * S + j]` for any `j` the checker shows is below `S`, and lend a part of its block to a helper. An access the checker cannot place in the lane's block is `E-PARALLEL-RACE`.
 
 ```cairn
 const BLOCK:usize = 4096;
@@ -367,7 +365,7 @@ fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i
 plan scale { block 128; per_lane 4; unroll 4; }   // 128 threads a block, about four indices each
 ```
 
-`vector W` has each device lane run `W` adjacent indices with one load and one store of at most 16 bytes per array it touches only at `x[i]`, so an `f32` array takes `vector 4` at most. When a pointer is not aligned to the chunk width, the region runs its scalar lanes instead, so the result is always the unplanned one. `E-PLAN` refuses a width that is not a power of two, a chunk wider than 16 bytes, and `vector` beside `fuse`.
+`vector W` has each device lane run `W` adjacent indices with one load and one store of at most 16 bytes per array it touches only at `x[i]`, so an `f32` array takes `vector 4` at most. A pointer not aligned to the chunk width runs the scalar lanes instead. `E-PLAN` refuses a width that is not a power of two, a chunk wider than 16 bytes, and `vector` beside `fuse`.
 
 ```cairn
 fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
@@ -396,7 +394,7 @@ fn blur(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
 plan blur { stage 1; block 128; }   // each element of x crosses from memory once per block
 ```
 
-`cairn predict` prices a staged region as the unplanned one: what a tile saves is what the device's caches would have missed, which only a device run measures. `cairn tune` tries `stage` and reads each staged candidate's registers and tile from its compile, so a tile that costs resident warps is priced as costing them.
+`cairn predict` prices a staged region as the unplanned one: what a tile saves is what the device's caches would have missed, which only a device run measures. [`cairn tune`](tools.md#cairn-tune) reads a staged candidate's registers and tile from its compile, so a tile that costs resident warps is priced as costing them.
 
 `fuse K` runs up to `K` adjacent regions, from 2 to 16, as one traversal: each lane runs the first body at its index, then the next. The regions must share a placement and an extent, touch what they write only at their own index, and have bodies that cannot trap or be observed from outside. A local array only the chain touches then lives in each lane as one value and is never allocated. A host `reduce` over the same extent may end the chain, keeping its fold order.
 
@@ -445,7 +443,7 @@ fn count(n:usize, out:rw<u64>[n], x:ro<u64>[n]) {
 plan count { fuse 2; }
 ```
 
-Keeping the schedule apart from the algorithm, as Halide does, is what makes [`cairn tune`](tools.md#cairn-tune) possible: every plan it tries is correct, so it only ranks them. Whether that makes tuning cheaper than rewriting the loop has not been measured.
+With the schedule apart from the algorithm, as in Halide, every plan [`cairn tune`](tools.md#cairn-tune) tries is correct and it only ranks them; whether that makes tuning cheaper than rewriting the loop has not been measured.
 
 ## reduce and compact
 
@@ -592,17 +590,17 @@ fn stage(n:usize, host_x:ro<f32>[n], x:rw<f32>[n]@device, out:rw<f32>[n]@device)
 
 ## Device execution
 
-Device work runs on the calling thread's execution context: a stream and its event, one scratch arena and a budget (`runtime/cairn_exec.hpp`). The thread's first device operation makes the context, and the thread keeps it. A region over device views, and a `transfer`, runs on the context's stream and returns once that stream has finished, so the host sees the result and a guard that fired in a lane aborts the process, as before. Nothing waits for the rest of the device. A device `reduce`, `scan` or `compact` takes its temporaries from the arena, which grows to the largest request it has met and is then reused. Queued work borrows a lane that comes back at its `wait`.
+Device work runs on the calling thread's execution context (`runtime/cairn_exec.hpp`): a stream and its event, one scratch arena and a budget, made by the thread's first device operation and kept. A region over device views, and a `transfer`, returns once that stream has run it, so the host sees the result and a guard that fired in a lane aborts the process; nothing waits for the rest of the device. A device `reduce`, `scan` or `compact` takes its temporaries from the arena, which grows to the largest request it has met. Queued work borrows a lane that comes back at its `wait`.
 
-After its first pass, a pipeline run again makes no stream, allocates no temporary and waits only for its own stream. `tests/runtime/test_execution.py` runs the generated code of one (regions, a vector and a staged plan, a reduction, a scan, a compaction, transfers and two queued tickets) on a host machine that counts every stream, allocation and wait: two streams and three arena allocations on the first pass, none after, and nine stream waits per pass ([evidence](../evidence/v0_9/execution/README.md)). Its CUDA build compiles for sm_120 and calls no `cudaDeviceSynchronize`; it has not run on a GPU. A device `mma_unordered` still waits for the whole device.
+Run again, a pipeline makes no stream, allocates no temporary and waits only for its own stream. On a host machine that counts them (`tests/runtime/test_execution.py`), one pipeline of regions, a vector and a staged plan, a reduction, a scan, a compaction, transfers and two queued tickets made two streams and three arena allocations on its first pass and none after, with nine stream waits a pass ([evidence](../evidence/v0_9/execution/README.md)). Its CUDA build compiles for sm_120 without `cudaDeviceSynchronize` and has not run on a GPU. A device `mma_unordered` still waits for the whole device.
 
-A region no longer waits for queued work it does not touch: each ticket is waited for at its own `wait`. On a device without concurrent managed access (Windows and WSL2), the host must not touch `@unified` memory while any kernel runs, and a live ticket's kernel may still be running after a region returns.
+A region does not wait for queued work it does not touch; each ticket is waited for at its own `wait`. On a device without concurrent managed access (Windows and WSL2), a live ticket's kernel may still run after a region returns, and the host must not touch `@unified` memory while any kernel runs.
 
 A C program that owns a stream hands it to a device library with `NAME_device_stream(stream)`, which `cairn build --header` declares ([tools.md](tools.md#cairn-build---header)). The calling thread's synchronous device work then runs on that stream, after what the caller queued there, and queued work starts after it too; `NULL` gives the thread its own stream back. A device view the library takes is a pointer to memory the caller owns.
 
 ## Cooperative regions
 
-`blocks b in G threads t in T { body }` runs `G` blocks of `T` threads. The threads of one block share the arrays the body declares with `shared` and wait for each other at `barrier`. Where a `parallel` lane touches only its own element, threads of a block may read what others wrote once a barrier lies between them. A region runs on the device when a view it indexes is `@device`, and on host threads otherwise.
+`blocks b in G threads t in T { body }` runs `G` blocks of `T` threads. A block's threads share the arrays the body declares `shared` and wait for each other at `barrier`, so, unlike `parallel` lanes, they may read what another thread wrote once a barrier lies between. A region runs on the device when a view it indexes is `@device`, and on host threads otherwise.
 
 ```cairn
 fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
@@ -624,9 +622,9 @@ fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
 }
 ```
 
-Each side names up to three binders, fastest first: in `blocks bx, by in gx, gy threads tx, ty in 32, 8`, thread `(tx, ty)` is thread `tx + 32 * ty` of its block. The grid's extents are any `usize` values. The thread extents are literals or constants whose product is a whole number of warps, 32 to 1024 (`E-COOP-SHAPE`). A `shared` array is declared directly in the body with a constant length and starts on 128 bytes, where a tensor-core fragment may load from it ([numerics.md](numerics.md#tensor-core-fragments)), and a block's arrays hold at most 48 KiB together (`E-COOP-SHARED`).
+Each side names up to three binders, fastest first: in `blocks bx, by in gx, gy threads tx, ty in 32, 8`, thread `(tx, ty)` is thread `tx + 32 * ty` of its block. The grid's extents are any `usize` values; the thread extents are literals or constants whose product is a whole number of warps, 32 to 1024 (`E-COOP-SHAPE`). A `shared` array is declared directly in the body with a constant length and starts on 128 bytes, where a tensor-core fragment may load from it ([numerics.md](numerics.md#tensor-core-fragments)), and a block's arrays hold at most 48 KiB together (`E-COOP-SHARED`).
 
-A barrier must be reached by every thread of the block, so it may not sit under a condition that depends on a thread's name, nor in a loop a `break` or `continue` can leave early (`E-COOP-BARRIER`). The warp operations `shuffle(v, lane)`, `shuffle_xor(v, mask)`, `shuffle_down(v, delta)` and `reduce OP warp yield v` need every thread of the warp (`E-COOP-WARP`). A condition whole warps agree on, such as `t < 32`, `t / 32 == w`, or `ty < 4` when `tx` counts 32, keeps warps whole. `reduce OP warp` takes `reduce`'s operators and combines in a fixed butterfly, halves then quarters down to neighbours, so every thread gets the same answer on the host and the device.
+Every thread of the block must reach a barrier, so it may not sit under a condition that depends on a thread's name, nor in a loop a `break` or `continue` can leave early (`E-COOP-BARRIER`). The warp operations `shuffle(v, lane)`, `shuffle_xor(v, mask)`, `shuffle_down(v, delta)` and `reduce OP warp yield v` need every thread of the warp (`E-COOP-WARP`), which a condition such as `t < 32`, `t / 32 == w`, or `ty < 4` when `tx` counts 32 keeps whole. `reduce OP warp` takes `reduce`'s operators and combines in a fixed butterfly, halves then quarters down to neighbours, so every thread gets the same answer on the host and the device.
 
 ```cairn rejects E-COOP-BARRIER
 fn f(g:usize) {
@@ -636,7 +634,7 @@ fn f(g:usize) {
 }
 ```
 
-Between two barriers, a phase, no two threads of a block may touch one element of a shared array where either writes. The checker runs the body for every thread of one block, the block's names and everything outside the region kept as symbols, and refuses a phase where two threads write one element (`E-COOP-CONFLICT`), where a thread reads what another writes earlier in the phase (`E-COOP-UNORDERED`), or where a thread writes over what another may still be reading (`E-COOP-REUSE`). Each message names both threads, both lines and where a barrier would order them. An index it cannot follow, such as one read from data or one that differs from another by a value only known at run time, is `E-COOP-UNDECIDED` beside a write, never accepted.
+Between two barriers, a phase, no two threads of a block may touch one element of a shared array where either writes. The checker runs the body for every thread of one block, with the block's names and everything outside the region as symbols, and refuses a phase where two threads write one element (`E-COOP-CONFLICT`), a thread reads what another writes earlier in the phase (`E-COOP-UNORDERED`), or a thread writes over what another may still be reading (`E-COOP-REUSE`). An index it cannot follow, such as one read from data or one that differs from another by a value known only at run time, is `E-COOP-UNDECIDED` beside a write.
 
 ```cairn rejects E-COOP-UNORDERED
 fn reverse(g:usize, out:rw<u64>[g]) {
@@ -665,7 +663,7 @@ fn shift(g:usize, out:rw<u64>[g]) {
 }
 ```
 
-An array from outside the region is shared by every block, and no barrier orders two blocks. Each of its elements may be written by at most one thread of one block, and read by another only if nobody writes it (`E-COOP-GLOBAL`). The checker shows this when the index is a sum of the block, thread and loop names, each times a weight larger than everything the lighter terms add up to, as `b * 256 + t` is, or as the transpose's `(bx * 32 + ty + 8 * k) * h + by * 32 + tx` is when `h` is `32 * gy`. A condition on the index, `if col < h`, counts toward that bound. A thread may read the elements it writes, as `c += ...` does, when the read's index is the write's, in the same loop or in another over the same range, under the write's conditions.
+An array from outside the region is shared by every block, and no barrier orders two blocks, so each of its elements may be written by at most one thread of one block, and read by another only if nobody writes it (`E-COOP-GLOBAL`). The checker shows this when the index is a sum of the block, thread and loop names, each times a weight larger than all the lighter terms add up to: `b * 256 + t`, or the transpose's `(bx * 32 + ty + 8 * k) * h + by * 32 + tx` when `h` is `32 * gy`. A condition on the index, `if col < h`, counts toward that bound. A thread may read the elements it writes, as `c += ...` does, when the read's index is the write's, in the same loop or in another over the same range, under the write's conditions.
 
 ```cairn
 // out is x transposed: x has 32 * gy rows of 32 * gx elements.
@@ -689,9 +687,9 @@ fn transpose(gx:usize, gy:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
 
 A thread obeys everything a lane obeys: it cannot assign a scalar from outside (`E-PARALLEL-WRITE`), start another region (`E-PARALLEL-NEST`), do I/O (`E-PARALLEL-CALL`), or reach the other side's memory (`E-PLACEMENT`). The row gains `par:device` or `par:host`, `zero_init` for the shared arrays, and `trap` for the guards; the receipt lists each array's bytes and the block's total under `local_storage`.
 
-On the device the region is one launch of blocks of `T` threads, the arrays in static shared memory, `barrier` as `__syncthreads()` and the warp operations as `__shfl_*_sync` over the whole warp, on the calling thread's execution context, returning once its stream has run the region, as `parallel` does. It compiles for `sm_120` and has not run on a GPU. On the host each block's threads are real threads meeting at a `std::barrier`, two blocks at a time, so the thread sanitizer checks the phase rule on real runs; the host lowering creates `2 * T` threads per region and is not a fast path.
+On the device the region is one launch on the thread's execution context, as `parallel` is: blocks of `T` threads, the arrays in static shared memory, `barrier` as `__syncthreads()` and the warp operations as `__shfl_*_sync` over the whole warp. It compiles for `sm_120` and has not run on a GPU. On the host each block's threads are real threads meeting at a `std::barrier`, two blocks at a time, so the thread sanitizer checks the phase rule on real runs; this lowering creates `2 * T` threads per region and is not a fast path.
 
-A `pipeline` is shared memory the block fills from an outside array while its threads read another part of it. `pipeline tiles:u64[256] depth 2;` declares two stages of 256 elements of a 4- or 8-byte scalar. `tiles.fill(x, start, count)` starts copying `x[start .. start + count]` into the next free stage and zeroes the rest of it; `tiles.wait()` waits, in every thread, for the oldest stage in flight, which then reads as `tiles[i]`; `tiles.release()` says the threads are done reading it, and the next barrier frees it. The whole block reaches each of these together (`E-COOP-BARRIER`).
+A `pipeline` is shared memory the block fills from an outside array while its threads read another part of it. `pipeline tiles:u64[256] depth 2;` declares two stages of 256 elements of a 4- or 8-byte scalar. `tiles.fill(x, start, count)` starts copying `x[start .. start + count]` into the next free stage and zeroes the rest of it. `tiles.wait()` waits, in every thread, for the oldest stage in flight, which then reads as `tiles[i]`, and `tiles.release()` marks it read, to be freed at the next barrier. The whole block reaches each of these together (`E-COOP-BARRIER`).
 
 ```cairn
 // out[r * 256 + t] is the sum of x[r * cols + t], x[r * cols + t + 256], ...: row r, a tile at a time.
@@ -719,7 +717,7 @@ fn strided_sums[D:nat](rows:usize, cols:usize, n:usize, x:ro<u64>[n], m:usize, o
 fn double(rows:usize, cols:usize, n:usize, x:ro<u64>[n], m:usize, out:rw<u64>[m]) { strided_sums[2](rows, cols, n, x, m, out); }
 ```
 
-The checker follows each stage through the body: available, transfer in flight, readable, readers in flight, available again at the next barrier. It refuses a read, `release` or `wait` with no stage in the state it needs (`E-STAGE-UNREADY`), a `fill` with no free stage and a `wait` while a stage is still readable (`E-STAGE-BUSY`), and a loop or an `if` that leaves a pipeline in another state than it found it (`E-STAGE-LOOP`). A refused `fill` names the stage and the reads that may still be running.
+The checker follows each stage through the body: available, transfer in flight, readable, readers in flight, available again at the next barrier. It refuses a read, `release` or `wait` with no stage in the state it needs (`E-STAGE-UNREADY`), a `fill` with no free stage and a `wait` while a stage is still readable (`E-STAGE-BUSY`), and a loop or an `if` that leaves a pipeline in another state than it found it (`E-STAGE-LOOP`).
 
 ```cairn rejects E-STAGE-BUSY
 fn sums(rows:usize, cols:usize, n:usize, x:ro<u64>[n], m:usize, out:rw<u64>[m]) {
@@ -744,4 +742,4 @@ fn sums(rows:usize, cols:usize, n:usize, x:ro<u64>[n], m:usize, out:rw<u64>[m]) 
 tiles.fill at line 9 would refill the stage of tiles released at line 12 while other threads may still be reading it (tiles[...] at line 11). Put a barrier after line 12 and before line 9 runs.
 ```
 
-The depth is a constant of the declaration, so raising it changes only what a deeper pipeline needs: the block's shared memory (depth times the stage's bytes, in the receipt's `local_storage` and in the kernel's static shared memory) and how many copies a `wait` leaves in flight, which the checker counts (`cp.async.wait_group 1` at depth 2, `2` at depth 3). On the device a fill is one `cp.async` per element, committed as one group per thread; on the host it is each thread's own copy, so a read the checker let through too early would race with it under the thread sanitizer. `strided_sums[2]` and `strided_sums[3]` compute the same sums.
+The depth is a constant of the declaration, and raising it changes only the block's shared memory (depth times the stage's bytes, in the receipt's `local_storage` and the kernel's static shared memory) and how many copies a `wait` leaves in flight, which the checker counts (`cp.async.wait_group 1` at depth 2, `2` at depth 3): `strided_sums[2]` and `strided_sums[3]` compute the same sums. On the device a fill is one `cp.async` per element, committed as one group per thread. On the host it is each thread's own copy, so a read the checker let through too early would race with it under the thread sanitizer.
