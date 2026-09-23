@@ -86,18 +86,46 @@ struct alignas(64) Berth {
   std::atomic<bool> parked{false};
 };
 
+// A region's indices are cut into one home per lane it can use, each with a counter of its own. A lane claims
+// from its own home first and then from what is left of the others, so a lane that runs the same region again
+// runs the same indices again, from its own core's cache, while the home of a lane that is busy or asleep is
+// still taken by whoever is free. With one counter for the whole region, which lane claimed which chunk changed
+// from one region to the next, and saxpy over a million floats ran 2.8 times slower than OpenMP's static schedule,
+// which keeps each thread on one range (evidence/v1_4/bench). proofs/Cairn/Region.lean is this protocol.
+inline constexpr std::size_t HOMES = 64;
+// Where home h begins, of `homes` cut from [0, n): the homes are consecutive, differ in length by at most one,
+// and home `homes` begins at n.
+inline constexpr std::size_t cut(std::size_t n, std::size_t homes, std::size_t h) noexcept {
+  return n / homes * h + (h < n % homes ? h : n % homes);
+}
+// A home's counter is read and bumped through std::atomic_ref, so a region's unused homes stay unwritten: only
+// the ones a region uses are set, before it is published.
+struct alignas(64) Home {
+  std::size_t next;  // the next index of this home no lane has claimed
+  std::size_t end;   // one past the home's last index
+  std::size_t claim(std::size_t grain) noexcept {
+    return std::atomic_ref<std::size_t>(next).fetch_add(grain, std::memory_order_relaxed);
+  }
+  bool open() noexcept { return std::atomic_ref<std::size_t>(next).load(std::memory_order_relaxed) < end; }
+};
+
 // One region, on the stack of the thread that started it. Workers reach it only while they hold a
 // reference (`users`), and the submitter returns only once that count is back to zero, so the
 // frame outlives every thread that can touch it. Nothing here is allocated.
 struct Region {
   Call call = nullptr;
   void* body = nullptr;
-  std::size_t n = 0;
   std::size_t grain = 1;
   std::size_t helpers = 0;  // workers 0..helpers-1 may join; the rest leave a small region alone
+  std::size_t homes = 1;    // homes 0..homes-1 are in use
   Region* older = nullptr;  // regions started by other threads, newest first; guarded by m_
-  std::atomic<std::size_t> next{0};   // the next index no lane has claimed
   std::atomic<std::size_t> users{0};  // workers currently inside this region
+  Home home[HOMES];
+  bool open() noexcept {  // Is any index unclaimed? A stale answer costs a worker one look, never an index.
+    for(std::size_t h = 0; h < homes; ++h)
+      if(home[h].open()) return true;
+    return false;
+  }
 };
 
 class Pool final {
@@ -152,7 +180,7 @@ public:
   // arrangement of busy, blocked or absent workers can deadlock a region.
   void execute(Region& region) noexcept {
     publish(region);
-    drain(region);
+    drain(region, 0, region.homes - 1);  // home 0, then backward: the last homes' workers are woken last
     withdraw(region);
     settle(region);
   }
@@ -215,7 +243,7 @@ private:
   Region* adopt(std::size_t k) noexcept {
     std::lock_guard<std::mutex> hold(m_);
     for(Region* region = head_; region != nullptr; region = region->older)
-      if(k < region->helpers && region->next.load(std::memory_order_relaxed) < region->n) {
+      if(k < region->helpers && region->open()) {
         region->users.fetch_add(1, std::memory_order_relaxed);  // m_ orders this against withdraw
         return region;
       }
@@ -233,13 +261,16 @@ private:
     rest_.notify_all();
   }
 
-  // Claim chunks and run them until nothing is left. Used by the submitter and by every worker.
-  static void drain(Region& region) noexcept {
-    while(region.next.load(std::memory_order_relaxed) < region.n) {
-      const std::size_t begin = region.next.fetch_add(region.grain, std::memory_order_relaxed);
-      if(begin >= region.n) return;
-      const std::size_t end = region.n - begin < region.grain ? region.n : begin + region.grain;
-      region.call(region.body, begin, end);
+  // Claim chunks and run them until every home is used up, taking the homes in the order first, first + step,
+  // first + 2 * step and so on around the region. Used by the submitter and by every worker.
+  static void drain(Region& region, std::size_t first, std::size_t step) noexcept {
+    for(std::size_t r = 0, h = first; r < region.homes; ++r, h = (h + step) % region.homes) {
+      Home& home = region.home[h];
+      while(home.open()) {
+        const std::size_t begin = home.claim(region.grain);
+        if(begin >= home.end) break;
+        region.call(region.body, begin, home.end - begin < region.grain ? home.end : begin + region.grain);
+      }
     }
   }
 
@@ -248,7 +279,7 @@ private:
       const std::uint64_t seen = epoch_.load(std::memory_order_acquire);
       if(k < wanted_.load(std::memory_order_acquire)) {
         if(Region* region = adopt(k)) {
-          drain(*region);
+          drain(*region, (k + 1) % region->homes, 1);  // its own home, the one after the submitter's for worker 0
           leave(*region);
           // Look again only if there can be something to find. Missing work is never wrong -- the
           // thread that started a region can always finish it -- and this halves how often sixty
@@ -325,10 +356,12 @@ template<class F> void run_wide(std::size_t n, F& body, std::size_t weight = 1, 
     for(std::size_t i = begin; i < end; ++i) lane(i);
   };
   region.body = const_cast<void*>(static_cast<const void*>(std::addressof(body)));
-  region.n = n;
   region.helpers = use - 1;
   region.grain = n / (use * lanes::SPLIT);
   if(region.grain < least) region.grain = least;
+  region.homes = use < lanes::HOMES ? use : lanes::HOMES;
+  for(std::size_t h = 0; h < region.homes; ++h)
+    region.home[h] = {lanes::cut(n, region.homes, h), lanes::cut(n, region.homes, h + 1)};
   pool.execute(region);
 }
 

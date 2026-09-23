@@ -61,6 +61,20 @@ static void test_run() {
   CHECK(touched == 0);
 }
 
+// The homes a region is cut into are what proofs/Cairn/Region.lean assumes of them (Cut.Ok): the first begins at
+// 0, one past the last begins at n, and each begins no later than the next, here no more than one index apart.
+static void test_homes() {
+  for(std::size_t n : {std::size_t(0), std::size_t(1), CUT, CUT + 1, std::size_t(1000003)})
+    for(std::size_t homes = 1; homes <= cr::par::lanes::HOMES; ++homes) {
+      CHECK(cr::par::lanes::cut(n, homes, 0) == 0);
+      CHECK(cr::par::lanes::cut(n, homes, homes) == n);
+      for(std::size_t h = 0; h < homes; ++h) {
+        const std::size_t length = cr::par::lanes::cut(n, homes, h + 1) - cr::par::lanes::cut(n, homes, h);
+        CHECK(length == n / homes || length == n / homes + 1);
+      }
+    }
+}
+
 // Eight threads each run their own regions at the same time over their own arrays. The pool serves
 // whichever of them it can and every one of them can finish alone, so all eight must come out whole.
 static void test_regions_from_several_threads() {
@@ -350,6 +364,7 @@ int main(int argc, char** argv) {
   }
   if(argc > 1) return death(argv[1]);
   test_run();
+  test_homes();
   test_regions_from_several_threads();
   test_many_regions();
   test_a_slow_lane_still_completes();

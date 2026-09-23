@@ -24,8 +24,9 @@
 // The three grain rows, named here so a build line, a table column and a pragma cannot drift apart.
 // DEFAULT lets a library choose alone. CHUNK hands it CAIRN's claim size assigned in advance, which
 // is OpenMP's schedule(static, g) and TBB's simple_partitioner over a range of grain g. CLAIM hands
-// it the same size taken on demand, which is OpenMP's schedule(dynamic, g) and is what cr::par::run
-// itself does; TBB claims and steals in both of its rows, so it has no separate CLAIM row.
+// it the same size taken on demand, which is OpenMP's schedule(dynamic, g); cr::par::run takes it on
+// demand from a home range of each lane, first its own; TBB claims and steals in both of its rows, so it
+// has no separate CLAIM row.
 #define BENCH_GRAIN_DEFAULT 0
 #define BENCH_GRAIN_CHUNK 1
 #define BENCH_GRAIN_CLAIM 2
