@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cairn-language"
-version = "1.3.0"
+version = "1.4.0"
 description = "A systems language with visible costs, second-class borrows, CPU/GPU lanes and compiler-admitted AI edits"
 readme = "README.md"
 license = "MIT OR Apache-2.0"

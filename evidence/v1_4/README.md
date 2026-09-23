@@ -4,6 +4,7 @@ Each directory is one record, taken on the reference machine while the 1.4 work 
 
 | Record | What it holds |
 |---|---|
+| `bench/` | The preregistered CPU baseline suite run again at `a090489`, with no agent running: the parallel `reduce` and the lane-owned-block histogram that 1.3 could not write are level with OpenMP and oneTBB, and `dot_f64` still keeps its written order. |
 | `guards/` | The optimized build against the one that keeps every guard: 1,821 generated functions, 174,816 cases per compiler, no difference. |
 | `lowering/` | The guards the emitted C++ writes before and after the elision work, the checks internal calls no longer run at a lean body, and what those checks cost in time. |
 | `lean/` | Two differential runs against the Lean models: 20,000 generated programs the checker and the ownership calculus classify alike (`differential.json`), and 20,000 guard sites `facts.py` and `Facts.lean` decide alike (`facts_differential.json`). |

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.0
 
 ### Language
 
@@ -12,6 +12,21 @@
 - An I/O ring, `let mut q = IoRing(n);`, keeps up to `n` kernel operations in flight from one thread over io_uring. `q.read`, `q.write`, `q.recv`, `q.send` and `q.accept` move the `Buf[u8]` they work on into the ring, and `q.next(tag, result)` hands the next finished one back with its tag and the kernel's result; `std.io.outcome(result)` reads that as a `Result`. `q.timeout(ns, tag)` finishes with `-ETIME` after `ns` nanoseconds, and `q.cancel(tag)` stops what runs under a tag, which still comes back through `next` with its buffer. A ring records no lease, so it may be lent `rw` to a callee or a task; it is linear, pinned (`E-PINNED`), host only, and `wait(q)` lets every operation finish before it releases anything.
 - A ticket or a task group can no longer be a parameter in any mode (`E-PINNED`). 1.3 accepted a group lent `rw` to a callee that spawned into it, and the task's lease ended at the callee's return while the task still wrote.
 - A task group keeps every lease any path, or any earlier iteration of a loop, lent it, and a part orders other parts only where every path formed it. This closes three races 1.3 accepted.
+- A variant may leave out its sum where the context names it: `return None;`, `Some(v) => ...`, `op = Write;`. It checks and emits as the qualified form, which stays legal, and a name that could also mean a local, constant, function or type is `E-VARIANT-AMBIGUOUS`.
+- A match arm that is one `return`, `break`, `continue`, assignment or call may leave out its braces, and `_` binds nothing: an arm's `_` drops its payload, releasing an owner and refusing a linear one (`E-LINEAR-LEAK`), and `for _ in 0..n` only counts.
+- Compound assignment `+= -= *= /= %= &= |= ^=` checks as the written-out assignment, with the same rows, guards and refusals, and evaluates its place once, so `xs[i] += v` pays one bounds guard.
+- A call may stand as a statement and drop what it returns; an owner it returns is released there. An outcome sum `try` accepts is handled with `try` or `match`, or let go with `let _ =` (`E-DISCARD`).
+- `for x in xs` and `for i, x in xs` walk the copyable elements of a view, `Buf` or `Array` as the index loop they stand for, with its facts and guards (`E-ELEMENT-LOOP`).
+- A record may lend a view: `lends data[0..len];` makes the record, named where an array view is expected, the part it names, with that part's guard, row, lease and alias rules (`E-LENDS`). `std.vec` lends its live elements, so a `Vec[u8]` goes to `io.print` or `text.equal` whole.
+- `test name { }` blocks are checked like functions and held by no ordinary build. `assert(cond[, "why"])` traps naming its file and line, and `assert_eq(a, b[, "why"])` prints both scalars first (`E-TEST`, `E-ASSERT-EQ`).
+- `print`, `println`, `eprint`, `eprintln` and `format` write any mix of integers, bools, character literals, floats and bytes in one call, every argument computed before a byte is written; a float prints its shortest round-trip digits laid out as JavaScript lays out a number (`E-PRINT-ARG`, `E-FORMAT-TARGET`).
+- `scan OP [exclusive] out for|parallel i in n yield e` writes every prefix and binds the total. A checked unsigned `+` traps exactly when the in-order total does, and the pooled form runs in two passes on the lane pool (`E-SCAN-*`).
+- `sqrt`, `floor`, `ceil`, `trunc`, `abs` and `to_bits` are builtins that IEEE 754 makes exact or correctly rounded (`E-MATH-TYPE`).
+- `f16`, `bf16`, `f8e4m3` and `f8e5m2` are storage floats: they hold and convert by one correctly rounded step and never compute. `quantize[T](x, scale)` rounds once and saturates, `quantize_stochastic` rounds by the caller's noise, and the receipt lists every rounding under `numerics`.
+- `derive grad for f;` writes the reverse-mode derivative of `f` as ordinary checked CAIRN, through lets, branches, sums, element loops, lanes that add only into their own element, and `std.math`'s `exp` and `log` (`E-GRAD`, `E-GRAD-FORM`, `E-GRAD-RACE`).
+- `mma_unordered(m, n, k, c, a, b)` adds the product of two storage-float matrices into an `f32` one under a named contract: exact products, `f32` sums in the hardware's order, within `(k + 1) * 2^-22` of the exact sum's magnitude. On the host it is the written loop; on the device, tensor-core instructions with double-buffered asynchronous copies.
+- A plan may `fuse K` adjacent host regions into one traversal when no body can trap or be observed, and set a device region's `block`, `per_lane`, `unroll`, `vector W` (one aligned 128-bit access for W lanes' elements) and `stage R` (a block's stencil input in shared memory). No plan item changes a result (`E-PLAN`).
+- An owner passed by value to a group's task moves into it, so a loop may hand a group a fresh `Buf` each time round.
 
 ### Projects and tools
 
@@ -23,6 +38,23 @@
 - A preregistered trial (`tools/ai/protocol_trial.py` and its preregistration) puts twelve planted repairs to fresh subjects under the component packet and the focused one; it has not been run.
 - The teaching fixtures under `training/` carry today's rule cards, packets and receipts, and each generator's `--check` fails the suite when its committed files drift.
 - `tools/checks/emission_identity.py` compiles 1,044 programs (the examples, `std`, every program in the tests and every docs block) and requires the same C++ and effect rows before and after a source change.
+- At a terminal, `cairn` renders a refusal with its code, position and underlined token, answers in one line, and runs the program on the terminal's own streams; piped output stays the JSON record. A refusal inside a library module names that module's file.
+- `cairn predict` prices each function from its checked work and a calibrated machine profile without building it: a cost formula in its extents, the bound, the fraction of speed of light and a confidence. `cairn tune` ranks every legal plan by prediction and times only the best few on the host; device plans are timed only under the owner's `make tune-device`.
+- `cairn diff OLD NEW`, over paths or git revisions, gives each function one class (identical code, SMT-equivalent, changed with a witness replayed natively, or unknown with its reason), its exact effect, guard and signature changes, and a semantic version that is `unknown` while a public function is unproven.
+- `cairn build --header` writes a library's C header with every layout asserted on both sides and an interface identity a stale header fails to link against; `cairn emit --ctypes` writes a Python binding its import checks. `examples/interop` is a C++ program that links a CAIRN library with nothing of CAIRN in its build.
+- `cairn new --template cli|lib|service|parallel`, `cairn check --watch` (JSON Lines with `--format json`), `cairn completions bash|zsh`, `cairn test --test NAME`, and `cairn run app -- ARGS`.
+- The language server analyses a document with its whole project: it colors names by what the checker knows, hints effect rows, left-out extents and `let` types, offers deterministic quick fixes, run and test lenses, highlights and workspace symbols, and finds references and renames functions, fields and variants across files, admitting a rename only when every function's receipt is unchanged.
+- The TextMate and Vim grammars are generated from the compiler's vocabulary and checked against the real TextMate engine; GitHub highlights `.cairn` files; `compile_flags.txt` and `.clangd` let clangd read the runtime and the device tests.
+- Packets name each callee's evidence class, a warm host sends each constant entry once, a refusal points into the reply with its smallest fix, and context is measured in o200k tokens. `cairn state` gives the program as it stands under one digest, `cairn migrate` carries one authorized signature change through every caller (every file or none), a plan edit (`cairn.plan/1`) may change only plan items, a session may require `preserve: identical|equivalent` (`E-PRESERVE`), and `cairn shot` runs a program headless and returns its frames, layout records and the effect rows an edit changed.
+- The library gains `std.fmt`, `std.fs`, `std.env`, `std.time`, `std.math` (libm's functions, labelled so in every row), `std.zlib` (a system library linked only through the toolchain's closed table), `std.image` (PNG and PPM with no library) and `std.draw` (clipped shapes, blits, layers, bitmap text and layouts a test can query). `std.map` hands out `Slot`s that resolve to `None` once their key is removed or the map rehashes, and `std.sort.radix_sort` runs on `scan` without allocating.
+- New examples: `wordfreq` (a command-line tool), `panel` (a headless UI frame loop), `classifier` (training on `derive grad`, then inference quantized to `i8` and `f8e4m3`), `matmul` (the tensor-core contract) and `interop`.
+
+### Runtime
+
+- An I/O ring returns every submission exactly once with the kernel's errno, reports a ring the kernel would not create, and makes a full ring or an empty `next` visible before it traps; the service answers overload instead of trapping.
+- A spawn takes a parked task thread or starts one, so a pipeline pays for a thread once instead of per task, and no task ever waits for a thread.
+- A function that takes views has a checked C entry that checks every view once and a lean body that calls from CAIRN reach.
+- An execution context for queued device work (reusable streams, events and scratch under a declared budget, and a reduction that stays on the device) is built and tested against a host mock. It is not yet wired into the emitted code.
 
 ### Verification
 
@@ -32,10 +64,25 @@
 - `proofs/Cairn/Facts.lean` proves that a guard the checker's facts discharge cannot fail where those facts hold, and `tools/checks/differential_facts.py` requires `facts.py` and the Lean rule to decide twenty thousand generated sites alike.
 - Tests build emitted C++ through one helper (`tests/emitted.py`) and require refusals through another, which removed 320 lines of repeated scaffolding.
 - Four reduction passes made the compiler, the agent layer, the verifiers, the editor, the tools, the tests, `std` and the examples shorter without changing what they do: the emitted C++ of every program the suite compiles is unchanged, except where a native test shows the behaviour is. The code was dense to begin with, so the gains are a few percent in tokens; features added this cycle more than made up the difference in lines.
+- Guard elision is justified: every guard the lowering leaves out carries the facts that justify it, each with its origin, and `verify/elision.py` checks each proof independently before a line is emitted. Facts reach the right side of `&&` and `||`, a settled part loses its guard, `--keep-guards` writes every guard, and the conservative and the optimized builds agreed on 174,816 generated cases per compiler.
+- Lean proves that a part whose guard the facts discharge lies inside its view, and the facts differential asks Python and Lean that decision on twenty thousand inputs.
+- `cairn predict` was checked against CPU timings calibration never saw: a median error of 28 to 44 percent and a Kendall tau of 0.87 to 0.92 on one machine, with its weak ranges named. Its device half is a published specification no run has confirmed.
+- Every storage-float pattern is held to an exact rational model, gradients to central differences and torch, printed floats to an exact oracle and to node, and the fused, scanned and planned forms to their unplanned results under both compilers and the sanitizers.
+- A semantic receipt is pinned to every checker and emitter file, and a test keeps it so.
 
 ### Documentation
 
 - The agent chapter, the README, the roadmap and the verification chapter were rewritten in plain sentences that state each claim once.
+- The language reference is five chapters: `language.md`, `memory.md`, `abstractions.md`, `concurrency.md` and `numerics.md`. The API reference is an index, `docs/std_api.md`, and one generated page per module under `docs/std/`. The ownership tables, the roadmap and `capabilities.json` name every module and gate that exists.
+
+### Repository
+
+- The suite holds every tracked source file to 800 lines, the documentation to its writing rules, and every relative link to an existing file or heading.
+- Issue and pull request templates, package metadata, and an index of the evidence of each release.
+
+### Reviews and users
+
+- Two adversarial reviews of everything added since 1.3 found nine defects, each fixed with its regression test and none a soundness hole in the language: a crafted revision that could make `cairn diff` write outside its scratch directory, edits and migrations that could slip a declaration past their span, a stale C header that linked, a tune that wrote its plan into the wrong file, a rename that left a task contract behind, and a false refusal. Their tables keep the refused attacks (`tests/soundness/test_review_1_4.py`, `test_review_1_4b.py`).
 
 ## 1.3.0
 
