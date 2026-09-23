@@ -23,7 +23,7 @@ cairn check demo --watch            # check again each time a file the project r
 source <(cairn completions bash)    # or zsh; put the script on $fpath as _cairn to keep it
 ```
 
-`--watch` runs the same check as without it, and again whenever the manifest or a source it lists changes its time or its size, polling four times a second with nothing to install. Each answer comes under a line with the time, the refusal rendered as above or the one line `check` gives. A manifest that is broken when the watch starts is watched until it is fixed, and the interrupt that ends a watch exits 0.
+`--watch` runs the same check as without it, and again whenever the manifest or a source it lists changes its time or its size, polling four times a second with nothing to install. Each answer comes under a line with the time, the refusal rendered as above or the one line `check` gives. With `--format json`, or piped, each answer is its whole JSON record on one line (JSON Lines), with no time line, so an editor or an agent reads one line per check. A manifest that is broken when the watch starts is watched until it is fixed, and the interrupt that ends a watch exits 0.
 
 `cairn completions bash` and `cairn completions zsh` print a completion script written from the command line's own parser, so every command, option and choice (`--format`, `--template`, `--arch`) is offered and nothing else is. The suite checks that each script names everything the parser declares, that it is valid in its shell, and that the bash one completes what a person types.
 

@@ -1,6 +1,7 @@
 """`cairn check --watch`: the same check as without it, again each time a file the project reads changes, until the
 person interrupts it."""
 
+import json
 import queue
 import signal
 import subprocess
@@ -89,3 +90,42 @@ def test_a_broken_manifest_is_watched_until_it_is_fixed(tmp_path):
         if watched.poll() is None:
             watched.kill()
             watched.wait(timeout=10)
+
+
+def test_a_watched_check_prints_one_json_record_per_line(tmp_path):
+    """JSON Lines: a reader that takes a line at a time gets each round's whole record, an accepted round and a
+    refused one alike, and nothing that is not a record."""
+    source = tmp_path / "prog.cairn"
+    source.write_text(GOOD)
+    watched = subprocess.Popen(
+        [sys.executable, str(ROOT / "bin/cairn"), "check", str(source), "--watch", "--format", "json"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    lines: queue.Queue = queue.Queue()
+    threading.Thread(target=reader, args=(watched.stdout, lines), daemon=True).start()
+    try:
+        first = json.loads(next_matching(lines, lambda line: line.strip() != ""))
+        assert first["status"] == "typed" and first["functions"] == 1
+        change(source, BAD)
+        refused = json.loads(next_matching(lines, lambda line: line.strip() != ""))
+        assert refused["status"] == "rejected" and refused["code"] == "E-TYPE-MISMATCH"
+        watched.send_signal(signal.SIGINT)
+        assert watched.wait(timeout=30) == 0
+        while not lines.empty():  # whatever else came out is a whole record on its own line too
+            left = lines.get()
+            assert not left.strip() or isinstance(json.loads(left), dict)
+    finally:
+        if watched.poll() is None:
+            watched.kill()
+            watched.wait(timeout=10)
+
+
+def test_a_check_outside_a_watch_still_prints_the_indented_record(tmp_path, capsys):
+    from cairn.cli import main
+
+    source = tmp_path / "prog.cairn"
+    source.write_text(GOOD)
+    assert main(["check", str(source), "--format", "json"]) == 0
+    assert capsys.readouterr().out.startswith('{\n  "status": "typed"')

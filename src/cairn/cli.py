@@ -23,6 +23,7 @@ from .projects.project import ProjectError, contained_file, load_project, read_t
 from .projects.toolchain import ARCHS, TARGETS, emulator, host_family, resolve_arch
 
 FORMAT: str | None = None  # --format as given; None lets the stream decide (see editor/terminal.py)
+LINES = False  # a watched check's records, one per line (JSON Lines), so a reader can take each as it comes
 
 
 def report(value: dict, brief: bool = False) -> None:
@@ -30,7 +31,7 @@ def report(value: dict, brief: bool = False) -> None:
     if brief and terminal.human(FORMAT):
         terminal.summary(value)
         return
-    print(json.dumps(value, indent=2, allow_nan=False))
+    print(json.dumps(value, allow_nan=False) if LINES else json.dumps(value, indent=2, allow_nan=False))
 
 
 TEMPLATES = Path(__file__).parent / "templates"  # each a whole project the suite builds, runs and tests as it is
@@ -213,8 +214,10 @@ def stamps(path: str) -> tuple:
 
 
 def watch(path: str, again: list[str]) -> int:
-    """`cairn check --watch`: the same check as without it, run again each time a file it reads changes."""
-    seen = None
+    """`cairn check --watch`: the same check as without it, run again each time a file it reads changes. Every
+    round's JSON record is one line, so a watching editor or agent reads JSON Lines."""
+    global LINES
+    seen, LINES = None, True
     try:
         while True:
             now = stamps(path)
@@ -228,6 +231,8 @@ def watch(path: str, again: list[str]) -> int:
             time.sleep(0.25)
     except KeyboardInterrupt:
         return 0
+    finally:
+        LINES = False
 
 
 def parser() -> argparse.ArgumentParser:
