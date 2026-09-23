@@ -201,20 +201,23 @@ template<class A> inline bool chunked(std::size_t n, std::size_t k, const A* a, 
   return sizeof(A) == 2 && n % 8 == 0 && k % 8 == 0 && on(a) && on(b);
 }
 
-template<class A> inline void launch(std::size_t m, std::size_t n, std::size_t k, float* c, std::size_t cn,
-                                     const A* a, std::size_t an, const A* b, std::size_t bn) noexcept {
+// On the calling thread's execution context (cairn_exec.hpp): the tiles run on its synchronous stream and the call
+// returns once that stream has run them, never by waiting for the whole device.
+template<class A> inline void launch(gpu::Context& ctx, std::size_t m, std::size_t n, std::size_t k, float* c,
+                                     std::size_t cn, const A* a, std::size_t an, const A* b, std::size_t bn) noexcept {
   shape(m, n, k, cn, an, bn);
   if(!m || !n) return;
   const std::size_t count = tiles(m, n);
   const unsigned grid = unsigned(count < gpu::MAX_GRID ? count : gpu::MAX_GRID);
-  if constexpr(sizeof(A) == 2) {
-    if(chunked(n, k, a, b)) product<A, true><<<grid, unsigned(THREADS)>>>(m, n, k, c, a, b);
-    else product<A, false><<<grid, unsigned(THREADS)>>>(m, n, k, c, a, b);
-  } else {
-    product<A, false><<<grid, unsigned(THREADS)>>>(m, n, k, c, a, b);
-  }
-  gpu::check(cudaGetLastError());
-  gpu::check(cudaDeviceSynchronize());
+  reuse::synchronous(ctx, [&](cudaStream_t s) {
+    if constexpr(sizeof(A) == 2) {
+      if(chunked(n, k, a, b)) product<A, true><<<grid, unsigned(THREADS), 0, s>>>(m, n, k, c, a, b);
+      else product<A, false><<<grid, unsigned(THREADS), 0, s>>>(m, n, k, c, a, b);
+    } else {
+      product<A, false><<<grid, unsigned(THREADS), 0, s>>>(m, n, k, c, a, b);
+    }
+    gpu::check(cudaGetLastError());
+  });
 }
 
 } // namespace cr::tensor

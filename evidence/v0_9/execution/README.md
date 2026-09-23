@@ -25,6 +25,6 @@ Read from the lowering and runtime at `533de2f`, not measured: each pass would h
 
 ## What did not run
 
-No device run: the CUDA build compiles for sm_120 and has not run on a GPU, and `make gpu` has not been run since. The host machine counts the calls the runtime makes; it does not show what they cost on a device, and no time was measured. A device `mma_unordered` still waits for the whole device (`cairn_tensor.hpp`). The machine was shared with other agents while this ran.
+No device run: the CUDA build compiles for sm_120 and has not run on a GPU, and `make gpu` has not been run since. The host machine counts the calls the runtime makes; it does not show what they cost on a device, and no time was measured. A device `mma_unordered` waited for the whole device when this was recorded; it now runs on the thread's execution context too, and its sm_120 build holds no `cudaDeviceSynchronize` (`tests/soundness/test_tensor.py`). The machine was shared with other agents while this ran.
 
 `python3 tools/checks/execution_counts.py` writes `counts.json` again, and `tests/runtime/test_execution.py` checks the same counts in the suite.

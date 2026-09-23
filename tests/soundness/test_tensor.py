@@ -234,8 +234,15 @@ fn main() -> i32 {
 
 
 @pytest.mark.parametrize("name", FORMATS)
-def test_the_device_multiply_compiles_for_sm_120_without_touching_it(tmp_path, name):
-    device_build(tmp_path, compile_source(ON_DEVICE.replace("T", name))[0], entry="main", timeout=900)
+def test_the_device_multiply_compiles_for_sm_120_and_never_waits_for_the_whole_device(tmp_path, name):
+    """Compiled by nvcc for sm_120 and never run. The multiply runs on the thread's execution context: the object's
+    undefined CUDA symbols hold a stream wait and no whole-device wait."""
+    built = device_build(tmp_path, compile_source(ON_DEVICE.replace("T", name))[0], entry="main", timeout=900)
+    if not shutil.which("nm"):
+        pytest.skip("needs nm")
+    listed = subprocess.run(["nm", "-u", str(built)], capture_output=True, text=True, check=True).stdout
+    called = {line.split()[-1] for line in listed.splitlines() if line.split()[-1].startswith("cuda")}
+    assert "cudaStreamSynchronize" in called and "cudaDeviceSynchronize" not in called, called
 
 
 @pytest.mark.parametrize("name", FORMATS)

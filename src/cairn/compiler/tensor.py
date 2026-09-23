@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from . import fragments
+from . import execution, fragments
 from .tree import HOST_VISIBLE, STORAGE, USIZE, VOID, Expr, Type, fail, is_view
 
 if TYPE_CHECKING:
@@ -76,4 +76,6 @@ def lower_mma(g: Emitter, e: Expr) -> str:
             g.feature("bf16")
     extents = ", ".join(g.expr(x) for x in e.args[:3])
     views = ", ".join(f"{data}, {count}" for data, count in (g.pointer(a) for a in e.args[3:]))
-    return f"cr::tensor::{'launch' if device else 'multiply'}<{g.type(element)}>({extents}, {views})"
+    if device:  # on the calling thread's execution context, waiting for its stream alone (runtime/cairn_exec.hpp)
+        return f"cr::tensor::launch<{g.type(element)}>({execution.CONTEXT}, {extents}, {views})"
+    return f"cr::tensor::multiply<{g.type(element)}>({extents}, {views})"
