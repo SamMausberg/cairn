@@ -153,7 +153,8 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
     generated += "\n// entry\n" if entry else dispatcher(tests) if tests else ""
     declared = ""
     if header:  # The library carries the layouts its header states, so the two cannot disagree and still link.
-        declared, checks = c_header(project.source, project.name, lambda f: project.wrote(f.line))
+        mine, on_device = (lambda f: project.wrote(f.line)), "cuda" in receipt["requires"]
+        declared, checks = c_header(project.source, project.name, mine, on_device)
         generated += "\n" + checks
     if entry and entry != "main":  # Start-up code calls cf_main, wherever main was written.
         generated += f'\nextern "C" std::int32_t cf_main() noexcept {{ return cf_{mangle(entry)}(); }}\n'

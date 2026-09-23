@@ -283,7 +283,7 @@ plan smooth { fuse 2; block 128; }
 
 def test_a_fused_device_chain_is_one_launch_without_its_scratch():
     cpp, receipt = compile_source(DEVICE)
-    assert cpp.count("cr::gpu::launch(") == 1 and "}, 128);" in cpp and "float s_t{};" in cpp
+    assert cpp.count("cr::gpu::run(cr::gpu::here(), ") == 1 and "}, 128);" in cpp and "float s_t{};" in cpp
     assert "gpu::Buffer" not in cpp and "gpu::Buffer" in compile_source(DEVICE.replace("fuse 2; ", ""))[0]
     assert receipt["functions"]["smooth"]["fused"] == [{"line": 4, "regions": 2, "scratch_in_lanes": ["t"]}]
 

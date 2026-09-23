@@ -429,7 +429,9 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 binding(project.source, project.name, mine)
                 if a.ctypes
-                else header(project.source, project.name, mine)[0],
+                else header(
+                    project.source, project.name, mine, "cuda" in compile_source(project.source)[1]["requires"]
+                )[0],
                 end="",
             )
             return 0

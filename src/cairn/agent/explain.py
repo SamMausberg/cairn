@@ -47,11 +47,12 @@ SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and h
     "lock": ".with(",
     "host region completes": "cr::par::run(",
     "pooled reduce completes": "cr::par::reduce<",
-    "device region completes": "cr::gpu::launch(",
-    "queued device work": "cr::gpu::launch_async(",
-    "transfer": "cr::gpu::copy(",
-    "device reduce reads back": "cr::gpu::reduce",
-    "device compact reads back": "cr::gpu::compact",
+    "device region completes": "cr::gpu::run",  # its own stream, on the thread's execution context
+    "queued device work": "cr::gpu::queue",
+    "transfer": "cr::gpu::copy_on(",
+    "device reduce reads back": "cr::gpu::reduce_on",
+    "device scan reads back": "cr::gpu::scan_on",
+    "device compact reads back": "cr::gpu::compact_on",
 }
 ALLOCATION = re.compile(r"(cr::(?:gpu::)?(?:Buf|Buffer|Pinned|Unified)<[^()=;]*?>)\s*\w*\(")
 CALL = re.compile(r"\bc[fi]_(\w+)\(")  # A checked entry `cf_` or the lean body `ci_`.

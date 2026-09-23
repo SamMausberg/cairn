@@ -34,6 +34,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/machine.py` | the machine: `mmio_read`, `mmio_write`, `asm` and typed assembly, their rules and target requirements beside their lowering |
 | `compiler/printing.py` | `print`, `println`, `eprint`, `eprintln` and `format`: what each argument writes, and their lowering |
 | `compiler/codegen.py` | lowering the typed tree; nothing else produces C++ |
+| `compiler/execution.py` | which runtime operation each piece of device work lowers to, on the calling thread's execution context |
 | `compiler/header.py` | the C header of a library build: its declarations, the layouts it states, what cannot cross |
 | `runtime/*.hpp` | guards, owners, threads, rings, storage floats, the tensor-core multiply, device calls, execution contexts |
 | `projects/project.py` | manifests, vendored dependencies, the line-to-file map |

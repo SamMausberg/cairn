@@ -53,7 +53,7 @@ def test_a_vector_plan_is_refused_where_it_would_change_nothing_or_could_not_hol
 
 def test_a_vector_plan_chunks_what_its_lanes_touch_only_at_their_index():
     planned, receipt = compile_source(SAXPY + "plan saxpy { vector 4; }")
-    assert "cr::gpu::launch_vector<4>(v_n, cr::gpu::aligned<4>(v_out, v_x, v_y), " in planned
+    assert "cr::gpu::run_vector<4>(cr::gpu::here(), v_n, cr::gpu::aligned<4>(v_out, v_x, v_y), " in planned
     assert "auto cr_c_x = cr::gpu::Chunk<float, 4>::load(v_x + cr_base);" in planned
     assert "cr::gpu::Chunk<float, 4> cr_c_out{};" in planned  # written at the top of the body, never read: no load
     assert "cr_c_out.store(v_out + cr_base);" in planned and "cr_c_x.store" not in planned

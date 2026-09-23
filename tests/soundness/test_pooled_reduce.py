@@ -51,7 +51,7 @@ def test_a_pooled_fold_says_it_runs_on_the_lane_pool_and_a_plain_one_does_not():
     assert "par:host" in rows["pooled"]["effects"] and rows["pooled"]["syntactic_check_sites"]["parallel_regions"] == 1
     assert not any(e.startswith("par:") for e in rows["plain"]["effects"])
     assert "par:device" in rows["device"]["effects"]  # A device reduction is a tree either way.
-    assert "cr::par::reduce<std::uint64_t>(" in cpp and "cr::gpu::reduce<float>(" in cpp
+    assert "cr::par::reduce<std::uint64_t>(" in cpp and "cr::gpu::reduce_on<float>(cr::gpu::here(), " in cpp
 
 
 def test_the_canonical_projection_keeps_the_form():

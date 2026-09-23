@@ -4,15 +4,27 @@
 // arena is handed to its next user ordered after its last one on the device, never by stopping the host.
 // What a context holds is declared when it is made: a budget reserves scratch up front, may allow growth up
 // to a stated limit, and answers a request beyond that limit with a defined failure instead of allocating.
-// The machine is a template parameter: cairn_gpu.hpp binds it to CUDA, and tests/runtime/reuse_runtime.cpp
-// drives the same bookkeeping with a mock device whose work completes only when the test says so.
+// A caller that owns a stream may bind it: synchronous work then runs on it, after what the caller queued there.
+//
+// Beside the context are the operations device work runs through, written once against the machine: synchronous
+// work on the context's own lane, queued work on a lane lent until its wait, and the reductions, scans and
+// compactions whose temporaries come from the arena. The machine is a template parameter. cairn_gpu.hpp binds it
+// to CUDA, tests/runtime/reuse_runtime.cpp drives the bookkeeping with a mock device whose work completes only when
+// the test says so, and tests/runtime/gpu_host.hpp runs generated programs on a host machine that counts every
+// stream, allocation and wait.
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
+#include <limits>
 #include <new>
 #include <utility>
 #include "cairn_runtime.hpp"
 namespace cr::reuse {
+
+constexpr unsigned BLOCK = 256, MAX_GRID = 65535, WARP = 32;  // a region's default block, the widest grid, a warp
+constexpr std::size_t ALIGN = 256;  // what cudaMalloc guarantees, and what CUB's temporary storage wants
+constexpr std::size_t UNBOUNDED = std::numeric_limits<std::size_t>::max();
 
 // What a request for more scratch than the arena holds may do.
 struct Budget {
@@ -25,6 +37,18 @@ struct Budget {
 enum class Allocation { synchronous, stream_ordered };
 
 enum class Scratch { ok, over_budget };  // what a request for scratch answered
+
+enum class Where { device, pinned, unified };  // where an owner's storage lives
+enum class Dir { h2d, d2h, d2d, h2h };         // which way a copy crosses
+
+template<class T> inline std::size_t span(std::size_t n) noexcept {  // the bytes of n elements, or a trap
+  if(n > static_cast<std::size_t>(std::numeric_limits<std::ptrdiff_t>::max()) / sizeof(T)) trap();
+  return n * sizeof(T);
+}
+inline std::size_t aligned(std::size_t b) noexcept {
+  if(b > std::numeric_limits<std::size_t>::max() - ALIGN) trap();
+  return (b + ALIGN - 1) / ALIGN * ALIGN;
+}
 
 template<class Api> class Context final {
 public:
@@ -47,7 +71,8 @@ public:
   Context& operator=(const Context&) = delete;
   Context(Context&&) = delete;
   Context& operator=(Context&&) = delete;
-  // Every lane must have come back: a lane still lent is work nobody waited for, which traps like a ticket.
+  // Every lane must have come back: a lane still lent is work nobody waited for, which traps like a ticket. A
+  // bound stream is the caller's, and is never destroyed here.
   ~Context() noexcept {
     if(lent_ != 0 || leased_) trap();
     if(used_) api_.sync_event(marker_);  // nothing below may go while the device still reads the arena
@@ -59,12 +84,21 @@ public:
       delete lane;
       lane = next;
     }
+    if(bound_event_) api_.destroy_event(bound_.event);
     api_.destroy_event(marker_);
   }
 
   // A lane whose earlier work has completed, or a new one: never waits, and never shares a stream, so two
-  // operations lent two lanes stay as independent as two tickets with streams of their own.
-  Lane* lend() noexcept {
+  // operations lent two lanes stay as independent as two tickets with streams of their own. `synchronous` asks
+  // for the lane synchronous work runs on, which is the bound stream while one is bound. Any other lane lent while
+  // a stream is bound starts after what was queued there.
+  Lane* lend(bool synchronous = false) noexcept {
+    if(synchronous && binding_) {
+      if(bound_lent_) trap();  // synchronous work does not nest
+      bound_lent_ = true;
+      ++lent_;
+      return &bound_;
+    }
     Lane* lane = free_;
     if(lane != nullptr) free_ = lane->next;
     else {
@@ -76,14 +110,34 @@ public:
     }
     lane->next = nullptr;
     ++lent_;
+    if(binding_) {
+      api_.record(bound_.event, bound_.stream);
+      api_.wait_event(lane->stream, bound_.event);
+    }
     return lane;
   }
   // Wait for the lane's work, then keep the lane for the next operation.
   void give_back(Lane* lane) noexcept {
     api_.sync_stream(lane->stream);
+    --lent_;
+    if(lane == &bound_) {
+      bound_lent_ = false;
+      return;
+    }
     lane->next = free_;
     free_ = lane;
-    --lent_;
+  }
+
+  // Synchronous work runs on `stream`, which the caller owns and keeps alive, after what it queued there.
+  void bind(Stream stream) noexcept {
+    if(bound_lent_) trap();
+    if(!bound_event_) bound_.event = api_.make_event(), bound_event_ = true;
+    bound_.stream = stream;
+    binding_ = true;
+  }
+  void unbind() noexcept {
+    if(bound_lent_) trap();
+    binding_ = false;
   }
 
   // Scratch of at least `bytes` for work about to be queued on `lane`. The work is ordered after the arena's
@@ -114,6 +168,7 @@ public:
   std::size_t streams_made() const noexcept { return made_; }
   std::size_t lent() const noexcept { return lent_; }
   std::size_t grown() const noexcept { return grown_; }  // how many times the arena was replaced by a larger one
+  bool bound() const noexcept { return binding_; }
   Api& api() noexcept { return api_; }
 
 private:
@@ -148,5 +203,193 @@ private:
   Event marker_{};       // recorded after the arena's last user; the next user's stream waits on it
   bool used_ = false;    // whether marker_ has been recorded since the arena last changed
   bool leased_ = false;  // between acquire and release
+  Lane bound_{};         // the caller's stream while one is bound, and an event of this context's own
+  bool binding_ = false, bound_lent_ = false, bound_event_ = false;
 };
+
+// Queued work on a lane a context lent. Linear like a ticket: exactly one wait() consumes it, and that hands the
+// lane back once its work has completed; dropping it unawaited traps.
+template<class Api> class Lent final {
+  using Lane = typename Context<Api>::Lane;
+  Context<Api>* ctx_ = nullptr;
+  Lane* lane_ = nullptr;
+public:
+  explicit Lent(Context<Api>& c) noexcept : ctx_(&c), lane_(c.lend()) {}
+  Lent(Lent&& o) noexcept : ctx_(o.ctx_), lane_(std::exchange(o.lane_, nullptr)) {}
+  Lent(const Lent&) = delete;
+  Lent& operator=(const Lent&) = delete;
+  Lent& operator=(Lent&&) = delete;  // a linear value is initialized, never overwritten
+  ~Lent() noexcept { if(lane_) trap(); }
+  typename Api::Stream stream() const noexcept { return lane_->stream; }
+  Lane& lane() const noexcept { return *lane_; }
+  // An event that completes with everything queued here so far, for other work to be ordered after.
+  typename Api::Event mark() const noexcept {
+    ctx_->api().record(lane_->event, lane_->stream);
+    return lane_->event;
+  }
+  void follow(typename Api::Event e) const noexcept { ctx_->api().wait_event(lane_->stream, e); }
+  void wait() && noexcept { ctx_->give_back(std::exchange(lane_, nullptr)); }
+};
+
+// Synchronous work: `queue(stream)` queues it on the context's synchronous lane, and the call returns once that
+// lane has finished it. Nothing else is waited for, and after the lane's first use nothing is made.
+template<class Api, class Q> inline void synchronous(Context<Api>& ctx, Q&& queue) noexcept {
+  typename Context<Api>::Lane* lane = ctx.lend(true);
+  queue(lane->stream);
+  ctx.give_back(lane);
+}
+
+// CUB asks for the return type of the combining operator in host code, which nvcc refuses to
+// infer for an extended __device__ lambda. Naming T here lets the emitter pass a plain lambda.
+template<class T, class Op> struct Binary {
+  Op op;
+  CR_DEVICE T operator()(T a, T b) const { return op(a, b); }
+};
+
+// A random-access input iterator whose element i is value(i). CUB 2 shipped this as its counting
+// and transform input iterators; CCCL 3 deleted both in favour of thrust's, so the runtime
+// carries its own eleven lines instead of a thrust dependency.
+template<class T, class F> struct Indexed {
+  using value_type = T;
+  using reference = T;
+  using pointer = void;
+  using difference_type = std::ptrdiff_t;
+  using iterator_category = std::random_access_iterator_tag;
+  F value;
+  std::size_t i = 0;
+  CR_HD T operator*() const { return value(i); }
+  CR_HD T operator[](difference_type d) const { return value(i + static_cast<std::size_t>(d)); }
+  CR_HD Indexed operator+(difference_type d) const { return Indexed{value, i + static_cast<std::size_t>(d)}; }
+  CR_HD Indexed& operator++() { ++i; return *this; }
+};
+
+// What a scan carries, as the element its output holds: a checked sum's value without its overflow flag.
+template<class T> CR_HD inline T plain(T x) noexcept { return x; }
+template<class T> CR_HD inline T plain(Sum<T> x) noexcept { return x.v; }
+
+// Transform-reduce of value(i) over [0,n), with its result on the host: one cell of the arena holds it on the
+// device, and one copy and one wait for the synchronous lane bring it back. Nothing is allocated within the
+// budget. Association order is unspecified by contract, so the result is exact for associative integer ops and
+// within the usual tolerance for float sums. Over the budget nothing is queued and `result` is untouched.
+template<class Api, class T, class Op, class F>
+inline Scratch reduce(Context<Api>& ctx, T& result, std::size_t n, T identity, Op op, F value) noexcept {
+  if(!n) {
+    result = identity;
+    return Scratch::ok;
+  }
+  Api& api = ctx.api();
+  typename Context<Api>::Lane* lane = ctx.lend(true);
+  const Indexed<T, F> in{value};
+  const Binary<T, Op> fold{op};
+  std::size_t need = 0;
+  api.reduce(nullptr, need, in, static_cast<T*>(nullptr), n, fold, identity, lane->stream);
+  const std::size_t cell = aligned(sizeof(T));
+  void* base = nullptr;
+  const Scratch answer = ctx.acquire(cell + aligned(need ? need : 1), *lane, &base);
+  T host = identity;
+  if(answer == Scratch::ok) {
+    T* at = static_cast<T*>(base);
+    api.reduce(static_cast<char*>(base) + cell, need, in, at, n, fold, identity, lane->stream);
+    api.copy(&host, at, sizeof(T), Dir::d2h, lane->stream);
+    ctx.release(*lane);
+  }
+  ctx.give_back(lane);
+  if(answer == Scratch::ok) result = host;
+  return answer;
+}
+
+// The same reduction into `out`, a device cell, queued on a lane of `ctx` after `after...`: no host copy, and no
+// allocation within the budget. The result stays on the device, for work ordered after the returned ticket.
+// When the reduction would need more scratch than the budget allows, nothing is queued and `*answer` says so.
+template<class Api, class T, class Op, class F, class... After>
+inline Lent<Api> reduce_to(Context<Api>& ctx, T* out, std::size_t n, T identity, Op op, F value, Scratch* answer,
+                           const After&... after) noexcept {
+  Api& api = ctx.api();
+  Lent<Api> t(ctx);
+  (t.follow(after.mark()), ...);
+  *answer = Scratch::ok;
+  if(!n) {
+    api.template lanes<1>(1, [=] CR_DEVICE(std::size_t) { *out = identity; }, t.stream(), BLOCK, 1);
+    return t;
+  }
+  const Indexed<T, F> in{value};
+  const Binary<T, Op> fold{op};
+  std::size_t need = 0;
+  api.reduce(nullptr, need, in, out, n, fold, identity, t.stream());
+  void* temp = nullptr;
+  *answer = ctx.acquire(aligned(need ? need : 1), t.lane(), &temp);
+  if(*answer != Scratch::ok) return t;
+  api.reduce(temp, need, in, out, n, fold, identity, t.stream());
+  ctx.release(t.lane());
+  return t;
+}
+
+// Scan of value(i) over [0,n) into out: out[i] is op over value(0..i], or over value(0..i) when Exclusive, and
+// `total` is op over every value. The association order is the machine's, exact for the integer operators the
+// language admits here. The inclusive scan lands in arena scratch first, so a value(i) that reads out[i] reads it
+// before anything writes it; one more pass writes out from the scratch, shifted by one place when Exclusive. Every
+// step is queued on the synchronous lane, which is waited for once.
+template<bool Exclusive, class Api, class T, class R, class Op, class F>
+inline Scratch scan(Context<Api>& ctx, T& total, R* out, std::size_t n, T identity, Op op, F value) noexcept {
+  if(!n) {
+    total = identity;
+    return Scratch::ok;
+  }
+  Api& api = ctx.api();
+  typename Context<Api>::Lane* lane = ctx.lend(true);
+  const Indexed<T, F> in{value};
+  const Binary<T, Op> fold{op};
+  std::size_t need = 0;
+  api.inclusive_scan(nullptr, need, in, static_cast<T*>(nullptr), fold, n, lane->stream);
+  const std::size_t held = aligned(span<T>(n));
+  void* base = nullptr;
+  const Scratch answer = ctx.acquire(held + aligned(need ? need : 1), *lane, &base);
+  T last = identity;
+  if(answer == Scratch::ok) {
+    T* h = static_cast<T*>(base);
+    api.inclusive_scan(static_cast<char*>(base) + held, need, in, h, fold, n, lane->stream);
+    api.template lanes<1>(
+        n, [=] CR_DEVICE(std::size_t i) { out[i] = plain(Exclusive ? (i ? h[i - 1] : identity) : h[i]); },
+        lane->stream, BLOCK, 1);
+    api.copy(&last, h + (n - 1), sizeof(T), Dir::d2h, lane->stream);
+    ctx.release(*lane);
+  }
+  ctx.give_back(lane);
+  if(answer == Scratch::ok) total = last;
+  return answer;
+}
+
+// Stable compaction: value(i) for each selected i, in order, into the prefix of out; the tail of out is left alone.
+// pred runs exactly once per i (its answer is kept), value only when selected. The flags, the offsets and the
+// machine's scan storage are carved from the arena and every step is queued on the synchronous lane: one wait,
+// and no allocation within the budget. `*used` is the number selected, or 0 when the budget answered over_budget.
+template<class Api, class T, class P, class F>
+inline Scratch compact(Context<Api>& ctx, std::size_t* used, T* out, std::size_t n, P pred, F value) noexcept {
+  *used = 0;
+  if(!n) return Scratch::ok;
+  Api& api = ctx.api();
+  typename Context<Api>::Lane* lane = ctx.lend(true);
+  std::size_t need = 0;
+  api.exclusive_sum(nullptr, need, static_cast<unsigned char*>(nullptr), static_cast<std::size_t*>(nullptr), n,
+                    lane->stream);
+  const std::size_t flags = aligned(n), offsets = aligned(span<std::size_t>(n));
+  void* base = nullptr;
+  const Scratch answer = ctx.acquire(flags + offsets + aligned(need ? need : 1), *lane, &base);
+  std::size_t last = 0;
+  unsigned char tail = 0;
+  if(answer == Scratch::ok) {
+    unsigned char* k = static_cast<unsigned char*>(base);
+    std::size_t* o = reinterpret_cast<std::size_t*>(static_cast<char*>(base) + flags);
+    api.template lanes<1>(n, [=] CR_DEVICE(std::size_t i) { k[i] = pred(i) ? 1 : 0; }, lane->stream, BLOCK, 1);
+    api.exclusive_sum(static_cast<char*>(base) + flags + offsets, need, k, o, n, lane->stream);
+    api.template lanes<1>(n, [=] CR_DEVICE(std::size_t i) { if(k[i]) out[o[i]] = value(i); }, lane->stream, BLOCK,
+                          1);
+    api.copy(&last, o + (n - 1), sizeof(last), Dir::d2h, lane->stream);
+    api.copy(&tail, k + (n - 1), sizeof(tail), Dir::d2h, lane->stream);
+    ctx.release(*lane);
+  }
+  ctx.give_back(lane);
+  if(answer == Scratch::ok) *used = last + (tail ? 1 : 0);
+  return answer;
+}
 }  // namespace cr::reuse

@@ -144,6 +144,7 @@ def implementation_hash():
                 "compiler/expansion.py",
                 "compiler/gradients.py",
                 "compiler/codegen.py",
+                "compiler/execution.py",
                 "compiler/modules.py",
                 "version.py",
             ]

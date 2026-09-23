@@ -223,7 +223,9 @@ def test_the_same_lane_body_runs_on_the_device(tmp_path):
         effects = set(receipt["functions"]["main"]["effects"])
         assert {"par:device", "gpu_alloc", "gpu_free", "transfer:h2d", "transfer:d2h"} <= effects
         host = DEVICE.replace("@device", "").replace("kernel fn", "fn")  # The same program, on host threads.
-        assert "cr::par::run" in compile_source(host)[0] and "cr::gpu::launch" in compile_source(DEVICE)[0]
+        assert (
+            "cr::par::run" in compile_source(host)[0] and "cr::gpu::run(cr::gpu::here(), " in compile_source(DEVICE)[0]
+        )
 
 
 BODY = (
@@ -492,7 +494,7 @@ fn main() -> i32 {
 
 def test_queued_device_work_is_ordered_by_tickets_and_overlaps_the_host(tmp_path):
     generated, receipt = compile_source(QUEUED)
-    assert generated.count("cr::gpu::launch_async(") == 1 and "cr::gpu::Dir::d2h, v_scale)" in generated
+    assert generated.count("cr::gpu::queue(cr::gpu::here(), ") == 1 and "cr::gpu::Dir::d2h, v_scale)" in generated
     assert {"spawn", "join", "par:device", "transfer:h2d", "transfer:d2h"} <= set(
         receipt["functions"]["main"]["effects"]
     )

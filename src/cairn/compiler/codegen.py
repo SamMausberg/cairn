@@ -9,7 +9,7 @@ from typing import Any
 
 from ..verify.elision import audit
 from ..version import VERSION
-from . import chunks, fusion, layouts, machine, rings, staging
+from . import chunks, execution, fusion, layouts, machine, rings, staging
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import Checker
 from .expressions import COMPARISONS
@@ -152,9 +152,9 @@ class Emitter:
         elif t.name == "IoRing":  # io_uring: kernel operations in flight, the owners they use held by the ring
             self.need("cairn_io.hpp")
             return "cr::io::Ring" if t.mode == "value" else "cr::io::Ring&"
-        elif t.name == "Ticket" and t.place == "device":  # Queued device work owns a stream, not a thread.
+        elif t.name == "Ticket" and t.place == "device":  # Queued device work borrows a lane, not a thread.
             self.need("cairn_gpu.hpp")
-            base = "cr::gpu::Ticket"
+            base = "cr::gpu::Lent"
         elif t.name in SHARED:  # Interior mutability: a ro borrow of shared state is still a plain reference.
             self.need("cairn_parallel.hpp")
             base = f"cr::par::{SHARED[t.name]}<{self.type(t.args[0])}>"
@@ -282,13 +282,13 @@ class Emitter:
 
     def e_spawn(self, e: Expr) -> str:
         """Arguments are evaluated now and carried by value, so the task never reads the spawner's locals."""
-        if e.val == "queue":  # Device work on its own stream, ordered after the tickets it names by device events.
+        if e.val == "queue":  # Device work on a lent lane, ordered after the tickets it names by device events.
             region = e.ref if isinstance(e.ref, Stmt) else None
             order = "".join(f", v_{t.val}" for t in (e.args if region else e.args[1:]))
             if region is None:
                 return TABLE["transfer"][1](self, e.args[0], order)
             lanes = self.lane(region, lambda: self.block(region.body))
-            return f"cr::gpu::launch_async({self.expr(region.exprs[0])}, {lanes}{order})"
+            return execution.call("queue", [self.expr(region.exprs[0]), lanes + order])
         call, captures, passed = e.args[0], [], []
         for k, (a, (_, want)) in enumerate(zip(call.args, call.ref.params, strict=True)):
             place = want.mode != "value" and not want.extent and a.tag in {"name", "field", "index"}
@@ -579,7 +579,7 @@ class Emitter:
         if s.ref == "device":
             keep = self.lane(s, lambda: self.put(f"return {pred};"))
             project = self.lane(s, lambda: self.put(f"return {value};"))
-            return self.put(f"const std::size_t {used} = cr::gpu::compact({out}, {hi}, {keep}, {project});")
+            return self.put(f"const std::size_t {used} = {execution.call('compact_on', [out, hi, keep, project])};")
 
         def selected():  # The only unchecked store: induction gives used <= i < n (Lean: store_index_lt_capacity).
             self.puts(f"{out}[{used}] = {value};", f"++{used};")
@@ -595,11 +595,10 @@ class Emitter:
         return self.inner(lambda: f"[=] CR_DEVICE{binder}" if device else f"[&]{binder} noexcept", body)
 
     def s_parallel(self, s: Stmt, es: list[str], body=None):
-        entry = "cr::gpu::launch" if s.ref == "device" else "cr::par::run"
+        unroll = 0
         if s.ref == "device":  # A plan fixes the block, the indices per thread and the unrolled passes of each thread.
             block, per_lane, unroll = s.launch
             schedule = [block or 256, per_lane] if per_lane else [block] if block else []
-            entry += f"<{unroll}>" if unroll > 1 else ""
         else:  # Each index is a block of that many elements, and a plan fixes the claim and the lanes.
             schedule = [s.block, *s.plan]
             while schedule and schedule[-1] == (1 if len(schedule) == 1 else 0):  # defaults say nothing
@@ -609,7 +608,11 @@ class Emitter:
             return chunks.lower(self, s, es[0], lanes, schedule, s.launch[2])
         if s.stage and body is None:  # Each block loads its tiles, then its lanes read them (staging.py).
             return staging.lower(self, s, es[0], lambda: self.block(s.body), schedule, s.launch[2])
-        self.put(f"{entry}({es[0]}, {lanes}{''.join(f', {x}' for x in schedule)});")
+        if s.ref == "device":  # On the thread's execution context: its stream, waited for alone.
+            return self.put(
+                execution.call("run", [es[0], lanes, *map(str, schedule)], execution.unrolled(unroll)) + ";"
+            )
+        self.put(f"cr::par::run({es[0]}, {lanes}{''.join(f', {x}' for x in schedule)});")
 
     def folding(self, s: Stmt) -> tuple[str, str, str, str, str]:
         """A reduction's or a scan's element type, its combine over `a` and `b`, its identity, the type it carries
@@ -632,8 +635,9 @@ class Emitter:
         i = "v_" + s.binder
         if s.ref == "device" or s.pooled:  # Pooled: blocks the count fixes, each folded in order, then their totals.
             value = self.lane(s, lambda: [before and before(), self.put(f"return {self.expr(s.exprs[1])};")])
-            where, fold = "gpu" if s.ref == "device" else "par", self.combiner(s, carried, combine)
-            total = f"cr::{where}::reduce<{carried}>({es[0]}, {start}, {fold}, {value})"
+            fold, parts = self.combiner(s, carried, combine), [es[0], start]
+            total = (execution.call("reduce_on", [*parts, fold, value], [carried]) if s.ref == "device"
+                     else f"cr::par::reduce<{carried}>({es[0]}, {start}, {fold}, {value})")  # fmt: skip
             return self.put(f"const {ty} v_{s.name} = {total}{'' if carried == ty else '.checked()'};")
         count = self.fresh("n")[0]  # Without `parallel`, a host reduction is an in-order fold; its extent is read once.
         self.puts(f"{ty} v_{s.name} = static_cast<{ty}>({identity});", f"const std::size_t {count} = {es[0]};")
@@ -647,9 +651,9 @@ class Emitter:
         total, exclusive = ("v_" + s.name if s.name else self.fresh("cr_scan_")[0]), str(s.exclusive).lower()
         if s.ref == "device" or s.pooled:  # The runtime writes each element; the yield is a lane's.
             each = self.lane(s, lambda: self.put(f"return {self.expr(value)};"))
-            where, fold = "gpu" if s.ref == "device" else "par", self.combiner(s, carried, combine)
-            called = f"cr::{where}::scan<{exclusive}, {carried}>"
-            called += f"({self.expr(out)}, {self.expr(hi)}, {start}, {fold}, {each})"
+            fold, parts = self.combiner(s, carried, combine), [self.expr(out), self.expr(hi), start]
+            called = (execution.call("scan_on", [*parts, fold, each], [exclusive, carried]) if s.ref == "device"
+                      else f"cr::par::scan<{exclusive}, {carried}>({', '.join([*parts, fold, each])})")  # fmt: skip
             return self.put(f"const {ty} {total} = {called}{'' if carried == ty else '.checked()'};")
         count, i = self.fresh("n")[0], "v_" + s.binder  # In order: the yield, then the store it feeds, per index.
         stored = f"{self.expr(store)} = {'a' if s.exclusive else total};"

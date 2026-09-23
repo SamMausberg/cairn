@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import facts, machine, printing, rings, tensor
+from . import execution, facts, machine, printing, rings, tensor
 from .traits import vtable
 from .tree import (
     BOOL,
@@ -260,8 +260,8 @@ def lower_transfer(g: Emitter, e: Expr, queued: str | None = None) -> str:
     if (way := crossing(e.args[1].ty, e.args[0].ty)) == "h2h":
         return f"std::copy_n({src}, {count}, {dst})"
     g.need("cairn_gpu.hpp")
-    entry, order = ("copy", "") if queued is None else ("copy_async", queued)  # Queued on a stream of its own.
-    return f"cr::gpu::{entry}({dst}, {src}, {count}, cr::gpu::Dir::{way}{order})"
+    entry, order = ("copy_on", "") if queued is None else ("queue_copy", queued)  # Queued: on a lent lane.
+    return execution.call(entry, [dst, src, count, f"cr::gpu::Dir::{way}{order}"])
 
 
 def check_wait(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:

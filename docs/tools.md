@@ -258,6 +258,8 @@ assert lib.cf_summarize(6, samples).max == 42
 
 `tests/projects/test_interop.py` builds the example under both compilers, runs it under AddressSanitizer and UndefinedBehaviorSanitizer, requires overlapping, misaligned and null views to abort, and compiles headers of nested, packed, aligned and storage-float records as C11 and C++17.
 
+A library that runs device work also declares `void NAME_device_stream(void *stream)`: the calling thread's device work then runs on a `cudaStream_t` the caller owns, after what the caller queued there, and `NULL` gives the thread its own stream back ([concurrency.md](concurrency.md#device-execution)).
+
 ## A manifest is named by its path
 
 `check`, `build`, `run`, `test`, `doc` and `expand` take a project directory, a single `.cairn` file, or a manifest with any name, so one directory can hold several configurations:

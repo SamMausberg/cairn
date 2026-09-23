@@ -43,6 +43,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | The tensor-core multiply, its numerical contract and its lowering | `compiler/tensor.py` | `check_mma`, `lower_mma` |
 | `layout` declarations: storage layouts and spreads, coverage, owners, runs, bank conflicts, conversions, and `L.at(...)` in code | `compiler/layouts.py` | `value`, `cover`, `runs`, `conflicts`, `conversion`, `method`, `lower` |
 | Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
+| Which runtime operation each piece of device work lowers to, on the thread's execution context | `compiler/execution.py` | `call`, `unrolled` |
 | The machine: `mmio_read`, `mmio_write`, `asm` and typed assembly with its operands, target and declared effects, beside their lowering | `compiler/machine.py` | `check_machine`, `s_asm`, `lower_asm`, `unbuildable` |
 | What each argument of `print`, `println`, `eprint`, `eprintln` and `format` writes, and their lowering | `compiler/printing.py` | `check_print`, `target`, `piece`, `lower_print` |
 | The C header of a library: declarations, layouts it states and checks, what cannot cross | `compiler/header.py` | `Header.render`, `shape`, `refusal` |
@@ -54,15 +55,16 @@ Per-function state lives in one `Scope`, swapped when an instance is checked in 
 
 Three questions have one answer each. Who may touch this place now is `leased`, which every access passes. Who implements this trait for this type is `implemented`, which serves static calls, `dyn` borrows and `Dyn` values alike. What may run in a lane is one rule, applied to the lane's row, to its callees' rows, and through `lane:f` to the closure finally passed.
 
-A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::launch`, is chosen by placement, so host and device share the emitter. `toolchain.py` chooses the one native command line. A device program's host pass takes `-fexceptions`, because CUDA 13's CUB headers contain throw and catch; nothing in the runtime throws, and `tests/tooling/test_tools.py` pins that as the one departure.
+A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, is chosen by placement, so host and device share the emitter. `toolchain.py` chooses the one native command line. A device program's host pass takes `-fexceptions`, because CUDA 13's CUB headers contain throw and catch; nothing in the runtime throws, and `tests/tooling/test_tools.py` pins that as the one departure.
 
 | Header in `runtime/` | Owns |
 |---|---|
 | `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard is host and device callable |
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
 | `cairn_parallel.hpp` | the host lane pool with its pooled reduction and two-pass scan, the crew of reusable task threads, linear tasks, task groups with a bounded completion ring, `Mutex` and `Atomic` with explicit orders |
-| `cairn_gpu.hpp` | scoped device, pinned and unified memory, lanes, linear stream tickets, reduction, stable compaction, and execution contexts bound to CUDA |
-| `cairn_reuse.hpp` | execution contexts apart from the machine: lanes (a stream and its event) lent until their work completes, one scratch arena ordered between its users on the device, a declared budget |
+| `cairn_gpu.hpp` | CUDA as the machine `cairn_exec.hpp` runs on: the kernels, CUB's calls, streams, events, allocation and copies; and the older synchronous entry points (`launch`, `Ticket`, `reduce`, `scan`, `compact`), which wait for the whole device and which generated code no longer calls |
+| `cairn_exec.hpp` | what generated code calls for device work, written once for any machine: the calling thread's execution context, device owners, regions on its stream, reductions, scans and compactions in its arena, queued work on lent lanes, and a C caller's own stream |
+| `cairn_reuse.hpp` | execution contexts apart from the machine: lanes (a stream and its event) lent until their work completes, one scratch arena ordered between its users on the device, a declared budget, a caller's bound stream; and the reductions, scans and compactions written against the machine |
 | `cairn_io.hpp` | the I/O ring over io_uring: fixed berths that own each operation's `Buf`, completion-order collection, a wait that drains before it releases |
 | `cairn_layout.hpp` | a layout's coordinate checked against its extent, and CuTe's swizzle, on the host and in a device lane alike |
 | `cairn_float.hpp` | the storage floats `f16 bf16 f8e4m3 f8e5m2`: one integer routine that rounds on the host and in a device lane alike, `quantize` and `quantize_stochastic` |
@@ -85,13 +87,13 @@ What each operation takes when it runs, and gives back when it ends:
 | `spawn f(args)` | one heap cell for the result and one for the captured arguments; a parked thread, or a new one | the thread at `wait`, to the crew |
 | `Group[T](n)`, `spawn ... into g` | four arrays of `n` at the declaration; per submission one heap cell for the captures, and a thread the first time a berth runs | the berths' threads at `wait(g)` |
 | `IoRing(n)` | eight arrays of `n`, the io_uring descriptor and three mappings, at the declaration | all of it at `wait(q)`; nothing per operation |
-| device `parallel` | a launch, then a whole-device synchronize | nothing |
-| queued device work, `transfer` after a ticket | a new stream and a new event per ticket | both destroyed at its `wait`, after a stream synchronize |
-| device `reduce` | a device cell for the result, CUB's temporary storage, a synchronous copy of the result to the host | both freed before it returns |
-| device `compact` | two device arrays of `n` (flags, offsets), CUB's temporary storage, two launches, three synchronizations and two one-element copies to the host | all freed before it returns |
-| a `@device`, `@pinned` or `@unified` buffer | one CUDA allocation, zeroed | freed at scope exit |
+| device `parallel`, a synchronous `transfer` | a launch or a copy on the thread's execution context's stream, then a wait for that stream | nothing |
+| queued device work, `transfer` after a ticket | a lane of the thread's context: a stream and an event, made the first time and reused after | the lane at its `wait`, after a wait for its stream |
+| device `reduce`, `scan` | a cell and the library's storage in the context's arena, one copy to the host, one stream wait; the arena grows the first time a larger request arrives | nothing |
+| device `compact` | flags, offsets and CUB's storage in the arena, two launches, two one-element copies to the host, one stream wait | nothing |
+| a `@device`, `@pinned` or `@unified` buffer | one CUDA allocation, zeroed on the context's stream, which is waited for | freed at scope exit |
 
-The device rows are where reuse is still to come. `cr::gpu::Context` (`cairn_reuse.hpp`) lends a stream and its event until the work queued on it completes, hands one scratch arena to each user in device order, and allocates within a budget declared up front. It is tested against a mock device (`tests/runtime/reuse_runtime.cpp`) and compiles for `sm_120`, but its device test runs only under `make gpu`, which has not run it, so the lowering does not use it yet.
+Device work runs on the calling thread's execution context, `cr::gpu::here()`, which the thread's first device operation makes and the thread keeps; `compiler/execution.py` names it at every call. A pipeline run again therefore makes no stream, allocates no temporary and waits for nothing but its own stream after its first pass. The context's bookkeeping is tested against a mock device (`tests/runtime/reuse_runtime.cpp`), generated programs run on a host machine that counts every stream, allocation and wait (`tests/runtime/gpu_host.hpp`, `tests/runtime/test_execution.py`), and the CUDA build compiles for `sm_120`. No device run has checked it: `make gpu` runs the device tests, and has not run since. `mma_unordered` on the device still waits for the whole device (`cairn_tensor.hpp`).
 
 The rest of the package, by folder, is in the ownership table of [AGENTS.md](../AGENTS.md): `agent/` the edit protocol, `perf/` the performance model (nothing in it runs a program except `measure.py` on the host and `on_device.py` under the owner's targets), `editor/` the formatter, language server and grammars, and `verify/` the certificates, the SMT model, the test runners and `cairn diff`. No agent, test generator or solver may rewrite the authority it is checked against, and native libraries never import the agent tooling or Z3.
 

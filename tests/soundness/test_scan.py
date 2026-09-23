@@ -72,7 +72,10 @@ def test_rows_say_where_a_scan_runs_and_what_it_writes():
     assert {"write:out", "read:x", "trap"} <= rows["plain"] and not any(e.startswith("par:") for e in rows["plain"])
     assert {"write:out", "par:host"} <= rows["pooled"] and "alloc" not in rows["pooled"]
     assert {"par:device", "gpu_alloc", "gpu_free", "trap"} <= rows["device"]  # CUB's scratch, and the checked sum
-    assert "cr::par::scan<true, std::uint64_t>(" in cpp and "cr::gpu::scan<false, cr::Sum<std::uint32_t>>(" in cpp
+    assert (
+        "cr::par::scan<true, std::uint64_t>(" in cpp
+        and "cr::gpu::scan_on<false, cr::Sum<std::uint32_t>>(cr::gpu::here(), " in cpp
+    )
     guards = receipt["functions"]["plain"]
     assert guards["discharged_check_sites"]["bounds"] == guards["syntactic_check_sites"]["bounds"] == 2  # x[i], out[i]
 

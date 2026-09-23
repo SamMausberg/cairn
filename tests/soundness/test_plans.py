@@ -67,10 +67,10 @@ def test_a_plan_is_its_own_item_in_the_canonical_projection():
 @pytest.mark.parametrize(
     ("plan", "launch"),
     [
-        ("", "cr::gpu::launch(v_n, "),  # an unplanned region is written as it always was
+        ("", "cr::gpu::run(cr::gpu::here(), v_n, "),  # an unplanned region is written as it always was
         ("plan dev { block 128; }", "}, 128);"),
         ("plan dev { per_lane 8; }", "}, 256, 8);"),
-        ("plan dev { block 64; per_lane 4; unroll 4; }", "cr::gpu::launch<4>(v_n, "),
+        ("plan dev { block 64; per_lane 4; unroll 4; }", "cr::gpu::run<4>(cr::gpu::here(), v_n, "),
     ],
 )
 def test_a_device_plan_shapes_the_launch_and_nothing_the_checker_says(plan, launch):

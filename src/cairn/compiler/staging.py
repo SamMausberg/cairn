@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import layouts
+from . import execution, layouts
 from .chunks import ELEMENTS, assignments, exprs
 from .tree import Expr, Stmt, fail, is_view
 
@@ -117,5 +117,5 @@ def lower(g: Emitter, s: Stmt, extent: str, body, schedule: list[int], unroll: i
                     "unsigned char* cr_shared)", run)  # fmt: skip
     bytes_ = " + ".join(f"cr::gpu::tile_bytes<{ty}>(cr_w)" for _, ty, _ in arrays)
     size = g.inner(lambda: "[](std::size_t cr_w)", lambda: g.put(f"return {bytes_};"))
-    launch = f"cr::gpu::launch_staged<{radius}{f', {unroll}' if unroll > 1 else ''}>"
-    g.put(f"{launch}({extent}, {loads}, {lanes}, {size}{''.join(f', {x}' for x in schedule)});")
+    arguments = [extent, loads, lanes, size, *map(str, schedule)]
+    g.put(execution.call("run_staged", arguments, [radius, *execution.unrolled(unroll)]) + ";")

@@ -589,3 +589,13 @@ fn stage(n:usize, host_x:ro<f32>[n], x:rw<f32>[n]@device, out:rw<f32>[n]@device)
   wait(work);
 }
 ```
+
+## Device execution
+
+Device work runs on the calling thread's execution context: a stream and its event, one scratch arena and a budget (`runtime/cairn_exec.hpp`). The thread's first device operation makes the context, and the thread keeps it. A region over device views, and a `transfer`, runs on the context's stream and returns once that stream has finished, so the host sees the result and a guard that fired in a lane aborts the process, as before. Nothing waits for the rest of the device. A device `reduce`, `scan` or `compact` takes its temporaries from the arena, which grows to the largest request it has met and is then reused. Queued work borrows a lane that comes back at its `wait`.
+
+After its first pass, a pipeline run again makes no stream, allocates no temporary and waits only for its own stream. `tests/runtime/test_execution.py` runs the generated code of one (regions, a vector and a staged plan, a reduction, a scan, a compaction, transfers and two queued tickets) on a host machine that counts every stream, allocation and wait: two streams and three arena allocations on the first pass, none after, and nine stream waits per pass ([evidence](../evidence/v0_9/execution/README.md)). Its CUDA build compiles for sm_120 and calls no `cudaDeviceSynchronize`; it has not run on a GPU. A device `mma_unordered` still waits for the whole device.
+
+A region no longer waits for queued work it does not touch: each ticket is waited for at its own `wait`. On a device without concurrent managed access (Windows and WSL2), the host must not touch `@unified` memory while any kernel runs, and a live ticket's kernel may still be running after a region returns.
+
+A C program that owns a stream hands it to a device library with `NAME_device_stream(stream)`, which `cairn build --header` declares ([tools.md](tools.md#cairn-build---header)). The calling thread's synchronous device work then runs on that stream, after what the caller queued there, and queued work starts after it too; `NULL` gives the thread its own stream back. A device view the library takes is a pointer to memory the caller owns.

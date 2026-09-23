@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import layouts
+from . import execution, layouts
 from .tree import FLOAT, INT, STORAGE, Expr, Stmt, fail, is_view, nested
 
 if TYPE_CHECKING:
@@ -128,5 +128,5 @@ def lower(g: Emitter, s: Stmt, extent: str, scalar: str, schedule: list[int], un
 
     chunks = g.inner(lambda: "[=] CR_DEVICE(std::size_t cr_base)", chunk)
     aligned = f"cr::gpu::aligned<{width}>({', '.join(pointers.values())})"
-    entry = f"cr::gpu::launch_vector<{width}{f', {unroll}' if unroll > 1 else ''}>"
-    g.put(f"{entry}({extent}, {aligned}, {scalar}, {chunks}{''.join(f', {x}' for x in schedule)});")
+    arguments = [extent, aligned, scalar, chunks, *map(str, schedule)]
+    g.put(execution.call("run_vector", arguments, [width, *execution.unrolled(unroll)]) + ";")
