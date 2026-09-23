@@ -1,0 +1,652 @@
+{
+ "schema": "cairn.search-instances/1",
+ "machine": {
+  "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+  "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "toolkit": {
+   "nvcc": "/usr/local/cuda/bin/nvcc",
+   "release": "13.2",
+   "version": "V13.2.78"
+  }
+ },
+ "load_average": {
+  "before": [
+   12.73974609375,
+   15.80908203125,
+   21.4169921875
+  ],
+  "after": [
+   9.19775390625,
+   13.90576171875,
+   19.9052734375
+  ]
+ },
+ "validations": {
+  "prefix_by4": {
+   "exit": 0,
+   "status": "passed",
+   "wall_s": 4.8,
+   "tiles": {
+    "4": "the condition's % 4"
+   },
+   "cases": 129,
+   "implementation_ran": 46,
+   "smt": "smt-equivalent",
+   "reason": null
+  },
+  "prefix_lanes": {
+   "exit": 2,
+   "status": "unknown",
+   "wall_s": 3.37,
+   "tiles": {
+    "16384": "the lane pool's cutoff",
+    "65536": "the condition's >= 65536"
+   },
+   "cases": 129,
+   "implementation_ran": 0,
+   "smt": "unknown",
+   "reason": "No case met the implementation's condition, so it never ran; admit more inputs or widen the condition."
+  },
+  "prefix_by[4]": {
+   "exit": 0,
+   "status": "passed",
+   "wall_s": 17.74,
+   "tiles": {
+    "4": "the condition's % 4"
+   },
+   "cases": 129,
+   "implementation_ran": 46,
+   "smt": "unknown",
+   "reason": null
+  },
+  "prefix_by[8]": {
+   "exit": 0,
+   "status": "passed",
+   "wall_s": 17.97,
+   "tiles": {
+    "8": "the condition's % 8"
+   },
+   "cases": 129,
+   "implementation_ran": 41,
+   "smt": "unknown",
+   "reason": null
+  },
+  "prefix_by[16]": {
+   "exit": 0,
+   "status": "passed",
+   "wall_s": 18.08,
+   "tiles": {
+    "16": "the condition's % 16"
+   },
+   "cases": 129,
+   "implementation_ran": 42,
+   "smt": "unknown",
+   "reason": null
+  },
+  "prefix_by[32]": {
+   "exit": 0,
+   "status": "passed",
+   "wall_s": 17.57,
+   "tiles": {
+    "32": "the condition's % 32"
+   },
+   "cases": 129,
+   "implementation_ran": 41,
+   "smt": "unknown",
+   "reason": null
+  }
+ },
+ "predicted": {
+  "wall_s": 0.21,
+  "space": {
+   "configurations": 7,
+   "checked": 7,
+   "legal": 7,
+   "refused": []
+  },
+  "candidates": [
+   {
+    "plan": "plan prefix use prefix_lanes;",
+    "predicted_ns": 120100.0,
+    "validated": "no validation holds: run cairn validate before using it"
+   },
+   {
+    "plan": "(no plan for prefix)",
+    "predicted_ns": 275500.0
+   },
+   {
+    "plan": "plan prefix use prefix_by[32];",
+    "predicted_ns": 275500.0,
+    "parameters": {
+     "K": 32
+    },
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "0124441c22cebfc6"
+    }
+   },
+   {
+    "plan": "plan prefix use prefix_by[16];",
+    "predicted_ns": 276900.0,
+    "parameters": {
+     "K": 16
+    },
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "bedc2c4acc8a99e0"
+    }
+   },
+   {
+    "plan": "plan prefix use prefix_by[8];",
+    "predicted_ns": 386800.0,
+    "parameters": {
+     "K": 8
+    },
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "da900a2d2984f418"
+    }
+   },
+   {
+    "plan": "plan prefix use prefix_by[4];",
+    "predicted_ns": 606600.0,
+    "parameters": {
+     "K": 4
+    },
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "e0aa977f542304e6"
+    }
+   },
+   {
+    "plan": "plan prefix use prefix_by4;",
+    "predicted_ns": 2107000.0,
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "459e90889b062c3e"
+    }
+   }
+  ],
+  "chosen": "(no plan for prefix)",
+  "budget": {
+   "compiles": {
+    "allowed": 4,
+    "started": 0,
+    "kept": 0
+   },
+   "seconds": {
+    "allowed": 300.0,
+    "spent": 0.11
+   },
+   "runs": {
+    "allowed": null,
+    "started": 0,
+    "kept": 0
+   },
+   "undone": {}
+  }
+ },
+ "measured": {
+  "wall_s": 10.71,
+  "space": {
+   "configurations": 7,
+   "checked": 7,
+   "legal": 7,
+   "refused": []
+  },
+  "candidates": [
+   {
+    "plan": "plan prefix use prefix_lanes;",
+    "predicted_ns": 120100.0,
+    "validated": "no validation holds: run cairn validate before using it"
+   },
+   {
+    "plan": "(no plan for prefix)",
+    "predicted_ns": 275500.0
+   },
+   {
+    "plan": "plan prefix use prefix_by[32];",
+    "predicted_ns": 275500.0,
+    "parameters": {
+     "K": 32
+    },
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "0124441c22cebfc6"
+    }
+   },
+   {
+    "plan": "plan prefix use prefix_by[16];",
+    "predicted_ns": 276900.0,
+    "parameters": {
+     "K": 16
+    },
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "bedc2c4acc8a99e0"
+    }
+   },
+   {
+    "plan": "plan prefix use prefix_by[8];",
+    "predicted_ns": 386800.0,
+    "parameters": {
+     "K": 8
+    },
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "da900a2d2984f418"
+    }
+   },
+   {
+    "plan": "plan prefix use prefix_by[4];",
+    "predicted_ns": 606600.0,
+    "parameters": {
+     "K": 4
+    },
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "e0aa977f542304e6"
+    }
+   },
+   {
+    "plan": "plan prefix use prefix_by4;",
+    "predicted_ns": 2107000.0,
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "459e90889b062c3e"
+    }
+   }
+  ],
+  "chosen": "plan prefix use prefix_by[32];",
+  "budget": {
+   "compiles": {
+    "allowed": 4,
+    "started": 0,
+    "kept": 0
+   },
+   "seconds": {
+    "allowed": 300.0,
+    "spent": 10.7
+   },
+   "runs": {
+    "allowed": null,
+    "started": 7,
+    "kept": 0
+   },
+   "undone": {}
+  },
+  "rounds": [
+   {
+    "blocks": 3,
+    "measured_ns": {
+     "(no plan for prefix)": 320922.9,
+     "plan prefix use prefix_by[32];": 229747.2,
+     "plan prefix use prefix_by[16];": 337550.4,
+     "plan prefix use prefix_by[8];": 252715.0,
+     "plan prefix use prefix_by4;": 284513.6
+    }
+   },
+   {
+    "blocks": 6,
+    "measured_ns": {
+     "plan prefix use prefix_by[32];": 228116.6,
+     "plan prefix use prefix_by[8];": 253177.7
+    }
+   }
+  ],
+  "measured_best": "plan prefix use prefix_by[32];",
+  "pairs_ordered_as_predicted": "5 of 10",
+  "measured": "Timed on this host by cairn.perf.measure, the median of each round's blocks; a busy machine adds noise, so a close measured order says little."
+ },
+ "measured_again": {
+  "wall_s": 0.14,
+  "space": {
+   "configurations": 7,
+   "checked": 7,
+   "legal": 7,
+   "refused": []
+  },
+  "candidates": [
+   {
+    "plan": "plan prefix use prefix_lanes;",
+    "predicted_ns": 120100.0,
+    "validated": "no validation holds: run cairn validate before using it"
+   },
+   {
+    "plan": "(no plan for prefix)",
+    "predicted_ns": 275500.0
+   },
+   {
+    "plan": "plan prefix use prefix_by[32];",
+    "predicted_ns": 275500.0,
+    "parameters": {
+     "K": 32
+    },
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "0124441c22cebfc6"
+    }
+   },
+   {
+    "plan": "plan prefix use prefix_by[16];",
+    "predicted_ns": 276900.0,
+    "parameters": {
+     "K": 16
+    },
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "bedc2c4acc8a99e0"
+    }
+   },
+   {
+    "plan": "plan prefix use prefix_by[8];",
+    "predicted_ns": 386800.0,
+    "parameters": {
+     "K": 8
+    },
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "da900a2d2984f418"
+    }
+   },
+   {
+    "plan": "plan prefix use prefix_by[4];",
+    "predicted_ns": 606600.0,
+    "parameters": {
+     "K": 4
+    },
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "e0aa977f542304e6"
+    }
+   },
+   {
+    "plan": "plan prefix use prefix_by4;",
+    "predicted_ns": 2107000.0,
+    "validated": {
+     "evidence": "finite-tested",
+     "record": "459e90889b062c3e"
+    }
+   }
+  ],
+  "chosen": "plan prefix use prefix_by[32];",
+  "budget": {
+   "compiles": {
+    "allowed": 4,
+    "started": 0,
+    "kept": 0
+   },
+   "seconds": {
+    "allowed": 300.0,
+    "spent": 0.14
+   },
+   "runs": {
+    "allowed": null,
+    "started": 0,
+    "kept": 7
+   },
+   "undone": {}
+  },
+  "rounds": [
+   {
+    "blocks": 3,
+    "measured_ns": {
+     "(no plan for prefix)": 320922.9,
+     "plan prefix use prefix_by[32];": 229747.2,
+     "plan prefix use prefix_by[16];": 337550.4,
+     "plan prefix use prefix_by[8];": 252715.0,
+     "plan prefix use prefix_by4;": 284513.6
+    }
+   },
+   {
+    "blocks": 6,
+    "measured_ns": {
+     "plan prefix use prefix_by[32];": 228116.6,
+     "plan prefix use prefix_by[8];": 253177.7
+    }
+   }
+  ],
+  "measured_best": "plan prefix use prefix_by[32];",
+  "pairs_ordered_as_predicted": "5 of 10",
+  "measured": "Timed on this host by cairn.perf.measure, the median of each round's blocks; a busy machine adds noise, so a close measured order says little."
+ },
+ "interleaved": {
+  "sizes": {
+   "n": 1000000.0
+  },
+  "rounds": 5,
+  "blocks": 3,
+  "times": {
+   "reference": {
+    "median_ns": 313368.0,
+    "min_ns": 301463.4,
+    "max_ns": 516885.0,
+    "rounds": [
+     301463.4,
+     304633.0,
+     313368.0,
+     516885.0,
+     409876.4
+    ]
+   },
+   "prefix_by4": {
+    "median_ns": 278090.5,
+    "min_ns": 275081.1,
+    "max_ns": 304087.6,
+    "rounds": [
+     278090.5,
+     275081.1,
+     304087.6,
+     275156.8,
+     279233.5
+    ]
+   },
+   "prefix_by[4]": {
+    "median_ns": 235699.9,
+    "min_ns": 230755.6,
+    "max_ns": 369386.8,
+    "rounds": [
+     235879.4,
+     235699.9,
+     230755.6,
+     231689.6,
+     369386.8
+    ]
+   },
+   "prefix_by[8]": {
+    "median_ns": 251143.7,
+    "min_ns": 229547.5,
+    "max_ns": 566209.5,
+    "rounds": [
+     251143.7,
+     237014.8,
+     566209.5,
+     229547.5,
+     302371.8
+    ]
+   },
+   "prefix_by[16]": {
+    "median_ns": 314923.6,
+    "min_ns": 233562.7,
+    "max_ns": 403425.2,
+    "rounds": [
+     282627.1,
+     233562.7,
+     403425.2,
+     341194.1,
+     314923.6
+    ]
+   },
+   "prefix_by[32]": {
+    "median_ns": 255403.2,
+    "min_ns": 229865.9,
+    "max_ns": 374176.4,
+    "rounds": [
+     314317.1,
+     255403.2,
+     374176.4,
+     243068.0,
+     229865.9
+    ]
+   }
+  }
+ },
+ "written": {
+  "chosen": "plan prefix use prefix_by[32];",
+  "file": "src/prefix.cairn",
+  "selection": [
+   "plan prefix use prefix_by[32];"
+  ]
+ },
+ "history": {
+  "plan prefix use prefix_by4;": {
+   "validation": 1,
+   "measurement": 1
+  },
+  "plan prefix use prefix_lanes;": {
+   "failure": 1
+  },
+  "plan prefix use prefix_by[4];": {
+   "validation": 1
+  },
+  "plan prefix use prefix_by[8];": {
+   "validation": 1,
+   "measurement": 2
+  },
+  "plan prefix use prefix_by[16];": {
+   "validation": 1,
+   "measurement": 1
+  },
+  "plan prefix use prefix_by[32];": {
+   "validation": 1,
+   "measurement": 2
+  },
+  "(no plan for prefix)": {
+   "attempt": 2,
+   "measurement": 1
+  }
+ },
+ "device": {
+  "wall_s": 15.41,
+  "space": {
+   "configurations": 360,
+   "checked": 360,
+   "legal": 360,
+   "refused": []
+  },
+  "candidates": [
+   {
+    "plan": "plan scale use scale_blocks[64];",
+    "predicted_ns": 3.774,
+    "parameters": {
+     "K": 64
+    },
+    "validated": "no validation holds: run cairn validate before using it",
+    "resources": {
+     "registers": 28,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 0,
+     "dynamic_shared_bytes": 0,
+     "instructions": 192,
+     "key": "f1be91efcf613cf0",
+     "sass": "ddfca583a9f04c0b",
+     "kept": false
+    }
+   },
+   {
+    "plan": "plan scale use scale_blocks[256];",
+    "predicted_ns": 3.774,
+    "parameters": {
+     "K": 256
+    },
+    "validated": "no validation holds: run cairn validate before using it",
+    "resources": {
+     "registers": 28,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 0,
+     "dynamic_shared_bytes": 0,
+     "instructions": 192,
+     "key": "2c12732ef86a3e01",
+     "sass": "ddfca583a9f04c0b",
+     "kept": false
+    }
+   },
+   {
+    "plan": "plan scale { vector 2; } plan scale use scale_blocks[64];",
+    "predicted_ns": 3.774,
+    "parameters": {
+     "K": 64
+    },
+    "validated": "no validation holds: run cairn validate before using it",
+    "resources": {
+     "registers": 28,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 0,
+     "dynamic_shared_bytes": 0,
+     "instructions": 192,
+     "key": "cefb5c439c0d76fb",
+     "sass": "6a93d15a8d78a4ac",
+     "kept": false
+    }
+   },
+   {
+    "plan": "plan scale { vector 2; } plan scale use scale_blocks[256];",
+    "predicted_ns": 3.774,
+    "parameters": {
+     "K": 256
+    },
+    "validated": "no validation holds: run cairn validate before using it",
+    "resources": {
+     "registers": 28,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 0,
+     "dynamic_shared_bytes": 0,
+     "instructions": 192,
+     "key": "d0824a6c82c0eaa3",
+     "sass": "6a93d15a8d78a4ac",
+     "kept": false
+    }
+   },
+   {
+    "plan": "plan scale { vector 4; } plan scale use scale_blocks[64];",
+    "predicted_ns": 3.774,
+    "parameters": {
+     "K": 64
+    },
+    "validated": "no validation holds: run cairn validate before using it"
+   },
+   {
+    "plan": "plan scale { vector 4; } plan scale use scale_blocks[256];",
+    "predicted_ns": 3.774,
+    "parameters": {
+     "K": 256
+    },
+    "validated": "no validation holds: run cairn validate before using it"
+   }
+  ],
+  "chosen": "(no plan for scale)",
+  "budget": {
+   "compiles": {
+    "allowed": 4,
+    "started": 4,
+    "kept": 0
+   },
+   "seconds": {
+    "allowed": 300.0,
+    "spent": 15.39
+   },
+   "runs": {
+    "allowed": null,
+    "started": 0,
+    "kept": 0
+   },
+   "undone": {
+    "not inspected: compile budget spent": 356
+   }
+  }
+ }
+}

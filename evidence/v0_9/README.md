@@ -12,6 +12,6 @@ Each directory is one record of the 0.9.0 release work, taken as it landed on a 
 | `ai_benchmark/` | The preregistered equal-budget benchmark of CAIRN, C++ and Rust; its `RESULTS.md` says what ran and what did not. |
 | `skill/` | A six-run smoke comparison of sessions with and without the Claude Code plugin. |
 | `implementations/` | Alternative implementations, the implementation session and `cairn validate` on `examples/implementations`. |
-| `search/` | What the bounded search of `cairn tune` compiles, keeps and runs again. |
+| `search/` | What the bounded search of `cairn tune` compiles, keeps and runs again, and its search over the instances of a parameterized implementation. |
 | `tensor/` | Two matrix multiplies written with layouts and tensor-core fragments, checked on the host and compiled for sm_120. |
 | `cooperative/` | Cooperative regions and pipeline stages: host runs under the thread sanitizer, and the sm_120 device build, which has not run. |
