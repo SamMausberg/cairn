@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import facts, printing, rings, tensor
+from . import facts, machine, printing, rings, tensor
 from .traits import vtable
 from .tree import (
     BOOL,
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from .codegen import Emitter
 
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
-SOFT = {"take", "swap", "transfer", "mmio_read", "mmio_write", "asm", "wait", "collect"}
+SOFT = {"take", "swap", "transfer", "wait", "collect", *machine.NAMES}
 MATH = {"sqrt", "floor", "ceil", "trunc", "abs", "to_bits"}  # 1.4: a program's own function of the name wins
 SOFT |= MATH | printing.NAMES | {"quantize", "quantize_stochastic", "from_bits", "assert", "assert_eq", "mma_unordered"}
 QUANTIZED = [*STORAGE, "i8", "u8", "i16", "u16"]  # where one rounding of x / scale is exact (cairn_float.hpp)
@@ -229,34 +229,6 @@ def lower_assert_eq(g: Emitter, e: Expr) -> str:
     return f"cr::check_eq({g.expr(e.args[0])}, {g.expr(e.args[1])}, {where})"
 
 
-def check_machine(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
-    """mmio_read mmio_write asm: target access is audited, never silently safe."""
-    n = e.val
-    if not c.unsafe_depth:
-        fail("E-UNSAFE", f"{n} touches the machine directly; use it inside an unsafe block.", e)
-    c.effect("asm" if n == "asm" else "mmio")
-    if n == "asm":
-        if len(args) != 1 or args[0].tag != "str":
-            fail("E-ARITY", "asm takes one string literal of target instructions.", e)
-        return VOID
-    ty = named(c, e, targs, expected)
-    if ty is None or ty.name not in UNSIGNED:
-        fail("E-INFER", f"Write {n}[u8|u16|u32|u64] with the register width.", e)
-    arity(e, args, 1 + (n == "mmio_write"), f"{n} takes an address" + (" and a value." if n == "mmio_write" else "."))
-    c.expr(args[0], USIZE)
-    if n == "mmio_write":
-        c.expr(args[1], ty)
-    e.ref = ("builtin", ty)
-    return ty if n == "mmio_read" else VOID
-
-
-def lower_machine(g: Emitter, e: Expr) -> str:
-    if e.val == "asm":
-        return f"__asm__({g.quoted(e.args[0].val)})"
-    register = f"*reinterpret_cast<volatile {g.type(e.ref[1])}*>({g.expr(e.args[0])})"  # One access, exact width.
-    return f"static_cast<{g.type(e.ty)}>({register})" if e.val == "mmio_read" else f"({register} = {g.expr(e.args[1])})"
-
-
 def crossing(src: Type, dst: Type) -> str:
     """Which way a transfer goes, `h2d` and the like, by where each end's memory can be reached."""
     return "2".join("h" if t.place in HOST_VISIBLE else "d" for t in (src, dst))
@@ -413,7 +385,7 @@ TABLE: dict[str, tuple[Any, Any]] = {
     **dict.fromkeys(STORAGE, (check_convert, lower_convert)),
     **dict.fromkeys(("quantize", "quantize_stochastic"), (check_quantize, lower_float)),
     "from_bits": (check_from_bits, lower_float),
-    **dict.fromkeys(("mmio_read", "mmio_write", "asm"), (check_machine, lower_machine)),
+    **dict.fromkeys(machine.NAMES, (machine.check_machine, machine.lower_machine)),
     "transfer": (check_transfer, lower_transfer),
     "mma_unordered": (tensor.check_mma, tensor.lower_mma),
     "wait": (check_wait, lambda g, e: f"{g.expr(e.args[0])}.wait()"),
