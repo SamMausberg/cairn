@@ -188,8 +188,8 @@ Every change lands with the gates AGENTS.md lists. Then, on a clean committed tr
 make all native systems                        # lint, the suite, proofs, sanitizers, the systems examples
 make gpu embedded                              # where the hardware and the emulator are present
 make bench && python3 bench/suite/report.py    # the preregistered CPU suite, hours
-python3 tools/release/collect_evidence.py --release v1_4
-python3 tools/release/collect_lean_evidence.py --release v1_4
+python3 tools/release/collect_evidence.py --release "$RELEASE"          # the evidence folder name
+python3 tools/release/collect_lean_evidence.py --release "$RELEASE"
 make wheel audit
 ```
 

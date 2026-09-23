@@ -19,7 +19,7 @@ Symlink the directory into the editor's extensions folder and reload the window,
 ln -s "$PWD/editors/vscode" ~/.vscode/extensions/cairn-language.cairn
 ```
 
-The extension is not packaged as a `.vsix` here: packaging needs `@vscode/vsce`, which is not installed on the machine this repository is built on, and nothing is ever downloaded. With `vsce` installed, `npx vsce package` inside `vscode/` packages it; `.vscodeignore` already names what the package leaves out. The suite checks the extension's manifest, its commands and its client against stand-in modules instead.
+No `.vsix` is built here, because packaging needs `@vscode/vsce` and nothing is downloaded; with it installed, `npx vsce package` inside `vscode/` packages the extension. The suite checks the manifest, the commands and the client against stand-in modules.
 
 ## Vim and Neovim
 
@@ -35,13 +35,4 @@ vim.api.nvim_create_autocmd("FileType", { pattern = "cairn", callback = function
 end })
 ```
 
-Any other editor with an LSP client can run `cairn lsp` over stdio the same way.
-
-## The shell and a watching editor
-
-`cairn completions bash` and `cairn completions zsh` print a completion script generated from the command line's own parser, so every command, option and choice completes. `cairn check --watch` checks again each time a file the project reads changes; with `--format json` it prints one JSON record per check on its own line, for a tool that reads its output as it comes.
-
-```sh
-cairn completions bash > ~/.local/share/bash-completion/completions/cairn
-cairn check --watch --format json examples/hello
-```
+Any other editor with an LSP client can run `cairn lsp` over stdio the same way. Shell completions and a watched check that prints JSON Lines are in [docs/tools.md](../docs/tools.md#a-watched-check-and-shell-completions).

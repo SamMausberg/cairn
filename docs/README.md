@@ -18,4 +18,4 @@ The [README](../README.md) says what CAIRN is and how to install it. Read the re
 | [agents.md](agents.md) | The AI edit protocol: packets and what they establish, rule cards, the program's state, interface migrations, plan edits, named choices, what a program drew, and what an edit can never change. |
 | [roadmap.md](roadmap.md) | What is still open, stated as gates. [project/capabilities.json](project/capabilities.json) holds the same list as data. |
 
-Every fenced `cairn` block in these files is compiled by `tests/language/test_docs_examples.py`, and a block tagged `cairn rejects E-CODE` must be refused with exactly that code. The 0.2, 0.3 and 0.4 specifications were earlier proposals and never a source of accepted features; they stay in `docs/history/` of the v1.3.0 tag.
+Every fenced `cairn` block in these files is compiled by `tests/language/test_docs_examples.py`, and a block tagged `cairn rejects E-CODE` must be refused with exactly that code. Early design drafts were never a source of accepted features; they remain in git history, under `docs/history/` at the tag `v1.3.0`.
