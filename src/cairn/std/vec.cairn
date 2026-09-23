@@ -2,7 +2,8 @@
 module std.vec;
 import std.core (Option, Eq);
 
-pub struct Vec[T:affine] { data:Buf[T]; len:usize; }
+// Lent where a view is expected: `io.print(line)` passes the elements it holds, `line.data[0..line.len]`.
+pub struct Vec[T:affine] { data:Buf[T]; len:usize; lends data[0..len]; }
 
 pub fn new[T:affine]() -> Vec[T] = Vec(Buf[T](0), 0);
 pub fn with_capacity[T:affine](capacity:usize) -> Vec[T] = Vec(Buf[T](capacity), 0);

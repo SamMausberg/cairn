@@ -5,7 +5,9 @@
 A growable owner. Growth is the only allocation and it is visible in every caller's effect row.
 
 ```cairn
-pub struct Vec[T:affine] { data:Buf[T]; len:usize; }
+// Lent where a view is expected: `io.print(line)` passes the elements it holds, `line.data[0..line.len]`.
+pub struct Vec[T:affine] { data:Buf[T]; len:usize; lends data[0..len]; }
+
 pub fn new[T:affine]() -> Vec[T]  // effects: alloc, free, trap, zero_init
 pub fn with_capacity[T:affine](capacity:usize) -> Vec[T]  // effects: alloc, free, trap, zero_init
 pub fn capacity[T:affine](v:ro<Vec[T]>) -> usize  // effects: read:v

@@ -249,6 +249,7 @@ class Program:
     sources: dict[str, str] = field(default_factory=dict)  # linked library module -> its text
     modules: dict[str, str] = field(default_factory=dict)  # declared name -> owning module
     field_extents: dict[str, dict[str, str]] = field(default_factory=dict)  # record -> Buf field -> extent field
+    lends: dict[str, tuple[str, str, str]] = field(default_factory=dict)  # record -> (Buf field, lo, hi) it lends
 
 
 def is_view(ty: Type) -> bool:

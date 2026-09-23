@@ -84,6 +84,15 @@ class Parser:
             name += "." + self.ident()
         return name
 
+    def bounds(self) -> tuple[str, str]:
+        """`[lo..hi]` of a `lends` clause: each a literal or a field of the record, never an expression."""
+        self.need("[")
+        lo = str(self.integer()) if self.t.s.isdigit() else self.ident()
+        self.need("..")
+        hi = str(self.integer()) if self.t.s.isdigit() else self.ident()
+        self.need("]")
+        return lo, hi
+
     def integer(self) -> int:
         if not self.t.s.isdigit():
             fail("E-STATIC", "Expected a nonnegative integer literal.", self.t)
@@ -638,7 +647,14 @@ class Parser:
                     self.need(")")
                 self.need("{")
                 fs, carried = [], {}
+                lent: tuple[str, str, str] | None = None
                 while not self.eat("}"):
+                    if self.t.s == "lends" and self.ahead(1) != ":" and self.eat("lends"):  # the view it lends
+                        if lent:
+                            fail("E-LENDS", f"{n} already lends {lent[0]}; a record lends one view.", self.t)
+                        lent = (self.ident(), *self.bounds())
+                        self.need(";")
+                        continue
                     fs.append(self.parameter())
                     if self.eat("["):  # `price:Buf[f64][rows]`: this field holds as many elements as `rows` says.
                         carried[fs[-1][0]] = self.ident()
@@ -648,6 +664,8 @@ class Parser:
                 p.records[full], p.generics[full], p.attributes[full] = fs, generics, attributes
                 if carried:
                     p.field_extents[full] = carried
+                if lent:
+                    p.lends[full] = lent
             elif self.eat("enum"):
                 n = self.ident()
                 generics = self.generic_parameters()

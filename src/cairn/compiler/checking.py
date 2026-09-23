@@ -300,6 +300,17 @@ class Checker:
                      f"of {record}.", node)  # fmt: skip
             if held[extent] != USIZE:
                 fail("E-EXTENT", f"A field extent is a usize field; {extent} is {held[extent].display()}.", node)
+        if record in self.p.lends:  # `lends data[0..len];`: a Buf field and two bounds each call reads again.
+            carrier, lo, hi = self.p.lends[record]
+            if carrier not in held or held[carrier].name != "Buf":
+                shown = held[carrier].display() if carrier in held else "no field of it"
+                fail("E-LENDS", f"{record} lends {carrier}, which is {shown}; a record lends a Buf field.", node)
+            for bound in (lo, hi):
+                if not bound.isdigit() and held.get(bound) != USIZE:
+                    fail("E-LENDS", f"A lent view's bounds are literals or usize fields of {record}; {bound} is "
+                         f"{held[bound].display() if bound in held else 'no field of it'}.", node)  # fmt: skip
+            if lo.isdigit() and hi.isdigit() and int(lo) > int(hi):
+                fail("E-LENDS", f"{record} lends {carrier}[{lo}..{hi}], which ends before it begins.", node)
 
     def participates(self, ty: Type, name: str) -> str:
         """Which declared field extent of `ty` the field `name` takes part in: its carrier, or the empty string."""

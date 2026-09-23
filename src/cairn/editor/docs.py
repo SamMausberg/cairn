@@ -56,7 +56,13 @@ def sections(source: str, modules: list[str] | None = None) -> tuple[list[str], 
         entries: list[list[str]] = []
         for table, kind in TABLES:
             for name in filter(shown, getattr(p, table)):
-                one = Program(generics=p.generics, attributes=p.attributes, public=p.public)
+                one = Program(
+                    generics=p.generics,
+                    attributes=p.attributes,
+                    public=p.public,
+                    field_extents=p.field_extents,
+                    lends=p.lends,
+                )
                 setattr(one, table, {name: getattr(p, table)[name]})
                 doc = above(rf"^(?:pub )?(?:linear )?{kind} {re.escape(local(name))}\b")
                 entries.append([*commented(doc), type_declarations(one)])

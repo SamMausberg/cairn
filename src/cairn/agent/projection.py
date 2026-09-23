@@ -150,6 +150,7 @@ def declarations(p: Program) -> dict[str, str]:
         layout = "".join(" " + a for a in sorted(marks - {"linear"}))
         carried = p.field_extents.get(n, {})
         fields = " ".join(f"{k}:{t.display()}{'[' + carried[k] + ']' if k in carried else ''};" for k, t in fs)
+        fields += " lends {}[{}..{}];".format(*p.lends[n]) if n in p.lends else ""
         linear = "linear " * ("linear" in marks)
         out[n] = f"{pub(n)}{linear}struct {local(n)}{generics(p.generics.get(n, []))}{layout} {{ {fields} }}"
     for n, vs in p.enums.items():
@@ -205,7 +206,7 @@ def expanded_source(source: str) -> str:
     modules = {n: p.modules[n] for n in [*records, *(f.name for f in made)]}
     return projection(
         Program(records, functions=made, generics=p.generics, public=p.public, modules=modules,
-                field_extents=p.field_extents),
+                field_extents=p.field_extents, lends=p.lends),
         source,
     )  # fmt: skip
 
@@ -224,7 +225,7 @@ def projection(p: Program, source: str) -> str:
             out.append(f"import {target}{renamed}{' (' + ', '.join(names) + ')' if names else ''};")
         shown = type_declarations(
             Program(**tables, generics=p.generics, attributes=p.attributes, public=p.public,
-                    field_extents=p.field_extents)
+                    field_extents=p.field_extents, lends=p.lends)
         )  # fmt: skip
         out += [shown] if shown else []
         members: list[Function] = []

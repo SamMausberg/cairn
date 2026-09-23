@@ -44,12 +44,13 @@ Device work can be queued: let up = spawn transfer(x, a); let k = spawn parallel
     "closures": """fn(u64) -> u64 is a copyable code pointer to a plain declared function of values. ro<fn(u64) -> u64> is a borrowed callable: pass a declared function or write the closure in place, apply(n, xs, |x:u64| -> u64 { return x + bias; }). A closure captures its scope by reference, exists only as that argument, never allocates, and its effects belong to the function that wrote it. What it captures it borrows for that call (rw where it writes), so the same call cannot lend, move or write those places.
 ro<dyn Shape> and rw<dyn Shape> parameters take any named place whose type implements the trait; calls through them add the dispatch effect and the effects of every implementation. Dynamic references are never values; Dyn[Shape](value) is the owned form, an affine heap value (alloc, free) that dispatches and lends itself as dyn.""",
     "tests": """test sums { let s = total(3); assert(s == 6, "three"); } is a test: no parameters, no result, one name per module (E-TEST), checked like a void function with any effects. No other build holds a test and nothing can call one (E-CALLEE). cairn test runs every test block, each in a process of its own, beside the project's JSON contracts; a test passes only when its process exits 0, so a failed assert or guard, a signal or a timeout fails that test alone. assert(cond) or assert(cond, "why") traps when cond is false, naming its file and line; the condition is a bool and the text one literal (E-ARITY). A call that allocates or writes is bound before the assert that reads it (E-EFFECT-ORDER).""",
+    "lends": """struct Vec[T] { data:Buf[T]; len:usize; lends data[0..len]; } lends that part: named where a view is expected, v is v.data[0..v.len], guarded and leased as written, and for x in v walks it. Bounds are literals or usize fields (E-LENDS).""",
     "modules": """module net.http; names the module of what follows, and pub exports. import net.http; allows http.get(...); import a.b as c; renames; import std.core (Option, Result); also brings those names in unqualified. std.* ships with the compiler and nothing is downloaded. A private name of another module is not callable (E-PRIVATE): request context instead of guessing.""",
 }
 
 
 def select_cards(
-    source: str, has_views: bool = False, has_records: bool = False, has_sums: bool = False
+    source: str, has_views: bool = False, has_records: bool = False, has_sums: bool = False, lends: bool = False
 ) -> dict[str, str]:
     # Actual tokens prevent comments/spacing from silently choosing the curriculum.
     words = {token.s for token in lex(source)}
@@ -72,6 +73,7 @@ def select_cards(
         "tasks": words & {"spawn", "wait", "collect", "Group", "Atomic", "Mutex"},
         "rings": "IoRing" in words,
         "tests": words & {"test", "assert"},
+        "lends": lends or "lends" in words,  # a record the packet shows lends a view
         "closures": words & {"|", "||", "dyn"} and ("dyn" in words or "fn" in words),
         "modules": words & {"module", "import", "pub"},
     }

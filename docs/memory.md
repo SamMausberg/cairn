@@ -63,6 +63,40 @@ fn main() -> i32 { let a = Buf[u64](8); let b = Buf[u64](8); return i32(dot(a, b
 Expected ro<u64>[len(a)]@host, got ro<u64>[len(b)]@host.
 ```
 
+A record may name the view it lends. `lends data[0..len];` in its body says that the record, named where an array view is expected, means the part `data[0..len]` of itself: `io.print(out)` is `io.print(out.data[0..out.len])`, the same C++, guard, row, lease and alias rules. A `for` over it is the index loop over that part, so `for b in line` is `for i in 0..line.len { let b = line.data[i]; }`. The bounds are read again at every call and nothing about them is assumed, so the length may change freely and a length past the storage traps at the part's guard. `std.vec` declares it, so a `Vec` goes to a call whole.
+
+```cairn
+struct Line { data:Buf[u8]; len:usize; lends data[0..len]; }
+
+fn sum(n:usize, bytes:ro<u8>[n]) -> u64 {
+  let mut t:u64 = 0;
+  for b in bytes { t += u64(b); }
+  return t;
+}
+
+fn main() -> i32 {
+  let mut line = Line(Buf[u8](8), 2);
+  line.data[0] = 3;
+  line.data[1] = 4;
+  if sum(line) != 7 || sum(line.data[0..line.len]) != 7 { return 1; }        // the same call
+  let mut seen:u64 = 0;
+  for b in line { seen += u64(b); }
+  if seen != 7 { return 2; }
+  return 0;
+}
+```
+
+A record lends one `Buf` field between two bounds, each a literal or a `usize` field of the record (`E-LENDS`). A task leases what it was lent, the elements, and not the length.
+
+```cairn rejects E-LENDS
+struct Line { data:Buf[u8]; len:u32; lends data[0..len]; }
+fn main() -> i32 { let line = Line(Buf[u8](8), 2); return 0; }
+```
+
+```text
+A lent view's bounds are literals or usize fields of Line; len is u32.
+```
+
 A part `bytes[lo..hi]` goes wherever an array borrow is expected and carries one dynamic guard: `lo <= hi <= len`, and `hi - lo` equal to the callee's extent, which for a part may be any `usize` arithmetic. A part of a part guards once per level. Bounds and extents are written from names, literals, fields, elements, operators, `len` and the arithmetic builtins; a call is bound to a name first (`E-CALL-SHAPE`).
 
 ```cairn

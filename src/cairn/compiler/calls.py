@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from . import facts, rings
 from .builtins import SOFT, TABLE, WRAPPING
 from .scope import Binding
+from .syntax import copied
 from .traits import infer, instantiate, trait_member, unbound, unify, vtable
 from .tree import INTRINSIC_TYPES, NUMERIC, USIZE, VISIBLE_AS, VOID, Expr, Function, Type, fail, is_view, root
 
@@ -133,6 +134,31 @@ def elaborate(f: Function, args: list[Expr]) -> None:
     args[:] = [written[n] if n in written else measured(first[n]) for n, _ in f.params]
 
 
+def lent(c: Checker, f: Function, args: list[Expr]) -> None:
+    """`io.print(out)` for `print(n:usize, text:ro<u8>[n])`: a record that lends a view (`lends data[0..len];`),
+    named where an array view is expected, is that part written out, `out.data[0..out.len]`, before anything else
+    reads the call. The part pays its guard, lends its elements and is held to every alias and lease rule, as the
+    part a person would write is; the bounds are read again at every call, so nothing about them is assumed."""
+    implied = extents(f)
+    params = f.params if len(args) == len(f.params) else [(n, t) for n, t in f.params if n not in implied]
+    if len(params) != len(args):
+        return
+    for k, (a, (_, want)) in enumerate(zip(args, params, strict=True)):
+        if not want.extent or a.tag not in {"name", "field", "index"} or root(a).val not in c.env:
+            continue
+        counted, discharged = dict(c.counts), dict(c.discharged)
+        ty = c.expr(copied(a), consume=False)  # a look at its type only: the guards it counted are not emitted
+        for kept, saved in ((c.counts, counted), (c.discharged, discharged)):
+            kept.clear()
+            kept.update(saved)
+        if is_view(ty) or ty.name not in c.p.lends:
+            continue
+        carrier, lo, hi = c.p.lends[ty.name]
+        field = [Expr("field", name, [copied(a)], a.line, a.col) for name in (carrier, lo, hi)]
+        bound = [Expr("int", b, [], a.line, a.col) if b.isdigit() else field[j + 1] for j, b in enumerate((lo, hi))]
+        args[k] = Expr("slice", "", [field[0], *bound], a.line, a.col, start=a.start, end=a.end)
+
+
 def same(a: Expr, b: Expr) -> bool:
     """Whether two expressions are written alike."""
     return (a.tag, a.val, len(a.args)) == (b.tag, b.val, len(b.args)) and all(map(same, a.args, b.args))
@@ -153,6 +179,8 @@ def spanned(args: list[Expr]):
 
 
 def invoke(c: Checker, e: Expr, f: Function, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    if c.p.lends:
+        lent(c, f, args)
     elaborate(f, args)
     spanned(args)
     if len(args) != len(f.params):

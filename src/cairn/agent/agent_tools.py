@@ -187,7 +187,8 @@ class EditSession:
         if self.scope == "component":
             return select_cards(text, views, bool(self.parsed.records or self.parsed.enums), bool(self.parsed.sums))
         records = any(n in self.program.records or n in self.program.enums for n in types)
-        return select_cards(text, views, records, any(n in self.program.sums for n in types))
+        lends = any(n in self.program.lends for n in types)
+        return select_cards(text, views, records, any(n in self.program.sums for n in types), lends)
 
     def packet(self, site: str | None = None) -> dict[str, Any]:
         p = self.component() if self.scope == "component" else self.focused()

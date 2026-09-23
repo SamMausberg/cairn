@@ -278,6 +278,8 @@ def elements(c: Checker, s: Stmt):
     if xs.tag not in {"name", "field"} or not field_path(xs):
         fail("E-ELEMENT-LOOP", f"for {s.name} in ... walks a named array: bind the value to a name first.", xs)
     ty, walked = c.peek(copied(xs)), path(xs)
+    if not is_view(ty) and ty.name in c.p.lends:  # what the record lends, as the index loop over it
+        return lent_elements(c, s, xs, ty, walked)
     if not is_view(ty) and ty.name not in {"Buf", "Array"}:
         count = f"; a count is a range, for {s.name} in 0..{walked}" if ty == USIZE else ""
         fail("E-ELEMENT-LOOP", f"for {s.name} in {walked} walks a view, a Buf or an Array, not {ty.display()}{count}.",
@@ -290,6 +292,32 @@ def elements(c: Checker, s: Stmt):
     read = Expr("index", "", [copied(xs), Expr("name", index, [], xs.line, xs.col)], xs.line, xs.col)
     s.body = [Stmt("let", s.name, exprs=[read], line=s.line, col=s.col), *s.body]
     s.exprs = [Expr("int", "0", [], xs.line, xs.col), Expr("call", "len", [copied(xs)], xs.line, xs.col)]
+    s.name, s.op, s.binder = index, "", ""
+
+
+def lent_elements(c: Checker, s: Stmt, xs: Expr, ty: Type, walked: str):
+    """`for i, x in text` over a record that `lends data[lo..hi]` is `for i in 0..text.hi - text.lo { let x =
+    text.data[text.lo + i]; .. }`, `for i in 0..text.len { let x = text.data[i]; .. }` when lo is 0: the loop
+    std writes by hand, whose bounds are read once, as a range's are, and whose every element pays its guard."""
+    carrier, lo, hi = c.p.lends[ty.name]
+
+    def at(name: str) -> Expr:
+        return (
+            Expr("int", name, [], xs.line, xs.col)
+            if name.isdigit()
+            else Expr("field", name, [copied(xs)], xs.line, xs.col)
+        )
+
+    element = c.peek(at(carrier)).args[0]
+    if c.kind(element) != "copy":
+        fail("E-ELEMENT-LOOP", f"for {s.name} in {walked} copies each element, and {element.display()} is not "
+             f"copyable: write for i in 0..{walked}.{hi} and take, swap or lend {walked}.{carrier}[i].", xs)  # fmt: skip
+    index = s.binder or fresh(c, s, s.name + "_index")
+    i = Expr("name", index, [], xs.line, xs.col)
+    read = Expr("index", "", [at(carrier), i if lo == "0" else Expr("binary", "+", [at(lo), i])], xs.line, xs.col)
+    s.body = [Stmt("let", s.name, exprs=[read], line=s.line, col=s.col), *s.body]
+    span = at(hi) if lo == "0" else Expr("binary", "-", [at(hi), at(lo)], xs.line, xs.col)
+    s.exprs = [Expr("int", "0", [], xs.line, xs.col), span]
     s.name, s.op, s.binder = index, "", ""
 
 

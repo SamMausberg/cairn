@@ -5,7 +5,7 @@
 RGBA images held in one owned array of pixels, and the files that hold them: PNG, which every viewer opens, and the plain PPM. A pixel is a u32 written 0xRRGGBBAA, so a colour reads as the hex a designer writes, and 0xff8800ff is opaque orange. Pixels run in rows, top row first: (x, y) is px[y * w + x], and n is w * h. Cost: `new` allocates the pixels, the encoders append to a Vec and allocate as it grows, and `fill` and `shade` run as parallel regions once an image passes the lane pool's cutoff.
 
 ```cairn
-pub struct Image { w:usize; h:usize; n:usize; px:Buf[u32]; }
+pub struct Image { w:usize; h:usize; n:usize; px:Buf[u32][n]; }
 
 // A w by h image of transparent black. An image has at least one pixel, and w * h is checked, so an empty or
 // unaddressable size traps here instead of writing a file no reader accepts.

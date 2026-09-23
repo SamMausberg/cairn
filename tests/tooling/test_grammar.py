@@ -163,6 +163,8 @@ PINNED = [
     ("fn checksum(n:usize) -> u32 pure {", "pure", "storage.modifier.cairn"),
     ("struct Chart packed { rows:usize; price:Buf[f64][rows]; }", "Chart", "entity.name.type.cairn"),
     ("struct Chart packed { rows:usize; price:Buf[f64][rows]; }", "packed", "storage.modifier.layout.cairn"),
+    ("struct Text { data:Buf[u8]; len:usize; lends data[0..len]; }", "lends", "storage.modifier.cairn"),
+    ("struct Odd { lends:usize; }", "lends", "variable.other.property.cairn"),
     ("struct Chart packed { rows:usize; price:Buf[f64][rows]; }", "price", "variable.other.property.cairn"),
     ("struct Slot align(64) { hits:u64; }", "align", "storage.modifier.layout.cairn"),
     ("enum Op { Read; Write; }", "Op", "entity.name.type.cairn"),
