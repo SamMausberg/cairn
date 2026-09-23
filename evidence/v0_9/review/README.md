@@ -6,7 +6,7 @@ The attacks were CAIRN programs, crafted project and export directories, and scr
 
 ## Fixed
 
-Seventeen defects are fixed on main. Each fix is in the file that owns the rule, and `tests/soundness/test_review_implementation_layer.py` keeps the program or request that showed it, except those fixed by another track: PARAMS's in `tests/language/test_implementations.py`, the MCP fix in `tests/agent/test_mcp.py`, and TENSOR's in `tests/soundness/test_fragments.py` and `tests/language/test_layouts.py`.
+Twenty-one defects were found, and all are fixed on main. Each fix is in the file that owns the rule, and `tests/soundness/test_review_implementation_layer.py` keeps the program or request that showed it, except those fixed by another track: PARAMS's in `tests/language/test_implementations.py`, the MCP fix in `tests/agent/test_mcp.py`, TENSOR's in `tests/soundness/test_fragments.py` and `tests/language/test_layouts.py`, and PROOFS's in `tests/soundness/test_reach.py`, `test_pipelines.py` and `test_cooperative_faults.py`, which takes each refusal back out and shows the hang, the race or the crash. Where the owning track was still changing the file, the reviewer sent it the program and it made the fix.
 
 | defect | what went wrong | fix |
 |---|---|---|
@@ -27,17 +27,10 @@ Seventeen defects are fixed on main. Each fix is in the file that owns the rule,
 | Fragment arguments could differ within a warp | WMMA loads and stores at `(t % 2, 0)`, `WmmaAcc(f32(t))` and an `MmaA` load at `t % 2` were accepted; WMMA leaves them undefined on the device, and the host emulation answered per lane. | `970328e` (TENSOR): `E-COOP-WARP` for a thread-level coordinate, fill value, operand or WMMA accumulator |
 | A device fragment load ran on host threads | A region whose only device view was read through `mma_load` was placed on the host, where it dereferenced the device pointer. | `970328e` (TENSOR): a fragment's view places the region (`E-PLACEMENT`) |
 | A WMMA store named a writer lane WMMA does not | The phase rule took a WMMA store's writer from the `mma.sync` share, so a thread reading its own lane's elements after a store, with no barrier, was accepted. | `970328e` (TENSOR): a WMMA store is one write by its warp with no lane named (`E-COOP-UNORDERED`); an `mma.sync` store keeps the ISA's share |
-
-## Found and handed to their owners
-
-Four more defects are in files PROOFS was changing while this ran, so the reviewer sent it the programs and did not edit the files. When this was written its fix had not landed on main, so each is open until its commit says otherwise.
-
-| owner | defect | shown by |
-|---|---|---|
-| PROOFS, `cooperative.py` (`Reach`) | A barrier under a local that differs per thread is accepted when the local is set through an `rw` borrow (`put(k, t); if k == 0 { barrier; }`), by a closure, or through an array element; each hangs on host threads under ThreadSanitizer with both compilers, where an unconditional barrier exits 0. A chain of eight moves in a loop is accepted where seven is refused (a helper's run). The warp operations share this analysis. | native hangs, both compilers |
-| PROOFS, `cooperative.py` | A closure that writes `out[0] = u64(t)`, passed to a call in every thread, is accepted and races under both compilers; `parallel` refuses the same with `E-PARALLEL-RACE`. A closure writing a shared array races the same way. | ThreadSanitizer, both compilers |
-| PROOFS, `pipelines.py` | A stage read before its `wait` through anything but `tiles[i]` is accepted: `first(64, tiles)` and `first(tiles[0..4])` dereference the null stage pointer (AddressSanitizer SEGV under g++, unknown-crash under clang++). A closure capture and a fill from a pipeline never waited on crash the same way (a helper's runs). | AddressSanitizer, both compilers |
-| PROOFS, `pipelines.py` | A fill from a `@device` source in a host region, or from a host view in a device region, is accepted: the fill's source placement is not checked. | acceptance |
+| A barrier under a per-thread local was accepted | A barrier under a local set through an `rw` borrow (`put(k, t); if k == 0 { barrier; }`), by a closure, or through an array element hung on host threads under ThreadSanitizer with both compilers, where an unconditional barrier exits 0. A chain of eight moves in a loop was accepted where seven was refused (a helper's run). | `1ac8dc2` (PROOFS): the thread-level analysis runs loops to their fixed point and raises a local lent `rw`, written through an element or assigned in a closure (`E-COOP-BARRIER`) |
+| A closure raced in a cooperative region | A closure that writes `out[0] = u64(t)` or `s[0] = u64(t)`, passed to a call in every thread, was accepted and raced under both compilers; `parallel` refuses the same with `E-PARALLEL-RACE`. | `1ac8dc2` (PROOFS): a closure naming a shared array, a pipeline or an outside array is `E-COOP-UNDECIDED` |
+| A stage was read before its wait | A read through anything but `tiles[i]`, as `first(64, tiles)` or `first(tiles[0..4])`, dereferenced the null stage pointer (AddressSanitizer SEGV under g++, unknown-crash under clang++); a closure capture and a fill from a pipeline never waited on crashed the same way (a helper's runs). | `1ac8dc2` (PROOFS): any use of the name but as the receiver of its own operations reads the readable stage (`E-STAGE-UNREADY`) |
+| A fill's source placement was not checked | A fill from a `@device` source in a host region, or from a host view in a device region, was accepted. | `1ac8dc2` (PROOFS): a fill's source is an outside array in the region's placement (`E-PLACEMENT`) |
 
 ## What held
 
@@ -63,7 +56,7 @@ None lets anything unsafe through, and none was changed. `cairn tune --write` re
 
 ## What this does not show
 
-One reviewer and three helpers wrote every attack, on one x86-64 machine, and nothing ran on a device: the device lowering of cooperative regions, fragments, pipelines and typed PTX is compiled at most, and typed PTX attacks were checked for acceptance only. The four defects handed to PROOFS were open when this was written.
+One reviewer and three helpers wrote every attack, on one x86-64 machine, and nothing ran on a device: the device lowering of cooperative regions, fragments, pipelines and typed PTX is compiled at most, and typed PTX attacks were checked for acceptance only.
 
 Not examined: `launch(threads, block)` with blocks that are not whole warps, zero or symbolic, or called from a lane or a cooperative thread; one symbol defined by two vendored sources, a `.cu` source in a host build, and injection through extern names beyond reading; `unbuildable` for PTX of another architecture and for host assembly of another family; the `E-COOP-GLOBAL` weight rule beyond two attacks, and the `d799762` relaxation, which was read and not run (PROOFS found two radix holes in `footprints.py` while modelling it, fixed in `7ab0561`); warp operations under split conditions beyond the fragment cases; shared arrays declared in loops and conditions; the execution contexts and scratch reuse of `cairn_exec.hpp` and `cairn_reuse.hpp`; the device target beyond reading `projects/target.py`; implementation-session requests beyond the submission checks; routes to a reference through `dyn` or a trait method.
 
