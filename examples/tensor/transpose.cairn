@@ -1,0 +1,95 @@
+// out is x transposed through a 32 x 32 tile of each block's shared memory, three times over:
+// the tile stored row-major, padded and swizzled. The threads and the program are the same each
+// time; only the layout differs, and `cairn explain` says what that changes: reading the tile a
+// column at a time takes 32 bank ways row-major and one padded or swizzled.
+layout ROWS = rows(32, 32);
+layout PADDED = pad(rows(32, 32), 1);
+layout SWIZZLED = swizzle(rows(32, 32), 5, 0, 5);
+layout ROWS_IN = spread(ROWS, 8, 32, 1, 1); // thread t = tx + 32 * ty holds rows ty, ty + 8, ...
+layout ROWS_OUT = spread(transpose(ROWS), 8, 32, 1, 1);
+layout PADDED_IN = spread(PADDED, 8, 32, 1, 1);
+layout PADDED_OUT = spread(transpose(PADDED), 8, 32, 1, 1);
+layout SWIZZLED_IN = spread(SWIZZLED, 8, 32, 1, 1);
+layout SWIZZLED_OUT = spread(transpose(SWIZZLED), 8, 32, 1, 1);
+const CELLS:usize = PADDED.cosize();
+
+fn by_rows(w:usize, h:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
+  let across = (w + 31) / 32;
+  let down = (h + 31) / 32;
+  blocks bx, by in across, down threads tx, ty in 32, 8 {
+    shared tile:f32[CELLS] = zeroed;
+    let t = tx + 32 * ty;
+    for k in 0..4 {
+      if by * 32 + ty + 8 * k < h && bx * 32 + tx < w {
+        tile[ROWS_IN.at(t, k)] = x[(by * 32 + ty + 8 * k) * w + bx * 32 + tx];
+      }
+    }
+    barrier;
+    for k in 0..4 {
+      if bx * 32 + ty + 8 * k < w && by * 32 + tx < h {
+        out[(bx * 32 + ty + 8 * k) * h + by * 32 + tx] = tile[ROWS_OUT.at(t, k)];
+      }
+    }
+  }
+}
+
+fn padded(w:usize, h:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
+  let across = (w + 31) / 32;
+  let down = (h + 31) / 32;
+  blocks bx, by in across, down threads tx, ty in 32, 8 {
+    shared tile:f32[CELLS] = zeroed;
+    let t = tx + 32 * ty;
+    for k in 0..4 {
+      if by * 32 + ty + 8 * k < h && bx * 32 + tx < w {
+        tile[PADDED_IN.at(t, k)] = x[(by * 32 + ty + 8 * k) * w + bx * 32 + tx];
+      }
+    }
+    barrier;
+    for k in 0..4 {
+      if bx * 32 + ty + 8 * k < w && by * 32 + tx < h {
+        out[(bx * 32 + ty + 8 * k) * h + by * 32 + tx] = tile[PADDED_OUT.at(t, k)];
+      }
+    }
+  }
+}
+
+fn swizzled(w:usize, h:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
+  let across = (w + 31) / 32;
+  let down = (h + 31) / 32;
+  blocks bx, by in across, down threads tx, ty in 32, 8 {
+    shared tile:f32[CELLS] = zeroed;
+    let t = tx + 32 * ty;
+    for k in 0..4 {
+      if by * 32 + ty + 8 * k < h && bx * 32 + tx < w {
+        tile[SWIZZLED_IN.at(t, k)] = x[(by * 32 + ty + 8 * k) * w + bx * 32 + tx];
+      }
+    }
+    barrier;
+    for k in 0..4 {
+      if bx * 32 + ty + 8 * k < w && by * 32 + tx < h {
+        out[(bx * 32 + ty + 8 * k) * h + by * 32 + tx] = tile[SWIZZLED_OUT.at(t, k)];
+      }
+    }
+  }
+}
+
+fn main() -> i32 {
+  let w:usize = 70;
+  let h:usize = 45;
+  let n = w * h;
+  buffer x:f32[n] = zeroed;
+  buffer a:f32[n] = zeroed;
+  buffer b:f32[n] = zeroed;
+  buffer c:f32[n] = zeroed;
+  for i in 0..n { x[i] = f32(i); }
+  by_rows(w, h, n, a, x);
+  padded(w, h, n, b, x);
+  swizzled(w, h, n, c, x);
+  for r in 0..h {
+    for q in 0..w {
+      let want = x[r * w + q];
+      if a[q * h + r] != want || b[q * h + r] != want || c[q * h + r] != want { return 1; }
+    }
+  }
+  return 0;
+}

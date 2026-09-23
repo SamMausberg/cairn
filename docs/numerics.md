@@ -79,7 +79,26 @@ A fragment is one warp's share of a tensor-core instruction: an operand A, an op
 
 Operands hold `f16` or `bf16`, and accumulators `f32` (`E-FRAGMENT`). A is `M x K`, B is `K x N` and the accumulator `M x N`. `WmmaAcc[f32, 16, 16, 16](0.0)` fills an accumulator, `mma_load[F](tile, L, i, j)` reads fragment `(i, j)` of a tile laid out by `L`, counting whole fragments, and `mma_store(tile, L, i, j, acc)` writes one back. `acc = mma_unordered(acc, a, b)` adds `a * b` under the contract above: each output's `K` products and its old value, summed in f32 in an order the hardware picks.
 
-Every fragment operation is a warp operation. It is legal only inside a cooperative region, where each warp reaches it whole (`E-FRAGMENT` outside one, `E-COOP-WARP` under a condition that differs within a warp), and its tile is a shared array of the block or a device view.
+Every fragment operation is a warp operation. It is legal only inside a cooperative region ([concurrency.md](concurrency.md)), where each warp reaches it whole (`E-FRAGMENT` outside one, `E-COOP-WARP` under a condition that differs within a warp). A fragment is stored into a shared array of the block and loaded from one or from a read-only device view, and the phase rule counts a load as reads of its fragment's elements and a store as each lane's writes, so a missing barrier around one is refused as it is around any other access.
+
+```cairn
+layout TILE = rows(16, 16);
+const CELLS:usize = TILE.cosize();
+
+// One warp: out = c + a * b for a 16 x 16 tile, on the tensor cores.
+fn tile(out:rw<f32>[256]@device, c:ro<f32>[256]@device, a:ro<f16>[256]@device, b:ro<f16>[256]@device) {
+  blocks g in 1 threads t in 32 {
+    shared sc:f32[CELLS] = zeroed;
+    let x = mma_load[WmmaA[f16, 16, 16, 16]](a, TILE, 0, 0);
+    let y = mma_load[WmmaB[f16, 16, 16, 16]](b, TILE, 0, 0);
+    let mut acc = mma_load[WmmaAcc[f32, 16, 16, 16]](c, TILE, 0, 0);
+    acc = mma_unordered(acc, x, y);             // acc + x * y, its sums in the hardware's order
+    mma_store(sc, TILE, 0, 0, acc);             // each lane writes the elements it holds
+    barrier;
+    for i in 0..8 { out[t + 32 * i] = sc[t + 32 * i]; }
+  }
+}
+```
 
 Each family reads the layouts it can ([memory.md](memory.md#layouts)). WMMA takes a pointer and a leading dimension, so an operand's layout is row-major with its rows a multiple of 16 bytes apart, and a swizzled tile is `E-LAYOUT-CONSUMER`. `mma.sync` loads a shared tile with `ldmatrix`, one row address a lane, so a swizzle that keeps 16-byte runs together is readable and a pad that splits them is refused.
 
@@ -94,7 +113,9 @@ The family is a capability the build's device target must provide ([tools.md](to
 fn tensor_memory() { let acc = TmemAcc[f32, 128, 256, 16](0.0); }
 ```
 
-On the host every thread of a warp holds each fragment whole, adds in increasing k, and stores only the elements its lane holds on the device, so a warp's threads write each element once. The suite runs a warp as 32 threads under the thread sanitizer and holds every output to the reference loop bit for bit. The device operations compile for sm_120 to `HMMA` and `LDSM` instructions and have not run on a GPU.
+On the host every thread of a warp holds each fragment whole, adds in increasing k, and stores only the elements its lane holds on the device, so a warp's threads write each element once.
+
+Two matrix multiplies are written this way in `examples/tensor`: `tile64`, the tiling `mma_unordered` fixes (64 x 64 tiles, four warps of 2 x 2 WMMA fragments, k in steps of 32 through two padded stages), and `tile32`, another (64 x 32 tiles, eight warps of two `mma.sync` fragments, one stage whose A tile is swizzled). Neither needed a change to `cairn_tensor.hpp`. On generated shapes with partial tiles in every direction, each output of both lies within the contract's bound of the exact sum and equals the reference loop's bit for bit, under both compilers, and their threads run clean under the thread sanitizer. Both compile for sm_120, to `HMMA.16816.F32` and `HMMA.16816.F32.BF16` fed by `LDSM`, and have not run on a GPU ([evidence](../evidence/v0_9/tensor/README.md)).
 
 ## Gradients
 

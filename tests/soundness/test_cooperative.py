@@ -145,7 +145,7 @@ def test_the_device_lowering_compiles_for_sm_120_to_shared_memory_barriers_and_s
     warp reduction is five butterfly shuffles of a u64 (two 32-bit moves each)."""
     device = REDUCE.replace("[n]", "[n]@device").replace("[g]", "[g]@device")
     ptx = device_build(tmp_path, compile_source(device)[0], ptx=True).read_text()
-    assert ".shared .align 16 .b8" in ptx and "[2048]" in ptx
+    assert ".shared .align 128 .b8" in ptx and "[2048]" in ptx  # every array starts on 128 bytes (fragments.py)
     assert ptx.count("bar.sync") == 6  # zeroed, loaded, three tree steps, and the block's end
     assert ptx.count("shfl.sync.bfly") == 10
     assert "st.shared" in ptx and "ld.shared" in ptx

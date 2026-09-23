@@ -1,0 +1,18 @@
+{
+  "what": "examples/tensor/tile64.cairn and tile32.cairn, emitted by compile_source and compiled by the project's device command line with -arch=sm_120 -cubin -Xptxas -v, then read with cuobjdump -sass; nothing ran on a device",
+  "toolkit": "CUDA 13.2 (V13.2.78), host compiler g++ 13.3",
+  "kernels": {
+    "tile64": {
+      "fragments": "WMMA 16 x 16 x 16, f16",
+      "device_features": ["device_lanes", "wmma"],
+      "sass": {"HMMA.16816.F32": 16, "LDSM.16.M88.4": 4, "LDSM.16.MT88.4": 4, "BAR.SYNC.DEFER_BLOCKING": 6},
+      "ptxas": {"registers": 102, "shared_bytes": 36864, "spill_stores": 0, "spill_loads": 0, "stack_frame_bytes": 0}
+    },
+    "tile32": {
+      "fragments": "mma.sync m16n8k16, bf16",
+      "device_features": ["device_lanes", "mma_sync", "bf16"],
+      "sass": {"HMMA.16816.F32.BF16": 4, "LDSM.16.M88.4": 2, "LDSM.16.MT88.2": 4, "BAR.SYNC.DEFER_BLOCKING": 7},
+      "ptxas": {"registers": 98, "shared_bytes": 14848, "spill_stores": 0, "spill_loads": 0, "stack_frame_bytes": 0}
+    }
+  }
+}

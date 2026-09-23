@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from itertools import count
 from typing import TYPE_CHECKING, Any
 
+from . import fragments, layouts
 from .footprints import Poly, assigned, lent, opaque
 from .tree import BOOL, USIZE, Expr, Stmt, fail, nested, root
 
@@ -265,6 +266,11 @@ class Phases:
                 self.record(name, i, mode == "rw", a, now + 0.5, mask)
             else:
                 self.record(name, ("part", 0, self.counts[name]), mode == "rw", a, now, mask)
+        if isinstance(e.ref, tuple) and e.ref[:1] == ("layout",):  # `L.at(r, c)`, `D.row(t, v)`: compiler/layouts.py
+            return self.each(lambda *xs: laid(self.c, e, xs), *values)
+        if e.val in fragments.OPERATIONS and isinstance(e.ref, tuple) and len(e.ref) == 3:
+            self.fragment(e, values, mask, now)
+            return None
         if not isinstance(e.ref, tuple) or e.ty != USIZE:
             return None
         if e.val == "len" and e.args and e.args[0].ty is not None:
@@ -275,6 +281,33 @@ class Phases:
         if len(values) == 2 and e.val in {"min", "max", "shr", "shl_wrap", "add_wrap", "sub_wrap", "mul_wrap"}:
             return self.each(lambda x, y: arith(e.val, x, y), *values)
         return None
+
+    def fragment(self, e: Expr, values: list[Any], mask: list[int] | None, now: float):
+        """A fragment load reads every element of its fragment in every thread of the warp; a store writes each
+        element in the one thread whose lane holds it (compiler/fragments.py, `footprint`)."""
+        array = root(e.args[0]).val if root(e.args[0]).tag == "name" else ""
+        if array not in self.counts:
+            return  # a read-only device view: nothing in the region writes it
+        found: list[Any] = []
+        for t in range(self.T):
+            i, j = self.at(values[2], t), self.at(values[3], t)
+            if not all(isinstance(x, int) and not isinstance(x, bool) for x in (i, j)):
+                found.append(None)  # an unknown fragment: every element it may touch is unknown
+                continue
+            try:
+                found.append(fragments.footprint(self.c, e, i, j))
+            except IndexError:
+                found.append(TRAP)  # the coordinates' guard aborts the thread first
+        size = next((len(f) for f in found if isinstance(f, list)), 1)
+        for k in range(size):
+            index = [f[k][0] if isinstance(f, list) else f for f in found]
+            holder = next((f[k][1] for f in found if isinstance(f, list)), None)
+            only = (
+                None
+                if holder is None
+                else [(1 if mask is None else mask[t]) * (t % 32 == holder) for t in range(self.T)]
+            )
+            self.record(array, index, holder is not None, e, now, mask if only is None else only)
 
     def record(self, array: str, index: Any, write: bool, node: Any, time: float, mask: list[int] | None):
         for alternative in self.open:
@@ -571,6 +604,14 @@ class Phases:
              f"{self.who(a[0])} may still be reading what it held, at line {a[1].node.line}, in the same phase. "
              f"Put a barrier {between(a[1].node.line, b[1].node.line)}, so every thread has read the old value "
              "first.", b[1].node, array=array, read=a[1].node.line, write=b[1].node.line)  # fmt: skip
+
+
+def laid(c: Any, e: Expr, given: tuple[Any, ...]) -> Any:
+    """A layout's answer for one thread's arguments: a number, TRAP where its guard aborts, None for a symbol."""
+    try:
+        return layouts.apply(c, e, given)
+    except IndexError:
+        return TRAP
 
 
 def between(first: int, second: int) -> str:

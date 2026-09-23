@@ -1,0 +1,111 @@
+// out = c + a * b with WMMA fragments, in the shape mma_unordered's own tiling fixes: 64 x 64
+// output tiles, one block of four warps each, every warp 2 x 2 fragments of 16 x 16, k in steps
+// of 32 through two shared stages. It keeps the contract of mma_unordered, and the runtime header
+// was not edited for it.
+layout A_STAGES = pad(rows(128, 32), 8); // two 64 x 32 stages of a, rows 40 halves apart
+layout B_STAGES = pad(rows(64, 64), 8); // two 32 x 64 stages of b, rows 72 halves apart
+layout C_TILE = pad(rows(64, 64), 4); // the tile's outputs, rows 68 floats apart
+layout A_COPY = spread(rows(64, 32), 32, 4, 1, 8); // 128 threads, 8 halves (16 bytes) a run
+layout B_COPY = spread(rows(32, 64), 16, 8, 1, 8);
+layout WARPS = spread(rows(4, 4), 2, 2, 2, 2); // warp w's four fragments of the 4 x 4 grid
+const A_CELLS:usize = A_STAGES.cosize();
+const B_CELLS:usize = B_STAGES.cosize();
+const C_CELLS:usize = C_TILE.cosize();
+
+fn tile64(
+  m:usize, n:usize, k:usize, cn:usize, out:rw<f32>[cn]@device, c:ro<f32>[cn]@device, an:usize,
+  a:ro<f16>[an]@device, bn:usize, b:ro<f16>[bn]@device
+) {
+  let across = (n + 63) / 64;
+  let down = (m + 63) / 64;
+  let steps = (k + 31) / 32;
+  blocks bx, by in across, down threads tx, ty in 32, 4 {
+    shared sa:f16[A_CELLS] = zeroed;
+    shared sb:f16[B_CELLS] = zeroed;
+    shared sc:f32[C_CELLS] = zeroed;
+    let t = tx + 32 * ty;
+    for i in 0..16 { // the tile's old outputs; past the matrix they stay 0
+      for j in 0..2 {
+        if by * 64 + ty + 4 * i < m && bx * 64 + tx + 32 * j < n {
+          sc[C_TILE.at(ty + 4 * i, tx + 32 * j)] = c[
+            (by * 64 + ty + 4 * i) * n + bx * 64 + tx + 32 * j
+          ];
+        }
+      }
+    }
+    for v in 0..A_COPY.values() { // step 0 into stage 0, zero past the matrix
+      let r = A_COPY.row(t, v);
+      let q = A_COPY.col(t, v);
+      if by * 64 + r < m && q < k { sa[A_STAGES.at(r, q)] = a[(by * 64 + r) * k + q]; }
+    }
+    for v in 0..B_COPY.values() {
+      let p = B_COPY.row(t, v);
+      let q = B_COPY.col(t, v);
+      if p < k && bx * 64 + q < n { sb[B_STAGES.at(p, q)] = b[p * n + bx * 64 + q]; }
+    }
+    barrier;
+    let mut acc0 = mma_load[WmmaAcc[f32, 16, 16, 16]](
+      sc, C_TILE, WARPS.row(ty, 0), WARPS.col(ty, 0)
+    );
+    let mut acc1 = mma_load[WmmaAcc[f32, 16, 16, 16]](
+      sc, C_TILE, WARPS.row(ty, 1), WARPS.col(ty, 1)
+    );
+    let mut acc2 = mma_load[WmmaAcc[f32, 16, 16, 16]](
+      sc, C_TILE, WARPS.row(ty, 2), WARPS.col(ty, 2)
+    );
+    let mut acc3 = mma_load[WmmaAcc[f32, 16, 16, 16]](
+      sc, C_TILE, WARPS.row(ty, 3), WARPS.col(ty, 3)
+    );
+    for pair in 0..(steps + 1) / 2 {
+      for g in 0..2 { // stage g holds step 2 * pair + g
+        let step = 2 * pair + g;
+        if step + 1 < steps { // the next step into the other stage, zero past the matrix
+          for v in 0..A_COPY.values() {
+            let r = A_COPY.row(t, v);
+            let q = A_COPY.col(t, v);
+            let at = A_STAGES.at((1 - g) * 64 + r, q);
+            if by * 64 + r < m && (step + 1) * 32 + q < k {
+              sa[at] = a[(by * 64 + r) * k + (step + 1) * 32 + q];
+            } else { sa[at] = f16(0.0); }
+          }
+          for v in 0..B_COPY.values() {
+            let p = B_COPY.row(t, v);
+            let q = B_COPY.col(t, v);
+            let at = B_STAGES.at((1 - g) * 32 + p, q);
+            if (step + 1) * 32 + p < k && bx * 64 + q < n {
+              sb[at] = b[((step + 1) * 32 + p) * n + bx * 64 + q];
+            } else { sb[at] = f16(0.0); }
+          }
+        }
+        if step < steps {
+          for h in 0..2 { // two 16-deep slices of the 32-deep stage
+            let a0 = mma_load[WmmaA[f16, 16, 16, 16]](sa, A_STAGES, g * 4 + WARPS.row(ty, 0), h);
+            let a1 = mma_load[WmmaA[f16, 16, 16, 16]](sa, A_STAGES, g * 4 + WARPS.row(ty, 2), h);
+            let b0 = mma_load[WmmaB[f16, 16, 16, 16]](sb, B_STAGES, g * 2 + h, WARPS.col(ty, 0));
+            let b1 = mma_load[WmmaB[f16, 16, 16, 16]](sb, B_STAGES, g * 2 + h, WARPS.col(ty, 1));
+            acc0 = mma_unordered(acc0, a0, b0);
+            acc1 = mma_unordered(acc1, a0, b1);
+            acc2 = mma_unordered(acc2, a1, b0);
+            acc3 = mma_unordered(acc3, a1, b1);
+          }
+        }
+        barrier; // this stage read, the other written, before either changes
+      }
+    }
+    barrier; // with no step at all, the loads above are still read
+    mma_store(sc, C_TILE, WARPS.row(ty, 0), WARPS.col(ty, 0), acc0);
+    mma_store(sc, C_TILE, WARPS.row(ty, 1), WARPS.col(ty, 1), acc1);
+    mma_store(sc, C_TILE, WARPS.row(ty, 2), WARPS.col(ty, 2), acc2);
+    mma_store(sc, C_TILE, WARPS.row(ty, 3), WARPS.col(ty, 3), acc3);
+    barrier;
+    for i in 0..16 { // the tile's outputs back, only inside the matrix
+      for j in 0..2 {
+        if by * 64 + ty + 4 * i < m && bx * 64 + tx + 32 * j < n {
+          out[
+            (by * 64 + ty + 4 * i) * n + bx * 64 + tx + 32 * j
+          ] = sc[C_TILE.at(ty + 4 * i, tx + 32 * j)];
+        }
+      }
+    }
+  }
+}

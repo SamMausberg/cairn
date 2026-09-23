@@ -58,6 +58,7 @@ TYPES = {  # each fragment type: the device capability its family needs, and its
 SHAPES = {"wmma": {(16, 16, 16), (32, 8, 16), (8, 32, 16)}, "mma_sync": {(16, 8, 16)}, "tcgen05": {(128, 256, 16)}}
 OPERANDS = {"f16", "bf16"}
 BOUND = "(k + 1) * 2^-22 * (|c| + sum |a * b|)"  # the whole-matrix multiply's bound, for each output's k products
+OPERATIONS = {"mma_load", "mma_store"}  # what moves a fragment through a tile, which the phase rule records
 
 
 def fragment(ty: Type | None) -> tuple[str, str, str, tuple[int, int, int]] | None:
@@ -307,7 +308,7 @@ def lower_store(g: Emitter, e: Expr) -> str:
     at = offset(g, e, name, role, shape, e.args[2:4])
     form = layouts.affine(g.c.folded[name]) or ("row", 0)
     return (f"cr::frag::stored({g.expr(e.args[4])}, {data}, {at}, {form[1]}, {'true' if form[0] == 'row' else 'false'}, "
-            f"unsigned(cr_t % 32))")  # fmt: skip
+            f"unsigned(cr_blk.lane()))")  # fmt: skip
 
 
 def lower_mma(g: Emitter, e: Expr) -> str:

@@ -145,7 +145,7 @@ public:
 };
 
 template<unsigned THREADS, std::size_t BYTES> struct Team {
-  alignas(16) unsigned char shared[BYTES ? BYTES : 16] = {};
+  alignas(128) unsigned char shared[BYTES ? BYTES : 16] = {};
   std::barrier<> gate{THREADS};
   Warp warps[THREADS / WARP];
 };
@@ -232,7 +232,7 @@ public:
 
 template<unsigned THREADS, std::size_t BYTES, class F> __global__ void __launch_bounds__(THREADS)
 blocks(std::size_t grid, F body) {
-  __shared__ __align__(16) unsigned char memory[BYTES ? BYTES : 16];
+  __shared__ __align__(128) unsigned char memory[BYTES ? BYTES : 16];
   Device context(memory);
   const std::size_t t = threadIdx.x;
   for(std::size_t b = blockIdx.x; b < grid; b += gridDim.x) {  // the same trip count for the whole block

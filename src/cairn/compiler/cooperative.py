@@ -53,6 +53,7 @@ BLOCK, WARP, THREAD = 0, 1, 2
 WIDTHS = ("block", "warp", "thread")
 WARP_SIZE = 32
 SHARED_LIMIT = 48 * 1024  # static shared memory a block may hold on every NVIDIA device since compute 2.0
+ALIGN = 128  # where each shared array starts: tensor-core fragments load from 32 bytes on (compiler/fragments.py)
 SHUFFLES = {"shuffle", "shuffle_xor", "shuffle_down"}
 
 
@@ -337,7 +338,7 @@ def s_shared(c: Checker, s: Stmt):
         fail("E-COOP-SHARED", "A shared array's length is a positive literal or constant.", e)
     width = c.sizeof(element) * size
     offset = c.coop.bytes
-    c.coop.bytes += -(-width // 16) * 16
+    c.coop.bytes += -(-width // ALIGN) * ALIGN  # the next array starts on ALIGN bytes too
     if c.coop.bytes > SHARED_LIMIT:
         fail("E-COOP-SHARED", f"A block's shared arrays hold at most {SHARED_LIMIT} bytes; with {s.name} they hold "
              f"{c.coop.bytes}.", s)  # fmt: skip
