@@ -43,6 +43,7 @@ UNROLL = 4096  # iterations of one loop run one at a time; more are followed as 
 WORK = 6_000_000  # thread steps the rule takes for one region before it answers E-COOP-UNDECIDED
 ALTERNATIVES = 16  # ways a phase may have begun that the rule keeps apart before it merges them
 RANGE = 4096  # elements of a part lent to a call that are recorded one by one
+LANES = 32  # threads of a warp: thread t is lane t % 32 of warp t / 32
 
 
 class Trap:
@@ -128,6 +129,7 @@ class Event:
     node: Any
     time: float
     mask: list[int] | None  # which threads make it: 0 no, 1 yes, 2 perhaps; None all
+    warp: bool = False  # one write by each warp that makes it, in a lane nobody names (a WMMA store)
 
 
 @dataclass
@@ -296,8 +298,12 @@ class Phases:
         return None
 
     def fragment(self, e: Expr, values: list[Any], mask: list[int] | None, now: float):
-        """A fragment load reads every element of its fragment in every thread of the warp; a store writes each
-        element in the one thread whose lane holds it (compiler/fragments.py, `footprint`)."""
+        """A fragment load reads every element of its fragment in every thread of the warp. An mma.sync store
+        writes each element in the one thread whose lane holds it (compiler/fragments.py, `footprint`); a WMMA store,
+        or a store whose fragment is unknown, writes it in a lane of the warp nobody names, so every other access to
+        it in the phase, the same thread's included, is refused."""
+        store = e.val == "mma_store"
+        named = store and e.ref[2][0] != "wmma"
         array = root(e.args[0]).val if root(e.args[0]).tag == "name" else ""
         if array not in self.counts:
             return  # a read-only device view: nothing in the region writes it
@@ -315,16 +321,15 @@ class Phases:
         for k in range(size):
             index = [f[k][0] if isinstance(f, list) else f for f in found]
             holder = next((f[k][1] for f in found if isinstance(f, list)), None)
-            only = (
-                None
-                if holder is None
-                else [(1 if mask is None else mask[t]) * (t % 32 == holder) for t in range(self.T)]
-            )
-            self.record(array, index, holder is not None, e, now, mask if only is None else only)
+            if not named or holder is None or not all(isinstance(f, list) for f in found):
+                self.record(array, index, store, e, now, mask, warp=store)
+                continue
+            only = [(1 if mask is None else mask[t]) * (t % LANES == holder) for t in range(self.T)]
+            self.record(array, index, True, e, now, only)
 
-    def record(self, array: str, index: Any, write: bool, node: Any, time: float, mask: list[int] | None):
+    def record(self, array: str, index: Any, write: bool, node: Any, time: float, mask: list[int] | None, warp=False):
         for alternative in self.open:
-            alternative.append(Event(array, index, write, node, time, mask))
+            alternative.append(Event(array, index, write, node, time, mask, warp))
 
     # Statements ----------------------------------------------------------------------------------------------
 
@@ -528,6 +533,9 @@ class Phases:
 
     # The rule ------------------------------------------------------------------------------------------------
 
+    def whom(self, x: tuple[int, Event]) -> str:
+        return f"a lane of warp {x[0] // LANES} of the block" if x[1].warp else self.who(x[0])
+
     def who(self, t: int) -> str:
         names, extents, parts = self.block.threads, self.block.extents, []
         for n, k in zip(names, extents, strict=True):
@@ -566,7 +574,7 @@ class Phases:
                         cells.setdefault((idx.key, idx.offset), []).append((t, ev))
         for (key, offset), touches in cells.items():
             for writer in (x for x in touches if x[1].write):
-                others = [x for x in touches if x[0] != writer[0]]
+                others = [x for x in touches if not one(x, writer)]
                 if others:
                     element = repr(Poly({**dict(key), (): offset})) if key else str(offset)
                     self.refuse(array, element, writer, next((x for x in others if x[1].write), others[0]))
@@ -596,14 +604,14 @@ class Phases:
         thread beside any access by another is undecided."""
         for writes, others in ((a, b), (b, a)):
             for x in (x for x in writes if x[1].write):
-                y = next((y for y in others if y[0] != x[0]), None)
+                y = next((y for y in others if not one(y, x)), None)
                 if y is not None:
                     self.undecided(array, x, y)
 
     def undecided(self, array: str, x: tuple[int, Event], y: tuple[int, Event]):
         first, second = sorted((x, y), key=lambda z: z[1].time)
         fail("E-COOP-UNDECIDED", f"The checker cannot tell whether {array}[...] at line {first[1].node.line} "
-             f"({self.who(first[0])}) and at line {second[1].node.line} ({self.who(second[0])}) are one element, "
+             f"({self.whom(first)}) and at line {second[1].node.line} ({self.whom(second)}) are one element, "
              "and one of them writes it in the same phase. Index shared arrays by the thread and loop names and "
              "constants, or put a barrier between the two.", second[1].node, array=array)  # fmt: skip
 
@@ -612,19 +620,27 @@ class Phases:
         where = f"line {a[1].node.line}" if a[1].node.line == b[1].node.line else \
             f"lines {a[1].node.line} and {b[1].node.line}"  # fmt: skip
         if x[1].write and y[1].write:
-            fail("E-COOP-CONFLICT", f"{array}[{element}] is written by {self.who(a[0])} and by {self.who(b[0])} in "
+            fail("E-COOP-CONFLICT", f"{array}[{element}] is written by {self.whom(a)} and by {self.whom(b)} in "
                  f"the same phase, at {where}: two threads write one element with no barrier between them, and "
                  "the last to write wins. Give each thread its own element.", b[1].node, array=array,
                  threads=[a[0], b[0]])  # fmt: skip
         if a[1].write:
-            fail("E-COOP-UNORDERED", f"{self.who(b[0])} reads {array}[{element}] at line {b[1].node.line}, which "
-                 f"{self.who(a[0])} writes at line {a[1].node.line} in the same phase: nothing makes the write "
+            fail("E-COOP-UNORDERED", f"{self.whom(b)} reads {array}[{element}] at line {b[1].node.line}, which "
+                 f"{self.whom(a)} writes at line {a[1].node.line} in the same phase: nothing makes the write "
                  f"happen first. Put a barrier {between(a[1].node.line, b[1].node.line)}.", b[1].node, array=array,
                  write=a[1].node.line, read=b[1].node.line)  # fmt: skip
-        fail("E-COOP-REUSE", f"{self.who(b[0])} rewrites {array}[{element}] at line {b[1].node.line} while "
-             f"{self.who(a[0])} may still be reading what it held, at line {a[1].node.line}, in the same phase. "
+        fail("E-COOP-REUSE", f"{self.whom(b)} rewrites {array}[{element}] at line {b[1].node.line} while "
+             f"{self.whom(a)} may still be reading what it held, at line {a[1].node.line}, in the same phase. "
              f"Put a barrier {between(a[1].node.line, b[1].node.line)}, so every thread has read the old value "
              "first.", b[1].node, array=array, read=a[1].node.line, write=b[1].node.line)  # fmt: skip
+
+
+def one(x: tuple[int, Event], y: tuple[int, Event]) -> bool:
+    """Whether two accesses are one thread's, which never conflict: the same thread, or for a write in a lane
+    nobody names, the same write by the same warp."""
+    if x[1].warp or y[1].warp:
+        return x[1] is y[1] and x[0] // LANES == y[0] // LANES
+    return x[0] == y[0]
 
 
 def laid(c: Any, e: Expr, given: tuple[Any, ...]) -> Any:

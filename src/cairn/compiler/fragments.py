@@ -25,7 +25,11 @@ operation names says where each element of it lives (compiler/layouts.py). Each 
   breaks (E-LAYOUT-CONSUMER). A device view it reads element by element, from any layout.
 
 The layout's shape must hold whole fragments. The coordinates are checked against it at run time, as a layout's
-coordinates are, and so is the pointer's alignment where the family needs one: a guard, never undefined behaviour.
+coordinates are, and so are the array's length against every offset the layout places, where the checker cannot
+know it, and the pointer's alignment where the family needs one: a guard, never undefined behaviour. Every lane of a
+warp names one fragment together, so the coordinates, a fill's value, A and B, and a WMMA accumulator are the same
+in every thread of a warp (E-COOP-WARP, from compiler/cooperative.py's `Reach`); an mma.sync accumulator may differ,
+since each output element uses only the accumulator element its own lane holds.
 
 `mma_unordered(acc, a, b)` is `acc + a * b` under the contract of the whole-matrix multiply (tensor.py): every
 product exact in f32, every output its old value plus its K products, each partial sum rounded to f32 in an order
@@ -106,6 +110,19 @@ def warp(c: Checker, node: Any, what: str):
     cooperative.collective(c, node, cooperative.WARP, what, "E-COOP-WARP")
 
 
+def uniform(c: Checker, args: list[Expr], what: str):
+    """Refuse an argument of a warp operation that may differ between the threads of one warp: every lane passes
+    it, and the hardware takes the warp's one fragment from all of them together."""
+    cooperative = import_module(".cooperative", __package__)
+    for a in args:
+        level, why = c.coop.levels.get(id(a), (cooperative.THREAD, None))
+        if level > cooperative.WARP:
+            line = getattr(why, "line", 0) or a.line
+            fail("E-COOP-WARP", f"{what} must be the same in every thread of a warp, and the value at line {line} "
+                 "differs from thread to thread: the lanes of a warp name one fragment together. Compute it from the "
+                 "warp's number (t / 32), the block's names and constants.", a)  # fmt: skip
+
+
 def check_fill(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
     """`WmmaAcc[f32, 16, 16, 16](0.0)`: an accumulator with every element one f32 value."""
     ty = c.resolve(Type(e.val, args=targs), e) if targs else expected
@@ -118,6 +135,7 @@ def check_fill(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Ty
     if len(args) != 1:
         fail("E-ARITY", f"{e.val} takes the f32 value every element starts at.", e)
     c.expect(c.expr(args[0], Type("f32")), Type("f32"), args[0])
+    uniform(c, args, f"The value {e.val}(...) fills its accumulator with")
     e.ref = ("builtin", ty)
     return ty
 
@@ -187,8 +205,9 @@ def consumer(
 
 def footprint(c: Checker, e: Expr, i: int, j: int) -> list[tuple[int, int | None]]:
     """The elements a fragment load or store at fragment coordinates (i, j) touches, each with the one lane that
-    writes it (a store: its holder on the device) or None (a load: every lane of the warp reads every element on the
-    host). The phase rule records them per thread (compiler/phases.py)."""
+    writes it (a store: its holder under mma.sync, which the phase rule uses only for that family) or None (a load:
+    every lane of the warp reads every element on the host). The phase rule records them per thread
+    (compiler/phases.py)."""
     _, _, (_, role, _, shape, name, _) = e.ref
     v = layouts.value(c, name)
     assert isinstance(v, layouts.Layout)  # a fragment moves only through a storage layout (`tile`)
@@ -218,6 +237,7 @@ def check_load(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Ty
         )
     e.ref = ("builtin", ty, tile(c, e, args[0], args[1], args[2:], ty, False))
     warp(c, e, "mma_load")
+    uniform(c, args[2:], "mma_load's fragment coordinate")
     return ty
 
 
@@ -231,6 +251,9 @@ def check_store(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: T
         fail("E-TYPE-MISMATCH", f"mma_store writes an accumulator; {ty.display()} is not one.", args[4])
     e.ref = ("builtin", ty, tile(c, e, args[0], args[1], args[2:4], ty, True))
     warp(c, e, "mma_store")
+    uniform(c, args[2:4], "mma_store's fragment coordinate")
+    if found[0] == "wmma":  # which lane holds which element is unspecified, so every lane holds the same matrix
+        uniform(c, args[4:], "A WMMA accumulator")
     return VOID
 
 
@@ -286,6 +309,9 @@ def check_mma(c: Checker, e: Expr, args: list[Expr]) -> Type:
     if a[2] != b[2]:
         fail("E-MMA", f"A and B hold one format; this A holds {a[2]} and this B {b[2]}.", e)
     warp(c, e, "mma_unordered")
+    uniform(c, args[1:], "An A or B fragment")
+    if acc[0] == "wmma":
+        uniform(c, args[:1], "A WMMA accumulator")
     contract(c, e, "mma", a[2], "f32", rounding="unordered-f32", products="exact-in-f32", bound=BOUND,
              k=str(a[3][2]))  # fmt: skip
     e.ref = ("builtin", types[0], "fragment")
@@ -310,6 +336,13 @@ def need(g: Emitter, ty: Type):
         g.feature("bf16")
 
 
+def held(g: Emitter, array: Expr, name: str) -> str:
+    """The tile's pointer, after a guard that its array holds every offset the layout places: a length the checker
+    does not know is checked where the operation runs, on the host and in a device lane alike."""
+    data, count = g.pointer(array)
+    return f"cr::layout::holding({data}, {count}, {g.c.folded[name].cosize})"
+
+
 def lower_fill(g: Emitter, e: Expr) -> str:
     need(g, e.ty)
     return f"cr::frag::filled<{spelled(g, e.ty)}>({g.expr(e.args[0])})"
@@ -331,7 +364,7 @@ def offset(g: Emitter, e: Expr, name: str, role: str, shape: tuple[int, int, int
 def lower_load(g: Emitter, e: Expr) -> str:
     _, ty, (_, role, _, shape, name, shared) = e.ref
     need(g, ty)
-    data, _ = g.pointer(e.args[0])
+    data = held(g, e.args[0], name)
     at = offset(g, e, name, role, shape, e.args[2:])
     form = layouts.affine(g.c.folded[name]) or ("row", 0)
     return (f"cr::frag::loaded<{spelled(g, ty)}>({data}, {at}, {form[1]}, {'true' if form[0] == 'row' else 'false'}, "
@@ -341,7 +374,7 @@ def lower_load(g: Emitter, e: Expr) -> str:
 def lower_store(g: Emitter, e: Expr) -> str:
     _, ty, (_, role, _, shape, name, _) = e.ref
     need(g, ty)
-    data, _ = g.pointer(e.args[0])
+    data = held(g, e.args[0], name)
     at = offset(g, e, name, role, shape, e.args[2:4])
     form = layouts.affine(g.c.folded[name]) or ("row", 0)
     return (f"cr::frag::stored({g.expr(e.args[4])}, {data}, {at}, {form[1]}, {'true' if form[0] == 'row' else 'false'}, "

@@ -16,7 +16,10 @@ kernel's author would otherwise compute by hand:
 - whether a consumer that needs an affine layout (`affine`), or rows that move 16 bytes at a time (`rows16`), can
   read it.
 
-Every answer comes from enumerating the layout, so it is exact at every size MAX_ELEMENTS admits.
+Every answer comes from enumerating the layout, so it is exact at every size MAX_ELEMENTS admits. Every offset a
+storage layout places is below 2^63 - 1, the most elements an array holds, and a swizzle reads and flips bits below
+bit 63 (B + M + S at most 63), so the lowered arithmetic in 64-bit unsigned integers never wraps or shifts past its
+width, and gives what the enumeration gives (E-LAYOUT).
 `proofs/Cairn/Layout.lean` states the coverage rule and proves what a spread that passes it promises.
 """
 
@@ -32,6 +35,7 @@ if TYPE_CHECKING:
     from .checking import Checker
 
 MAX_ELEMENTS = 1 << 18  # the most elements, or participant-value pairs, one layout may enumerate
+LARGEST = 2**63 - 1  # the most elements an array holds (compiler/checking.py), so every offset a layout places is below
 WIDEST = 16  # bytes one thread moves in a single access
 BANKS, WORD = 32, 4  # shared memory: 32 banks of 4-byte words, served 128 bytes a phase
 Mode = tuple[int, int]  # (extent, stride): one digit of a logical dimension, fastest first
@@ -310,11 +314,26 @@ def evaluate(c: Checker, e: Expr, pending: tuple[str, ...]) -> Value:
     given = e.args[int(inner is not None) :]
     numbers = [natural(c, a, least) for a, least in zip(given, LEAST.get(e.val, (1,) * len(given)), strict=True)]
     made = build(e.val, inner, numbers, e)
+    bounded(made, e)
     enumerated = made.size if isinstance(made, Layout) else max(made.count * made.each, made.tile.size)
     if enumerated > MAX_ELEMENTS:
         fail("E-LAYOUT", f"The checker evaluates a layout of at most {MAX_ELEMENTS} elements; this one has "
              f"{enumerated}.", e)  # fmt: skip
     return made
+
+
+def bounded(v: Value, node: Any):
+    """Refuse a layout whose arithmetic would not fit in 64 bits: an offset no array can reach, or a swizzle that
+    reads or flips bit 63 or past it. A spread's own sums stay below MAX_ELEMENTS squared."""
+    tile = v if isinstance(v, Layout) else v.tile
+    bits, base, shift = tile.swizzle
+    if bits and bits + base + shift > 63:
+        fail("E-LAYOUT", f"swizzle(L, {bits}, {base}, {shift}) reads bits {base + shift} to {base + shift + bits - 1} "
+             "of an offset, and an offset below 2^63 has bits 0 to 62: B + M + S is at most 63.", node)  # fmt: skip
+    reach = sum((extent - 1) * stride for modes in tile.dims for extent, stride in modes)
+    if reach >= LARGEST:
+        fail("E-LAYOUT", f"This layout places an element at offset {reach}, and an array holds at most {LARGEST} "
+             "elements.", node)  # fmt: skip
 
 
 def storage(inner: Value | None, what: str, node: Any) -> Layout:

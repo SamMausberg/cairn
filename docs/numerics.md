@@ -79,7 +79,9 @@ A fragment is one warp's share of a tensor-core instruction: an operand A, an op
 
 Operands hold `f16` or `bf16`, and accumulators `f32` (`E-FRAGMENT`). A is `M x K`, B is `K x N` and the accumulator `M x N`. `WmmaAcc[f32, 16, 16, 16](0.0)` fills an accumulator, `mma_load[F](tile, L, i, j)` reads fragment `(i, j)` of a tile laid out by `L`, counting whole fragments, and `mma_store(tile, L, i, j, acc)` writes one back. `acc = mma_unordered(acc, a, b)` adds `a * b` under the contract above: each output's `K` products and its old value, summed in f32 in an order the hardware picks.
 
-Every fragment operation is a warp operation. It is legal only inside a cooperative region ([concurrency.md](concurrency.md)), where each warp reaches it whole (`E-FRAGMENT` outside one, `E-COOP-WARP` under a condition that differs within a warp). A fragment is stored into a shared array of the block and loaded from one or from a read-only device view, and the phase rule counts a load as reads of its fragment's elements and a store as each lane's writes, so a missing barrier around one is refused as it is around any other access.
+Every fragment operation is a warp operation. It is legal only inside a cooperative region ([concurrency.md](concurrency.md)), where each warp reaches it whole (`E-FRAGMENT` outside one, `E-COOP-WARP` under a condition that differs within a warp). The lanes of a warp name one fragment together, so its coordinates, a fill's value, A and B, and a WMMA accumulator are the same in every thread of the warp: `t / 32` is, and `t % 2` is `E-COOP-WARP`. An `mma.sync` accumulator may differ from lane to lane, since each lane holds its own elements.
+
+A fragment is stored into a shared array of the block and loaded from one or from a read-only device view, and a view it reads places the region as an index does. The array must hold every offset the layout places: a literal length is checked when the program is, and any other where the operation runs, trapping on the host and in a device lane alike. The phase rule counts a load as reads of its fragment's elements. An `mma.sync` store is each lane's writes of the elements the PTX ISA gives it; a WMMA store names no lane, so it is a write by the warp, and any access to what it wrote before a barrier, the storing thread's own included, is refused as it is around any other access.
 
 ```cairn
 layout TILE = rows(16, 16);
@@ -93,7 +95,7 @@ fn tile(out:rw<f32>[256]@device, c:ro<f32>[256]@device, a:ro<f16>[256]@device, b
     let y = mma_load[WmmaB[f16, 16, 16, 16]](b, TILE, 0, 0);
     let mut acc = mma_load[WmmaAcc[f32, 16, 16, 16]](c, TILE, 0, 0);
     acc = mma_unordered(acc, x, y);             // acc + x * y, its sums in the hardware's order
-    mma_store(sc, TILE, 0, 0, acc);             // each lane writes the elements it holds
+    mma_store(sc, TILE, 0, 0, acc);             // the warp's write: a barrier before anyone reads it
     barrier;
     for i in 0..8 { out[t + 32 * i] = sc[t + 32 * i]; }
   }

@@ -9,6 +9,7 @@ inspected, never run: that the tensor cores keep the contract is `make gpu`'s qu
 
 import re
 import shutil
+import signal
 import subprocess
 from pathlib import Path
 
@@ -189,3 +190,162 @@ def test_elementwise_access_compiles_for_sm_120_to_the_registers_it_names(tmp_pa
 )  # fmt: skip
 def test_elementwise_access_is_refused_where_it_is_not_defined(code, source, said):
     assert said in refused(code, source)["message"]
+
+
+# A tile whose length the checker cannot know: its guard runs where the load does, before any element is read. On
+# the host, unified memory is host memory, and a C++ caller passes a shorter array than the layout places.
+SHORT = """layout TILE = rows(16, 16);
+fn tile(n:usize, out:rw<f32>[256]@unified, a:ro<f16>[n]@unified, b:ro<f16>[256]@unified) {
+  blocks g in 1 threads t in 32 {
+    shared sc:f32[256] = zeroed;
+    let x = mma_load[WmmaA[f16, 16, 16, 16]](a, TILE, 0, 0);
+    let y = mma_load[WmmaB[f16, 16, 16, 16]](b, TILE, 0, 0);
+    let acc = mma_unordered(WmmaAcc[f32, 16, 16, 16](0.0), x, y);
+    mma_store(sc, TILE, 0, 0, acc);
+    barrier;
+    for i in 0..8 { out[t + 32 * i] = sc[t + 32 * i]; }
+  }
+}
+"""
+CALLER = """
+int main() {
+  float* out = new float[256]();
+  cr::f16* a = new cr::f16[N]();
+  cr::f16* b = new cr::f16[256]();
+  cf_tile(N, out, a, b);
+  delete[] out;
+  delete[] a;
+  delete[] b;
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["g++", "clang++"])
+@pytest.mark.parametrize("n", [16, 255, 256])
+def test_a_tile_shorter_than_its_layout_traps_before_the_load_reads_it(tmp_path, cxx, n):
+    cpp = compile_source(SHORT)[0] + CALLER.replace("N", str(n))
+    done = run(tmp_path, cpp, *sanitized(cxx), "-pthread", cxx=cxx, entry=None)
+    want = 0 if n == 256 else -signal.SIGABRT
+    assert done.returncode == want and "Sanitizer" not in done.stderr, (n, done.returncode, done.stderr[-2000:])
+
+
+def test_the_tile_s_guard_compiles_into_the_device_region(tmp_path):
+    """The same guard in a device lane, compiled for sm_120 and never run."""
+    if not shutil.which("nvcc"):
+        pytest.skip("needs nvcc")
+    device_build(tmp_path, compile_source(SHORT.replace("@unified", "@device"))[0], timeout=900)
+
+
+def warped(body: str, head: str = "") -> str:
+    """A cooperative region of one warp with a shared A tile, a shared B tile and a shared accumulator tile."""
+    return f"""layout T = rows(32, 16);
+layout A = rows(16, 16);
+layout T8 = rows(32, 8);
+{head}fn k(out:rw<f32>[512], x:ro<f16>[512]) {{
+  blocks g in 1 threads t in 32 {{
+    shared sa:f16[512] = zeroed;
+    shared sc:f32[512] = zeroed;
+    for i in 0..16 {{ sa[t + 32 * i] = x[t + 32 * i]; }}
+    barrier;
+{body}
+    barrier;
+    for i in 0..16 {{ out[t + 32 * i] = sc[t + 32 * i]; }}
+  }}
+}}
+"""
+
+
+WMMA_A = "mma_load[WmmaA[f16, 16, 16, 16]]"
+WMMA_B = "mma_load[WmmaB[f16, 16, 16, 16]]"
+WMMA_ACC = "WmmaAcc[f32, 16, 16, 16]"
+
+
+@pytest.mark.parametrize(
+    ("body", "said"),
+    [
+        (f"let a = {WMMA_A}(sa, T, t % 2, 0);", "mma_load's fragment coordinate"),
+        (f"let acc = {WMMA_ACC}(1.0);\n    mma_store(sc, T, t % 2, 0, acc);", "mma_store's fragment coordinate"),
+        (f"let acc = {WMMA_ACC}(f32(t));\n    mma_store(sc, A, 0, 0, acc);", "fills its accumulator with"),
+        ("let a = mma_load[MmaA[f16, 16, 8, 16]](sa, T, t % 2, 0);", "mma_load's fragment coordinate"),
+        (f"let mut i:usize = 0;\n    if t == 3 {{ i = 1; }}\n    let a = {WMMA_A}(sa, T, i, 0);", "line 11"),
+        (f"let mut a = {WMMA_A}(sa, T, 0, 0);\n    let other = {WMMA_A}(sa, T, 1, 0);\n    if t < 16 {{ a = other; }}\n"
+         f"    let acc = mma_unordered({WMMA_ACC}(0.0), a, {WMMA_B}(sa, A, 0, 0));", "An A or B fragment"),
+        (f"let mut acc = {WMMA_ACC}(0.0);\n    let one = {WMMA_ACC}(1.0);\n    if t == 0 {{ acc = one; }}\n"
+         "    mma_store(sc, A, 0, 0, acc);", "A WMMA accumulator"),
+        (f"let a = {WMMA_A}(sa, T, 0, 0);\n    let b = {WMMA_B}(sa, A, 0, 0);\n    let mut acc = {WMMA_ACC}(0.0);\n"
+         f"    let one = {WMMA_ACC}(1.0);\n    if t == 0 {{ acc = one; }}\n    acc = mma_unordered(acc, a, b);",
+         "A WMMA accumulator"),
+    ],
+)  # fmt: skip
+def test_what_names_a_fragment_is_the_same_in_every_thread_of_a_warp(body, said):
+    """Every lane passes the coordinates, the fill value and the fragments, and the hardware takes the warp's one
+    fragment from all of them: a value that differs within a warp is undefined on the device (E-COOP-WARP)."""
+    assert said in refused("E-COOP-WARP", warped(body))["message"]
+
+
+def test_the_warp_s_number_names_its_fragment_and_an_mma_sync_accumulator_may_differ_by_lane():
+    """`t / 32` is the same in a warp; an mma.sync accumulator's lanes hold their own elements, which mma_set
+    changes one lane at a time, and every output of the multiply reads only its own lane's accumulator element."""
+    compile_source(warped(f"let a = {WMMA_A}(sa, T, t / 32, 0);\n    let acc = mma_unordered({WMMA_ACC}(0.0), a, "
+                          f"{WMMA_B}(sa, A, 0, 0));\n    mma_store(sc, A, 0, 0, acc);"))  # fmt: skip
+    compile_source(warped("let a = mma_load[MmaA[f16, 16, 8, 16]](sa, T, 0, 0);\n"
+                          "    let b = mma_load[MmaB[f16, 16, 8, 16]](sa, T8, 0, 0);\n"
+                          "    let mut acc = MmaAcc[f32, 16, 8, 16](0.0);\n"
+                          "    acc = mma_set(acc, 0, f32(t));\n"
+                          "    acc = mma_unordered(acc, a, b);\n"
+                          "    mma_store(sc, T8, 0, 0, acc);"))  # fmt: skip
+
+
+LOADED = """layout TILE = rows(16, 16);
+fn tile(out:rw<f32>[256]@PLACE, a:ro<f16>[256]@device, b:ro<f16>[256]@device) {
+  blocks g in 1 threads t in 32 {
+    shared sc:f32[256] = zeroed;
+    let x = mma_load[WmmaA[f16, 16, 16, 16]](a, TILE, 0, 0);
+    let y = mma_load[WmmaB[f16, 16, 16, 16]](b, TILE, 0, 0);
+    mma_store(sc, TILE, 0, 0, mma_unordered(WmmaAcc[f32, 16, 16, 16](0.0), x, y));
+    barrier;
+    for i in 0..8 { out[t + 32 * i] = sc[t + 32 * i]; }
+  }
+}
+"""
+
+
+def test_a_region_that_loads_a_fragment_from_the_device_runs_there():
+    """A fragment's tile places the region as an index does: from a @device view, on the device."""
+    receipt = compile_source(LOADED.replace("PLACE", "unified"))[1]["functions"]["tile"]
+    assert "par:device" in receipt["effects"] and "par:host" not in receipt["effects"]
+    refused("E-PLACEMENT", LOADED.replace("@PLACE", ""))
+
+
+WMMA_STORE = """layout TILE = rows(16, 16);
+fn tile(out:rw<f32>[32]@device, c:ro<f32>[256]@device) {
+  blocks g in 1 threads t in 32 {
+    shared sc:f32[256] = zeroed;
+    let acc = mma_load[ACC](c, TILE, 0, 0);
+    mma_store(sc, TILE, I, 0, acc);
+BETWEEN
+    out[t] = sc[(t / 4) * 16 + 2 * (t % 4)];
+  }
+}
+"""
+
+
+@pytest.mark.parametrize(
+    ("acc", "i", "between", "code"),
+    [
+        ("WmmaAcc[f32, 16, 16, 16]", "0", "", "E-COOP-UNORDERED"),  # its own lane's element: WMMA names no lane
+        ("WmmaAcc[f32, 16, 16, 16]", "0", "    mma_store(sc, TILE, 0, 0, acc);", "E-COOP-CONFLICT"),
+        ("MmaAcc[f32, 16, 8, 16]", "g", "", "E-COOP-UNDECIDED"),  # an unknown fragment is still a write
+        ("WmmaAcc[f32, 16, 16, 16]", "0", "    barrier;", None),
+        ("MmaAcc[f32, 16, 8, 16]", "0", "", None),  # the PTX ISA names the lane: its own element, no barrier
+    ],
+)  # fmt: skip
+def test_the_phase_rule_takes_a_wmma_store_as_the_warp_s_with_no_lane_named(acc, i, between, code):
+    source = WMMA_STORE.replace("ACC", acc).replace("I,", f"{i},").replace("BETWEEN\n", between + "\n" * bool(between))
+    if "16, 8" in acc:
+        source = source.replace("rows(16, 16)", "rows(16, 8)").replace("[256]", "[128]").replace("* 16 +", "* 8 +")
+    if code is None:
+        compile_source(source)
+    else:
+        assert "a lane of warp 0" in refused(code, source)["message"]

@@ -182,6 +182,10 @@ def test_a_consumer_that_takes_a_pointer_and_a_leading_dimension():
         ("E-LAYOUT", "layout T = spread(spread(rows(8, 8), 2, 2, 4, 4), 1, 1, 1, 1);", "storage layout"),
         ("E-LAYOUT", "layout T = rows(4, 4);\nfn f() -> usize = T.values();", "counts a spread's"),
         ("E-LAYOUT", "fn f(x:usize) -> usize { return x; }\nlayout T = f(4);", "one of rows"),
+        ("E-LAYOUT", "layout T = strided(3, 1, 9223372036854775808, 1);", "at most 9223372036854775807"),
+        ("E-LAYOUT", "layout T = pad(strided(2, 1, 18446744073709551615, 1), 1);", "offset 18446744073709551615"),
+        ("E-LAYOUT", "layout T = swizzle(rows(32, 32), 3, 4, 64);", "B + M + S is at most 63"),
+        ("E-LAYOUT", "layout T = swizzle(rows(2, 2), 64, 0, 1);", "B + M + S is at most 63"),
         ("E-ARITY", "layout T = rows(4, 4);\nfn f(r:usize) -> usize = T.at(r);", "2 coordinates"),
         ("E-ARITY", "layout T = rows(4);", "takes 2"),
         ("E-CALLEE", "layout T = rows(4, 4);\nfn f(r:usize) -> usize = T.find(r, r);", "none of them"),
@@ -379,3 +383,10 @@ def test_a_coordinate_outside_its_layout_traps_in_a_device_lane(tmp_path):
     with on_device():
         done = contract(tmp_path, cpp, "g++", cuda=True)
         assert done.returncode == -signal.SIGABRT, (done.returncode, done.stderr[-2000:])
+
+
+def test_the_widest_layout_an_array_can_hold_is_accepted_and_folds_to_its_cosize():
+    """Offsets up to 2^63 - 2 and a swizzle up to bit 62 fit the lowered 64-bit arithmetic, which the checker's
+    enumeration then equals: the refusals above are where it would wrap or shift past its width."""
+    compile_source("layout T = strided(2, 1, 9223372036854775806, 1);\nconst C:usize = T.cosize();")
+    compile_source("layout T = swizzle(rows(32, 32), 3, 4, 56);\nfn f(r:usize, c:usize) -> usize = T.at(r, c);")

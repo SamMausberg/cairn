@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import execution, footprints, phases, pipelines
+from . import execution, footprints, fragments, phases, pipelines
 from .constants import constant
 from .effects import DEVICE_SAFE, LANE_SAFE
 from .footprints import natural
@@ -125,6 +125,8 @@ class Reach:
     def calls(self, e: Expr, at: tuple[int, Any]):
         if e.tag == "call":
             self.note(e, at)
+            for a in e.args:  # how widely each argument is shared, for a warp operation that takes one per warp
+                self.block.levels[id(a)] = widest(self.block.levels.get(id(a), (BLOCK, None)), self.value(a))
         for a in e.args if e.tag != "lambda" else []:
             self.calls(a, at)
 
@@ -312,10 +314,12 @@ def s_blocks(c: Checker, s: Stmt):
 
 
 def placements(c: Checker, ss: list[Stmt]) -> set[str]:
-    """Where the views a body indexes live."""
+    """Where the views a body indexes, or moves a fragment through, live."""
 
     def places(e: Expr) -> set[str]:
         mine = {c.env[root(e).val].ty.place} if e.tag == "index" and root(e).val in c.env else set()
+        if e.tag == "call" and e.val in fragments.OPERATIONS and e.args and root(e.args[0]).val in c.env:
+            mine.add(c.env[root(e.args[0]).val].ty.place)  # a fragment's tile is read where the region runs
         return mine.union(*(places(a) for a in e.args))
 
     found: set[str] = set()

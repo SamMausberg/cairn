@@ -60,6 +60,7 @@ class Block:
     shared: dict[str, tuple[Type, int, int]] = field(default_factory=dict)  # array -> (element, count, byte offset)
     pipelines: dict[str, Any] = field(default_factory=dict)  # name -> its stages (compiler/pipelines.py)
     reach: dict[int, tuple[int, Any]] = field(default_factory=dict)  # id(node) -> (who reaches it together, why)
+    levels: dict[int, tuple[int, Any]] = field(default_factory=dict)  # id(call argument) -> (how widely shared, why)
     bytes: int = 0  # shared memory each block holds: its arrays and stages, each on 16 bytes
 
     @property
