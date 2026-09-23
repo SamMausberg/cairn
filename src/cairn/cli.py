@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes.util
+import functools
 import json
 import os
 import platform
@@ -546,17 +547,12 @@ def main(argv: list[str] | None = None) -> int:
             report(result, brief=True)
             return 0 if result["status"] == "native-built" else 2
         # Execution is explicit. Process timeout is not an OS security sandbox.
-        from .verify.testing import resource
+        from .verify.testing import limited
 
         # A freestanding image is not a host process: it runs in the emulator its target names.
         machine = emulator(result["target"], result["artifact"])
-
-        def limits():
-            resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-            resource.setrlimit(resource.RLIMIT_CPU, (a.timeout, a.timeout))
-            if "cuda" not in result["frontend"]["requires"]:  # Unified addressing reserves far more than it uses.
-                memory = a.memory_mib * 1024 * 1024
-                resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+        cuda = "cuda" in result["frontend"]["requires"]  # Unified addressing reserves far more than it uses.
+        limits = functools.partial(limited, a.timeout, None if cuda else a.memory_mib)
 
         if machine and a.arguments:
             raise ProjectError("A freestanding image is started by its board, with no arguments.")

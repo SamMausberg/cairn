@@ -30,18 +30,9 @@ from ..projects.toolchain import command as native_command
 from ..projects.toolchain import flags, link_flags, linked
 from .scalar_values import bounds
 
-CTYPES: dict[str, Any] = {
-    "bool": C.c_bool,
-    "u8": C.c_uint8,
-    "u16": C.c_uint16,
-    "u32": C.c_uint32,
-    "u64": C.c_uint64,
-    "usize": C.c_size_t,
-    "i32": C.c_int32,
-    "i64": C.c_int64,
-    "f32": C.c_float,
-    "f64": C.c_double,
-}
+CTYPES: dict[str, Any] = {"bool": C.c_bool, "u8": C.c_uint8, "u16": C.c_uint16, "u32": C.c_uint32, "u64": C.c_uint64,
+                          "usize": C.c_size_t, "i32": C.c_int32, "i64": C.c_int64, "f32": C.c_float,
+                          "f64": C.c_double}  # fmt: skip
 LIMITS = {"bool": (0, 1), **{n: bounds(n) for n in ("u8", "u16", "u32", "u64", "usize", "i32", "i64")}}
 FLAGS = flags()
 
@@ -122,10 +113,16 @@ def diagnostic_value(value):
     return value
 
 
-def child(library, source, contract):
+def limited(seconds: int, memory_mib: int | None) -> None:
+    """A native child's limits: no core file, `seconds` of CPU, and `memory_mib` of address space when given."""
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    resource.setrlimit(resource.RLIMIT_CPU, (3, 3))
-    resource.setrlimit(resource.RLIMIT_AS, (768 * 1024 * 1024, 768 * 1024 * 1024))
+    resource.setrlimit(resource.RLIMIT_CPU, (seconds, seconds))
+    if memory_mib:
+        resource.setrlimit(resource.RLIMIT_AS, (memory_mib << 20, memory_mib << 20))
+
+
+def child(library, source, contract):
+    limited(3, 768)
     f = validate_contract(source, contract)
     lib = C.CDLL(str(library))
     native = getattr(lib, "cf_" + mangle(f.name))  # `m.f` is the C symbol cf_m_f
@@ -191,32 +188,18 @@ def evaluate(source: str, contract: dict, cxx="clang++", libraries: tuple[str, .
                 return {**common, "status": "native-build-failed", "build": build, "stderr": cp.stderr[:8000]}
             files = (str(t / name) for name in ("libtask.so", "source.cairn", "contract.json"))
             cmd = [sys.executable, "-m", "cairn.verify.testing", "--child", *files]
-            cp = subprocess.run(
-                cmd,
-                text=True,
-                capture_output=True,
-                timeout=8,
-                env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[2])},
-            )
+            here = str(Path(__file__).resolve().parents[2])
+            cp = subprocess.run(cmd, text=True, capture_output=True, timeout=8, env={**os.environ, "PYTHONPATH": here})
             lines = []
             for line in cp.stdout.splitlines():
                 with contextlib.suppress(json.JSONDecodeError):  # Stray native output is not a verdict.
                     lines.append(json.loads(line))
             verdict = next((x for x in reversed(lines) if "status" in x), None)
             if verdict is None or (cp.returncode != 0 and verdict.get("status") == "passed-finite-tests"):
-                verdict = {
-                    "status": "native-trap-or-crash",
-                    "exit_code": cp.returncode,
-                    "last_case_started": lines[-1].get("index") if lines else None,
-                    "stderr": cp.stderr[:2000],
-                }
-            return {
-                **common,
-                **verdict,
-                "build": build,
-                "execution_exit_code": cp.returncode,
-                "elapsed_seconds": time.monotonic() - start,
-            }
+                verdict = {"status": "native-trap-or-crash", "exit_code": cp.returncode,
+                           "last_case_started": lines[-1].get("index") if lines else None, "stderr": cp.stderr[:2000]}  # fmt: skip
+            return {**common, **verdict, "build": build, "execution_exit_code": cp.returncode,
+                    "elapsed_seconds": time.monotonic() - start}  # fmt: skip
         except subprocess.TimeoutExpired:
             message = "The bounded build or execution did not complete."
             return {**common, "status": "unknown", "stage": "timeout", "message": message}

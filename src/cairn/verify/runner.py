@@ -7,8 +7,8 @@ applies, which are protections against runaway programs and not a sandbox.
 
 from __future__ import annotations
 
+import functools
 import os
-import resource
 import signal
 import subprocess
 import time
@@ -19,6 +19,7 @@ from ..compiler.syntax import Parser
 from ..compiler.tree import Function, fail
 from ..projects.build import build
 from ..projects.project import Project
+from .testing import limited
 
 
 def label(f: Function) -> str:
@@ -45,17 +46,8 @@ def reason(done: subprocess.CompletedProcess) -> str:
     return f"exited with status {done.returncode}"
 
 
-def run_tests(
-    project: Project,
-    *,
-    cxx: str = "clang++",
-    chosen: str = "",
-    exact: bool = False,
-    jobs: int = 0,
-    timeout: int = 60,
-    memory_mib: int = 1024,
-    output: Path | None = None,
-) -> dict:
+def run_tests(project: Project, *, cxx: str = "clang++", chosen: str = "", exact: bool = False, jobs: int = 0,
+              timeout: int = 60, memory_mib: int = 1024, output: Path | None = None) -> dict:  # fmt: skip
     """Build every selected test into one executable under `output` (the project's build/ by default), then run each
     in its own process, `jobs` at a time."""
     if project.target != "hosted":
@@ -70,14 +62,8 @@ def run_tests(
     record["build"] = {k: built.get(k) for k in ("status", "artifact", "directory", "exit_code", "stderr", "message")}
     if built["status"] != "native-built":
         return {**record, "status": built["status"]}
-    cuda = "cuda" in built["frontend"]["requires"]
-
-    def limits():
-        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-        resource.setrlimit(resource.RLIMIT_CPU, (timeout, timeout))
-        if not cuda:  # Unified addressing reserves far more than it uses.
-            memory = memory_mib * 1024 * 1024
-            resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+    cuda = "cuda" in built["frontend"]["requires"]  # Unified addressing reserves far more than it uses.
+    limits = functools.partial(limited, timeout, None if cuda else memory_mib)
 
     def one(index: int) -> dict:
         started, (file, line) = time.monotonic(), project.site(tests[index].line)
