@@ -1,6 +1,6 @@
 # Guide
 
-From a fresh checkout to a project that builds, runs and refuses a wrong edit, then twelve complete programs, one per idea. At a terminal every command answers in lines written for a person. Piped, or with `--format json`, it prints a JSON record, the same one a script or an agent reads, and this guide shows both.
+From a fresh checkout to a project that builds, runs, tests itself and refuses a wrong edit, then twelve complete programs, one per idea. At a terminal every command answers in lines written for a person. Piped, or with `--format json`, it prints a JSON record, the same one a script or an agent reads, and this guide shows both.
 
 ## Install
 
@@ -169,7 +169,11 @@ fn main() -> i32 {
 ```
 
 ```text
-E-MOVED: data was moved.
+error[E-MOVED]: data was moved.
+  --> src/main.cairn:5:22
+  |
+5 |   return i32(average(data[0], 1));
+  |                      ^^^^
 ```
 
 Every diagnostic code has a paragraph in the language reference with a program that is refused with it.
@@ -363,7 +367,7 @@ fn main() -> i32 {
 
 ### 9. Lanes are race free by construction
 
-A lane may touch what it writes only at `[i]`. `reduce` is how lanes combine. The checked `+` is offered where no order of evaluation can change whether it traps, and a lane may call a closure that writes nothing it captured.
+A lane may touch what it writes only at `[i]`. `reduce` and `scan` are how lanes combine: one value, or every prefix. The checked `+` is offered where no order of evaluation can change whether it traps, and a lane may call a closure that writes nothing it captured.
 
 ```cairn
 fn map(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) { parallel i in n { out[i] = f(u64(i)); } }
@@ -372,10 +376,13 @@ fn main() -> i32 {
   let n:usize = 10000;
   let k:u64 = 3;
   buffer squares:u64[n] = zeroed;
+  buffer upto:u64[n] = zeroed;
   map(n, squares, |x:u64| -> u64 { return x * x * k; });
   let total = reduce + for i in n yield squares[i];
   let largest = reduce max for i in n yield squares[i];
+  let whole = scan + upto parallel i in n yield squares[i];      // every prefix, in two passes over the lanes
   if total != 999850005000 || largest != 299940003 { return 1; }
+  if whole != total || upto[2] != 0 + 3 + 12 || upto[n - 1] != total { return 2; }
   return 0;
 }
 ```
@@ -482,4 +489,4 @@ The device half of the language (placement types, `kernel fn`, device `reduce` a
 
 ## Where to go next
 
-[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md) and [concurrency.md](concurrency.md) are the reference: every rule with a program that is accepted and one that is refused. [library.md](library.md) is the standard library, [examples.md](examples.md) has real programs from a storage engine to a bare-metal image, and [verification.md](verification.md) says which claims are proved, which are SMT-checked and which are only tested.
+[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md), [concurrency.md](concurrency.md) and [numerics.md](numerics.md) are the reference: every rule with a program that is accepted and one that is refused. [library.md](library.md) is the standard library, [tools.md](tools.md) every command and the editors, [examples.md](examples.md) real programs from a storage engine to a bare-metal image, [agents.md](agents.md) the edit protocol an AI agent works through, and [verification.md](verification.md) which claims are proved, which are SMT-checked and which are only tested.
