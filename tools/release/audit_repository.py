@@ -20,11 +20,25 @@ RULES = {
 BAD_NAMES = {".env", ".netrc", ".npmrc", ".pypirc", "credentials.json", "id_rsa", "id_ed25519", "hosts.yml"}
 BAD_SUFFIXES = {".key", ".pem", ".p12", ".pfx", ".so", ".o", ".a", ".dll", ".exe", ".zip", ".whl", ".bundle"}
 PNG = b"\x89PNG\r\n\x1a\n"
+LIMIT, RECORD_LIMIT = 2_000_000, 4_000_000  # bytes of one file; a text record under evidence/ may reach the second
+
+
+def allowance(name: str) -> str:
+    """What a path may hold beyond the rules for every file: a demo's frame, or a larger text record."""
+    if name.startswith("demos/") and name.endswith(".png"):
+        return "picture"
+    return "record" if name.startswith("evidence/") else ""
 
 
 def picture(name: str, data: bytes) -> bool:
     """A frame a demo's README shows: a PNG under demos/, which the demo's test draws again and compares."""
-    return name.startswith("demos/") and name.endswith(".png") and data.startswith(PNG) and len(data) < 200_000
+    return allowance(name) == "picture" and data.startswith(PNG) and len(data) < 200_000
+
+
+def too_large(name: str, data: bytes) -> bool:
+    """Past two megabytes, or past four for a text record under evidence/; a binary never gets the larger limit."""
+    record = allowance(name) == "record" and b"\0" not in data
+    return len(data) > (RECORD_LIMIT if record else LIMIT)
 
 
 def audit(root: Path) -> dict:
@@ -34,7 +48,9 @@ def audit(root: Path) -> dict:
     commits = git("rev-list", "--all").decode().splitlines()
     if len(commits) > 1000:
         raise ValueError("History exceeds the bounded audit; perform an independent full audit.")
-    findings, first, count = [], {}, 0  # first: each distinct blob, with the path and commit it was first seen at
+    # first: each distinct blob under each allowance, with the path and commit it was first seen at there. A blob is
+    # judged once at a path of each kind, so a record under evidence/ does not admit the same bytes anywhere else.
+    findings, first, count = [], {}, 0
     for commit in commits:
         for record in git("ls-tree", "-r", "-z", commit).split(b"\0"):
             if not record:
@@ -48,23 +64,23 @@ def audit(root: Path) -> dict:
             if mode not in {"100644", "100755"} or kind != "blob":
                 findings.append({"path": name, "rule": "symlink-or-submodule", "commit": commit})
                 continue
-            first.setdefault(oid, (name, commit))
+            first.setdefault((oid, allowance(name)), (name, commit))
             if len(first) > 20000:
                 raise ValueError("History exceeds bounded blob audit.")
     # One `git cat-file --batch` reads every blob, where a pair of processes per blob spent minutes starting up.
-    request = "".join(f"{oid}\n" for oid in first).encode()
+    request = "".join(f"{oid}\n" for oid, _ in first).encode()
     with subprocess.Popen(
         ["git", "-C", str(root), "cat-file", "--batch"], stdin=subprocess.PIPE, stdout=subprocess.PIPE
     ) as batch:
         feeder = threading.Thread(target=lambda: (batch.stdin.write(request), batch.stdin.close()))
         feeder.start()
-        for oid, (name, commit) in first.items():
+        for (oid, _), (name, commit) in first.items():
             header = batch.stdout.readline().split()
             if header[:2] != [oid.encode(), b"blob"]:
                 raise ValueError(f"git cat-file answered {header!r} for blob {oid}.")
             size = int(header[2])
             data = batch.stdout.read(size + 1)[:size]
-            if size > 2_000_000:
+            if too_large(name, data):
                 findings.append({"path": name, "rule": "large-file", "commit": commit})
                 continue
             count += len(data)
@@ -80,7 +96,7 @@ def audit(root: Path) -> dict:
     return {
         "status": "no-pattern-findings" if not findings else "blocked",
         "commits": len(commits),
-        "distinct_blobs": len(first),
+        "distinct_blobs": len({oid for oid, _ in first}),
         "bytes_scanned": count,
         "findings": findings,
         "scope": "all reachable commits; finite credential patterns, not a guarantee",

@@ -70,6 +70,25 @@ def test_the_audit_admits_a_demo_frame_and_no_other_binary(tmp_path):
     assert {f["path"] for f in audit(tmp_path)["findings"]} == {"b.png", "demos/v/c.png"}
 
 
+def test_a_text_record_under_evidence_may_reach_four_megabytes_and_nothing_else_may_pass_two(tmp_path):
+    import subprocess
+
+    text = b'{"x": 1}\n' * 333_334  # three megabytes of text
+    (tmp_path / "evidence/v9").mkdir(parents=True)
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "evidence/v9/suite.json").write_bytes(text)  # admitted: a text record, under four megabytes
+    (tmp_path / "evidence/v9/huge.json").write_bytes(text * 2)  # six megabytes, past the evidence limit
+    (tmp_path / "evidence/v9/blob.json").write_bytes(text[:-1] + b"\0")  # a binary is held to two megabytes
+    (tmp_path / "tools/other.json").write_bytes(text + b"\n")  # outside evidence/, two megabytes is still the limit
+    (tmp_path / "tools/copy.json").write_bytes(text)  # the admitted record's own bytes, at a path that has no allowance
+    git = ["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+    for args in (["init", "-q"], ["add", "."], ["commit", "-qm", "records"]):
+        subprocess.run([*git, *args], check=True, capture_output=True)
+    found = {f["path"]: f["rule"] for f in audit(tmp_path)["findings"]}
+    assert found == {"evidence/v9/huge.json": "large-file", "evidence/v9/blob.json": "large-file",
+                     "tools/other.json": "large-file", "tools/copy.json": "large-file"}  # fmt: skip
+
+
 def test_default_never_contacts_github(tmp_path):
     runner = Fake(tmp_path)
     result = publish(tmp_path, "TestOwner/cairn", run=runner, audit_fn=clean)
