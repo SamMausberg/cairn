@@ -196,10 +196,18 @@ def inspected(candidates: list[Candidate], name: str, inspector: Any, profile: P
     """Compile the legal device candidates in predicted order for resource inspection, within the budget, and price
     each inspected one again with what it uses. Among candidates the model prices alike, those whose kernel items
     (unroll, vector, stage, fuse) the budget has not yet reached come first, so a small budget reads more distinct
-    kernels before it reads the launch variants of one; every candidate is still compiled on its own."""
+    kernels before it reads the launch variants of one; every candidate is still compiled on its own, except that a
+    candidate selecting an implementation already read takes that reading: the reference's plan items change only
+    the reference's regions, never the implementation's kernels."""
+    instances: dict[str, dict[str, Any]] = {}
     for c in shaped(sorted((c for c in candidates if not c.refused), key=lambda c: c.predicted_ns)):
         if spent.out_of_time():
             spent.skip("not inspected: out of time")
+            continue
+        if c.use in instances:
+            c.resources = {**instances[c.use], "kept": True}
+            if c.cost is not None:
+                c.predicted_ns = priced(c.cost, profile, sizes, arch, c.resources)
             continue
         kept = inspector.kept(c.source, c.runs(name), c.program)
         if kept is None and spent.compiles >= spent.budget.compiles:
@@ -211,5 +219,7 @@ def inspected(candidates: list[Candidate], name: str, inspector: Any, profile: P
         else:
             spent.kept += 1
             c.resources = kept
+        if c.use and c.resources.get("status") == "read":
+            instances[c.use] = c.resources
         if c.resources.get("status") == "read" and c.cost is not None:
             c.predicted_ns = priced(c.cost, profile, sizes, arch, c.resources)

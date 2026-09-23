@@ -101,10 +101,13 @@ def test_compare_names_an_instance():
 
 @NVCC
 def test_each_device_instance_is_compiled_for_its_own_kernels(tmp_path):
-    result = tune(SCALE, "scale", [{"n": 1e7}], MACHINE, budget=Budget(compiles=2), history=tmp_path,
+    result = tune(SCALE, "scale", [{"n": 1e7}], MACHINE, budget=Budget(compiles=3), history=tmp_path,
                   device_target=parse("sm_120"))  # fmt: skip
     read = {row["use"]: row["resources"] for row in result["candidates"] if row.get("use") and "resources" in row}
-    assert set(read) == {"scale_blocks[64]", "scale_blocks[256]"}  # the two instances, before any plan variant
+    # the model prices the reference and both instances alike, since each moves the same bytes: the three compiles
+    # read those three, and every plan variant of an instance takes its instance's reading, since a plan of the
+    # reference changes nothing in the instance's kernel
+    assert set(read) == {"scale_blocks[64]", "scale_blocks[256]"}
     assert all(r["registers"] > 0 and r["instructions"] > 0 for r in read.values())
     assert read["scale_blocks[64]"]["key"] != read["scale_blocks[256]"]["key"]
-    assert result["budget"]["compiles"] == {"allowed": 2, "started": 2, "kept": 0}
+    assert result["budget"]["compiles"] == {"allowed": 3, "started": 3, "kept": 0}
