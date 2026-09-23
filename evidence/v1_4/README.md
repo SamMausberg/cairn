@@ -1,6 +1,6 @@
 # 1.4 records
 
-Each directory is one record, taken on the reference machine while the 1.4 work landed: an AMD Ryzen 7 7800X3D (sixteen lanes) under WSL2 with clang++ 21.1.8 and g++ 13.3, shared throughout with other agents' builds and suites. A record's own notes say what ran, with what, and how the sharing bears on it. Nothing here ran on a device. The release's gates, `summary.json` and `RUN_NOTES.md` are written when 1.4 is cut.
+Each directory is one record, taken on the reference machine while the 1.4 work landed: an AMD Ryzen 7 7800X3D (sixteen lanes) under WSL2 with clang++ 21.1.8 and g++ 13.3, shared throughout with other agents' builds and suites. A record's own notes say what ran, with what, and how the sharing bears on it. Nothing here ran on a device. The release's gates are in `summary.json`, the Lean rebuild in `lean/`, and what ran and what did not in `RUN_NOTES.md`.
 
 | Record | What it holds |
 |---|---|
