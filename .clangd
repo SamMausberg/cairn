@@ -1,0 +1,7 @@
+# clangd reads compile_flags.txt for C++; the CUDA runtime header and device tests are CUDA, with the CCCL headers
+# where CUDA 13 installs them under the conventional /usr/local/cuda.
+If:
+  PathMatch: [.*cairn_gpu\.hpp, .*\.cu]
+CompileFlags:
+  Remove: [-xc++]
+  Add: [-xcuda, --cuda-gpu-arch=sm_120, -std=c++20, -isystem/usr/local/cuda/include/cccl]
