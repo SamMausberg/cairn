@@ -156,10 +156,23 @@ def test_every_layout_the_header_states_is_the_one_both_compilers_make(tmp_path,
     (tmp_path / "c.c").write_text('#include "layouts.h"\nint main(void) { return 0; }\n')
     (tmp_path / "c.cpp").write_text('#include "layouts.h"\nint main() { return 0; }\n')
     c = C_OF[cxx]
+    lib = [f"-L{built}", "-llayouts"]  # including the header names the library's interface identity, so link it
     compiled(
-        c, "-std=c11", "-pedantic", "-Wall", "-Wextra", "-Werror", f"-I{built}", tmp_path / "c.c", "-o", tmp_path / "c"
+        c,
+        "-std=c11",
+        "-pedantic",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        f"-I{built}",
+        tmp_path / "c.c",
+        *lib,
+        "-o",
+        tmp_path / "c",
     )
-    compiled(cxx, "-std=c++17", "-Wall", "-Wextra", "-Werror", f"-I{built}", tmp_path / "c.cpp", "-o", tmp_path / "cc")
+    compiled(
+        cxx, "-std=c++17", "-Wall", "-Wextra", "-Werror", f"-I{built}", tmp_path / "c.cpp", *lib, "-o", tmp_path / "cc"
+    )
 
 
 WITHHELD = """

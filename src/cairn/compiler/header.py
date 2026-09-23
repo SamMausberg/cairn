@@ -10,6 +10,7 @@ listed at the end with the reason, never declared.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import textwrap
@@ -61,6 +62,7 @@ class Header:
         self.shapes: dict[Type, Layout] = {}
         self.types: list[str] = []  # C definitions, each after the ones it uses
         self.checks: list[str] = []  # static_assert lines for the library's own C++
+        self.identity = ""  # the interface identity symbol, named when the header is rendered
         self.order: list[tuple[Type, str, list[tuple[Any, Any]]]] = []  # (type, kind, members) as defined
         self.exports: list[Function] = []
 
@@ -246,9 +248,25 @@ class Header:
                    for n in STORAGE if f"cairn_{n}" in "\n".join([*self.types, *declared])]  # fmt: skip
         tail = ["/* Not declared, because it cannot cross the C boundary:", *(" * " + w for w in withheld), " */", ""]
         tail = tail if withheld else []
-        text = [*head, *storage, *([""] if storage else []), *self.types, *declared, *tail]
+        stated = "\n".join([*storage, *self.types, *declared])
+        self.identity = f"cairn_interface_{mangle(self.name)}_{hashlib.sha256(stated.encode()).hexdigest()[:16]}"
+        text = [*head, *storage, *([""] if storage else []), *self.types, *declared, *tail, *INTERFACE]
+        text = [line.replace("@IDENTITY@", self.identity).replace("@NAME@", mangle(self.name)) for line in text]
         text += ["#ifdef __cplusplus", "}", "#endif", f"#endif /* {guard} */"]
-        return "\n".join(text) + "\n", "\n".join(["// The layouts the C header states.", *self.checks]) + "\n"
+        defined = f'extern "C" __attribute__((visibility("default"))) const char {self.identity}[] = "{self.name}";'
+        return "\n".join(text) + "\n", "\n".join(["// The layouts the C header states.", *self.checks, defined]) + "\n"
+
+
+# Every declaration above is hashed into one symbol's name. The library built with this header defines it, and the
+# header refers to it, so a program built with a header of another version of the library fails to link, where it
+# would otherwise call entries whose parameters or records the library no longer has.
+INTERFACE = [
+    "/* The interface identity: the library this header was generated with defines this symbol, and a program",
+    " * built with a header of any other version of it fails to link instead of passing the wrong records. */",
+    "extern const char @IDENTITY@[];",
+    "static const char* const cairn_interface_of_@NAME@ __attribute__((used)) = @IDENTITY@;",
+    "",
+]
 
 
 def shown(t: Type) -> str:
@@ -322,8 +340,12 @@ def binding(source: str, name: str, mine: Any = None) -> str:
     out += [
         "",
         "def load(path):",
-        '    """The library at `path`, every bound entry declared."""',
+        '    """The library at `path`, every bound entry declared, or ImportError when it is another version."""',
         "    lib = C.CDLL(path)",
+        "    try:",
+        f"        C.c_char.in_dll(lib, {h.identity!r})",
+        "    except ValueError:",
+        f'        raise ImportError(f"{{path}} is not the version of {name} this binding was generated with") from None',
     ]
     skipped = []
     for f in h.exports:

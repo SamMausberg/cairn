@@ -4,6 +4,7 @@ showed it, and the attacks that were correctly refused or held, kept so that a l
 `evidence/v1_4/review/README.md` has the write-up. The first review's table is `test_review_1_4.py`.
 """
 
+import importlib.util
 import shutil
 import subprocess
 import tempfile
@@ -12,7 +13,9 @@ import pytest
 
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
+from cairn.compiler.header import binding
 from cairn.perf.tune import write_plan
+from cairn.projects.build import build
 from cairn.projects.project import ProjectError, load_project
 from cairn.projects.revision import read
 from cairn.verify.diff import single
@@ -208,3 +211,50 @@ def test_a_reused_task_thread_carries_nothing_from_one_task_to_the_next(tmp_path
     done = watched(tmp_path, compile_source(REUSED[name])[0], cxx, sanitizer)
     assert done.returncode == 0, done.stderr[-3000:]
     assert "WARNING" not in done.stderr and "ERROR" not in done.stderr, done.stderr[-3000:]
+
+
+# --- Fixed: a header and a library of different versions no longer link ---------------------------------------------
+
+V1 = "struct Pair { a:u64; b:u32; }\npub fn first(p:Pair) -> u64 = p.a;\n"
+V2 = "struct Pair { b:u32; a:u64; }\npub fn first(p:Pair) -> u64 = p.a;\n"  # the same entry, the record reordered
+HOST = '#include "lib.h"\nint main(void) { ct_Pair p = {0}; p.a = 7; return cf_first(p) == 7 ? 0 : 1; }\n'
+
+
+def versioned(tmp_path, name, source):
+    root = tmp_path / name
+    (root / "src").mkdir(parents=True)
+    (root / "src/lib.cairn").write_text(source)
+    (root / "cairn.toml").write_text('[project]\nname = "lib"\nsources = ["src/lib.cairn"]\n')
+    record = build(load_project(root), kind="library", header=True, output=tmp_path / f"{name}-out", timeout=180)
+    assert record["status"] == "native-built", record.get("stderr", "")[:2000]
+    return root, record["directory"]
+
+
+@pytest.mark.skipif(not shutil.which("clang"), reason="needs a C compiler")
+def test_a_program_built_with_a_stale_header_does_not_link_against_the_new_library(tmp_path):
+    """A C program links by name alone, so a header of one version and a library of another linked and passed a
+    record the library laid out otherwise. The header now names the library's interface identity."""
+    _, old = versioned(tmp_path, "v1", V1)
+    _, new = versioned(tmp_path, "v2", V2)
+    (tmp_path / "host.c").write_text(HOST)
+
+    def linked(header_dir, library_dir):
+        return subprocess.run(["clang", "-std=c11", f"-I{header_dir}", tmp_path / "host.c", f"-L{library_dir}", "-llib",
+                               f"-Wl,-rpath,{library_dir}", "-o", tmp_path / "host"], capture_output=True, text=True)  # fmt: skip
+
+    stale = linked(old, new)
+    assert stale.returncode != 0 and "cairn_interface_lib_" in stale.stderr, stale.stderr
+    assert linked(new, new).returncode == 0
+    assert subprocess.run([tmp_path / "host"], timeout=30).returncode == 0
+
+
+def test_a_binding_of_one_version_refuses_to_load_a_library_of_another(tmp_path):
+    root, _ = versioned(tmp_path, "v1", V1)
+    _, new = versioned(tmp_path, "v2", V2)
+    path = tmp_path / "lib_binding.py"
+    path.write_text(binding(load_project(root).source, "lib"))
+    spec = importlib.util.spec_from_file_location("lib_binding", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with pytest.raises(ImportError, match="not the version of lib"):
+        module.load(f"{new}/liblib.so")
