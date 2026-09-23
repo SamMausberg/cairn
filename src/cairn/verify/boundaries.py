@@ -94,7 +94,8 @@ def edges(ty: str, lo: Any = None, hi: Any = None) -> list[Any]:
 
 
 def literals(e: Any) -> list[tuple[str, int]]:
-    """(operator, literal) of each binary node with an integer literal operand, in an expression or a body."""
+    """(operator, literal) of each binary node with an integer literal operand, in an expression or a body. An
+    instance's natural (`K` of `total_by[8]`) is the literal it stands for there."""
     found: list[tuple[str, int]] = []
     todo = [e] if isinstance(e, Expr) else []
     for s in [] if isinstance(e, Expr) else statements(e):
@@ -105,6 +106,8 @@ def literals(e: Any) -> list[tuple[str, int]]:
             for a in x.args:
                 if a.tag == "int":
                     found.append((x.val, int(a.val, 0)))
+                elif a.tag == "name" and isinstance(a.ref, int) and not isinstance(a.ref, bool):
+                    found.append((x.val, a.ref))
         todo += x.args
     return found
 

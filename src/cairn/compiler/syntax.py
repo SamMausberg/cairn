@@ -30,6 +30,7 @@ class Parser(StatementParser):
     def __init__(self, source: str):
         super().__init__(source)
         self.source = source  # what an implementation's identity digests
+        self.tuned: list[tuple[int, int]] = []  # each `tune ...` clause: its values are not the identity's
 
     def items(self) -> list[Any]:
         """The declarations of a recipe (or of an `each` inside one)."""
@@ -116,19 +117,30 @@ class Parser(StatementParser):
         )  # fmt: skip
 
     def implements(self) -> Implements:
-        """`implements total when n % 4 == 0 needs(cp_async)`, words only here (compiler/implementations.py)."""
+        """`implements total when n % K == 0 tune K in [4, 8] needs(cp_async)`, words only here
+        (compiler/implementations.py)."""
         self.i += 1
-        reference, when, text, needs = self.path(), None, "", ()
+        reference, when, text, needs, tune = self.path(), None, "", (), []
         if self.t.s == "when":
             self.i += 1
             first = self.i
             when = self.expr()
             shown = self.ts[first : self.i]  # the condition as written, one space wherever the source had any
             text = "".join(t.s + " " * (u.start > t.end) for t, u in zip(shown, [*shown[1:], shown[-1]], strict=True))
+        if self.t.s == "tune" and self.ahead(2) == "in":  # the values of each natural parameter, as a list
+            start = self.t.start
+            self.i += 1
+            while True:
+                name = self.ident()
+                self.need("in", "[")
+                tune.append((name, tuple(self.listed("]", self.integer))))
+                if not self.eat(","):
+                    break
+            self.tuned.append((start, self.ts[self.i - 1].end))
         if self.t.s == "needs" and self.ahead(1) == "(":
             self.i += 2
             needs = tuple(self.listed(")", self.effect))
-        return Implements(reference, when, text, needs)
+        return Implements(reference, when, text, needs, tune=tuple(tune))
 
     def effect(self) -> str:
         name = self.take()
@@ -299,7 +311,10 @@ class Parser(StatementParser):
                 name, chosen = self.path(), {}
                 if self.t.s == "use":  # `plan f use g;` runs the implementation g of f (compiler/implementations.py)
                     self.i += 1
-                    p.selections.append((self.module, name, self.path(), t))
+                    use = self.path()
+                    if self.eat("["):  # `use g[8]`: the instance of g at those values, named as instances are
+                        use += f"[{', '.join(str(v) for v in self.listed(']', self.integer))}]"
+                    p.selections.append((self.module, name, use, t))
                     self.need(";")
                     continue
                 self.need("{")
@@ -340,11 +355,21 @@ class Parser(StatementParser):
 
     def identities(self, p: Program) -> None:
         """Each implementation's identity: the digest of its reference's tokens and its own, as written, so a comment
-        or a blank line changes neither. What either calls is not in it; a build artifact's digest covers that."""
+        or a blank line changes neither. What either calls is not in it; a build artifact's digest covers that. The
+        values a `tune` clause lists are not in it either: an instance adds its own values (implementations.py), so
+        listing another value leaves every other instance's identity as it was."""
         written = {f.name: f for f in p.functions}
+
+        def tokens(g: Function) -> str:
+            text = self.source[g.start : g.end]
+            for start, end in sorted(self.tuned, reverse=True):
+                if g.start <= start < end <= g.end:
+                    text = text[: start - g.start] + text[end - g.start :]
+            return " ".join(t.s for t in lex(text))
+
         for f in p.functions:
             if f.implements is not None:
                 named = f.implements.reference
                 ref = written.get(f"{f.module}.{named}" if f.module else named) or written.get(named)
-                texts = [" ".join(t.s for t in lex(self.source[g.start : g.end])) if g else "" for g in (ref, f)]
+                texts = [tokens(g) if g else "" for g in (ref, f)]
                 f.implements.identity = hashlib.sha256("\0".join(texts).encode()).hexdigest()

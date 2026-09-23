@@ -482,7 +482,7 @@
     },
     {
      "name": "keyword.declaration.cairn",
-     "match": "\\bimplements\\b(?=\\s+[A-Za-z_][\\w.]*\\s*(?:when\\b|needs\\b|\\{|=))"
+     "match": "\\bimplements\\b(?=\\s+[A-Za-z_][\\w.]*\\s*(?:when\\b|tune\\b|needs\\b|\\{|=))"
     },
     {
      "name": "keyword.control.concurrency.cairn",
@@ -557,12 +557,16 @@
      "match": "\\bthreads\\b(?=\\s+[A-Za-z_]\\w*\\s*(?:,|in\\b))"
     },
     {
+     "name": "storage.modifier.cairn",
+     "match": "\\btune\\b(?=\\s+[A-Za-z_]\\w*\\s+in\\s*\\[)"
+    },
+    {
      "name": "keyword.other.plan.cairn",
      "match": "\\bunroll\\b(?=\\s+[0-9])"
     },
     {
      "name": "keyword.other.plan.cairn",
-     "match": "\\buse\\b(?=\\s+[A-Za-z_][\\w.]*\\s*;)"
+     "match": "\\buse\\b(?=\\s+[A-Za-z_][\\w.]*\\s*(?:;|\\[))"
     },
     {
      "name": "keyword.other.plan.cairn",

@@ -175,14 +175,16 @@ class Assembly:
 
 @dataclass
 class Implements:
-    """`implements total when n % 4 == 0 needs(cp_async)`: the function is an alternative implementation of `total`,
-    applicable where the condition holds and on the targets it names (compiler/implementations.py)."""
+    """`implements total when n % K == 0 tune K in [4, 8] needs(cp_async)`: the function is an alternative
+    implementation of `total`, applicable where the condition holds and on the targets it names, one instance per
+    value `tune` lists for each of its natural parameters (compiler/implementations.py)."""
 
     reference: str  # as written, resolved in the implementation's module
     when: Expr | None = None  # None: it applies to every input
     text: str = ""  # the condition as written, for a receipt and a packet
     needs: tuple[str, ...] = ()  # device features its code uses (projects/target.py FEATURES)
     identity: str = ""  # sha256 of the reference's tokens and its own, as the parser read them
+    tune: tuple[tuple[str, tuple[int, ...]], ...] = ()  # `tune K in [2, 4, 8]`: each natural parameter's values
 
 
 @dataclass

@@ -61,12 +61,16 @@ def parse_plan(text: str) -> Plan:
 
 
 def parse_candidate(text: str) -> tuple[Plan, str | None]:
-    """A plan as `parse_plan` reads it, and `use g` or `plan f use g;` for the implementation it selects."""
+    """A plan as `parse_plan` reads it, and `use g`, `use g[8]` or `plan f use g;` for the implementation, or the
+    instance of one, it selects."""
     import re
 
-    found = re.search(r"(?:\bplan\s+[A-Za-z_][\w.]*\s+)?\buse\s+([A-Za-z_][\w.]*)\s*;?", text)
+    found = re.search(r"(?:\bplan\s+[A-Za-z_][\w.]*\s+)?\buse\s+([A-Za-z_][\w.]*)\s*(\[[\d\s,]*\])?\s*;?", text)
     rest = (text[: found.start()] + text[found.end() :]).strip(" ;") if found else text
-    return parse_plan(rest or "none"), found.group(1) if found else None
+    if not found:
+        return parse_plan(rest or "none"), None
+    values = re.findall(r"\d+", found.group(2) or "")
+    return parse_plan(rest or "none"), found.group(1) + (f"[{', '.join(values)}]" if found.group(2) else "")
 
 
 def line(kind: str, by: str, text: str, **values: Any) -> dict[str, Any]:

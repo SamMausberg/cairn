@@ -209,6 +209,8 @@ class Globals:
         if e.tag == "name":
             if isinstance(e.ref, Expr):  # a named constant: its literal
                 return self.poly(e.ref, env, depth)
+            if isinstance(e.ref, int) and not isinstance(e.ref, bool):  # a static natural, K of scale_blocks[64]
+                return Poly.of(e.ref)
             if e.val in env:
                 return env[e.val]
             return self.outside(e.val, depth)

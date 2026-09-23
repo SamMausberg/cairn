@@ -53,7 +53,7 @@ def tiles(program: Any, checker: Any, name: str) -> int:
     """The dynamic shared memory one block of `name`'s staged regions asks for, the largest over its regions."""
     from .regions import walked
 
-    f = next(f for f in program.functions if f.name == name and not f.bindings)
+    f = next(f for f in program.functions if f.name == name)  # an implementation's instance among them
     most = 0
     for s in walked(f.body):
         if s.tag == "parallel" and s.ref == "device" and s.stage:

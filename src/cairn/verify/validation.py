@@ -27,6 +27,7 @@ from typing import Any
 
 from ..compiler.cairnc import Diagnostic, Function, Parser, compile_program, compile_source, write_program
 from ..compiler.codegen import mangle
+from ..compiler.lexing import IDENT, lex
 from ..compiler.tree import FLOAT
 from ..projects.toolchain import command as native_command
 from ..projects.toolchain import link_flags, linked
@@ -158,11 +159,34 @@ def fresh(p: Any, stem: str) -> str:
     return name
 
 
+def condition(impl: Function) -> str | None:
+    """The checked implementation's condition as source, an instance's naturals written as their values."""
+    from ..agent.projection import format_expr
+    from ..compiler.implementations import fixed
+
+    when = impl.implements.when if impl.implements is not None else None
+    return format_expr(fixed(when)) if when is not None else None
+
+
+def written_as(p: Any, checked: Function) -> Function:
+    """The declaration of `checked` in the parsed program `p`: itself, or for an instance, its template."""
+    return next(f for f in p.functions if f.name == (checked.source_name if checked.bindings else checked.name))
+
+
+def body_of(base: str, declared: Function, checked: Function) -> str:
+    """The body of `declared` as written in `base`, an instance's naturals written as the values they have."""
+    text = base[declared.body_start : declared.end]
+    for token in reversed(lex(text) if checked.bindings else []):
+        if token.s in checked.bindings and IDENT.fullmatch(token.s):
+            text = text[: token.start] + str(checked.bindings[token.s]) + text[token.end :]
+    return text
+
+
 def subject(source: str, reference: str, implementation: str, cxx: str, directory: Path,
             libraries: tuple[str, ...] = (), objects: tuple[str, ...] = ()) -> tuple[Subject, str]:  # fmt: skip
     """Both libraries built, and the program with no selection (what `smt` compares); `objects` are a project's
     vendored C++, linked into each (projects/foreign.py)."""
-    from ..agent.projection import format_expr, local
+    from ..agent.projection import local
 
     p, _, receipts = compile_program(source)
     fs = {f.name: f for f in p.functions}
@@ -171,14 +195,15 @@ def subject(source: str, reference: str, implementation: str, cxx: str, director
         raise ValueError(f"{implementation} is not an implementation of {reference}.")
     ref = fs[reference]
     params = boundaries.signature(ref)
+    when = condition(impl)
     base = without_selection(source, p, reference)
     p = Parser(base).parse()  # where each declaration now stands
-    impl = next(f for f in p.functions if f.name == implementation)
+    impl = written_as(p, impl)
     ps = ", ".join(f"{n}:{t.display()}" for n, t in impl.params)
     predicate, applies = "", None
-    if impl.implements is not None and impl.implements.when is not None:
-        applies = fresh(p, f"applies_{local(implementation)}")
-        predicate = f"\nfn {applies}({ps}) -> bool = {format_expr(impl.implements.when)};\n"
+    if when is not None:
+        applies = fresh(p, f"applies_{mangle(local(implementation))}")
+        predicate = f"\nfn {applies}({ps}) -> bool = {when};\n"
     with_predicate = base[: impl.end] + predicate + base[impl.end :]
     selected = base[: impl.end] + f"\nplan {local(reference)} use {local(implementation)};\n" + base[impl.end :]
     built = {}
@@ -372,14 +397,15 @@ def smt(base: str, reference: str, implementation: str, impl: Function, policy: 
     """What Z3 says of the implementation against the reference where its condition holds, apart from any test:
     the reference's body replaced by the implementation's, compared in the modeled fragment."""
     from ..agent.projection import format_expr
+    from ..compiler.implementations import fixed
     from .diff import isolated
     from .scalar_semantics import equivalent
     from .scalar_values import MAX_UNROLL
 
-    fs = {f.name: f for f in Parser(base).parse().functions}
-    ref, mine = fs[reference], fs[implementation]
-    candidate = base[: ref.body_start] + base[mine.body_start : mine.end] + base[ref.end :]
-    where = [format_expr(impl.implements.when)] if impl.implements and impl.implements.when is not None else []
+    parsed = Parser(base).parse()
+    ref, mine = next(f for f in parsed.functions if f.name == reference), written_as(parsed, impl)
+    candidate = base[: ref.body_start] + body_of(base, mine, impl) + base[ref.end :]
+    where = [format_expr(fixed(impl.implements.when))] if impl.implements and impl.implements.when is not None else []
     views = {t.extent for _, t in ref.params if t.extent}
     for name in (n for n, t in ref.params if n in views and t.name == "usize"):
         lo, hi = policy.domain.get("extents", {}).get(name, [0, policy.domain.get("largest_extent", 4096)])
@@ -438,6 +464,13 @@ def replay(source: str, record: dict[str, Any], cxx: str = "clang++", libraries:
             "claim": FINITE}  # fmt: skip
 
 
+def local(name: str | None) -> str | None:
+    """A function's name without its module; an instance keeps its values."""
+    from ..compiler.implementations import local as named
+
+    return named(name) if name else None
+
+
 def validate_project(project: Any, symbol: str, policy: dict[str, Any] | None = None, cxx: str = "clang++",
                      regressions: Path | None = None, history: Path | None = None) -> dict[str, Any]:  # fmt: skip
     """`cairn validate --symbol g`: g against the function it implements, with the policy given, else the one the
@@ -449,6 +482,10 @@ def validate_project(project: Any, symbol: str, policy: dict[str, Any] | None = 
 
     receipts = compile_program(project.source)[2]
     found = sorted(n for n, r in receipts.items() if "implements" in r and symbol in (n, n.rsplit(".", 1)[-1]))
+    instances = sorted(n for n, r in receipts.items() if symbol in (r.get("instance_of"), local(r.get("instance_of"))))
+    if not found and instances:  # when and tiles change with the values, so each instance is validated on its own
+        raise ProjectError(f"{symbol} is validated one instance at a time: name one of "
+                           f"{', '.join(local(n) for n in instances)}.")  # fmt: skip
     if len(found) != 1:
         raise ProjectError(f"{symbol} names {'no' if not found else 'more than one'} implementation; write "
                            "fn g(...) implements f ... and name g.")  # fmt: skip

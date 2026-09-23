@@ -303,7 +303,7 @@ fn main() -> i32 {
 }
 ```
 
-The selected implementation runs where its condition holds and the reference everywhere else, so every input the reference admits is still admitted; without a plan the reference runs. `when` is a condition over the value parameters that cannot trap: comparisons, `&& || !`, `& | ^ ~`, `min`, `max`, the wrapping forms, `/` or `%` by a nonzero literal, `shr` or `shl_wrap` by a literal below the width, `len` of a view parameter, literals and constants (`E-IMPL-WHEN`). Without `when` an implementation applies to every input and the dispatch tests nothing. A call whose literal or constant arguments make the condition true, such as `total(12, xs)` above, calls the implementation directly.
+The selected implementation runs where its condition holds and the reference everywhere else, so every input the reference admits is still admitted; without a plan the reference runs. `when` is a condition over the value parameters that cannot trap: comparisons, `&& || !`, `& | ^ ~`, `min`, `max`, the wrapping forms, `/` or `%` by a nonzero literal or natural parameter, `shr` or `shl_wrap` by one below the width, `len` of a view parameter, literals, constants and natural parameters (`E-IMPL-WHEN`). Without `when` an implementation applies to every input and the dispatch tests nothing. A call whose literal or constant arguments make the condition true, such as `total(12, xs)` above, calls the implementation directly.
 
 An implementation keeps its reference's contract. Its parameters, types, extents, placements and result are the reference's (`E-IMPL-SIGNATURE`). Its row stays inside the reference's declared ceiling, or inside the reference's own row when it declares none (`E-IMPL-EFFECT`), and it writes no rounding the reference does not write (`E-IMPL-NUMERICS`). The reference's row joins every implementation's, so choosing one changes no row.
 
@@ -344,12 +344,54 @@ fn total_padded(n:usize, xs:ro<u64>[n]) -> u64 implements total when (n + 3) / 4
 ```
 
 ```text
-A when is a condition over the value parameters that cannot trap: comparisons, && || !, & | ^ ~, min, max, the wrapping forms, / or % by a nonzero literal, shr or shl_wrap by a literal below the width, len of a view parameter, literals and constants.
+A when is a condition over the value parameters that cannot trap: comparisons, && || !, & | ^ ~, min, max, the wrapping forms, / or % by a nonzero literal or natural parameter, shr or shl_wrap by one below the width, len of a view parameter, literals, constants and natural parameters.
 ```
 
-An implementation lives in its reference's module and is an ordinary function with a body, never generic, a kernel or an implementation of an implementation (`E-IMPLEMENTS`). Only a test block calls one by name, and an implementation never reaches its reference, which could dispatch back to it (`E-IMPL-CALL`). A plan names one implementation of the function it plans (`E-IMPL-USE`). `needs(cp_async)` after the condition names the [device features](tools.md#the-device-target) an implementation's device code uses, and one without device code may name none (`E-IMPLEMENTS`). A plan that selects it adds them to what the program asks of its device target, and a build for a target that lacks one is refused (`E-IMPL-TARGET`) rather than running the reference in its place.
+An implementation lives in its reference's module and is an ordinary function with a body, never generic over types, a kernel or an implementation of an implementation (`E-IMPLEMENTS`). Only a test block calls one by name, and an implementation never reaches its reference, which could dispatch back to it (`E-IMPL-CALL`). A plan names one implementation of the function it plans (`E-IMPL-USE`). `needs(cp_async)` after the condition names the [device features](tools.md#the-device-target) an implementation's device code uses, and one without device code may name none (`E-IMPLEMENTS`). A plan that selects it adds them to what the program asks of its device target, and a build for a target that lacks one is refused (`E-IMPL-TARGET`) rather than running the reference in its place.
 
 The receipt lists each implementation under its reference with its condition, whether it is tested at entry, what it requires of the machine (host or device, lanes, tasks, allocation sites, stack bytes) and its identity, a digest of the two declarations' tokens that no comment changes, and marks the one a plan runs as `runs`. Acceptance says nothing about whether an implementation computes what its reference computes; [`cairn validate`](tools.md#cairn-validate) tests that.
+
+An implementation can take natural parameters for [`cairn tune`](tools.md#cairn-tune) to search. `tune K in [2, 4, 8]` after the condition lists the values `K` takes, and each value is an instance, `total_by[4]`, in whose body and condition `K` is a `usize` constant. `plan total use total_by[4];` selects one instance.
+
+```cairn
+fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut sum:u64 = 0;
+  for i in 0..n { sum += xs[i]; }
+  return sum;
+}
+
+// K elements a step, for a length K divides.
+fn total_by[K:nat](n:usize, xs:ro<u64>[n]) -> u64 implements total when n % K == 0 tune K in [2, 4, 8] {
+  let mut sum:u64 = 0;
+  for k in 0..n / K {
+    for j in 0..K { sum += xs[K * k + j]; }
+  }
+  return sum;
+}
+
+plan total use total_by[4];                       // total tests n % 4 == 0 on entry
+
+fn main() -> i32 {
+  let mut xs = Buf[u64](12);
+  for i in 0..12 { xs[i] = u64(i); }
+  if total(xs) != 66 || total(10, xs[0..10]) != 45 { return 1; }  // total_by[4], then the reference
+  return 0;
+}
+```
+
+Every instance the list names is made and held to every rule above, whether or not a plan selects it, so each candidate the search may try is one the checker accepted. An instance that breaks a rule is refused with that rule's code, and the message and the diagnostic's `instance` name it: with `tune K in [4, 0]`, `total_by[0]` divides by zero in its condition (`E-IMPL-WHEN`). A list holds distinct naturals, at most 16 instances with every parameter's values combined, as in `tune K in [2, 4], W in [1, 3]`. A natural without a list, a list on an implementation without naturals, a value the list does not name and a selection without values are `E-IMPL-PARAM`.
+
+```cairn rejects E-IMPL-PARAM
+fn total(n:usize, xs:ro<u64>[n]) -> u64 = 0;
+fn total_by[K:nat](n:usize, xs:ro<u64>[n]) -> u64 implements total when n % K == 0 tune K in [2, 4, 8] = 0;
+plan total use total_by[3];
+```
+
+```text
+K = 3 is not a value total_by lists; K is one of 2, 4, 8.
+```
+
+The receipt lists each instance under its reference with its values (`parameters`, `instance_of`) and its condition as the instance reads it, `n % 4 == 0`. An instance's identity is the declarations' identity with its values. The list is not part of it, so listing another value leaves every other instance's validation current. Each instance is built, so each can be validated on its own; a device implementation compiles every instance's kernels.
 
 ## Modules
 

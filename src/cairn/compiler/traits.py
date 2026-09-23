@@ -80,6 +80,10 @@ def instantiate(c: Checker, template: Function, bound: dict[str, Any], node: Any
         missing = ", ".join(g for g, _ in template.generics if g not in bound)
         fail("E-INFER", f"Cannot infer {missing} of {template.name}; write {template.name}[...](...).", node)
     name = f"{template.name}[{', '.join(v.display() if isinstance(v, Type) else str(v) for v in values)}]"
+    if name not in c.fs and template.implements is not None:  # only an instance its `tune` clause lists
+        from .implementations import admitted
+
+        admitted(template, bound, node)
     if name not in c.fs:
         for (g, constraint), value in zip(template.generics, values, strict=True):
             if (constraint == "nat") != isinstance(value, int):

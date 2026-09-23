@@ -114,6 +114,8 @@ def space(a: Item | None, b: Item) -> bool:
         return False
     if a.role in {"unary", "angle_open", "lam_open"} or b.role in {"angle_open", "angle_close", "lam_close"}:
         return False
+    if a.s == "in" and b.s == "[":  # `tune K in [4, 8]` lists values; it indexes nothing
+        return True
     if b.s in NO_LEAD or a.s in NO_TRAIL:
         return False
     if b.s == "(" and b.role != "spaced":

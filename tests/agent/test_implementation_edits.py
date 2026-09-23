@@ -173,7 +173,8 @@ def test_every_submission_is_kept_in_the_candidate_history(tmp_path):
     host.reply(submit("i1", BY4))
     kept = History(tmp_path / "history").records("total")
     assert [(r["kind"], r["candidate"]) for r in kept] == [
-        ("failure", "total_pairs"), ("failure", "submission"), ("validation", "total_by4")]  # fmt: skip
+        ("failure", "plan total use total_pairs;"), ("failure", "submission"),
+        ("validation", "plan total use total_by4;")]  # fmt: skip
     assert kept[0]["detail"]["stage"] == "validation" and kept[0]["detail"]["inputs"] == {"n": 1, "xs": [1]}
     assert kept[1]["detail"]["why"].startswith("E-TOLERANCE") and kept[2]["detail"]["evidence"] == "finite-tested"
     assert (

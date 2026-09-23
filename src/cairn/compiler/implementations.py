@@ -23,16 +23,46 @@ than falling back to the reference: a mismatch is refused, never approximated.
 A reference's row is the join of its own and every implementation's, whichever one a plan selects, so choosing an
 implementation changes no row. Each implementation has an identity, the digest of the two declarations as written
 (`Implements.identity`), which a validation record and a candidate history key on.
+
+An implementation may take natural parameters, and then says which values each takes:
+
+    fn total_by[K:nat](n:usize, xs:ro<u64>[n]) -> u64 implements total when n % K == 0 tune K in [2, 4, 8] { ... }
+    plan total use total_by[8];
+
+Each combination of the listed values is an instance, `total_by[8]`, made and held to every rule above whether or not
+a plan selects it, so each instance the search may try is one the checker accepted; one that fails is refused with
+its own code and named. A value outside the list, a parameter with no list, or a selection without values is
+E-IMPL-PARAM. An instance's identity is the declarations' identity with its values, and the list itself is not part
+of it, so listing another value leaves every other instance's validation current.
 """
 
 from __future__ import annotations
 
+import hashlib
+import itertools
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
 from .effects import allowed, fixed_point
 from .scope import Binding, Scope
-from .tree import BOOL, FLOAT, INT, SCALAR, VOID, WIDTH, Diagnostic, Expr, Function, Stmt, clone, fail, is_view, nested
+from .tree import (
+    BOOL,
+    FLOAT,
+    INT,
+    SCALAR,
+    USIZE,
+    VOID,
+    WIDTH,
+    Diagnostic,
+    Expr,
+    Function,
+    Stmt,
+    clone,
+    fail,
+    is_view,
+    nested,
+)
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -42,26 +72,107 @@ COMPARISONS = {"==", "!=", "<", "<=", ">", ">=", "&&", "||", "&", "|", "^"}
 TOTAL_CALLS = {"min", "max", "add_wrap", "sub_wrap", "mul_wrap"}  # calls of values that never trap
 WHEN = (
     "A when is a condition over the value parameters that cannot trap: comparisons, && || !, & | ^ ~, min, max, "
-    "the wrapping forms, / or % by a nonzero literal, shr or shl_wrap by a literal below the width, len of a view "
-    "parameter, literals and constants."
+    "the wrapping forms, / or % by a nonzero literal or natural parameter, shr or shl_wrap by one below the width, "
+    "len of a view parameter, literals, constants and natural parameters."
 )
+
+
+MAX_INSTANCES = 16  # instances one parameterized implementation lists, all its parameters' values combined
 
 
 def check(c: Checker) -> None:
     """Every declaration, its condition, and every `plan f use g;`: what needs only the checked bodies."""
-    for f in c.p.functions:
-        if f.implements is not None:
+    for f in list(c.p.functions):
+        if f.implements is not None and f.generics and not f.bindings:
+            parameterized(c, f)
+        elif f.implements is not None and not f.bindings:
             declared(c, f)
     for module, written, chosen, token in c.p.selections:
         select(c, module, written, chosen, token)
 
 
+def parameterized(c: Checker, f: Function) -> None:
+    """Make every instance the `tune` clause lists, and hold each to every rule an implementation keeps."""
+    clause = f.implements
+    assert clause is not None
+    if f.kernel or f.owner or any(kind != "nat" for _, kind in f.generics):
+        what = "a kernel" if f.kernel else "a trait member" if f.owner else "generic over types"
+        fail("E-IMPLEMENTS", f"{f.name} is {what}; an implementation is an ordinary function with a body, and its "
+             "parameters in brackets are naturals.", f)  # fmt: skip
+    values = listed(f)
+    combos = list(itertools.product(*values.values()))
+    if len(combos) > MAX_INSTANCES:
+        fail("E-IMPL-PARAM", f"{f.name} lists {len(combos)} instances; an implementation lists at most "
+             f"{MAX_INSTANCES}, all its parameters' values combined.", f)  # fmt: skip
+    from .traits import instantiate
+
+    for combo in combos:
+        bound = dict(zip(values, combo, strict=True))
+        name = instance(f.name, combo)
+        try:
+            made = instantiate(c, f, bound, f)
+            assert made.implements is not None
+            made.implements.identity = hashlib.sha256(f"{clause.identity}\0{local(name)}".encode()).hexdigest()
+            declared(c, made)
+        except Diagnostic as error:  # say which instance: the position is the template's text
+            error.data["message"] = f"{local(name)}: {error.data['message']}"
+            error.data.setdefault("instance", name)
+            raise
+
+
+def instance(template: str, values: tuple[int, ...] | list[int]) -> str:
+    """The name of an instance, as a generic instance is named: `total_by[8]`, `tiled[4, 2]`."""
+    return f"{template}[{', '.join(str(v) for v in values)}]"
+
+
+def local(name: str) -> str:
+    """A name without its module, an instance's values kept: `m.total_by[8]` is `total_by[8]`."""
+    base, bracket, rest = name.partition("[")
+    return base.rsplit(".", 1)[-1] + bracket + rest
+
+
+def listed(f: Function) -> dict[str, tuple[int, ...]]:
+    """Each natural parameter of `f` and the values its `tune` clause lists, in the parameters' order."""
+    clause = f.implements
+    assert clause is not None
+    names = [g for g, _ in f.generics]
+    given = dict(clause.tune)
+    if not clause.tune:
+        fail("E-IMPL-PARAM", f"{f.name} takes {', '.join(names)}; list the values each takes, as in "
+             f"tune {names[0]} in [4, 8], and a plan selects one instance, as in {local(f.name)}[8].", f)  # fmt: skip
+    for name, values in clause.tune:
+        if name not in names or [n for n, _ in clause.tune].count(name) > 1:
+            fail("E-IMPL-PARAM", f"tune lists the values of each natural parameter of {f.name} once; "
+                 f"{name} is {'listed twice' if name in names else 'not one of ' + ', '.join(names)}.", f)  # fmt: skip
+        if not values or len(set(values)) != len(values) or max(values) >= 2**32:
+            fail("E-IMPL-PARAM", f"The values of {name} are a nonempty list of distinct naturals below 2^32.", f)
+    if missing := [n for n in names if n not in given]:
+        fail("E-IMPL-PARAM", f"tune lists no values for {', '.join(missing)} of {f.name}.", f)
+    return {n: given[n] for n in names}
+
+
+def admitted(template: Function, bound: dict[str, Any], node: Any) -> None:
+    """An instance of an implementation made anywhere, such as a test block's `total_by[3](...)`: only one its
+    `tune` clause lists."""
+    if any(kind != "nat" for _, kind in template.generics):
+        return  # refused as generic over types where the declarations are checked
+    values = listed(template)
+    for name, value in bound.items():
+        if value not in values.get(name, ()):
+            fail("E-IMPL-PARAM", f"{name} = {value} is not a value {local(template.name)} lists; {name} is one of "
+                 f"{', '.join(map(str, values[name]))}.", node)  # fmt: skip
+
+
 def declared(c: Checker, f: Function) -> None:
     clause = f.implements
     assert clause is not None
-    what = "generic" if f.generics else "a kernel" if f.kernel else "a trait member" if f.owner else ""
+    generic = f.generics and not f.bindings
+    what = "generic" if generic else "a kernel" if f.kernel else "a trait member" if f.owner else ""
     if what:
         fail("E-IMPLEMENTS", f"{f.name} is {what}; an implementation is an ordinary function with a body.", f)
+    if clause.tune and not f.bindings:
+        fail("E-IMPL-PARAM", f"{f.name} takes no natural parameter for tune to list values of; declare one, as in "
+             f"fn {f.name}[K:nat](...).", f)  # fmt: skip
     with c.within(f.module):
         name = c.qualify(clause.reference, c.fs, node=f)
     if name is None:
@@ -104,6 +215,8 @@ def condition(c: Checker, f: Function, e: Expr) -> None:
     try:
         for n, ty in f.params:
             c.env[n] = Binding(ty)
+        for n, value in f.bindings.items():  # an instance's naturals, as its body sees them
+            c.env[n] = Binding(USIZE, constant=value)
         c.expr(e, BOOL)
     finally:
         c.s, c.capture_sites = saved, sites
@@ -112,8 +225,22 @@ def condition(c: Checker, f: Function, e: Expr) -> None:
     if not any(x.tag == "name" and x.val in params for x in walk(e)):  # a constant condition: decided here
         from .constants import fold
 
-        if not fold(c, e, BOOL, []):
+        if not fold(c, fixed(e), BOOL, []):
             fail("E-IMPL-WHEN", f"The condition of {f.name} is false for every input, so it never runs.", e)
+
+
+def static(e: Expr) -> int | None:
+    """The value of a name that is one of an instance's naturals, as its checked condition or body holds it."""
+    return e.ref if e.tag == "name" and isinstance(e.ref, int) and not isinstance(e.ref, bool) else None
+
+
+def fixed(e: Expr) -> Expr:
+    """`e` with an instance's naturals written as the literals they are, as constant folding reads a condition."""
+    out = clone(e)
+    for x in walk(out):
+        if (value := static(x)) is not None:
+            x.tag, x.val, x.args = "int", str(value), []
+    return out
 
 
 def total(c: Checker, e: Expr, params: dict) -> None:
@@ -121,19 +248,22 @@ def total(c: Checker, e: Expr, params: dict) -> None:
     ok = e.tag in {"int", "float", "bool"}
     if e.tag == "name":
         ty = params.get(e.val)
-        ok = (ty is not None and ty.mode == "value" and ty.name in SCALAR) or (ty is None and isinstance(e.ref, Expr))
+        ok = (ty is not None and ty.mode == "value" and ty.name in SCALAR) or (
+            ty is None and (isinstance(e.ref, Expr) or static(e) is not None)
+        )
     elif e.tag == "unary":
         ok = e.val in {"!", "~"} or (e.val == "-" and e.ty is not None and e.ty.name in FLOAT)
     elif e.tag == "binary":
         left = e.args[0].ty
-        divisor = e.args[1].tag == "int" and int(e.args[1].val, 0) > 0
+        divisor = literal(e.args[1], params)
         ok = (e.val in COMPARISONS or (left is not None and left.name in FLOAT)
-              or (e.val in {"/", "%"} and divisor))  # fmt: skip
+              or (e.val in {"/", "%"} and divisor is not None and divisor > 0))  # fmt: skip
     elif e.tag == "call" and e.val == "len":
         ok = len(e.args) == 1 and e.args[0].tag == "name" and is_view(params.get(e.args[0].val, VOID))
     elif e.tag == "call" and e.val in {"shr", "shl_wrap"}:
         width = WIDTH.get(e.ty.name, 0) if e.ty else 0
-        ok = len(e.args) == 2 and e.args[1].tag == "int" and int(e.args[1].val, 0) < width
+        shift = literal(e.args[1], params) if len(e.args) == 2 else None
+        ok = shift is not None and shift < width
     elif e.tag == "call":
         ok = e.val in TOTAL_CALLS and e.ty is not None and e.ty.name in INT
     if not ok:
@@ -143,6 +273,13 @@ def total(c: Checker, e: Expr, params: dict) -> None:
             total(c, a, params)
 
 
+def literal(e: Expr, params: dict) -> int | None:
+    """An integer literal, or an instance's natural, whose value the condition may divide or shift by."""
+    if e.tag == "int":
+        return int(e.val, 0)
+    return static(e) if e.val not in params else None
+
+
 def walk(e: Expr):
     yield e
     for a in e.args:
@@ -150,11 +287,24 @@ def walk(e: Expr):
 
 
 def select(c: Checker, module: str, written: str, chosen: str, token: Any) -> None:
+    base, bracket, rest = chosen.partition("[")
     with c.within(module):
         name = c.qualify(written, c.fs, node=token)
-        impl = c.qualify(chosen, c.fs, node=token)
+        impl = c.qualify(base, c.fs, node=token)
     if name is None:
         fail("E-IMPL-USE", f"plan {written} use {chosen}; names no function {written}.", token)
+    g = c.fs.get(impl) if impl else None
+    if g is not None and g.implements is not None and g.generics and not g.bindings:  # parameterized
+        values = [int(v) for v in rest.rstrip("]").split(",") if v.strip()]
+        names = [n for n, _ in g.generics]
+        if len(values) != len(names):
+            example = instance(base, [listed(g)[n][0] for n in names])
+            fail("E-IMPL-PARAM", f"{base} takes {', '.join(names)}; select one instance, as in plan {written} use "
+                 f"{example};.", token)  # fmt: skip
+        admitted(g, dict(zip(names, values, strict=True)), token)
+        impl = instance(g.name, values)
+    elif bracket and g is not None and g.implements is not None:
+        fail("E-IMPL-PARAM", f"{base} takes no natural parameters; select it as plan {written} use {base};.", token)
     offered = c.alternatives.get(name, [])
     if impl not in offered:
         these = f"its implementations are {', '.join(offered)}" if offered else f"{name} has no implementation"
@@ -180,29 +330,40 @@ def joined(c: Checker, effects: dict[str, set[str]]) -> dict[str, set[str]]:
         mine = roundings(c, name)
         for impl in impls:
             c.judging = impl
-            if excess := sorted(e for e in effects[impl] if not within(e, ceiling, pure)):
-                said = (
-                    f"which {name}'s ceiling does not allow"
-                    if ref.effects is not None
-                    else f"which {name} does not; {name} declares no ceiling, so its own row is the ceiling"
-                )
-                fail("E-IMPL-EFFECT", f"{impl} may {', '.join(excess)}, {said}.", c.fs[impl],
-                     added_effects=excess)  # fmt: skip
-            if name in reached(c, impl):
-                fail("E-IMPL-CALL", f"{impl} reaches {name}, its reference, which can dispatch back to it; call a "
-                     "helper both share.", c.fs[impl])  # fmt: skip
-            clause = c.fs[impl].implements
-            if clause is not None and clause.needs and requires(c, c.fs[impl], effects)["target"] != "device":
-                fail("E-IMPLEMENTS", f"{impl} needs {', '.join(clause.needs)}, device features, and runs no device "
-                     "code.", c.fs[impl])  # fmt: skip
-            if extra := sorted(roundings(c, impl) - mine):
-                fail("E-IMPL-NUMERICS", f"{impl} rounds where {name} does not ({'; '.join(extra)}); an implementation "
-                     "keeps its reference's numerical contract.", c.fs[impl])  # fmt: skip
+            try:
+                kept(c, name, impl, effects, ceiling, pure, mine)
+            except Diagnostic as error:  # each message names the implementation; an instance is also data
+                if c.fs[impl].bindings:
+                    error.data.setdefault("instance", impl)
+                raise
     for name, impls in c.alternatives.items():
         for impl in impls:
             c.calls[name].add(impl)
             c.call_edges[name].append((impl, {n: n for n, _ in c.fs[name].params}))
     return fixed_point(c)
+
+
+def kept(c: Checker, name: str, impl: str, effects: dict[str, set[str]], ceiling: set[str], pure: bool,
+         mine: set[str]) -> None:  # fmt: skip
+    """The rules that need every row: `impl` stays inside `name`'s ceiling and roundings, and never reaches it."""
+    ref = c.fs[name]
+    if excess := sorted(e for e in effects[impl] if not within(e, ceiling, pure)):
+        said = (
+            f"which {name}'s ceiling does not allow"
+            if ref.effects is not None
+            else f"which {name} does not; {name} declares no ceiling, so its own row is the ceiling"
+        )
+        fail("E-IMPL-EFFECT", f"{impl} may {', '.join(excess)}, {said}.", c.fs[impl], added_effects=excess)
+    if name in reached(c, impl):
+        fail("E-IMPL-CALL", f"{impl} reaches {name}, its reference, which can dispatch back to it; call a helper "
+             "both share.", c.fs[impl])  # fmt: skip
+    clause = c.fs[impl].implements
+    if clause is not None and clause.needs and requires(c, c.fs[impl], effects)["target"] != "device":
+        fail("E-IMPLEMENTS", f"{impl} needs {', '.join(clause.needs)}, device features, and runs no device code.",
+             c.fs[impl])  # fmt: skip
+    if extra := sorted(roundings(c, impl) - mine):
+        fail("E-IMPL-NUMERICS", f"{impl} rounds where {name} does not ({'; '.join(extra)}); an implementation keeps "
+             "its reference's numerical contract.", c.fs[impl])  # fmt: skip
 
 
 def reached(c: Checker, start: str) -> set[str]:
@@ -237,8 +398,11 @@ def called(c: Checker, f: Function, e: Expr) -> None:
     """A call or a function value naming an implementation: only a test block may, to compare it with its
     reference; everything else reaches it through the reference and a plan."""
     if f.implements is not None and not c.f.test:
-        fail("E-IMPL-CALL", f"{f.name} is an implementation of {f.implements.reference}: call "
-             f"{f.implements.reference}, and select {f.name} with plan {f.implements.reference} use {f.name};.", e)  # fmt: skip
+        ref, name = f.implements.reference, local(f.name)
+        if f.generics and not f.bindings and f.implements.tune:  # a parameterized one: select an instance
+            name = instance(name, [values[0] for _, values in f.implements.tune])
+        fail("E-IMPL-CALL", f"{local(f.name)} is an implementation of {ref}: call {ref}, and select it with plan "
+             f"{ref} use {name};.", e)  # fmt: skip
 
 
 def receipt(c: Checker, name: str) -> dict[str, Any]:
@@ -246,21 +410,38 @@ def receipt(c: Checker, name: str) -> dict[str, Any]:
     the reference of an implementation."""
     f = c.fs.get(name)
     if f is not None and f.implements is not None:
-        return {"implements": next(r for r, impls in c.alternatives.items() if name in impls)}
+        return {"implements": next(r for r, impls in c.alternatives.items() if name in impls), **parameters(f)}
     if name not in c.alternatives:
         return {}
     found = {}
     for impl in c.alternatives[name]:
-        clause = c.fs[impl].implements
+        g = c.fs[impl]
+        clause = g.implements
         assert clause is not None
         found[impl] = {
             "identity": clause.identity,
-            "when": clause.text or "always",
-            "applies": "tested at entry" if params_named(c.fs[impl]) else "always",
+            "when": written(g) or "always",
+            "applies": "tested at entry" if params_named(g) else "always",
+            **parameters(g),
             **({"needs": list(clause.needs)} if clause.needs else {}),
-            "requires": requires(c, c.fs[impl]),
+            "requires": requires(c, g),
         }
     return {"implementations": found, **({"runs": c.selected[name]} if name in c.selected else {})}
+
+
+def parameters(f: Function) -> dict[str, Any]:
+    """What an instance of a parameterized implementation adds to its receipt: its template and its values."""
+    if not f.bindings:
+        return {}
+    return {"instance_of": f.source_name, "parameters": dict(f.bindings)}
+
+
+def written(f: Function) -> str:
+    """The condition as written, an instance's naturals written as the values they have in it."""
+    text = f.implements.text if f.implements else ""
+    for name, value in f.bindings.items():
+        text = re.sub(rf"\b{re.escape(name)}\b", str(value), text)
+    return text
 
 
 def params_named(f: Function) -> bool:
@@ -316,7 +497,7 @@ def direct(g: Emitter, e: Expr, f: Function) -> Function:
     known = {n: given[n] if given[n].tag == "int" else given[n].ref for n in named}
     if not named or not all(isinstance(v, Expr) and v.tag in {"int", "unary"} for v in known.values()):
         return f
-    decided = clone(when)
+    decided = fixed(when)
     for x in walk(decided):
         if x.tag == "name" and x.val in known:
             x.tag, x.val, x.args = known[x.val].tag, known[x.val].val, clone(known[x.val].args)

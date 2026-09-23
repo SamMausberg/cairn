@@ -66,7 +66,9 @@ def pinned(declaration: str, policy: dict[str, Any]) -> dict[str, str]:
 def remember(where: Path, base: str, reference: str, entry: dict[str, Any]) -> dict[str, Any]:
     """One submission or validation as a candidate-history record (agent/history.py): its identity is the reference
     as written (`base`, history.as_written), the implementation's own identity, or the submission's digest when it has
-    none, the pinned contract and the host, where validation ran."""
+    none, the pinned contract and the host, where validation ran. The candidate is named `plan f use g;`, as
+    `cairn tune` names the same selection, so one implementation has one name in the history."""
+    from ..perf.plan_source import selecting
     from . import history
 
     contract = {k: entry[k] for k in CONTRACT}
@@ -78,8 +80,8 @@ def remember(where: Path, base: str, reference: str, entry: dict[str, Any]) -> d
         detail = {"stage": stage, "why": f"{entry['code']}: {entry['why']}",
                   **({"inputs": entry["inputs"]} if entry.get("inputs") else {})}  # fmt: skip
         kind = "failure"
-    return history.record(where, kind, reference, entry.get("implementation", "submission"), who, detail,
-                          variant=entry.get("identity"))  # fmt: skip
+    named = selecting(reference, entry["implementation"]) if entry.get("implementation") else "submission"
+    return history.record(where, kind, reference, named, who, detail, variant=entry.get("identity"))
 
 
 class ImplementationSession:
@@ -156,7 +158,8 @@ class ImplementationSession:
         if mine.implements is not None and mine.implements.reference != local(self.reference):
             fail("E-REFERENCE", f"This session implements {local(self.reference)}; {mine.name} implements "
                  f"{mine.implements.reference}.")  # fmt: skip
-        existing = set(self.receipt[self.reference].get("implementations", {}))
+        table = self.receipt[self.reference].get("implementations", {})
+        existing = set(table) | {r["instance_of"] for r in table.values() if "instance_of" in r}  # and templates
         full = f"{self.f.module}.{mine.name}" if self.f.module else mine.name
         if mine.name in ours and full not in existing:
             fail("E-DECLARATION", f"{mine.name} is already a function of the program, not an implementation of "
@@ -223,37 +226,44 @@ class ImplementationHost:
             if set(request) != {"protocol", "handle", "kind", "source"} or request["kind"] != "submit":
                 fail("E-REQUEST", "A submission is {protocol, handle, kind: submit, source}.")
             candidate, receipt, name = s.submit(request["source"])
-            record = validate(candidate, s.reference, name, s.policy, self.cxx, s.regressions)
         except Diagnostic as e:
             self.log(s, {**entry, "status": "refused", "code": e.data["code"], "why": e.data["message"]})
             raise
+        table = receipt[s.reference]["implementations"]
+        instances = [n for n, r in table.items() if r.get("instance_of") == name]  # each value its own validation
+        found = {one: self.validated(s, entry, candidate, receipt, one) for one in instances or [name]}
+        successor = ImplementationSession(candidate, s.reference, s.policy.record(), s.regressions, self.cxx)
+        self.sessions[request["handle"]] = successor
+        done = {"protocol": PROTOCOL, "status": "validated", "implementation": name}
+        tail = {"claim": FINITE, "candidate_sha256": digest(candidate), "selected": False}
+        if not instances:
+            return {**done, **found[name], **tail}
+        return {**done, "instances": found, **tail}
+
+    def validated(self, s: ImplementationSession, entry: dict[str, Any], candidate: str, receipt: dict[str, Any],
+                  name: str) -> dict[str, Any]:  # fmt: skip
+        """Validate the implementation `name`, or one instance of a parameterized one, against the reference under
+        the pinned policy, and keep the result; what the answer says of it, or E-VALIDATION."""
+        record = validate(candidate, s.reference, name, s.policy, self.cxx, s.regressions)
         info = receipt[s.reference]["implementations"][name]
-        entry |= {"implementation": name, "identity": info["identity"], "finite": record.get("finite", {}).get(
-            "status", record["status"]), "smt": record.get("smt", {}).get("status")}  # fmt: skip
+        entry = {**entry, "implementation": name, "identity": info["identity"], "finite": record.get(
+            "finite", {}).get("status", record["status"]), "smt": record.get("smt", {}).get("status")}  # fmt: skip
         if record["status"] != "passed":
             finite = record.get("finite", {})
             self.log(s, {**entry, "status": "refused", "code": "E-VALIDATION", "why": finite.get("status", "unknown"),
                          "inputs": finite.get("failed", {}).get("inputs")})  # fmt: skip
             fail("E-VALIDATION", f"{name} is not validated: {finite.get('status', record['status'])} against "
                  f"{s.reference}.", finite=finite or {"reason": record.get("reason")}, smt=record.get("smt"),
-                 identity=info["identity"])  # fmt: skip
+                 identity=info["identity"], implementation=name)  # fmt: skip
         self.log(s, {**entry, "status": "validated"})
-        successor = ImplementationSession(candidate, s.reference, s.policy.record(), s.regressions, self.cxx)
-        self.sessions[request["handle"]] = successor
         finite = record["finite"]
         return {
-            "protocol": PROTOCOL,
-            "status": "validated",
-            "implementation": name,
             "identity": info["identity"],
             "when": info["when"],
             "effects": receipt[name]["effects"],
             "requires": info["requires"],
             "finite": {k: finite[k] for k in ("status", "cases", "implementation_ran", "kept_cases")},
             "smt": record["smt"],
-            "claim": FINITE,
-            "candidate_sha256": digest(candidate),
-            "selected": False,
             "select_with": f"plan {local(s.reference)} use {local(name)};",
         }
 

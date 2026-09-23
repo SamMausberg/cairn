@@ -23,6 +23,26 @@ fn prefix_by4(n:usize, out:rw<u64>[n], xs:ro<u64>[n]) implements prefix when n %
   }
 }
 
+// K elements a step, each step one part of K: a part's guard is checked once for its K elements. The search tries
+// each K the tune clause lists.
+fn prefix_by[K:nat](n:usize, out:rw<u64>[n], xs:ro<u64>[n])
+  implements prefix when n % K == 0 tune K in [4, 8, 16, 32] {
+  let mut sum:u64 = 0;
+  for k in 0..n / K {
+    sum = prefix_part[K](sum, out[K * k..K * k + K], xs[K * k..K * k + K]);
+  }
+}
+
+// One part of K elements, from the total of the parts before it.
+fn prefix_part[K:nat](start:u64, out:rw<u64>[K], xs:ro<u64>[K]) -> u64 {
+  let mut sum = start;
+  for j in 0..K {
+    sum += xs[j];
+    out[j] = sum;
+  }
+  return sum;
+}
+
 // Two passes over the lane pool's blocks, once there are enough elements to engage it.
 fn prefix_lanes(n:usize, out:rw<u64>[n], xs:ro<u64>[n]) implements prefix when n >= 65536 {
   scan + out parallel i in n yield xs[i];

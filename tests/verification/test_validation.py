@@ -176,10 +176,13 @@ def test_cairn_validate_and_cairn_test_on_the_example_project(tmp_path):
     assert done.returncode == 0 and record["status"] == "passed", done.stderr
     assert record["regressions"] == {"file": "regressions/prefix.json", "exists": True, "replayed_by_cairn_test": True}
     kept = History(tmp_path / "history").records("prefix")
-    assert [(r["id"], r["kind"], r["candidate"]) for r in kept] == [(record["history"], "validation", "prefix_by4")]
+    assert [(r["id"], r["kind"], r["candidate"]) for r in kept] == [
+        (record["history"], "validation", "plan prefix use prefix_by4;")
+    ]  # the name cairn tune gives it
     assert kept[0]["variant"] == record["identity"] and kept[0]["detail"]["evidence"] == "finite-tested"
     done = subprocess.run([sys.executable, str(ROOT / "bin/cairn"), "test", str(project), "--format", "json"],
                           capture_output=True, text=True, timeout=600)  # fmt: skip
     tested = json.loads(done.stdout)
     assert done.returncode == 0 and tested["tests"][0]["status"] == "passed-finite-tests", done.stdout[-2000:]
-    assert set(tested["tests"][0]["implementations"]) == {"prefix_by4", "prefix_lanes"}
+    instances = {f"prefix_by[{k}]" for k in (4, 8, 16, 32)}  # each instance of prefix_by replays the kept cases
+    assert set(tested["tests"][0]["implementations"]) == {"prefix_by4", "prefix_lanes", *instances}

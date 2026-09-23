@@ -35,6 +35,12 @@ def shown(name: str, plan: Plan) -> str:
     return text(name, plan) or f"(no plan for {name})"
 
 
+def selecting(name: str, use: str) -> str:
+    """`plan f use g;`, or `plan f use g[8];` for an instance: the one name a candidate that selects an implementation
+    has wherever it is recorded, by `cairn tune`, `cairn validate` or an implementation session."""
+    return f"plan {name.rsplit('.', 1)[-1]} use {use.rsplit('.', 1)[-1]};"
+
+
 def replanned(source: str, name: str, plan: str) -> str:
     """`source` with `name`'s plan replaced by `plan`, or its plan removed when `plan` is empty: a textual edit for a
     source of one module, where a plan is found by the name it is written under. `Placement` resolves names."""

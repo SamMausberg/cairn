@@ -39,12 +39,17 @@ def signature(f: Function) -> str:
 
 
 def implementing(f: Function) -> str:
-    """` implements total when (n % 4) == 0 needs(cp_async)`: what an alternative implementation declares."""
+    """` implements total when (n % K) == 0 tune K in [4, 8] needs(cp_async)`: what an alternative implementation
+    declares."""
     clause = f.implements
     if clause is None:
         return ""
     when = f" when {format_expr(clause.when)}" if clause.when is not None else ""
-    return f" implements {clause.reference}{when}" + (f" needs({', '.join(clause.needs)})" if clause.needs else "")
+    listed = ", ".join(f"{name} in [{', '.join(map(str, values))}]" for name, values in clause.tune)
+    tune = f" tune {listed}" if listed and not f.bindings else ""
+    return f" implements {clause.reference}{when}{tune}" + (
+        f" needs({', '.join(clause.needs)})" if clause.needs else ""
+    )
 
 
 ESCAPES = {"\n": "\\n", "\t": "\\t", "\r": "\\r", "\0": "\\0", "\\": "\\\\", '"': '\\"'}

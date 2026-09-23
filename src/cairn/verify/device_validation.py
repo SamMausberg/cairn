@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import Parser
+from ..compiler.codegen import mangle
 from ..compiler.tree import FLOAT, is_view
 from .boundaries import Case
 
@@ -46,7 +47,7 @@ def cases_as_tests(source: str, reference: str, implementation: str, cases: list
     for k, case in enumerate(cases):
         if any(is_view(t) and len(case.args[n]) > LARGEST for n, t in ref.params):
             continue
-        name = f"device_{impl}_{k}"
+        name = f"device_{mangle(impl)}_{k}"  # `prefix_by[8]` names no test
         lines, args_ref, args_impl, checks = [f"test {name} {{"], [], [], []
         for n, t in ref.params:
             if not is_view(t):

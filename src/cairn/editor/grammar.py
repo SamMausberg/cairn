@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 # Words the parser reads in one position only; anywhere else they are ordinary names (the parser says where).
 CONTEXTUAL = {"after", "align", "exclusive", "fold", "into", "lends", "packed", "plan", "recipe", "require", "scan"}
-CONTEXTUAL |= {"test", "layout", "implements", "when", "needs", "use", *PLAN_ITEMS}
+CONTEXTUAL |= {"test", "layout", "implements", "when", "needs", "use", "tune", *PLAN_ITEMS}
 CONTEXTUAL |= {"blocks", "threads", "shared", "barrier", "warp", "pipeline", "depth"}  # a cooperative region
 CONTEXTUAL |= {"volatile", "out", "clobbers", "launch"}  # typed assembly and launched kernels (compiler/machine.py)
 
@@ -60,8 +60,9 @@ CONTEXT: dict[str, tuple[str, str]] = {
     "scan": ("keyword.control.concurrency.cairn", r"(?=\s+(?:[-+*&|^]|(?:min|max|add_wrap|mul_wrap)\b)\s*[A-Za-z_])"),
     "exclusive": ("keyword.control.concurrency.cairn", r"(?=\s+[A-Za-z_]\w*\s+(?:for|parallel)\b)"),
     "plan": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*(?:\{|use\b))"),
-    "use": ("keyword.other.plan.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*;)"),  # `plan f use g;`
-    "implements": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*(?:when\b|needs\b|\{|=))"),
+    "use": ("keyword.other.plan.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*(?:;|\[))"),  # `plan f use g;`, `use g[8];`
+    "implements": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*(?:when\b|tune\b|needs\b|\{|=))"),
+    "tune": ("storage.modifier.cairn", r"(?=\s+[A-Za-z_]\w*\s+in\s*\[)"),  # `tune K in [2, 4, 8]`
     "when": ("keyword.control.conditional.cairn", r"(?=\s+[A-Za-z_(!~0-9])"),
     "needs": ("storage.modifier.cairn", r"(?=\s*\(\s*sm_)"),
     "test": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*\{)"),

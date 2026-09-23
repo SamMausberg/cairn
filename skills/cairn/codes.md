@@ -43,6 +43,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-IMPL-CALL` | [implementations](cards/implementations.md) | Call a helper the reference and the implementation share, never the reference itself. |
 | `E-IMPL-EFFECT` | [foreign](cards/foreign.md), [implementations](cards/implementations.md) |  |
 | `E-IMPL-NUMERICS` | [implementations](cards/implementations.md) |  |
+| `E-IMPL-PARAM` | [implementations](cards/implementations.md) | List each natural's values with tune K in [4, 8], and select one of them: plan f use g[8];. |
 | `E-IMPL-SIGNATURE` | [implementations](cards/implementations.md) | Copy the reference's parameters, types, extents, placements and result exactly. |
 | `E-IMPL-TARGET` | [implementations](cards/implementations.md) |  |
 | `E-IMPL-USE` | [implementations](cards/implementations.md) |  |

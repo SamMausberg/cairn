@@ -23,7 +23,7 @@ from ..agent import history as kept
 from ..compiler.cairnc import compile_program
 from ..projects.target import DeviceTarget, resolve
 from . import model
-from .plan_source import KEEP, Placement, Plan, contract, shown, text, written
+from .plan_source import KEEP, Placement, Plan, contract, selecting, shown, text, written
 from .profile import Profile, default
 from .regions import applied, identified
 from .resources import Inspector, device_identity, host_target
@@ -79,7 +79,7 @@ def variant(key: Key, implementations: dict[str, Any]) -> dict[str, Any]:
 
 def label(name: str, key: Key) -> str:
     plan, use = key
-    selected = f"plan {local(name)} use {local(use)};" if use else ""
+    selected = selecting(name, use) if use else ""
     return " ".join(x for x in (text(local(name), plan), selected) if x) or shown(local(name), plan)
 
 
@@ -194,6 +194,10 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     ids = [r["id"] for r in named]
     validated = validations(source, name, receipts, alternatives, recorder)
     rows = [row(name, x, ids, validated) for x in legal]
+    table = receipts[name].get("implementations", {})
+    for r, x in zip(rows, legal, strict=True):  # an instance of a parameterized implementation: its values
+        if x.use and "parameters" in table.get(x.use, {}):
+            r["parameters"] = table[x.use]["parameters"]
     usable = [r for r in rows if not isinstance(r.get("validated"), str)]  # the reference, or a validated one
     read = [r for r in usable if r.get("resources", {}).get("registers") is not None]
     result: dict[str, Any] = {

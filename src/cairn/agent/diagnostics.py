@@ -51,6 +51,7 @@ HINTS = {
     "E-IMPL-SIGNATURE": "Copy the reference's parameters, types, extents, placements and result exactly.",
     "E-IMPL-WHEN": "Test only value parameters, with operations that cannot trap, such as n % 4 == 0 or n >= 64.",
     "E-IMPL-CALL": "Call a helper the reference and the implementation share, never the reference itself.",
+    "E-IMPL-PARAM": "List each natural's values with tune K in [4, 8], and select one of them: plan f use g[8];.",
 }
 CAUSES = {  # The constructs that bring an effect into a row, for a refusal that names effects.
     "alloc": "a Buf, a buffer or growing a Vec",
