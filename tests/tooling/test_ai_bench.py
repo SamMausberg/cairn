@@ -108,13 +108,20 @@ def test_the_audit_flags_a_path_outside_the_sandbox_and_the_network(tmp_path):
         },
         {"type": "tool_use", "id": "d", "name": "Read", "input": {"file_path": "/root/runs/pilot/x/cpp/main.cpp"}},
     ]
-    transcript.write_text(json.dumps({"type": "assistant", "message": {"content": uses}}) + "\n")
+    spill = str(Path.home() / ".claude/projects/-root-runs-counted-x-cairn/s/tool-results/b.txt")
+    uses.append({"type": "tool_use", "id": "e", "name": "Bash", "input": {"command": f"cat {spill}; echo $((j*n//k))"}})
+    lines = [
+        {"type": "system", "message": "a line whose message is text"},
+        {"type": "assistant", "message": {"content": uses}},
+    ]
+    transcript.write_text("".join(json.dumps(line) + "\n" for line in lines))
     found = audit(transcript, "/root/runs/counted/x/cairn", "/root")
     kinds = [(f["why"], f.get("what", "")[:20]) for f in found["flags"]]
     assert ("path", "/home/someone/cairn/") in kinds
     assert any(why == "network" for why, _ in kinds)
     assert ("path", "/root/runs/pilot/x/c") in kinds  # another subject's sandbox
     assert not any("/tmp/mine" in what for _, what in kinds)  # its own scratch file
+    assert len(found["flags"]) == 3  # nor its own saved tool output, nor a floor division
     assert found["compile_runs"] == 1
 
 

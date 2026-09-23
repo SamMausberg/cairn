@@ -19,7 +19,7 @@ TOOLCHAIN = ("/usr/", "/opt/llvm", "/bin/", "/lib/", "/etc/alternatives", "/dev/
 NETWORK = re.compile(
     r"\b(curl|wget|ssh|scp|rsync|nc|ncat|telnet|pip3?\s+install|cargo\s+(add|install|fetch|update|search)|git\s+(clone|fetch|pull)|npm|apt)\b"
 )
-PATH = re.compile(r"(?<![\w.$-])(~[\w/.-]*|/[\w.+-][\w/.+-]*)")
+PATH = re.compile(r"(?<![\w.$/-])(~[\w/.-]*|/[\w.+-][\w/.+-]*)")
 COMPILE = re.compile(
     r"(?<![\w-])(cairn\s+(check|build|run|test)|clang\+\+|g\+\+|cargo\s+(build|run|check|test)|rustc)(?![\w+])"
 )
@@ -39,10 +39,13 @@ def tool_calls(transcript: Path) -> list[dict]:
     calls: dict[str, dict] = {}
     order = []
     for m in messages(transcript):
-        content = (m.get("message") or {}).get("content") or []
+        message = m.get("message") if isinstance(m, dict) else None
+        content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, list):
             continue
         for block in content:
+            if not isinstance(block, dict):
+                continue
             if block.get("type") == "tool_use":
                 calls[block["id"]] = {
                     "name": block["name"],
@@ -69,7 +72,10 @@ def audit(transcript: Path, sandbox: str, root: str) -> dict:
     subject's own sandbox or the toolchain, so one subject reaching another's sandbox is caught. Scratch files a
     subject makes elsewhere under /tmp are its own and are not flagged."""
     tools = str(Path(root) / "toolchain")
-    home = (str(Path.home() / ".cargo"), str(Path.home() / ".rustup"))
+    # The platform keeps a long tool output of the session in a file named after the sandbox and hands the subject
+    # its path, so reading it back is the subject reading its own output.
+    spilled = str(Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", sandbox)) + "/"
+    home = (str(Path.home() / ".cargo"), str(Path.home() / ".rustup"), spilled)
 
     def allowed(path: str) -> bool:
         if path.startswith((sandbox, tools, *home, *TOOLCHAIN)):

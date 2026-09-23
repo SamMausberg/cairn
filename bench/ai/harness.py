@@ -92,6 +92,9 @@ def run(phase: str, replicate: int, names: list[str], languages: list[str], root
         done = cell / "record.json"
         if done.exists() and not json.loads(done.read_text()).get("infrastructure"):
             continue
+        if (RECORDS / "PAUSE").exists():  # a pause between subjects: none is running, and none starts
+            print(f"paused before {phase} r{replicate} {task} in {language}", flush=True)
+            return 4
         attempt = len(list(cell.glob("infrastructure-*.json"))) if cell.exists() else 0
         print(f"{phase} r{replicate}: {task} in {language} ...", flush=True)
         where = root / "runs" / phase / f"r{replicate}" / task / language
@@ -136,12 +139,14 @@ def export(record: dict, where: Path) -> None:
     (where / "record.json").write_text(json.dumps(kept, indent=1))
 
 
-def report(phase: str, out: Path) -> int:
+def report(phase: str, out: Path, root: Path | None = None) -> int:
     decisions_file = out / "audit_decisions.json"
     decisions = json.loads(decisions_file.read_text()) if decisions_file.exists() else {}
     records = []
     for path in sorted((RECORDS / phase).glob("r*/*/*/record.json")):
         record = json.loads(path.read_text())
+        if root is not None:  # the audit again, under the rule as it stands, for every subject alike
+            record["audit"] = audit(Path(record["transcript"]), record["sandbox"], str(root))
         key = f"{phase}/r{record.get('replicate', 1)}/{record['task']}/{record['language']}"
         record["contaminated"] = decisions.get(key, {}).get("contaminated", False)
         records.append(record)
@@ -184,6 +189,7 @@ def main(argv: list[str] | None = None) -> int:
     t = sub.add_parser("report", help="summarize one phase")
     t.add_argument("--phase", choices=PHASES, required=True)
     t.add_argument("--out", type=Path, default=HERE.parents[1] / "evidence" / "v1_5" / "ai_benchmark")
+    t.add_argument("--root", type=Path, help="the run's root: audit every transcript again under the current rule")
     args = p.parse_args(argv)
     if args.command == "verify":
         programs = args.program or ["reference", "starter"]
@@ -194,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
         names = args.task or [t.name for t in TASKS]
         limits = {**LIMITS, "model": args.model or MODELS[args.phase]}
         return run(args.phase, args.replicate, names, args.language or list(LANGUAGES), args.root, limits)
-    return report(args.phase, args.out)
+    return report(args.phase, args.out, args.root)
 
 
 if __name__ == "__main__":
