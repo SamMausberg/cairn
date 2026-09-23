@@ -326,3 +326,25 @@ def test_the_canonical_projection_keeps_typed_assembly(source):
 def test_the_assembly_card_is_chosen_by_the_asm_token():
     assert "assembly" in select_cards('fn f() { unsafe { asm x86_64 "mfence" effects(fence); } }')
     assert "assembly" not in select_cards("fn f(x:u64) -> u64 = x;")
+
+
+COOPERATIVE = """
+fn block_bits(n:usize, x:ro<u32>[n]@device, g:usize, out:rw<u32>[g]@device) {
+  blocks b in g threads t in 256 {
+    shared partial:u32[256] = zeroed;
+    let i = b * 256 + t;
+    if i < n {
+      unsafe {
+        asm ptx sm_75 "brev.b32 %0, %1;" (out r:u32, x[i]);
+        partial[t] = r;
+      }
+    }
+    barrier;
+    if t == 0 { out[b] = partial[0]; }
+  }
+}
+"""
+
+
+def test_a_thread_of_a_cooperative_region_runs_typed_ptx(tmp_path):
+    assert "BREV" in sass(tmp_path, COOPERATIVE)
