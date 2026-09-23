@@ -217,7 +217,7 @@ cairn state app --symbol lib.spread --since before.json    # only what changed
  "hypotheses": [], "experiments": [], "stale": {"records": 0, "by_part": {}}, ...}
 ```
 
-Beside the function's signature, row, plan, regions and current identity, the packet holds only the history that still holds: per candidate what was measured and by which procedure, what a compile read, what failed and why, and what was validated or profiled; the last searches and what they ranked best; and the hypotheses and suggested experiments, an experiment `done` once the runs it asks for are kept. Records that no longer hold are counted under `stale` by the part that moved. The packet above was 2,959 bytes for a function with three measured candidates, and running the same `cairn tune --measure` again starts no run, since every measurement it needs is kept.
+Beside the function's signature, row, plan, regions and current identity, the packet holds only the history that still holds: per candidate what was measured and by which procedure, what a compile read, what failed and why, and what was validated or profiled; the last searches and what they ranked best; and the hypotheses and suggested experiments, an experiment `done` once the runs it asks for are kept. A validation holds while the implementation, its reference and the compiler are as they were, under the policy and on the host it names, as `cairn tune` cites it. Records that no longer hold are counted under `stale` by the part that moved. The packet above was 2,959 bytes for a function with three measured candidates, and running the same `cairn tune --measure` again starts no run, since every measurement it needs is kept.
 
 ## Named choices
 
