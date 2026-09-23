@@ -29,6 +29,11 @@
       }
     ],
     "snippets": [{ "language": "cairn", "path": "./snippets/cairn.json" }],
+    "commands": [
+      { "command": "cairn.run", "title": "Run the program", "category": "CAIRN" },
+      { "command": "cairn.runTest", "title": "Run one test block", "category": "CAIRN" }
+    ],
+    "menus": { "commandPalette": [{ "command": "cairn.runTest", "when": "false" }] },
     "semanticTokenTypes": [
       { "id": "effect", "superType": "keyword", "description": "A name in an effect row: io, alloc, read:x." }
     ],

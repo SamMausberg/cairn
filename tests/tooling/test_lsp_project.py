@@ -4,14 +4,18 @@ Every rename that is admitted is applied to the files and the project is compile
 reason and changes nothing. The protocol is driven through the client of `test_lsp.py`.
 """
 
+import json
 import subprocess
 
 import pytest
 from test_lsp import Client, applied, place
 
+from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
 from cairn.editor import workspace as ws_module
 from cairn.editor.document import Document
+from cairn.editor.edits import document_highlights
+from cairn.editor.lenses import code_lenses
 from cairn.editor.workspace import Refused, prepare_rename, references, rename, workspace
 from cairn.projects.build import build
 from cairn.projects.project import load_project
@@ -170,10 +174,10 @@ def test_the_recheck_refuses_a_rename_that_compiles_but_changes_a_callee(tmp_pat
     (tmp_path / "cairn.toml").write_text(f'[project]\nname = "shadow"\nsources = {sources}\n')
     (tmp_path / "src/base.cairn").write_text("fn area(x:u64) -> u64 = x + 100;\n")
     (tmp_path / "src/geo.cairn").write_text("module geo;\npub fn area(x:u64) -> u64 = x * x;\n")
-    main = "module app;\nimport geo (area);\nfn main() -> i32 {\n  if area(3) != 9 { return 1; }\n  return 0;\n}\n"
-    (tmp_path / "src/main.cairn").write_text(main)
+    entry = "module app;\nimport geo (area);\nfn main() -> i32 {\n  if area(3) != 9 { return 1; }\n  return 0;\n}\n"
+    (tmp_path / "src/main.cairn").write_text(entry)
     uri = (tmp_path / "src/main.cairn").resolve().as_uri()
-    ws = workspace(uri, {uri: main})
+    ws = workspace(uri, {uri: entry})
     real = ws_module.target
 
     def missing_the_call(w, at):
@@ -182,7 +186,7 @@ def test_the_recheck_refuses_a_rename_that_compiles_but_changes_a_callee(tmp_pat
 
     monkeypatch.setattr(ws_module, "target", missing_the_call)
     with pytest.raises(Refused, match="change what the program does"):
-        rename(ws, uri, main.index("area(3)"), "size")
+        rename(ws, uri, entry.index("area(3)"), "size")
 
 
 def test_rename_over_the_protocol_edits_two_files(project):
@@ -218,5 +222,54 @@ def test_a_file_that_imports_another_is_analysed_with_its_project(project):
         here, there = client.diagnostics(geo), client.diagnostics(main)
         assert here[0]["code"] == "E-FIELD" and here[0]["range"]["start"]["line"] == 6
         assert there[0]["code"] == "E-FIELD" and there[0]["message"].startswith("src/geo.cairn:7: ")
+    finally:
+        client.close()
+
+
+def test_code_lenses_run_each_test_and_main(project):
+    text = MAIN + "\ntest doubles {\n  let mut p = geo.Pair(1, 1);\n  twice(p);\n  assert(p.a == 2);\n}\n"
+    (project / "src/main.cairn").write_text(text)
+    uri = (project / "src/main.cairn").resolve().as_uri()
+    lenses = code_lenses(Document(text), uri, {uri: text})
+    manifest = str((project / "cairn.toml").resolve())
+    assert [
+        (lens["command"]["title"], lens["command"]["command"], lens["command"]["arguments"]) for lens in lenses
+    ] == [("Run", "cairn.run", [manifest]), ("Run test", "cairn.runTest", [manifest, "app.doubles"])]
+    assert code_lenses(Document(text), "file:///nowhere/x.cairn", {}) == []  # nothing to run a buffer with
+
+
+def test_a_lens_runs_exactly_its_own_test(project, capsys):
+    """`doubles_too` fails and contains the name `doubles`: a lens that ran by substring would fail with it."""
+    text = MAIN + "\ntest doubles {\n  let mut p = geo.Pair(1, 1);\n  twice(p);\n  assert(p.a == 2);\n}\n"
+    text += "\ntest doubles_too {\n  assert(false);\n}\n"
+    (project / "src/main.cairn").write_text(text)
+    uri = (project / "src/main.cairn").resolve().as_uri()
+    lens = code_lenses(Document(text), uri, {uri: text})[1]
+    assert main(["test", *lens["command"]["arguments"][:1], "--test", lens["command"]["arguments"][1]]) == 0
+    record = json.loads(capsys.readouterr().out)
+    assert [t["name"] for t in record["blocks"]["tests"]] == ["app.doubles"] and record["tests"] == []
+    assert main(["test", str(project), "--test", "app.double"]) == 2  # a name, never a prefix
+    assert "named 'app.double'" in capsys.readouterr().out
+
+
+def test_highlights_mark_where_a_name_is_bound_or_assigned():
+    text = "fn f(n:u64) -> u64 {\n  let mut t:u64 = 0;\n  t += n;\n  return t;\n}\n"
+    kinds = [(h["range"]["start"]["line"], h["kind"]) for h in document_highlights(Document(text), text.index("t:u64"))]
+    assert kinds == [(1, 3), (2, 3), (3, 2)]  # bound, assigned, read
+
+
+def test_workspace_symbols_search_the_projects_at_the_workspace_roots(project):
+    client = Client()
+    try:
+        client.request("initialize", {"capabilities": {}, "rootUri": project.resolve().as_uri()}, 1)
+        found = client.request("workspace/symbol", {"query": "sca"}, 2)["result"]
+        assert [(s["name"], s["containerName"], s["location"]["uri"].rsplit("/", 1)[1]) for s in found] == [
+            ("scale", "geo", "geo.cairn")
+        ]
+        main = (project / "src/main.cairn").resolve().as_uri()
+        client.open(MAIN, uri=main)
+        params = {"textDocument": {"uri": main}, "position": place(MAIN, "let mut pair", 8)}
+        lit = client.request("textDocument/documentHighlight", params, 3)["result"]
+        assert [(h["range"]["start"]["line"], h["kind"]) for h in lit] == [(7, 3), (8, 2), (9, 2), (10, 2)]
     finally:
         client.close()

@@ -5,9 +5,11 @@ from __future__ import annotations
 
 from ..compiler.builtins import TABLE
 from ..compiler.syntax import IDENT, RESERVED
-from .document import Document, Item, binders, declarations, enclosing, flatten, word_at
+from .document import DECLARATIONS, Document, Item, binders, declarations, enclosing, flatten, word_at
 from .formatting import format_source
 from .names import TYPES
+
+DECLARING = set(DECLARATIONS) - {"impl"}  # the word before a name that a declaration introduces
 
 
 def occurrences(doc: Document, offset: int) -> list[Item]:
@@ -45,6 +47,27 @@ def occurrences(doc: Document, offset: int) -> list[Item]:
 def references(doc: Document, uri: str, offset: int) -> list[dict]:
     """Where the name under the cursor is written in this document, or nothing."""
     return [{"uri": uri, "range": doc.span(t.start, t.end)} for t in occurrences(doc, offset)]
+
+
+ASSIGNING = {"=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="}
+
+
+def highlights(doc: Document, starts: set[int]) -> list[dict]:
+    """The tokens of this document that start at `starts`, each a write where it is declared, bound or assigned,
+    and a read everywhere else (LSP DocumentHighlightKind 3 and 2)."""
+    cs = doc.code
+    bound = set(binders(cs, 0, len(cs))) | {i for i, t in enumerate(cs) if i and cs[i - 1].s in DECLARING}
+    out = []
+    for i, t in enumerate(cs):
+        if t.start in starts:
+            written = i in bound or (i + 1 < len(cs) and cs[i + 1].s in ASSIGNING)
+            out.append({"range": doc.span(t.start, t.end), "kind": 3 if written else 2})
+    return out
+
+
+def document_highlights(doc: Document, offset: int) -> list[dict]:
+    """Where the name under the cursor is written in this document, by the one-document rule."""
+    return highlights(doc, {t.start for t in occurrences(doc, offset)})
 
 
 def prepare_rename(doc: Document, offset: int) -> dict | None:

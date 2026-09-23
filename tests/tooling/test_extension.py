@@ -3,6 +3,8 @@ the server fills, snippets that compile as written, and no build step."""
 
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -71,6 +73,33 @@ def test_the_client_starts_the_server_over_stdio():
     assert "vscode-languageclient/node" in client
     assert "TransportKind.stdio" in client
     assert 'settings.get("server.arguments", ["lsp"])' in client
+
+
+def test_the_commands_a_lens_names_run_in_a_terminal():
+    """The client under stand-in `vscode` modules: each command the server's lenses name is registered and declared,
+    and types one quoted command line into one reused terminal."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    done = subprocess.run(
+        [node, str(Path(__file__).with_name("client_harness.js")), str(EDITOR / "client.js")],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert done.returncode == 0, done.stderr
+    said = json.loads(done.stdout)
+    assert said["registered"] == ["cairn.run", "cairn.runTest"] and said["subscriptions"] == 2
+    assert said["terminals"] == 1 and said["started"][0]["args"] == ["lsp"]
+    assert said["sent"] == [
+        "'/opt/my cairn' run '/work/my app/cairn.toml'",
+        "'/opt/my cairn' test /work/cairn.toml --test 'app.it'\\''s'",
+        "'/opt/my cairn' run '/work/open file.cairn'",  # from the palette: the open file
+    ]
+    declared = {c["command"] for c in manifest()["contributes"]["commands"]}
+    assert declared == set(said["registered"])
+    hidden = manifest()["contributes"]["menus"]["commandPalette"]
+    assert hidden == [{"command": "cairn.runTest", "when": "false"}]  # it needs the name a lens gives it
 
 
 def expanded(body: list[str]) -> str:

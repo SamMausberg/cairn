@@ -15,12 +15,13 @@ from typing import Any, BinaryIO
 from ..version import VERSION
 from .completion import completion, signature_help
 from .document import Document, symbols
-from .edits import formatted, prepare_rename, references, rename
+from .edits import document_highlights, formatted, highlights, prepare_rename, references, rename
 from .fixes import code_actions
 from .highlighting import LEGEND, semantic_tokens
 from .hints import inlay_hints
+from .lenses import code_lenses
 from .navigation import definition, hover
-from .workspace import context, within, workspace
+from .workspace import context, within, workspace, workspace_symbols
 from .workspace import prepare_rename as project_prepare_rename
 from .workspace import references as project_references
 from .workspace import rename as project_rename
@@ -39,12 +40,16 @@ CAPABILITIES = {
     "semanticTokensProvider": {"legend": LEGEND, "full": True},
     "inlayHintProvider": True,
     "codeActionProvider": {"codeActionKinds": ["quickfix"]},
+    "codeLensProvider": {"resolveProvider": False},
+    "documentHighlightProvider": True,
+    "workspaceSymbolProvider": True,
 }
 # The same questions when the document belongs to a project: answered across every file of it.
 ACROSS: dict[str, Any] = {
     "textDocument/references": lambda w, u, at, p: project_references(w, u, at),
     "textDocument/prepareRename": lambda w, u, at, p: project_prepare_rename(w, u, at),
     "textDocument/rename": lambda w, u, at, p: project_rename(w, u, at, str(p.get("newName") or "")),
+    "textDocument/documentHighlight": lambda w, u, at, p: [r for r in project_references(w, u, at) if r["uri"] == u],
 }
 IGNORED = {"initialized", "$/cancelRequest", "$/setTrace", "workspace/didChangeConfiguration"}
 UNSUPPORTED: Any = object()
@@ -91,6 +96,7 @@ ANSWERS: dict[str, Any] = {
     "textDocument/semanticTokens/full": lambda d, u, at, p: semantic_tokens(d),
     "textDocument/inlayHint": lambda d, u, at, p: inlay_hints(d, p.get("range")),
     "textDocument/codeAction": lambda d, u, at, p: code_actions(d, u, p.get("range") or {}),
+    "textDocument/documentHighlight": lambda d, u, at, p: document_highlights(d, at),
 }
 
 
@@ -98,6 +104,7 @@ class Server:
     def __init__(self, source: BinaryIO, sink: BinaryIO):
         self.source, self.sink = source, sink
         self.docs: dict[str, Document] = {}
+        self.roots: list[str] = []  # the folders `initialize` named, for workspace symbols
         self.stopping = False
 
     def send(self, payload: dict) -> None:
@@ -118,12 +125,16 @@ class Server:
 
     def handle(self, method: str, p: dict) -> Any:
         if method == "initialize":
+            folders = [f.get("uri", "") for f in p.get("workspaceFolders") or [] if isinstance(f, dict)]
+            self.roots = [u for u in [*folders, str(p.get("rootUri") or "")] if u]
             return {"capabilities": CAPABILITIES, "serverInfo": {"name": "cairn-lsp", "version": VERSION}}
         if method == "shutdown":
             self.stopping = True
             return None
         if method in IGNORED:
             return None
+        if method == "workspace/symbol":
+            return workspace_symbols(str(p.get("query") or ""), {u: d.text for u, d in self.docs.items()}, self.roots)
         uri = (p.get("textDocument") or {}).get("uri", "")
         if method == "textDocument/didOpen":
             self.refresh(uri, (p.get("textDocument") or {}).get("text", ""))
@@ -139,9 +150,14 @@ class Server:
         doc = self.docs.get(uri)
         if doc is None:
             return None if method.startswith("textDocument/") else UNSUPPORTED
-        at = doc.offset(p.get("position") or {})
-        if method in ACROSS and (ws := workspace(uri, {u: d.text for u, d in self.docs.items()})) is not None:
-            return ACROSS[method](ws, uri, at, p)
+        at, buffers = doc.offset(p.get("position") or {}), {u: d.text for u, d in self.docs.items()}
+        if method == "textDocument/codeLens":
+            return code_lenses(doc, uri, buffers)
+        if method in ACROSS and (ws := workspace(uri, buffers)) is not None:
+            answer = ACROSS[method](ws, uri, at, p)
+            if method == "textDocument/documentHighlight":  # the project's references in this file, read or write
+                return highlights(doc, {doc.offset(r["range"]["start"]) for r in answer})
+            return answer
         answer = ANSWERS.get(method)
         return answer(doc, uri, at, p) if answer else UNSUPPORTED
 

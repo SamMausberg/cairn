@@ -26,10 +26,12 @@ def label(f: Function) -> str:
     return f.name.replace("test$", "")
 
 
-def written(project: Project, chosen: str = "") -> list[Function]:
-    """The project's own tests, in source order, whose name contains `chosen`; a dependency's tests are its own."""
+def written(project: Project, chosen: str = "", exact: bool = False) -> list[Function]:
+    """The project's own tests, in source order, whose name contains `chosen`, or is `chosen` when `exact`; a
+    dependency's tests are its own."""
     parsed = Parser(project.source).parse().functions
-    return [f for f in parsed if f.test and project.wrote(f.line) and chosen in label(f)]
+    picked = [f for f in parsed if f.test and project.wrote(f.line)]
+    return [f for f in picked if (label(f) == chosen if exact else chosen in label(f))]
 
 
 def reason(done: subprocess.CompletedProcess) -> str:
@@ -48,6 +50,7 @@ def run_tests(
     *,
     cxx: str = "clang++",
     chosen: str = "",
+    exact: bool = False,
     jobs: int = 0,
     timeout: int = 60,
     memory_mib: int = 1024,
@@ -57,7 +60,7 @@ def run_tests(
     in its own process, `jobs` at a time."""
     if project.target != "hosted":
         fail("E-TEST", f"Tests run as host processes, and target {project.target} has no host to run them on.")
-    tests = written(project, chosen)
+    tests = written(project, chosen, exact)
     record: dict = {"status": "no-test-blocks", "tests": [], "passed": 0, "failed": 0}
     if not tests:
         return record

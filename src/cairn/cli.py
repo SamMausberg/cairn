@@ -141,6 +141,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"emit", "build"}, "--header", {"action": "store_true", "help": "The C header of a library: emit prints it, "
                                      "build writes NAME.h beside the library and holds the library to its layouts."}),
     ({"test"}, "--contract", {"type": Path}),
+    ({"test"}, "--test", {"default": "", "metavar": "NAME", "help": "Run the one test block of exactly this name "
+                           "(`sums`, or `store.sums` in module store), and no contract."}),
     ({"test"}, "--filter", {"default": "", "metavar": "TEXT", "help": "Run only the test blocks and contracts whose "
                             "name contains TEXT."}),
     ({"test"}, "--jobs", {"type": int, "default": 0, "help": "Test processes at once, 1..64; default: the cores, "
@@ -441,13 +443,13 @@ def main(argv: list[str] | None = None) -> int:
             paths = (
                 [a.contract] if a.contract else [contained_file(project.root, x, ".json") for x in project.contracts]
             )
-            paths = [path for path in paths if a.filter in path.name]
+            paths = [path for path in paths if a.filter in path.name and not a.test]
             blocks = {"status": "no-test-blocks", "tests": []}  # --contract runs that contract alone
             if not a.contract:
-                blocks = run_tests(project, cxx=a.cxx, chosen=a.filter, jobs=a.jobs, timeout=a.timeout,
-                                   memory_mib=a.memory_mib)  # fmt: skip
+                blocks = run_tests(project, cxx=a.cxx, chosen=a.test or a.filter, exact=bool(a.test), jobs=a.jobs,
+                                   timeout=a.timeout, memory_mib=a.memory_mib)  # fmt: skip
             if not paths and not blocks["tests"] and blocks["status"] == "no-test-blocks":
-                named = f" whose name contains {a.filter!r}" if a.filter else ""
+                named = f" named {a.test!r}" if a.test else f" whose name contains {a.filter!r}" if a.filter else ""
                 raise ProjectError(f"No tests{named}: write a test block, add project.tests or supply --contract.")
             results = [{"contract": path.name, **evaluate(project.source, load_json_strict(read_text(path, 2_000_000)),
                                                           a.cxx, project.libraries)} for path in paths]  # fmt: skip

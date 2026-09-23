@@ -16,6 +16,7 @@ other answer refuses the rename whole, with the reason, and nothing is applied i
 from __future__ import annotations
 
 import re
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,7 @@ from .document import (
     enclosing,
     flatten,
     line_starts,
+    module_at,
     module_of_each,
     word_at,
 )
@@ -96,14 +98,44 @@ def context(uri: str, buffers: dict[str, str]) -> tuple[Project, list[File]] | N
             project = load_project(home / MANIFEST, given)
         except (ProjectError, OSError, ValueError, Diagnostic):
             return None
-        starts, files = line_starts(project.source), []
-        for unit in project.units:
-            file = (project.root / unit.path).resolve()
-            text = given.get(file) if file in given else file.read_text(encoding="utf-8")
-            files.append(File(file.as_uri(), text, starts[unit.first_line - 1]))
+        files = files_of(project, given)
         if path.resolve().as_uri() in {f.uri for f in files}:
             return project, files
     return None
+
+
+def files_of(project: Project, given: dict[Path, str]) -> list[File]:
+    """Every file of a loaded project, as the editor holds it, with where it starts in the combined source."""
+    starts, files = line_starts(project.source), []
+    for unit in project.units:
+        file = (project.root / unit.path).resolve()
+        text = given.get(file) if file in given else file.read_text(encoding="utf-8")
+        files.append(File(file.as_uri(), text, starts[unit.first_line - 1]))
+    return files
+
+
+def workspace_symbols(query: str, buffers: dict[str, str], roots: list[str]) -> list[dict]:
+    """Every declaration whose name holds `query`, case aside, in the open documents, the projects they belong
+    to and the projects at the workspace's roots; each named with its module as its container."""
+    given = {p.resolve(): text for u, text in buffers.items() if (p := path_of(u)) and p.is_file()}
+    files: dict[str, File] = {}
+    for root in roots:
+        home = path_of(root)
+        if home is not None and (home / MANIFEST).is_file():
+            with suppress(ProjectError, OSError, ValueError, Diagnostic):  # a broken manifest has no symbols
+                files |= {f.uri: f for f in files_of(load_project(home / MANIFEST, given), given)}
+    for uri, text in buffers.items():
+        held = context(uri, buffers)
+        files |= {f.uri: f for f in held[1]} if held else {uri: File(uri, text, 0)}
+    out = []
+    for f in files.values():
+        doc = Document(f.text, analyse=False)
+        for d in flatten(declarations(doc.code, 0, len(doc.code))):
+            if query.lower() in d["name"].lower():
+                where = {"uri": f.uri, "range": doc.span(*d["mark"])}
+                out.append({"name": d["name"], "kind": d["kind"], "location": where,
+                            "containerName": module_at(doc.code, d["head"])})  # fmt: skip
+    return out[:1000]
 
 
 def within(project: Project, files: list[File], uri: str) -> tuple[str, int, Any] | None:
