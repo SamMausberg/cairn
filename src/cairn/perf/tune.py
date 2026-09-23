@@ -26,7 +26,7 @@ from . import model
 from .plan_source import Placement, Plan, contract, shown, written
 from .profile import Profile, default
 from .regions import applied, identified
-from .resources import Inspector, host_target, identity
+from .resources import Inspector, device_identity, host_target
 from .search import SPACE, Budget, Candidate, Spent, checked, inspected, priced, radii, refusals, space
 from .work import Cost, count
 
@@ -47,7 +47,7 @@ class Recorder:
                  device: DeviceTarget | None):  # fmt: skip
         self.where, self.name, self.contract = where, name, contract
         self.base = kept.as_written(source, name)
-        self.host, self.device = kept.digest(host), identity(device)
+        self.host, self.device = kept.digest(host), device_identity(device)
         self.history = kept.History(where)
 
     def put(self, kind: str, plan: Plan, target: str, detail: dict, artifact: str | None = None) -> None:

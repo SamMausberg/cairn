@@ -166,6 +166,11 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"tune"}, "--history", {"type": Path, "metavar": "DIR", "help": "The candidate history to record into "
                              "and answer from; default: .cairn/history beside the manifest."}),
     ({"tune"}, "--no-history", {"action": "store_true", "help": "Record nothing and answer from nothing kept."}),
+    ({"tune"}, "--compare", {"action": "append", "default": [], "metavar": "PLAN", "help": "Give twice, as `none` or "
+                             "items such as `grain 1; lanes 8`: report how the second plan differs from the first, "
+                             "each line labelled by the kind of evidence it is, instead of searching."}),
+    ({"tune"}, "--artifacts", {"action": "store_true", "help": "With --compare, add the path of every file behind "
+                               "the report."}),
     ({"predict", "shot"}, "--against", {"type": Path, "metavar": "BEFORE", "help": "What changing BEFORE into this "
                                          "program does: predicted costs, or for shot the rows of --symbol."}),
     ({"predict", "tune"}, "--profile", {"type": Path, "help": "A cairn.machine/1 profile; default: the packaged one."}),
@@ -550,6 +555,16 @@ def main(argv: list[str] | None = None) -> int:
             device = resolve_device(a.device_target, project.device_target, required=False)
             budget = Budget(a.budget_compiles, a.budget_seconds, a.budget_runs)
             kept = None if a.no_history else a.history or project.root / ".cairn" / "history"
+            if a.compare:  # a difference report between two plans, in place of a search
+                from .perf import feedback
+
+                if len(a.compare) != 2:
+                    raise ProjectError("--compare names two plans: the one to compare against, then the other.")
+                first, second = (feedback.parse_plan(x) for x in a.compare)
+                answer = feedback.compare(project.source, a.symbol[0], first, second, priced.parse_sizes(a.at),
+                                          supplied, arch, kept, device, a.budget_compiles, a.artifacts, a.cxx)  # fmt: skip
+                print(feedback.lines_for_people(answer)) if terminal.human(FORMAT) else report(answer)
+                return 0
             answer = tune(project.source, a.symbol[0], priced.parse_sizes(a.at), supplied, arch, a.measure, a.cxx,
                           a.device, device, budget, kept)  # fmt: skip
             if a.write:  # Only the plan line changes, in the file that declares the function, and only if it checks.

@@ -28,7 +28,7 @@ INSPECTOR = hashlib.sha256(Path(device.__file__).read_bytes()).hexdigest()  # a 
 BLOCK = 256  # the block a device region launches with when its plan names none (runtime/cairn_gpu.hpp)
 
 
-def identity(target: DeviceTarget | None) -> str:
+def device_identity(target: DeviceTarget | None) -> str:
     """What the history keeps as a device target (projects/target.py): its name and the toolkit that compiles for
     it. Without a target, words that say so, which no target's identity equals."""
     if target is None:
@@ -83,7 +83,7 @@ class Inspector:
 
     def key(self, source: str) -> str:
         cpp, receipt = compile_source(source)
-        parts = [hashlib.sha256(cpp.encode()).hexdigest(), receipt["runtime_sha256"], identity(self.target),
+        parts = [hashlib.sha256(cpp.encode()).hexdigest(), receipt["runtime_sha256"], device_identity(self.target),
                  INSPECTOR]  # fmt: skip
         return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 

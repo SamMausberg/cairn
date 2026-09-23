@@ -222,6 +222,26 @@ $ cairn tune blur.cairn --symbol blur --at n=1e7 --budget-compiles 4
 
 `--measure K` then times the best-ranked few and the current plan on this host, halving the field each round with more blocks for the survivors, and reports how many pairs ran in the predicted order; on a busy machine two close plans are within noise of each other. Timing device plans runs device code, so only the owner's targets do it: `make tune-device FILE=f.cairn SYMBOL=f AT=n=1e8`, which holds the device lock, rests after each run and stops after 64, and `make calibrate-device`, which replaces the device profile's assumed figures with measured ones. No agent runs either.
 
+`--compare A --compare B` reports how plan `B` differs from plan `A` instead of searching. A plan is written as its items, `grain 1; lanes 8`, or as `none`. Every line has one of five labels: a compiler observation (what ptxas, cuobjdump or the model said, with nothing run), a runtime measurement, a profiler observation, a hypothesis or a suggested experiment.
+
+```text
+$ cairn tune blur.cairn --symbol blur --at n=1e7 --compare none --compare "stage 1; block 128"
+blur: (no plan for blur)  ->  plan blur { block 128; stage 1; }
+  [compiler observation] cairn predict (the model, not a run): at n=1e+07: predicted 1.13e+05 ns -> 1.13e+05 ns; the model's bound device memory -> device memory; confidence low
+  [compiler observation] ptxas and cuobjdump: registers per thread: 12 -> 24
+  [compiler observation] the plan: staged tile bytes per block, computed from the plan: 0 -> 528
+  [compiler observation] ptxas and cuobjdump: SASS instructions in the code: 48 -> 88
+  [compiler observation] cuobjdump: global load instructions in the code: 3 -> 1
+  [compiler observation] cuobjdump: global store instructions in the code: 1 -> 2
+  [compiler observation] cuobjdump: shared load instructions in the code: 0 -> 4
+  [compiler observation] cuobjdump: shared store instructions in the code: 0 -> 1
+  [hypothesis] derived from the SASS counts: b reads through shared memory (global load instructions in the code: 1 in b, 3 in a); b may move fewer bytes from device memory, unless the caches already served the neighbours' repeated reads
+  [suggested experiment] suggested, not run: time a and b at the same sizes, interleaved: make tune-device FILE=... SYMBOL=blur AT=...  (the owner's target; nothing here runs the device)
+  [suggested experiment] suggested, not run: profile a and b in an explicit profiling run (Nsight Compute's occupancy and memory sections), apart from timing, which only the owner runs
+```
+
+A register count, a spill or an instruction count never becomes the reason one plan is slower: at most it leads to a hypothesis worded as one, beside the experiment that would test it, and both go into the history under those kinds. Counts are of instructions in the code, not instructions executed. A measurement or a profile appears only from the history, only while it holds for this function, contract, compiler and target, and with the procedure or the profiling run it came from. Nothing here profiles, and profiling stays apart from timing because a profiler replays kernels. A measured order the model did not predict is reported as such. `--artifacts` adds the path of every file behind the lines: the emitted program, the cubin, ptxas's log, the SASS and the record ids.
+
 The search records into the candidate history, `.cairn/history` beside the manifest unless `--history DIR` names another or `--no-history` turns it off: what it tried, what the checker or nvcc refused, what each compile read, and each run with its procedure (see [the agent protocol](agents.md#candidate-history)). A later search answers from it what still holds, so a kept compile is not repeated and a kept measurement of the same candidate, sizes and procedure is not run again.
 
 ## cairn diff

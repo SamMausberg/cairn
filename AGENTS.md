@@ -62,6 +62,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `perf/regions.py` | names for a function's parallel regions that survive edits which do not touch them |
 | `perf/search.py`, `perf/tune.py` | the bounded search over a function's plans: the space, what the checker accepts, the budgets, measurement |
 | `perf/resources.py` | what a compiled candidate uses on the device, for one target, kept by what was compiled |
+| `perf/feedback.py` | the difference report between two candidates, each line labelled by the kind of evidence it is |
 | `verify/elision.py` | the independent check of every guard lowering leaves out |
 | `verify/diff.py`, `verify/emission.py` | the class each function of two versions gets, and when two emissions are the same code |
 | `verify/runner.py` | test blocks, each run in a process of its own |
