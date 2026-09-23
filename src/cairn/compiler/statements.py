@@ -235,6 +235,13 @@ def s_match(c: Checker, s: Stmt):
     def arm_body(arm, payload):
         if bool(arm.binder) != (payload is not None):
             fail("E-MATCH-BINDING", "A payload arm binds exactly one value; a nullary arm binds none.", arm)
+        if arm.binder == "_":  # binds nothing: the payload is dropped where the arm ends, as `let _ = e;` drops
+            if c.kind(payload) == "linear":
+                fail("E-LINEAR-LEAK", f"{arm.variant}(_) would drop a linear {payload.display()}: bind it and "
+                     "consume it.", arm)  # fmt: skip
+            if c.releases(payload):
+                c.effect("free")
+            return c.block(arm.body)
         if arm.binder:
             c.bind(arm.binder, Binding(payload), arm, "Payload binder must be fresh.")
         returned = c.block(arm.body)
@@ -346,6 +353,8 @@ def s_for(c: Checker, s: Stmt):
         elements(c, s)
     c.expr(s.exprs[0], USIZE)
     c.expr(s.exprs[1], USIZE)
+    if s.name == "_":  # `for _ in 0..n` counts and binds nothing
+        return c.loop(s)
     c.bind(s.name, Binding(USIZE), s, f"Loop binder {s.name} already exists.")
     known = len(c.facts)
     facts.binder(c, s.name, s.exprs[0], s.exprs[1], origin=("binder", s))

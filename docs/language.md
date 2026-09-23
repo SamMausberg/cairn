@@ -259,6 +259,37 @@ fn cost(op:Op) -> u64 { match op { Read => let c = 1; Write => return 2; } retur
 An arm without braces is one return, break, continue, assignment or call; write a block for anything else.
 ```
 
+`_` binds nothing. `Err(_) => return 1;` drops the payload it matches: a copyable one costs nothing, an owner is released where the arm ends and the row says `free`, as `let _ = e;` releases one, and a linear one is refused (`E-LINEAR-LEAK`), because only a consumer may end it. Nothing can read `_` (`E-UNBOUND`), so it repeats freely, in nested arms and as the binder of a loop that only counts, `for _ in 0..3`.
+
+```cairn
+import std.core (Option);
+
+fn depth(a:Option[u64], b:Option[Buf[u8]]) -> u64 {
+  let mut n:u64 = 0;
+  match a {
+    Some(_) => { match b { Some(_) => n = 2; None => n = 1; } }   // the Buf is released here
+    None => return 0;
+  }
+  for _ in 0..3 { n += 1; }
+  return n;
+}
+
+fn main() -> i32 {
+  if depth(Some(7), Some(Buf[u8](4))) != 5 || depth(None, None) != 0 { return 1; }
+  return 0;
+}
+```
+
+```cairn rejects E-LINEAR-LEAK
+import std.core (Option);
+linear struct Lease { id:u64; }
+fn gone(l:Option[Lease]) -> u64 { match l { Some(_) => return 1; None => return 0; } }
+```
+
+```text
+Some(_) would drop a linear Lease: bind it and consume it.
+```
+
 A variant may leave out its type wherever the context names the sum. In an expression, `None`, `Some(x)` and `Ok(v)` belong to the sum the context expects: the return type, an annotated `let`, an assignment, a parameter, a field, the payload of another variant, or the other side of `==`. The bare form checks and emits exactly as the qualified one, which stays legal everywhere.
 
 ```cairn

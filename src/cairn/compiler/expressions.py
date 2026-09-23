@@ -85,6 +85,8 @@ def e_name(c: Checker, e: Expr, expected: Type | None) -> Type:
         value = c.function_value(e, expected) if const is None and expected and expected.name == "fn" else None
         if value:
             return value
+        if const is None and e.val == "_":
+            fail("E-UNBOUND", "_ binds nothing, so nothing can read it: name the value to use it.", e)
         if const is None:
             fail("E-UNBOUND", f"Unbound name {e.val}.{unexpected(c, e.val)}", e, available_names=sorted(c.env),
                  expected_type=expected.display() if expected else None)  # fmt: skip
