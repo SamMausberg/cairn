@@ -25,13 +25,25 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/traits.py` | who implements what, what a bound promises, the one place an instance is made |
 | `compiler/constants.py` | constant folding |
 | `compiler/facts.py` | what the checker established about `usize` values, which lowering uses to drop a guard |
-| `verify/elision.py` | the independent check of every guard lowering leaves out |
 | `compiler/builtins.py` | every primitive's rule, beside its lowering |
 | `compiler/codegen.py` | lowering the typed tree; nothing else produces C++ |
 | `compiler/header.py` | the C header of a library build: its declarations, the layouts it states, what cannot cross |
-| `runtime/*.hpp` | guards, owners, threads, device calls |
-| `projects/toolchain.py` | every native flag |
+| `runtime/*.hpp` | guards, owners, threads, rings, storage floats, device calls, execution contexts |
+| `projects/project.py` | manifests, vendored dependencies, the line-to-file map |
+| `projects/toolchain.py` | every native flag, and the closed table of system libraries |
+| `projects/revision.py` | a program as a path or a git revision holds it |
+| `agent/agent_tools.py` | edit sessions, packets and the host that names them by handle |
+| `agent/evidence.py` | what a packet may say is established about a function |
+| `agent/migration.py`, `agent/plans.py` | the two wider edit classes: interface migrations across files, and plan-only edits |
 | `agent/teaching.py` | the rule cards, selected from lexical tokens |
+| `editor/grammar.py` | the editor grammars, generated from the compiler's vocabulary |
+| `editor/terminal.py` | what a person at a terminal reads, beside the JSON record |
+| `perf/work.py` | what a function does each time it runs, counted from the typed tree, which a prediction prices |
+| `perf/model.py`, `perf/profile.py` | a predicted time, and what one machine can do |
+| `perf/on_device.py` | the only device timing, under the owner's make targets |
+| `verify/elision.py` | the independent check of every guard lowering leaves out |
+| `verify/diff.py`, `verify/emission.py` | the class each function of two versions gets, and when two emissions are the same code |
+| `verify/runner.py` | test blocks, each run in a process of its own |
 | `verify/scalar_values.py` | the value model: leaves, what the guard admits, what a caller observes, reading a model back |
 | `verify/scalar_symbolic.py` | the SMT translator |
 | `verify/scalar_concrete.py` | the concrete replay |
