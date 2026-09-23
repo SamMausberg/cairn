@@ -341,6 +341,31 @@ assert lib.cf_summarize(6, samples).max == 42
 
 A library that runs device work also declares `void NAME_device_stream(void *stream)`, which puts the calling thread's device work on a `cudaStream_t` the caller owns ([concurrency.md](concurrency.md#device-execution)).
 
+## cairn foreign
+
+A foreign implementation is vendored C++ or CUDA standing for a CAIRN function ([memory.md](memory.md#foreign-implementations) has the declarations). `cairn foreign` builds it, inspects it, validates it against its reference, and says what it has:
+
+```sh
+cairn foreign examples/foreign/host --implementation histogram_interleaved
+cairn foreign examples/foreign/device --implementation stencil_tiled --device-target sm_120
+```
+
+```text
+histogram_interleaved implements histogram_u32 (vendor/histogram.cpp)
+  contract        declared, not checked: ffi:histogram_u32_interleaved, ffi_precondition, read:x, trap, write:out
+  native build    native-built: clang++, g++
+  device          not-applicable: a C++ source has no device code
+  finite-tested   clang++: passed, 256 cases
+  finite-tested   g++: passed, 256 cases
+stencil_tiled implements stencil_1d (vendor/stencil.cu)
+  contract        declared, not checked: ffi:stencil_1d_tiled, ffi_precondition, par:device, read:x, trap, write:out
+  native build    native-built: clang++, g++
+  device          stencil_1d_tiled(unsigned long, float *, const float *): 11 registers, 1032 B shared, 0 B spilled, 0 B stack
+  finite-tested   not run: it runs device code, and device code runs only under make gpu; its 12 device tests are native-built
+```
+
+Each line is its own claim. The contract is the externs' declared rows, which nothing checks against the source. The build compiles the vendored files unchanged with the program's command line and device target, and fails if a symbol's C++ types differ from what its extern passes. The device line is what ptxas reports when the source is compiled for the device target; nothing is launched. The finite tests are [cairn validate](#cairn-validate)'s, with the vendored objects linked into both libraries it builds, under each compiler; they are finite testing, and a failure names the shrunk input. The JSON record, `cairn.foreign/1`, adds the implementation's identity, each source's sha256 and every kernel of every CUDA source. A source that defines nothing the program declares, like the vendored `parallel_gpu.cu`, is compiled with the same flags and inspected, and not linked. The command exits 1 when a build or a test failed.
+
 ## A manifest is named by its path
 
 `check`, `build`, `run`, `test`, `doc` and `expand` take a project directory, a single `.cairn` file, or a manifest with any name, so one directory can hold several configurations:

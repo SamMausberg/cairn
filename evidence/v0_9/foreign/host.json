@@ -1,0 +1,115 @@
+{
+ "machine": {
+  "host": "Linux x86_64 6.18.33.2-microsoft-standard-WSL2",
+  "nvcc": "Build cuda_13.2.r13.2/compiler.37668154_0",
+  "g++": "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+  "cuobjdump": true
+ },
+ "schema": "cairn.foreign/1",
+ "implementation": "histogram_interleaved",
+ "implements": "histogram_u32",
+ "identity": "855b2e241b1db36269a256b322ffa0fb03aedc498c914a61764a7be5a79c8265",
+ "sources": [
+  {
+   "path": "vendor/histogram.cpp",
+   "symbols": [
+    "histogram_u32_interleaved"
+   ],
+   "sha256": "bae86c0ac8f2cfa4ce7caf8c3d395c4ed9c0a47ef5834694ddb74dae44459c2a"
+  }
+ ],
+ "contract": {
+  "externs": {
+   "histogram_cpp": {
+    "declared": "histogram_cpp(n:usize, out:rw<u64>[256]@host, x:ro<u32>[n]@host)",
+    "effects": [
+     "ffi:histogram_u32_interleaved",
+     "ffi_precondition",
+     "read:x",
+     "trap",
+     "write:out"
+    ]
+   }
+  },
+  "trust": "declared-not-checked"
+ },
+ "native_built": {
+  "status": "native-built",
+  "compilers": {
+   "clang++": "native-built",
+   "g++": "native-built"
+  }
+ },
+ "device_inspected": {
+  "status": "not-applicable",
+  "reason": "a C++ source has no device code"
+ },
+ "finite_tested": {
+  "clang++": {
+   "schema": "cairn.validation/1",
+   "reference": "histogram_u32",
+   "implementation": "histogram_interleaved",
+   "policy": {
+    "tolerance": {
+     "absolute": 0.0,
+     "relative": 0.0
+    },
+    "domain": {},
+    "budget": 256,
+    "seed": 0,
+    "probes": 300,
+    "seconds": 5
+   },
+   "identity": "855b2e241b1db36269a256b322ffa0fb03aedc498c914a61764a7be5a79c8265",
+   "tiles": {},
+   "finite": {
+    "claim": "finite-tested: the reference is an independent algorithm, but both are compiled by this compiler, so agreement on these cases is finite testing, never proof",
+    "kept_cases": 0,
+    "cases": 256,
+    "implementation_ran": 256,
+    "dispatch_ran": 256,
+    "status": "passed"
+   },
+   "smt": {
+    "status": "unknown",
+    "where": "((n >= 0 && n <= 4096)) && n <= 16",
+    "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided",
+    "reason": "Statement 'unsafe' is not modeled."
+   },
+   "status": "passed"
+  },
+  "g++": {
+   "schema": "cairn.validation/1",
+   "reference": "histogram_u32",
+   "implementation": "histogram_interleaved",
+   "policy": {
+    "tolerance": {
+     "absolute": 0.0,
+     "relative": 0.0
+    },
+    "domain": {},
+    "budget": 256,
+    "seed": 0,
+    "probes": 300,
+    "seconds": 5
+   },
+   "identity": "855b2e241b1db36269a256b322ffa0fb03aedc498c914a61764a7be5a79c8265",
+   "tiles": {},
+   "finite": {
+    "claim": "finite-tested: the reference is an independent algorithm, but both are compiled by this compiler, so agreement on these cases is finite testing, never proof",
+    "kept_cases": 0,
+    "cases": 256,
+    "implementation_ran": 256,
+    "dispatch_ran": 256,
+    "status": "passed"
+   },
+   "smt": {
+    "status": "unknown",
+    "where": "((n >= 0 && n <= 4096)) && n <= 16",
+    "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided",
+    "reason": "Statement 'unsafe' is not modeled."
+   },
+   "status": "passed"
+  }
+ }
+}

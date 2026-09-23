@@ -1,0 +1,13 @@
+[project]
+name = "foreign_device"
+sources = ["src/stencil.cairn"]
+
+[build]
+kind = "exe"
+device_target = "sm_120"
+
+# vendor/parallel_gpu.cu is bench/gpu/parallel_gpu.cu, byte for byte. The program calls nothing in it, so it is
+# compiled and inspected with the program's flags and target, and not linked.
+[foreign]
+"vendor/stencil.cu" = ["stencil_1d_tiled"]
+"vendor/parallel_gpu.cu" = []

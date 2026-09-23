@@ -141,6 +141,8 @@ COMMANDS = {
     "graph": "Print the module graph: each file's modules, each module's imports, exports and dependents, hashes.",
     "export": "Write the program a build compiles, the runtime headers it includes and a record pinning them to "
     "--out; given an export, check it. build, run and test take an export too.",
+    "foreign": "What a foreign implementation has: its declared contract, native build, device inspection, and "
+    "finite tests against its reference.",
 }
 OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that take it, the option, its keywords)
     ({"build", "run", "test", "explain", "tune", "shot", "validate", "state", "export"}, "--cxx", {"default": "clang++"}),
@@ -186,7 +188,9 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"build", "run", "export"}, "--out", {"type": Path}),
     ({"build", "run", "explain", "predict", "tune", "state", "export"}, "--arch", {"choices": sorted(ARCHS)}),
     ({"build", "run"}, "--target", {"choices": sorted(TARGETS), "help": "Freestanding profile; default hosted."}),
-    ({"build", "run", "predict", "tune", "state", "export"}, "--device-target", {"metavar": "SM", "help": "The GPU's compilation "
+    ({"foreign"}, "--implementation", {"required": True, "metavar": "NAME", "help": "The implementation, whose "
+                                       "body calls what a [foreign] source of the manifest defines."}),
+    ({"build", "run", "predict", "tune", "state", "export", "foreign"}, "--device-target", {"metavar": "SM", "help": "The GPU's compilation "
                                                                "target, as sm_120, sm_120f or sm_120a; default: "
                                                                "[build] device_target, else the GPU nvidia-smi "
                                                                "reports."}),
@@ -525,6 +529,12 @@ def main(argv: list[str] | None = None) -> int:
                 report(error.data)
                 return 1
             return 0
+        if a.command == "foreign":  # a device implementation is built and inspected here, and never run
+            from .verify import foreign
+
+            record = foreign.report(project, a.implementation, device_target=a.device_target)
+            print(foreign.summary(record), end="") if terminal.human(FORMAT) else report(record)
+            return 0 if foreign.passed(record) else 1
         if a.command == "graph":
             from .projects.graph import graph, summary
 

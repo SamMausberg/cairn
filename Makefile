@@ -83,7 +83,8 @@ gpu:
 	  tests/soundness/test_concurrency.py tests/soundness/test_plans.py tests/soundness/test_scan.py \
 	  tests/soundness/test_device_paths.py tests/soundness/test_staging.py tests/soundness/test_tensor.py \
 	  tests/projects/test_apps.py tests/projects/test_app_matmul.py \
-	  tests/projects/test_app_analytics.py tests/projects/test_demos.py tests/verification/test_device_validation.py
+	  tests/projects/test_app_analytics.py tests/projects/test_demos.py tests/verification/test_device_validation.py \
+	  tests/projects/test_foreign.py
 	CAIRN_GPU_TESTS=1 $(PYTHON) bench/gpu/parallel_gpu.py
 
 # The two other targets that run device code. Only the owner runs them, never while anything else uses the device:

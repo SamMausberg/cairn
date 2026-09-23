@@ -30,6 +30,7 @@ def signature(f: Function) -> str:
     """The declared interface, exactly as an edit must preserve it."""
     ps = ", ".join(n + ":" + t.display() for n, t in f.params)
     ret = "" if f.ret.name == "void" else " -> " + f.ret.display()
+    ret += f" launch({f.launch[0]}, {f.launch[1]})" if f.launch else ""
     ceiling = "" if f.effects is None else " pure" if f.effects == ("pure",) else f" effects({', '.join(f.effects)})"
     written = f.name if f.source_name.startswith("derive ") else f.source_name  # A derived impl keeps its origin there.
     name = written.rsplit(".", 1)[-1] if f.owner else f.name.rsplit(".", 1)[-1] if f.module else f.name

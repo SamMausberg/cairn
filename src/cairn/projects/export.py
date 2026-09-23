@@ -104,6 +104,9 @@ def export(project: Project, out: Path, *, cxx: str = "clang++", arch: str | Non
         raise ProjectError(f"{out} exists; an export is written into a new directory, never over another.")
     if project.target != "hosted":
         raise ProjectError(f"An export is a hosted program; target {project.target} is built by cairn build.")
+    if project.foreign:  # vendored C++ and CUDA are compiled by cairn build (projects/foreign.py), not exported yet
+        raise ProjectError("An export holds the program CAIRN generates; a project with [foreign] sources is built by "
+                           "cairn build.")  # fmt: skip
     chosen = tuple(f.name for f in written(project)) if tests else ()
     if tests and not chosen:
         raise ProjectError("--tests exports the project's test blocks, and it has none.")

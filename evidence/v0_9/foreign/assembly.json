@@ -1,0 +1,35 @@
+{
+ "machine": {
+  "host": "Linux x86_64 6.18.33.2-microsoft-standard-WSL2",
+  "nvcc": "Build cuda_13.2.r13.2/compiler.37668154_0",
+  "g++": "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+  "cuobjdump": true
+ },
+ "x86_64": {
+  "g++": {
+   "exit": 0,
+   "stdout": "578437695752307201 2 27 7\n1.4142135623730951 3.75 3 2147483647 true\n",
+   "expected": "578437695752307201 2 27 7\n1.4142135623730951 3.75 3 2147483647 true\n",
+   "agrees": true,
+   "sanitizer_reports": false
+  },
+  "clang++": {
+   "exit": 0,
+   "stdout": "578437695752307201 2 27 7\n1.4142135623730951 3.75 3 2147483647 true\n",
+   "expected": "578437695752307201 2 27 7\n1.4142135623730951 3.75 3 2147483647 true\n",
+   "agrees": true,
+   "sanitizer_reports": false
+  }
+ },
+ "ptx": {
+  "BREV": [
+   "/*0180*/ BREV R9, R6 ; /* 0x0000000600097301 */"
+  ],
+  "LDG.E.CONSTANT": [
+   "/*0180*/ LDG.E.CONSTANT R5, desc[UR8][R4.64] ; /* 0x0000000804057981 */"
+  ],
+  "MEMBAR": [
+   "/*0120*/ MEMBAR.ALL.GPU ; /* 0x0000000000007992 */"
+  ]
+ }
+}

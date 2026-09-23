@@ -22,6 +22,7 @@ from .toolchain import ARCHS, KINDS, LIBRARIES, TARGETS, ProjectError
 SEGMENT = re.compile(r"[A-Za-z0-9_.-]+")
 MAX_SOURCES = 1024  # source files one manifest lists; the bytes they hold together are held to MAX_SOURCE
 MAX_DEPENDENCIES = 64  # vendored projects one manifest names, each at most 4 deep
+FOREIGN_SUFFIXES = (".cpp", ".cc", ".cu")  # what a [foreign] table vendors: C++ sources and CUDA sources
 
 
 def read_text(path: Path, limit: int) -> str:
@@ -92,6 +93,8 @@ class Project:
     vendored_units: tuple[str, ...] = ()  # the unit paths a dependency contributed, never the root project's own
     libraries: tuple[str, ...] = ()  # the system libraries the root manifest names: rows of toolchain.LIBRARIES
     device_target: str | None = None  # `[build] device_target`, as written: projects/target.py resolves it
+    # `[foreign]`: each vendored C++ or CUDA source and the symbols it defines (projects/foreign.py builds them)
+    foreign: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     def unit_at(self, line: int) -> Unit | None:
         """The source file a line of the combined source comes from."""
@@ -122,6 +125,7 @@ class Project:
         return result
 
     def receipt(self) -> dict:
+        vendored = [{"path": p, "symbols": list(s), "sha256": digest(self.root / p)} for p, s in self.foreign]
         return {
             "name": self.name,
             "manifest_sha256": self.manifest_sha256,
@@ -130,6 +134,7 @@ class Project:
             "composition": "ordered sources, vendored dependencies first; modules are the only namespaces",
             "source_sha256": hashlib.sha256(self.source.encode()).hexdigest(),
             **({"libraries": list(self.libraries)} if self.libraries else {}),
+            **({"foreign": vendored} if vendored else {}),
         }
 
 
@@ -145,6 +150,7 @@ class Manifest:
     sha256: str
     libraries: tuple[str, ...] = ()
     device_target: str | None = None
+    foreign: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
 
 def read_manifest(target: Path) -> Manifest:
@@ -153,7 +159,7 @@ def read_manifest(target: Path) -> Manifest:
     it is written. A dependency's `[build]` choices are ignored by the build but must still name something known."""
     text = read_text(target, 65536)
     data = tomllib.loads(text)
-    if set(data) - {"project", "build", "dependencies"}:
+    if set(data) - {"project", "build", "dependencies", "foreign"}:
         raise ProjectError("Unknown manifest tables; hooks are not supported.")
     project, build, table = data.get("project", {}), data.get("build", {}), data.get("dependencies", {})
     if not isinstance(project, dict) or not isinstance(build, dict) or not isinstance(table, dict):
@@ -193,10 +199,32 @@ def read_manifest(target: Path) -> Manifest:
     device = build.get("device_target")  # the GPU's compilation target, never the CPU's: sm_120, sm_120f, sm_120a
     if device is not None:
         parse(device, "manifest")
+    foreign = vendored(data.get("foreign", {}))
     digest = hashlib.sha256(text.encode()).hexdigest()
     return Manifest(
-        name, tuple(sources), tuple(contracts), kind, arch, machine, table, digest, tuple(libraries), device
+        name, tuple(sources), tuple(contracts), kind, arch, machine, table, digest, tuple(libraries), device, foreign
     )
+
+
+def vendored(table: object) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """`[foreign] "vendor/x.cpp" = ["symbol"]`: a vendored C++ or CUDA source and the C symbols or kernel names it
+    defines, which the project's externs declare. Data only: the build chooses every flag (projects/foreign.py)."""
+    if not isinstance(table, dict) or len(table) > 64:
+        raise ProjectError("foreign is a table of at most 64 vendored sources.")
+    out = []
+    for path, symbols in table.items():
+        if PurePosixPath(path).suffix not in FOREIGN_SUFFIXES:
+            raise ProjectError(f"A foreign source is C++ or CUDA ({', '.join(FOREIGN_SUFFIXES)}): {path!r}.")
+        if not isinstance(symbols, list) or len(symbols) > 256 or len(set(map(str, symbols))) != len(symbols):
+            raise ProjectError(f"{path} names each symbol it defines once, in a list.")
+        if not all(isinstance(s, str) and re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", s) for s in symbols):
+            raise ProjectError(f"{path} names its symbols as C identifiers.")
+        out.append((path, tuple(symbols)))
+    return tuple(out)
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def opened(body: str, current: str) -> list[str]:
@@ -275,9 +303,11 @@ def load_project(path: str | Path = ".", given: Mapping[Path, str] | None = None
     combined = "".join(text)  # its size was held to the limit fragment by fragment
     for relative in manifest.contracts:
         contained_file(root, relative, ".json")
+    for relative, _ in manifest.foreign:
+        contained_file(root, relative, PurePosixPath(relative).suffix)
     return Project(root, manifest.name, combined, tuple(units), manifest.contracts, manifest.kind, manifest.arch,
                    manifest.target, manifest.sha256, tuple(vendored), tuple(p for p, _, _ in fragments),
-                   manifest.libraries, manifest.device_target)  # fmt: skip
+                   manifest.libraries, manifest.device_target, manifest.foreign)  # fmt: skip
 
 
 def dependencies(root: Path, table: dict, seen: dict[Path, str], depth: int = 0,
@@ -299,6 +329,8 @@ def dependencies(root: Path, table: dict, seen: dict[Path, str], depth: int = 0,
         manifest = read_manifest(contained_file(home, "cairn.toml", ".toml"))
         if manifest.name != name:  # Read before the diamond below: nothing is pinned under a name of its own.
             raise ProjectError(f"Dependency {name} is a project of another name at {where!r}.")
+        if manifest.foreign:  # one build compiles one project's vendored C++ and CUDA, by its own externs
+            raise ProjectError(f"Dependency {name} vendors foreign sources; the root project lists and builds them.")
         if home in seen:
             continue  # A diamond loads once; the first mention fixes its place in the order.
         if name in seen.values():

@@ -490,3 +490,39 @@ fn main() -> i32 {
 ```json
 "say": ["ffi:write", "ffi_precondition", "io", "read:text", "trap"]
 ```
+
+## Foreign implementations
+
+Existing C++ and CUDA can be an [implementation](abstractions.md#implementations) of a CAIRN reference without being rewritten. The project vendors the source and names the symbols it defines in its manifest, an `extern` gives each symbol its CAIRN signature and effects, and an implementation's body is the foreign call.
+
+```toml
+[foreign]
+"vendor/histogram.cpp" = ["histogram_u32_interleaved"]
+"vendor/stencil.cu" = ["stencil_1d_tiled"]
+```
+
+```cairn
+fn blend3(l:f32, c:f32, r:f32) -> f32 = 0.25 * l + 0.5 * c + 0.25 * r;
+
+fn stencil_1d(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device)
+  effects(read:x, write:out, trap, ffi_precondition, par:device, ffi:stencil_1d_tiled) {
+  parallel i in n {
+    if i > 0 && i + 1 < n { out[i] = blend3(x[i - 1], x[i], x[i + 1]); } else { out[i] = x[i]; }
+  }
+}
+
+extern "stencil_1d_tiled" fn stencil_launch(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) launch(n, 256)
+  effects();
+
+fn stencil_tiled(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) implements stencil_1d {
+  unsafe { stencil_launch(n, out, x); }
+}
+
+plan stencil_1d use stencil_tiled;
+```
+
+`launch(threads, block)` makes an extern a CUDA `__global__` kernel. A host call launches it over `threads` indices, `block` threads to a block, on the calling thread's stream, and returns once that stream has run it, as a device `parallel` region does. A launched kernel returns nothing, takes scalars and `@device` or `@unified` views, and runs whole warps, 32 to 1024 threads to a block (`E-LAUNCH`, `E-PLACEMENT`). Its row adds `par:device` and `trap`, so no lane can call it (`E-PARALLEL-CALL`). The kernel is trusted to guard its own indices and to touch only the views it is given, as its declared effects say.
+
+An implementation stays inside its reference's ceiling, so the reference names the foreign symbol its implementations may reach (`E-IMPL-EFFECT` otherwise). The build compiles each vendored source as it is, with the program's own flags and device target and the runtime headers on the include path, and asserts that each symbol has the C++ types its extern passes, so a definition of other types does not build. A C++ symbol has C linkage; a kernel keeps its C++ name. A source that defines nothing the program declares, such as a copy of `bench/gpu/parallel_gpu.cu`, is compiled and inspected and not linked. The receipt pins every source by its sha256.
+
+`cairn foreign` says what one foreign implementation has, each claim apart: its declared contract, trusted and not checked; whether it is native-built; what ptxas reports of a CUDA source's kernels; and validation against its reference with the vendored objects linked, under clang++ and g++. An implementation that runs device code has its device tests built and not run, since device code runs only under `make gpu`. [tools.md](tools.md#cairn-foreign) shows the record.

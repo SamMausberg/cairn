@@ -41,7 +41,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-GRAD-RACE` | [gradients](cards/gradients.md) |  |
 | `E-IMMUTABLE` |  | Parameters and let bindings are immutable: copy it into a let mut local and change that. |
 | `E-IMPL-CALL` | [implementations](cards/implementations.md) | Call a helper the reference and the implementation share, never the reference itself. |
-| `E-IMPL-EFFECT` | [implementations](cards/implementations.md) |  |
+| `E-IMPL-EFFECT` | [foreign](cards/foreign.md), [implementations](cards/implementations.md) |  |
 | `E-IMPL-NUMERICS` | [implementations](cards/implementations.md) |  |
 | `E-IMPL-SIGNATURE` | [implementations](cards/implementations.md) | Copy the reference's parameters, types, extents, placements and result exactly. |
 | `E-IMPL-TARGET` | [implementations](cards/implementations.md) |  |
@@ -49,6 +49,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-IMPL-WHEN` | [implementations](cards/implementations.md) | Test only value parameters, with operations that cannot trap, such as n % 4 == 0 or n >= 64. |
 | `E-IMPLEMENTS` | [implementations](cards/implementations.md) |  |
 | `E-IMPORT` |  | Only the project's modules and std.* can be imported. |
+| `E-LAUNCH` | [foreign](cards/foreign.md) |  |
 | `E-LAYOUT` | [layouts](cards/layouts.md) |  |
 | `E-LAYOUT-CONSUMER` | [layouts](cards/layouts.md), [fragments](cards/fragments.md) |  |
 | `E-LAYOUT-GAP` | [layouts](cards/layouts.md) |  |
@@ -72,7 +73,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-PARSE` |  | Use braces, semicolons and CAIRN's grammar, not Rust's or Python's. |
 | `E-PARTIAL-MOVE` | [owners](cards/owners.md) |  |
 | `E-PINNED` | [rings](cards/rings.md) |  |
-| `E-PLACEMENT` | [printing](cards/printing.md) |  |
+| `E-PLACEMENT` | [foreign](cards/foreign.md), [printing](cards/printing.md) |  |
 | `E-PLAN` | [parallel](cards/parallel.md) |  |
 | `E-PRESERVE` |  | Keep what the function does; a witness, when the refusal has one, is an input where it differs. |
 | `E-PRINT-ARG` | [printing](cards/printing.md) |  |

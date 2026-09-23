@@ -1,0 +1,35 @@
+// A 256-bin histogram of the low byte of each sample, and a C++ implementation of it this project vendors.
+// `cairn foreign examples/foreign/host --implementation histogram_interleaved` builds both, runs them on the same
+// boundary inputs under clang++ and g++, and says what the C++ has.
+
+// The reference, as bench/suite/kernels/histogram_u32 measures it. A lane may write only its own element, so CAIRN
+// counts in one loop. Its ceiling lets an implementation call the vendored C++, and nothing else foreign.
+fn histogram_u32(
+  n:usize, out:rw<u64>[256], x:ro<u32>[n]
+) effects(read:x, read:out, write:out, trap, ffi_precondition, ffi:histogram_u32_interleaved) {
+  each b in 256 { out[b] = 0; }
+  each i in n { let b = usize(x[i] & 255); out[b] = add_wrap(out[b], 1); }
+}
+
+// vendor/histogram.cpp, compiled by this project's toolchain as it was written. Its effects are declared and
+// trusted, and a call from CAIRN is unsafe.
+extern "histogram_u32_interleaved" fn histogram_cpp(
+  n:usize, out:rw<u64>[256], x:ro<u32>[n]
+) effects();
+
+// The foreign implementation: the reference's signature, and a body that is the vendored call.
+fn histogram_interleaved(n:usize, out:rw<u64>[256], x:ro<u32>[n]) implements histogram_u32 {
+  unsafe { histogram_cpp(n, out, x); }
+}
+
+plan histogram_u32 use histogram_interleaved;
+
+fn main() -> i32 {
+  let n:usize = 1000;
+  buffer x:u32[n] = zeroed;
+  for i in 0..n { x[i] = u32(i * 7 % 300); }
+  stack counts:u64[256] = zeroed;
+  histogram_u32(n, counts, x);
+  println("bin 7 holds ", counts[7], " samples");
+  return 0;
+}

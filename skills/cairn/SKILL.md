@@ -90,6 +90,7 @@ Each card states one part of the language and the codes of its rules. The compil
 | [generics](cards/generics.md) | `impl`, `trait` |
 | [owners](cards/owners.md) | `Array`, `Buf`, `defer`, `linear`, `swap`, `take` |
 | [assembly](cards/assembly.md) | `asm` |
+| [foreign](cards/foreign.md) | `launch` |
 | [effects](cards/effects.md) | `effects`, `extern`, `pure`, `unsafe` |
 | [parallel](cards/parallel.md) | `device`, `parallel`, `pinned`, `reduce`, `transfer`, `unified` |
 | [cooperative](cards/cooperative.md) | `barrier`, `pipeline`, `shuffle`, `shuffle_down`, `shuffle_xor`, `warp` |
@@ -135,6 +136,7 @@ Every command takes `--format json`, the default when output is piped.
 | `cairn doc` | Generate the API reference of the checked program, as Markdown. |
 | `cairn graph` | Print the module graph: each file's modules, each module's imports, exports and dependents, hashes. |
 | `cairn export` | Write the program a build compiles, the runtime headers it includes and a record pinning them to --out; given an export, check it. build, run and test take an export too. |
+| `cairn foreign` | What a foreign implementation has: its declared contract, native build, device inspection, and finite tests against its reference. |
 | `cairn verify` | SMT source equivalence, not native or Lean verification. |
 | `cairn diff` | What changed between two versions, function by function, and on what evidence. |
 | `cairn certificates` | Check collector arithmetic certificates; not a Lean/compiler proof. |

@@ -84,6 +84,12 @@ class Parser(StatementParser):
         self.need("(")
         ps = self.listed(")", self.parameter)
         ret = self.ty() if self.eat("->") else VOID
+        if flags.get("extern") and self.t.s == "launch" and self.ahead(1) == "(":  # a kernel: launch(threads, block)
+            self.i += 2
+            threads = self.take()
+            self.need(",")
+            flags["launch"] = (threads, self.integer())
+            self.need(")")
         effects = None
         if self.eat("pure"):
             effects = ("pure",)

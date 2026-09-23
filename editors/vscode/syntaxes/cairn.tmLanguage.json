@@ -493,6 +493,10 @@
      "match": "\\blanes\\b(?=\\s+[0-9])"
     },
     {
+     "name": "storage.modifier.cairn",
+     "match": "\\blaunch\\b(?=\\s*\\(\\s*\\w+\\s*,\\s*[0-9]+\\s*\\))"
+    },
+    {
      "name": "keyword.declaration.cairn",
      "match": "\\blayout\\b(?=\\s+[A-Za-z_]\\w*\\s*=)"
     },

@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from operator import attrgetter
 from typing import Any
 
-from . import calls, concurrency, cooperative, expressions, implementations, machine, places, statements
+from . import calls, concurrency, cooperative, expressions, implementations, launches, machine, places, statements
 from .builtins import SOFT, TABLE
 from .concurrency import ORDERS, PINNED
 from .constants import constant
@@ -516,6 +516,8 @@ class Checker:
         if f.extern:
             self.effects |= {"ffi:" + (f.symbol or f.name.rsplit(".", 1)[-1]), *(f.effects or ())}
             self.effects |= {("write:" if t.mode == "rw" else "read:") + n for n, t in f.params if t.mode != "value"}
+            if f.launch:  # a vendored CUDA kernel host code launches
+                launches.check_launch(self, f)
         elif not self.block(f.body) and f.ret != VOID:
             fail("E-RETURN", f"Not all paths of {f.name} return.", f)
         if not f.extern:  # An owner it was given, and did not pass on, is released where the function ends.

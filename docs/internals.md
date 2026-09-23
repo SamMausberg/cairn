@@ -51,9 +51,12 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
 | The runtime operation each piece of device work lowers to | `compiler/execution.py` | `call`, `unrolled` |
 | `mmio_read`, `mmio_write`, `asm` and typed assembly, beside their lowering | `compiler/machine.py` | `check_machine`, `s_asm`, `lower_asm`, `unbuildable` |
+| An `extern` CUDA kernel's `launch(threads, block)` and its launch | `compiler/launches.py` | `check_launch`, `lower_launch` |
 | `print`, `println`, `eprint`, `eprintln`, `format` and their lowering | `compiler/printing.py` | `check_print`, `target`, `piece`, `lower_print` |
 | The C header of a library | `compiler/header.py` | `Header.render`, `shape`, `refusal` |
 | Manifests, vendored dependencies | `projects/project.py` | `read_manifest`, `contained_file`, `claim`, `dependencies` |
+| Vendored C++ and CUDA, compiled by the program's command line and held to their externs' types | `projects/foreign.py` | `compile_sources`, `binding`, `inspect` |
+| What a foreign implementation has: its contract, build, device inspection and validation | `verify/foreign.py` | `identify`, `report`, `device_tests` |
 | Native flags, the closed table of system libraries, the freestanding effect ban | `projects/toolchain.py` | `command`, `flags`, `LIBRARIES`, `audit_effects` |
 | The device target | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits` |
 | Exports and the commands that take one | `projects/export.py` | `export`, `check`, `build`, `run`, `test`, `compare` |
@@ -170,7 +173,7 @@ Outside `unsafe` and `extern`, an accepted program cannot use a moved owner, lea
 "process": { "effects": ["ffi:getpid", "io"], "syntactic_check_sites": { "unsafe_blocks": 1 } }
 ```
 
-An extern's signature and effects are trusted as written, and so are the effects [typed assembly](memory.md#layout-and-the-machine) declares. A foreign caller of an exported function must supply live, initialized, correctly typed storage for every borrow; the entry guards cannot prove provenance or exclude concurrent foreign access. Those guards run only in the exported `cf_` symbol (`checked-entries/1` among the receipt's trusted lowering rules).
+An extern's signature and effects are trusted as written, and so are the effects [typed assembly](memory.md#layout-and-the-machine) declares, and so is the contract of a [foreign implementation](memory.md#foreign-implementations), which `cairn foreign` holds to its reference only on the inputs it ran. A foreign caller of an exported function must supply live, initialized, correctly typed storage for every borrow; the entry guards cannot prove provenance or exclude concurrent foreign access. Those guards run only in the exported `cf_` symbol (`checked-entries/1` among the receipt's trusted lowering rules).
 
 Manifests are data and accept local listed paths only: no hooks, commands, downloads, arbitrary flags, traversal or symlinks. Each rule is pinned in `tests/projects/test_projects.py`:
 

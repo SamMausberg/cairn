@@ -167,6 +167,14 @@ def unit_commands(cxx: str, arch: str | None, kind: str) -> tuple[list[str], lis
     return [find(cxx), *(f for f in every if f != "-shared"), "-c"], [find(cxx), *every]
 
 
+def foreign_unit(cxx: str, arch: str | None, kind: str, device: DeviceTarget | None, include: Path) -> list[str]:
+    """How a vendored source compiles (projects/foreign.py): the program's own flags, for `device` when it is CUDA,
+    as an object, with the runtime headers at `include` on the path; the unit and `-o object` follow."""
+    if device is None:
+        return [*unit_commands(cxx, arch, kind)[0], f"-I{include}"]
+    return [*(f for f in device_prefix(cxx, arch, kind, device) if f != "-shared"), "-c", f"-I{include}"]
+
+
 def precompiled(prefix: list[str], version_text: str, header: Path) -> tuple[list[str], list[str]]:
     """How an incremental build precompiles its shared header, and what each unit then adds to its command. Clang
     reads the PCH it is named. GCC refuses `#pragma once` in the file it precompiles, so it precompiles `pch.hpp`,

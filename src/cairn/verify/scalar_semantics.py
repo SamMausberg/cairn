@@ -146,6 +146,7 @@ def implementation_hash():
                 "compiler/constants.py",
                 "compiler/builtins.py",
                 "compiler/machine.py",
+                "compiler/launches.py",
                 "compiler/printing.py",
                 "compiler/expansion.py",
                 "compiler/gradients.py",

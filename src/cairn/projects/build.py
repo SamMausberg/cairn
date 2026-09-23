@@ -19,6 +19,7 @@ from ..compiler.header import header as c_header
 from ..compiler.implementations import targeted
 from ..compiler.machine import unbuildable
 from ..compiler.tree import Diagnostic
+from . import foreign
 from .project import Project, ProjectError
 from .target import resolve
 from .toolchain import audit_effects, find, flags, host_family, link_flags, linked, precompiled, profile, unit_commands
@@ -197,15 +198,16 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         (directory / (name + ".h")).write_text(declared, encoding="utf-8")
     artifact = directory / (name + ".elf" if bare else "lib" + name + ".so" if kind == "library" else name)
     device = None
-    if "cuda" in receipt["requires"]:  # One device target, resolved once, for the command line and the receipt.
+    cuda = "cuda" in receipt["requires"] or foreign.linked_device_code(project)  # a linked kernel makes a device build
+    if cuda or any(foreign.cuda(path) for path, _ in project.foreign):  # One target, resolved once, for everything.
         device = resolve(device_target, project.device_target)
         targeted(receipt["functions"], device)  # a selected implementation's needs, named before the program's
         device = device.require(receipt["device_features"])
     if why := unbuildable(receipt["requires"], host_family(), device.name if device else ""):
         raise Diagnostic("E-ASM-TARGET", why)  # assembly builds only for the machine it names
-    command = native_command(
-        cxx, str(cpp), str(artifact), arch or project.arch, kind, device is not None, target, device
-    )
+    if project.foreign and bare:
+        raise ProjectError(f"Target {target} builds one image from CAIRN alone; it compiles no vendored source.")
+    command = native_command(cxx, str(cpp), str(artifact), arch or project.arch, kind, cuda, target, device)
     libraries = [] if bare else linked(project.libraries, receipt["modules"])  # an image refuses ffi effects above
     command += link_flags(libraries)
     if debug:  # Symbols plus #line directives: a debugger steps through the .cairn files.
@@ -231,15 +233,22 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
     }
     try:
         record["compiler_version"] = compiler_version(compiler)[:10000]
-        if incremental and not bare and "cuda" not in receipt["requires"]:  # Device code and images stay one unit.
+        # Vendored C++ and CUDA, each compiled by this build's own command line and linked before the libraries.
+        vendored, foreign_built = foreign.compile_sources(
+            project, directory, cxx, arch or project.arch, kind, device, timeout
+        )
+        at = command.index("-o")  # nvcc's `-x cu` would read an object as source, so its linker is handed them
+        command[at:at] = [part for obj in vendored for part in (["-Xlinker", obj] if cuda else [obj])]
+        record.update({"foreign": foreign_built} if foreign_built else {})
+        if incremental and not bare and not cuda:  # Device code and images stay one unit.
             stub = generated[generated.rindex("\n// entry\n") :] if "\n// entry\n" in generated else ""
             command, compiled = objects(
                 project, directory, out, compiler, cxx, arch, kind, debug, units(interface, bodies), stub, timeout
             )
-            command += ["-o", str(artifact), *link_flags(libraries)]
+            command += [*vendored, "-o", str(artifact), *link_flags(libraries)]
             record["command"] = command
             record["units"] = [{k: v for k, v in u.items() if k not in {"error", "arguments"}} for u in compiled]
-        failed = next((unit["error"] for unit in compiled if unit.get("error")), None)
+        failed = next((unit["error"] for unit in compiled if unit.get("error")), None) or foreign.failure(foreign_built)
         cp = failed or subprocess.run(command, capture_output=True, text=True, timeout=timeout)
         record.update(
             status="native-built" if cp.returncode == 0 else "native-build-failed",

@@ -159,8 +159,9 @@ def fresh(p: Any, stem: str) -> str:
 
 
 def subject(source: str, reference: str, implementation: str, cxx: str, directory: Path,
-            libraries: tuple[str, ...] = ()) -> tuple[Subject, str]:  # fmt: skip
-    """Both libraries built, and the program with no selection (what `smt` compares)."""
+            libraries: tuple[str, ...] = (), objects: tuple[str, ...] = ()) -> tuple[Subject, str]:  # fmt: skip
+    """Both libraries built, and the program with no selection (what `smt` compares); `objects` are a project's
+    vendored C++, linked into each (projects/foreign.py)."""
     from ..agent.projection import format_expr, local
 
     p, _, receipts = compile_program(source)
@@ -189,6 +190,7 @@ def subject(source: str, reference: str, implementation: str, cxx: str, director
         where.mkdir(parents=True, exist_ok=True)
         write_program(where, "program.cpp", cpp)
         line = native_command(cxx, str(where / "program.cpp"), str(where / "program.so"))
+        line[line.index("-o") : line.index("-o")] = objects
         line += link_flags(linked(libraries, receipt["modules"]))
         done = subprocess.run(line, capture_output=True, text=True, timeout=300)
         if done.returncode:
@@ -298,7 +300,7 @@ def keep(path: Path, reference: str, case: Case, implementation: str, policy: Po
 
 def validate(source: str, reference: str, implementation: str, policy: Policy | dict[str, Any] | None = None,
              cxx: str = "clang++", regressions: Path | None = None, libraries: tuple[str, ...] = (),
-             smt_timeout_ms: int = 3000) -> dict[str, Any]:  # fmt: skip
+             smt_timeout_ms: int = 3000, objects: tuple[str, ...] = ()) -> dict[str, Any]:  # fmt: skip
     """The validation record of one implementation: finite results and, apart from them, what Z3 established."""
     policy = policy if isinstance(policy, Policy) else Policy.of(policy)
     record: dict[str, Any] = {"schema": SCHEMA, "reference": reference, "implementation": implementation,
@@ -316,7 +318,7 @@ def validate(source: str, reference: str, implementation: str, policy: Policy | 
     fs = {f.name: f for f in p.functions}
     with tempfile.TemporaryDirectory(prefix="cairn-validate-") as tmp:
         try:
-            s, base = subject(source, reference, implementation, cxx, Path(tmp), libraries)
+            s, base = subject(source, reference, implementation, cxx, Path(tmp), libraries, objects)
             found = boundaries.tiles(p, fs[implementation], receipts[implementation].get("plan"))
             cases, _ = kept(regressions, reference)
             fresh_cases = boundaries.generate(fs[reference], found, policy.domain, policy.budget, policy.seed)
@@ -442,6 +444,7 @@ def validate_project(project: Any, symbol: str, policy: dict[str, Any] | None = 
     project's regressions file of that function pinned when it kept its first case, else the defaults. A failing case
     is kept in that file, `regressions/<reference>.json` unless named, which `cairn test` replays once the manifest
     lists it under tests."""
+    from ..projects import foreign
     from ..projects.project import ProjectError
 
     receipts = compile_program(project.source)[2]
@@ -453,7 +456,9 @@ def validate_project(project: Any, symbol: str, policy: dict[str, Any] | None = 
     path = regressions or project.root / "regressions" / f"{reference}.json"
     _, pinned = kept(path, reference)
     chosen = policy if policy is not None else (pinned or {}).get("policy")
-    record = validate(project.source, reference, name, chosen, cxx, path, project.libraries)
+    with tempfile.TemporaryDirectory(prefix="cairn-vendored-") as vendored:  # a foreign implementation's C++
+        objects = tuple(foreign.host_objects(project, Path(vendored), cxx)) if project.foreign else ()
+        record = validate(project.source, reference, name, chosen, cxx, path, project.libraries, objects=objects)
     relative = path.resolve().relative_to(project.root.resolve()).as_posix() if path.resolve().is_relative_to(
         project.root.resolve()) else str(path)  # fmt: skip
     record["regressions"] = {"file": relative, "exists": path.is_file(),

@@ -1,0 +1,162 @@
+{
+ "machine": {
+  "host": "Linux x86_64 6.18.33.2-microsoft-standard-WSL2",
+  "nvcc": "Build cuda_13.2.r13.2/compiler.37668154_0",
+  "g++": "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+  "cuobjdump": true
+ },
+ "status": "read",
+ "device_target": {
+  "name": "sm_120",
+  "compute_capability": "12.0",
+  "variant": "portable",
+  "origin": "given",
+  "features": [
+   "device_lanes",
+   "wmma",
+   "mma_sync",
+   "bf16",
+   "cp_async",
+   "clusters",
+   "tma"
+  ],
+  "required_features": [],
+  "limits": {
+   "registers_per_thread": 255,
+   "registers_per_sm": 65536,
+   "threads_per_block": 1024,
+   "warps_per_sm": 48,
+   "shared_per_block": 49152,
+   "shared_per_block_optin": 101376,
+   "shared_per_sm": 102400
+  },
+  "limits_origin": "specification: CUDA C++ Programming Guide, technical specifications per compute capability",
+  "toolkit": {
+   "nvcc": "/usr/local/cuda/bin/nvcc",
+   "release": "13.2",
+   "version": "V13.2.78"
+  }
+ },
+ "sources": {
+  "vendor/stencil.cu": {
+   "status": "inspected",
+   "sha256": "35f97878e7d5348ded6cc5f6946600e8eb962ba7afc72b0f9677eca357122810",
+   "command": [
+    "/usr/local/cuda/bin/nvcc",
+    "-std=c++20",
+    "-O3",
+    "--fmad=false",
+    "-arch=sm_120",
+    "--extended-lambda",
+    "--expt-relaxed-constexpr",
+    "-Werror",
+    "all-warnings",
+    "-ccbin",
+    "/usr/bin/g++",
+    "-x",
+    "cu",
+    "-Xcompiler",
+    "-ffp-contract=off,-fno-fast-math,-fexceptions,-fno-rtti,-Wall,-Wextra,-Werror,-Wno-unused-parameter,-Wno-unused-variable,-Wno-unused-but-set-variable,-march=x86-64",
+    "-I/tmp/tmp8foa9ynz",
+    "-cubin",
+    "-Xptxas",
+    "-v",
+    "/tmp/tmp8foa9ynz/inspect_0.cu",
+    "-o",
+    "/tmp/tmp8foa9ynz/inspect_0.cubin"
+   ],
+   "kernels": {
+    "stencil_1d_tiled(unsigned long, float *, const float *)": {
+     "registers": 11,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 1032
+    }
+   }
+  },
+  "vendor/parallel_gpu.cu": {
+   "status": "inspected",
+   "sha256": "e3d75b162aa76556cf5870ba2f364397ca91f26793c1b36c3f172f4378735106",
+   "command": [
+    "/usr/local/cuda/bin/nvcc",
+    "-std=c++20",
+    "-O3",
+    "--fmad=false",
+    "-arch=sm_120",
+    "--extended-lambda",
+    "--expt-relaxed-constexpr",
+    "-Werror",
+    "all-warnings",
+    "-ccbin",
+    "/usr/bin/g++",
+    "-x",
+    "cu",
+    "-Xcompiler",
+    "-ffp-contract=off,-fno-fast-math,-fexceptions,-fno-rtti,-Wall,-Wextra,-Werror,-Wno-unused-parameter,-Wno-unused-variable,-Wno-unused-but-set-variable,-march=x86-64",
+    "-I/tmp/tmp8foa9ynz",
+    "-cubin",
+    "-Xptxas",
+    "-v",
+    "/tmp/tmp8foa9ynz/inspect_1.cu",
+    "-o",
+    "/tmp/tmp8foa9ynz/inspect_1.cubin"
+   ],
+   "kernels": {
+    "void cr::gpu::lanes<(unsigned int)1, unsigned long cr::gpu::compact<unsigned long, compact(unsigned long, bool)::[lambda(unsigned long) (instance 1)], compact(unsigned long, bool)::[lambda(unsigned long) (instance 2)]>(T1 *, unsigned long, T2, T3)::[lambda(unsigned long) (instance 2)]>(unsigned long, T2)": {
+     "registers": 14,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 0
+    },
+    "void cr::gpu::lanes<(unsigned int)1, unsigned long cr::gpu::compact<unsigned long, compact(unsigned long, bool)::[lambda(unsigned long) (instance 1)], compact(unsigned long, bool)::[lambda(unsigned long) (instance 2)]>(T1 *, unsigned long, T2, T3)::[lambda(unsigned long) (instance 1)]>(unsigned long, T2)": {
+     "registers": 12,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 0
+    },
+    "void cr::gpu::lanes<(unsigned int)1, saxpy(unsigned long, bool)::[lambda(unsigned long) (instance 1)]>(unsigned long, T2)": {
+     "registers": 14,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 0
+    },
+    "void cub::_V_300200_SM_1200::detail::scan::DeviceScanKernel<cub::_V_300200_SM_1200::detail::scan::policy_hub<unsigned char, unsigned long, int, unsigned long long, cuda::std::__4::plus<void>>::Policy1000, unsigned char *, unsigned long *, cub::_V_300200_SM_1200::ScanTileState<int, (bool)1>, cuda::std::__4::plus<void>, cub::_V_300200_SM_1200::detail::InputValue<unsigned char, unsigned char *>, unsigned long long, int, (bool)0, unsigned char>(T2, T3, T4, int, T5, T6, T7)": {
+     "registers": 72,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 12304
+    },
+    "void cub::_V_300200_SM_1200::detail::scan::DeviceScanInitKernel<cub::_V_300200_SM_1200::ScanTileState<int, (bool)1>>(T1, int)": {
+     "registers": 8,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 0
+    },
+    "void cub::_V_300200_SM_1200::detail::reduce::DeviceReduceSingleTileKernel<cub::_V_300200_SM_1200::detail::reduce::policy_hub<float, unsigned long long, cr::reuse::Binary<float, dot(unsigned long, bool)::[lambda(float, float) (instance 1)]>>::Policy1000, float *, float *, int, cr::reuse::Binary<float, dot(unsigned long, bool)::[lambda(float, float) (instance 1)]>, float, float, cuda::std::__4::identity>(T2, T3, T4, T5, T6, T8)": {
+     "registers": 39,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 44
+    },
+    "void cub::_V_300200_SM_1200::detail::reduce::DeviceReduceKernel<cub::_V_300200_SM_1200::detail::reduce::policy_hub<float, unsigned long long, cr::reuse::Binary<float, dot(unsigned long, bool)::[lambda(float, float) (instance 1)]>>::Policy1000, cr::reuse::Indexed<float, dot(unsigned long, bool)::[lambda(unsigned long) (instance 1)]>, unsigned long long, cr::reuse::Binary<float, dot(unsigned long, bool)::[lambda(float, float) (instance 1)]>, float, cuda::std::__4::identity>(T2, T5 *, T3, cub::_V_300200_SM_1200::GridEvenShare<T3>, T4, T6)": {
+     "registers": 40,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 44
+    },
+    "void cub::_V_300200_SM_1200::detail::reduce::DeviceReduceSingleTileKernel<cub::_V_300200_SM_1200::detail::reduce::policy_hub<float, unsigned long long, cr::reuse::Binary<float, dot(unsigned long, bool)::[lambda(float, float) (instance 1)]>>::Policy1000, cr::reuse::Indexed<float, dot(unsigned long, bool)::[lambda(unsigned long) (instance 1)]>, float *, unsigned long long, cr::reuse::Binary<float, dot(unsigned long, bool)::[lambda(float, float) (instance 1)]>, float, float, cuda::std::__4::identity>(T2, T3, T4, T5, T6, T8)": {
+     "registers": 52,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 44
+    },
+    "void cub::_V_300200_SM_1200::detail::EmptyKernel<void>()": {
+     "registers": 4,
+     "spill_bytes": 0,
+     "stack_bytes": 0,
+     "shared_bytes": 0
+    }
+   }
+  }
+ }
+}

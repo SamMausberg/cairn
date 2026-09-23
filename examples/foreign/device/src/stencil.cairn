@@ -1,0 +1,46 @@
+// A 3-point blend on the device, and a CUDA kernel this project vendors that computes it from a shared-memory tile.
+// `cairn foreign examples/foreign/device --implementation stencil_tiled` builds both and reads the kernel's registers
+// and shared memory; the comparison runs only on a GPU, under `make gpu`.
+
+// The reference: the blend bench/suite/kernels/stencil_1d measures, with its views on the device. Its ceiling lets an
+// implementation launch the vendored kernel, and nothing else foreign.
+fn blend3(l:f32, c:f32, r:f32) -> f32 = 0.25 * l + 0.5 * c + 0.25 * r;
+
+fn stencil_1d(
+  n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device
+) effects(read:x, write:out, trap, ffi_precondition, par:device, ffi:stencil_1d_tiled) {
+  parallel i in n {
+    if i > 0 && i + 1 < n {
+      out[i] = blend3(x[i - 1], x[i], x[i + 1]);
+    } else {
+      out[i] = x[i];
+    }
+  }
+}
+
+// vendor/stencil.cu's kernel, launched over n threads, 256 to a block, as its own comment asks. The checker cannot
+// see its body: its effects are declared and trusted, and each call is unsafe.
+extern "stencil_1d_tiled" fn stencil_launch(
+  n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device
+) launch(n, 256) effects();
+
+// The foreign implementation: the reference's signature, and a body that is the launch.
+fn stencil_tiled(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) implements stencil_1d {
+  unsafe { stencil_launch(n, out, x); }
+}
+
+plan stencil_1d use stencil_tiled;
+
+fn main() -> i32 {
+  let n:usize = 100000;
+  buffer x:f32[n] = zeroed;
+  for i in 0..n { x[i] = f32(i % 1000) * 0.25; }
+  buffer dx:f32[n]@device = zeroed;
+  buffer dout:f32[n]@device = zeroed;
+  transfer(dx, x);
+  stencil_1d(n, dout, dx);
+  buffer got:f32[n] = zeroed;
+  transfer(got, dout);
+  println("point 7 is ", got[7]);
+  return 0;
+}

@@ -38,6 +38,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/facts.py` | what the checker established about `usize` values, which lowering uses to drop a guard |
 | `compiler/builtins.py` | every primitive's rule, beside its lowering |
 | `compiler/machine.py` | the machine: `mmio_read`, `mmio_write`, `asm` and typed assembly, their rules and target requirements beside their lowering |
+| `compiler/launches.py` | an `extern` CUDA kernel's `launch(threads, block)`: its rule beside its lowering |
 | `compiler/printing.py` | `print`, `println`, `eprint`, `eprintln` and `format`: what each argument writes, and their lowering |
 | `compiler/codegen.py` | lowering the typed tree; nothing else produces C++ |
 | `compiler/execution.py` | which runtime operation each piece of device work lowers to, on the calling thread's execution context |
@@ -47,6 +48,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `projects/toolchain.py` | every native flag, and the closed table of system libraries |
 | `projects/target.py` | the device target: its spelling, how it is resolved, the features and limits it has, and the results it refuses |
 | `projects/export.py` | an export: the program a build compiles and the record pinning it, and the builds, runs, tests and comparisons that take it |
+| `projects/foreign.py` | vendored C++ and CUDA a manifest's `[foreign]` names: built by the project's command line, held to each extern's types, inspected |
 | `projects/revision.py` | a program as a path or a git revision holds it |
 | `agent/agent_tools.py` | edit sessions, packets and the host that names them by handle |
 | `agent/evidence.py` | what a packet may say is established about a function |
@@ -68,6 +70,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `perf/feedback.py` | the difference report between two candidates, each line labelled by the kind of evidence it is |
 | `verify/elision.py` | the independent check of every guard lowering leaves out |
 | `verify/diff.py`, `verify/emission.py` | the class each function of two versions gets, and when two emissions are the same code |
+| `verify/foreign.py` | what a foreign implementation has: its declared contract, build, device inspection and validation |
 | `verify/runner.py` | test blocks, each run in a process of its own |
 | `verify/boundaries.py`, `verify/validation.py`, `verify/isolated_calls.py` | contract-driven validation: boundary inputs from an implementation's contract, each call in a process of its own against the reference, shrinking and kept regressions |
 | `verify/device_validation.py` | the device side of validation: generated device tests under each Compute Sanitizer tool, only in `make gpu` |

@@ -1,0 +1,9 @@
+[project]
+name = "foreign_host"
+sources = ["src/histogram.cairn"]
+
+[build]
+kind = "exe"
+
+[foreign]
+"vendor/histogram.cpp" = ["histogram_u32_interleaved"]
