@@ -545,28 +545,34 @@ def audit(p: Program, keep_all: bool = False) -> dict[str, dict[str, dict[str, i
                 w.env[n] = Name(True, constant=v)
         if keep_all:
             clear(f.body)
-        else:
+        elif any(e.established for e in nodes(f.body)):  # A function with nothing proposed has nothing to check.
             w.block(f.body)
         out[f.name] = {"accepted": w.accepted, "refused": w.refused}
     return out
 
 
-def clear(body: list[Stmt]):
-    """Clear every established flag under `body`, so that lowering writes every guard."""
+def nodes(body: list[Stmt]):
+    """Every expression under `body` that lowering writes, a lambda's, a part's extent and a spawned region's too."""
     for s in body:
         for e in s.exprs:
-            unestablish(e)
+            yield from within_expr(e)
         for inner in (s.body, s.other, *(a.body for a in s.arms)):
-            clear(inner)
+            yield from nodes(inner)
 
 
-def unestablish(e: Expr):
-    e.established = False
+def within_expr(e: Expr):
+    yield e
     for a in e.args:
-        unestablish(a)
+        yield from within_expr(a)
     if isinstance(e.ref, Expr) and e.tag == "slice":
-        unestablish(e.ref)
+        yield from within_expr(e.ref)
     elif isinstance(e.ref, Function) and e.tag == "lambda":
-        clear(e.ref.body)
+        yield from nodes(e.ref.body)
     elif isinstance(e.ref, Stmt) and e.tag == "spawn":
-        clear([e.ref])
+        yield from nodes([e.ref])
+
+
+def clear(body: list[Stmt]):
+    """Clear every established flag under `body`, so that lowering writes every guard."""
+    for e in nodes(body):
+        e.established = False
