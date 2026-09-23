@@ -1,0 +1,7 @@
+[project]
+name = "matmul"
+sources = ["src/layer.cairn", "src/main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

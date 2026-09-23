@@ -1,0 +1,61 @@
+// One dense layer, out = x * w, with x[rows * inner] and w[inner * cols] stored as f16 and out accumulated in f32.
+// The weights and inputs are rounded once from f32 to f16; the multiply runs on the tensor cores where the three views
+// are @device and as the written loop on the host, under mma_unordered's contract (docs/numerics.md): exact
+// products, f32 sums in the order the hardware picks, within (inner + 1) * 2^-22 * (|out| + sum |x * w|).
+
+// A deterministic value in [-1, 1) for element e of a matrix drawn with this seed: the same on every machine.
+pub fn draw(seed:u64, e:usize) -> f32 {
+  let h = mul_wrap(u64(e) + seed, 0x9e3779b97f4a7c15)
+    ^ shr(mul_wrap(u64(e), 0xbf58476d1ce4e5b9), 31);
+  return f32(i64(h % 2048) - 1024) / 1024.0;
+}
+
+// Fill a row-major matrix of `count` f16 values from `seed`, each value rounded once from its f32 draw.
+pub fn fill(count:usize, into:rw<f16>[count], seed:u64) {
+  for e in 0..count { into[e] = f16(draw(seed, e)); }
+}
+
+// The reference the contract is stated against, in f64 over the f16 values: what an exact multiply would give,
+// within f64's own rounding, and the magnitude the bound scales with.
+pub fn exact(
+  rows:usize, cols:usize, inner:usize, xn:usize, x:ro<f16>[xn], wn:usize, w:ro<f16>[wn], i:usize,
+  j:usize
+) -> f64 {
+  let mut total:f64 = 0.0;
+  for p in 0..inner { total += f64(x[i * inner + p]) * f64(w[p * cols + j]); }
+  return total;
+}
+
+pub fn magnitude(
+  rows:usize, cols:usize, inner:usize, xn:usize, x:ro<f16>[xn], wn:usize, w:ro<f16>[wn], i:usize,
+  j:usize
+) -> f64 {
+  let mut total:f64 = 0.0;
+  for p in 0..inner { total += abs(f64(x[i * inner + p]) * f64(w[p * cols + j])); }
+  return total;
+}
+
+// How many outputs lie outside the contract's bound, starting from out = 0: zero when the multiply kept it.
+pub fn outside(
+  rows:usize, cols:usize, inner:usize, on:usize, out:ro<f32>[on], xn:usize, x:ro<f16>[xn], wn:usize,
+  w:ro<f16>[wn]
+) -> usize {
+  let mut broken:usize = 0;
+  let slack = f64(inner + 1) / 4194304.0;
+  for i in 0..rows {
+    for j in 0..cols {
+      let want = exact(rows, cols, inner, x, w, i, j);
+      let room = slack * magnitude(rows, cols, inner, x, w, i, j); // 4x f32's worst case covers f64's own rounding
+      if abs(f64(out[i * cols + j]) - want) > room { broken += 1; }
+    }
+  }
+  return broken;
+}
+
+// The layer on the host: the written loop, exactly.
+pub fn host_layer(
+  rows:usize, cols:usize, inner:usize, on:usize, out:rw<f32>[on], xn:usize, x:ro<f16>[xn], wn:usize,
+  w:ro<f16>[wn]
+) {
+  mma_unordered(rows, cols, inner, out, x, w);
+}

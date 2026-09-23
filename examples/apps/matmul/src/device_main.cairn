@@ -1,0 +1,38 @@
+// matmul on the tensor cores: the same layer as src/main.cairn, its matrices moved to the device, multiplied there by
+// mma_unordered and moved back, then held to the same contract. The shape, 256 x 512 x 1024, is whole tiles in
+// every direction with k and n multiples of 8, so both stages cross in asynchronous 16-byte copies.
+// `cairn predict --symbol device_layer --at rows=256,cols=512,inner=1024,...` gives what the roofline says; only a
+// device run says what the kernel does, and that is `make gpu`.
+const ROWS:usize = 256;
+const COLS:usize = 512;
+const INNER:usize = 1024;
+const XN:usize = ROWS * INNER;
+const WN:usize = INNER * COLS;
+const ON:usize = ROWS * COLS;
+
+fn device_layer(
+  rows:usize, cols:usize, inner:usize, on:usize, out:rw<f32>[on]@device, xn:usize,
+  x:ro<f16>[xn]@device, wn:usize, w:ro<f16>[wn]@device
+) {
+  mma_unordered(rows, cols, inner, out, x, w);
+}
+
+fn main() -> i32 {
+  buffer x:f16[XN] = zeroed;
+  buffer w:f16[WN] = zeroed;
+  fill(x, 1);
+  fill(w, 2);
+  buffer dx:f16[XN]@device = zeroed;
+  buffer dw:f16[WN]@device = zeroed;
+  buffer dout:f32[ON]@device = zeroed;
+  transfer(dx, x);
+  transfer(dw, w);
+  device_layer(ROWS, COLS, INNER, dout, dx, dw);
+  buffer out:f32[ON] = zeroed;
+  transfer(out, dout);
+  let broken = outside(ROWS, COLS, INNER, out, x, w);
+  println(
+    "device layer: ", ROWS, " x ", COLS, " x ", INNER, ", ", broken, " outputs outside the contract"
+  );
+  return i32(broken);
+}

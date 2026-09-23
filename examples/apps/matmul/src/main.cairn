@@ -1,0 +1,49 @@
+// matmul: a 200 x 136 x 72 f16 layer on the host, checked against the contract of mma_unordered, and one
+// test per property the contract promises. `cairn run examples/apps/matmul/gpu.toml` runs the same layer on the
+// tensor cores; that build needs nvcc and a device, and runs only under `make gpu`.
+const ROWS:usize = 200;
+const COLS:usize = 136;
+const INNER:usize = 72;
+
+const XN:usize = ROWS * INNER;
+const WN:usize = INNER * COLS;
+const ON:usize = ROWS * COLS;
+
+fn main() -> i32 {
+  buffer x:f16[XN] = zeroed;
+  buffer w:f16[WN] = zeroed;
+  buffer out:f32[ON] = zeroed;
+  fill(x, 1);
+  fill(w, 2);
+  host_layer(ROWS, COLS, INNER, out, x, w);
+  let broken = outside(ROWS, COLS, INNER, out, x, w);
+  println(
+    "host layer: ", ROWS, " x ", COLS, " x ", INNER, ", ", broken, " outputs outside the contract"
+  );
+  return i32(broken);
+}
+
+test the_host_multiply_keeps_the_written_order {
+  buffer x:f16[6] = zeroed;
+  buffer w:f16[6] = zeroed;
+  buffer out:f32[4] = zeroed;
+  fill(x, 7);
+  fill(w, 8);
+  host_layer(2, 2, 3, out, x, w);
+  for i in 0..2 {
+    for j in 0..2 {
+      let mut sum:f32 = 0.0;
+      for p in 0..3 { sum += f32(x[i * 3 + p]) * f32(w[p * 2 + j]); }
+      assert_eq(to_bits(out[i * 2 + j]), to_bits(sum), "the host is the written loop, bit for bit");
+    }
+  }
+}
+
+test no_products_leave_every_output_as_it_was {
+  buffer x:f16[1] = zeroed;
+  buffer w:f16[1] = zeroed;
+  buffer out:f32[6] = zeroed;
+  for e in 0..6 { out[e] = f32(e); }
+  host_layer(2, 3, 0, out, x[0..0], w[0..0]);
+  for e in 0..6 { assert_eq(to_bits(out[e]), to_bits(f32(e))); }
+}
