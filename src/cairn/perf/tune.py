@@ -135,7 +135,8 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     legal = sorted((x for x in candidates if not x.refused), key=lambda x: x.predicted_ns)
     if not legal:
         raise ValueError(f"The checker refused every plan of {name} the search tried.")
-    ids = [r["id"] for r in identified(source, name)]
+    named = identified(source, name)
+    ids = [r["id"] for r in named]
     rows = [row(name, x, ids) for x in legal]
     read = [r for r in rows if r.get("resources", {}).get("registers") is not None]
     result: dict[str, Any] = {
@@ -147,7 +148,7 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
         "profile": chosen.describe(),
         "target": {"host": {"arch": arch or "baseline"}},
         **on,
-        "regions": identified(source, name),
+        "regions": named,
         "current": shown(local(name), current),
         "space": {
             "configurations": len(plans),
@@ -192,7 +193,7 @@ def record_search(recorder: Recorder, candidates: list[Candidate], result: dict)
                 "registers", "spill_bytes", "stack_bytes", "shared_bytes", "dynamic_shared_bytes", "instructions",
                 "memory", "kernels")}}  # fmt: skip
             recorder.put("observation", x.plan, recorder.device, detail, r.get("cubin_sha256"))
-        elif r["status"] == "compile-failed":
+        elif r["status"] in {"compile-failed", "target-refused"}:
             recorder.put("failure", x.plan, recorder.device, {"stage": "build", "why": r.get("why", "nvcc failed"),
                                                               "analysis": r["key"]})  # fmt: skip
 
@@ -262,6 +263,53 @@ def timed(source: str, name: str, ranked: list[Plan], current: Plan, sizes: list
         "pairs_ordered_as_predicted": f"{agree} of {len(pairs)}",
         "chosen": {"plan": shown(name, best), **dict(best), "measured_ns": round(times[best], 1)},
     }
+
+
+def lines(result: dict[str, Any], shown_rows: int = 8) -> str:
+    """The answer for a person: the space, the best-ranked few with what a compile read, what was measured, and what
+    the budget spent and left undone."""
+    from .report import duration
+
+    space_ = result["space"]
+    out = [f"{result['function']}: {space_['configurations']} plans, {space_['legal']} accepted, "
+           f"{space_['configurations'] - space_['legal']} refused or unchecked; now {result['current']}"]  # fmt: skip
+    for i, row in enumerate(result["candidates"][:shown_rows], 1):
+        read = row.get("resources", {})
+        seen = f"  {read['registers']} registers, {read['spill_bytes']} spilled" if "registers" in read else ""
+        out.append(f"  {i:>2}  {row['plan']:<44} {duration(row['predicted_ns']):>10} predicted{seen}")
+    if len(result["candidates"]) > shown_rows:
+        out.append(f"      and {len(result['candidates']) - shown_rows} more")
+    out.append(f"chosen: {result['chosen']['plan']}")
+    if isinstance(result.get("measured"), str) and not result.get("rounds"):
+        out.append(result["measured"])
+    for r in result.get("rounds", []):
+        timed_ = ", ".join(f"{p} {duration(ns)}" for p, ns in r["measured_ns"].items())
+        out.append(f"measured, median of {r['blocks']} blocks: {timed_}")
+    spent = result["budget"]
+    out.append(f"budget: {spent['compiles']['started']} of {spent['compiles']['allowed']} compiles, "
+               f"{spent['compiles']['kept']} kept; {spent['seconds']['spent']} s of {spent['seconds']['allowed']}; "
+               f"{spent['runs']['started']} runs, {spent['runs']['kept']} kept")  # fmt: skip
+    out += [f"undone: {why} ({n})" for why, n in spent["undone"].items()]
+    return "\n".join(out)
+
+
+def delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    """What a search answered differently from an earlier answer: each candidate row that changed or is new, the
+    plans no longer among the candidates, and every other part that differs. A row that differs only in whether its
+    reading was kept from an earlier compile is the same row."""
+    if not str(before.get("schema", "")).startswith("cairn.tune/") or before.get("function") != after["function"]:
+        raise ValueError(f"A delta runs between two answers of cairn tune for {after['function']}.")
+
+    def same(row: dict[str, Any]) -> dict[str, Any]:
+        read = {k: v for k, v in row.get("resources", {}).items() if k != "kept"}
+        return {**row, **({"resources": read} if read else {})}
+
+    earlier = {row["plan"]: same(row) for row in before.get("candidates", [])}
+    changed = [row for row in after["candidates"] if earlier.get(row["plan"]) != same(row)]
+    rest = {k: v for k, v in after.items() if k != "candidates" and before.get(k) != v}
+    return {**rest, "schema": "cairn.tune-delta/2", "function": after["function"], "candidates": changed,
+            "unchanged": len(after["candidates"]) - len(changed),
+            "gone": sorted(set(earlier) - {row["plan"] for row in after["candidates"]})}  # fmt: skip
 
 
 def distinct(ranked: list[Plan], keep: int) -> list[Plan]:

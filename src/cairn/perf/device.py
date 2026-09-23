@@ -27,7 +27,14 @@ STACK = re.compile(r"(\d+) bytes stack frame")
 SHARED = re.compile(r"(\d+) bytes smem")
 FUNCTION = re.compile(r"^\s+Function : (\S+)")
 INSTRUCTION = re.compile(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]*)")
-MEMORY = {"LDG": "global_load", "STG": "global_store", "LDS": "shared_load", "STS": "shared_store"}
+MEMORY = {
+    "LDG": "global_load",
+    "STG": "global_store",
+    "LDS": "shared_load",
+    "STS": "shared_store",
+    "LDL": "local_load",
+    "STL": "local_store",
+}  # local memory holds what spills: its instructions are where the spills go
 
 
 def available() -> bool:

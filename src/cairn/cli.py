@@ -166,6 +166,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"tune", "state"}, "--history", {"type": Path, "metavar": "DIR", "help": "The candidate history to record into "
                              "and answer from; default: .cairn/history beside the manifest."}),
     ({"tune"}, "--no-history", {"action": "store_true", "help": "Record nothing and answer from nothing kept."}),
+    ({"tune"}, "--since", {"type": Path, "metavar": "TUNE.json", "help": "Print only what changed since this saved "
+                           "answer: the candidates whose row changed, and what else differs."}),
     ({"tune"}, "--compare", {"action": "append", "default": [], "metavar": "PLAN", "help": "Give twice, as `none` or "
                              "items such as `grain 1; lanes 8`: report how the second plan differs from the first, "
                              "each line labelled by the kind of evidence it is, instead of searching."}),
@@ -563,6 +565,8 @@ def main(argv: list[str] | None = None) -> int:
             from .perf.plan_source import write_plan
             from .perf.profile import Profile
             from .perf.tune import Budget, tune
+            from .perf.tune import delta as tune_delta
+            from .perf.tune import lines as tune_lines
 
             supplied = Profile.load(a.profile) if a.profile else None
             arch = resolve_arch(a.arch or project.arch)
@@ -583,7 +587,11 @@ def main(argv: list[str] | None = None) -> int:
                           a.device, device, budget, kept)  # fmt: skip
             if a.write:  # Only the plan line changes, in the file that declares the function, and only if it checks.
                 answer["written"] = write_plan(a.path, a.symbol[0], answer["chosen"])
-            report(answer)
+            earlier = json.loads(read_text(a.since, 16_000_000)) if a.since else None
+            if earlier:
+                report(tune_delta(earlier, answer))
+            else:
+                print(tune_lines(answer)) if terminal.human(FORMAT) else report(answer)
             return 0
         if a.command == "validate":
             from .agent.agent_tools import load_json_strict

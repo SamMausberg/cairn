@@ -2,6 +2,7 @@
 for its own resources within the compile budget and kept by what was compiled, and a history answers what an earlier
 search established without compiling or running it again, for the same target only."""
 
+import json
 import shutil
 
 import pytest
@@ -136,6 +137,31 @@ def test_the_run_budget_bounds_measurement_and_a_kept_measurement_is_not_run_aga
     assert len(records) == 2 and all("median of 3 blocks" in r["detail"]["procedure"] for r in records)
     again = tune(MIX, "spread", [{"n": 20000}], MACHINE, measure=2, budget=Budget(runs=1), history=tmp_path)
     assert again["budget"]["runs"]["kept"] == 2 and again["budget"]["runs"]["started"] == 1
+
+
+def test_a_person_reads_the_space_the_best_few_and_the_budget(tmp_path, capsys):
+    source = tmp_path / "spread.cairn"
+    source.write_text(MIX)
+    assert main(["tune", str(source), "--symbol", "spread", "--at", "n=1e6", "--no-history", "--format", "human"]) == 0
+    shown = capsys.readouterr().out.splitlines()
+    assert shown[0].startswith("spread: ") and "plans," in shown[0] and "predicted" in shown[1]
+    assert any(line.startswith("chosen: ") for line in shown) and shown[-1].startswith("budget: 0 of 4")
+
+
+def test_a_search_asked_again_answers_with_what_changed(tmp_path, capsys):
+    source = tmp_path / "spread.cairn"
+    source.write_text(MIX)
+    ask = ["tune", str(source), "--symbol", "spread", "--at", "n=1e6", "--format", "json"]
+    assert main(ask) == 0
+    (tmp_path / "first.json").write_text(capsys.readouterr().out)
+    assert main([*ask, "--since", str(tmp_path / "first.json")]) == 0
+    again = json.loads(capsys.readouterr().out)
+    assert again["schema"] == "cairn.tune-delta/2" and again["candidates"] == [] and again["gone"] == []
+    assert again["unchanged"] == len(json.loads((tmp_path / "first.json").read_text())["candidates"])
+    source.write_text(MIX + "plan spread { lanes 2; }\n")
+    assert main([*ask, "--since", str(tmp_path / "first.json")]) == 0
+    moved = json.loads(capsys.readouterr().out)
+    assert moved["current"] == "plan spread { lanes 2; }" and moved["unchanged"] == again["unchanged"]
 
 
 def test_the_command_records_beside_the_manifest_unless_told_not_to(tmp_path, capsys):
