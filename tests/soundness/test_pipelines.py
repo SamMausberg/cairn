@@ -190,10 +190,30 @@ TAIL = "  }\n}\n"
         ("E-COOP-BARRIER", "if t == 0 { p.fill(x, 0, 0); }\n", "every thread of the block"),
         ("E-COOP-SHARED", "if g > 1 { pipeline q:u64[4] depth 2; }\n", "directly in the body"),
         ("E-COOP-GLOBAL", "if t == 0 { out[b] = 1; }\np.fill(out, 0, 0);\n", "at the element it writes"),
+        # a stage used whole or in part before its wait, which dereferenced the null stage pointer
+        ("E-STAGE-UNREADY", "let v = first(256, p);\np.fill(x, 0, 0);\np.wait();\n", "p at line 4 uses"),
+        ("E-STAGE-UNREADY", "let v = first(4, p[0..4]);\np.fill(x, 0, 0);\np.wait();\n", "p at line 4 uses"),
+        # a fill loop left early: with one fill in flight the wait after it left one in flight too (wait<1>)
+        ("E-STAGE-LOOP", "for k in 0..2 {\np.fill(x, 0, 0);\nif n > 5 { break; }\n}\np.wait();\n", "break at line 6"),
+        ("E-STAGE-LOOP", "for k in 0..2 {\nif n > 5 { continue; }\np.fill(x, 0, 0);\n}\n", "continue at line 5"),
+        ("E-PLACEMENT", "pipeline q:u64[256] depth 1;\nq.fill(x, 0, 0);\nq.wait();\np.fill(q, 0, 0);\n", "q is not"),
+        ("E-PLACEMENT", "shared s:u64[256] = zeroed;\np.fill(s, 0, 0);\n", "s is not"),
     ],
 )
 def test_every_stage_rule_refuses_with_its_code(code, body, said):
-    assert said in refused(code, HEAD + body + TAIL)["message"]
+    first = "fn first(n:usize, x:ro<u64>[n]) -> u64 = x[0];\n"
+    assert said in refused(code, HEAD + body + TAIL + first)["message"]
+
+
+@pytest.mark.parametrize(
+    ("source", "view"),
+    [("x:ro<u64>[n]@device, out:rw<u64>[256]", "host"), ("x:ro<u64>[n], out:rw<u64>[256]@device", "device")],
+)
+def test_a_fill_copies_from_memory_where_the_region_runs(source, view):
+    """A region runs where the views it indexes live, and a fill's source must live there too."""
+    program = f"fn f(n:usize, {source}) {{\n  blocks r in 1 threads t in 256 {{\n    pipeline p:u64[256] depth 2;\n"
+    program += "    p.fill(x, 0, min(256, n));\n    p.wait();\n    out[t] = p[t];\n    p.release();\n  }\n}\n"
+    assert f"from {view} memory" in refused("E-PLACEMENT", program)["message"]
 
 
 @pytest.mark.parametrize(

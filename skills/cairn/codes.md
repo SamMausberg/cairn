@@ -74,7 +74,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-PARSE` |  | Use braces, semicolons and CAIRN's grammar, not Rust's or Python's. |
 | `E-PARTIAL-MOVE` | [owners](cards/owners.md) |  |
 | `E-PINNED` | [rings](cards/rings.md) |  |
-| `E-PLACEMENT` | [foreign](cards/foreign.md), [printing](cards/printing.md) |  |
+| `E-PLACEMENT` | [foreign](cards/foreign.md), [cooperative](cards/cooperative.md), [printing](cards/printing.md) |  |
 | `E-PLAN` | [parallel](cards/parallel.md) |  |
 | `E-PRESERVE` |  | Keep what the function does; a witness, when the refusal has one, is an input where it differs. |
 | `E-PRINT-ARG` | [printing](cards/printing.md) |  |

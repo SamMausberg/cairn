@@ -14,11 +14,16 @@ follows these states through the body in order, the same in every thread, since 
 block reaches together (E-COOP-BARRIER otherwise). It refuses:
 
 - a read of `tiles` where no stage is readable, a `release` with nothing readable, and a `wait` with nothing in
-  flight (E-STAGE-UNREADY): the transfer may not have landed;
+  flight (E-STAGE-UNREADY): the transfer may not have landed. Any use of the name but as the receiver of its own
+  operations reads the readable stage, `first(tiles)` and `tiles[0..4]` as much as `tiles[t]`;
 - a `fill` with no available stage, naming the stage still being read and the reads that may still be running, and a
   `wait` while a stage is still readable (E-STAGE-BUSY);
 - a loop whose body leaves the pipeline in another state than it found it, and an `if` whose arms leave it in two
-  (E-STAGE-LOOP): a loop of unknown count has to work from every iteration.
+  (E-STAGE-LOOP): a loop of unknown count has to work from every iteration. A loop that operates on a pipeline runs
+  every iteration whole, so a break or continue in it is refused too (E-STAGE-LOOP).
+
+A fill copies from an array from outside the region, where the region runs: device memory in a device region, host
+memory on host threads (E-PLACEMENT).
 
 `fill` copies `count` elements, at most the stage's length, and zeroes the rest of the stage; `start + count` must lie
 within `x`, or it traps. A pipeline's depth is a constant of the declaration, so raising it changes three things and
@@ -39,7 +44,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from .footprints import natural
-from .tree import USIZE, VOID, Expr, Stmt, Type, fail, is_view, nested
+from .tree import USIZE, VOID, Expr, Stmt, Type, fail, is_view, nested, root
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -108,6 +113,11 @@ def method(c: Checker, e: Expr, name: str, op: str, args: list[Expr]) -> Type:
         if not is_view(source) or source.value != pipeline.element:
             fail("E-TYPE-MISMATCH", f"{name} holds {pipeline.element.display()}; fill it from a view of them, not "
                  f"{source.display()}.", args[0])  # fmt: skip
+        outside = root(args[0]).tag == "name" and c.lanes is not None and root(args[0]).val in c.lanes.outer
+        where = "device" if c.coop.device else "host"
+        if not outside or ((source.place == "device") != c.coop.device and source.place != "unified"):
+            fail("E-PLACEMENT", f"A fill copies from {where} memory from outside the region, an array passed in or "
+                 f"declared before `blocks`; {root(args[0]).val} is not one.", args[0])  # fmt: skip
         read = c.lend(args[0], "ro", [])
         if read:
             c.effect("read:" + read)
@@ -143,14 +153,21 @@ class Stages:
         self.states = {name: State([]) for name in pipelines}
 
     def expr(self, e: Expr):
+        """Every use of a pipeline's name but as the receiver of its own operations reads its readable stage: an
+        element, a part, or the whole stage lent to a call."""
         if e.tag == "lambda":
             return
-        for a in e.args:
+        element = e.tag == "index" and e.args[0].tag == "name" and e.args[0].val in self.pipelines
+        operation = e.tag == "call" and isinstance(e.ref, tuple) and e.ref[0] == "stage"  # args[0] is its receiver
+        for a in e.args[1:] if element or operation else e.args:
             self.expr(a)
-        if e.tag == "index" and e.args[0].tag == "name" and e.args[0].val in self.pipelines:
-            state = self.states[e.args[0].val]
+        if element or (e.tag == "name" and e.val in self.pipelines):
+            name = e.args[0].val if element else e.val
+            state = self.states[name]
             if state.readable is None:
-                self.unready(e.args[0].val, e, f"{e.args[0].val}[...] at line {e.line} reads")
+                self.unready(
+                    name, e, f"{name}[...] at line {e.line} reads" if element else f"{name} at line {e.line} uses"
+                )
             state.reads.append(e)
         if e.tag == "call" and isinstance(e.ref, tuple) and e.ref[0] == "stage":
             self.operate(e)
@@ -250,7 +267,14 @@ class Stages:
 
     def loop(self, s: Stmt):
         """A loop of a known count runs its iterations until the states repeat; any other must leave every pipeline
-        as it found it, since it may run any number of times, none included."""
+        as it found it, since it may run any number of times, none included. Either way every iteration runs whole:
+        a break or continue could skip an operation and leave the stages where the checker does not follow them."""
+        from .cooperative import jumps
+
+        leaving = next(iter(jumps(s.body)), None)
+        if leaving is not None and operates(s.body):
+            fail("E-STAGE-LOOP", f"The loop at line {s.line} fills, waits on or releases a pipeline, so it runs every "
+                 f"iteration whole; the {leaving.tag} at line {leaving.line} could skip one of them.", leaving)  # fmt: skip
         count = counted(s)
         if count is not None:
             for _ in range(count):
@@ -271,6 +295,15 @@ class Stages:
                      f"{', one stage readable' if now[1] else ''} and {now[2]} stage(s) being released, and entered "
                      f"it with {was[0]}{', one readable' if was[1] else ''} and {was[2]}: each iteration must leave "
                      "the pipeline as it found it, as a fill and a wait each turn do.", s)  # fmt: skip
+
+
+def operates(ss: list[Stmt]) -> bool:
+    """Whether a pipeline operation stands anywhere in `ss`."""
+
+    def found(e: Expr) -> bool:
+        return (isinstance(e.ref, tuple) and e.ref[:1] == ("stage",)) or any(found(a) for a in e.args)
+
+    return any(any(found(e) for e in s.exprs) or operates(nested(s)) for s in ss)
 
 
 def counted(s: Stmt) -> int | None:

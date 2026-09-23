@@ -44,7 +44,23 @@ from .effects import DEVICE_SAFE, LANE_SAFE
 from .footprints import natural
 from .pipelines import lower_pipeline, s_pipeline  # noqa: F401  (the checker and the emitter bind them from here)
 from .scope import Binding, Block, Lanes
-from .tree import FLOAT, INT, NUMERIC, SCALAR, STORAGE, UNSIGNED, USIZE, Expr, Stmt, Type, fail, nested, root
+from .tree import (
+    FLOAT,
+    INT,
+    NUMERIC,
+    SCALAR,
+    STORAGE,
+    UNSIGNED,
+    USIZE,
+    Diagnostic,
+    Expr,
+    Stmt,
+    Type,
+    fail,
+    is_view,
+    nested,
+    root,
+)
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -56,6 +72,9 @@ WARP_SIZE = 32
 SHARED_LIMIT = 48 * 1024  # static shared memory a block may hold on every NVIDIA device since compute 2.0
 ALIGN = 128  # where each shared array starts: tensor-core fragments load from 32 bytes on (compiler/fragments.py)
 SHUFFLES = {"shuffle", "shuffle_xor", "shuffle_down"}
+SHARED_STATE = {"Atomic", "Mutex"}  # what threads handed the same one may still see differently
+# The primitives that write an argument; every other one takes its arguments by value or ro (builtins.TABLE).
+WRITING = {"take", "swap", "transfer", "mma_store"}
 
 
 # Who reaches a statement together ---------------------------------------------------------------------------------
@@ -67,6 +86,9 @@ class Reach:
 
     def __init__(self, c: Checker, block: Block, stages: set[str]):
         self.c, self.block, self.stages = c, block, stages  # stages: the pipelines the body declares
+        # The body's `let mut` locals, the only names a thread's write can make differ: nothing outside the region is
+        # assigned in it, and the phase rule keeps each element of a shared array to one writer between barriers.
+        self.mutable: set[str] = set()
         whole = block.extents[0] % WARP_SIZE == 0
         self.values: dict[str, tuple[int, Any]] = dict.fromkeys(block.grid, (BLOCK, None))
         for i, name in enumerate(block.threads):
@@ -89,14 +111,17 @@ class Reach:
             return self.values.get(e.val, (BLOCK, None))
         if self.warp_wide(e):
             return WARP, e
-        if e.tag == "call" and e.val in SHUFFLES:
+        if e.tag == "call" and (e.val in SHUFFLES or self.unshared(e)):
             return THREAD, e
         if e.tag == "index" and root(e).tag == "name" and root(e).val in self.private:
             return THREAD, e
         if e.tag == "lambda":
             return THREAD, e
         found: tuple[int, Any] = (BLOCK, None)
-        for a in e.args:
+        parts = list(e.args)
+        if e.tag == "call" and "." in e.val:  # a method's receiver is one of its values too
+            parts.append(Expr("name", e.val.split(".")[0], line=e.line, col=e.col))
+        for a in parts:
             level = self.value(a)
             if level[0] > found[0]:
                 found = level if level[1] is not None else (level[0], a)
@@ -122,13 +147,64 @@ class Reach:
         if old is None or at[0] > old[0]:
             self.block.reach[id(node)] = at
 
+    def unshared(self, e: Expr) -> bool:
+        """A call whose result may differ between threads that pass it the same values: one handed an atomic or a
+        mutex from outside the region, or a function value, which computes whatever it closes over. Typed assembly
+        runs only in the region's own body, where `asm` makes its outputs each thread's own."""
+        head = e.val.split(".")[0]
+        named = [head, *(root(a).val for a in e.args if root(a).tag == "name")]
+        if any(n in self.c.env and self.c.env[n].ty.name in SHARED_STATE for n in named):
+            return True
+        return "." not in e.val and (e.val in self.values or e.val in self.c.env)
+
     def calls(self, e: Expr, at: tuple[int, Any]):
+        """Note every call of an expression as reached at `at`, the right side of `&&` and `||` only where the left
+        side lets it run, and what each call may write."""
+        if e.tag == "lambda":
+            self.run(e.ref.body, (THREAD, e))  # it may run in any thread: whatever it assigns differs
+            return
+        if e.tag == "binary" and e.val in {"&&", "||"}:
+            self.calls(e.args[0], at)
+            self.calls(e.args[1], widest(at, self.cause(e.args[0])))
+            return
         if e.tag == "call":
             self.note(e, at)
             for a in e.args:  # how widely each argument is shared, for a warp operation that takes one per warp
                 self.block.levels[id(a)] = widest(self.block.levels.get(id(a), (BLOCK, None)), self.value(a))
-        for a in e.args if e.tag != "lambda" else []:
+            self.lends(e, at)
+        for a in e.args:
             self.calls(a, at)
+
+    def lends(self, e: Expr, at: tuple[int, Any]):
+        """A call leaves in what it may write whatever each thread's call put there: its rw arguments, every
+        argument of a primitive that writes one or of a callee the checker cannot see into, and a method's
+        receiver."""
+        from .builtins import TABLE
+
+        head, _, method = e.val.rpartition(".")
+        if head in self.stages or e.val in SHUFFLES:
+            return
+        try:
+            found = None if head else self.c.qualify(e.val, self.c.fs)
+        except Diagnostic:
+            found = None
+        if found is not None:
+            written = [a for a, (_, t) in zip(e.args, self.c.fs[found].params, strict=False) if t.mode == "rw"]
+        elif (method or e.val) in TABLE and (method or e.val) not in WRITING:
+            written = []
+        else:
+            written = list(e.args)
+            if head:
+                written.append(Expr("name", head.split(".")[0], line=e.line, col=e.col))
+        level = widest(at, self.value(e))
+        for a in written:
+            self.assigned(a, widest(level, self.value(a)))
+
+    def assigned(self, target: Expr, level: tuple[int, Any]):
+        """`target` now holds a value as widely shared as `level`: its root local, through fields and elements."""
+        name = root(target)
+        if name.tag == "name" and name.val in self.mutable:
+            self.values[name.val] = widest(self.values.get(name.val, (BLOCK, None)), level)
 
     def run(self, ss: list[Stmt], at: tuple[int, Any]):
         for s in ss:
@@ -139,6 +215,8 @@ class Reach:
         for e in s.exprs:
             self.calls(e, at)
         tag = s.tag
+        if tag == "reg" or (tag == "unpack" and s.op == "reg"):
+            self.mutable |= {s.name} if tag == "reg" else {n.val for n in s.other_names}
         if tag in {"let", "reg"}:
             level = self.value(s.exprs[0])
             self.values[s.name] = widest(level, at) if tag == "reg" else level
@@ -150,13 +228,14 @@ class Reach:
                 self.values[n.val] = self.value(s.exprs[0])
         elif tag == "stack":
             self.private.add(s.name)
-        elif tag == "assign":
-            target = s.exprs[0]
-            while target.tag == "field":
-                target = target.args[0]
-            if target.tag == "name":
-                old = self.values.get(target.val, (BLOCK, None))
-                self.values[target.val] = widest(old, self.value(s.exprs[1]), at)
+        elif tag == "assign":  # an element written at an index that differs makes the whole local differ
+            self.assigned(s.exprs[0], widest(self.value(s.exprs[0]), self.value(s.exprs[1]), at))
+        elif tag == "asm":  # machine state the checker cannot see, such as %laneid
+            for name, *_ in s.assembly.outputs:
+                self.values[name] = (THREAD, s)
+            for effect in s.assembly.effects:
+                if effect.startswith("write:"):
+                    self.assigned(Expr("name", effect.partition(":")[2], line=s.line, col=s.col), (THREAD, s))
         elif tag == "if":
             inner = widest(at, self.cause(s.exprs[0]))
             self.run(s.body, inner)
@@ -186,8 +265,8 @@ class Reach:
         if leaving is not None and phases.holds_barrier(s.body, self.stages):
             fail("E-COOP-BARRIER", f"A loop that holds a barrier runs every iteration whole in every thread; the "
                  f"{leaving.tag} at line {leaving.line} would take threads past it.", leaving)  # fmt: skip
-        for _ in range(8):
-            before = dict(self.values)
+        while True:  # levels only rise, so this reaches its fixed point
+            before = {name: level for name, (level, _) in self.values.items()}
             inner = at
             for e in s.exprs:
                 inner = widest(inner, self.cause(e))
@@ -199,7 +278,10 @@ class Reach:
                 if escape[0] > inner[0]:
                     inner = escape
                     self.run(s.body, inner)
-            if self.values == before:
+            if s.tag == "while":  # its condition runs again in every thread still inside
+                for e in s.exprs:
+                    self.calls(e, inner)
+            if {name: level for name, (level, _) in self.values.items()} == before:
                 break
 
 
@@ -271,7 +353,10 @@ def s_blocks(c: Checker, s: Stmt):
              f"is {total}.", s)  # fmt: skip
     device = "device" in placements(c, s.body)
     block = Block(grid, threads, extents, device, top={id(x) for x in s.body})
-    reach = Reach(c, block, {x.name for x in s.body if x.tag == "pipeline"})
+    held = {x.name: x.tag for x in s.body if x.tag in {"shared", "pipeline"}}
+    outside = {n: "outside" for n, b in c.env.items() if is_view(b.ty) or b.ty.name in {"Buf", "Array"}}
+    closures(c, s.body, {**held, **outside})
+    reach = Reach(c, block, {n for n, k in held.items() if k == "pipeline"})
     reach.run(s.body, (BLOCK, None))
     for name, node in zip(names, s.other_names, strict=True):
         c.bind(name, Binding(USIZE), node)
@@ -311,6 +396,39 @@ def s_blocks(c: Checker, s: Stmt):
     c.resources[c.f.name].append({"name": "blocks", "kind": "blocks", "threads": total, "shared_bytes": block.bytes,
                                   "placement": target, "line": s.line})  # fmt: skip
     s.ref = block
+
+
+def closures(c: Checker, ss: list[Stmt], held: dict[str, str]):
+    """Refuse a closure in the body that names a shared array, a pipeline or an array from outside the region: it may
+    be called in any phase and in any thread, so neither the phase rule nor the global rule can place what it
+    touches."""
+
+    def names(e: Expr) -> set[str]:
+        found = {e.val} if e.tag == "name" else {e.val.split(".")[0]} if e.tag == "call" else set()
+        if e.tag == "lambda":
+            found |= inside(e.ref.body)
+        return found.union(*(names(a) for a in e.args))
+
+    def inside(body: list[Stmt]) -> set[str]:
+        return set().union(*(names(e) for s in body for e in s.exprs), *(inside(nested(s)) for s in body))
+
+    def walk(e: Expr):
+        if e.tag == "lambda":
+            named = sorted(inside(e.ref.body) & set(held))
+            if named:
+                what = {"shared": "the shared array", "pipeline": "the pipeline", "outside": "the array"}[
+                    held[named[0]]
+                ]
+                fail("E-COOP-UNDECIDED", f"A closure in a cooperative region names {what} {named[0]}; it may run in "
+                     "any phase and any thread, so the checker cannot tell which of its elements it touches when. "
+                     "Write the access in the region's body.", e)  # fmt: skip
+        for a in e.args:
+            walk(a)
+
+    for s in ss:
+        for e in s.exprs:
+            walk(e)
+        closures(c, nested(s), held)
 
 
 def placements(c: Checker, ss: list[Stmt]) -> set[str]:
