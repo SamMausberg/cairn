@@ -44,6 +44,7 @@ cairn = ["runtime/*.hpp", "std/*.cairn", "templates/*/cairn.toml", "templates/*/
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "tests", "tests/language", "tests/soundness", "tests/verification"]  # The agent-layer tests reuse those programs.
+faulthandler_timeout = 600  # a test still running after ten minutes prints every thread's stack, so a hang names itself
 
 [tool.ruff]
 extend-exclude = [".claude"]  # Agent worktrees are whole copies of the repository.

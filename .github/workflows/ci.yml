@@ -11,9 +11,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  compiler:
+  checks:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 20
     steps:
       - name: Checkout without retained credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -22,13 +22,11 @@ jobs:
       - name: Install the pinned development dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang g++ libz3-4 python3-venv qemu-system-arm
+          sudo apt-get install -y clang g++ libz3-4 python3-venv
           python3 -m venv .venv
           .venv/bin/python -m pip install -e '.[dev]'
       - name: Formatting and lint
         run: make lint PYTHON=.venv/bin/python
-      - name: Unit, native, sanitizer and agent-layer tests (GPU, Lean and QEMU parts skip when absent)
-        run: make test PYTHON=.venv/bin/python
       - name: Examples, certificates and scalar equivalence
         run: |
           .venv/bin/python bin/cairn run examples/hello
@@ -42,6 +40,38 @@ jobs:
           .venv/bin/python bin/cairn doc --std --pages /tmp/docs --format json
           diff -u docs/std_api.md /tmp/docs/std_api.md
           diff -ru docs/std /tmp/docs/std
+  # The whole suite is about twenty CPU minutes on a fast desktop core, which one two-core runner cannot finish inside
+  # its limit, so it runs as four parts on four runners. The last part is every test outside the first three's
+  # folders, so a folder added later is still run.
+  tests:
+    name: tests (${{ matrix.part }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: tooling
+            paths: tests/tooling
+          - part: soundness
+            paths: tests/soundness
+          - part: language and agent
+            paths: tests/language tests/agent
+          - part: the rest
+            paths: tests --ignore=tests/tooling --ignore=tests/soundness --ignore=tests/language --ignore=tests/agent
+    steps:
+      - name: Checkout without retained credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned development dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang g++ libz3-4 python3-venv qemu-system-arm
+          python3 -m venv .venv
+          .venv/bin/python -m pip install -e '.[dev]'
+      - name: Unit, native, sanitizer and agent-layer tests (GPU, Lean and QEMU parts skip when absent)
+        run: .venv/bin/python -m pytest -q ${{ matrix.paths }} -n auto --durations=25
   proofs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
