@@ -1,5 +1,5 @@
 name = "cairn-proofs"
-version = "0.9.0"
+version = "1.0.0"
 defaultTargets = ["Cairn"]
 
 # No dependencies: everything below is proved against Lean 4 core only

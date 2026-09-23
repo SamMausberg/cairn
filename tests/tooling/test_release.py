@@ -22,6 +22,8 @@ def test_the_version_is_stated_once():
     assert extension["version"] == __version__
     assert capabilities["profile"] == "cairn-native/" + __version__
     assert f"CAIRN {major_minor} is a checked systems language" in card
+    for module in ("bazel/MODULE.bazel", "examples/bazel/MODULE.bazel"):  # the Bazel rules carry the release too
+        assert f'"rules_cairn", version = "{__version__}"' in (ROOT / module).read_text(encoding="utf-8"), module
 
 
 def test_the_changelog_opens_with_this_release():
