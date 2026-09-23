@@ -437,7 +437,7 @@ def replay(source: str, record: dict[str, Any], cxx: str = "clang++", libraries:
 
 
 def validate_project(project: Any, symbol: str, policy: dict[str, Any] | None = None, cxx: str = "clang++",
-                     regressions: Path | None = None) -> dict[str, Any]:  # fmt: skip
+                     regressions: Path | None = None, history: Path | None = None) -> dict[str, Any]:  # fmt: skip
     """`cairn validate --symbol g`: g against the function it implements, with the policy given, else the one the
     project's regressions file of that function pinned when it kept its first case, else the defaults. A failing case
     is kept in that file, `regressions/<reference>.json` unless named, which `cairn test` replays once the manifest
@@ -460,7 +460,27 @@ def validate_project(project: Any, symbol: str, policy: dict[str, Any] | None = 
                              "replayed_by_cairn_test": relative in project.contracts}  # fmt: skip
     if "kept" in record.get("finite", {}):
         record["finite"]["kept"] = record["finite"]["kept"].replace(str(path), relative)
+    if history is not None and "finite" in record:
+        record["history"] = remembered(history, project.source, reference, name, record)
     return record
+
+
+def remembered(where: Path, source: str, reference: str, implementation: str, record: dict[str, Any]) -> str:
+    """A validation kept in the candidate history (agent/history.py) under the implementation's identity: a validation
+    record when it passed, a failure record when it did not; the record's id."""
+    from ..agent import history
+    from ..agent.implementations import pinned, remember
+
+    ref = next(f for f in Parser(source).parse().functions if f.name == reference)
+    finite = record["finite"]
+    entry = {"identity": record["identity"], "implementation": implementation, "finite": finite["status"],
+             "smt": record["smt"]["status"], **pinned(source[ref.start : ref.end], record["policy"])}  # fmt: skip
+    if record["status"] == "passed":
+        entry["status"] = "validated"
+    else:
+        entry |= {"status": "refused", "code": "E-VALIDATION", "why": finite.get("reason") or finite["status"],
+                  "inputs": finite.get("failed", {}).get("inputs")}  # fmt: skip
+    return remember(where, history.as_written(source, reference), reference, entry)["id"]
 
 
 def evaluate(source: str, contract: dict[str, Any], cxx: str = "clang++", libraries: tuple[str, ...] = ()) -> dict:

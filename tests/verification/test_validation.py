@@ -165,13 +165,19 @@ def test_kept_cases_replay_against_every_implementation(tmp_path):
     assert replay(TOTAL + BY4 + PAIRS, record)["status"] == "failed-tests"
 
 
-def test_cairn_validate_and_cairn_test_on_the_example_project():
+def test_cairn_validate_and_cairn_test_on_the_example_project(tmp_path):
+    from cairn.agent.history import History
+
     project = ROOT / "examples/implementations"
     done = subprocess.run([sys.executable, str(ROOT / "bin/cairn"), "validate", str(project), "--symbol", "prefix_by4",
-                           "--format", "json"], capture_output=True, text=True, timeout=600)  # fmt: skip
+                           "--history", str(tmp_path / "history"), "--format", "json"], capture_output=True, text=True,
+                          timeout=600)  # fmt: skip
     record = json.loads(done.stdout)
     assert done.returncode == 0 and record["status"] == "passed", done.stderr
     assert record["regressions"] == {"file": "regressions/prefix.json", "exists": True, "replayed_by_cairn_test": True}
+    kept = History(tmp_path / "history").records("prefix")
+    assert [(r["id"], r["kind"], r["candidate"]) for r in kept] == [(record["history"], "validation", "prefix_by4")]
+    assert kept[0]["variant"] == record["identity"] and kept[0]["detail"]["evidence"] == "finite-tested"
     done = subprocess.run([sys.executable, str(ROOT / "bin/cairn"), "test", str(project), "--format", "json"],
                           capture_output=True, text=True, timeout=600)  # fmt: skip
     tested = json.loads(done.stdout)

@@ -147,6 +147,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                                 "probes and seconds; default: what the regressions file pinned, else the defaults."}),
     ({"validate"}, "--regressions", {"type": Path, "metavar": "FILE", "help": "Where a failing case is kept; "
                                      "default: regressions/<reference>.json in the project."}),
+    ({"validate"}, "--history", {"type": Path, "metavar": "DIR", "help": "Also keep the result in this candidate "
+                                 "history, under the implementation's identity."}),
     ({"explain", "predict", "shot"}, "--symbol", {"action": "append", "help": "This function only (repeatable); "
                                                   "for shot, a function whose effect row is reported."}),
     ({"tune"}, "--symbol", {"action": "append", "required": True, "help": "The function whose plan is chosen."}),
@@ -600,7 +602,7 @@ def main(argv: list[str] | None = None) -> int:
             from .verify.validation import validate_project
 
             given = load_json_strict(read_text(a.policy, 200_000)) if a.policy else None
-            record = validate_project(project, a.symbol, given, a.cxx, a.regressions)
+            record = validate_project(project, a.symbol, given, a.cxx, a.regressions, a.history)
             report(record, brief=True)
             return 0 if record["status"] == "passed" else 1 if record["status"] in {"failed", "rejected"} else 2
         if a.command == "test":

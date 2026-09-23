@@ -47,8 +47,39 @@ REACHES = {
 }  # fmt: skip
 OTHER = ("records", "enums", "sums", "traits", "consts", "plans", "selections", "derivations", "families", "recipes",
          "imports")  # fmt: skip
+TESTS = ("budget", "seed", "probes", "seconds")  # the policy's test part; tolerance and domain are the others
+CONTRACT = ("reference_sha256", "tolerance_sha256", "tests_sha256", "domain_sha256")
 PINNED = ("the reference's declaration, signature, row, ceiling and roundings", "the tolerance on float results",
           "the test policy: cases, seed, shrinking and time", "the permitted inputs", "which implementation runs")  # fmt: skip
+
+
+def pinned(declaration: str, policy: dict[str, Any]) -> dict[str, str]:
+    """The digests of what a validation is held to: the reference's tokens, the tolerance, the tests and the inputs."""
+    return {
+        "reference_sha256": digest(" ".join(t.s for t in lex(declaration))),
+        "tolerance_sha256": digest(stable_json(policy["tolerance"])),
+        "tests_sha256": digest(stable_json({k: policy[k] for k in TESTS})),
+        "domain_sha256": digest(stable_json(policy["domain"])),
+    }
+
+
+def remember(where: Path, base: str, reference: str, entry: dict[str, Any]) -> dict[str, Any]:
+    """One submission or validation as a candidate-history record (agent/history.py): its identity is the reference
+    as written (`base`, history.as_written), the implementation's own identity, or the submission's digest when it has
+    none, the pinned contract and the host, where validation ran."""
+    from . import history
+
+    contract = {k: entry[k] for k in CONTRACT}
+    who = history.identity(base, entry.get("identity") or entry["submission_sha256"], contract, "host")
+    if entry["status"] == "validated":
+        kind, detail = "validation", {"evidence": "finite-tested", "finite": entry["finite"], "smt": entry["smt"]}
+    else:
+        stage = "validation" if entry["code"] == "E-VALIDATION" else "check"
+        detail = {"stage": stage, "why": f"{entry['code']}: {entry['why']}",
+                  **({"inputs": entry["inputs"]} if entry.get("inputs") else {})}  # fmt: skip
+        kind = "failure"
+    return history.record(where, kind, reference, entry.get("implementation", "submission"), who, detail,
+                          variant=entry.get("identity"))  # fmt: skip
 
 
 class ImplementationSession:
@@ -68,13 +99,10 @@ class ImplementationSession:
         declaration = source[self.f.start : self.f.end]
         record = self.policy.record()
         self.pinned = {
-            "reference_sha256": digest(" ".join(t.s for t in lex(declaration))),
             "tolerance": record["tolerance"],
-            "tolerance_sha256": digest(stable_json(record["tolerance"])),
-            "tests": {k: record[k] for k in ("budget", "seed", "probes", "seconds")},
-            "tests_sha256": digest(stable_json({k: record[k] for k in ("budget", "seed", "probes", "seconds")})),
+            "tests": {k: record[k] for k in TESTS},
             "domain": record["domain"],
-            "domain_sha256": digest(stable_json(record["domain"])),
+            **pinned(declaration, record),
         }
         self.reference_view = {
             "symbol": self.reference,
@@ -237,25 +265,13 @@ class ImplementationHost:
             self.history(entry)
 
     def remember(self, s: ImplementationSession, entry: dict[str, Any]) -> dict[str, Any]:
-        """One submission as a candidate-history record: its identity is the reference as written, the
-        implementation's own identity (or the submission's digest when it has none), the pinned contract and the
-        host, where validation ran."""
         from . import history
 
         key = digest(s.source)
         if key not in self.bases:
             self.bases[key] = history.as_written(s.source, s.reference)
-        contract = {k: v for k, v in entry.items() if k.endswith("_sha256") and k != "submission_sha256"}
-        who = history.identity(self.bases[key], entry.get("identity", entry["submission_sha256"]), contract, "host")
-        if entry["status"] == "validated":
-            kind, detail = "validation", {"evidence": "finite-tested", "finite": entry["finite"], "smt": entry["smt"]}
-        else:
-            stage = "validation" if entry["code"] == "E-VALIDATION" else "check"
-            detail = {"stage": stage, "why": f"{entry['code']}: {entry['why']}",
-                      **({"inputs": entry["inputs"]} if entry.get("inputs") else {})}  # fmt: skip
-            kind = "failure"
-        return history.record(self.records, kind, s.reference, entry.get("implementation", "submission"), who, detail,
-                              variant=entry.get("identity"))  # fmt: skip
+        assert self.records is not None
+        return remember(self.records, self.bases[key], s.reference, entry)
 
     def reply(self, text: str) -> dict[str, Any]:
         """A model's raw reply: the result, or the refusal it would read."""
