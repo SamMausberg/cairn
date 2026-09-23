@@ -1,6 +1,6 @@
 // Storage floats: formats that hold a value and convert, and never compute. One routine rounds on the host
 // and inside a device lane alike, integer arithmetic on the bit pattern, so the host's exhaustive tests
-// cover the lane too. docs/language.md#storage-floats states the rules this header implements.
+// cover the lane too. docs/numerics.md#storage-floats states the rules this header implements.
 #pragma once
 #include "cairn_runtime.hpp"
 

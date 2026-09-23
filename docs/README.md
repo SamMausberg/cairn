@@ -9,6 +9,7 @@ The [README](../README.md) says what CAIRN is and how to install it. Read the re
 | [memory.md](memory.md) | Views and parts, owners and moves, linear values, layout, effect rows, operand order and the foreign boundary, in the same form. |
 | [abstractions.md](abstractions.md) | Generics, bounds, traits, `dyn`, closures, modules, projects, dependencies and recipes. |
 | [concurrency.md](concurrency.md) | Tasks and leases, task groups collected in completion order, atomics and mutexes, parallel regions, `reduce` and `compact`, placement and queued device work. |
+| [numerics.md](numerics.md) | Storage floats (`f16`, `bf16`, `f8e4m3`, `f8e5m2`) and their one stated rounding, `quantize` and its stochastic form, and `derive grad`, which writes a reverse-mode derivative as ordinary checked code. |
 | [library.md](library.md) | The standard library, module by module, with a program for each. [std_api.md](std_api.md) indexes the generated signature and effect-row reference, one page per module under `std/`. |
 | [tools.md](tools.md) | `cairn fmt`, `check --generics`, `doc`, `expand`, `explain`, `build --incremental`, `lsp`, the editor extension, and the bare-metal AArch64 target under QEMU. |
 | [examples.md](examples.md) | What each project under `examples/` shows, with its output and the effect rows worth reading. |

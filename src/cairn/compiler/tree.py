@@ -72,7 +72,7 @@ class Type:
 BITS = {"u8": 8, "u16": 16, "u32": 32, "u64": 64, "usize": 64, "i8": 8, "i16": 16, "i32": 32, "i64": 64}
 CPP = {n: "std::size_t" if n == "usize" else f"std::{'u' * (n[0] == 'u')}int{w}_t" for n, w in BITS.items()}
 CPP |= {"bool": "bool", "f32": "float", "f64": "double", "void": "void"}
-# Storage floats hold a value and convert; they never compute (docs/language.md#storage-floats). Each is
+# Storage floats hold a value and convert; they never compute (docs/numerics.md#storage-floats). Each is
 # (exponent bits, fraction bits, whether the top exponent means infinity and NaN as in IEEE 754).
 STORAGE = {"f16": (5, 10, True), "bf16": (8, 7, True), "f8e4m3": (4, 3, False), "f8e5m2": (5, 2, True)}
 CPP |= {name: "cr::" + name for name in STORAGE}

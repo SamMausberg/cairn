@@ -1,5 +1,5 @@
 """Reverse-mode differentiation: `derive grad for f;` and `derive grad[w, b] for f;` generate `f_grad`, the adjoint of
-f, as ordinary CAIRN source checked like any other function (docs/abstractions.md#gradients).
+f, as ordinary CAIRN source checked like any other function (docs/numerics.md#gradients).
 
 `f_grad` takes f's parameters, then `seed` when f returns a float, then one adjoint for each parameter it
 differentiates, `d_x:rw<T>` or `d_x:rw<T>[n]`, into which it adds, and `d_out:ro<T>[n]` for each float view f
