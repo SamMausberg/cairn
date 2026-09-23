@@ -1,6 +1,8 @@
 # Changelog
 
-## 1.4.0
+## 0.9.0
+
+The first public release. The sections below it are the internal milestones that came before, 0.5.0 to 1.3.0, whose tags keep the numbers they had; the public numbering starts again below 1.0 because the language can still change. 1.4.0 was prepared and never tagged, and its changes are listed here.
 
 ### Language
 
