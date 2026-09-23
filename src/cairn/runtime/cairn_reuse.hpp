@@ -4,7 +4,7 @@
 // arena is handed to its next user ordered after its last one on the device, never by stopping the host.
 // What a context holds is declared when it is made: a budget reserves scratch up front, may allow growth up
 // to a stated limit, and answers a request beyond that limit with a defined failure instead of allocating.
-// The machine is a template parameter: cairn_gpu.hpp binds it to CUDA, and tests/native/reuse_runtime.cpp
+// The machine is a template parameter: cairn_gpu.hpp binds it to CUDA, and tests/runtime/reuse_runtime.cpp
 // drives the same bookkeeping with a mock device whose work completes only when the test says so.
 #pragma once
 #include <cstddef>

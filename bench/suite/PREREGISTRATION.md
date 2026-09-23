@@ -25,7 +25,7 @@ Eight kernels are preregistered. Each one is in for a stated reason, and no nint
 | `stencil_1d` | the out-of-place shape is accepted in a region and the in-place shape is refused, which no C++ toolchain refuses | ratio, and a recorded refusal |
 | `tasks_split` | four visibly disjoint parts under leases, against `std::thread`, OpenMP sections and `tbb::parallel_invoke` | ratio |
 
-`mixed_u64` carries its body verbatim from `bench/host_regions/host_regions.cpp`, and both it and `saxpy_f32` keep that file's input fill, so the numbers chain with `evidence/v1_2/host_regions/benchmark.json` rather than starting a second unrelated series.
+`mixed_u64` carries its body verbatim from `bench/host/host_regions.cpp`, and both it and `saxpy_f32` keep that file's input fill, so the numbers chain with `evidence/v1_2/host_regions/benchmark.json` rather than starting a second unrelated series.
 
 Three of the eight carry a finding that is not a speed. They are stated here, before any run, because each one is a limit of the language and not a defect of a baseline.
 
@@ -86,7 +86,7 @@ A library that is absent, that does not build under the project's flags, or that
 
 ## The protocol
 
-The protocol is `bench/host_regions/host_regions.py`'s, kept deliberately so that a number here and a number there were taken the same way.
+The protocol is `bench/host/host_regions.py`'s, kept deliberately so that a number here and a number there were taken the same way.
 
 A case is one kernel, one arm, one size. It runs once to warm up, then nine timed blocks, and the median of the nine is the number. Each block repeats the case until it covers sixteen million elements, at most a thousand times, and the total is divided back, so a small region is not measured against the clock's floor. A compiler barrier sits between repetitions, or the compiler keeps one pass and drops the rest.
 

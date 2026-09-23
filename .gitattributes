@@ -7,3 +7,5 @@ docs/std_api.md linguist-generated
 docs/std/** linguist-generated
 editors/vscode/syntaxes/cairn.tmLanguage.json linguist-generated
 editors/vim/** linguist-generated
+tools/corpus/lessons/** linguist-generated
+tools/corpus/semantic/** linguist-generated

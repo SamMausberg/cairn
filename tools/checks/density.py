@@ -67,7 +67,7 @@ def main():
     for stem in ["native", "family", "wire"]:
         generate(R / f"examples/basics/{stem}.cairn", R / "results/native")
     native = (R / "examples/basics/native.cairn").read_text()
-    ref = (R / "bench/cpu/reference.cpp").read_text()
+    ref = (R / "bench/host/reference.cpp").read_text()
     pairs = []
     for n in names:
         a = extract(native, r"fn " + n + r"\(")
@@ -86,8 +86,8 @@ def main():
         "examples/basics/native.cairn",
         "examples/basics/family.cairn",
         "examples/basics/wire.cairn",
-        "bench/cpu/reference.cpp",
-        "bench/cpu/family_template.cpp",
+        "bench/host/reference.cpp",
+        "bench/codegen/family_template.cpp",
         "results/native/native.cpp",
         "results/native/family.cpp",
         "results/native/wire.cpp",
@@ -114,15 +114,16 @@ def main():
     family = {
         "source_tokens": t("examples/basics/family.cairn"),
         "expanded_cpp_tokens": t("results/native/family.cpp"),
-        "cpp_template_tokens": t("bench/cpu/family_template.cpp"),
+        "cpp_template_tokens": t("bench/codegen/family_template.cpp"),
         "expansion_ratio": t("results/native/family.cpp") / t("examples/basics/family.cairn"),
-        "compact_cpp_template_over_cairn": t("bench/cpu/family_template.cpp") / t("examples/basics/family.cairn"),
+        "compact_cpp_template_over_cairn": t("bench/codegen/family_template.cpp") / t("examples/basics/family.cairn"),
         "cold_cairn_source_plus_card_plus_recipe": t("examples/basics/family.cairn") + t(CARD) + t(RECIPE),
         "source_audit_cairn_plus_card_plus_recipe_plus_compiler": t("examples/basics/family.cairn")
         + t(CARD)
         + t(RECIPE)
         + sum(t(p) for p in compiler_paths),
-        "cpp_template_plus_shared_runtime": t("bench/cpu/family_template.cpp") + t("results/native/cairn_runtime.hpp"),
+        "cpp_template_plus_shared_runtime": t("bench/codegen/family_template.cpp")
+        + t("results/native/cairn_runtime.hpp"),
         "limitation": "CAIRN exports 256 named entries; compact C++ uses one indexed entry and a function-pointer table. Different API; both tested over the same numerical family. Runtime header shared by both. No C++ language documentation charged; no universal cold-context advantage inferred.",
     }
     wire = {

@@ -1,6 +1,6 @@
 // The sequential C++ baseline. One thread, the boundary that guards.hpp selects, nothing else.
 //
-// The addition itself is an ordinary C++ wrapping +, as bench/cpu/reference.cpp writes it, because
+// The addition itself is an ordinary C++ wrapping +, as bench/host/reference.cpp writes it, because
 // the emitter writes cr::add_wrap there and cr::add_wrap traps on nothing. The BG_* sites below are
 // therefore the whole of this arm's boundary: one BG_VIEW and one BG_AT, matching the receipt's
 // view_entry 1 and bounds 1 for both cf_sum_u64_wrap and cf_sum_u64_atomic. There is one array and

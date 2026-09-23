@@ -1,6 +1,6 @@
 // The sequential C++ baseline. One thread, the boundary that guards.hpp selects, nothing else.
 //
-// The xor and the multiply are ordinary C++ wrapping operators, as bench/cpu/reference.cpp writes
+// The xor and the multiply are ordinary C++ wrapping operators, as bench/host/reference.cpp writes
 // them, because cr::mul_wrap traps on nothing. The shift is different: cr::shr traps on a count at
 // or beyond the width, so it is a boundary and the receipt counts it as one `shift` site in `mix`.
 // It is written here as BG_SHR, once, in the one helper the loop calls, so this arm carries the

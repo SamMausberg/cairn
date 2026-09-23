@@ -184,7 +184,7 @@ def compile_once() -> None:
 
 
 def measure_cards(count) -> dict:
-    prior = json.loads((ROOT / "bench/cpu/fixtures/cards_05.json").read_text())
+    prior = json.loads((ROOT / "tools/ai/cards_05.json").read_text())
     source = (ROOT / "examples/basics/native.cairn").read_text()
     rows, current_only = [], []
 

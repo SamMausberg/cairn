@@ -1,9 +1,0 @@
-{
-  "exhaustive_collector_masks": 8191,
-  "collector_max_length": 12,
-  "wire_roundtrip_and_independent_decode_cases": 1000,
-  "wire_bytes": 36,
-  "native_record_bytes": 40,
-  "all_passed": true,
-  "formal_status": "finite-tests-only"
-}

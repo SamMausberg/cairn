@@ -1,8 +1,0 @@
-{
-  "input_archive": "CAIRN_0_5_Repository.zip",
-  "archive_sha256": "0bea2e474da5a446feeb43b49c36af0fd4c84d39633a09340a5845a56bd1998c",
-  "base_commit": "2debea1e99e4f516832136485c5530f9e925ee81",
-  "base_tag": "v0.5.0",
-  "development_branch": "work/v0.6",
-  "remote_mutations": false
-}

@@ -125,7 +125,7 @@ def test_verify():
 @needs_clang
 def test_codegen_only():
     with exclusive():
-        printed = tool("bench/cpu/codegen_only.py", timeout=600)
+        printed = tool("bench/codegen/codegen_only.py", timeout=600)
     result = json.loads((RESULTS / "codegen/codegen.json").read_text())
     rows = result["comparisons"]
     assert len(rows) == 9 and all(r["cairn_bytes"] > 0 and r["cpp_bytes"] > 0 for r in rows)
@@ -136,7 +136,7 @@ def test_codegen_only():
 @needs_clang
 def test_bench_run():
     with exclusive():
-        tool("bench/cpu/run.py", timeout=900)
+        tool("bench/host/paired.py", timeout=900)
     summary = json.loads((RESULTS / "timing/timing_summary.json").read_text())
     assert summary and all(row["pairs"] > 1 and row["cairn_median_ns"] > 0 for row in summary)
     where = json.loads((RESULTS / "timing/benchmark_environment.json").read_text())
@@ -179,7 +179,7 @@ def test_validate_systems():
 def test_measure_context(tmp_path):
     printed = parsed(tool("tools/ai/measure_context.py", "--output", tmp_path / "context.json"))
     result = json.loads((tmp_path / "context.json").read_text())
-    prior = set(json.loads((ROOT / "bench/cpu/fixtures/cards_05.json").read_text())["cards"])
+    prior = set(json.loads((ROOT / "tools/ai/cards_05.json").read_text())["cards"])
     assert result["aggregate"]["packet_count"] > 0 and result["aggregate"]["before"] > result["aggregate"]["after"]
     assert all(set(row["cards"]) <= prior for row in result["rows"]), "a legacy comparison uses 0.5 cards only"
     assert result["current_only"] and all(row["legacy_comparison"] is None for row in result["current_only"])
@@ -197,7 +197,7 @@ def test_measure_context(tmp_path):
 
 @needs_clang
 def test_mutation_checks():
-    printed = tool("tools/checks/mutation_checks.py", timeout=600)
+    printed = tool("tools/corpus/mutation_checks.py", timeout=600)
     result = json.loads((RESULTS / "agent/mutation_checks.json").read_text())
     assert result["cases"] == result["detected"] == 8 and not result["model_generated"]
     assert f"Detected {result['detected']}" in printed
@@ -279,10 +279,10 @@ def current(*args, timeout=600):
 
 
 def test_curriculum():
-    result = current("tools/ai/curriculum.py")
+    result = current("tools/corpus/curriculum.py")
     assert result["tasks"] == result["train"] + result["heldout"] and result["contrastive_pairs"] > 0
     assert not result["model_training_performed"]
-    committed = ROOT / "training/source"
+    committed = ROOT / "tools/corpus/lessons"
     assert len(json.loads((committed / "all_tasks_with_oracles.json").read_text())) == result["tasks"]
     # Every contrastive pair is a rejection the compiler still performs, with the code it still emits.
     pairs = [json.loads(line) for line in (committed / "contrastive.jsonl").read_text().splitlines()]
@@ -335,7 +335,7 @@ def test_drift_ignores_only_what_records_a_run(tmp_path):
 @needs_clang
 @needs_gcc
 def test_curriculum_verify():
-    printed = tool("tools/checks/curriculum_verify.py", "--gcc", timeout=900)
+    printed = tool("tools/corpus/curriculum_verify.py", "--gcc", timeout=900)
     result = json.loads((RESULTS / "agent/curriculum_validation.json").read_text())
     assert result["status"] == "all finite teaching cases passed" and result["model_runs"] == 0
     assert len(result["results"]) == 2 and all(r["cases"] > 0 for r in result["results"])
@@ -347,7 +347,7 @@ def test_curriculum_verify():
 @needs_gcc
 @needs_z3
 def test_semantic_corpus():
-    result = current("tools/checks/semantic_corpus.py", timeout=900)
+    result = current("tools/corpus/semantic_corpus.py", timeout=900)
     assert result["status"] == "passed" and result["tasks"] > 0
     assert result["positive_smt_labels"] == result["negative_smt_counterexamples"] == result["tasks"]
     assert len(result["native"]) == 2 and not result["fine_tuning_performed"]
@@ -355,7 +355,7 @@ def test_semantic_corpus():
 
 @needs_z3
 def test_protocol_curriculum():
-    result = current("tools/ai/protocol_curriculum.py", timeout=900)
+    result = current("tools/corpus/protocol_curriculum.py", timeout=900)
     assert result["status"] == "passed" and result["executed_protocol_lessons"] > 0
     assert result["fresh_semantic_checks"] == 2 * result["executed_protocol_lessons"]
     assert result["wrong_turns_never_sft_targets"] and not result["model_or_training_run"]
@@ -437,15 +437,16 @@ def test_parallel_gpu_flags():
 def test_host_region_benchmark_builds_under_the_contract(tmp_path):
     """The host region benchmark is not timed here: it writes release evidence. It must still build
     warning free under the project's own flags, with both compilers, against the real headers."""
-    sys.path.insert(0, str(ROOT / "bench/host_regions"))
+    sys.path.insert(0, str(ROOT / "bench/host"))
     import host_regions
+
     from support import best_profile, profile_flags
 
     assert host_regions.COMPILERS == ("g++", "clang++")
     arch = best_profile(*host_regions.COMPILERS)
     for cxx in host_regions.COMPILERS:
         line = [cxx, *profile_flags("exe", arch), f"-I{ROOT / 'src/cairn/runtime'}"]
-        line += [str(ROOT / "bench/host_regions/host_regions.cpp"), "-o", str(tmp_path / f"probe_{cxx[0]}")]
+        line += [str(ROOT / "bench/host/host_regions.cpp"), "-o", str(tmp_path / f"probe_{cxx[0]}")]
         made = subprocess.run(line, capture_output=True, text=True, timeout=600)
         assert made.returncode == 0, made.stderr[-3000:]
         assert made.stderr == "", f"the benchmark must build without a warning:\n{made.stderr}"

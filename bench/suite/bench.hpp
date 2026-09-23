@@ -1,6 +1,6 @@
 // The measurement protocol every arm of every kernel runs, written once.
 //
-// The protocol is bench/host_regions/host_regions.cpp's, kept deliberately: a median of nine timed
+// The protocol is bench/host/host_regions.cpp's, kept deliberately: a median of nine timed
 // blocks after one warm up, each block repeated until it covers sixteen million elements and the
 // total divided back, every case checked against a sequential result computed in this process, and
 // nothing reported when a case disagrees. A kernel supplies a Case type; run_all supplies the

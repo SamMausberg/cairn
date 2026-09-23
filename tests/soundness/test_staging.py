@@ -1,7 +1,7 @@
 """`plan f { stage R; }`: each block of a device region loads, into shared memory, the elements its lanes read near
 their index, once, and the lanes read them there.
 
-The staged lambdas are run on the host by tests/native/staged_host.hpp, block by block with every load before every
+The staged lambdas are run on the host by tests/runtime/staged_host.hpp, block by block with every load before every
 body and the tile poisoned first, under the sanitizers and against the unplanned region. Device code is compiled for
 sm_120 here and never run: the runs that compare a staged region with the unplanned one are in `make gpu`.
 """
@@ -96,7 +96,7 @@ def test_every_tile_a_staged_region_loads_holds_what_its_lanes_read(tmp_path, cx
         (tmp_path / name).write_text(cpp.replace('#include "cairn_gpu.hpp"', '#include "staged_host.hpp"'))
     (tmp_path / "main.cpp").write_text(MAIN)
     line = [cxx, "-std=c++20", "-O1", "-g", "-ffp-contract=off", "-fno-fast-math", "-fsanitize=address,undefined",
-            "-fno-sanitize-recover=all", f"-I{ROOT / 'src/cairn/runtime'}", f"-I{ROOT / 'tests/native'}",
+            "-fno-sanitize-recover=all", f"-I{ROOT / 'src/cairn/runtime'}", f"-I{ROOT / 'tests/runtime'}",
             *(str(tmp_path / f) for f in ("planned.cpp", "plain.cpp", "main.cpp")), "-o", str(tmp_path / "t")]  # fmt: skip
     built = subprocess.run(line, capture_output=True, text=True, timeout=300)
     assert built.returncode == 0, built.stderr[-3000:]

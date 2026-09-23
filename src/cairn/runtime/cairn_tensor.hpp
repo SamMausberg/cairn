@@ -8,7 +8,7 @@
 // On the host the multiply is its own reference: every product, then every sum in increasing p. On the device it
 // runs 64 x 64 output tiles, one block of four warps each, over k in steps of 32 staged through shared memory in two
 // buffers, each warp adding 2 x 2 tensor-core 16 x 16 x 16 products per step. The tile's phases are written once,
-// against the operations a Tile is given, so that tests/native/tensor_runtime.cpp runs every thread of a block phase
+// against the operations a Tile is given, so that tests/runtime/tensor_runtime.cpp runs every thread of a block phase
 // by phase on the host, with a model of the tensor-core operations, and holds the tiling, the tails and the two
 // stages to the reference exactly.
 #pragma once

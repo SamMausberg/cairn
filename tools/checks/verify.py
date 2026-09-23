@@ -52,7 +52,7 @@ def main():
     py = sys.executable
     for stem in ["native", "family", "wire"]:
         run([py, "tools/release/build.py", f"examples/basics/{stem}.cairn", "--out", "results/native", "--arch", arch])
-    run(command("clang++", "bench/cpu/family_template.cpp", "results/native/libtemplate.so", arch, "library"))
+    run(command("clang++", "bench/codegen/family_template.cpp", "results/native/libtemplate.so", arch, "library"))
     # The suite's own smoke test runs this script; the flag stops it re-entering and rewriting results/.
     run([py, "-m", "pytest", a.tests, "-q"], "results/checks/compiler_tests.txt", dict(os.environ, CAIRN_VERIFY="1"))
     run([py, "tests/oracles/native_checks.py"], "results/checks/native_tests.json")
@@ -70,11 +70,11 @@ def main():
     if a.sanitize:
         # Sanitizers need frame pointers and a light optimizer; every other flag is the shared contract.
         flags = profile_flags("exe", arch, drop=("-O3",), add=SANITIZE)
-        run(["clang++", *flags, "tests/native/sanitize.cpp", "-o", "results/native/sanitize"])
+        run(["clang++", *flags, "tests/runtime/sanitize.cpp", "-o", "results/native/sanitize"])
         env = dict(os.environ, ASAN_OPTIONS="detect_leaks=1", UBSAN_OPTIONS="halt_on_error=1")
         run(["results/native/sanitize"], "results/checks/sanitizer_tests.txt", env)
     if a.bench:
-        run([py, "bench/cpu/run.py"], "results/checks/benchmark_run.txt")
+        run([py, "bench/host/paired.py"], "results/checks/benchmark_run.txt")
     run([py, "tools/checks/density.py"], "results/checks/density_run.txt")
     summary = {"status": "all requested checks passed", "commands": len(record["commands"])}
     print(json.dumps({**summary, **record["environment"], "formal_status": "not-verified"}))

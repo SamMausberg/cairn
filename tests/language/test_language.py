@@ -248,7 +248,7 @@ def test_owned_dynamic_values_hold_heterogeneous_owners(tmp_path):
     """Vec[Dyn[Shape]]: explicit allocation, dispatch through the table, release through the drop word."""
     from pathlib import Path
 
-    source = (Path(__file__).parents[1] / "native/owned_dynamic.cairn").read_text()
+    source = Path(__file__).with_name("owned_dynamic.cairn").read_text()
     generated, receipt = compile_source(source)
     assert {"alloc", "free", "dispatch"} <= set(receipt["functions"]["main"]["effects"])
     assert run(tmp_path, generated, *SANITIZED, env={"ASAN_OPTIONS": "detect_leaks=1"}).returncode == 0

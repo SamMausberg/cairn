@@ -28,7 +28,7 @@
 // machine that ran it. `#include <cub/cub.cuh>` is NOT usable: it drags in Thrust's
 // system_error.inl, which needs -fexceptions. The four narrow CUB headers below do not.
 //
-// Device trap mechanism (measured, see tests/native/gpu_runtime.cu):
+// Device trap mechanism (measured, see tests/runtime/gpu_runtime.cu):
 //   __trap()          chosen. The kernel dies, the context is poisoned, and every later call on
 //                     it - the next sync, wait or copy - returns cudaErrorLaunchFailure, which
 //                     cr::gpu::check turns into std::abort. No hang, no wrong answer, one PTX

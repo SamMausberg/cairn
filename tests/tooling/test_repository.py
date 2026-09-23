@@ -7,7 +7,11 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-RECORDS = ("evidence/", "training/", "docs/history/")  # what ran or was proposed then, kept as it was written
+RECORDS = (
+    "evidence/",
+    "tools/corpus/lessons/",
+    "tools/corpus/semantic/",
+)  # what ran, and generated corpora, kept as written
 SOURCES = {".py", ".cairn", ".hpp", ".cpp", ".cu", ".lean", ".md", ".js", ".S", ".ld", ".toml", ".yml"}
 EMOJI = re.compile("[\U0001f300-\U0001faff☀-➿⭐✅❌]")
 
@@ -29,6 +33,12 @@ def test_no_source_file_is_longer_than_800_lines():
             if lines > 800:
                 long[name] = lines
     assert not long, f"split these by responsibility: {long}"
+
+
+def test_a_test_module_is_named_by_its_subject_not_by_a_release():
+    """`test_review_1_4b.py` said when a file was written; `test_review_tools.py` says what it holds."""
+    dated = [name for name in tracked() if re.match(r"tests/.*/test_\w*\d\w*\.py$", name)]
+    assert not dated, f"rename these by what they test: {dated}"
 
 
 def prose(text: str):

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 import test_language as language
-from test_agent10 import PROGRAMS
+from test_agent_language import PROGRAMS
 
 from cairn.agent.agent_tools import HANDLES, PROTOCOL, EditHost, EditSession
 from cairn.agent.evidence import TERMS

@@ -7,7 +7,7 @@ emits each kernel, probes whether OpenMP and oneTBB actually run in parallel her
 under both compilers with the project's own flags, counts each arm's safety boundaries against the
 CAIRN build receipt, runs what built, and writes the raw timings under results/. It never writes
 under evidence/ and it refuses to write anything at all when a case disagreed with its sequential
-result, which is bench/host_regions/host_regions.py's rule kept deliberately.
+result, which is bench/host/host_regions.py's rule kept deliberately.
 
   python bench/suite/harness.py --smoke          # tiny sizes, seconds, proves the harness works
   python bench/suite/harness.py --build-only     # every arm built and priced, nothing timed

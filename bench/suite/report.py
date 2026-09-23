@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT = ROOT / "results/bench_suite/suite.json"
 
-# The preregistered threshold. A ratio above one favours CAIRN, as it does in bench/cpu/run.py.
+# The preregistered threshold. A ratio above one favours CAIRN, as it does in bench/host/paired.py.
 WIN_RATIO = 1.25
 # The arms the 1.4 addendum adds, which may also be divided into a baseline they check at least as much as.
 ADDENDUM_ARMS = {"cairn_pool", "cairn_blocks"}

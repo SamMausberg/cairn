@@ -3,7 +3,7 @@
 Submitting moves a `Buf[u8]` into the ring and `q.next(tag, result)` hands it back with the kernel's result, so the
 kernel only ever touches storage the ring owns. The native tests run pipes and a lent ring under both compilers
 with the sanitizers that bite, including ThreadSanitizer for a ring lent to a task; every rule has a rejection
-naming its code. tests/native/io_runtime.cpp holds the runtime to the same promises from C++.
+naming its code. tests/runtime/io_runtime.cpp holds the runtime to the same promises from C++.
 """
 
 import pytest

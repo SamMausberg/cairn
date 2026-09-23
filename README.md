@@ -157,7 +157,7 @@ src/cairn/     compiler/ runtime/ std/ verify/ agent/ editor/ perf/ projects/ te
 proofs/        Lean 4: collector certificates, ownership and lease calculus, lane pool, guard elision
 examples/      runnable projects: hello/ systems/ apps/ interop/ embedded/, and inputs for the tools
 tests/         the suite: language/ soundness/ verification/ projects/ runtime/ tooling/ agent/
-tools/         checks/ ai/ release/
+tools/         checks/ ai/ corpus/ release/
 bench/         the CPU and GPU benchmark harnesses and the preregistered suite
 editors/       VS Code and Vim support, generated from the compiler's vocabulary
 docs/          the documentation

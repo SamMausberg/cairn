@@ -4,7 +4,7 @@ On the host the multiply is its own reference, every product then every sum in i
 replay of that order in Python (tests/oracles/float_formats.py decodes the inputs; every f32 operation is rounded
 through struct, which double rounding cannot disturb for one addition or product of floats) must match it bit for
 bit, and the contract's bound must hold against the exact rational sum, old value included. The tile the device runs is checked on the
-host, phase by phase, by tests/native/tensor_runtime.cpp. The device itself is compiled for here, never run: the
+host, phase by phase, by tests/runtime/tensor_runtime.cpp. The device itself is compiled for here, never run: the
 comparison of the tensor cores with the reference, within the contract, is in `make gpu`.
 """
 
@@ -182,7 +182,7 @@ def test_every_tile_of_the_device_multiply_equals_the_reference_on_the_host(tmp_
     exe = tmp_path / "tensor_runtime"
     line = [cxx, "-std=c++20", "-O1", "-g", "-ffp-contract=off", "-fno-fast-math", "-fsanitize=address,undefined",
             "-fno-sanitize-recover=all", "-Wall", "-Wextra", "-Werror", f"-I{RUNTIME}",
-            str(ROOT / "tests/native/tensor_runtime.cpp"), "-o", str(exe)]  # fmt: skip
+            str(ROOT / "tests/runtime/tensor_runtime.cpp"), "-o", str(exe)]  # fmt: skip
     built = subprocess.run(line, capture_output=True, text=True, timeout=300)
     assert built.returncode == 0, built.stderr[-3000:]
     done = subprocess.run([str(exe)], capture_output=True, text=True, timeout=300)

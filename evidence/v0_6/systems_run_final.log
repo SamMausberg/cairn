@@ -1,9 +1,0 @@
-{
-  "status": "program-exited",
-  "exit_code": 0,
-  "stdout": "",
-  "stderr": "",
-  "build_directory": "/mnt/data/cairn_work_06/cairn/examples/systems/build/systems-qluijavx",
-  "security_sandbox": false,
-  "memory_limit_mib": 1024
-}

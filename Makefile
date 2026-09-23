@@ -44,7 +44,7 @@ test:
 
 native:
 	$(PYTHON) tools/checks/verify.py --gcc --sanitize
-	$(PYTHON) bench/cpu/codegen_only.py
+	$(PYTHON) bench/codegen/codegen_only.py
 
 # The preregistered CPU baseline suite: bench/suite/PREREGISTRATION.md fixes what it measures before
 # it runs. It writes under results/, never under evidence/, and nothing when a case disagrees.

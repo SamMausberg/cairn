@@ -1,6 +1,6 @@
 """Compile and run the native parallel, I/O ring, execution context and device runtime tests.
 
-The executables under tests/native are self checking: exit 0 is a pass. Each also runs one
+The executables beside this file are self checking: exit 0 is a pass. Each also runs one
 named death case per invocation, which must abort the process, so those are driven here as
 subprocesses. Device work runs only under `make gpu`, one run at a time (`support.device_reason`);
 everywhere else a device test is compiled for a named architecture and never run.
@@ -23,7 +23,7 @@ from support import device_lock, device_reason
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / "src/cairn/runtime"
-NATIVE = ROOT / "tests/native"
+NATIVE = ROOT / "tests/runtime"
 
 # The language contract: strict floating point, no unwinding, warnings are errors. nvcc takes
 # the first two itself and the rest only through -Xcompiler.

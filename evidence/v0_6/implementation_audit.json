@@ -1,8 +1,0 @@
-{
-  "status": "no-pattern-findings",
-  "commits": 4,
-  "distinct_blobs": 394,
-  "bytes_scanned": 2138241,
-  "findings": [],
-  "scope": "all reachable commits; finite credential patterns, not a guarantee"
-}
