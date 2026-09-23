@@ -244,6 +244,7 @@ class Program:
     families: list[tuple[str, str, int, int]] = field(default_factory=list)
     derivations: list[tuple] = field(default_factory=list)  # (module, recipe as written, naturals, target, token)
     plans: list[tuple] = field(default_factory=list)  # (module, function as written, {item: value}, token)
+    scopes: list[tuple[int, str]] = field(default_factory=list)  # (where a `module` line starts, the module it opens)
     recipes: dict[str, Recipe] = field(default_factory=dict)
     sums: dict[str, list[tuple[str, Type | None]]] = field(default_factory=dict)
     generics: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # generic types

@@ -28,19 +28,7 @@ from ..compiler.builtins import TABLE
 from ..compiler.cairnc import Diagnostic, compile_source
 from ..compiler.syntax import IDENT, RESERVED
 from ..projects.project import Project, ProjectError, contained_file, load_project
-from .document import (
-    Document,
-    Item,
-    binders,
-    declarations,
-    dotted,
-    enclosing,
-    flatten,
-    line_starts,
-    module_at,
-    module_of_each,
-    word_at,
-)
+from .document import Document, Item, binders, declarations, dotted, enclosing, flatten, line_starts, word_at
 from .edits import occurrences as local_occurrences
 from .names import TYPES, callee, declared, qualified
 
@@ -62,6 +50,7 @@ class File:
     uri: str
     text: str
     start: int  # where its first character sits in the combined source
+    whole: str = ""  # the combined source of its project, which says the module its first line sits in
 
 
 @dataclass
@@ -111,7 +100,7 @@ def files_of(project: Project, given: dict[Path, str]) -> list[File]:
     for unit in project.units:
         file = (project.root / unit.path).resolve()
         text = given.get(file) if file in given else file.read_text(encoding="utf-8")
-        files.append(File(file.as_uri(), text, starts[unit.first_line - 1]))
+        files.append(File(file.as_uri(), text, starts[unit.first_line - 1], project.source))
     return files
 
 
@@ -130,12 +119,12 @@ def workspace_symbols(query: str, buffers: dict[str, str], roots: list[str]) -> 
         files |= {f.uri: f for f in held[1]} if held else {uri: File(uri, text, 0)}
     out = []
     for f in files.values():
-        doc = Document(f.text, analyse=False)
+        doc = Document(f.text, analyse=False, within=(f.whole, f.start, None) if f.whole else None)
         for d in flatten(declarations(doc.code, 0, len(doc.code))):
             if query.lower() in d["name"].lower():
                 where = {"uri": f.uri, "range": doc.span(*d["mark"])}
                 out.append({"name": d["name"], "kind": d["kind"], "location": where,
-                            "containerName": module_at(doc.code, d["head"])})  # fmt: skip
+                            "containerName": doc.module_at(d["head"])})  # fmt: skip
     return out[:1000]
 
 
@@ -160,7 +149,7 @@ def target(ws: Workspace, offset: int) -> tuple[str, str, list[Item]] | None:
     if at is None or p is None:
         raise Refused("There is no name here, or the project does not compile.")
     cs, (i, word) = doc.code, at
-    modules = module_of_each(cs)
+    modules = doc.modules()
     if any(cs[j].s == word.s for j in binders(cs, 0, len(cs))):
         return None
     tables: dict[str, dict[str, Any]] = {"fn": declared(p), "struct": p.records, "enum": {**p.sums, **p.enums},
@@ -221,6 +210,22 @@ def references(ws: Workspace, uri: str, offset: int) -> list[dict]:
         return []
     tokens = named[2] if named else local_occurrences(ws.whole, at)
     return [where for t in tokens if (where := ws.location(t))]
+
+
+def definition(ws: Workspace, uri: str, offset: int) -> dict | None:
+    """Where the declaration the name under the cursor refers to is written, in whichever file of the project holds
+    it; None for a local, a library name or a member, and on the declaration itself, which one document answers."""
+    at = ws.offset(uri, offset)
+    try:
+        named = target(ws, at)
+    except Refused:
+        return None
+    if named is None:
+        return None
+    bare, cs = local(named[1]), ws.whole.code
+    marks = {d["mark"][0] for d in flatten(declarations(cs, 0, len(cs))) if d["name"] == bare}
+    declaring = [t for t in named[2] if t.start in marks and not t.start <= at < t.end]
+    return ws.location(declaring[0]) if declaring else None
 
 
 def renameable(ws: Workspace, at: int) -> tuple[tuple[str, str, list[Item]] | None, list[Item]]:
@@ -308,7 +313,7 @@ def contracts(project: Project, old: str, new: str) -> list[tuple[str, dict]]:
 def owner(ws: Workspace, offset: int) -> str:
     """The function a local belongs to, as the receipt names it."""
     d = enclosing(ws.whole, offset)[0]
-    module = module_of_each(ws.whole.code)[next(i for i, t in enumerate(ws.whole.code) if t.start >= d["head"])]
+    module = ws.whole.module_at(d["head"] + 1) if d else ""
     return f"{module}.{d['name']}" if module and d else d["name"] if d else ""
 
 

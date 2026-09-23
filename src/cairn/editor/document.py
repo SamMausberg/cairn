@@ -50,6 +50,7 @@ class Document:
         self.starts = line_starts(text)
         self.code = roles([t for t in scan(text) if not t.comment])
         self.program: Program | None = None
+        self._scopes: list[tuple[int, str]] | None = None  # where each module this text sits in begins, once asked
         self.rows: dict[str, list[str]] = {}  # function -> its effect row, for hovers
         self.error: dict = {}  # the compiler's diagnostic with every detail it carries, for code actions
         self.sites, self.diagnostics = self._analyse() if analyse else ([], [])
@@ -71,6 +72,34 @@ class Document:
 
     def span(self, start: int, end: int) -> dict:
         return {"start": self.position(start), "end": self.position(end)}
+
+    def scopes(self) -> list[tuple[int, str]]:
+        """Where each module this text sits in begins, as (offset in this text, module), the first at -1: the
+        module in force where this text starts. A project's file that opens no module continues the one the file
+        before it opened, as the compiler reads the combined source, so the answer is the compiler's own parse
+        when this analysis compiled; for a buffer that does not, the same rule is read from the source's tokens."""
+        if self._scopes is None:
+            start = self.within[1] if self.within else 0
+            if self.program is not None:  # the library's modules were parsed from their own files: not ours
+                opened = [(at - start, m) for at, m in self.program.scopes if m not in self.program.sources]
+            else:
+                source = self.within[0] if self.within else self.text
+                cs = roles([t for t in scan(source) if not t.comment])
+                opened = [(t.start - start, ahead(cs, i + 1)) for i, t in enumerate(cs) if t.s == "module"]
+            before = [m for at, m in opened if at < 0]
+            self._scopes = [(-1, before[-1] if before else ""), *((at, m) for at, m in opened if at >= 0)]
+        return self._scopes
+
+    def module_at(self, offset: int) -> str:
+        """The module whose declarations surround `offset`; the root module is ""."""
+        opened = self.scopes()
+        return opened[bisect.bisect_left([at for at, _ in opened], offset) - 1][1]
+
+    def modules(self) -> list[str]:
+        """The module of every token of `code`, a `module` line's own tokens already in the module it opens."""
+        opened = self.scopes()
+        starts = [at for at, _ in opened]
+        return [opened[bisect.bisect_right(starts, t.start) - 1][1] for t in self.code]
 
     def _analyse(self) -> tuple[list[dict], list[dict]]:
         """The buffer's sites and diagnostics; its program and effect rows when it compiles."""
@@ -287,25 +316,6 @@ def enclosing(doc: Document, offset: int) -> tuple[dict | None, bool]:
     """The innermost declaration covering `offset`, and whether it is a trait or impl member."""
     over = [d for d in flatten(declarations(doc.code, 0, len(doc.code))) if d["head"] <= offset <= d["tail"]]
     return min(over, key=lambda d: d["tail"] - d["head"], default=None), len(over) > 1
-
-
-def module_at(cs: list[Item], offset: int) -> str:
-    """The module whose declarations surround `offset`, from its `module a.b;`; the root module is ""."""
-    out = ""
-    for i, t in enumerate(cs):
-        if t.start >= offset:
-            break
-        out = ahead(cs, i + 1) if t.s == "module" else out
-    return out
-
-
-def module_of_each(cs: list[Item]) -> list[str]:
-    """`module_at` for every token at once."""
-    out, module = [], ""
-    for i, t in enumerate(cs):
-        module = ahead(cs, i + 1) if t.s == "module" else module
-        out.append(module)
-    return out
 
 
 def word_at(doc: Document, offset: int) -> tuple[int, Item] | None:

@@ -615,6 +615,7 @@ class Parser:
             public = self.eat("pub")
             if self.eat("module"):
                 self.module = self.path()
+                p.scopes.append((t.start, self.module))
                 self.need(";")
             elif self.eat("import"):
                 path = self.path()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..agent.projection import local, signature
 from ..compiler.modules import library_path
-from .document import Document, declarations, dotted, flatten, module_at, word_at
+from .document import Document, declarations, dotted, flatten, word_at
 from .names import callee, declared, qualified, template
 
 
@@ -42,7 +42,7 @@ def declaration(doc: Document, offset: int, own: bool = True) -> tuple[Document,
         return None
     i, word = at
     path = dotted(doc.code, i)
-    elsewhere = packaged(doc, module_at(doc.code, word.start), path)
+    elsewhere = packaged(doc, doc.module_at(word.start), path)
     if elsewhere and "." in path:  # `vec.push` is that module's, whatever this document declares.
         return elsewhere
     for d in flatten(declarations(doc.code, 0, len(doc.code))):
@@ -69,7 +69,7 @@ def hover(doc: Document, offset: int) -> dict | None:
         if binding:
             body += ["", ("mutable" if binding["mutable"] else "immutable") + " binding of `" + binding["type"] + "`"]
     at = word_at(doc, offset)
-    f = callee(doc, module_at(doc.code, offset), dotted(doc.code, at[0]), offset)[0] if at and doc.good else None
+    f = callee(doc, doc.module_at(offset), dotted(doc.code, at[0]), offset)[0] if at and doc.good else None
     if f is not None:  # A template's row is the join of its instances', as `cairn doc` prints it.
         effects = {x for n, xs in doc.good.rows.items() if template(n) == f.name for x in xs}
         body += ["", "```cairn", signature(f), "```", ""]

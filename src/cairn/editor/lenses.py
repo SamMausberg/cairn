@@ -3,7 +3,7 @@ and what it runs on, the document's project when it has one."""
 
 from __future__ import annotations
 
-from .document import Document, declarations, module_at
+from .document import Document, declarations
 from .workspace import context, path_of
 
 
@@ -26,7 +26,7 @@ def code_lenses(doc: Document, uri: str, buffers: dict[str, str]) -> list[dict]:
     for d in declarations(doc.code, 0, len(doc.code)):
         mark = doc.span(*d["mark"])
         if d["detail"] == "test":
-            module = module_at(doc.code, d["head"])
+            module = doc.module_at(d["head"])
             named = f"{module}.{d['name']}" if module else d["name"]
             run = {"title": "Run test", "command": "cairn.runTest", "arguments": [where, named]}
             out.append({"range": mark, "command": run})

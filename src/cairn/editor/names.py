@@ -10,7 +10,7 @@ from ..agent.projection import local, signature
 from ..compiler.modules import STD
 from ..compiler.syntax import INTRINSIC_TYPES, SCALAR, Function, Program
 from ..compiler.tree import STORAGE
-from .document import Document, binders, enclosing, module_at
+from .document import Document, binders, enclosing
 
 ITEM = {  # LSP CompletionItemKind, by what the name is
     "fn": 3, "struct": 22, "enum": 13, "trait": 8, "const": 21, "impl": 7, "recipe": 15, "module": 9,
@@ -130,7 +130,7 @@ def scope(doc: Document, offset: int) -> dict[str, str]:
     d, member = enclosing(doc, offset)
     if d is None:
         return {}
-    module = module_at(doc.code, d["head"])
+    module = doc.module_at(d["head"])
     prefix = module + "." if module else ""
     out: dict[str, str] = {}
     for s in doc.good.sites if doc.good else []:

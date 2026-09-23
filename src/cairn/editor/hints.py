@@ -11,7 +11,7 @@ import re
 
 from ..compiler.calls import extents
 from ..compiler.syntax import IDENT, RESERVED
-from .document import Document, Item, declarations, dotted, flatten, module_at, module_of_each
+from .document import Document, Item, declarations, dotted, flatten
 from .names import callee, template
 
 QUALIFIER = re.compile(r"\b(?:[a-z_]\w*\.)+(?=[A-Za-z_])")  # `std.vec.Vec[u64]` reads as `Vec[u64]`
@@ -46,7 +46,7 @@ def rows(doc: Document, lo: int, hi: int) -> list[dict]:
         at = index.get(d["mark"][0], -1)
         if d["detail"] != "fn" or at < 0 or not lo <= cs[at].start <= hi:
             continue
-        module = module_at(cs, d["head"])
+        module = doc.module_at(d["head"])
         prefix, member = module + "." if module else "", all(d is not t for t in top)
         found = [xs for n, xs in doc.good.rows.items() if (base := template(n)) == prefix + d["name"]
                  or (member and base.startswith(prefix) and base.endswith("." + d["name"]))]  # fmt: skip
@@ -77,7 +77,7 @@ def extent_of(argument: str) -> str:
 
 def extents_left_out(doc: Document, lo: int, hi: int) -> list[dict]:
     """Before the first argument of a call that leaves its extents out, the extents it passes."""
-    cs, out, modules = doc.code, [], module_of_each(doc.code)
+    cs, out, modules = doc.code, [], doc.modules()
     for i, t in enumerate(cs):
         if doc.good is None or t.s != "(" or not i or t.pair <= i or not lo <= t.start <= hi:
             continue
@@ -109,7 +109,7 @@ def let_types(doc: Document, lo: int, hi: int) -> list[dict]:
     for s in doc.good.sites:
         for n, b in s["bindings"].items():
             types.setdefault(template(s["symbol"]), {}).setdefault(n, b["type"])
-    decls, modules = flatten(declarations(cs, 0, len(cs))), module_of_each(cs)
+    decls, modules = flatten(declarations(cs, 0, len(cs))), doc.modules()
     for i, t in enumerate(cs):
         j = i + 1 + (i + 1 < len(cs) and cs[i + 1].s == "mut")
         if t.s not in {"let", "reg"} or not lo <= t.start <= hi or j + 1 >= len(cs) or cs[j + 1].s != "=":

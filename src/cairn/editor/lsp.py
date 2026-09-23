@@ -22,6 +22,7 @@ from .hints import inlay_hints
 from .lenses import code_lenses
 from .navigation import definition, hover
 from .workspace import context, within, workspace, workspace_symbols
+from .workspace import definition as project_definition
 from .workspace import prepare_rename as project_prepare_rename
 from .workspace import references as project_references
 from .workspace import rename as project_rename
@@ -46,6 +47,7 @@ CAPABILITIES = {
 }
 # The same questions when the document belongs to a project: answered across every file of it.
 ACROSS: dict[str, Any] = {
+    "textDocument/definition": lambda w, u, at, p: project_definition(w, u, at),
     "textDocument/references": lambda w, u, at, p: project_references(w, u, at),
     "textDocument/prepareRename": lambda w, u, at, p: project_prepare_rename(w, u, at),
     "textDocument/rename": lambda w, u, at, p: project_rename(w, u, at, str(p.get("newName") or "")),
@@ -157,7 +159,8 @@ class Server:
             answer = ACROSS[method](ws, uri, at, p)
             if method == "textDocument/documentHighlight":  # the project's references in this file, read or write
                 return highlights(doc, {doc.offset(r["range"]["start"]) for r in answer})
-            return answer
+            if answer is not None or method != "textDocument/definition":  # a local or a library name: this file's
+                return answer
         answer = ANSWERS.get(method)
         return answer(doc, uri, at, p) if answer else UNSUPPORTED
 

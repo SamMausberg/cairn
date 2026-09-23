@@ -7,7 +7,7 @@ from ..compiler.builtins import TABLE
 from ..compiler.calls import extents
 from ..compiler.syntax import IDENT, RESERVED
 from ..compiler.traits import CLASSES, KINDS
-from .document import Document, before, call_at, declarations, dotted, module_at, promising, statement
+from .document import Document, before, call_at, declarations, dotted, promising, statement
 from .formatting import CLOSERS, OPENERS
 from .names import (
     TABLES,
@@ -31,7 +31,7 @@ def completion(doc: Document, offset: int) -> list[dict]:
     """What may be written at `offset`: the members of what precedes a `.`, the modules of an import,
     the recipes of a derive, what a bound may promise, else every name in scope. The client filters."""
     cs, p = doc.code, doc.good.program if doc.good else None
-    i, module = before(cs, offset), module_at(cs, offset)
+    i, module = before(cs, offset), doc.module_at(offset)
     if statement(cs, i, "import"):
         return [entry(m, "module", "module") for m in modules(p)]
     if p is not None and i >= 0 and cs[i].s == "derive":
@@ -91,7 +91,7 @@ def signature_help(doc: Document, offset: int) -> dict | None:
     i = call_at(cs, before(cs, offset))
     if i <= 0 or doc.good is None or not IDENT.fullmatch(cs[i - 1].s) or cs[i - 1].s in RESERVED:
         return None
-    f, receiver = callee(doc, module_at(cs, offset), dotted(cs, i - 1), offset)
+    f, receiver = callee(doc, doc.module_at(offset), dotted(cs, i - 1), offset)
     if f is None:
         return None
     depth, commas = 0, 0

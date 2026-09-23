@@ -12,7 +12,7 @@ from ..agent.projection import local
 from ..compiler.builtins import TABLE
 from ..compiler.effects import EFFECTS
 from ..compiler.syntax import IDENT, RESERVED, Program
-from .document import BINDERS, Document, Item, _units, declarations, dotted, module_of_each, statement
+from .document import BINDERS, Document, Item, _units, declarations, dotted, statement
 from .grammar import FAMILIES
 from .names import TYPES, declared, qualified, visible
 
@@ -120,7 +120,7 @@ def classify(doc: Document) -> list[tuple[Item, str, set[str]]]:
     modules: dict[str, dict[str, str]] = {}
     paths = set(p.modules.values()) if p else set()
     out: list[tuple[Item, str, set[str]]] = []
-    within = module_of_each(cs)
+    within = doc.modules()
     row_ends = -1  # inside `effects(...)`, a word is an effect and the name after `read:` a parameter
     for i, t in enumerate(cs):
         if t.s == "effects" and i + 1 < len(cs) and cs[i + 1].s == "(":

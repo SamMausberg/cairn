@@ -5,6 +5,7 @@ reason and changes nothing. The protocol is driven through the client of `test_l
 """
 
 import json
+import pathlib
 import subprocess
 
 import pytest
@@ -275,3 +276,66 @@ def test_workspace_symbols_search_the_projects_at_the_workspace_roots(project):
         assert [(lens["command"]["command"], lens["range"]["start"]["line"]) for lens in lenses] == [("cairn.run", 6)]
     finally:
         client.close()
+
+
+CONTINUED = (
+    '[project]\nname = "geo"\nsources = ["src/geo.cairn", "src/more.cairn", "src/main.cairn"]\n'
+    '[build]\nkind = "exe"\narch = "baseline"\n'
+)
+AREA = "module geo;\n\n// The square of a side.\npub fn area(x:u64) -> u64 = x * x;\n"
+MORE = "pub fn double(x:u64) -> u64 = area(x) * 2;\n\ntest doubles {\n  assert(double(3) == 18);\n}\n"
+ENTRY = "module app;\nimport geo;\n\nfn main() -> i32 {\n  if geo.double(3) != 18 { return 1; }\n  return 0;\n}\n"
+
+
+@pytest.fixture
+def continued(tmp_path):
+    """more.cairn opens no module, so the compiler reads it as the rest of geo, where geo.cairn left off."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "cairn.toml").write_text(CONTINUED)
+    for name, text in [("geo", AREA), ("more", MORE), ("main", ENTRY)]:
+        (tmp_path / f"src/{name}.cairn").write_text(text)
+    return tmp_path
+
+
+def test_a_file_that_opens_no_module_is_in_the_module_the_compiler_says(continued):
+    uri = (continued / "src/more.cairn").resolve().as_uri()
+    geo = (continued / "src/geo.cairn").resolve().as_uri()
+    client = Client()
+    try:
+        client.request("initialize", {"capabilities": {}, "rootUri": continued.resolve().as_uri()}, 1)
+        assert client.open(MORE, uri=uri) == []
+        at = {"textDocument": {"uri": uri}, "position": place(MORE, "area(x)")}
+        shown = client.request("textDocument/hover", at, 5)["result"]["contents"]["value"]
+        assert "fn area(x:u64) -> u64" in shown and "Effects: `trap`." in shown
+        found = client.request("textDocument/definition", at, 6)["result"]
+        assert found["uri"] == geo and found["range"]["start"] == {"line": 3, "character": 7}
+        lenses = client.request("textDocument/codeLens", {"textDocument": {"uri": uri}}, 7)["result"]
+        assert [lens["command"]["arguments"][1] for lens in lenses] == ["geo.doubles"]  # the name cairn test takes
+        symbols = client.request("workspace/symbol", {"query": "double"}, 8)["result"]
+        assert [(s["name"], s["containerName"]) for s in symbols] == [("double", "geo"), ("doubles", "geo")]
+    finally:
+        client.close()
+    ws = workspace(uri, {uri: MORE})
+    assert lines(references(ws, uri, MORE.index("area(x)"))) == [("geo.cairn", 3), ("more.cairn", 0)]
+    edits = rename(ws, uri, MORE.index("area(x)"), "square")["changes"]
+    assert sorted(u.rsplit("/", 1)[1] for u in edits) == ["geo.cairn", "more.cairn"]
+
+
+def test_a_buffer_that_does_not_compile_still_reads_its_module_from_the_project(continued):
+    """With no analysis to ask, the same rule is read from the combined source: the file before opened geo."""
+    uri = (continued / "src/more.cairn").resolve().as_uri()
+    broken = MORE.replace("area(x) * 2", "area(x) *")
+    held = ws_module.context(uri, {uri: broken})
+    doc = Document(broken, within=ws_module.within(*held, uri))
+    assert doc.program is None and doc.module_at(broken.index("double")) == "geo"
+    assert set(doc.modules()) == {"geo"}
+
+
+def test_the_rule_read_from_tokens_is_the_compiler_s_on_every_example_project():
+    root = pathlib.Path(__file__).resolve().parents[2]
+    for manifest in sorted((root / "examples").rglob("cairn.toml")):
+        project = load_project(manifest)
+        for f in ws_module.files_of(project, {}):
+            inside = (project.source, f.start, project.site)
+            asked, read = Document(f.text, within=inside), Document(f.text, analyse=False, within=inside)
+            assert asked.program is not None and asked.modules() == read.modules(), (manifest, f.uri)
