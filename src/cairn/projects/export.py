@@ -12,6 +12,10 @@ uses exactly the recorded command and compilers (`E-EXPORT-TOOLCHAIN`); and ever
 a timing writes carries the identity. A later rewrite of the output therefore has another identity, or is refused,
 and is never covered by an earlier record. `compare` says whether two exports are the same code, function by function
 as `verify/emission.py` decides it, and says that their speed is compared only under the same harness.
+
+The identity is a digest anyone can recompute, not a signature, so the record is data and never a build script: a
+build runs the compiler this machine finds under the name the record gives it, clang++ or g++, never a path the record
+names, and only the command `toolchain.command` gives for the record's kind, architecture, target and libraries.
 """
 
 from __future__ import annotations
@@ -33,15 +37,17 @@ from ..compiler.machine import unbuildable
 from ..compiler.tree import Diagnostic
 from ..version import VERSION
 from .project import Project, ProjectError
-from .target import resolve, toolkit_record
+from .target import parse, resolve, toolkit_record
+from .toolchain import KINDS, find, host_family, link_flags, linked
 from .toolchain import command as native_command
-from .toolchain import find, host_family, link_flags, linked
 from .toolchain import version as compiler_version
 
 RECORD = "export.json"
 SCHEMA = "cairn.export/1"
 BUILT = "build"  # where builds of an export go, inside it; never part of what the identity covers
 INCLUDE = re.compile(r'^#include "([^"]+)"', re.M)
+COMPILER = re.compile(r"(clang\+\+|g\+\+)(-[0-9][0-9.]*)?")  # the names a build finds its C++ compiler by
+PLAIN = re.compile(r"[A-Za-z0-9_-]{1,64}")  # an artifact's name, as `export` makes it from the project's
 DEVICE_SIDE = {"cairn_kernels.hpp", "cairn_runtime.hpp", "cairn_assert.hpp", "cairn_float.hpp", "cairn_layout.hpp"}
 LAUNCH = {"cairn_gpu.hpp", "cairn_exec.hpp", "cairn_reuse.hpp"}
 
@@ -137,8 +143,10 @@ def export(project: Project, out: Path, *, cxx: str = "clang++", arch: str | Non
         (out / header_name).write_text(RUNTIME_FILES[header_name], encoding="utf-8")
     if made.declared:
         (out / (name + ".h")).write_text(made.declared, encoding="utf-8")
-    line = native_command(cxx, program, artifact, arch or project.arch, kind, cuda, None, device)
-    line += link_flags(linked(project.libraries, receipt["modules"]))
+    libraries = linked(project.libraries, receipt["modules"])
+    line = native_command(cxx, program, artifact, arch or project.arch, kind, cuda, None, device) + link_flags(
+        libraries
+    )
     compilers = {"cxx": {"path": find(cxx), "version": compiler_version(find(cxx)).splitlines()[0]}}
     if cuda:
         compilers["nvcc"] = toolkit_record() or {}
@@ -151,6 +159,8 @@ def export(project: Project, out: Path, *, cxx: str = "clang++", arch: str | Non
         "files": files,
         "roles": {n: role(n, program, cuda) for n in files},
         "command": line,
+        "arch": arch or project.arch,
+        "libraries": libraries,
         "compilers": compilers,
         "device_target": device.name if device else None,
         "device": device.record() if device else None,
@@ -184,7 +194,9 @@ def check(directory: Path) -> dict[str, Any]:
     present = {p.name for p in directory.iterdir() if p.name not in {RECORD, BUILT}}
     listed = set(record["files"])
     changed = sorted(
-        n for n in listed & present if (directory / n).is_symlink() or sha(directory / n) != record["files"][n]
+        n
+        for n in listed & present
+        if (directory / n).is_symlink() or not (directory / n).is_file() or sha(directory / n) != record["files"][n]
     )
     missing, added = sorted(listed - present), sorted(present - listed)
     if changed or missing or added:
@@ -198,10 +210,42 @@ def check(directory: Path) -> dict[str, Any]:
     return record
 
 
+def compiler(record: dict[str, Any]) -> str:
+    """The name of the C++ compiler the export was made with, when this machine's PATH finds it where the record
+    says; else E-EXPORT-TOOLCHAIN. A build runs a compiler this machine finds by name, never a path from the record,
+    so an export cannot bring the program that builds it."""
+    path = str(record["compilers"]["cxx"]["path"])
+    name = Path(path).name
+    if not COMPILER.fullmatch(name):
+        raise refuse("E-EXPORT-TOOLCHAIN", f"The export names {path} as its compiler; a build finds clang++ or g++ "
+                     "on this machine's PATH, and runs nothing an export names.")  # fmt: skip
+    if (here := shutil.which(name)) != path:
+        raise refuse("E-EXPORT-TOOLCHAIN", f"The export was made with {path}; here {name} is {here or 'absent'}. A "
+                     "build with another compiler is another artifact: export again here.")  # fmt: skip
+    return name
+
+
+def rebuilt(record: dict[str, Any]) -> list[str]:
+    """The command `toolchain.command` gives for the export's kind, architecture, device target and libraries, with
+    the compiler found here: the only command a build runs, so the record's command is never a script."""
+    kind, artifact = record.get("kind"), record.get("artifact")
+    stem = artifact[3:-3] if kind == "library" and isinstance(artifact, str) and artifact[:3] + artifact[-3:] == (
+        "lib.so") else artifact  # fmt: skip
+    if kind not in KINDS or not isinstance(stem, str) or not PLAIN.fullmatch(stem):
+        raise refuse("E-EXPORT-TAMPERED", f"{RECORD} names the artifact {artifact!r} of kind {kind!r}, which no export "
+                     "writes.")  # fmt: skip
+    device = parse(record["device_target"]) if record.get("device_target") else None
+    program = "program.cu" if device else "program.cpp"
+    line = native_command(
+        compiler(record), program, artifact, record.get("arch"), kind, device is not None, None, device
+    )
+    return line + link_flags(linked(record.get("libraries") or [], ()))
+
+
 def toolchain(record: dict[str, Any]) -> None:
     """E-EXPORT-TOOLCHAIN unless the compilers here are the ones the export was made with."""
     cxx = record["compilers"]["cxx"]
-    found = shutil.which(cxx["path"])
+    found = shutil.which(compiler(record))
     here = compiler_version(found).splitlines()[0] if found else None
     if here != cxx["version"]:
         raise refuse("E-EXPORT-TOOLCHAIN", f"The export was made with {cxx['path']} ({cxx['version']}); here it is "
@@ -216,6 +260,9 @@ def build(directory: Path, output: Path | None = None, timeout: int = 300) -> di
     """Check the export, copy it into a fresh directory, check the copy, and run exactly its recorded command there."""
     record = check(directory)
     toolchain(record)
+    if record["command"] != rebuilt(record):
+        raise refuse("E-EXPORT-TAMPERED", f"The command {RECORD} records is not the one cairn builds this export "
+                     "with; a record is data, and a build runs only the command toolchain.py gives for it.")  # fmt: skip
     base = output or directory / BUILT
     base.mkdir(parents=True, exist_ok=True)
     fresh = Path(tempfile.mkdtemp(prefix="build-", dir=base.resolve()))
