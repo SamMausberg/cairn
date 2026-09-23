@@ -1,0 +1,15 @@
+{
+  "name": "cairn",
+  "owner": {"name": "SamMausberg", "url": "https://github.com/SamMausberg"},
+  "description": "The CAIRN language plugin for Claude Code.",
+  "plugins": [
+    {
+      "name": "cairn",
+      "source": "./",
+      "description": "The CAIRN language skill, the cairn command and the language server.",
+      "version": "0.9.0",
+      "license": "MIT OR Apache-2.0",
+      "category": "development"
+    }
+  ]
+}

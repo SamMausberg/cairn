@@ -1,0 +1,8 @@
+# The storage card
+
+Sent to an agent when the program uses `bf16`, `f16`, `f8e4m3`, `f8e5m2`, `from_bits`, `mma_unordered`, `quantize`, `quantize_stochastic`.
+Codes: `E-CAST`, `E-MMA`, `E-OPERATOR`, `E-QUANTIZE`, `E-TYPE-MISMATCH`.
+
+```text
+f16, bf16, f8e4m3 and f8e5m2 are storage floats: they hold and convert, never compute; arithmetic, comparison or a literal of one is E-OPERATOR or E-TYPE-MISMATCH. f32(h) and f64(h) widen exactly; compute there. f16(x) rounds an f32 or f64 once to nearest even as IEEE converts, infinity past the range, and f8e4m3, which has no infinity, traps there; integers and other storage floats go through f32 (E-CAST). quantize[T](x, scale): x / scale rounded once to nearest even and clamped to T's finite range, T a storage float or i8 u8 i16 u16, x and scale f32, scale positive and finite or a trap, NaN kept or a trap for an integer (E-QUANTIZE); quantize_stochastic[T](x, scale, noise:u32) rounds away from zero when the dropped fraction, to 32 bits, exceeds noise. Dequantize is f32(q) * scale. to_bits(h) and from_bits[T](u) move between a float and its pattern. mma_unordered(m, n, k, c, a, b) adds the row-major product of a[m * k] and b[k * n], views of one storage float, into c[m * n], an rw view of f32: exact products, f32 sums in the hardware's order (the receipt says unordered-f32), the written loop on the host and the tensor cores when all three are @device; len must be m * n, m * k and k * n or it traps (E-MMA).
+```

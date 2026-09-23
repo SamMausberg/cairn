@@ -170,6 +170,19 @@ python3 tools/checks/build_library.py examples/sketch/after.cairn
 
 The receipt records the reference and candidate hashes, the domain, the query hashes and the Z3 version, and `--obligations` saves the SMT-LIB queries so anyone can rerun them.
 
+## The skill and the Claude Code plugin
+
+`skills/cairn/` is an [Agent Skill](https://agentskills.io): `SKILL.md` holds the check, test and run loop, the three cards every packet carries and an example that compiles; `codes.md` maps each diagnostic code to its card and fix; `cards/` holds the other cards. An agent lists only the description, about 180 tokens, and reads `SKILL.md` (about 3,800 tokens) when a task involves CAIRN. `python -m cairn.agent.skill` writes the directory from `teaching.py`, `diagnostics.py` and the command line's parser, `make editors` runs it, and `tests/tooling/test_skill.py` fails while a committed file differs from a fresh render.
+
+The repository is also a Claude Code plugin and its own marketplace:
+
+```sh
+claude plugin marketplace add SamMausberg/cairn
+claude plugin install cairn@cairn
+```
+
+The plugin adds the skill, puts `bin/cairn` on the session's `PATH`, and runs `cairn lsp` on `.cairn` files, so each edit returns the compiler's diagnostics to the agent. It needs Python 3.11 or later and a C++20 compiler and downloads nothing. Another agent that reads Agent Skills can load `skills/cairn/` directly, with `bin/cairn` of a checkout on its `PATH`.
+
 ## Training material and trials
 
 `tools/corpus/` holds hand-written teaching material in the protocol's format: 40 tasks in 14 algorithm families, each with an equivalent and an inequivalent implementation, 28 preference pairs, and 29 executed repair transcripts. Its answers ship, so none of it is a held-out test. Solver timeouts, failed translations and tool errors never become positive labels, and edits that weaken a signature or empty a domain are not rewarded.

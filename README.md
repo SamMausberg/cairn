@@ -88,6 +88,8 @@ pip install -e .                   # '.[dev]' adds pytest, ruff and mypy
 cairn doctor                       # which optional tools are present
 ```
 
+In Claude Code, `claude plugin marketplace add SamMausberg/cairn` and `claude plugin install cairn@cairn` add the CAIRN skill, the `cairn` command and the language server ([agents.md](docs/agents.md#the-skill-and-the-claude-code-plugin)).
+
 `python3 bin/cairn` runs the same command line without installing. Optional tools switch on more checks and are never downloaded: `libz3` for `verify` and `diff`, CUDA `nvcc` for device code, Lean 4 for `proofs/`, `qemu-system-aarch64` for the bare-metal target.
 
 ## Run
@@ -173,6 +175,7 @@ What has not been validated:
 
 ```
 src/cairn/     compiler/ runtime/ std/ verify/ agent/ editor/ perf/ projects/ templates/ targets/
+skills/        cairn/: the Agent Skill, generated from the compiler's rule cards
 proofs/        Lean 4: collector certificates, ownership and lease calculus, lane pool, guard elision
 demos/         the three demos above
 examples/      runnable projects: hello/ systems/ apps/ interop/ embedded/ bazel/, and inputs for the tools

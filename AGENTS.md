@@ -45,6 +45,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `agent/history.py` | what was tried, failed, measured or hypothesized for each candidate, under its identity, and analyses kept by key |
 | `agent/migration.py`, `agent/plans.py` | the two wider edit classes: interface migrations across files, and plan-only edits |
 | `agent/teaching.py` | the rule cards, selected from lexical tokens |
+| `agent/skill.py` | the agent skill under `skills/cairn/`, written from the cards, the fixes and the command line |
 | `editor/grammar.py` | the editor grammars, generated from the compiler's vocabulary |
 | `editor/terminal.py` | what a person at a terminal reads, beside the JSON record |
 | `perf/work.py` | what a function does each time it runs, counted from the typed tree, which a prediction prices |
