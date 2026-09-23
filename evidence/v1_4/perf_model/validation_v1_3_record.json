@@ -10,33 +10,33 @@
   "summary": {
     "clang++": {
       "points": 60,
-      "median_relative_error": 0.441,
-      "within_2x": 41,
-      "kendall_tau": 0.915,
+      "median_relative_error": 0.436,
+      "within_2x": 43,
+      "kendall_tau": 0.92,
       "kendall_tau_within_each_size": {
-        "1000": 0.911,
-        "10000": 0.956,
-        "100000": 0.778,
-        "1000000": 0.689,
+        "1000": 0.956,
+        "10000": 0.911,
+        "100000": 0.809,
+        "1000000": 0.719,
         "10000000": 0.674,
-        "100000000": 0.674
+        "100000000": 0.629
       },
       "median_relative_error_where_confident": 0.302
     },
     "g++": {
       "points": 60,
-      "median_relative_error": 0.421,
+      "median_relative_error": 0.404,
       "within_2x": 47,
-      "kendall_tau": 0.907,
+      "kendall_tau": 0.916,
       "kendall_tau_within_each_size": {
-        "1000": 0.867,
-        "10000": 0.867,
-        "100000": 0.822,
-        "1000000": 0.6,
+        "1000": 0.911,
+        "10000": 0.911,
+        "100000": 0.809,
+        "1000000": 0.674,
         "10000000": 0.674,
-        "100000000": 0.809
+        "100000000": 0.854
       },
-      "median_relative_error_where_confident": 0.401
+      "median_relative_error_where_confident": 0.398
     }
   },
   "points": [
@@ -70,11 +70,11 @@
       "compiler": "g++",
       "n": 100000,
       "measured_ns": 19137.831000000002,
-      "predicted_ns": 10850.0,
+      "predicted_ns": 13890.0,
       "bound": "pool start",
       "confidence": "medium",
-      "relative_error": 0.433,
-      "ratio": 0.567
+      "relative_error": 0.274,
+      "ratio": 0.726
     },
     {
       "kernel": "saxpy_f32",
@@ -82,11 +82,11 @@
       "compiler": "g++",
       "n": 1000000,
       "measured_ns": 183768.375,
-      "predicted_ns": 27640.0,
-      "bound": "memory (l2)",
+      "predicted_ns": 51750.0,
+      "bound": "memory (l3)",
       "confidence": "medium",
-      "relative_error": 0.85,
-      "ratio": 0.15
+      "relative_error": 0.718,
+      "ratio": 0.282
     },
     {
       "kernel": "saxpy_f32",
@@ -142,11 +142,11 @@
       "compiler": "clang++",
       "n": 100000,
       "measured_ns": 26475.956,
-      "predicted_ns": 10850.0,
+      "predicted_ns": 13890.0,
       "bound": "pool start",
       "confidence": "medium",
-      "relative_error": 0.59,
-      "ratio": 0.41
+      "relative_error": 0.475,
+      "ratio": 0.525
     },
     {
       "kernel": "saxpy_f32",
@@ -154,11 +154,11 @@
       "compiler": "clang++",
       "n": 1000000,
       "measured_ns": 224785.437,
-      "predicted_ns": 27640.0,
-      "bound": "memory (l2)",
+      "predicted_ns": 51750.0,
+      "bound": "memory (l3)",
       "confidence": "medium",
-      "relative_error": 0.877,
-      "ratio": 0.123
+      "relative_error": 0.77,
+      "ratio": 0.23
     },
     {
       "kernel": "saxpy_f32",
@@ -214,11 +214,11 @@
       "compiler": "g++",
       "n": 100000,
       "measured_ns": 69109.45,
-      "predicted_ns": 15140.0,
-      "bound": "pool start",
+      "predicted_ns": 18190.0,
+      "bound": "compute",
       "confidence": "medium",
-      "relative_error": 0.781,
-      "ratio": 0.219
+      "relative_error": 0.737,
+      "ratio": 0.263
     },
     {
       "kernel": "mixed_u64",
@@ -226,11 +226,11 @@
       "compiler": "g++",
       "n": 1000000,
       "measured_ns": 549374.75,
-      "predicted_ns": 58010.0,
+      "predicted_ns": 103700.0,
       "bound": "compute",
       "confidence": "medium",
-      "relative_error": 0.894,
-      "ratio": 0.106
+      "relative_error": 0.811,
+      "ratio": 0.189
     },
     {
       "kernel": "mixed_u64",
@@ -286,11 +286,11 @@
       "compiler": "clang++",
       "n": 100000,
       "measured_ns": 66408.412,
-      "predicted_ns": 15140.0,
-      "bound": "pool start",
+      "predicted_ns": 18190.0,
+      "bound": "compute",
       "confidence": "medium",
-      "relative_error": 0.772,
-      "ratio": 0.228
+      "relative_error": 0.726,
+      "ratio": 0.274
     },
     {
       "kernel": "mixed_u64",
@@ -298,11 +298,11 @@
       "compiler": "clang++",
       "n": 1000000,
       "measured_ns": 556199.625,
-      "predicted_ns": 58010.0,
+      "predicted_ns": 103700.0,
       "bound": "compute",
       "confidence": "medium",
-      "relative_error": 0.896,
-      "ratio": 0.104
+      "relative_error": 0.814,
+      "ratio": 0.186
     },
     {
       "kernel": "mixed_u64",
@@ -622,11 +622,11 @@
       "compiler": "g++",
       "n": 1000,
       "measured_ns": 634.1279999999999,
-      "predicted_ns": 774.6,
+      "predicted_ns": 624.7,
       "bound": "compute",
       "confidence": "high",
-      "relative_error": 0.222,
-      "ratio": 1.222
+      "relative_error": 0.015,
+      "ratio": 0.985
     },
     {
       "kernel": "dot_f64",
@@ -634,11 +634,11 @@
       "compiler": "g++",
       "n": 10000,
       "measured_ns": 7667.366999999999,
-      "predicted_ns": 7746.0,
+      "predicted_ns": 6247.0,
       "bound": "compute",
       "confidence": "high",
-      "relative_error": 0.01,
-      "ratio": 1.01
+      "relative_error": 0.185,
+      "ratio": 0.815
     },
     {
       "kernel": "dot_f64",
@@ -646,11 +646,11 @@
       "compiler": "g++",
       "n": 100000,
       "measured_ns": 73955.887,
-      "predicted_ns": 77460.0,
+      "predicted_ns": 62470.0,
       "bound": "compute",
       "confidence": "high",
-      "relative_error": 0.047,
-      "ratio": 1.047
+      "relative_error": 0.155,
+      "ratio": 0.845
     },
     {
       "kernel": "dot_f64",
@@ -658,11 +658,11 @@
       "compiler": "g++",
       "n": 1000000,
       "measured_ns": 772009.25,
-      "predicted_ns": 774600.0,
+      "predicted_ns": 624700.0,
       "bound": "compute",
       "confidence": "high",
-      "relative_error": 0.003,
-      "ratio": 1.003
+      "relative_error": 0.191,
+      "ratio": 0.809
     },
     {
       "kernel": "dot_f64",
@@ -670,11 +670,11 @@
       "compiler": "g++",
       "n": 10000000,
       "measured_ns": 9142174.0,
-      "predicted_ns": 7746000.0,
+      "predicted_ns": 6247000.0,
       "bound": "compute",
       "confidence": "high",
-      "relative_error": 0.153,
-      "ratio": 0.847
+      "relative_error": 0.317,
+      "ratio": 0.683
     },
     {
       "kernel": "dot_f64",
@@ -682,11 +682,11 @@
       "compiler": "g++",
       "n": 100000000,
       "measured_ns": 84502941.0,
-      "predicted_ns": 77460000.0,
+      "predicted_ns": 62470000.0,
       "bound": "compute",
       "confidence": "high",
-      "relative_error": 0.083,
-      "ratio": 0.917
+      "relative_error": 0.261,
+      "ratio": 0.739
     },
     {
       "kernel": "dot_f64",
@@ -694,11 +694,11 @@
       "compiler": "clang++",
       "n": 1000,
       "measured_ns": 607.999,
-      "predicted_ns": 774.6,
+      "predicted_ns": 624.7,
       "bound": "compute",
       "confidence": "high",
-      "relative_error": 0.274,
-      "ratio": 1.274
+      "relative_error": 0.027,
+      "ratio": 1.027
     },
     {
       "kernel": "dot_f64",
@@ -706,11 +706,11 @@
       "compiler": "clang++",
       "n": 10000,
       "measured_ns": 6760.736,
-      "predicted_ns": 7746.0,
+      "predicted_ns": 6247.0,
       "bound": "compute",
       "confidence": "high",
-      "relative_error": 0.146,
-      "ratio": 1.146
+      "relative_error": 0.076,
+      "ratio": 0.924
     },
     {
       "kernel": "dot_f64",
@@ -718,11 +718,11 @@
       "compiler": "clang++",
       "n": 100000,
       "measured_ns": 67234.825,
-      "predicted_ns": 77460.0,
+      "predicted_ns": 62470.0,
       "bound": "compute",
       "confidence": "high",
-      "relative_error": 0.152,
-      "ratio": 1.152
+      "relative_error": 0.071,
+      "ratio": 0.929
     },
     {
       "kernel": "dot_f64",
@@ -730,11 +730,11 @@
       "compiler": "clang++",
       "n": 1000000,
       "measured_ns": 649139.375,
-      "predicted_ns": 774600.0,
+      "predicted_ns": 624700.0,
       "bound": "compute",
       "confidence": "high",
-      "relative_error": 0.193,
-      "ratio": 1.193
+      "relative_error": 0.038,
+      "ratio": 0.962
     },
     {
       "kernel": "dot_f64",
@@ -742,11 +742,11 @@
       "compiler": "clang++",
       "n": 10000000,
       "measured_ns": 7368776.0,
-      "predicted_ns": 7746000.0,
+      "predicted_ns": 6247000.0,
       "bound": "compute",
       "confidence": "high",
-      "relative_error": 0.051,
-      "ratio": 1.051
+      "relative_error": 0.152,
+      "ratio": 0.848
     },
     {
       "kernel": "dot_f64",
@@ -754,11 +754,11 @@
       "compiler": "clang++",
       "n": 100000000,
       "measured_ns": 75200062.0,
-      "predicted_ns": 77460000.0,
+      "predicted_ns": 62470000.0,
       "bound": "compute",
       "confidence": "high",
-      "relative_error": 0.03,
-      "ratio": 1.03
+      "relative_error": 0.169,
+      "ratio": 0.831
     },
     {
       "kernel": "compact_even",
@@ -1078,11 +1078,11 @@
       "compiler": "g++",
       "n": 100000,
       "measured_ns": 20517.793999999998,
-      "predicted_ns": 10470.0,
+      "predicted_ns": 12350.0,
       "bound": "pool start",
       "confidence": "medium",
-      "relative_error": 0.49,
-      "ratio": 0.51
+      "relative_error": 0.398,
+      "ratio": 0.602
     },
     {
       "kernel": "stencil_1d",
@@ -1090,11 +1090,11 @@
       "compiler": "g++",
       "n": 1000000,
       "measured_ns": 183713.125,
-      "predicted_ns": 23240.0,
-      "bound": "pool start",
+      "predicted_ns": 39260.0,
+      "bound": "memory (l3)",
       "confidence": "medium",
-      "relative_error": 0.873,
-      "ratio": 0.127
+      "relative_error": 0.786,
+      "ratio": 0.214
     },
     {
       "kernel": "stencil_1d",
@@ -1102,11 +1102,11 @@
       "compiler": "g++",
       "n": 10000000,
       "measured_ns": 1077710.0,
-      "predicted_ns": 266600.0,
+      "predicted_ns": 299700.0,
       "bound": "memory (l3)",
       "confidence": "medium",
-      "relative_error": 0.753,
-      "ratio": 0.247
+      "relative_error": 0.722,
+      "ratio": 0.278
     },
     {
       "kernel": "stencil_1d",
@@ -1150,11 +1150,11 @@
       "compiler": "g++",
       "n": 100000,
       "measured_ns": 21126.512,
-      "predicted_ns": 10720.0,
+      "predicted_ns": 12350.0,
       "bound": "pool start",
       "confidence": "medium",
-      "relative_error": 0.493,
-      "ratio": 0.507
+      "relative_error": 0.415,
+      "ratio": 0.585
     },
     {
       "kernel": "stencil_1d",
@@ -1162,11 +1162,11 @@
       "compiler": "g++",
       "n": 1000000,
       "measured_ns": 173920.0,
-      "predicted_ns": 24840.0,
-      "bound": "compute",
+      "predicted_ns": 39260.0,
+      "bound": "memory (l3)",
       "confidence": "medium",
-      "relative_error": 0.857,
-      "ratio": 0.143
+      "relative_error": 0.774,
+      "ratio": 0.226
     },
     {
       "kernel": "stencil_1d",
@@ -1174,11 +1174,11 @@
       "compiler": "g++",
       "n": 10000000,
       "measured_ns": 1285786.0,
-      "predicted_ns": 266600.0,
+      "predicted_ns": 299700.0,
       "bound": "memory (l3)",
       "confidence": "medium",
-      "relative_error": 0.793,
-      "ratio": 0.207
+      "relative_error": 0.767,
+      "ratio": 0.233
     },
     {
       "kernel": "stencil_1d",
@@ -1222,11 +1222,11 @@
       "compiler": "clang++",
       "n": 100000,
       "measured_ns": 25705.162,
-      "predicted_ns": 10470.0,
+      "predicted_ns": 12350.0,
       "bound": "pool start",
       "confidence": "medium",
-      "relative_error": 0.593,
-      "ratio": 0.407
+      "relative_error": 0.52,
+      "ratio": 0.48
     },
     {
       "kernel": "stencil_1d",
@@ -1234,11 +1234,11 @@
       "compiler": "clang++",
       "n": 1000000,
       "measured_ns": 178058.437,
-      "predicted_ns": 23240.0,
-      "bound": "pool start",
+      "predicted_ns": 39260.0,
+      "bound": "memory (l3)",
       "confidence": "medium",
-      "relative_error": 0.869,
-      "ratio": 0.131
+      "relative_error": 0.78,
+      "ratio": 0.22
     },
     {
       "kernel": "stencil_1d",
@@ -1246,11 +1246,11 @@
       "compiler": "clang++",
       "n": 10000000,
       "measured_ns": 1513105.0,
-      "predicted_ns": 266600.0,
+      "predicted_ns": 299700.0,
       "bound": "memory (l3)",
       "confidence": "medium",
-      "relative_error": 0.824,
-      "ratio": 0.176
+      "relative_error": 0.802,
+      "ratio": 0.198
     },
     {
       "kernel": "stencil_1d",
@@ -1294,11 +1294,11 @@
       "compiler": "clang++",
       "n": 100000,
       "measured_ns": 21752.194,
-      "predicted_ns": 10720.0,
+      "predicted_ns": 12350.0,
       "bound": "pool start",
       "confidence": "medium",
-      "relative_error": 0.507,
-      "ratio": 0.493
+      "relative_error": 0.432,
+      "ratio": 0.568
     },
     {
       "kernel": "stencil_1d",
@@ -1306,11 +1306,11 @@
       "compiler": "clang++",
       "n": 1000000,
       "measured_ns": 178452.0,
-      "predicted_ns": 24840.0,
-      "bound": "compute",
+      "predicted_ns": 39260.0,
+      "bound": "memory (l3)",
       "confidence": "medium",
-      "relative_error": 0.861,
-      "ratio": 0.139
+      "relative_error": 0.78,
+      "ratio": 0.22
     },
     {
       "kernel": "stencil_1d",
@@ -1318,11 +1318,11 @@
       "compiler": "clang++",
       "n": 10000000,
       "measured_ns": 1229783.0,
-      "predicted_ns": 266600.0,
+      "predicted_ns": 299700.0,
       "bound": "memory (l3)",
       "confidence": "medium",
-      "relative_error": 0.783,
-      "ratio": 0.217
+      "relative_error": 0.756,
+      "ratio": 0.244
     },
     {
       "kernel": "stencil_1d",
@@ -1354,11 +1354,11 @@
       "compiler": "g++",
       "n": 10000,
       "measured_ns": 206777.223,
-      "predicted_ns": 484400.0,
+      "predicted_ns": 484800.0,
       "bound": "task start",
       "confidence": "high",
-      "relative_error": 1.343,
-      "ratio": 2.343
+      "relative_error": 1.345,
+      "ratio": 2.345
     },
     {
       "kernel": "tasks_split",
@@ -1366,11 +1366,11 @@
       "compiler": "g++",
       "n": 100000,
       "measured_ns": 210515.431,
-      "predicted_ns": 487300.0,
+      "predicted_ns": 490400.0,
       "bound": "task start",
       "confidence": "high",
-      "relative_error": 1.315,
-      "ratio": 2.315
+      "relative_error": 1.33,
+      "ratio": 2.33
     },
     {
       "kernel": "tasks_split",
@@ -1378,11 +1378,11 @@
       "compiler": "g++",
       "n": 1000000,
       "measured_ns": 238641.5,
-      "predicted_ns": 528100.0,
+      "predicted_ns": 549900.0,
       "bound": "task start",
       "confidence": "high",
-      "relative_error": 1.213,
-      "ratio": 2.213
+      "relative_error": 1.304,
+      "ratio": 2.304
     },
     {
       "kernel": "tasks_split",
@@ -1390,11 +1390,11 @@
       "compiler": "g++",
       "n": 10000000,
       "measured_ns": 718095.0,
-      "predicted_ns": 1157000.0,
+      "predicted_ns": 1200000.0,
       "bound": "memory (l3)",
       "confidence": "high",
-      "relative_error": 0.611,
-      "ratio": 1.611
+      "relative_error": 0.671,
+      "ratio": 1.671
     },
     {
       "kernel": "tasks_split",
@@ -1426,11 +1426,11 @@
       "compiler": "clang++",
       "n": 10000,
       "measured_ns": 206253.353,
-      "predicted_ns": 484400.0,
+      "predicted_ns": 484800.0,
       "bound": "task start",
       "confidence": "high",
-      "relative_error": 1.349,
-      "ratio": 2.349
+      "relative_error": 1.351,
+      "ratio": 2.351
     },
     {
       "kernel": "tasks_split",
@@ -1438,11 +1438,11 @@
       "compiler": "clang++",
       "n": 100000,
       "measured_ns": 208013.95,
-      "predicted_ns": 487300.0,
+      "predicted_ns": 490400.0,
       "bound": "task start",
       "confidence": "high",
-      "relative_error": 1.343,
-      "ratio": 2.343
+      "relative_error": 1.358,
+      "ratio": 2.358
     },
     {
       "kernel": "tasks_split",
@@ -1450,11 +1450,11 @@
       "compiler": "clang++",
       "n": 1000000,
       "measured_ns": 236388.188,
-      "predicted_ns": 528100.0,
+      "predicted_ns": 549900.0,
       "bound": "task start",
       "confidence": "high",
-      "relative_error": 1.234,
-      "ratio": 2.234
+      "relative_error": 1.326,
+      "ratio": 2.326
     },
     {
       "kernel": "tasks_split",
@@ -1462,11 +1462,11 @@
       "compiler": "clang++",
       "n": 10000000,
       "measured_ns": 745867.0,
-      "predicted_ns": 1157000.0,
+      "predicted_ns": 1200000.0,
       "bound": "memory (l3)",
       "confidence": "high",
-      "relative_error": 0.551,
-      "ratio": 1.551
+      "relative_error": 0.609,
+      "ratio": 1.609
     },
     {
       "kernel": "tasks_split",

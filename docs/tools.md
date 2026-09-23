@@ -166,25 +166,25 @@ An agent gets the same report through `cairn inspect --symbol f --explain`, or b
 ```text
 $ cairn predict bench/suite/kernels/saxpy_f32/kernel.cairn --arch x86-64-v4
 predicted, not measured: AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
-saxpy_f32  0.0806 ns*n (memory (l1), up to n=2.05e+03); 0.124 ns*n (memory (l2), ...); 2.88 us + 0.0331 ns*n (pool start, ...); ...; 0.342 ns*n (memory (dram), up to n=1.07e+09)
-  n=1000          80.6 ns  memory (l1)          19% of speed of light    high
-  n=100000        10.8 us  pool start           14% of speed of light    medium
+saxpy_f32  0.0807 ns*n (memory (l1), up to n=2.05e+03); 0.124 ns*n (memory (l2), ...); 5.66 us + 0.0648 ns*n (pool start, ...); ...; 0.342 ns*n (memory (dram), up to n=1.07e+09)
+  n=1000          80.6 ns  memory (l1)          37% of speed of light    high
+  n=100000        13.9 us  pool start           22% of speed of light    medium
   n=1e+07          922 us  memory (dram)        99% of speed of light    medium
 ```
 
 The prediction is built from what the checker already knows. A region's count and a loop's trip count are polynomials in the extents, and the lane rule makes every write a stream. The effect row names each allocation, transfer, task and wait. `--format json` prints those counts beside the time: operations by kind, bytes read and written per stream, accesses whose address comes from data, and the formula piece by piece. A machine profile prices them: bandwidth per cache level on one lane and on all of them, the cost of each kind of operation with and without vectors, and the cost of starting the lane pool, a task and an allocation. `bound` names what limits each part. `speed of light` is the same work at the whole machine's peak for that bound, so a sequential loop reads low where parallel lanes would help.
 
-`--against BEFORE` prices two versions and prints the ratio at each size. Turning `for i in 0..n` into `parallel i in n` over a cheap body is predicted to change nothing at a thousand elements and to take a quarter of the time at ten million:
+`--against BEFORE` prices two versions and prints the ratio at each size. Turning `for i in 0..n { out[i] = x[i] * 2.0; }` over `f32` views into `parallel i in n` is predicted to change nothing at a thousand elements and to take under a third of the time at ten million:
 
 ```text
 $ cairn predict after.cairn --against before.cairn --arch x86-64-v4 --at n=1000 --at n=1e7
 predicted, not measured: AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
 f
-  n=1000            58 ns -> 58 ns      x1.0  memory (l1), high
-  n=1e+07          1.1 ms -> 287 us     x0.261  memory (l3), medium
+  n=1000          54.8 ns -> 54.8 ns    x1.0  memory (l1), high
+  n=1e+07          997 us -> 300 us     x0.301  memory (l3), medium
 ```
 
-Confidence is `high` when every count is a size and every access a stream. It is `medium` when something is approximated: a wide host region, a loop bounded by `min()` or by an outer index, an atomic, a profile measured for another `-march`. It is `low`, with `measure` set, when a number is a guess: a `while` loop, an address from data, a foreign call, a function value, recursion or a size that was not given. `evidence/v1_4/perf_model/` records how the packaged profile was measured and how well it predicted timings it was never fitted to: within a quarter at one lane and at a hundred million elements, and badly for wide regions between a hundred thousand and ten million elements, which is why those are `medium`.
+Confidence is `high` when every count is a size and every access a stream. It is `medium` when something is approximated: a wide host region, a loop bounded by `min()` or by an outer index, an atomic, a profile measured for another `-march`. It is `low`, with `measure` set, when a number is a guess: a `while` loop, an address from data, a foreign call, a function value, recursion or a size that was not given. `evidence/v1_4/perf_model/` records how the packaged profile was measured and how well it predicted timings it was never fitted to: within a quarter at one lane and at a hundred million elements, and badly for wide regions between a hundred thousand and ten million elements, which is why those are `medium`. The model prices a fold by the larger of its dependent chain and the rest of its body, a vector loop's compute on physical cores rather than lanes, and a wide region's streams mostly from the shared cache, since the pool's on-demand claims move chunks between cores; the same record says what each of those corrected and where the model got worse.
 
 `cairn tune [path] --symbol f --at n=1e7` chooses `f`'s [plan](concurrency.md#plans) by prediction. A plan changes how a function's host regions are scheduled and nothing they compute, so every candidate is correct by construction, and the search only asks which is fastest. Every legal `grain` and `lanes` pair is priced, with `fuse` on and off where the function has regions to join, and the answer lists them ranked. `--measure K` then times the best-ranked plans with distinct lane caps, and the plan the function has now, on this host, halving the field each round with more blocks for the survivors, and says how many pairs the measurement ordered as predicted. `--write` puts the chosen plan into the file the checked program places `f` in, under its short name, replacing any plan it had there, and writes nothing unless the whole project still checks with it. On a busy machine two close plans are noise apart, so a close measured order says little.
 

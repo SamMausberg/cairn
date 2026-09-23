@@ -109,7 +109,8 @@ def validate(profile: Profile, record: Path = RECORD) -> dict:
                 predicted = model.predict(costs[name], profile, {"n": row["n"]}, arch)
                 points.append({"kernel": kernel, "function": name, "compiler": run["compiler"], "n": row["n"],
                                "measured_ns": row["median_ms"] * 1e6, "predicted_ns": predicted["ns"],
-                               "bound": predicted["bound"], "confidence": predicted["confidence"]})  # fmt: skip
+                               "bound": predicted["bound"], "confidence": predicted["confidence"],
+                               **({"least_ns": row["min_ms"] * 1e6} if "min_ms" in row else {})})  # fmt: skip
     for point in points:
         point["relative_error"] = round(abs(point["predicted_ns"] - point["measured_ns"]) / point["measured_ns"], 3)
         point["ratio"] = round(point["predicted_ns"] / point["measured_ns"], 3)
@@ -136,6 +137,13 @@ def validate(profile: Profile, record: Path = RECORD) -> dict:
             if confident
             else None,
         }
+        if all("least_ns" in p for p in mine):  # the statistic calibration keeps: a shared machine only adds time
+            least = [abs(p["predicted_ns"] - p["least_ns"]) / p["least_ns"] for p in mine]
+            summary[compiler]["against_the_least_disturbed_block"] = {
+                "median_relative_error": round(statistics.median(least), 3),
+                "within_2x": sum(0.5 <= p["predicted_ns"] / p["least_ns"] <= 2 for p in mine),
+                "kendall_tau": round(kendall([p["least_ns"] for p in mine], [p["predicted_ns"] for p in mine]), 3),
+            }
     return {
         "schema": "cairn.perf-validation/1",
         "profile": profile.describe(),

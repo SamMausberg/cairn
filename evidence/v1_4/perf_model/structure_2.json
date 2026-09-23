@@ -1,0 +1,594 @@
+{
+ "schema": "cairn.perf-structure/1",
+ "what": "The second model pass: three structural changes, each checked against records calibration never saw.",
+ "changes": [
+  "A loop's compute is the larger of its folds' dependent chain and the rest of its body, not their sum.",
+  "A vector loop's compute on a wide region is shared among physical cores, not lanes; a scalar loop, a chain and an irregular access are shared among lanes.",
+  "A wide region's streams come from the lane's own core's cache once in as many cores as it engages, and otherwise from the shared level holding the whole working set, not from every core's private cache at once."
+ ],
+ "refit": "Nothing was fitted to these records. The profile gained two facts calibration had computed but not written: eight physical cores, and the working set each level's bandwidth was timed at.",
+ "machine": "AMD Ryzen 7 7800X3D, 8 cores, 16 lanes, 96 MiB L3, WSL2, clang++ 21.1.8; shared with five other agents, load average 11 to 13 on 16 threads during every measurement taken in this pass.",
+ "validation": {
+  "v1_3_record_against_its_medians": {
+   "before": {
+    "clang++": {
+     "points": 60,
+     "median_relative_error": 0.441,
+     "within_2x": 41,
+     "kendall_tau": 0.915,
+     "kendall_tau_within_each_size": {
+      "1000": 0.911,
+      "10000": 0.956,
+      "100000": 0.778,
+      "1000000": 0.689,
+      "10000000": 0.674,
+      "100000000": 0.674
+     },
+     "median_relative_error_where_confident": 0.302
+    },
+    "g++": {
+     "points": 60,
+     "median_relative_error": 0.421,
+     "within_2x": 47,
+     "kendall_tau": 0.907,
+     "kendall_tau_within_each_size": {
+      "1000": 0.867,
+      "10000": 0.867,
+      "100000": 0.822,
+      "1000000": 0.6,
+      "10000000": 0.674,
+      "100000000": 0.809
+     },
+     "median_relative_error_where_confident": 0.401
+    }
+   },
+   "after": {
+    "clang++": {
+     "points": 60,
+     "median_relative_error": 0.436,
+     "within_2x": 43,
+     "kendall_tau": 0.92,
+     "kendall_tau_within_each_size": {
+      "1000": 0.956,
+      "10000": 0.911,
+      "100000": 0.809,
+      "1000000": 0.719,
+      "10000000": 0.674,
+      "100000000": 0.629
+     },
+     "median_relative_error_where_confident": 0.302
+    },
+    "g++": {
+     "points": 60,
+     "median_relative_error": 0.404,
+     "within_2x": 47,
+     "kendall_tau": 0.916,
+     "kendall_tau_within_each_size": {
+      "1000": 0.911,
+      "10000": 0.911,
+      "100000": 0.809,
+      "1000000": 0.674,
+      "10000000": 0.674,
+      "100000000": 0.854
+     },
+     "median_relative_error_where_confident": 0.398
+    }
+   }
+  },
+  "fresh_record": {
+   "before": {
+    "clang++": {
+     "points": 66,
+     "median_relative_error": 0.333,
+     "within_2x": 47,
+     "kendall_tau": 0.857,
+     "kendall_tau_within_each_size": {
+      "1000": 0.807,
+      "10000": 0.881,
+      "100000": 0.455,
+      "1000000": 0.309,
+      "10000000": 0.587,
+      "100000000": 0.734
+     },
+     "median_relative_error_where_confident": 0.283,
+     "against_the_least_disturbed_block": {
+      "median_relative_error": 0.346,
+      "within_2x": 47,
+      "kendall_tau": 0.87
+     }
+    }
+   },
+   "after": {
+    "clang++": {
+     "points": 66,
+     "median_relative_error": 0.367,
+     "within_2x": 48,
+     "kendall_tau": 0.871,
+     "kendall_tau_within_each_size": {
+      "1000": 0.844,
+      "10000": 0.917,
+      "100000": 0.477,
+      "1000000": 0.404,
+      "10000000": 0.587,
+      "100000000": 0.771
+     },
+     "median_relative_error_where_confident": 0.329,
+     "against_the_least_disturbed_block": {
+      "median_relative_error": 0.279,
+      "within_2x": 46,
+      "kendall_tau": 0.881
+     }
+    }
+   }
+  },
+  "by_regime": {
+   "v13 clang++ measured_ns": {
+    "before": {
+     "up to 1e4, one lane": {
+      "points": 20,
+      "median_relative_error": 0.229,
+      "within_2x": 16,
+      "lowest_ratio": 0.85,
+      "highest_ratio": 2.349
+     },
+     "1e5 to 1e7, a wide region": {
+      "points": 30,
+      "median_relative_error": 0.571,
+      "within_2x": 15,
+      "lowest_ratio": 0.104,
+      "highest_ratio": 2.343
+     },
+     "1e8": {
+      "points": 10,
+      "median_relative_error": 0.06,
+      "within_2x": 10,
+      "lowest_ratio": 0.555,
+      "highest_ratio": 1.729
+     }
+    },
+    "after": {
+     "up to 1e4, one lane": {
+      "points": 20,
+      "median_relative_error": 0.198,
+      "within_2x": 16,
+      "lowest_ratio": 0.85,
+      "highest_ratio": 2.351
+     },
+     "1e5 to 1e7, a wide region": {
+      "points": 30,
+      "median_relative_error": 0.523,
+      "within_2x": 17,
+      "lowest_ratio": 0.186,
+      "highest_ratio": 2.358
+     },
+     "1e8": {
+      "points": 10,
+      "median_relative_error": 0.116,
+      "within_2x": 10,
+      "lowest_ratio": 0.555,
+      "highest_ratio": 1.729
+     }
+    }
+   },
+   "v13 g++ measured_ns": {
+    "before": {
+     "up to 1e4, one lane": {
+      "points": 20,
+      "median_relative_error": 0.46,
+      "within_2x": 16,
+      "lowest_ratio": 0.253,
+      "highest_ratio": 2.343
+     },
+     "1e5 to 1e7, a wide region": {
+      "points": 30,
+      "median_relative_error": 0.457,
+      "within_2x": 21,
+      "lowest_ratio": 0.106,
+      "highest_ratio": 2.315
+     },
+     "1e8": {
+      "points": 10,
+      "median_relative_error": 0.12,
+      "within_2x": 10,
+      "lowest_ratio": 0.546,
+      "highest_ratio": 1.408
+     }
+    },
+    "after": {
+     "up to 1e4, one lane": {
+      "points": 20,
+      "median_relative_error": 0.46,
+      "within_2x": 16,
+      "lowest_ratio": 0.253,
+      "highest_ratio": 2.345
+     },
+     "1e5 to 1e7, a wide region": {
+      "points": 30,
+      "median_relative_error": 0.432,
+      "within_2x": 21,
+      "lowest_ratio": 0.189,
+      "highest_ratio": 2.33
+     },
+     "1e8": {
+      "points": 10,
+      "median_relative_error": 0.177,
+      "within_2x": 10,
+      "lowest_ratio": 0.546,
+      "highest_ratio": 1.408
+     }
+    }
+   },
+   "fresh clang++ measured_ns": {
+    "before": {
+     "up to 1e4, one lane": {
+      "points": 22,
+      "median_relative_error": 0.203,
+      "within_2x": 18,
+      "lowest_ratio": 0.726,
+      "highest_ratio": 83.872
+     },
+     "1e5 to 1e7, a wide region": {
+      "points": 33,
+      "median_relative_error": 0.715,
+      "within_2x": 18,
+      "lowest_ratio": 0.045,
+      "highest_ratio": 3.543
+     },
+     "1e8": {
+      "points": 11,
+      "median_relative_error": 0.157,
+      "within_2x": 11,
+      "lowest_ratio": 0.629,
+      "highest_ratio": 1.624
+     }
+    },
+    "after": {
+     "up to 1e4, one lane": {
+      "points": 22,
+      "median_relative_error": 0.189,
+      "within_2x": 18,
+      "lowest_ratio": 0.726,
+      "highest_ratio": 83.872
+     },
+     "1e5 to 1e7, a wide region": {
+      "points": 33,
+      "median_relative_error": 0.676,
+      "within_2x": 19,
+      "lowest_ratio": 0.08,
+      "highest_ratio": 3.543
+     },
+     "1e8": {
+      "points": 11,
+      "median_relative_error": 0.208,
+      "within_2x": 11,
+      "lowest_ratio": 0.629,
+      "highest_ratio": 1.624
+     }
+    }
+   },
+   "fresh clang++ least_ns": {
+    "before": {
+     "up to 1e4, one lane": {
+      "points": 22,
+      "median_relative_error": 0.179,
+      "within_2x": 17,
+      "lowest_ratio": 0.884,
+      "highest_ratio": 104.861
+     },
+     "1e5 to 1e7, a wide region": {
+      "points": 33,
+      "median_relative_error": 0.625,
+      "within_2x": 19,
+      "lowest_ratio": 0.096,
+      "highest_ratio": 3.846
+     },
+     "1e8": {
+      "points": 11,
+      "median_relative_error": 0.12,
+      "within_2x": 11,
+      "lowest_ratio": 0.694,
+      "highest_ratio": 1.75
+     }
+    },
+    "after": {
+     "up to 1e4, one lane": {
+      "points": 22,
+      "median_relative_error": 0.118,
+      "within_2x": 17,
+      "lowest_ratio": 0.884,
+      "highest_ratio": 104.861
+     },
+     "1e5 to 1e7, a wide region": {
+      "points": 33,
+      "median_relative_error": 0.655,
+      "within_2x": 18,
+      "lowest_ratio": 0.132,
+      "highest_ratio": 3.846
+     },
+     "1e8": {
+      "points": 11,
+      "median_relative_error": 0.132,
+      "within_2x": 11,
+      "lowest_ratio": 0.694,
+      "highest_ratio": 1.75
+     }
+    }
+   }
+  }
+ },
+ "fusion_record_repriced": {
+  "before": {
+   "median_relative_error_of_each_time": 0.414,
+   "kendall_tau_of_the_speedups": 0.693,
+   "fusion_predicted_to_lose_where_it_won": 4,
+   "energy_speedup_predicted": {
+    "clang++ 100000": 0.812,
+    "clang++ 1e+06": 0.735,
+    "clang++ 1e+07": 5.988,
+    "clang++ 3e+07": 6.506,
+    "g++ 100000": 0.812,
+    "g++ 1e+06": 0.735,
+    "g++ 1e+07": 5.988,
+    "g++ 3e+07": 6.506
+   },
+   "digest_speedup_predicted_at_1e7": [
+    231.857,
+    231.857
+   ]
+  },
+  "after": {
+   "median_relative_error_of_each_time": 0.272,
+   "kendall_tau_of_the_speedups": 0.742,
+   "fusion_predicted_to_lose_where_it_won": 0,
+   "energy_speedup_predicted": {
+    "clang++ 100000": 1.426,
+    "clang++ 1e+06": 1.282,
+    "clang++ 1e+07": 10.094,
+    "clang++ 3e+07": 10.977,
+    "g++ 100000": 1.426,
+    "g++ 1e+06": 1.282,
+    "g++ 1e+07": 10.094,
+    "g++ 3e+07": 10.977
+   },
+   "digest_speedup_predicted_at_1e7": [
+    203.747,
+    203.747
+   ]
+  },
+  "measured": {
+   "energy": {
+    "clang++ 100000": 1.53,
+    "clang++ 1e+06": 1.61,
+    "clang++ 1e+07": 9.07,
+    "clang++ 3e+07": 7.93,
+    "g++ 100000": 1.97,
+    "g++ 1e+06": 2.19,
+    "g++ 1e+07": 10.38,
+    "g++ 3e+07": 10.14
+   },
+   "digest_at_1e7": [
+    62.06,
+    38.82
+   ]
+  }
+ },
+ "measured_in_this_pass": {
+  "note": "results/perf2/lanes.py through cairn.perf.measure, clang++, -march=x86-64-v4, two interleaved rounds; the shared machine's load makes single cells vary up to fivefold, so read the pattern, not a cell.",
+  "saxpy_f32": [
+   {
+    "n": 100000,
+    "lanes": 1,
+    "round": 0,
+    "median_ns": 13603.8
+   },
+   {
+    "n": 100000,
+    "lanes": 8,
+    "round": 0,
+    "median_ns": 11691.9
+   },
+   {
+    "n": 100000,
+    "lanes": 16,
+    "round": 0,
+    "median_ns": 17305.6
+   },
+   {
+    "n": 1000000,
+    "lanes": 1,
+    "round": 0,
+    "median_ns": 155755.8
+   },
+   {
+    "n": 1000000,
+    "lanes": 8,
+    "round": 0,
+    "median_ns": 67779.7
+   },
+   {
+    "n": 1000000,
+    "lanes": 16,
+    "round": 0,
+    "median_ns": 80963.9
+   },
+   {
+    "n": 10000000,
+    "lanes": 1,
+    "round": 0,
+    "median_ns": 5695280.0
+   },
+   {
+    "n": 10000000,
+    "lanes": 8,
+    "round": 0,
+    "median_ns": 1845309.5
+   },
+   {
+    "n": 10000000,
+    "lanes": 16,
+    "round": 0,
+    "median_ns": 1982760.0
+   },
+   {
+    "n": 100000,
+    "lanes": 1,
+    "round": 1,
+    "median_ns": 11395.5
+   },
+   {
+    "n": 100000,
+    "lanes": 8,
+    "round": 1,
+    "median_ns": 19388.7
+   },
+   {
+    "n": 100000,
+    "lanes": 16,
+    "round": 1,
+    "median_ns": 14260.9
+   },
+   {
+    "n": 1000000,
+    "lanes": 1,
+    "round": 1,
+    "median_ns": 155202.5
+   },
+   {
+    "n": 1000000,
+    "lanes": 8,
+    "round": 1,
+    "median_ns": 62991.8
+   },
+   {
+    "n": 1000000,
+    "lanes": 16,
+    "round": 1,
+    "median_ns": 141116.6
+   },
+   {
+    "n": 10000000,
+    "lanes": 1,
+    "round": 1,
+    "median_ns": 5107232.0
+   },
+   {
+    "n": 10000000,
+    "lanes": 8,
+    "round": 1,
+    "median_ns": 1770685.5
+   },
+   {
+    "n": 10000000,
+    "lanes": 16,
+    "round": 1,
+    "median_ns": 9726103.0
+   }
+  ],
+  "mixed_u64": [
+   {
+    "n": 1000000,
+    "lanes": 1,
+    "round": 0,
+    "median_ns": 790601.75
+   },
+   {
+    "n": 1000000,
+    "lanes": 2,
+    "round": 0,
+    "median_ns": 349788.5625
+   },
+   {
+    "n": 1000000,
+    "lanes": 4,
+    "round": 0,
+    "median_ns": 1276927.25
+   },
+   {
+    "n": 1000000,
+    "lanes": 8,
+    "round": 0,
+    "median_ns": 186359.8125
+   },
+   {
+    "n": 1000000,
+    "lanes": 16,
+    "round": 0,
+    "median_ns": 191389.25
+   },
+   {
+    "n": 1000000,
+    "lanes": 1,
+    "round": 1,
+    "median_ns": 813007.75
+   },
+   {
+    "n": 1000000,
+    "lanes": 2,
+    "round": 1,
+    "median_ns": 455759.5625
+   },
+   {
+    "n": 1000000,
+    "lanes": 4,
+    "round": 1,
+    "median_ns": 250733.8125
+   },
+   {
+    "n": 1000000,
+    "lanes": 8,
+    "round": 1,
+    "median_ns": 184028.03125
+   },
+   {
+    "n": 1000000,
+    "lanes": 16,
+    "round": 1,
+    "median_ns": 167725.0625
+   }
+  ],
+  "stream_bandwidth_curve_gbps": [
+   {
+    "mib": 8,
+    "rd_par": 288.23,
+    "wr_par": 172.46,
+    "rd_seq": 108.59,
+    "wr_seq": 84.42
+   },
+   {
+    "mib": 16,
+    "rd_par": 354.74,
+    "wr_par": 271.74,
+    "rd_seq": 79.82,
+    "wr_seq": 66.95
+   },
+   {
+    "mib": 32,
+    "rd_par": 284.68,
+    "wr_par": 321.79,
+    "rd_seq": 75.19,
+    "wr_seq": 74.04
+   },
+   {
+    "mib": 48,
+    "rd_par": 217.34,
+    "wr_par": 366.29,
+    "rd_seq": 46.16,
+    "wr_seq": 15.4
+   },
+   {
+    "mib": 64,
+    "rd_par": 195.38,
+    "wr_par": 30.3,
+    "rd_seq": 29.92,
+    "wr_seq": 17.76
+   },
+   {
+    "mib": 80,
+    "rd_par": 190.99,
+    "wr_par": 97.53,
+    "rd_seq": 20.34,
+    "wr_seq": 23.28
+   }
+  ]
+ }
+}

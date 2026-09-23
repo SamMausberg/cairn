@@ -4,7 +4,7 @@ Every piece of a call is priced on its own and says what bounds it. A sequential
 larger of its compute and its memory traffic on one thread. A wide host region pays the pool's start and then shares
 its work among the lanes it engages, bounded by the bandwidth of the level its data lives in. Tasks overlap until
 they are waited on. Transfers and allocations are priced by bytes. The speed of light is the same work at the whole
-machine's peak for the bound that applies: bandwidth for streams, every lane for compute.
+machine's peak for the bound that applies: bandwidth for streams, every core for compute.
 
 A prediction is never a measurement. Its confidence is `high` when every count is a size and every access a stream,
 `medium` when something was approximated, and `low`, with the reason, when a count or an address rests on data.
@@ -58,20 +58,39 @@ def price(work: Work, host: Host, arch: str, sizes: dict[str, float], missing: s
           reach: float) -> tuple[float, float, float, str]:  # fmt: skip
     """(compute ns, memory ns, irregular ns, level) of `work` run once, on `threads` threads sharing it.
 
-    An irregular access costs the latency of the level its own view fits in, so a histogram's bins in the first
-    cache are cheap however large the input that streams past them."""
+    A fold's step waits for the step before it, and an out-of-order core runs the rest of the body while it waits,
+    so compute is the larger of the folds' chain and the rest, not their sum: a body whose only cost is its fold, or
+    that has no fold, is priced as calibration fitted it. A vector loop's compute is shared among the physical cores
+    the threads run on, since two sibling lanes share a core's vector units; a scalar loop, a chain and an irregular
+    access leave room that a sibling fills. On more than one thread the pool claims chunks on demand, so a lane
+    finds its chunk where its own core cached it on the call before about once in as many cores as the region
+    engages, and every other chunk comes from the shared level that holds the whole working set. An irregular access
+    costs the latency of the level its own view fits in, so a histogram's bins in the first cache are cheap however
+    large the input that streams past them."""
     table = host.table(arch)
     chosen = mode(work, host, arch)
     counted = {k: value(n, sizes, missing) for k, n in work.ops.items() if k != "atomic" or threads == 1}
-    fitted = sum(n * table.get(chosen, table["scalar"]).get(k, table["scalar"].get(k, 0.0)) for k, n in counted.items())
-    compute = max(fitted, sum(counted.values()) * floor(host, chosen))
-    level = host.level(reach, threads)
+    costs = table.get(chosen, table["scalar"])
+    each = {k: n * costs.get(k, table["scalar"].get(k, 0.0)) for k, n in counted.items()}
+    chain = sum(ns for k, ns in each.items() if k.endswith("_fold"))
+    rest = max(sum(each.values()) - chain, sum(counted.values()) * floor(host, chosen))
+    compute = max(chain, rest)
+    level = host.level(reach, threads, threads <= 1)
     read = sum(value(n, sizes, missing) for n in work.reads.values())
     written = sum(value(n, sizes, missing) for n in work.writes.values())
-    memory = host.seconds("read", read, reach, threads) + host.seconds("write", written, reach, threads)
+    own = 1 / host.parallel(threads)  # the share of chunks a lane finds where its own core left them
+
+    def moved(private: bool) -> float:
+        return host.seconds("read", read, reach, threads, private) + host.seconds("write", written, reach, threads,
+                                                                                    private)  # fmt: skip
+
+    memory = moved(True) if threads <= 1 else own * moved(True) + (1 - own) * moved(False)
     irregular = sum(value(n, sizes, missing) * host.irregular_ns.get(
         host.level(value(work.footprint.get(k, Poly()), sizes, missing), threads), 0.0) for k, n in work.irregular.items())  # fmt: skip
-    return compute / threads, memory, irregular / threads, level
+    # A vector loop keeps its core's vector units busy, so its sibling lane adds nothing to it and only physical
+    # cores add throughput. A scalar loop, or one waiting on its own chain, leaves room that a sibling fills.
+    busy = chosen == "vector" and chain < rest
+    return compute / (host.parallel(threads) if busy else threads), memory, irregular / threads, level
 
 
 def floor(host: Host, chosen: str) -> float:
@@ -89,7 +108,7 @@ def contended(work: Work, host: Host, sizes: dict[str, float], missing: set[str]
 
 
 def light(work: Work, host: Host, arch: str, sizes: dict[str, float], reach: float) -> float:
-    """The same work at the whole machine's peak: vector compute on every lane, the bandwidth of every lane."""
+    """The same work at the whole machine's peak: vector compute on every core, the bandwidth of every lane."""
     missing: set[str] = set()
     table = host.table(arch)
     compute = sum(value(n, sizes, missing) * min(table["vector"].get(k, 0.0) or table["scalar"].get(k, 0.0),
@@ -97,7 +116,7 @@ def light(work: Work, host: Host, arch: str, sizes: dict[str, float], reach: flo
     read = sum(value(n, sizes, missing) for n in work.reads.values())
     written = sum(value(n, sizes, missing) for n in work.writes.values())
     memory = host.seconds("read", read, reach, host.lanes) + host.seconds("write", written, reach, host.lanes)
-    return max(compute / host.lanes, memory)
+    return max(compute / host.parallel(host.lanes), memory)
 
 
 def settled(compute: float, memory: float, serial: float, irregular: float, level: str) -> str:
@@ -193,7 +212,8 @@ def region(r: Region, host: Host, arch: str, sizes: dict[str, float], missing: s
                                                                                          irregular, level)  # fmt: skip
     peak = light(total, host, arch, each, reach)
     detail = {"count": r.count.render(), "lanes": used, "mode": mode(r.body, host, arch), "level": level,
-              "compute_ns": round(compute, 1), "memory_ns": round(memory, 1), "start_ns": round(start, 1)}  # fmt: skip
+              "compute_ns": round(compute, 1), "memory_ns": round(memory, 1), "start_ns": round(start, 1),
+              "working_set_bytes": round(reach)}  # fmt: skip
     return Piece(f"{r.kind} region at line {r.line}", ns * runs, bound, peak * runs, detail)
 
 
@@ -250,9 +270,13 @@ def pieces(c: Cost, host: Host, arch: str, sizes: dict[str, float], missing: set
 
 
 WIDE = (
-    "a wide host region's start and its slowest lane vary with the machine's load; at 1e5 to 1e7 elements the "
-    "validation measured such regions up to ten times slower than predicted"
+    "a wide host region waits for its slowest lane, which the machine's load can hold up: at 1e5 to 1e7 elements the "
+    "validation measured such regions up to five times slower than predicted"
 )  # evidence/v1_4/perf_model
+STREAMED = (
+    "a wide region streams more than calibration measured the last-level cache at, though less than it holds, and is "
+    "priced at that bandwidth; on a shared machine such streams ran up to five times slower"
+)  # evidence/v1_4/perf_model: the working set from 32 to 96 MiB
 
 
 def significant(ns: float) -> float:
@@ -272,8 +296,13 @@ def confidence(c: Cost, missing: set[str], found: list[Piece], profile: Profile,
     if any("irregular" in p.bound for p in found):
         guesses.append("an address rests on data, so its cache behaviour is a guess")
     approximations = list(c.approximate)
-    if any(p.detail.get("lanes", 1) > 1 and p.what.startswith(("host", "pooled")) for p in found):
+    wide = [p for p in found if p.detail.get("lanes", 1) > 1 and p.what.startswith(("host", "pooled"))]
+    if wide:
         approximations.append(WIDE)
+    host = profile.host
+    if host and any(host.measured_bytes.get("l3", host.cache["l3"]) < p.detail.get("working_set_bytes", 0)
+                    <= host.cache["l3"] for p in wide):  # fmt: skip
+        approximations.append(STREAMED)
     if any(p.what.startswith(("device", "transfer h2d", "transfer d2h", "transfer d2d")) for p in found):
         guesses.append("device work is priced from the published specification, and no device run has checked it")
     if any(p.what.startswith("device tensor-core") for p in found):

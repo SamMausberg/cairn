@@ -287,3 +287,79 @@ def test_device_work_is_priced_from_the_specification_and_says_so():
     small, large = (model.predict(costs(source)["scale"], MACHINE, {"n": n}) for n in (1e3, 1e8))
     assert small["bound"] == "launch" and large["bound"] == "device memory" and large["ns"] > small["ns"]
     assert large["confidence"] == "low" and any("specification" in w for w in large["why"])
+
+
+def machine(**changed) -> Profile:
+    """The test machine with some fields changed: a copy, so no test sees another's."""
+    import dataclasses
+
+    return Profile("a machine made up for the test", "measured", "", dataclasses.replace(MACHINE.host, **changed), None)
+
+
+def folding(f64: float) -> Profile:
+    return machine(ops={"x86-64-v4": {"vector": {}, "scalar": {"load": 0.5, "f64": f64, "f64_fold": 3.0},
+                                      "keeps_scalar": ["f64_fold"]}})  # fmt: skip
+
+
+def test_a_fold_hides_the_independent_work_beside_it():
+    """A fold waits on its last step and the core runs the rest meanwhile: the larger of the two, not their sum."""
+    plain = costs("fn s(n:usize, x:ro<f64>[n]) -> f64 { let t = reduce + for i in n yield x[i]; return t; }")["s"]
+    squares = costs(
+        "fn s(n:usize, x:ro<f64>[n]) -> f64 { let t = reduce + for i in n yield x[i] * x[i] + 1.0; return t; }"
+    )
+    one, two = (model.predict(c, folding(1.0), {"n": 1000})["ns"] for c in (plain, squares["s"]))
+    assert one == two == 3000.0  # two loads and two operations, 3.0 each step, hide under 3.0 of chain
+    ops = {k: n.value({"n": 1000}) for k, n in squares["s"].seq.ops.items()}
+    rest = ops["load"] * 0.5 + ops["f64"] * 4.0
+    assert rest > 3000.0 and model.predict(squares["s"], folding(4.0), {"n": 1000})["ns"] == rest  # the rest governs
+
+
+def test_a_vector_loop_shares_a_core_with_its_sibling_and_a_scalar_one_does_not():
+    siblings = machine(cores=4)  # eight lanes on four cores
+    vector = costs("fn f(n:usize, o:rw<u64>[n], x:ro<u64>[n]) { parallel i in n { o[i] = mul_wrap(x[i], 3); } }")["f"]
+    scalar = costs("fn f(n:usize, o:rw<u64>[n], x:ro<u64>[n]) { parallel i in n { o[i] = x[i] / 3; } }")["f"]
+    n = 1 << 20
+    for cost, shared_by in ((vector, 4), (scalar, 8)):
+        wide = model.predict(cost, siblings, {"n": n})["parts"][0]
+        body = model.Work()
+        body.merge(cost.regions[0].body, cost.regions[0].count)
+        alone = model.price(body, siblings.host, "x86-64-v4", {"n": n}, set(), 1, 0.0)[0]
+        assert wide["lanes"] == 8 and wide["compute_ns"] == pytest.approx(alone / shared_by, rel=1e-3)
+
+
+def test_a_wide_region_finds_its_chunk_in_its_own_core_once_in_as_many_cores():
+    """Claims move chunks between cores from one call to the next: one in `cores` comes from the lane's own cache,
+    the rest from the shared level that holds the whole working set."""
+    fast = {"1": 1e9, "all": 1e9}
+    levels = machine(read={"l1": {"1": 100.0, "all": 800.0}, "l2": {"1": 100.0, "all": 800.0},
+                           "l3": {"1": 50.0, "all": 200.0}, "dram": {"1": 10.0, "all": 40.0}},
+                     write=dict.fromkeys(("l1", "l2", "l3", "dram"), fast))  # fmt: skip
+    host = levels.host
+    assert host.blend(4 << 20, 8, private=False) == [("l3", 1.0)] and host.level(4 << 20, 8, private=False) == "l3"
+    sums = costs("fn s(n:usize, x:ro<u64>[n]) -> u64 { let t = reduce add_wrap parallel i in n yield x[i]; return t; }")
+    part = model.predict(sums["s"], levels, {"n": 1 << 19}, "x86-64-v4")["parts"][-1]  # 4 MiB, within the lanes' L2s
+    read = (1 << 19) * 8
+    assert part["lanes"] == 8 and part["level"] == "l3"
+    assert part["memory_ns"] == pytest.approx(read / 800.0 / 8 + read / 200.0 * 7 / 8, rel=1e-2)
+
+
+def test_the_speed_of_light_counts_the_cores_that_compute():
+    siblings = machine(cores=4)
+    vector = costs("fn f(n:usize, o:rw<u64>[n], x:ro<u64>[n]) { parallel i in n { o[i] = mul_wrap(x[i], 3); } }")["f"]
+    work = model.Work()
+    work.merge(vector.regions[0].body, vector.regions[0].count)
+    n = float(1 << 24)
+    counted = {k: p.value({"n": n}) for k, p in work.ops.items()}
+    table = MACHINE.host.ops["x86-64-v4"]
+    ideal = sum(v * min(table["vector"].get(k, 0.0) or table["scalar"].get(k, 0.0),
+                        table["scalar"].get(k, 0.0) or table["vector"].get(k, 0.0)) for k, v in counted.items())  # fmt: skip
+    assert model.light(work, siblings.host, "x86-64-v4", {"n": n}, 0.0) >= ideal / 4  # four cores, not eight lanes
+
+
+def test_a_wide_stream_past_what_calibration_timed_the_last_cache_at_says_so():
+    timed = machine(measured_bytes={"l3": 8 << 20})
+    cost = suite("saxpy_f32")["saxpy_f32"]
+    inside = model.predict(cost, timed, {"n": 1 << 19}, "x86-64-v4")  # 6 MiB: what calibration timed covers it
+    beyond = model.predict(cost, timed, {"n": 1 << 21}, "x86-64-v4")  # 24 MiB: past 8 MiB, within the 32 MiB cache
+    assert model.STREAMED not in inside["why"] and model.STREAMED in beyond["why"]
+    assert beyond["confidence"] == "medium"

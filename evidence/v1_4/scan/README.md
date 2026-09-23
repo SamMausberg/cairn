@@ -30,7 +30,7 @@ The sequential scan runs level with the loop it replaces, as it should, since it
 
 ## Against the prediction
 
-`cairn predict` ranked the three scan kernels the way they ran at every size under both compilers: the pooled scan below the two sequential ones, and those two equal. It predicted the times low. Under clang++ the sequential ones came out 1.7 to 2.1 times the prediction, and the pooled one 2.3 times at 1e5, 4.4 times at 1e6 and 1.2 times at 1e7. The pooled predictions carry `medium` confidence and say why: a wide host region between 1e5 and 1e7 elements is the range `evidence/v1_4/perf_model/` found the model weakest in, and this run was on a loaded machine as well.
+`cairn predict` ranked the three scan kernels the way they ran at every size under both compilers: the pooled scan below the two sequential ones, and those two equal. It predicted the times low. Under clang++ the sequential ones came out 1.7 to 2.1 times the prediction, and the pooled one 2.3 times at 1e5, 4.4 times at 1e6 and 1.2 times at 1e7. Priced again by the model's second pass (`evidence/v1_4/perf_model/`), the pooled scan at 1e6 is 0.65 of its least-disturbed run where it was 0.30, and at 1e5 1.41 where it was 0.91; `predicted.json` keeps what the model said before these runs. The pooled predictions carry `medium` confidence and say why: a wide host region between 1e5 and 1e7 elements is the range `evidence/v1_4/perf_model/` found the model weakest in, and this run was on a loaded machine as well.
 
 ## What this does not show
 

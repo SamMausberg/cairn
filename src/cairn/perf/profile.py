@@ -35,9 +35,14 @@ class Host:
     irregular_ns: dict[str, float] = field(default_factory=dict)  # level -> ns per data-dependent access
     atomic_ns: dict[str, float] = field(default_factory=dict)  # "shared": ns per access when every lane hits one
     ghz: float = 0.0
+    cores: int = 0  # physical cores; 0 when unknown, and then every lane counts as one
+    measured_bytes: dict[str, int] = field(default_factory=dict)  # level -> the working set its bandwidth was timed at
 
-    def level(self, footprint: float, threads: int) -> str:
-        """Where a working set of `footprint` bytes lives: per-core levels are shared out among the threads."""
+    def level(self, footprint: float, threads: int, private: bool = True) -> str:
+        """Where a working set of `footprint` bytes lives: per-core levels are shared out among the threads, and
+        serve nothing when `private` is false, as for a wide region whose chunks move between cores."""
+        if not private:
+            return "l3" if footprint <= self.cache["l3"] else "dram"
         share = footprint / max(threads, 1)
         if share <= self.cache["l1"]:
             return "l1"
@@ -45,10 +50,13 @@ class Host:
             return "l2"
         return "l3" if footprint <= self.cache["l3"] else "dram"
 
-    def blend(self, footprint: float, threads: int) -> list[tuple[str, float]]:
+    def blend(self, footprint: float, threads: int, private: bool = True) -> list[tuple[str, float]]:
         """Which levels serve a working set, and in what share: all of it from the first level that holds it, or,
-        when it overflows one, the part that fits from that level and the rest from the next one down."""
-        caps = [("l1", self.cache["l1"] * threads), ("l2", self.cache["l2"] * threads), ("l3", self.cache["l3"])]
+        when it overflows one, the part that fits from that level and the rest from the next one down. Without
+        `private` only the shared levels serve it: a lane pool claims its chunks on demand, so the chunk a lane
+        gets on one call is rarely the one its core cached on the last."""
+        caps = [("l1", self.cache["l1"] * threads), ("l2", self.cache["l2"] * threads)] if private else []
+        caps.append(("l3", self.cache["l3"]))
         for i, (level, cap) in enumerate(caps):
             if footprint <= cap:
                 if i == 0:
@@ -57,10 +65,10 @@ class Host:
                 return [(below, held / footprint), (level, 1 - held / footprint)]
         return [("l3", caps[-1][1] / footprint), ("dram", 1 - caps[-1][1] / footprint)]
 
-    def seconds(self, kind: str, bytes_moved: float, footprint: float, threads: int) -> float:
+    def seconds(self, kind: str, bytes_moved: float, footprint: float, threads: int, private: bool = True) -> float:
         """Nanoseconds to move `bytes_moved` of a `footprint`-byte working set, level by level."""
         return sum(bytes_moved * share / self.bandwidth(kind, level, threads) for level, share in
-                   self.blend(footprint, threads) if share > 0)  # fmt: skip
+                   self.blend(footprint, threads, private) if share > 0)  # fmt: skip
 
     def bandwidth(self, kind: str, level: str, threads: int) -> float:
         """Bytes per nanosecond (GB/s) at `level`, interpolated between one thread and every lane."""
@@ -73,6 +81,12 @@ class Host:
     def table(self, arch: str | None) -> dict[str, Any]:
         """The operation costs measured for `arch`, or for the first profile measured when `arch` was not."""
         return self.ops.get(arch or "") or next(iter(self.ops.values()))
+
+    def parallel(self, threads: int) -> int:
+        """How many of `threads` lanes a vector loop computes on at once: one per physical core, since two sibling
+        lanes share that core's vector units. On the reference machine a multiply-bound region ran no faster on
+        sixteen lanes than on eight (evidence/v1_4/perf_model)."""
+        return min(threads, self.cores) if self.cores else threads
 
     def fork(self, lanes: int) -> float:
         return self.pool["fork_ns"] + self.pool["per_lane_ns"] * max(lanes - 1, 0)

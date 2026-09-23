@@ -389,7 +389,14 @@
     },
     "ghz": 4.666,
     "page_ns": 2736.9,
-    "mapped_bytes": 33554432
+    "mapped_bytes": 33554432,
+    "cores": 8,
+    "measured_bytes": {
+      "l1": 16384,
+      "l2": 524288,
+      "l3": 33554432,
+      "dram": 536870912
+    }
   },
   "device": null
 }

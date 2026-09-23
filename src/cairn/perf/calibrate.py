@@ -273,6 +273,8 @@ def calibrate(cxx: str = "clang++", arch: str | None = None) -> dict[str, Any]:
             "irregular_ns": irregular,
             "atomic_ns": {"shared": round(shared, 3)},
             "ghz": round(cycles / chain_ns, 3) if cycles else 0.0,
+            "cores": physical,
+            "measured_bytes": {level: n * 8 for level, n in LEVEL_ELEMENTS.items()},
         },
         "device": None,
     }
