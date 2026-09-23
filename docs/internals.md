@@ -15,7 +15,7 @@ A project becomes a native artifact in nine stages, and nothing but the emitter 
 | Specialize families | `compiler/expansion.py` | `specialize` | one function per variant of a family's natural range |
 | Check | `compiler/checking.py` and its rule modules | `Checker.bodies` | one typed tree, annotated in place (`Expr.ty`, `Expr.ref`) |
 | Judge | `compiler/checking.py` | `Checker.judge` | every effect row, and the rules that need all of them |
-| Emit | `compiler/codegen.py` | `Emitter.units` | readable C++20: one shared header, one unit per module |
+| Emit | `compiler/codegen.py`, `compiler/region_lowering.py` | `Emitter.units` | readable C++20: one shared header, one unit per module |
 | Build | `projects/build.py` | `build` | a fresh directory, a hashed native artifact, a `cairn.build/1` receipt |
 
 `compiler/cairnc.py` is the facade. `compile_program` runs parse through judge. `generate` checks the collector's seventeen certificates before it emits a line, and the `Emitter` asks the independent audit (`verify/elision.py`) to accept every discharged guard, writing the guard of each one it refuses.
