@@ -213,4 +213,7 @@ def test_the_differential_harness_agrees_and_sees_a_guard_dropped_behind_the_aud
         return cpp, receipt
 
     monkeypatch.setattr(harness, "compile_source", planted)
+    # Hundreds of planted cases end in an AddressSanitizer report the comparison never reads. Symbolizing them took 47
+    # of this test's 56 seconds on a sixteen-thread machine; a report without symbols ends its case the same way.
+    monkeypatch.setenv("ASAN_OPTIONS", "symbolize=0")
     assert harness.compare(sources, names, "clang++", tmp_path / "planted")

@@ -19,7 +19,16 @@ def fn(body, params="x:u64", ret="u64"):
     return f"fn f({params})->{ret}{{{body}}}"
 
 
+# Z3's timeout is wall clock, and a shared two-core runner answers some of these queries in several times the three
+# seconds `equivalent` allows by default, which turns a counterexample into unknown. A test that expects an answer waits
+# as long as the solver accepts, and a query that is quick here stays quick. A test that expects unknown keeps the
+# default, since a query that never decides would only wait longer for the same answer.
+SOLVER_MS = 30000
+
+
 def check(a, b, expected="smt-equivalent", **kw):
+    if expected != "unknown":
+        kw.setdefault("timeout_ms", SOLVER_MS)
     r = equivalent(a, b, "f", **kw)
     assert r["status"] == expected, r
     assert not r["lean_verified"] and not r["native_verified"]
@@ -105,9 +114,7 @@ def test_saturating_add(ty):
 
 @pytest.mark.parametrize("expr,correct", [("x!=0 && x/x==1", "x!=0"), ("x==0 || x/x==1", "true")])
 def test_short_circuit(expr, correct):
-    # Division under a guard is a heavy query, and the suite runs one worker per core, so the
-    # default wall-clock budget flakes to unknown under load. Unknown still fails.
-    check(fn("return " + expr + ";", ret="bool"), fn("return " + correct + ";", ret="bool"), timeout_ms=15000)
+    check(fn("return " + expr + ";", ret="bool"), fn("return " + correct + ";", ret="bool"))
 
 
 def test_eager_condition_is_not_lazy():
@@ -287,9 +294,7 @@ def test_float_doubling_and_addition_agree():
 def test_float_addition_is_not_associative():
     a = fn("return (x+y)+z;", "x:f64,y:f64,z:f64", "f64")
     b = fn("return x+(y+z);", "x:f64,y:f64,z:f64", "f64")
-    # Three symbolic doubles make z3's heaviest query in this file; the timeout is wall clock and the
-    # suite runs one worker per core, so the default budget flakes to unknown under load. Unknown still fails.
-    refute(a, b, assume="x==x && y==y && z==z", timeout_ms=15000)
+    refute(a, b, assume="x==x && y==y && z==z")  # three symbolic doubles: the heaviest query in this file
 
 
 def test_signed_zero_is_part_of_the_value():
