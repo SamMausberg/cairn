@@ -25,6 +25,7 @@ class Scope:
     device_depth: int = 0
     module: str = ""
     lanes: Lanes | None = None
+    coop: Block | None = None  # The cooperative region being checked (compiler/cooperative.py); its lanes are threads.
     closure: tuple[Function, set[str]] | None = None  # (the closure, names bound outside it)
     leases: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # ticket -> [(place, mode)]
     before: dict[str, set[str]] = field(default_factory=dict)  # device ticket -> tickets its work is queued after
@@ -44,6 +45,29 @@ class Lanes:
     outer: set[str]
     home: Any = None  # The closure the region began in: `return` may leave a newer closure, never the lane.
     accesses: list[tuple[str, int | None, bool, Expr]] = field(default_factory=list)  # root, block stride, write
+
+
+@dataclass
+class Block:
+    """One cooperative region, `blocks b in G threads t in T { }`: every block runs T threads that share its arrays
+    and meet at its barriers (compiler/cooperative.py)."""
+
+    grid: list[str]  # the block names, fastest first
+    threads: list[str]  # the thread names, fastest first
+    extents: list[int]  # each thread name's extent: constants, whose product is whole warps
+    device: bool
+    top: set[int] = field(default_factory=set)  # ids of the statements directly in the body, where arrays are declared
+    shared: dict[str, tuple[Type, int, int]] = field(default_factory=dict)  # array -> (element, count, byte offset)
+    reach: dict[int, tuple[int, Any]] = field(default_factory=dict)  # id(node) -> (who reaches it together, why)
+    bytes: int = 0  # shared memory each block holds: its arrays and stages, each on 16 bytes
+
+    @property
+    def count(self) -> int:
+        """Threads in one block."""
+        total = 1
+        for n in self.extents:
+            total *= n
+        return total
 
 
 @dataclass

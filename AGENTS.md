@@ -23,6 +23,9 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/fusion.py` | which adjacent regions a plan's `fuse` may run as one, and the scratch they need not keep |
 | `compiler/chunks.py` | which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering |
 | `compiler/staging.py` | which arrays a plan's `stage` loads into a device block's shared tile, and that lowering |
+| `compiler/cooperative.py` | cooperative regions (`blocks ... threads ...`): their shape, shared arrays, barriers and warp operations, who reaches a statement together, and their lowering |
+| `compiler/phases.py` | the phase rule: between two barriers no two threads of a block touch one shared element where either writes |
+| `compiler/footprints.py` | index polynomials, and the rule that each element of an array from outside a cooperative region has one writer |
 | `compiler/tensor.py` | the tensor-core multiply `mma_unordered`: its rule, its numerical contract and its lowering |
 | `compiler/fragments.py` | tensor-core fragments: their types, the warp operations on them, the layouts each family reads, their lowering |
 | `compiler/layouts.py` | `layout` declarations: storage layouts and spreads, what the checker answers from them, and `L.at(...)` in code |

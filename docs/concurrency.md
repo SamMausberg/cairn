@@ -599,3 +599,93 @@ After its first pass, a pipeline run again makes no stream, allocates no tempora
 A region no longer waits for queued work it does not touch: each ticket is waited for at its own `wait`. On a device without concurrent managed access (Windows and WSL2), the host must not touch `@unified` memory while any kernel runs, and a live ticket's kernel may still be running after a region returns.
 
 A C program that owns a stream hands it to a device library with `NAME_device_stream(stream)`, which `cairn build --header` declares ([tools.md](tools.md#cairn-build---header)). The calling thread's synchronous device work then runs on that stream, after what the caller queued there, and queued work starts after it too; `NULL` gives the thread its own stream back. A device view the library takes is a pointer to memory the caller owns.
+## Cooperative regions
+
+`blocks b in G threads t in T { body }` runs `G` blocks of `T` threads. The threads of one block share the arrays the body declares with `shared` and wait for each other at `barrier`. Where a `parallel` lane touches only its own element, threads of a block may read what others wrote once a barrier lies between them. A region runs on the device when a view it indexes is `@device`, and on host threads otherwise.
+
+```cairn
+fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
+  blocks b in g threads t in 256 {
+    shared partial:u64[256] = zeroed;              // one per block, zeroed where the block starts
+    let i = b * 256 + t;
+    if i < n { partial[t] = x[i]; }
+    barrier;                                       // every thread's element is in place
+    for k in 0..3 {
+      let s:usize = shr(128, k);
+      if t < s { partial[t] = partial[t] + partial[t + s]; }
+      barrier;
+    }
+    if t < 32 {                                    // the first warp, whole
+      let total = reduce + warp yield partial[t];
+      if t == 0 { out[b] = total; }
+    }
+  }
+}
+```
+
+Each side names up to three binders, fastest first: in `blocks bx, by in gx, gy threads tx, ty in 32, 8`, thread `(tx, ty)` is thread `tx + 32 * ty` of its block. The grid's extents are any `usize` values. The thread extents are literals or constants whose product is a whole number of warps, 32 to 1024 (`E-COOP-SHAPE`). A `shared` array is declared directly in the body with a constant length, and a block's arrays hold at most 48 KiB together (`E-COOP-SHARED`).
+
+A barrier must be reached by every thread of the block, so it may not sit under a condition that depends on a thread's name, nor in a loop a `break` or `continue` can leave early (`E-COOP-BARRIER`). The warp operations `shuffle(v, lane)`, `shuffle_xor(v, mask)`, `shuffle_down(v, delta)` and `reduce OP warp yield v` need every thread of the warp (`E-COOP-WARP`). A condition whole warps agree on, such as `t < 32`, `t / 32 == w`, or `ty < 4` when `tx` counts 32, keeps warps whole. `reduce OP warp` takes `reduce`'s operators and combines in a fixed butterfly, halves then quarters down to neighbours, so every thread gets the same answer on the host and the device.
+
+```cairn rejects E-COOP-BARRIER
+fn f(g:usize) {
+  blocks b in g threads t in 64 {
+    if t < 5 { barrier; }                          // threads 5 to 63 would never arrive
+  }
+}
+```
+
+Between two barriers, a phase, no two threads of a block may touch one element of a shared array where either writes. The checker runs the body for every thread of one block, the block's names and everything outside the region kept as symbols, and refuses a phase where two threads write one element (`E-COOP-CONFLICT`), where a thread reads what another writes earlier in the phase (`E-COOP-UNORDERED`), or where a thread writes over what another may still be reading (`E-COOP-REUSE`). Each message names both threads, both lines and where a barrier would order them. An index it cannot follow, such as one read from data or one that differs from another by a value only known at run time, is `E-COOP-UNDECIDED` beside a write, never accepted.
+
+```cairn rejects E-COOP-UNORDERED
+fn reverse(g:usize, out:rw<u64>[g]) {
+  blocks b in g threads t in 256 {
+    shared s:u64[256] = zeroed;
+    s[t] = u64(t);
+    let v = s[255 - t];                            // written by thread 255 - t, with no barrier between
+    if t == 0 { out[b] = v; }
+  }
+}
+```
+
+```text
+thread t = 255 reads s[0] at line 5, which thread t = 0 writes at line 4 in the same phase: nothing makes the write happen first. Put a barrier after line 4 and before line 5 runs.
+```
+
+```cairn rejects E-COOP-REUSE
+fn shift(g:usize, out:rw<u64>[g]) {
+  blocks b in g threads t in 256 {
+    shared s:u64[256] = zeroed;
+    s[t] = u64(t);
+    barrier;
+    let v = s[(t + 1) % 256];
+    s[t] = v;                                      // thread t - 1 may not have read s[t] yet
+  }
+}
+```
+
+An array from outside the region is shared by every block, and no barrier orders two blocks. Each of its elements may be written by at most one thread of one block, and read by another only if nobody writes it (`E-COOP-GLOBAL`). The checker shows this when the index is a sum of the block, thread and loop names, each times a weight larger than everything the lighter terms add up to, as `b * 256 + t` is, or as the transpose's `(bx * 32 + ty + 8 * k) * h + by * 32 + tx` is when `h` is `32 * gy`. A condition on the index, `if col < h`, counts toward that bound.
+
+```cairn
+// out is x transposed: x has 32 * gy rows of 32 * gx elements.
+fn transpose(gx:usize, gy:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
+  let w = gx * 32;
+  let h = gy * 32;
+  blocks bx, by in gx, gy threads tx, ty in 32, 8 {
+    shared tile:f32[1056] = zeroed;                // 32 rows of 33: a column's elements in 32 banks
+    for k in 0..4 {
+      let r = ty + k * 8;
+      tile[r * 33 + tx] = x[(by * 32 + r) * w + bx * 32 + tx];
+    }
+    barrier;
+    for k in 0..4 {
+      let r = ty + k * 8;
+      out[(bx * 32 + r) * h + by * 32 + tx] = tile[tx * 33 + r];
+    }
+  }
+}
+```
+
+A thread obeys everything a lane obeys: it cannot assign a scalar from outside (`E-PARALLEL-WRITE`), start another region (`E-PARALLEL-NEST`), do I/O (`E-PARALLEL-CALL`), or reach the other side's memory (`E-PLACEMENT`). The row gains `par:device` or `par:host`, `zero_init` for the shared arrays, and `trap` for the guards; the receipt lists each array's bytes and the block's total under `local_storage`.
+
+On the device the region is one launch of blocks of `T` threads, the arrays in static shared memory, `barrier` as `__syncthreads()` and the warp operations as `__shfl_*_sync` over the whole warp, on the calling thread's execution context, returning once its stream has run the region, as `parallel` does. It compiles for `sm_120` and has not run on a GPU. On the host each block's threads are real threads meeting at a `std::barrier`, two blocks at a time, so the thread sanitizer checks the phase rule on real runs; the host lowering creates `2 * T` threads per region and is not a fast path.

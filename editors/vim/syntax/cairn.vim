@@ -13,7 +13,7 @@ syntax keyword cairnModifier as dyn linear mut pub pure ro rw unsafe
 syntax keyword cairnConstant false true zeroed
 syntax keyword cairnType Array Atomic Buf Dyn Group IoRing MmaA MmaAcc MmaB Mutex Ticket TmemAcc WmmaA WmmaAcc WmmaB bf16 bool f16 f32 f64 f8e4m3 f8e5m2 i16 i32 i64 i8 u16 u32 u64 u8 usize void
 syntax keyword cairnVariant Empty Err Invalid None Ok Overflow Some
-syntax match cairnBuiltin /\v<(abs|add_wrap|asm|assert|assert_eq|ceil|collect|eprint|eprintln|floor|format|from_bits|len|max|min|mma_load|mma_store|mma_unordered|mmio_read|mmio_write|mul_wrap|print|println|quantize|quantize_stochastic|shl_wrap|shr|sqrt|sub_wrap|swap|take|to_bits|transfer|trunc|wait)>\ze\s*[[(]/
+syntax match cairnBuiltin /\v<(abs|add_wrap|asm|assert|assert_eq|ceil|collect|eprint|eprintln|floor|format|from_bits|len|max|min|mma_load|mma_store|mma_unordered|mmio_read|mmio_write|mul_wrap|print|println|quantize|quantize_stochastic|shl_wrap|shr|shuffle|shuffle_down|shuffle_xor|sqrt|sub_wrap|swap|take|to_bits|transfer|trunc|wait)>\ze\s*[[(]/
 syntax match cairnCall /\v<\l\w*\ze\s*\(/
 syntax match cairnFunction /\v(<(fn|kernel|test)\s+)@<=\h\w*/
 syntax match cairnUserType /\v<\u\w*>/
@@ -21,7 +21,7 @@ syntax match cairnConstant /\v<\u[A-Z0-9_]*[A-Z0-9]>/
 syntax match cairnEnumMember /\v(<\u\w*\.)@<=\u\w*>/
 syntax match cairnSelf /\v<(self|Self)>/
 syntax match cairnPlacement /\v\@(host|device|pinned|unified)>/
-syntax match cairnContext /\v<(after|block|clobbers|exclusive|fold|fuse|grain|implements|into|lanes|layout|lends|needs|out|per_lane|plan|recipe|require|scan|stage|test|unroll|use|vector|volatile|when)>\ze\s+[[:alnum:]_"$+*&|^-]/
+syntax match cairnContext /\v<(after|barrier|block|blocks|clobbers|exclusive|fold|fuse|grain|implements|into|lanes|layout|lends|needs|out|per_lane|plan|recipe|require|scan|shared|stage|test|threads|unroll|use|vector|volatile|warp|when)>\ze\s+[[:alnum:]_"$+*&|^-]/
 syntax match cairnContext /\v<packed>\ze\s*\{/
 syntax match cairnContext /\v<align>\ze\s*\(/
 syntax match cairnNumber /\v<(0x\x+|\d+(\.\d+)?([eE][+-]?\d+)?)>/

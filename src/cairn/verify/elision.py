@@ -283,6 +283,22 @@ class Walk:
         elif tag == "parallel":
             self.expr(es[0])
             self.inside(s, s.name, self.bound(s.name, None, es[0], True), lambda: self.block(s.body))
+        elif tag == "blocks":  # every block and thread name below its extent, all in force through the body
+            for e in es:
+                self.expr(e)
+            env = dict(self.env)
+            facts = []
+            for name, extent in zip((n.val for n in s.other_names), es, strict=True):
+                self.bind(name, True)
+                facts += self.bound(name, None, extent, True)
+            key = self.enter(("binder", id(s)), facts)
+            self.block(s.body)
+            del self.active[key]
+            self.env = env
+        elif tag in {"shared", "warp_reduce"}:
+            for e in es:
+                self.expr(e)
+            self.bind(s.name, tag == "warp_reduce" and s.ty == USIZE, None)
         elif tag == "reduce":
             self.expr(es[0])
             self.inside(s, s.binder, self.bound(s.binder, None, es[0], True), lambda: self.expr(es[1]))

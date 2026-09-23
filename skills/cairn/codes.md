@@ -16,7 +16,15 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-CALLEE` | [tests](cards/tests.md) |  |
 | `E-CAST` | [storage](cards/storage.md) |  |
 | `E-COLLECT-CAPACITY` |  | The collector's extent must be exactly the output's capacity. |
-| `E-COOP-WARP` | [fragments](cards/fragments.md) |  |
+| `E-COOP-BARRIER` | [cooperative](cards/cooperative.md) |  |
+| `E-COOP-CONFLICT` | [cooperative](cards/cooperative.md) |  |
+| `E-COOP-GLOBAL` | [cooperative](cards/cooperative.md) |  |
+| `E-COOP-REUSE` | [cooperative](cards/cooperative.md) |  |
+| `E-COOP-SHAPE` | [cooperative](cards/cooperative.md) |  |
+| `E-COOP-SHARED` | [cooperative](cards/cooperative.md) |  |
+| `E-COOP-UNDECIDED` | [cooperative](cards/cooperative.md) |  |
+| `E-COOP-UNORDERED` | [cooperative](cards/cooperative.md) |  |
+| `E-COOP-WARP` | [cooperative](cards/cooperative.md), [fragments](cards/fragments.md) |  |
 | `E-DECLARATION` |  | Write only the one function's body; add or remove no declaration. |
 | `E-DISCARD` | [sums](cards/sums.md) |  |
 | `E-DOMAIN` |  | The permitted inputs are the host's: narrow where the implementation applies with when instead. |

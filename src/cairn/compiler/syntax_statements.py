@@ -70,12 +70,47 @@ class StatementParser(ExpressionParser):
             if op not in REDUCERS:
                 fail("E-REDUCE-OP", f"reduce accepts one of {sorted(REDUCERS)}.", self.t)
             self.i += 1
+            if self.t.s == "warp" and self.ahead(1) == "yield":  # `reduce + warp yield v`: over one warp's threads
+                self.i += 2
+                value = self.expr()
+                self.need(";")
+                return Stmt("warp_reduce", name, typ, [value], op=op, **at)
             pooled = self.t.s == "parallel"
             binder, hi = self.generator("parallel" if pooled else "for")
             self.need("yield")
             es = [hi, self.expr()]
         self.need(";")
         return Stmt(form, name, typ, es, binder=binder, op=op, pooled=form == "reduce" and pooled, **at)
+
+    def cooperative(self, at: dict[str, Any]) -> Stmt:
+        """`blocks b in G threads t in T { }`, up to three names and extents a side; `blocks` and `threads` are words
+        only here. The block names come first in `other_names`, and `op` says how many there are."""
+        self.need("blocks")
+        names = self.binders()
+        extents = self.extents(len(names))
+        if self.t.s != "threads":
+            fail("E-PARSE", "A cooperative region is `blocks b in G threads t in T { ... }`.", self.t)
+        self.i += 1
+        count = len(names)
+        names += self.binders()
+        extents += self.extents(len(names) - count)
+        return Stmt("blocks", exprs=extents, body=self.block(), other_names=names, op=str(count), **at)
+
+    def binders(self) -> list[Expr]:
+        found: list[Expr] = []
+        while not found or self.eat(","):
+            found.append(Expr("name", self.t.s, [], self.t.line, self.t.col))
+            self.ident()
+        return found
+
+    def extents(self, count: int) -> list[Expr]:
+        self.need("in")
+        found = [self.expr()]
+        while self.eat(","):
+            found.append(self.expr())
+        if len(found) != count:
+            fail("E-PARSE", f"{count} name(s) take {count} extent(s); {len(found)} are written.", self.t)
+        return found
 
     def require(self, t: Token) -> Stmt:
         """`require unsigned(f), "message";` states a recipe's admissible inputs."""
@@ -149,6 +184,20 @@ class StatementParser(ExpressionParser):
             return self.require(t)
         if self.scanning():  # A scan whose total nobody reads.
             return self.contracted(t, "let", "", None)
+        if t.s == "blocks" and IDENT.fullmatch(self.ahead(1)) and self.ahead(2) in {",", "in"}:
+            return self.cooperative(at)
+        if t.s == "shared" and IDENT.fullmatch(self.ahead(1)) and self.ahead(2) == ":":  # a block's shared array
+            self.i += 1
+            n = self.ident()
+            self.need(":")
+            element = Type(self.path())
+            self.need("[")
+            extent = self.expr()
+            self.need("]", "=", "zeroed", ";")
+            return Stmt("shared", n, element, [extent], **at)
+        if t.s == "barrier" and self.ahead(1) == ";":  # every thread of a cooperative block meets here
+            self.i += 2
+            return Stmt("barrier", **at)
         if t.s in {"buffer", "stack"}:
             self.i += 1
             n = self.ident()

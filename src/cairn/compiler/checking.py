@@ -16,13 +16,13 @@ from contextlib import contextmanager
 from operator import attrgetter
 from typing import Any
 
-from . import calls, concurrency, expressions, implementations, machine, places, statements
+from . import calls, concurrency, cooperative, expressions, implementations, machine, places, statements
 from .builtins import SOFT, TABLE
 from .concurrency import ORDERS, PINNED
 from .constants import constant
 from .effects import DEVICE_SAFE, LANE_SAFE, audit, exposed, fixed_point
 from .places import FORGED
-from .scope import SCOPED, Binding, Lanes, Scope
+from .scope import SCOPED, Binding, Block, Lanes, Scope
 from .traits import KINDS, connect_dispatches, hold_impls, satisfies
 from .tree import (
     CPP,
@@ -63,6 +63,7 @@ class Checker:
     device_depth: int
     module: str
     lanes: Lanes | None
+    coop: Block | None
     closure: tuple[Function, set[str]] | None
     leases: dict[str, list[tuple[str, str]]]
     before: dict[str, set[str]]
@@ -95,6 +96,8 @@ class Checker:
     e_spawn, shared, lane_callee, plans = (concurrency.e_spawn, concurrency.shared, concurrency.lane_callee,
                                            concurrency.plans)  # fmt: skip
     judge_lane_callbacks, s_submit = concurrency.judge_lane_callbacks, concurrency.s_submit
+    s_blocks, s_shared, s_barrier, s_warp_reduce = (cooperative.s_blocks, cooperative.s_shared,
+                                                    cooperative.s_barrier, cooperative.s_warp_reduce)  # fmt: skip
 
     e_int, e_float, e_bool, e_str, e_name = (expressions.e_int, expressions.e_float, expressions.e_bool,
                                              expressions.e_str, expressions.e_name)  # fmt: skip

@@ -41,6 +41,9 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Which adjacent regions a plan's `fuse` joins, and the scratch they hold in their lanes | `compiler/fusion.py` | `chains`, `quiet`, `compatible`, `scratch` |
 | Which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering | `compiler/chunks.py` | `chunkable`, `vectored`, `lower` |
 | Which arrays a plan's `stage` loads into a device block's shared tile, and that lowering | `compiler/staging.py` | `stageable`, `staged`, `lower` |
+| Cooperative regions: shape, shared arrays, barriers, warp operations, who reaches a statement together, lowering | `compiler/cooperative.py` | `s_blocks`, `Reach`, `participation`, `collective`, `lower_blocks` |
+| Two threads of a block at one shared element between barriers | `compiler/phases.py` | `Phases`, `check`, `check_array` |
+| One writer for every element of an array from outside a cooperative region | `compiler/footprints.py` | `Poly`, `Globals`, `disjoint`, `radix` |
 | The tensor-core multiply, its numerical contract and its lowering | `compiler/tensor.py` | `check_mma`, `lower_mma` |
 | Tensor-core fragments: their types, the warp operations on them, the layouts each family reads, their lowering | `compiler/fragments.py` | `valid`, `tile`, `consumer`, `check_mma`, `lower_load` |
 | `layout` declarations: storage layouts and spreads, coverage, owners, runs, bank conflicts, conversions, and `L.at(...)` in code | `compiler/layouts.py` | `value`, `cover`, `runs`, `conflicts`, `conversion`, `method`, `lower` |
@@ -72,6 +75,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 | `cairn_layout.hpp` | a layout's coordinate checked against its extent, and CuTe's swizzle, on the host and in a device lane alike |
 | `cairn_float.hpp` | the storage floats `f16 bf16 f8e4m3 f8e5m2`: one integer routine that rounds on the host and in a device lane alike, `quantize` and `quantize_stochastic` |
 | `cairn_tensor.hpp` | `mma_unordered`: the reference loop on the host, and on the device 64 x 64 tensor-core tiles over two shared-memory stages, written once against the operations a tile is given so a host test runs every thread's phases |
+| `cairn_coop.hpp` | cooperative regions: on the host each block's threads as real threads at a `std::barrier`, two blocks at a time, with warp exchanges through per-warp slots; on the device one launch with static shared memory, `__syncthreads` and `__shfl_*_sync` |
 | `cairn_print.hpp` | `print` and `format`: every piece computed before a byte is written, one 4096-byte stack buffer, shortest round-trip floats through `std::to_chars`, a byte record grown as `std.vec` grows |
 | `cairn_assert.hpp` | `assert`: the message a failed one prints, on standard error, through the device's printf in a lane, or not at all in an image, before the trap |
 

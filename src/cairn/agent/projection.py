@@ -157,6 +157,16 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
         elif s.tag == "parallel":
             order = " after " + ", ".join(t.val for t in s.other_names) if s.other_names else ""
             line = f"parallel {s.name} in {es[0]}{order} {nested(s.body)}"
+        elif s.tag == "blocks":
+            names, count = [n.val for n in s.other_names], int(s.op)
+            line = (f"blocks {', '.join(names[:count])} in {', '.join(es[:count])} threads "
+                    f"{', '.join(names[count:])} in {', '.join(es[count:])} {nested(s.body)}")  # fmt: skip
+        elif s.tag == "shared":
+            line = f"shared {s.name}:{s.ty.value.display()}[{es[0]}] = zeroed;"
+        elif s.tag == "barrier":
+            line = "barrier;"
+        elif s.tag == "warp_reduce":
+            line = f"let {s.name}{':' + s.ty.display() if s.ty else ''} = reduce {s.op} warp yield {es[0]};"
         elif s.tag == "defer":
             line = "defer " + format_block(s.body, indent).split("\n", 2)[1].strip()
         elif s.tag in {"unsafe", "block"}:

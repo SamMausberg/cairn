@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[3]
 # Words the parser reads in one position only; anywhere else they are ordinary names (the parser says where).
 CONTEXTUAL = {"after", "align", "exclusive", "fold", "into", "lends", "packed", "plan", "recipe", "require", "scan"}
 CONTEXTUAL |= {"test", "layout", "volatile", "out", "clobbers", "implements", "when", "needs", "use", *PLAN_ITEMS}
+CONTEXTUAL |= {"blocks", "threads", "shared", "barrier", "warp"}  # a cooperative region
 
 # class -> (TextMate scope, Vim group, words). Every reserved word is in exactly one class.
 WORDS: dict[str, tuple[str, str, set[str]]] = {
@@ -72,6 +73,11 @@ CONTEXT: dict[str, tuple[str, str]] = {
     "volatile": ("storage.modifier.cairn", r"(?=\s+(?:ptx|x86_64|aarch64)\b)"),  # `asm volatile x86_64 ...`
     "out": ("storage.modifier.cairn", r"(?=\s+[A-Za-z_]\w*\s*:)"),  # an output of typed assembly, `out hi:u64`
     "clobbers": ("storage.modifier.cairn", r"(?=\s*\(\s*[a-z][a-z0-9]*\s*[,)])"),  # `clobbers(rax, rdx)`
+    # a cooperative region: `blocks b in g threads t in 256 {`, `shared s:u64[8] = zeroed;`, `barrier;`, `reduce + warp`
+    **dict.fromkeys(("blocks", "threads"), ("keyword.control.concurrency.cairn", r"(?=\s+[A-Za-z_]\w*\s*(?:,|in\b))")),
+    "shared": ("storage.type.binding.cairn", r"(?=\s+[A-Za-z_]\w*\s*:)"),
+    "barrier": ("keyword.control.concurrency.cairn", r"(?=\s*;)"),
+    "warp": ("keyword.control.concurrency.cairn", r"(?=\s+yield\b)"),
     **dict.fromkeys(PLAN_ITEMS, ("keyword.other.plan.cairn", r"(?=\s+[0-9])")),  # the items a plan sets
 }
 FAMILIES = (*(f.rstrip(":") for f in EFFECT_FAMILIES), "read", "write", "lane")  # as effects.py names them
