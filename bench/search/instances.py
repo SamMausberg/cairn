@@ -4,7 +4,8 @@
 On a copy of the project: each implementation of `prefix` is validated with `cairn validate --history` under the
 policy the project's regressions file pinned, one instance of `prefix_by` at a time; then `cairn tune --symbol prefix
 --at n=1e6` searches with that history, first predicted only, then with `--measure 4` on this host, then the same
-measurement again, which the history answers without a run; last, `--write` writes the chosen selection into the
+measurement again, which the history answers without a run; then every selection is timed again in five interleaved
+rounds, for the spread the search's own rounds do not show; last, `--write` writes the chosen selection into the
 copy. A device program whose implementation lists two block sizes is then searched with 4 compiles for sm_120: each
 instance is compiled and read by ptxas and cuobjdump, and nothing runs on a GPU. The load average is recorded before
 and after, since the machine is shared.
@@ -21,6 +22,7 @@ import json
 import os
 import platform
 import shutil
+import statistics
 import sys
 import tempfile
 import time
@@ -31,8 +33,12 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from cairn.agent.history import History
 from cairn.cli import main
+from cairn.perf import measure
 from cairn.perf.calibrate import cpu_model
+from cairn.perf.plan_source import Placement
+from cairn.projects.project import load_project
 from cairn.projects.target import toolkit_record
+from cairn.projects.toolchain import resolve_arch
 
 DEVICE = """fn scale(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) effects(pure, write:out, par:device, zero_init) {
   parallel i in n { out[i] = 2.0 * x[i]; }
@@ -69,6 +75,18 @@ def searched(answer: dict, wall: float) -> dict:
     return out
 
 
+def interleaved(project: Path, uses: list[str | None], rounds: int = 5) -> dict:
+    """Each selection timed once per round, the rounds interleaved, so load that comes and goes falls on all alike."""
+    placement = Placement(load_project(project).source, "prefix")
+    times: dict[str, list[float]] = {use or "reference": [] for use in uses}
+    for _ in range(rounds):
+        for use in uses:
+            got = measure.time(placement.apply((), use), "prefix", {"n": 1e6}, arch=resolve_arch("baseline"), blocks=3)
+            times[use or "reference"].append(round(float(got["median_ns"]), 1))
+    return {name: {"median_ns": statistics.median(v), "min_ns": min(v), "max_ns": max(v), "rounds": v}
+            for name, v in times.items()}  # fmt: skip
+
+
 def run(out: Path) -> dict:
     record: dict = {"schema": "cairn.search-instances/1", "machine": {"cpu": cpu_model(), "platform": platform.platform(),
                     "toolkit": toolkit_record()}, "load_average": {"before": list(os.getloadavg())}}  # fmt: skip
@@ -92,6 +110,8 @@ def run(out: Path) -> dict:
         record["measured"] = searched(answer, wall)
         code, answer, wall = cairn(*ask, "--measure", "4")
         record["measured_again"] = searched(answer, wall)
+        uses = [None, "prefix_by4", *(f"prefix_by[{k}]" for k in (4, 8, 16, 32))]
+        record["interleaved"] = {"sizes": {"n": 1e6}, "rounds": 5, "blocks": 3, "times": interleaved(project, uses)}
         code, answer, wall = cairn(*ask, "--measure", "4", "--write")
         record["written"] = {"chosen": answer["chosen"]["plan"], "file": answer.get("written"),
                              "selection": [line for line in (project / "src/prefix.cairn").read_text().splitlines()
