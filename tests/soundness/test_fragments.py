@@ -53,6 +53,8 @@ FRAGMENTS = "acc:WmmaAcc[f32, 16, 16, 16], a:WmmaA[f16, 16, 16, 16], b:WmmaB[f16
          "names none"),
         ("E-LAYOUT-CONSUMER", TILE + "fn f(a:ro<f16>[100]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, SA, 0, 0); }",
          "past the 100 elements"),
+        ("E-LAYOUT-CONSUMER", TILE + "fn f(b:ro<f16>[256]@device) { let x = mma_load[WmmaB[f16, 32, 8, 16]](b, SA, 0, 1); }",
+         "starts 16 bytes in"),
         ("E-TYPE-MISMATCH", TILE + "fn f(a:ro<bf16>[256]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, SA, 0, 0); }",
          "array of f16"),
         ("E-TYPE-MISMATCH", TILE + f"fn f(c:ro<f32>[256]@device, {FRAGMENTS}) {{ mma_store(c, SA, 0, 0, acc); }}", "an rw array"),

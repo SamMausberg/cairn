@@ -148,7 +148,7 @@ def tile(c: Checker, e: Expr, array: Expr, written: Expr, coords: list[Expr], ty
         fail("E-LAYOUT-CONSUMER", f"{name} places elements up to offset {v.cosize - 1}, past the {kind.extent} "
              f"elements of {root(array).val}.", array)  # fmt: skip
     size = 4 if role == "acc" else c.sizeof(Type(element))
-    consumer(family, role, shared, v, name, size, written)
+    consumer(family, role, shared, v, name, size, (rows, cols), written)
     for a in coords:
         c.expect(c.expr(a, USIZE), USIZE, a)
     if root(array).tag == "name":
@@ -157,7 +157,9 @@ def tile(c: Checker, e: Expr, array: Expr, written: Expr, coords: list[Expr], ty
     return family, role, element, shape, name, shared
 
 
-def consumer(family: str, role: str, shared: bool, v: layouts.Layout, name: str, size: int, node: Any):
+def consumer(
+    family: str, role: str, shared: bool, v: layouts.Layout, name: str, size: int, grid: tuple[int, int], node: Any
+):
     """Whether this family's loads and stores can read `v`: WMMA through a pointer and a leading dimension, mma.sync
     from shared memory through ldmatrix's row addresses, anything else element by element."""
     if family == "wmma":
@@ -170,6 +172,12 @@ def consumer(family: str, role: str, shared: bool, v: layouts.Layout, name: str,
         if form[1] * size % 16:
             fail("E-LAYOUT-CONSUMER", f"WMMA needs rows a multiple of 16 bytes apart; {name}'s are "
                  f"{form[1] * size} bytes apart.", node)  # fmt: skip
+        rows, cols = grid
+        for i in range(v.shape[0] // rows):
+            for j in range(v.shape[1] // cols):
+                if v.offset((i * rows, j * cols)) * size % 32:
+                    fail("E-LAYOUT-CONSUMER", f"WMMA reads a fragment from 32 bytes on, and fragment ({i}, {j}) "
+                         f"of {name} starts {v.offset((i * rows, j * cols)) * size} bytes in.", node)  # fmt: skip
     elif family == "mma_sync" and shared and role != "acc" and not layouts.rows16(v, size):
         fail("E-LAYOUT-CONSUMER", f"ldmatrix reads each 16 bytes of a row from one address; {name} splits a run of "
              "16 bytes, or starts one off 16 bytes: keep a swizzle's base at 16 bytes and a pad a multiple of 16 "
@@ -184,6 +192,8 @@ def footprint(c: Checker, e: Expr, i: int, j: int) -> list[tuple[int, int | None
     v = layouts.value(c, name)
     assert isinstance(v, layouts.Layout)  # a fragment moves only through a storage layout (`tile`)
     rows, cols = extent(role, shape)
+    if not (0 <= i < v.shape[0] // rows and 0 <= j < v.shape[1] // cols):
+        raise IndexError(f"fragment ({i}, {j}) is outside {name}'s grid of {rows} x {cols} fragments")
     store = e.val == "mma_store"
     return [(v.offset((i * rows + r, j * cols + q)), (r % 8) * 4 + (q % 8) // 2 if store else None)
             for r in range(rows) for q in range(cols)]  # fmt: skip
