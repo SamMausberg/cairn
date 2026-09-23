@@ -207,15 +207,15 @@ MODULE = re.compile(r"^module\s+([\w.]+)\s*;", re.M)
 IMPORT = re.compile(r"^import\s+([\w.]+)", re.M)
 
 
-def reach(source: str, module: str) -> str:
-    """The part of `source` a function of `module` can reach: its module and every module that imports lead to.
+def reach(source: str, modules: set[str]) -> str:
+    """The part of `source` functions of `modules` can reach: those modules and every module their imports lead to.
     Modules cannot import the root, so a module function needs no root code; a root function needs all it imports."""
     cuts = [0, *(m.start() for m in MODULE.finditer(source)), len(source)]
     chunks = [(h.group(1) if (h := MODULE.match(source, a)) else "", source[a:b]) for a, b in pairwise(cuts)]
     texts: dict[str, list[str]] = {}
     for m, text in chunks:
         texts.setdefault(m, []).append(text)
-    need, todo = set(), [module]
+    need, todo = set(), list(modules)
     while todo:
         m = todo.pop()
         if m not in need and m in texts:
@@ -257,8 +257,19 @@ def compare(o: Version, n: Version, name: str, deadline: float, timeout_ms: int)
     remaining = int((deadline - time.monotonic()) * 1000)
     if remaining < 10:
         return {"class": "unknown", "reason": "The diff's solver budget ran out before this function."}
-    module = n.p.modules.get(name, n.functions[name].module)
-    old, new = (v.source if len(v.source.encode()) <= MAX_SOURCE_BYTES else reach(v.source, module) for v in (o, n))
+
+    def home(v: Version, f: str) -> str:
+        return v.p.modules.get(f, v.functions[f].module) if f in v.functions else ""
+
+    def slice_of(v: Version) -> str:
+        """The modules the function can reach, with those that call it: a generic instance exists only because a
+        caller instantiates it."""
+        if len(v.source.encode()) <= MAX_SOURCE_BYTES:
+            return v.source
+        callers = {home(v, f) for f, r in v.receipts.items() if isinstance(r, dict) and name in r.get("calls", [])}
+        return reach(v.source, {home(v, name), *callers})
+
+    old, new = slice_of(o), slice_of(n)
     r = equivalent(old, new, name, allow_reference_traps=True, timeout_ms=min(timeout_ms, remaining))
     counts = [p for p, t in n.functions[name].params if t.mode == "value" and t.name in UNSIGNED]
     if r["status"] == "unknown" and "unrolling budget" in r.get("reason", "") and counts:

@@ -311,3 +311,16 @@ def test_a_comparison_that_runs_past_its_limit_is_stopped_and_unknown():
     assert isolated(lambda: {"class": "smt-equivalent"}, 30) == {"class": "smt-equivalent"}
     failed = isolated(lambda: 1 / 0, 30)
     assert failed["class"] == "unknown" and "ZeroDivisionError" in failed["reason"]
+
+
+def test_a_generic_instance_past_the_size_limit_keeps_the_module_that_instantiates_it():
+    filler = "module pad;\n" + "".join(f"pub fn p{i}(x:u64) -> u64 = x + {i};\n" for i in range(2000))
+    lib = "module lib;\npub fn pick[T:copy](x:T, y:T) -> T = x;\n"
+    user = "module user;\nimport lib;\npub fn go(x:u32) -> u32 = lib.pick(x, 3);\n"
+    old, new = (
+        filler + lib + user,
+        filler + lib.replace("= x;", "{ let kept = x; let unused = y; return kept; }") + user,
+    )
+    assert len(old.encode()) > 64000
+    entry = diff(old, new, predict=False)["functions"]["lib.pick[u32]"]
+    assert entry["class"] == "smt-equivalent", entry  # through the solver, on the modules that make the instance
