@@ -7,11 +7,11 @@ CAIRN is a systems programming language for code that AI agents write and people
 - A race, a use after move, a leaked task or two mutable borrows of one array is a compile error with a stable code (`E-LEASED` below) and a rule card that says how to fix it.
 - Every function has an inferred effect row (`alloc`, `spawn`, `io`, `write:data`, `trap`, ...). A signature can cap it with `pure` or `effects(...)`, so an edit that adds an allocation or a thread where none was allowed is refused.
 - There are no lifetime annotations. A borrow exists only as a parameter; anything stored is an owner, an index or a handle.
-- An edit session hands the agent one function's source and the interfaces around it, and admits a new body only if the signature and the effect ceiling still hold.
-- `cairn diff OLD NEW` says, function by function, whether a change compiled to identical code, is SMT-equivalent, or changed behaviour, with an input that shows the difference.
-- `cairn predict` prices a function on this machine without running it, and `cairn shot` returns the frames a UI drew as PNGs.
+- A function can have alternative implementations beside its reference: a blocked loop, a GPU kernel with shared memory and tensor-core fragments, or existing C++ and CUDA. Each keeps the reference's signature, effect ceiling and numerical contract, `cairn validate` tests it against the reference, and `cairn tune` chooses only validated ones.
+- The compiler's hosts admit an agent's edit, plan or implementation only if everything they pin still holds, and `cairn diff OLD NEW` says per function whether a change compiled to identical code, is SMT-equivalent, or changed behaviour, with an input that shows it.
+- `cairn predict` prices a function without running it, `cairn tune` searches plans and implementations within compile and run budgets and keeps a history a fresh agent resumes from, and `cairn shot` returns the frames a UI drew.
 
-These are properties of the design, checked by the tests and proofs listed under [limitations](#limitations-and-what-you-trust). They do not yet make a model cheaper to use. In a preregistered equal-budget benchmark ([bench/ai](bench/ai/PREREGISTRATION.md)), `claude-sonnet-5` solved all ten small systems tasks in CAIRN, C++ and Rust (20 of 20 in each), so the run cannot tell the languages apart by tasks solved. The CAIRN subjects, who had never seen the language and read its documentation inside the budget, used 11.6 times the tokens of the C++ subjects and 12.3 times those of the Rust subjects ([results](evidence/v0_9/ai_benchmark/RESULTS.md)).
+These are properties of the design, checked by the tests and proofs listed under [limitations](#limitations-and-what-you-trust). The [Claude Code plugin](#install) gives an agent the rules in about 4,000 tokens; in a six-session smoke comparison, sessions with it cost 0.51 times as much as sessions without it, and every session solved its task ([evidence/v0_9/skill](evidence/v0_9/skill/README.md)). The preregistered equal-budget benchmark ran before the plugin existed: CAIRN subjects solved every task, as C++ and Rust subjects did, and used 11.6 times the tokens of C++ subjects, most of it reading the documentation ([results](evidence/v0_9/ai_benchmark/RESULTS.md)). Whether the plugin closes that gap is untested.
 
 ## Example
 
@@ -88,7 +88,12 @@ pip install -e .                   # '.[dev]' adds pytest, ruff and mypy
 cairn doctor                       # which optional tools are present
 ```
 
-In Claude Code, `claude plugin marketplace add SamMausberg/cairn` and `claude plugin install cairn@cairn` add the CAIRN skill, the `cairn` command and the language server ([agents.md](docs/agents.md#the-skill-and-the-claude-code-plugin)).
+For Claude Code, the repository is a plugin that adds the CAIRN skill, the `cairn` command, the language server and the compiler's MCP tools. Other agents load `skills/cairn/` (the Agent Skill format) or connect to `cairn mcp` ([agents.md](docs/agents.md#the-skill-and-the-claude-code-plugin)).
+
+```sh
+claude plugin marketplace add SamMausberg/cairn
+claude plugin install cairn@cairn
+```
 
 `python3 bin/cairn` runs the same command line without installing. Optional tools switch on more checks and are never downloaded: `libz3` for `verify` and `diff`, CUDA `nvcc` for device code, Lean 4 for `proofs/`, `qemu-system-aarch64` for the bare-metal target.
 
@@ -107,7 +112,7 @@ Bazel rules are in [bazel/](bazel/), with an example in [examples/bazel](example
 
 ## Demos
 
-Three demos, each one command from a fresh checkout. `tests/projects/test_demos.py` runs them again, so they cannot go stale.
+Three demos, each one command from a fresh checkout; `tests/projects/test_demos.py` runs them.
 
 | Demo | What you see | Command |
 |---|---|---|
@@ -117,7 +122,7 @@ Three demos, each one command from a fresh checkout. `tests/projects/test_demos.
 
 ![the visual demo's plate viewer after 5000 sweeps](demos/visual/frames/after-4.png)
 
-The agents in the demos are scripted replies, replayed; everything the host, the compiler, Z3 and the programs say is computed on each run. `python3 demos/repair/run.py --live MODEL` sends the same packets to a real model.
+The demo agents are scripted replies; what the host, the compiler, Z3 and the programs say is computed on each run.
 
 ## Limitations and what you trust
 
@@ -130,13 +135,14 @@ The compiler is not proved correct. The checker and the C++ emitter are about 8,
 | The Python parser, checker and emitter | every program | about 3,800 tests, rejection tables from seven adversarial reviews, differential runs against the Lean models |
 | The runtime headers | owners, threads, the lane pool, rings, device calls | native runs under Clang and GCC with the address, leak, undefined and thread sanitizers |
 | Clang or GCC, and nvcc | native and device code | nothing in this repository |
-| `unsafe` blocks and `extern` declarations | the foreign boundary, MMIO, inline assembly | the effects they declare, which are trusted as written |
+| `unsafe` blocks, `extern` declarations, typed `asm` and foreign implementations | the foreign boundary, MMIO, inline assembly, vendored C++ and CUDA | the effects and contracts they declare, trusted as written; a foreign implementation is finite-tested against its reference where it ran |
 | Z3 and the SMT translator | `cairn verify` and `cairn diff` | tests of the translator; anything outside the modeled fragment is `unknown` |
 | The Lean kernel | the proofs in `proofs/` | an axiom audit: `propext` and `Quot.sound`, nothing else |
 
 What has not been validated:
 
-- Most of the GPU side has not run on a GPU. Device lanes, transfers and three kernels ran on one RTX 5070 Ti (`evidence/v1_3/gpu`). Vector loads, shared-memory staging, device plans, `mma_unordered`, the device `scan` and the reusable execution context compile for sm_120 and are checked on the host only, and the execution context is not yet used by the generated code. The device half of `cairn predict` is NVIDIA's published specification, not a measurement.
+- Most of the GPU side has not run on a GPU. Device lanes, transfers and three kernels ran on one RTX 5070 Ti (`evidence/v1_3/gpu`). Everything since compiles for sm_120 and is checked on the host only: vector loads, shared staging, device plans, `mma_unordered` and the two tensor-core multiplies written in CAIRN, cooperative regions and pipeline stages, typed PTX, the device `scan`, foreign CUDA kernels, and the execution context generated code runs on, whose CUDA calls a host stand-in counts. The device half of `cairn predict` is NVIDIA's published specification, not a measurement.
+- `cairn validate` is finite testing: an implementation is compared with its reference on generated boundary inputs, and the reference is an independent algorithm that shares the compiler.
 - Host performance was measured on one 16-thread x86-64 machine against plain C++, OpenMP and oneTBB at equal guards. Nothing is claimed against tuned C++ or CUDA.
 - SMT equivalence covers a fragment. An owner inside a record or an array, concurrency, device memory, the foreign boundary, storage floats and loops it cannot bound are `unknown`, and `unknown` is never reported as success.
 - The AI evidence is one model family on small tasks. The equal-budget benchmark gave ten single-file tasks to one model, which also wrote the language and the tasks; every subject solved its task, so it measured cost and not difficulty. Most of CAIRN's extra tokens went to reading its documentation. An earlier pilot had no comparison arm (`evidence/v1_1/ai_pilot`).
@@ -152,7 +158,10 @@ What has not been validated:
 | The collector's seventeen arithmetic certificates hold, and its loop model stores in bounds. | Lean-checked | `proofs/Cairn/Collector.lean` |
 | A host `parallel` region runs level with OpenMP and oneTBB at equal guards and worker counts. | Benchmarked, one machine | `evidence/v1_4/bench` |
 | `cairn predict` ranks held-out host timings with a Kendall tau of 0.87 to 0.92, at a median error of 28 to 44 percent. | Benchmarked, one machine | `evidence/v1_4/perf_model` |
+| Two threads of an accepted cooperative region never make conflicting accesses between barriers, in any interleaving, and the result does not depend on thread order. | Lean-checked model, differential-tested | `proofs/Cairn/Cooperative.lean`, `evidence/v0_9/cooperative` |
+| A declared layout covers its tile exactly once, so writes through it by distinct threads never collide. | Lean-checked model | `proofs/Cairn/Layout.lean` |
 | At equal budgets on ten small tasks, `claude-sonnet-5` solved 20 of 20 in each of CAIRN, C++ and Rust, and used 11.6 times the tokens in CAIRN that it used in C++. | Benchmarked, one model, preregistered | `evidence/v0_9/ai_benchmark` |
+| With the Claude Code plugin, three small tasks cost 0.51 times as much as without it, all solved in both arms. | Smoke test, one model, one run per cell | `evidence/v0_9/skill` |
 
 [docs/verification.md](docs/verification.md) says what each proof, model and test covers and what it leaves out.
 
@@ -163,26 +172,29 @@ What has not been validated:
 - Owners that move and are released at scope exit, `linear` values consumed exactly once, `take`, `swap` and `defer`.
 - Tasks with leases down to one field, task groups, I/O rings, atomics and mutexes.
 - `parallel`, `reduce`, `compact` and `scan` on host threads or CUDA lanes, plans that change how a region runs without changing its result, and placement types (`@host`, `@pinned`, `@unified`, `@device`).
+- Cooperative regions (`blocks b in g threads t in n`) with shared memory, barriers, warp shuffles and pipeline stages, checked by a phase rule; layouts with checked coverage; tensor-core fragments.
+- Alternative implementations of a function (`implements f when ...`, with natural parameters to search), chosen by a plan with the reference as the fallback.
 - Storage floats (`f16`, `bf16`, `f8e4m3`, `f8e5m2`) with one stated rounding, `quantize`, and `derive grad`, which writes a reverse-mode derivative as ordinary checked code.
 - Test blocks and `assert` in the language, and a standard library written in CAIRN: collections, text, formatting, files, sockets, `zlib`, images and 2D drawing.
-- `extern` with mandatory effects behind an `unsafe` gate, a freestanding AArch64 target, and a generated C header for calling a CAIRN library from C or C++.
+- `extern` with mandatory effects behind an `unsafe` gate, typed inline assembly for x86-64, AArch64 and PTX, vendored C++ and CUDA as foreign implementations, a freestanding AArch64 target, and a generated C header for calling a CAIRN library from C or C++.
 
 ## Documentation
 
-[docs/](docs/README.md) indexes the reference: the language, memory, abstractions, concurrency and numerics, the standard library, the tools, verification, the agent protocol and the roadmap. [AGENTS.md](AGENTS.md) has the rules for anyone, human or agent, changing this repository, and [CHANGELOG.md](CHANGELOG.md) is the release history.
+[docs/](docs/README.md) is the reference. [AGENTS.md](AGENTS.md) has the rules for changing this repository, and [CHANGELOG.md](CHANGELOG.md) the release history.
 
 ## Repository
 
 ```
 src/cairn/     compiler/ runtime/ std/ verify/ agent/ editor/ perf/ projects/ templates/ targets/
+.claude-plugin/ the Claude Code plugin and marketplace manifests
 skills/        cairn/: the Agent Skill, generated from the compiler's rule cards
-proofs/        Lean 4: collector certificates, ownership and lease calculus, lane pool, guard elision
+proofs/        Lean 4: collector certificates, ownership and lease calculus, lane pool, guard elision, layouts, cooperative regions
 demos/         the three demos above
-examples/      runnable projects: hello/ systems/ apps/ interop/ embedded/ bazel/, and inputs for the tools
+examples/      runnable projects (hello/ systems/ apps/ cooperative/ tensor/ implementations/ foreign/ ...) and tool inputs
 bazel/         rules_cairn: Bazel rules for CAIRN libraries, binaries and tests
 tests/         the suite: language/ soundness/ verification/ projects/ runtime/ tooling/ agent/
 tools/         checks/ ai/ corpus/ release/
-bench/         suite/ host/ codegen/ gpu/ benchmark harnesses, and ai/, the equal-budget AI benchmark
+bench/         suite/ host/ codegen/ gpu/ scale/ search/ harnesses, ai/ the equal-budget AI benchmark, skill/ the plugin's evals
 editors/       VS Code and Vim support, generated from the compiler's vocabulary
 docs/          the documentation
 evidence/      executed results by release, with their limits
