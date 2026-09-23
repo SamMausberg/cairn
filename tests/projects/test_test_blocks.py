@@ -12,14 +12,13 @@ import pytest
 from cairn.agent.explain import explain
 from cairn.agent.projection import canonical_source
 from cairn.cli import main
-from cairn.compiler.cairnc import RUNTIME_FILES, Parser, compile_source
+from cairn.compiler.cairnc import Parser, compile_source
 from cairn.editor.document import Document, symbols
 from cairn.projects.build import build, dispatcher
 from cairn.projects.project import load_project
-from cairn.projects.toolchain import command
 from cairn.verify.runner import run_tests
 from emitted import build as build_cpp
-from emitted import code_of, refused, sanitized
+from emitted import code_of, device_build, refused, sanitized
 
 LIBRARY = """import std.vec;
 
@@ -220,15 +219,8 @@ def test_the_runner_executable_under_the_sanitizers(tmp_path, cxx):
 
 def test_an_assert_in_a_device_lane_compiles_for_the_device(tmp_path):
     """Compiled for sm_120 by nvcc and never run: device code runs only under make gpu."""
-    if not shutil.which("nvcc") or not shutil.which("g++"):
-        pytest.skip("needs nvcc and g++")
     cpp, receipt = compile_source(
         'fn mark(n:usize, xs:rw<u32>[n]@device) { parallel i in n { assert(xs[i] < 7, "small"); xs[i] = 1; } }'
     )
     assert "cr::check(" in cpp and "par:device" in receipt["functions"]["mark"]["effects"]
-    for name, text in {"p.cu": cpp, **RUNTIME_FILES}.items():
-        (tmp_path / name).write_text(text)
-    line = command("g++", str(tmp_path / "p.cu"), str(tmp_path / "p.o"), kind="library", cuda=True)
-    line = [("-arch=sm_120" if part == "-arch=native" else part) for part in line if part != "-shared"] + ["-c"]
-    done = subprocess.run(line, capture_output=True, text=True, timeout=300)
-    assert done.returncode == 0, done.stderr[-4000:]
+    device_build(tmp_path, cpp)

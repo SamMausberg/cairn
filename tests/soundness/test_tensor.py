@@ -22,7 +22,7 @@ import pytest
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from cairn.verify.scalar_semantics import equivalent
-from emitted import contract, emit, library, on_device, refused, run
+from emitted import contract, device_build, library, on_device, refused, run
 from oracles.float_formats import FORMATS, Format
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -233,14 +233,9 @@ fn main() -> i32 {
 """
 
 
-@pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")
 @pytest.mark.parametrize("name", FORMATS)
 def test_the_device_multiply_compiles_for_sm_120_without_touching_it(tmp_path, name):
-    source, _ = emit(tmp_path, compile_source(ON_DEVICE.replace("T", name))[0])
-    command_line = ["nvcc", "-std=c++20", "-O3", "--fmad=false", "-arch=sm_120", "--extended-lambda",
-                    "--expt-relaxed-constexpr", "-Werror", "all-warnings", "-x", "cu", "-c", source, "-o", str(tmp_path / "p.o")]  # fmt: skip
-    done = subprocess.run(command_line, capture_output=True, text=True, timeout=900)
-    assert done.returncode == 0, done.stderr[-3000:]
+    device_build(tmp_path, compile_source(ON_DEVICE.replace("T", name))[0], entry="main", timeout=900)
 
 
 @pytest.mark.parametrize("name", FORMATS)

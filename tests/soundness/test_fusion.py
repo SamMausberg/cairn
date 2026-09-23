@@ -9,7 +9,6 @@ with nothing it may join; where the rules forbid a join, the regions are emitted
 
 import os
 import shutil
-import subprocess
 
 import pytest
 
@@ -17,7 +16,7 @@ from cairn.agent.plans import PlanHost
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from cairn.perf.report import report
-from emitted import contract, emit, refused, watched
+from emitted import contract, device_build, refused, watched
 
 HEAD = "fn f(n:usize, m:usize, out:rw<f64>[n], x:ro<f64>[n], y:rw<f64>[n], z:rw<f64>[m]) {\n"
 PIPE = "  buffer t:f64[n] = zeroed;\n  parallel i in n { t[i] = 2.0 * x[i]; }\n  parallel j in n { out[j] = t[j] + 1.0; }\n"
@@ -289,10 +288,5 @@ def test_a_fused_device_chain_is_one_launch_without_its_scratch():
     assert receipt["functions"]["smooth"]["fused"] == [{"line": 4, "regions": 2, "scratch_in_lanes": ["t"]}]
 
 
-@pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")
 def test_a_fused_device_chain_compiles_for_the_device_without_touching_it(tmp_path):
-    source, _ = emit(tmp_path, compile_source(DEVICE)[0], entry=None)
-    command = ["nvcc", "-std=c++20", "-O3", "--fmad=false", "-arch=sm_120", "--extended-lambda",
-               "--expt-relaxed-constexpr", "-Werror", "all-warnings", "-x", "cu", "-c", source, "-o", str(tmp_path / "p.o")]  # fmt: skip
-    done = subprocess.run(command, capture_output=True, text=True, timeout=600)
-    assert done.returncode == 0, done.stderr[-3000:]
+    device_build(tmp_path, compile_source(DEVICE)[0])

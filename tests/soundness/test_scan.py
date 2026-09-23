@@ -11,7 +11,6 @@ import json
 import os
 import shutil
 import signal
-import subprocess
 
 import pytest
 
@@ -20,7 +19,7 @@ from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.syntax import Parser
 from cairn.verify.scalar_semantics import equivalent
-from emitted import contract, emit, native, on_device, refused, watched
+from emitted import contract, device_build, native, on_device, refused, watched
 
 VIEWS = "fn f(n:usize, out:rw<u64>[n], x:ro<u64>[n], s:ro<i32>[n], d:ro<f64>[n], w:rw<i32>[n], g:rw<f64>[n]) {\n  "
 
@@ -380,13 +379,8 @@ fn main() -> i32 {
 """
 
 
-@pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")
 def test_a_device_scan_compiles_for_the_device_without_touching_it(tmp_path):
-    source, _ = emit(tmp_path, compile_source(DEVICE)[0])
-    command = ["nvcc", "-std=c++20", "-O3", "--fmad=false", "-arch=sm_120", "--extended-lambda",
-               "--expt-relaxed-constexpr", "-Werror", "all-warnings", "-x", "cu", "-c", source, "-o", str(tmp_path / "p.o")]  # fmt: skip
-    done = subprocess.run(command, capture_output=True, text=True, timeout=600)
-    assert done.returncode == 0, done.stderr[-3000:]
+    device_build(tmp_path, compile_source(DEVICE)[0], entry="main")
 
 
 def test_a_device_scan_is_the_host_prefix(tmp_path):

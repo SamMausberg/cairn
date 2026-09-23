@@ -8,8 +8,6 @@ is compiled here for sm_120 and never run: the runs that compare a vectored regi
 """
 
 import re
-import shutil
-import subprocess
 
 import pytest
 
@@ -19,7 +17,7 @@ from cairn.perf import model
 from cairn.perf.profile import packaged
 from cairn.perf.tune import tune
 from cairn.perf.work import count
-from emitted import contract, emit, on_device, refused
+from emitted import contract, device_build, on_device, refused
 
 SAXPY = """fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
   parallel i in n { out[i] = a * x[i] + y[i]; }
@@ -88,16 +86,10 @@ def test_a_vector_plan_is_its_own_item_in_the_canonical_projection():
     assert compile_source(canonical)[0] == compile_source(source)[0] and canonical_source(canonical) == canonical
 
 
-@pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")
 def test_a_vectored_lane_moves_its_chunks_in_single_wide_accesses_on_the_device(tmp_path):
     """Compiled for sm_120 and never run: the PTX holds one 128-bit load per read chunk and one store per written
     chunk, where the scalar lanes make 32-bit ones."""
-    source, _ = emit(tmp_path, compile_source(SAXPY + "plan saxpy { vector 4; }")[0], entry=None)
-    command = ["nvcc", "-std=c++20", "-O3", "--fmad=false", "-arch=sm_120", "--extended-lambda",
-               "--expt-relaxed-constexpr", "-Werror", "all-warnings", "-x", "cu", "-ptx", source, "-o", str(tmp_path / "p.ptx")]  # fmt: skip
-    done = subprocess.run(command, capture_output=True, text=True, timeout=600)
-    assert done.returncode == 0, done.stderr[-3000:]
-    ptx = (tmp_path / "p.ptx").read_text()
+    ptx = device_build(tmp_path, compile_source(SAXPY + "plan saxpy { vector 4; }")[0], ptx=True).read_text()
     assert len(re.findall(r"ld\.global\.v4\.b32", ptx)) == 2 and len(re.findall(r"st\.global\.v4\.b32", ptx)) == 1
 
 
@@ -148,14 +140,9 @@ fn main() -> i32 {
 VECTORS = ["plan fill { vector 2; }", "plan fill { vector 2; block 64; per_lane 8; unroll 2; }"]
 
 
-@pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")
 @pytest.mark.parametrize("plan", VECTORS)
 def test_every_vector_plan_compiles_for_the_device_without_touching_it(tmp_path, plan):
-    source, _ = emit(tmp_path, compile_source(ON_DEVICE.replace("PLAN", plan))[0])
-    command = ["nvcc", "-std=c++20", "-O3", "--fmad=false", "-arch=sm_120", "--extended-lambda",
-               "--expt-relaxed-constexpr", "-Werror", "all-warnings", "-x", "cu", "-c", source, "-o", str(tmp_path / "p.o")]  # fmt: skip
-    done = subprocess.run(command, capture_output=True, text=True, timeout=600)
-    assert done.returncode == 0, done.stderr[-3000:]
+    device_build(tmp_path, compile_source(ON_DEVICE.replace("PLAN", plan))[0], entry="main")
 
 
 @pytest.mark.parametrize("plan", ["", *VECTORS])

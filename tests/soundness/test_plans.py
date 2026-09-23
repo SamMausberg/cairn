@@ -8,13 +8,12 @@ never its result or its effect row. The checker refuses a plan that names nothin
 
 import os
 import shutil
-import subprocess
 
 import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from emitted import contract, emit, on_device, refused, watched
+from emitted import contract, device_build, on_device, refused, watched
 
 SCALE = "fn scale(n:usize, out:rw<u64>[n], x:ro<u64>[n]) { parallel i in n { out[i] = x[i] * 3; } }\n"
 DEVICE = "fn dev(n:usize, out:rw<f32>[n]@device) { parallel i in n { out[i] = 1.0; } }\n"
@@ -99,14 +98,9 @@ DEVICE_PLANS = ["", "plan fill { block 32; }", "plan fill { block 1024; per_lane
                 "plan fill { per_lane 65536; }", "plan fill { unroll 3; }"]  # fmt: skip
 
 
-@pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")
 @pytest.mark.parametrize("plan", DEVICE_PLANS)
 def test_every_device_plan_compiles_for_the_device_without_touching_it(tmp_path, plan):
-    source, _ = emit(tmp_path, compile_source(ON_DEVICE.replace("PLAN", plan))[0])
-    command = ["nvcc", "-std=c++20", "-O3", "--fmad=false", "-arch=sm_120", "--extended-lambda",
-               "--expt-relaxed-constexpr", "-Werror", "all-warnings", "-x", "cu", "-c", source, "-o", str(tmp_path / "p.o")]  # fmt: skip
-    done = subprocess.run(command, capture_output=True, text=True, timeout=600)
-    assert done.returncode == 0, done.stderr[-3000:]
+    device_build(tmp_path, compile_source(ON_DEVICE.replace("PLAN", plan))[0], entry="main")
 
 
 @pytest.mark.parametrize("plan", DEVICE_PLANS)

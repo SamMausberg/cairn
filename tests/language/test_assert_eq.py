@@ -3,14 +3,10 @@ are checked as `a == b` is, only a scalar prints, and a failure prints the site 
 natively under both compilers, sanitizer-clean when it holds; a device lane's compiles for sm_120 and never runs.
 """
 
-import shutil
-import subprocess
-
 import pytest
 
-from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
-from cairn.projects.toolchain import command
-from emitted import WARNINGS, refused, run, sanitized
+from cairn.compiler.cairnc import compile_source
+from emitted import WARNINGS, device_build, refused, run, sanitized
 
 HOLDS = """
 fn main() -> i32 {
@@ -74,17 +70,10 @@ def test_a_program_s_own_assert_eq_wins():
 
 def test_an_assert_eq_in_a_device_lane_compiles_for_the_device(tmp_path):
     """Compiled for sm_120 by nvcc and never run: device code runs only under make gpu."""
-    if not shutil.which("nvcc") or not shutil.which("g++"):
-        pytest.skip("needs nvcc and g++")
     cpp = compile_source('fn mark(n:usize, xs:rw<u32>[n]@device) { parallel i in n { assert_eq(xs[i], 0, "zeroed"); '
                          "xs[i] = 1; } }")[0]  # fmt: skip
     assert "cr::check_eq(" in cpp
-    for name, text in {"p.cu": cpp, **RUNTIME_FILES}.items():
-        (tmp_path / name).write_text(text)
-    line = command("g++", str(tmp_path / "p.cu"), str(tmp_path / "p.o"), kind="library", cuda=True)
-    line = [("-arch=sm_120" if part == "-arch=native" else part) for part in line if part != "-shared"] + ["-c"]
-    done = subprocess.run(line, capture_output=True, text=True, timeout=300)
-    assert done.returncode == 0, done.stderr[-4000:]
+    device_build(tmp_path, cpp)
 
 
 def test_the_value_model_answers_unknown_for_assert_eq():

@@ -9,16 +9,13 @@ from the subnormals to the overflow cover the rest, under both compilers.
 import ctypes as C
 import math
 import random
-import shutil
-import subprocess
 
 import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from cairn.projects.toolchain import command
 from cairn.verify.scalar_semantics import equivalent
-from emitted import WARNINGS, emit, library, native, refused, run, sanitized
+from emitted import WARNINGS, device_build, library, native, refused, run, sanitized
 from oracles.float_formats import (
     FORMATS,
     TRAP,
@@ -382,15 +379,9 @@ fn main() -> i32 {
 
 
 def test_a_device_lane_compiles_the_same_conversions(tmp_path):
-    if not shutil.which("nvcc"):
-        pytest.skip("nvcc unavailable")
     cpp = compile_source(
         "fn pack(n:usize, xs:ro<f32>[n]@device, out:rw<f8e4m3>[n]@device, h:rw<f16>[n]@device) {\n"
         "  parallel i in n { out[i] = quantize[f8e4m3](xs[i], 0.5); h[i] = f16(f32(out[i]) * 2.0); }\n"
         "}\n"
     )[0]
-    source, artifact = emit(tmp_path, cpp, entry=None)
-    line = [f for f in command("g++", source, artifact + ".o", cuda=True) if f not in {"-arch=native", "-shared"}]
-    line[line.index("-o") : line.index("-o")] = ["-arch=sm_120", "-c"]  # a named architecture: nothing asks the device
-    done = subprocess.run(line, capture_output=True, text=True, timeout=600)
-    assert done.returncode == 0, done.stderr[-3000:]  # compiled only; device code runs under `make gpu` alone
+    device_build(tmp_path, cpp)  # compiled only; device code runs under `make gpu` alone

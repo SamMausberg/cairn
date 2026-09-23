@@ -16,8 +16,7 @@ import pytest
 
 from cairn.agent.projection import canonical_source, expanded_source
 from cairn.compiler.cairnc import compile_source
-from cairn.projects.toolchain import command
-from emitted import WARNINGS, emit, library, refused, run, sanitized, watched
+from emitted import WARNINGS, device_build, library, refused, run, sanitized, watched
 
 MODEL = """
 fn square(x:f64) -> f64 = x * x;
@@ -336,13 +335,7 @@ derive grad[x] for glow;
 
 
 def test_a_device_region_s_gradient_compiles_for_the_device(tmp_path):
-    if not shutil.which("nvcc"):
-        pytest.skip("nvcc unavailable")
-    source, artifact = emit(tmp_path, compile_source(DEVICE)[0], entry=None)
-    line = [f for f in command("g++", source, artifact + ".o", cuda=True) if f not in {"-arch=native", "-shared"}]
-    line[line.index("-o") : line.index("-o")] = ["-arch=sm_120", "-c"]  # a named architecture: nothing asks the device
-    done = subprocess.run(line, capture_output=True, text=True, timeout=600)
-    assert done.returncode == 0, done.stderr[-3000:]  # compiled only; device code runs under `make gpu` alone
+    device_build(tmp_path, compile_source(DEVICE)[0])  # compiled only; device code runs under `make gpu` alone
 
 
 def test_a_device_region_does_not_gather_a_shared_scalar_on_the_host():

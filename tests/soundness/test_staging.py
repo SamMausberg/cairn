@@ -14,7 +14,7 @@ import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from emitted import contract, emit, on_device, refused
+from emitted import contract, device_build, on_device, refused
 
 ROOT = Path(__file__).resolve().parents[2]
 BLUR = """fn blur(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
@@ -29,8 +29,6 @@ FAR = "fn far(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) { parallel i 
 ONLY = "fn only(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) { parallel i in n { out[i] = x[i]; } }\n"
 GUARDED = "fn guarded(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) { parallel i in n { out[i] = x[i + 1]; } }\n"
 HOST = "fn host(n:usize, out:rw<u64>[n], x:ro<u64>[n]) { parallel i in n { if i + 1 < n { out[i] = x[i + 1]; } } }\n"
-NVCC = ["nvcc", "-std=c++20", "-O3", "--fmad=false", "-arch=sm_120", "--extended-lambda", "--expt-relaxed-constexpr",
-        "-Werror", "all-warnings", "-x", "cu"]  # fmt: skip
 
 
 @pytest.mark.parametrize(
@@ -104,14 +102,9 @@ def test_every_tile_a_staged_region_loads_holds_what_its_lanes_read(tmp_path, cx
     assert done.returncode == 0 and "every tile agrees" in done.stdout, done.stdout + done.stderr[-3000:]
 
 
-@pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")
 def test_a_staged_region_reads_shared_memory_on_the_device(tmp_path):
     """Compiled for sm_120 and never run: the tile is stored to and read from shared memory between barriers."""
-    source, _ = emit(tmp_path, compile_source(BLUR + "plan blur { stage 2; block 128; }")[0], entry=None)
-    done = subprocess.run([*NVCC, "-ptx", source, "-o", str(tmp_path / "p.ptx")], capture_output=True, text=True,
-                          timeout=600)  # fmt: skip
-    assert done.returncode == 0, done.stderr[-3000:]
-    ptx = (tmp_path / "p.ptx").read_text()
+    ptx = device_build(tmp_path, compile_source(BLUR + "plan blur { stage 2; block 128; }")[0], ptx=True).read_text()
     assert ptx.count("ld.global.b32") == 1 and ptx.count("ld.shared.b32") == 6  # one tile load, six reads
     assert ptx.count("st.shared.b32") == 1 and ptx.count("bar.sync") == 2
 
@@ -146,13 +139,9 @@ STAGES = ["plan blur { stage 2; }", "plan blur { stage 2; block 32; per_lane 16;
           "plan blur { stage 32; block 1024; }"]  # fmt: skip
 
 
-@pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")
 @pytest.mark.parametrize("plan", STAGES)
 def test_every_stage_plan_compiles_for_the_device_without_touching_it(tmp_path, plan):
-    source, _ = emit(tmp_path, compile_source(ON_DEVICE.replace("PLAN", plan))[0])
-    done = subprocess.run([*NVCC, "-c", source, "-o", str(tmp_path / "p.o")], capture_output=True, text=True,
-                          timeout=600)  # fmt: skip
-    assert done.returncode == 0, done.stderr[-3000:]
+    device_build(tmp_path, compile_source(ON_DEVICE.replace("PLAN", plan))[0], entry="main")
 
 
 @pytest.mark.parametrize("plan", ["", *STAGES])

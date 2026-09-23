@@ -15,7 +15,7 @@ from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project
-from emitted import SANITIZED, emit, on_device, run
+from emitted import SANITIZED, device_build, on_device, run
 
 APP = Path(__file__).resolve().parents[2] / "examples/apps/matmul"
 
@@ -49,13 +49,8 @@ def test_the_receipt_says_what_each_configuration_costs():
     assert {"transfer:h2d", "transfer:d2h", "gpu_alloc", "gpu_free"} <= set(device["main"]["effects"])
 
 
-@pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")
 def test_the_device_configuration_compiles_for_sm_120_without_touching_it(tmp_path):
-    source, _ = emit(tmp_path, compile_source(load_project(APP / "gpu.toml").source)[0])
-    command = ["nvcc", "-std=c++20", "-O3", "--fmad=false", "-arch=sm_120", "--extended-lambda",
-               "--expt-relaxed-constexpr", "-Werror", "all-warnings", "-x", "cu", "-c", source, "-o", str(tmp_path / "p.o")]  # fmt: skip
-    done = subprocess.run(command, capture_output=True, text=True, timeout=900)
-    assert done.returncode == 0, done.stderr[-3000:]
+    device_build(tmp_path, compile_source(load_project(APP / "gpu.toml").source)[0], entry="main", timeout=900)
 
 
 def test_the_tensor_cores_keep_the_contract_on_the_device(tmp_path):
