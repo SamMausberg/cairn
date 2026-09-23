@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import platform
 import shutil
+import subprocess
 from pathlib import Path
 
 FAMILIES = {"x86-64": ("x86-64", "x86-64-v2", "x86-64-v3", "x86-64-v4"), "armv8-a": ("armv8-a", "armv8.2-a", "armv9-a")}
@@ -160,3 +161,9 @@ def find(compiler: str) -> str:
     if not path:
         raise ProjectError(f"Native compiler unavailable: {compiler}. Nothing was downloaded.")
     return path
+
+
+def version(compiler: str) -> str:
+    """What `compiler --version` prints. A cold compiler on a loaded two-core runner took more than the five
+    seconds this once allowed, so it has two minutes."""
+    return subprocess.run([compiler, "--version"], check=True, capture_output=True, text=True, timeout=120).stdout

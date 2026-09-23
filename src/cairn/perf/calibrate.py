@@ -16,7 +16,6 @@ import datetime
 import json
 import os
 import platform
-import subprocess
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -24,6 +23,7 @@ from typing import Any
 
 from ..compiler.cairnc import compile_program
 from ..projects.toolchain import find, resolve_arch
+from ..projects.toolchain import version as compiler_version
 from . import measure
 from .work import count
 
@@ -255,7 +255,7 @@ def calibrate(cxx: str = "clang++", arch: str | None = None) -> dict[str, Any]:
         "measured": {
             "date": datetime.date.today().isoformat(),
             "platform": platform.platform(),
-            "compiler": subprocess.run([find(cxx), "--version"], capture_output=True, text=True).stdout.split("\n")[0],
+            "compiler": compiler_version(find(cxx)).split("\n")[0],
             "arch": arch,
             "statistic": "minimum of nine timed blocks after one warm-up, each block at least 2 ms",
             "operation_fit": fit,

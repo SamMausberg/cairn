@@ -29,6 +29,7 @@ if str(ROOT / "src") not in sys.path:
 
 from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
 from cairn.projects.toolchain import FAMILIES, command, find, flags, host_family
+from cairn.projects.toolchain import version as compiler_version
 
 FAMILY = host_family()
 ARCHS = ("baseline", *FAMILIES[FAMILY])
@@ -74,7 +75,7 @@ def profile_flags(kind: str = "library", arch: str | None = None, drop: tuple[st
 
 
 def version(cxx: str) -> str:
-    return subprocess.run([find(cxx), "--version"], text=True, capture_output=True, check=True).stdout
+    return compiler_version(find(cxx))
 
 
 def environment(*compilers: str, arch: str | None = None) -> dict:

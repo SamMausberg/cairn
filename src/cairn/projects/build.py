@@ -18,6 +18,7 @@ from ..compiler.header import header as c_header
 from .project import Project, ProjectError
 from .toolchain import audit_effects, find, flags, link_flags, linked, profile, unit_commands
 from .toolchain import command as native_command
+from .toolchain import version as compiler_version
 
 
 def intact(target: Path, digest: Path) -> bool:
@@ -51,7 +52,7 @@ def objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, st
     files["0start.cpp"] = '#include "program.hpp"\n' + stub  # No module's unit can be named with a leading digit.
     compile_prefix, link = unit_commands(cxx, arch or project.arch, kind)
     compile_prefix += ["-g"] if debug else []
-    version = subprocess.run([compiler, "--version"], capture_output=True, text=True, timeout=5).stdout
+    version = compiler_version(compiler)
     cache = out.resolve() / "objects"
     if cache.is_symlink() or (cache.exists() and not cache.is_dir()):
         raise ProjectError("The object cache build/objects must be a directory and not a symbolic link.")
@@ -181,9 +182,7 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         "directory": str(directory),
     }
     try:
-        record["compiler_version"] = subprocess.run(
-            [compiler, "--version"], check=True, capture_output=True, text=True, timeout=5
-        ).stdout[:10000]
+        record["compiler_version"] = compiler_version(compiler)[:10000]
         if incremental and not bare and "cuda" not in receipt["requires"]:  # Device code and images stay one unit.
             stub = generated[generated.rindex("\n// entry\n") :] if "\n// entry\n" in generated else ""
             command, units = objects(

@@ -24,6 +24,7 @@ from ..compiler.codegen import Emitter, demangled, mangle
 from ..compiler.modules import library_path
 from ..compiler.tree import Expr, Function, Stmt
 from ..projects.toolchain import REMARKS, find, flags
+from ..projects.toolchain import version as compiler_version
 
 GUARDS = {  # The checker's name for each guard kind, and the runtime calls that are that guard in emitted C++.
     "bounds": ("cr::at(", "cr::part("),
@@ -249,7 +250,7 @@ def vectorize(cpp: str, names, cxx: str, arch, timeout: int, functions: dict, sh
             r["file"] = str(PACKAGE / "runtime" / Path(r["file"]).name)
     for name, entry in functions.items():
         entry["loops"] = verdicts([r for r in entries if r["function"] == name], show)
-    version = subprocess.run([find(cxx), "--version"], capture_output=True, text=True, timeout=10).stdout
+    version = compiler_version(find(cxx))
     return {
         "status": "observed",
         "compiler": version.split("\n", 1)[0],
