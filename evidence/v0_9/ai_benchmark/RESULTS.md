@@ -58,4 +58,4 @@ The tasks were too easy to separate the languages by solve rate: the model solve
 
 ## What the README may say
 
-At equal budgets on ten small systems tasks, `claude-sonnet-5` solved every task in all three languages (20 of 20 each in CAIRN, C++ and Rust), so this run cannot tell the languages apart by tasks solved. CAIRN subjects, who had never seen the language and read its documentation inside the budget, used 11.6 times the tokens of the C++ subjects and 12.3 times those of the Rust subjects (`evidence/v1_5/ai_benchmark/`).
+At equal budgets on ten small systems tasks, `claude-sonnet-5` solved every task in all three languages (20 of 20 each in CAIRN, C++ and Rust), so this run cannot tell the languages apart by tasks solved. CAIRN subjects, who had never seen the language and read its documentation inside the budget, used 11.6 times the tokens of the C++ subjects and 12.3 times those of the Rust subjects (`evidence/v0_9/ai_benchmark/`).

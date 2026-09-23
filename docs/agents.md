@@ -174,7 +174,7 @@ The receipt records the reference and candidate hashes, the domain, the query ha
 
 `tools/corpus/` holds hand-written teaching material in the protocol's format: 40 tasks in 14 algorithm families, each with an equivalent and an inequivalent implementation, 28 preference pairs, and 29 executed repair transcripts. Its answers ship, so none of it is a held-out test. Solver timeouts, failed translations and tool errors never become positive labels, and edits that weaken a signature or empty a domain are not rewarded.
 
-Two experiments are designed. [tools/ai/protocol_trial.md](../tools/ai/protocol_trial.md) compares the focused and component packets on twelve planted repairs, and has not run. [bench/ai/PREREGISTRATION.md](../bench/ai/PREREGISTRATION.md) gives ten tasks to fresh model subjects in CAIRN, C++ and Rust at equal budgets, with results under `evidence/v1_5/ai_benchmark/`. Only the second compares languages, and neither tests other model families or large programs.
+Two experiments are designed. [tools/ai/protocol_trial.md](../tools/ai/protocol_trial.md) compares the focused and component packets on twelve planted repairs, and has not run. [bench/ai/PREREGISTRATION.md](../bench/ai/PREREGISTRATION.md) gives ten tasks to fresh model subjects in CAIRN, C++ and Rust at equal budgets, with results under `evidence/v0_9/ai_benchmark/`. Only the second compares languages, and neither tests other model families or large programs.
 
 ## Closed generator contracts
 

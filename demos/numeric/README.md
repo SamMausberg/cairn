@@ -45,7 +45,7 @@ Every program printed the same fingerprint: yes.
 
 The largest error is 0.0000148, about 300 times inside the contract. `run.py` then builds `baseline/plate.cpp`, the same loop as a C++ programmer writes it, with the same compiler and the flags CAIRN builds with. With `-DGUARDS` it makes the same checks per cell that the CAIRN build keeps (`cairn explain demos/numeric --symbol sweep` lists them), and with `-fopenmp` it is an OpenMP parallel for over as many threads as the lane pool. It runs every program in interleaved rounds and prints the median sweep time of each. Every C++ build prints the fingerprint above, so all of them computed the same bits.
 
-The timings in [evidence/v1_5/demos](../../evidence/v1_5/demos/README.md) were taken while five other agents loaded the machine, and they are not a performance comparison: under that load OpenMP's static schedule waits on its slowest thread. Run `make demo-numeric` on a quiet machine before you quote a ratio.
+The timings in [evidence/v0_9/demos](../../evidence/v0_9/demos/README.md) were taken while five other agents loaded the machine, and they are not a performance comparison: under that load OpenMP's static schedule waits on its slowest thread. Run `make demo-numeric` on a quiet machine before you quote a ratio.
 
 ## The device
 
