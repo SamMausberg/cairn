@@ -1,0 +1,53 @@
+{
+ "written": {
+  "100000": {
+   "ns": 20380,
+   "bound": "compute",
+   "confidence": "high"
+  },
+  "1000000": {
+   "ns": 203800,
+   "bound": "compute",
+   "confidence": "high"
+  },
+  "10000000": {
+   "ns": 4143000,
+   "bound": "memory (dram)",
+   "confidence": "high"
+  }
+ },
+ "plain": {
+  "100000": {
+   "ns": 20380,
+   "bound": "compute",
+   "confidence": "high"
+  },
+  "1000000": {
+   "ns": 203800,
+   "bound": "compute",
+   "confidence": "high"
+  },
+  "10000000": {
+   "ns": 4143000,
+   "bound": "memory (dram)",
+   "confidence": "high"
+  }
+ },
+ "pooled": {
+  "100000": {
+   "ns": 14330,
+   "bound": "pool start",
+   "confidence": "medium"
+  },
+  "1000000": {
+   "ns": 56460,
+   "bound": "memory (l2)",
+   "confidence": "medium"
+  },
+  "10000000": {
+   "ns": 4493000,
+   "bound": "memory (dram)",
+   "confidence": "medium"
+  }
+ }
+}

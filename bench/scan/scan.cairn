@@ -1,0 +1,98 @@
+// The host scan against the loop it replaces, and the radix sort against the heapsort, timed inside one process.
+// Every repetition runs each kernel once, in an order that rotates, so a change in the machine's load reaches
+// every kernel alike. Each line is `kernel n ns`; the last is a checksum that keeps the work observable.
+import std.io;
+import std.sort;
+import std.time;
+
+const REPS:usize = 15; // run.py sets it from --reps
+
+fn written(n:usize, out:rw<u64>[n], x:ro<u64>[n]) -> u64 {
+  let mut t:u64 = 0;
+  for i in 0..n {
+    t = add_wrap(t, x[i]);
+    out[i] = t;
+  }
+  return t;
+}
+
+fn plain(n:usize, out:rw<u64>[n], x:ro<u64>[n]) -> u64 {
+  let t = scan add_wrap out for i in n yield x[i];
+  return t;
+}
+
+fn pooled(n:usize, out:rw<u64>[n], x:ro<u64>[n]) -> u64 {
+  let t = scan add_wrap out parallel i in n yield x[i];
+  return t;
+}
+
+fn line(k:usize, n:usize, ns:u64) {
+  if k == 0 { io.print("written "); }
+  if k == 1 { io.print("scan "); }
+  if k == 2 { io.print("scan_parallel "); }
+  if k == 3 { io.print("radix_sort "); }
+  if k == 4 { io.print("heapsort "); }
+  io.print_u64(u64(n));
+  io.print(" ");
+  io.print_u64(ns);
+  io.newline();
+}
+
+fn fill(n:usize, keys:rw<u64>[n]) {
+  let mut state:u64 = 0x2545f4914f6cdd1d;
+  for i in 0..n {
+    state ^= shl_wrap(state, 13);
+    state ^= shr(state, 7);
+    state ^= shl_wrap(state, 17);
+    keys[i] = state;
+  }
+}
+
+fn main() -> i32 {
+  let mut check:u64 = 0;
+  stack sizes:usize[3] = zeroed;
+  sizes[0] = 100000;
+  sizes[1] = 1000000;
+  sizes[2] = 10000000;
+  for at in 0..3 {
+    let n = sizes[at];
+    buffer x:u64[n] = zeroed;
+    buffer out:u64[n] = zeroed;
+    fill(n, x);
+    for rep in 0..REPS {
+      for step in 0..3 {
+        let k = (rep + step) % 3;
+        let start = time.now();
+        let mut t:u64 = 0;
+        if k == 0 { t = written(n, out, x); }
+        if k == 1 { t = plain(n, out, x); }
+        if k == 2 { t = pooled(n, out, x); }
+        let ns = time.since(start);
+        check = add_wrap(check, t ^ out[n - 1]);
+        line(k, n, ns);
+      }
+    }
+  }
+  for at in 0..2 {
+    let n = sizes[at];
+    buffer keys:u64[n] = zeroed;
+    buffer spare:u64[n] = zeroed;
+    for rep in 0..REPS {
+      for step in 0..2 {
+        let k = 3 + (rep + step) % 2;
+        fill(n, keys);
+        let start = time.now();
+        if k == 3 { sort.radix_sort(keys, spare); }
+        if k == 4 { sort.sort(keys); }
+        let ns = time.since(start);
+        for i in 1..n { if keys[i - 1] > keys[i] { return 1; } }
+        check = add_wrap(check, keys[n / 2]);
+        line(k, n, ns);
+      }
+    }
+  }
+  io.print("checksum 0 ");
+  io.print_u64(check);
+  io.newline();
+  return 0;
+}

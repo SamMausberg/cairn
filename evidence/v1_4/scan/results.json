@@ -1,0 +1,166 @@
+{
+  "schema": "cairn.bench.scan/1",
+  "machine": {
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "cpus": 16,
+    "lanes": "hardware"
+  },
+  "note": "shared: five other agents were building and testing on the machine",
+  "reps": 15,
+  "compilers": {
+    "clang++": {
+      "written": {
+        "100000": {
+          "median_ns": 43316,
+          "min_ns": 24434,
+          "runs": 15
+        },
+        "1000000": {
+          "median_ns": 355102,
+          "min_ns": 261417,
+          "runs": 15
+        },
+        "10000000": {
+          "median_ns": 8277242,
+          "min_ns": 6292421,
+          "runs": 15
+        }
+      },
+      "scan": {
+        "100000": {
+          "median_ns": 39102,
+          "min_ns": 23009,
+          "runs": 15
+        },
+        "1000000": {
+          "median_ns": 336091,
+          "min_ns": 252268,
+          "runs": 15
+        },
+        "10000000": {
+          "median_ns": 8475517,
+          "min_ns": 6029922,
+          "runs": 15
+        }
+      },
+      "scan_parallel": {
+        "100000": {
+          "median_ns": 33075,
+          "min_ns": 15803,
+          "runs": 15
+        },
+        "1000000": {
+          "median_ns": 249632,
+          "min_ns": 185738,
+          "runs": 15
+        },
+        "10000000": {
+          "median_ns": 5498994,
+          "min_ns": 4558159,
+          "runs": 15
+        }
+      },
+      "radix_sort": {
+        "100000": {
+          "median_ns": 1071462,
+          "min_ns": 967634,
+          "runs": 15
+        },
+        "1000000": {
+          "median_ns": 11371237,
+          "min_ns": 10486270,
+          "runs": 15
+        }
+      },
+      "heapsort": {
+        "100000": {
+          "median_ns": 6034600,
+          "min_ns": 5913727,
+          "runs": 15
+        },
+        "1000000": {
+          "median_ns": 91355682,
+          "min_ns": 83641901,
+          "runs": 15
+        }
+      }
+    },
+    "g++": {
+      "written": {
+        "100000": {
+          "median_ns": 53999,
+          "min_ns": 30202,
+          "runs": 15
+        },
+        "1000000": {
+          "median_ns": 403430,
+          "min_ns": 307303,
+          "runs": 15
+        },
+        "10000000": {
+          "median_ns": 6879541,
+          "min_ns": 5652235,
+          "runs": 15
+        }
+      },
+      "scan": {
+        "100000": {
+          "median_ns": 54409,
+          "min_ns": 30137,
+          "runs": 15
+        },
+        "1000000": {
+          "median_ns": 387550,
+          "min_ns": 304030,
+          "runs": 15
+        },
+        "10000000": {
+          "median_ns": 6147966,
+          "min_ns": 5516671,
+          "runs": 15
+        }
+      },
+      "scan_parallel": {
+        "100000": {
+          "median_ns": 35582,
+          "min_ns": 18579,
+          "runs": 15
+        },
+        "1000000": {
+          "median_ns": 234434,
+          "min_ns": 212074,
+          "runs": 15
+        },
+        "10000000": {
+          "median_ns": 4524539,
+          "min_ns": 4014990,
+          "runs": 15
+        }
+      },
+      "radix_sort": {
+        "100000": {
+          "median_ns": 1182311,
+          "min_ns": 1063728,
+          "runs": 15
+        },
+        "1000000": {
+          "median_ns": 14542621,
+          "min_ns": 11280609,
+          "runs": 15
+        }
+      },
+      "heapsort": {
+        "100000": {
+          "median_ns": 10550828,
+          "min_ns": 9760198,
+          "runs": 15
+        },
+        "1000000": {
+          "median_ns": 152062098,
+          "min_ns": 138489940,
+          "runs": 15
+        }
+      }
+    }
+  }
+}

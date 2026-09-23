@@ -7,6 +7,7 @@ block total and offset is at most that total. Floats scan only in the written or
 index and may read out only at its own element, which makes an in-place scan well defined.
 """
 
+import json
 import os
 import shutil
 import signal
@@ -15,6 +16,7 @@ import subprocess
 import pytest
 
 from cairn.agent.projection import canonical_source
+from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.syntax import Parser
 from cairn.verify.scalar_semantics import equivalent
@@ -314,6 +316,29 @@ def test_the_radix_sort_moves_no_allocation_into_its_row():
     )
     row = set(receipt["functions"]["f"]["effects"])
     assert "alloc" not in row and "diverge" not in row and "stack_storage" in row  # the digit counts
+
+
+PRICED = """
+fn written(n:usize, out:rw<u64>[n], x:ro<u64>[n]) -> u64 {
+  let mut t:u64 = 0;
+  for i in 0..n {
+    t = add_wrap(t, x[i]);
+    out[i] = t;
+  }
+  return t;
+}
+fn plain(n:usize, out:rw<u64>[n], x:ro<u64>[n]) -> u64 { let t = scan add_wrap out for i in n yield x[i]; return t; }
+fn pooled(n:usize, out:rw<u64>[n], x:ro<u64>[n]) -> u64 { let t = scan add_wrap out parallel i in n yield x[i]; return t; }
+"""
+
+
+def test_a_scan_is_priced_as_the_loop_it_writes_and_a_pooled_one_as_a_region(tmp_path, capsys):
+    source = tmp_path / "priced.cairn"
+    source.write_text(PRICED)
+    assert main(["predict", str(source), "--format", "json", "--at", "n=1000000"]) == 0
+    rows = {name: row["predictions"][0] for name, row in json.loads(capsys.readouterr().out)["functions"].items()}
+    assert rows["plain"]["ns"] == rows["written"]["ns"] and rows["plain"]["confidence"] == "high"
+    assert rows["pooled"]["ns"] < rows["plain"]["ns"] and rows["pooled"]["confidence"] == "medium"
 
 
 def test_a_scan_is_outside_the_value_model_and_verify_says_unknown():

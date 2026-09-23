@@ -479,7 +479,8 @@ class Counter:
     def s_scan(self, s: Stmt, at: Frame) -> None:
         out, hi, value, store = s.exprs
         count = self.size(hi) or Poly.var(f"?count@{s.line}")
-        combine = f"{s.ty.name}_fold" if s.ty.name in FLOAT else "int_fold"  # each step waits on the one before
+        # As a reduction and a written loop are priced: a checked or float step waits on the last, the rest overlap.
+        combine = f"{s.ty.name}_fold" if s.ty.name in FLOAT else "int_fold" if s.op == "+" else "int"
         if s.ref == "device" or s.pooled:
             body = Work()
             lane = Frame(body, ONE, (s.binder,), True)

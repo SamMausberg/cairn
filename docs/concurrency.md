@@ -512,6 +512,8 @@ fn running(n:usize, out:rw<f64>[n], x:ro<f64>[n]) { scan + out parallel i in n y
 
 `std.sort.radix_sort` is the library's use of the form: eight bits a pass, each pass counts its digit, turns the counts into each digit's first place with `scan + exclusive`, and moves the keys there in order, so the sort is stable and allocates nothing.
 
+On one shared sixteen-lane machine, the pooled scan ran 1.3 to 1.7 times faster than the loop it replaces from a hundred thousand to ten million `u64` elements, and the sequential one ran level with that loop; a prefix sum streams its array in both passes, so the gain stays modest. The radix sort sorted a million `u64` keys 8 to 10 times faster than the heapsort. `evidence/v1_4/scan/` has the timings, the run notes and what `cairn predict` said beforehand.
+
 ## Placement and device memory
 
 A view's placement is part of its type: `@host` (the default), `@pinned`, `@unified`, `@device`. A region whose body indexes a `@device` view runs as CUDA lanes, otherwise on host threads; the emitted lane body is the same lambda either way.
