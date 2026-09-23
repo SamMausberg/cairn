@@ -217,7 +217,7 @@ python tools/checks/differential_ownership.py --count 2000 --seed 7
 CAIRN_DIFFERENTIAL_N=5000 python -m pytest -q tests/verification/test_differential_ownership.py
 ```
 
-`make test` runs 40 programs and `make lean` 200, and the test plants one wrong verdict that the harness must report. Twenty thousand programs agreed on the run recorded in `evidence/v1_4/lean/differential.json`. Without `lake` the harness exits 3 rather than passing.
+`make test` runs 40 programs and `make lean` 200, and the test plants one wrong verdict that the harness must report. Twenty thousand programs agreed on the run recorded in `evidence/v1_0/gates_2026_09_22/lean/differential.json`. Without `lake` the harness exits 3 rather than passing.
 
 ### What this does not cover
 
@@ -242,11 +242,11 @@ CAIRN_DIFFERENTIAL_N=5000 python -m pytest -q tests/verification/test_differenti
 
 Lowering leaves a guard out where `compiler/facts.py` shows it cannot fail, and `proofs/Cairn/Facts.lean` proves the rule. A fact is `x - y <= k` between two atoms (zero, an immutable `usize`, or a multiple of a stride), and a Bellman-Ford search finds the tightest `k` the facts give. Five decisions read the result: an index below its extent, a `+` that stays at most the largest `usize`, a `-` that stays at least zero, a value at most a constant (a shift count or a narrowing), and a part inside its view. `distance_sound`, `bounds_sound`, `index_sound`, `add_sound`, `sub_sound`, `atMostConst_sound` and `part_sound` prove them under every valuation that makes the facts true.
 
-The Lean functions are transliterations of the Python ones, and `tools/checks/differential_facts.py` asks both the same generated questions. Twenty thousand inputs agreed on the run in `evidence/v1_4/lean/facts_differential.json`, and a planted off-by-one is caught within a few hundred.
+The Lean functions are transliterations of the Python ones, and `tools/checks/differential_facts.py` asks both the same generated questions. Twenty thousand inputs agreed on the run in `evidence/v1_0/gates_2026_09_22/lean/facts_differential.json`, and a planted off-by-one is caught within a few hundred.
 
 That the facts in scope are true where they are used is checked at every site but not proved. `src/cairn/verify/elision.py` walks each function independently, without importing `facts.py`. It requires every fact a discharged guard cites to come from an origin in force at that site (a loop binder, an immutable `let`, a condition, an early exit, the left side of `&&`) and to name only values that cannot have changed. It then decides the guard again from those facts alone. The emitter keeps any guard whose proof the audit refuses, counted under `refused_discharges`.
 
-Across the library, the examples and the docs the audit refuses nothing. `tests/soundness/test_elision.py` requires every single-point tampering of a proof to be refused, and an off-by-one planted in `facts.py` to reach no emitted program. `tools/checks/differential_guards.py` builds generated programs with and without every guard, under both compilers and the sanitizers, and requires the same value or the same trap: 1,821 functions and 174,816 cases per compiler agreed (`evidence/v1_4/guards/`). The audit's own rules are hand-written and not in Lean, and the model has no `usize(x)` of a narrower integer.
+Across the library, the examples and the docs the audit refuses nothing. `tests/soundness/test_elision.py` requires every single-point tampering of a proof to be refused, and an off-by-one planted in `facts.py` to reach no emitted program. `tools/checks/differential_guards.py` builds generated programs with and without every guard, under both compilers and the sanitizers, and requires the same value or the same trap: 1,821 functions and 174,816 cases per compiler agreed (`evidence/v1_0/guards/`). The audit's own rules are hand-written and not in Lean, and the model has no `usize(x)` of a narrower integer.
 
 ## The layout rule
 

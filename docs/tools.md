@@ -200,7 +200,7 @@ f
   n=1e+07          997 us -> 300 us     x0.301  memory (l3), medium
 ```
 
-Confidence is `high` when every count is a size and every access a stream, `medium` when something is approximated (a wide host region, a loop bounded by `min()`, an atomic), and `low` when a number is a guess (a `while` loop, an address from data, a foreign call, recursion). On timings it was not fitted to, the packaged profile came within a quarter at one lane and at a hundred million elements, and predicted wide regions of a hundred thousand to ten million elements badly, hence `medium` ([evidence/v1_4/perf_model](../evidence/v1_4/perf_model/README.md)). `python -m cairn.perf.calibrate --out PROFILE.json` measures another host, and `--profile` or `CAIRN_PROFILE` selects it.
+Confidence is `high` when every count is a size and every access a stream, `medium` when something is approximated (a wide host region, a loop bounded by `min()`, an atomic), and `low` when a number is a guess (a `while` loop, an address from data, a foreign call, recursion). On timings it was not fitted to, the packaged profile came within a quarter at one lane and at a hundred million elements, and predicted wide regions of a hundred thousand to ten million elements badly, hence `medium` ([evidence/v1_0/perf_model](../evidence/v1_0/perf_model/README.md)). `python -m cairn.perf.calibrate --out PROFILE.json` measures another host, and `--profile` or `CAIRN_PROFILE` selects it.
 
 A [cooperative region](concurrency.md#cooperative-regions) is priced by its blocks. Each thread's work is counted between its barriers as its warp runs it: which lanes take part in an access or a branch, and which banks or 32-byte sectors they reach, come from the phase rule's run of one block. The region costs a launch and the largest of four times over the grid: device memory, issue, shared-memory wavefronts and tensor-core multiply-adds. An SM holds as many blocks as its threads, registers and shared memory allow, beside the 1 KB each block leaves the system. Registers count only after `--inspect` has compiled the kernels for the device target and ptxas has read them; nothing runs.
 
@@ -295,7 +295,7 @@ semver: major: scale behaves differently at x = 63
 
 Beside the class, each function lists how its signature, effect row, guards, allocations, tasks and `unsafe` blocks changed. The semantic version is `major` for a removed, renamed or re-signed public function, a public function that gained an effect or has a witness, or a changed public type; `minor` for an added one; `patch` otherwise. An `unknown` public function makes the level `unknown`, with what is proven under `at_least`, unless it is already `major`.
 
-`--require equivalent` exits 1 unless every function is identical or `smt-equivalent`, and `--require identical` refuses `smt-equivalent` too. `--markdown FILE` writes a section for a pull request. The solver has `--timeout-ms` per query and `--budget-s` for the whole diff (60 s by default), and each function runs in a process stopped at its limit, because Z3 cannot be interrupted while it reads a large query. Both versions are lowered by this compiler, so the diff compares two sources, never two compilers. `evidence/v1_4/diff/` records a diff of the library and every example project across two revisions.
+`--require equivalent` exits 1 unless every function is identical or `smt-equivalent`, and `--require identical` refuses `smt-equivalent` too. `--markdown FILE` writes a section for a pull request. The solver has `--timeout-ms` per query and `--budget-s` for the whole diff (60 s by default), and each function runs in a process stopped at its limit, because Z3 cannot be interrupted while it reads a large query. Both versions are lowered by this compiler, so the diff compares two sources, never two compilers. `evidence/v1_0/diff/` records a diff of the library and every example project across two revisions.
 
 ## cairn export
 
@@ -406,7 +406,7 @@ cairn run examples/apps/analytics/gpu.toml   # the same sources plus the device 
 
 A program may hold 16 MB of source, 32,768 functions and 3,200,000 syntax nodes, and a manifest may list 1,024 files and 64 dependencies. Past a limit the compiler refuses the program with `E-EXPANSION-LIMIT` or `E-SOURCE-LIMIT` and names what it counted. What code generates stays small: 1,024 copies per family, 2,048 across a program's families, 2,048 declarations per recipe.
 
-Effect rows are a fixed point over the call graph, so a check, an editor refresh and an incremental build each run the front end over every module, in time about linear in the program's size. On a generated project of 77,000 lines a check took 11 s, an editor refresh 12 s, and an incremental rebuild after a body edit 13 s; one of 31,802 functions checked in 33 s at 800 MiB (`evidence/v0_9/scale`, on a loaded machine; `make scale` measures it again). An incremental build of 16 or more units precompiles the shared header, which made cold and interface-edit rebuilds about three times faster.
+Effect rows are a fixed point over the call graph, so a check, an editor refresh and an incremental build each run the front end over every module, in time about linear in the program's size. On a generated project of 77,000 lines a check took 11 s, an editor refresh 12 s, and an incremental rebuild after a body edit 13 s; one of 31,802 functions checked in 33 s at 800 MiB (`evidence/v1_0/scale`, on a loaded machine; `make scale` measures it again). An incremental build of 16 or more units precompiles the shared header, which made cold and interface-edit rebuilds about three times faster.
 
 `cairn graph` prints the module graph a build system or CI job plans with: each file's modules, each module's imports, exports and dependents, a topological order and a source hash. `--interfaces` checks the program and adds each module's interface hash, which changes only when a public signature or effect row does. Every build writes `compile_commands.json` beside the C++ it generated, for clangd and other C++ tools.
 
@@ -622,7 +622,7 @@ qemu-system-aarch64 -M virt -cpu cortex-a72 -nographic -semihosting -kernel <ima
 echo $?      # fn main()'s return value, or 134 for a failed guard
 ```
 
-`evidence/v1_0/embedded/` holds a captured transcript, `size`, `nm` and the tool versions.
+`evidence/v0_8_0/embedded/` holds a captured transcript, `size`, `nm` and the tool versions.
 
 ### Adding a target
 

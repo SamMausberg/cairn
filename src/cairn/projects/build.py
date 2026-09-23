@@ -26,7 +26,7 @@ from .toolchain import audit_effects, find, flags, host_family, link_flags, link
 from .toolchain import command as native_command
 from .toolchain import version as compiler_version
 
-PRECOMPILE_AT = 16  # units to compile before a precompiled header repays its own build (evidence/v0_9/scale)
+PRECOMPILE_AT = 16  # units to compile before a precompiled header repays its own build (evidence/v1_0/scale)
 
 
 def intact(target: Path, digest: Path) -> bool:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compile and run bench/host/host_tasks.cpp against one or two sets of runtime headers, interleaved.
 
-Writes evidence/v1_4/runtime/benchmark.json. `--before DIR` names a directory of older headers (check them out of
+Writes evidence/v1_0/runtime/benchmark.json. `--before DIR` names a directory of older headers (check them out of
 git into a directory of their own); the two builds then run in alternation, `--runs` times each, so load that
 comes and goes on a shared machine falls on both. Each run reports the median of its own blocks, and a session
 keeps every run, the median across them and the load average around it. A session is filed under `--label` and
@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from support import best_profile, profile_flags, version
 
-OUT = ROOT / "evidence/v1_4/runtime/benchmark.json"
+OUT = ROOT / "evidence/v1_0/runtime/benchmark.json"
 
 
 def compile_against(cxx: str, runtime: Path, arch: str, exe: Path) -> list[str]:

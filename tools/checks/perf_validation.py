@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """How well `cairn predict` foresees measured times it was never fitted to.
 
-The measurements are the CAIRN arms of the preregistered suite's first run (`evidence/v1_3/bench/suite.json`): eight
+The measurements are the CAIRN arms of the preregistered suite's first run (`evidence/v0_8_3/bench/suite.json`): eight
 kernels, six sizes, both compilers, sixteen lanes, on the machine the profile was calibrated on. Calibration never
 sees these kernels; it fits its own. For every measured point this prints the prediction beside it, and over all of
 them the median relative error and Kendall's tau, since a tuner needs the order of candidates more than their times.
 
-    python3 tools/checks/perf_validation.py --profile PROFILE.json --out evidence/v1_4/perf_model/validation.json
+    python3 tools/checks/perf_validation.py --profile PROFILE.json --out evidence/v1_0/perf_model/validation.json
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from cairn.perf.work import count
 from support import best_profile
 
 SUITE = ROOT / "bench/suite"
-RECORD = ROOT / "evidence/v1_3/bench/suite.json"
+RECORD = ROOT / "evidence/v0_8_3/bench/suite.json"
 
 
 def entry(kernel: str, arm: str) -> str | None:

@@ -32,7 +32,7 @@ def run(command: list[str], env: dict[str, str]) -> tuple[int, str, float]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--release", required=True, help="the evidence directory, such as v1_3")
+    parser.add_argument("--release", required=True, help="the evidence directory, such as v0_8_3")
     args = parser.parse_args()
     out = ROOT / "evidence" / args.release / "lean"
     out.mkdir(parents=True, exist_ok=True)

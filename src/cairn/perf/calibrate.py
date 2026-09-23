@@ -6,7 +6,7 @@ are fitted, not asserted: each kernel's operations are counted by `work`, the sa
 non-negative least-squares fit finds the cost per operation that explains the times. A kind whose kernels run no
 faster with the vectorizer on is recorded as one that keeps a loop scalar. Nothing here touches a device.
 
-    python -m cairn.perf.calibrate --out evidence/v1_4/perf_model/zen4-7800x3d.json
+    python -m cairn.perf.calibrate --out evidence/v1_0/perf_model/zen4-7800x3d.json
 """
 
 from __future__ import annotations

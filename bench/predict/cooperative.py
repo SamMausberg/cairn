@@ -1,8 +1,8 @@
-"""The runs behind evidence/v0_9/predict_cooperative: what `cairn predict`, `cairn explain` and `cairn tune` say of
+"""The runs behind evidence/v1_0/predict_cooperative: what `cairn predict`, `cairn explain` and `cairn tune` say of
 the cooperative and tensor-core examples, and what ptxas reports of the same kernels for sm_120. Kernels are compiled
 and read; none is run, and nothing here touches a GPU.
 
-    python bench/predict/cooperative.py --out evidence/v0_9/predict_cooperative
+    python bench/predict/cooperative.py --out evidence/v1_0/predict_cooperative
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ KERNELS = [
     (ROOT / "examples" / "tensor" / "tile32.cairn", {"tile32"}),
     (ROOT / "examples" / "tensor" / "tile64.cairn", {"tile64"}),
 ]  # fmt: skip
-STAGES = ROOT / "evidence" / "v0_9" / "predict_cooperative" / "stages.cairn"
+STAGES = ROOT / "evidence" / "v1_0" / "predict_cooperative" / "stages.cairn"
 TARGET = parse("sm_120")
 
 

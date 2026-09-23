@@ -10,7 +10,7 @@ copy. A device program whose implementation lists two block sizes is then search
 instance is compiled and read by ptxas and cuobjdump, and nothing runs on a GPU. The load average is recorded before
 and after, since the machine is shared.
 
-    python3 bench/search/instances.py --out evidence/v0_9/search/instances.json
+    python3 bench/search/instances.py --out evidence/v1_0/search/instances.json
 """
 
 from __future__ import annotations

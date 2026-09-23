@@ -273,11 +273,11 @@ def pieces(c: Cost, host: Host, arch: str, sizes: dict[str, float], missing: set
 WIDE = (
     "a wide host region waits for its slowest lane, which the machine's load can hold up: at 1e5 to 1e7 elements the "
     "validation measured such regions up to five times slower than predicted"
-)  # evidence/v1_4/perf_model
+)  # evidence/v1_0/perf_model
 STREAMED = (
     "a wide region streams more than calibration measured the last-level cache at, though less than it holds, and is "
     "priced at that bandwidth; on a shared machine such streams ran up to five times slower"
-)  # evidence/v1_4/perf_model: the working set from 32 to 96 MiB
+)  # evidence/v1_0/perf_model: the working set from 32 to 96 MiB
 
 
 def significant(ns: float) -> float:

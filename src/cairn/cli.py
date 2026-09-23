@@ -359,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
     global FORMAT
     # A compile builds millions of tree objects that live until it ends, so the collector looks at old ones rarely.
     # Interleaved checks of a 77,000-line project ran 10 to 20 percent faster at the same peak memory; the loaded
-    # scale run of evidence/v0_9/scale does not separate that from its noise.
+    # scale run of evidence/v1_0/scale does not separate that from its noise.
     gc.set_threshold(50_000, 50, 100)
     p = parser()
     argv = sys.argv[1:] if argv is None else argv

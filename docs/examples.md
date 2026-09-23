@@ -442,6 +442,6 @@ cairn test examples/implementations       # replays regressions/prefix.json agai
 python3 examples/implementations/loop.py  # the scripted session below, as JSON
 ```
 
-`bench/search/instances.py` validates each instance, then lets `cairn tune` choose among them; [evidence/v0_9/search](../evidence/v0_9/search/README.md) records one run.
+`bench/search/instances.py` validates each instance, then lets `cairn tune` choose among them; [evidence/v1_0/search](../evidence/v1_0/search/README.md) records one run.
 
 `loop.py` opens an [implementation session](agents.md#implementation-sessions) on `prefix` under `policy.json` and replays four fixed replies. `candidates/prefix_blocks_wrong.cairn` restarts each block of eight at zero; validation refuses it with the input it shrank to, `n = 16` with a single 1 at `xs[7]`, and keeps that input in `regressions/prefix.json`. The same reply with a looser tolerance is `E-TOLERANCE`, and with a smaller domain `E-DOMAIN`. `candidates/prefix_blocks.cairn` carries the sum across blocks and validates. The replies are fixed text; everything the host, the compiler and the native runs say is computed on each run.

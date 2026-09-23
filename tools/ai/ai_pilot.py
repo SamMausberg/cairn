@@ -5,7 +5,7 @@ prepare DIR   one sandbox per task outside the repository: CARDS.md, TASK.md, ch
 check         (run by the subject inside a sandbox) compiler diagnostics and required constructs; no tests
 score DIR     hidden finite tests for every solution.cairn, written to DIR/results.json
 
-The protocol, the tasks and the metrics are fixed in evidence/v1_1/ai_pilot/PREREGISTRATION.md before
+The protocol, the tasks and the metrics are fixed in evidence/v0_8_1/ai_pilot/PREREGISTRATION.md before
 any subject runs. This measures proficiency with CAIRN, not an advantage over any other language.
 """
 

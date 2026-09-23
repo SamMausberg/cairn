@@ -1,7 +1,7 @@
 // Eight dependent rounds of xor shift and wrapping multiply per element: registers only, no second
 // load and no second store, so a large region is bound by the cores rather than by memory.
 // The body is carried verbatim from bench/host/host_regions.cpp, so a number here chains
-// with the ones already recorded in evidence/v1_2/host_regions.
+// with the ones already recorded in evidence/v0_8_2/host_regions.
 fn mix(v:u64) -> u64 {
   let mut w = v;
   for k in 0..8 { w = mul_wrap(w ^ shr(w, 29), 0xbf58476d1ce4e5b9); }

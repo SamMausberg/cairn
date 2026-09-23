@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write evidence/v0_9/execution/counts.json: what the repeated device pipeline of tests/runtime/test_execution.py
+"""Write evidence/v1_0/execution/counts.json: what the repeated device pipeline of tests/runtime/test_execution.py
 makes, allocates and waits for on the host machine of tests/runtime/gpu_host.hpp, pass by pass, and the CUDA runtime
 symbols its sm_120 object references. It compiles and runs host code only: nothing is launched on a GPU."""
 
@@ -30,7 +30,7 @@ def quoted(text: str, name: str) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--out", type=Path, default=ROOT / "evidence/v0_9/execution")
+    ap.add_argument("--out", type=Path, default=ROOT / "evidence/v1_0/execution")
     ap.add_argument("--passes", type=int, default=20)
     a = ap.parse_args(argv)
     text = (ROOT / "tests/runtime/test_execution.py").read_text(encoding="utf-8")

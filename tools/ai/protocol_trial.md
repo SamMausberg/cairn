@@ -1,6 +1,6 @@
 # Edit-protocol trial: preregistration
 
-This file fixes the design of the trial before any subject runs. Anything that changes afterwards is reported as a deviation beside the results, under `evidence/v1_4/protocol_trial/`. The harness is `tools/ai/protocol_trial.py`.
+This file fixes the design of the trial before any subject runs. Anything that changes afterwards is reported as a deviation beside the results, under `evidence/v1_0/protocol_trial/`. The harness is `tools/ai/protocol_trial.py`.
 
 ## Question
 
@@ -17,7 +17,7 @@ Both arms use the `cairn.edit/2` host, with handles in place of digests, the sam
 | component | the target's call-graph component in both directions, as source, and every type of the program | no |
 | focused | the target's source, and the signature, effect row and comment of every function it calls or that calls it, with the types those name | yes, up to 32 names per request |
 
-Scripted replies on thirty edits of the same programs put the focused packet at about a quarter of the component packet's context (`evidence/v1_4/context/`). This trial asks whether a model, which may expand more, repair more and think longer, keeps that saving.
+Scripted replies on thirty edits of the same programs put the focused packet at about a quarter of the component packet's context (`evidence/v1_0/context/`). This trial asks whether a model, which may expand more, repair more and think longer, keeps that saving.
 
 ## Tasks
 

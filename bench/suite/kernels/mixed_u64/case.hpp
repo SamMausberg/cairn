@@ -3,7 +3,7 @@
 // within one element and a large region is bound by the cores rather than by memory bandwidth.
 //
 // The body and the fill are bench/host/host_regions.cpp's, so a number here sits beside the
-// ones already recorded in evidence/v1_2/host_regions. Every operation is exact in u64: the shift
+// ones already recorded in evidence/v0_8_2/host_regions. Every operation is exact in u64: the shift
 // and the xor are bit operations and the multiply wraps, so kernels/mixed_u64/oracle.py reproduces
 // the result in Python integers masked to 64 bits and the comparison carries no tolerance.
 #pragma once

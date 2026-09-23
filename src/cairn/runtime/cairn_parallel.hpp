@@ -29,7 +29,7 @@ namespace lanes {
 // GRAIN is the fewest elements worth handing to another thread and CUTOFF = 2*GRAIN is therefore
 // the smallest region that can use more than one lane; below it `run` is the loop it replaces, so
 // a small region neither publishes nor wakes anybody. SPLIT claims per lane let an uneven body
-// balance itself. Chosen by measurement on a 64-core GH200 (evidence/v1_2/host_regions): engaging
+// balance itself. Chosen by measurement on a 64-core GH200 (evidence/v0_8_2/host_regions): engaging
 // one more lane cost about 0.45us there, and 8192 elements of the cheapest body measured (a
 // vectorized saxpy, about 0.11ns an element) is about twice that, so a lane always earns its
 // keep. Larger grains helped that cheapest body more and cost a dearer one its win at thirty
@@ -91,7 +91,7 @@ struct alignas(64) Berth {
 // runs the same indices again, from its own core's cache, while the home of a lane that is busy or asleep is
 // still taken by whoever is free. With one counter for the whole region, which lane claimed which chunk changed
 // from one region to the next, and saxpy over a million floats ran 2.8 times slower than OpenMP's static schedule,
-// which keeps each thread on one range (evidence/v1_4/bench). proofs/Cairn/Region.lean is this protocol.
+// which keeps each thread on one range (evidence/v1_0/bench). proofs/Cairn/Region.lean is this protocol.
 inline constexpr std::size_t HOMES = 64;
 // Where home h begins, of `homes` cut from [0, n): the homes are consecutive, differ in length by at most one,
 // and home `homes` begins at n.

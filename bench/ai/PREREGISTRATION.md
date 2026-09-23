@@ -1,6 +1,6 @@
 # Equal-budget benchmark of CAIRN, C++ and Rust: preregistration
 
-This file fixes the design before any counted subject runs. It is committed first, and the commit's time is the proof of order. Anything that changes afterwards is reported as a deviation beside the results in `evidence/v1_5/ai_benchmark/`. The harness is `bench/ai/harness.py`.
+This file fixes the design before any counted subject runs. It is committed first, and the commit's time is the proof of order. Anything that changes afterwards is reported as a deviation beside the results in `evidence/v1_0/ai_benchmark/`. The harness is `bench/ai/harness.py`.
 
 ## Question
 
@@ -64,7 +64,7 @@ Every subject that starts is reported. There are no reruns and no replacements, 
 
 ## Pilot
 
-Before this file was committed, two tasks ran as a pilot to debug the harness and to set the budget: `dedupe` and `records`, once in each language. All six pilot subjects solved their task, and the CAIRN subjects used 4.0 and 9.0 times the tokens of the C++ subjects (`evidence/v1_5/ai_benchmark/tables_pilot.md`). After the pilot the audit rule for scratch files under `/tmp` was narrowed, sandboxes were deleted after judging, and the documentation was pinned to one snapshot per run. No task, oracle or case changed. The CAIRN programs were put through `cairn fmt`, which moved comments in the `csv_field` starter and in three references and changed nothing else a program does, and the `records` CAIRN reference now writes one `else if` chain as three `if`s. Pilot subjects are labelled `pilot`, reported apart and never counted. Both tasks run again in the counted run with fresh subjects.
+Before this file was committed, two tasks ran as a pilot to debug the harness and to set the budget: `dedupe` and `records`, once in each language. All six pilot subjects solved their task, and the CAIRN subjects used 4.0 and 9.0 times the tokens of the C++ subjects (`evidence/v1_0/ai_benchmark/tables_pilot.md`). After the pilot the audit rule for scratch files under `/tmp` was narrowed, sandboxes were deleted after judging, and the documentation was pinned to one snapshot per run. No task, oracle or case changed. The CAIRN programs were put through `cairn fmt`, which moved comments in the `csv_field` starter and in three references and changed nothing else a program does, and the `records` CAIRN reference now writes one `else if` chain as three `if`s. Pilot subjects are labelled `pilot`, reported apart and never counted. Both tasks run again in the counted run with fresh subjects.
 
 ## Audit
 

@@ -8,7 +8,7 @@ runs on a GPU. One host program is also timed with --measure, cold and again, to
 run twice. The cubins the compiles wrote are compared by digest, which says how many distinct kernels they were. The
 load average is recorded before and after, since the machine is shared.
 
-    python3 bench/search/search.py --out evidence/v0_9/search/search.json
+    python3 bench/search/search.py --out evidence/v1_0/search/search.json
 """
 
 from __future__ import annotations

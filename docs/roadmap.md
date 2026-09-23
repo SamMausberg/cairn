@@ -14,7 +14,7 @@ Each gate below is open. A gate closes when its tests, its documentation and its
 ## Proof
 
 - A proof that the emitted collector loop refines the Lean model, and that native code refines the emitted C++.
-- A link from `checking.py` to the ownership calculus stronger than review and the differential run (twenty thousand generated programs agreed, `evidence/v1_4/lean/differential.json`).
+- A link from `checking.py` to the ownership calculus stronger than review and the differential run (twenty thousand generated programs agreed, `evidence/v1_0/gates_2026_09_22/lean/differential.json`).
 - The calculus extended to closures, `lane:f`, device placement, `reduce`, `compact`, queued device work, a group submitted to inside a loop, and declared field extents.
 - Proofs of what the calculus assumes of the emitter: that a part's guard runs on the spawning thread before the task starts (pinned by `tests/soundness` for `spawn` and `spawn ... into g`), and that `cairn_parallel.hpp` performs the proved region protocol under its memory orders.
 - The elision audit's own rules in Lean.
@@ -26,13 +26,13 @@ Each gate below is open. A gate closes when its tests, its documentation and its
 
 - Device validation. The device half of `cairn predict` is NVIDIA's published figures for one card. Device plans, the execution context, the tensor-core multiply, and storage floats, gradients and asserts in a lane compile for sm_120 and run only under the owner's `make gpu`, `make tune-device` and `make calibrate-device`, which have not run them. Until then no device prediction, plan or speed-of-light fraction is a measurement.
 - Measurements beyond one machine. One x86-64 host and one AArch64 host have been measured, nothing has run across more than one memory domain, and nothing is claimed against tuned C++ or CUDA.
-- `cairn predict`'s weak range: wide host regions of 1e5 to 1e7 elements, which it has predicted up to five times too fast (`evidence/v1_4/perf_model/`).
-- `dot_f64` in the preregistered suite loses to a reassociating reduction by design, because CAIRN keeps a float fold in its written order (`evidence/v1_4/bench/`).
+- `cairn predict`'s weak range: wide host regions of 1e5 to 1e7 elements, which it has predicted up to five times too fast (`evidence/v1_0/perf_model/`).
+- `dot_f64` in the preregistered suite loses to a reassociating reduction by design, because CAIRN keeps a float fold in its written order (`evidence/v1_0/bench/`).
 
 ## AI evidence
 
-- An equal-budget comparison where the languages differ in what gets solved. The preregistered run ([bench/ai/PREREGISTRATION.md](../bench/ai/PREREGISTRATION.md), `evidence/v0_9/ai_benchmark/`) found every task solved in CAIRN, C++ and Rust, with CAIRN at 11.6 times the tokens of C++, mostly spent reading its documentation. Open: larger programs, other model families, and a CAIRN that costs a newcomer fewer tokens to learn.
-- The preregistered packet trial ([tools/ai/protocol_trial.md](../tools/ai/protocol_trial.md)), which needs fresh model subjects. The context savings in `evidence/v1_4/context/` come from authored transcripts and show nothing about how a model does.
+- An equal-budget comparison where the languages differ in what gets solved. The preregistered run ([bench/ai/PREREGISTRATION.md](../bench/ai/PREREGISTRATION.md), `evidence/v1_0/ai_benchmark/`) found every task solved in CAIRN, C++ and Rust, with CAIRN at 11.6 times the tokens of C++, mostly spent reading its documentation. Open: larger programs, other model families, and a CAIRN that costs a newcomer fewer tokens to learn.
+- The preregistered packet trial ([tools/ai/protocol_trial.md](../tools/ai/protocol_trial.md)), which needs fresh model subjects. The context savings in `evidence/v1_0/context/` come from authored transcripts and show nothing about how a model does.
 
 ## Packaging
 

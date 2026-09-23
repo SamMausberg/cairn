@@ -7,7 +7,7 @@
 2. Each legal candidate is counted from its own checked program and priced by the model.
 3. In predicted order, ties broken toward kernel items no earlier compile covered, each device candidate is compiled
    for the target and read by ptxas and cuobjdump (`perf/resources.py`) until the compile budget is spent. For
-   `blur` in evidence/v0_9/search, the model priced all 160 plans alike, and 32 compiles wrote 8 distinct SASS. An
+   `blur` in evidence/v1_0/search, the model priced all 160 plans alike, and 32 compiles wrote 8 distinct SASS. An
    inspection is kept by the key of what it compiled, so a candidate that emits a program already compiled, in this
    search or an earlier one with the same history, costs no compile. Registers and shared memory then enter its
    price through occupancy.

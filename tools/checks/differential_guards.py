@@ -12,7 +12,7 @@ includes empty views and `k` next to the largest usize, each in a child process,
 line for every case: a dropped guard that could fail shows up as a missing trap, a different value or a report.
 
 A mismatch is minimized, by deleting statements while the mismatch persists, and printed as a CAIRN program to keep
-as a regression test. `--output` records the run; `evidence/v1_4/guards/` holds the one this checkout recorded.
+as a regression test. `--output` records the run; `evidence/v1_0/guards/` holds the one this checkout recorded.
 """
 
 from __future__ import annotations

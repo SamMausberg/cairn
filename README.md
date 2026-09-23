@@ -11,7 +11,7 @@ CAIRN is a systems programming language for code that AI agents write and people
 - The compiler's hosts admit an agent's edit, plan or implementation only if everything they pin still holds, and `cairn diff OLD NEW` says per function whether a change compiled to identical code, is SMT-equivalent, or changed behaviour, with an input that shows it.
 - `cairn predict` prices a function without running it, `cairn tune` searches plans and implementations within compile and run budgets and keeps a history a fresh agent resumes from, and `cairn shot` returns the frames a UI drew.
 
-These are properties of the design, checked by the tests and proofs listed under [limitations](#limitations-and-what-you-trust). The [Claude Code plugin](#install) gives an agent the rules in about 4,000 tokens; in a six-session smoke comparison, sessions with it cost 0.51 times as much as sessions without it, and every session solved its task ([evidence/v0_9/skill](evidence/v0_9/skill/README.md)). The preregistered equal-budget benchmark ran before the plugin existed: CAIRN subjects solved every task, as C++ and Rust subjects did, and used 11.6 times the tokens of C++ subjects, most of it reading the documentation ([results](evidence/v0_9/ai_benchmark/RESULTS.md)). Whether the plugin closes that gap is untested.
+These are properties of the design, checked by the tests and proofs listed under [limitations](#limitations-and-what-you-trust). The [Claude Code plugin](#install) gives an agent the rules in about 4,000 tokens; in a six-session smoke comparison, sessions with it cost 0.51 times as much as sessions without it, and every session solved its task ([evidence/v1_0/skill](evidence/v1_0/skill/README.md)). The preregistered equal-budget benchmark ran before the plugin existed: CAIRN subjects solved every task, as C++ and Rust subjects did, and used 11.6 times the tokens of C++ subjects, most of it reading the documentation ([results](evidence/v1_0/ai_benchmark/RESULTS.md)). Whether the plugin closes that gap is untested.
 
 ## Example
 
@@ -141,11 +141,11 @@ The compiler is not proved correct. The checker and the C++ emitter are about 8,
 
 What has not been validated:
 
-- Most of the GPU side has not run on a GPU. Device lanes, transfers and three kernels ran on one RTX 5070 Ti (`evidence/v1_3/gpu`). Everything since compiles for sm_120 and is checked on the host only: vector loads, shared staging, device plans, `mma_unordered` and the two tensor-core multiplies written in CAIRN, cooperative regions and pipeline stages, typed PTX, the device `scan`, foreign CUDA kernels, and the execution context generated code runs on, whose CUDA calls a host stand-in counts. The device half of `cairn predict` is NVIDIA's published specification, not a measurement.
+- Most of the GPU side has not run on a GPU. Device lanes, transfers and three kernels ran on one RTX 5070 Ti (`evidence/v0_8_3/gpu`). Everything since compiles for sm_120 and is checked on the host only: vector loads, shared staging, device plans, `mma_unordered` and the two tensor-core multiplies written in CAIRN, cooperative regions and pipeline stages, typed PTX, the device `scan`, foreign CUDA kernels, and the execution context generated code runs on, whose CUDA calls a host stand-in counts. The device half of `cairn predict` is NVIDIA's published specification, not a measurement.
 - `cairn validate` is finite testing: an implementation is compared with its reference on generated boundary inputs, and the reference is an independent algorithm that shares the compiler.
 - Host performance was measured on one 16-thread x86-64 machine against plain C++, OpenMP and oneTBB at equal guards. Nothing is claimed against tuned C++ or CUDA.
 - SMT equivalence covers a fragment. An owner inside a record or an array, concurrency, device memory, the foreign boundary, storage floats and loops it cannot bound are `unknown`, and `unknown` is never reported as success.
-- The AI evidence is one model family on small tasks. The equal-budget benchmark gave ten single-file tasks to one model, which also wrote the language and the tasks; every subject solved its task, so it measured cost and not difficulty. Most of CAIRN's extra tokens went to reading its documentation. An earlier pilot had no comparison arm (`evidence/v1_1/ai_pilot`).
+- The AI evidence is one model family on small tasks. The equal-budget benchmark gave ten single-file tasks to one model, which also wrote the language and the tasks; every subject solved its task, so it measured cost and not difficulty. Most of CAIRN's extra tokens went to reading its documentation. An earlier pilot had no comparison arm (`evidence/v0_8_1/ai_pilot`).
 - Linux only. There is no package registry and no fetching; the package is not on PyPI. The bare-metal AArch64 target runs only under QEMU on an AArch64 host.
 
 ## What is established
@@ -154,14 +154,14 @@ What has not been validated:
 |---|---|---|
 | An accepted program of the ownership and lease calculus has no use after move or free, double free, leaked task, aliased argument or data race, under any interleaving, and never gets stuck. | Lean-checked model | `proofs/Cairn/Ownership/` |
 | The lane pool runs each index of a host region once and returns only when no worker is inside. | Lean-checked model | `proofs/Cairn/Region.lean` |
-| A guard the compiler leaves out cannot fail where the checker's facts hold. Each left-out guard is also re-derived by an independent audit, and conservative and optimized builds agreed on 174,816 cases per compiler. | Lean-checked rule, audited, finite-tested | `proofs/Cairn/Facts.lean`, `evidence/v1_4/guards` |
+| A guard the compiler leaves out cannot fail where the checker's facts hold. Each left-out guard is also re-derived by an independent audit, and conservative and optimized builds agreed on 174,816 cases per compiler. | Lean-checked rule, audited, finite-tested | `proofs/Cairn/Facts.lean`, `evidence/v1_0/guards` |
 | The collector's seventeen arithmetic certificates hold, and its loop model stores in bounds. | Lean-checked | `proofs/Cairn/Collector.lean` |
-| A host `parallel` region runs level with OpenMP and oneTBB at equal guards and worker counts. | Benchmarked, one machine | `evidence/v1_4/bench` |
-| `cairn predict` ranks held-out host timings with a Kendall tau of 0.87 to 0.92, at a median error of 28 to 44 percent. | Benchmarked, one machine | `evidence/v1_4/perf_model` |
-| Two threads of an accepted cooperative region never make conflicting accesses between barriers, in any interleaving, and the result does not depend on thread order. | Lean-checked model, differential-tested | `proofs/Cairn/Cooperative.lean`, `evidence/v0_9/cooperative` |
+| A host `parallel` region runs level with OpenMP and oneTBB at equal guards and worker counts. | Benchmarked, one machine | `evidence/v1_0/bench` |
+| `cairn predict` ranks held-out host timings with a Kendall tau of 0.87 to 0.92, at a median error of 28 to 44 percent. | Benchmarked, one machine | `evidence/v1_0/perf_model` |
+| Two threads of an accepted cooperative region never make conflicting accesses between barriers, in any interleaving, and the result does not depend on thread order. | Lean-checked model, differential-tested | `proofs/Cairn/Cooperative.lean`, `evidence/v1_0/cooperative` |
 | A declared layout covers its tile exactly once, so writes through it by distinct threads never collide. | Lean-checked model | `proofs/Cairn/Layout.lean` |
-| At equal budgets on ten small tasks, `claude-sonnet-5` solved 20 of 20 in each of CAIRN, C++ and Rust, and used 11.6 times the tokens in CAIRN that it used in C++. | Benchmarked, one model, preregistered | `evidence/v0_9/ai_benchmark` |
-| With the Claude Code plugin, three small tasks cost 0.51 times as much as without it, all solved in both arms. | Smoke test, one model, one run per cell | `evidence/v0_9/skill` |
+| At equal budgets on ten small tasks, `claude-sonnet-5` solved 20 of 20 in each of CAIRN, C++ and Rust, and used 11.6 times the tokens in CAIRN that it used in C++. | Benchmarked, one model, preregistered | `evidence/v1_0/ai_benchmark` |
+| With the Claude Code plugin, three small tasks cost 0.51 times as much as without it, all solved in both arms. | Smoke test, one model, one run per cell | `evidence/v1_0/skill` |
 
 [docs/verification.md](docs/verification.md) says what each proof, model and test covers and what it leaves out.
 

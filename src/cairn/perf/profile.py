@@ -85,7 +85,7 @@ class Host:
     def parallel(self, threads: int) -> int:
         """How many of `threads` lanes a vector loop computes on at once: one per physical core, since two sibling
         lanes share that core's vector units. On the reference machine a multiply-bound region ran no faster on
-        sixteen lanes than on eight (evidence/v1_4/perf_model)."""
+        sixteen lanes than on eight (evidence/v1_0/perf_model)."""
         return min(threads, self.cores) if self.cores else threads
 
     def fork(self, lanes: int) -> float:

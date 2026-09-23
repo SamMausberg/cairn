@@ -4,7 +4,7 @@ Each program below was written to break a rule with one of the new forms (bare v
 compound assignment, call statements and `let _`, element loops), or through what they meet: guard elision and
 the entry that checks views once, the recoverable ring, map Slots, test blocks, storage floats, derived gradients.
 All of them were refused. The behaviour tests below them are the attacks that compile: each must stop at a guard
-or run race free, under both compilers and the sanitizer that bites. evidence/v1_4/review/ says what was attacked.
+or run race free, under both compilers and the sanitizer that bites. evidence/v1_0/review/ says what was attacked.
 """
 
 import pytest

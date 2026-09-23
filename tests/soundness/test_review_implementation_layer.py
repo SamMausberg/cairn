@@ -1,7 +1,7 @@
 """The adversarial review of what 0.9 added: each defect it found pinned by the program or request that showed it,
 and the attacks that were correctly refused or held, kept so that a later change cannot reopen them.
 
-`evidence/v0_9/review/README.md` has the write-up.
+`evidence/v1_0/review_implementation_layer/README.md` has the write-up.
 """
 
 import hashlib

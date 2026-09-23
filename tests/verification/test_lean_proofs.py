@@ -243,9 +243,9 @@ def test_lake_build_succeeds_and_axioms_are_clean():
 
 
 def test_recorded_evidence_matches_the_pinned_toolchain():
-    summary_path = ROOT / "evidence" / "v1_0" / "lean" / "summary.json"
+    summary_path = ROOT / "evidence" / "v0_8_0" / "lean" / "summary.json"
     if not summary_path.is_file():
-        pytest.skip("no captured Lean evidence in evidence/v1_0/lean")
+        pytest.skip("no captured Lean evidence in evidence/v0_8_0/lean")
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     pinned = (PROOFS / "lean-toolchain").read_text(encoding="utf-8").strip()
     assert summary["toolchain"] == pinned

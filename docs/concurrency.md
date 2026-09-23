@@ -417,7 +417,7 @@ fn energy(n:usize, x:ro<f64>[n]) -> f64 {
 plan energy { fuse 2; }    // one fold that squares as it adds
 ```
 
-No body may trap, because fusing two trapping bodies could let the later body's guard fail first. Fusion is a plan item rather than automatic because one fused body is not always faster than two short loops that each vectorize. `--keep-guards` never fuses, and the receipt lists every chain under `fused`. On one shared host, fused element-wise regions ran 1.1x to 2.6x faster than as written, and chains that no longer allocate their scratch 1.5x to 62x faster, most of that at ten million elements and more ([evidence/v1_4/fusion](../evidence/v1_4/fusion/README.md)).
+No body may trap, because fusing two trapping bodies could let the later body's guard fail first. Fusion is a plan item rather than automatic because one fused body is not always faster than two short loops that each vectorize. `--keep-guards` never fuses, and the receipt lists every chain under `fused`. On one shared host, fused element-wise regions ran 1.1x to 2.6x faster than as written, and chains that no longer allocate their scratch 1.5x to 62x faster, most of that at ten million elements and more ([evidence/v1_0/fusion](../evidence/v1_0/fusion/README.md)).
 
 `E-PLAN` refuses a plan for a function without the kind of region an item needs, a second plan for one function, an unknown or repeated item, a value out of range (a grain of 0, lanes outside 1 to 1024, `per_lane` outside 1 to 65536), and a `fuse` with no two regions it may join. `plan` is a keyword only at the top of a module.
 
@@ -531,7 +531,7 @@ fn main() -> i32 {
 fn running(n:usize, out:rw<f64>[n], x:ro<f64>[n]) { scan + out parallel i in n yield x[i]; }
 ```
 
-`std.sort.radix_sort` uses `scan + exclusive` to place each digit, so it is stable and allocates nothing. On one shared sixteen-lane machine the pooled scan ran 1.3 to 1.7 times faster than the loop from a hundred thousand to ten million `u64` elements, and the radix sort 5.6 to 10.5 times faster than the heapsort (`evidence/v1_4/scan/`).
+`std.sort.radix_sort` uses `scan + exclusive` to place each digit, so it is stable and allocates nothing. On one shared sixteen-lane machine the pooled scan ran 1.3 to 1.7 times faster than the loop from a hundred thousand to ten million `u64` elements, and the radix sort 5.6 to 10.5 times faster than the heapsort (`evidence/v1_0/scan/`).
 
 ## Placement and device memory
 
@@ -592,7 +592,7 @@ fn stage(n:usize, host_x:ro<f32>[n], x:rw<f32>[n]@device, out:rw<f32>[n]@device)
 
 Device work runs on the calling thread's execution context (`runtime/cairn_exec.hpp`): a stream and its event, one scratch arena and a budget, made by the thread's first device operation and kept. A region over device views, and a `transfer`, returns once that stream has run it, so the host sees the result and a guard that fired in a lane aborts the process; nothing waits for the rest of the device. A device `reduce`, `scan` or `compact` takes its temporaries from the arena, which grows to the largest request it has met. Queued work borrows a lane that comes back at its `wait`.
 
-Run again, a pipeline makes no stream, allocates no temporary and waits only for its own stream. On a host machine that counts them (`tests/runtime/test_execution.py`), one pipeline of regions, a vector and a staged plan, a reduction, a scan, a compaction, transfers and two queued tickets made two streams and three arena allocations on its first pass and none after, with nine stream waits a pass ([evidence](../evidence/v0_9/execution/README.md)). Its CUDA build compiles for sm_120 without `cudaDeviceSynchronize` and has not run on a GPU. A device `mma_unordered` runs on the same stream and waits only for it.
+Run again, a pipeline makes no stream, allocates no temporary and waits only for its own stream. On a host machine that counts them (`tests/runtime/test_execution.py`), one pipeline of regions, a vector and a staged plan, a reduction, a scan, a compaction, transfers and two queued tickets made two streams and three arena allocations on its first pass and none after, with nine stream waits a pass ([evidence](../evidence/v1_0/execution/README.md)). Its CUDA build compiles for sm_120 without `cudaDeviceSynchronize` and has not run on a GPU. A device `mma_unordered` runs on the same stream and waits only for it.
 
 A region does not wait for queued work it does not touch; each ticket is waited for at its own `wait`. On a device without concurrent managed access (Windows and WSL2), a live ticket's kernel may still run after a region returns, and the host must not touch `@unified` memory while any kernel runs.
 

@@ -33,7 +33,7 @@ The first public release. The sections below it are the internal milestones that
 ### Projects and tools
 
 - `cairn graph` prints a project's module graph with each file's source hash and each module's interface hash as JSON, so another build system can plan its actions and caches. `bazel/` holds `rules_cairn`: `cairn_library` is checked as a validation action, and `cairn_binary` and `cairn_test` build and test a program; `examples/bazel` builds, runs and tests with them offline.
-- A program may hold 16 MB of source, 32,768 functions and 3,200,000 syntax nodes, and a manifest 1,024 files and 64 dependencies; generated families keep their caps, and each refusal names what it counted. An incremental build runs the front end once, compiles 16 or more units against a precompiled header, and every build writes `compile_commands.json`. On a 77,000-line generated project on a shared machine, a cold incremental build went from 264 s to 82 s and a rebuild with nothing changed from 28 s to 13 s (`evidence/v0_9/scale`).
+- A program may hold 16 MB of source, 32,768 functions and 3,200,000 syntax nodes, and a manifest 1,024 files and 64 dependencies; generated families keep their caps, and each refusal names what it counted. An incremental build runs the front end once, compiles 16 or more units against a precompiled header, and every build writes `compile_commands.json`. On a 77,000-line generated project on a shared machine, a cold incremental build went from 264 s to 82 s and a rebuild with nothing changed from 28 s to 13 s (`evidence/v1_0/scale`).
 - The compiler reads each imported library module's parse from a per-process cache and lexes in one pass, so the examples compile in 0.84 of the time with byte-identical C++, and each process asks a compiler its version once.
 - A counterexample is asked for again with every integer input near zero, so a witness in a refusal, a diff or a receipt reads as `x = 0, lo = 16, hi = 12` rather than twenty-digit numbers.
 - `cairn test FILE --contract` runs a finite task contract, and a program that `cairn run`, `cairn test` or `cairn shot` starts no longer wakes the system's crash handler when it traps.
@@ -58,7 +58,7 @@ The first public release. The sections below it are the internal milestones that
 
 ### Runtime
 
-- A host region is cut into one home range per lane, and each lane claims from its own home before the others', so a lane runs the same indices region after region: at 16 lanes and 1e6 elements the share a lane runs again rose from 0.14 to 0.50. `proofs/Cairn/Region.lean` proves the new protocol. Its timings were taken on a shared machine and are not quoted (`evidence/v0_9/perf`).
+- A host region is cut into one home range per lane, and each lane claims from its own home before the others', so a lane runs the same indices region after region: at 16 lanes and 1e6 elements the share a lane runs again rose from 0.14 to 0.50. `proofs/Cairn/Region.lean` proves the new protocol. Its timings were taken on a shared machine and are not quoted (`evidence/v1_0/perf`).
 - An I/O ring returns every submission exactly once with the kernel's errno, reports a ring the kernel would not create, and makes a full ring or an empty `next` visible before it traps; the service answers overload instead of trapping.
 - A spawn takes a parked task thread or starts one, so a pipeline pays for a thread once instead of per task, and no task ever waits for a thread.
 - A function that takes views has a checked C entry that checks every view once and a lean body that calls from CAIRN reach.
@@ -66,7 +66,7 @@ The first public release. The sections below it are the internal milestones that
 
 ### Verification
 
-- `bench/ai` is a preregistered equal-budget benchmark of CAIRN, C++ and Rust: ten small systems tasks with hidden checks under the sanitizers, sixty fresh `claude-sonnet-5` subjects. Every subject solved its task, so the run cannot tell the languages apart by tasks solved; CAIRN subjects used 11.6 times the tokens of C++ subjects, most of it reading the documentation (`evidence/v0_9/ai_benchmark`).
+- `bench/ai` is a preregistered equal-budget benchmark of CAIRN, C++ and Rust: ten small systems tasks with hidden checks under the sanitizers, sixty fresh `claude-sonnet-5` subjects. Every subject solved its task, so the run cannot tell the languages apart by tasks solved; CAIRN subjects used 11.6 times the tokens of C++ subjects, most of it reading the documentation (`evidence/v1_0/ai_benchmark`).
 - The whole release was held to its starting compiler: 1,541 programs emit the same C++, effect rows and refusal codes, and the editor features answer the same on 1,508.
 - The history audit reads every blob through one `git cat-file --batch`, lets a text record under `evidence/` reach 4 MB and holds everything else to 2 MB, judging a blob once per kind of path, and the benchmark's transcript audit reads a doubled leading slash as the path it names.
 - A test that opens the device gate fails before any process it did not replace can start.
@@ -168,7 +168,7 @@ The first public release. The sections below it are the internal milestones that
 
 ### Runtime
 
-- Host `parallel` regions run on a persistent pool of lanes instead of creating threads per statement; a region below sixteen thousand elements is compiled as the loop it replaces. On the GH200 the size at which a region beats the loop fell from ten million cheap elements to a hundred thousand (`evidence/v1_2/host_regions/`). `CAIRN_LANES` sets the lane count.
+- Host `parallel` regions run on a persistent pool of lanes instead of creating threads per statement; a region below sixteen thousand elements is compiled as the loop it replaces. On the GH200 the size at which a region beats the loop fell from ten million cheap elements to a hundred thousand (`evidence/v0_8_2/host_regions/`). `CAIRN_LANES` sets the lane count.
 - A host `reduce` reads its extent once.
 
 ### Verification
@@ -194,7 +194,7 @@ The first public release. The sections below it are the internal milestones that
 - Queued device work: `let t = spawn transfer(dst, src);` and `let k = spawn parallel i in n after t { ... };` put device work on its own stream and return. The ticket leases what the work touches until `wait`, `after` orders work by device events without a host wait, and work queued after a ticket may share what that ticket holds.
 - Incremental builds: `cairn build --incremental` compiles one object per module against a shared interface header and reuses an object only when everything that went into it hashes the same. A body-only edit recompiles one module. It is opt-in because it gives up inlining across modules. Device programs and images stay one unit.
 - Checked reduction: `reduce +` is offered on unsigned integers, on the host and on the device, and traps exactly when the total does not fit, in any order.
-- Evidence: a preregistered fresh-model pilot (`evidence/v1_1/ai_pilot`). Nine of nine tasks were solved from the rule cards alone, eight on the first compile, and every transcript was audited. The cards were then revised with what the subjects had to guess.
+- Evidence: a preregistered fresh-model pilot (`evidence/v0_8_1/ai_pilot`). Nine of nine tasks were solved from the rule cards alone, eight on the first compile, and every transcript was audited. The cards were then revised with what the subjects had to guess.
 - Source equivalence: the SMT model covers records, tag-only enums and payload sums with `match` and `try`, IEEE `f32` and `f64` under the compiler's strict floating contract, fixed local storage with its bounds guard, and loops with `break` and `continue` unrolled within a sixteen-iteration budget. A value is compared component by component, a sum by its tag and active payload only. Exceeding the budget is an obligation the solver must refute, and a returned NaN is reported unknown.
 - Proof: a core ownership and lease calculus in Lean (`proofs/Cairn/Ownership.lean`), with safety including race freedom and with witnesses that rejected programs really fault.
 - Tasks: leases are path sensitive. A `wait` on a path that returns no longer ends the lease on the path that goes on, a race three earlier reviews had missed.

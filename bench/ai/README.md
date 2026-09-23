@@ -1,6 +1,6 @@
 # Equal-budget AI benchmark
 
-Ten small systems tasks given to fresh model subjects in CAIRN, C++ and Rust, with the same budget in every language. [PREREGISTRATION.md](PREREGISTRATION.md) fixes the design, and `evidence/v0_9/ai_benchmark/` holds the results.
+Ten small systems tasks given to fresh model subjects in CAIRN, C++ and Rust, with the same budget in every language. [PREREGISTRATION.md](PREREGISTRATION.md) fixes the design, and `evidence/v1_0/ai_benchmark/` holds the results.
 
 ```sh
 python3 bench/ai/harness.py verify                     # every reference passes, every starter fails; no model runs

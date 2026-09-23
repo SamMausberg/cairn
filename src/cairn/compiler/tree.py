@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, NoReturn, TypeVar
 
 # Size limits: past one, a program is refused with a code instead of running out of time or memory. On the reference
-# machine a program of 31,802 functions, 7 MB and 758,000 nodes checked in 33 s at 800 MiB (evidence/v0_9/scale);
+# machine a program of 31,802 functions, 7 MB and 758,000 nodes checked in 33 s at 800 MiB (evidence/v1_0/scale);
 # the source and node limits admit about twice that, which was not measured.
 MAX_SOURCE = 16_000_000  # bytes of a program's combined source
 MAX_FUNCTIONS = 32_768  # functions a program holds: its own, its library's, and every copy and instance made

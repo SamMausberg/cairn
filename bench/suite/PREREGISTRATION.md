@@ -17,7 +17,7 @@ Eight kernels are preregistered. Each one is in for a stated reason, and no nint
 | kernel | why it is in | what a row may claim |
 |---|---|---|
 | `saxpy_f32` | two flops over twelve bytes, so a large region is bound by memory bandwidth and prices the region itself | ratio |
-| `mixed_u64` | a dependent integer mix in registers, already recorded at about 1.5 nanoseconds an element in `evidence/v1_2/host_regions`, so a large region is bound by the cores | ratio |
+| `mixed_u64` | a dependent integer mix in registers, already recorded at about 1.5 nanoseconds an element in `evidence/v0_8_2/host_regions`, so a large region is bound by the cores | ratio |
 | `sum_u64_wrap` | wrapping addition is order independent, so a reassociating parallel baseline computes the same function | ratio |
 | `dot_f64` | a strict in-order fold and a reassociating reduction are different functions of the same inputs | semantic difference only |
 | `compact_even` | the certified collector against `std::copy_if` and a two-pass parallel compaction | ratio |
@@ -25,7 +25,7 @@ Eight kernels are preregistered. Each one is in for a stated reason, and no nint
 | `stencil_1d` | the out-of-place shape is accepted in a region and the in-place shape is refused, which no C++ toolchain refuses | ratio, and a recorded refusal |
 | `tasks_split` | four visibly disjoint parts under leases, against `std::thread`, OpenMP sections and `tbb::parallel_invoke` | ratio |
 
-`mixed_u64` carries its body verbatim from `bench/host/host_regions.cpp`, and both it and `saxpy_f32` keep that file's input fill, so the numbers chain with `evidence/v1_2/host_regions/benchmark.json` rather than starting a second unrelated series.
+`mixed_u64` carries its body verbatim from `bench/host/host_regions.cpp`, and both it and `saxpy_f32` keep that file's input fill, so the numbers chain with `evidence/v0_8_2/host_regions/benchmark.json` rather than starting a second unrelated series.
 
 Three of the eight carry a finding that is not a speed. They are stated here, before any run, because each one is a limit of the language and not a defect of a baseline.
 

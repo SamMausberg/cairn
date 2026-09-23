@@ -1,7 +1,7 @@
 // saxpy_f32: out[i] = a * x[i] + y[i] over f32.
 //
 // The fill is bench/host/host_regions.cpp's, so a number here sits beside the ones already
-// recorded in evidence/v1_2/host_regions. Every value is exactly representable in f32 and every
+// recorded in evidence/v0_8_2/host_regions. Every value is exactly representable in f32 and every
 // product and sum is exact, so kernels/saxpy_f32/oracle.py can check the result in Python doubles
 // without a tolerance.
 #pragma once

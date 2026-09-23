@@ -188,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--model", help="default: the phase's preregistered model")
     t = sub.add_parser("report", help="summarize one phase")
     t.add_argument("--phase", choices=PHASES, required=True)
-    t.add_argument("--out", type=Path, default=HERE.parents[1] / "evidence" / "v0_9" / "ai_benchmark")
+    t.add_argument("--out", type=Path, default=HERE.parents[1] / "evidence" / "v1_0" / "ai_benchmark")
     t.add_argument("--root", type=Path, help="the run's root: audit every transcript again under the current rule")
     args = p.parse_args(argv)
     if args.command == "verify":

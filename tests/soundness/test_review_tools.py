@@ -1,7 +1,7 @@
 """The second adversarial review of what was added after 1.3: what it found, each fix pinned by the program that
 showed it, and the attacks that were correctly refused or held, kept so that a later change cannot reopen them.
 
-`evidence/v1_4/review/README.md` has the write-up. The first review's table is `test_review_forms.py`.
+`evidence/v1_0/review/README.md` has the write-up. The first review's table is `test_review_forms.py`.
 """
 
 import importlib.util

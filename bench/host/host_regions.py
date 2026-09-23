@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compile and run bench/host/host_regions.cpp and record the result with its environment.
 
-Writes evidence/v1_2/host_regions/benchmark.json. A run is filed under a label and merged into
+Writes evidence/v0_8_2/host_regions/benchmark.json. A run is filed under a label and merged into
 whatever is already there, so a before and an after measured on the same machine with the same
 flags sit side by side in one file. --runtime points at a directory of runtime headers, which is
 how the "before" row is taken: check the older headers out of git into a directory of their own.
@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from support import best_profile, profile_flags, version
 
-OUT = ROOT / "evidence/v1_2/host_regions/benchmark.json"
+OUT = ROOT / "evidence/v0_8_2/host_regions/benchmark.json"
 COMPILERS = ("g++", "clang++")
 
 

@@ -51,7 +51,7 @@ def lines(*patterns: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--release", default="v1_0")
+    parser.add_argument("--release", default="v0_8_0")
     args = parser.parse_args()
     out = ROOT / "evidence" / args.release
     out.mkdir(parents=True, exist_ok=True)

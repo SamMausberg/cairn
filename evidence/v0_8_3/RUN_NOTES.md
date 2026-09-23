@@ -1,0 +1,26 @@
+# CAIRN 1.3 run notes
+
+The first record taken on x86-64 and on a consumer GPU: Linux 6.18 under WSL2, sixteen hardware threads, g++ 13.3.0, clang++ 21.1.8, CUDA 13.2 with an NVIDIA GeForce RTX 5070 Ti (compute capability 12.0), libz3, oneTBB, Lean 4.34.0 through elan. 2026-09-22. Every earlier record (`v0_8_0` to `v0_8_2`) was taken on a rented GH200, AArch64. `summary.json` is written by `tools/release/collect_evidence.py --release v0_8_3` on a committed tree; `lean/` by `tools/release/collect_lean_evidence.py`, which rebuilds `proofs/` from scratch; `bench/` and `gpu/` by the harnesses named below.
+
+## What 1.3 added, and how each was checked here
+
+- Field-level leases. Two tasks may take two fields of one record; the same field twice, a field read under a whole-record lease and a new value landing in a lent cell are rejected by name. ThreadSanitizer runs under both compilers, and the Lean calculus reclassified its regression with `sameFieldToTwoTasks_races` as the witness.
+- Declared field extents, in written records and in records a recipe generates. `E-EXTENT` and `E-EXTENT-FIELD` tables, Address and Leak sanitizer runs under both compilers, a receipt test that the whole-column call carries no part guard, and `examples/apps/analytics` rewritten to pass its columns whole on both the host and the device configuration, agreeing bit for bit.
+- Task groups. Twenty-nine tests: completion order under ThreadSanitizer with both compilers, owners as results under Address and Leak, the full-group and empty-group traps exiting with SIGABRT, K-way parts leased until `wait`, and the rejection table over `E-PINNED`, `E-LINEAR-LEAK`, `E-LINEAR-BRANCH`, `E-MOVED`, `E-LEASED`, `E-SPAWN`, `E-TYPE-MISMATCH`, `E-LINEAR-STORAGE` and `E-PLACEMENT`. The Lean calculus does not model groups, and the roadmap says so.
+- `free` charged where the release runs, with the seventeen library rows that gained it pinned in a receipt test.
+- SMT: nested tags admitted as the emitter admits them, two views of one array sharing one storage through a call with the callee's disjointness guard modeled as emitted, and owners that move (`take`, `swap`, a by-value owner, a returned owner). Each has equivalent and refuted pairs whose counterexamples replay concretely, `validate_semantics.py --gcc` compared the model with native builds on 472,588 pinned cases, and `examples/proof_scope/mixed.cairn` keeps a function the model still refuses so empty coverage cannot pass.
+- Lean: the ownership development is ten modules under `proofs/Cairn/Ownership/`, 250 lines fewer through better arguments, with every pinned theorem statement unchanged; `lake build` from scratch, the axiom audit (`propext` and `Quot.sound` only, no `Classical.choice`), `ownership-regression: pass` and a 200-program differential run are in `lean/` and in the proof gate of `summary.json`.
+- The standard library additions (`std.text`, `std.io`, `std.vec`, `std.map`) run under both compilers, and the coverage program instantiates every generic the library declares.
+- The whole package type-checks under mypy, which `make lint` now runs.
+
+## Performance records
+
+`bench/` is the first run of the preregistered CPU baseline suite: eight kernels, plain C++, OpenMP and oneTBB baselines each built once guarded and once not, sixteen lanes, both compilers. Its README states the verdicts under the preregistered rule and the three losses the preregistration predicted. `gpu/benchmark.json` is `bench/gpu/parallel_gpu.py` on the RTX 5070 Ti, median of five after one warm-up: at 10^8 elements the device kernels run 25x (`saxpy`), 53x (`dot_reduce`) and 3.2x (`compact_even`) faster than the sequential host loop, and end to end, transfers included, 0.47x, 1.38x and 0.87x. Moving the data costs more than computing on it for two of the three, which is the cost the language makes a program write as `transfer`. The host-parallel column is the lane pool at sixteen lanes; `v0_8_2/host_regions` on the GH200 remains the record of where a region starts to pay off.
+
+## Known inaccuracy in summary.json
+
+`source_lines.lean_proofs` counted the six top-level proof files (1,704 lines) and missed the ten modules under `proofs/Cairn/Ownership/`; the development is 4,442 lines. `collect_evidence.py` counts the subdirectory from the next release on. `lean/summary.json` lists every file the build covered.
+
+## What was not done
+
+The freestanding target did not run here: `qemu-system-aarch64` and an AArch64 host are both absent on this machine, so `tests/projects/test_freestanding.py` skipped and `evidence/v0_8_0/embedded` on the GH200 is the last executed record of that profile. The clang++ OpenMP rows of one grain did not build, because the only `libomp` on this machine is LLVM 18's; the bench README records them as `did-not-build`. No comparative AI experiment ran. The SMT model still refuses an owner held inside a record, a sum or an array, recursion, concurrency, device placement, closures, `dyn` and the foreign boundary. The Lean calculus does not cover task groups, closures, `lane:f` callbacks, placement, `reduce`, `compact` or queued device work, and nothing relates the Python checker to it beyond the differential harness. The performance numbers are from one machine and one lane count.

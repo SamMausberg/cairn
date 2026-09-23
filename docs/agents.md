@@ -81,7 +81,7 @@ The host splices a reply into the pinned original and rechecks the whole linked 
 
 An admitted reply is `typed`, which says nothing yet about its behaviour. A refusal points into the reply the agent wrote (`line`, `column`, `source_line`, and `in` is `reply`) unless the whole-module recheck found the fault elsewhere. Its `repair_hint` is the smallest fix the host can state without guessing: a close name for an unknown one, the construct that brings each refused effect, the expand request that discloses a callee, or the conversion between two types.
 
-The host keeps the digests behind each handle, so the agent never copies a hash, and sends each card and the terms once per host. On thirty scripted edits of five example programs, a focused packet with one expansion took about a quarter of the context of the component packet (`evidence/v1_4/context/`). No model took part in that measurement.
+The host keeps the digests behind each handle, so the agent never copies a hash, and sends each card and the terms once per host. On thirty scripted edits of five example programs, a focused packet with one expansion took about a quarter of the context of the component packet (`evidence/v1_0/context/`). No model took part in that measurement.
 
 For a refactoring the host puts `{"preserve": "equivalent"}` or `{"preserve": "identical"}` in the contract, and the candidate is compared with the original as [`cairn diff`](tools.md#cairn-diff) compares versions: `identical` admits only the original's code up to renaming, and `equivalent` also what Z3 shows behaves the same. Anything else is `E-PRESERVE`, with any witness input as the `repair_hint`. An admission names the class it established in `equivalence`, or `not-proved` without the contract.
 
@@ -272,7 +272,7 @@ The plugin adds the skill, puts `bin/cairn` on the session's `PATH`, and runs `c
 
 The plugin also starts [`cairn mcp`](tools.md#cairn-mcp), a Model Context Protocol server, so an agent without a shell reaches the same hosts: `check`, `state`, and the edit, plan and implementation sessions of this page, as eight tools. A session opened on a path writes each change its host admits back to the files it came from, and refuses as stale (`E-SESSION`) when a file changed since the session read it. Claude Desktop and other MCP clients start the same server as `bin/cairn` with the argument `mcp`. `claude plugin details` counts the skill's description, about 181 tokens, as the plugin's whole always-on cost and does not count MCP tool schemas; the eight tools' list is 4,061 bytes of JSON, about a thousand tokens more wherever a client loads tool schemas up front.
 
-In a six-run smoke comparison (three small tasks, one `claude-sonnet-5` session each with and without the plugin), every session solved its task, and the sessions with the plugin cost 0.51 times as much and took 40 turns instead of 70, because they read two cards instead of searching the checkout ([evidence/v0_9/skill](../evidence/v0_9/skill/README.md)). One run per cell is not a benchmark.
+In a six-run smoke comparison (three small tasks, one `claude-sonnet-5` session each with and without the plugin), every session solved its task, and the sessions with the plugin cost 0.51 times as much and took 40 turns instead of 70, because they read two cards instead of searching the checkout ([evidence/v1_0/skill](../evidence/v1_0/skill/README.md)). One run per cell is not a benchmark.
 
 `bench/skill/` is a `claude plugin eval` suite, which `plugin.json` names under `experimental.evals`. Its six cases need only the Read, Glob, Grep and Skill tools: five refused programs, each graded by a regular expression for its diagnostic code, a rubric for the fix and whether the skill fired, and one checksum to write. `tests/tooling/test_skill.py` holds each program to the code its case grades. The suite has not been run.
 
@@ -280,7 +280,7 @@ In a six-run smoke comparison (three small tasks, one `claude-sonnet-5` session 
 
 `tools/corpus/` holds hand-written teaching material in the protocol's format: 40 tasks in 14 algorithm families, each with an equivalent and an inequivalent implementation, 28 preference pairs, and 29 executed repair transcripts. Its answers ship, so none of it is a held-out test. Solver timeouts, failed translations and tool errors never become positive labels, and edits that weaken a signature or empty a domain are not rewarded.
 
-Two experiments are designed. [tools/ai/protocol_trial.md](../tools/ai/protocol_trial.md) compares the focused and component packets on twelve planted repairs, and has not run. [bench/ai/PREREGISTRATION.md](../bench/ai/PREREGISTRATION.md) gives ten tasks to fresh model subjects in CAIRN, C++ and Rust at equal budgets, with results under `evidence/v0_9/ai_benchmark/`. Only the second compares languages, and neither tests other model families or large programs.
+Two experiments are designed. [tools/ai/protocol_trial.md](../tools/ai/protocol_trial.md) compares the focused and component packets on twelve planted repairs, and has not run. [bench/ai/PREREGISTRATION.md](../bench/ai/PREREGISTRATION.md) gives ten tasks to fresh model subjects in CAIRN, C++ and Rust at equal budgets, with results under `evidence/v1_0/ai_benchmark/`. Only the second compares languages, and neither tests other model families or large programs.
 
 ## Closed generator contracts
 
