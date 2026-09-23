@@ -22,9 +22,8 @@ from ..compiler.syntax import Parser
 from .scalar_semantics import equivalent
 
 
-def verify_module(
-    reference: str, candidate: str, timeout_ms: int = 3000, preconditions: dict[str, str] | None = None
-) -> dict:
+def verify_module(reference: str, candidate: str, timeout_ms: int = 3000,
+                  preconditions: dict[str, str] | None = None) -> dict:  # fmt: skip
     result: dict[str, Any] = {
         "protocol": "cairn.verification-coverage/1",
         "status": "incomplete",

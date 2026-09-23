@@ -128,15 +128,8 @@ def flags(arch: str | None = None, kind: str = "library", target: str | None = N
     return [*STRICT, *WARNINGS, "-march=" + resolve_arch(arch), *shared]
 
 
-def command(
-    cxx: str,
-    source: str,
-    artifact: str,
-    arch: str | None = None,
-    kind: str = "library",
-    cuda=False,
-    target: str | None = None,
-):
+def command(cxx: str, source: str, artifact: str, arch: str | None = None, kind: str = "library", cuda=False,
+            target: str | None = None):  # fmt: skip
     """The one native command line. Device programs go through nvcc with the same host contract."""
     if profile(target):
         start = TARGET_ROOT / str(target)

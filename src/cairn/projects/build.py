@@ -39,9 +39,8 @@ def store(target: Path, digest: Path, fresh: Path) -> None:
     temporary.replace(digest)
 
 
-def objects(
-    project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout, keep=False
-) -> tuple[list[str], list]:
+def objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout,
+            keep=False) -> tuple[list[str], list]:  # fmt: skip
     """One object per module, reused only when the unit, the shared interface, the command and the compiler all hash
     to the same key and the stored bytes still match the digest beside them, so nothing stale, truncated or replaced
     is ever linked. The cache is a directory of the project's own build output, never a link out of it. Missing
@@ -104,21 +103,10 @@ int main(int argc, char** argv) {{
 """
 
 
-def build(
-    project: Project,
-    *,
-    output: Path | None = None,
-    cxx: str = "clang++",
-    arch: str | None = None,
-    kind: str | None = None,
-    timeout: int = 60,
-    target: str | None = None,
-    debug: bool = False,
-    incremental: bool = False,
-    keep_guards: bool = False,
-    tests: tuple[str, ...] = (),
-    header: bool = False,
-) -> dict:
+def build(project: Project, *, output: Path | None = None, cxx: str = "clang++", arch: str | None = None,
+          kind: str | None = None, timeout: int = 60, target: str | None = None, debug: bool = False,
+          incremental: bool = False, keep_guards: bool = False, tests: tuple[str, ...] = (),
+          header: bool = False) -> dict:  # fmt: skip
     kind = "exe" if tests else kind or project.kind  # A test build is an executable whose main runs one test.
     target = target or project.target
     bare = bool(profile(target))

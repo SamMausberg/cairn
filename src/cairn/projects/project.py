@@ -247,9 +247,8 @@ def load_project(path: str | Path = ".", given: Mapping[Path, str] | None = None
                    manifest.libraries)  # fmt: skip
 
 
-def dependencies(
-    root: Path, table: dict, seen: dict[Path, str], depth: int = 0, given: Mapping[Path, str] | None = None
-) -> tuple[list[dict], list[tuple[str, str, str]]]:
+def dependencies(root: Path, table: dict, seen: dict[Path, str], depth: int = 0,
+                 given: Mapping[Path, str] | None = None) -> tuple[list[dict], list[tuple[str, str, str]]]:  # fmt: skip
     """`[dependencies] geometry = "deps/geometry"`: a project vendored inside this one's root. Its sources load
     before ours (its own dependencies first), it contributes modules only, and only what it marks `pub` is
     reachable. Nothing is fetched and nothing outside the root is read; the receipt pins what was used. One

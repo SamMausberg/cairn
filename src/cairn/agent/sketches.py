@@ -43,15 +43,8 @@ class Candidate:
 class Sketch:
     """A fixed function, fixed policy, and a few nonoverlapping expression slots."""
 
-    def __init__(
-        self,
-        source: str,
-        symbol: str,
-        *,
-        task: dict | None = None,
-        semantic: ScalarContract | None = None,
-        include: tuple[str, ...] = (),
-    ):
+    def __init__(self, source: str, symbol: str, *, task: dict | None = None, semantic: ScalarContract | None = None,
+                 include: tuple[str, ...] = ()):  # fmt: skip
         self._session = EditSession(source, symbol, task, include)
         if semantic is not None and semantic.symbol != symbol:
             fail("E-SKETCH-CONTRACT", "Semantic contract names a different target.")
@@ -224,14 +217,8 @@ def replayed(reference: Concrete, candidate: str, symbol: str, witnesses: list[A
     return None
 
 
-def solve_finite(
-    sketch: Sketch,
-    choices: dict[str, list[str]],
-    *,
-    limit: int = MAX_CHOICES,
-    timeout_ms: int = 3000,
-    use_counterexample_cache: bool = True,
-) -> dict:
+def solve_finite(sketch: Sketch, choices: dict[str, list[str]], *, limit: int = MAX_CHOICES, timeout_ms: int = 3000,
+                 use_counterexample_cache: bool = True) -> dict:  # fmt: skip
     """Search an explicit finite, ordered grammar. This is NOT a model trial.
 
     Replayed counterexamples only reject; final acceptance always makes a fresh

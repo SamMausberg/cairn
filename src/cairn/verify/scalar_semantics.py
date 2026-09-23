@@ -142,16 +142,9 @@ def implementation_hash():
     ).hexdigest()
 
 
-def equivalent(
-    reference: str,
-    candidate: str,
-    symbol: str,
-    *,
-    assume: str = "true",
-    allow_reference_traps: bool = False,
-    timeout_ms: int = 3000,
-    query_log: list | None = None,
-) -> dict[str, Any]:
+def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "true",
+               allow_reference_traps: bool = False, timeout_ms: int = 3000,
+               query_log: list | None = None) -> dict[str, Any]:  # fmt: skip
     """Check a fixed reference contract, not a model-editable expected result.
 
     The default requires reference totality over a nonempty, total domain.

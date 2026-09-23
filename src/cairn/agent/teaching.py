@@ -50,9 +50,8 @@ ro<dyn Shape> and rw<dyn Shape> parameters take any named place whose type imple
 }
 
 
-def select_cards(
-    source: str, has_views: bool = False, has_records: bool = False, has_sums: bool = False, lends: bool = False
-) -> dict[str, str]:
+def select_cards(source: str, has_views: bool = False, has_records: bool = False, has_sums: bool = False,
+                 lends: bool = False) -> dict[str, str]:  # fmt: skip
     # Actual tokens prevent comments/spacing from silently choosing the curriculum.
     words = {token.s for token in lex(source)}
     wanted = {

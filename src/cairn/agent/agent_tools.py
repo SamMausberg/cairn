@@ -92,14 +92,8 @@ class EditSession:
     session opens and shown with each interface (`agent/evidence.py`).
     """
 
-    def __init__(
-        self,
-        source: str,
-        symbol: str,
-        contract: dict[str, Any] | None = None,
-        include: tuple[str, ...] = (),
-        scope: str = "focused",
-    ):
+    def __init__(self, source: str, symbol: str, contract: dict[str, Any] | None = None, include: tuple[str, ...] = (),
+                 scope: str = "focused"):  # fmt: skip
         self.source, self.symbol, self.scope = source, symbol, scope
         self.contract = {} if contract is None else copy.deepcopy(contract)
         if scope not in SCOPES:

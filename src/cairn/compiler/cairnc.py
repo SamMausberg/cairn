@@ -59,9 +59,8 @@ def certify_templates(source: str) -> dict[str, str]:
     return certify(lambda: Checker(specialize(derive(link(Parser(source).parse())))))[1]
 
 
-def compile_units(
-    source: str, origin: Any = "", roots: tuple[str, ...] = (), keep_guards: bool = False, sites: Any = None
-) -> tuple[dict[str, str], dict[str, Any]]:
+def compile_units(source: str, origin: Any = "", roots: tuple[str, ...] = (), keep_guards: bool = False,
+                  sites: Any = None) -> tuple[dict[str, str], dict[str, Any]]:  # fmt: skip
     """The same program as one object per module: `program.hpp` (what every unit shares) and `<module>.cpp`
     files holding only bodies. A body-only change alters one file; a signature change alters the header."""
     interface, bodies, manifest = generate(source, origin, roots, keep_guards, sites)
@@ -75,9 +74,8 @@ def compile_units(
     return files, manifest
 
 
-def compile_source(
-    source: str, origin: Any = "", roots: tuple[str, ...] = (), keep_guards: bool = False, sites: Any = None
-) -> tuple[str, dict[str, Any]]:
+def compile_source(source: str, origin: Any = "", roots: tuple[str, ...] = (), keep_guards: bool = False,
+                   sites: Any = None) -> tuple[str, dict[str, Any]]:  # fmt: skip
     """Generated C++ and its receipt; `origin` names the source in #line directives for debug builds,
     `keep_guards` writes every guard, including the ones the checker showed cannot fail, and `sites` maps a line to
     the (file, line) a failed assert names."""
@@ -85,9 +83,8 @@ def compile_source(
     return "\n".join([*interface, *(line for _, lines in bodies for line in lines)]) + "\n", manifest
 
 
-def generate(
-    source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool = False, sites: Any = None
-) -> tuple[list[str], list[tuple[str, list[str]]], dict]:
+def generate(source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool = False,
+             sites: Any = None) -> tuple[list[str], list[tuple[str, list[str]]], dict]:  # fmt: skip
     p, checker, receipts = compile_program(source)
     certificate = audit_collector()  # The collector's unchecked store is emitted only under this gate.
     emitter = Emitter(p, checker, origin, roots, keep=keep_guards, sites=sites)
