@@ -1,6 +1,6 @@
 # Examples
 
-Every project under `examples/` is built and run by the test suite. Commands are written as `cairn ...`; from a source checkout that is `python3 bin/cairn ...`. Start with `hello` for the smallest complete project and `apps/kvstore` to see how a real program is shaped.
+Every project under `examples/` is built and run by the test suite. Commands are written as `cairn ...`; from a source checkout that is `python3 bin/cairn ...`. Start with `hello` for the smallest complete project and `apps/kvstore` to see how a real program is shaped. The three [demos](../demos/README.md) (an agent's repair reviewed by `cairn diff`, one numeric kernel on host and device lanes, and a UI an agent fixes from its frames) each run with one `make` target.
 
 | project | what it is | command |
 | --- | --- | --- |
@@ -16,12 +16,13 @@ Every project under `examples/` is built and run by the test suite. Commands are
 | [apps/simulator](#examplesappssimulator) | one Jacobi stencil, three back ends, bitwise agreement | `cairn run examples/apps/simulator` |
 | [apps/gpu_pipeline](#examplesappsgpu_pipeline) | upload, map, compact, reduce, download, checked against the host | `cairn run examples/apps/gpu_pipeline` |
 | [apps/matmul](#examplesappsmatmul) | an f16 layer multiplied by `mma_unordered` and held to its contract, on the host and on the tensor cores | `cairn run examples/apps/matmul` |
+| [interop](#examplesinterop) | a CAIRN library called from a C++ program through its generated header | `cairn build examples/interop --header` |
 | [embedded](#examplesembedded) | a bare-metal AArch64 image under QEMU, and a guard violation | `cairn run examples/embedded` |
 | [proof_scope](#examplesproof_scope) | what `cairn verify` covers and what it cannot reach | `cairn verify examples/proof_scope/reference.cairn examples/proof_scope/candidate.cairn --all` |
 | [sketch](#examplessketch) | a host-bound sketch settled by SMT, with no model in the loop | `python3 tools/ai/sketch_demo.py` |
 | [agent](#examplesagent) | the fixture behind the edit and repair loop | `python3 tools/ai/demo.py` |
 
-`apps/simulator`, `apps/gpu_pipeline`, `apps/analytics/gpu.toml` and `apps/matmul/gpu.toml` need nvcc and a CUDA device. `embedded` needs `qemu-system-aarch64` on an AArch64 host. Everything else needs only a C++20 compiler.
+`apps/simulator`, `apps/gpu_pipeline`, `apps/analytics/gpu.toml` and `apps/matmul/gpu.toml` need nvcc and a CUDA device, and the suite runs their device code only under `make gpu`. `embedded` needs `qemu-system-aarch64` on an AArch64 host. Everything else needs only a C++20 compiler.
 
 ## examples/hello
 
@@ -32,7 +33,7 @@ cairn run  examples/hello     # "status": "program-exited", "exit_code": 0
 cairn test examples/hello     # "status": "passed-finite-tests", "cases": 81
 ```
 
-`src/math.cairn` holds `average`, which computes the floor of the mean without overflowing the intermediate sum. `tests/average.json` pins it at 81 boundary pairs, including `u64` maxima, and `cairn test` builds a shared library and calls the symbol for each one.
+`src/math.cairn` holds `average`, the floor of the mean computed without overflowing the intermediate sum. `tests/average.json` pins it at 81 boundary pairs, `u64` maxima included, and `cairn test` builds a shared library and calls the symbol for each one.
 
 ## examples/systems
 
@@ -43,11 +44,11 @@ cairn run  examples/systems     # "status": "program-exited", "exit_code": 0
 cairn test examples/systems     # decimal_kind: 8 cases, sorted_even: 7 cases, both passed
 ```
 
-`src/parse.cairn` answers with a sum (`Value(u64)`, `Invalid(at)`, `Overflow(at)`, `Empty`) and never a sentinel, and it detects overflow before it happens. `src/sort.cairn` keeps its histogram in `stack counts:usize[256]`, so nothing is allocated and the `rw` output cannot alias the `ro` input.
+`src/parse.cairn` answers with a sum (`Value(u64)`, `Invalid(at)`, `Overflow(at)`, `Empty`), never a sentinel, and detects overflow before it happens. `src/sort.cairn` keeps its histogram in `stack counts:usize[256]`, so nothing is allocated, and the `rw` output cannot alias the `ro` input.
 
 ## examples/basics
 
-Three single-file sources with no `main`, read by `cairn check`, by the density harness (`tools/checks/density.py`) and by the codegen benchmarks.
+Three single-file sources with no `main`, read by `cairn check`, the density harness (`tools/checks/density.py`) and the codegen benchmarks.
 
 ```sh
 cairn check examples/basics/native.cairn   # "functions": 23
@@ -55,11 +56,11 @@ cairn check examples/basics/family.cairn   # "functions": 256
 cairn check examples/basics/wire.cairn     # "functions": 3
 ```
 
-`native.cairn` is the breadth sample: records, sums, `each` loops, `compact`, checked arithmetic, explicit conversions and every guard site. `family.cairn` is five lines that produce 256 typed specializations, which is what `family gain = scale[1..257];` means. `wire.cairn` is one record and one `derive wire`; read what it generated with `cairn expand examples/basics/wire.cairn`.
+`native.cairn` is the breadth sample: records, sums, `each` loops, `compact`, checked arithmetic, explicit conversions and every guard site. `family.cairn` is five lines that produce 256 typed specializations, which is what `family gain = scale[1..257];` means. `wire.cairn` is one record and one `derive wire`; `cairn expand examples/basics/wire.cairn` shows what it generated.
 
 ## examples/apps/kvstore
 
-A crash-safe log-structured store: an append-only log of checksummed records, the index in memory, put/get/delete, reopen by replay, and compaction. `main` runs the whole scenario against a file of its own and returns 0 only if every check passes.
+A crash-safe log-structured store: an append-only log of checksummed records, an index in memory, put, get and delete, reopening by replay, and compaction. `main` runs the whole scenario against a file of its own and returns 0 only if every check passes.
 
 ```sh
 cairn run examples/apps/kvstore
@@ -69,11 +70,14 @@ cairn run examples/apps/kvstore
 kvstore: self-check passed
 ```
 
-What it shows. `derive wire` for the 16-byte record header: `struct Header { check:u32; kind:u32; key_len:u32; val_len:u32; }` plus `derive wire for Header;` gives little-endian `encode_Header` and `decode_Header` with no padding and no hand-written shifting. A linear `File` beside the state, not inside it: `Store` holds only the index and the valid log length, and the File is a separate local with `defer io.close(f)`, because a linear value inside a struct could never be consumed. `try` with `defer`: every step is `let x = try ...;`, and the deferred close runs on the failing path too. `Map[u64, Record]` with owner values: the index owns both the key and the value bytes, replacing a key releases the old value inside the map, and `remove` moves it out. Recovery that is a loop: `replay` stops at the first record that is short, truncated or fails its checksum, `ftruncate`s the file back to the last whole record and leaves the descriptor there. The scenario tears the log twice, nine bytes of a header and then a complete record with a wrong checksum, and expects both to vanish.
+What it shows:
 
-The index is keyed by the 64-bit FNV digest of the key and also stores the key bytes, so every hit is verified byte for byte and a digest collision is a miss rather than a wrong answer. Values live in memory; the log is the durability layer, replayed on open and rewritten by compaction. `compact_log` writes the live records to `<path>.tmp` and renames it over the log; the caller must reopen afterwards, because the descriptor it still holds names the replaced file.
+- `derive wire for Header;` writes the 16-byte header's little-endian `encode_Header` and `decode_Header`, with no hand-written shifts.
+- A linear `File` lives beside the state, not inside it, and is closed by `defer io.close(f)`, which runs on the failing path of every `try` too.
+- `Map[u64, Record]` owns the key and value bytes: replacing a key releases the old value, and `remove` moves it out. A hit is checked byte for byte, so a digest collision is a miss, not a wrong answer.
+- `replay` stops at the first short, truncated or corrupt record and truncates the file there. The scenario tears the log twice and expects both tears to vanish.
 
-From the build receipt, minus the `ffi_precondition`, `diverge`, `local_read`, `local_write`, `stack_storage` and `ffi:__errno_location` that every caller of `std.io` carries:
+The effect rows, leaving out what every caller of `std.io` carries:
 
 ```text
 put          alloc, ffi:fsync, ffi:write, free, io, mmio, read:f, read:key, read:s, read:value,
@@ -84,11 +88,11 @@ compact_log  ffi:close, ffi:fsync, ffi:open, ffi:rename, ffi:write, io, mmio, re
              read:temp, trap, zero_init
 ```
 
-`put` says `ffi:fsync`, so durability is visible in the row of everything that calls it. `compact_log` has no `alloc`, because rewriting the log copies bytes through one stack header and the existing Vec storage. `mmio` comes from `std.sys.errno`, which reads errno's address with one volatile load.
+`put` says `ffi:fsync`, so durability shows in the row of everything that calls it. `compact_log` has no `alloc`: it copies through one stack header and the existing storage.
 
 ## examples/apps/service
 
-A TCP key/value service on 127.0.0.1, serving many clients at once from one thread, shut down by a client.
+A TCP key/value service on 127.0.0.1 that serves many clients at once from one thread, and is shut down by a client.
 
 ```text
 put <key> <value>   ->  +ok
@@ -111,11 +115,11 @@ printf 'put a hello\nget a\ndel a\nget a\nquit\n' | nc 127.0.0.1 39800
 +bye
 ```
 
-The port is `const PORT:u16` in `src/main.cairn`. `tests/projects/test_apps.py` copies the project and rewrites it with a free port, so parallel test workers never collide.
+What it shows:
 
-What it shows. One thread and one I/O ring: `run` keeps the accept and every client's receive in flight together, and `q.next(tag, result)` answers whichever finished first. The tag says which: 0 is the accept, `k + 1` is client `k`'s receive. The buffer a receive fills comes back with its result and goes straight into the next receive, so nothing is allocated per request except the answer to `get`. When a client says `quit`, `run` cancels the accept and every idle receive, and `defer wait(q)` collects what the cancels stopped before the listener closes. `tests/projects/test_apps.py` holds three clients connected at once, interleaves their requests, and checks that the process never has a second thread.
-
-Parsing without substrings: a borrow cannot be returned, so `word_end` answers with an index and the request is sliced at the call site, `find(t, k, line[key_lo..key_hi])`, and nothing is copied until a key is stored. Each client keeps its pending line in its own slot; `take_in` appends what arrived, answers every complete line, and shifts the remainder down with an ordinary loop, since `mem.copy` would be rejected there (`E-ALIAS`). The `Table` lives in `run`, so every client sees what the others stored.
+- One thread and one I/O ring. The accept and every client's receive stay in flight together, and `q.next(tag, result)` answers whichever finished first. A receive's buffer comes back with its result and goes into the next receive, so nothing is allocated per request except the answer to `get`. The test holds three clients at once and checks the process never has a second thread.
+- On `quit`, `run` cancels the accept and every idle receive, and `defer wait(q)` collects them before the listener closes.
+- Parsing without substrings. A borrow cannot be returned, so `word_end` returns an index and the caller slices, `find(t, k, line[key_lo..key_hi])`. Shifting a client's pending line down is an ordinary loop, because `mem.copy` would be refused there (`E-ALIAS`).
 
 ```text
 respond  alloc, ffi:send, free, io, mmio, read:line, read:t, trap, write:t, zero_init
@@ -125,13 +129,13 @@ hang_up  ffi:close, io, read:clients, trap, write:clients
 run      + ffi:socket, ffi:bind, ffi:listen, ffi:setsockopt, ffi:close, ffi:write
 ```
 
-`respond` reads the request and writes only the table, and the row says which argument each read and write belongs to. `admit` writes the ring it was lent, because every submission changes it, and sends `-busy` to a client it turns away. `alloc` is in `respond` because `get` builds its answer in a `Vec`; a reply of a fixed shape would not allocate. A reply is a blocking send, which a line always fits; a client that stops reading its replies can still stall the service.
+`respond` has `alloc` only because `get` builds its answer in a `Vec`. A reply is a blocking send, so a client that stops reading its replies can still stall the service.
 
-Overload is an answer, never a trap. The table holds 32 clients, and a 33rd connection hears `-busy` and is closed. An accept that fails, which is what running out of descriptors looks like, is not retried at once: `run` submits a ten-millisecond `q.timeout` under the tag `RETRY` and accepts again when it fires, so a shortage costs no CPU and the waiting client is admitted as soon as another leaves. A kernel with no io_uring for the service (a container's seccomp filter, a sysctl, no descriptor for the ring) makes `q.status()` negative, and the service says `service: no io_uring here, errno 24` and exits 2 before it listens. `tests/projects/test_apps.py` provokes all three: a table of two and a third client, a descriptor limit lowered on the running process, and a limit that leaves the ring no descriptor.
+Overload is an answer, never a trap. A 33rd client hears `-busy` and is closed. A failed accept, which is what running out of descriptors looks like, is retried after a ten-millisecond `q.timeout`, so a shortage costs no CPU. A kernel without io_uring for the service makes `q.status()` negative, and the service prints `service: no io_uring here, errno 24` and exits 2. `tests/projects/test_apps.py` provokes all three.
 
 ## examples/apps/wordfreq
 
-A command-line tool: the most frequent words of the files named on its command line, then the totals. A word is a run of ASCII letters and digits, folded to lowercase, and ties go in byte order. `tale.txt` is the opening of A Tale of Two Cities.
+A command-line tool that prints the most frequent words of the files named on its command line, then the totals. A word is a run of ASCII letters and digits, folded to lowercase, and ties go in byte order. `tale.txt` is the opening of A Tale of Two Cities.
 
 ```sh
 cairn run examples/apps/wordfreq -- -n 5 examples/apps/wordfreq/tale.txt
@@ -146,9 +150,7 @@ cairn run examples/apps/wordfreq -- -n 5 examples/apps/wordfreq/tale.txt
 119 words, 58 distinct
 ```
 
-What it shows. `std.env` hands it its arguments, and each path goes to `std.fs.read` as it is, with no NUL to add. The map is keyed by the word itself: `Word` wraps a `Vec[u8]` and implements `Hash` and `Eq` over its bytes, so two words never share an entry whatever their hashes do. `tally` counts through `counts.update(word, |c:rw<u64>| { c += 1; })`, which lends the closure the count alone; a closure that reached for the map there would be refused (`E-ALIAS`). The rows are sorted by `std.sort.sort_by` with a closure that reads the map, and `std.fmt` right-aligns the counts, so one `io.print` writes the whole table.
-
-`src/words.cairn` holds two test blocks that `cairn test examples/apps/wordfreq` runs: one for the byte classes and one that counts a sentence into a fresh map and looks a word up in it, a `Map` that no JSON contract could pass. A file it cannot read is named with its errno and the program exits 1 (`wordfreq: cannot read nowhere.txt: errno 2`), and a missing file list or a count that is not a number prints the usage and exits 2. `tests/projects/test_wordfreq.py` compares every line with Python's `Counter` over the same bytes, under both compilers and once more under AddressSanitizer with leak detection, on files with ties, capitals, digits, bytes past ASCII and one that is empty, and holds the output above to what the program prints.
+What it shows: `std.env` and `std.fs` for arguments and files; a `Map` keyed by a `Word` that implements `Hash` and `Eq` over its bytes; `counts.update(word, |c:rw<u64>| { c += 1; })`, which lends the closure the count alone (a closure that reached for the map would be `E-ALIAS`); and `std.fmt` for the aligned table. An unreadable file exits 1 with its errno, and bad arguments print the usage and exit 2. `tests/projects/test_wordfreq.py` compares every line with Python's `Counter`, under both compilers and under AddressSanitizer.
 
 ## examples/apps/classifier
 
@@ -169,13 +171,11 @@ f8e4m3 accuracy 0.995000
 f8e4m3 drift    0.961371
 ```
 
-What it shows. `derive grad[w, c, v, b] for loss;` differentiates the parameters and leaves the points as data, and `loss_grad` calls `sample_grad`, which calls `logit_grad` and `unit_grad`, each generated from its own `derive grad` line. The sums are `let mut` loops (`z += unit(...)`), because a function that reaches libm cannot run inside a `reduce`; `std.math.exp` and `std.math.log` have their derivatives written with themselves, so the gradient's row says `ffi:exp` too. `quantize[i8](f32(p[i]), scale)` rounds once and saturates, and `f32(q) * scale` brings it back. Drift is the largest change quantization makes to the output before the logistic function, over the unseen points. The run above is on this machine; the numbers depend only on the code and the IEEE arithmetic, apart from libm's last bit.
-
-`cairn run examples/apps/classifier -- 40` trains 40 steps instead of 800. `tests/projects/test_app_classifier.py` trains those 40 steps again in Python with the backward pass derived by hand and requires every printed number to agree to the six places printed, under both compilers, and runs the full 800 steps under AddressSanitizer and UndefinedBehaviorSanitizer, requiring the accuracy and quantization costs above to hold within stated margins.
+`derive grad[w, c, v, b] for loss;` differentiates the parameters and leaves the points as data, and each helper's gradient comes from its own `derive grad` line. The sums are `let mut` loops because a function that reaches libm cannot run inside a `reduce`. `quantize[i8](f32(p[i]), scale)` rounds once and saturates. Drift is the largest change quantization makes to the output before the logistic function. `tests/projects/test_app_classifier.py` retrains 40 steps in Python with a hand-derived backward pass and requires every printed number to agree, under both compilers, and runs the full 800 steps under the sanitizers.
 
 ## examples/apps/panel
 
-A small inventory screen, a list of six items and the detail of the selected one, driven by a script of keys with one frame per key. It is drawn with `std.draw` on the CPU and never opens a window. `cairn shot` runs it and hands back each frame.
+A small inventory screen, a list of six items and the detail of the selected one, driven by a script of keys with one frame per key. `std.draw` draws it on the CPU, and it never opens a window. `cairn shot` runs it and hands back each frame.
 
 ```sh
 cairn shot examples/apps/panel --symbol panel.ui.update
@@ -189,15 +189,19 @@ shot: 7 frames
   panel.ui.update: read:ui, trap, write:ui
 ```
 
-What it shows. `update` declares `effects(read:ui, write:ui, trap)`, so an allocation added to it anywhere is `E-EFFECT-CEILING` before it runs, and the row in the shot says so too. Each frame is `spawn render.frame(canvas, sheet, shown)`: the task draws a copy of the state while `main` applies the next key to the state itself, and until `wait` the canvas it writes and the icon sheet it reads are leased to it, so filling the canvas there is `E-LEASED`. The ticket is linear, so a frame that starts without its `wait` is `E-LINEAR-LEAK`. The frame marks the list, the highlight, the detail and the status bar in a `Layout`, and `draw.capture` writes the frame and those marks when `CAIRN_SHOT` names a directory. `cairn run examples/apps/panel` draws the same frames and captures none.
+What it shows:
 
-`render.cairn` ends in `test layout`, which draws every state and asserts that the panels stay on the screen and apart and that the highlight sits on its row, so `cairn test examples/apps/panel` holds the layout without a pixel read. `tests/projects/test_app_panel.py` recomputes each frame's selection from the key script, requires every mark inside the canvas, the highlight inside the list and the detail apart from the list, and reads the pixels back from the PNG files. It also holds the three refusals above to their codes, and asks the edit host for the same shot.
+- `update` declares `effects(read:ui, write:ui, trap)`, so an allocation added to it is `E-EFFECT-CEILING`, and the shot shows the row.
+- Each frame is `spawn render.frame(canvas, sheet, shown)`, drawing a copy of the state while `main` applies the next key. Touching the canvas before `wait` is `E-LEASED`, and a frame without its `wait` is `E-LINEAR-LEAK`.
+- The frame marks its panels in a `Layout`, and `draw.capture` writes the frame and the marks when `CAIRN_SHOT` names a directory. `test layout` asserts that the panels stay on screen and apart, so `cairn test` holds the layout without reading a pixel.
+
+[demos/visual](../demos/visual/README.md) is the same loop with an agent in it.
 
 ## examples/apps/analytics
 
-A million wire-encoded trades on disk, read back into a structure of arrays, filtered, aggregated and grouped four different ways. No table type here is one the compiler knows about: `Trade_table`, `Trade_get`, `Trade_summarize`, `Trade_unrolled_price`, the `Ord` that sorts a row and the `Aggregator` impls behind the query plan are all generated by recipes, four of this program's own in `src/cols.cairn` and `src/agg.cairn` plus `wire`, `eq` and `ord` from the packaged library.
+A million wire-encoded trades on disk, read back into a structure of arrays, filtered, aggregated and grouped four ways. No table type here is one the compiler knows: `Trade_table`, `Trade_get`, `Trade_summarize`, `Trade_unrolled_price`, the `Ord` that sorts a row and the `Aggregator` impls behind the query plan are all generated by recipes. Four of the recipes are the program's own, in `src/cols.cairn` and `src/agg.cairn`, and `wire`, `eq` and `ord` come from the packaged library.
 
-Every query is answered twice, and `main` returns 0 only if the two answers agree: row-wise against column-wise, the contracted collector against the loop, a sequential pass against host lanes, one pass against four tasks, a bound against a table lookup. The device configuration adds host against device. 791 lines of CAIRN in ten modules; 21 bytes a row, 21 MB on disk, 10^6 rows.
+Every query is answered twice, and `main` returns 0 only if the two answers agree: row-wise against column-wise, the contracted collector against the loop, a sequential pass against host lanes, one pass against four tasks, and a bound against a table lookup. The device configuration adds host against device. The program is 791 lines of CAIRN in ten modules, with 21 bytes a row, 21 MB on disk and 10^6 rows.
 
 ```sh
 cairn run examples/apps/analytics --timeout 240
@@ -218,7 +222,7 @@ analytics: group by venue    2513 us
 analytics: every cross-check passed on the host
 ```
 
-The host configuration needs no GPU and builds in 1.2 s under clang++, 1.4 s under g++. The device one is `gpu.toml`, which swaps `src/main.cairn` for `src/device_main.cairn` and adds `src/device.cairn`, because one `@device` view sends the whole program through nvcc and a machine without CUDA must still be able to build and run the host engine. nvcc takes 6.3 s of the 7 s that build spends.
+The device configuration is a second manifest, `gpu.toml`, because one `@device` view sends the whole program through nvcc, and a machine without CUDA must still build the host engine in its 1.2 s.
 
 ```sh
 cairn run examples/apps/analytics/gpu.toml --timeout 300
@@ -236,7 +240,15 @@ analytics: queued pipeline   1123 us
 analytics: the device agrees with the host bit for bit
 ```
 
-What it shows. Recipes as the schema layer: `columns/1` generates the table record (the row count, then one `Buf` per field that declares the row count as its extent, so a column goes to every query whole and pays no part guard), the row accessors, a row digest folded over the fields with `fold ^`, and the static facts `count(R)` and the wire width `fold + each f in R { bytes(f) }`; `stats/1` generates a summary record laid out column by column and four functions per column; `unrolled[K]/1` takes a natural and generates a K-accumulator kernel per column, so `derive cols.unrolled[4] for Trade;` and `derive cols.unrolled[8] for sensor.Reading;` differ only in that number; `device_columns/1` generates the same reductions over `@device` views, under the same names, in a different module. Generated implementations: `derive eq for Trade;` and `derive ord for Trade;` let `sort.sort` order whole rows, and `analytics.agg` derives its own aggregators, `derive folded[add_wrap] for SumAgg;`, `derive folded[max] for MaxAgg;`, `derive folded[counting] for CountAgg;`, so a fourth aggregator is one line. Two totals, because they are two claims: `reduce +` over an unsigned column traps if the total does not fit, `reduce add_wrap` is exact under any association and is what the device tree reduction is compared against, and the program insists they agree. A K-way task split: `venue_sums_tasks` lends four visibly disjoint row ranges and four disjoint blocks of one scratch buffer to four tasks at once; overlap the blocks by one element and the checker says `E-LEASED` at the second `spawn`. Templates that say what they need: `cairn check --generics examples/apps/analytics` exits 0, with all seven templates certifying. Lanes that call the caller's closure: `map_par` is generic, its lanes call `f`, its row carries `lane:f`, and a closure that assigned its capture would be `E-PARALLEL-CALL`. Pluggable aggregators both ways: `run_static[A:Aggregator]` is monomorphised, `run_dyn(a:rw<dyn Aggregator>, ...)` dispatches, and `Vec[Dyn[Aggregator]]` is a query plan assembled at run time, all answering the same numbers. A queued device pipeline over pinned staging: `spawn transfer`, `spawn parallel ... after up_price, up_qty` and `spawn transfer ... after work` put two uploads, a region and a download on streams, while the host folds its own copy straight out of the same staging buffers under a shared read-only lease. Labels nobody counts: `report.line` takes `ro<u8>[LABEL]`, and a label one space short is `E-TYPE-MISMATCH` at the call.
+What it shows:
+
+- Recipes as the schema layer. `columns/1` generates the table record, one `Buf` per field with the row count as its declared extent, so a column goes to every query whole and pays no part guard. `unrolled[K]/1` takes a number, so `derive cols.unrolled[4] for Trade;` and `derive cols.unrolled[8] for sensor.Reading;` differ only in it. `derive folded[add_wrap] for SumAgg;` makes an aggregator in one line.
+- Two totals, because they are two claims: `reduce +` traps if the total does not fit, and `reduce add_wrap` is exact under any association, which is what the device's tree reduction is compared against.
+- A four-way task split over disjoint row ranges and scratch blocks. Overlap two blocks by one element and the second `spawn` is `E-LEASED`.
+- `map_par`'s lanes call the caller's closure and its row says `lane:f`; a closure that assigned its capture would be `E-PARALLEL-CALL`.
+- Aggregators three ways, `run_static[A:Aggregator]`, `run_dyn(a:rw<dyn Aggregator>, ...)` and a `Vec[Dyn[Aggregator]]` plan built at run time, all giving the same numbers.
+- A queued device pipeline, `spawn transfer` and `spawn parallel ... after`, while the host folds its own copy from the same pinned staging under a shared read-only lease.
+- `report.line` takes `ro<u8>[LABEL]`, so a label one space short is `E-TYPE-MISMATCH`.
 
 ```text
 cols.chain                              (empty)
@@ -254,15 +266,13 @@ agg.run_dyn                             ... dispatch
 device.queued_notional                  ... spawn, join, par:device, transfer:h2d, transfer:d2h
 ```
 
-The two derived-column functions differ in exactly one effect. The helpers the recipes splice in have empty rows, so a generated digest or aggregator costs nothing but arithmetic.
+Measured 2026-09-19 on a GH200 with CUDA 12.8 and clang 15.0.7: ingest dominates, host lanes do not pay off over 10^6 cheap elements, and on the device the queries take 1 ms against 2.2 ms on the host but the download alone costs 1.9 ms. Moving the answer costs more than computing it, which is why the language makes you write the `transfer`.
 
-Measured 2026-09-19 on a GH200 with CUDA 12.8 and clang 15.0.7. Ingest dominates: 25 ms to encode, write, read and decode a million 21-byte rows, against 2 ms for a full pass over a column. Host lanes do not pay off here, because `notional_par` over 10^6 cheap elements is no faster than the loop. On the device the three queries take 1 ms against 2.2 ms on the host, but the download of the kept prefix costs 1.9 ms on its own: moving the answer is dearer than computing it, which is why the language makes you write the `transfer`.
-
-Still awkward: a recipe's run-time `fold` takes an operator or a bare function name, never a qualified one, so the digest folds with `^` over per-field calls; a view parameter's extent cannot be inferred from a literal, so a label is a fixed width; and `notional_of` is written by hand, because a recipe iterates over all of a record's fields and arithmetic between two named ones has no shape a recipe can take.
+Still awkward: a recipe's run-time `fold` takes only an operator or a bare function name, a view's extent cannot be inferred from a literal, and a recipe cannot express arithmetic between two named fields, so `notional_of` is written by hand.
 
 ## examples/apps/simulator
 
-A 2-D Jacobi heat sweep over a 1024x1024 grid, 16 sweeps, run three ways: an ordinary loop, host lanes (`parallel` over `@host` views) and device lanes (`parallel` over `@device` views). The program compares all three element by element and fails if any bit differs. Needs nvcc and a CUDA device.
+A 2-D Jacobi heat sweep over a 1024x1024 grid, 16 sweeps, run three ways: an ordinary loop, host lanes (`parallel` over `@host` views) and device lanes (`parallel` over `@device` views). The program compares all three element by element and fails if any bit differs. It needs nvcc and a CUDA device.
 
 ```sh
 cairn run examples/apps/simulator --timeout 240
@@ -277,7 +287,7 @@ simulator: device     448 us
 simulator: all three back ends agree bit for bit
 ```
 
-What it shows. Placement is the only difference: `step_loop`, `step_threads` and `step_device` have the same body, and the third one's `@device` views alone make its lanes a kernel. Bitwise agreement is a claim the language can keep: the arithmetic lives in one function, `blend(up, down, left, right) = 0.25 * (up + down + left + right)`, compiled for both host and device from one definition, with contraction and reassociation forbidden on both sides. Ping-pong without moving an owner: each round runs two sweeps, `a -> b` then `b -> a`, so the two `buffer`s never have to be swapped and both keep the extent identity `m`. `transfer` is the only crossing: two explicit copies, one in and one out.
+Placement is the only difference: `step_loop`, `step_threads` and `step_device` have the same body, and the third one's `@device` views alone make its lanes a kernel. Bitwise agreement holds because the arithmetic lives in one function compiled for both sides, with contraction and reassociation forbidden on both. Each round sweeps `a -> b` then `b -> a`, so no owner moves, and `transfer` is the only crossing.
 
 ```text
 blend         (empty)
@@ -288,11 +298,11 @@ step_device   ffi_precondition, par:device, read:src, trap, write:out
 main          ... gpu_alloc, gpu_free, transfer:h2d, transfer:d2h, par:host, par:device
 ```
 
-Measured 2026-09-19 on a GH200, 64 cores, CUDA 12.8, clang 15.0.7. Host threads beat the sequential loop by about 10x; sixteen sweeps are sixteen regions, cheap because the first one builds the lane pool and the rest reuse it. The device sweeps are about 85x faster than the sequential loop, but the first device allocation pays 283 ms to create the CUDA context, which the program reports separately rather than hiding inside the measurement.
+Measured 2026-09-19 on a GH200, 64 cores, CUDA 12.8, clang 15.0.7: host threads beat the loop by about 10x and the device sweeps by about 85x, but the first device allocation pays 283 ms to create the CUDA context, which the program reports on its own line rather than hiding it.
 
 ## examples/apps/gpu_pipeline
 
-Four device stages over 2^22 values, each one statement, verified against the same four stages run on the host. Every phase is timed with `io.monotonic_ns`. Needs nvcc and a CUDA device.
+Four device stages over 2^22 values, each one statement, checked against the same four stages run on the host. Every phase is timed with `io.monotonic_ns`. It needs nvcc and a CUDA device.
 
 ```sh
 cairn run examples/apps/gpu_pipeline --timeout 240
@@ -309,7 +319,7 @@ gpu_pipeline: download        1647 us
 gpu_pipeline: device result matches the host
 ```
 
-What it shows. The contracted forms run on the device unchanged: `compact out for i in m where ... yield ...` becomes CUB stream compaction when its output is a `@device` view and a plain loop when it is not, and `reduce add_wrap ...` becomes a device tree reduction or a host in-order fold. Why `add_wrap` and not `+`: the device folds in an unspecified association order, so only an operator that is exact under any association may be offered, and the host and device sums are equal by construction. Compacted prefixes are parts: `keep_device` returns how many values it selected, and the sum of the selection is `sum_device(dev_used, dev_kept[0..dev_used])`, a part with one dynamic guard. Verification is elementwise: the kept prefix is downloaded and compared with the host's, and the two counts and the two sums must agree.
+The same `compact` and `reduce` become CUB stream compaction and a tree reduction when their views are on the device, and plain loops when they are not. The sum is `add_wrap`, not `+`, because the device folds in an unspecified order and only an operator exact under any association is allowed there. The kept prefix is a part, `dev_kept[0..dev_used]`, with one dynamic guard.
 
 ```text
 map_device   ffi_precondition, par:device, read:src, trap, write:out
@@ -318,11 +328,11 @@ sum_device   ffi_precondition, gpu_alloc, gpu_free, par:device, read:src, trap
 main         ... alloc, free, gpu_alloc, gpu_free, io, par:device, transfer:h2d, transfer:d2h
 ```
 
-`keep_device` and `sum_device` say `gpu_alloc` and `gpu_free`, which is CUB's own temporary storage for the scan and the tree reduction, so the device buffers the program asks for are not the only device memory in the row. `main` carries no `par:host`, because the host `reduce` emits a sequential fold. Measured 2026-09-19 on a GH200 with CUDA 12.8: the device does map, compact and reduce in about 1 ms against 3.5 ms for the host pipeline, but the download of the whole capacity costs 1.6 ms on its own.
+`gpu_alloc` in `keep_device` and `sum_device` is CUB's own temporary storage. Measured 2026-09-19 on a GH200 with CUDA 12.8: the device stages take about 1 ms against 3.5 ms for the host pipeline, and the download alone 1.6 ms.
 
 ## examples/apps/matmul
 
-One dense layer, `out = x * w`, with `x` and `w` rounded once from f32 to `f16` and `out` accumulated in f32 by `mma_unordered`. The host configuration multiplies with the written loop and checks every output against the multiply's contract, an exact f64 sum over the same `f16` values within `(inner + 1) * 2^-22 * sum |x * w|`, and its two test blocks check that the host is the written loop bit for bit and that no products leave every output as it was.
+One dense layer, `out = x * w`, with `x` and `w` rounded once from f32 to `f16` and `out` accumulated in f32 by `mma_unordered`. The host configuration multiplies with the written loop and checks every output against the multiply's contract: an exact f64 sum over the same `f16` values, within `(inner + 1) * 2^-22 * sum |x * w|`. Its two test blocks check that the host is the written loop bit for bit, and that no products leave every output as it was.
 
 ```sh
 cairn run examples/apps/matmul
@@ -332,13 +342,13 @@ cairn run examples/apps/matmul
 host layer: 200 x 136 x 72, 0 outputs outside the contract
 ```
 
-`gpu.toml` replaces the entry with `src/device_main.cairn`, which moves the matrices to the device, multiplies a 256 x 512 x 1024 layer on the tensor cores and holds it to the same bound. That shape is whole 64 x 64 tiles with `k` and `n` multiples of 8, so both shared-memory stages cross in asynchronous 16-byte copies. It runs only under `make gpu`, and nothing here has measured it. `cairn predict` prices it from the published tensor peak, as a roofline, at low confidence:
+`gpu.toml` replaces the entry with `src/device_main.cairn`, which moves the matrices to the device, multiplies a 256 x 512 x 1024 layer on the tensor cores and holds it to the same bound. That shape is whole 64 x 64 tiles with `k` and `n` multiples of 8, so both shared-memory stages load through asynchronous 16-byte copies. It runs only under `make gpu`, and nothing here has measured it. `cairn predict` prices it from the published tensor peak, as a roofline, at low confidence:
 
 ```sh
 cairn predict examples/apps/matmul/gpu.toml --symbol device_layer --at rows=256,cols=512,inner=1024,on=131072,xn=262144,wn=524288
 ```
 
-At that size the prediction is 11.4 us, of which the assumed 8 us launch is most, and the multiply's own 2.6 MB and 268 million operations would take 3.4 us at the sustained bandwidth and 3.1 us at the tensor peak, a predicted 0.27 of the roofline. Every one of those numbers is the specification's until `make calibrate-device` measures the device.
+The prediction is 11.4 us, most of it an assumed 8 us launch, and 0.27 of the roofline. Every one of those numbers is the specification's until `make calibrate-device` measures the device.
 
 ```text
 host_layer    ffi_precondition, read:w, read:x, trap, write:out
@@ -348,7 +358,7 @@ main          ... gpu_alloc, gpu_free, par:device, transfer:h2d, transfer:d2h
 
 ## examples/interop
 
-A CAIRN library called from a C++ program that owns its data. `src/stats.cairn` summarizes a series in one pass, scales it in place, sums sliding windows and names its trend as a sum; `host/main.cpp` includes the header `cairn build --header` wrote and is built by the C++ compiler alone.
+A CAIRN library called from a C++ program that owns its data. `src/stats.cairn` summarizes a series in one pass, scales it in place, sums sliding windows and names its trend as a sum. `host/main.cpp` includes the header `cairn build --header` wrote and is built by the C++ compiler alone.
 
 ```text
 count 6, min 4, max 42, total 108
@@ -357,11 +367,11 @@ trend up by 38, spread 38
 scaled by 3/2: 6 .. 63
 ```
 
-What it shows. `ct_Summary` and `ct_Trend` cross the boundary by value, laid out exactly as the header states and the library checks. A vector goes in as its `data()` and `size()`, and `cf_window_sums` refuses an output that overlaps its input by aborting at its entry. `spread` calls `summarize` inside CAIRN, and that call reaches the lean body with no entry checks. [tools.md](tools.md#cairn-build---header) has the rules.
+`ct_Summary` and `ct_Trend` cross the boundary by value, laid out exactly as the header states and the library checks. A vector goes in as its `data()` and `size()`, and `cf_window_sums` refuses an output that overlaps its input by aborting at its entry. `spread` calls `summarize` inside CAIRN, and that call reaches the lean body, with no entry checks. [tools.md](tools.md#cairn-build---header) has the rules.
 
 ## examples/embedded
 
-A sensor log arrives over a wire as comma-terminated decimal fields, some of them malformed. This program reports every bad field with the offset of the byte at fault, summarises the good ones with checked arithmetic, sorts them through a fixed histogram and prints all of it over a PL011 UART, on a machine with no operating system, no C library and no allocator.
+A sensor log arrives over a wire as comma-terminated decimal fields, some of them malformed. This program reports each bad field with the offset of the byte at fault, summarises the good ones with checked arithmetic, sorts them through a fixed histogram, and prints all of it over a PL011 UART, on a machine with no operating system, no C library and no allocator.
 
 ```sh
 cairn run   examples/embedded     # builds the image and runs it under QEMU
@@ -379,13 +389,11 @@ sorted 7 19 19 23 31 42
 ok
 ```
 
-The image exits with `fn main()`'s return value, 0 here, and `size` reports 5411 bytes of text with no data and no bss.
+The image exits with `fn main()`'s return value, 0 here, and `size` reports 5411 bytes of text, with no data and no bss.
 
-`src/uart.cairn` is the driver: `mmio_read[u32]` and `mmio_write[u32]` inside `unsafe { }` poll the flag register until the transmit FIFO has room, then write the data register; `putu` formats a `u64` as decimal into twenty bytes of `stack` storage with every write bounds checked. `src/parse.cairn` answers with `enum Reading { Value(u64); Invalid(usize); Overflow(usize); Empty; }`, a value rather than an errno or a sentinel, carrying the offset of the first byte at fault, and it detects overflow before it happens. `src/main.cairn` walks the input once and hands each field to the parser as `text[start..i]`, a part of the one borrowed view: no copy, no allocation, one guard that the part is inside the string. The `match` has an arm per variant and no wildcard, the totals use checked `+`, and `sort_small` counting-sorts through a `stack counts:usize[64]` histogram, where a reading outside `0..63` trips the range-checked `u8` conversion or the bounds check rather than corrupting a neighbouring bucket.
+The UART driver is `mmio_read[u32]` and `mmio_write[u32]` inside `unsafe { }`. Each field goes to the parser as `text[start..i]`, a part of the one borrowed view, with no copy and one guard. The parser answers with a sum carrying the offset at fault, and the sort goes through a `stack` histogram. There is no `Buf`, `parallel` or `extern` anywhere, and there could not be ([the freestanding target](tools.md#the-freestanding-target)).
 
-There is no `buffer`, no `Buf`, no `parallel` and no `extern` anywhere, and there could not be: the freestanding build reads the effect row of every function and refuses the program by name if one of them needs something a hosted runtime would provide ([the freestanding target](tools.md#the-freestanding-target)).
-
-`trap/` is the same machine and the same driver, reading one element past a four-element array with an index that comes from storage. There is no MMU, so the read would succeed and return whatever follows the array; the language's own bounds check is what stops it.
+`trap/` reads one element past a four-element array. There is no MMU, so the read would return whatever follows the array; the language's bounds check is what stops it.
 
 ```sh
 cairn run examples/embedded/trap
@@ -395,7 +403,7 @@ cairn run examples/embedded/trap
 trap demo: reading window[4] of 4
 ```
 
-`unreachable` is never printed and QEMU exits 134, the status a hosted shell reports for `std::abort`.
+`unreachable` is never printed, and QEMU exits 134, the status a hosted shell reports for `std::abort`.
 
 ## examples/proof_scope
 
@@ -409,11 +417,11 @@ cairn verify examples/proof_scope/reference.cairn examples/proof_scope/mixed.cai
 # "status": "incomplete", missing: extent, shifted; extra: applied, moved; uncovered: applied, extent, moved, shifted
 ```
 
-`applied` takes a callable, which the value model cannot express, so it is reported as uncovered rather than as equivalent, and `mixed.cairn` compared with itself stays `incomplete` because of it; `moved` allocates a `Buf` and `take`s it, which the model does follow. `native_proof` and `lean_proof` are `false` in both answers: this is SMT equivalence of two sources under a restricted value model, not a proof about the emitted machine code.
+`applied` takes a callable, which the value model cannot express, so it is reported as uncovered rather than equivalent, and `mixed.cairn` compared with itself stays `incomplete` because of it. `moved` allocates a `Buf` and `take`s it, which the model does follow. `native_proof` and `lean_proof` are `false` in both answers: this is SMT equivalence of two sources under a restricted value model, not a proof about the emitted machine code.
 
 ## examples/sketch
 
-A host-bound sketch. The signature, the task and the reference belong to the host; the only thing searched is one named choice. `before.cairn` returns `(x + y) / 2`, which overflows, and `after.cairn` is what the deterministic search picks.
+A host-bound sketch. The signature, the task and the reference belong to the host, and the only thing searched is one named choice. `before.cairn` returns `(x + y) / 2`, which overflows, and `after.cairn` is what the deterministic search picks.
 
 ```sh
 python3 tools/ai/sketch_demo.py --out /tmp/sketchdemo
@@ -433,4 +441,4 @@ python3 tools/ai/demo.py --out /tmp/agentdemo
 #  "public_cases": 3, "reserved_cases": 5, "adapter_kind": "scripted-fixture"}
 ```
 
-`scripted_adapter.py` is a scripted stand-in for a model: it replies with a type error, then a behavioural error, then the correct body, which is what makes the transcript reproducible. `task.json` names the symbol, the allowed effects and the cases; some of them are reserved, so the adapter never sees what it is finally judged on. `prefix_sum.cairn` is a second, unrelated symbol the harnesses use.
+`scripted_adapter.py` stands in for a model: it replies with a type error, then a behavioural error, then the correct body, which makes the transcript reproducible. `task.json` names the symbol, the allowed effects and the cases. Some cases are reserved, so the adapter never sees what it is finally judged on. `prefix_sum.cairn` is a second, unrelated symbol the harnesses use. [demos/repair](../demos/repair/README.md) runs the same loop through the edit host on a larger program, and ends with `cairn diff`.
