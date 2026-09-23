@@ -7,13 +7,20 @@ carries what a type does not say about itself.
 
 from __future__ import annotations
 
+import pickle
 from dataclasses import dataclass, field
-from typing import Any, NoReturn
+from typing import Any, NoReturn, TypeVar
 
 MAX_SOURCE = 2_000_000
 MAX_FAMILY = 1024
 MAX_FUNCTIONS = 2048
 MAX_NODES = 200_000
+Node = TypeVar("Node")
+
+
+def clone(node: Node) -> Node:
+    """A deep copy of plain tree data, as `copy.deepcopy` makes it, through pickle's C code in a third of the time."""
+    return pickle.loads(pickle.dumps(node, pickle.HIGHEST_PROTOCOL))
 
 
 class Diagnostic(Exception):

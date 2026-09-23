@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import ctypes.util
 import functools
 import json
 import os
@@ -305,6 +304,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         assumed = preconditions(a.assume) if a.command == "verify" else {}
         if a.command == "doctor":
+            import ctypes.util  # Only the doctor looks for libz3, so no other command pays to load ctypes.
+
             elan = os.pathsep.join([os.environ.get("PATH", ""), str(Path.home() / ".elan/bin")])
             tools = {
                     "version": __version__,

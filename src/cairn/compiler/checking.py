@@ -13,6 +13,7 @@ bound as methods in the class, so each lives in the file that owns its subject.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from operator import attrgetter
 from typing import Any
 
 from . import calls, concurrency, expressions, places, statements
@@ -48,7 +49,7 @@ def parts(layout: Any) -> list[Type]:
 
 
 class Checker:
-    # Declared for readers and type checkers; the values live in the current Scope (see __getattr__).
+    # Declared for readers and type checkers; the values live in the current Scope (see `scoped` below).
     f: Function
     tenv: dict[str, Any]
     env: dict[str, Binding]
@@ -152,17 +153,6 @@ class Checker:
         self.address_taken: set[str] = set()
         self.nodes = self.unique = 0
         self.reaching = 0  # Depth inside a field path: its base is reached, not read whole.
-
-    def __getattr__(self, name: str):  # Per-function state lives in the current Scope.
-        if name in SCOPED:
-            return getattr(self.s, name)
-        raise AttributeError(name)
-
-    def __setattr__(self, name: str, value: Any):
-        if name in SCOPED:
-            setattr(self.s, name, value)
-        else:
-            object.__setattr__(self, name, value)
 
     # Names and types ---------------------------------------------------------------------------
 
@@ -612,3 +602,19 @@ class Checker:
         ty = self.expr(e, consume=False)
         self.early[id(e)] = e
         return ty
+
+
+def scoped(name: str) -> property:
+    """A Scope field, read and written through the checker as `self.env`. A property is found at once, where a
+    __getattr__ ran only after each failed lookup."""
+
+    def put(checker: Checker, value: Any) -> None:
+        setattr(checker.s, name, value)
+
+    return property(attrgetter(f"s.{name}"), put)
+
+
+if _clash := SCOPED & set(vars(Checker)):  # A property would replace a method of the same name unseen.
+    raise TypeError(f"Checker defines {sorted(_clash)}, which name fields of Scope.")
+for _name in SCOPED:
+    setattr(Checker, _name, scoped(_name))

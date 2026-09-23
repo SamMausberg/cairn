@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from .tree import MAX_SOURCE, fail
 
 
-@dataclass
+@dataclass(slots=True)
 class Token:
     s: str
     line: int
@@ -17,10 +17,10 @@ class Token:
     end: int = -1
 
 
-TOKEN = re.compile(
-    r"//[^\n]*|\s+|\"(?:[^\"\\\n]|\\.)*\"|'(?:[^'\\\n]|\\.)+'|0x[0-9A-Fa-f]+"
+TOKEN = re.compile(  # No two alternatives match at the same first character, so the commonest go first.
+    r"\s+|[A-Za-z_$][A-Za-z_0-9$]*|//[^\n]*|\"(?:[^\"\\\n]|\\.)*\"|'(?:[^'\\\n]|\\.)+'|0x[0-9A-Fa-f]+"
     r"|(?:[0-9]+\.[0-9]+(?:[eE][+-]?[0-9]+)?|[0-9]+(?:[eE][+-]?[0-9]+))|[0-9]+"
-    r"|[A-Za-z_$][A-Za-z_0-9$]*|=>|->|\.\.|==|!=|<=|>=|&&|\|\||[-+*/%&|^]=|[{}()\[\],;:.@+*/%<>=!&|^~-]"
+    r"|=>|->|\.\.|==|!=|<=|>=|&&|\|\||[-+*/%&|^]=|[{}()\[\],;:.@+*/%<>=!&|^~-]"
 )
 COMPOUND = {op + "=": op for op in "+-*/%&|^"}  # `x += e` is the checked `x = x + e`; wrapping stays by name
 IDENT = re.compile(r"[A-Za-z_$][A-Za-z_0-9$]*\Z")
@@ -37,22 +37,24 @@ ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "0": "\0", "\\": "\\", '"': '"', "'"
 def lex(text: str) -> list[Token]:
     if len(text.encode()) > MAX_SOURCE:
         fail("E-SOURCE-LIMIT", "Source exceeds the 2 MB bootstrap limit.")
+    # Only a run of whitespace holds a newline: a comment, a string and a character literal all stop before one. So
+    # only whitespace moves the line, and a token's column is its distance from where its line starts.
     out: list[Token] = []
-    p, line, col = 0, 1, 1
-    while p < len(text):
-        m = TOKEN.match(text, p)
+    append, match = out.append, TOKEN.match
+    p, end, line, start = 0, len(text), 1, 0
+    while p < end:
+        m = match(text, p)
         if not m:
-            fail("E-LEX", f"Unexpected character {text[p]!r}.", Token("", line, col))
-        s = m.group()
-        if not s.isspace() and not s.startswith("//"):
-            out.append(Token(s, line, col, p, m.end()))
-        if "\n" in s:
-            line += s.count("\n")
-            col = len(s.rsplit("\n", 1)[1]) + 1
-        else:
-            col += len(s)
-        p = m.end()
-    out.append(Token("<eof>", line, col, p, p))
+            fail("E-LEX", f"Unexpected character {text[p]!r}.", Token("", line, p - start + 1))
+        e = m.end()
+        if text[p].isspace():
+            if newlines := text.count("\n", p, e):
+                line += newlines
+                start = text.rindex("\n", p, e) + 1
+        elif not text.startswith("//", p):
+            append(Token(text[p:e], line, p - start + 1, p, e))
+        p = e
+    append(Token("<eof>", line, p - start + 1, p, p))
     return out
 
 

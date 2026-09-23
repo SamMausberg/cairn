@@ -32,6 +32,7 @@ from .tree import (
     Shape,
     Stmt,
     Type,
+    clone,
     fail,
 )
 
@@ -409,7 +410,7 @@ def specialize(p: Program) -> Program:
         if estimated > MAX_NODES or len(concrete) + hi - lo > MAX_FUNCTIONS:
             fail("E-EXPANSION-LIMIT", "Family exceeds the remaining AST/function budget.")
         for k in range(lo, hi):
-            f = copy.deepcopy(base)
+            f = clone(base)
             f.name, f.bindings = f"{prefix}_{k}", {base.generics[0][0]: k}
             if f.name in names:
                 fail("E-DUPLICATE", f"Family emits duplicate name {f.name}.")

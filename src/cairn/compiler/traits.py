@@ -4,7 +4,6 @@ instance is made. Functions over the checker, like effects.py and builtins.py; c
 
 from __future__ import annotations
 
-import copy
 import itertools
 import math
 from collections.abc import Callable
@@ -25,6 +24,7 @@ from .tree import (
     Expr,
     Function,
     Type,
+    clone,
     fail,
     is_view,
 )
@@ -95,7 +95,7 @@ def instantiate(c: Checker, template: Function, bound: dict[str, Any], node: Any
                     fail(code, f"{value.display()} {broken}; {template.name} needs [{g}:{constraint}].", node)
         if len(c.p.functions) >= MAX_FUNCTIONS:
             fail("E-EXPANSION-LIMIT", "Expanded program exceeds 2048 functions.", node)
-        f = copy.deepcopy(template)
+        f = clone(template)
         f.name, f.bindings = (name, dict(zip((g for g, _ in template.generics), values, strict=True)))
         c.fs[name] = f
         c.p.functions.append(f)

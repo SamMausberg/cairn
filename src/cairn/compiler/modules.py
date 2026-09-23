@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import pickle
 from dataclasses import fields
+from functools import lru_cache
 from pathlib import Path
 
 from .syntax import Parser
@@ -25,6 +27,12 @@ def library_source(module: str) -> str | None:
     return path.read_text(encoding="utf-8") if path else None
 
 
+@lru_cache(maxsize=64)
+def parsed(source: str) -> bytes:
+    """A library module's syntax tree, parsed once per process and kept pickled, since linking changes the tree."""
+    return pickle.dumps(Parser(source).parse(), pickle.HIGHEST_PROTOCOL)
+
+
 def link(p: Program) -> Program:
     """Merge every imported module that the program does not define itself, transitively."""
     defined = set(p.modules.values())
@@ -39,7 +47,7 @@ def link(p: Program) -> Program:
         source = library_source(module)
         if source is None:
             fail("E-IMPORT", f"Unknown module {module}; only project modules and std.* can be imported.")
-        library = Parser(source).parse()
+        library = pickle.loads(parsed(source))
         if set(library.modules.values()) != {module}:
             fail("E-IMPORT", f"{module} must declare exactly `module {module};`.")
         if set(library.modules) & set(p.modules):
