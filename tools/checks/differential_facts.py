@@ -15,7 +15,6 @@ import argparse
 import json
 import os
 import random
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -26,7 +25,7 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.compiler import facts as F
 from cairn.compiler.scope import Binding
 from cairn.compiler.tree import USIZE, Expr, Type
-from checks.differential_ownership import PROOFS, find_lake, lean_environment
+from checks.differential_ownership import find_lake, run_lean
 
 ATOMS = 4  # x0..x3 are immutable usize values; m0 is one that can change.
 STRIDES = (2, 4, 8, 256)
@@ -137,19 +136,8 @@ def lean_source(rows: list[str], chunk: int = 100) -> str:
 def compare(count: int, seed: int, lake: str, target: Path, timeout: int) -> dict:
     rng = random.Random(seed)
     cases = [case(rng) for _ in range(count)]
-    target.write_text(lean_source([lean_row(c) for c in cases]), encoding="utf-8")
-    command = [lake, "env", "lean", str(target)]
-    done = subprocess.run(command, cwd=PROOFS, capture_output=True, text=True, env=lean_environment(), timeout=timeout)
-    if done.returncode != 0:  # A cold `.lake`: build once and try again.
-        subprocess.run(
-            [lake, "build"], cwd=PROOFS, capture_output=True, text=True, env=lean_environment(), timeout=timeout
-        )
-        done = subprocess.run(
-            command, cwd=PROOFS, capture_output=True, text=True, env=lean_environment(), timeout=timeout
-        )
-    if done.returncode != 0:
-        raise RuntimeError("lake env lean failed:\n" + done.stdout[-4000:] + done.stderr[-4000:])
-    lean = [line for line in done.stdout.split() if len(line) == len(DECISIONS) and set(line) <= {"0", "1"}]
+    printed = run_lean(lean_source([lean_row(c) for c in cases]), lake, target, timeout)
+    lean = [line for line in printed.split() if len(line) == len(DECISIONS) and set(line) <= {"0", "1"}]
     if len(lean) != count:
         raise RuntimeError(f"the Lean run printed {len(lean)} rows for {count} inputs")
     disagreements, held = [], dict.fromkeys(DECISIONS, 0)

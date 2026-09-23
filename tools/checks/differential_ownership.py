@@ -635,10 +635,10 @@ def lean_source(rendered: list[str], names: list[str], chunk: int = 100) -> str:
     return "\n".join(lines) + "\n"
 
 
-def lean_verdicts(text: str, lake: str, target: Path, timeout: int) -> dict[str, bool]:
-    """Run the generated file once and read one line per program.
+def run_lean(text: str, lake: str, target: Path, timeout: int) -> str:
+    """Write `text` to `target`, run it once with `lake env lean`, and return what it printed.
 
-    `lake env lean` needs `Cairn.Ownership` already compiled, so a first failure is answered by
+    `lake env lean` needs the modules it imports already compiled, so a first failure is answered by
     building `proofs/` once and trying again: that covers a checkout whose `.lake` is cold, and
     a build another process was part way through.  A second failure is reported, never ignored.
     """
@@ -654,8 +654,13 @@ def lean_verdicts(text: str, lake: str, target: Path, timeout: int) -> dict[str,
         )
     if done.returncode != 0:
         raise RuntimeError("lake env lean failed:\n" + done.stdout[-4000:] + done.stderr[-4000:])
+    return done.stdout
+
+
+def lean_verdicts(text: str, lake: str, target: Path, timeout: int) -> dict[str, bool]:
+    """Run the generated file once and read one line per program."""
     verdicts = {}
-    for line in done.stdout.splitlines():
+    for line in run_lean(text, lake, target, timeout).splitlines():
         parts = line.strip().split()
         if len(parts) == 2 and parts[1] in {"accept", "reject"}:
             verdicts[parts[0]] = parts[1] == "accept"
