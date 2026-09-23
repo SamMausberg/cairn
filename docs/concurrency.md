@@ -1,6 +1,6 @@
 # Tasks, lanes and devices
 
-Tasks lease what they borrow, lanes are race free by construction, and placement is part of a view's type. [language.md](language.md) covers values and control flow, [memory.md](memory.md) memory, ownership and effects; [abstractions.md](abstractions.md) covers generics, traits, closures, modules and recipes.
+Tasks lease what they borrow, lanes are race free by construction, and placement is part of a view's type. [language.md](language.md) covers values and control flow, [memory.md](memory.md) memory, ownership and effects; [abstractions.md](abstractions.md) covers generics, traits, closures, modules and recipes, and [numerics.md](numerics.md) the storage floats a region may hold and convert, quantization and derived gradients.
 
 ## Tasks and leases
 
