@@ -1,0 +1,184 @@
+{
+ "row_sums[2]": {
+  "cooperative": [
+   {
+    "at": "src/device_kernels.cairn:48",
+    "placement": "device",
+    "threads": 256,
+    "thread_extents": [
+     256
+    ],
+    "shared_bytes": 6144,
+    "shared": [
+     {
+      "at": "src/device_kernels.cairn:50",
+      "name": "partial",
+      "bytes": 2048
+     }
+    ],
+    "pipelines": [
+     {
+      "at": "src/device_kernels.cairn:49",
+      "name": "tiles",
+      "depth": 2,
+      "stage_bytes": 2048,
+      "bytes": 4096
+     }
+    ],
+    "barriers": [
+     "src/device_kernels.cairn:62",
+     "src/device_kernels.cairn:65",
+     "src/device_kernels.cairn:69"
+    ],
+    "waits": [
+     {
+      "at": "src/device_kernels.cairn:59",
+      "pipeline": "tiles",
+      "wait_group": 1
+     }
+    ],
+    "copies": [
+     {
+      "at": "src/device_kernels.cairn:53",
+      "pipeline": "tiles"
+     },
+     {
+      "at": "src/device_kernels.cairn:58",
+      "pipeline": "tiles"
+     }
+    ],
+    "warp_collectives": [
+     {
+      "at": "src/device_kernels.cairn:72",
+      "operation": "reduce + warp"
+     }
+    ]
+   }
+  ],
+  "synchronization": [
+   {
+    "at": "src/device_kernels.cairn:73",
+    "kind": "cooperative region completes"
+   },
+   {
+    "at": "src/device_kernels.cairn:53",
+    "kind": "pipeline copies start"
+   },
+   {
+    "at": "src/device_kernels.cairn:58",
+    "kind": "pipeline copies start"
+   },
+   {
+    "at": "src/device_kernels.cairn:59",
+    "kind": "pipeline wait"
+   },
+   {
+    "at": "src/device_kernels.cairn:62",
+    "kind": "barrier"
+   },
+   {
+    "at": "src/device_kernels.cairn:65",
+    "kind": "barrier"
+   },
+   {
+    "at": "src/device_kernels.cairn:69",
+    "kind": "barrier"
+   },
+   {
+    "at": "src/device_kernels.cairn:72",
+    "kind": "warp reduction"
+   }
+  ]
+ },
+ "row_sums[3]": {
+  "cooperative": [
+   {
+    "at": "src/device_kernels.cairn:48",
+    "placement": "device",
+    "threads": 256,
+    "thread_extents": [
+     256
+    ],
+    "shared_bytes": 8192,
+    "shared": [
+     {
+      "at": "src/device_kernels.cairn:50",
+      "name": "partial",
+      "bytes": 2048
+     }
+    ],
+    "pipelines": [
+     {
+      "at": "src/device_kernels.cairn:49",
+      "name": "tiles",
+      "depth": 3,
+      "stage_bytes": 2048,
+      "bytes": 6144
+     }
+    ],
+    "barriers": [
+     "src/device_kernels.cairn:62",
+     "src/device_kernels.cairn:65",
+     "src/device_kernels.cairn:69"
+    ],
+    "waits": [
+     {
+      "at": "src/device_kernels.cairn:59",
+      "pipeline": "tiles",
+      "wait_group": 2
+     }
+    ],
+    "copies": [
+     {
+      "at": "src/device_kernels.cairn:53",
+      "pipeline": "tiles"
+     },
+     {
+      "at": "src/device_kernels.cairn:58",
+      "pipeline": "tiles"
+     }
+    ],
+    "warp_collectives": [
+     {
+      "at": "src/device_kernels.cairn:72",
+      "operation": "reduce + warp"
+     }
+    ]
+   }
+  ],
+  "synchronization": [
+   {
+    "at": "src/device_kernels.cairn:73",
+    "kind": "cooperative region completes"
+   },
+   {
+    "at": "src/device_kernels.cairn:53",
+    "kind": "pipeline copies start"
+   },
+   {
+    "at": "src/device_kernels.cairn:58",
+    "kind": "pipeline copies start"
+   },
+   {
+    "at": "src/device_kernels.cairn:59",
+    "kind": "pipeline wait"
+   },
+   {
+    "at": "src/device_kernels.cairn:62",
+    "kind": "barrier"
+   },
+   {
+    "at": "src/device_kernels.cairn:65",
+    "kind": "barrier"
+   },
+   {
+    "at": "src/device_kernels.cairn:69",
+    "kind": "barrier"
+   },
+   {
+    "at": "src/device_kernels.cairn:72",
+    "kind": "warp reduction"
+   }
+  ]
+ }
+}

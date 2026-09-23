@@ -16,3 +16,4 @@ Each directory is one record of the 0.9.0 release work, taken as it landed on a 
 | `tensor/` | Two matrix multiplies written with layouts and tensor-core fragments, checked on the host and compiled for sm_120. |
 | `cooperative/` | Cooperative regions and pipeline stages: host runs under the thread sanitizer, and the sm_120 device build, which has not run. |
 | `review/` | An adversarial review of the implementation layer: the defects found, their fixes, the attacks that held and what was not examined. |
+| `predict_cooperative/` | What `cairn predict`, `explain` and `tune` say of cooperative regions: shared memory against ptxas, a pipeline's depth, a search over block shape and depth; nothing ran. |

@@ -1,0 +1,200 @@
+{
+ "schema": "cairn.tune/2",
+ "function": "row_totals",
+ "sizes": [
+  {
+   "rows": 64,
+   "cols": 100000.0
+  }
+ ],
+ "predicted": "Every plan the checker accepted is priced by cairn predict; a plan changes no result, so none needed checking. Registers and shared memory come from compiling the candidate, never from a run.",
+ "profile": {
+  "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+  "origin": "measured",
+  "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+ },
+ "target": {
+  "host": {
+   "arch": "baseline"
+  }
+ },
+ "device_target": {
+  "name": "sm_120",
+  "compute_capability": "12.0",
+  "variant": "portable",
+  "origin": "given",
+  "features": [
+   "device_lanes",
+   "wmma",
+   "mma_sync",
+   "bf16",
+   "cp_async",
+   "clusters",
+   "tma"
+  ],
+  "required_features": [],
+  "limits": {
+   "registers_per_thread": 255,
+   "registers_per_sm": 65536,
+   "threads_per_block": 1024,
+   "warps_per_sm": 48,
+   "shared_per_block": 49152,
+   "shared_per_block_optin": 101376,
+   "shared_per_sm": 102400
+  },
+  "limits_origin": "specification: CUDA C++ Programming Guide, technical specifications per compute capability",
+  "toolkit": {
+   "nvcc": "/usr/local/cuda/bin/nvcc",
+   "release": "13.2",
+   "version": "V13.2.78"
+  }
+ },
+ "regions": [],
+ "current": "(no plan for row_totals)",
+ "space": {
+  "configurations": 5,
+  "checked": 5,
+  "legal": 5,
+  "refused": []
+ },
+ "candidates": [
+  {
+   "plan": "plan row_totals use row_totals_tiled[256, 3];",
+   "predicted_ns": 75750.0,
+   "use": "row_totals_tiled[256, 3]",
+   "validated": "no validation holds: run cairn validate before using it",
+   "resources": {
+    "registers": 32,
+    "spill_bytes": 0,
+    "stack_bytes": 0,
+    "shared_bytes": 8192,
+    "dynamic_shared_bytes": 0,
+    "instructions": 488,
+    "key": "81591ebeba739624",
+    "sass": "fdcc55e1f236a43c",
+    "kept": false
+   },
+   "parameters": {
+    "T": 256,
+    "D": 3
+   }
+  },
+  {
+   "plan": "plan row_totals use row_totals_tiled[256, 2];",
+   "predicted_ns": 106200.0,
+   "use": "row_totals_tiled[256, 2]",
+   "validated": "no validation holds: run cairn validate before using it",
+   "resources": {
+    "registers": 48,
+    "spill_bytes": 0,
+    "stack_bytes": 0,
+    "shared_bytes": 6144,
+    "dynamic_shared_bytes": 0,
+    "instructions": 576,
+    "key": "f347297f87186637",
+    "sass": "6006bbc4459c65dc",
+    "kept": false
+   },
+   "parameters": {
+    "T": 256,
+    "D": 2
+   }
+  },
+  {
+   "plan": "plan row_totals use row_totals_tiled[128, 3];",
+   "predicted_ns": 138700.0,
+   "use": "row_totals_tiled[128, 3]",
+   "validated": "no validation holds: run cairn validate before using it",
+   "resources": {
+    "registers": 32,
+    "spill_bytes": 0,
+    "stack_bytes": 0,
+    "shared_bytes": 4096,
+    "dynamic_shared_bytes": 0,
+    "instructions": 480,
+    "key": "9ea237a4478e1277",
+    "sass": "78b3a0a9dee2977e",
+    "kept": false
+   },
+   "parameters": {
+    "T": 128,
+    "D": 3
+   }
+  },
+  {
+   "plan": "plan row_totals use row_totals_tiled[128, 2];",
+   "predicted_ns": 203800.0,
+   "use": "row_totals_tiled[128, 2]",
+   "validated": "no validation holds: run cairn validate before using it",
+   "resources": {
+    "registers": 48,
+    "spill_bytes": 0,
+    "stack_bytes": 0,
+    "shared_bytes": 3072,
+    "dynamic_shared_bytes": 0,
+    "instructions": 560,
+    "key": "fa0e61d27c9d62d6",
+    "sass": "8574e4f275d842a3",
+    "kept": false
+   },
+   "parameters": {
+    "T": 128,
+    "D": 2
+   }
+  },
+  {
+   "plan": "(no plan for row_totals)",
+   "predicted_ns": 7067000.0,
+   "resources": {
+    "registers": 18,
+    "spill_bytes": 0,
+    "stack_bytes": 0,
+    "shared_bytes": 0,
+    "dynamic_shared_bytes": 0,
+    "instructions": 88,
+    "key": "3be9d3894365be70",
+    "sass": "65e46a295bb5b344",
+    "kept": false
+   }
+  }
+ ],
+ "chosen": {
+  "plan": "(no plan for row_totals)",
+  "predicted_ns": 7067000.0,
+  "resources": {
+   "registers": 18,
+   "spill_bytes": 0,
+   "stack_bytes": 0,
+   "shared_bytes": 0,
+   "dynamic_shared_bytes": 0,
+   "instructions": 88,
+   "key": "3be9d3894365be70",
+   "sass": "65e46a295bb5b344",
+   "kept": false
+  }
+ },
+ "implementations": [
+  "row_totals_tiled[128, 2]",
+  "row_totals_tiled[128, 3]",
+  "row_totals_tiled[256, 2]",
+  "row_totals_tiled[256, 3]"
+ ],
+ "budget": {
+  "compiles": {
+   "allowed": 5,
+   "started": 5,
+   "kept": 0
+  },
+  "seconds": {
+   "allowed": 300.0,
+   "spent": 30.75
+  },
+  "runs": {
+   "allowed": null,
+   "started": 0,
+   "kept": 0
+  },
+  "undone": {}
+ },
+ "seconds": 30.8
+}

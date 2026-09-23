@@ -1,0 +1,142 @@
+{
+ "by": "cairn predict --inspect: ptxas -v and cuobjdump for sm_120, a compiler observation; nothing ran",
+ "toolkit": {
+  "nvcc": "/usr/local/cuda/bin/nvcc",
+  "release": "13.2",
+  "version": "V13.2.78"
+ },
+ "regions": [
+  {
+   "program": "examples/cooperative/gpu.toml",
+   "function": "transpose",
+   "line": 10,
+   "status": "read",
+   "registers": 40,
+   "shared_bytes": 4224,
+   "checked_shared_bytes": 4224,
+   "spill_bytes": 0,
+   "stack_bytes": 0,
+   "instructions": 968
+  },
+  {
+   "program": "examples/cooperative/gpu.toml",
+   "function": "block_sums",
+   "line": 27,
+   "status": "read",
+   "registers": 24,
+   "shared_bytes": 2048,
+   "checked_shared_bytes": 2048,
+   "spill_bytes": 0,
+   "stack_bytes": 0,
+   "instructions": 320
+  },
+  {
+   "program": "examples/cooperative/gpu.toml",
+   "function": "row_sums[2]",
+   "line": 49,
+   "status": "read",
+   "registers": 44,
+   "shared_bytes": 6144,
+   "checked_shared_bytes": 6144,
+   "spill_bytes": 0,
+   "stack_bytes": 0,
+   "instructions": 576
+  },
+  {
+   "program": "examples/cooperative/gpu.toml",
+   "function": "row_sums[3]",
+   "line": 49,
+   "status": "read",
+   "registers": 34,
+   "shared_bytes": 8192,
+   "checked_shared_bytes": 8192,
+   "spill_bytes": 0,
+   "stack_bytes": 0,
+   "instructions": 488
+  },
+  {
+   "program": "examples/cooperative/tuned.toml",
+   "function": "row_totals",
+   "line": 8,
+   "status": "read",
+   "registers": 18,
+   "shared_bytes": 0,
+   "checked_shared_bytes": 0,
+   "spill_bytes": 0,
+   "stack_bytes": 0,
+   "instructions": 88
+  },
+  {
+   "program": "examples/cooperative/tuned.toml",
+   "function": "row_totals_tiled[128, 2]",
+   "line": 22,
+   "status": "read",
+   "registers": 48,
+   "shared_bytes": 3072,
+   "checked_shared_bytes": 3072,
+   "spill_bytes": 0,
+   "stack_bytes": 0,
+   "instructions": 560
+  },
+  {
+   "program": "examples/cooperative/tuned.toml",
+   "function": "row_totals_tiled[128, 3]",
+   "line": 22,
+   "status": "read",
+   "registers": 32,
+   "shared_bytes": 4096,
+   "checked_shared_bytes": 4096,
+   "spill_bytes": 0,
+   "stack_bytes": 0,
+   "instructions": 480
+  },
+  {
+   "program": "examples/cooperative/tuned.toml",
+   "function": "row_totals_tiled[256, 2]",
+   "line": 22,
+   "status": "read",
+   "registers": 48,
+   "shared_bytes": 6144,
+   "checked_shared_bytes": 6144,
+   "spill_bytes": 0,
+   "stack_bytes": 0,
+   "instructions": 576
+  },
+  {
+   "program": "examples/cooperative/tuned.toml",
+   "function": "row_totals_tiled[256, 3]",
+   "line": 22,
+   "status": "read",
+   "registers": 32,
+   "shared_bytes": 8192,
+   "checked_shared_bytes": 8192,
+   "spill_bytes": 0,
+   "stack_bytes": 0,
+   "instructions": 488
+  },
+  {
+   "program": "examples/tensor/tile32.cairn",
+   "function": "tile32",
+   "line": 21,
+   "status": "read",
+   "registers": 103,
+   "shared_bytes": 14848,
+   "checked_shared_bytes": 14848,
+   "spill_bytes": 0,
+   "stack_bytes": 0,
+   "instructions": 5456
+  },
+  {
+   "program": "examples/tensor/tile64.cairn",
+   "function": "tile64",
+   "line": 22,
+   "status": "read",
+   "registers": 102,
+   "shared_bytes": 36864,
+   "checked_shared_bytes": 36864,
+   "spill_bytes": 0,
+   "stack_bytes": 0,
+   "instructions": 2344
+  }
+ ]
+}
