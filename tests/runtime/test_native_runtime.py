@@ -1,8 +1,9 @@
-"""Compile and run the native parallel, I/O ring and device runtime tests.
+"""Compile and run the native parallel, I/O ring, execution context and device runtime tests.
 
 The executables under tests/native are self checking: exit 0 is a pass. Each also runs one
 named death case per invocation, which must abort the process, so those are driven here as
-subprocesses. Device work runs only under `make gpu`, one run at a time (`support.device_reason`).
+subprocesses. Device work runs only under `make gpu`, one run at a time (`support.device_reason`);
+everywhere else a device test is compiled for a named architecture and never run.
 
 The parallel test is run at several lane counts (CAIRN_LANES), under ThreadSanitizer and under
 AddressSanitizer with UBSan, because the lane pool is shared, long lived and joined at exit.
@@ -184,3 +185,67 @@ def test_gpu_runtime(gpu_exe: Path) -> None:
 def test_gpu_runtime_deaths(gpu_exe: Path) -> None:
     with device_lock():
         run_cases(gpu_exe)
+
+
+@pytest.fixture(scope="session", params=HOSTS)
+def reuse_exe(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The execution context's bookkeeping against a mock device, under each host compiler with the contract flags."""
+    exe = tmp_path_factory.mktemp("native") / f"reuse_runtime_{request.param}"
+    build([request.param, *STRICT, *HOST, f"-I{RUNTIME}", str(NATIVE / "reuse_runtime.cpp"), "-o", str(exe)])
+    return exe
+
+
+def test_reuse_runtime(reuse_exe: Path) -> None:
+    done = subprocess.run([str(reuse_exe)], capture_output=True, text=True, timeout=120)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "ok after" in done.stdout
+
+
+def test_reuse_runtime_deaths(reuse_exe: Path) -> None:
+    run_cases(reuse_exe)
+
+
+def test_reuse_runtime_is_clean_under_address_leak_and_ub(tmp_path: Path) -> None:
+    """Every stream, event and arena a context made is gone when it ends; a leak or a late free shows here."""
+    exe = tmp_path / "reuse_asan"
+    line = [HOSTS[-1], "-std=c++20", "-O1", "-g", *HOST, "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
+    build([*line, f"-I{RUNTIME}", str(NATIVE / "reuse_runtime.cpp"), "-o", str(exe)])
+    done = subprocess.run(
+        [str(exe)], capture_output=True, text=True, timeout=120, env={**os.environ, "ASAN_OPTIONS": "detect_leaks=1"}
+    )
+    assert done.returncode == 0 and "Sanitizer" not in done.stderr, done.stdout + done.stderr[-4000:]
+
+
+def device_line(source: str, out: Path) -> list[str]:
+    host = ["-Xcompiler", ",".join(f.replace("-fno-exceptions", "-fexceptions") for f in HOST)]
+    return ["nvcc", *STRICT, *DEVICE, *host, f"-I{RUNTIME}", str(NATIVE / source), "-o", str(out)]
+
+
+@pytest.mark.skipif(not shutil.which("nvcc"), reason="nvcc is not installed")
+@pytest.mark.parametrize("source", ["gpu_runtime.cu", "gpu_reuse.cu"])
+def test_device_tests_compile_for_a_named_architecture(source: str, tmp_path: Path) -> None:
+    """Compiled for sm_120 and never run: the device half is checked by `make gpu` alone."""
+    line = device_line(source, tmp_path / "device.o")
+    line[line.index("-arch=native")] = "-arch=sm_120"
+    build([*line, "-c"])
+
+
+@pytest.fixture(scope="session")
+def gpu_reuse_exe(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    if reason := device_reason():
+        pytest.skip(reason)
+    exe = tmp_path_factory.mktemp("native") / "gpu_reuse"
+    build(device_line("gpu_reuse.cu", exe))
+    return exe
+
+
+def test_gpu_reuse(gpu_reuse_exe: Path) -> None:
+    with device_lock():
+        done = subprocess.run([str(gpu_reuse_exe)], capture_output=True, text=True)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "ok after" in done.stdout
+
+
+def test_gpu_reuse_deaths(gpu_reuse_exe: Path) -> None:
+    with device_lock():
+        run_cases(gpu_reuse_exe)

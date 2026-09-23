@@ -1,5 +1,5 @@
 // CAIRN device runtime: scoped device owners, lane launches, linear stream tickets, reduce and
-// stable compaction. The body of `parallel i in n` is the same lambda the host path runs; only
+// stable compaction, and execution contexts that lend streams and scratch to queued work. The body of `parallel i in n` is the same lambda the host path runs; only
 // the entry point differs. Every entry point is synchronous unless its name says otherwise, and
 // any CUDA error - including a guard that fired in a lane - aborts the process.
 //
@@ -47,6 +47,7 @@
 #include <cub/device/device_scan.cuh>
 #include <cuda_runtime.h>
 #include <iterator>
+#include "cairn_reuse.hpp"
 #include "cairn_runtime.hpp"
 namespace cr::gpu {
 
@@ -157,6 +158,11 @@ public:
   Ticket& operator=(Ticket&&) = delete;  // a linear value is initialized, never overwritten
   ~Ticket() noexcept { if(s_) trap(); }
   cudaStream_t stream() const noexcept { return s_; }
+  // An event that completes with everything queued on this ticket so far, for other work to be ordered after.
+  cudaEvent_t mark() const noexcept {
+    check(cudaEventRecord(e_, s_));
+    return e_;
+  }
   void follow(const Ticket& dep) const noexcept {
     check(cudaEventRecord(dep.e_, dep.s_));
     check(cudaStreamWaitEvent(s_, dep.e_, 0));
@@ -263,4 +269,173 @@ inline std::size_t compact(T* out, std::size_t n, P pred, F value) noexcept {
   copy(&tail, k + (n - 1), std::size_t(1), Dir::d2h);
   return last + (tail ? 1 : 0);
 }
+
+// Execution contexts (cairn_reuse.hpp) bound to CUDA. A context owns streams, events and one scratch arena,
+// and lends them to queued work until that work has completed: a lane comes back at its ticket's wait, and
+// the arena's next user is ordered after its last one on the device. The budget is declared when the context
+// is made; an operation that needs more than it allows answers Scratch::over_budget and queues nothing. The
+// default lowering does not use a context yet: every ticket still owns a stream of its own. Stream-ordered
+// allocation is used only when the context is made with Allocation::stream_ordered.
+struct Cuda {
+  using Stream = cudaStream_t;
+  using Event = cudaEvent_t;
+  Stream make_stream() noexcept {
+    cudaStream_t s = nullptr;
+    check(cudaStreamCreate(&s));
+    return s;
+  }
+  void destroy_stream(Stream s) noexcept { check(cudaStreamDestroy(s)); }
+  Event make_event() noexcept {
+    cudaEvent_t e = nullptr;
+    check(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+    return e;
+  }
+  void destroy_event(Event e) noexcept { check(cudaEventDestroy(e)); }
+  void record(Event e, Stream s) noexcept { check(cudaEventRecord(e, s)); }
+  void wait_event(Stream s, Event e) noexcept { check(cudaStreamWaitEvent(s, e, 0)); }
+  void sync_stream(Stream s) noexcept { check(cudaStreamSynchronize(s)); }
+  void sync_event(Event e) noexcept { check(cudaEventSynchronize(e)); }
+  void* alloc(std::size_t b) noexcept {
+    void* p = nullptr;
+    check(cudaMalloc(&p, b));
+    return p;
+  }
+  void free(void* p) noexcept { check(cudaFree(p)); }
+  void* alloc_async(std::size_t b, Stream s) noexcept {
+    void* p = nullptr;
+    check(cudaMallocAsync(&p, b, s));
+    return p;
+  }
+  void free_async(void* p, Stream s) noexcept { check(cudaFreeAsync(p, s)); }
+};
+using Context = reuse::Context<Cuda>;
+using reuse::Allocation;
+using reuse::Budget;
+using reuse::Scratch;
+
+// Queued work on a lane a context lent. Linear like a Ticket: exactly one wait() consumes it, and that hands the
+// lane back once its work has completed; dropping it unawaited traps.
+class Lent final {
+  Context* ctx_ = nullptr;
+  Context::Lane* lane_ = nullptr;
+public:
+  explicit Lent(Context& c) noexcept : ctx_(&c), lane_(c.lend()) {}
+  Lent(Lent&& o) noexcept : ctx_(o.ctx_), lane_(std::exchange(o.lane_, nullptr)) {}
+  Lent(const Lent&) = delete;
+  Lent& operator=(const Lent&) = delete;
+  Lent& operator=(Lent&&) = delete;  // a linear value is initialized, never overwritten
+  ~Lent() noexcept { if(lane_) trap(); }
+  cudaStream_t stream() const noexcept { return lane_->stream; }
+  Context::Lane& lane() const noexcept { return *lane_; }
+  // An event that completes with everything queued here so far, for other work to be ordered after.
+  cudaEvent_t mark() const noexcept {
+    check(cudaEventRecord(lane_->event, lane_->stream));
+    return lane_->event;
+  }
+  void follow(cudaEvent_t e) const noexcept { check(cudaStreamWaitEvent(lane_->stream, e, 0)); }
+  void wait() && noexcept { ctx_->give_back(std::exchange(lane_, nullptr)); }
+};
+
+// Lanes after the tickets or lent work named in `after...`.
+template<class F, class... After> inline Lent launch_on(Context& ctx, std::size_t n, F body, const After&... after) noexcept {
+  Lent t(ctx);
+  (t.follow(after.mark()), ...);
+  fire(n, body, t.stream());
+  return t;
+}
+
+inline constexpr std::size_t ALIGN = 256;  // what cudaMalloc guarantees, and what CUB's temporary storage wants
+inline std::size_t aligned(std::size_t b) noexcept {
+  if(b > std::numeric_limits<std::size_t>::max() - ALIGN) trap();
+  return (b + ALIGN - 1) / ALIGN * ALIGN;
+}
+
+// Transform-reduce of value(i) over [0,n) into `out`, a device cell, queued on a lane of `ctx`: no host copy, and
+// no allocation within the budget. The result stays on the device, for work ordered after the returned ticket.
+// When CUB would need more scratch than the budget allows, nothing is queued and `*answer` says so.
+template<class T, class Op, class F, class... After>
+inline Lent reduce_to(Context& ctx, T* out, std::size_t n, T identity, Op op, F value, Scratch* answer,
+                      const After&... after) noexcept {
+  Lent t(ctx);
+  (t.follow(after.mark()), ...);
+  *answer = Scratch::ok;
+  if(!n) {
+    fire(1, [=] CR_DEVICE(std::size_t) { *out = identity; }, t.stream());
+    return t;
+  }
+  const Indexed<T, F> in{value};
+  const Binary<T, Op> fold{op};
+  std::size_t need = 0;
+  check(cub::DeviceReduce::Reduce(nullptr, need, in, out, n, fold, identity, t.stream()));
+  void* temp = nullptr;
+  *answer = ctx.acquire(aligned(need ? need : 1), t.lane(), &temp);
+  if(*answer != Scratch::ok) return t;
+  check(cub::DeviceReduce::Reduce(temp, need, in, out, n, fold, identity, t.stream()));
+  ctx.release(t.lane());
+  return t;
+}
+
+// The same reduction with its result on the host: one cell of the arena holds it on the device, and one
+// copy and one synchronization bring it back. Nothing is allocated within the budget.
+template<class T, class Op, class F>
+inline Scratch reduce(Context& ctx, T& result, std::size_t n, T identity, Op op, F value) noexcept {
+  if(!n) {
+    result = identity;
+    return Scratch::ok;
+  }
+  Lent t(ctx);
+  const Indexed<T, F> in{value};
+  const Binary<T, Op> fold{op};
+  std::size_t need = 0;
+  check(cub::DeviceReduce::Reduce(nullptr, need, in, static_cast<T*>(nullptr), n, fold, identity, t.stream()));
+  const std::size_t cell = aligned(sizeof(T));
+  void* base = nullptr;
+  const Scratch answer = ctx.acquire(cell + aligned(need ? need : 1), t.lane(), &base);
+  if(answer == Scratch::ok) {
+    T* at = static_cast<T*>(base);
+    check(cub::DeviceReduce::Reduce(static_cast<char*>(base) + cell, need, in, at, n, fold, identity, t.stream()));
+    T host = identity;
+    check(cudaMemcpyAsync(&host, at, sizeof(T), cudaMemcpyDeviceToHost, t.stream()));
+    ctx.release(t.lane());
+    std::move(t).wait();
+    result = host;
+    return answer;
+  }
+  std::move(t).wait();
+  return answer;
+}
+
+// Stable compaction as compact() does it, with the flags, the offsets and CUB's storage carved from the arena
+// and every step queued on one lane: one synchronization where compact() has three, and no allocation
+// within the budget. `*used` is the number selected, or 0 when the budget answered over_budget.
+template<class T, class P, class F>
+inline Scratch compact(Context& ctx, std::size_t* used, T* out, std::size_t n, P pred, F value) noexcept {
+  *used = 0;
+  if(!n) return Scratch::ok;
+  Lent t(ctx);
+  std::size_t need = 0;
+  check(cub::DeviceScan::ExclusiveSum(nullptr, need, static_cast<unsigned char*>(nullptr),
+                                      static_cast<std::size_t*>(nullptr), n, t.stream()));
+  const std::size_t flags = aligned(n), offsets = aligned(bytes<std::size_t>(n));
+  void* base = nullptr;
+  const Scratch answer = ctx.acquire(flags + offsets + aligned(need ? need : 1), t.lane(), &base);
+  if(answer == Scratch::ok) {
+    unsigned char* k = static_cast<unsigned char*>(base);
+    std::size_t* o = reinterpret_cast<std::size_t*>(static_cast<char*>(base) + flags);
+    fire(n, [=] CR_DEVICE(std::size_t i) { k[i] = pred(i) ? 1 : 0; }, t.stream());
+    check(cub::DeviceScan::ExclusiveSum(static_cast<char*>(base) + flags + offsets, need, k, o, n, t.stream()));
+    fire(n, [=] CR_DEVICE(std::size_t i) { if(k[i]) out[o[i]] = value(i); }, t.stream());
+    std::size_t last = 0;
+    unsigned char tail = 0;
+    check(cudaMemcpyAsync(&last, o + (n - 1), sizeof(last), cudaMemcpyDeviceToHost, t.stream()));
+    check(cudaMemcpyAsync(&tail, k + (n - 1), sizeof(tail), cudaMemcpyDeviceToHost, t.stream()));
+    ctx.release(t.lane());
+    std::move(t).wait();
+    *used = last + (tail ? 1 : 0);
+    return answer;
+  }
+  std::move(t).wait();
+  return answer;
+}
+
 } // namespace cr::gpu
