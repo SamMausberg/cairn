@@ -62,11 +62,12 @@ DRIVER = """
 #include <cstdio>
 #include <cstring>
 #include <sys/wait.h>
+#include <sys/prctl.h>
 #include <unistd.h>
 static int outcome(void (*call)()) {
   std::fflush(stdout);
   const pid_t child = fork();
-  if (child == 0) { call(); _exit(0); }
+  if (child == 0) { prctl(PR_SET_DUMPABLE, 0, 0, 0, 0); call(); _exit(0); }  // not dumpable, so no crash handler starts for a child that traps: under clang 18 that cost minutes
   int status = 0;
   waitpid(child, &status, 0);
   return WIFSIGNALED(status) ? -WTERMSIG(status) : WEXITSTATUS(status);

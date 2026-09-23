@@ -106,6 +106,7 @@ GRID_N, GRID_K = (0, 1, 3, 6), (0, 1, 2, 5, 2**64 - 1)
 DRIVER = """
 #include <cstdio>
 #include <sys/wait.h>
+#include <sys/prctl.h>
 #include <unistd.h>
 using F = std::uint64_t (*)(std::size_t, const std::uint64_t*, std::size_t, std::size_t);
 int main() {
@@ -117,6 +118,7 @@ int main() {
       std::fflush(stdout);
       const pid_t child = fork();
       if(child == 0) {
+        prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);  // not dumpable, so no crash handler starts for a child that traps: under clang 18 that cost minutes
         auto* x = new std::uint64_t[n + 1];
         for(std::size_t j = 0; j < n; ++j) x[j] = (j * 7) % 5;
         std::printf("%llu ", static_cast<unsigned long long>(pair[side](n, x, k, m)));

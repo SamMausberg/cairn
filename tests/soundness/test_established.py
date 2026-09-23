@@ -257,6 +257,7 @@ DRIVER = """
 #include <csignal>
 #include <cstdio>
 #include <sys/wait.h>
+#include <sys/prctl.h>
 #include <unistd.h>
 int main() {
   const std::size_t sizes[] = {SIZES};
@@ -264,6 +265,7 @@ int main() {
     std::fflush(stdout);
     const pid_t child = fork();
     if(child == 0) {
+      prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);  // not dumpable, so no crash handler starts for a child that traps: under clang 18 that cost minutes
       auto* x = new std::uint64_t[n]; auto* y = new std::uint64_t[m];
       for(std::size_t j = 0; j < n; ++j) x[j] = 3 * j + 1;
       for(std::size_t j = 0; j < m; ++j) y[j] = 5 * j + 2;

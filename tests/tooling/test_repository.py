@@ -41,6 +41,17 @@ def test_a_test_module_is_named_by_its_subject_not_by_a_release():
     assert not dated, f"rename these by what they test: {dated}"
 
 
+def test_a_forked_child_that_may_trap_starts_no_crash_handler():
+    """A C++ driver that forks a child per case makes the child non-dumpable. Where core dumps go through a pipe, as
+    apport takes them on CI, a crash handler started for each trapping child kept the soundness tests past their
+    thirty minutes under clang 18."""
+    here = str(Path(__file__).relative_to(ROOT))
+    forked = [n for n in tracked() if n.endswith(".py") and n != here and "fork()" in (ROOT / n).read_text()]
+    assert forked, "the drivers this rule is about have moved"
+    dumped = [n for n in forked if "PR_SET_DUMPABLE" not in (ROOT / n).read_text()]
+    assert not dumped, f"call prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) in each forked child of: {dumped}"
+
+
 def prose(text: str):
     """Each line outside a fenced block and the front matter of a template, with its number."""
     fenced, lines = False, text.splitlines()

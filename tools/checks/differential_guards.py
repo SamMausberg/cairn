@@ -88,6 +88,7 @@ def function(rng: random.Random, number: int, body: list[str] | None = None) -> 
 
 DRIVER = """
 #include <cstdio>
+#include <sys/prctl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 int main() {
@@ -97,6 +98,7 @@ int main() {
     std::fflush(stdout);
     const pid_t child = fork();
     if(child == 0) {
+      prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);  // not dumpable, so no crash handler starts for a child that traps: under clang 18 that cost minutes
       alarm(20);  // a loop that runs this long is reported as a status, not waited for
       auto* x = new std::uint64_t[n ? n : 1]; auto* y = new std::uint64_t[m ? m : 1];
       for(std::size_t j = 0; j < n; ++j) x[j] = 3 * j + 1;
