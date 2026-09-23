@@ -10,7 +10,9 @@ A rename is a checked transaction. The new name must be an identifier that no fi
 and not a reserved word, a builtin or a type, so no occurrence it adds can mean something already there. The edit is
 applied to the combined source, which must still compile, and every function's receipt entry (its effect row, its
 callees, its guard sites and its allocations) must be what it was, under the new name where the name changed. Any
-other answer refuses the rename whole, with the reason, and nothing is applied in part.
+other answer refuses the rename whole, with the reason, and nothing is applied in part. A field or a variant is
+renamed the same way (`members.py` finds its tokens), and since a receipt names no field or variant, every entry
+must be exactly what it was.
 """
 
 from __future__ import annotations
@@ -30,10 +32,12 @@ from ..compiler.syntax import IDENT, RESERVED
 from ..projects.project import Project, ProjectError, contained_file, load_project
 from .document import Document, Item, binders, declarations, dotted, enclosing, flatten, line_starts, word_at
 from .edits import occurrences as local_occurrences
+from .members import Members, bodies, declares
 from .names import TYPES, callee, declared, qualified
 
 MANIFEST = "cairn.toml"
 LEVELS = 8  # how far above a document a manifest is looked for
+MEMBERS = {"field", "variant"}  # what a record or a sum declares, renamed through members.py
 
 
 class Refused(ValueError):
@@ -149,7 +153,15 @@ def target(ws: Workspace, offset: int) -> tuple[str, str, list[Item]] | None:
     if at is None or p is None:
         raise Refused("There is no name here, or the project does not compile.")
     cs, (i, word) = doc.code, at
-    modules = doc.modules()
+    modules, members = doc.modules(), Members(doc)
+    member = members.at(i)  # a field or a variant: checked before locals, since a local may share its spelling
+    if member is not None:
+        kind, owner, name = member
+        if p.modules.get(owner, "") in p.sources:
+            raise Refused(f"{owner}.{name} is declared in the library, which a project does not rename.")
+        if members.declaration(kind, owner, name) is None:
+            raise Refused(f"{owner}.{name} has no declaration in the project's files to rename: a recipe wrote it.")
+        return kind, f"{owner}.{name}", members.tokens(kind, owner, name)
     if any(cs[j].s == word.s for j in binders(cs, 0, len(cs))):
         return None
     tables: dict[str, dict[str, Any]] = {"fn": declared(p), "struct": p.records, "enum": {**p.sums, **p.enums},
@@ -160,7 +172,7 @@ def target(ws: Workspace, offset: int) -> tuple[str, str, list[Item]] | None:
         f = callee(doc, modules[i], path, word.start)[0]
         found = [("fn", f.name)] if f is not None and f.name in tables["fn"] else []
     if not found:
-        raise Refused(f"{word.s} is not a declaration this project can rename: a field, a variant or a member.")
+        raise Refused(f"{word.s} is not a declaration this project can rename: a trait member, or a name of a recipe.")
     kind, full = found[0]
     home = p.modules.get(full, "")
     if home in p.sources:
@@ -184,19 +196,7 @@ def target(ws: Workspace, offset: int) -> tuple[str, str, list[Item]] | None:
 
 def field_names(cs: list[Item]) -> set[int]:
     """The tokens that name a field or a variant where a record or a sum declares it: `head:Header`, `Some(T);`."""
-    out: set[int] = set()
-    for i, t in enumerate(cs):
-        if t.s in {"struct", "enum"}:
-            j = i
-            while j < len(cs) and cs[j].s not in {"{", ";"}:
-                j += 1
-            end = cs[j].pair if j < len(cs) and cs[j].s == "{" else j
-            for k in range(j + 1, end):
-                later = cs[k + 1].s if k + 1 < len(cs) else ""
-                starts = cs[k - 1].s in {"{", ";"}
-                if IDENT.fullmatch(cs[k].s) and starts and (later == ":" or (t.s == "enum" and later in "(;}")):
-                    out.add(k)
-    return out
+    return {k for kind, _, opener, end in bodies(cs) for k in range(opener + 1, end) if declares(cs, k, kind)}
 
 
 # The requests -------------------------------------------------------------------------------------
@@ -223,7 +223,11 @@ def definition(ws: Workspace, uri: str, offset: int) -> dict | None:
     if named is None:
         return None
     bare, cs = local(named[1]), ws.whole.code
-    marks = {d["mark"][0] for d in flatten(declarations(cs, 0, len(cs))) if d["name"] == bare}
+    if named[0] in MEMBERS:  # a field or a variant: where its record or sum declares it
+        owner, name = named[1].rsplit(".", 1)
+        marks = {t.start for t in [Members(ws.whole).declaration(named[0], owner, name)] if t is not None}
+    else:
+        marks = {d["mark"][0] for d in flatten(declarations(cs, 0, len(cs))) if d["name"] == bare}
     declaring = [t for t in named[2] if t.start in marks and not t.start <= at < t.end]
     return ws.location(declaring[0]) if declaring else None
 
@@ -262,7 +266,8 @@ def rename(ws: Workspace, uri: str, offset: int, fresh: str) -> dict:
     before, after = ws.project.source, ws.project.source
     for t in sorted(tokens, key=lambda t: t.start, reverse=True):
         after = after[: t.start] + fresh + after[t.end :]
-    old, new = (named[1], renamed(named[1], fresh)) if named else ("", "")
+    # A declaration's receipt names change with it; a field or a variant names no function, so every entry stays.
+    old, new = (named[1], renamed(named[1], fresh)) if named and named[0] not in MEMBERS else ("", "")
     try:
         was, now = compile_source(before)[1]["functions"], compile_source(after)[1]["functions"]
     except Diagnostic as error:
@@ -272,7 +277,7 @@ def rename(ws: Workspace, uri: str, offset: int, fresh: str) -> dict:
             rewrite(n, old, new): {**e, "calls": sorted(rewrite(c, old, new) for c in e["calls"])}
             for n, e in was.items()
         }
-    if not old:  # a parameter's row names it: `read:p` of its own function, and of that function's instances
+    if named is None:  # a parameter's row names it: `read:p` of its own function, and of that function's instances
         home, name = owner(ws, at), tokens[0].s
         was = {n: {**e, "effects": [re.sub(rf":{re.escape(name)}\Z", ":" + fresh, x) for x in e["effects"]]}
                if n == home or n.startswith(home + "[") else e for n, e in was.items()}  # fmt: skip
