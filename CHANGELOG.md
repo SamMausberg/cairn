@@ -2,7 +2,7 @@
 
 ## 0.9.0
 
-The first public release. The sections below it are the internal milestones that came before, 0.5.0 to 1.3.0, whose tags keep the numbers they had; the public numbering starts again below 1.0 because the language can still change. 1.4.0 was prepared and never tagged, and its changes are listed here.
+The first public release. The sections below it are the internal milestones that came before it, 0.5.0 to 0.8.3. The milestones 0.8.0 to 0.8.3 were first tagged 1.0.0 to 1.3.0 and were renumbered, at the same commits, so that every tag sorts below this release; the numbering stays below 1.0 because the language can still change. A 1.4.0 was prepared and never tagged, and its changes are listed here.
 
 ### Language
 
@@ -12,8 +12,8 @@ The first public release. The sections below it are the internal milestones that
 - A lane may own a block of what lanes write: `out[b * S + j]` with `j` below one constant `S`, an index a loop or condition keeps in `[b * S, b * S + S)`, or a part of that block lent to a helper that writes it. Blocks of one stride never meet, so the race rule stays whole, and an access it cannot place is still `E-PARALLEL-RACE`. A host lane may now call a function that writes through what the lane lends it. The pool sizes its claims by the block, and the facts scale `b < k` to `b * 256 + 256 <= k * 256`, so a per-block histogram's inner loop carries no guard.
 - A plan, `plan f { grain G; lanes L; }`, sets how `f`'s host regions are split over the lane pool, apart from the code that says what they compute. It changes no result, effect row or guard, the receipt records it, and `E-PLAN` refuses one that names nothing it can schedule.
 - An I/O ring, `let mut q = IoRing(n);`, keeps up to `n` kernel operations in flight from one thread over io_uring. `q.read`, `q.write`, `q.recv`, `q.send` and `q.accept` move the `Buf[u8]` they work on into the ring, and `q.next(tag, result)` hands the next finished one back with its tag and the kernel's result; `std.io.outcome(result)` reads that as a `Result`. `q.timeout(ns, tag)` finishes with `-ETIME` after `ns` nanoseconds, and `q.cancel(tag)` stops what runs under a tag, which still comes back through `next` with its buffer. A ring records no lease, so it may be lent `rw` to a callee or a task; it is linear, pinned (`E-PINNED`), host only, and `wait(q)` lets every operation finish before it releases anything.
-- A ticket or a task group can no longer be a parameter in any mode (`E-PINNED`). 1.3 accepted a group lent `rw` to a callee that spawned into it, and the task's lease ended at the callee's return while the task still wrote.
-- A task group keeps every lease any path, or any earlier iteration of a loop, lent it, and a part orders other parts only where every path formed it. This closes three races 1.3 accepted.
+- A ticket or a task group can no longer be a parameter in any mode (`E-PINNED`). 0.8.3 accepted a group lent `rw` to a callee that spawned into it, and the task's lease ended at the callee's return while the task still wrote.
+- A task group keeps every lease any path, or any earlier iteration of a loop, lent it, and a part orders other parts only where every path formed it. This closes three races 0.8.3 accepted.
 - A variant may leave out its sum where the context names it: `return None;`, `Some(v) => ...`, `op = Write;`. It checks and emits as the qualified form, which stays legal, and a name that could also mean a local, constant, function or type is `E-VARIANT-AMBIGUOUS`.
 - A match arm that is one `return`, `break`, `continue`, assignment or call may leave out its braces, and `_` binds nothing: an arm's `_` drops its payload, releasing an owner and refusing a linear one (`E-LINEAR-LEAK`), and `for _ in 0..n` only counts.
 - Compound assignment `+= -= *= /= %= &= |= ^=` checks as the written-out assignment, with the same rows, guards and refusals, and evaluates its place once, so `xs[i] += v` pays one bounds guard.
@@ -84,9 +84,9 @@ The first public release. The sections below it are the internal milestones that
 
 ### Reviews and users
 
-- Two adversarial reviews of everything added since 1.3 found nine defects, each fixed with its regression test and none a soundness hole in the language: a crafted revision that could make `cairn diff` write outside its scratch directory, edits and migrations that could slip a declaration past their span, a stale C header that linked, a tune that wrote its plan into the wrong file, a rename that left a task contract behind, and a false refusal. Their tables keep the refused attacks (`tests/soundness/test_review_1_4.py`, `test_review_1_4b.py`).
+- Two adversarial reviews of everything added since 0.8.3 found nine defects, each fixed with its regression test and none a soundness hole in the language: a crafted revision that could make `cairn diff` write outside its scratch directory, edits and migrations that could slip a declaration past their span, a stale C header that linked, a tune that wrote its plan into the wrong file, a rename that left a task contract behind, and a false refusal. Their tables keep the refused attacks (`tests/soundness/test_review_1_4.py`, `test_review_1_4b.py`).
 
-## 1.3.0
+## 0.8.3
 
 ### Language
 
@@ -126,7 +126,7 @@ The first public release. The sections below it are the internal milestones that
 
 - The whole tree is green on x86-64 with g++ 13, clang 21 and an RTX 5070 Ti under CUDA 13.2; every earlier record was AArch64.
 
-## 1.2.0
+## 0.8.2
 
 ### Language
 
@@ -174,7 +174,7 @@ The first public release. The sections below it are the internal milestones that
 - The documentation was rewritten for readers, and every CAIRN example in it is checked by the test suite (`cairn`, `cairn rejects E-CODE`, `cairn fragment`).
 - `docs/guide/tour.md`: twelve complete programs that the suite builds and runs under sanitizers.
 
-## 1.1.0
+## 0.8.1
 
 - Recipes: generators are library code. `recipe name[K:nat] for R { ... }` holds ordinary function and record declarations with static `each` (over a record's fields or a natural range, at declaration, statement, field-list and call-argument level), `fold`, `where` values, `$name` splices and `require` domains. `derive name[naturals] for Type;` expands it before checking into code of the deriving module. The closed Python generator behind `derive wire` is gone: `std.wire` is twelve lines of CAIRN and produces the same C++ byte for byte. Receipts pin each recipe by the hash of its tokens. `wire` is no longer a reserved word.
 - Queued device work: `let t = spawn transfer(dst, src);` and `let k = spawn parallel i in n after t { ... };` put device work on its own stream and return. The ticket leases what the work touches until `wait`, `after` orders work by device events without a host wait, and work queued after a ticket may share what that ticket holds.
@@ -184,9 +184,9 @@ The first public release. The sections below it are the internal milestones that
 - Source equivalence: the SMT model covers records, tag-only enums and payload sums with `match` and `try`, IEEE `f32` and `f64` under the compiler's strict floating contract, fixed local storage with its bounds guard, and loops with `break` and `continue` unrolled within a sixteen-iteration budget. A value is compared component by component, a sum by its tag and active payload only. Exceeding the budget is an obligation the solver must refute, and a returned NaN is reported unknown.
 - Proof: a core ownership and lease calculus in Lean (`proofs/Cairn/Ownership.lean`), with safety including race freedom and with witnesses that rejected programs really fault.
 - Tasks: leases are path sensitive. A `wait` on a path that returns no longer ends the lease on the path that goes on, a race three earlier reviews had missed.
-- A fourth adversarial review of the 1.1 features found seven defects in recipe expansion and the incremental build. All are fixed and pinned.
+- A fourth adversarial review of the 0.8.1 features found seven defects in recipe expansion and the incremental build. All are fixed and pinned.
 
-## 1.0.0
+## 0.8.0
 
 The language grew from a checked CPU kernel language into a general systems language. The compiler core was rebuilt around one typed tree, and every addition arrived with native behavior tests, rejection tests and an application.
 
@@ -205,7 +205,7 @@ The language grew from a checked CPU kernel language into a general systems lang
 - Agent layer: the canonical projection, edit sessions, effect ceilings and rule cards cover the whole language. An edit cannot add a lane race, a shared write, an allocation or a task past its ceiling.
 - Tooling: `cairn fmt` (comment preserving), `cairn lsp`, an editor grammar, optional `#line` source maps, `ruff` formatting and lint for the Python sources.
 - Reviews: three adversarial rounds. The first found fourteen accepted but unsound programs (use after free, overflow through extent identity, three lease races, forged linear values, under-reported effects, operand-order holes). The second, with three reviewers, found about forty more, among them closures that freed or raced what their own call lent, lanes whose bodies escaped the rule their callees obey, impls never held to their trait, `try` abandoning an owner mid-expression, privacy holes in `family` and `derive wire`, and a `.gitignore` pattern that had hidden `std/core.cairn` from every fresh checkout. The third attacked only the new rules and found nine more. All are fixed and pinned in the rejection tables, and the fixes made the rules more precise: a closure borrows exactly what it captures, a parallel map may take a closure that writes nothing it captured, K-way part splits are accepted. The first library author's seven compiler bugs are pinned too.
-- Compatibility: every 0.6 program, diagnostic code and receipt field is preserved. Newly reserved words: `trait impl dyn const pub linear parallel reduce spawn try as type` (and the placement words, until 1.2). New builtin names (`take swap transfer wait mmio_read mmio_write asm`) yield to a program's own function of the same name. Two 0.6 rejections became legal by design: record payloads in sums and arrays of sums.
+- Compatibility: every 0.6 program, diagnostic code and receipt field is preserved. Newly reserved words: `trait impl dyn const pub linear parallel reduce spawn try as type` (and the placement words, until 0.8.2). New builtin names (`take swap transfer wait mmio_read mmio_write asm`) yield to a program's own function of the same name. Two 0.6 rejections became legal by design: record payloads in sums and arrays of sums.
 
 ## 0.6.0
 
