@@ -111,6 +111,7 @@ class Inspector:
             answer |= summed(entries)
             answer["dynamic_shared_bytes"] = tiles(program, checker, name) if checker is not None else 0
             answer["cubin_sha256"] = hashlib.sha256(files.get("program.cubin", b"")).hexdigest()
+            answer["sass_sha256"] = hashlib.sha256(files.get("sass.txt", b"")).hexdigest()  # the code, no paths
             if not entries:
                 answer["status"] = "no-kernel"
         elif "stderr" in read or "reason" in read:

@@ -77,6 +77,8 @@ def row(name: str, c: Candidate, regions: list[str]) -> dict[str, Any]:
                                                "dynamic_shared_bytes", "instructions") if k in r}
                             if r["status"] == "read" else {"status": r["status"]})  # fmt: skip
         out["resources"]["key"] = r["key"][:16]
+        if "sass_sha256" in r:  # candidates whose code is the same share this
+            out["resources"]["sass"] = r["sass_sha256"][:16]
         out["resources"]["kept"] = bool(r.get("kept"))
     if any(k in dict(c.plan) for k in ("vector", "stage", "fuse")) and regions:
         done = applied(c.source, name, (c.program, c.checker))
@@ -189,9 +191,13 @@ def record_search(recorder: Recorder, candidates: list[Candidate], result: dict)
         if r is None or r.get("kept"):
             continue
         if r["status"] == "read":
-            detail = {"by": "ptxas and cuobjdump", "analysis": r["key"], **{k: r[k] for k in (
-                "registers", "spill_bytes", "stack_bytes", "shared_bytes", "dynamic_shared_bytes", "instructions",
-                "memory", "kernels")}}  # fmt: skip
+            read = ("registers", "spill_bytes", "stack_bytes", "shared_bytes", "dynamic_shared_bytes", "instructions",
+                    "memory", "kernels", "sass_sha256")  # fmt: skip
+            detail: dict[str, Any] = {
+                "by": "ptxas and cuobjdump",
+                "analysis": r["key"],
+                **{k: r[k] for k in read if k in r},
+            }
             recorder.put("observation", x.plan, recorder.device, detail, r.get("cubin_sha256"))
         elif r["status"] in {"compile-failed", "target-refused"}:
             recorder.put("failure", x.plan, recorder.device, {"stage": "build", "why": r.get("why", "nvcc failed"),

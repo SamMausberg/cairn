@@ -99,6 +99,10 @@ def compare(source: str, name: str, a: Plan, b: Plan, sizes: list[dict[str, floa
             if found is not None:
                 read[k] = found
         if set(read) == {"a", "b"} and all(r["status"] == "read" for r in read.values()):
+            same = read["a"].get("sass_sha256") and read["a"].get("sass_sha256") == read["b"].get("sass_sha256")
+            if same:
+                lines.append(line(COMPILER, "cuobjdump", f"the SASS of a and b is the same, digest "
+                                  f"{read['a']['sass_sha256'][:16]}", same_code=True))  # fmt: skip
             for key, what in READ:
                 if read["a"].get(key) != read["b"].get(key):
                     lines.append(line(COMPILER, "ptxas and cuobjdump" if key != "dynamic_shared_bytes" else "the plan",
@@ -184,6 +188,10 @@ def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], devi
     run = ("make tune-device FILE=... SYMBOL=" + name + " AT=...  (the owner's target; nothing here runs the device)"
            if device else f"cairn tune --symbol {name} --measure 2 --at ... with both plans on this host")  # fmt: skip
     got = {k: r for k, r in read.items() if r.get("status") == "read"}
+    if any(x.get("same_code") for x in lines):
+        out.append(line(HYPOTHESIS, "derived from the SASS digests", "a and b run the same device code, so a "
+                        "difference measured between them may come from how the kernel is launched (the block and "
+                        "the indices per thread) or from noise"))  # fmt: skip
     if len(got) == 2:
         a, b = got["a"], got["b"]
         spec = card()

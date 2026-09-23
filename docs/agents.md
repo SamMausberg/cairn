@@ -94,7 +94,7 @@ cairn state examples/apps/kvstore > before.json
 cairn state examples/apps/kvstore --since before.json    # only what changed
 ```
 
-A `delta` request, or `--since`, gives only what changed, and applying it to the state it names reproduces the new digest exactly. A delta from a digest the host never sent is `E-SESSION`.
+A `delta` request, or `--since`, gives only what changed, and applying it to the state it names reproduces the new digest exactly. A delta from a digest the host never sent is `E-SESSION`. `cairn state --symbol f` is the state of one function's performance work instead ([below](#resuming-an-investigation)).
 
 ```json
 {"protocol": "cairn.edit/2", "handle": "e1", "kind": "delta", "since": "<the digest of an earlier state>"}

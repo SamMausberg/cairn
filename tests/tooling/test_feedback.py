@@ -118,6 +118,10 @@ def test_a_device_comparison_reads_both_compiles_and_hands_over_their_files(tmp_
     (claim,) = [r for r in kept_now if r["kind"] == "hypothesis"]  # kept as a hypothesis, never as a finding
     assert "may move fewer bytes" in claim["detail"]["claim"]
     assert all(r["detail"]["tests"] == [claim["id"]] for r in kept_now if r["kind"] == "experiment")
+    launch = compare(BLUR, "blur", (), parse_plan("block 128"), [{"n": 1e7}], MACHINE, history=tmp_path,
+                     target=parse("sm_120"))  # fmt: skip
+    assert any(x.get("same_code") for x in launch["lines"])  # a launch item leaves the kernel's code as it was
+    assert any(x["kind"] == HYPOTHESIS and "same device code" in x["text"] for x in launch["lines"])
     owners = {"procedure": "make tune-device, 9 blocks", "sizes": {"n": 1e7}, "median_ns": 2e5}
     kept(tmp_path, BLUR, staged, "measurement", device_identity(parse("sm_120")), owners, name="blur")
     again = compare(BLUR, "blur", (), staged, [{"n": 1e7}], MACHINE, history=tmp_path, compiles=0,
