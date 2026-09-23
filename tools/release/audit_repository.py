@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import subprocess
+import threading
 from pathlib import Path
 
 RULES = {
@@ -27,7 +28,7 @@ def audit(root: Path) -> dict:
     commits = git("rev-list", "--all").decode().splitlines()
     if len(commits) > 1000:
         raise ValueError("History exceeds the bounded audit; perform an independent full audit.")
-    findings, seen, count = [], set(), 0
+    findings, first, count = [], {}, 0  # first: each distinct blob, with the path and commit it was first seen at
     for commit in commits:
         for record in git("ls-tree", "-r", "-z", commit).split(b"\0"):
             if not record:
@@ -41,16 +42,25 @@ def audit(root: Path) -> dict:
             if mode not in {"100644", "100755"} or kind != "blob":
                 findings.append({"path": name, "rule": "symlink-or-submodule", "commit": commit})
                 continue
-            if oid in seen:
-                continue
-            seen.add(oid)
-            if len(seen) > 20000:
+            first.setdefault(oid, (name, commit))
+            if len(first) > 20000:
                 raise ValueError("History exceeds bounded blob audit.")
-            size = int(git("cat-file", "-s", oid))
+    # One `git cat-file --batch` reads every blob, where a pair of processes per blob spent minutes starting up.
+    request = "".join(f"{oid}\n" for oid in first).encode()
+    with subprocess.Popen(
+        ["git", "-C", str(root), "cat-file", "--batch"], stdin=subprocess.PIPE, stdout=subprocess.PIPE
+    ) as batch:
+        feeder = threading.Thread(target=lambda: (batch.stdin.write(request), batch.stdin.close()))
+        feeder.start()
+        for oid, (name, commit) in first.items():
+            header = batch.stdout.readline().split()
+            if header[:2] != [oid.encode(), b"blob"]:
+                raise ValueError(f"git cat-file answered {header!r} for blob {oid}.")
+            size = int(header[2])
+            data = batch.stdout.read(size + 1)[:size]
             if size > 2_000_000:
                 findings.append({"path": name, "rule": "large-file", "commit": commit})
                 continue
-            data = git("cat-file", "blob", oid)
             count += len(data)
             if b"\0" in data:
                 findings.append({"path": name, "rule": "binary-file", "commit": commit})
@@ -58,10 +68,13 @@ def audit(root: Path) -> dict:
                 if pattern.search(data):
                     # Never print a credential or a matching source snippet.
                     findings.append({"path": name, "rule": rule, "commit": commit})
+        feeder.join()
+    if batch.returncode != 0:
+        raise ValueError("git cat-file --batch failed.")
     return {
         "status": "no-pattern-findings" if not findings else "blocked",
         "commits": len(commits),
-        "distinct_blobs": len(seen),
+        "distinct_blobs": len(first),
         "bytes_scanned": count,
         "findings": findings,
         "scope": "all reachable commits; finite credential patterns, not a guarantee",
