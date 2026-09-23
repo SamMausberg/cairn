@@ -226,6 +226,35 @@ static void test_a_context_ends_after_its_last_user() {
   CHECK(m.violations == 0 && m.taken.empty() && m.streams == m.streams_gone);
 }
 
+// A stream the caller owns: synchronous work runs on it after what the caller queued there, a lane lent meanwhile
+// starts after that work too, and the context never destroys the caller's stream.
+static void test_a_bound_stream_stays_the_callers() {
+  Machine m;
+  const int mine = m.make_stream();
+  void* p = m.block();
+  m.live.insert(p);
+  {
+    Context c(Budget{64, 64}, Allocation::synchronous, Mock{&m});
+    m.queue[mine].push_back({Machine::touch, p, -1, 0, 1});  // the caller's own work, not yet run
+    c.bind(mine);
+    Context::Lane* sync = c.lend(true);
+    CHECK(sync->stream == mine && c.streams_made() == 0);
+    c.give_back(sync);  // a wait for the caller's stream, so its work ran
+    CHECK((m.order == std::vector<int>{1}));
+    m.queue[mine].push_back({Machine::touch, p, -1, 0, 2});  // more of the caller's work, queued after the wait
+    Context::Lane* lane = c.lend();
+    m.queue[lane->stream].push_back({Machine::touch, p, -1, 0, 3});
+    c.give_back(lane);  // runs the lane, which first waits for the caller's queued work
+    CHECK((m.order == std::vector<int>{1, 2, 3}));
+    c.unbind();
+    Context::Lane* own = c.lend(true);
+    CHECK(own->stream != mine && c.streams_made() == 1);
+    c.give_back(own);
+  }
+  CHECK(m.alive[mine] && m.streams_gone == m.streams - 1);  // the caller's stream outlives the context
+  CHECK(m.violations == 0);
+}
+
 static int death(const char* name) {
   Machine m;
   if(!std::strcmp(name, "lane_not_given_back")) {
@@ -241,6 +270,11 @@ static int death(const char* name) {
     Context c(Budget{64, 64}, Allocation::synchronous, Mock{&m});
     Context::Lane* lane = c.lend();
     c.release(*lane);
+  } else if(!std::strcmp(name, "bound_lane_lent_twice")) {
+    Context c(Budget{64, 64}, Allocation::synchronous, Mock{&m});
+    c.bind(m.make_stream());
+    (void)c.lend(true);
+    (void)c.lend(true);  // synchronous work does not nest on the caller's stream
   } else {
     std::fprintf(stderr, "unknown death case %s\n", name);
     return 2;
@@ -250,7 +284,8 @@ static int death(const char* name) {
 }
 
 int main(int argc, char** argv) {
-  static const char* cases[] = {"lane_not_given_back", "scratch_acquired_twice", "released_without_acquire"};
+  static const char* cases[] = {"lane_not_given_back", "scratch_acquired_twice", "released_without_acquire",
+                                "bound_lane_lent_twice"};
   if(argc > 1 && !std::strcmp(argv[1], "--list")) {
     for(const char* c : cases) std::printf("%s\n", c);
     return 0;
@@ -260,6 +295,7 @@ int main(int argc, char** argv) {
   test_scratch_users_are_ordered_on_the_device();
   test_a_budget_answers_or_grows_as_declared();
   test_a_context_ends_after_its_last_user();
+  test_a_bound_stream_stays_the_callers();
   std::printf("reuse_runtime: %s after %ld checks\n", failures ? "FAILED" : "ok", checked);
   return failures ? 1 : 0;
 }
