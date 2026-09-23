@@ -117,10 +117,10 @@ def paragraphs(text: str) -> str:
 def card_file(name: str, words: list[str]) -> str:
     uses = ", ".join(f"`{w}`" for w in words) if words else "the forms it describes"
     listed = sorted(set(CODE.findall(CARDS[name])))
-    head = [f"# The {name} card", "", f"Sent to an agent when the program uses {uses}."]
+    said = f"Sent to an agent when the program uses {uses}."
     if listed:
-        head.append("Codes: " + ", ".join(f"`{c}`" for c in listed) + ".")
-    return "\n".join(head) + "\n\n" + paragraphs(CARDS[name]) + "\n"
+        said += " Codes: " + ", ".join(f"`{c}`" for c in listed) + "."
+    return f"# The {name} card\n\n{said}\n\n{paragraphs(CARDS[name])}\n"
 
 
 def codes_file() -> str:

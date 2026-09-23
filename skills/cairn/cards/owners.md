@@ -1,7 +1,6 @@
 # The owners card
 
-Sent to an agent when the program uses `Array`, `Buf`, `defer`, `linear`, `swap`, `take`.
-Codes: `E-EXTENT`, `E-EXTENT-FIELD`, `E-LINEAR-BRANCH`, `E-LINEAR-LEAK`, `E-MOVE-IN-LOOP`, `E-MOVED`, `E-PARTIAL-MOVE`.
+Sent to an agent when the program uses `Array`, `Buf`, `defer`, `linear`, `swap`, `take`. Codes: `E-EXTENT`, `E-EXTENT-FIELD`, `E-LINEAR-BRANCH`, `E-LINEAR-LEAK`, `E-MOVE-IN-LOOP`, `E-MOVED`, `E-PARTIAL-MOVE`.
 
 ```text
 let mut b = Buf[u64](n); is a first-class zeroed heap array, and Array[u64, 4]() an inline one. Owners are affine: binding, passing by value or returning one moves it, and the old name is dead (E-MOVED). An owner never moves out of a place (E-PARTIAL-MOVE): take(place) moves it out and leaves zero, swap(a, b) exchanges two places, and let Conn(sock, sent) = c; consumes a whole record and binds every field, the way out for a linear field. An outer owner cannot move inside a loop, closure or lane (E-MOVE-IN-LOOP).
