@@ -42,9 +42,14 @@ def stored(name: str) -> str:
     return f"{name} is a storage float: widen it with f32(x) to compute, and round back with {name}(y) or quantize."
 
 
-def e_int(c: Checker, e: Expr, expected: Type | None) -> Type:
+def unrounded(e: Expr, expected: Type | None, written: str) -> None:
+    """A literal never becomes a storage float by itself: the rounding is written, `f16(1.5)`."""
     if expected and expected.mode == "value" and expected.name in STORAGE:
-        fail("E-TYPE-MISMATCH", f"A literal is an f32 or an f64; write {expected.name}({e.val}.0) to round it.", e)
+        fail("E-TYPE-MISMATCH", f"A literal is an f32 or an f64; write {expected.name}({written}) to round it.", e)
+
+
+def e_int(c: Checker, e: Expr, expected: Type | None) -> Type:
+    unrounded(e, expected, e.val + ".0")
     ty = expected if expected and expected.mode == "value" and expected.name in NUMERIC else Type("u64")
     n = int(e.val)
     if ty.name in WIDTH:
@@ -56,8 +61,7 @@ def e_int(c: Checker, e: Expr, expected: Type | None) -> Type:
 
 
 def e_float(c: Checker, e: Expr, expected: Type | None) -> Type:
-    if expected and expected.mode == "value" and expected.name in STORAGE:
-        fail("E-TYPE-MISMATCH", f"A literal is an f32 or an f64; write {expected.name}({e.val}) to round it.", e)
+    unrounded(e, expected, e.val)
     ty = expected if expected and expected.name in FLOAT else Type("f64")
     v = float(e.val)
     if not math.isfinite(v) or (ty.name == "f32" and abs(v) > 3.4028234663852886e38):

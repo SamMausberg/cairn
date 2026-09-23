@@ -425,14 +425,12 @@ class Counter:
             at.work.merge(joined)
 
     def s_if(self, s: Stmt, at: Frame) -> None:
+        """An `if` or a `match`: its condition or subject, a branch, and the dearer of its bodies."""
         self.expr(s.exprs[0], at)
         at.work.op("branch", at.times)
-        self.branches([s.body, s.other], at)
+        self.branches([s.body, s.other] if s.tag == "if" else [arm.body for arm in s.arms], at)
 
-    def s_match(self, s: Stmt, at: Frame) -> None:
-        self.expr(s.exprs[0], at)
-        at.work.op("branch", at.times)
-        self.branches([arm.body for arm in s.arms], at)
+    s_match = s_if
 
     def s_for(self, s: Stmt, at: Frame) -> None:
         lo, hi = s.exprs

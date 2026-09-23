@@ -47,6 +47,11 @@ def arity(e: Expr, args: list[Expr], count: int, message: str):
         fail("E-ARITY", message, e)
 
 
+def named(c: Checker, e: Expr, targs: tuple, expected: Type | None) -> Type | None:
+    """The one type a call names in brackets, `f[T](...)`, or else the type its context expects."""
+    return c.resolve(targs[0], e) if len(targs) == 1 else expected
+
+
 def explicit(c: Checker, e: Expr, name: str, targs: tuple, expected: Type | None, hint: str) -> Type:
     """The type a constructor builds: written as Name[...] or taken from the expected type."""
     ty = c.resolve(Type(name, args=targs), e) if targs else expected
@@ -150,7 +155,7 @@ def check_math(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Ty
 
 def check_from_bits(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
     """from_bits[T](u): the float whose pattern is u, the inverse of to_bits; every pattern is some value."""
-    ty = c.resolve(targs[0], e) if len(targs) == 1 else expected
+    ty = named(c, e, targs, expected)
     if ty is None or ty.mode != "value" or ty.name not in PATTERN:
         fail("E-MATH-TYPE", "Write from_bits[T](u) with T one of f32 f64 f16 bf16 f8e4m3 f8e5m2.", e)
     arity(e, args, 1, "from_bits takes the unsigned pattern.")
@@ -164,7 +169,7 @@ def check_quantize(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected
     range. quantize_stochastic[T](x, scale, noise) rounds away from zero with the probability the dropped
     fraction is, by the u32 noise the caller draws. The scale must be positive and finite, and an integer T has
     no NaN to give, so both are guards."""
-    ty = c.resolve(targs[0], e) if len(targs) == 1 else expected
+    ty = named(c, e, targs, expected)
     if ty is None or ty.mode != "value" or ty.name not in QUANTIZED:
         fail("E-QUANTIZE", f"Write {e.val}[T](x, scale) with T one of {' '.join(QUANTIZED)}.", e)
     stochastic = e.val == "quantize_stochastic"
@@ -234,7 +239,7 @@ def check_machine(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected:
         if len(args) != 1 or args[0].tag != "str":
             fail("E-ARITY", "asm takes one string literal of target instructions.", e)
         return VOID
-    ty = c.resolve(targs[0], e) if len(targs) == 1 else expected
+    ty = named(c, e, targs, expected)
     if ty is None or ty.name not in UNSIGNED:
         fail("E-INFER", f"Write {n}[u8|u16|u32|u64] with the register width.", e)
     arity(e, args, 1 + (n == "mmio_write"), f"{n} takes an address" + (" and a value." if n == "mmio_write" else "."))
