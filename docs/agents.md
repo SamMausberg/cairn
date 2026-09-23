@@ -199,6 +199,28 @@ The compiler's own refusals come back as they are (`E-IMPL-SIGNATURE`, `E-IMPL-W
 
 `examples/implementations/loop.py` replays a scripted agent through one session: a blocked prefix sum that restarts each block is refused at `n = 16` with one nonzero element, asking for a looser tolerance is `E-TOLERANCE`, asking for fewer inputs is `E-DOMAIN`, and the repaired version validates.
 
+## Resuming an investigation
+
+An agent that picks up another's work on a function does not need that conversation. `cairn state --symbol f` prints the investigation of `f` from its history (`--history DIR`, by default `.cairn/history` beside the manifest), current for this host (`--arch`, `--cxx`) and for the [device target](tools.md#the-device-target) (`--device-target`):
+
+```sh
+cairn state app --symbol lib.spread > before.json
+cairn state app --symbol lib.spread --since before.json    # only what changed
+```
+
+```json
+{"protocol": "cairn.investigation/1", "function": "spread", "plan": "(no plan for spread)",
+ "regions": [{"id": "spread@b3bfc3de", "kind": "host", "line": 6, "binder": "i"}],
+ "searches": [{"by": "cairn tune", "configurations": 36, "legal": 36, "chosen": "plan spread { grain 1; }",
+               "measured_best": "plan spread { grain 1; lanes 16; }", "ranked": [["plan spread { grain 1; }", 49190.0], ...]}],
+ "candidates": {"(no plan for spread)": {"measured": [{"median_ns": 633053.5, "min_ns": 628449.25, "max_ns": 649618.5,
+                                                       "procedure": "p0", "sizes": {"n": 20000.0}, ...}]}, ...},
+ "procedures": {"p0": "cairn.perf.measure: the candidate built with the project's flags beside a driver that fills each view, timed in blocks of at least 2 ms, the median of 3 blocks, on this host", ...},
+ "hypotheses": [], "experiments": [], "stale": {"records": 0, "by_part": {}}, ...}
+```
+
+The packet holds the function's signature, row, plan and regions, the identity that holds now, and from the history only what still holds: per candidate what was measured and by which procedure, what a compile read, what failed and why, what was validated or profiled; the last searches with what they ranked best; and the hypotheses and suggested experiments, an experiment marked `done` once the runs it asks for are kept. Records that no longer hold are counted under `stale` by the part that moved. The packet above was 2,959 bytes for a function with three measured candidates. Running the same `cairn tune --measure` again from it starts no run: every measurement it needs is kept.
+
 ## Named choices
 
 A host can instead ask for named expressions, and check them against a reference:

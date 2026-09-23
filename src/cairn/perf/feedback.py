@@ -217,7 +217,7 @@ def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], devi
             if (model_ratio - 1) * (run_ratio - 1) < 0:
                 out.append(line(HYPOTHESIS, "the model against the measurement", f"the model predicted x{model_ratio:.3g}"
                                 f" and the runs measured x{run_ratio:.3g}: the model leaves out what separates them"))  # fmt: skip
-    if out or not measured:
+    if out or {x["side"] for x in measured} != {"a", "b"}:  # a hypothesis to test, or a side nothing timed
         out.append(line(EXPERIMENT, "suggested, not run", f"time a and b at the same sizes, interleaved: {run}"))
     if device and any(x["kind"] == HYPOTHESIS for x in out):
         out.append(line(EXPERIMENT, "suggested, not run", "profile a and b in an explicit profiling run (Nsight "

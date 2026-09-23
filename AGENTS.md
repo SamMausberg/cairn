@@ -49,6 +49,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `agent/agent_tools.py` | edit sessions, packets and the host that names them by handle |
 | `agent/evidence.py` | what a packet may say is established about a function |
 | `agent/history.py` | what was tried, failed, measured or hypothesized for each candidate, under its identity, and analyses kept by key |
+| `agent/investigation.py` | one function's investigation as a compact packet, from the history records that still hold |
 | `agent/migration.py`, `agent/plans.py` | the two wider edit classes: interface migrations across files, and plan-only edits |
 | `agent/implementations.py` | implementation sessions: a pinned reference, tolerance, test policy and inputs, and new implementations admitted only when they validate |
 | `agent/teaching.py` | the rule cards, selected from lexical tokens |

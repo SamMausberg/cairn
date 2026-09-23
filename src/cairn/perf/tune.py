@@ -158,13 +158,14 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
         "candidates": rows,
         "chosen": read[0] if read else rows[0],
     }
-    if recorder is not None:
-        record_search(recorder, candidates, result)
+    predicted = result["chosen"]
     if measure and "device" in kinds and not device:
         result["measured"] = "Not measured: device plans are timed only by `make tune-device`, which the owner runs."
     elif measure:
         ranked = [x.plan for x in legal]
         result.update(timed(source, name, ranked, current, sizes, measure, cxx, arch, device, spent, recorder, target))
+    if recorder is not None:
+        record_search(recorder, candidates, {**result, "chosen": predicted})
     result["budget"] = spent.report()
     return result
 
@@ -173,9 +174,11 @@ def record_search(recorder: Recorder, candidates: list[Candidate], result: dict)
     """The search itself, the checker's refusals and each compile's reading, into the history."""
     summary = {k: result["space"][k] for k in ("configurations", "checked", "legal")}
     chosen = written({k: v for k, v in result["chosen"].items() if isinstance(v, int)})
+    ranked = [[row["plan"], row["predicted_ns"]] for row in result["candidates"][:8]]  # what to time next
     recorder.put("attempt", chosen, recorder.host, {"by": "cairn tune", "sizes": result["sizes"], **summary,
-                                                    "chosen": result["chosen"]["plan"]})  # fmt: skip
-
+                                                    "chosen": result["chosen"]["plan"], "ranked": ranked,
+                                                    **({"measured_best": result["measured_best"]}
+                                                       if result.get("measured_best") else {})})  # fmt: skip
     for group in refusals(candidates):
         plan = written(group["example"])
         recorder.put("failure", plan, recorder.host, {"stage": "check", "why": f"{group['code']}: {group['message']}",

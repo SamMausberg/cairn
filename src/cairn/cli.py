@@ -139,7 +139,7 @@ COMMANDS = {
     "graph": "Print the module graph: each file's modules, each module's imports, exports and dependents, hashes.",
 }
 OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that take it, the option, its keywords)
-    ({"build", "run", "test", "explain", "tune", "shot", "validate"}, "--cxx", {"default": "clang++"}),
+    ({"build", "run", "test", "explain", "tune", "shot", "validate", "state"}, "--cxx", {"default": "clang++"}),
     ({"validate"}, "--symbol", {"required": True, "help": "The implementation; its reference is what it implements."}),
     ({"validate"}, "--policy", {"type": Path, "metavar": "POLICY.json", "help": "Tolerance, domain, budget, seed, "
                                 "probes and seconds; default: what the regressions file pinned, else the defaults."}),
@@ -163,7 +163,7 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                                     "whole search."}),
     ({"tune"}, "--budget-runs", {"type": int, "metavar": "N", "help": "Timed runs --measure may start; kept "
                                  "measurements are free. Default: what --measure asks."}),
-    ({"tune"}, "--history", {"type": Path, "metavar": "DIR", "help": "The candidate history to record into "
+    ({"tune", "state"}, "--history", {"type": Path, "metavar": "DIR", "help": "The candidate history to record into "
                              "and answer from; default: .cairn/history beside the manifest."}),
     ({"tune"}, "--no-history", {"action": "store_true", "help": "Record nothing and answer from nothing kept."}),
     ({"tune"}, "--compare", {"action": "append", "default": [], "metavar": "PLAN", "help": "Give twice, as `none` or "
@@ -175,9 +175,9 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                                          "program does: predicted costs, or for shot the rows of --symbol."}),
     ({"predict", "tune"}, "--profile", {"type": Path, "help": "A cairn.machine/1 profile; default: the packaged one."}),
     ({"build", "run"}, "--out", {"type": Path}),
-    ({"build", "run", "explain", "predict", "tune"}, "--arch", {"choices": sorted(ARCHS)}),
+    ({"build", "run", "explain", "predict", "tune", "state"}, "--arch", {"choices": sorted(ARCHS)}),
     ({"build", "run"}, "--target", {"choices": sorted(TARGETS), "help": "Freestanding profile; default hosted."}),
-    ({"build", "run", "predict", "tune"}, "--device-target", {"metavar": "SM", "help": "The GPU's compilation "
+    ({"build", "run", "predict", "tune", "state"}, "--device-target", {"metavar": "SM", "help": "The GPU's compilation "
                                                                "target, as sm_120, sm_120f or sm_120a; default: "
                                                                "[build] device_target, else the GPU nvidia-smi "
                                                                "reports."}),
@@ -220,6 +220,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                                  "the hash of its public signatures and effect rows."}),
     ({"state"}, "--since", {"type": Path, "metavar": "STATE.json", "help": "Print only what changed since this "
                             "saved state."}),
+    ({"state"}, "--symbol", {"help": "Print the investigation of this one function instead: what the candidate "
+                             "history holds for it now, to resume from without rerunning what ran."}),
     ({"migrate"}, "--to", {"required": True, "metavar": "SIGNATURE", "help": "The new signature, from fn."}),
     ({"migrate"}, "--also", {"action": "append", "default": [], "metavar": "NAME=SIGNATURE", "help": "Another "
                              "function whose signature changes with it (repeatable)."}),
@@ -506,6 +508,18 @@ def main(argv: list[str] | None = None) -> int:
 
             record = graph(project, a.interfaces)
             print(summary(record), end="") if terminal.human(FORMAT) else report(record)
+            return 0
+        if a.command == "state" and a.symbol:  # one function's investigation, from its candidate history
+            from .agent import investigation
+            from .perf.resources import device_identity, host_target
+
+            where = a.history or project.root / ".cairn" / "history"
+            device = resolve_device(a.device_target, project.device_target, required=False)
+            targets = {"host": host_target(resolve_arch(a.arch or project.arch), a.cxx),
+                       "device": device_identity(device)}  # fmt: skip
+            packet = investigation.investigation(project.source, a.symbol, where, targets)
+            earlier = json.loads(read_text(a.since, 16_000_000)) if a.since else None
+            report(investigation.delta(earlier, packet) if earlier else packet)
             return 0
         if a.command == "state":
             from .agent.state import delta, state

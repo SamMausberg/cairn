@@ -147,11 +147,11 @@ class History:
 
     def __init__(self, where: str | Path):
         self.root = Path(where)
-        self.root.mkdir(parents=True, exist_ok=True)
         self.file = self.root / "records.jsonl"
 
     @contextmanager
     def locked(self) -> Iterator[None]:
+        self.root.mkdir(parents=True, exist_ok=True)
         with (self.root / ".lock").open("a") as held:
             fcntl.flock(held, fcntl.LOCK_EX)
             try:
