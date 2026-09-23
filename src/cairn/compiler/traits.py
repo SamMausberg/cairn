@@ -223,6 +223,15 @@ def implemented(c: Checker, trait: str, target: Type, node: Any = None) -> dict[
     return c.impls[trait, target]
 
 
+def selfless(t: Any) -> bool:
+    return not isinstance(t, Type) or (t.name != "Self" and all(selfless(a) for a in t.args))
+
+
+def incompatible(trait: str, member: Function, node: Any) -> None:
+    fail("E-DYN", f"{trait}.{member.name} is not dyn-compatible: only its receiver may be a borrow or mention Self.",
+         node)  # fmt: skip
+
+
 def dispatch(c: Checker, e: Expr, trait: str, member: Function, position: int, args: list[Expr]) -> Function:
     """An indirect call through the vtable; its row is the join of every implementation's."""
     c.host_only(e, "A dynamic reference points at a host table")
@@ -231,17 +240,13 @@ def dispatch(c: Checker, e: Expr, trait: str, member: Function, position: int, a
     if member.params[position][1].mode == "rw" and not c.writable(args[position]):
         fail("E-WRITE-LEASE", f"{member.name} writes its receiver; it needs an rw<dyn {trait}> reference.", e)
 
-    def selfless(t: Any) -> bool:
-        return not isinstance(t, Type) or (t.name != "Self" and all(selfless(a) for a in t.args))
-
     receiver = c.lend(args[position], member.params[position][1].mode, [])  # Leases and lanes see it.
     callbacks = []
     with c.within(c.p.modules.get(trait, ""), {"Self": Type("dyn", args=(Type(trait),))}):
         for i, (a, (_, declared)) in enumerate(zip(args, member.params, strict=True)):
             if i != position:
                 if declared.mode != "value" or not selfless(declared) or not selfless(member.ret):
-                    fail("E-DYN", f"{trait}.{member.name} is not dyn-compatible: only its receiver may be "
-                         "a borrow or mention Self.", e)  # fmt: skip
+                    incompatible(trait, member, e)
                 callbacks += [(a, i)] if c.expr(a, c.resolve(declared, a)).name == "fn" else []
         if not selfless(member.ret):
             fail("E-DYN", f"{trait}.{member.name} returns Self, which a dynamic reference cannot name.", e)
@@ -262,15 +267,11 @@ def vtable(c: Checker, trait: str, value: Type, node: Any) -> list[Function]:
     if found is None or any(m.generics and not m.bindings for m in found.values()):
         fail("E-TRAIT-IMPL", f"{value.display()} does not implement {trait} with concrete found.", node)
 
-    def selfless(t: Any) -> bool:
-        return not isinstance(t, Type) or (t.name != "Self" and all(selfless(a) for a in t.args))
-
     for m in c.p.traits[trait]:  # The static table has a slot for every member, called or not.
         receiver = next((i for i, (_, t) in enumerate(m.params) if t.name == "Self"), None)
         rest = [t for i, (_, t) in enumerate(m.params) if i != receiver]
         if receiver is None or not selfless(m.ret) or any(t.mode != "value" or not selfless(t) for t in rest):
-            fail("E-DYN", f"{trait}.{m.name} is not dyn-compatible: only its receiver may be a borrow or "
-                 "mention Self.", node)  # fmt: skip
+            incompatible(trait, m, node)
     c.callset |= {m.name for m in found.values()}  # The static table reaches them, called here or not.
     return [found[m.name] for m in c.p.traits[trait]]
 

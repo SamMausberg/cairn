@@ -209,8 +209,7 @@ def s_if(c: Checker, s: Stmt):
 
 def s_match(c: Checker, s: Stmt):
     ty, e = c.expr(s.exprs[0]), s.exprs[0]
-    if e.tag == "call" and isinstance(e.ref, tuple) and e.ref[0] == "builtin" and e.val in COMPUTES:
-        fail("E-DISCARD", f"{e.val}(...) only computes a value: use it, or leave the call out.", s)
+    computes_only(e, s)
     layout = c.layouts.get(ty)
     if ty.mode != "value" or not isinstance(layout, dict):
         fail("E-MATCH-TYPE", "match requires a declared enum or tagged sum.", s)
@@ -291,14 +290,22 @@ def elements(c: Checker, s: Stmt):
         count = f"; a count is a range, for {s.name} in 0..{walked}" if ty == USIZE else ""
         fail("E-ELEMENT-LOOP", f"for {s.name} in {walked} walks a view, a Buf or an Array, not {ty.display()}{count}.",
              xs)  # fmt: skip
-    element = ty.value if is_view(ty) else ty.args[0]
-    if c.kind(element) != "copy":
-        fail("E-ELEMENT-LOOP", f"for {s.name} in {walked} copies each element, and {element.display()} is not "
-             f"copyable: write for i in 0..len({walked}) and take, swap or lend {walked}[i].", xs)  # fmt: skip
+    copyable(c, s, ty.value if is_view(ty) else ty.args[0], walked, f"len({walked})", f"{walked}[i]", xs)
     index = s.binder or fresh(c, s, s.name + "_index")
     read = Expr("index", "", [copied(xs), Expr("name", index, [], xs.line, xs.col)], xs.line, xs.col)
+    written_out(s, index, read, Expr("call", "len", [copied(xs)], xs.line, xs.col))
+
+
+def copyable(c: Checker, s: Stmt, element: Type, walked: str, count: str, one: str, xs: Expr):
+    if c.kind(element) != "copy":
+        fail("E-ELEMENT-LOOP", f"for {s.name} in {walked} copies each element, and {element.display()} is not "
+             f"copyable: write for i in 0..{count} and take, swap or lend {one}.", xs)  # fmt: skip
+
+
+def written_out(s: Stmt, index: str, read: Expr, span: Expr):
+    """The element loop `s` as the index loop `for index in 0..span { let x = read; .. }`."""
     s.body = [Stmt("let", s.name, exprs=[read], line=s.line, col=s.col), *s.body]
-    s.exprs = [Expr("int", "0", [], xs.line, xs.col), Expr("call", "len", [copied(xs)], xs.line, xs.col)]
+    s.exprs = [Expr("int", "0", [], span.line, span.col), span]
     s.name, s.op, s.binder = index, "", ""
 
 
@@ -315,17 +322,11 @@ def lent_elements(c: Checker, s: Stmt, xs: Expr, ty: Type, walked: str):
             else Expr("field", name, [copied(xs)], xs.line, xs.col)
         )
 
-    element = c.peek(at(carrier)).args[0]
-    if c.kind(element) != "copy":
-        fail("E-ELEMENT-LOOP", f"for {s.name} in {walked} copies each element, and {element.display()} is not "
-             f"copyable: write for i in 0..{walked}.{hi} and take, swap or lend {walked}.{carrier}[i].", xs)  # fmt: skip
+    copyable(c, s, c.peek(at(carrier)).args[0], walked, f"{walked}.{hi}", f"{walked}.{carrier}[i]", xs)
     index = s.binder or fresh(c, s, s.name + "_index")
     i = Expr("name", index, [], xs.line, xs.col)
     read = Expr("index", "", [at(carrier), i if lo == "0" else Expr("binary", "+", [at(lo), i])], xs.line, xs.col)
-    s.body = [Stmt("let", s.name, exprs=[read], line=s.line, col=s.col), *s.body]
-    span = at(hi) if lo == "0" else Expr("binary", "-", [at(hi), at(lo)], xs.line, xs.col)
-    s.exprs = [Expr("int", "0", [], xs.line, xs.col), span]
-    s.name, s.op, s.binder = index, "", ""
+    written_out(s, index, read, at(hi) if lo == "0" else Expr("binary", "-", [at(hi), at(lo)], xs.line, xs.col))
 
 
 def fresh(c: Checker, s: Stmt, name: str) -> str:
@@ -368,13 +369,18 @@ def s_expr(c: Checker, s: Stmt):
     if s.exprs[0].tag not in {"call", "try"}:
         fail("E-DISCARD", "Only calls may be used as discarded expression statements.", s)
     ty, e = c.expr(s.exprs[0]), s.exprs[0]
-    if e.tag == "call" and isinstance(e.ref, tuple) and e.ref[0] == "builtin" and e.val in COMPUTES:
-        fail("E-DISCARD", f"{e.val}(...) only computes a value: use it, or leave the call out.", s)
+    computes_only(e, s)
     layout = c.layouts.get(ty)
     if isinstance(layout, dict) and len(layout) == 2 and ty.name not in c.p.enums:
         fail("E-DISCARD", f"This call returns {ty.display()}, an outcome to handle: use try or match, or drop it "
              "on purpose with let _ = ...", s)  # fmt: skip
     dropped(c, ty, s)
+
+
+def computes_only(e: Expr, s: Stmt):
+    """A builtin that only computes a value, used as a whole statement, does nothing: E-DISCARD."""
+    if e.tag == "call" and isinstance(e.ref, tuple) and e.ref[0] == "builtin" and e.val in COMPUTES:
+        fail("E-DISCARD", f"{e.val}(...) only computes a value: use it, or leave the call out.", s)
 
 
 def dropped(c: Checker, ty: Type, s: Stmt):

@@ -69,6 +69,13 @@ def show(e: Expr) -> str:
     fail("E-GRAD-FORM", f"derive grad cannot differentiate a {e.tag} expression.", e)
 
 
+def loop_head(s: Stmt) -> str:
+    """`for i in lo..hi` or `parallel i in n`, as the statement was written."""
+    if s.tag == "for":
+        return f"for {s.name} in {show(s.exprs[0])}..{show(s.exprs[1])}"
+    return f"parallel {s.name} in {show(s.exprs[0])}"
+
+
 def bare(e: Expr) -> str:
     """An expression where nothing binds tighter around it: an index, an argument, a whole right-hand side."""
     text = show(e)
@@ -180,13 +187,9 @@ class Adjoint:
         """A loop or region whose body is lets and output elements, each written once at the binder."""
         if s.tag == "for" and s.op == "elements":
             fail("E-GRAD-FORM", "derive grad differentiates index loops: write for i in 0..len(xs) with xs[i].", s)
-        if s.tag == "for":
-            head = f"for {s.name} in {show(s.exprs[0])}..{show(s.exprs[1])}"
-        elif s.other_names:
+        if s.tag != "for" and s.other_names:
             fail("E-GRAD-FORM", "derive grad does not differentiate queued device work.", s)
-        else:
-            head = f"parallel {s.name} in {show(s.exprs[0])}"
-        lines = [head + " {"]
+        lines = [loop_head(s) + " {"]
         self.types[s.name] = "usize"
         summed = set()
         for inner in s.body:
@@ -348,21 +351,21 @@ class Adjoint:
             if s.tag in {"let", "reg"} and s.name in self.active:
                 items += self.back(s.exprs[0], "d_" + s.name)
             elif s.tag == "reduce" and s.name in self.active:
-                items.append(Nest(f"for {s.binder} in 0..{show(s.exprs[0])}", self.back(s.exprs[1], "d_" + s.name)))
+                items.append(self.summed_back(s))
             elif s.tag in {"parallel", "for"}:
                 items += self.backward_region(s)
         lines = render(items)
         return [*lines, "return grad_result;"] if result is not None else lines
 
+    def summed_back(self, s: Stmt) -> Nest:
+        """A `reduce +`'s adjoint flows into every yield, in a sequential loop of its own."""
+        return Nest(f"for {s.binder} in 0..{show(s.exprs[0])}", self.back(s.exprs[1], "d_" + s.name))
+
     def backward_region(self, s: Stmt) -> list[Any]:
         """A region's lanes add into their own elements in a region of their own; what they add into an outer
         scalar is gathered by a sequential loop, so no lane writes a shared value."""
         lets = [st for st in s.body if st.tag in {"let", "reduce"}]
-        head = (
-            f"for {s.name} in {show(s.exprs[0])}..{show(s.exprs[1])}"
-            if s.tag == "for"
-            else f"parallel {s.name} in {show(s.exprs[0])}"
-        )
+        head = loop_head(s)
         self.inner = {st.name for st in lets}
         self.lane = s.name if s.tag == "parallel" else ""
         items: list[Any] = [Line(line) for st in lets for line in self.forward(st)]
@@ -379,7 +382,7 @@ class Adjoint:
             elif st.name in self.active and st.tag == "let":
                 items += self.back(st.exprs[0], "d_" + st.name)
             elif st.name in self.active:  # a reduction inside the lane: its own sequential loop
-                items.append(Nest(f"for {st.binder} in 0..{show(st.exprs[0])}", self.back(st.exprs[1], "d_" + st.name)))
+                items.append(self.summed_back(st))
         self.inner, self.lane = set(), ""
         if s.tag == "for":
             return [Nest(head, items)]

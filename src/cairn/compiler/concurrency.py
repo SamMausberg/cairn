@@ -96,6 +96,13 @@ PLAN_ITEMS = {
 POWERS = {"vector"}  # items that are also a power of two: a chunk is one access, and accesses are powers of two
 
 
+def planned_functions(c: Checker, module: str, name: str) -> list[Function]:
+    """The function `plan name` written in `module` names, with every instance of it."""
+    with c.within(module):
+        target = c.qualify(name, c.fs)
+    return [f for f in c.p.functions if target in (f.name, f.source_name)]
+
+
 def plans(c: Checker) -> dict[str, dict[str, int]]:
     """`plan f { grain G; lanes L; }` chooses how f's host regions are claimed: at least G indices at a time, on at
     most L lanes; `block B; per_lane K; unroll U; vector W;` how f's device regions launch: B threads a block, a
@@ -114,9 +121,7 @@ def plans(c: Checker) -> dict[str, dict[str, int]]:
                 fail("E-PLAN", f"{item} runs from {least} to {most}{multiple}; {value} is outside.", token)
             if item in POWERS and value & (value - 1):
                 fail("E-PLAN", f"{item} is a power of two from {least} to {most}; {value} is not one.", token)
-        with c.within(module):
-            target = c.qualify(name, c.fs)
-        planned = [f for f in c.p.functions if target in (f.name, f.source_name)]
+        planned = planned_functions(c, module, name)
         regions = [s for f in planned for s in walk(f.body) if s.tag == "parallel"]
         if not regions or any(f.name in chosen for f in planned):
             fail("E-PLAN", f"plan {name} must name a function with a parallel region, once.", token)
@@ -147,9 +152,7 @@ def fusions(c: Checker, rows: dict[str, set[str]]):
     for module, name, items, token in c.p.plans:
         if "fuse" not in items:
             continue
-        with c.within(module):
-            target = c.qualify(name, c.fs)
-        planned = [f for f in c.p.functions if target in (f.name, f.source_name)]
+        planned = planned_functions(c, module, name)
         if not any(fusion.chains(ss, rows) for f in planned for ss in fusion.lists(f.body)):
             fail("E-PLAN", f"fuse joins adjacent parallel regions over one extent whose bodies cannot trap, loop or be "
                  f"seen, and whose shared arrays each lane touches only at its own index; {name} has no two such "
