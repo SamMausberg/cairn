@@ -241,3 +241,19 @@ def test_a_selected_implementation_s_needs_reach_the_build_s_device_target(tmp_p
     with pytest.raises(Diagnostic) as at_build:  # refused before anything is compiled
         build(load_project(tmp_path / "scale.cairn"), output=tmp_path / "build", kind="library", device_target="sm_120")
     assert at_build.value.data["code"] == "E-IMPL-TARGET"
+
+
+def test_a_call_whose_arguments_decide_the_condition_reaches_the_implementation_directly():
+    source = (
+        TOTAL
+        + BY4
+        + """plan total use total_by4;
+const EIGHT:usize = 8;
+fn sums(n:usize, xs:ro<u64>[n], eight:ro<u64>[8], five:ro<u64>[5]) -> u64 {
+  return total(8, eight) + total(EIGHT, eight) + total(5, five) + total(n, xs);
+}
+"""
+    )
+    cpp, _ = compile_source(source)
+    body = cpp.split("ci_sums(std::size_t v_n")[2].split("\n}\n")[0]
+    assert body.count("ci_total_by4(") == 2 and body.count("ci_total(") == 2  # 8 is decided; 5 and n are tested

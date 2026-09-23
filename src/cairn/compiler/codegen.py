@@ -382,6 +382,7 @@ class Emitter:
         return TABLE[e.val][1](self, e)
 
     def invoke(self, e: Expr, f: Function) -> str:
+        f = implementations.direct(self, e, f)  # a selected implementation whose condition the arguments decide
         args = (self.pointer(a)[0] if t.extent and a.tag != "slice" else self.expr(a)
                 for a, (_, t) in zip(e.args, f.params, strict=True))  # fmt: skip
         return f"{self.callee(f)}({', '.join(args)})"

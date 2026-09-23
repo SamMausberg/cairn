@@ -12,7 +12,9 @@ runs and every input the reference admits is still admitted. Only a test block c
 an implementation never reaches its reference, which could dispatch back to it (E-IMPL-CALL).
 
 Nothing runs an implementation unless a plan names it (`plan total use total_by4;`, E-IMPL-USE), and then the
-reference's body starts with the dispatch: the condition tested at entry, or nothing when there is no condition.
+reference's body starts with the dispatch: the condition tested at entry, or nothing when there is no condition. A
+call whose arguments make the condition a constant that folds to true (`total(8, xs)`) calls the implementation
+directly, the condition established at compile time.
 `needs(cp_async)` names the device features an implementation's code needs, from the device-target table
 (projects/target.py), and only an implementation that runs device code may name one. A selection adds them to what the
 program asks of its device target, and a build whose target lacks one is refused (E-IMPL-TARGET, `targeted`) rather
@@ -30,7 +32,7 @@ from typing import TYPE_CHECKING, Any
 
 from .effects import allowed, fixed_point
 from .scope import Binding, Scope
-from .tree import BOOL, FLOAT, INT, SCALAR, VOID, WIDTH, Diagnostic, Expr, Function, Stmt, fail, is_view, nested
+from .tree import BOOL, FLOAT, INT, SCALAR, VOID, WIDTH, Diagnostic, Expr, Function, Stmt, clone, fail, is_view, nested
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -297,6 +299,32 @@ def lower(g: Emitter, f: Function) -> None:
     g.put(f"if ({test}) {{ {call}; return; }}" if f.ret == VOID else f"if ({test}) return {call};")
     for feature in impl.implements.needs if impl.implements else ():
         g.feature(feature)  # what the program now asks of its device target
+
+
+def direct(g: Emitter, e: Expr, f: Function) -> Function:
+    """The function a call of `f` reaches: the selected implementation itself when the arguments its condition reads
+    are literals or constants that make it true, so the test is decided here; otherwise `f`, which tests it on entry."""
+    from .constants import fold
+
+    chosen = g.c.selected.get(f.name)
+    impl = g.c.fs.get(chosen) if chosen else None
+    when = impl.implements.when if impl is not None and impl.implements is not None else None
+    if impl is None or when is None or len(e.args) != len(f.params):
+        return f
+    given = {n: a for (n, _), a in zip(f.params, e.args, strict=True)}
+    named = {x.val for x in walk(when) if x.tag == "name" and x.val in given}
+    known = {n: given[n] if given[n].tag == "int" else given[n].ref for n in named}
+    if not named or not all(isinstance(v, Expr) and v.tag in {"int", "unary"} for v in known.values()):
+        return f
+    decided = clone(when)
+    for x in walk(decided):
+        if x.tag == "name" and x.val in known:
+            x.tag, x.val, x.args = known[x.val].tag, known[x.val].val, clone(known[x.val].args)
+    try:
+        holds = fold(g.c, decided, BOOL, []) is True
+    except (Diagnostic, ValueError):  # a condition folding cannot decide, such as one that calls min, is tested
+        return f
+    return impl if holds else f
 
 
 def targeted(functions: dict[str, Any], device: Any) -> None:

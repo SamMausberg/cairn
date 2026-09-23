@@ -305,7 +305,7 @@ fn main() -> i32 {
 }
 ```
 
-The selected implementation runs where its condition holds and the reference runs everywhere else, so every input the reference admits is still admitted. Without a plan the reference runs. `when` is a condition over the value parameters that cannot trap: comparisons, `&& || !`, `& | ^ ~`, `min`, `max`, the wrapping forms, `/` or `%` by a nonzero literal, `len` of a view parameter, literals and constants (`E-IMPL-WHEN`). Without `when` an implementation applies to every input and the dispatch tests nothing.
+The selected implementation runs where its condition holds and the reference runs everywhere else, so every input the reference admits is still admitted. Without a plan the reference runs. `when` is a condition over the value parameters that cannot trap: comparisons, `&& || !`, `& | ^ ~`, `min`, `max`, the wrapping forms, `/` or `%` by a nonzero literal, `len` of a view parameter, literals and constants (`E-IMPL-WHEN`). Without `when` an implementation applies to every input and the dispatch tests nothing. A call whose arguments for the condition are literals or constants that make it true, such as `total(12, xs)` above, calls the implementation directly, the condition decided when the program is compiled.
 
 An implementation keeps its reference's contract. Its parameters, types, extents, placements and result are the reference's (`E-IMPL-SIGNATURE`). Its row stays inside the reference's declared ceiling, or inside the reference's own row when it declares none (`E-IMPL-EFFECT`), and it writes no rounding the reference does not write (`E-IMPL-NUMERICS`). The reference's row joins every implementation's, so choosing one changes no row.
 
