@@ -6,6 +6,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# A newer push to the same branch supersedes a run still going, so a burst of commits costs one run, not one each.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   compiler:
     runs-on: ubuntu-24.04
