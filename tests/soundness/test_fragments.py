@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler import layouts as L
-from cairn.compiler.cairnc import compile_program
-from emitted import refused
+from cairn.compiler.cairnc import compile_program, compile_source
+from emitted import device_build, refused, run, sanitized
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / "src/cairn/runtime"
@@ -112,3 +112,80 @@ def test_the_device_operations_compile_for_sm_120_to_tensor_core_instructions(tm
     sass = subprocess.run(["cuobjdump", "-sass", str(cubin)], capture_output=True, text=True, timeout=120).stdout
     found = set(re.findall(r"\b(HMMA\.16816\.F32(?:\.BF16)?|LDSM\.16\.M(?:T)?88\.[24])\b", sass))
     assert {"HMMA.16816.F32", "HMMA.16816.F32.BF16", "LDSM.16.M88.4", "LDSM.16.MT88.2"} <= found, found
+
+
+BIASED = """layout TILE_A = rows(16, 16);
+layout TILE_B = rows(16, 8);
+layout TILE_C = rows(16, 8);
+layout SHARE = spread(rows(16, 8), 8, 4, 1, 2);    // the lanes' share of an mma.sync accumulator
+
+// One warp: out = a * b plus bias[j] in every column j, the bias added where each lane holds its elements.
+fn biased(out:rw<f32>[128], a:ro<f16>[256], b:ro<f16>[128], bias:ro<f32>[8]) {
+  blocks g in 1 threads t in 32 {
+    shared sa:f16[256] = zeroed;
+    shared sb:f16[128] = zeroed;
+    shared sc:f32[128] = zeroed;
+    for i in 0..8 { sa[t + 32 * i] = a[t + 32 * i]; }
+    for i in 0..4 { sb[t + 32 * i] = b[t + 32 * i]; }
+    barrier;
+    let x = mma_load[MmaA[f16, 16, 8, 16]](sa, TILE_A, 0, 0);
+    let y = mma_load[MmaB[f16, 16, 8, 16]](sb, TILE_B, 0, 0);
+    let mut acc = MmaAcc[f32, 16, 8, 16](0.0);
+    acc = mma_unordered(acc, x, y);
+    for v in 0..4 { acc = mma_set(acc, v, mma_get(acc, v) + bias[SHARE.col(t, v)]); }
+    mma_store(sc, TILE_C, 0, 0, acc);
+    barrier;
+    for i in 0..4 { out[t + 32 * i] = sc[t + 32 * i]; }
+  }
+}
+
+fn main() -> i32 {
+  buffer a:f16[256] = zeroed;
+  buffer b:f16[128] = zeroed;
+  buffer bias:f32[8] = zeroed;
+  buffer out:f32[128] = zeroed;
+  for e in 0..256 { a[e] = f16(f64(e % 7) - 3.0); }
+  for e in 0..128 { b[e] = f16(f64(e % 5) - 2.0); }
+  for j in 0..8 { bias[j] = f32(j) * 0.5; }
+  biased(out, a, b, bias);
+  for i in 0..16 {
+    for j in 0..8 {
+      let mut want:f32 = bias[j];
+      for p in 0..16 { want = want + f32(a[i * 16 + p]) * f32(b[p * 8 + j]); }
+      if out[i * 8 + j] != want { return 1; }
+    }
+  }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["g++", "clang++"])
+def test_each_lane_reaches_the_accumulator_elements_the_isa_gives_it(tmp_path, cxx):
+    """mma_get and mma_set on the host, where each lane's copy is right at the elements it holds: a bias added
+    through the layout of the lanes' share lands in the right column, checked against a loop written out."""
+    done = run(tmp_path, compile_source(BIASED)[0], *sanitized(cxx), "-pthread", cxx=cxx)
+    assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+
+
+def test_elementwise_access_compiles_for_sm_120_to_the_registers_it_names(tmp_path):
+    if not shutil.which("nvcc"):
+        pytest.skip("needs nvcc")
+    kernel = BIASED[: BIASED.index("fn main")]
+    head = kernel[kernel.index("fn biased") : kernel.index("{", kernel.index("fn biased"))]
+    kernel = kernel.replace(head, re.sub(r"\[(\d+)\]", r"[\1]@device", head))
+    kernel = kernel.replace("out[t + 32 * i] =", "out[t + 32 * i + 128 * g] =")  # the device build refuses an unused g
+    device_build(tmp_path, compile_source(kernel)[0], timeout=900)
+
+
+@pytest.mark.parametrize(
+    ("code", "source", "said"),
+    [
+        ("E-FRAGMENT", "fn f(acc:WmmaAcc[f32, 16, 16, 16]) -> f32 = mma_get(acc, 0);", "unspecified"),
+        ("E-FRAGMENT", "fn f(acc:MmaAcc[f32, 16, 8, 16]) -> f32 = mma_get(acc, 0);", "cooperative region"),
+        ("E-TYPE-MISMATCH", f"fn f({FRAGMENTS}) -> f32 = mma_get(a, 0);", "accumulator"),
+        ("E-ARITY", "fn f(acc:MmaAcc[f32, 16, 8, 16]) { let x = mma_set(acc, 0); }", "an f32"),
+    ],
+)  # fmt: skip
+def test_elementwise_access_is_refused_where_it_is_not_defined(code, source, said):
+    assert said in refused(code, source)["message"]

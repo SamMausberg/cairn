@@ -274,3 +274,29 @@ def test_mma_sync_reads_a_swizzled_shared_tile_and_refuses_one_whose_rows_it_can
     compile_source(swizzled + region(body))
     narrow = "layout SW = swizzle(rows(16, 16), 1, 2, 3);\n"  # a base of 2 splits the 16-byte runs
     assert "ldmatrix" in refused("E-LAYOUT-CONSUMER", narrow + region(body))["message"]
+
+
+@pytest.mark.parametrize("name", [*KERNELS, "transpose"])
+def test_the_canonical_projection_of_each_program_lowers_to_the_same_code(name):
+    from cairn.agent.projection import canonical_source
+
+    source = (TENSOR / f"{name}.cairn").read_text()
+    assert compile_source(canonical_source(source))[0] == compile_source(source)[0]
+
+
+def test_the_receipt_states_each_fragment_step_s_contract_and_the_value_model_answers_unknown():
+    from cairn.verify.scalar_semantics import equivalent
+
+    source = (TENSOR / "tile32.cairn").read_text()
+    steps = [s for s in compile_source(source)[1]["functions"]["tile32"]["numerics"] if s["op"] == "mma"]
+    assert len(steps) == 2 and all(s["rounding"] == "unordered-f32" and s["k"] == "16" for s in steps)
+    assert steps[0]["from"] == "bf16" and steps[0]["bound"] == "(k + 1) * 2^-22 * (|c| + sum |a * b|)"
+    assert equivalent(source, source, "tile32")["status"] == "unknown"
+
+
+def test_the_performance_model_says_a_fragment_step_is_not_priced():
+    from cairn.compiler.cairnc import compile_program
+    from cairn.perf.work import count
+
+    p, checker, _ = compile_program((TENSOR / "tile64.cairn").read_text())
+    assert any("fragment step is not priced" in why for why in count(p, checker)["tile64"].unknown)

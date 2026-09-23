@@ -129,6 +129,8 @@ namespace Cairn
 #print axioms Cairn.Layout.doubled_overlap
 #print axioms Cairn.Layout.fitted_ok
 #print axioms Cairn.Layout.cleared_clash
+#print axioms Cairn.Layout.accumulator_share_ok
+#print axioms Cairn.Layout.accumulator_share_is_the_isa
 
 /-! ### Non-vacuity: the faults are reachable for rejected programs -/
 

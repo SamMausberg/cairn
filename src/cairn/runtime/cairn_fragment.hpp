@@ -247,6 +247,33 @@ template<class F, class S, class At> CR_HD F loaded(const S* base, At at, std::s
   return f;
 }
 
+// Lane l's value v of an mma.sync accumulator is element (l / 4 + 8 * (v / 2), 2 * (l % 4) + v % 2), as the PTX ISA
+// shares an m16n8 accumulator. On the host a lane reads and writes that element of its whole copy: it is the one
+// element of the copy the lane stores, and the one a multiply-accumulate needs for it, so the copy stays right where
+// it matters.
+CR_HD constexpr std::size_t element(unsigned lane, std::size_t v) noexcept {
+  return (lane / 4 + 8 * (v / 2)) * 8 + 2 * (lane % 4) + v % 2;
+}
+template<class F> CR_HD float get(const F& f, std::size_t v, unsigned lane) noexcept {
+  if(v >= 4) trap();
+#if defined(__CUDA_ARCH__)
+  (void)lane;
+  return f.c[v];
+#else
+  return f.e[element(lane % 32, v)];
+#endif
+}
+template<class F> CR_HD F set(F f, std::size_t v, float x, unsigned lane) noexcept {
+  if(v >= 4) trap();
+#if defined(__CUDA_ARCH__)
+  (void)lane;
+  f.c[v] = x;
+#else
+  f.e[element(lane % 32, v)] = x;
+#endif
+  return f;
+}
+
 template<class D, class A, class B> CR_HD D multiplied(D d, const A& a, const B& b) noexcept {
   mma(d, a, b);
   return d;

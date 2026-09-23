@@ -619,6 +619,10 @@ class Counter:
                 self.cost.allocated = self.cost.allocated + n * element * at.times
             elif name == "transfer":
                 self.transfer(e, at)
+            elif name == "mma_unordered" and len(e.args) == 3:  # a warp's fragment step (compiler/fragments.py)
+                why = f"line {e.line}: a tensor-core fragment step is not priced"
+                if why not in self.cost.unknown:
+                    self.cost.unknown.append(why)
             elif name == "mma_unordered":
                 self.multiply(e, at)
             elif name in {"wait", "collect"}:

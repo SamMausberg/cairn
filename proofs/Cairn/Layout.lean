@@ -285,5 +285,25 @@ theorem fitted_ok : ({ doubled with tile := ⟨[[(4, 1)], [(2, 4)]], (0, 0, 0)�
 /-- A swizzle with no shift clears the bits it would flip, so two elements meet. -/
 theorem cleared_clash : (Storage.mk [[(4, 1)], [(4, 4)]] (1, 0, 0)).clash = some (0, 1) := by decide
 
+/-! ### The mma.sync accumulator's share
+
+A tensor-core fragment is a warp's value, and a lane stores only the elements it holds (`cr::frag::holder` and
+`cr::frag::element` in `runtime/cairn_fragment.hpp`).  For an m16n8 accumulator that share is
+`spread(rows(16, 8), 8, 4, 1, 2)`: it is the PTX ISA's, and it passes the rule, so `ok_one_writer` says the 32 lanes
+of a warp store each element once between them. -/
+
+def accumulatorShare : Spread :=
+  { tile := ⟨[[(8, 1)], [(16, 8)]], (0, 0, 0)⟩,
+    participants := [(4, [2, 0]), (8, [0, 1])],
+    values := [(2, [1, 0]), (1, [0, 1]), (1, [8, 0]), (2, [0, 8])],
+    wrap := true, origin := [0, 0] }
+
+theorem accumulator_share_ok : accumulatorShare.ok = true := by decide
+
+/-- Lane `l`'s value `v` is element `(l / 4 + 8 * (v / 2), 2 * (l % 4) + v % 2)`, column first here. -/
+theorem accumulator_share_is_the_isa :
+    ∀ l, l < 32 → ∀ v, v < 4 → accumulatorShare.coords l v = [2 * (l % 4) + v % 2, l / 4 + 8 * (v / 2)] := by
+  decide
+
 end Layout
 end Cairn

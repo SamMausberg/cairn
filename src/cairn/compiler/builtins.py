@@ -36,7 +36,7 @@ WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
 SOFT = {"take", "swap", "transfer", "wait", "collect", *machine.NAMES}
 MATH = {"sqrt", "floor", "ceil", "trunc", "abs", "to_bits"}  # 1.4: a program's own function of the name wins
 SOFT |= MATH | printing.NAMES | {"quantize", "quantize_stochastic", "from_bits", "assert", "assert_eq", "mma_unordered"}
-SOFT |= {"mma_load", "mma_store"}  # tensor-core fragments (fragments.py)
+SOFT |= {"mma_load", "mma_store", "mma_get", "mma_set"}  # tensor-core fragments (fragments.py)
 SOFT |= cooperative.SHUFFLES  # 0.9: a program's own function of the name wins
 QUANTIZED = [*STORAGE, "i8", "u8", "i16", "u16"]  # where one rounding of x / scale is exact (cairn_float.hpp)
 PATTERN = {"f32": "u32", "f64": "u64", **{n: "u16" if STORAGE[n][0] + STORAGE[n][1] > 7 else "u8" for n in STORAGE}}
@@ -392,6 +392,8 @@ TABLE: dict[str, tuple[Any, Any]] = {
     "mma_unordered": (tensor.check_mma, tensor.lower_mma),
     "mma_load": (fragments.check_load, fragments.lower_load),
     "mma_store": (fragments.check_store, fragments.lower_store),
+    "mma_get": (fragments.check_get, fragments.lower_get),
+    "mma_set": (fragments.check_set, fragments.lower_set),
     **dict.fromkeys(fragments.TYPES, (fragments.check_fill, fragments.lower_fill)),
     **dict.fromkeys(cooperative.SHUFFLES, (cooperative.check_shuffle, cooperative.lower_shuffle)),
     "wait": (check_wait, lambda g, e: f"{g.expr(e.args[0])}.wait()"),

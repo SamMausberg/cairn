@@ -107,6 +107,8 @@ layout SWIZZLED = swizzle(rows(16, 16), 1, 3, 3);
 fn first(a:ro<f16>[256]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, SWIZZLED, 0, 0); }
 ```
 
+An accumulator's elements are reached one at a time where the family says which lane holds which. `mma_get(acc, v)` is the value `v` this thread's lane holds of an `mma.sync` accumulator, and `acc = mma_set(acc, v, x)` replaces it. Lane `l`'s value `v` is element `(l / 4 + 8 * (v / 2), 2 * (l % 4) + v % 2)`, the share the PTX ISA states, which a program names as the layout `spread(rows(16, 8), 8, 4, 1, 2)`: in a region of `threads t in 32`, `SHARE.col(t, v)` is the column of `mma_get(acc, v)`. `proofs/Cairn/Layout.lean` checks that this spread is the ISA's formula and gives each element one lane. WMMA leaves the share unspecified, so there an element is `E-FRAGMENT`.
+
 The family is a capability the build's device target must provide ([tools.md](tools.md#the-device-target)). `TmemAcc` needs tcgen05 and tensor memory, which sm_120 does not have and which nothing here lowers, so it is refused rather than emulated.
 
 ```cairn rejects E-TARGET-FEATURE

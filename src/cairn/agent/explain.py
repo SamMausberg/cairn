@@ -39,6 +39,7 @@ GUARDS = {  # The checker's name for each guard kind, and the runtime calls that
     "callable": ("cr::callable(",),
     "assert": ("cr::check(", "cr::check_eq("),
     "layout": ("cr::layout::within(",),  # A coordinate or participant checked against its layout (layouts.py).
+    "fragment": ("cr::frag::loaded<", "cr::frag::stored(", "cr::frag::get(", "cr::frag::set("),  # fragments.py
 }
 SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and how the emitter spells it.
     "wait": ".wait()",

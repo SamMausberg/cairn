@@ -234,6 +234,43 @@ def check_store(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: T
     return VOID
 
 
+def owned(c: Checker, e: Expr, acc: Expr, value: Expr) -> Type:
+    """The accumulator and the value index of `mma_get` and `mma_set`: an mma.sync accumulator, whose lanes hold
+    the elements the PTX ISA says, the value below how many each lane holds."""
+    ty = c.expr(acc)
+    found = fragment(ty)
+    if found is None or found[1] != "acc":
+        fail("E-TYPE-MISMATCH", f"{e.val} reaches one element of an accumulator; {ty.display()} is not one.", acc)
+    if found[0] != "mma_sync":
+        fail("E-FRAGMENT", f"{e.val} reaches the element a lane holds, and {ty.name} leaves which lane holds which "
+             "element unspecified; use an mma.sync accumulator (MmaAcc), whose share the PTX ISA states: lane l's "
+             "value v is element (l / 4 + 8 * (v / 2), 2 * (l % 4) + v % 2).", e)  # fmt: skip
+    if getattr(c, "coop", None) is None:
+        fail("E-FRAGMENT", f"{e.val} reaches the element this thread's lane holds, and only a thread of a "
+             "cooperative region has a lane: write it inside `blocks ... threads ... { }`.", e)  # fmt: skip
+    c.expect(c.expr(value, USIZE), USIZE, value)
+    c.guard("fragment")  # the value index against the four a lane holds
+    return ty
+
+
+def check_get(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    """`mma_get(acc, v)`: this thread's lane's value v of an mma.sync accumulator."""
+    if len(args) != 2:
+        fail("E-ARITY", "mma_get takes an accumulator and one of the values the thread's lane holds.", e)
+    e.ref = ("builtin", owned(c, e, args[0], args[1]))
+    return Type("f32")
+
+
+def check_set(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    """`acc = mma_set(acc, v, x)`: the accumulator with this thread's lane's value v replaced by x."""
+    if len(args) != 3:
+        fail("E-ARITY", "mma_set takes an accumulator, one of the values the thread's lane holds, and an f32.", e)
+    ty = owned(c, e, args[0], args[1])
+    c.expect(c.expr(args[2], Type("f32")), Type("f32"), args[2])
+    e.ref = ("builtin", ty)
+    return ty
+
+
 def check_mma(c: Checker, e: Expr, args: list[Expr]) -> Type:
     """`mma_unordered(acc, a, b)`: acc + a * b, one warp's tensor-core step."""
     from .builtins import contract
@@ -309,6 +346,17 @@ def lower_store(g: Emitter, e: Expr) -> str:
     form = layouts.affine(g.c.folded[name]) or ("row", 0)
     return (f"cr::frag::stored({g.expr(e.args[4])}, {data}, {at}, {form[1]}, {'true' if form[0] == 'row' else 'false'}, "
             f"unsigned(cr_blk.lane()))")  # fmt: skip
+
+
+def lower_get(g: Emitter, e: Expr) -> str:
+    need(g, e.ref[1])
+    return f"cr::frag::get({g.expr(e.args[0])}, {g.expr(e.args[1])}, unsigned(cr_blk.lane()))"
+
+
+def lower_set(g: Emitter, e: Expr) -> str:
+    need(g, e.ref[1])
+    at = ", ".join(g.expr(a) for a in e.args)
+    return f"cr::frag::set({at}, unsigned(cr_blk.lane()))"
 
 
 def lower_mma(g: Emitter, e: Expr) -> str:

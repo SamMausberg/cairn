@@ -100,6 +100,8 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Layout.gappy_gap",
     "Cairn.Layout.doubled_overlap",
     "Cairn.Layout.cleared_clash",
+    "Cairn.Layout.accumulator_share_ok",
+    "Cairn.Layout.accumulator_share_is_the_isa",
     # The phase rule of a cooperative region: no clashing steps, one result, and a refusal of each kind.
     "Cairn.Cooperative.no_race",
     "Cairn.Cooperative.deterministic",
