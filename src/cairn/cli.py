@@ -16,6 +16,7 @@ from typing import Any
 
 from . import __version__
 from .compiler.cairnc import Diagnostic, certify_templates, compile_source
+from .compiler.modules import library_source
 from .editor import terminal
 from .projects.project import ProjectError, contained_file, load_project, read_text
 from .projects.toolchain import ARCHS, TARGETS, emulator, host_family, resolve_arch
@@ -441,7 +442,10 @@ def main(argv: list[str] | None = None) -> int:
     except Diagnostic as error:
         located = project.locate(error) if project else error.data
         if terminal.human(FORMAT):
-            terminal.diagnostic({**located, "source_line": error.data["line"]}, project.source if project else "")
+            shown = library_source(located["module"]) if located.get("module", "").startswith("std.") else None
+            terminal.diagnostic(
+                {**located, "source_line": error.data["line"]}, shown or (project.source if project else "")
+            )
         else:
             report(located)
         return 1

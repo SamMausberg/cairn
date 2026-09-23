@@ -10,6 +10,7 @@ from itertools import takewhile
 from pathlib import Path, PurePosixPath
 
 from ..compiler.lexing import lex
+from ..compiler.modules import library_path
 from ..compiler.syntax import Parser
 from ..compiler.tree import MAX_SOURCE, Diagnostic
 from .toolchain import ARCHS, KINDS, LIBRARIES, TARGETS, ProjectError
@@ -93,6 +94,8 @@ class Project:
 
     def locate(self, error: Diagnostic) -> dict:
         result = dict(error.data)
+        if result.get("module", "").startswith("std."):  # a line of a linked library module, in its own file
+            return {**result, "file": str(library_path(result["module"]))}
         unit = self.unit_at(result.get("line", 0))
         if unit:
             result.update(file=unit.path, line=result["line"] - unit.first_line + 1)

@@ -390,6 +390,9 @@ class Checker:
                 self.function(f)
             except Diagnostic as error:  # The position is the recipe's: say which derivation this copy came from.
                 error.data.update({"derived": f.source_name} if f.source_name.startswith("derive ") else {})
+                inner = self.s.f.module  # the innermost body checked, since an instance is checked inside its caller
+                if inner in self.p.sources and "module" not in error.data:
+                    error.data["module"] = inner  # its line counts in that library module's own file
                 raise
 
     def judge(self) -> dict[str, set[str]]:

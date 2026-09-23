@@ -15,7 +15,7 @@ from typing import TextIO
 
 from ..compiler.lexing import TOKEN
 
-SHOWN = {"protocol", "status", "code", "message", "line", "column", "trust", "file"}  # rendered in the header
+SHOWN = {"protocol", "status", "code", "message", "line", "column", "trust", "file", "module"}  # in the header
 CHOICES = ("available_names", "available_variants")  # a misspelling is answered with the nearest of these
 
 
