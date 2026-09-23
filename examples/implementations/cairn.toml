@@ -1,0 +1,8 @@
+[project]
+name = "implementations"
+sources = ["src/prefix.cairn", "src/main.cairn"]
+tests = ["regressions/prefix.json"]
+
+[build]
+kind = "exe"
+arch = "baseline"

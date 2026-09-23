@@ -34,7 +34,16 @@ def signature(f: Function) -> str:
     written = f.name if f.source_name.startswith("derive ") else f.source_name  # A derived impl keeps its origin there.
     name = written.rsplit(".", 1)[-1] if f.owner else f.name.rsplit(".", 1)[-1] if f.module else f.name
     link = f'"{f.symbol}" ' if f.symbol else ""
-    return f"{'extern ' * f.extern}{link}{'kernel ' * f.kernel}fn {name}{generics(f.generics if not f.bindings else [])}({ps}){ret}{ceiling}"
+    return f"{'extern ' * f.extern}{link}{'kernel ' * f.kernel}fn {name}{generics(f.generics if not f.bindings else [])}({ps}){ret}{ceiling}{implementing(f)}"
+
+
+def implementing(f: Function) -> str:
+    """` implements total when (n % 4) == 0 needs(cp_async)`: what an alternative implementation declares."""
+    clause = f.implements
+    if clause is None:
+        return ""
+    when = f" when {format_expr(clause.when)}" if clause.when is not None else ""
+    return f" implements {clause.reference}{when}" + (f" needs({', '.join(clause.needs)})" if clause.needs else "")
 
 
 ESCAPES = {"\n": "\\n", "\t": "\\t", "\r": "\\r", "\0": "\\0", "\\": "\\\\", '"': '\\"'}
@@ -270,6 +279,7 @@ def projection(p: Program, source: str) -> str:
         out += [derivation(r, naturals, target) for m, r, naturals, target, _ in p.derivations if m == module]
         out += [f"plan {name} {{{''.join(f' {k} {items[k]};' for k in PLAN_ITEMS if k in items)} }}"
                 for m, name, items, _ in p.plans if m == module]  # fmt: skip
+        out += [f"plan {name} use {chosen};" for m, name, chosen, _ in p.selections if m == module]
     return "\n\n".join(out) + "\n"
 
 

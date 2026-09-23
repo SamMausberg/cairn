@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import facts, layouts, rings
+from . import facts, implementations, layouts, rings
 from .builtins import SOFT, TABLE, WRAPPING
 from .scope import Binding
 from .syntax import copied, lent_part
@@ -177,6 +177,8 @@ def spanned(args: list[Expr]):
 
 
 def invoke(c: Checker, e: Expr, f: Function, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    if f.implements is not None:
+        implementations.called(c, f, e)
     if c.p.lends:
         lent(c, f, args)
     elaborate(f, args)

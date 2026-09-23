@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
-from . import facts
+from . import facts, implementations
 from .builtins import TABLE
 from .places import field_path, path
 from .scope import Binding
@@ -285,6 +285,8 @@ def function_value(c: Checker, e: Expr, want: Type) -> Type | None:
         e.args = []
     name = g.name
     c.signature(g)
+    if g.implements is not None:
+        implementations.called(c, g, e)
     if (g.generics and not g.bindings) or g.extern or g.kernel or any(t.mode != "value" for _, t in g.params):
         fail("E-FN-TYPE", f"{name} cannot be a function value: only plain host functions of values qualify.", e)
     c.call_edges[c.f.name].append((name, {}))

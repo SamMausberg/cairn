@@ -135,6 +135,7 @@ def implementation_hash():
                 "compiler/tensor.py",
                 "compiler/layouts.py",
                 "compiler/rings.py",
+                "compiler/implementations.py",
                 "compiler/effects.py",
                 "compiler/traits.py",
                 "compiler/constants.py",

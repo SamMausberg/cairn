@@ -96,6 +96,7 @@ Each card states one part of the language and the codes of its rules. The compil
 | [rings](cards/rings.md) | `IoRing` |
 | [closures](cards/closures.md) | `dyn` |
 | [tests](cards/tests.md) | `assert`, `assert_eq`, `test` |
+| [implementations](cards/implementations.md) | `implements` |
 | [printing](cards/printing.md) | `eprint`, `eprintln`, `format`, `print`, `println` |
 | [layouts](cards/layouts.md) | `layout` |
 | [lends](cards/lends.md) | `lends` |
@@ -128,6 +129,7 @@ Every command takes `--format json`, the default when output is piped.
 | `cairn explain` | Where each function pays at run time: guards, allocations, waits and loop vectorization. |
 | `cairn predict` | How long each function will take, from its checked work and a machine profile; nothing runs. |
 | `cairn tune` | Choose a function's plan by prediction, and with --measure time only the best-ranked few on this host. |
+| `cairn validate` | Test one implementation against its reference on boundary inputs its contract gives; finite, not proof. |
 | `cairn doc` | Generate the API reference of the checked program, as Markdown. |
 | `cairn graph` | Print the module graph: each file's modules, each module's imports, exports and dependents, hashes. |
 | `cairn verify` | SMT source equivalence, not native or Lean verification. |

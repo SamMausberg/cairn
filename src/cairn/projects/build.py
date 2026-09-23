@@ -15,6 +15,7 @@ from pathlib import Path
 from ..compiler.cairnc import RUNTIME_FILES, Parser, generate, joined, units, write_program
 from ..compiler.codegen import mangle
 from ..compiler.header import header as c_header
+from ..compiler.implementations import targeted
 from ..compiler.machine import unbuildable
 from ..compiler.tree import Diagnostic
 from .project import Project, ProjectError
@@ -173,7 +174,9 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
     artifact = directory / (name + ".elf" if bare else "lib" + name + ".so" if kind == "library" else name)
     device = None
     if "cuda" in receipt["requires"]:  # One device target, resolved once, for the command line and the receipt.
-        device = resolve(device_target, project.device_target).require(receipt["device_features"])
+        device = resolve(device_target, project.device_target)
+        targeted(receipt["functions"], device)  # a selected implementation's needs, named before the program's
+        device = device.require(receipt["device_features"])
     if why := unbuildable(receipt["requires"], host_family(), device.name if device else ""):
         raise Diagnostic("E-ASM-TARGET", why)  # assembly builds only for the machine it names
     command = native_command(

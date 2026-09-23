@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from operator import attrgetter
 from typing import Any
 
-from . import calls, concurrency, expressions, machine, places, statements
+from . import calls, concurrency, expressions, implementations, machine, places, statements
 from .builtins import SOFT, TABLE
 from .concurrency import ORDERS, PINNED
 from .constants import constant
@@ -154,6 +154,8 @@ class Checker:
         self.address_taken: set[str] = set()
         self.nodes = self.unique = 0
         self.reaching = 0  # Depth inside a field path: its base is reached, not read whole.
+        self.alternatives: dict[str, list[str]] = {}  # reference -> its implementations (implementations.py)
+        self.selected: dict[str, str] = {}  # reference -> the implementation a plan runs
 
     # Names and types ---------------------------------------------------------------------------
 
@@ -404,7 +406,7 @@ class Checker:
                          "unused templates are not silently ignored.")  # fmt: skip
                 self.unchecked.append(f.name)
         connect_dispatches(self)
-        effects = fixed_point(self)
+        effects = implementations.joined(self, fixed_point(self))
         audit(self, effects)
         self.judge_lane_callbacks(effects)
         kernels = [(f.name, True, f, f.name) for f in self.p.functions if f.kernel]
@@ -431,6 +433,7 @@ class Checker:
 
     def check(self) -> dict[str, Any]:
         self.bodies()
+        implementations.check(self)
         planned = concurrency.plans(self)
         effects = self.rows = self.judge()
         concurrency.fusions(self, effects)
@@ -444,6 +447,7 @@ class Checker:
                 "discharged_check_sites": self.discharges[n],
                 **({"plan": planned[n]} if n in planned else {}),
                 **({"numerics": self.numerics[n]} if self.numerics.get(n) else {}),
+                **implementations.receipt(self, n),
                 "heap_allocations": sum(x["kind"] == "buffer" for x in self.resources[n]),
                 "allocation_count_kind": "syntactic-sites-not-dynamic-bound",
                 "local_storage": self.resources[n],

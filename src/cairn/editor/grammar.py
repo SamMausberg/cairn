@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 # Words the parser reads in one position only; anywhere else they are ordinary names (the parser says where).
 CONTEXTUAL = {"after", "align", "exclusive", "fold", "into", "lends", "packed", "plan", "recipe", "require", "scan"}
-CONTEXTUAL |= {"test", "layout", "volatile", "out", "clobbers", *PLAN_ITEMS}
+CONTEXTUAL |= {"test", "layout", "volatile", "out", "clobbers", "implements", "when", "needs", "use", *PLAN_ITEMS}
 
 # class -> (TextMate scope, Vim group, words). Every reserved word is in exactly one class.
 WORDS: dict[str, tuple[str, str, set[str]]] = {
@@ -57,7 +57,11 @@ CONTEXT: dict[str, tuple[str, str]] = {
     "fold": ("keyword.control.flow.cairn", r"(?=\s*(?:[-+*&|^]|[A-Za-z_][\w.]*\s+each\b))"),
     "scan": ("keyword.control.concurrency.cairn", r"(?=\s+(?:[-+*&|^]|(?:min|max|add_wrap|mul_wrap)\b)\s*[A-Za-z_])"),
     "exclusive": ("keyword.control.concurrency.cairn", r"(?=\s+[A-Za-z_]\w*\s+(?:for|parallel)\b)"),
-    "plan": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*\{)"),
+    "plan": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*(?:\{|use\b))"),
+    "use": ("keyword.other.plan.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*;)"),  # `plan f use g;`
+    "implements": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_][\w.]*\s*(?:when\b|needs\b|\{|=))"),
+    "when": ("keyword.control.conditional.cairn", r"(?=\s+[A-Za-z_(!~0-9])"),
+    "needs": ("storage.modifier.cairn", r"(?=\s*\(\s*sm_)"),
     "test": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*\{)"),
     "layout": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*=)"),
     "recipe": ("keyword.declaration.cairn", r"(?=\s+[A-Za-z_]\w*\s*[\[({]|\s+[A-Za-z_]\w*\s+for\b)"),
@@ -211,7 +215,7 @@ def textmate() -> dict:
                 ),
                 captured(rf"\b(recipe)\s+({IDENT})", "keyword.declaration.cairn", "entity.name.function.recipe.cairn"),
                 captured(
-                    rf"\b(plan)\s+({IDENT}(?:\.{IDENT})*)(?=\s*\{{)",
+                    rf"\b(plan)\s+({IDENT}(?:\.{IDENT})*)(?=\s*(?:\{{|use\b))",
                     "keyword.declaration.cairn",
                     "entity.name.function.cairn",
                 ),

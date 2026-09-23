@@ -132,6 +132,41 @@ Tuning a function should not mean rewriting it. A plan edit (`cairn.plan/1`, `ag
 
 A reply names items and whole numbers, never source text, so nothing else can ride along. The host writes the plan, rechecks the program, and requires every function's receipt to be what it was apart from the plan. It refuses an item the regions do not take or a value out of range (`E-PLAN`), anything else in the reply (`E-REQUEST`), and a session already spent or reopened (`E-SESSION`). A plan sent to an edit host, or a body to a plan host, is `E-REQUEST`. A plan changes no result, so an admitted plan needs no test to be correct, only a measurement to be worth keeping.
 
+## Implementation sessions
+
+An agent that writes a faster algorithm should not be able to change what the function means. An implementation session (`cairn.implementation/1`, `agent/implementations.py`) opens on one reference and admits new [implementations](abstractions.md#implementations) of it, each validated against the reference before the host keeps it.
+
+```python
+from pathlib import Path
+
+from cairn.agent.implementations import ImplementationHost
+from cairn.projects.project import load_project
+
+project = load_project(Path("examples/implementations"))
+host = ImplementationHost(regressions=project.root / "regressions/prefix.json")
+policy = {"tolerance": {"absolute": 0.0, "relative": 0.0}, "domain": {"largest_extent": 4096}}
+packet = host.open(project.source, "prefix", policy)
+source = (project.root / "candidates/prefix_blocks.cairn").read_text()
+answer = host.respond({"protocol": "cairn.implementation/1", "handle": "i1", "kind": "submit", "source": source})
+assert answer["status"] == "validated" and answer["select_with"] == "plan prefix use prefix_blocks;"
+```
+
+The packet shows the reference's declaration, row, ceiling and roundings, the implementations it already has, and what the host pinned, each with its digest: the tolerance on float results, the test policy (cases, seed, shrinking budget, time per call) and the permitted inputs. A submission is one implementation of the reference, new or replacing one of the same name, and any helpers it calls. The host splices it in beside the reference, rechecks the whole program with every `E-IMPL-*` rule, and runs [`cairn validate`](tools.md#cairn-validate) against the reference under the pinned policy. Only a validated implementation advances the source, and the answer says how to select it; selecting is the host's decision.
+
+| Code | Why |
+|---|---|
+| `E-REFERENCE` | the submission redefines the reference, implements another function, or names a `reference` field |
+| `E-TOLERANCE` | it names a tolerance |
+| `E-TEST-POLICY` | it names cases, a seed, a budget or a policy, or holds a test block |
+| `E-DOMAIN` | it names a domain, inputs or a precondition |
+| `E-DECLARATION` | it holds anything but functions, two implementations, a plan, or a helper that would replace a function of the program |
+| `E-CALLER-EFFECT` | another function's row grew |
+| `E-VALIDATION` | validation failed, with the shrunk input in `finite.failed` and the `repair_hint`, or it could not decide, which is never success |
+
+The compiler's own refusals come back as they are (`E-IMPL-SIGNATURE`, `E-IMPL-WHEN`, `E-IMPL-EFFECT`, ...), located in the submission. A failing case is kept in the regressions file, so the next run of the project tests it again. A validated answer is compact: the identity, the condition, the row, what the implementation requires of the machine, the finite result with its counts and its label, which says it is finite testing and never proof, and Z3's answer apart from it. Every submission, admitted or refused, goes to the candidate history (`agent/history.py`) when the host names a directory as `records`: a `validation` record for one that validated, and a `failure` record with its stage and why for one that did not, under an identity made of the reference as written, the implementation's own identity, the pinned contract and the host. A `history` callback gets the same entry.
+
+`examples/implementations/loop.py` replays a scripted agent through one session: a blocked prefix sum that restarts each block is refused at `n = 16` with one nonzero element, asking for a looser tolerance is `E-TOLERANCE`, asking for fewer inputs is `E-DOMAIN`, and the repaired version validates.
+
 ## Named choices
 
 A host can instead ask for named expressions, and check them against a reference:

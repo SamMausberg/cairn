@@ -82,6 +82,8 @@ def summary(result: dict, stream: TextIO | None = None) -> None:
     stream = stream or sys.stdout
     s = paint(stream)
     status = str(result.get("status", ""))
+    if result.get("schema") == "cairn.validation/1":
+        return validation(result, stream, s)
     good = status in {"typed", "native-built", "passed-finite-tests", "created"}
     detail = {
         "typed": lambda: typed(result),
@@ -104,6 +106,25 @@ def summary(result: dict, stream: TextIO | None = None) -> None:
     generics = {n: v for n, v in result.get("generics", {}).items() if v != "ok"}
     for name, verdict in generics.items():
         print(f"  {name}: {verdict}", file=stream)
+
+
+def validation(result: dict, stream: TextIO, s) -> None:
+    """`cairn validate`: the finite result, then what Z3 established apart from it, and a failure's shrunk input."""
+    finite, smt = result.get("finite", {}), result.get("smt", {})
+    status = str(result.get("status", ""))
+    said = f"{result.get('implementation')} against {result.get('reference')}"
+    if finite:
+        said += (
+            f", {plural(finite.get('cases', 0), 'case')} ({finite.get('implementation_ran', 0)} ran it), finite-tested"
+        )
+    print(s(status, "1;32" if status == "passed" else "1;31") + f": {said}", file=stream)
+    if failed := finite.get("failed"):
+        shown = ", ".join(f"{k} = {v}" for k, v in failed.get("inputs", {}).items())
+        print(f"  fails at {shown}" + (f"; kept in {finite['kept']}" if finite.get("kept") else ""), file=stream)
+    if reason := result.get("reason") or finite.get("reason"):
+        print(f"  {reason}", file=stream)
+    if smt:
+        print(f"  smt: {smt.get('status')} where {smt.get('where')}", file=stream)
 
 
 def typed(result: dict) -> str:

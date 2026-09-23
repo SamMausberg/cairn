@@ -103,6 +103,29 @@ tests-not-passed: 1 of 3 tests failed, 1 contract, 81 cases
 
 Tests run only as host processes, so a freestanding project's tests are refused (`E-TEST`).
 
+## cairn validate
+
+```sh
+cairn validate examples/implementations --symbol prefix_by4          # against the function it implements
+cairn validate app --symbol total_lanes --policy policy.json         # tolerance, domain, budget, seed, probes
+```
+
+`cairn validate` tests one [implementation](abstractions.md#implementations) against its reference on inputs generated from the contract the compiler already knows: the signature, which `usize` parameters are extents, the `when`, the literal tiles the body indexes by (`4 * k` gives 4), the plan items of the implementation (vector width, stage, block, grain) and the lane pool's cutoff where it runs host lanes. Extents come at each tile minus one, the tile, plus one, a partial second tile, zero, one and the largest the domain admits; views come zeroed, all ones, ascending, all at their type's largest value, alternating and random, and once placed one element off an aligned allocation; scalars come at their type's edges. The same seed gives the same cases.
+
+Each case runs the reference, the reference with `plan f use g;` (the dispatch, on every input) and, where its condition holds, the implementation itself. Every call runs in a process of its own, so a trap is that call's outcome: two traps agree, and results agree bit for bit, or within the policy's tolerance for floats. The reference is an independent algorithm, but both are compiled by the same compiler, so a pass is finite testing on the cases that ran, never proof, and the record says so. An implementation that no case ran is `unknown`.
+
+A failing case is shrunk while it still fails: smaller extents with each view cut to its prefix, aligned views, then each value toward zero. The report names the shrunk input and what each side did with it, and the case is kept in `regressions/<reference>.json`, sorted and indented the same on every run. List that file under the manifest's `tests` and `cairn test` replays every kept case against every implementation of the reference.
+
+```text
+failed: prefix_blocks against prefix, 17 cases (5 ran it), finite-tested
+  fails at n = 16, out = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], xs = [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0]; kept in regressions/prefix.json
+  smt: unknown where ((((n % 8) == 0)) && (n >= 0 && n <= 4096)) && n <= 16
+```
+
+Apart from the finite result, `smt` asks Z3 whether the implementation's body and the reference's agree where its condition holds, as [`cairn verify`](verification.md#value-level-source-equivalence) would. A loop over an extent the domain lets past 16 is asked only up to 16, and the record says the answer holds only there. Anything outside the modeled fragment, such as a `scan` or a lane region, is `unknown`.
+
+The policy is the host's: `tolerance` (`absolute` and `relative`, 0 by default), `domain` (`largest_extent`, and `extents` or `values` ranges by parameter), `budget` cases, `seed`, `probes` for shrinking and `seconds` per call. Without `--policy` the one the regressions file pinned is used. A signature the validator cannot feed (records, owners, views of records) is `unknown`, and so is a program with device code: nothing here runs on a device. `make gpu` runs the device side, each Compute Sanitizer tool (`memcheck`, `racecheck`, `initcheck`, `synccheck`) as a result of its own (`verify/device_validation.py`).
+
 ## cairn doc and cairn expand
 
 `cairn doc [path]` prints a Markdown reference of the checked program: every public type, recipe and function with its bounds, the `//` comment above it and its inferred effect row. `cairn doc --std` documents the packaged library, and `make docs` writes it as [std_api.md](std_api.md) and one page per module, which the suite holds to the compiler's answer.

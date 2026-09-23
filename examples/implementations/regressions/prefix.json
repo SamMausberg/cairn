@@ -1,0 +1,61 @@
+{
+  "cases": [
+    {
+      "args": {
+        "n": 16,
+        "out": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "xs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "why": "told prefix_blocks from prefix"
+    }
+  ],
+  "policy": {
+    "budget": 128,
+    "domain": {
+      "largest_extent": 4096
+    },
+    "probes": 300,
+    "seconds": 5,
+    "seed": 0,
+    "tolerance": {
+      "absolute": 0.0,
+      "relative": 0.0
+    }
+  },
+  "reference": "prefix",
+  "schema": "cairn.regressions/1"
+}

@@ -18,6 +18,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-COLLECT-CAPACITY` |  | The collector's extent must be exactly the output's capacity. |
 | `E-DECLARATION` |  | Write only the one function's body; add or remove no declaration. |
 | `E-DISCARD` | [sums](cards/sums.md) |  |
+| `E-DOMAIN` |  | The permitted inputs are the host's: narrow where the implementation applies with when instead. |
 | `E-EFFECT-CEILING` | [effects](cards/effects.md) |  |
 | `E-EFFECT-EXPANSION` |  | Change the implementation, not the ceiling: the host owns it. |
 | `E-EFFECT-ORDER` | [calls](SKILL.md#core-rules), [assembly](cards/assembly.md), [tests](cards/tests.md) |  |
@@ -29,6 +30,14 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-GRAD-FORM` | [gradients](cards/gradients.md) |  |
 | `E-GRAD-RACE` | [gradients](cards/gradients.md) |  |
 | `E-IMMUTABLE` |  | Parameters and let bindings are immutable: copy it into a let mut local and change that. |
+| `E-IMPL-CALL` | [implementations](cards/implementations.md) | Call a helper the reference and the implementation share, never the reference itself. |
+| `E-IMPL-EFFECT` | [implementations](cards/implementations.md) |  |
+| `E-IMPL-NUMERICS` | [implementations](cards/implementations.md) |  |
+| `E-IMPL-SIGNATURE` | [implementations](cards/implementations.md) | Copy the reference's parameters, types, extents, placements and result exactly. |
+| `E-IMPL-TARGET` | [implementations](cards/implementations.md) |  |
+| `E-IMPL-USE` | [implementations](cards/implementations.md) |  |
+| `E-IMPL-WHEN` | [implementations](cards/implementations.md) | Test only value parameters, with operations that cannot trap, such as n % 4 == 0 or n >= 64. |
+| `E-IMPLEMENTS` | [implementations](cards/implementations.md) |  |
 | `E-IMPORT` |  | Only the project's modules and std.* can be imported. |
 | `E-LAYOUT` | [layouts](cards/layouts.md) |  |
 | `E-LAYOUT-CONSUMER` | [layouts](cards/layouts.md) |  |
@@ -61,6 +70,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-QUANTIZE` | [storage](cards/storage.md) |  |
 | `E-RECORD-TYPE` | [records](cards/records.md) |  |
 | `E-REDUCE-ORDER` | [parallel](cards/parallel.md) |  |
+| `E-REFERENCE` |  | The reference is pinned: write a new function that implements it. |
 | `E-RETURN` |  | End every path with a return; there is no implicit tail return. |
 | `E-SCAN-EXTENT` | [scan](cards/scan.md) |  |
 | `E-SCAN-OP` | [scan](cards/scan.md) |  |
@@ -72,6 +82,8 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-STACK-LIMIT` | [memory](cards/memory.md) | Declare less stack storage, or a buffer if the ceiling allows alloc. Do not hide the cost. |
 | `E-SYMBOL` |  | Name a function or type exactly as a packet or a body shows it. |
 | `E-TEST` | [tests](cards/tests.md) |  |
+| `E-TEST-POLICY` |  | The cases, the seed and the tests are the host's: submit the implementation and its helpers. |
+| `E-TOLERANCE` |  | The tolerance is the host's: bring the implementation's result closer to the reference's. |
 | `E-TRY` | [sums](cards/sums.md) |  |
 | `E-TYPE-MISMATCH` | [storage](cards/storage.md) | Use the expected type; an explicit conversion may trap. Do not change a signature to hide it. |
 | `E-UNBOUND` |  | Use a name from available_names, or declare it before this use. |

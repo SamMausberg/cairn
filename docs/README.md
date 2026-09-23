@@ -7,7 +7,7 @@ The [README](../README.md) says what CAIRN is and how to install it. Read the re
 | [guide.md](guide.md) | A fresh checkout to a project that builds, runs, tests itself and refuses a wrong edit, then twelve complete programs, one idea each. |
 | [language.md](language.md) | Values, control flow, records, sums, constants and tests. Every rule has a program it accepts and one it refuses with its diagnostic code. |
 | [memory.md](memory.md) | Views and parts, owners and moves, linear values, layout, effect rows, operand order and the foreign boundary, in the same form. |
-| [abstractions.md](abstractions.md) | Generics, bounds, traits, `dyn`, closures, modules, projects, dependencies and recipes. |
+| [abstractions.md](abstractions.md) | Generics, bounds, traits, `dyn`, closures, implementations, modules, projects, dependencies and recipes. |
 | [concurrency.md](concurrency.md) | Tasks and leases, task groups, I/O rings, atomics and mutexes, parallel regions, plans and fusion, `reduce`, `compact` and `scan`, placement and queued device work. |
 | [numerics.md](numerics.md) | Storage floats (`f16`, `bf16`, `f8e4m3`, `f8e5m2`) and their one rounding, `quantize`, the tensor-core multiply, and `derive grad`, which writes a reverse-mode derivative as ordinary checked code. |
 | [library.md](library.md) | The standard library, module by module, with a program for each. [std_api.md](std_api.md) indexes the generated reference: every signature and effect row, one page per module under `std/`. |

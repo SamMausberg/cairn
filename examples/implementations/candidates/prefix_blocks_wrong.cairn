@@ -1,0 +1,10 @@
+// A scripted agent's first attempt: blocks of eight, but each block restarts its sum at zero.
+fn prefix_blocks(n:usize, out:rw<u64>[n], xs:ro<u64>[n]) implements prefix when n % 8 == 0 {
+  for b in 0..n / 8 {
+    let mut sum:u64 = 0;
+    for j in 0..8 {
+      sum += xs[8 * b + j];
+      out[8 * b + j] = sum;
+    }
+  }
+}

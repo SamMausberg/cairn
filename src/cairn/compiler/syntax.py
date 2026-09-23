@@ -14,7 +14,7 @@ from typing import Any
 
 from .lexing import IDENT as IDENT
 from .lexing import RESERVED as RESERVED
-from .lexing import Token, unescape
+from .lexing import Token, lex, unescape
 from .syntax_expressions import ARM_STATEMENTS as ARM_STATEMENTS
 from .syntax_expressions import PREC as PREC
 from .syntax_expressions import REDUCERS as REDUCERS
@@ -23,10 +23,14 @@ from .syntax_expressions import lent_part as lent_part
 from .syntax_statements import StatementParser
 from .tree import INTRINSIC_TYPES as INTRINSIC_TYPES  # The language server takes the vocabulary from here.
 from .tree import SCALAR as SCALAR
-from .tree import VOID, Function, Impl, Program, Recipe, Shape, Stmt, Type, fail
+from .tree import VOID, Function, Impl, Implements, Program, Recipe, Shape, Stmt, Type, fail
 
 
 class Parser(StatementParser):
+    def __init__(self, source: str):
+        super().__init__(source)
+        self.source = source  # what an implementation's identity digests
+
     def items(self) -> list[Any]:
         """The declarations of a recipe (or of an `each` inside one)."""
         self.need("{")
@@ -86,6 +90,7 @@ class Parser(StatementParser):
         elif self.eat("effects"):
             self.need("(")
             effects = tuple(self.listed(")", self.effect))
+        implements = self.implements() if self.t.s == "implements" and not bodiless else None
         body_start = self.t.start
         body: list[Stmt] = []
         if bodiless:
@@ -101,8 +106,23 @@ class Parser(StatementParser):
         end = self.ts[self.i - 1].end
         return Function(
             n, ps, ret, body, generics, source_name=n, line=t.line, col=t.col, start=t.start,
-            body_start=body_start, end=end, module=self.module, effects=effects, **flags,
+            body_start=body_start, end=end, module=self.module, effects=effects, implements=implements, **flags,
         )  # fmt: skip
+
+    def implements(self) -> Implements:
+        """`implements total when n % 4 == 0 needs(cp_async)`, words only here (compiler/implementations.py)."""
+        self.i += 1
+        reference, when, text, needs = self.path(), None, "", ()
+        if self.t.s == "when":
+            self.i += 1
+            first = self.i
+            when = self.expr()
+            shown = self.ts[first : self.i]  # the condition as written, one space wherever the source had any
+            text = "".join(t.s + " " * (u.start > t.end) for t, u in zip(shown, [*shown[1:], shown[-1]], strict=True))
+        if self.t.s == "needs" and self.ahead(1) == "(":
+            self.i += 2
+            needs = tuple(self.listed(")", self.effect))
+        return Implements(reference, when, text, needs)
 
     def effect(self) -> str:
         name = self.take()
@@ -271,6 +291,11 @@ class Parser(StatementParser):
             elif self.t.s == "plan" and IDENT.fullmatch(self.ahead(1)):  # A word only here: `plan f { grain 64; }`.
                 self.i += 1
                 name, chosen = self.path(), {}
+                if self.t.s == "use":  # `plan f use g;` runs the implementation g of f (compiler/implementations.py)
+                    self.i += 1
+                    p.selections.append((self.module, name, self.path(), t))
+                    self.need(";")
+                    continue
                 self.need("{")
                 while not self.eat("}"):  # Items and their ranges are the checker's (concurrency.PLAN_ITEMS).
                     item = self.t
@@ -304,4 +329,16 @@ class Parser(StatementParser):
                     "const, extern, module, import, family, or derive wire.",
                     self.t,
                 )
+        self.identities(p)
         return p
+
+    def identities(self, p: Program) -> None:
+        """Each implementation's identity: the digest of its reference's tokens and its own, as written, so a comment
+        or a blank line changes neither. What either calls is not in it; a build artifact's digest covers that."""
+        written = {f.name: f for f in p.functions}
+        for f in p.functions:
+            if f.implements is not None:
+                named = f.implements.reference
+                ref = written.get(f"{f.module}.{named}" if f.module else named) or written.get(named)
+                texts = [" ".join(t.s for t in lex(self.source[g.start : g.end])) if g else "" for g in (ref, f)]
+                f.implements.identity = hashlib.sha256("\0".join(texts).encode()).hexdigest()

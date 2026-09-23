@@ -1,0 +1,31 @@
+// Inclusive prefix sums: out[i] is xs[0] + ... + xs[i]. The reference is the loop that says so, and its ceiling
+// lets an implementation run on the lane pool. An overflowing total traps, in every implementation alike.
+fn prefix(n:usize, out:rw<u64>[n], xs:ro<u64>[n]) effects(pure, write:out, par:host) {
+  let mut sum:u64 = 0;
+  for i in 0..n {
+    sum += xs[i];
+    out[i] = sum;
+  }
+}
+
+// Four elements a step, for a length the step divides.
+fn prefix_by4(n:usize, out:rw<u64>[n], xs:ro<u64>[n]) implements prefix when n % 4 == 0 {
+  let mut sum:u64 = 0;
+  for k in 0..n / 4 {
+    let a = sum + xs[4 * k];
+    let b = a + xs[4 * k + 1];
+    let c = b + xs[4 * k + 2];
+    sum = c + xs[4 * k + 3];
+    out[4 * k] = a;
+    out[4 * k + 1] = b;
+    out[4 * k + 2] = c;
+    out[4 * k + 3] = sum;
+  }
+}
+
+// Two passes over the lane pool's blocks, once there are enough elements to engage it.
+fn prefix_lanes(n:usize, out:rw<u64>[n], xs:ro<u64>[n]) implements prefix when n >= 65536 {
+  scan + out parallel i in n yield xs[i];
+}
+
+plan prefix use prefix_by4;

@@ -1,0 +1,12 @@
+// The repaired attempt: blocks of eight, each starting from the total of the blocks before it.
+fn prefix_blocks(n:usize, out:rw<u64>[n], xs:ro<u64>[n]) implements prefix when n % 8 == 0 {
+  let mut carried:u64 = 0;
+  for b in 0..n / 8 {
+    let mut sum = carried;
+    for j in 0..8 {
+      sum += xs[8 * b + j];
+      out[8 * b + j] = sum;
+    }
+    carried = sum;
+  }
+}

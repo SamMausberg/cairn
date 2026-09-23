@@ -35,6 +35,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Traits, bounds, overlap, dynamic tables | `compiler/traits.py` | `implemented`, `dispatch`, `vtable`, `certify` |
 | Constant folding | `compiler/constants.py` | `constant`, `fold` |
 | I/O rings: the declaration, the operations that move a `Buf` in and hand it back, their lowering | `compiler/rings.py` | `check_ring`, `method`, `waited`, `lower` |
+| Alternative implementations: the declaration, its condition, its reference's contract, the plan that selects one and the dispatch that lowers it | `compiler/implementations.py` | `declared`, `condition`, `select`, `joined`, `called`, `lower` |
 | Facts about `usize` values that let lowering drop a guard | `compiler/facts.py` | `binder`, `defined`, `assume`, `index`, `arithmetic`, `conversion` |
 | The independent check of each guard lowering leaves out | `verify/elision.py` | `audit`, `decide`, `part` |
 | Which adjacent regions a plan's `fuse` joins, and the scratch they hold in their lanes | `compiler/fusion.py` | `chains`, `quiet`, `compatible`, `scratch` |

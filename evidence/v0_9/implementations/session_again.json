@@ -1,0 +1,323 @@
+{
+  "packet": {
+    "handle": "i1",
+    "reference": {
+      "symbol": "prefix",
+      "source": "fn prefix(n:usize, out:rw<u64>[n], xs:ro<u64>[n]) effects(pure, write:out, par:host) {\n  let mut sum:u64 = 0;\n  for i in 0..n {\n    sum += xs[i];\n    out[i] = sum;\n  }\n}",
+      "effects": [
+        "ffi_precondition",
+        "par:host",
+        "read:xs",
+        "trap",
+        "write:out"
+      ],
+      "ceiling": [
+        "pure",
+        "write:out",
+        "par:host"
+      ]
+    },
+    "pinned": {
+      "reference_sha256": "c9aefd776d45f90263e20016350299cadd9b315d235eee796a5e557b946f4577",
+      "tolerance": {
+        "absolute": 0.0,
+        "relative": 0.0
+      },
+      "tolerance_sha256": "9aa24eccf7410145604db722c1982d61506993e395fc47bb4ce29de2ee5036f9",
+      "tests": {
+        "budget": 128,
+        "seed": 0,
+        "probes": 300,
+        "seconds": 5
+      },
+      "tests_sha256": "b03a4bedff94fbc177b3c98699248c4dc7cc5004ffc4fc2e6e1481f253d37a64",
+      "domain": {
+        "largest_extent": 4096
+      },
+      "domain_sha256": "c4e6b90a53710097f6e41a469cc0de06a87bbbc2dbb9290aec2b9a936ded8ca7"
+    },
+    "reply": {
+      "protocol": "cairn.implementation/1",
+      "kind": "submit",
+      "source": "fn NAME(n:usize, out:rw<u64>[n]@host, xs:ro<u64>[n]@host) effects(pure, write:out, par:host) implements prefix when CONDITION { ... }",
+      "handle": "i1"
+    }
+  },
+  "exchange": [
+    {
+      "agent": "a blocked prefix sum that restarts each block",
+      "host": {
+        "code": "E-VALIDATION",
+        "message": "prefix_blocks is not validated: failed against prefix.",
+        "repair_hint": "At n = 16, out = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], xs = [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0] the reference leaves out = [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1] and the implementation leaves out = [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0]: fix the algorithm for every input its condition admits, not for that one.",
+        "finite": {
+          "claim": "finite-tested: the reference is an independent algorithm, but both are compiled by this compiler, so agreement on these cases is finite testing, never proof",
+          "kept_cases": 1,
+          "cases": 1,
+          "implementation_ran": 1,
+          "dispatch_ran": 1,
+          "status": "failed",
+          "failed": {
+            "inputs": {
+              "n": 16,
+              "out": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "xs": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "found_as": "told prefix_blocks from prefix",
+            "shrunk_in": 8,
+            "reference": {
+              "outcome": "return",
+              "after": {
+                "out": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1
+                ]
+              }
+            },
+            "implementation": {
+              "outcome": "return",
+              "after": {
+                "out": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              }
+            },
+            "dispatch": {
+              "outcome": "return",
+              "after": {
+                "out": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              }
+            }
+          },
+          "kept": "examples/implementations/regressions/prefix.json (already held this case)"
+        },
+        "status": "rejected",
+        "identity": "a9c9389a6094de40616339ae1e065618e2da8ff4acaf872ef2265be504c3d0c9",
+        "smt": {
+          "status": "unknown",
+          "where": "((((n % 8) == 0)) && (n >= 0 && n <= 4096)) && n <= 16",
+          "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided",
+          "reason": "The comparison ran past its 14 s limit and was stopped."
+        }
+      }
+    },
+    {
+      "agent": "the same, with a looser tolerance",
+      "host": {
+        "code": "E-TOLERANCE",
+        "message": "tolerance is the host's: a submission carries protocol, handle, kind and source, and nothing it carries changes the reference, the tolerance, the test policy or the permitted inputs.",
+        "repair_hint": "The tolerance is the host's: bring the implementation's result closer to the reference's.",
+        "status": "rejected"
+      }
+    },
+    {
+      "agent": "the same, admitting only one block",
+      "host": {
+        "code": "E-DOMAIN",
+        "message": "domain is the host's: a submission carries protocol, handle, kind and source, and nothing it carries changes the reference, the tolerance, the test policy or the permitted inputs.",
+        "repair_hint": "The permitted inputs are the host's: narrow where the implementation applies with when instead.",
+        "status": "rejected"
+      }
+    },
+    {
+      "agent": "the repaired blocked prefix sum",
+      "host": {
+        "finite": {
+          "status": "passed",
+          "cases": 129,
+          "implementation_ran": 41,
+          "kept_cases": 1
+        },
+        "status": "validated",
+        "implementation": "prefix_blocks",
+        "identity": "c4541802f1369e317796c02e617b4acec85b4ef09a47f81a43d30d0b61047afc",
+        "smt": {
+          "status": "unknown",
+          "where": "((((n % 8) == 0)) && (n >= 0 && n <= 4096)) && n <= 16",
+          "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided",
+          "reason": "The comparison ran past its 14 s limit and was stopped."
+        },
+        "select_with": "plan prefix use prefix_blocks;"
+      }
+    }
+  ],
+  "history": [
+    {
+      "protocol": "cairn.implementation/1",
+      "reference": "prefix",
+      "source_sha256": "455c5cf4bc1ea6810cb67984154f1e5233ed5ea8f327ce5cf1ab1ec86b8a22da",
+      "submission_sha256": "b5f0b95d384c16128037d492ba67e53dd0d74392f3b58688e0e898247610441b",
+      "reference_sha256": "c9aefd776d45f90263e20016350299cadd9b315d235eee796a5e557b946f4577",
+      "tolerance_sha256": "9aa24eccf7410145604db722c1982d61506993e395fc47bb4ce29de2ee5036f9",
+      "tests_sha256": "b03a4bedff94fbc177b3c98699248c4dc7cc5004ffc4fc2e6e1481f253d37a64",
+      "domain_sha256": "c4e6b90a53710097f6e41a469cc0de06a87bbbc2dbb9290aec2b9a936ded8ca7",
+      "implementation": "prefix_blocks",
+      "identity": "a9c9389a6094de40616339ae1e065618e2da8ff4acaf872ef2265be504c3d0c9",
+      "finite": "failed",
+      "smt": "unknown",
+      "status": "refused",
+      "code": "E-VALIDATION",
+      "why": "failed",
+      "inputs": {
+        "n": 16,
+        "out": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "xs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "protocol": "cairn.implementation/1",
+      "reference": "prefix",
+      "source_sha256": "455c5cf4bc1ea6810cb67984154f1e5233ed5ea8f327ce5cf1ab1ec86b8a22da",
+      "submission_sha256": "4467f2abbd86717b232b0c146191be36f335b451152b018be2cb0c91e46c2cee",
+      "reference_sha256": "c9aefd776d45f90263e20016350299cadd9b315d235eee796a5e557b946f4577",
+      "tolerance_sha256": "9aa24eccf7410145604db722c1982d61506993e395fc47bb4ce29de2ee5036f9",
+      "tests_sha256": "b03a4bedff94fbc177b3c98699248c4dc7cc5004ffc4fc2e6e1481f253d37a64",
+      "domain_sha256": "c4e6b90a53710097f6e41a469cc0de06a87bbbc2dbb9290aec2b9a936ded8ca7",
+      "status": "refused",
+      "code": "E-TOLERANCE",
+      "why": "tolerance is the host's: a submission carries protocol, handle, kind and source, and nothing it carries changes the reference, the tolerance, the test policy or the permitted inputs."
+    },
+    {
+      "protocol": "cairn.implementation/1",
+      "reference": "prefix",
+      "source_sha256": "455c5cf4bc1ea6810cb67984154f1e5233ed5ea8f327ce5cf1ab1ec86b8a22da",
+      "submission_sha256": "a1980b8363659d16bc9ee423ee55e85476edd78050207f468a536f1ce563d754",
+      "reference_sha256": "c9aefd776d45f90263e20016350299cadd9b315d235eee796a5e557b946f4577",
+      "tolerance_sha256": "9aa24eccf7410145604db722c1982d61506993e395fc47bb4ce29de2ee5036f9",
+      "tests_sha256": "b03a4bedff94fbc177b3c98699248c4dc7cc5004ffc4fc2e6e1481f253d37a64",
+      "domain_sha256": "c4e6b90a53710097f6e41a469cc0de06a87bbbc2dbb9290aec2b9a936ded8ca7",
+      "status": "refused",
+      "code": "E-DOMAIN",
+      "why": "domain is the host's: a submission carries protocol, handle, kind and source, and nothing it carries changes the reference, the tolerance, the test policy or the permitted inputs."
+    },
+    {
+      "protocol": "cairn.implementation/1",
+      "reference": "prefix",
+      "source_sha256": "455c5cf4bc1ea6810cb67984154f1e5233ed5ea8f327ce5cf1ab1ec86b8a22da",
+      "submission_sha256": "8d77122edfeb367c3f58ce08f8f3533132cfc9bedda29d54fde72e7ff955b363",
+      "reference_sha256": "c9aefd776d45f90263e20016350299cadd9b315d235eee796a5e557b946f4577",
+      "tolerance_sha256": "9aa24eccf7410145604db722c1982d61506993e395fc47bb4ce29de2ee5036f9",
+      "tests_sha256": "b03a4bedff94fbc177b3c98699248c4dc7cc5004ffc4fc2e6e1481f253d37a64",
+      "domain_sha256": "c4e6b90a53710097f6e41a469cc0de06a87bbbc2dbb9290aec2b9a936ded8ca7",
+      "implementation": "prefix_blocks",
+      "identity": "c4541802f1369e317796c02e617b4acec85b4ef09a47f81a43d30d0b61047afc",
+      "finite": "passed",
+      "smt": "unknown",
+      "status": "validated"
+    }
+  ]
+}

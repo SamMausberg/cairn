@@ -1,0 +1,41 @@
+{
+  "schema": "cairn.validation/1",
+  "reference": "prefix",
+  "implementation": "prefix_by4",
+  "policy": {
+    "tolerance": {
+      "absolute": 0.0,
+      "relative": 0.0
+    },
+    "domain": {
+      "largest_extent": 4096
+    },
+    "budget": 128,
+    "seed": 0,
+    "probes": 300,
+    "seconds": 5
+  },
+  "identity": "00bff061e42b89642fe66989c728623e82e28069e7e0b0ea3abc2ee617c441de",
+  "tiles": {
+    "4": "the condition's % 4"
+  },
+  "finite": {
+    "claim": "finite-tested: the reference is an independent algorithm, but both are compiled by this compiler, so agreement on these cases is finite testing, never proof",
+    "kept_cases": 1,
+    "cases": 129,
+    "implementation_ran": 46,
+    "dispatch_ran": 129,
+    "status": "passed"
+  },
+  "smt": {
+    "status": "smt-equivalent",
+    "where": "((((n % 4) == 0)) && (n >= 0 && n <= 4096)) && n <= 16",
+    "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided"
+  },
+  "status": "passed",
+  "regressions": {
+    "file": "regressions/prefix.json",
+    "exists": true,
+    "replayed_by_cairn_test": true
+  }
+}

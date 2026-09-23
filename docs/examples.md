@@ -21,6 +21,7 @@ Every project under `examples/` is built and run by the test suite. Commands are
 | [proof_scope](#examplesproof_scope) | what `cairn verify` covers and what it cannot reach | `cairn verify examples/proof_scope/reference.cairn examples/proof_scope/candidate.cairn --all` |
 | [sketch](#examplessketch) | a host-bound sketch settled by SMT, with no model in the loop | `python3 tools/ai/sketch_demo.py` |
 | [agent](#examplesagent) | the fixture behind the edit and repair loop | `python3 tools/ai/demo.py` |
+| [implementations](#examplesimplementations) | one prefix sum, two implementations, validated, and a scripted agent refused and then admitted | `cairn validate examples/implementations --symbol prefix_by4` |
 
 `apps/simulator`, `apps/gpu_pipeline`, `apps/analytics/gpu.toml` and `apps/matmul/gpu.toml` need nvcc and a CUDA device, and the suite runs their device code only under `make gpu`. `embedded` needs `qemu-system-aarch64` on an AArch64 host. Everything else needs only a C++20 compiler.
 
@@ -442,3 +443,18 @@ python3 tools/ai/demo.py --out /tmp/agentdemo
 ```
 
 `scripted_adapter.py` stands in for a model: it replies with a type error, then a behavioural error, then the correct body, which makes the transcript reproducible. `task.json` names the symbol, the allowed effects and the cases. Some cases are reserved, so the adapter never sees what it is finally judged on. `prefix_sum.cairn` is a second, unrelated symbol the harnesses use. [demos/repair](../demos/repair/README.md) runs the same loop through the edit host on a larger program, and ends with `cairn diff`.
+
+## examples/implementations
+
+One reference, `prefix`, the inclusive prefix sum written as the loop that defines it, and two [implementations](abstractions.md#implementations): `prefix_by4`, four elements a step where `n % 4 == 0`, and `prefix_lanes`, a pooled `scan` once `n >= 65536`, which the reference's ceiling (`par:host`) admits. `plan prefix use prefix_by4;` selects the first, and `main` checks every length from 0 to 39 against `n * (n + 1) / 2`.
+
+```sh
+cairn run examples/implementations        # prefix sums agree at every length from 0 to 39
+cairn validate examples/implementations --symbol prefix_by4
+# passed: prefix_by4 against prefix, 129 cases (46 ran it), finite-tested
+#   smt: smt-equivalent where ((((n % 4) == 0)) && (n >= 0 && n <= 4096)) && n <= 16
+cairn test examples/implementations       # replays regressions/prefix.json against both implementations
+python3 examples/implementations/loop.py  # the scripted session below, as JSON
+```
+
+`loop.py` opens an [implementation session](agents.md#implementation-sessions) on `prefix` under `policy.json` and replays four fixed replies. `candidates/prefix_blocks_wrong.cairn` restarts each block of eight at zero; validation refuses it with the input it shrank to, `n = 16` with a single 1 at `xs[7]`, and keeps that input in `regressions/prefix.json`. The same reply with a looser tolerance is `E-TOLERANCE`, and with a smaller domain `E-DOMAIN`. `candidates/prefix_blocks.cairn` carries the sum across blocks and validates. The replies are fixed text; everything the host, the compiler and the native runs say is computed on each run.

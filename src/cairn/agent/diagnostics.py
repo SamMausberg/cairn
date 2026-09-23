@@ -37,6 +37,13 @@ HINTS = {
     "E-IMPORT": "Only the project's modules and std.* can be imported.",
     "E-UNBOUND": "Use a name from available_names, or declare it before this use.",
     "E-STACK-LIMIT": "Declare less stack storage, or a buffer if the ceiling allows alloc. Do not hide the cost.",
+    "E-REFERENCE": "The reference is pinned: write a new function that implements it.",
+    "E-TOLERANCE": "The tolerance is the host's: bring the implementation's result closer to the reference's.",
+    "E-TEST-POLICY": "The cases, the seed and the tests are the host's: submit the implementation and its helpers.",
+    "E-DOMAIN": "The permitted inputs are the host's: narrow where the implementation applies with when instead.",
+    "E-IMPL-SIGNATURE": "Copy the reference's parameters, types, extents, placements and result exactly.",
+    "E-IMPL-WHEN": "Test only value parameters, with operations that cannot trap, such as n % 4 == 0 or n >= 64.",
+    "E-IMPL-CALL": "Call a helper the reference and the implementation share, never the reference itself.",
 }
 CAUSES = {  # The constructs that bring an effect into a row, for a refusal that names effects.
     "alloc": "a Buf, a buffer or growing a Vec",
@@ -98,6 +105,14 @@ def fix(d: dict[str, Any], known: tuple[str, ...] = ()) -> str | None:
         at = ", ".join(f"{k} = {v}" for k, v in w["inputs"].items()) or "no input"
         seen = [f"returns {x['return']}" if x.get("defined") else "aborts" for x in (w["before"], w["after"])]
         return f"At {at} the function {seen[0]} and the edit {seen[1]}: keep that answer."
+    if code == "E-IMPL-EFFECT" and d.get("added_effects"):
+        brought = "; ".join(f"{e}: {cause(e)}" for e in d["added_effects"])
+        return f"Remove what brings {brought}. The reference's ceiling is the host's."
+    if code == "E-VALIDATION" and isinstance(failed := (d.get("finite") or {}).get("failed"), dict):
+        at = ", ".join(f"{k} = {v}" for k, v in failed["inputs"].items()) or "no input"
+        return (f"At {at} the reference {observed(failed['reference'])} and the implementation "
+                f"{observed(failed.get('implementation', failed.get('dispatch', {})))}: fix the algorithm for every "
+                "input its condition admits, not for that one.")  # fmt: skip
     if code == "E-CONTEXT-CLOSURE" and d.get("symbols"):
         return f"Ask first: an expand request naming {', '.join(d['symbols'])}."
     if code == "E-TYPE-MISMATCH" and {"expected_type", "actual_type"} <= set(d):
@@ -110,6 +125,15 @@ def fix(d: dict[str, Any], known: tuple[str, ...] = ()) -> str | None:
 
 
 NUMERIC = {"u8", "u16", "u32", "u64", "usize", "i8", "i16", "i32", "i64", "f32", "f64"}
+
+
+def observed(outcome: dict[str, Any]) -> str:
+    """One call's outcome as a refusal says it: what it returned and left in each rw view, or how it stopped."""
+    if outcome.get("outcome") != "return":
+        return {"trap": "traps", "timeout": "runs past its limit"}.get(outcome.get("outcome", ""), "crashes")
+    said = [f"returns {outcome['return']}"] if "return" in outcome else []
+    said += [f"leaves {name} = {values}" for name, values in outcome.get("after", {}).items()]
+    return " and ".join(said) or "returns"
 
 
 def explain(error: Diagnostic, source: str = "", known: tuple[str, ...] = ()) -> dict[str, Any]:

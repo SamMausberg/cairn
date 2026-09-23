@@ -9,7 +9,7 @@ from typing import Any
 
 from ..verify.elision import audit
 from ..version import VERSION
-from . import chunks, execution, fusion, layouts, machine, rings, staging
+from . import chunks, execution, fusion, implementations, layouts, machine, rings, staging
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import Checker
 from .expressions import COMPARISONS
@@ -489,6 +489,7 @@ class Emitter:
             if t.mode == "value" and isinstance(self.c.layouts.get(t), dict):
                 tag = f"static_cast<std::uint32_t>(v_{n})" if t.name in self.p.enums else f"v_{n}.tag"
                 self.put(f"if({tag} >= {len(self.c.layouts[t])}) cr::trap();")
+        implementations.lower(self, f)  # a plan's implementation, where its condition holds
         self.block(f.body)
 
     def block(self, ss: list[Stmt]):

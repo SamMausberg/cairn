@@ -1,0 +1,14 @@
+// Prefix sums of 1..n through the selected implementation, checked against n * (n + 1) / 2 at every length.
+fn main() -> i32 {
+  for n in 0..40 {
+    buffer xs:u64[n] = zeroed;
+    buffer out:u64[n] = zeroed;
+    for i in 0..n { xs[i] = u64(i) + 1; }
+    prefix(n, out, xs);
+    for i in 0..n {
+      if out[i] != u64(i + 1) * u64(i + 2) / 2 { return 1; }
+    }
+  }
+  println("prefix sums agree at every length from 0 to 39");
+  return 0;
+}

@@ -172,6 +172,18 @@ class Assembly:
 
 
 @dataclass
+class Implements:
+    """`implements total when n % 4 == 0 needs(cp_async)`: the function is an alternative implementation of `total`,
+    applicable where the condition holds and on the targets it names (compiler/implementations.py)."""
+
+    reference: str  # as written, resolved in the implementation's module
+    when: Expr | None = None  # None: it applies to every input
+    text: str = ""  # the condition as written, for a receipt and a packet
+    needs: tuple[str, ...] = ()  # device features its code uses (projects/target.py FEATURES)
+    identity: str = ""  # sha256 of the reference's tokens and its own, as the parser read them
+
+
+@dataclass
 class Function:
     name: str
     params: list[tuple[str, Type]]
@@ -196,6 +208,7 @@ class Function:
     test: bool = False  # `test name { }`: run by `cairn test` in a process of its own, emitted into no other build.
     captures: list[tuple[str, str]] = field(default_factory=list)  # A closure's (outer place, mode) accesses.
     row: tuple[set, set] = field(default_factory=lambda: (set(), set()))  # A closure's own (effects, callees).
+    implements: Implements | None = None  # An alternative implementation of another function.
 
     @property
     def static(self) -> str | None:
@@ -263,6 +276,7 @@ class Program:
     families: list[tuple[str, str, int, int]] = field(default_factory=list)
     derivations: list[tuple] = field(default_factory=list)  # (module, recipe as written, naturals, target, token)
     plans: list[tuple] = field(default_factory=list)  # (module, function as written, {item: value}, token)
+    selections: list[tuple] = field(default_factory=list)  # `plan f use g;`: (module, f, g as written, token)
     scopes: list[tuple[int, str]] = field(default_factory=list)  # (where a `module` line starts, the module it opens)
     recipes: dict[str, Recipe] = field(default_factory=dict)
     sums: dict[str, list[tuple[str, Type | None]]] = field(default_factory=dict)

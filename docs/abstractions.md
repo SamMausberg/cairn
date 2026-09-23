@@ -1,6 +1,6 @@
 # Generics, traits, closures, modules and recipes
 
-The ways a program abstracts: type and natural parameters with bounds, traits with static and dynamic dispatch, function values and closures, modules and vendored projects, and recipes that generate code.
+The ways a program abstracts: type and natural parameters with bounds, traits with static and dynamic dispatch, function values and closures, alternative implementations of one function, modules and vendored projects, and recipes that generate code.
 
 ## Generics
 
@@ -275,6 +275,83 @@ fn main() -> i32 {
 ```text
 A mutable view cannot be passed to overlapping call arguments.
 ```
+
+## Implementations
+
+A function can have several implementations. The ordinary `fn` is the reference, the definition of what the function computes. An implementation is written as a function with exactly the reference's signature, says which function it implements, and may say with `when` on which inputs it applies. `plan f use g;` chooses which one runs.
+
+```cairn
+fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut sum:u64 = 0;
+  for i in 0..n { sum += xs[i]; }
+  return sum;
+}
+
+// Two running sums, for a length the loop divides evenly.
+fn total_by4(n:usize, xs:ro<u64>[n]) -> u64 implements total when n % 4 == 0 {
+  let mut a:u64 = 0;
+  let mut b:u64 = 0;
+  for k in 0..n / 4 { a += xs[4 * k] + xs[4 * k + 1]; b += xs[4 * k + 2] + xs[4 * k + 3]; }
+  return a + b;
+}
+
+plan total use total_by4;                         // total tests n % 4 == 0 on entry
+
+fn main() -> i32 {
+  let mut xs = Buf[u64](12);
+  for i in 0..12 { xs[i] = u64(i); }
+  if total(xs) != 66 || total(10, xs[0..10]) != 45 { return 1; }  // total_by4, then the reference
+  return 0;
+}
+```
+
+The selected implementation runs where its condition holds and the reference runs everywhere else, so every input the reference admits is still admitted. Without a plan the reference runs. `when` is a condition over the value parameters that cannot trap: comparisons, `&& || !`, `& | ^ ~`, `min`, `max`, the wrapping forms, `/` or `%` by a nonzero literal, `len` of a view parameter, literals and constants (`E-IMPL-WHEN`). Without `when` an implementation applies to every input and the dispatch tests nothing.
+
+An implementation keeps its reference's contract. Its parameters, types, extents, placements and result are the reference's (`E-IMPL-SIGNATURE`). Its row stays inside the reference's declared ceiling, or inside the reference's own row when it declares none (`E-IMPL-EFFECT`), and it writes no rounding the reference does not write (`E-IMPL-NUMERICS`). The reference's row joins every implementation's, so choosing one changes no row.
+
+```cairn rejects E-IMPL-EFFECT
+fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut sum:u64 = 0;
+  for i in 0..n { sum += xs[i]; }
+  return sum;
+}
+fn total_copy(n:usize, xs:ro<u64>[n]) -> u64 implements total {
+  let mut copy = Buf[u64](n);
+  for i in 0..n { copy[i] = xs[i]; }
+  return copy[0];
+}
+```
+
+```text
+total_copy may alloc, free, local_read, local_write, zero_init, which total does not; total declares no ceiling, so its own row is the ceiling.
+```
+
+A reference that states a ceiling admits what the ceiling admits. Here the reference is a sequential loop, and its ceiling lets an implementation run on the lane pool:
+
+```cairn
+fn scale(n:usize, xs:rw<u64>[n]) effects(pure, write:xs, par:host) {
+  for i in 0..n { xs[i] = 2 * xs[i]; }
+}
+
+fn scale_lanes(n:usize, xs:rw<u64>[n]) implements scale when n >= 65536 {
+  parallel i in n { xs[i] = 2 * xs[i]; }
+}
+
+plan scale use scale_lanes;
+```
+
+```cairn rejects E-IMPL-WHEN
+fn total(n:usize, xs:ro<u64>[n]) -> u64 = 0;
+fn total_padded(n:usize, xs:ro<u64>[n]) -> u64 implements total when (n + 3) / 4 > 2 = 0;
+```
+
+```text
+A when is a condition over the value parameters that cannot trap: comparisons, && || !, & | ^ ~, min, max, the wrapping forms, / or % by a nonzero literal, shr or shl_wrap by a literal below the width, len of a view parameter, literals and constants.
+```
+
+An implementation lives in its reference's module and is an ordinary function with a body, never generic or a kernel, and never an implementation of an implementation (`E-IMPLEMENTS`). Only a test block calls one by name, to compare it with its reference, and an implementation never reaches its reference, which could dispatch back to it (`E-IMPL-CALL`). A plan names one implementation of the function it plans (`E-IMPL-USE`). `needs(cp_async)` after the condition names the [device features](tools.md#the-device-target) an implementation's code uses, and only an implementation that runs device code may name them (`E-IMPLEMENTS`). A plan that selects it adds them to what the program asks of its device target, and a build for a target that lacks one is refused (`E-IMPL-TARGET`); the reference does not run in its place.
+
+The receipt lists each implementation under its reference with its condition, whether it is tested at entry, what it requires of the machine (host or device, lanes, tasks, allocation sites, stack bytes) and its identity, a digest of the two declarations' tokens, so a comment changes neither. The one a plan runs is `runs`. Being accepted says nothing about whether an implementation computes what its reference computes; [`cairn validate`](tools.md#cairn-validate) tests that.
 
 ## Modules
 

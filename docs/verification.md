@@ -14,6 +14,7 @@ Nothing proves the whole compiler correct. Three mechanisms each establish somet
 | Two versions of one function agree on the result and on everything they were lent, for every admitted input. | Z3 over a modeled source fragment, `smt-equivalent` | `src/cairn/verify/scalar_semantics.py` | An owner inside a record, a sum or an array, recursion, tasks, lanes, device placement, closures, `dyn`, the foreign boundary, an unbounded trip count, an observed NaN, a storage float or a quantization, a function that asserts: each is `unknown`. A tag that names no variant aborts, which assumes the emitter's `default: cr::trap()`. Trusts the translator and Z3. |
 | Every declared function and public type of two modules was compared that way. | `cairn verify --all`, `smt-module-equivalent` | `src/cairn/verify/verification.py` | One uncovered function keeps the module incomplete. A restricted entry holds only where its precondition does. Size, count and solver budgets apply. |
 | Accepted programs build and run under both compilers, four sanitizers, CUDA and QEMU, and pass their finite task contracts. | Executed tests | `tests/` | Finite inputs only. |
+| An implementation computes what its reference computes on the generated boundary cases and the kept regressions. | Executed, finite-tested, `cairn validate` | `src/cairn/verify/validation.py` | Every other input. Both sides are compiled by this compiler, so a shared lowering fault agrees with itself. Device implementations run only under `make gpu`. |
 
 ```sh
 cd proofs && lake build                       # about four seconds, no dependencies
@@ -289,6 +290,10 @@ Each class [`cairn diff`](tools.md#cairn-diff) gives is a different claim. `iden
 Accepted programs run natively under both compilers and under AddressSanitizer, UndefinedBehaviorSanitizer, LeakSanitizer and ThreadSanitizer, and device guards have death tests that run only under `make gpu`. A sanitizer-clean run shows the absence of those faults on the inputs it ran. A template nothing instantiates is unchecked, and the receipt lists it.
 
 Much of `checking.py` is outside the calculus: linear values, leases over parts whose bounds are not visible, what a lane's callees may do, placement and the effect fixed point. Acceptance and rejection tests exercise those rules, and nothing connects them mechanically to a model. A process that prints a pass and then crashes has failed.
+
+## Validating an implementation
+
+`cairn validate` and the implementation session hold an implementation to its reference by running both. The reference is an independent algorithm, written apart, which is what makes it an oracle; it is not an independent compiler, so the two share the parser, the checker, the lowering and the runtime, and a fault there can make both wrong alike. The inputs come from the contract (tiles, the condition, plan items, type edges), a pass covers exactly the cases that ran, an implementation no case reached is `unknown`, and so is a call that ran past its limit. The record labels the result finite testing. Z3's answer on the same pair is reported beside it, never merged into it, and a loop is decided only up to the unrolling bound, which the record names.
 
 ## Pinned versions and the audit
 

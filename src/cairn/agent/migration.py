@@ -31,8 +31,8 @@ MAX_FUNCTIONS = 64  # authorized functions and callers one migration may carry
 
 # Every kind of top-level declaration besides functions. A replacement declares none of them, and a migration leaves
 # the program's set of them as it found it.
-DECLARATIONS = ("records", "enums", "sums", "traits", "generics", "consts", "plans", "derivations", "families",
-                "recipes", "imports")  # fmt: skip
+DECLARATIONS = ("records", "enums", "sums", "traits", "generics", "consts", "plans", "selections", "derivations",
+                "families", "recipes", "imports")  # fmt: skip
 
 
 def declared(text: str) -> Any:
@@ -48,6 +48,7 @@ def inventory(program: Any) -> set[tuple[str, str]]:
     named = {(kind, name) for kind in ("records", "enums", "sums", "traits", "generics", "consts", "recipes")
              for name in getattr(program, kind)}  # fmt: skip
     named |= {("plans", f"{p[0]}.{p[1]} {p[2]} {p[3]}") for p in program.plans}
+    named |= {("selections", f"{s[0]}.{s[1]} use {s[2]}") for s in program.selections}
     named |= {("derivations", f"{d[0]}.{d[1]} {d[2]} {d[3]}") for d in program.derivations}
     named |= {("families", repr(family)) for family in program.families}
     named |= {("imports", repr(item)) for item in program.imports}

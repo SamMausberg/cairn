@@ -286,7 +286,7 @@
      }
     },
     {
-     "match": "\\b(plan)\\s+([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*)(?=\\s*\\{)",
+     "match": "\\b(plan)\\s+([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*)(?=\\s*(?:\\{|use\\b))",
      "captures": {
       "1": {
        "name": "keyword.declaration.cairn"
@@ -469,6 +469,10 @@
      "match": "\\bgrain\\b(?=\\s+[0-9])"
     },
     {
+     "name": "keyword.declaration.cairn",
+     "match": "\\bimplements\\b(?=\\s+[A-Za-z_][\\w.]*\\s*(?:when\\b|needs\\b|\\{|=))"
+    },
+    {
      "name": "keyword.control.concurrency.cairn",
      "match": "\\binto\\b(?=\\s+[A-Za-z_]\\w*\\s*;)"
     },
@@ -486,6 +490,10 @@
     },
     {
      "name": "storage.modifier.cairn",
+     "match": "\\bneeds\\b(?=\\s*\\(\\s*sm_)"
+    },
+    {
+     "name": "storage.modifier.cairn",
      "match": "\\bout\\b(?=\\s+[A-Za-z_]\\w*\\s*:)"
     },
     {
@@ -498,7 +506,7 @@
     },
     {
      "name": "keyword.declaration.cairn",
-     "match": "\\bplan\\b(?=\\s+[A-Za-z_][\\w.]*\\s*\\{)"
+     "match": "\\bplan\\b(?=\\s+[A-Za-z_][\\w.]*\\s*(?:\\{|use\\b))"
     },
     {
      "name": "keyword.declaration.cairn",
@@ -526,11 +534,19 @@
     },
     {
      "name": "keyword.other.plan.cairn",
+     "match": "\\buse\\b(?=\\s+[A-Za-z_][\\w.]*\\s*;)"
+    },
+    {
+     "name": "keyword.other.plan.cairn",
      "match": "\\bvector\\b(?=\\s+[0-9])"
     },
     {
      "name": "storage.modifier.cairn",
      "match": "\\bvolatile\\b(?=\\s+(?:ptx|x86_64|aarch64)\\b)"
+    },
+    {
+     "name": "keyword.control.conditional.cairn",
+     "match": "\\bwhen\\b(?=\\s+[A-Za-z_(!~0-9])"
     }
    ]
   },

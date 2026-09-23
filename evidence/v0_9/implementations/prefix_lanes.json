@@ -1,0 +1,43 @@
+{
+  "schema": "cairn.validation/1",
+  "reference": "prefix",
+  "implementation": "prefix_lanes",
+  "policy": {
+    "tolerance": {
+      "absolute": 0.0,
+      "relative": 0.0
+    },
+    "domain": {
+      "largest_extent": 140000
+    },
+    "budget": 64,
+    "seed": 0,
+    "probes": 300,
+    "seconds": 5
+  },
+  "identity": "5c8a90acc7d61e93d8aacaf63a7185e31ceea779f151cd42bb7ac7fac2f11f17",
+  "tiles": {
+    "16384": "the lane pool's cutoff",
+    "65536": "the condition's >= 65536"
+  },
+  "finite": {
+    "claim": "finite-tested: the reference is an independent algorithm, but both are compiled by this compiler, so agreement on these cases is finite testing, never proof",
+    "kept_cases": 1,
+    "cases": 65,
+    "implementation_ran": 10,
+    "dispatch_ran": 65,
+    "status": "passed"
+  },
+  "smt": {
+    "status": "unknown",
+    "where": "(((n >= 65536)) && (n >= 0 && n <= 140000)) && n <= 16",
+    "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided",
+    "reason": "Statement 'scan' is not modeled."
+  },
+  "status": "passed",
+  "regressions": {
+    "file": "regressions/prefix.json",
+    "exists": true,
+    "replayed_by_cairn_test": true
+  }
+}

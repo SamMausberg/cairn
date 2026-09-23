@@ -170,6 +170,9 @@ def wrap(parts: list[Part], indent: int) -> list[str]:
     if len(pad) + len(_join(parts)) <= WIDTH or len(parts) < 3:
         return [pad + _join(parts)]
     depth = _depths(parts)
+    clause = [i for i in range(1, len(parts)) if depth[i] == 0 and parts[i][1] == "implements"]
+    if clause:  # an implementation's signature, then what it implements on a line of its own
+        return _fill(_groups(parts, clause[:1]), pad, pad + STEP)
     cuts = [i for i in range(1, len(parts)) if depth[i] == 0 and parts[i][2]]
     if cuts:
         return _fill(_groups(parts, cuts), pad, pad + STEP)

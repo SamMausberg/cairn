@@ -26,6 +26,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/tensor.py` | the tensor-core multiply `mma_unordered`: its rule, its numerical contract and its lowering |
 | `compiler/layouts.py` | `layout` declarations: storage layouts and spreads, what the checker answers from them, and `L.at(...)` in code |
 | `compiler/rings.py` | I/O rings: their declaration, the operations that move owners in and out, their lowering |
+| `compiler/implementations.py` | alternative implementations of a function: their declaration, condition, contract, selection by a plan and the dispatch that lowers it |
 | `compiler/effects.py` | the effect vocabulary, the fixed point, the operand-order audit |
 | `compiler/traits.py` | who implements what, what a bound promises, the one place an instance is made |
 | `compiler/constants.py` | constant folding |
@@ -45,6 +46,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `agent/evidence.py` | what a packet may say is established about a function |
 | `agent/history.py` | what was tried, failed, measured or hypothesized for each candidate, under its identity, and analyses kept by key |
 | `agent/migration.py`, `agent/plans.py` | the two wider edit classes: interface migrations across files, and plan-only edits |
+| `agent/implementations.py` | implementation sessions: a pinned reference, tolerance, test policy and inputs, and new implementations admitted only when they validate |
 | `agent/teaching.py` | the rule cards, selected from lexical tokens |
 | `agent/skill.py` | the agent skill under `skills/cairn/`, written from the cards, the fixes and the command line |
 | `editor/grammar.py` | the editor grammars, generated from the compiler's vocabulary |
@@ -57,6 +59,8 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `verify/elision.py` | the independent check of every guard lowering leaves out |
 | `verify/diff.py`, `verify/emission.py` | the class each function of two versions gets, and when two emissions are the same code |
 | `verify/runner.py` | test blocks, each run in a process of its own |
+| `verify/boundaries.py`, `verify/validation.py`, `verify/isolated_calls.py` | contract-driven validation: boundary inputs from an implementation's contract, each call in a process of its own against the reference, shrinking and kept regressions |
+| `verify/device_validation.py` | the device side of validation: generated device tests under each Compute Sanitizer tool, only in `make gpu` |
 | `verify/scalar_values.py` | the value model: leaves, what the guard admits, what a caller observes, reading a model back |
 | `verify/scalar_symbolic.py` | the SMT translator |
 | `verify/scalar_concrete.py` | the concrete replay |

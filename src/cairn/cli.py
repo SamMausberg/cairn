@@ -134,11 +134,17 @@ COMMANDS = {
     "explain": "Where each function pays at run time: guards, allocations, waits and loop vectorization.",
     "predict": "How long each function will take, from its checked work and a machine profile; nothing runs.",
     "tune": "Choose a function's plan by prediction, and with --measure time only the best-ranked few on this host.",
+    "validate": "Test one implementation against its reference on boundary inputs its contract gives; finite, not proof.",
     "doc": "Generate the API reference of the checked program, as Markdown.",
     "graph": "Print the module graph: each file's modules, each module's imports, exports and dependents, hashes.",
 }
 OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that take it, the option, its keywords)
-    ({"build", "run", "test", "explain", "tune", "shot"}, "--cxx", {"default": "clang++"}),
+    ({"build", "run", "test", "explain", "tune", "shot", "validate"}, "--cxx", {"default": "clang++"}),
+    ({"validate"}, "--symbol", {"required": True, "help": "The implementation; its reference is what it implements."}),
+    ({"validate"}, "--policy", {"type": Path, "metavar": "POLICY.json", "help": "Tolerance, domain, budget, seed, "
+                                "probes and seconds; default: what the regressions file pinned, else the defaults."}),
+    ({"validate"}, "--regressions", {"type": Path, "metavar": "FILE", "help": "Where a failing case is kept; "
+                                     "default: regressions/<reference>.json in the project."}),
     ({"explain", "predict", "shot"}, "--symbol", {"action": "append", "help": "This function only (repeatable); "
                                                   "for shot, a function whose effect row is reported."}),
     ({"tune"}, "--symbol", {"action": "append", "required": True, "help": "The function whose plan is chosen."}),
@@ -539,10 +545,18 @@ def main(argv: list[str] | None = None) -> int:
                 answer["written"] = write_plan(a.path, a.symbol[0], answer["chosen"])
             report(answer)
             return 0
+        if a.command == "validate":
+            from .agent.agent_tools import load_json_strict
+            from .verify.validation import validate_project
+
+            given = load_json_strict(read_text(a.policy, 200_000)) if a.policy else None
+            record = validate_project(project, a.symbol, given, a.cxx, a.regressions)
+            report(record, brief=True)
+            return 0 if record["status"] == "passed" else 1 if record["status"] in {"failed", "rejected"} else 2
         if a.command == "test":
             from .agent.agent_tools import load_json_strict
             from .verify.runner import run_tests
-            from .verify.testing import evaluate
+            from .verify.validation import evaluate
 
             paths = (
                 [a.contract] if a.contract else [contained_file(project.root, x, ".json") for x in project.contracts]
