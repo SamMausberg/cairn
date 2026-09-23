@@ -3,6 +3,10 @@
 The helpers `fn`, `check`, `agree` and `refute` are shared with the sibling test_semantics_* modules.
 """
 
+import inspect
+import re
+from pathlib import Path
+
 import pytest
 
 from cairn.compiler.tree import VOID
@@ -395,3 +399,17 @@ def test_records_and_sums_inside_fixed_storage():
     src = "struct Q{a:u64;b:u64;}\nenum M{S(Q);N;}\n"
     check(src + fn("let mut g=Array[M,2]();g[1]=M.S(Q(x,x));match g[1]{M.S(q)=>{return add_wrap(q.a,q.b);} M.N=>{return 0;}}"),
           src + fn("return add_wrap(x,x);"))  # fmt: skip
+
+
+def test_the_receipt_is_pinned_to_every_file_that_decides_what_a_program_means():
+    """A semantic receipt names the compiler that judged it: every parser, checker and emitter file is in the hash, so a
+    change to a builtin's rule changes every receipt's implementation_sha256 as surely as a change to the parser."""
+    from cairn.verify import scalar_semantics
+
+    listed = set(re.findall(r'"(compiler/[a-z_]+\.py)"', inspect.getsource(scalar_semantics.implementation_hash)))
+    compiler = Path(scalar_semantics.__file__).parents[1] / "compiler"
+    semantic = {f"compiler/{p.name}" for p in compiler.glob("*.py")} - {
+        "compiler/__init__.py",
+        "compiler/header.py",  # the C header of a library build, which no receipt describes
+    }
+    assert semantic <= listed, f"add to implementation_hash(): {sorted(semantic - listed)}"
