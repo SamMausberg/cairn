@@ -70,6 +70,11 @@ jobs:
           sudo apt-get install -y clang g++ libz3-4 python3-venv qemu-system-arm
           python3 -m venv .venv
           .venv/bin/python -m pip install -e '.[dev]'
+      # The sanitizers of the runner's clang 18 and g++ 13 cannot place their shadow memory under the kernel's 32
+      # bits of mmap randomness, and a sanitized program then loops instead of starting: the soundness part hung
+      # there for its whole limit, in a program that runs in a second and a half elsewhere. 28 bits is what they expect.
+      - name: Keep the sanitizers' address space where they expect it
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
       - name: Unit, native, sanitizer and agent-layer tests (GPU, Lean and QEMU parts skip when absent)
         run: .venv/bin/python -m pytest -q ${{ matrix.paths }} -n auto --durations=25
   proofs:
