@@ -1,6 +1,6 @@
 # Guide
 
-From a fresh checkout to a project that builds, runs, tests itself and refuses a wrong edit, then twelve complete programs, one per idea. At a terminal every command answers in lines written for a person. Piped, or with `--format json`, it prints a JSON record, the same one a script or an agent reads, and this guide shows both.
+This guide takes a fresh checkout to a project that builds, runs, tests itself and refuses a wrong edit, then walks through twelve complete programs, one idea each. At a terminal every command prints lines for a person. Piped, or given `--format json`, it prints the JSON record a script or an agent reads. The guide shows both.
 
 ## Install
 
@@ -10,7 +10,7 @@ pip install -e '.[dev]'
 cairn doctor
 ```
 
-`doctor` names the compilers it found and which optional tools are present. Clang or GCC with C++20 is required. `libz3`, `nvcc`, Lean and QEMU each enable one more gate and are never downloaded. In a checkout without an install, `python3 bin/cairn` is the same command.
+`doctor` names the compilers it found and the optional tools that are present. Clang or GCC with C++20 is required. `libz3`, `nvcc`, Lean and QEMU each switch on one more check, and none is ever downloaded. Without an install, `python3 bin/cairn` is the same command.
 
 ## A project
 
@@ -18,7 +18,7 @@ cairn doctor
 cairn new demo
 ```
 
-A project is a directory with a manifest, ordered sources and task contracts. The manifest is data: it lists files and names a build kind, and it cannot run anything.
+A project is a directory with a manifest, sources and task contracts. The manifest is data: it lists files and names a build kind, and it cannot run anything.
 
 ```toml
 [project]
@@ -51,7 +51,7 @@ fn main() -> i32 {
 }
 ```
 
-`u64` is a fixed-width integer, `+` traps on overflow, `&` and `^` are unsigned, `shr` takes a count below the width, and `= expression;` is a one-return body. `test average { ... }` is a test, which only `cairn test` runs, and `assert_eq` traps when its two values differ, printing both. `println` writes its arguments and a newline, a `let` is immutable, and a call whose result is nothing is a statement. `main` returns the process exit status.
+`u64` is a fixed-width integer and `+` traps on overflow. `&` and `^` are unsigned, and `shr` takes a count below the width. A body written `= expression;` returns that expression. `test average { ... }` runs only under `cairn test`, and `assert_eq` traps when its two values differ, printing both. A `let` is immutable, a call that returns nothing is a statement, and `main` returns the process exit status.
 
 That project is the default template. Four more are starting points for real programs, and each carries a test block:
 
@@ -62,7 +62,7 @@ cairn new echo --template service    # a server that keeps every client's receiv
 cairn new squares --template parallel  # a host region, a checked reduce and a plan that splits it
 ```
 
-The test suite creates every template, builds and runs it, and runs its tests, so a template cannot fall behind the language.
+The test suite creates, builds, runs and tests every template, so none can fall behind the language.
 
 ## Check, run, test
 
@@ -78,13 +78,13 @@ typed: 3 functions
 {"status": "typed", "functions": 3, "library_functions": 0, "formal_status": "not-verified"}
 ```
 
-`typed` means the program passed every static rule: syntax, types, ownership, leases, lanes, placement and effects. All three are the program's, the test among them. A program that imports a module of the library is checked with the parts of it that the program reaches, and the count says how many those are. `formal_status` is `not-verified` here and everywhere, because acceptance is not a proof.
+`typed` means the program passed every static rule: syntax, types, ownership, leases, lanes, placement and effects. The three functions are the program's own, counting the test. When a program imports library modules, the library functions it reaches are checked with it and counted in `library_functions`. `formal_status` is always `not-verified`, because acceptance is not a proof.
 
 ```sh
 cairn run demo
 ```
 
-`run` builds a native executable in a fresh directory under `build/` and runs it under an address-space cap. At a terminal the program gets the terminal's own streams, and `cairn` exits with its status:
+`run` builds a native executable in a fresh directory under `build/` and runs it with its address space capped. At a terminal the program writes to the terminal, and `cairn` exits with the program's status:
 
 ```text
 average(10, 20) = 15
@@ -96,15 +96,15 @@ Piped, the record carries what it printed:
 {"status": "program-exited", "exit_code": 0, "stdout": "average(10, 20) = 15\n", "build_directory": "demo/build/demo-38_uge7b", "memory_limit_mib": 1024}
 ```
 
-`cairn run demo -- one two` starts the program with the arguments `one` and `two`, which `std.env` reads.
+`cairn run demo -- one two` passes `one` and `two` to the program, which reads them through `std.env`.
 
-The directory holds the generated `program.cpp`, the runtime headers it includes and `receipt.json`, which records what was compiled, with what, and the effect row of every function:
+The build directory holds the generated `program.cpp`, the runtime headers it includes, and `receipt.json`, which records what was compiled, with which compiler, and every function's effect row:
 
 ```json
 "average": {"effects": ["trap"], "calls": [], "syntactic_check_sites": {"shift": 1, "overflow": 1}, "discharged_check_sites": {}}
 ```
 
-`trap` says the function carries a guard that can abort, and the two sites are the shift count and the checked `+`. `discharged_check_sites` lists the guards the checker proved cannot fail and the C++ leaves out; nothing bounds `x` and `y` here, so both guards stay. A function that allocated, wrote through a borrow, started a task or crossed to the device would say so in the same list, and so would everything that calls it.
+`trap` means the function has a guard that can abort: here the shift count and the checked `+`. `discharged_check_sites` lists the guards the checker proved cannot fail, which the C++ leaves out. Nothing bounds `x` and `y`, so both guards stay. A function that allocates, writes through a borrow, starts a task or uses the device says so in the same list, and so does every function that calls it.
 
 ```sh
 cairn test demo
@@ -114,7 +114,7 @@ cairn test demo
 passed-finite-tests: 1 test, 1 contract, 81 cases
 ```
 
-`test` runs every test block in a process of its own, so a failed assert fails that test alone, and then the manifest's contracts. A contract names a symbol and finite cases: `test` builds a shared library and calls the symbol for each case from Python. A test or a case that disagrees, or a child that exits abnormally, fails the run whatever was printed.
+`test` runs each test block in its own process, so a failed assert fails only that test. Then it runs the manifest's contracts. A contract names a symbol and a finite list of cases, and `test` builds a shared library and calls the symbol once per case from Python. A wrong answer, or a child that exits abnormally, fails the run whatever it printed.
 
 ```json
 {"schema": "cairn.task/1", "symbol": "average",
@@ -123,7 +123,7 @@ passed-finite-tests: 1 test, 1 contract, 81 cases
 
 ## A wrong edit
 
-Change the annotation of a local and the compiler refuses the program with a code, a message and a position:
+Change the type of a local and the compiler refuses the program with a code, a message and a position:
 
 ```cairn rejects E-TYPE-MISMATCH
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
@@ -149,7 +149,7 @@ error[E-TYPE-MISMATCH]: Expected u32, got u64.
 {"status": "rejected", "code": "E-TYPE-MISMATCH", "message": "Expected u32, got u64.", "line": 3, "column": 18, "file": "src/main.cairn"}
 ```
 
-Nothing converts on its own; `u32(average(10, 20))` says the narrowing and checks it. The safety rules are refused the same way. A heap array is an owner, using it as a value moves it, and the old name is dead:
+Nothing converts implicitly. `u32(average(10, 20))` writes the narrowing out and checks it at run time. The safety rules refuse a program the same way. A heap array is an owner, so using it as a value moves it, and the old name is dead:
 
 ```cairn rejects E-MOVED
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
@@ -168,7 +168,7 @@ error[E-MOVED]: data was moved.
   |                      ^^^^
 ```
 
-Every diagnostic code has a paragraph in the language reference with a program that is refused with it.
+Every diagnostic code has a paragraph in the reference, with a program it refuses.
 
 ## Format, document, edit
 
@@ -178,11 +178,11 @@ cairn doc demo                 # a Markdown reference from the checked program, 
 cairn emit demo/src/math.cairn # the C++ one file lowers to
 ```
 
-`fmt` re-lexes its own output and leaves a file alone unless the tokens and comments are unchanged. `doc` prints each public function with its signature, its comment and its inferred effects. The [editor extension](tools.md#the-editor-extension) gives diagnostics as you type, hover types and effect rows, completion and rename over the same language server.
+`fmt` re-lexes its output and rewrites a file only if the tokens and comments come out unchanged. `doc` prints each public function's signature, comment and inferred effects. The [editor extension](tools.md#the-editor-extension) shows diagnostics as you type, types and effect rows on hover, completion and rename, all from the same language server.
 
 ## The tour in twelve programs
 
-The suite compiles and runs every program here under the address and undefined-behaviour sanitizers (`tests/language/test_tour.py`): a program exits 0 or the build fails.
+The suite builds and runs every program below under the address and undefined-behaviour sanitizers (`tests/language/test_tour.py`), and each must exit 0.
 
 ### 1. Values, checked arithmetic, explicit conversions
 
@@ -204,7 +204,7 @@ fn main() -> i32 {
 
 ### 2. Views: borrowed arrays whose length is part of the type
 
-`ro<T>[n]` and `rw<T>[n]` borrow `n` elements, where `n` is an earlier parameter, a literal or a constant. Indexing is bounds checked, two `rw` views of one call cannot overlap, and a part `xs[lo..hi]` carries one guard.
+`ro<T>[n]` and `rw<T>[n]` borrow `n` elements, where `n` is an earlier parameter, a literal or a constant. Indexing is bounds checked, two `rw` views passed to one call cannot overlap, and a part `xs[lo..hi]` costs one guard.
 
 ```cairn
 const N:usize = 4 * 2;
@@ -224,7 +224,7 @@ fn main() -> i32 {
 
 ### 3. Records, sums, `match` and `try`
 
-A sum has one payload per variant. `match` is exhaustive and has no wildcard. `try` yields the success payload or returns the failure from the enclosing function, and it is the only propagation form.
+A sum has one payload per variant. `match` is exhaustive and has no wildcard. `try` yields the success payload or returns the failure from the enclosing function; it is the only way to propagate an error.
 
 ```cairn
 struct Point { x:i64; y:i64; }
@@ -249,7 +249,7 @@ fn main() -> i32 {
 
 ### 4. Generics and what a parameter promises
 
-An instance is what is checked. A bound is a promise checked at the call: a trait, a kind (`copy`, `affine`) or a closed class of scalars that licenses operators.
+Each instance of a generic is checked. A bound is a promise checked at the call: a trait, a kind (`copy`, `affine`), or a closed class of scalars that allows operators.
 
 ```cairn
 struct Pair[T:copy] { a:T; b:T; }
@@ -268,7 +268,7 @@ fn main() -> i32 {
 
 ### 5. Traits, static and dynamic
 
-Dispatch is static on the type of `Self`. A `dyn` reference is an explicit two-word borrow, and a call through it shows `dispatch` in the effect row together with the rows of every implementation.
+Dispatch is static on the type of `Self`. A `dyn` reference is an explicit two-word borrow, and a call through it adds `dispatch` and the rows of every implementation to the effect row.
 
 ```cairn
 trait Shape { fn area(self:ro<Self>) -> u64; }
@@ -359,7 +359,7 @@ fn main() -> i32 {
 
 ### 9. Lanes are race free by construction
 
-A lane may touch what it writes only at `[i]`. `reduce` and `scan` are how lanes combine: one value, or every prefix. The checked `+` is offered where no order of evaluation can change whether it traps, and a lane may call a closure that writes nothing it captured.
+A lane may touch what it writes only at `[i]`. Lanes combine through `reduce`, into one value, and `scan`, into every prefix. The checked `+` is allowed where no order of evaluation can change whether it traps. A lane may call a closure that writes nothing it captured.
 
 ```cairn
 fn map(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) { parallel i in n { out[i] = f(u64(i)); } }
@@ -381,7 +381,7 @@ fn main() -> i32 {
 
 ### 10. Generators are library code
 
-A recipe is ordinary declarations with static `each`, `where` and `$name` splices. `derive wire`, `derive eq`, `derive ord` and `derive hash` are recipes of the packaged library.
+A recipe is ordinary declarations with static `each`, `where` and `$name` splices. `derive wire`, `derive eq`, `derive ord` and `derive hash` are recipes in the standard library.
 
 ```cairn
 import std.core (Eq, Ord);
@@ -419,7 +419,7 @@ fn main() -> i32 {
 
 ### 11. Modules and the library
 
-`module` names what follows, `pub` exports, `import` brings a module (or listed names) into view. Growth, maps and I/O are library code written in CAIRN, so their costs show in every caller's effect row.
+`module` names what follows, `pub` exports, and `import` brings a module, or listed names, into view. Growable arrays, maps and I/O are library code written in CAIRN, so their costs show in every caller's effect row.
 
 ```cairn
 module inventory;
@@ -463,7 +463,7 @@ pub fn main() -> i32 {
 
 ### 12. The foreign boundary states its effects
 
-An `extern` declaration has no body the checker can read, so it declares what it may do, and calling it needs `unsafe`. The effect travels to every caller. `pure` and `effects(...)` are checked ceilings.
+The checker cannot read an `extern` function's body, so the declaration states what it may do, and a call to it needs `unsafe`. The effect reaches every caller. `pure` and `effects(...)` are checked ceilings.
 
 ```cairn
 extern fn getpid() -> i32 effects(io);
@@ -477,8 +477,8 @@ fn main() -> i32 {
 }
 ```
 
-The device half of the language (placement types, `kernel fn`, device `reduce` and `compact`, queued work with `spawn ... after`) is shown by [examples/apps/gpu_pipeline](examples.md#examplesappsgpu_pipeline) and [examples/apps/simulator](examples.md#examplesappssimulator), which the suite runs when a GPU is present.
+The device half of the language (placement types, `kernel fn`, device `reduce` and `compact`, queued work with `spawn ... after`) is shown by [examples/apps/gpu_pipeline](examples.md#examplesappsgpu_pipeline) and [examples/apps/simulator](examples.md#examplesappssimulator). Their device runs happen only under `make gpu`.
 
 ## Where to go next
 
-[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md), [concurrency.md](concurrency.md) and [numerics.md](numerics.md) are the reference: every rule with a program that is accepted and one that is refused. [library.md](library.md) is the standard library, [tools.md](tools.md) every command and the editors, [examples.md](examples.md) real programs from a storage engine to a bare-metal image, [agents.md](agents.md) the edit protocol an AI agent works through, and [verification.md](verification.md) which claims are proved, which are SMT-checked and which are only tested.
+[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md), [concurrency.md](concurrency.md) and [numerics.md](numerics.md) are the reference: every rule with a program it accepts and one it refuses. [library.md](library.md) covers the standard library, [tools.md](tools.md) every command and the editors, and [examples.md](examples.md) real programs from a storage engine to a bare-metal image. [agents.md](agents.md) is the edit protocol an AI agent works through, and [verification.md](verification.md) says which claims are proved, which are SMT-checked and which are only tested.

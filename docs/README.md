@@ -4,18 +4,18 @@ The [README](../README.md) says what CAIRN is and how to install it. Read the re
 
 | Document | What it gives you |
 | --- | --- |
-| [guide.md](guide.md) | From a fresh checkout to a project that builds, runs, tests itself and refuses a wrong edit, then twelve complete programs, one per idea. |
-| [language.md](language.md) | The reference for values, control flow, records, sums, constants and tests. Every rule has a program that is accepted and one that is refused with its diagnostic code. |
+| [guide.md](guide.md) | A fresh checkout to a project that builds, runs, tests itself and refuses a wrong edit, then twelve complete programs, one idea each. |
+| [language.md](language.md) | Values, control flow, records, sums, constants and tests. Every rule has a program it accepts and one it refuses with its diagnostic code. |
 | [memory.md](memory.md) | Views and parts, owners and moves, linear values, layout, effect rows, operand order and the foreign boundary, in the same form. |
 | [abstractions.md](abstractions.md) | Generics, bounds, traits, `dyn`, closures, modules, projects, dependencies and recipes. |
-| [concurrency.md](concurrency.md) | Tasks and leases, task groups collected in completion order, I/O rings, atomics and mutexes, parallel regions, plans and fusion, `reduce`, `compact` and `scan`, placement and queued device work. |
-| [numerics.md](numerics.md) | Storage floats (`f16`, `bf16`, `f8e4m3`, `f8e5m2`) and their one stated rounding, `quantize` and its stochastic form, and `derive grad`, which writes a reverse-mode derivative as ordinary checked code. |
-| [library.md](library.md) | The standard library, module by module, with a program for each. [std_api.md](std_api.md) indexes the generated signature and effect-row reference, one page per module under `std/`. |
-| [tools.md](tools.md) | What the terminal shows, `cairn fmt`, `test`, `check --generics` and `--watch`, `doc`, `expand`, `explain`, `predict` and `tune`, `diff`, `build --incremental` and `--header`, `lsp`, the editor extension and the other editors, and the bare-metal AArch64 target under QEMU. |
+| [concurrency.md](concurrency.md) | Tasks and leases, task groups, I/O rings, atomics and mutexes, parallel regions, plans and fusion, `reduce`, `compact` and `scan`, placement and queued device work. |
+| [numerics.md](numerics.md) | Storage floats (`f16`, `bf16`, `f8e4m3`, `f8e5m2`) and their one rounding, `quantize`, the tensor-core multiply, and `derive grad`, which writes a reverse-mode derivative as ordinary checked code. |
+| [library.md](library.md) | The standard library, module by module, with a program for each. [std_api.md](std_api.md) indexes the generated reference: every signature and effect row, one page per module under `std/`. |
+| [tools.md](tools.md) | Every command beyond check, build and run: `fmt`, `test`, `doc`, `expand`, `explain`, `predict`, `tune`, `diff`, incremental builds, the C header, the language server, the editors and the bare-metal target. |
 | [examples.md](examples.md) | What each project under `examples/` shows, with its output and the effect rows worth reading. |
-| [verification.md](verification.md) | The Lean proofs, the guard-elision rule and its independent audit, the SMT source equivalence, what `cairn diff` establishes, and the tests, each with what it does and does not cover. |
-| [internals.md](internals.md) | The compiler's stages and which file owns which rule, the test layers, what an accepted program promises, and how a release is cut. |
-| [agents.md](agents.md) | The AI edit protocol: packets and what they say is established, rule cards, the program's state, interface migrations, plan edits, named choices, what a program drew, and what an edit can never move. |
-| [roadmap.md](roadmap.md) | What is still open, stated as gates. [project/capabilities.json](project/capabilities.json) carries the same as data. |
+| [verification.md](verification.md) | The Lean proofs, the guard-elision rule and its audit, SMT source equivalence, what `cairn diff` establishes, and the tests, each with what it covers and what it does not. |
+| [internals.md](internals.md) | The compiler's stages, which file owns which rule, the test layers, what an accepted program promises, and how a release is cut. |
+| [agents.md](agents.md) | The AI edit protocol: packets and what they establish, rule cards, the program's state, interface migrations, plan edits, named choices, what a program drew, and what an edit can never change. |
+| [roadmap.md](roadmap.md) | What is still open, stated as gates. [project/capabilities.json](project/capabilities.json) holds the same list as data. |
 
-The 0.2, 0.3 and 0.4 specifications were earlier proposals, never a source of accepted features; they stay in `docs/history/` of the v1.3.0 tag. Every fenced `cairn` block in these files is compiled by `tests/language/test_docs_examples.py`, and a block tagged `cairn rejects E-CODE` must be refused with exactly that code.
+Every fenced `cairn` block in these files is compiled by `tests/language/test_docs_examples.py`, and a block tagged `cairn rejects E-CODE` must be refused with exactly that code. The 0.2, 0.3 and 0.4 specifications were earlier proposals and never a source of accepted features; they stay in `docs/history/` of the v1.3.0 tag.
