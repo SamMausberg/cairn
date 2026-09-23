@@ -6,7 +6,7 @@ import re
 
 from cairn import __version__
 from cairn.agent import skill
-from cairn.compiler.cairnc import compile_source
+from cairn.compiler.cairnc import Diagnostic, compile_source
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SKILL = ROOT / "skills" / "cairn"
@@ -70,3 +70,37 @@ def test_the_plugin_and_its_marketplace_state_this_release():
     server = plugin["lspServers"]["cairn"]
     assert server["command"] == "${CLAUDE_PLUGIN_ROOT}/bin/cairn" and server["args"] == ["lsp"]
     assert (ROOT / "bin/cairn").stat().st_mode & 0o111  # the plugin's bin/ goes on PATH as it is
+
+
+def test_the_plugin_runs_the_mcp_server_and_names_its_eval_suite():
+    plugin = json.loads((ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+    assert plugin["mcpServers"] == {"cairn": {"command": "${CLAUDE_PLUGIN_ROOT}/bin/cairn", "args": ["mcp"]}}
+    assert (ROOT / plugin["experimental"]["evals"]).is_dir()
+
+
+def front(text: str) -> dict[str, str]:
+    """The flat `key: value` lines of a Markdown file's frontmatter."""
+    head = text.split("---\n")[1]
+    return {k.strip(): v.strip() for k, _, v in (line.partition(":") for line in head.splitlines())}
+
+
+def test_each_eval_case_uses_read_only_tools_and_its_program_is_refused_with_the_code_it_grades():
+    """The suite is not run here (it spends a model's usage); what the suite claims about the compiler is checked."""
+    cases = sorted(p.parent for p in (ROOT / "bench/skill").glob("*/prompt.md"))
+    assert 5 <= len(cases) <= 6
+    for case in cases:
+        prompt = (case / "prompt.md").read_text(encoding="utf-8")
+        assert front(prompt)["allowed_tools"] == "[Read, Glob, Grep, Skill]"  # no Bash: no sandbox on this machine
+        graders = {p.stem: front(p.read_text(encoding="utf-8")) for p in (case / "graders").glob("*.md")}
+        assert all(g["name"] == stem and g["type"] in {"regex", "llm", "tool_used"} for stem, g in graders.items())
+        assert graders["skill"]["tool"] == "Skill"
+        if "code" not in graders:
+            continue
+        [program] = re.findall(r"```cairn\n(.*?)```", prompt, re.S)
+        code = re.fullmatch(r"'(E-[A-Z-]+)\\b'", graders["code"]["pattern"]).group(1)
+        try:
+            compile_source(program)
+        except Diagnostic as error:
+            assert error.data["code"] == code, case.name
+        else:
+            raise AssertionError(f"{case.name}: the program checks, but the case grades a refusal")

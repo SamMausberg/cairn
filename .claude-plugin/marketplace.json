@@ -6,7 +6,7 @@
     {
       "name": "cairn",
       "source": "./",
-      "description": "The CAIRN language skill, the cairn command and the language server.",
+      "description": "The CAIRN language skill, the cairn command, the language server and the MCP server.",
       "version": "0.9.0",
       "license": "MIT OR Apache-2.0",
       "category": "development"

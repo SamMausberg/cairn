@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from cairn.cli import create_project, main, templates
+from cairn.agent.skill import commands
+from cairn.cli import GUIDE, create_project, main, templates
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.build import build
 from cairn.projects.project import ProjectError, load_project
@@ -32,6 +33,12 @@ def test_every_template_is_a_project_whose_tests_pass_as_created(tmp_path, templ
     assert main(["test", str(root), "--format", "json"]) == 0
     record = json.loads(capsys.readouterr().out)
     assert record["blocks"]["tests"], "every template carries at least one test block"
+    guide = (root / "AGENTS.md").read_text()  # what the project tells an agent, the same for every template
+    assert guide == GUIDE.read_text() and len(guide.splitlines()) < 25
+    for said in ("cairn check . --format json", "cairn test .", "cairn run .", "cairn doc --std", "effect ceiling"):
+        assert said in guide
+    named = {name for name, _ in commands()}
+    assert set(re.findall(r"`cairn ([a-z]+)", guide)) <= named  # every command it names exists
 
 
 def test_an_unknown_template_is_refused_and_nothing_is_made(tmp_path):

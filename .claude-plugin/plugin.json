@@ -2,7 +2,7 @@
   "name": "cairn",
   "displayName": "CAIRN",
   "version": "0.9.0",
-  "description": "Write, check, test and tune CAIRN programs: the language skill, the cairn command on PATH, and the language server, so every edit to a .cairn file comes back with the compiler's diagnostics.",
+  "description": "Write, check, test and tune CAIRN programs: the language skill, the cairn command on PATH, the language server, so every edit to a .cairn file comes back with the compiler's diagnostics, and an MCP server with the compiler's guarded edit, plan and implementation hosts.",
   "author": {"name": "SamMausberg", "url": "https://github.com/SamMausberg"},
   "homepage": "https://github.com/SamMausberg/cairn",
   "repository": "https://github.com/SamMausberg/cairn",
@@ -14,5 +14,12 @@
       "args": ["lsp"],
       "extensionToLanguage": {".cairn": "cairn"}
     }
-  }
+  },
+  "mcpServers": {
+    "cairn": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/cairn",
+      "args": ["mcp"]
+    }
+  },
+  "experimental": {"evals": "bench/skill"}
 }

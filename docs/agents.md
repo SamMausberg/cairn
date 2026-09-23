@@ -270,7 +270,11 @@ claude plugin install cairn@cairn
 
 The plugin adds the skill, puts `bin/cairn` on the session's `PATH`, and runs `cairn lsp` on `.cairn` files, so each edit returns the compiler's diagnostics to the agent. It needs Python 3.11 or later and a C++20 compiler and downloads nothing. Another agent that reads Agent Skills can load `skills/cairn/` directly, with `bin/cairn` of a checkout on its `PATH`.
 
+The plugin also starts [`cairn mcp`](tools.md#cairn-mcp), a Model Context Protocol server, so an agent without a shell reaches the same hosts: `check`, `state`, and the edit, plan and implementation sessions of this page, as eight tools. A session opened on a path writes each change its host admits back to the files it came from, and refuses as stale (`E-SESSION`) when a file changed since the session read it. Claude Desktop and other MCP clients start the same server as `bin/cairn` with the argument `mcp`. `claude plugin details` counts the skill's description, about 181 tokens, as the plugin's whole always-on cost and does not count MCP tool schemas; the eight tools' list is 4,061 bytes of JSON, about a thousand tokens more wherever a client loads tool schemas up front.
+
 In a six-run smoke comparison (three small tasks, one `claude-sonnet-5` session each with and without the plugin), every session solved its task, and the sessions with the plugin cost 0.51 times as much and took 40 turns instead of 70, because they read two cards instead of searching the checkout ([evidence/v0_9/skill](../evidence/v0_9/skill/README.md)). One run per cell is not a benchmark.
+
+`bench/skill/` is a `claude plugin eval` suite, which `plugin.json` names under `experimental.evals`. Its six cases need only the Read, Glob, Grep and Skill tools: five refused programs, each graded by a regular expression for its diagnostic code, a rubric for the fix and whether the skill fired, and one checksum to write. `tests/tooling/test_skill.py` holds each program to the code its case grades. The suite has not been run.
 
 ## Training material and trials
 

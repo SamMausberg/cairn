@@ -132,7 +132,7 @@ class Tools:
     def program(self, a: dict[str, Any]) -> tuple[str, Files | None]:
         """The combined source to judge, and for a path the files it came from."""
         if ("path" in a) == ("source" in a):
-            fail("E-REQUEST", "Give path or source, not both.")
+            fail("E-REQUEST", "Give exactly one of path and source.")
         if "source" in a:
             return text(a, "source"), None
         files = Files(self.root / text(a, "path"))
