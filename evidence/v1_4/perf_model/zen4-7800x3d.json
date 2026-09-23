@@ -172,6 +172,11 @@
           "store"
         ]
       }
+    },
+    "allocation": {
+      "date": "2026-09-22",
+      "kernel": "alloc",
+      "mapped_at": 67108864
     }
   },
   "host": {
@@ -372,7 +377,7 @@
       ]
     },
     "spawn_ns": 121036.1,
-    "alloc_ns": 1.61,
+    "alloc_ns": 17.99,
     "irregular_ns": {
       "l1": 0.489,
       "l2": 0.964,
@@ -382,7 +387,9 @@
     "atomic_ns": {
       "shared": 6.282
     },
-    "ghz": 4.666
+    "ghz": 4.666,
+    "page_ns": 2736.9,
+    "mapped_bytes": 33554432
   },
   "device": null
 }

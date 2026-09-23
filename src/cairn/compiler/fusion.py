@@ -123,13 +123,19 @@ def compatible(regions: list[Stmt]) -> bool:
 
 
 def fusible(a: Stmt, b: Stmt, rows: dict[str, set[str]]) -> bool:
+    """`b` may run inside `a`'s lanes: another region, or a host `reduce` that ends the chain, whose value for an
+    index is the fused bodies then its yield. Its fold keeps its order, so it traps, if it does, where it did. A
+    device reduce hands its value to CUB, which does not promise to evaluate an index once, so it stays apart."""
+    tail = b.tag == "reduce" and b.ref == "host"
     return (
-        a.tag == b.tag == "parallel"
+        a.tag == "parallel"
+        and (b.tag == "parallel" or tail)
         and a.ref == b.ref
         and a.block == b.block == 1
         and alike(a.exprs[0], b.exprs[0])
         and quiet_block(a.body, rows)
         and quiet_block(b.body, rows)
+        and (not tail or quiet(b.exprs[1], rows))
     )
 
 
@@ -153,6 +159,8 @@ def chains(ss: list[Stmt], rows: dict[str, set[str]], f: Function | None = None)
             if not (fusible(run[-1], nxt, rows) and fusible(head, nxt, rows) and compatible([*run, nxt])):
                 break
             run.append(nxt)
+            if nxt.tag == "reduce":  # a fold ends the chain: nothing after it reads a value it made per index
+                break
         if len(run) > 1:
             found.append(Chain(run, scratch(ss[:i], run, f) if f is not None else []))
         i += len(run)

@@ -494,15 +494,18 @@ class Emitter:
             getattr(self, "s_" + s.tag)(s, es)
 
     def chain(self, chain: fusion.Chain, es: list[str], held: dict[str, Any]):
-        """One region whose lanes run each fused body at their own index, in order, each in a block of its own."""
-        head = chain.regions[0]
-        index = head.binder or head.name
+        """One region whose lanes run each fused body at their own index, in order, each in a block of its own; or,
+        when a host reduce ends the chain, one fold whose value for each index runs the bodies first."""
+        tail = chain.regions[-1] if chain.regions[-1].tag == "reduce" else None
+        lead = tail or chain.regions[0]  # whose loop or lanes carry the index
+        index = lead.binder or lead.name
+        for name in chain.scratch:
+            self.scalar[name] = f"s_{name}"
 
-        def body():
+        def bodies():
             for name in chain.scratch:
-                self.scalar[name] = f"s_{name}"
                 self.put(f"{self.type(held[name])} s_{name}{{}};")
-            for r in chain.regions:
+            for r in chain.regions[: -1 if tail else None]:
 
                 def one(r: Stmt = r):
                     if (r.binder or r.name) != index:
@@ -510,12 +513,15 @@ class Emitter:
                     self.block(r.body)
 
                 self.nest("{", one)
-            for name in chain.scratch:
-                del self.scalar[name]
 
-        record = {"line": head.line, "regions": len(chain.regions), "scratch_in_lanes": chain.scratch}
-        self.fused.setdefault(self.f.name, []).append(record)
-        self.s_parallel(head, es, body)
+        record = {"line": chain.regions[0].line, "regions": len(chain.regions), "scratch_in_lanes": chain.scratch}
+        self.fused.setdefault(self.f.name, []).append({**record, **({"into": "reduce"} if tail else {})})
+        if tail:
+            self.s_reduce(tail, [self.expr(e) for e in tail.exprs], bodies)
+        else:
+            self.s_parallel(chain.regions[0], es, bodies)
+        for name in chain.scratch:
+            del self.scalar[name]
 
     def s_buffer(self, s: Stmt, es: list[str]):
         owner, ty = self.fresh("cr_owner_")[0], self.type(s.ty)
@@ -598,18 +604,20 @@ class Emitter:
         marked, promise = (" CR_DEVICE", "") if s.ref == "device" else ("", " noexcept")
         return f"[]{marked}({carried} a, {carried} b){promise} {{ return {combine}; }}"
 
-    def s_reduce(self, s: Stmt, es: list[str]):
+    def s_reduce(self, s: Stmt, es: list[str], before=None):
         ty, combine, identity, carried, start = self.folding(s)
         i = "v_" + s.binder
         if s.ref == "device" or s.pooled:  # Pooled: blocks the count fixes, each folded in order, then their totals.
-            value = self.lane(s, lambda: self.put(f"return {self.expr(s.exprs[1])};"))
+            value = self.lane(s, lambda: [before and before(), self.put(f"return {self.expr(s.exprs[1])};")])
             where, fold = "gpu" if s.ref == "device" else "par", self.combiner(s, carried, combine)
             total = f"cr::{where}::reduce<{carried}>({es[0]}, {start}, {fold}, {value})"
             return self.put(f"const {ty} v_{s.name} = {total}{'' if carried == ty else '.checked()'};")
         count = self.fresh("n")[0]  # Without `parallel`, a host reduction is an in-order fold; its extent is read once.
-        self.puts(f"{ty} v_{s.name} = static_cast<{ty}>({identity});", f"const std::size_t {count} = {es[0]};",
-                  f"for (std::size_t {i} = 0; {i} < {count}; ++{i}) {{", f"  const {ty} a = v_{s.name}, b = {es[1]};",
-                  f"  v_{s.name} = {combine};", "}")  # fmt: skip
+        self.puts(f"{ty} v_{s.name} = static_cast<{ty}>({identity});", f"const std::size_t {count} = {es[0]};")
+        step = [f"const {ty} a = v_{s.name}, b = {es[1]};", f"v_{s.name} = {combine};"]
+        self.nest(
+            f"for (std::size_t {i} = 0; {i} < {count}; ++{i}) {{", lambda: [before and before(), self.puts(*step)]
+        )
 
     def s_scan(self, s: Stmt, _: list[str]):
         ty, combine, identity, carried, start = self.folding(s)

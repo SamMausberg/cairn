@@ -96,6 +96,55 @@ def test_a_callee_whose_every_guard_was_discharged_may_run_in_a_fused_body():
     assert receipt["functions"]["f"]["fused"][0]["regions"] == 2 and "cf_mix(" in cpp.split("void ci_f(", 2)[2]
 
 
+ENERGY = """fn energy(n:usize, x:ro<f64>[n]) -> f64 {
+  buffer sq:f64[n] = zeroed;
+  parallel i in n { sq[i] = x[i] * x[i]; }
+  let e = reduce + for i in n yield sq[i];
+  return e;
+}
+"""
+DIGEST = """fn mix(v:u64) -> u64 = mul_wrap(v ^ shr(v, 29), 0xbf58476d1ce4e5b9);
+fn digest(n:usize, keys:ro<u64>[n]) -> u64 {
+  buffer h:u64[n] = zeroed;
+  parallel i in n { h[i] = mix(keys[i]); }
+  let d = reduce add_wrap parallel j in n yield h[j];
+  return d;
+}
+"""
+
+
+def test_a_host_reduce_may_end_a_chain_and_fold_what_the_bodies_made():
+    cpp, receipt = compile_source(ENERGY + "plan energy { fuse 2; }\n")
+    body = cpp.split("double ci_energy(", 2)[2]
+    assert "cr::par::run(" not in body and "cr::Buffer" not in body  # one in-order fold, its scratch in each step
+    assert "double s_sq{};" in body and "b = s_sq;" in body
+    assert receipt["functions"]["energy"]["fused"] == [
+        {"line": 3, "regions": 2, "scratch_in_lanes": ["sq"], "into": "reduce"}
+    ]
+    pooled = compile_source(DIGEST + "plan digest { fuse 2; }\n")[0].split("ci_digest(", 2)[2]
+    assert "cr::par::reduce<" in pooled and "const std::size_t v_i = v_j;" in pooled and "cr::par::run(" not in pooled
+
+
+def test_a_device_reduce_stays_apart():  # CUB may evaluate one index's value more than once
+    device = """fn dev(n:usize, x:ro<f32>[n]@device) -> f32 {
+  buffer t:f32[n]@device = zeroed;
+  parallel i in n { t[i] = x[i] * 2.0; }
+  let s = reduce + for i in n yield t[i];
+  return s;
+}
+plan dev { fuse 2; }
+"""
+    refused("E-PLAN", device)
+
+
+def test_a_chain_into_a_fold_is_priced_where_it_runs():
+    sizes = [{"n": 1e7}]
+    fold = report(ENERGY + "plan energy { fuse 2; }\n", sizes, {"energy"})["functions"]["energy"]
+    assert fold["regions"] == [] and fold["sequential"]["bytes_read"] == {"x": "8*n"}  # one thread, no scratch
+    pooled = report(DIGEST + "plan digest { fuse 2; }\n", sizes, {"digest"})["functions"]["digest"]
+    assert [r["kind"] for r in pooled["regions"]] == ["pooled"]
+
+
 def test_conservative_emission_keeps_every_region_apart():
     cpp, _ = compile_source(planned(PIPE), keep_guards=True)  # the reference build a differential run compares with
     assert cpp.split("void ci_f(", 2)[-1].count("cr::par::run(") == 2 and "cr::Buffer<double>" in cpp
@@ -156,6 +205,20 @@ fn hashes(n:usize, out:rw<u64>[n], keys:ro<u64>[n], seen:rw<u64>[n]) {
   parallel k in n { seen[k] = add_wrap(seen[k], out[k]); }
 }
 
+fn energy(n:usize, x:ro<f64>[n]) -> f64 {
+  buffer sq:f64[n] = zeroed;
+  parallel i in n { sq[i] = x[i] * x[i]; }
+  let e = reduce + for i in n yield sq[i];
+  return e;
+}
+
+fn digest(n:usize, keys:ro<u64>[n]) -> u64 {
+  buffer h:u64[n] = zeroed;
+  parallel i in n { h[i] = mix(keys[i]); }
+  let d = reduce add_wrap parallel j in n yield h[j];
+  return d;
+}
+
 PLAN
 
 fn main() -> i32 {
@@ -171,17 +234,25 @@ fn main() -> i32 {
   }
   pipe(n, out, x, 1.5, 0.75);
   hashes(n, hashed, keys, seen);
+  let mut e:f64 = 0.0;
+  let mut d:u64 = 0;
   for i in 0..n {
     let t = 1.5 * x[i] + sqrt(x[i]);
     if out[i] != t * 0.75 - x[i] { return 1; }
     let s = mix(keys[i]);
     if hashed[i] != (s ^ keys[i]) || seen[i] != add_wrap(s, s ^ keys[i]) { return 2; }
+    e += x[i] * x[i];                                  // the in-order sum the fold must give, bit for bit
+    d = add_wrap(d, s);
   }
+  let folded = energy(n, x);                             // it may allocate its scratch: a statement of its own
+  let digested = digest(n, keys);
+  if folded != e { return 3; }
+  if digested != d { return 4; }
   return 0;
 }
 """
-PLANS = ["", "plan pipe { fuse 2; }\nplan hashes { fuse 3; }", "plan pipe { fuse 2; grain 1; lanes 3; }\n"
-         "plan hashes { fuse 2; grain 4096; }"]  # fmt: skip
+PLANS = ["", "plan pipe { fuse 2; }\nplan hashes { fuse 3; }\nplan energy { fuse 2; }\nplan digest { fuse 2; }",
+         "plan pipe { fuse 2; grain 1; lanes 3; }\nplan hashes { fuse 2; grain 4096; }"]  # fmt: skip
 
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])

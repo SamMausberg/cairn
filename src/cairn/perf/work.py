@@ -346,21 +346,29 @@ class Counter:
 
     def fused(self, chain: fusion.Chain, at: Frame) -> None:
         """A chain a plan fused is one region: one pass over the extent doing every body, sharing what it reads,
-        with its lane-held scratch neither streamed nor allocated."""
-        head, body = chain.regions[0], Work()
-        binders = tuple(r.name for r in chain.regions)
+        with its lane-held scratch neither streamed nor allocated. A host reduce that ends it is one fold whose
+        every step runs the bodies first: in order on this thread, or pooled in blocks."""
+        head, tail, body = chain.regions[0], chain.regions[-1], Work()
+        folds = tail.tag == "reduce"
+        binders = tuple(r.binder or r.name for r in chain.regions)
         self.bound += binders
-        lane = Frame(body, ONE, (*at.binders, *binders), True)
-        for r in chain.regions:
+        count = self.size(head.exprs[0]) or Poly.var(f"?count@{head.line}")
+        lane = Frame(body, ONE, (*at.binders, *binders), not folds or tail.pooled)
+        for r in chain.regions[: -1 if folds else None]:
             self.block(r.body, lane)
             # What this body wrote, a later body reads back only at the lane's own index: from a register or L1.
             lane.seen |= {(k, False) for k in body.writes}
+        if folds:
+            self.expr(tail.exprs[1], lane)
+            body.op(f"{tail.ty.name}_fold" if tail.ty.name in FLOAT else "int_fold" if tail.op == "+" else "int", ONE)
         del self.bound[-len(binders) :]
         for name in chain.scratch:
             for table in (body.reads, body.writes, body.footprint):
                 table.pop(name, None)
-        count = self.size(head.exprs[0]) or Poly.var(f"?count@{head.line}")
-        kind = "device" if head.ref == "device" else "host"
+        if folds and not tail.pooled:  # the fold's own thread runs every step, the bodies with it
+            at.work.merge(body, at.times * count)
+            return
+        kind = "pooled" if folds else "device" if head.ref == "device" else "host"
         self.cost.regions.append(
             Region(kind, head.line, count, at.times, body, head.block, head.plan, head.launch, fuse=head.fuse)
         )

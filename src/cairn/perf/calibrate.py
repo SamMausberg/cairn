@@ -39,7 +39,7 @@ fn chain(n:usize, seed:u64) -> u64 {
 }
 fn nothing(n:usize, out:rw<u64>[n]) { out[0] = 1; }
 fn spawn_one(n:usize, out:rw<u64>[n]) { let t = spawn nothing(n, out); wait(t); }
-fn alloc(n:usize) -> usize { let b = Buf[u64](n); return len(b); }
+fn alloc(n:usize) -> u64 { let b = Buf[u64](n); let t = reduce add_wrap for i in n yield b[i]; return t; }
 fn at_par(n:usize) -> u64 {
   let total = Atomic[u64](0);
   parallel i in n { let before = total.fetch_add(1, Order.relaxed); }
@@ -211,6 +211,20 @@ def pool(cxx: str, arch: str, threads: int, write_l2: float) -> dict[str, Any]:
             "points": [[u, round(t, 1)] for u, t in points]}  # fmt: skip
 
 
+MAPPED = 32 << 20  # glibc's largest dynamic mmap threshold: an allocation this large is mapped afresh every time
+PAGE = 4096
+
+
+def allocation(cxx: str, arch: str, read: dict, write: dict) -> tuple[float, float]:
+    """What one small allocation and its release cost, and what each 4 KiB page of an allocation the allocator maps
+    afresh adds on its first touch. The kernel reads back what it allocated, so the compiler cannot elide it."""
+    small = best(measure.time(BANDWIDTH, "alloc", {"n": 1}, cxx=cxx, arch=arch))
+    n = 2 * MAPPED // 8
+    whole = best(measure.time(BANDWIDTH, "alloc", {"n": n}, cxx=cxx, arch=arch))
+    moved = n * 8 / read["dram"]["1"] + n * 8 / write["dram"]["1"]  # the zeroing, and the read back
+    return small, max(0.0, whole - small - moved) / (n * 8 / PAGE)
+
+
 def mca_cycles(cxx: str, arch: str) -> float | None:
     """Cycles per round of the dependent chain, as llvm-mca reads the compiled loop; None without llvm-mca."""
     from .native import loop_cycles
@@ -227,7 +241,7 @@ def calibrate(cxx: str = "clang++", arch: str | None = None) -> dict[str, Any]:
     cycles = mca_cycles(cxx, arch)
     spawn = best(measure.time(BANDWIDTH, "spawn_one", {"n": 8}, cxx=cxx, arch=arch))
     shared = best(measure.time(BANDWIDTH, "at_par", {"n": 1 << 20}, cxx=cxx, arch=arch, lanes=threads)) / (1 << 20)
-    allocation = best(measure.time(BANDWIDTH, "alloc", {"n": 1}, cxx=cxx, arch=arch))
+    small, page = allocation(cxx, arch, read, write)
     model = cpu_model()
     return {
         "schema": "cairn.machine/1",
@@ -253,7 +267,9 @@ def calibrate(cxx: str = "clang++", arch: str | None = None) -> dict[str, Any]:
             "ops": {arch: {**ops, "keeps_scalar": scalarizing}},
             "pool": pool(cxx, arch, threads, write["l2"]["1"]),
             "spawn_ns": round(spawn, 1),
-            "alloc_ns": round(allocation, 2),
+            "alloc_ns": round(small, 2),
+            "page_ns": round(page, 1),
+            "mapped_bytes": MAPPED,
             "irregular_ns": irregular,
             "atomic_ns": {"shared": round(shared, 3)},
             "ghz": round(cycles / chain_ns, 3) if cycles else 0.0,
@@ -279,7 +295,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--arch", help="The -march profile to measure; default: this host family's baseline.")
     ap.add_argument("--into", type=Path, metavar="PROFILE.json", help="Add this profile's operation costs for "
                     "--arch to an existing profile, and measure nothing else.")  # fmt: skip
+    ap.add_argument("--allocation", action="store_true", help="With --into, measure again only what an allocation "
+                    "costs, small and mapped afresh, beside the bandwidths the profile already holds.")  # fmt: skip
     a = ap.parse_args(argv)
+    if a.into and a.allocation:
+        existing = json.loads(a.into.read_text(encoding="utf-8"))
+        host = existing["host"]
+        small, page = allocation(a.cxx, resolve_arch(a.arch), host["read"], host["write"])
+        host |= {"alloc_ns": round(small, 2), "page_ns": round(page, 1), "mapped_bytes": MAPPED}
+        existing["measured"]["allocation"] = {"date": datetime.date.today().isoformat(), "kernel": "alloc",
+                                              "mapped_at": 2 * MAPPED}  # fmt: skip
+        a.into.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps({"status": "calibrated", "profile": str(a.into), "alloc_ns": small, "page_ns": page}))
+        return 0
     if a.into:  # One more -march profile's operation costs, beside the bandwidths already measured.
         existing = json.loads(a.into.read_text(encoding="utf-8"))
         arch = resolve_arch(a.arch)

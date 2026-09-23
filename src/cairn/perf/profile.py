@@ -30,6 +30,8 @@ class Host:
     pool: dict[str, float]  # fork_ns, per_lane_ns, cutoff, grain
     spawn_ns: float = 30_000.0
     alloc_ns: float = 200.0
+    page_ns: float = 0.0  # a first touch of each 4 KiB page of an allocation the allocator maps afresh
+    mapped_bytes: int = 32 << 20  # from this size up, every allocation is mapped afresh (glibc's largest threshold)
     irregular_ns: dict[str, float] = field(default_factory=dict)  # level -> ns per data-dependent access
     atomic_ns: dict[str, float] = field(default_factory=dict)  # "shared": ns per access when every lane hits one
     ghz: float = 0.0

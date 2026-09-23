@@ -214,6 +214,8 @@ def pieces(c: Cost, host: Host, arch: str, sizes: dict[str, float], missing: set
     if made:
         level = host.level(zeroed, 1)
         ns = made * host.alloc_ns + zeroed / host.bandwidth("write", level, 1)
+        if zeroed >= made * host.mapped_bytes:  # mapped afresh on every call: each page faults on its first touch
+            ns += zeroed / 4096 * host.page_ns
         out.append(Piece("allocation", ns, "allocation", zeroed / host.bandwidth("write", level, host.lanes)))
     return [p for p in out if p.ns or p.what != "sequential code"]
 

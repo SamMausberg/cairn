@@ -192,6 +192,21 @@ def test_the_packaged_profiles_say_where_their_numbers_come_from():
     assert card.device.occupancy(32) == 1.0 and card.device.occupancy(255) < 0.2
 
 
+def test_an_allocation_the_allocator_maps_afresh_pays_a_fault_a_page():
+    fresh = Profile(MACHINE.name, "measured", "", Host(**{**MACHINE.host.__dict__, "alloc_ns": 20.0, "page_ns": 1000.0}),
+                    None)  # fmt: skip
+    source = (
+        "fn scratch(n:usize) -> u64 { let b = Buf[u64](n); let t = reduce add_wrap for i in n yield b[i]; return t; }"
+    )
+    c = costs(source)["scratch"]
+    parts = {n: {p["what"]: p["ns"] for p in model.predict(c, fresh, {"n": n})["parts"]} for n in (1 << 20, 1 << 23)}
+    assert parts[1 << 20]["allocation"] == pytest.approx(20.0 + (8 << 20) / 50.0, rel=1e-3)  # 8 MiB: memory kept
+    mapped = parts[1 << 23]["allocation"]  # 64 MiB: mapped afresh, 16384 pages faulted on the first touch
+    assert mapped == pytest.approx(20.0 + (64 << 20) / 50.0 + 16384 * 1000.0, rel=1e-3)  # four significant digits
+    held = packaged("zen4-7800x3d").host  # measured on a kernel that reads its allocation, so none of it was elided
+    assert held.alloc_ns > 5 and held.page_ns > 100 and held.mapped_bytes == 32 << 20
+
+
 def test_the_fit_finds_non_negative_costs():
     rows, targets = [[1, 1], [1, 0], [0, 1]], [3.0, 1.0, 2.0]
     assert [round(v, 3) for v in nnls(rows, targets)] == [1.0, 2.0]

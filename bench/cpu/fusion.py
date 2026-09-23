@@ -2,10 +2,13 @@
 """Time fused chains against the regions they were written as, on this host, interleaved, beside what the model
 predicted for each.
 
-Two kernels, each built twice from one source: once as written and once with `plan f { fuse K; }`. `blend` keeps
+Four kernels, each built twice from one source: once as written and once with `plan f { fuse K; }`. `blend` keeps
 its intermediate in a local buffer, which the fused chain holds in its lanes instead; `layers` writes three arrays
-the caller keeps, so fusing saves passes over memory but no array. Every round times each variant once at each
-size under each compiler, in an order that alternates, so a change of load on a shared machine falls on both.
+the caller keeps, so fusing saves passes over memory but no array. `energy` squares on the lane pool and sums in
+order on one thread, and fused it squares inside the in-order fold, on that one thread; `digest` hashes on the pool
+and folds with a pooled reduce, and fused it hashes inside the pool's blocks. Every round times each variant once
+at each size under each compiler, in an order that alternates, so a change of load on a shared machine falls on
+both.
 Only the host runs anything: `cairn.perf.measure` refuses device code.
 
     python3 bench/cpu/fusion.py [--rounds 3] [--out results/fusion/fusion.json]
@@ -47,6 +50,27 @@ KERNELS = {
 """,
         3,
     ),
+    "energy": (
+        """fn energy(n:usize, x:ro<f64>[n]) -> f64 {
+  buffer squared:f64[n] = zeroed;
+  parallel i in n { squared[i] = x[i] * x[i] + 1.0; }
+  let e = reduce + for i in n yield squared[i];
+  return e;
+}
+""",
+        2,
+    ),
+    "digest": (
+        """fn mix(v:u64) -> u64 = mul_wrap(v ^ shr(v, 29), 0xbf58476d1ce4e5b9);
+fn digest(n:usize, keys:ro<u64>[n]) -> u64 {
+  buffer h:u64[n] = zeroed;
+  parallel i in n { h[i] = mix(keys[i]); }
+  let d = reduce add_wrap parallel j in n yield h[j];
+  return d;
+}
+""",
+        2,
+    ),
 }
 SIZES = (1e5, 1e6, 1e7, 3e7)
 
@@ -57,7 +81,10 @@ def variants(name: str) -> dict[str, str]:
 
 
 def predicted(name: str, n: float) -> dict[str, float]:
-    return {v: report(src, [{"n": n}], {name})["functions"][name]["predictions"][0]["ns"] for v, src in variants(name).items()}
+    return {
+        v: report(src, [{"n": n}], {name})["functions"][name]["predictions"][0]["ns"]
+        for v, src in variants(name).items()
+    }
 
 
 def main() -> int:
