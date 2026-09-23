@@ -101,7 +101,7 @@ tests-not-passed: 1 of 3 tests failed, 1 contract, 81 cases
   test wrong: assertion failed at src/main.cairn:13: four is not five
 ```
 
-Tests run only as host processes, so a freestanding project's tests are refused (`E-TEST`).
+Test blocks run only as host processes, so a freestanding project's are refused (`E-TEST`); `cairn test --contract FILE` still runs a task contract on the host.
 
 ## cairn validate
 
@@ -523,7 +523,7 @@ $ size examples/embedded/build/embedded-*/embedded.elf
    5411	      0	      0	   5411	   1523	embedded.elf
 ```
 
-What the profile does not give: an allocator (storage is `stack` arrays, statics and string views), concurrency, a device, an MMU, caches, interrupts, a timer, a vector table (a hardware exception hangs the machine), unwinding (`defer` and owner release do not run on a trap, as with a hosted abort), or cross compilation (a target is refused on another host family). The image runs with the MMU off, so every access is Device-nGnRnE memory, the build passes `-mstrict-align`, and its timings are not comparable to hosted ones. `cairn test` still runs on the host. The backend is not verified.
+What the profile does not give: an allocator (storage is `stack` arrays, statics and string views), concurrency, a device, an MMU, caches, interrupts, a timer, a vector table (a hardware exception hangs the machine), unwinding (`defer` and owner release do not run on a trap, as with a hosted abort), or cross compilation (a target is refused on another host family). The image runs with the MMU off, so every access is Device-nGnRnE memory, the build passes `-mstrict-align`, and its timings are not comparable to hosted ones. The backend is not verified.
 
 ### The aarch64-virt target
 

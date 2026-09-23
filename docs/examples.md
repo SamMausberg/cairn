@@ -185,7 +185,7 @@ The frame marks its panels in a `Layout`, which `draw.capture` writes beside the
 
 ## examples/apps/analytics
 
-A million wire-encoded trades on disk, read back into a structure of arrays, filtered, aggregated and grouped four ways, in 791 lines of CAIRN over ten modules (21 bytes a row, 21 MB on disk). Recipes generate every table type: `Trade_table`, `Trade_get`, `Trade_summarize`, `Trade_unrolled_price`, the `Ord` that sorts a row and the `Aggregator` impls behind the query plan. Four of the recipes are the program's own, in `src/cols.cairn` and `src/agg.cairn`, and `wire`, `eq` and `ord` come from the packaged library.
+A million wire-encoded trades on disk, read back into a structure of arrays, filtered, aggregated and grouped four ways, in 775 lines of CAIRN over ten modules (21 bytes a row, 21 MB on disk). Recipes generate every table type: `Trade_table`, `Trade_get`, `Trade_summarize`, `Trade_unrolled_price`, the `Ord` that sorts a row and the `Aggregator` impls behind the query plan. Four of the recipes are the program's own, in `src/cols.cairn` and `src/agg.cairn`, and `wire`, `eq` and `ord` come from the packaged library.
 
 Every query is answered twice, and `main` returns 0 only if the two answers agree: row-wise against column-wise, the contracted collector against the loop, a sequential pass against host lanes, one pass against four tasks, a bound against a table lookup, and in the device configuration host against device.
 
@@ -308,7 +308,7 @@ sum_device   ffi_precondition, gpu_alloc, gpu_free, par:device, read:src, trap
 main         ... alloc, free, gpu_alloc, gpu_free, io, par:device, transfer:h2d, transfer:d2h
 ```
 
-`gpu_alloc` in `keep_device` and `sum_device` is CUB's own temporary storage. The run above was measured 2026-09-19 on a GH200 with CUDA 12.8.
+`gpu_alloc` in `keep_device` and `sum_device` is the execution context's arena growing for CUB's temporary storage. The run above was measured 2026-09-19 on a GH200 with CUDA 12.8.
 
 ## examples/apps/matmul
 
