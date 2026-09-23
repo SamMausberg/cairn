@@ -39,7 +39,7 @@ def test_the_packet_opens_only_the_items_of_the_function_s_regions():
     assert packet["items"]["lanes"] == {"region": "host", "least": 1, "most": 1024}
     assert packet["predicted"][0]["sizes"] == {"n": 1e6} and packet["signature"].startswith("fn spread(")
     device = host.open(DEVICE, "scale")
-    assert set(device["items"]) == {"block", "per_lane", "unroll", "vector"}
+    assert set(device["items"]) == {"block", "per_lane", "unroll", "vector", "stage"}
     assert device["items"]["block"]["multiple_of"] == 32 and device["items"]["vector"]["power_of_two"]
 
 

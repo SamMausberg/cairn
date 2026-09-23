@@ -21,6 +21,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/concurrency.py` | tasks and tickets, lanes and regions, atomics and mutexes, placement |
 | `compiler/fusion.py` | which adjacent regions a plan's `fuse` may run as one, and the scratch they need not keep |
 | `compiler/chunks.py` | which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering |
+| `compiler/staging.py` | which arrays a plan's `stage` loads into a device block's shared tile, and that lowering |
 | `compiler/tensor.py` | the tensor-core multiply `mma_unordered`: its rule, its numerical contract and its lowering |
 | `compiler/rings.py` | I/O rings: their declaration, the operations that move owners in and out, their lowering |
 | `compiler/effects.py` | the effect vocabulary, the fixed point, the operand-order audit |

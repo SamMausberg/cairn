@@ -149,6 +149,8 @@ class Stmt:
         0  # Adjacent indices each lane of a device region runs over chunks of W elements (compiler/chunks.py).
     )
     chunked: tuple = ()  # The arrays a vectored region moves W at a time: (name, element, loaded, stored, view).
+    stage: int = 0  # How far either side of a device block's indices its tiles reach (compiler/staging.py).
+    staged: tuple = ()  # The arrays a staged region reads from its block's tiles: (name, element, view).
     touched: tuple = ()  # A region's (outer name, block stride or None, written) accesses, as its lanes made them.
 
 

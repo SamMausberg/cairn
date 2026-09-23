@@ -39,6 +39,7 @@ Checking is one pass per function over one typed tree, and a generic instance is
 | The independent check of each guard lowering leaves out | `verify/elision.py` | `audit`, `decide`, `part` |
 | Which adjacent regions a plan's `fuse` joins, and the scratch they hold in their lanes | `compiler/fusion.py` | `chains`, `quiet`, `compatible`, `scratch` |
 | Which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering | `compiler/chunks.py` | `chunkable`, `vectored`, `lower` |
+| Which arrays a plan's `stage` loads into a device block's shared tile, and that lowering | `compiler/staging.py` | `stageable`, `staged`, `lower` |
 | The tensor-core multiply, its numerical contract and its lowering | `compiler/tensor.py` | `check_mma`, `lower_mma` |
 | Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
 | What each argument of `print`, `println`, `eprint`, `eprintln` and `format` writes, and their lowering | `compiler/printing.py` | `check_print`, `target`, `piece`, `lower_print` |

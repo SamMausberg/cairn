@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from . import chunks, facts, fusion
+from . import chunks, facts, fusion, staging
 from .builtins import WRAPPING, crossing
 from .effects import LANE_SAFE, PURE
 from .scope import Binding, Lanes
@@ -90,6 +90,7 @@ PLAN_ITEMS = {
     "per_lane": ("device", 1, 65536, 1),  # indices each thread runs before the grid wraps
     "unroll": ("device", 1, 32, 1),  # passes of a thread's index loop the compiler unrolls
     "vector": ("device", 2, 16, 1),  # adjacent indices a lane runs over one W-wide chunk of each array (chunks.py)
+    "stage": ("device", 1, 32, 1),  # how far either side of its indices a block's shared tile reaches (staging.py)
     "fuse": ("either", 2, 16, 1),  # adjacent regions, over one extent, that run as one traversal at most
 }
 POWERS = {"vector"}  # items that are also a power of two: a chunk is one access, and accesses are powers of two
@@ -134,6 +135,8 @@ def plans(c: Checker) -> dict[str, dict[str, int]]:
             s.fuse = items.get("fuse", 0)
             if "vector" in items and s.ref == "device":
                 chunks.vectored(c, s, items["vector"], token)
+            if "stage" in items and s.ref == "device":
+                staging.staged(c, s, items["stage"], token)
         chosen |= {f.name: dict(items) for f in planned}
     return chosen
 

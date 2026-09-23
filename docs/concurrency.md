@@ -387,6 +387,21 @@ fn wide(n:usize, out:rw<f64>[n]@device) { parallel i in n { out[i] = 1.0; } }
 plan wide { vector 4; }    // four f64 are 32 bytes, and a lane moves 16 at once
 ```
 
+`stage R` has each block of a device region load, into shared memory, the elements its lanes read near their own index, from 1 to 32 either side, and read them there. An array is staged when the region never writes it and every read of it is `x[i]`, `x[i + d]` or `x[i - d]` for the lane's index and a literal `d` of at most `R`, with its guard discharged, and at least one at `d` other than 0. The lane rule already refuses reading a written array off `[i]`, so a tile is never stale. A block then runs its indices tile by tile: a barrier, its threads loading the tile of every staged array from `R` before its first index to `R` after its last, only where the array has elements, a barrier, and the body at each index. Every index runs once and reads what the array holds, so the result is the unplanned one. `E-PLAN` refuses a region with nothing to stage, and `stage` beside `vector` or `fuse`.
+
+```cairn
+fn blur(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
+  parallel i in n {
+    if i >= 1 && i + 1 < n { out[i] = x[i - 1] + x[i] * 2.0 + x[i + 1]; }
+    else { out[i] = x[i]; }
+  }
+}
+
+plan blur { stage 1; block 128; }   // each element of x crosses from memory once per block
+```
+
+`cairn predict` prices a staged region as the unplanned one, because the model already counts a read beside the lane's own as a cache hit, and `cairn tune` does not try `stage`. What a tile saves is what the device's own caches would have missed, and only a device run measures that.
+
 `fuse K` runs up to `K` adjacent regions of a function as one traversal, from 2 to 16: each lane runs the first body at its index, then the next, in order. The regions must sit side by side in one block, share a placement and an extent spelled the same way, and have lanes that own element `[i]` rather than a block. Whatever one of them writes and another touches, both touch only at their own index, so no lane of a later body reads what another lane of an earlier body writes. No body may trap, loop without end or be observed from outside: every guard in it was discharged, and every function it calls is quiet in the same sense. A local `buffer` or `stack` array that only the chain touches, each lane at its own index and never lent, lives in each lane as one value and is never allocated. A host `reduce` over the same extent may end the chain: each step of its fold runs the fused bodies for that index first, and the fold keeps its order, so a checked fold still traps where it did. A sequential fold then runs the bodies on its own thread, in order, and `reduce op parallel` keeps them on the pool. A device `reduce` stays apart, because CUB does not promise to evaluate one index's value once.
 
 ```cairn

@@ -72,7 +72,8 @@ lean:
 gpu:
 	CAIRN_GPU_TESTS=1 $(PYTHON) -m pytest -q -p no:xdist tests/runtime/test_native_runtime.py \
 	  tests/soundness/test_concurrency.py tests/soundness/test_plans.py tests/soundness/test_scan.py \
-	  tests/soundness/test_device_paths.py tests/soundness/test_tensor.py tests/projects/test_apps.py \
+	  tests/soundness/test_device_paths.py tests/soundness/test_staging.py tests/soundness/test_tensor.py \
+	  tests/projects/test_apps.py tests/projects/test_app_matmul.py \
 	  tests/projects/test_app_analytics.py
 	CAIRN_GPU_TESTS=1 $(PYTHON) bench/gpu/parallel_gpu.py
 

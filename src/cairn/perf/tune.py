@@ -30,6 +30,7 @@ SPACE = {  # the values tried for each item; 0 is the runtime's own choice
     "per_lane": (0, 4, 16, 64),
     "unroll": (0, 4),
     "vector": (0, 2, 4),
+    "stage": (0,),  # the model prices a staged region as the unplanned one, so ranking cannot choose it
 }
 Plan = tuple[tuple[str, int], ...]  # the items a plan sets, in the checker's order, zeros left out
 

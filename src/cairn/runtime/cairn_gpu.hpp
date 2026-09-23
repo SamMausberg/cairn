@@ -182,6 +182,45 @@ inline void launch_vector(std::size_t n, bool whole, F scalar, G chunk, unsigned
   check(cudaDeviceSynchronize());
 }
 
+// `plan f { stage R; }` (compiler/staging.py): a block runs its indices tile by tile, the same for every thread, so
+// the barriers are reached by all of them. Each tile covers blockDim.x indices from `base`; `load` fills the block's
+// shared memory with every staged array's elements from base - R to base + blockDim.x + R that lie inside it, and
+// `body` runs at the thread's index reading them there. Every index runs once, after its tile is loaded.
+template<class T> CR_HD constexpr std::size_t tile_bytes(std::size_t width) noexcept {
+  return (width * sizeof(T) + 15) / 16 * 16;  // each tile starts on 16 bytes
+}
+template<std::size_t R, unsigned U, class L, class F> __global__ void staged_lanes(std::size_t n, L load, F body) {
+  extern __shared__ __align__(16) unsigned char cr_shared[];
+  const std::size_t b = blockDim.x, w = b + 2 * R, t = threadIdx.x, step = std::size_t(gridDim.x) * b;
+#pragma unroll U
+  for(std::size_t base = blockIdx.x * b; base < n; base += step) {
+    __syncthreads();  // every thread is done with the last tile before this one overwrites it
+    load(base, w, t, b, cr_shared);
+    __syncthreads();
+    if(base + t < n) body(base + t, base, w, cr_shared);
+  }
+}
+template<std::size_t R, unsigned U = 1, class L, class F, class S>
+inline void launch_staged(std::size_t n, L load, F body, S bytes, unsigned block = BLOCK,
+                          std::size_t per_lane = 1) noexcept {
+  static_assert(std::is_trivially_copyable_v<L> && std::is_trivially_copyable_v<F>, "lanes cross as arguments");
+  if(!n) return;
+  static const unsigned most = [] {
+    cudaFuncAttributes held{};
+    check(cudaFuncGetAttributes(&held, staged_lanes<R, U, L, F>));
+    return unsigned(held.maxThreadsPerBlock) / WARP * WARP;
+  }();
+  if(block > most) block = most;
+  const std::size_t shared = bytes(std::size_t(block) + 2 * R);
+  if(shared > 48 * 1024)  // past the default a kernel must ask for its dynamic shared memory
+    check(cudaFuncSetAttribute(staged_lanes<R, U, L, F>, cudaFuncAttributeMaxDynamicSharedMemorySize, int(shared)));
+  const std::size_t each = std::size_t(block) * per_lane;
+  const std::size_t g = (n + each - 1) / each;
+  staged_lanes<R, U><<<(g < MAX_GRID ? unsigned(g) : MAX_GRID), block, shared>>>(n, load, body);
+  check(cudaGetLastError());
+  check(cudaDeviceSynchronize());
+}
+
 // A linear ticket owning one stream: exactly one wait() consumes it, and dropping it unawaited
 // traps. Ordering between tickets is recorded on the device through an event, never by stopping
 // the host. The lane body needs no keep-alive: CUDA copies kernel arguments at launch.

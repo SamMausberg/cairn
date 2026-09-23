@@ -490,6 +490,10 @@
      "match": "\\bscan\\b(?=\\s+(?:[-+*&|^]|(?:min|max|add_wrap|mul_wrap)\\b)\\s*[A-Za-z_])"
     },
     {
+     "name": "keyword.other.plan.cairn",
+     "match": "\\bstage\\b(?=\\s+[0-9])"
+    },
+    {
      "name": "keyword.declaration.cairn",
      "match": "\\btest\\b(?=\\s+[A-Za-z_]\\w*\\s*\\{)"
     },

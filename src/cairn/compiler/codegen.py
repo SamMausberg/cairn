@@ -8,7 +8,7 @@ from typing import Any
 
 from ..verify.elision import audit
 from ..version import VERSION
-from . import chunks, fusion, rings
+from . import chunks, fusion, rings, staging
 from .builtins import SHARED, TABLE, WRAPPING
 from .checking import Checker
 from .expressions import COMPARISONS
@@ -71,6 +71,7 @@ class Emitter:
         self.elision = audit(p, keep_all=keep)
         self.lean = not keep
         self.scalar: dict[str, str] = {}  # a fused chain's scratch array -> the lane-local value that holds it
+        self.staged: dict[str, tuple[str, int]] = {}  # a staged array -> its block's tile, and the tile's reach
         self.fused: dict[str, list[dict[str, Any]]] = {}  # function -> the chains it runs as one region
 
     def put(self, s: str = ""):
@@ -226,6 +227,9 @@ class Emitter:
     def e_index(self, e: Expr) -> str:
         if e.args[0].tag == "name" and e.args[0].val in self.scalar:  # fusion keeps this element in the lane
             return self.scalar[e.args[0].val]
+        if e.args[0].tag == "name" and e.args[0].val in self.staged:  # read from the block's tile (staging.py)
+            tile, reach = self.staged[e.args[0].val]
+            return f"{tile}[({self.expr(e.args[1])}) - cr_base + {reach}]"
         data, count = self.pointer(e.args[0])
         if e.established:  # The checker showed the index is below the extent (facts.py).
             return f"{data}[{self.expr(e.args[1])}]"
@@ -588,6 +592,8 @@ class Emitter:
         lanes = self.lane(s, body or (lambda: self.block(s.body)))
         if s.vector and body is None:  # Each lane runs W indices over chunks when every pointer sits on a chunk.
             return chunks.lower(self, s, es[0], lanes, schedule, s.launch[2])
+        if s.stage and body is None:  # Each block loads its tiles, then its lanes read them (staging.py).
+            return staging.lower(self, s, es[0], lambda: self.block(s.body), schedule, s.launch[2])
         self.put(f"{entry}({es[0]}, {lanes}{''.join(f', {x}' for x in schedule)});")
 
     def folding(self, s: Stmt) -> tuple[str, str, str, str, str]:
