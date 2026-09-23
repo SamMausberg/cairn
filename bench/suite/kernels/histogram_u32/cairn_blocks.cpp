@@ -1,4 +1,4 @@
-// The second CAIRN arm, which the 1.4 addendum to the preregistration adds: every lane counts one
+// The second CAIRN arm, which the guards addendum to the preregistration adds: every lane counts one
 // block of 65536 inputs into its own 256 bins, then one thread merges the bins in block order. The
 // emitted function allocates and zeroes that scratch itself, so its cost is in this column.
 #include "case.hpp"

@@ -2,7 +2,7 @@
 """Count the guards the emitter writes, with and without the facts the checker established.
 
 Every program under examples/, the standard library and the preregistered bench kernels is compiled once;
-its C++ is emitted as it is, then again with every guard kept (`keep`), which is what the emitter of 1.3 wrote.
+its C++ is emitted as it is, then again with every guard kept (`keep`), which is what the emitter of 0.8.3 wrote.
 It also counts the call sites that reach a callee's lean body and the entry checks each of them no longer runs.
 Nothing runs, so this measures emitted code only: how many guards a program pays at runtime is a separate
 question, and so is what they cost.

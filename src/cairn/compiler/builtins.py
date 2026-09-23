@@ -1,7 +1,7 @@
 """Every builtin in one place: how it types, what it costs, and how it lowers.
 
 Each entry of TABLE pairs a rule `(checker, call, args, type_args, expected) -> Type` with a lowering
-`(emitter, call) -> C++`. Names in SOFT arrived in 1.0 and yield to a program's own function.
+`(emitter, call) -> C++`. Names in SOFT yield to a program's own function.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
 SOFT = {"take", "swap", "transfer", "wait", "collect", *machine.NAMES}
-MATH = {"sqrt", "floor", "ceil", "trunc", "abs", "to_bits"}  # 1.4: a program's own function of the name wins
+MATH = {"sqrt", "floor", "ceil", "trunc", "abs", "to_bits"}  # a program's own function of the name wins
 SOFT |= MATH | printing.NAMES | {"quantize", "quantize_stochastic", "from_bits", "assert", "assert_eq", "mma_unordered"}
 SOFT |= {"mma_load", "mma_store", "mma_get", "mma_set"}  # tensor-core fragments (fragments.py)
 SOFT |= cooperative.SHUFFLES  # 0.9: a program's own function of the name wins

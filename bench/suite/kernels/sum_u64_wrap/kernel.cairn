@@ -9,7 +9,7 @@
 // That arm is sequential by construction and is reported as such.
 //
 // sum_u64_atomic is a parallel region whose lanes each add their element into one relaxed Atomic,
-// the only parallel host reduction 1.3 offered. sum_u64_pool is the 1.4 form, `reduce add_wrap
+// the only parallel host reduction 0.8.3 offered. sum_u64_pool is the later form, `reduce add_wrap
 // parallel`, which folds blocks the count fixes on the lane pool and then folds their totals in
 // order (the addendum in bench/suite/PREREGISTRATION.md adds it as an arm).
 fn sum_u64_wrap(n:usize, x:ro<u64>[n]) -> u64 {

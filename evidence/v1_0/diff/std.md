@@ -1,6 +1,6 @@
-## What changed from `v1.3.0` to `13692b3e0333925b8f9fb2f2af2800a337360b05`
+## What changed from `v0.8.3` to `13692b3e0333925b8f9fb2f2af2800a337360b05`
 
-Compared by `cairn diff` (cairn-native/1.3.0): 60 identical-code, 21 identical-source, 1 smt-equivalent, 40 unknown, 129 added. A function whose code is identical, with everything it calls, is counted and not listed.
+Compared by `cairn diff` (cairn-native/0.8.3): 60 identical-code, 21 identical-source, 1 smt-equivalent, 40 unknown, 129 added. A function whose code is identical, with everything it calls, is counted and not listed.
 
 | function | class | evidence | compiler-established changes |
 |---|---|---|---|

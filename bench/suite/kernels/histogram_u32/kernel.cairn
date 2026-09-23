@@ -22,7 +22,7 @@ fn histogram_u32(n:usize, out:rw<u64>[256], x:ro<u32>[n]) {
   each i in n { let b = usize(x[i] & 255); out[b] = add_wrap(out[b], 1); }
 }
 
-// The 1.4 arm. A lane may own a block of what lanes write, so each lane counts one block of the input
+// The guards addendum's arm. A lane may own a block of what lanes write, so each lane counts one block of the input
 // into its own 256 bins of a scratch buffer, and one thread merges the bins in block order. The
 // scratch is visible: a buffer of 256 counters per block, zeroed and released in this function.
 const BLOCK:usize = 65536;

@@ -6,7 +6,7 @@
 // -DBENCH_GUARDED=1 for the guarded arm and -DBENCH_GUARDED=0 for the unguarded one; nothing else
 // about the two builds differs, so the pair prices the boundary and nothing else.
 //
-// -DBENCH_GUARDED=2 is the matched arm of the 1.4 addendum: it keeps exactly the categories named by
+// -DBENCH_GUARDED=2 is the matched arm of the guards addendum: it keeps exactly the categories named by
 // -DBENCH_KEEP_ENTRY, _ELEMENT, _ARITHMETIC and _CONVERSION, which bench/suite/harness.py sets to the
 // categories the emitted CAIRN kernel still guards once the checker's established sites are gone.
 //

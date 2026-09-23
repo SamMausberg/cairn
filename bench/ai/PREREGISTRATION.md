@@ -87,3 +87,5 @@ For each language: tasks solved per replicate and in total, the median and sum o
 ## Known weaknesses
 
 Ten small tasks, each a single file, with finite hidden tests. One model family, which also wrote the language, its documentation, these tasks, their oracles and their bug reports. The CAIRN starters carry a tokenizer the others do not need, and the CAIRN subjects are given documentation the others are not, which is the fair setting for a new language and still a difference. The subjects are audited from their transcripts, not isolated by the operating system. Only ThreadSanitizer, AddressSanitizer and UndefinedBehaviorSanitizer judge C++ and CAIRN, and Rust has no sanitizer here. Two replicates of ten tasks can show a large difference and cannot show a small one.
+
+After the runs, the version names and evidence paths in this file were changed to the release numbering (1.0.0, with the earlier milestones as 0.8.0 to 0.8.3). Nothing else changed; the text each run followed is in git at the commit its record names.

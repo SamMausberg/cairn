@@ -1,4 +1,4 @@
-// The third CAIRN arm: `reduce add_wrap parallel`, which the 1.4 addendum to the preregistration adds.
+// The third CAIRN arm: `reduce add_wrap parallel`, which the guards addendum to the preregistration adds.
 // The emitter writes cr::par::reduce: blocks of consecutive indices that the count alone fixes, each
 // folded in order on some lane of the pool, then the block totals folded in order on this thread.
 #include "case.hpp"

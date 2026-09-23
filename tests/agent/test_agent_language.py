@@ -1,4 +1,4 @@
-"""The agent layer over the 1.0 language: projection, packets, rule cards and guarded edits."""
+"""The agent layer over the language: projection, packets, rule cards and guarded edits."""
 
 from pathlib import Path
 

@@ -1,4 +1,4 @@
-"""CAIRN 1.0 breadth: generics, traits, owners, moves, linear values, cleanup, parts and text.
+"""Breadth: generics, traits, owners, moves, linear values, cleanup, parts and text.
 
 Every accepted construct is executed natively under both compilers; every rule has a rejection.
 """

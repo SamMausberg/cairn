@@ -32,7 +32,7 @@ The emitted C++ is identical. Every project, every `.cairn` file in the tree and
 
 ## The lane pool
 
-A region used to hand out chunks from one counter, so which lane ran which chunk changed from one region to the next. In the 1.4 suite, saxpy over a million floats ran 2.8 times slower than OpenMP's static schedule, which keeps each thread on one range. Now a region is cut into one home range for each lane it uses. Each home has its own counter. A lane claims from its own home first, then from what is left of the others. The thread that started the region takes every home, so a region still never waits for a worker to arrive.
+A region used to hand out chunks from one counter, so which lane ran which chunk changed from one region to the next. In the suite's second run, saxpy over a million floats ran 2.8 times slower than OpenMP's static schedule, which keeps each thread on one range. Now a region is cut into one home range for each lane it uses. Each home has its own counter. A lane claims from its own home first, then from what is left of the others. The thread that started the region takes every home, so a region still never waits for a worker to arrive.
 
 `proofs/Cairn/Region.lean` models this protocol, and its three theorems hold for it. For any cut into consecutive homes and any order a worker takes them in: every index runs exactly once (`runs_once`), no worker is inside when the region returns (`quiet_when_back`), and a region finishes with no new worker joining (`finishes`). They depend on no axiom beyond `propext` and `Quot.sound`. `tests/runtime/parallel_runtime.cpp` checks that the header's cut is the one the model assumes. `parallel_runtime.cpp` passes under ThreadSanitizer, and under AddressSanitizer with UndefinedBehaviorSanitizer, built by g++ and by clang++, at 2, 4, 16 and 64 lanes.
 
@@ -71,4 +71,4 @@ python3 bench/suite/harness.py --kernels saxpy_f32,mixed_u64,stencil_1d --out re
 python3 bench/suite/report.py --input results/bench_suite_homes/suite.json
 ```
 
-The first is the preregistered suite's sweep over the three region kernels. Its 1e6 row against OpenMP and oneTBB is the comparison the 1.4 record lost.
+The first is the preregistered suite's sweep over the three region kernels. Its 1e6 row against OpenMP and oneTBB is the comparison the second run lost.

@@ -1,14 +1,14 @@
 # Host parallel regions: threads per statement, then a lane pool
 
 `benchmark.json` holds two runs of `bench/host_regions.cpp` on the same machine, with the same
-flags, minutes apart. `per_statement_threads` builds it against the CAIRN 1.1 runtime headers
+flags, minutes apart. `per_statement_threads` builds it against the CAIRN 0.8.1 runtime headers
 (commit `4ff485a`), where every `parallel` statement creates and joins its own threads.
 `lane_pool` builds it against this branch, where the first region of a process creates the lanes
 and every later region reuses them. Reproduce either with:
 
 ```
 python3 bench/host_regions.py --label lane_pool
-python3 bench/host_regions.py --runtime <dir of 1.1 headers> --label per_statement_threads
+python3 bench/host_regions.py --runtime <dir of 0.8.1 headers> --label per_statement_threads
 ```
 
 ## What was measured
@@ -96,6 +96,6 @@ within this machine's run-to-run spread at three repetitions.
   wakes only the lanes a region can use rather than all of them.
 - **Not the device.** Host regions only. `evidence/v0_8_0/gpu/benchmark.json` measures CUDA lanes;
   nothing here was re-measured against them, and that file's `host_parallel_ms` column is the
-  1.1 runtime and was deliberately left as it was recorded.
+  0.8.1 runtime and was deliberately left as it was recorded.
 - **Not a statistical study.** Medians of a few runs on one afternoon, with no confidence
   intervals. Rows within about a tenth of each other should be read as equal.

@@ -1,4 +1,4 @@
-"""The adversarial review of the forms added after 1.3: what it tried, refused with the code it must keep.
+"""The adversarial review of the forms added after 0.8.3: what it tried, refused with the code it must keep.
 
 Each program below was written to break a rule with one of the new forms (bare variants, one-statement arms,
 compound assignment, call statements and `let _`, element loops), or through what they meet: guard elision and

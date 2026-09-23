@@ -122,7 +122,7 @@ def test_payload_restrictions(decl):
 
 
 def test_sums_compose_with_records_and_views():
-    """1.0: payloads are any value type and sums are ordinary array elements."""
+    """Payloads are any value type and sums are ordinary array elements."""
     source = (
         "struct S {x:u64;} enum R {Good(S); Bad;} "
         "fn f(n:usize,x:ro<R>[n])->u64 { match x[0] { R.Good(s)=>{return s.x;} R.Bad=>{return 0;} } }"

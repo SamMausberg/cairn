@@ -4,7 +4,7 @@ The first two sections count guard calls in emitted C++ text, which says neither
 
 ## Every program as it stands
 
-`guard_counts.json` was taken at commit 816afbd with `python3 bench/cpu/guard_counts.py --out evidence/v1_0/lowering/guard_counts.json`. It covers the 23 programs that compile on this host: every example project and single-file example, and the eight preregistered bench kernels. Each is emitted once as the compiler emits it, where a guard is left out only where `verify/elision.py` accepted the checker's proof, and once with `keep_guards`, which writes every guard as the 1.3 emitter did.
+`guard_counts.json` was taken at commit 816afbd with `python3 bench/cpu/guard_counts.py --out evidence/v1_0/lowering/guard_counts.json`. It covers the 23 programs that compile on this host: every example project and single-file example, and the eight preregistered bench kernels. Each is emitted once as the compiler emits it, where a guard is left out only where `verify/elision.py` accepted the checker's proof, and once with `keep_guards`, which writes every guard as the 0.8.3 emitter did.
 
 | guard | every guard kept | as emitted |
 |---|---|---|

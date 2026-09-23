@@ -1,8 +1,8 @@
-# CAIRN 1.3 run notes
+# CAIRN 0.8.3 run notes
 
 The first record taken on x86-64 and on a consumer GPU: Linux 6.18 under WSL2, sixteen hardware threads, g++ 13.3.0, clang++ 21.1.8, CUDA 13.2 with an NVIDIA GeForce RTX 5070 Ti (compute capability 12.0), libz3, oneTBB, Lean 4.34.0 through elan. 2026-09-22. Every earlier record (`v0_8_0` to `v0_8_2`) was taken on a rented GH200, AArch64. `summary.json` is written by `tools/release/collect_evidence.py --release v0_8_3` on a committed tree; `lean/` by `tools/release/collect_lean_evidence.py`, which rebuilds `proofs/` from scratch; `bench/` and `gpu/` by the harnesses named below.
 
-## What 1.3 added, and how each was checked here
+## What 0.8.3 added, and how each was checked here
 
 - Field-level leases. Two tasks may take two fields of one record; the same field twice, a field read under a whole-record lease and a new value landing in a lent cell are rejected by name. ThreadSanitizer runs under both compilers, and the Lean calculus reclassified its regression with `sameFieldToTwoTasks_races` as the witness.
 - Declared field extents, in written records and in records a recipe generates. `E-EXTENT` and `E-EXTENT-FIELD` tables, Address and Leak sanitizer runs under both compilers, a receipt test that the whole-column call carries no part guard, and `examples/apps/analytics` rewritten to pass its columns whole on both the host and the device configuration, agreeing bit for bit.

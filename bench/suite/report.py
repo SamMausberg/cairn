@@ -21,12 +21,12 @@ DEFAULT = ROOT / "results/bench_suite/suite.json"
 
 # The preregistered threshold. A ratio above one favours CAIRN, as it does in bench/host/paired.py.
 WIN_RATIO = 1.25
-# The arms the 1.4 addendum adds, which may also be divided into a baseline they check at least as much as.
+# The arms the guards addendum adds, which may also be divided into a baseline they check at least as much as.
 ADDENDUM_ARMS = {"cairn_pool", "cairn_blocks"}
 
 
 def column(row: dict) -> str:
-    guard = row.get("boundary") or ("guarded" if row["guarded"] else "unguarded")  # 1.3 records have no boundary
+    guard = row.get("boundary") or ("guarded" if row["guarded"] else "unguarded")  # 0.8.3 records have no boundary
     return f"{row['arm']}/{guard}/{row['grain_row']}"
 
 
@@ -118,7 +118,7 @@ def kernel_report(name: str, record: dict, out: list[str]) -> None:
             lines.append(line)
         out.append(table(lines, ["n", *columns]))
 
-    # One table per CAIRN arm, each under the equality rule. An arm the 1.4 addendum adds may
+    # One table per CAIRN arm, each under the equality rule. An arm the guards addendum adds may
     # also be divided into a baseline it checks at least as much as in every category; such a
     # row says `cairn checks more` beside its verdict, and a win there holds with the baseline's checks added.
     by_arm = safety.get("cairn_boundaries_by_arm") or {"cairn": safety["cairn_boundaries"]}

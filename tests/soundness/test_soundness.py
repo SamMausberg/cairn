@@ -1,4 +1,4 @@
-"""Regression tests for every hole an adversarial audit found in the 1.0 checker.
+"""Regression tests for every hole an adversarial audit found in the 0.8.0 checker.
 
 Each program below was once accepted and then shown unsound under a sanitizer, shown to
 under-report effects, or shown to emit invalid C++. They must stay rejected (or fixed).
@@ -412,7 +412,7 @@ REJECTED = {
         "fn main() -> i32 { let n:usize = 4; buffer o:u64[n] = zeroed;\n"
         "  let r = once(|x:u64| -> u64 { parallel i in n { return 1; } return 0; }); return 0; }",
     ),
-    # Round five: what 1.2 added -----------------------------------------------------------------
+    # Round five: what 0.8.2 added -----------------------------------------------------------------
     "an extent the guard reads once and the callee reads again (overflow past the guard)": (
         "E-CALL-SHAPE",
         SUM + "fn main() -> i32 { let mut b = Buf[u64](4); let c = Atomic[usize](3);\n"
@@ -470,7 +470,7 @@ REJECTED = {
         FILL + "fn two() -> usize = 2;\n"
         "fn main() -> i32 { let mut b = Buf[u64](4); let t = spawn fill(two(), b[0..2], 1); wait(t); return 0; }",
     ),
-    # Round six: what 1.3 added -------------------------------------------------------------------
+    # Round six: what 0.8.3 added -------------------------------------------------------------------
     "a ceiling that hides the release of an owner the function was handed": (
         "E-EFFECT-CEILING",
         "fn sink(b:Buf[u64]) pure {}\n",

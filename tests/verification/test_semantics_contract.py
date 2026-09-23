@@ -92,7 +92,7 @@ def test_precondition_cannot_inject_a_declaration():
 
 
 def test_equivalence_sees_through_generics_traits_modules_families_and_constants():
-    """1.0: the scalar model runs on the typed, linked, monomorphized tree, so resolved calls are ordinary calls."""
+    """The scalar model runs on the typed, linked, monomorphized tree, so resolved calls are ordinary calls."""
     reference = "fn f(x:u64, y:u64) -> u64 { if x < y { return y; } return x; }"
     candidate = (
         "import std.core (Ord);\nconst BIAS:u64 = 0;\n"

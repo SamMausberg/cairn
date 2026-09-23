@@ -1,4 +1,4 @@
-# An adversarial review of what was added after 1.3.0
+# An adversarial review of what was added after 0.8.3
 
 On 2026-09-22 one reviewer tried to break the soundness of every form and tool added since `ed5a179`, before a public release. [SECURITY.md](../../../SECURITY.md) defines a soundness bug. The attacks were written as CAIRN programs and edit-host requests, checked by the compiler of main at `be68a40` and after, and every accepted program was built with the runtime headers and run under AddressSanitizer with UndefinedBehaviorSanitizer or under ThreadSanitizer, with clang++ 21.1.8 and g++ 13.3. Nothing ran on a device.
 
@@ -16,7 +16,7 @@ Two statements in the documentation were not exact, and now are. A host lane may
 
 ## What held
 
-`tests/soundness/test_review_1_4.py` keeps 54 of the attacks that were correctly refused, each with the code it must keep, and 12 that compile and must stop at a guard or run race free, each under both compilers. What was tried, by target:
+`tests/soundness/test_review_forms.py` keeps 54 of the attacks that were correctly refused, each with the code it must keep, and 12 that compile and must stop at a guard or run race free, each under both compilers. What was tried, by target:
 
 | target | tried | outcome |
 |---|---|---|
@@ -38,11 +38,11 @@ A review finds what its author thought to try, and one reviewer wrote every atta
 
 # A second review, of what landed after the first
 
-Later on 2026-09-22 a second reviewer attacked what landed after the first review, and what it left out. The targets were `cairn diff`, the reused task threads and the execution context's host mock, the C header and the ctypes binding, the language server's project-wide rename, `cairn tune --write` and plan edits, device plan items, `cairn predict` and `cairn shot`, `std.zlib`, `std.image` and `std.draw` at edge sizes, `quantize` and `derive grad` outside their own tests, and the value model on the new forms. Accepted programs were built with the runtime headers and run under AddressSanitizer with UndefinedBehaviorSanitizer or under ThreadSanitizer with clang++ 21.1.8 and g++ 13.3, and nothing ran on a device. `tests/soundness/test_review_1_4b.py` keeps every fix's regression test, and the attacks that held or were refused.
+Later on 2026-09-22 a second reviewer attacked what landed after the first review, and what it left out. The targets were `cairn diff`, the reused task threads and the execution context's host mock, the C header and the ctypes binding, the language server's project-wide rename, `cairn tune --write` and plan edits, device plan items, `cairn predict` and `cairn shot`, `std.zlib`, `std.image` and `std.draw` at edge sizes, `quantize` and `derive grad` outside their own tests, and the value model on the new forms. Accepted programs were built with the runtime headers and run under AddressSanitizer with UndefinedBehaviorSanitizer or under ThreadSanitizer with clang++ 21.1.8 and g++ 13.3, and nothing ran on a device. `tests/soundness/test_review_tools.py` keeps every fix's regression test, and the attacks that held or were refused.
 
 ## What the second review found and fixed
 
-Six defects were found: one lets a crafted repository write outside `cairn diff`'s scratch directory, three let a tool report or write something false, and two made a correct use fail. Each is fixed in the file that owns the rule, and its regression test is in `test_review_1_4b.py`.
+Six defects were found: one lets a crafted repository write outside `cairn diff`'s scratch directory, three let a tool report or write something false, and two made a correct use fail. Each is fixed in the file that owns the rule, and its regression test is in `test_review_tools.py`.
 
 | defect | what went wrong | fix |
 |---|---|---|

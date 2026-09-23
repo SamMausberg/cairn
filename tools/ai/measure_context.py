@@ -5,7 +5,7 @@ No model runs. `tasks` replays one authored transcript per function of five real
 first reply with a type error and its diagnostic, a request to read a callee's body (focused scope only, where
 the body is not already shown), and the correct reply with its admission. It counts every message once, and
 also as a model reads it, re-reading the conversation so far on every turn. Five settings are compared: the
-component packet over cairn.edit/1 (the 1.3 protocol), and component or focused packets over cairn.edit/2,
+component packet over cairn.edit/1 (the 0.8.3 protocol), and component or focused packets over cairn.edit/2,
 cold (a new host per task) or warm (one host per program, so cards and boundaries go once).
 
 `cards` keeps the 0.6 measurement: the same component packet with only the card texts swapped for 0.5's.

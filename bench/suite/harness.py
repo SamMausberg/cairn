@@ -86,7 +86,7 @@ RECEIPT_BOUNDARY = {
 # A guard that fails ends in cr::trap, which g++ inlines to a call of abort and clang++ leaves as a
 # call of cr::trap itself. Either relocation in a kernel's own section proves the boundary is there.
 GUARD_FAILURE = ("abort", "cr4trapEv")
-# BENCH_GUARDED as a word: 2 is the matched build the 1.4 addendum to the preregistration adds.
+# BENCH_GUARDED as a word: 2 is the matched build the guards addendum to the preregistration adds.
 BOUNDARIES = {1: "guarded", 0: "unguarded", 2: "matched"}
 
 BOUNDARY = "One machine, one lane count, two compilers. Not a tuned-kernel claim, and not another host's numbers."
@@ -372,7 +372,7 @@ class Harness:
 
     def jobs(self, kernel: str, work: Path, libraries: dict, kept: dict[str, int]) -> list[dict]:
         """Every arm under every compiler: a baseline guarded, unguarded, and matched to the categories of
-        boundary the CAIRN arm still carries (`kept`), which is the 1.4 addendum's third build."""
+        boundary the CAIRN arm still carries (`kept`), which is the guards addendum's third build."""
         spec = KERNELS[kernel]
         matched = [f"-DBENCH_KEEP_{category.upper()}={int(kept[category] > 0)}" for category in SITE_PATTERNS]
         out = []
