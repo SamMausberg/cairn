@@ -15,6 +15,7 @@ other answer refuses the rename whole, with the reason, and nothing is applied i
 
 from __future__ import annotations
 
+import json
 import re
 from contextlib import suppress
 from dataclasses import dataclass
@@ -26,7 +27,7 @@ from ..agent.projection import local
 from ..compiler.builtins import TABLE
 from ..compiler.cairnc import Diagnostic, compile_source
 from ..compiler.syntax import IDENT, RESERVED
-from ..projects.project import Project, ProjectError, load_project
+from ..projects.project import Project, ProjectError, contained_file, load_project
 from .document import (
     Document,
     Item,
@@ -279,7 +280,29 @@ def rename(ws: Workspace, uri: str, offset: int, fresh: str) -> dict:
         if where is None:
             raise Refused("A name to rename lies outside the project's files.")
         edits.setdefault(where["uri"], []).append({"range": where["range"], "newText": fresh})
+    for uri_, contract in contracts(ws.project, old, new):  # a task contract names its function by symbol
+        edits.setdefault(uri_, []).append(contract)
     return {"changes": edits}
+
+
+def contracts(project: Project, old: str, new: str) -> list[tuple[str, dict]]:
+    """The edit that renames `old` in each task contract the manifest lists whose symbol it is, so a rename never
+    leaves `cairn test` a contract naming a function that no longer exists."""
+    found = []
+    for listed in project.contracts if old else ():
+        path = contained_file(project.root, listed, ".json")
+        text = path.read_text(encoding="utf-8")
+        named = None
+        with suppress(ValueError, AttributeError):  # a file that is no contract is `cairn test`'s to refuse
+            named = json.loads(text).get("symbol")
+        if named != old:
+            continue
+        at = re.search(rf'"symbol"\s*:\s*"({re.escape(old)})"', text)
+        if at is None:
+            raise Refused(f"{listed} names {old} in a form this rename cannot rewrite; rename it there first.")
+        span = Document(text, analyse=False).span(at.start(1), at.end(1))
+        found.append((path.resolve().as_uri(), {"range": span, "newText": new}))
+    return found
 
 
 def owner(ws: Workspace, offset: int) -> str:

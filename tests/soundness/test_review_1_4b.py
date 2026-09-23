@@ -11,9 +11,11 @@ import tempfile
 
 import pytest
 
-from cairn.cli import main
+from cairn.cli import create_project, main
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.header import binding
+from cairn.editor.document import Document
+from cairn.editor.workspace import rename, workspace
 from cairn.perf.tune import write_plan
 from cairn.projects.build import build
 from cairn.projects.project import ProjectError, load_project
@@ -258,3 +260,27 @@ def test_a_binding_of_one_version_refuses_to_load_a_library_of_another(tmp_path)
     spec.loader.exec_module(module)
     with pytest.raises(ImportError, match="not the version of lib"):
         module.load(f"{new}/liblib.so")
+
+
+# --- Fixed: a rename carries the task contracts that name the function ----------------------------------------------
+
+
+def test_a_rename_rewrites_the_task_contract_that_names_the_function(tmp_path):
+    """The rename checked that the program changed nothing but a name, and left `tests/average.json` naming
+    `average`: every file it edited compiled, and `cairn test` then refused the contract (invalid-contract)."""
+    root = tmp_path / "demo"
+    create_project(root)
+    math = root / "src/math.cairn"
+    text = math.read_text()
+    edit = rename(workspace(math.as_uri(), {}), math.as_uri(), text.index("fn average") + 3, "midpoint")["changes"]
+    contract = (root / "tests/average.json").resolve().as_uri()
+    assert contract in edit and len(edit) == 3  # math.cairn, main.cairn and the contract
+    for uri, edits in edit.items():
+        path = root / uri.split("/demo/", 1)[1]
+        doc = Document(path.read_text(), analyse=False)
+        out = doc.text
+        for e in sorted(edits, key=lambda e: -doc.offset(e["range"]["start"])):
+            out = out[: doc.offset(e["range"]["start"])] + e["newText"] + out[doc.offset(e["range"]["end"]) :]
+        path.write_text(out)
+    assert '"symbol": "midpoint"' in (root / "tests/average.json").read_text()
+    assert main(["test", str(root), "--format", "json"]) == 0
