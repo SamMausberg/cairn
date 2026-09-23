@@ -471,4 +471,4 @@ The device half of the language (placement types, `kernel fn`, device `reduce` a
 
 ## Where to go next
 
-[language.md](language.md), [abstractions.md](abstractions.md) and [concurrency.md](concurrency.md) are the reference: every rule with a program that is accepted and one that is refused. [library.md](library.md) is the standard library, [examples.md](examples.md) has real programs from a storage engine to a bare-metal image, and [verification.md](verification.md) says which claims are proved, which are SMT-checked and which are only tested.
+[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md) and [concurrency.md](concurrency.md) are the reference: every rule with a program that is accepted and one that is refused. [library.md](library.md) is the standard library, [examples.md](examples.md) has real programs from a storage engine to a bare-metal image, and [verification.md](verification.md) says which claims are proved, which are SMT-checked and which are only tested.

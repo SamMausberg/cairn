@@ -5,7 +5,8 @@ The [README](../README.md) says what CAIRN is and how to install it. Read the re
 | Document | What it gives you |
 | --- | --- |
 | [guide.md](guide.md) | From a fresh checkout to a project that builds, runs and refuses a wrong edit, then twelve complete programs, one per idea. |
-| [language.md](language.md) | The reference for values, control flow, records, sums, memory, ownership and effects. Every rule has a program that is accepted and one that is refused with its diagnostic code. |
+| [language.md](language.md) | The reference for values, control flow, records, sums, constants and tests. Every rule has a program that is accepted and one that is refused with its diagnostic code. |
+| [memory.md](memory.md) | Views and parts, owners and moves, linear values, layout, effect rows, operand order and the foreign boundary, in the same form. |
 | [abstractions.md](abstractions.md) | Generics, bounds, traits, `dyn`, closures, modules, projects, dependencies and recipes. |
 | [concurrency.md](concurrency.md) | Tasks and leases, task groups collected in completion order, atomics and mutexes, parallel regions, `reduce` and `compact`, placement and queued device work. |
 | [library.md](library.md) | The standard library, module by module, with a program for each. [std_api.md](std_api.md) indexes the generated signature and effect-row reference, one page per module under `std/`. |

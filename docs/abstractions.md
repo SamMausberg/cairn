@@ -1,6 +1,6 @@
 # Generics, traits, closures, modules and recipes
 
-The ways a program abstracts: type and natural parameters with bounds, traits with static and dynamic dispatch, function values and closures, modules and vendored projects, and recipes that generate code as library code. [language.md](language.md) covers values, memory and effects; [concurrency.md](concurrency.md) covers tasks, lanes and devices.
+The ways a program abstracts: type and natural parameters with bounds, traits with static and dynamic dispatch, function values and closures, modules and vendored projects, and recipes that generate code as library code. [language.md](language.md) covers values and control flow, [memory.md](memory.md) memory, ownership and effects; [concurrency.md](concurrency.md) covers tasks, lanes and devices.
 
 ## Generics
 
