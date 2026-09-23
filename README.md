@@ -11,7 +11,7 @@ CAIRN is a systems programming language for code that AI agents write and people
 - `cairn diff OLD NEW` says, function by function, whether a change compiled to identical code, is SMT-equivalent, or changed behaviour, with an input that shows the difference.
 - `cairn predict` prices a function on this machine without running it, and `cairn shot` returns the frames a UI drew as PNGs.
 
-These are properties of the design, checked by the tests and proofs listed under [limitations](#limitations-and-what-you-trust). Whether they help a model finish more tasks than it does in C++ or Rust is a separate question, and no result on it is claimed yet.
+These are properties of the design, checked by the tests and proofs listed under [limitations](#limitations-and-what-you-trust). Whether they help a model finish more tasks than in C++ or Rust is a separate question, measured by a preregistered equal-budget benchmark in [bench/ai](bench/ai/PREREGISTRATION.md). Its pilot gave two tasks to fresh subjects in each language: every subject solved its task, and the CAIRN subjects spent about seven times the tokens of the C++ ones. The counted run is in progress, and no claim rests on the pilot.
 
 ## Example
 
@@ -133,7 +133,7 @@ What has not been validated:
 - Most of the GPU side has not run on a GPU. Device kernels, transfers and lanes ran on one RTX 5070 Ti in 1.3 (`evidence/v1_3/gpu`). Everything 1.4 added for the device (vector loads, shared-memory staging, device plans, `mma_unordered`, the device `scan`, the execution context) compiles for sm_120 and is checked on the host only. The device half of `cairn predict` is NVIDIA's published specification, not a measurement.
 - Host performance was measured on one 16-thread x86-64 machine against plain C++, OpenMP and oneTBB at equal guards. Nothing is claimed against tuned C++ or CUDA.
 - SMT equivalence covers a fragment. An owner inside a record or an array, concurrency, device memory, the foreign boundary, storage floats and loops it cannot bound are `unknown`, and `unknown` is never reported as success.
-- The AI evidence is one preregistered pilot with no comparison arm: nine fresh subjects of one model family solved nine of nine small tasks (`evidence/v1_1/ai_pilot`). No comparison with C++ or Rust has run.
+- The AI evidence is small. The equal-budget comparison with C++ and Rust has run only its pilot: six subjects, two tasks, one model (`evidence/v1_5/ai_benchmark/tables_pilot.md`). An earlier pilot had no comparison arm (`evidence/v1_1/ai_pilot`).
 - Linux only. There is no package registry and no fetching; the package is not on PyPI. The bare-metal AArch64 target runs only under QEMU on an AArch64 host.
 
 ## What is established
