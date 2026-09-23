@@ -582,7 +582,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if a.command == "tune":
             from .perf import report as priced
-            from .perf.plan_source import write_plan
+            from .perf.plan_source import KEEP, write_plan
             from .perf.profile import Profile
             from .perf.tune import Budget, tune
             from .perf.tune import delta as tune_delta
@@ -606,7 +606,8 @@ def main(argv: list[str] | None = None) -> int:
             answer = tune(project.source, a.symbol[0], priced.parse_sizes(a.at), supplied, arch, a.measure, a.cxx,
                           a.device, device, budget, kept)  # fmt: skip
             if a.write:  # Only the plan line changes, in the file that declares the function, and only if it checks.
-                answer["written"] = write_plan(a.path, a.symbol[0], answer["chosen"])
+                use = answer["chosen"].get("use") if "implementations" in answer else KEEP  # the reference: none
+                answer["written"] = write_plan(a.path, a.symbol[0], answer["chosen"], use)
             earlier = json.loads(read_text(a.since, 16_000_000)) if a.since else None
             if earlier:
                 report(tune_delta(earlier, answer))

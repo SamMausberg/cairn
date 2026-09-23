@@ -135,13 +135,14 @@ def placed(source: str, symbol: str, plan: Plan) -> str:
     return Placement(source, symbol).apply(plan)
 
 
-def write_plan(manifest: Any, symbol: str, chosen: dict[str, Any]) -> str:
+def write_plan(manifest: Any, symbol: str, chosen: dict[str, Any], use: Any = KEEP) -> str:
     """Write `chosen` as `symbol`'s plan into the files of the project, and return the path of the file that
     declares the function, where the plan is written.
 
     The plans the checker resolves to the function are removed from whichever file holds them, and the new one is
-    written after the declaration under the name its own module gives it. The files are written only when the whole
-    project still checks with every edit in place, and never a vendored file."""
+    written after the declaration under the name its own module gives it. Unless `use` is KEEP, the selection of an
+    implementation is replaced the same way: by `plan f use g;` for `use` g, or by none for None. The files are
+    written only when the whole project still checks with every edit in place, and never a vendored file."""
     from ..compiler.cairnc import compile_source
     from ..projects.project import ProjectError, contained_file, load_project
 
@@ -156,7 +157,7 @@ def write_plan(manifest: Any, symbol: str, chosen: dict[str, Any]) -> str:
         raise ProjectError(nowhere)
     starts = [0, *(i + 1 for i, ch in enumerate(project.source) if ch == "\n")]
     files: dict[str, tuple[Path, int, str]] = {}  # unit path -> (file, where it starts in the source, its text)
-    for edit in where.edits(written(chosen)):
+    for edit in where.edits(written(chosen), use):
         owner = project.unit_at(project.source.count("\n", 0, edit.start) + 1)
         if owner is None or owner.path in project.vendored_units:
             raise ProjectError(f"A plan of {symbol} is written outside this project's own files; nothing was written.")

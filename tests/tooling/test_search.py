@@ -194,6 +194,27 @@ def test_an_implementation_is_searched_and_chosen_only_while_its_validation_hold
     assert isinstance(next(r for r in moved["candidates"] if r.get("use") == "total_by4")["validated"], str)
 
 
+@pytest.mark.skipif(not shutil.which("clang++"), reason="validating an implementation runs native builds")
+def test_the_command_writes_the_selection_of_the_validated_implementation_it_chose(tmp_path, capsys):
+    from cairn.agent.implementations import PROTOCOL, ImplementationHost
+
+    total = TOTAL.replace("-> u64 {", "-> u64 effects(pure, par:host) {", 1)
+    lanes = ("fn total_lanes(n:usize, xs:ro<u64>[n]) -> u64 implements total when n % 4 == 0 {\n"
+             "  let s = reduce + parallel i in n yield xs[i];\n  return s;\n}")  # fmt: skip
+    host = ImplementationHost(records=tmp_path / "history")
+    host.open(total, "total", {"tolerance": {"absolute": 0.0, "relative": 0.0}, "domain": {"largest_extent": 48}})
+    assert host.respond({"protocol": PROTOCOL, "handle": "i1", "kind": "submit", "source": lanes})["status"] == (
+        "validated")  # fmt: skip
+    source = tmp_path / "total.cairn"
+    source.write_text(host.source("i1"))
+    ask = ["tune", str(source), "--symbol", "total", "--at", "n=1e7", "--history", str(tmp_path / "history")]
+    assert main([*ask, "--write", "--format", "json"]) == 0
+    answer = json.loads(capsys.readouterr().out)
+    assert answer["chosen"]["use"] == "total_lanes" and answer["chosen"]["validated"]["evidence"] == "finite-tested"
+    assert "plan total use total_lanes;" in source.read_text()
+    compile_program(source.read_text())
+
+
 def test_a_person_reads_the_space_the_best_few_and_the_budget(tmp_path, capsys):
     source = tmp_path / "spread.cairn"
     source.write_text(MIX)
