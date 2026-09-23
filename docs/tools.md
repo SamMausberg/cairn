@@ -1,10 +1,10 @@
 # Tools and targets
 
-Every tool here ships with the compiler and needs no Python package outside the standard library. None of them changes what the compiler accepts. `cairn COMMAND --help` lists every option.
+Every tool here ships with the compiler, needs no Python package outside the standard library, and changes nothing the compiler accepts. `cairn COMMAND --help` lists every option.
 
 ## Output for people and for programs
 
-At a terminal, `cairn` prints for a person: a refusal names its code and position and underlines the token, and `run` hands the terminal to the program. Piped, every command prints the JSON record that scripts, tests and agents read. `--format human|json` or `CAIRN_FORMAT` chooses, and `NO_COLOR` turns colour off. The exit status and the record are the same either way.
+At a terminal, `cairn` prints for a person, as below, and `run` hands the terminal to the program. Piped, every command prints the JSON record scripts and agents read. `--format human|json` or `CAIRN_FORMAT` chooses, `NO_COLOR` turns colour off, and the exit status and the record do not change.
 
 ```text
 error[E-LEASED]: data is lent to left until wait(left).
@@ -23,7 +23,7 @@ cairn check demo --watch            # check again each time a file the project r
 source <(cairn completions bash)    # or zsh; put the script on $fpath as _cairn to keep it
 ```
 
-`--watch` checks again whenever the manifest or a source it lists changes, polling four times a second. Piped or with `--format json`, each answer is one JSON record per line (JSON Lines), which is what an editor or an agent reads. A manifest that is broken when the watch starts is watched until it is fixed. The completion scripts are generated from the command line's own parser, so they offer every command, option and choice and nothing else.
+`--watch` polls the manifest and its sources four times a second, and watches a manifest that is broken at the start until it is fixed. Piped or with `--format json`, each answer is one JSON Lines record. The completion scripts are generated from the command line's own parser, so they offer every command, option and choice and nothing else.
 
 ## cairn fmt
 
@@ -54,9 +54,9 @@ $ cairn fmt --diff sloppy.cairn
  }
 ```
 
-The layout is two-space indentation, one statement per line, `key:Type` with no space after the colon, and lines wrapped at 100 columns. A block written on one line stays on one line if it fits, a block written over several lines is never collapsed, every comment stays where it was, and runs of blank lines collapse to one.
+The layout is two-space indentation, one statement per line, `key:Type`, and lines wrapped at 100 columns. A one-line block stays on one line if it fits, a block over several lines is never collapsed, every comment stays where it was, and runs of blank lines collapse to one.
 
-The formatter re-lexes its own output and compares the tokens and comments with the input. If either differs, or the input does not lex, the file is left alone and listed under `not_formatted` with the reason, and the exit code is 1:
+The formatter re-lexes its output and compares tokens and comments with the input. If either differs, or the input does not lex, the file is left alone and listed under `not_formatted` with the reason, and the exit code is 1:
 
 ```json
 {
@@ -71,7 +71,7 @@ Formatting is a fixed point, and `cairn.editor.formatting.format_source(text)` i
 
 ## cairn check --generics
 
-`--generics` also checks each generic function once against its bounds, and fails if one needs more than they promise, so misuse is reported at the call rather than at the instance:
+`--generics` also checks each generic function once against its bounds, as [abstractions.md](abstractions.md#certifying-a-template) describes:
 
 ```json
 {"status": "typed", "functions": 159, "formal_status": "not-verified",
@@ -79,7 +79,7 @@ Formatting is a fixed point, and `cairn.editor.formatting.format_source(text)` i
               "analytics.query.map_par": "ok", "analytics.query.map_loop": "ok"}}
 ```
 
-A template that reaches past its bounds is named with what it needed, and the command exits 1. `fn widest[T:affine](a:ro<T>, b:ro<T>) -> bool = less(a, b);` compares values of a type that promised only to be affine:
+A template that needs more than its bounds promise is named with what it needed, and the command exits 1. `fn widest[T:affine](a:ro<T>, b:ro<T>) -> bool = less(a, b);` compares values that promised only to be affine:
 
 ```json
 {"generics": {"ranking.widest": "E-TRAIT-IMPL: ?ranking.widest.T does not implement std.core.Ord."}}
@@ -94,7 +94,7 @@ cairn test demo --test app.sums    # the one test block of exactly that name, an
 cairn test demo --jobs 4 --timeout 10
 ```
 
-`cairn test` builds one executable holding every selected [test block](language.md#tests-and-assert) and runs each test in its own process, several at a time. A test passes only when its process exits 0: a failed `assert` or guard, a signal or a timeout fails that test alone, whatever it printed. The processes run under the limits `cairn run` applies, which stop runaway programs and are not a sandbox. The manifest's JSON contracts run beside the blocks, and a run that finds no test at all fails.
+`cairn test` builds one executable holding every selected [test block](language.md#tests-and-assert) and runs each test in its own process, several at a time, under the limits `cairn run` applies, which are not a sandbox. A test passes only when its process exits 0, so an assert, a guard, a signal or a timeout fails that test alone, whatever it printed. The manifest's JSON contracts run beside the blocks, and a run that finds no test fails.
 
 ```text
 tests-not-passed: 1 of 3 tests failed, 1 contract, 81 cases
@@ -110,11 +110,11 @@ cairn validate examples/implementations --symbol prefix_by4          # against t
 cairn validate app --symbol total_lanes --policy policy.json         # tolerance, domain, budget, seed, probes
 ```
 
-`cairn validate` tests one [implementation](abstractions.md#implementations) against its reference on inputs generated from the contract the compiler already knows: the signature, which `usize` parameters are extents, the `when`, the literal tiles the body indexes by (`4 * k` gives 4), the plan items of the implementation (vector width, stage, block, grain) and the lane pool's cutoff where it runs host lanes. Extents come at each tile minus one, the tile, plus one, a partial second tile, zero, one and the largest the domain admits; views come zeroed, all ones, ascending, all at their type's largest value, alternating and random, and once placed one element off an aligned allocation; scalars come at their type's edges. The same seed gives the same cases.
+`cairn validate` tests one [implementation](abstractions.md#implementations) against its reference on inputs generated from what the compiler already knows: the signature, which `usize` parameters are extents, the `when`, the literal tiles the body indexes by (`4 * k` gives 4), the implementation's plan items and, for host lanes, the pool's cutoff. Extents come at each tile minus one, the tile, plus one, a partial second tile, zero, one and the domain's largest; views come zeroed, all ones, ascending, at their type's largest value, alternating, random, and once one element off an aligned allocation; scalars come at their type's edges. The same seed gives the same cases.
 
-Each case runs the reference, the reference with `plan f use g;` (the dispatch, on every input) and, where its condition holds, the implementation itself. Every call runs in a process of its own, so a trap is that call's outcome: two traps agree, and results agree bit for bit, or within the policy's tolerance for floats. The reference is an independent algorithm, but both are compiled by the same compiler, so a pass is finite testing on the cases that ran, never proof, and the record says so. An implementation that no case ran is `unknown`.
+Each case runs the reference, the reference under `plan f use g;` (the dispatch, on every input) and, where the condition holds, the implementation, each call in a process of its own. Two traps agree, and results agree bit for bit, or within the policy's tolerance for floats. A pass is [finite testing](verification.md#validating-an-implementation) on the cases that ran, never proof, and an implementation no case ran is `unknown`.
 
-A failing case is shrunk while it still fails: smaller extents with each view cut to its prefix, aligned views, then each value toward zero. The report names the shrunk input and what each side did with it, and the case is kept in `regressions/<reference>.json`, sorted and indented the same on every run. List that file under the manifest's `tests` and `cairn test` replays every kept case against every implementation of the reference.
+A failing case is shrunk while it still fails (smaller extents with each view cut to its prefix, aligned views, then each value toward zero), reported with what each side did, and kept in `regressions/<reference>.json`, written the same on every run. Listed under the manifest's `tests`, that file makes `cairn test` replay every kept case against every implementation of the reference.
 
 ```text
 failed: prefix_blocks against prefix, 17 cases (5 ran it), finite-tested
@@ -122,13 +122,13 @@ failed: prefix_blocks against prefix, 17 cases (5 ran it), finite-tested
   smt: unknown where ((((n % 8) == 0)) && (n >= 0 && n <= 4096)) && n <= 16
 ```
 
-Apart from the finite result, `smt` asks Z3 whether the implementation's body and the reference's agree where its condition holds, as [`cairn verify`](verification.md#value-level-source-equivalence) would. A loop over an extent the domain lets past 16 is asked only up to 16, and the record says the answer holds only there. Anything outside the modeled fragment, such as a `scan` or a lane region, is `unknown`.
+Apart from the finite result, `smt` asks Z3, as [`cairn verify`](verification.md#value-level-source-equivalence) would, whether the two bodies agree where the condition holds. A loop over an extent the domain lets past 16 is decided only up to 16, and the record says so; anything outside the modeled fragment, such as a `scan` or a lane region, is `unknown`.
 
-The policy is the host's: `tolerance` (`absolute` and `relative`, 0 by default), `domain` (`largest_extent`, and `extents` or `values` ranges by parameter), `budget` cases, `seed`, `probes` for shrinking and `seconds` per call. Without `--policy` the one the regressions file pinned is used. `--history DIR` also keeps the result in that candidate history (`agent/history.py`): a `validation` record when it passed and a `failure` record with the shrunk input when it did not, under the implementation's identity and the digests of the policy. A signature the validator cannot feed (records, owners, views of records) is `unknown`, and so is a program with device code: nothing here runs on a device. `make gpu` runs the device side, each Compute Sanitizer tool (`memcheck`, `racecheck`, `initcheck`, `synccheck`) as a result of its own (`verify/device_validation.py`).
+The policy sets `tolerance` (`absolute` and `relative`, 0 by default), `domain` (`largest_extent`, and `extents` or `values` ranges by parameter), `budget` cases, `seed`, shrinking `probes` and `seconds` per call; without `--policy`, the one the regressions file pinned applies. `--history DIR` keeps the result in that [candidate history](agents.md#candidate-history), a `validation` record or a `failure` record with the shrunk input, under the implementation's identity and the policy's digests. A signature the validator cannot feed (records, owners, views of records) is `unknown`, and so is device code, which only `make gpu` runs, under each Compute Sanitizer tool (`memcheck`, `racecheck`, `initcheck`, `synccheck`) as a result of its own.
 
 ## cairn doc and cairn expand
 
-`cairn doc [path]` prints a Markdown reference of the checked program: every public type, recipe and function with its bounds, the `//` comment above it and its inferred effect row. `cairn doc --std` documents the packaged library, and `make docs` writes it as [std_api.md](std_api.md) and one page per module, which the suite holds to the compiler's answer.
+`cairn doc [path]` prints a Markdown reference of the checked program's public types, recipes and functions, with bounds, comments and inferred effect rows. `cairn doc --std` documents the packaged library, and `make docs` writes it as [std_api.md](std_api.md) and one page per module, which the suite holds to the compiler's answer.
 
     $ cairn doc examples/hello
     # root module
@@ -141,7 +141,7 @@ The policy is the host's: `tolerance` (`absolute` and `relative`, 0 by default),
     fn main() -> i32  // effects: trap
     ```
 
-`cairn expand [path]` prints the CAIRN source the program's `derive` statements generated, with every `$name` spliced and every static value folded. It is exactly what the checker sees, so it is where to read the instance a diagnostic inside a recipe is about. An edit belongs in the recipe, so `cairn inspect --symbol` refuses a generated entry (`E-SYMBOL`).
+`cairn expand [path]` prints the source the program's `derive` statements generated, `$name` spliced and static values folded: exactly what the checker sees, and where to read the instance a diagnostic inside a recipe is about. An edit belongs in the recipe, so `cairn inspect --symbol` refuses a generated entry (`E-SYMBOL`).
 
 ```text
 $ cairn expand examples/apps/kvstore
@@ -153,7 +153,7 @@ fn encode_Header(out:rw<u8>[16]@host, value:Header) {
 
 ## cairn explain
 
-`cairn explain [path] [--symbol f]` shows where each function pays at run time, at the `.cairn` line of each cost: the guards the C++ still checks, the owners it allocates, the calls that allocate, spawn, join, lock or do I/O, the points where it waits, and clang's verdict on every loop. It reads the emitted C++ and clang's optimization record. Nothing is run or timed.
+`cairn explain [path] [--symbol f]` shows where each function pays at run time, at the `.cairn` line of each cost: the guards the C++ still checks, the owners it allocates, the calls that allocate, spawn, join, lock or do I/O, the points where it waits, and clang's verdict on every loop. It reads the emitted C++ and clang's optimization record, and runs nothing.
 
 ```text
 $ cairn explain examples/apps/analytics --symbol analytics.query.above_loop
@@ -168,13 +168,13 @@ $ cairn explain examples/apps/analytics --symbol analytics.query.above_loop
            "reasons": ["Cannot vectorize early exit loop", ...]}, ...]
 ```
 
-`sites` counts what needed a guard, `discharged` the guards the checker proved cannot fail and the lowering leaves out, and `emitted` what the lowering wrote. `emitted` can exceed `sites` minus `discharged`, because a part's base is written once for its data and once for its size. Here `out[used]` keeps its guard because nothing bounds `used` by the extent of `out`, and clang names that guard's early exit as the reason the loop stays scalar. `--keep-guards` on `emit`, `build` and `run` writes every guard, so a program can be run against its conservative build. Loop verdicts come from clang only: under g++ or with device code, the report says why it has none.
+`sites` counts what needed a guard, `discharged` what the checker proved cannot fail, and `emitted` what the lowering wrote, which can exceed the difference because a part's base is written once for its data and once for its size. Here `out[used]` keeps its guard, since nothing bounds `used` by `out`'s extent, and clang names that guard's early exit as why the loop stays scalar. `--keep-guards` on `emit`, `build` and `run` writes every guard. Loop verdicts come from clang only; under g++ or with device code the report says why it has none.
 
 An agent gets the same report from `cairn inspect --symbol f --explain`, or by sending `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "explain"}` after an edit.
 
 ## cairn predict
 
-`cairn predict [path] [--symbol f] [--at n=1e6] [--against BEFORE]` says how long each function will take, before anything is built, so an agent can price a change without compiling and timing it. The answer is a prediction, never a measurement, and says how sure it is.
+`cairn predict [path] [--symbol f] [--at n=1e6] [--against BEFORE]` says how long each function will take without building it, so an agent can price a change before compiling and timing it. The answer is a prediction, never a measurement, with a confidence.
 
 ```text
 $ cairn predict bench/suite/kernels/saxpy_f32/kernel.cairn --arch x86-64-v4
@@ -185,9 +185,9 @@ saxpy_f32  0.0807 ns*n (memory (l1), up to n=2.05e+03); 0.124 ns*n (memory (l2),
   n=1e+07          922 us  memory (dram)        99% of speed of light    medium
 ```
 
-The prediction starts from what the checker already knows: trip counts are polynomials in the extents, the lane rule makes every write a stream, and the effect row names each allocation, transfer, task and wait. A machine profile prices those counts (bandwidth per cache level, the cost of each operation, of starting the lane pool, a task and an allocation). `bound` names what limits each part, and `speed of light` is the same work at the machine's peak for that bound. `--format json` shows the counts and the formula term by term.
+The checker supplies the counts: trip counts are polynomials in the extents, the lane rule makes every write a stream, and the effect row names each allocation, transfer, task and wait. A machine profile prices them by bandwidth per cache level and the cost of each operation and of starting the lane pool, a task and an allocation. `bound` names what limits each part, `speed of light` is the same work at that bound's peak, and `--format json` shows the formula term by term.
 
-`--against BEFORE` prints the ratio between two versions. Turning a loop over `f32` views into `parallel i in n` is predicted to change nothing at a thousand elements and to take under a third of the time at ten million:
+`--against BEFORE` prints the ratio between two versions, here a loop over `f32` views made `parallel i in n`:
 
 ```text
 $ cairn predict after.cairn --against before.cairn --arch x86-64-v4 --at n=1000 --at n=1e7
@@ -197,17 +197,17 @@ f
   n=1e+07          997 us -> 300 us     x0.301  memory (l3), medium
 ```
 
-Confidence is `high` when every count is a size and every access a stream, `medium` when something is approximated (a wide host region, a loop bounded by `min()`, an atomic), and `low` when a number is a guess (a `while` loop, an address from data, a foreign call, recursion). On timings it was not fitted to, the packaged profile came within a quarter at one lane and at a hundred million elements, and predicted wide regions between a hundred thousand and ten million elements badly, which is why those are `medium` ([evidence/v1_4/perf_model](../evidence/v1_4/perf_model/README.md)). `python -m cairn.perf.calibrate --out PROFILE.json` measures another host, and `--profile` or `CAIRN_PROFILE` selects it.
+Confidence is `high` when every count is a size and every access a stream, `medium` when something is approximated (a wide host region, a loop bounded by `min()`, an atomic), and `low` when a number is a guess (a `while` loop, an address from data, a foreign call, recursion). On timings it was not fitted to, the packaged profile came within a quarter at one lane and at a hundred million elements, and predicted wide regions of a hundred thousand to ten million elements badly, hence `medium` ([evidence/v1_4/perf_model](../evidence/v1_4/perf_model/README.md)). `python -m cairn.perf.calibrate --out PROFILE.json` measures another host, and `--profile` or `CAIRN_PROFILE` selects it.
 
 ## cairn tune
 
-`cairn tune [path] --symbol f --at n=1e7` chooses `f`'s [plan](concurrency.md#plans) by a bounded search. A plan changes how regions are scheduled and nothing they compute, so every candidate the checker accepts is correct and the search only asks which is fastest. A function of a named module is named with its module, as in `--symbol lib.spread`. `--write` puts the chosen plan after the function's declaration, removes any plan that named it elsewhere, and writes nothing unless the whole project still checks.
+`cairn tune [path] --symbol f --at n=1e7` chooses `f`'s [plan](concurrency.md#plans) by a bounded search. A plan changes no result, so every candidate the checker accepts is correct and the search only asks which is fastest. A function is named with its module, as in `--symbol lib.spread`. `--write` puts the chosen plan after the function's declaration and removes any plan that named it elsewhere, only if the whole project still checks.
 
-The space is every combination of the items `f`'s regions take: `grain` and `lanes` for host regions; `block`, `per_lane`, `unroll`, `vector` and `stage` for device regions, `stage` at the radius the staging rule reads; `fuse` where two regions could join. The search does not decide which combinations are legal. It writes each complete candidate into the source and checks the whole program, so `vector` beside `fuse`, or `stage` beside `vector`, is tried and refused with the checker's `E-PLAN`, counted under `space.refused` with one example. Every legal candidate is priced by `cairn predict`.
+The space is every combination of the items `f`'s regions take: `grain` and `lanes` for host regions; `block`, `per_lane`, `unroll`, `vector` and `stage` (at the radius the staging rule reads) for device regions; `fuse` where two regions could join. The checker, not the search, decides what is legal: each candidate is written into the source and the whole program checked, so `vector` beside `fuse`, or `stage` beside `vector`, is refused with `E-PLAN` and counted under `space.refused` with one example. `cairn predict` prices every legal candidate.
 
-When `f` has [implementations](abstractions.md#implementations), each is a candidate beside the reference, with every plan of the reference's own regions: the row's `plan` reads `plan f use g;` and its price is `g`'s, the code that runs where its condition holds. A function with implementations and no region of its own is searched over its implementations alone. Selecting an implementation could change a result, so such a candidate is chosen or timed only while the history holds a validation of it as it is now, the record an [implementation session](agents.md#implementation-sessions) keeps. Its row says `validated` with the evidence class, or that no validation holds; an edit to the implementation makes the old validation stale, and without a history no implementation is chosen. `--write` writes the chosen selection beside the plan, or removes the selection when the reference was chosen.
+When `f` has [implementations](abstractions.md#implementations), each is a candidate beside the reference, with every plan of the reference's regions: its row's `plan` reads `plan f use g;` and it is priced as `g`, the code that runs where the condition holds. A function with implementations and no region is searched over them alone. Because selecting an implementation could change a result, one is chosen or timed only while the history holds a validation of it as it is now, the record an [implementation session](agents.md#implementation-sessions) keeps; its row says `validated` with the evidence class, or that none holds. Editing the implementation makes its validation stale, and without a history no implementation is chosen. `--write` writes the chosen selection beside the plan, or removes it when the reference was chosen.
 
-A device candidate is then compiled for the [device target](#the-device-target), in predicted order, and among candidates priced alike one whose kernel items (`unroll`, `vector`, `stage`, `fuse`) no earlier compile covered goes first. ptxas and cuobjdump report its registers, spilled bytes, stack, static shared memory and instructions; a staged tile's shared memory is computed from the plan. Nothing runs. Each compile is kept by the digest of what it read (the emitted program, the runtime headers, the target, the toolkit and the inspector), so a candidate that emits a program already compiled costs nothing, and a compile for another target is never used for this one: a kept reading that names another target is refused with `E-TARGET-MISMATCH`. Without a device target nothing is compiled, and the answer says so. Registers and shared memory enter the price through occupancy, and `chosen` is the best-ranked candidate a compile read. `resources.sass` is a digest of the SASS: candidates whose device code is the same show one digest, as `blur` with and without `block 128` does.
+Device candidates are then compiled for the [device target](#the-device-target) in predicted order; among candidates priced alike, one whose kernel items (`unroll`, `vector`, `stage`, `fuse`) no earlier compile covered goes first. Nothing runs: ptxas and cuobjdump report registers, spilled bytes, stack, static shared memory and instructions, and a staged tile's shared memory is computed from the plan. Registers and shared memory enter the price through occupancy, and `chosen` is the best-ranked candidate a compile read. Each compile is kept by the digest of what it read (the emitted program, the runtime headers, the target, the toolkit and the inspector), so a program already compiled costs nothing, and a kept reading for another target is refused (`E-TARGET-MISMATCH`). `resources.sass` digests the SASS, so candidates with the same device code show one digest, as `blur` with and without `block 128` does. Without a device target nothing is compiled, and the answer says so.
 
 ```text
 $ cairn tune blur.cairn --symbol blur --at n=1e7 --budget-compiles 4
@@ -220,11 +220,11 @@ $ cairn tune blur.cairn --symbol blur --at n=1e7 --budget-compiles 4
            "runs": {"allowed": null, "started": 0, "kept": 0}, "undone": {"not inspected: compile budget spent": 156}}
 ```
 
-`blur@9e54491e` names the region by a digest of its syntax, so the name survives an edit anywhere else, a comment or a reformat, and a plan item's `applies_to` says which regions it changed and which arrays it chunked or tiled. The budgets are explicit: `--budget-compiles` device compiles (4 by default), `--budget-seconds` for the whole search (300), and `--budget-runs` timed runs. What a spent budget left undone is counted under `undone`, and a candidate no compile read has no `resources` rather than another candidate's.
+`blur@9e54491e` names the region by a digest of its syntax, which survives an edit elsewhere, a comment or a reformat; `applies_to` says which regions a plan item changed and which arrays it chunked or tiled. The budgets are `--budget-compiles` (4 by default), `--budget-seconds` for the whole search (300) and `--budget-runs`. What a spent budget left undone is counted under `undone`, and a candidate no compile read has no `resources`.
 
-`--measure K` then times the best-ranked few and the current plan on this host, halving the field each round with more blocks for the survivors, and reports how many pairs ran in the predicted order; on a busy machine two close plans are within noise of each other. Timing device plans runs device code, so only the owner's targets do it: `make tune-device FILE=f.cairn SYMBOL=f AT=n=1e8`, which holds the device lock, rests after each run and stops after 64, and `make calibrate-device`, which replaces the device profile's assumed figures with measured ones. No agent runs either.
+`--measure K` then times the best-ranked few and the current plan on this host, halving the field each round with more blocks for the survivors, and reports how many pairs ran in the predicted order; on a busy machine two close plans are within noise. Device plans are timed only by the owner's targets: `make tune-device FILE=f.cairn SYMBOL=f AT=n=1e8`, which holds the device lock, rests after each run and stops after 64, and `make calibrate-device`, which replaces the device profile's assumed figures with measured ones.
 
-`--compare A --compare B` reports how plan `B` differs from plan `A` instead of searching. A plan is written as its items, `grain 1; lanes 8`, or as `none`, and `use g` adds the selection of the implementation `g`, which is then priced and compiled as `g`; a side without `use` is the reference. Every line has one of five labels: a compiler observation (what ptxas, cuobjdump or the model said, with nothing run), a runtime measurement, a profiler observation, a hypothesis or a suggested experiment.
+`--compare A --compare B` reports how plan `B` differs from plan `A` instead of searching. A plan is written as its items, `grain 1; lanes 8`, or as `none`, and `use g` adds the selection of the implementation `g`, which is then priced and compiled as `g`; a side without `use` is the reference. Each line is labelled a compiler observation (ptxas, cuobjdump or the model, nothing run), a runtime measurement, a profiler observation, a hypothesis or a suggested experiment.
 
 ```text
 $ cairn tune blur.cairn --symbol blur --at n=1e7 --compare none --compare "stage 1; block 128"
@@ -242,13 +242,13 @@ blur: (no plan for blur)  ->  plan blur { block 128; stage 1; }
   [suggested experiment] suggested, not run: profile a and b in an explicit profiling run (Nsight Compute's occupancy and memory sections), apart from timing, which only the owner runs
 ```
 
-A register count, a spill or an instruction count never becomes the reason one plan is slower: at most it leads to a hypothesis worded as one, beside the experiment that would test it, and both go into the history under those kinds. Counts are of instructions in the code, not instructions executed. When a and b compile to the same SASS, the report says so, and supposes no more than that a difference measured between them comes from the launch or from noise. A measurement or a profile appears only from the history, only while it holds for this function, contract, compiler and target, and with the procedure or the profiling run it came from. Nothing here profiles, and profiling stays apart from timing because a profiler replays kernels. A measured order the model did not predict is reported as such. `--artifacts` adds the path of every file behind the lines: the emitted program, the cubin, ptxas's log, the SASS and the record ids.
+A register, spill or instruction count (in the code, not executed) is never given as the reason one plan is slower: at most it leads to a hypothesis, beside the experiment that would test it, and both go into the history. When a and b compile to the same SASS, the report says so and attributes a measured difference only to the launch or noise. A measurement or a profile comes only from the history, while it holds for this function, contract, compiler and target, with the procedure or profiling run behind it. Nothing here profiles; profiling stays apart from timing because a profiler replays kernels. A measured order the model did not predict is reported as such, and `--artifacts` adds the path of every file behind the lines: the emitted program, the cubin, ptxas's log, the SASS and the record ids.
 
-The search records into the candidate history, `.cairn/history` beside the manifest unless `--history DIR` names another or `--no-history` turns it off: what it tried, what the checker or nvcc refused, what each compile read, and each run with its procedure (see [the agent protocol](agents.md#candidate-history)). A later search answers from it what still holds, so a kept compile is not repeated and a kept measurement of the same candidate, sizes and procedure is not run again. `--since TUNE.json` prints only the rows that changed since a saved answer, and counts the rest.
+The search records what it tried, what the checker or nvcc refused, what each compile read and each run with its procedure into the [candidate history](agents.md#candidate-history), `.cairn/history` beside the manifest unless `--history DIR` or `--no-history` says otherwise. A later search reuses what still holds: a kept compile is not repeated, nor a kept measurement of the same candidate, sizes and procedure. `--since TUNE.json` prints only the rows that changed since a saved answer, and counts the rest.
 
 ## cairn diff
 
-`cairn diff OLD NEW` says what changed between two versions of a program, function by function, and what establishes each answer. A side is a path or a git revision (`--in PATH` names the project inside the repository). A revision is read into a scratch directory, and nothing is checked out over the working tree. [demos/repair](../demos/repair/README.md) shows it reviewing an agent's fix.
+`cairn diff OLD NEW` says what changed between two versions of a program, function by function, and what establishes each answer. A side is a path or a git revision (`--in PATH` names the project inside the repository). A revision is read into a scratch directory, never checked out over the working tree. [demos/repair](../demos/repair/README.md) shows it reviewing an agent's fix.
 
 ```text
 $ cairn diff before.cairn after.cairn
@@ -268,13 +268,13 @@ semver: major: scale behaves differently at x = 63
 | `signature-changed`, `added`, `removed`, `renamed` | What the names say. A changed signature is not compared value for value. |
 | `unknown` | It gives its reason, and is never counted as unchanged. |
 
-Beside the class, each function lists what the compiler established differently: signature, effect row, guards, allocations, tasks and `unsafe` blocks. The semantic version is `major` for a removed, renamed or re-signed public function, a public function that gained an effect or has a witness, or a changed public type; `minor` for an added one; `patch` otherwise. An `unknown` public function makes the level `unknown`, with what is proven under `at_least`, unless it is already `major`.
+Beside the class, each function lists how its signature, effect row, guards, allocations, tasks and `unsafe` blocks changed. The semantic version is `major` for a removed, renamed or re-signed public function, a public function that gained an effect or has a witness, or a changed public type; `minor` for an added one; `patch` otherwise. An `unknown` public function makes the level `unknown`, with what is proven under `at_least`, unless it is already `major`.
 
-`--require equivalent` exits 1 unless every function is identical or `smt-equivalent`, and `--require identical` refuses `smt-equivalent` too, so a refactoring's pull request can require proof that it only refactored. `--markdown FILE` writes a section for a pull request description. The solver has `--timeout-ms` per query and `--budget-s` for the whole diff (60 s by default), and each function runs in its own process that is stopped at its limit, because Z3 cannot be interrupted while it reads a large query. Both versions are lowered by this compiler, so the diff compares two sources, never two compilers. `evidence/v1_4/diff/` records a `cairn diff` of the library and every example project across two revisions.
+`--require equivalent` exits 1 unless every function is identical or `smt-equivalent`, and `--require identical` refuses `smt-equivalent` too. `--markdown FILE` writes a section for a pull request. The solver has `--timeout-ms` per query and `--budget-s` for the whole diff (60 s by default), and each function runs in a process stopped at its limit, because Z3 cannot be interrupted while it reads a large query. Both versions are lowered by this compiler, so the diff compares two sources, never two compilers. `evidence/v1_4/diff/` records a diff of the library and every example project across two revisions.
 
 ## cairn export
 
-`cairn export PATH --out DIR` writes the program `cairn build` would compile into a new directory: the generated C++ (`program.cu` for a device program), exactly the runtime headers it includes, the C header with `--kind library --header`, and `export.json`. The record holds the command line `toolchain.py` gives for the files, the device target, each compiler's path and version, a sha256 per file, the canonical emission of each function, and one identity over all of it.
+`cairn export PATH --out DIR` writes the program `cairn build` would compile into a new directory: the generated C++ (`program.cu` for a device program), exactly the runtime headers it includes, the C header with `--kind library --header`, and `export.json`. That record holds the command line, the device target, each compiler's path and version, a sha256 per file, each function's canonical emission, and one identity over all of it.
 
 ```sh
 cairn export examples/systems --out out/systems     # the program and its record
@@ -283,15 +283,15 @@ cairn build out/systems                             # the recorded command, in a
 cairn run out/systems
 ```
 
-`build`, `run` and `test` take the export directory itself. Each first checks every file against its hash, refuses a file added or removed, and refuses a record whose identity no longer covers it (`E-EXPORT-TAMPERED`), then builds with exactly the recorded command and compilers (`E-EXPORT-TOOLCHAIN` when the compiler here is another version). Every record they write carries the export's identity, so a later rewrite of the output is visibly not what was built, run or tested. `--tests` exports the test blocks' program, which `cairn test DIR` runs one process per test. `--time f --at n=1e6` exports `f` beside the timing driver of `cairn tune --measure`, so `cairn run DIR` measures exactly the exported code. A device export builds here and runs only under the owner's make targets.
+`build`, `run` and `test` take the export directory itself. Each refuses a file that fails its hash, was added or was removed, and a record whose identity no longer covers it (`E-EXPORT-TAMPERED`), then builds with exactly the recorded command and compilers (`E-EXPORT-TOOLCHAIN` when a compiler here is another version). Every record they write carries the export's identity, so a later rewrite shows. `--tests` exports the test blocks' program, which `cairn test DIR` runs one process per test, and `--time f --at n=1e6` exports `f` beside the timing driver of `cairn tune --measure`, so `cairn run DIR` measures exactly the exported code. A device export builds here and runs only under the owner's make targets.
 
-Each runtime header of a device export has a role in the record. `cairn_kernels.hpp` and the guards a lane calls are the device implementation: the kernels launch on a stream the caller names, with no execution context. `cairn_gpu.hpp`, `cairn_exec.hpp` and `cairn_reuse.hpp` are the CAIRN launch wrappers, which an application can point at its own stream (`NAME_device_stream`) or replace with another machine, as the suite's host machine does.
+The record names each runtime header's role in a device export: the device implementation (`cairn_kernels.hpp` and the guards a lane calls, whose kernels launch on a stream the caller names, with no execution context) or the launch wrappers (`cairn_gpu.hpp`, `cairn_exec.hpp`, `cairn_reuse.hpp`), which an application can point at its own stream (`NAME_device_stream`) or replace with another machine, as the suite's host machine does.
 
-`cairn export DIR --compare OTHER` says whether two exports are the same code: each function's canonical emission, as `cairn diff` compares it, each runtime header, the command, the compilers and the target. It exits 1 when they differ, which is how a change is held to a known-fast implementation. Same code is not the same speed: compare timings only between exports built alike, holding the same `--time` harness, run on the same machine.
+`cairn export DIR --compare OTHER` says whether two exports are the same code (each function's canonical emission, as `cairn diff` compares it, each runtime header, the command, the compilers and the target), and exits 1 when they differ, which holds a change to a known-fast implementation. Same code is not the same speed: compare timings only between exports built alike, with the same `--time` harness, on the same machine.
 
 ## cairn build --incremental
 
-`--incremental` compiles one object per module against a shared interface header and caches it under `build/objects/`, keyed by a hash of everything that went into it: the unit, the header, the command line, the runtime headers and the compiler version. It is opt-in because separate objects give up inlining across modules. Device programs and freestanding images are always one unit.
+`--incremental` compiles one object per module against a shared interface header and caches it under `build/objects/`, keyed by a hash of the unit, the header, the command line, the runtime headers and the compiler version. It is opt-in because separate objects give up inlining across modules, and device programs and freestanding images are always one unit.
 
 ```text
 cairn build --incremental examples/apps/analytics    1.34 s   15 compiled   cold cache
@@ -299,18 +299,18 @@ cairn build --incremental examples/apps/analytics    0.14 s    0 compiled   noth
 cairn build examples/apps/analytics                  1.17 s             whole program, one unit
 ```
 
-A body-only edit recompiles one module (0.87 s for one statement added to `analytics.query.above_loop`), and a signature or layout change recompiles all of them. Each object is published by a rename with its sha256 beside it and hashed again before reuse, so an interrupted, corrupted or shared cache is caught. That does not stop someone who can write into `build/`, and the cache is always safe to delete.
+A body-only edit recompiles one module (0.87 s for one statement added to `analytics.query.above_loop`), and a signature or layout change recompiles all of them. Each object is published by a rename with its sha256 beside it and hashed again before reuse, which catches an interrupted, corrupted or shared cache but not someone who can write into `build/`. The cache is always safe to delete.
 
 ## cairn build --header
 
-A C or C++ program can call a CAIRN library with nothing from CAIRN in its own build. `cairn build --kind library --header` writes `NAME.h` beside `libNAME.so`:
+`cairn build --kind library --header` writes `NAME.h` beside `libNAME.so`, so a C or C++ program can call the library with nothing from CAIRN in its own build:
 
 ```sh
 cairn build examples/interop --header       # libstats.so and stats.h under examples/interop/build/stats-*/
 c++ -std=c++17 examples/interop/host/main.cpp -I"$DIR" -L"$DIR" -lstats -Wl,-rpath,"$DIR"
 ```
 
-The header declares the checked entry `cf_NAME` of every function whose types can cross: scalars, copyable records, tag-only enums, copyable sums, and borrows of them. A view `xs:ro<i64>[n]` becomes `const int64_t *xs` with its length in `n`, and a record becomes a `ct_` struct with CAIRN's field names. Each declaration carries its comment, CAIRN signature and effect row:
+The header declares the checked entry `cf_NAME` of every function whose types can cross: scalars, copyable records, tag-only enums, copyable sums, and borrows of them. A view `xs:ro<i64>[n]` becomes `const int64_t *xs` with its length in `n`, a record a `ct_` struct with CAIRN's field names, and each declaration carries its comment, signature and effect row:
 
 ```c
 /*
@@ -322,9 +322,9 @@ The header declares the checked entry `cf_NAME` of every function whose types ca
 ct_Summary cf_summarize(size_t n, const int64_t *xs);
 ```
 
-The entry checks what a foreign caller could get wrong: a view must be null only when empty, aligned, and inside the address space, and a written view must overlap no other. Otherwise the process aborts, as it does when any guard fails. A single borrow must point to live storage, which no entry can check. Calls between CAIRN functions skip the entry and reach the lean body `ci_`.
+The entry checks what a foreign caller could get wrong, and aborts as a failed guard does: a view must be null only when empty, aligned and inside the address space, and a written view must overlap no other. No entry can check that a single borrow points to live storage. Calls between CAIRN functions reach the lean body `ci_` directly.
 
-Every layout is asserted on both sides, in the header and in the library, so a mismatch fails to build instead of corrupting a call. The header also names an interface hash that only the matching library defines, so a program built against another version fails to link. The end of the header lists what cannot cross, with the reason: owners such as `Buf`, linear values, function values, `dyn` references, arrays by value, trait members and device kernels. Private functions, templates, tests, externs, `main` and vendored dependencies are left out. `--header` needs a hosted library built as one unit, so `--kind exe`, a freestanding target and `--incremental` refuse it.
+Every layout is asserted in both the header and the library, so a mismatch fails to build instead of corrupting a call, and the header names an interface hash only the matching library defines, so a program built against another version fails to link. The header ends with what cannot cross and why: owners such as `Buf`, linear values, function values, `dyn` references, arrays by value, trait members and device kernels. Private functions, templates, tests, externs, `main` and vendored dependencies are left out. `--header` needs a hosted library built as one unit, so `--kind exe`, a freestanding target and `--incremental` refuse it.
 
 `cairn emit --ctypes` prints a Python module that opens the same library, asserts the same layouts on import, and leaves out, with the reason, what ctypes cannot pass exactly (a record with `align(n)`, and a packed record or a float-holding sum by value).
 
@@ -339,7 +339,7 @@ assert lib.cf_summarize(6, samples).max == 42
 
 `tests/projects/test_interop.py` builds the example under both compilers, runs it under AddressSanitizer and UndefinedBehaviorSanitizer, requires overlapping, misaligned and null views to abort, and compiles headers of nested, packed, aligned and storage-float records as C11 and C++17.
 
-A library that runs device work also declares `void NAME_device_stream(void *stream)`: the calling thread's device work then runs on a `cudaStream_t` the caller owns, after what the caller queued there, and `NULL` gives the thread its own stream back ([concurrency.md](concurrency.md#device-execution)).
+A library that runs device work also declares `void NAME_device_stream(void *stream)`, which puts the calling thread's device work on a `cudaStream_t` the caller owns ([concurrency.md](concurrency.md#device-execution)).
 
 ## A manifest is named by its path
 
@@ -354,16 +354,16 @@ cairn run examples/apps/analytics/gpu.toml   # the same sources plus the device 
 
 A program may hold 16 MB of source, 32,768 functions and 3,200,000 syntax nodes, and a manifest may list 1,024 files and 64 dependencies. Past a limit the compiler refuses the program with `E-EXPANSION-LIMIT` or `E-SOURCE-LIMIT` and names what it counted. What code generates stays small: 1,024 copies per family, 2,048 across a program's families, 2,048 declarations per recipe.
 
-The checker judges the whole program, since effect rows are a fixed point over the call graph. So a check, an editor refresh and an incremental build each run the front end over every module, and their time grows about linearly. On a generated project of 77,000 lines a check took 11 s, an editor refresh 12 s, and an incremental rebuild after a body edit 13 s; one of 31,802 functions checked in 33 s at 800 MiB (`evidence/v0_9/scale`, on a loaded machine; `make scale` measures it again). An incremental build of 16 or more units precompiles the shared header, which made cold and interface-edit rebuilds about three times faster.
+Effect rows are a fixed point over the call graph, so a check, an editor refresh and an incremental build each run the front end over every module, in time about linear in the program's size. On a generated project of 77,000 lines a check took 11 s, an editor refresh 12 s, and an incremental rebuild after a body edit 13 s; one of 31,802 functions checked in 33 s at 800 MiB (`evidence/v0_9/scale`, on a loaded machine; `make scale` measures it again). An incremental build of 16 or more units precompiles the shared header, which made cold and interface-edit rebuilds about three times faster.
 
-`cairn graph` prints the module graph a build system or a CI job plans with: each file's modules, each module's imports, exports and dependents, a topological order and a source hash. `--interfaces` checks the program and adds each module's interface hash, which changes only when a public signature or effect row does. Every build writes `compile_commands.json` beside the C++ it generated, for clangd and other C++ tools.
+`cairn graph` prints the module graph a build system or CI job plans with: each file's modules, each module's imports, exports and dependents, a topological order and a source hash. `--interfaces` checks the program and adds each module's interface hash, which changes only when a public signature or effect row does. Every build writes `compile_commands.json` beside the C++ it generated, for clangd and other C++ tools.
 
 ```sh
 cairn graph examples/apps/analytics --format human
 cairn graph examples/apps/analytics --interfaces --format json
 ```
 
-`bazel/` is a Bazel module, `rules_cairn`. A library is checked on its own as a validation action, so `bazel build` refuses what `cairn check` refuses, and a binary or test builds all its sources and its dependencies' as one program:
+`bazel/` is a Bazel module, `rules_cairn`. A library is checked on its own as a validation action, so `bazel build` refuses what `cairn check` refuses, and a binary or test builds its sources and its dependencies' as one program:
 
 ```starlark
 load("@rules_cairn//:defs.bzl", "cairn_binary", "cairn_library", "cairn_test")
@@ -374,7 +374,7 @@ cairn_binary(name = "shop", srcs = ["shop.cairn"], deps = [":pricing"])
 cairn_test(name = "pricing_test", size = "small", srcs = ["pricing/pricing_test.cairn"], deps = [":pricing"])
 ```
 
-`examples/bazel` is that workspace, and `bazel build //...`, `bazel run //:shop` and `bazel test //...` work there with nothing fetched. Its `MODULE.bazel` names this checkout with `cairn.local(path = "../..")`; without it the rules run the `cairn` on `PATH`. The rules use the host's Python and C++ compiler, not a hermetic toolchain. Each action copies its sources into a fresh directory and writes a manifest there, because a project refuses a source that is a symbolic link, which is how Bazel lays out inputs.
+`examples/bazel` is that workspace, where `bazel build //...`, `bazel run //:shop` and `bazel test //...` work with nothing fetched. Its `MODULE.bazel` names this checkout with `cairn.local(path = "../..")`; without it the rules run the `cairn` on `PATH`. The rules use the host's Python and C++ compiler, not a hermetic toolchain. Each action copies its sources into a fresh directory with a manifest, because a project refuses a source that is a symbolic link, which is how Bazel lays out inputs.
 
 ## cairn lsp
 
@@ -385,11 +385,11 @@ cairn lsp      # speaks JSON-RPC with Content-Length framing on stdin/stdout
 | Request | What it answers |
 | --- | --- |
 | diagnostics | the compiler's diagnostic, its repair hint and the exact token range |
-| hover | the type of the smallest checked expression, the expected type, and for a function its signature, effect row and comment |
+| hover | the type of the smallest checked expression, the expected type, and a function's signature, effect row and comment |
 | documentSymbol, workspace/symbol | the declarations of a document, or of the open projects |
-| definition | the declaration of the name, in the project or in the packaged `std` |
+| definition | the name's declaration, in the project or the packaged `std` |
 | completion, signatureHelp | fields, functions, variants, module members, locals, keywords; the call being written and its current parameter |
-| references, documentHighlight, rename | every place that names the declaration or local, and a rename across the project that is checked before it is offered |
+| references, documentHighlight, rename | every place that names the declaration or local, and a project-wide rename checked before it is offered |
 | formatting | one whole-document edit from `cairn fmt` |
 | semanticTokens | every name by what it is, including effects and mutable bindings |
 | inlayHint | each function's effect row, the extents a call leaves out, and the type of an unannotated `let` |
@@ -405,15 +405,15 @@ cairn lsp      # speaks JSON-RPC with Content-Length framing on stdin/stdout
   "activeSignature": 0, "activeParameter": 1}}
 ```
 
-A buffer being typed usually does not compile. Each feature takes its context from the current tokens and its meaning from the last analysis that did compile, so after `let y = p.` the fields of `p` are still offered. A document on disk under a `cairn.toml` that lists it is analysed with its whole project: names from sibling files resolve, and a refusal in one file is shown on every open file of the project.
+A buffer being typed rarely compiles, so each feature takes its context from the current tokens and its meaning from the last analysis that compiled: after `let y = p.` the fields of `p` are still offered. A document a `cairn.toml` lists is analysed with its whole project, so names from sibling files resolve and a refusal in one file shows on every open file of the project.
 
-A rename is one checked transaction. The edited project must compile again, and every function's effect row, callees, guard sites and allocations must be exactly what they were under the new name, so a rename that misses one occurrence or catches one too many is refused rather than applied. Fields and variants are renamed from the types the checker gave each expression. Library declarations, foreign functions, `main` and trait members are refused with the reason. Outside a project, references and rename cover only what one document can prove, and answer nothing where that is not enough.
+A rename is one checked transaction: the edited project must compile again with every function's effect row, callees, guard sites and allocations as they were under the new name, so a rename that misses an occurrence or catches one too many is refused. Fields and variants are renamed from the types the checker gave each expression. Library declarations, foreign functions, `main` and trait members are refused with the reason. Outside a project, references and rename cover only what one document can prove, and answer nothing where that is not enough.
 
 A compiler failure becomes a diagnostic, never an exception. Known limits: diagnostics stop at the first compiler error, as the compiler does; `definition` picks the first declaration with a matching name; there is no format-on-type; and no quick fix ever widens an effect ceiling, a borrow mode or a signature.
 
 ## The editor extension
 
-`editors/vscode/` is a VS Code and Cursor extension: a generated TextMate grammar, snippets, the semantic token legend and a client that starts `cairn lsp`. It has no build step and does not vendor `node_modules`. To install it from a checkout, symlink it and reload the window:
+`editors/vscode/` is a VS Code and Cursor extension: a generated TextMate grammar, snippets, the semantic token legend and a client that starts `cairn lsp`, with no build step and no vendored `node_modules`. From a checkout, symlink it and reload the window:
 
 ```sh
 ln -s "$PWD/editors/vscode" ~/.cursor/extensions/cairn-language.cairn   # Cursor
@@ -438,7 +438,7 @@ When `cairn` is not on `PATH`, point the client at the checkout's entry script:
 }
 ```
 
-The grammar is generated, never edited: `make editors` writes it and the Vim files from the compiler's own vocabulary (`src/cairn/editor/grammar.py`), with standard TextMate scope names so every theme colours them. `tests/tooling/test_grammar.py` fails when a committed grammar differs from a fresh run or misses a word the parser knows, and `tests/tooling/test_extension.py` compiles every snippet.
+`make editors` generates the grammar and the Vim files from the compiler's vocabulary (`src/cairn/editor/grammar.py`), with standard TextMate scope names every theme colours. `tests/tooling/test_grammar.py` fails when a committed grammar differs from a fresh run or misses a word the parser knows, and `tests/tooling/test_extension.py` compiles every snippet.
 
 ## Vim, Neovim and GitHub
 
@@ -458,7 +458,7 @@ GitHub has no CAIRN grammar, so `.gitattributes` has it highlight `.cairn` files
 
 ## The device target
 
-A program that indexes `@device` views is built for one device target, spelled as nvcc spells it. `sm_120` is portable: its code runs on compute capability 12.0 and every later 12.x device. `sm_120f` adds the features the family shares and runs on the family's devices from 12.0. `sm_120a` adds every feature of exactly 12.0 and runs only there. The device target is not the CPU architecture, which `--arch` names.
+A program that indexes `@device` views is built for one device target, spelled as nvcc spells it and apart from the CPU architecture `--arch` names. `sm_120` runs on compute capability 12.0 and every later 12.x device, `sm_120f` adds the features the family shares and runs on its devices from 12.0, and `sm_120a` adds every feature of exactly 12.0 and runs only there.
 
 `--device-target` on `build`, `run`, `predict` and `tune` names the target, else `[build] device_target`, else the one GPU `nvidia-smi` reports, which asks the driver and launches nothing. With none of these a device build is refused with `E-TARGET`; nothing defaults to `-arch=native`.
 
@@ -514,7 +514,7 @@ The language works as it does hosted, guards, `stack` storage, records, sums, ge
  "message": "A freestanding target has no hosted runtime: main has effect 'alloc'."}
 ```
 
-No symbol is undefined: the target's `start.S` defines `memset`, `memcpy` and the exit path. `fn main() -> i32` returns its value as the emulator's exit status, and a failed guard exits with 134, the status a hosted shell reports for `std::abort`.
+No symbol is undefined: the target's `start.S` defines `memset`, `memcpy` and the exit path. `main`'s return value is the emulator's exit status, and a failed guard exits with 134, as a hosted `std::abort` does.
 
 ```text
 $ nm -u examples/embedded/build/embedded-*/embedded.elf     # nothing is undefined
