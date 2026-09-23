@@ -125,6 +125,19 @@ def test_the_audit_flags_a_path_outside_the_sandbox_and_the_network(tmp_path):
     assert found["compile_runs"] == 1
 
 
+def test_a_doubled_slash_still_names_a_path_but_a_floor_division_or_a_comment_does_not(tmp_path):
+    import json
+
+    from scoring import audit
+
+    commands = ["cat //etc/hostname", "ls ///home", "echo $(((n+1)//2)) $((7//2))", "printf '//note\\n' > a.c"]
+    uses = [{"type": "tool_use", "id": str(k), "name": "Bash", "input": {"command": c}} for k, c in enumerate(commands)]
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text(json.dumps({"type": "assistant", "message": {"content": uses}}) + "\n")
+    found = audit(transcript, "/root/runs/counted/x/cairn", "/root")
+    assert sorted(f["what"] for f in found["flags"]) == ["/etc/hostname", "/home"]
+
+
 @needs_tools
 @pytest.mark.parametrize("name", ["split_sum", "varint"])
 @pytest.mark.parametrize("language", checking.LANGUAGES)

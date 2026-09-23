@@ -20,6 +20,17 @@ NETWORK = re.compile(
     r"\b(curl|wget|ssh|scp|rsync|nc|ncat|telnet|pip3?\s+install|cargo\s+(add|install|fetch|update|search)|git\s+(clone|fetch|pull)|npm|apt)\b"
 )
 PATH = re.compile(r"(?<![\w.$/-])(~[\w/.-]*|/[\w.+-][\w/.+-]*)")
+# A run of slashes is a floor division or a comment unless what follows names a directory at the root: `//etc/x` is
+# the path /etc/x, and `(n+1)//2` and `//note` are not paths.
+DOUBLED = re.compile(r"(?<![\w.$/-])/{2,}([\w.+-][\w/.+-]*)")
+
+
+def paths(text: str) -> list[str]:
+    """Every path a shell command names, a doubled leading slash read as one."""
+    doubled = [f"/{p}" for p in DOUBLED.findall(text) if Path("/", p.split("/")[0]).is_dir()]
+    return PATH.findall(text) + doubled
+
+
 COMPILE = re.compile(
     r"(?<![\w-])(cairn\s+(check|build|run|test)|clang\+\+|g\+\+|cargo\s+(build|run|check|test)|rustc)(?![\w+])"
 )
@@ -91,7 +102,7 @@ def audit(transcript: Path, sandbox: str, root: str) -> dict:
             text = given.get("command", "")
             if NETWORK.search(text):
                 flags.append({"tool": name, "why": "network", "what": text[:300]})
-            for path in PATH.findall(text):
+            for path in paths(text):
                 if not allowed(path) and path not in ("/", "/tmp"):
                     flags.append({"tool": name, "why": "path", "what": path, "command": text[:300]})
             if ".." in re.findall(r"(?:^|[\s/'\"])(\.\.)(?:/|\s|$)", text):
