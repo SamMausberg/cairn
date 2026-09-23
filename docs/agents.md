@@ -1,10 +1,10 @@
 # The AI edit protocol
 
-An agent edits CAIRN through a host. The host holds the program, shows the agent a packet, and decides whether the agent's reply is kept. A request is one of the objects of [project/edit_schema.json](project/edit_schema.json): a `cairn.edit/2` request names its session by a handle such as `e1` and is a `body` edit of a whole function, an `expr` edit of one site named like `x3`, or a request for more context. A replacement is at most 64000 UTF-8 bytes. [internals.md](internals.md#safety-and-trust) lists what a reply can never change. [demos/repair](../demos/repair/README.md) shows a whole session.
+An agent edits CAIRN through a host, which holds the program, shows the agent a packet and decides whether its reply is kept. A request is an object of [project/edit_schema.json](project/edit_schema.json): a `cairn.edit/2` request names its session by a handle such as `e1` and is a `body` edit of a whole function, an `expr` edit of one site named like `x3`, or a request for more context. A replacement is at most 64000 UTF-8 bytes. [internals.md](internals.md#safety-and-trust) lists what a reply can never change, and [demos/repair](../demos/repair/README.md) shows a whole session.
 
 ## The rule cards
 
-`src/cairn/agent/teaching.py` holds eighteen rule cards, one per part of the language: base, integers, views, compact, calls, floats, records, generators, memory, sums, generics, owners, effects, parallel, tasks, rings, closures and modules. Each says in a few paragraphs what that part accepts and refuses, and names the diagnostic code of each rule, so a refusal leads back to its card. `base`, `integers` and `calls` go with every packet. The others are picked by the lexical tokens of the source at hand, so a packet carries only what its program uses.
+`src/cairn/agent/teaching.py` holds thirty rule cards, one per part of the language, named in `CARDS`. Each states what its part accepts and refuses, with the diagnostic code of each rule, so a refusal leads back to its card. `base`, `integers` and `calls` go with every packet, and the others are picked by the lexical tokens of the source at hand, so a packet carries only what its program uses.
 
 ## Packets
 
@@ -19,7 +19,7 @@ A packet starts focused. It holds:
 
 `cairn inspect --symbol f` prints the packet. The agent reads these facts and cannot replace them.
 
-The evidence class says how much of a callee's behaviour the agent may rely on without reading its body. The session establishes it when it opens, against the exact source, so it is never a claim carried in from elsewhere:
+The evidence class says how much of a callee's behaviour the agent may rely on without reading its body. The session establishes it against the exact source when it opens, never carrying a claim in from elsewhere:
 
 | Class | Established by | What the packet shows | May the agent rely on it |
 |---|---|---|---|
@@ -41,7 +41,7 @@ assert packet["dependencies"]["step"]["evidence"] == "smt-equivalent"
 
 ## Requests beyond an edit
 
-`expand` asks for up to 32 more functions or types. The host answers with each body as written, the types those bodies use and any card they add, and a function the agent has expanded may then be called. `cairn inspect --symbol f --expand g` shows the same, and `--scope component` shows the whole call-graph component at once.
+`expand` asks for up to 32 more functions or types; the host answers with each body as written, the types it uses and any card it adds, and the agent may then call what it expanded. `cairn inspect --symbol f --expand g` shows the same, and `--scope component` the whole call-graph component.
 
 ```json
 {"protocol": "cairn.edit/2", "handle": "e1", "kind": "expand", "symbols": ["append", "Header"]}
@@ -49,9 +49,9 @@ assert packet["dependencies"]["step"]["evidence"] == "smt-equivalent"
 
 `explain` returns [`cairn explain`](tools.md#cairn-explain) for the disclosed functions of the last admitted candidate, so an agent sees whether its edit left a guard in a loop or stopped it vectorizing, without running anything.
 
-`predict`, as in `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "predict", "sizes": [{"n": 1e7}]}`, returns [`cairn predict`](tools.md#cairn-predict) for the disclosed functions, and after an admission the predicted ratio against the original at each size. An agent can price candidates this way and build and time only the one it keeps. A prediction is not evidence of speed, and the host still decides what is measured.
+`predict`, as in `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "predict", "sizes": [{"n": 1e7}]}`, returns [`cairn predict`](tools.md#cairn-predict) for the disclosed functions, and after an admission the predicted ratio against the original at each size. A prediction is not evidence of speed, and the host still decides what is measured.
 
-`shot`, as in `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "shot", "functions": ["panel.ui.update"]}`, shows the agent what the program draws. The host runs the latest admitted candidate once, headless, and returns every frame [`std.draw.capture`](library.md#stddraw) wrote, with the effect rows of the named functions and what each gained or lost against the original. `cairn shot app --symbol f` gives the same from the command line. Nothing opens a window or touches a device.
+`shot`, as in `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "shot", "functions": ["panel.ui.update"]}`, runs the latest admitted candidate once, headless, and returns every frame [`std.draw.capture`](library.md#stddraw) wrote, with the effect rows of the named functions and what each gained or lost against the original; `cairn shot app --symbol f` does the same from the command line. Nothing opens a window or touches a device.
 
 ```json
 {"schema": "cairn.shot/1", "status": "shot", "exit_code": 0,
@@ -62,11 +62,11 @@ assert packet["dependencies"]["step"]["evidence"] == "smt-equivalent"
  "changed": {"panel.render.frame": {"added": ["ffi:write", "io"], "removed": []}}}
 ```
 
-The PNG is the pixels. The layout record is what the program says it drew where, so "the detail panel does not overlap the list" is checked on numbers and a test can hold it. The rows say what the edit costs: a frame function that gained `alloc` allocates every frame. A failed program still returns the frames it wrote before failing.
+The layout record is what the program says it drew where, so "the detail panel does not overlap the list" is checked on numbers, and a test can hold it. The rows say what the edit costs: a frame function that gained `alloc` allocates every frame. A failed program still returns the frames it wrote.
 
 ## What the host admits
 
-When a reply arrives, the host splices it into the pinned original and rechecks the whole linked module, whatever the packet showed. Every token outside the authorized range must lex as it did, so a reply that ends in a comment, which would hide the rest of the line, is refused. The host refuses:
+The host splices a reply into the pinned original and rechecks the whole linked module, whatever the packet showed. Every token outside the authorized range must lex as it did, so a reply ending in a comment that would hide the rest of the line is refused. The host refuses:
 
 | Code | Why |
 |---|---|
@@ -83,11 +83,11 @@ An admitted reply is `typed`, which says nothing yet about its behaviour. A refu
 
 The host keeps the digests behind each handle, so the agent never copies a hash, and sends each card and the terms once per host. On thirty scripted edits of five example programs, a focused packet with one expansion took about a quarter of the context of the component packet (`evidence/v1_4/context/`). No model took part in that measurement.
 
-A host that asks for a refactoring puts `{"preserve": "equivalent"}` or `{"preserve": "identical"}` in the contract. The candidate is then compared with the original as [`cairn diff`](tools.md#cairn-diff) compares versions: `identical` admits only code that is the original's up to renaming, and `equivalent` also admits code Z3 shows behaves the same. Anything else is `E-PRESERVE`, with the witness input as the `repair_hint` when there is one. An admission says in `equivalence` which class it established, or `not-proved` without the contract.
+For a refactoring the host puts `{"preserve": "equivalent"}` or `{"preserve": "identical"}` in the contract, and the candidate is compared with the original as [`cairn diff`](tools.md#cairn-diff) compares versions: `identical` admits only the original's code up to renaming, and `equivalent` also what Z3 shows behaves the same. Anything else is `E-PRESERVE`, with any witness input as the `repair_hint`. An admission names the class it established in `equivalence`, or `not-proved` without the contract.
 
 ## The program's state
 
-An agent that has made several edits does not need the conversation that made them. `cairn state`, or a `state` request, prints the program as it stands: every function of the program's own modules as `[signature, effect row]`, the declared types, the open diagnostics and the admitted edits, under one `digest`. A refused program keeps its parsed signatures with a row of `null`, which means unknown, never empty.
+`cairn state`, or a `state` request, prints the program as it stands: every function of the program's own modules as `[signature, effect row]`, the declared types, the open diagnostics and the admitted edits, under one `digest`. A refused program keeps its parsed signatures with a row of `null`, which means unknown, never empty.
 
 ```sh
 cairn state examples/apps/kvstore > before.json
@@ -102,7 +102,7 @@ A `delta` request, or `--since`, gives only what changed, and applying it to the
 
 ## Interface migrations
 
-An edit can never change a signature. Changing one, such as adding a parameter or changing an error type, is a separate authorization that the host grants by name, and an edit session cannot reach it (`E-REQUEST`).
+An edit never changes a signature. A signature change, such as a new parameter or error type, is a separate authorization the host grants by name, which an edit session cannot reach (`E-REQUEST`).
 
 ```sh
 cairn migrate app --symbol lib.checksum --to "fn checksum(n:usize, bytes:ro<u8>[n], seed:u32) -> u32" > packet.json
@@ -124,15 +124,15 @@ It rechecks the whole program with every replacement in place, then writes each 
 
 ## Plan edits
 
-Tuning a function should not mean rewriting it. A plan edit (`cairn.plan/1`, `agent/plans.py`) lets the agent change only how one function's regions are scheduled. The packet lists the [plan items](concurrency.md#plans) its regions take, their ranges, the current plan and its predicted cost.
+A plan edit (`cairn.plan/1`, `agent/plans.py`) lets the agent change only how one function's regions are scheduled. The packet lists the [plan items](concurrency.md#plans) its regions take, their ranges, the current plan and its predicted cost.
 
 ```json
 {"protocol": "cairn.plan/1", "session": "<the packet's digest>", "items": {"grain": 1, "lanes": 8}}
 ```
 
-A reply names items and whole numbers, never source text, so nothing else can ride along. The host writes the plan, rechecks the program, and requires every function's receipt to be what it was, the plan of this function apart, and that plan to be the one the reply set. It refuses an item the regions do not take or a value out of range (`E-PLAN`), anything else in the reply (`E-REQUEST`), and a session already spent or reopened (`E-SESSION`). A plan sent to an edit host, or a body to a plan host, is `E-REQUEST`. A plan changes no result, so an admitted plan needs no test to be correct, only a measurement to be worth keeping.
+A reply names items and whole numbers, never source text. The host writes the plan, rechecks the program, and requires every function's receipt to be unchanged apart from this function's plan, which must be the one the reply set. It refuses an item the regions do not take or a value out of range (`E-PLAN`), anything else in the reply, a plan sent to an edit host or a body to a plan host (`E-REQUEST`), and a session already spent or reopened (`E-SESSION`). A plan changes no result, so an admitted plan needs no test to be correct, only a measurement to be worth keeping.
 
-A session opens on a function of any module, named with its module (`lib.spread`); a name two modules declare is `E-SYMBOL`, with the qualified names. Given a loaded project, `PlanHost().open(load_project(path), "lib.spread")` says under `written_in` the module, file and line the plan goes after. The plan is written after the function's declaration under the name its module gives it, and a plan that named the function from another module, such as `plan lib.spread { ... }` in the root, is removed rather than doubled.
+A session opens on a function of any module, named with its module (`lib.spread`); a name two modules declare is `E-SYMBOL`, with the qualified names. `PlanHost().open(load_project(path), "lib.spread")` says under `written_in` the module, file and line after which the plan is written, under the name its module gives the function. A plan that named it from another module, such as `plan lib.spread { ... }` in the root, is removed rather than doubled.
 
 ## Candidate history
 
@@ -162,11 +162,11 @@ A record's identity has five parts: `source`, the function and everything it cal
 | `hypothesis` | `claim` | an explanation nothing has confirmed |
 | `experiment` | `run`, `tests` | a run that would confirm or refute a hypothesis |
 
-`History(where).judged(function, base, contracts, targets)` splits a function's records into `current` and `stale`. A record is current while its source, contract and compiler match the program now and its target is one the caller works on; otherwise it is returned under `stale` with the parts that moved, and never as a current fact. An equal record is kept once, and an analysis such as a compile's reading is kept under the digest of everything it read, with its files. A function's implementations are not part of its source here: a plan selects one, and a candidate that selects it names it with its identity, so [`cairn tune`](tools.md#cairn-tune) cites the validation an implementation session recorded only while the implementation and its reference are as they were.
+`History(where).judged(function, base, contracts, targets)` returns a record as `current` while its source, contract and compiler match the program now and its target is one the caller works on, and otherwise under `stale` with the parts that moved. An equal record is kept once, and an analysis such as a compile's reading is kept under the digest of everything it read, with its files. A function's implementations are not part of its source: a candidate that selects one names it by its identity, so [`cairn tune`](tools.md#cairn-tune) cites an implementation session's validation only while the implementation and its reference are as they were.
 
 ## Implementation sessions
 
-An agent that writes a faster algorithm should not be able to change what the function means. An implementation session (`cairn.implementation/1`, `agent/implementations.py`) opens on one reference and admits new [implementations](abstractions.md#implementations) of it, each validated against the reference before the host keeps it.
+An implementation session (`cairn.implementation/1`, `agent/implementations.py`) opens on one reference and admits new [implementations](abstractions.md#implementations) of it, each validated against the reference before the host keeps it, so a faster algorithm cannot change what the function means.
 
 ```python
 from pathlib import Path
@@ -183,7 +183,7 @@ answer = host.respond({"protocol": "cairn.implementation/1", "handle": "i1", "ki
 assert answer["status"] == "validated" and answer["select_with"] == "plan prefix use prefix_blocks;"
 ```
 
-The packet shows the reference's declaration, row, ceiling and roundings, the implementations it already has, and what the host pinned, each with its digest: the tolerance on float results, the test policy (cases, seed, shrinking budget, time per call) and the permitted inputs. A submission is one implementation of the reference, new or replacing one of the same name, and any helpers it calls. The host splices it in beside the reference, rechecks the whole program with every `E-IMPL-*` rule, and runs [`cairn validate`](tools.md#cairn-validate) against the reference under the pinned policy. Only a validated implementation advances the source, and the answer says how to select it; selecting is the host's decision.
+The packet shows the reference's declaration, row, ceiling and roundings, the implementations it already has, and what the host pinned, each with its digest: the tolerance on float results, the test policy (cases, seed, shrinking budget, time per call) and the permitted inputs. A submission is one implementation of the reference, new or replacing one of the same name, and any helpers it calls. The host splices it in, rechecks the whole program with every `E-IMPL-*` rule, and runs [`cairn validate`](tools.md#cairn-validate) under the pinned policy. Only a validated implementation advances the source; the answer says how to select it, and selecting is the host's decision.
 
 | Code | Why |
 |---|---|
@@ -195,13 +195,11 @@ The packet shows the reference's declaration, row, ceiling and roundings, the im
 | `E-CALLER-EFFECT` | another function's row grew |
 | `E-VALIDATION` | validation failed, with the shrunk input in `finite.failed` and the `repair_hint`, or it could not decide, which is never success |
 
-The compiler's own refusals come back as they are (`E-IMPL-SIGNATURE`, `E-IMPL-WHEN`, `E-IMPL-EFFECT`, ...), located in the submission. A failing case is kept in the regressions file, so the next run of the project tests it again. A validated answer is compact: the identity, the condition, the row, what the implementation requires of the machine, the finite result with its counts and its label, which says it is finite testing and never proof, and Z3's answer apart from it. Every submission, admitted or refused, goes to the candidate history (`agent/history.py`) when the host names a directory as `records`: a `validation` record for one that validated, and a `failure` record with its stage and why for one that did not, under an identity made of the reference as written, the implementation's own identity, the pinned contract and the host. A `history` callback gets the same entry.
-
-`examples/implementations/loop.py` replays a scripted agent through one session: a blocked prefix sum that restarts each block is refused at `n = 16` with one nonzero element, asking for a looser tolerance is `E-TOLERANCE`, asking for fewer inputs is `E-DOMAIN`, and the repaired version validates.
+The compiler's own refusals come back as they are (`E-IMPL-SIGNATURE`, `E-IMPL-WHEN`, `E-IMPL-EFFECT`, ...), located in the submission, and a failing case is kept in the regressions file for the project's next test run. A validated answer holds the identity, the condition, the row, what the implementation requires of the machine, the finite result with its counts and its label, which says finite testing and never proof, and Z3's answer apart from it. When the host names a `records` directory, every submission goes to the [candidate history](#candidate-history): a `validation` record, or a `failure` record with its stage and why, under an identity made of the reference as written, the implementation's own identity, the pinned contract and the host. A `history` callback gets the same entry. [examples/implementations](examples.md#examplesimplementations) replays a scripted agent through one session.
 
 ## Resuming an investigation
 
-An agent that picks up another's work on a function does not need that conversation. `cairn state --symbol f` prints the investigation of `f` from its history (`--history DIR`, by default `.cairn/history` beside the manifest), current for this host (`--arch`, `--cxx`) and for the [device target](tools.md#the-device-target) (`--device-target`):
+`cairn state --symbol f` prints the investigation of `f` from its history (`--history DIR`, by default `.cairn/history` beside the manifest), current for this host (`--arch`, `--cxx`) and for the [device target](tools.md#the-device-target) (`--device-target`):
 
 ```sh
 cairn state app --symbol lib.spread > before.json
@@ -219,7 +217,7 @@ cairn state app --symbol lib.spread --since before.json    # only what changed
  "hypotheses": [], "experiments": [], "stale": {"records": 0, "by_part": {}}, ...}
 ```
 
-The packet holds the function's signature, row, plan and regions, the identity that holds now, and from the history only what still holds: per candidate what was measured and by which procedure, what a compile read, what failed and why, what was validated or profiled; the last searches with what they ranked best; and the hypotheses and suggested experiments, an experiment marked `done` once the runs it asks for are kept. Records that no longer hold are counted under `stale` by the part that moved. The packet above was 2,959 bytes for a function with three measured candidates. Running the same `cairn tune --measure` again from it starts no run: every measurement it needs is kept.
+Beside the function's signature, row, plan, regions and current identity, the packet holds only the history that still holds: per candidate what was measured and by which procedure, what a compile read, what failed and why, and what was validated or profiled; the last searches and what they ranked best; and the hypotheses and suggested experiments, an experiment `done` once the runs it asks for are kept. Records that no longer hold are counted under `stale` by the part that moved. The packet above was 2,959 bytes for a function with three measured candidates, and running the same `cairn tune --measure` again starts no run, since every measurement it needs is kept.
 
 ## Named choices
 
@@ -249,7 +247,7 @@ assert result["status"] == "smt-equivalent"
 
 The reply maps each slot to an expression string. `fill_json` refuses duplicate keys, extra fields, non-string values, text that would escape its slot, stale bindings and any choice the compiler refuses. The binding between a reply and its session lives in one host process: a saved JSON map is not an approved patch on its own.
 
-Types cannot tell `x+y` from `add_wrap(x,y)`, which differ only at overflow, so for the scalar fragment the checker asks Z3 for an admitted input on which the candidate and the reference differ, or on which only the candidate aborts. A distinguishing input is replayed in an independent Python interpreter before it is shown to the model. Code outside the SMT model (owners inside records, recursion, tasks, lanes, the device, closures, `dyn`, the foreign boundary) goes to finite tests, and anything the model cannot decide is `unknown`. The reference can misstate what a person wanted, and a nontrivial `--assume` is a precondition on callers that the native build does not check.
+Types cannot tell `x+y` from `add_wrap(x,y)`, which differ only at overflow, so for the scalar fragment the checker asks Z3 for an admitted input on which the candidate and the reference differ, or on which only the candidate aborts. A distinguishing input is replayed in an independent Python interpreter before it is shown to the model. Code outside the [SMT model](verification.md#value-level-source-equivalence) goes to finite tests, and anything the model cannot decide is `unknown`. The reference can misstate what a person wanted, and a nontrivial `--assume` is a precondition on callers that the native build does not check.
 
 ```sh
 python3 tools/ai/sketch_demo.py
