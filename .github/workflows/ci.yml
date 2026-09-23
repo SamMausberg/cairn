@@ -70,11 +70,11 @@ jobs:
           sudo apt-get install -y clang g++ libz3-4 python3-venv qemu-system-arm
           python3 -m venv .venv
           .venv/bin/python -m pip install -e '.[dev]'
-      # Ubuntu pipes every crash to apport, and a pipe takes a core whatever RLIMIT_CORE says unless
+      # The runner pipes every crash to systemd-coredump, and a pipe takes a core whatever RLIMIT_CORE says unless
       # it is 1. The sanitizers of the runner's clang 18 and g++ 13 set it to 0, so each expected trap in a sanitized
       # test program waited for its core to be piped: 1.4 s a trap under clang 18 on a desktop, and the soundness part
       # ran past its limit on the hundreds of traps in the elision test. Cores written to a file obey the limit.
-      - name: Write cores to a file, which RLIMIT_CORE of 0 turns off, instead of piping each one to apport
+      - name: Write cores to a file, which RLIMIT_CORE of 0 turns off, instead of piping each one to a crash helper
         run: cat /proc/sys/kernel/core_pattern && sudo sysctl -w kernel.core_pattern=core
       - name: Unit, native, sanitizer and agent-layer tests (GPU, Lean and QEMU parts skip when absent)
         run: ulimit -c 0 && .venv/bin/python -m pytest -q ${{ matrix.paths }} -n auto --durations=25
