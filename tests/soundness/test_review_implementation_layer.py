@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from cairn.cli import main
 from cairn.projects import export as exported
 from cairn.projects.project import load_project
 from emitted import code_of
@@ -64,3 +65,50 @@ def test_a_reidentified_export_record_runs_nothing_it_names(tmp_path, attack):
     assert code_of(lambda: exported.build(out, tmp_path / "builds")) in {"E-EXPORT-TAMPERED", "E-EXPORT-TOOLCHAIN"}
     assert not (tmp_path / "ran").exists() and not (tmp_path / "builds").exists()
 
+
+# --- Fixed: a validation holds only while everything the implementation calls is as it was -------------------------
+
+HELPED = """fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut s:u64 = 0;
+  for i in 0..n {
+    for j in 0..n { if j == i { s = add_wrap(s, xs[j]); } }
+  }
+  return s;
+}
+
+fn settle(x:u64) -> u64 = x;
+
+fn total_fast(n:usize, xs:ro<u64>[n]) -> u64 implements total {
+  let mut s:u64 = 0;
+  for i in 0..n { s = add_wrap(s, xs[i]); }
+  return settle(s);
+}
+
+fn main() -> i32 { return 0; }
+"""
+
+
+def test_a_validation_goes_stale_when_a_helper_of_the_implementation_changes(tmp_path, capsys):
+    """An implementation's identity digests the two declarations as written, not what they call. A validation stayed
+    current after the helper `settle` changed, and `cairn tune --write` wrote `plan total use total_fast;` for an
+    implementation that now fails validation, with the same identity."""
+    if not shutil.which("clang++"):
+        pytest.skip("clang++ unavailable")
+    root, history = tmp_path / "helped", tmp_path / "history"
+    (root / "src").mkdir(parents=True)
+    (root / "src/main.cairn").write_text(HELPED)
+    (root / "cairn.toml").write_text('[project]\nname = "helped"\nsources = ["src/main.cairn"]\n')
+    validate = ["validate", str(root), "--symbol", "total_fast", "--format", "json"]
+    assert main([*validate, "--history", str(history)]) == 0
+    first = json.loads(capsys.readouterr().out)
+    (root / "src/main.cairn").write_text(
+        HELPED.replace("settle(x:u64) -> u64 = x;", "settle(x:u64) -> u64 = add_wrap(x, 1);")
+    )
+    assert main(validate) == 1  # it now returns the sum plus one
+    assert json.loads(capsys.readouterr().out)["identity"] == first["identity"]  # the receipt's identity did not move
+    tune = ["tune", str(root), "--symbol", "total", "--at", "n=1e4", "--history", str(history), "--write"]
+    assert main([*tune, "--format", "json"]) == 0
+    answer = json.loads(capsys.readouterr().out)
+    [row] = [c for c in answer["candidates"] if c.get("use") == "total_fast"]
+    assert isinstance(row["validated"], str) and "no validation holds" in row["validated"]
+    assert "use total_fast" not in (root / "src/main.cairn").read_text()

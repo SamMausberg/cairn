@@ -166,7 +166,8 @@ def test_kept_cases_replay_against_every_implementation(tmp_path):
 
 
 def test_cairn_validate_and_cairn_test_on_the_example_project(tmp_path):
-    from cairn.agent.history import History
+    from cairn.agent.history import History, selectable
+    from cairn.projects.project import load_project
 
     project = ROOT / "examples/implementations"
     done = subprocess.run([sys.executable, str(ROOT / "bin/cairn"), "validate", str(project), "--symbol", "prefix_by4",
@@ -179,7 +180,9 @@ def test_cairn_validate_and_cairn_test_on_the_example_project(tmp_path):
     assert [(r["id"], r["kind"], r["candidate"]) for r in kept] == [
         (record["history"], "validation", "plan prefix use prefix_by4;")
     ]  # the name cairn tune gives it
-    assert kept[0]["variant"] == record["identity"] and kept[0]["detail"]["evidence"] == "finite-tested"
+    source = load_project(project).source  # kept under the implementation with everything it calls
+    assert kept[0]["variant"] == selectable(source, {"prefix_by4": record})["prefix_by4"]["identity"]
+    assert kept[0]["variant"] != record["identity"] and kept[0]["detail"]["evidence"] == "finite-tested"
     done = subprocess.run([sys.executable, str(ROOT / "bin/cairn"), "test", str(project), "--format", "json"],
                           capture_output=True, text=True, timeout=600)  # fmt: skip
     tested = json.loads(done.stdout)

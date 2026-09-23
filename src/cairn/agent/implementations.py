@@ -65,14 +65,16 @@ def pinned(declaration: str, policy: dict[str, Any]) -> dict[str, str]:
 
 def remember(where: Path, base: str, reference: str, entry: dict[str, Any]) -> dict[str, Any]:
     """One submission or validation as a candidate-history record (agent/history.py): its identity is the reference
-    as written (`base`, history.as_written), the implementation's own identity, or the submission's digest when it has
-    none, the pinned contract and the host, where validation ran. The candidate is named `plan f use g;`, as
+    as written (`base`, history.as_written), the implementation's own identity with everything it calls
+    (`variant`, history.selectable), or the submission's digest when it has none, the pinned contract and the host,
+    where validation ran. The candidate is named `plan f use g;`, as
     `cairn tune` names the same selection, so one implementation has one name in the history."""
     from ..perf.plan_source import selecting
     from . import history
 
     contract = {k: entry[k] for k in CONTRACT}
-    who = history.identity(base, entry.get("identity") or entry["submission_sha256"], contract, "host")
+    variant = entry.get("variant") or entry.get("identity")
+    who = history.identity(base, variant or entry["submission_sha256"], contract, "host")
     if entry["status"] == "validated":
         kind, detail = "validation", {"evidence": "finite-tested", "finite": entry["finite"], "smt": entry["smt"]}
     else:
@@ -81,7 +83,7 @@ def remember(where: Path, base: str, reference: str, entry: dict[str, Any]) -> d
                   **({"inputs": entry["inputs"]} if entry.get("inputs") else {})}  # fmt: skip
         kind = "failure"
     named = selecting(reference, entry["implementation"]) if entry.get("implementation") else "submission"
-    return history.record(where, kind, reference, named, who, detail, variant=entry.get("identity"))
+    return history.record(where, kind, reference, named, who, detail, variant=variant)
 
 
 class ImplementationSession:
@@ -248,6 +250,10 @@ class ImplementationHost:
         info = receipt[s.reference]["implementations"][name]
         entry = {**entry, "implementation": name, "identity": info["identity"], "finite": record.get(
             "finite", {}).get("status", record["status"]), "smt": record.get("smt", {}).get("status")}  # fmt: skip
+        if self.records is not None:  # kept under what the implementation calls too, so an edited helper is stale
+            from . import history
+
+            entry["variant"] = history.selectable(candidate, {name: info})[name]["identity"]
         if record["status"] != "passed":
             finite = record.get("finite", {})
             self.log(s, {**entry, "status": "refused", "code": "E-VALIDATION", "why": finite.get("status", "unknown"),

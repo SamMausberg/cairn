@@ -137,7 +137,7 @@ def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]
             why = "nvcc and cuobjdump are needed, or the compile budget was spent" if card else "no device target"
             lines.append(line(COMPILER, "this report", f"no device resources for {missing}: {why}"))
     targets = {kept.digest(host_target(arch, cxx)), device_identity(card)}
-    table = checked["a"][2].get(name, {}).get("implementations", {})  # each implementation's identity
+    table = kept.selectable(source, checked["a"][2].get(name, {}).get("implementations"))  # with what each calls
     variants = {k: variant(key, table) for k, key in sides.items()}
     held = history_lines(source, name, variants, sizes, history, targets) if history is not None else {}
     lines += held.get("lines", [])

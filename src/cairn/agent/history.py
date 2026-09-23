@@ -75,9 +75,16 @@ def compiler() -> str:
 def closure(source: str, symbol: str) -> str:
     """The digest of `symbol` and everything it calls as lowered, each canonical (verify/emission.py). An
     implementation of a function is not one of its callees: a plan selects it, and a candidate names it."""
-    from ..verify.emission import canonical, emitted
+    from ..verify.emission import emitted
 
-    _, receipts, code, types = emitted(source)
+    return closed(emitted(source), symbol)
+
+
+def closed(lowered: tuple[Any, ...], symbol: str) -> str:
+    """`closure` of `symbol` in a program already lowered by `verify.emission.emitted`."""
+    from ..verify.emission import canonical
+
+    _, receipts, code, types = lowered
     if symbol not in receipts:
         raise ValueError(f"No function {symbol} to identify.")
     seen, pending = set(), [symbol]
@@ -96,6 +103,19 @@ def as_written(source: str, symbol: str) -> str:
     from ..perf.plan_source import Placement
 
     return closure(Placement(source, symbol).apply((), use=None), symbol)
+
+
+def selectable(source: str, table: dict[str, Any] | None) -> dict[str, Any]:
+    """A reference's implementations as its receipt lists them, each identity widened by the implementation and
+    everything it calls as lowered (`closure`). The receipt's identity is the two declarations as written, so a
+    helper changed after a validation would otherwise leave the validation current. A validation of an
+    implementation, and every candidate that selects one, is kept under this identity."""
+    if not table:
+        return {}
+    from ..verify.emission import emitted
+
+    lowered = emitted(source)
+    return {g: {**row, "identity": digest([row["identity"], closed(lowered, g)])} for g, row in table.items()}
 
 
 def identity(base: str, variant: Any, contract: Any, target: Any, artifact: str | None = None) -> dict[str, Any]:

@@ -516,7 +516,8 @@ def remembered(where: Path, source: str, reference: str, implementation: str, re
     ref = next(f for f in Parser(source).parse().functions if f.name == reference)
     finite = record["finite"]
     entry = {"identity": record["identity"], "implementation": implementation, "finite": finite["status"],
-             "smt": record["smt"]["status"], **pinned(source[ref.start : ref.end], record["policy"])}  # fmt: skip
+             "smt": record["smt"]["status"], **pinned(source[ref.start : ref.end], record["policy"]),
+             "variant": history.selectable(source, {implementation: record})[implementation]["identity"]}  # fmt: skip
     if record["status"] == "passed":
         entry["status"] = "validated"
     else:

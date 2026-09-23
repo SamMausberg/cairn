@@ -85,12 +85,12 @@ def label(name: str, key: Key) -> str:
 
 def validations(source: str, name: str, receipts: dict[str, Any], alternatives: list[str],
                 recorder: Recorder | None) -> dict[str, Any]:  # fmt: skip
-    """For each implementation of `name`, the validation the history holds for it as it is now (its identity in the
-    receipt, the reference as written, this compiler); none without a history. An implementation without one is
-    searched and priced but never chosen or timed: selecting it could change a result."""
+    """For each implementation of `name`, the validation the history holds for it as it is now (its identity with
+    everything it calls, `history.selectable`, the reference as written, this compiler); none without a history. An
+    implementation without one is searched and priced but never chosen or timed: selecting it could change a result."""
     if recorder is None:
         return {}
-    table = receipts[name].get("implementations", {})
+    table = recorder.implementations
     out: dict[str, Any] = {}
     for g in alternatives:
         found = recorder.history.holding(name, recorder.base, "validation", table.get(g, {}).get("identity"))
@@ -173,7 +173,7 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
             contract(source, name),
             host_target(arch, cxx),
             target,
-            receipts[name].get("implementations"),
+            kept.selectable(source, receipts[name].get("implementations")),
         )
     if "device" in kinds:
         from .device import available
