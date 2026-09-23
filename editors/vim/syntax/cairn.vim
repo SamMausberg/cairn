@@ -13,7 +13,7 @@ syntax keyword cairnModifier as dyn linear mut pub pure ro rw unsafe
 syntax keyword cairnConstant false true zeroed
 syntax keyword cairnType Array Atomic Buf Dyn Group IoRing Mutex Ticket bf16 bool f16 f32 f64 f8e4m3 f8e5m2 i16 i32 i64 i8 u16 u32 u64 u8 usize void
 syntax keyword cairnVariant Empty Err Invalid None Ok Overflow Some
-syntax match cairnBuiltin /\v<(abs|add_wrap|asm|assert|ceil|collect|floor|from_bits|len|max|min|mmio_read|mmio_write|mul_wrap|quantize|quantize_stochastic|shl_wrap|shr|sqrt|sub_wrap|swap|take|to_bits|transfer|trunc|wait)>\ze\s*[[(]/
+syntax match cairnBuiltin /\v<(abs|add_wrap|asm|assert|ceil|collect|eprint|eprintln|floor|format|from_bits|len|max|min|mmio_read|mmio_write|mul_wrap|print|println|quantize|quantize_stochastic|shl_wrap|shr|sqrt|sub_wrap|swap|take|to_bits|transfer|trunc|wait)>\ze\s*[[(]/
 syntax match cairnCall /\v<\l\w*\ze\s*\(/
 syntax match cairnFunction /\v(<(fn|kernel|test)\s+)@<=\h\w*/
 syntax match cairnUserType /\v<\u\w*>/

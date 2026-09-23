@@ -112,6 +112,7 @@ class Expr:
     established: bool = False  # The checker showed this site's guard cannot fail (facts.py); lowering omits it.
     proof: Any = None  # Why it cannot: ("facts", the facts used) or ("span", part), checked by verify/elision.py.
     span: Any = None  # The part `x[lo..hi]` of the same call whose bounds this node repeats (calls.spanned).
+    char: bool = False  # An integer written as a character literal 'c', which print writes as its byte.
 
 
 @dataclass

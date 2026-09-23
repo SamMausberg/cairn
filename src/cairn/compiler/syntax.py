@@ -211,7 +211,7 @@ class Parser:
             text = unescape(t)
             if t.s[0] == "'" and len(text.encode("latin-1", "replace")) != 1:
                 fail("E-LEX", "A character literal is exactly one byte.", t)
-            e = Expr("str", text, [], *at) if t.s[0] == '"' else Expr("int", str(ord(text)), [], *at)
+            e = Expr("str", text, [], *at) if t.s[0] == '"' else Expr("int", str(ord(text)), [], *at, char=True)
         else:
             e = Expr("name", self.ident(), [], *at)
         e.start, e.end = self.ts[start].start, self.ts[self.i - 1].end

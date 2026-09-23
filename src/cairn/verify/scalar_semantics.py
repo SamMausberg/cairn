@@ -128,6 +128,7 @@ def implementation_hash():
                 "compiler/traits.py",
                 "compiler/constants.py",
                 "compiler/builtins.py",
+                "compiler/printing.py",
                 "compiler/expansion.py",
                 "compiler/gradients.py",
                 "compiler/codegen.py",

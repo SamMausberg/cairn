@@ -40,12 +40,19 @@ def signature(f: Function) -> str:
 ESCAPES = {"\n": "\\n", "\t": "\\t", "\r": "\\r", "\0": "\\0", "\\": "\\\\", '"': '\\"'}
 
 
+def quoted(text: str, quote: str) -> str:
+    escapes = {**ESCAPES, quote: "\\" + quote}
+    return quote + "".join(escapes.get(c, c if 32 <= ord(c) < 127 else f"\\x{ord(c):02x}") for c in text) + quote
+
+
 def format_expr(e: Expr) -> str:
     args = [format_expr(a) for a in e.args] if e.tag != "lambda" else []
+    if e.tag == "int" and e.char:  # a character literal stays one: print writes its byte, not its number
+        return quoted(chr(int(e.val)), "'")
     if e.tag in {"name", "int", "float", "bool", "function"}:
         return e.val
     if e.tag == "str":
-        return '"' + "".join(ESCAPES.get(c, c if 32 <= ord(c) < 127 else f"\\x{ord(c):02x}") for c in e.val) + '"'
+        return quoted(e.val, '"')
     if e.tag == "call":
         targs = e.ref if isinstance(e.ref, tuple) and all(isinstance(t, Type | int) for t in e.ref) else ()
         shown = "[" + ", ".join(t.display() if isinstance(t, Type) else str(t) for t in targs) + "]" if targs else ""

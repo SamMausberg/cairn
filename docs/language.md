@@ -422,6 +422,39 @@ test average(x:u64) { assert(x > 0); }
 A test is `test average { ... }`: one name per module, no parameters, no result.
 ```
 
+## print and format
+
+`println("total ", n, ' ', ok)` writes its arguments in turn, then a newline. An integer prints in decimal and a bool as `true` or `false`. A character literal written as the argument prints as its byte, while a `u8` held anywhere, a constant included, prints as its number. An `f32` or `f64` prints in the shortest form that reads back to the same value, fixed or with an exponent, whichever has fewer characters: `0.1`, `1.5`, `1e+05`, `-0`, `nan`. A string, a `u8` view, a part, a `Buf` or `Array` of `u8`, and a record that lends a `u8` view, a `Vec[u8]` among them, print as their bytes. A negated literal with nothing else to say its type, `println(-1)`, is an `i64`.
+
+`print` writes without the newline, and `eprint` and `eprintln` write to standard error. `format(out, ...)` appends the same text to `out`, a `Vec[u8]` or any record whose `lends buf[0..len]` names a `Buf[u8]` and its length, growing it as `vec.push` does.
+
+```cairn
+import std.vec (Vec);
+
+fn report(n:usize, name:ro<u8>[n], hits:u64, rate:f64) { println(name, ": ", hits, " hits, ", rate, " per second"); }
+
+fn main() -> i32 {
+  let mut line = vec.new[u8]();
+  format(line, "worker ", 3);
+  report(line, 1500, 12.5);
+  eprintln("done ", true, ' ', -1);
+  return 0;
+}
+```
+
+Every argument is computed, left to right, before a byte is written, so an argument whose guard fails aborts the program with nothing of that line written. The operand-order rules still apply to the arguments, as to any call's (`E-EFFECT-ORDER`). The four print forms write through one buffer of 4096 bytes on the stack, so a line up to that length leaves in one `write`, which a pipe keeps whole. They allocate nothing, and their row is `io` and `ffi:write`, with `read:x` for a view they are lent. `format` writes `out`, charges `alloc` and `free` for the growth, and allocates at most once a call. A write the kernel refuses, to a closed pipe or a full disk, ends that print where it stopped and traps nothing.
+
+Anything else is `E-PRINT-ARG`: a record, a sum, a view of another element type, or a storage float, which widens with `f32(x)` first. A target `format` cannot grow is `E-FORMAT-TARGET`. A device lane cannot print (`E-PLACEMENT`), and neither can a host lane, whose row may not hold `io` (`E-PARALLEL-CALL`); a freestanding image has no stream to write to, and its build refuses the row. A program's own function named `print` or `format` wins, as it does for the math builtins, and `std.io`'s functions stay.
+
+```cairn rejects E-PRINT-ARG
+struct Point { x:u64; y:u64; }
+fn show(p:Point) { println(p); }
+```
+
+```text
+print writes integers, bools, character literals, floats and bytes; format a Point with std.fmt first, or print its fields.
+```
+
 ## What the language does not have
 
 No inheritance and no implicit boxing. No lifetime annotations: a borrow cannot outlive the call it is written in. No implicit conversion, no operator overloading, no shadowing, no block-tail return. No wildcard arm, and no propagation form other than `try`. No exception, no unwinding and no rollback: a failed guard aborts. No orphan rule, because coherence is judged over the whole program. No cancellation of a task or of queued device work. No loop that implies parallelism. No downloads: dependencies are vendored sources.

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import facts, rings
+from . import facts, printing, rings
 from .traits import vtable
 from .tree import (
     BOOL,
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 WRAPPING = {"add_wrap", "sub_wrap", "mul_wrap", "shl_wrap", "shr"}
 SOFT = {"take", "swap", "transfer", "mmio_read", "mmio_write", "asm", "wait", "collect"}
 MATH = {"sqrt", "floor", "ceil", "trunc", "abs", "to_bits"}  # 1.4: a program's own function of the name wins
-SOFT |= MATH | {"quantize", "quantize_stochastic", "from_bits", "assert"}
+SOFT |= MATH | printing.NAMES | {"quantize", "quantize_stochastic", "from_bits", "assert"}
 QUANTIZED = [*STORAGE, "i8", "u8", "i16", "u16"]  # where one rounding of x / scale is exact (cairn_float.hpp)
 PATTERN = {"f32": "u32", "f64": "u64", **{n: "u16" if STORAGE[n][0] + STORAGE[n][1] > 7 else "u8" for n in STORAGE}}
 F32 = Type("f32")
@@ -379,6 +379,7 @@ def lower_float(g: Emitter, e: Expr) -> str:
 TABLE: dict[str, tuple[Any, Any]] = {
     "len": (check_len, lower_len),
     "assert": (check_assert, lower_assert),
+    **dict.fromkeys(printing.NAMES, (printing.check_print, printing.lower_print)),
     **dict.fromkeys(NUMERIC, (check_convert, lower_convert)),
     **dict.fromkeys(WRAPPING | {"min", "max"}, (check_binary, lower_binary)),
     **dict.fromkeys(MATH, (check_math, lower_math)),
