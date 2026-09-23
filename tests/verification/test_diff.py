@@ -293,3 +293,21 @@ def test_an_unproven_public_function_makes_the_level_unknown_unless_it_is_alread
     text = page.read_text()
     assert "Semantic version: **unknown (at least patch)**." in text
     assert "It is unknown, because these public functions are unproven: `spin`." in text
+
+
+def test_a_comparison_that_runs_past_its_limit_is_stopped_and_unknown():
+    import time
+
+    from cairn.verify.diff import isolated
+
+    def forever():
+        while True:
+            pass
+
+    start = time.monotonic()
+    stopped = isolated(forever, 1.0)
+    assert stopped == {"class": "unknown", "reason": "The comparison ran past its 1 s limit and was stopped."}
+    assert time.monotonic() - start < 10
+    assert isolated(lambda: {"class": "smt-equivalent"}, 30) == {"class": "smt-equivalent"}
+    failed = isolated(lambda: 1 / 0, 30)
+    assert failed["class"] == "unknown" and "ZeroDivisionError" in failed["reason"]

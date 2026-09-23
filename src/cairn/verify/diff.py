@@ -23,6 +23,7 @@ that declares no module.
 from __future__ import annotations
 
 import dataclasses
+import multiprocessing
 import re
 import shutil
 import time
@@ -223,6 +224,33 @@ def reach(source: str, module: str) -> str:
     return "".join(text for m, text in chunks if m in need)
 
 
+def isolated(call, seconds: float) -> dict[str, Any]:
+    """`call()` in a forked child that is stopped after `seconds`. Z3 cannot be interrupted while it reads a query,
+    and a large one can take it longer than any budget, so a comparison runs where it can be stopped."""
+    context = multiprocessing.get_context("fork")
+    receive, send = context.Pipe(duplex=False)
+
+    def run():
+        try:
+            send.send(call())
+        except Exception as e:  # a comparison that fails establishes nothing
+            send.send({"class": "unknown", "reason": f"The comparison failed: {type(e).__name__}: {e}"})
+
+    child = context.Process(target=run, daemon=True)
+    child.start()
+    send.close()
+    try:
+        if receive.poll(seconds):
+            return receive.recv()
+        return {"class": "unknown", "reason": f"The comparison ran past its {seconds:.0f} s limit and was stopped."}
+    except EOFError:
+        return {"class": "unknown", "reason": "The comparison's process ended without an answer."}
+    finally:
+        if child.is_alive():
+            child.kill()
+        child.join()
+
+
 def compare(o: Version, n: Version, name: str, deadline: float, timeout_ms: int) -> dict[str, Any]:
     """The solver's answer for one function whose code differs, as a class and its evidence. A program past the
     value model's size limit is handed to it as the modules the function can reach."""
@@ -282,7 +310,8 @@ def classes(o: Version, n: Version, timeout_ms: int, budget_s: float, compilers:
         elif o.functions[name].extern or n.functions[name].extern:
             entry |= {"class": "unknown", "reason": "A foreign declaration's body is outside both programs."}
         else:
-            entry |= compare(o, n, name, deadline, timeout_ms)
+            limit = max(1.0, min(deadline - time.monotonic(), 20 * timeout_ms / 1000))  # its share, at most
+            entry |= isolated(lambda name=name: compare(o, n, name, deadline, timeout_ms), limit)
             if entry["class"] == "unknown" and name in own_same:
                 entry["reason"] += " Its own code is identical; something it calls changed."
         if entry["class"] == "behavior-changed" and left > 0:

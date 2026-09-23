@@ -35,6 +35,22 @@ def test_api_parse_error_unknown():
         assert s.check("(assert INVALID)", {})["status"] == "unknown"
 
 
+def test_a_check_that_runs_past_its_watchdog_is_interrupted_and_unknown():
+    """Factoring a 62-bit semiprime keeps Z3 busy for far longer than a tenth of a second."""
+    import time
+
+    semiprime = 2305843009213693951 * 3  # a Mersenne prime times three, above 2**62
+    query = ("(declare-const x (_ BitVec 128)) (declare-const y (_ BitVec 128))"
+             f"(assert (= (bvmul x y) (_ bv{semiprime * 5 + 2} 128)))"
+             "(assert (bvugt x (_ bv1 128))) (assert (bvugt y (_ bv1 128)))"
+             "(assert (bvult x (_ bv18446744073709551616 128))) (assert (bvult y (_ bv18446744073709551616 128)))")  # fmt: skip
+    with Solver(30000, watchdog_ms=200) as s:  # Z3's own timeout is far away; the watchdog is what stops it
+        start = time.monotonic()
+        result = s.check(query, {})
+    assert result["status"] == "unknown" and "interrupted at 200 ms" in result["reason"]
+    assert time.monotonic() - start < 10
+
+
 @pytest.mark.parametrize("ty", ["i32", "i64"])
 def test_signed_remainder_not_python_modulo(ty):
     source = fn("return x%y;", f"x:{ty},y:{ty}", ty)

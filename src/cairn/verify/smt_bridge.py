@@ -9,6 +9,7 @@ from __future__ import annotations
 import ctypes as C
 import ctypes.util
 import hashlib
+import threading
 from typing import Any
 
 P = C.c_void_p
@@ -41,6 +42,7 @@ SIGNATURES = {  # the C functions used, with their result and argument types
     "Z3_get_bool_value": (C.c_int, [P, P]),
     "Z3_get_numeral_string": (S, [P, P]),
     "Z3_get_full_version": (S, []),
+    "Z3_interrupt": (None, [P]),
 }
 
 
@@ -49,7 +51,11 @@ class SolverUnavailable(RuntimeError):
 
 
 class Solver:
-    def __init__(self, timeout_ms: int = 3000):
+    """One Z3 context. Its `timeout` parameter is what Z3 is asked to keep; a solver for a named logic can run past
+    it, so a watchdog interrupts any check still running at `watchdog_ms` (twice the timeout, and half a second more,
+    by default), and that check is unknown with the reason."""
+
+    def __init__(self, timeout_ms: int = 3000, watchdog_ms: int | None = None):
         if type(timeout_ms) is not int or not 1 <= timeout_ms <= 30000:
             raise ValueError("Solver timeout must be 1..30000 milliseconds.")
         library = ctypes.util.find_library("z3")
@@ -65,6 +71,7 @@ class Solver:
         self.version = self.lib.Z3_get_full_version().decode()
         self.library = library
         self.timeout_ms = timeout_ms
+        self.watchdog_ms = watchdog_ms if watchdog_ms is not None else 2 * timeout_ms + 500
         self.errors: list[str] = []
         self.ctx = None
         cfg = self.lib.Z3_mk_config()
@@ -125,7 +132,24 @@ class Solver:
             z.Z3_solver_from_string(self.ctx, solver, text.encode())
             if self.errors:
                 return unknown("SMT parse/API error", errors=list(self.errors))
-            status = z.Z3_solver_check(self.ctx, solver)
+            fired = threading.Event()
+
+            def interrupt():
+                fired.set()
+                z.Z3_interrupt(self.ctx)
+
+            watchdog = threading.Timer(self.watchdog_ms / 1000, interrupt)
+            watchdog.daemon = True
+            watchdog.start()
+            try:
+                status = z.Z3_solver_check(self.ctx, solver)  # ctypes lets the watchdog run while Z3 works
+            finally:
+                watchdog.cancel()
+                watchdog.join()  # no thread outlives the check, so a caller may fork afterwards
+            if fired.is_set():
+                return unknown(
+                    f"Z3 ran past its {self.timeout_ms} ms timeout and was interrupted at {self.watchdog_ms} ms."
+                )
             if self.errors:
                 return unknown("SMT API error", errors=list(self.errors))
             if status == -1:
