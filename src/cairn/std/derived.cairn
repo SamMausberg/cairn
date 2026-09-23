@@ -1,8 +1,7 @@
-module std.derived;
-import std.core;
-
 // Implementations written once for any record whose fields already have them:
 // `derive eq for Point;`, `derive ord for Point;`, `derive hash for Point;`.
+module std.derived;
+import std.core;
 
 // Field-wise equality.
 pub recipe eq for R {

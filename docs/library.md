@@ -2,7 +2,7 @@
 
 Twenty modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
 
-[std_api.md](std_api.md) holds every signature and every effect row, generated from these sources by `cairn doc --std`. This file is the working guide: what each module is for, a program that uses it, and where it bites.
+[std_api.md](std_api.md) indexes a page per module that holds every signature and every effect row, generated from these sources by `make docs`. This file is the working guide: what each module is for, a program that uses it, and where it bites.
 
 Three habits explain the API shape. A lookup answers with an index, never a borrow: `map.find` and `arena.find` return `Option[usize]`, and the caller reads `m.vals[slot]` itself, which is a place and can be passed on, borrowed, taken or assigned. A position kept across changes is a handle checked on use: `arena.Handle` and `map.Slot`. Every array parameter carries its length, `f(n, xs)` against a callee's `xs:ro<u8>[n]`; a whole view or buffer matches by name identity, and a part `v.data[lo..hi]` matches whatever `usize` expression you pass, at the cost of one bounds guard. Costs are in the signature: a function that allocates says `alloc` in its effect row and so does everyone who calls it.
 

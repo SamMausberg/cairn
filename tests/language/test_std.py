@@ -750,11 +750,17 @@ def test_every_packaged_template_needs_only_what_its_bounds_promise():
 
 
 def test_the_api_reference_is_what_the_compiler_says_today():
-    """docs/std_api.md is generated (`cairn doc --std`): signatures, bounds, comments and inferred effect rows."""
-    from cairn.editor.docs import document, standard_library
+    """docs/std_api.md and docs/std/ are generated (`make docs`): signatures, bounds, comments and effect rows."""
+    from cairn.editor.docs import GENERATED, NOTE, document, standard_library, standard_library_pages
 
     root = pathlib.Path(__file__).resolve().parents[2]
-    assert (root / "docs/std_api.md").read_text(encoding="utf-8") == standard_library(), "run `make docs`"
+    pages = standard_library_pages()
+    assert {f"std/{p.name}" for p in (root / "docs/std").glob("*.md")} | {"std_api.md"} == set(pages), "run `make docs`"
+    for name, text in pages.items():
+        assert (root / "docs" / name).read_text(encoding="utf-8") == text, f"run `make docs`: docs/{name} drifted"
+    whole = standard_library()
+    for name in set(pages) - {"std_api.md"}:  # each page is its module's section of the one document, word for word
+        assert pages[name].removeprefix(GENERATED).removesuffix("\n\n" + NOTE + "\n") in whole, name
     own = document("module m;\n// Doubles.\npub fn twice[T: integer](x:T) -> T = x + x;\nfn hidden() {}\n")
     assert "pub fn twice[T:integer](x:T) -> T" in own and "Doubles." in own and "hidden" not in own
     assert "pub fn twice[T:integer](x:T) -> T  // effects: trap" in own

@@ -4,5 +4,6 @@
 
 # Written by generators; `make docs` and `make editors` rewrite them.
 docs/std_api.md linguist-generated
+docs/std/** linguist-generated
 editors/vscode/syntaxes/cairn.tmLanguage.json linguist-generated
 editors/vim/** linguist-generated

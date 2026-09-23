@@ -18,7 +18,7 @@ DOCUMENTS = [
     *sorted(
         str(p.relative_to(ROOT))
         for p in ROOT.glob("docs/**/*.md")
-        if p.name != "std_api.md" and "history" not in p.parts
+        if p.name != "std_api.md" and "history" not in p.parts and "std" not in p.parts  # the generated reference
     ),
 ]
 BLOCKS = [

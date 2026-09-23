@@ -55,7 +55,7 @@ def test_the_documentation_follows_the_writing_rules():
             if EMOJI.search(line):
                 broken.append(f"{name}:{number}: an emoji")
             sentence = bool(re.match(r"[A-Za-z`*\[(]", line))
-            if sentence and previous and name != "docs/std_api.md":  # the generated reference pairs two lines
+            if sentence and previous and not name.startswith("docs/std"):  # the generated reference pairs lines
                 broken.append(f"{name}:{number}: a paragraph continues on a second line; one paragraph per line")
             previous = line if sentence else ""
     assert not broken, "\n".join(broken)

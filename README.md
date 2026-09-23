@@ -111,7 +111,7 @@ cairn run examples/embedded                # bare-metal AArch64 under QEMU
 | `state`, `migrate` | The program as it stands under one digest, for an agent to resume from; one authorized signature change carried through every caller, every file or none. |
 | `fmt`, `doc`, `lsp` | A comment-preserving formatter, an API reference generated from the checked program, a language server. |
 
-`make lint test proof` are the everyday gates. `make gpu embedded` need the hardware and the emulator, and `make docs` regenerates [docs/std_api.md](docs/std_api.md).
+`make lint test proof` are the everyday gates. `make gpu embedded` need the hardware and the emulator, and `make docs` regenerates the API reference, [docs/std_api.md](docs/std_api.md) and a page per module.
 
 ## Documentation
 
@@ -135,7 +135,7 @@ tests/              language/ soundness/ verification/ projects/ runtime/ toolin
 tools/              checks/ ai/ release/
 bench/              cpu/ gpu/ host_regions/ suite/
 editors/            VS Code and Cursor extension, Vim runtime files, both generated from the compiler vocabulary
-docs/               the documentation, the generated std_api.md, project data, history/
+docs/               the documentation, the generated std_api.md and std/, project data, history/
 evidence/           executed results by release, and their limits
 ```
 

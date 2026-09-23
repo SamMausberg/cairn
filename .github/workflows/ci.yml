@@ -35,8 +35,9 @@ jobs:
           .venv/bin/python bin/cairn verify examples/proof_scope/reference.cairn examples/proof_scope/candidate.cairn --all
       - name: The generated API reference is current
         run: |
-          .venv/bin/python bin/cairn doc --std > /tmp/std_api.md
-          diff -u docs/std_api.md /tmp/std_api.md
+          .venv/bin/python bin/cairn doc --std --pages /tmp/docs --format json
+          diff -u docs/std_api.md /tmp/docs/std_api.md
+          diff -ru docs/std /tmp/docs/std
   proofs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30

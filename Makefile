@@ -18,7 +18,7 @@ help:
 	@echo 'calibrate-device measures the device into results/perf_model/device.json (runs device code)'
 	@echo 'embedded  the freestanding image under QEMU (needs an AArch64 host)'
 	@echo 'bench     the preregistered CPU baseline suite (hours)'
-	@echo 'docs      regenerate docs/std_api.md'
+	@echo 'docs      regenerate docs/std_api.md and docs/std/'
 	@echo 'editors   regenerate the TextMate and Vim grammars from the compiler vocabulary'
 	@echo 'wheel     build the package offline into dist/'
 	@echo 'audit     scan the committed history for credentials and binaries'
@@ -85,7 +85,7 @@ embedded:
 	$(PYTHON) -m pytest -q tests/projects/test_freestanding.py
 
 docs:
-	$(CAIRN) doc --std > docs/std_api.md
+	$(CAIRN) doc --std --pages docs --format json > /dev/null
 
 editors:
 	PYTHONPATH=src $(PYTHON) -m cairn.editor.grammar

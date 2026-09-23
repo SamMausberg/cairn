@@ -148,6 +148,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"doc"}, "--module", {"action": "append",
                            "help": "Document this module (repeatable); default: the project's own."}),
     ({"doc"}, "--std", {"action": "store_true", "help": "Document the packaged standard library instead."}),
+    ({"doc"}, "--pages", {"type": Path, "metavar": "DIR", "help": "With --std, write DIR/std_api.md and one page per "
+                          "module under DIR/std/ instead of printing; a page no module has is removed."}),
     ({"inspect", "migrate"}, "--symbol", {"required": True}),
     ({"inspect"}, "--scope", {"choices": ["focused", "component"], "default": "focused", "help": "focused: the symbol "
                               "and the interfaces around it; component: its whole call graph."}),
@@ -308,9 +310,18 @@ def main(argv: list[str] | None = None) -> int:
         if a.command in {"run", "test"} and not 64 <= a.memory_mib <= 65536:
             raise ProjectError("Native memory limit must be 64..65536 MiB.")
         if a.command == "doc" and a.std:  # The packaged library needs no project.
-            from .editor.docs import standard_library
+            from .editor.docs import standard_library, standard_library_pages
 
-            print(standard_library(), end="")
+            if not a.pages:
+                print(standard_library(), end="")
+                return 0
+            pages = standard_library_pages()
+            (a.pages / "std").mkdir(parents=True, exist_ok=True)
+            for stale in set((a.pages / "std").glob("*.md")) - {a.pages / name for name in pages}:
+                stale.unlink()
+            for name, text in pages.items():
+                (a.pages / name).write_text(text, encoding="utf-8")
+            report({"status": "documented", "pages": sorted(pages)})
             return 0
         project = load_project(a.path)
         if a.command in {"check", "emit"}:
