@@ -1,14 +1,14 @@
 # Numerics
 
-This reference covers the numbers CAIRN stores in fewer bits than it computes in, and the derivatives it writes for you: storage floats and their conversions, `quantize` and its stochastic form, and `derive grad`. [language.md](language.md#values-and-arithmetic) has the arithmetic of the scalars they convert to, and [abstractions.md](abstractions.md#recipes) has the `derive` form `grad` shares with the other recipes. Every rounding a program performs is named in its source and listed in its build receipt under `numerics`.
+Numbers stored in fewer bits than they are computed in, the one multiply whose sums follow the hardware's order, and derivatives the compiler writes for you. Every rounding a program performs is named in its source and listed in its build receipt under `numerics`.
 
 ## Storage floats
 
-`f16`, `bf16`, `f8e4m3` and `f8e5m2` hold a value in 16 or 8 bits and convert. They never compute: arithmetic, a comparison or a literal of one is refused (`E-OPERATOR`, `E-TYPE-MISMATCH`), so a program widens, computes in `f32` or `f64`, and rounds back where it says so. `f16` is IEEE 754 binary16, `bf16` is the upper half of an `f32`, and the two 8-bit formats are OCP's E4M3, which reaches 448 and has no infinity, and E5M2, which reaches 57344.
+`f16`, `bf16`, `f8e4m3` and `f8e5m2` hold a value in 16 or 8 bits and convert, but never compute: arithmetic, a comparison or a literal of one is refused (`E-OPERATOR`, `E-TYPE-MISMATCH`). A program widens, computes in `f32` or `f64`, and rounds back where it says so. `f16` is IEEE 754 binary16, `bf16` the upper half of an `f32`, and the 8-bit formats are OCP's E4M3 (up to 448, no infinity) and E5M2 (up to 57344).
 
-`f32(h)` and `f64(h)` are exact, since every value of the four formats is an `f32`. `f16(x)` rounds an `f32` or `f64` once, to nearest with ties to even, as IEEE 754 converts: a value past the range becomes infinity and a NaN stays a NaN. `f8e4m3` has no infinity to give, so there its conversion traps. An integer or another storage float converts through `f32` first (`E-CAST`), which is exact and keeps the rounding single.
+`f32(h)` is exact. `f16(x)` rounds once, to nearest with ties to even: past the range it gives infinity, and in `f8e4m3`, which has none, it traps. An integer or another storage float converts through `f32` first (`E-CAST`).
 
-`quantize[T](x, scale)` is `x / scale` rounded once to nearest with ties to even and clamped to T's finite range, so the quotient is never rounded twice and saturation takes the place of overflow. T is a storage float or one of `i8 u8 i16 u16`, the widths where one rounding of the quotient of two `f32` values is exact, and `x` and `scale` are `f32` (`E-QUANTIZE`). A scale that is not positive and finite traps, and so does a NaN quantized to an integer, which has none. `quantize_stochastic[T](x, scale, noise)` is the one other rounding: it moves away from zero exactly when the fraction the double quotient drops, to 32 bits, exceeds the `u32` noise the caller draws, so over uniform noise it is unbiased, and the same noise gives the same bits everywhere. The receipt says `stochastic-u32`. Dequantizing needs no builtin: `f32(q) * scale` widens exactly and rounds once. `to_bits(h)` and `from_bits[T](u)` move between a float and its pattern, for `f32` and `f64` as well.
+`quantize[T](x, scale)` is `x / scale` rounded once to nearest with ties to even and clamped to T's finite range, so saturation takes the place of overflow. T is a storage float or one of `i8 u8 i16 u16`, and `x` and `scale` are `f32` (`E-QUANTIZE`). A scale that is not positive and finite traps. `quantize_stochastic[T](x, scale, noise)` rounds away from zero when the dropped fraction exceeds the caller's `u32` noise, so it is unbiased over uniform noise and reproducible for the same noise. `f32(q) * scale` dequantizes, and `to_bits(h)` and `from_bits[T](u)` move between a float and its bits.
 
 ```cairn
 fn pack(n:usize, weights:ro<f32>[n], out:rw<f8e4m3>[n], scale:f32) {
@@ -44,11 +44,11 @@ fn mean(a:bf16, b:bf16) -> bf16 = (a + b) / bf16(2.0);
 bf16 is a storage float: widen it with f32(x) to compute, and round back with bf16(y) or quantize.
 ```
 
-The build receipt lists every rounding the source writes under the function's `numerics`: the operation, its formats, the rounding, what happens past the range and what happens to a NaN. One routine rounds on the host and in a device lane alike, working on the bit pattern with integers, and the suite holds it to an independent model over every pattern of all four formats, every tie between two neighbours and random doubles from the subnormals up, under both compilers and the sanitizers. The SMT model does not describe storage floats, so it answers `unknown` for a function that uses one.
+One integer routine rounds on the host and in a device lane alike. The suite holds it to an independent model over every pattern of all four formats and every tie, under both compilers and the sanitizers. The SMT model answers `unknown` for a function that uses a storage float.
 
 ## The tensor-core multiply
 
-`mma_unordered(m, n, k, c, a, b)` adds the product of the row-major `m x k` matrix `a` and the row-major `k x n` matrix `b` into the row-major `m x n` matrix `c`. `a` and `b` are views of one storage float and `c` is an `rw` view of `f32`, the accumulator. It is the one operation in CAIRN whose float additions do not follow the written order, and its name says so, as `add_wrap` says it wraps. The receipt lists it under the function's `numerics` with `rounding: unordered-f32` and its bound.
+`mma_unordered(m, n, k, c, a, b)` adds the product of the row-major `m x k` matrix `a` and the `k x n` matrix `b` into the `m x n` matrix `c`. `a` and `b` are views of one storage float, and `c` is an `rw` view of `f32`. It is the one operation whose float additions do not follow the written order, and its name says so.
 
 ```cairn
 fn layer(m:usize, n:usize, k:usize, cn:usize, c:rw<f32>[cn]@device, an:usize, a:ro<f16>[an]@device,
@@ -57,23 +57,21 @@ fn layer(m:usize, n:usize, k:usize, cn:usize, c:rw<f32>[cn]@device, an:usize, a:
 }
 ```
 
-The contract is this, and nothing stronger. Every product `a[i][p] * b[p][j]` is exact in f32, which holds for every product of two `f16`, `f8e4m3` or `f8e5m2` values, and for two `bf16` values unless the product leaves f32's range. Every output is its old value plus its `k` products, each partial sum rounded to f32, in an order and grouping the hardware picks. Every finite output lies within `(k + 1) * 2^-22 * (|c[i][j]| + sum |a[i][p] * b[p][j]|)` of the exact sum, and an output any of whose products or partial sums is not finite is not finite either, with no promise which. Two runs on one device give the same bits; the host and the device need not.
+The contract, and nothing stronger: every product is exact in f32 (true for all `f16` and 8-bit products, and for `bf16` unless a product leaves f32's range), and every output is its old value plus its `k` products, each partial sum rounded to f32 in an order the hardware picks. Every finite output lies within `(k + 1) * 2^-22 * (|c[i][j]| + sum |a[i][p] * b[p][j]|)` of the exact sum. Two runs on one device give the same bits; the host and the device need not.
 
-On the host the multiply is its reference loop: every output's products in increasing `p` after its old value, so `c` is exactly what the written loop would compute. On the device, where all three views must live (`E-PLACEMENT` otherwise), it runs 64 x 64 output tiles on four warps each, over `k` in steps of 32 staged through shared memory in two buffers, each warp multiplying 16 x 16 x 16 fragments on the tensor cores. An 8-bit float is widened to `f16` on its way into shared memory, which is exact. Where the format is 2 bytes, `k` and `n` are multiples of 8 and `a` and `b` sit on 16 bytes, the stages cross in asynchronous 16-byte copies while the warps multiply the previous one. The extents are checked once at the call: `len(c) == m * n`, `len(a) == m * k` and `len(b) == k * n`, or the call traps. The row says `read:a`, `read:b`, `write:c`, `trap`, and `par:device` on the device.
-
-`E-MMA` refuses a `c` that is not an `rw` view of `f32` and an `a` and `b` that are not views of one storage float; a multiply inside a lane is `E-PARALLEL-NEST`. `cairn verify` answers `unknown` for a function that multiplies, and `cairn predict` prices a device multiply at the published tensor peak, which is its roofline and says so: the kernel's own efficiency is measured only by the owner's device calibration.
+On the host the multiply is the written loop, in increasing `p`. On the device, where all three views must live (`E-PLACEMENT`), it runs 64 x 64 tiles on the tensor cores through two shared-memory stages. The extents are checked once at the call. `E-MMA` refuses a `c` that is not an `rw` view of `f32` or an `a` and `b` of different formats, and a multiply inside a lane is `E-PARALLEL-NEST`. `cairn verify` answers `unknown` for it, and `cairn predict` prices it at the published tensor peak, a roofline.
 
 ```cairn rejects E-MMA
 fn widened(n:usize, c:rw<f32>[n], a:ro<f32>[n], b:ro<f32>[n]) { mma_unordered(1, 1, n, c, a, b); }
 ```
 
-The host suite replays the reference in Python and requires it bit for bit, and the contract's bound against the exact rational sum, over every format and shapes with tails in every direction. It also runs the device tile's phases thread by thread on the host, with a model of the tensor-core operations that adds in increasing `k`, and requires every output to equal the reference, so the tiling, the tails, the zero fill and the two stages are checked here, under the sanitizers. That the tensor cores meet the contract is checked only by `make gpu`, which compares them with the reference within its bound.
+The host suite checks the reference bit for bit against Python and the bound against the exact rational sum, and runs the device tiling thread by thread on the host under the sanitizers. That the tensor cores meet the contract is checked only by `make gpu`, which has not run on this release.
 
 ## Gradients
 
-`derive grad for f;` generates `f_grad`, the reverse-mode derivative of `f`, as an ordinary function: `cairn expand` prints it and the checker checks it like any other. `derive grad[w, b] for f;` differentiates with respect to the named parameters only. Without a list, every float parameter and every `ro` float view is differentiated.
+`derive grad for f;` generates `f_grad`, the reverse-mode derivative of `f`, as an ordinary function that `cairn expand` prints and the checker checks. `derive grad[w, b] for f;` differentiates only the named parameters; without a list, every float parameter and `ro` float view is differentiated.
 
-`f_grad` takes `f`'s parameters, then `seed` when `f` returns a float, then one adjoint for each parameter it differentiates: `d_x:rw<T>` or `d_x:rw<T>[n]`, into which it adds, and `d_out:ro<T>[n]` for each float view `f` writes, which it reads. It runs `f`, adds `seed` times each partial derivative into the adjoints, and returns `f`'s result. Adding rather than assigning is what lets gradients compose: a gradient that calls `g` hands `g_grad` its own adjoints.
+`f_grad` takes `f`'s parameters, then `seed` when `f` returns a float, then one adjoint per differentiated parameter (`d_x:rw<T>` or `d_x:rw<T>[n]`), and `d_out:ro<T>[n]` for each float view `f` writes. It runs `f`, adds `seed` times each partial derivative into the adjoints, and returns `f`'s result. Adding rather than assigning is what lets gradients compose.
 
 ```cairn
 fn square(x:f64) -> f64 = x * x;
@@ -106,9 +104,9 @@ fn main() -> i32 {
 }
 ```
 
-The differentiated fragment is one whose adjoint lies in the same fragment: immutable `let`s, `if` whose paths return, sums, loops and regions that write each output element once at their binder, `+ - * /`, `sqrt`, `abs` (whose derivative at zero is taken as 1), `floor ceil trunc` (whose derivative is 0), conversions between `f32` and `f64`, `std.math.exp` and `std.math.log`, and calls of functions that derive their own gradient. A sum is a `reduce +`, or a float `let mut` that one sequential loop adds into (`acc += e`, with `e` not reading `acc`) and that nothing reads before that loop ends: each step's `e` then takes the sum's own adjoint. A function that reaches libm cannot run inside a `reduce`, so its sums are loops. Any other `let mut`, `while`, a `reduce` other than `+`, and an output read or written twice are `E-GRAD-FORM`. A call of a function with no derived gradient, or one whose gradient leaves out a parameter the caller differentiates, is `E-GRAD-CALL`. A target that is not a plain function of this module, or a list naming something other than its float parameters, is `E-GRAD`.
+The fragment that can be differentiated is: immutable `let`s, `if` whose paths return, sums, loops and regions that write each output element once, `+ - * /`, `sqrt`, `abs` (derivative 1 at zero), `floor ceil trunc` (derivative 0), `f32`/`f64` conversions, `std.math.exp` and `std.math.log`, and calls of functions with their own derived gradient. A sum is a `reduce +` or a float `let mut` one sequential loop adds into (`acc += e`). Anything else is `E-GRAD-FORM`, a call without a matching gradient is `E-GRAD-CALL`, and a bad target or list is `E-GRAD`.
 
-Nothing is taped. Each `return`, and the end of a function that writes views, carries its own backward sweep, which recomputes the `let`s on its path. A region's backward sweep is a region of its own, in which each lane adds into its own element of each adjoint. Whatever the lanes would add into a shared scalar is gathered by a sequential loop, so no lane writes a value another lane writes. A lane that reads a differentiated input at another lane's element would scatter its adjoint across lanes, so that is `E-GRAD-RACE`: read it at `[i]`, differentiate a sequential loop, or leave the input out of the list.
+Nothing is taped: each `return` carries its own backward sweep, which recomputes the `let`s on its path. A region's backward sweep is a region in which each lane adds into its own element of each adjoint. A lane that reads a differentiated input at another lane's element would scatter its adjoint across lanes, so it is `E-GRAD-RACE`.
 
 ```cairn rejects E-GRAD-RACE
 fn smooth(n:usize, x:ro<f64>[n], out:rw<f64>[n]) {
@@ -121,4 +119,4 @@ derive grad for smooth;
 The adjoint of x[(i + 1) % n] adds into d_x at another lane's element; read x at [i] in the region, or differentiate a sequential loop.
 ```
 
-The derivative is the derivative of the formulas, not of their rounding: the float operations round as written, and the adjoint's own operations round too. The suite holds gradients to central differences of the compiled function and, where the system Python has torch, to torch's autograd over the same formulas, under both compilers, the sanitizers and ThreadSanitizer for a region. That is finite testing, not a proof, and the SMT model does not describe generated gradients any more than it describes the regions they contain.
+The derivative is that of the formulas, not of their rounding. The suite holds gradients to central differences and, where torch is present, to its autograd, under both compilers and the sanitizers. That is finite testing, not a proof.

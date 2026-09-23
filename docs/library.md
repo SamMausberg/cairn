@@ -1,10 +1,8 @@
 # The standard library
 
-Twenty modules, written in CAIRN, shipped inside the package and linked on demand. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`. A module you do not import is not in your program. An executable keeps only what `main` reaches, a library build keeps every function of the modules it imports, and a generic function exists only at the types it is used with.
+Twenty modules, written in CAIRN and shipped inside the package. `import std.map (Map);` brings in `map.insert(...)` and the bare name `Map`, and a module you do not import is not in your program. [std_api.md](std_api.md) has every signature and effect row, generated from these sources; this page says what each module is for, shows a program that uses it, and says where it bites.
 
-[std_api.md](std_api.md) indexes a page per module that holds every signature and every effect row, generated from these sources by `make docs`. This file is the working guide: what each module is for, a program that uses it, and where it bites.
-
-Three habits explain the API shape. A lookup answers with an index, never a borrow: `map.find` and `arena.find` return `Option[usize]`, and the caller reads `m.vals[slot]` itself, which is a place and can be passed on, borrowed, taken or assigned. A position kept across changes is a handle checked on use: `arena.Handle` and `map.Slot`. Every array parameter carries its length, `f(n, xs)` against a callee's `xs:ro<u8>[n]`; a whole view or buffer matches by name identity, and a part `v.data[lo..hi]` matches whatever `usize` expression you pass, at the cost of one bounds guard. Costs are in the signature: a function that allocates says `alloc` in its effect row and so does everyone who calls it.
+Three habits explain the API. A lookup answers with an index, never a borrow: `map.find` returns `Option[usize]`, and the caller reads `m.vals[slot]` itself. A position kept across changes is a handle checked on use (`arena.Handle`, `map.Slot`). A function that allocates says `alloc` in its row, and so does everyone who calls it.
 
 | module | what it is for | allocates |
 | --- | --- | --- |
@@ -72,11 +70,11 @@ fn main() -> i32 {
 }
 ```
 
-`std.core` implements `Ord` and `Eq` for every integer type, `Eq` for `bool` and `Hash` for the unsigned integers, one bounded impl per class; `hash` is Fibonacci hashing, one wrapping multiply whose high bits carry the mix. Write your own impl, or generate one with [std.derived](#stdderived). Every trait member is declared `pure` and every implementation is held to it, so `[T:Ord]` promises a comparison that only reads: a `less` that prints is `E-EFFECT-CEILING`, "Ord.Frame.less exceeds its declared effects."
+`std.core` implements `Ord` and `Eq` for every integer type, `Eq` for `bool` and `Hash` for the unsigned integers. Write your own impl, or generate one with [std.derived](#stdderived). Every trait member is `pure`, so a `less` that prints is `E-EFFECT-CEILING`.
 
 ## std.vec
 
-`struct Vec[T:affine] { data:Buf[T]; len:usize; lends data[0..len]; }`, a growable owner. A Vec named where a view is expected lends its elements, so `io.print(line)` passes `line.data[0..line.len]` ([memory.md](memory.md#arrays-views-and-parts)), and a `for` walks them. Both fields are public, so a part of the storage, `v.data[lo..hi]`, can be lent too.
+`struct Vec[T:affine] { data:Buf[T]; len:usize; lends data[0..len]; }` is a growable owner. Named where a view is expected, it [lends its elements](memory.md#arrays-views-and-parts), and a `for` walks them.
 
 ```cairn
 import std.vec as vec;
@@ -96,11 +94,11 @@ fn main() -> i32 {
 }
 ```
 
-`reserve` doubles and moves elements with `swap`, so an owner is never copied; `push` is amortized O(1) and puts `alloc` in every caller's row. `pop`, `remove` and `swap_remove` move an element out as an `Option[T]`, `insert` moves one in and shifts the tail by swaps, and `find` answers the index of the first element equal to a key by the element's `Eq`. `get`, `set` and `extend_from` take only copyable elements, because an owner would have to be moved out of a place, and `get` and `set` trap on an index at or past `len`. `clear` and `truncate` release elements now and keep the capacity.
+Growth doubles and moves elements with `swap`, so an owner is never copied, and `push` is amortized O(1). `pop` and `remove` move an element out as an `Option[T]`. `get` and `set` take only copyable elements and trap past `len`.
 
 ## std.text
 
-Numbers to bytes and back, plus the searching a line protocol needs. A substring cannot be returned, so every search answers with an index into the input and the caller passes `s[lo..hi]` onwards.
+Numbers to bytes and back, and the searching a line protocol needs. A substring cannot be returned, so a search answers with an index and the caller passes `s[lo..hi]` on.
 
 ```cairn
 import std.core (Option, Result);
@@ -137,11 +135,11 @@ fn main() -> i32 {
 }
 ```
 
-`write_u64`, `write_i64` and `write_hex` answer with the number of bytes used, and 0 when the value does not fit; `write_hex` writes exactly `width` lowercase digits and loses whatever is above them. `parse_i64` takes an optional leading `-` and reports the same three errors as `parse_u64`, with the offset of the byte at fault. `compare` and `equal` are lexicographic, shorter first, and `starts_with` and `ends_with` are the two comparisons a path or a protocol line needs. `find` is naive, because a line protocol's needles are short, and `find_last_byte` searches backwards. `hash_bytes` is FNV-1a with no table. `push_u64` and `push_i64` are the two functions here that allocate.
+The `write_` functions answer with the number of bytes used, or 0 when the value does not fit. The parsers report the offset of the byte at fault. `hash_bytes` is FNV-1a.
 
 ## std.io
 
-A `File` is `linear`, so the checker requires every path to close it. A failure is an errno inside an `IoError`, because CAIRN cannot express the `int*` the C library keeps its error behind. `io.outcome(result)` reads the result an I/O ring reports ([concurrency.md](concurrency.md#io-rings)), a count or a negative errno, as a `Result[usize, IoError]`.
+A `File` is `linear`, so every path must close it, and a failure is an errno inside an `IoError`. `io.outcome(result)` reads what an [I/O ring](concurrency.md#io-rings) reports as a `Result`.
 
 ```cairn
 import std.core (Option, Result);
@@ -179,13 +177,13 @@ fn main() -> i32 {
 }
 ```
 
-`defer io.close(f)` is the idiom: `try` refuses to leave a function while a linear value is unconsumed, so a File that is not deferred cannot be used with `try` at all (`E-LINEAR-LEAK`, "f is linear: consume it, or defer its consumer, on every path"). `close` reports nothing, because consuming a linear value requires a function that never reaches a `return`, and `return` demands that every linear value already be consumed. Report through a borrow if you need the status.
+`defer io.close(f)` is the idiom: `try` refuses to leave a function while a linear value is unconsumed, so without the `defer` a File cannot be used with `try` at all (`E-LINEAR-LEAK`). `close` reports nothing, because a consumer of a linear value cannot return a status; report through a borrow if you need it.
 
-Open flags are `READ`, `WRITE`, `APPEND` and `TRUNCATE`; `seek` takes `SET`, `CUR` or `END`; `sync` and `truncate` answer `Ok(0)`. A path ends in a NUL byte, since C reads a pointer and not a length. `read` is one syscall and answers 0 at end of file; `read_full` and `write` loop, and a short write is an error here even though it is not one to the kernel. Nothing buffers: n bytes written is n bytes of syscall. `print`, `println`, `eprintln`, `newline`, `print_u64` and `print_i64` are best effort and return nothing. The builtins `print`, `println`, `eprint`, `eprintln` and `format` ([language.md](language.md#print-and-format)) write several values of different types in one call, through one buffer; a program still writes `io.print` for these library functions. `read_stdin` is one read from standard input, answering 0 at end of input. `read_to_end(f, into)` appends everything left to read in 4096-byte steps, for a pipe, a socket or a `/proc` file whose size says 0. `monotonic_ns` reads CLOCK_MONOTONIC; `std.time` has the same clock as a value.
+A path here ends in a NUL byte, since C reads a pointer and not a length; [std.fs](#stdfs) takes paths without one. `read` is one syscall and answers 0 at end of file, and `read_full` and `write` loop. Nothing buffers. The [print builtins](language.md#print-and-format) are usually what a program wants for output.
 
 ## std.fmt
 
-Text built into a `Vec[u8]`: every call appends, so a line is a run of calls and one write. `uint` and `int` take any unsigned or signed integer type, `hex(out, v, width)` writes at least `width` lowercase digits, `padded(out, v, width, fill)` right-aligns a number, and `left` and `right` pad text. `fixed(out, x, places)` writes a float with that many digits after the point, rounding its exact binary value half to even, which is what printf's `%.*f` prints, for every finite `f64` and up to forty places; `nan`, `inf` and `-inf` are spelled out and a negative zero keeps its sign. `tests/language/test_std_fmt.py` checks every line against Python's own formatting.
+Text built into a `Vec[u8]`: every call appends, so a line is a run of calls and one write. `hex`, `padded`, `left` and `right` pad and align. `fixed(out, x, places)` writes a float with that many digits after the point, rounded as printf's `%.*f` rounds, and the suite checks every case against Python's formatting.
 
 ```cairn
 import std.fmt;
@@ -205,11 +203,11 @@ fn main() -> i32 {
 }
 ```
 
-The row of every call carries `alloc` and `free`, because appending may grow the `Vec`. `fixed` works in 720 bytes of its own stack and needs no allocation beyond the digits it appends.
+Every call's row has `alloc` and `free`, because appending may grow the `Vec`.
 
 ## std.fs
 
-The same files by path, where a path is its bytes alone. Each call copies the path into NUL-terminated storage of its own, so a path from the command line, from a `Vec` or from a literal goes straight in. A path of 4096 bytes or more is the error 36 (`ENAMETOOLONG`), and a NUL inside one is 22 (`EINVAL`): both are values, never guards.
+Files by path, where a path is its bytes alone, so one from the command line, a `Vec` or a literal goes straight in. A path of 4096 bytes or more, or one holding a NUL, is an error value, never a trap.
 
 ```cairn
 import std.core (Result);
@@ -234,11 +232,11 @@ fn main() -> i32 {
 }
 ```
 
-`open` hands back the `std.io` `File`, and `read`, `write`, `append`, `remove`, `rename` and `exists` do one job each. `exists` answers for this instant; the next call may find something else.
+`open` hands back the `std.io` `File`. `exists` answers for this instant only.
 
 ## std.env
 
-The arguments and the environment the program was started with. Linux keeps both under `/proc/self` as the kernel passed them, so reading them needs no start-up code and works from any module. `args()` reads them once into an `Args`: argument `i` is `a.text.data[a.begin(i)..a.end(i)]`, the program's own path first, and `a.text.data[a.end(i)]` is the NUL a C call wants. `var(name)` is the value of one variable, copied out, or `None`. `cairn run app -- in.txt -v` starts the program with `in.txt` and `-v`.
+The program's arguments and environment, read from `/proc/self`, so any module can read them. `args()` reads them into an `Args`, where argument `i` is `a.text.data[a.begin(i)..a.end(i)]`, the program's path first. `var(name)` is one variable's value, or `None`.
 
 ```cairn
 import std.core (Option, Result);
@@ -269,7 +267,7 @@ fn main() -> i32 {
 
 ## std.time
 
-`now()` is an `Instant` on CLOCK_MONOTONIC, which never jumps, and `since(start)` is the nanoseconds from it. `wall_ns()` reads CLOCK_REALTIME, the date, which moves when the system clock is set. `sleep(ns)` waits at least that long, sleeping through a signal that wakes it early. Each is one system call, so its row says `io` and `ffi:clock_gettime` or `ffi:nanosleep`.
+`now()` is an `Instant` on the monotonic clock and `since(start)` the nanoseconds from it. `wall_ns()` reads the date, which moves when the system clock is set, and `sleep(ns)` waits at least that long.
 
 ```cairn
 import std.time (Instant);
@@ -285,7 +283,7 @@ fn main() -> i32 {
 
 ## std.math
 
-The C math library on `f64`: `exp`, `log`, `log2`, `pow`, `sin`, `cos`, `tan` and `atan2`, with `PI` and `E`. Their last bit depends on which libm links the program, glibc, musl or CUDA's, so a result is not reproducible across machines. The builtins `sqrt`, `floor`, `ceil`, `trunc` and `abs` are the other kind: IEEE 754 makes them the same everywhere ([language.md](language.md#values-and-arithmetic)). A call here is a foreign call, so its row says `ffi:exp` and the like, and, because the library may write `errno`, it stands in its own statement or initializer (`E-EFFECT-ORDER`).
+The C math library on `f64`: `exp`, `log`, `log2`, `pow`, `sin`, `cos`, `tan` and `atan2`, with `PI` and `E`. Their last bit depends on which libm links the program, so a result is not reproducible across machines, unlike the [builtins](language.md#values-and-arithmetic) `sqrt`, `floor`, `ceil`, `trunc` and `abs`. A call here is a foreign call, so its row says `ffi:exp` and the like, and it stands in its own statement (`E-EFFECT-ORDER`).
 
 ```cairn
 import std.math;
@@ -300,7 +298,7 @@ fn main() -> i32 {
 
 ## std.zlib
 
-`std.zlib` binds the system zlib. `compress(data, level)` gives the zlib stream of a whole view as a `Vec[u8]`, and `crc32` and `adler32` continue a checksum over a view. Importing the module links `-lz`, found where the C compiler finds it, and nothing is downloaded.
+The system zlib: `compress(data, level)` gives the zlib stream of a whole view, and `crc32` and `adler32` continue a checksum. Importing the module links `-lz`.
 
 ```cairn
 import std.zlib;
@@ -315,11 +313,11 @@ fn main() -> i32 {
 }
 ```
 
-Only the calls that take a pointer and a length for the length of one call are bound. zlib's streaming interface keeps pointers into the caller's buffers inside a `z_stream` between calls, and a CAIRN borrow never outlives its call, so a C library built that way needs a wrapper that owns the buffers, or its one-shot entry points. The rows say `ffi:compress2`, `ffi:crc32_z` or `ffi:adler32_z` and `ffi_precondition`, with no `io`. A level outside -1 to 9 is `ZError(-2)`, a value and not a trap. A project whose own `extern` declarations call a system library names it under `[build]` as `libraries = ["z"]` ([abstractions.md](abstractions.md#projects)).
+Only the one-shot calls are bound. zlib's streaming interface keeps pointers into the caller's buffers between calls, and a CAIRN borrow never outlives its call, so a library built that way needs a wrapper that owns the buffers. A level outside -1 to 9 is `ZError(-2)`, a value and not a trap. A project's own `extern` declarations name their system libraries under [`[build] libraries`](abstractions.md#projects).
 
 ## std.image
 
-`Image` is an RGBA picture held in one owned array: `struct Image { w:usize; h:usize; n:usize; px:Buf[u32][n]; }`, rows top first, so pixel `(x, y)` is `px[y * w + x]`. A pixel is written `0xRRGGBBAA`, so `0xff8800ff` is opaque orange, and `rgba`, `red`, `green`, `blue` and `alpha` build and read one. `new(w, h)` gives transparent black and traps on an empty size, `get` and `set` trap on a column past the width instead of reading the next row, and `differ` counts the pixels two images disagree on.
+`Image` is an RGBA picture in one owned array, rows top first, so pixel `(x, y)` is `px[y * w + x]`, written `0xRRGGBBAA`. `get` and `set` trap on a column past the width instead of reading the next row.
 
 ```cairn
 import std.image (Image);
@@ -334,11 +332,11 @@ fn main() -> i32 {
 }
 ```
 
-`png` writes 8-bit RGBA with its scanlines in stored zlib blocks, so it needs no library and every byte is where a reader can check it. `scanlines` gives the bytes PNG compresses and `packed` wraps a stream from `std.zlib` around them when the file's size matters. `ppm` writes the binary PPM, dropping alpha. `fill` and `shade` are parallel regions: `shade` calls its closure from the lanes, so the closure may read what it captured and write nothing (`E-PARALLEL-CALL`).
+`png` writes 8-bit RGBA in stored zlib blocks, so it needs no library; `packed` compresses through `std.zlib` when size matters. `fill` and `shade` are parallel regions, so `shade`'s closure may read what it captured and write nothing (`E-PARALLEL-CALL`).
 
 ## std.draw
 
-`std.draw` draws into an `Image` on the CPU: `rect`, `line`, `circle`, `plot`, `blit` of one image onto another, `layer` of a whole same-sized image as a parallel region, and `text` in a built-in 8 by 13 bitmap font with a whole-number `scale`. Every shape is clipped, so a shape partly outside the image draws its inside part and none traps. Coordinates are `i64`, so a shape may start left of or above the image.
+Shapes, blending and text drawn into an `Image` on the CPU, in a built-in 8 by 13 bitmap font. Every shape is clipped, so a shape partly outside the image draws its inside part and none traps.
 
 ```cairn
 import std.draw;
@@ -359,11 +357,9 @@ fn main() -> i32 {
 }
 ```
 
-The rules are integer and exact, which is what lets a test hold them to an independent rasterizer pixel for pixel. Pixel `(x, y)` is in a rectangle when `x0 <= x < x0 + w` and `y0 <= y < y0 + h`, and in a circle when `dx * dx + dy * dy <= r * r`. A line visits every point Bresenham's steps give from one end to the other, both included, so its cost is its length, the part outside the image too. A colour blends source over destination: each colour channel becomes `(s * a + d * (255 - a) + 127) / 255` and alpha becomes `a + (d_a * (255 - a) + 127) / 255`, so an opaque colour replaces a pixel and a clear one leaves it. The glyphs are the public-domain X11 misc-fixed 8x13 font, and a byte outside printable ASCII draws as `?`.
+The rules are integer and exact, so a test holds them to an independent rasterizer pixel for pixel. A colour blends source over destination with integer rounding, so an opaque colour replaces a pixel and a clear one leaves it.
 
-A `Layout` records named rectangles as the program draws them, and `json` writes them with the image's size: `{"width":120,"height":40,"at_ns":T,"elements":[{"name":"button","x":8,"y":8,"w":104,"h":24}]}`. A test can hold a layout to its rules in CAIRN too: `place(l, "detail")` is the `Mark { x; y; w; h; }` last marked with that name, or a guard failure when there is none, `marked` asks whether there is one, and `inside` and `apart` compare two marks. `capture(img, l, k)` writes `frame-k.png` and `frame-k.json` into the directory the environment variable `CAIRN_SHOT` names, and does nothing when it names none, so a program keeps its captures in place and runs unchanged without them. `cairn shot` sets it and returns the frames, their layout records and times, and the effect rows an edit changed ([agents.md](agents.md#requests-beyond-an-edit)).
-
-Everything here is drawn on the CPU and nothing opens a window. A C graphics library such as raylib or SDL binds the way `std.zlib` does: an opaque handle it returns becomes an integer inside a `linear struct` whose one consumer calls the library's destroy function, a struct passed by value is a `packed` record of the same layout, and a call that takes a pointer and a length is an `extern` over a view. A callback into CAIRN, or a library that keeps a pointer into a caller's buffer after the call returns, needs a C wrapper that owns the buffer, because a CAIRN borrow ends with its call. libpng reports errors by `longjmp` across the caller's frames, which CAIRN code cannot survive soundly, so it is not bound. None of those libraries is installed here, so none is bound.
+A `Layout` records named rectangles as the program draws them, and a test can check them in CAIRN (`place`, `inside`, `apart`). `capture(img, l, k)` writes `frame-k.png` and `frame-k.json` into the directory `CAIRN_SHOT` names, and does nothing when it names none, so a program runs unchanged without it. [`cairn shot`](agents.md#requests-beyond-an-edit) sets it and returns the frames. Nothing here opens a window, and no windowing library is bound.
 
 ## std.map
 
@@ -408,9 +404,9 @@ fn main() -> i32 {
 }
 ```
 
-`find` answers with the slot, not the value, and `contains` with a bool. `insert` moves key and value in and releases the old value when it replaces one; `remove` moves the value out.
+`find` answers with the slot, not the value. `insert` releases the old value when it replaces one, and `remove` moves the value out.
 
-A slot index from `find` is good until the next `insert` or `remove`: growth rehashes every entry, and a removed key's slot can be reused by another key, so an old index may still be in bounds and name the wrong entry. Three forms keep a position honest instead. `slot(m, key)` answers with a `Slot`, an index and the stamp its entry got when its key was placed, and `resolve(m, s)` answers `None` once that key is removed or the map rehashes, never another entry's index. A `Slot` answers for the map that gave it: resolved against another map it is only a number there, as a raw index is, because two maps count their stamps alike. `update(m, key, f)` lends the value to a closure and answers whether the key was there; the call holds the map, so a closure that reaches the map is refused (`E-ALIAS`). `get(m, key)` copies a copyable value out.
+A slot index is good only until the next `insert` or `remove`, since growth rehashes and a slot can be reused. `slot(m, key)` gives a `Slot` stamped when its key was placed, and `resolve(m, s)` answers `None` once that key is gone, never another entry's index. `update(m, key, f)` lends the value to a closure, which may not reach the map (`E-ALIAS`).
 
 ```cairn
 import std.core (Option);
@@ -428,11 +424,13 @@ fn main() -> i32 {
   match m.get(9) { Option.Some(v) => { if !found || v != 91 { return 3; } } Option.None => { return 4; } }
   return 0;
 }
-``` Operations are expected O(1), and `insert` rehashes past three quarters full, so `alloc`, `free` and `zero_init` are in every caller's row. `K` must implement `Hash` and `Eq`, checked where the instance is made: a key with `derive eq` and no `derive hash` is `E-TRAIT-IMPL`, "Route does not implement Hash; std.map.insert needs [K:Hash+Eq+affine]."
+```
+
+Operations are expected O(1), and `insert` rehashes past three quarters full. `K` must implement `Hash` and `Eq`: a key with `derive eq` and no `derive hash` is `E-TRAIT-IMPL`.
 
 ## std.derived
 
-Three recipes that generate trait implementations: `derive eq` (field-wise `same`), `derive ord` (lexicographic `less`, declaration order) and `derive hash` (FNV-1a over the fields' own hashes). Each writes an ordinary `impl` of the `std.core` trait, so the record then satisfies `[T:Ord]` for `std.sort` and `[K:Hash + Eq + affine]` for `std.map`.
+`derive eq` (field-wise), `derive ord` (lexicographic, in declaration order) and `derive hash` write ordinary `impl`s of the `std.core` traits, so a record can be sorted or used as a map key.
 
 ```cairn
 import std.core (Option, Eq, Hash);
@@ -458,11 +456,11 @@ fn main() -> i32 {
 }
 ```
 
-A field whose type lacks the trait is named: `derive ord` over a record with a `bool` field is `E-TRAIT-IMPL`, "bool does not implement std.core.Ord." `cairn expand` prints what a `derive` generated, as source.
+A field whose type lacks the trait is named (`E-TRAIT-IMPL`).
 
 ## std.sort
 
-Heapsort: the one O(n log n) order that needs no recursion (no `diverge` from a call cycle), no scratch buffer (no `alloc`) and moves elements only with `swap`, so it sorts owners too. Equal elements are not kept in order.
+`sort` is a heapsort: O(n log n) with no recursion, no allocation and moves only by `swap`, so it sorts owners too. Equal elements are not kept in order.
 
 ```cairn
 import std.core (Option, Ord, Eq);
@@ -491,9 +489,9 @@ fn main() -> i32 {
 }
 ```
 
-`sort_by` takes a closure or a declared function; `sort` is `sort_by` with the trait's `less`. `search` binary-searches an already sorted view and answers the index of an element equal to the key, or `None`. The closure is a borrowed callable: it captures by reference, exists only as that argument, and cannot allocate or escape. The caller's row gains `indirect_call`.
+`sort_by` takes a closure or a function, and `search` binary-searches a sorted view.
 
-`radix_sort` sorts unsigned keys and keeps equal ones in order. It takes eight bits a pass, least significant first: each pass counts its digit, turns the counts into each digit's first place with a [`scan`](concurrency.md#scan), and moves the keys there. The passes go from the keys to a scratch view of the same extent and back, and stop once the largest key has no digit left, so small keys pay for their width only. It is O(n) a pass, at most eight passes, with no allocation: the caller lends the scratch, and the row shows the digit counts as `stack_storage`.
+`radix_sort` sorts unsigned keys stably, eight bits a pass, placing each digit with a [`scan`](concurrency.md#scan). It stops once the largest key has no digit left and allocates nothing: the caller lends the scratch view.
 
 ```cairn
 import std.sort as sort;
@@ -515,7 +513,7 @@ fn main() -> i32 {
 
 ## std.wire
 
-One recipe, and the first piece of the compiler to become library code. `derive wire for Header;` generates `encode_Header`, `decode_Header` and `wire_size_Header` for a record of fixed-width unsigned fields: little-endian, declaration order, no padding, extents known statically.
+`derive wire for Header;` generates `encode_Header`, `decode_Header` and `wire_size_Header` for a record of fixed-width unsigned fields: little-endian, in declaration order, no padding.
 
 ```cairn
 import std.core (Eq);
@@ -535,11 +533,11 @@ fn main() -> i32 {
 }
 ```
 
-It infers no framing, no authentication and no validation. Any other kind of field is `E-DERIVE-FIELD`, "wire/1 supports only fixed-width unsigned scalar fields." `src/cairn/std/wire.cairn` is the worked example of `each`, `where`, `fold` and `$` splices; its output is pinned byte for byte against the closed generator it replaced.
+It adds no framing, authentication or validation. Any other kind of field is `E-DERIVE-FIELD`. `src/cairn/std/wire.cairn` is a worked example of a recipe.
 
 ## std.arena
 
-The language's answer to graphs and cycles. Values live in one owned array and are named by a copyable `Handle { slot; generation }`. Removing a value bumps its slot's generation, so every handle to it stops resolving: a use after free becomes a `None`, not a dangling pointer.
+How to build graphs and cycles. Values live in one owned array and are named by a copyable `Handle { slot; generation }`. Removing a value bumps its slot's generation, so a use after free becomes a `None`, not a dangling pointer.
 
 ```cairn
 import std.core (Option);
@@ -567,11 +565,11 @@ fn main() -> i32 {
 }
 ```
 
-`insert` is amortized O(1) and reuses removed slots; `find` and `remove` are O(1), and `remove` moves the value out. Iterate with `for slot in 0..a.slots()` and `a.alive(slot)`; `a.handle(slot)` gives the handle a live slot currently answers to, and `a.count()` how many are live.
+`insert` reuses removed slots, and `find` and `remove` are O(1).
 
 ## std.mem
 
-`fill`, `copy` and `equal` over views, one pass each. All three instantiate only for copyable elements, because an owner would have to be moved out of a place.
+`fill`, `copy` and `equal` over views of copyable elements.
 
 ```cairn
 import std.mem as mem;
@@ -587,11 +585,11 @@ fn main() -> i32 {
 }
 ```
 
-`copy` takes two views of one extent, so it is not a memmove: overlapping parts of one array are refused at the call site with `E-ALIAS`, and the checked entry that a caller outside CAIRN reaches checks it numerically as well. Shift a buffer down with an ordinary loop. `equal` takes two extents, since a comparison is the one place where the lengths may differ, and it stops at the first difference.
+`copy` is not a memmove: overlapping parts of one array are refused (`E-ALIAS`), so shift a buffer with an ordinary loop. `equal` takes two extents, since the lengths may differ.
 
 ## std.net
 
-Blocking TCP. A `Socket` is linear for the same reason a `File` is. To serve many connections from one thread, keep their accepts and receives in an I/O ring ([concurrency.md](concurrency.md#io-rings)) and answer with `net.send_all(fd, data)`, which takes the raw descriptor a ring's accept returns. `examples/apps/service` does exactly that. An address is four bytes, so a string literal is an IPv4 address.
+Blocking TCP. A `Socket` is linear, as a `File` is. To serve many connections from one thread, keep their accepts and receives in an [I/O ring](concurrency.md#io-rings), as `examples/apps/service` does. An address is four bytes.
 
 ```cairn
 import std.core (Result);
@@ -626,11 +624,11 @@ fn main() -> i32 {
 }
 ```
 
-`listen_on` sets `SO_REUSEADDR`, so a restart does not lose to the previous listener's TIME_WAIT. `accept` and `connect_to` block. `send` loops until the whole view is gone; `recv` is one syscall, and a count of 0 means the peer closed its end, never an error. Every failure path inside the module closes the raw descriptor before a `Socket` exists, and reads errno first, because `close` would overwrite it.
+`send` loops until the whole view is gone, and `recv` is one syscall, where 0 means the peer closed its end.
 
 ## std.sys
 
-Every libc binding the library uses, declared exactly once: `read`, `write`, `open`, `close`, `lseek`, `fsync`, `ftruncate`, `unlink`, `rename`, `clock_gettime`, `getpid`, the BSD socket calls, `__errno_location`, and `errno()` on top of it. Prefer `std.io` and `std.net`. This module exists because an extern's C symbol is its CAIRN name, so two modules cannot both declare `close`.
+Every libc binding the library uses, declared once, because an extern's C symbol is its CAIRN name and two modules cannot both declare `close`. Prefer `std.io` and `std.net`.
 
 ```cairn
 import std.sys as sys;
@@ -649,12 +647,12 @@ fn main() -> i32 {
 }
 ```
 
-The second convention is for C strings: a pointer is not a view, so `open` is declared `path:ro<u8>[1]` and called as `sys.open(path[0..1], flags, 420)` with the NUL byte inside `path`. `errno` is a macro over a thread-local `int*`, which no CAIRN signature can return, so `std.sys.errno` declares `__errno_location` as a `usize` and does one `mmio_read[u32]` of that address inside `unsafe`. It is the only place in the library that needs the `mmio` effect.
+A C string is passed as a one-element view whose storage holds the NUL. `errno` is a thread-local that no signature can return, so `std.sys.errno` reads it with one `mmio_read[u32]`, the library's only use of `mmio`.
 
 ## Sharp edges
 
-A linear value inside a record leaves by taking the record apart. `take` cannot forge the zero a `File` would leave behind (`E-LINEAR-STORAGE`, "take would leave a forged linear value behind; swap two places instead"), so a wrapper is consumed whole: `let Conn(f, sent) = c;` binds every field and `c` is gone. A `File` or a `Socket` may therefore live inside your own state.
+A linear value inside a record leaves by taking the record apart, `let Conn(f, sent) = c;`, because `take` cannot forge the zero a `File` would leave behind (`E-LINEAR-STORAGE`).
 
-One failure family per function. `try` requires the enclosing function to return the same sum family with the same failure payload, so everything fallible here is `Result[_, IoError]` and the void-ish ones answer `Ok(0)`. Mixing families is `E-TRY`, "try returns the failure of std.core.Result[u64, std.io.IoError], which Broken cannot carry."
+One failure type per function: `try` requires the same failure payload, so everything fallible here is `Result[_, IoError]` (`E-TRY` otherwise).
 
-A call that allocates or writes through a borrow cannot be a nested operand. Bind it first: `let empty = vec.new[Handle](); arena.insert(plan, Step(1, empty));`. Nesting it is `E-EFFECT-ORDER`, "Bind a writing call to its own statement before using its result."
+A call that allocates or writes through a borrow cannot be a nested operand. Bind it first (`E-EFFECT-ORDER`).
