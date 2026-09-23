@@ -127,7 +127,7 @@ fn main() -> i32 {
 }
 ```
 
-A loop may lend a group what its tasks only read, since read-only lending is shared. Lending a place `rw` inside a loop is refused, because the next iteration would lend it to the group again while the group still holds it. For the same reason nothing a loop body touches may conflict with what an earlier iteration lent the group, so writing `d[0]` before submitting a reader of `d` is `E-LEASED` too.
+A loop may lend a group what its tasks only read, since read-only lending is shared. Lending a place `rw` inside a loop is refused, because the next iteration would lend it to the group again while the group still holds it. For the same reason nothing a loop body touches may conflict with what an earlier iteration lent the group, so writing `d[0]` before submitting a reader of `d` is `E-LEASED` too. An owner passed by value is not lent: it moves into the task, which releases it, so a loop may make a fresh `Buf` and move it into the group each time round, and the moved name is `E-MOVED` afterwards.
 
 After an `if` or a `match` the group holds what every path lent it. A part's bounds order other parts only when every path formed that part, because its `lo <= hi` guard ran only where it was formed, and the same holds for a part lent inside a loop, which may run no iteration at all.
 

@@ -12,7 +12,7 @@ import tempfile
 import pytest
 
 from cairn.cli import create_project, main
-from cairn.compiler.cairnc import compile_source
+from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.compiler.header import binding
 from cairn.editor.document import Document
 from cairn.editor.workspace import rename, workspace
@@ -284,3 +284,44 @@ def test_a_rename_rewrites_the_task_contract_that_names_the_function(tmp_path):
         path.write_text(out)
     assert '"symbol": "midpoint"' in (root / "tests/average.json").read_text()
     assert main(["test", str(root), "--format", "json"]) == 0
+
+
+# --- Fixed: an owner moved into a group's task is the task's, not lent ---------------------------------------------
+
+KEEP = "fn keep(b:Buf[u64]) -> u64 = u64(len(b)) + b[0];\n"
+MOVED_IN = (
+    KEEP + "fn main() -> i32 {\n  let g = Group[u64](4);\n"
+    "  for k in 0..4 { let mut b = Buf[u64](k + 1); b[0] = u64(k); spawn keep(b) into g; }\n"
+    "  let mut sum:u64 = 0;\n  for k in 0..4 { sum += collect(g); }\n  wait(g);\n"
+    "  if sum != 1 + 2 + 3 + 4 + 0 + 1 + 2 + 3 { return 1; }\n  return 0;\n}\n"
+)
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_loop_may_move_a_fresh_owner_into_a_group_each_time_round(tmp_path, cxx):
+    """The group's rule for a loop read every place the submission touched as lent, a Buf passed by value
+    included, so moving a fresh owner in each iteration was E-LEASED although nothing of it stayed with the
+    spawner. Each owner is released once, on the task's thread."""
+    done = watched(tmp_path, compile_source(MOVED_IN)[0], cxx, "address,undefined")
+    assert done.returncode == 0, done.stderr[-3000:]
+
+
+@pytest.mark.parametrize(
+    "source,code",
+    [
+        (  # a view lent in a loop is still lent to the group until its wait
+            "fn fill(n:usize, out:rw<u64>[n]) { out[0] = 1; }\nfn main() -> i32 { let mut v = Buf[u64](4);\n"
+            "  let g = Group[void](4);\n  for k in 0..4 { spawn fill(v) into g; }\n  wait(g);\n  return 0;\n}\n",
+            "E-LEASED",
+        ),
+        (  # and an owner moved in is gone from the spawner
+            KEEP + "fn main() -> i32 { let g = Group[u64](1); let b = Buf[u64](1); spawn keep(b) into g;\n"
+            "  let again = b[0];\n  let r = collect(g);\n  wait(g);\n  return 0;\n}\n",
+            "E-MOVED",
+        ),
+    ],
+)
+def test_what_a_group_still_holds_is_still_refused(source, code):
+    with pytest.raises(Diagnostic) as refused:
+        compile_source(source)
+    assert refused.value.data["code"] == code, refused.value.data

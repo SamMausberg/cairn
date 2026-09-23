@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from . import facts, fusion
@@ -324,11 +325,14 @@ def e_spawn(c: Checker, e: Expr, expected: Type | None) -> Type:
     if e.val == "into":  # The group holds every lease until wait(g); which task finished is never known here.
         group = c.env[name]
         c.expect(result, group.ty.args[0], e)
-        again = [p for p, mode in c.borrowed if mode == "rw"] if c.loop_depth > group.depth else []
+        # An owner passed by value is the task's now: the spawner cannot reach it, and a later binding of its name
+        # is another object, so it is not lent, and a loop may move a fresh one in each time round.
+        lent = [(p, mode) for p, mode in c.borrowed if re.split(r"[.\[]", p, maxsplit=1)[0] not in c.moved]
+        again = [p for p, mode in lent if mode == "rw"] if c.loop_depth > group.depth else []
         if again:
             fail("E-LEASED", f"{again[0].removesuffix('[]')} is lent to {name} until wait({name}), and the next "
                  "iteration would lend it again.", e)  # fmt: skip
-        c.leases[name] = [*c.leases.get(name, ()), *c.borrowed]  # A new list: a sibling path shares the old one.
+        c.leases[name] = [*c.leases.get(name, ()), *lent]  # A new list: a sibling path shares the old one.
         c.effect("spawn")
         c.guard("submit")  # A full group traps rather than growing.
         return VOID
