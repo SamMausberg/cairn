@@ -7,10 +7,10 @@
 2. Each legal candidate is counted from its own checked program and priced by the model.
 3. In predicted order, ties broken toward kernel items no earlier compile covered, each device candidate is compiled
    for the target and read by ptxas and cuobjdump (`perf/resources.py`) until the compile budget is spent. For
-   `blur` in evidence/v0_9/search, 32 compiles in plain predicted order read 8 distinct SASS: the model priced most
-   of its plans alike, and `per_lane` left the code as it was. An inspection is kept by the key of what
-   it compiled, so a candidate that emits a program already compiled, in this search or an earlier one with the same
-   history, costs no compile. Registers and shared memory then enter its price through occupancy.
+   `blur` in evidence/v0_9/search, the model priced all 160 plans alike, and 32 compiles wrote 8 distinct SASS. An
+   inspection is kept by the key of what it compiled, so a candidate that emits a program already compiled, in this
+   search or an earlier one with the same history, costs no compile. Registers and shared memory then enter its
+   price through occupancy.
 
 A budget bounds the whole search: `compiles` device compiles started, `seconds` of wall time checked between steps,
 and `runs` timed runs (`perf/tune.py` times; device plans only under the owner's make target). What a spent budget
@@ -28,7 +28,7 @@ from typing import Any
 from ..compiler.cairnc import Diagnostic, compile_program
 from ..compiler.concurrency import PLAN_ITEMS
 from . import model
-from .plan_source import Placement, Plan, written
+from .plan_source import KEEP, Placement, Plan, written
 from .profile import Profile
 from .work import Cost, count
 
@@ -120,19 +120,29 @@ class Candidate:
     checker: Any = None
     predicted_ns: float = 0.0
     resources: dict[str, Any] | None = None
+    use: str | None = None  # the implementation a `plan f use g;` selects, by its qualified name; None: the reference
+
+    def runs(self, name: str) -> str:
+        """The function whose code this candidate runs where it applies: the selected implementation, or `name`."""
+        return self.use or name
 
 
-def checked(placement: Placement, name: str, plans: list[Plan], spent: Spent) -> list[Candidate]:
-    """Each plan written into the source and checked as a whole program, until the time runs out."""
+def checked(placement: Placement, name: str, plans: list[Plan], spent: Spent,
+            uses: tuple[str | None, ...] = ()) -> list[Candidate]:  # fmt: skip
+    """Each plan, beside each implementation of `uses` when there are any (None is the reference), written into the
+    source and checked as a whole program, until the time runs out. A candidate that selects an implementation is
+    counted as that implementation, the code that runs where its condition holds."""
     out = []
-    for plan in plans:
+    for plan, use in itertools.product(plans, uses or (KEEP,)):
         if spent.out_of_time():
             spent.skip("not checked: out of time")
             continue
-        c = Candidate(plan, placement.apply(plan))
+        chosen = use if isinstance(use, str) else None
+        written_as = chosen.rsplit(".", 1)[-1] if chosen else None
+        c = Candidate(plan, placement.apply(plan, written_as if use is not KEEP else KEEP), use=chosen)
         try:
             c.program, c.checker, _ = compile_program(c.source)
-            c.cost = count(c.program, c.checker, {name})[name]
+            c.cost = count(c.program, c.checker, {c.runs(name)})[c.runs(name)]
         except Diagnostic as error:
             c.refused = (error.data["code"], error.data["message"])
         out.append(c)
@@ -168,12 +178,12 @@ def shaped(ranked: list[Candidate]) -> list[Candidate]:
     """`ranked` with each run of equal predicted times reordered: a candidate whose items apart from `LAUNCH` no
     earlier candidate had comes before one whose items some earlier candidate had. Unequal times keep their order."""
     out: list[Candidate] = []
-    seen: set[Plan] = set()
+    seen: set[tuple] = set()
     for _, tier in itertools.groupby(ranked, key=lambda c: model.significant(c.predicted_ns)):
         fresh: list[Candidate] = []
         again: list[Candidate] = []
         for c in tier:
-            shape = tuple((k, v) for k, v in c.plan if k not in LAUNCH)
+            shape = (c.use, *((k, v) for k, v in c.plan if k not in LAUNCH))
             (again if shape in seen else fresh).append(c)
             seen.add(shape)
         out += fresh + again
@@ -190,13 +200,13 @@ def inspected(candidates: list[Candidate], name: str, inspector: Any, profile: P
         if spent.out_of_time():
             spent.skip("not inspected: out of time")
             continue
-        kept = inspector.kept(c.source, name, c.program)
+        kept = inspector.kept(c.source, c.runs(name), c.program)
         if kept is None and spent.compiles >= spent.budget.compiles:
             spent.skip("not inspected: compile budget spent")
             continue
         if kept is None:
             spent.compiles += 1
-            c.resources = inspector.inspect(c.source, name, c.program, c.checker)
+            c.resources = inspector.inspect(c.source, c.runs(name), c.program, c.checker)
         else:
             spent.kept += 1
             c.resources = kept

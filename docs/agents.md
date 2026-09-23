@@ -162,7 +162,7 @@ A record's identity has five parts: `source`, the function and everything it cal
 | `hypothesis` | `claim` | an explanation nothing has confirmed |
 | `experiment` | `run`, `tests` | a run that would confirm or refute a hypothesis |
 
-`History(where).judged(function, base, contracts, targets)` splits a function's records into `current` and `stale`. A record is current while its source, contract and compiler match the program now and its target is one the caller works on; otherwise it is returned under `stale` with the parts that moved, and never as a current fact. An equal record is kept once, and an analysis such as a compile's reading is kept under the digest of everything it read, with its files.
+`History(where).judged(function, base, contracts, targets)` splits a function's records into `current` and `stale`. A record is current while its source, contract and compiler match the program now and its target is one the caller works on; otherwise it is returned under `stale` with the parts that moved, and never as a current fact. An equal record is kept once, and an analysis such as a compile's reading is kept under the digest of everything it read, with its files. A function's implementations are not part of its source here: a plan selects one, and a candidate that selects it names it with its identity, so [`cairn tune`](tools.md#cairn-tune) cites the validation an implementation session recorded only while the implementation and its reference are as they were.
 
 ## Implementation sessions
 

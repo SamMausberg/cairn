@@ -23,7 +23,7 @@ from ..agent import history as kept
 from ..compiler.cairnc import compile_program
 from ..projects.target import DeviceTarget, resolve
 from . import model
-from .plan_source import Placement, Plan, contract, shown, written
+from .plan_source import KEEP, Placement, Plan, contract, shown, text, written
 from .profile import Profile, default
 from .regions import applied, identified
 from .resources import Inspector, device_identity, host_target
@@ -44,33 +44,69 @@ class Recorder:
     """What a search writes into a history, under the identity of each candidate it is about."""
 
     def __init__(self, where: str | Path, source: str, name: str, contract: Any, host: dict,
-                 device: DeviceTarget | None):  # fmt: skip
+                 device: DeviceTarget | None, implementations: dict[str, Any] | None = None):  # fmt: skip
         self.where, self.name, self.contract = where, name, contract
         self.base = kept.as_written(source, name)
         self.host, self.device = kept.digest(host), device_identity(device)
         self.history = kept.History(where)
+        self.implementations = implementations or {}  # the receipt's table: each implementation's identity
 
-    def put(self, kind: str, plan: Plan, target: str, detail: dict, artifact: str | None = None) -> None:
-        variant = {"plan": dict(plan)}
-        identity = kept.identity(self.base, variant, self.contract, target, artifact)
-        kept.record(self.where, kind, self.name, shown(local(self.name), plan), identity, detail, variant)
+    def variant(self, key: Key) -> dict[str, Any]:
+        """What makes the candidate `key`: its plan, and the implementation it selects with that implementation's
+        identity, so an edit to the implementation leaves the records of the candidate stale."""
+        plan, use = key
+        chosen = {"use": use, "implementation": self.implementations.get(use, {}).get("identity")} if use else {}
+        return {"plan": dict(plan), **chosen}
 
-    def earlier(self, plan: Plan, sizes: dict[str, float], procedure: str, target: str) -> dict[str, Any] | None:
-        """A current measurement of `plan` at `sizes` by `procedure` on `target`, if one is kept."""
+    def put(self, kind: str, key: Key, target: str, detail: dict, artifact: str | None = None) -> None:
+        identity = kept.identity(self.base, self.variant(key), self.contract, target, artifact)
+        kept.record(self.where, kind, self.name, label(self.name, key), identity, detail, self.variant(key))
+
+    def earlier(self, key: Key, sizes: dict[str, float], procedure: str, target: str) -> dict[str, Any] | None:
+        """A current measurement of the candidate `key` at `sizes` by `procedure` on `target`, if one is kept."""
         split = self.history.judged(self.name, self.base, {kept.digest(self.contract)}, {target})
         return next((r["detail"] for r in split["current"] if r["kind"] == "measurement" and r["variant"] ==
-                     {"plan": dict(plan)} and r["detail"].get("sizes") == sizes and r["detail"]["procedure"] ==
+                     self.variant(key) and r["detail"].get("sizes") == sizes and r["detail"]["procedure"] ==
                      procedure), None)  # fmt: skip
+
+
+Key = tuple[Plan, str | None]  # a plan, and the implementation it selects by qualified name, or None
+
+
+def label(name: str, key: Key) -> str:
+    plan, use = key
+    selected = f"plan {local(name)} use {local(use)};" if use else ""
+    return " ".join(x for x in (text(local(name), plan), selected) if x) or shown(local(name), plan)
+
+
+def validations(source: str, name: str, receipts: dict[str, Any], alternatives: list[str],
+                recorder: Recorder | None) -> dict[str, Any]:  # fmt: skip
+    """For each implementation of `name`, the validation the history holds for it as it is now (its identity in the
+    receipt, the reference as written, this compiler); none without a history. An implementation without one is
+    searched and priced but never chosen or timed: selecting it could change a result."""
+    if recorder is None:
+        return {}
+    table = receipts[name].get("implementations", {})
+    out: dict[str, Any] = {}
+    for g in alternatives:
+        found = recorder.history.holding(name, recorder.base, "validation", table.get(g, {}).get("identity"))
+        if found:
+            out[g] = {"evidence": found[-1]["detail"].get("evidence"), "record": found[-1]["id"]}
+    return out
 
 
 def local(name: str) -> str:
     return name.rsplit(".", 1)[-1]
 
 
-def row(name: str, c: Candidate, regions: list[str]) -> dict[str, Any]:
-    """One candidate as the answer shows it: its plan, its price, what a compile read, what it did to which region."""
-    out: dict[str, Any] = {"plan": shown(local(name), c.plan), **dict(c.plan),
+def row(name: str, c: Candidate, regions: list[str], validated: dict[str, Any] | None = None) -> dict[str, Any]:
+    """One candidate as the answer shows it: its plan, its price, what a compile read, what it did to which region,
+    and for an implementation, the validation the history holds for it as it is now."""
+    out: dict[str, Any] = {"plan": label(name, (c.plan, c.use)), **dict(c.plan),
                            "predicted_ns": model.significant(c.predicted_ns)}  # fmt: skip
+    if c.use:
+        out["use"] = local(c.use)
+        out["validated"] = (validated or {}).get(c.use) or "no validation holds: run cairn validate before using it"
     if c.resources is not None:
         r = c.resources
         out["resources"] = ({k: r[k] for k in ("registers", "spill_bytes", "stack_bytes", "shared_bytes",
@@ -105,23 +141,36 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
         raise ValueError(f"No function {name} to tune.")
     c = costs[name]
     kinds = {r.kind for r in c.regions} & {"host", "device"}
-    if not kinds:
-        raise ValueError(f"{name} has no parallel region, so no plan applies to it (E-PLAN).")
+    alternatives = list(getattr(checker, "alternatives", {}).get(name, []))  # its implementations (E-IMPL-*)
+    if not kinds and not alternatives:
+        raise ValueError(f"{name} has no parallel region and no implementation, so no plan applies to it (E-PLAN).")
+    kinds |= {r.kind for g in alternatives for r in count(p, checker, {g})[g].regions} & {"host", "device"}
     if not sizes:
         raise ValueError("Give the sizes to tune for with --at, such as --at n=1e7.")
     placement = Placement(source, name)
     target = (device_target or resolve(required=False)) if "device" in kinds else None
     on = targeted({name: c}, chosen, target)  # the card that prices device plans runs the target's code
-    current = written(receipts[name].get("plan", {}))
+    current: Key = (written(receipts[name].get("plan", {})), receipts[name].get("runs"))
     stages = radii(p, name) if "device" in kinds else ()
-    plans = space(kinds, chosen.host.lanes if chosen.host else 16, regions(p, name), stages)
-    candidates = checked(placement, name, plans, spent)
+    own = {r.kind for r in c.regions} & {"host", "device"}  # plan items schedule the reference's own regions
+    nothing: list[Plan] = [()]
+    plans = space(own, chosen.host.lanes if chosen.host else 16, regions(p, name), stages) if own else nothing
+    uses = (None, *alternatives) if alternatives else ()
+    candidates = checked(placement, name, plans, spent, uses)
     for cand in candidates:
         if cand.cost is not None:
             cand.predicted_ns = priced(cand.cost, chosen, sizes, arch)
     recorder = None
     if history is not None:
-        recorder = Recorder(history, source, name, contract(source, name), host_target(arch, cxx), target)
+        recorder = Recorder(
+            history,
+            source,
+            name,
+            contract(source, name),
+            host_target(arch, cxx),
+            target,
+            receipts[name].get("implementations"),
+        )
     if "device" in kinds:
         from .device import available
 
@@ -139,8 +188,10 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
         raise ValueError(f"The checker refused every plan of {name} the search tried.")
     named = identified(source, name)
     ids = [r["id"] for r in named]
-    rows = [row(name, x, ids) for x in legal]
-    read = [r for r in rows if r.get("resources", {}).get("registers") is not None]
+    validated = validations(source, name, receipts, alternatives, recorder)
+    rows = [row(name, x, ids, validated) for x in legal]
+    usable = [r for r in rows if not isinstance(r.get("validated"), str)]  # the reference, or a validated one
+    read = [r for r in usable if r.get("resources", {}).get("registers") is not None]
     result: dict[str, Any] = {
         "schema": "cairn.tune/2",
         "function": name,
@@ -151,41 +202,60 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
         "target": {"host": {"arch": arch or "baseline"}},
         **on,
         "regions": named,
-        "current": shown(local(name), current),
+        "current": label(name, current),
         "space": {
-            "configurations": len(plans),
+            "configurations": len(plans) * max(len(uses), 1),
             "checked": len(candidates),
             "legal": len(legal),
             "refused": refusals(candidates),
         },
         "candidates": rows,
-        "chosen": read[0] if read else rows[0],
+        "chosen": read[0] if read else usable[0] if usable else rows[0],
+        **({"implementations": [local(g) for g in alternatives]} if alternatives else {}),
     }
     predicted = result["chosen"]
+    best = legal[rows.index(predicted)]
     if measure and "device" in kinds and not device:
         result["measured"] = "Not measured: device plans are timed only by `make tune-device`, which the owner runs."
     elif measure:
-        ranked = [x.plan for x in legal]
-        result.update(timed(source, name, ranked, current, sizes, measure, cxx, arch, device, spent, recorder, target))
+        eligible = [
+            (x.plan, x.use) for x, r in zip(legal, rows, strict=True) if not isinstance(r.get("validated"), str)
+        ]
+        result.update(
+            timed(
+                source,
+                name,
+                eligible,
+                current,
+                sizes,
+                measure,
+                cxx,
+                arch,
+                device,
+                spent,
+                recorder,
+                target,
+                bool(alternatives),
+            )
+        )
     if recorder is not None:
-        record_search(recorder, candidates, {**result, "chosen": predicted})
+        record_search(recorder, candidates, {**result, "chosen": predicted}, (best.plan, best.use))
     result["budget"] = spent.report()
     return result
 
 
-def record_search(recorder: Recorder, candidates: list[Candidate], result: dict) -> None:
+def record_search(recorder: Recorder, candidates: list[Candidate], result: dict, chosen: Key) -> None:
     """The search itself, the checker's refusals and each compile's reading, into the history."""
     summary = {k: result["space"][k] for k in ("configurations", "checked", "legal")}
-    chosen = written({k: v for k, v in result["chosen"].items() if isinstance(v, int)})
     ranked = [[row["plan"], row["predicted_ns"]] for row in result["candidates"][:8]]  # what to time next
     recorder.put("attempt", chosen, recorder.host, {"by": "cairn tune", "sizes": result["sizes"], **summary,
                                                     "chosen": result["chosen"]["plan"], "ranked": ranked,
                                                     **({"measured_best": result["measured_best"]}
                                                        if result.get("measured_best") else {})})  # fmt: skip
     for group in refusals(candidates):
-        plan = written(group["example"])
-        recorder.put("failure", plan, recorder.host, {"stage": "check", "why": f"{group['code']}: {group['message']}",
-                                                      "configurations": group["configurations"]})  # fmt: skip
+        first = next(x for x in candidates if x.refused == (group["code"], group["message"]))
+        recorder.put("failure", (first.plan, first.use), recorder.host, {"stage": "check", "why": f"{group['code']}: "
+                     f"{group['message']}", "configurations": group["configurations"]})  # fmt: skip
     for x in candidates:
         r = x.resources
         if r is None or r.get("kept"):
@@ -198,29 +268,30 @@ def record_search(recorder: Recorder, candidates: list[Candidate], result: dict)
                 "analysis": r["key"],
                 **{k: r[k] for k in read if k in r},
             }
-            recorder.put("observation", x.plan, recorder.device, detail, r.get("cubin_sha256"))
+            recorder.put("observation", (x.plan, x.use), recorder.device, detail, r.get("cubin_sha256"))
         elif r["status"] in {"compile-failed", "target-refused"}:
-            recorder.put("failure", x.plan, recorder.device, {"stage": "build", "why": r.get("why", "nvcc failed"),
+            recorder.put("failure", (x.plan, x.use), recorder.device, {"stage": "build", "why": r.get("why", "nvcc failed"),
                                                               "analysis": r["key"]})  # fmt: skip
 
 
-def timed(source: str, name: str, ranked: list[Plan], current: Plan, sizes: list[dict[str, float]], keep: int,
-          cxx: str, arch: str | None, device: bool, spent: Spent | None = None,
-          recorder: Recorder | None = None, target: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
-    """Successive halving over the best-ranked `keep` distinct plans and the current one, within the run budget; a
-    measurement the history already holds for the same identity and procedure is used rather than run again."""
+def timed(source: str, name: str, ranked: list[Any], current: Any, sizes: list[dict[str, float]], keep: int,
+          cxx: str, arch: str | None, device: bool, spent: Spent | None = None, recorder: Recorder | None = None,
+          target: DeviceTarget | None = None, selecting: bool = False) -> dict[str, Any]:  # fmt: skip
+    """Successive halving over the best-ranked `keep` distinct candidates and the current one, within the run budget;
+    a measurement the history already holds for the same identity and procedure is used rather than run again. A
+    candidate is a plan, or a `Key` of a plan and the implementation it selects when `selecting`."""
     from ..projects.toolchain import resolve_arch
     from . import measure, on_device
 
     spent = spent or Spent(Budget())
     allowed = spent.budget.runs
     placement = Placement(source, name)
-    field = list(dict.fromkeys([*distinct(ranked, keep), current]))
+    field: list[Key] = list(dict.fromkeys(keyed(x) for x in [*distinct(ranked, keep), current]))
     where = (recorder.device if device else recorder.host) if recorder else ""
     blocks, rounds = 3, []
-    times: dict[Plan, float] = {}
+    times: dict[Key, float] = {}
     while True:
-        done: list[Plan] = []
+        done: list[Key] = []
         procedure = PROCEDURE[device].format(blocks=blocks)
         for plan in field:
             total = 0.0
@@ -233,13 +304,14 @@ def timed(source: str, name: str, ranked: list[Plan], current: Plan, sizes: list
                     break
                 else:
                     spent.runs += 1
-                    variant = placement.apply(plan)
+                    use = (local(plan[1]) if plan[1] else None) if selecting else KEEP
+                    variant = placement.apply(plan[0], use)
                     if device:
                         got = on_device.time_device(variant, name, s, blocks=blocks, target=target)
                     else:
                         got = measure.time(variant, name, s, cxx=cxx, arch=resolve_arch(arch), blocks=blocks)
                     if got["status"] != "measured":
-                        raise ValueError(f"{shown(name, plan)} did not run: {got}")
+                        raise ValueError(f"{label(name, plan)} did not run: {got}")
                     if recorder:
                         numbers = {k: got[k] for k in ("median_ns", "min_ns", "max_ns", "inner") if k in got}
                         recorder.put("measurement", plan, where, {"procedure": procedure, "sizes": s, **numbers})
@@ -247,7 +319,7 @@ def timed(source: str, name: str, ranked: list[Plan], current: Plan, sizes: list
             else:
                 times[plan] = total
                 done.append(plan)
-        rounds.append({"blocks": blocks, "measured_ns": {shown(name, p): round(times[p], 1) for p in done}})
+        rounds.append({"blocks": blocks, "measured_ns": {label(name, p): round(times[p], 1) for p in done}})
         if len(done) < len(field) or len(field) <= 2:
             field = done or field
             break
@@ -259,15 +331,20 @@ def timed(source: str, name: str, ranked: list[Plan], current: Plan, sizes: list
     if not times:
         return {"measured": note, "rounds": rounds, "measured_best": None}
     best = min((p for p in field if p in times), key=lambda plan: times[plan])
-    order = [p for p in ranked if p in times]  # predicted order, fastest first
+    order = [keyed(p) for p in ranked if keyed(p) in times]  # predicted order, fastest first
     pairs = [(a, b) for i, a in enumerate(order) for b in order[i + 1 :]]
     agree = sum(times[a] <= times[b] for a, b in pairs)
     return {
         "measured": note,
         "rounds": rounds,
-        "measured_best": shown(name, best),
+        "measured_best": label(name, best),
         "pairs_ordered_as_predicted": f"{agree} of {len(pairs)}",
-        "chosen": {"plan": shown(name, best), **dict(best), "measured_ns": round(times[best], 1)},
+        "chosen": {
+            "plan": label(name, best),
+            **dict(best[0]),
+            **({"use": local(best[1])} if best[1] else {}),
+            "measured_ns": round(times[best], 1),
+        },
     }
 
 
@@ -318,14 +395,22 @@ def delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
             "gone": sorted(set(earlier) - {row["plan"] for row in after["candidates"]})}  # fmt: skip
 
 
-def distinct(ranked: list[Plan], keep: int) -> list[Plan]:
-    """The best-ranked `keep` plans the model tells apart: plans it prices alike would spend the budget on noise,
-    so one of each predicted time is timed."""
-    picked: list[Plan] = []
+def keyed(candidate: Any) -> Key:
+    """A plan, or a plan and the implementation it selects, as a `Key`."""
+    is_key = (
+        isinstance(candidate, tuple) and len(candidate) == 2 and (candidate[1] is None or isinstance(candidate[1], str))
+    )
+    return candidate if is_key else (candidate, None)
+
+
+def distinct(ranked: list[Any], keep: int) -> list[Any]:
+    """The best-ranked `keep` candidates the model tells apart: plans it prices alike would spend the budget on
+    noise, so one of each predicted time is timed, for each implementation a candidate selects."""
+    picked: list[Any] = []
     seen: set[str] = set()
     for plan in ranked:
-        items = dict(plan)
-        key = f"{items.get('lanes', 0)}/{items.get('block', 0)}/{items.get('per_lane', 0)}"
+        items, use = dict(keyed(plan)[0]), keyed(plan)[1]
+        key = f"{items.get('lanes', 0)}/{items.get('block', 0)}/{items.get('per_lane', 0)}/{use}"
         if key not in seen:
             seen.add(key)
             picked.append(plan)

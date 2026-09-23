@@ -151,6 +151,49 @@ def test_the_run_budget_bounds_measurement_and_a_kept_measurement_is_not_run_aga
     assert again["budget"]["runs"]["kept"] == 2 and again["budget"]["runs"]["started"] == 1
 
 
+TOTAL = """fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut s:u64 = 0;
+  for i in 0..n { s += xs[i]; }
+  return s;
+}
+"""
+BY4 = """fn total_by4(n:usize, xs:ro<u64>[n]) -> u64 implements total when n % 4 == 0 {
+  let mut a:u64 = 0;
+  let mut b:u64 = 0;
+  for k in 0..n / 4 { a += xs[4 * k] + xs[4 * k + 1]; b += xs[4 * k + 2] + xs[4 * k + 3]; }
+  return a + b;
+}"""
+PAIRS = """fn total_pairs(n:usize, xs:ro<u64>[n]) -> u64 implements total {
+  let mut s:u64 = 0;
+  for k in 0..n / 2 { s += xs[2 * k] + xs[2 * k + 1]; }
+  return s;
+}"""  # wrong at every odd length, and never submitted, so nothing validated it
+
+
+@pytest.mark.skipif(not shutil.which("clang++"), reason="validating an implementation runs native builds")
+def test_an_implementation_is_searched_and_chosen_only_while_its_validation_holds(tmp_path):
+    from cairn.agent.implementations import PROTOCOL, ImplementationHost
+
+    host = ImplementationHost(records=tmp_path)
+    host.open(TOTAL, "total", {"tolerance": {"absolute": 0.0, "relative": 0.0}, "domain": {"largest_extent": 48}})
+    answer = host.respond({"protocol": PROTOCOL, "handle": "i1", "kind": "submit", "source": BY4})
+    assert answer["status"] == "validated"
+    source = host.source("i1") + "\n" + PAIRS + "\n"
+    result = tune(source, "total", [{"n": 1e6}], MACHINE, history=tmp_path)
+    rows = {row.get("use"): row for row in result["candidates"]}
+    assert set(rows) == {None, "total_by4", "total_pairs"} and result["implementations"] == ["total_by4", "total_pairs"]
+    assert rows["total_by4"]["validated"]["evidence"] == "finite-tested"
+    assert rows["total_by4"]["plan"] == "plan total use total_by4;"
+    assert rows["total_pairs"]["validated"].startswith("no validation holds")
+    assert result["chosen"].get("use") != "total_pairs"  # selecting it could change a result
+    unkept = tune(source, "total", [{"n": 1e6}], MACHINE)
+    assert all(isinstance(row["validated"], str) for row in unkept["candidates"] if row.get("use"))
+    assert "use" not in unkept["chosen"]  # without a history, only the reference is chosen
+    edited = source.replace("a += xs[4 * k] + xs[4 * k + 1];", "a += xs[4 * k + 1] + xs[4 * k];")
+    moved = tune(edited, "total", [{"n": 1e6}], MACHINE, history=tmp_path)
+    assert isinstance(next(r for r in moved["candidates"] if r.get("use") == "total_by4")["validated"], str)
+
+
 def test_a_person_reads_the_space_the_best_few_and_the_budget(tmp_path, capsys):
     source = tmp_path / "spread.cairn"
     source.write_text(MIX)

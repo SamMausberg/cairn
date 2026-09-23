@@ -20,6 +20,7 @@ from ..compiler.lexing import lex
 from ..compiler.tree import Function, fail
 
 Plan = tuple[tuple[str, int], ...]  # the items a plan sets, in the checker's order, zeros left out
+KEEP = object()  # a selection left as it is
 
 
 def written(items: dict[str, int]) -> Plan:
@@ -76,8 +77,9 @@ def line_span(source: str, start: int, end: int) -> tuple[int, int]:
 
 
 class Placement:
-    """Where the plan of one function of one checked source is written: the plans the checker resolves to it, and
-    the point right after its declaration. `apply` gives the source with a given plan in their place."""
+    """Where the plan of one function of one checked source is written: the plans the checker resolves to it, the
+    `plan f use g;` that selects one of its implementations, and the point right after its declaration. `apply` gives
+    the source with a given plan, and a given selection or none, in their place."""
 
     def __init__(self, source: str, symbol: str):
         self.source = source
@@ -91,15 +93,29 @@ class Placement:
                 continue
             end = next(t.end for t in tokens if t.start > token.start and t.s == "}")  # items are `name N;`
             self.removed.append(Edit(*line_span(source, token.start, end), ""))
+        self.unselected: list[Edit] = []  # every `plan f use g;` the checker resolves to this function
+        for module, name, _, token in getattr(program, "selections", ()):
+            with checker.within(module):
+                if checker.qualify(name, checker.fs) != self.f.name:
+                    continue
+            end = next(t.end for t in tokens if t.start > token.start and t.s == ";")
+            self.unselected.append(Edit(*line_span(source, token.start, end), ""))
 
-    def edits(self, plan: Plan) -> list[Edit]:
-        """The edits that put `plan` in place of every plan the function has now, latest first."""
-        added = [Edit(self.f.end, self.f.end, "\n" + text(self.name, plan))] if plan else []
-        return sorted([*self.removed, *added], key=lambda e: (e.start, e.end), reverse=True)
+    def edits(self, plan: Plan, use: Any = KEEP) -> list[Edit]:
+        """The edits that put `plan` in place of every plan the function has now, latest first; and, unless `use` is
+        KEEP, a selection of the implementation `use` (a name its module resolves) in place of the one it has, or
+        none when `use` is None."""
+        written_ = "\n" + text(self.name, plan) if plan else ""
+        removed = list(self.removed)
+        if use is not KEEP:
+            removed += self.unselected
+            written_ += f"\nplan {self.name} use {use};" if use else ""
+        added = [Edit(self.f.end, self.f.end, written_)] if written_ else []
+        return sorted([*removed, *added], key=lambda e: (e.start, e.end), reverse=True)
 
-    def apply(self, plan: Plan) -> str:
+    def apply(self, plan: Plan, use: Any = KEEP) -> str:
         out = self.source
-        for e in self.edits(plan):
+        for e in self.edits(plan, use):
             out = out[: e.start] + e.text + out[e.end :]
         return out
 

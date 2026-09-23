@@ -71,6 +71,15 @@ def test_a_record_holds_until_its_function_contract_target_or_compiler_moves(tmp
     assert judged(tmp_path, S)["stale"][0]["stale"] == ["compiler"]
 
 
+def test_a_function_as_written_leaves_out_its_implementations_and_the_one_a_plan_selects():
+    total = "fn total(n:usize, xs:ro<u64>[n]) -> u64 {\n  let mut s:u64 = 0;\n  for i in 0..n { s += xs[i]; }\n  return s;\n}\n"
+    by2 = ("fn total_by2(n:usize, xs:ro<u64>[n]) -> u64 implements total when n % 2 == 0 {\n  let mut s:u64 = 0;\n"
+           "  for k in 0..n / 2 { s += xs[2 * k] + xs[2 * k + 1]; }\n  return s;\n}\n")  # fmt: skip
+    alone = as_written(total, "total")
+    assert as_written(total + by2, "total") == alone  # an implementation is not a callee of its reference
+    assert as_written(total + by2 + "plan total use total_by2;\n", "total") == alone  # nor is the one selected
+
+
 def test_a_stale_record_is_never_returned_as_current(tmp_path):
     measured(tmp_path, variant={"lanes": 4})
     edited = S.replace("out[i] = mix(u64(i));", "out[i] = mix(u64(i)) ^ 1;")

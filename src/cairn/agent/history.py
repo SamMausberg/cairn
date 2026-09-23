@@ -73,7 +73,8 @@ def compiler() -> str:
 
 
 def closure(source: str, symbol: str) -> str:
-    """The digest of `symbol` and everything it calls as lowered, each canonical (verify/emission.py)."""
+    """The digest of `symbol` and everything it calls as lowered, each canonical (verify/emission.py). An
+    implementation of a function is not one of its callees: a plan selects it, and a candidate names it."""
     from ..verify.emission import canonical, emitted
 
     _, receipts, code, types = emitted(source)
@@ -84,15 +85,17 @@ def closure(source: str, symbol: str) -> str:
         name = pending.pop()
         if name not in seen and name in code:
             seen.add(name)
-            pending += receipts[name]["calls"]
+            alternatives = receipts[name].get("implementations", {})  # what a plan may select instead, not a callee
+            pending += [callee for callee in receipts[name]["calls"] if callee not in alternatives]
     return digest("".join(f"// {n}\n{canonical(n, code[n], types)}\n" for n in sorted(seen)))
 
 
 def as_written(source: str, symbol: str) -> str:
-    """`symbol` as written, without a plan: the `closure` every candidate's source is made from."""
+    """`symbol` as written, without a plan or a selected implementation: the `closure` every candidate's source is
+    made from."""
     from ..perf.plan_source import Placement
 
-    return closure(Placement(source, symbol).apply(()), symbol)
+    return closure(Placement(source, symbol).apply((), use=None), symbol)
 
 
 def identity(base: str, variant: Any, contract: Any, target: Any, artifact: str | None = None) -> dict[str, Any]:
@@ -177,6 +180,14 @@ class History:
             ):
                 out.append(r)
         return out
+
+    def holding(self, function: str, base: str, kind: str, variant: Any) -> list[dict[str, Any]]:
+        """The records of `kind` about `variant` of `function` whose source and compiler hold now, for any contract
+        and target: what may be cited about that candidate as it is now, such as the validation of an
+        implementation whose identity is `variant`."""
+        now = {"source": digest([base, variant]), "compiler": compiler()}
+        return [r for r in self.records(function) if r["kind"] == kind and r["variant"] == variant
+                and all(r["identity"][part] == value for part, value in now.items())]  # fmt: skip
 
     def judged(self, function: str, base: str, contracts: set[str], targets: set[str]) -> dict[str, list[dict]]:
         """`function`'s records split into `current` and `stale`, against the function as written now (`base`, the
