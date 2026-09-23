@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
-from itertools import takewhile
+from functools import lru_cache
+from itertools import islice, takewhile
 from pathlib import Path, PurePosixPath
 
 from ..compiler.lexing import lex
@@ -17,11 +19,18 @@ from ..compiler.tree import MAX_SOURCE, Diagnostic
 from .toolchain import ARCHS, KINDS, LIBRARIES, TARGETS, ProjectError
 
 SEGMENT = re.compile(r"[A-Za-z0-9_.-]+")
+MAX_SOURCES = 1024  # source files one manifest lists; the bytes they hold together are held to MAX_SOURCE
+MAX_DEPENDENCIES = 64  # vendored projects one manifest names, each at most 4 deep
 
 
 def read_text(path: Path, limit: int) -> str:
+    """The file's text, refused past `limit` bytes. The read is sized by the file, not by the limit, since a read
+    of n bytes allocates n up front; one byte past what it held catches a file that grew meanwhile."""
     with path.open("rb") as stream:
-        data = stream.read(limit + 1)
+        want = min(os.fstat(stream.fileno()).st_size, limit) + 1
+        data = stream.read(want)
+        if len(data) == want <= limit:  # It grew after fstat: read on to the limit.
+            data += stream.read(limit + 1 - want)
     if len(data) > limit:
         raise ProjectError(f"{path.name} exceeds its {limit}-byte input limit.")
     return data.decode("utf-8")
@@ -152,7 +161,7 @@ def read_manifest(target: Path) -> Manifest:
     if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name):
         raise ProjectError("Project name must be an ASCII name of 1..64 characters.")
     sources, contracts = project.get("sources"), project.get("tests", [])
-    for label, values, low, high in [("sources", sources, 1, 64), ("tests", contracts, 0, 128)]:
+    for label, values, low, high in [("sources", sources, 1, MAX_SOURCES), ("tests", contracts, 0, 128)]:
         if not isinstance(values, list) or not low <= len(values) <= high:
             raise ProjectError(f"{label} must contain {low}..{high} paths.")
         if not all(isinstance(v, str) for v in values) or len(values) != len(set(values)):
@@ -163,8 +172,8 @@ def read_manifest(target: Path) -> Manifest:
     machine = build.get("target", "hosted")
     if not isinstance(machine, str) or machine not in TARGETS:
         raise ProjectError(f"Unsupported build target; known targets are {', '.join(sorted(TARGETS))}.")
-    if len(table) > 16:
-        raise ProjectError("dependencies is a table of at most 16 entries.")
+    if len(table) > MAX_DEPENDENCIES:
+        raise ProjectError(f"dependencies is a table of at most {MAX_DEPENDENCIES} entries.")
     libraries = build.get("libraries", [])  # names of toolchain rows, never flags or paths
     if not isinstance(libraries, list) or len(libraries) > 8 or not all(isinstance(n, str) for n in libraries):
         raise ProjectError("libraries is a list of at most 8 names.")
@@ -179,16 +188,26 @@ def read_manifest(target: Path) -> Manifest:
 def opened(body: str, current: str) -> list[str]:
     """Every module a source file declares into, given the one in effect where it starts: the files of a build are
     concatenated, so a file that does not open with a `module` header keeps declaring into the previous file's."""
+    found = headers(body)
+    if found is None:
+        return []  # A file that does not lex declares nothing; the checker reports it against the combined source.
+    before, names = found
+    return [current, *names] if before else list(names)
+
+
+@lru_cache(maxsize=2048)
+def headers(body: str) -> tuple[bool, tuple[str, ...]] | None:
+    """Whether a file declares anything but `pub` before its first `module` header, and every header's name; None
+    when it does not lex. Kept by the text, so an editor's refresh lexes again only the files that changed."""
     try:
         tokens = lex(body)
     except Diagnostic:
-        return []  # A file that does not lex declares nothing; the checker reports it against the combined source.
+        return None
     first = next((i for i, token in enumerate(tokens) if token.s == "module"), len(tokens) - 1)
-    names = [] if all(token.s == "pub" for token in tokens[:first]) else [current]
-    for i, token in enumerate(tokens):
-        if token.s == "module":
-            names.append("".join(t.s for t in takewhile(lambda t: t.s not in {";", "<eof>"}, tokens[i + 1 :])))
-    return names
+    ends = {";", "<eof>"}
+    names = tuple("".join(t.s for t in takewhile(lambda t: t.s not in ends, islice(tokens, i + 1, None)))
+                  for i, token in enumerate(tokens) if token.s == "module")  # fmt: skip
+    return not all(token.s == "pub" for token in tokens[:first]), names
 
 
 def claim(owners: dict[str, str], names: list[str], project: str, relative: str) -> None:
@@ -236,7 +255,7 @@ def load_project(path: str | Path = ".", given: Mapping[Path, str] | None = None
         fragment = header + body + "\n"
         byte_count += len(fragment.encode())
         if byte_count > MAX_SOURCE:
-            raise ProjectError("Combined project exceeds the 2 MB native source limit.")
+            raise ProjectError(f"The project's sources together exceed the {MAX_SOURCE}-byte limit.")
         text.append(fragment)
         line += fragment.count("\n")
     combined = "".join(text)  # its size was held to the limit fragment by fragment

@@ -94,7 +94,7 @@ def instantiate(c: Checker, template: Function, bound: dict[str, Any], node: Any
                     code = "E-TRAIT-IMPL" if broken.startswith("does not implement") else "E-BOUND"
                     fail(code, f"{value.display()} {broken}; {template.name} needs [{g}:{constraint}].", node)
         if len(c.p.functions) >= MAX_FUNCTIONS:
-            fail("E-EXPANSION-LIMIT", "Expanded program exceeds 2048 functions.", node)
+            fail("E-EXPANSION-LIMIT", f"Expanded program exceeds {MAX_FUNCTIONS} functions.", node)
         f = clone(template)
         f.name, f.bindings = (name, dict(zip((g for g, _ in template.generics), values, strict=True)))
         c.fs[name] = f

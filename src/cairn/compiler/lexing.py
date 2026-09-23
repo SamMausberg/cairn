@@ -36,7 +36,7 @@ ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "0": "\0", "\\": "\\", '"': '"', "'"
 
 def lex(text: str) -> list[Token]:
     if len(text.encode()) > MAX_SOURCE:
-        fail("E-SOURCE-LIMIT", "Source exceeds the 2 MB bootstrap limit.")
+        fail("E-SOURCE-LIMIT", f"Source exceeds the {MAX_SOURCE}-byte limit.")
     # Only a run of whitespace holds a newline: a comment, a string and a character literal all stop before one. So
     # only whitespace moves the line, and a token's column is its distance from where its line starts.
     out: list[Token] = []

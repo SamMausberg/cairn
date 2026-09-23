@@ -22,7 +22,8 @@ from .tree import INT, SIGNED, WIDTH, Diagnostic, Expr, Function, Program, Stmt,
 
 __all__ = ["IDENT", "INT", "RESERVED", "RUNTIME", "RUNTIME_FILES", "SIGNED", "VERSION", "WIDTH", "Binding", "Checker",
            "Diagnostic", "Emitter", "Expr", "Function", "Parser", "Program", "Stmt", "Type", "certify_templates",
-           "compile_program", "compile_source", "compile_units", "derive", "fail", "specialize", "write_program"]  # fmt: skip
+           "compile_program", "compile_source", "compile_units", "derive", "fail", "generate", "joined", "specialize",
+           "units", "write_program"]  # fmt: skip
 
 
 def write_program(directory: Path, name: str, cpp: str) -> Path:
@@ -32,8 +33,10 @@ def write_program(directory: Path, name: str, cpp: str) -> Path:
     return directory / name
 
 
-def compile_program(source: str, capture_sites: bool = False) -> tuple[Program, Checker, dict[str, Any]]:
-    p = specialize(derive(link(Parser(source).parse())))
+def compile_program(source: str, capture_sites: bool = False,
+                    parsed: Program | None = None) -> tuple[Program, Checker, dict[str, Any]]:  # fmt: skip
+    """`parsed`, when given, is `Parser(source).parse()` already made by the caller, and is linked in place."""
+    p = specialize(derive(link(parsed or Parser(source).parse())))
     checker = Checker(p, capture_sites)
     return p, checker, checker.check()
 
@@ -64,6 +67,11 @@ def compile_units(source: str, origin: Any = "", roots: tuple[str, ...] = (), ke
     """The same program as one object per module: `program.hpp` (what every unit shares) and `<module>.cpp`
     files holding only bodies. A body-only change alters one file; a signature change alters the header."""
     interface, bodies, manifest = generate(source, origin, roots, keep_guards, sites)
+    return units(interface, bodies), manifest
+
+
+def units(interface: list[str], bodies: list[tuple[str, list[str]]]) -> dict[str, str]:
+    """What `generate` made, cut into the files of an incremental build."""
     shared = "\n".join(
         ["#pragma once", *(line.replace("static const cdt_", "inline const cdt_") for line in interface)]
     )
@@ -71,7 +79,12 @@ def compile_units(source: str, origin: Any = "", roots: tuple[str, ...] = (), ke
     for module, lines in bodies:
         name = (module or "root").replace(".", "_") + ".cpp"
         files[name] = files.get(name, '#include "program.hpp"\n') + "\n".join(lines) + "\n"
-    return files, manifest
+    return files
+
+
+def joined(interface: list[str], bodies: list[tuple[str, list[str]]]) -> str:
+    """What `generate` made, as the one C++ file of a whole-program build."""
+    return "\n".join([*interface, *(line for _, lines in bodies for line in lines)]) + "\n"
 
 
 def compile_source(source: str, origin: Any = "", roots: tuple[str, ...] = (), keep_guards: bool = False,
@@ -80,12 +93,12 @@ def compile_source(source: str, origin: Any = "", roots: tuple[str, ...] = (), k
     `keep_guards` writes every guard, including the ones the checker showed cannot fail, and `sites` maps a line to
     the (file, line) a failed assert names."""
     interface, bodies, manifest = generate(source, origin, roots, keep_guards, sites)
-    return "\n".join([*interface, *(line for _, lines in bodies for line in lines)]) + "\n", manifest
+    return joined(interface, bodies), manifest
 
 
-def generate(source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool = False,
-             sites: Any = None) -> tuple[list[str], list[tuple[str, list[str]]], dict]:  # fmt: skip
-    p, checker, receipts = compile_program(source)
+def generate(source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool = False, sites: Any = None,
+             parsed: Program | None = None) -> tuple[list[str], list[tuple[str, list[str]]], dict]:  # fmt: skip
+    p, checker, receipts = compile_program(source, parsed=parsed)
     certificate = audit_collector()  # The collector's unchecked store is emitted only under this gate.
     emitter = Emitter(p, checker, origin, roots, keep=keep_guards, sites=sites)
     for name, verdict in emitter.elision.items():  # What lowering leaves out is what the audit accepted.
@@ -97,7 +110,7 @@ def generate(source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool
     for name, chains in emitter.fused.items():  # What a plan's fuse joined, as it was emitted.
         if name in receipts:
             receipts[name]["fused"] = chains
-    cpp = "\n".join([*interface, *(line for _, lines in bodies for line in lines)]) + "\n"
+    cpp = joined(interface, bodies)
     manifest = {
         "compiler": VERSION,
         "source_sha256": hashlib.sha256(source.encode()).hexdigest(),

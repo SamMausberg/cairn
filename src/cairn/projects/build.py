@@ -12,13 +12,15 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ..compiler.cairnc import RUNTIME_FILES, Parser, compile_source, compile_units, write_program
+from ..compiler.cairnc import RUNTIME_FILES, Parser, generate, joined, units, write_program
 from ..compiler.codegen import mangle
 from ..compiler.header import header as c_header
 from .project import Project, ProjectError
-from .toolchain import audit_effects, find, flags, link_flags, linked, profile, unit_commands
+from .toolchain import audit_effects, find, flags, link_flags, linked, precompiled, profile, unit_commands
 from .toolchain import command as native_command
 from .toolchain import version as compiler_version
+
+PRECOMPILE_AT = 16  # units to compile before a precompiled header repays its own build (evidence/v1_5/scale)
 
 
 def intact(target: Path, digest: Path) -> bool:
@@ -40,15 +42,12 @@ def store(target: Path, digest: Path, fresh: Path) -> None:
     temporary.replace(digest)
 
 
-def objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout,
-            keep=False) -> tuple[list[str], list]:  # fmt: skip
+def objects(project, directory, out, compiler, cxx, arch, kind, debug, files, stub, timeout) -> tuple[list[str], list]:
     """One object per module, reused only when the unit, the shared interface, the command and the compiler all hash
     to the same key and the stored bytes still match the digest beside them, so nothing stale, truncated or replaced
     is ever linked. The cache is a directory of the project's own build output, never a link out of it. Missing
-    objects compile concurrently."""
-    files, _ = compile_units(
-        project.source, project.origin if debug else "", (entry,) if entry else (), keep, project.site
-    )
+    objects compile concurrently, against a precompiled shared header when there are enough of them to repay it.
+    `files` are the units of the front end's one pass (`cairnc.units`)."""
     files["0start.cpp"] = '#include "program.hpp"\n' + stub  # No module's unit can be named with a leading digit.
     compile_prefix, link = unit_commands(cxx, arch or project.arch, kind)
     compile_prefix += ["-g"] if debug else []
@@ -59,8 +58,8 @@ def objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, st
     cache.mkdir(exist_ok=True)
     for name, text in files.items():
         (directory / name).write_text(text, encoding="utf-8")
-
-    def one(name: str) -> dict:
+    compiled: list[dict] = []
+    for name in (n for n in files if n.endswith(".cpp")):
         salt = "\0".join(
             [files["program.hpp"], files[name], " ".join(compile_prefix), version, *RUNTIME_FILES.values()]
         )
@@ -68,19 +67,28 @@ def objects(project, directory, out, compiler, cxx, arch, kind, debug, entry, st
         target, digest = cache / (key + ".o"), cache / (key + ".sha256")
         if any(path.is_symlink() or path.is_dir() for path in (target, digest)):
             raise ProjectError(f"A cached object and its digest are plain files of the cache: {target.name} is not.")
-        unit = {"unit": name, "object": str(target), "reused": intact(target, digest)}
-        if not unit["reused"]:
-            fresh = directory / (name + ".o")
-            done = subprocess.run([*compile_prefix, str(directory / name), "-o", str(fresh)],
-                                  capture_output=True, text=True, timeout=timeout)  # fmt: skip
-            if done.returncode:
-                return unit | {"error": done}
-            store(target, digest, fresh)
+        line = [*compile_prefix, str(directory / name), "-o", str(directory / (name + ".o"))]
+        compiled.append({"unit": name, "object": str(target), "reused": intact(target, digest), "arguments": line,
+                         "digest": digest})  # fmt: skip
+    missing = [unit for unit in compiled if not unit["reused"]]
+    extra: list[str] = []
+    if len(missing) >= PRECOMPILE_AT:  # a header each unit would otherwise parse again, parsed once
+        header, extra = precompiled(compile_prefix, version, directory / "program.hpp")
+        made = subprocess.run(header, capture_output=True, text=True, timeout=timeout)
+        extra = extra if made.returncode == 0 else []  # a header that does not precompile is read as text
+
+    def one(unit: dict) -> dict:
+        unit = unit | {"arguments": [*unit["arguments"][:-3], *extra, *unit["arguments"][-3:]]}  # as it ran
+        done = subprocess.run(unit["arguments"], capture_output=True, text=True, timeout=timeout)
+        if done.returncode:
+            return unit | {"error": done}
+        store(Path(unit["object"]), unit["digest"], directory / (unit["unit"] + ".o"))
         return unit
 
     with ThreadPoolExecutor(max_workers=8) as pool:
-        units = list(pool.map(one, [n for n in files if n.endswith(".cpp")]))
-    return [*link, *(unit["object"] for unit in units)], units
+        fresh = {unit["unit"]: made for unit, made in zip(missing, pool.map(one, missing), strict=True)}
+    compiled = [{k: v for k, v in fresh.get(u["unit"], u).items() if k != "digest"} for u in compiled]
+    return [*link, *(unit["object"] for unit in compiled)], compiled
 
 
 def dispatcher(tests: tuple[str, ...]) -> str:
@@ -122,9 +130,11 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         raise ProjectError("--header describes a hosted library built as one unit: use --kind library.")
     compiler = find(cxx)
     entry = ""
+    parsed = None
     if kind == "exe" and not tests:  # The entry point is `main` of the root module, else the only module-level `main`.
         # A vendored dependency is a library: it neither supplies the program's entry point nor denies it one.
-        written = Parser(project.source).parse().functions
+        parsed = Parser(project.source).parse()  # parsed once: the front end below links this same tree
+        written = list(parsed.functions)
         mains = [f for f in written if f.name.rsplit(".", 1)[-1] == "main" and project.wrote(f.line)]
         main = next((f for f in mains if f.name == "main"), mains[0] if len(mains) == 1 else None)
         if main is None or main.static or main.params or main.ret.name != "i32" or main.ret.mode != "value":
@@ -133,7 +143,8 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
     # A library exports everything; a program contains only what its entry point reaches.
     roots = tests or ((entry,) if entry else ())
     origin = project.origin if debug else ""
-    generated, receipt = compile_source(project.source, origin, roots, keep_guards, sites=project.site)
+    interface, bodies, receipt = generate(project.source, origin, roots, keep_guards, project.site, parsed)
+    generated = joined(interface, bodies)  # The front end runs once; an incremental build cuts the same pass.
     if bare:  # No hosted runtime stands behind the image, so no effect may assume one; no test is in the image.
         audit_effects({name: row for name, row in receipt["functions"].items() if not row.get("test")})
     generated += "\n// entry\n" if entry else dispatcher(tests) if tests else ""
@@ -163,7 +174,7 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
     command += link_flags(libraries)
     if debug:  # Symbols plus #line directives: a debugger steps through the .cairn files.
         command.insert(1, "-g")
-    units: list[dict] = []
+    compiled: list[dict] = []
     started = time.monotonic()
     record = {
         "schema": "cairn.build/1",
@@ -185,13 +196,13 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         record["compiler_version"] = compiler_version(compiler)[:10000]
         if incremental and not bare and "cuda" not in receipt["requires"]:  # Device code and images stay one unit.
             stub = generated[generated.rindex("\n// entry\n") :] if "\n// entry\n" in generated else ""
-            command, units = objects(
-                project, directory, out, compiler, cxx, arch, kind, debug, entry, stub, timeout, keep_guards
+            command, compiled = objects(
+                project, directory, out, compiler, cxx, arch, kind, debug, units(interface, bodies), stub, timeout
             )
             command += ["-o", str(artifact), *link_flags(libraries)]
             record["command"] = command
-            record["units"] = [{k: v for k, v in unit.items() if k != "error"} for unit in units]
-        failed = next((unit["error"] for unit in units if unit.get("error")), None)
+            record["units"] = [{k: v for k, v in u.items() if k not in {"error", "arguments"}} for u in compiled]
+        failed = next((unit["error"] for unit in compiled if unit.get("error")), None)
         cp = failed or subprocess.run(command, capture_output=True, text=True, timeout=timeout)
         record.update(
             status="native-built" if cp.returncode == 0 else "native-build-failed",
@@ -205,4 +216,10 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         record.update(status="unknown", message=str(error))
     record["elapsed_seconds"] = time.monotonic() - started
     (directory / "receipt.json").write_text(json.dumps(record, indent=2) + "\n")
+    # What clangd and other C++ tools read to understand the generated code: one entry per unit compiled.
+    entries = [{"file": u["arguments"][-3], "arguments": u["arguments"]} for u in compiled] or [
+        {"file": str(cpp), "arguments": command}
+    ]
+    listed = [{"directory": str(directory), **entry} for entry in entries]
+    (directory / "compile_commands.json").write_text(json.dumps(listed, indent=2) + "\n")
     return record

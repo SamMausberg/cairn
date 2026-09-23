@@ -15,6 +15,7 @@ from .syntax import PREC
 from .tree import (
     FLOAT,
     INT,
+    MAX_EXPANSION,
     MAX_FAMILY,
     MAX_FUNCTIONS,
     MAX_NODES,
@@ -312,10 +313,10 @@ class Deriver:
                     out.append(made)
             else:
                 out.append(self.function(item, env, prefix))
-            if len(out) > MAX_FUNCTIONS:  # Refused while it is still small, not after a million declarations.
+            if len(out) > MAX_EXPANSION:  # Refused while it is still small, not after a million declarations.
                 fail(
                     "E-EXPANSION-LIMIT",
-                    f"Recipe {self.recipe.name} generates more than {MAX_FUNCTIONS} declarations.",
+                    f"Recipe {self.recipe.name} generates more than {MAX_EXPANSION} declarations.",
                     item,
                 )
         return out
@@ -397,8 +398,13 @@ def specialize(p: Program) -> Program:
     concrete = [f for f in p.functions if not f.generics]
     names = declared(p) - set(templates)
     estimated = sum(node_count(f) for f in concrete)
-    if estimated > MAX_NODES or len(concrete) > MAX_FUNCTIONS:
-        fail("E-EXPANSION-LIMIT", "Program exceeds the pre-expansion budget.")
+    if len(concrete) > MAX_FUNCTIONS:
+        fail("E-EXPANSION-LIMIT", f"The program holds {len(concrete)} functions, its library's included, past the "
+             f"limit of {MAX_FUNCTIONS}.")  # fmt: skip
+    if estimated > MAX_NODES:
+        fail("E-EXPANSION-LIMIT", f"The program's functions hold {estimated} syntax nodes, past the limit of "
+             f"{MAX_NODES}.")  # fmt: skip
+    copies = 0
     for prefix, name, lo, hi in p.families:
         home = p.modules.get(prefix, "")
         base = templates.get(visible(p, home, name, templates) or "")
@@ -406,9 +412,10 @@ def specialize(p: Program) -> Program:
             fail("E-FAMILY-TARGET", f"{name} is not a static function template.")
         if not 0 <= lo < hi <= 2**32 or hi - lo > MAX_FAMILY:
             fail("E-FAMILY-LIMIT", "Family must be a nonempty half-open range, at most 1024 variants, below 2^32.")
-        estimated += (hi - lo) * node_count(base)
-        if estimated > MAX_NODES or len(concrete) + hi - lo > MAX_FUNCTIONS:
-            fail("E-EXPANSION-LIMIT", "Family exceeds the remaining AST/function budget.")
+        estimated, copies = estimated + (hi - lo) * node_count(base), copies + hi - lo
+        if copies > MAX_EXPANSION or estimated > MAX_NODES or len(concrete) + hi - lo > MAX_FUNCTIONS:
+            fail("E-EXPANSION-LIMIT", f"Family {prefix} takes the program's families past {MAX_EXPANSION} copies in "
+                 "all, or the program past its function or syntax node limit.")  # fmt: skip
         for k in range(lo, hi):
             f = clone(base)
             f.name, f.bindings = f"{prefix}_{k}", {base.generics[0][0]: k}

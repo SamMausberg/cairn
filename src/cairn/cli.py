@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import functools
+import gc
 import json
 import os
 import platform
@@ -133,6 +134,7 @@ COMMANDS = {
     "predict": "How long each function will take, from its checked work and a machine profile; nothing runs.",
     "tune": "Choose a function's plan by prediction, and with --measure time only the best-ranked few on this host.",
     "doc": "Generate the API reference of the checked program, as Markdown.",
+    "graph": "Print the module graph: each file's modules, each module's imports, exports and dependents, hashes.",
 }
 OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that take it, the option, its keywords)
     ({"build", "run", "test", "explain", "tune", "shot"}, "--cxx", {"default": "clang++"}),
@@ -189,6 +191,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"inspect"}, "--expand", {"action": "append", "default": [], "metavar": "NAME", "help": "Disclose this "
                                "function's source or this type first, as an expand request would."}),
     ({"inspect"}, "--explain", {"action": "store_true", "help": "Attach cairn explain for the disclosed functions."}),
+    ({"graph"}, "--interfaces", {"action": "store_true", "help": "Also check the program and give each module "
+                                 "the hash of its public signatures and effect rows."}),
     ({"state"}, "--since", {"type": Path, "metavar": "STATE.json", "help": "Print only what changed since this "
                             "saved state."}),
     ({"migrate"}, "--to", {"required": True, "metavar": "SIGNATURE", "help": "The new signature, from fn."}),
@@ -292,6 +296,9 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     global FORMAT
+    # A compile builds millions of tree objects that live until it ends: collect the young ones as usual and the
+    # old ones rarely, which takes a tenth to a fifth off a large check at the same peak memory (evidence/v1_5/scale).
+    gc.set_threshold(50_000, 50, 100)
     p = parser()
     argv = sys.argv[1:] if argv is None else argv
     given = argv.index("--") if "--" in argv else len(argv)  # what follows is the program's, for `cairn run`
@@ -465,6 +472,12 @@ def main(argv: list[str] | None = None) -> int:
             except Diagnostic as error:
                 report(error.data)
                 return 1
+            return 0
+        if a.command == "graph":
+            from .projects.graph import graph, summary
+
+            record = graph(project, a.interfaces)
+            print(summary(record), end="") if terminal.human(FORMAT) else report(record)
             return 0
         if a.command == "state":
             from .agent.state import delta, state

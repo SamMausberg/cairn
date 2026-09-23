@@ -9,8 +9,11 @@ has a module of its own.
 from __future__ import annotations
 
 import json
+import os
+import queue
 import sys
-from typing import Any, BinaryIO
+import threading
+from typing import Any, BinaryIO, NoReturn
 
 from ..version import VERSION
 from .completion import completion, signature_help
@@ -186,17 +189,44 @@ class Server:
         return False
 
     def run(self) -> int:
+        """Read on one thread and answer on this one. What arrived while an analysis ran is answered in order, but
+        a run of whole-text changes to one file is analysed once, at its last text: a large project's analysis takes
+        seconds, and a burst of keystrokes would otherwise queue one for each."""
+        inbox: queue.Queue = queue.Queue()
+        threading.Thread(target=self.pump, args=(inbox,), daemon=True).start()
+        while True:
+            batch = [inbox.get()]
+            while not inbox.empty():
+                batch.append(inbox.get_nowait())
+            for message in latest(batch):
+                if message is None:
+                    return 0 if self.stopping else 1
+                if isinstance(message, dict) and self.dispatch(message):
+                    return 0
+
+    def pump(self, inbox: queue.Queue) -> None:
         while True:
             try:
                 message = read_message(self.source)
             except ValueError:  # A malformed frame is skipped, not fatal.
                 continue
+            inbox.put(message)
             if message is None:
-                return 0 if self.stopping else 1
-            if isinstance(message, dict) and self.dispatch(message):
-                return 0
+                return
 
 
-def serve() -> int:
-    """`cairn lsp`: speak LSP over stdin/stdout until the client sends `exit`."""
-    return Server(sys.stdin.buffer, sys.stdout.buffer).run()
+def latest(batch: list[Any]) -> list[Any]:
+    """`batch` in order, less each didChange that the very next message replaces: a later didChange of the same
+    document. The server syncs whole texts, so the later change carries everything the earlier one did."""
+    uri = lambda m: (m.get("params") or {}).get("textDocument", {}).get("uri")  # noqa: E731
+    change = lambda m: isinstance(m, dict) and m.get("method") == "textDocument/didChange"  # noqa: E731
+    return [m for m, after in zip(batch, [*batch[1:], None], strict=True)
+            if not (change(m) and change(after) and uri(m) == uri(after))]  # fmt: skip
+
+
+def serve() -> NoReturn:
+    """`cairn lsp`: speak LSP over stdin/stdout until the client sends `exit`. The process ends here, since the
+    reading thread may still wait on stdin, and an interpreter shutdown would abort on that buffer's lock."""
+    code = Server(sys.stdin.buffer, sys.stdout.buffer).run()
+    sys.stdout.flush()
+    os._exit(code)

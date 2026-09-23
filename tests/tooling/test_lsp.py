@@ -245,6 +245,37 @@ def test_positions_use_utf16_code_units(client):
     assert client.ask("hover", {"line": 0, "character": 5})["result"] is None
 
 
+def test_a_run_of_changes_to_one_file_is_analysed_once_at_its_last_text():
+    from cairn.editor.lsp import latest
+
+    def change(uri, text):
+        return {"method": "textDocument/didChange",
+                "params": {"textDocument": {"uri": uri}, "contentChanges": [{"text": text}]}}  # fmt: skip
+
+    hover = {"id": 3, "method": "textDocument/hover", "params": {"textDocument": {"uri": "a"}}}
+    burst = [change("a", "1"), change("a", "2"), change("b", "x"), change("a", "3"), hover, change("a", "4"),
+             change("a", "5"), None]  # fmt: skip
+    kept = [m and (m.get("params") or {}).get("contentChanges", [{}])[0].get("text", "hover") for m in latest(burst)]
+    assert kept == ["2", "x", "3", "hover", "5", None]  # a request between two changes keeps the first
+
+
+def test_a_burst_of_changes_leaves_the_diagnostics_and_answers_of_the_last_text(client):
+    client.start()
+    client.send("initialized")
+    assert client.open(BROKEN)
+    for k in range(20):  # sent without waiting, as a typist's editor does
+        text = FIXED if k == 19 else BROKEN.replace("missing_name", f"missing_{k}")
+        client.send("textDocument/didChange", {"textDocument": {"uri": URI}, "contentChanges": [{"text": text}]})
+    hovered = client.ask("hover", place(FIXED, "average(10, 20)", 2))
+    assert "u64" in hovered["result"]["contents"]["value"]
+    published = []
+    while not client.inbox.empty():
+        message = client.inbox.get_nowait()
+        if message and message.get("method") == "textDocument/publishDiagnostics":
+            published.append(message["params"]["diagnostics"])
+    assert published == [] or published[-1] == []  # whatever came after the answer is the last text's: none
+
+
 def test_the_server_survives_nonsense(client):
     client.start()
     methods = ("hover", "definition", "documentSymbol", "completion", "signatureHelp", "references", "prepareRename")

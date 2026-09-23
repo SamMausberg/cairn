@@ -157,6 +157,19 @@ def unit_commands(cxx: str, arch: str | None, kind: str) -> tuple[list[str], lis
     return [find(cxx), *(f for f in every if f != "-shared"), "-c"], [find(cxx), *every]
 
 
+def precompiled(prefix: list[str], version_text: str, header: Path) -> tuple[list[str], list[str]]:
+    """How an incremental build precompiles its shared header, and what each unit then adds to its command. Clang
+    reads the PCH it is named. GCC refuses `#pragma once` in the file it precompiles, so it precompiles `pch.hpp`,
+    which only includes the header, and each unit includes that first. The flags are the units' own, so the header
+    means what it means when a unit reads it as text; if the PCH cannot be used, the compiler reads the text."""
+    if "clang" in version_text:
+        pch = header.with_name(header.name + ".pch")
+        return [*prefix, "-x", "c++-header", str(header), "-o", str(pch)], ["-include-pch", str(pch)]
+    wrapper = header.with_name("pch.hpp")
+    wrapper.write_text(f'#include "{header.name}"\n', encoding="utf-8")
+    return [*prefix, "-x", "c++-header", str(wrapper), "-o", str(wrapper) + ".gch"], ["-include", str(wrapper)]
+
+
 def find(compiler: str) -> str:
     path = shutil.which(compiler)
     if not path:

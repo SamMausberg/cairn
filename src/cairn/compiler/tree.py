@@ -11,10 +11,14 @@ import pickle
 from dataclasses import dataclass, field
 from typing import Any, NoReturn, TypeVar
 
-MAX_SOURCE = 2_000_000
-MAX_FAMILY = 1024
-MAX_FUNCTIONS = 2048
-MAX_NODES = 200_000
+# Size limits, measured in evidence/v1_5/scale: at them a program checks in about a minute and a gigabyte, so each
+# refuses a program that would cost more than that, with a code, instead of letting it run out of time or memory.
+MAX_SOURCE = 16_000_000  # bytes of a program's combined source
+MAX_FUNCTIONS = 32_768  # functions a program holds: its own, its library's, and every copy and instance made
+MAX_NODES = 3_200_000  # syntax nodes of those functions before expansion
+# What code may generate stays small whatever the program's size: expansion is cheap to write and dear to check.
+MAX_FAMILY = 1024  # copies one family makes
+MAX_EXPANSION = 2048  # functions one recipe generates, and all of a program's families together
 Node = TypeVar("Node")
 
 
