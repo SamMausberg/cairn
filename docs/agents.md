@@ -130,7 +130,39 @@ Tuning a function should not mean rewriting it. A plan edit (`cairn.plan/1`, `ag
 {"protocol": "cairn.plan/1", "session": "<the packet's digest>", "items": {"grain": 1, "lanes": 8}}
 ```
 
-A reply names items and whole numbers, never source text, so nothing else can ride along. The host writes the plan, rechecks the program, and requires every function's receipt to be what it was apart from the plan. It refuses an item the regions do not take or a value out of range (`E-PLAN`), anything else in the reply (`E-REQUEST`), and a session already spent or reopened (`E-SESSION`). A plan sent to an edit host, or a body to a plan host, is `E-REQUEST`. A plan changes no result, so an admitted plan needs no test to be correct, only a measurement to be worth keeping.
+A reply names items and whole numbers, never source text, so nothing else can ride along. The host writes the plan, rechecks the program, and requires every function's receipt to be what it was, the plan of this function apart, and that plan to be the one the reply set. It refuses an item the regions do not take or a value out of range (`E-PLAN`), anything else in the reply (`E-REQUEST`), and a session already spent or reopened (`E-SESSION`). A plan sent to an edit host, or a body to a plan host, is `E-REQUEST`. A plan changes no result, so an admitted plan needs no test to be correct, only a measurement to be worth keeping.
+
+A session opens on a function of any module, named with its module (`lib.spread`); a name two modules declare is `E-SYMBOL`, with the qualified names. Given a loaded project, `PlanHost().open(load_project(path), "lib.spread")` says under `written_in` the module, file and line the plan goes after. The plan is written after the function's declaration under the name its module gives it, and a plan that named the function from another module, such as `plan lib.spread { ... }` in the root, is removed rather than doubled.
+
+## Candidate history
+
+`agent/history.py` keeps what was tried on a function, what failed and why, what was measured and how, and what is only a hypothesis. `cairn tune` records into it, and so can any host:
+
+```python
+from cairn.agent.history import as_written, identity, record
+
+source = "fn spread(n:usize, out:rw<u64>[n]) { parallel i in n { out[i] = u64(i); } }\n"
+variant = {"plan": {"lanes": 4}}
+made = identity(as_written(source, "spread"), variant, {"kind": "plan"}, {"kind": "host", "arch": "x86-64-v3"})
+claim = {"claim": "four lanes may be enough at n=1e5"}
+kept = record(".cairn/history", "hypothesis", "spread", "plan spread { lanes 4; }", made, claim, variant)
+assert kept["kind"] == "hypothesis" and len(kept["id"]) == 16
+```
+
+A record's identity has five parts: `source`, the function and everything it calls as lowered and canonicalized (so an edit elsewhere, a comment or a renamed local leaves it alone) with the variant that makes the candidate; `contract`, what the candidate must preserve; `target`; `compiler`, `implementation_hash()` with the runtime headers; and `artifact`, the build output when there is one. Each record has one kind, and a kind requires what makes it evidence:
+
+| Kind | Requires | What it is |
+|---|---|---|
+| `attempt` | | a candidate or a search that was tried |
+| `failure` | `stage`, `why` | a refusal by the checker, nvcc or a validation, or a run that failed |
+| `validation` | `evidence` | a check of behaviour, with the evidence class it established |
+| `observation` | `by` | a compiler's static reading: resources, instruction counts, a prediction |
+| `measurement` | `procedure` | a timed run, with the procedure that produced its numbers |
+| `profile` | `tool`, `run` | a profiler's reading from an explicit profiling run, apart from timing |
+| `hypothesis` | `claim` | an explanation nothing has confirmed |
+| `experiment` | `run`, `tests` | a run that would confirm or refute a hypothesis |
+
+`History(where).judged(function, base, contracts, targets)` splits a function's records into `current` and `stale`. A record is current while its source, contract and compiler match the program now and its target is one the caller works on; otherwise it is returned under `stale` with the parts that moved, and never as a current fact. An equal record is kept once, and an analysis such as a compile's reading is kept under the digest of everything it read, with its files.
 
 ## Implementation sessions
 

@@ -112,11 +112,13 @@ class Device:
     compute_capability: str = ""  # of the device described: which device targets' code runs on it
     target: str = ""  # a measured card: the device target its figures were measured for (projects/target.py)
 
-    def occupancy(self, registers: int, block: int = 256) -> float:
-        """The resident share of an SM's threads for blocks of `block` threads using `registers` each."""
+    def occupancy(self, registers: int, block: int = 256, shared: int = 0) -> float:
+        """The resident share of an SM's threads for blocks of `block` threads using `registers` each and `shared`
+        bytes of shared memory a block."""
         by_threads = self.threads_per_sm // block
         by_registers = self.registers_per_sm // max(registers * block, 1)
-        return min(by_threads, by_registers) * block / self.threads_per_sm
+        by_shared = self.shared_per_sm // shared if shared else by_threads
+        return min(by_threads, by_registers, by_shared) * block / self.threads_per_sm
 
 
 @dataclass

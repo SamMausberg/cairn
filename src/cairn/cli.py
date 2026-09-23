@@ -157,6 +157,15 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                             "tune-device, the owner's target, allows it to run."}),
     ({"tune"}, "--write", {"action": "store_true", "help": "Write the chosen plan into the file that declares the "
                            "function."}),
+    ({"tune"}, "--budget-compiles", {"type": int, "default": 4, "metavar": "N", "help": "Device compiles the search "
+                                     "may start for resource inspection; kept inspections are free."}),
+    ({"tune"}, "--budget-seconds", {"type": float, "default": 300.0, "metavar": "S", "help": "Wall time of the "
+                                    "whole search."}),
+    ({"tune"}, "--budget-runs", {"type": int, "metavar": "N", "help": "Timed runs --measure may start; kept "
+                                 "measurements are free. Default: what --measure asks."}),
+    ({"tune"}, "--history", {"type": Path, "metavar": "DIR", "help": "The candidate history to record into "
+                             "and answer from; default: .cairn/history beside the manifest."}),
+    ({"tune"}, "--no-history", {"action": "store_true", "help": "Record nothing and answer from nothing kept."}),
     ({"predict", "shot"}, "--against", {"type": Path, "metavar": "BEFORE", "help": "What changing BEFORE into this "
                                          "program does: predicted costs, or for shot the rows of --symbol."}),
     ({"predict", "tune"}, "--profile", {"type": Path, "help": "A cairn.machine/1 profile; default: the packaged one."}),
@@ -534,13 +543,15 @@ def main(argv: list[str] | None = None) -> int:
             from .perf import report as priced
             from .perf.plan_source import write_plan
             from .perf.profile import Profile
-            from .perf.tune import tune
+            from .perf.tune import Budget, tune
 
             supplied = Profile.load(a.profile) if a.profile else None
             arch = resolve_arch(a.arch or project.arch)
             device = resolve_device(a.device_target, project.device_target, required=False)
+            budget = Budget(a.budget_compiles, a.budget_seconds, a.budget_runs)
+            kept = None if a.no_history else a.history or project.root / ".cairn" / "history"
             answer = tune(project.source, a.symbol[0], priced.parse_sizes(a.at), supplied, arch, a.measure, a.cxx,
-                          a.device, device)  # fmt: skip
+                          a.device, device, budget, kept)  # fmt: skip
             if a.write:  # Only the plan line changes, in the file that declares the function, and only if it checks.
                 answer["written"] = write_plan(a.path, a.symbol[0], answer["chosen"])
             report(answer)

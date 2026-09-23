@@ -169,8 +169,8 @@ def lanes(r: Region, card: Device | None, sizes: dict[str, float], missing: set[
     block, per_lane, _ = r.launch
     threads = min(n / (per_lane or 1), 65535 * (block or 256))  # the grid the runtime launches
     busy = min(1.0, threads / (card.sms * card.threads_per_sm * card.occupancy_to_saturate)) if n else 1.0
-    if r.registers:  # a kernel whose registers keep few warps resident cannot keep the memory busy either
-        busy = min(busy, card.occupancy(r.registers, block or 256) / card.occupancy_to_saturate)
+    if r.registers:  # a kernel whose registers or shared memory keep few warps resident cannot keep memory busy
+        busy = min(busy, card.occupancy(r.registers, block or 256, r.shared) / card.occupancy_to_saturate)
     memory, compute = moved / (card.dram_gbps * card.memory_efficiency * busy), issued / (card.flops["i32"] * busy)
     ns, bound = launched(card, memory, compute, "device compute")
     light = max(moved / card.dram_gbps, issued / card.flops["i32"])

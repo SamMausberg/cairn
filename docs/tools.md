@@ -201,9 +201,28 @@ Confidence is `high` when every count is a size and every access a stream, `medi
 
 ## cairn tune
 
-`cairn tune [path] --symbol f --at n=1e7` chooses `f`'s [plan](concurrency.md#plans) by prediction. A plan changes how regions are scheduled and nothing they compute, so every candidate is correct and the search only asks which is fastest. It prices every legal `grain` and `lanes` pair, with `fuse` on and off, and ranks them. `--measure K` then times the best few on this host, halving the field each round, and reports how many pairs ran in the predicted order; on a busy machine two close plans are within noise of each other. `--write` puts the chosen plan into the source, and writes nothing unless the whole project still checks.
+`cairn tune [path] --symbol f --at n=1e7` chooses `f`'s [plan](concurrency.md#plans) by a bounded search. A plan changes how regions are scheduled and nothing they compute, so every candidate the checker accepts is correct and the search only asks which is fastest. A function of a named module is named with its module, as in `--symbol lib.spread`. `--write` puts the chosen plan after the function's declaration, removes any plan that named it elsewhere, and writes nothing unless the whole project still checks.
 
-A device region is tuned over `block`, `per_lane` and `unroll` from what ptxas reports for each unroll, without running anything. Timing device plans runs device code, so only the owner's targets do it: `make tune-device FILE=f.cairn SYMBOL=f AT=n=1e8`, which holds the device lock, rests after each run and stops after 64, and `make calibrate-device`, which replaces the device profile's assumed figures with measured ones. No agent runs either.
+The space is every combination of the items `f`'s regions take: `grain` and `lanes` for host regions; `block`, `per_lane`, `unroll`, `vector` and `stage` for device regions, `stage` at the radius the staging rule reads; `fuse` where two regions could join. The search does not decide which combinations are legal. It writes each complete candidate into the source and checks the whole program, so `vector` beside `fuse`, or `stage` beside `vector`, is tried and refused with the checker's `E-PLAN`, counted under `space.refused` with one example. Every legal candidate is priced by `cairn predict`.
+
+A device candidate is then compiled for the [device target](#the-device-target), in predicted order, and ptxas and cuobjdump report its registers, spilled bytes, stack, static shared memory and instructions; a staged tile's shared memory is computed from the plan. Nothing runs. Each compile is kept by the digest of what it read (the emitted program, the runtime headers, the target, the toolkit and the inspector), so a candidate that emits a program already compiled costs nothing, and a compile for another target is never used for this one: a kept reading that names another target is refused with `E-TARGET-MISMATCH`. Without a device target nothing is compiled, and the answer says so. Registers and shared memory enter the price through occupancy, and `chosen` is the best-ranked candidate a compile read.
+
+```text
+$ cairn tune blur.cairn --symbol blur --at n=1e7 --budget-compiles 4
+"space":  {"configurations": 240, "checked": 240, "legal": 160,
+           "refused": [{"code": "E-PLAN", "message": "stage loads one region's tiles; fuse and vector reshape the region, and a plan takes one.", "configurations": 80, "example": {"vector": 2, "stage": 1}}]}
+"candidates": [{"plan": "plan blur { stage 1; }", "stage": 1, "predicted_ns": 113000.0,
+                "resources": {"registers": 24, "dynamic_shared_bytes": 1040, "instructions": 88, ...},
+                "applies_to": {"stage": {"blur@9e54491e": {"radius": 1, "arrays": ["x"]}}}}, ...]
+"budget": {"compiles": {"allowed": 4, "started": 4, "kept": 0}, "seconds": {"allowed": 300.0, "spent": 18.29},
+           "runs": {"allowed": null, "started": 0, "kept": 0}, "undone": {"not inspected: compile budget spent": 156}}
+```
+
+`blur@9e54491e` names the region by a digest of its syntax, so the name survives an edit anywhere else, a comment or a reformat, and a plan item's `applies_to` says which regions it changed and which arrays it chunked or tiled. The budgets are explicit: `--budget-compiles` device compiles (4 by default), `--budget-seconds` for the whole search (300), and `--budget-runs` timed runs. What a spent budget left undone is counted under `undone`, and a candidate no compile read has no `resources` rather than another candidate's.
+
+`--measure K` then times the best-ranked few and the current plan on this host, halving the field each round with more blocks for the survivors, and reports how many pairs ran in the predicted order; on a busy machine two close plans are within noise of each other. Timing device plans runs device code, so only the owner's targets do it: `make tune-device FILE=f.cairn SYMBOL=f AT=n=1e8`, which holds the device lock, rests after each run and stops after 64, and `make calibrate-device`, which replaces the device profile's assumed figures with measured ones. No agent runs either.
+
+The search records into the candidate history, `.cairn/history` beside the manifest unless `--history DIR` names another or `--no-history` turns it off: what it tried, what the checker or nvcc refused, what each compile read, and each run with its procedure (see [the agent protocol](agents.md#candidate-history)). A later search answers from it what still holds, so a kept compile is not repeated and a kept measurement of the same candidate, sizes and procedure is not run again.
 
 ## cairn diff
 

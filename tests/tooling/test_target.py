@@ -269,5 +269,6 @@ def test_tuning_reads_registers_for_the_target_it_records():
     from cairn.perf.tune import tune
 
     result = tune(SCALE, "scale", [{"n": 1e7}], device_target=parse("sm_120f"))
-    assert result["device_target"]["name"] == "sm_120f" and result["registers_by_unroll"]
+    read = [row["resources"] for row in result["candidates"] if row.get("resources", {}).get("registers")]
+    assert result["device_target"]["name"] == "sm_120f" and read  # each compiled for sm_120f, and read
     assert code_of(lambda: tune(SCALE, "scale", [{"n": 1e7}], device_target=parse("sm_90"))) == "E-TARGET-MISMATCH"

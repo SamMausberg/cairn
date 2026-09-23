@@ -104,6 +104,16 @@ class Placement:
         return out
 
 
+def contract(source: str, symbol: str) -> dict[str, Any]:
+    """What every plan of `symbol` must preserve, as a candidate's identity names it: the function's signature and
+    effect row, which the checker holds a plan to, and its body, which a plan cannot touch (`agent/history.py`)."""
+    from ..agent.projection import signature
+
+    program, _, receipts = compile_program(source)
+    f = function(program, symbol)
+    return {"kind": "plan", "signature": signature(f), "effects": receipts[f.name]["effects"]}
+
+
 def placed(source: str, symbol: str, plan: Plan) -> str:
     """`source` with `symbol`'s plan replaced by `plan`, or removed when `plan` is empty, by resolution."""
     return Placement(source, symbol).apply(plan)

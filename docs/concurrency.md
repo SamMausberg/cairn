@@ -396,7 +396,7 @@ fn blur(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
 plan blur { stage 1; block 128; }   // each element of x crosses from memory once per block
 ```
 
-`cairn predict` prices a staged region as the unplanned one, and `cairn tune` does not try `stage`: what a tile saves is what the device's caches would have missed, which only a device run measures.
+`cairn predict` prices a staged region as the unplanned one: what a tile saves is what the device's caches would have missed, which only a device run measures. `cairn tune` tries `stage` and reads each staged candidate's registers and tile from its compile, so a tile that costs resident warps is priced as costing them.
 
 `fuse K` runs up to `K` adjacent regions, from 2 to 16, as one traversal: each lane runs the first body at its index, then the next. The regions must share a placement and an extent, touch what they write only at their own index, and have bodies that cannot trap or be observed from outside. A local array only the chain touches then lives in each lane as one value and is never allocated. A host `reduce` over the same extent may end the chain, keeping its fold order.
 

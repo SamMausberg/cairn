@@ -67,9 +67,11 @@ def mix(sass: str) -> dict[str, Counter]:
     return out
 
 
-def kernels(source: str, target: DeviceTarget | None = None, timeout: int = 600) -> dict[str, Any]:
+def kernels(source: str, target: DeviceTarget | None = None, timeout: int = 600,
+            keep: dict[str, bytes] | None = None) -> dict[str, Any]:  # fmt: skip
     """Per CAIRN function with device lanes: each kernel's resources, instruction mix and memory instructions, for
-    `target`, or the target resolved here when none is given."""
+    `target`, or the target resolved here when none is given. `keep`, when given, receives the compiled program, its
+    cubin, ptxas's log and the SASS, by file name."""
     if not available():
         return {"status": "not-run", "reason": "nvcc and cuobjdump are needed to read a kernel; neither was found."}
     chosen = supported(target or resolve())
@@ -91,6 +93,9 @@ def kernels(source: str, target: DeviceTarget | None = None, timeout: int = 600)
         if done.returncode:
             return {"status": "compile-failed", "stderr": done.stderr[-4000:]}
         dump = subprocess.run([find("cuobjdump"), "-sass", str(cubin)], capture_output=True, text=True, timeout=120)
+        if keep is not None:
+            keep |= {"program.cu": program.read_bytes(), "program.cubin": cubin.read_bytes(),
+                     "ptxas.log": (done.stderr + done.stdout).encode(), "sass.txt": dump.stdout.encode()}  # fmt: skip
     used, counted = resources(done.stderr + done.stdout), mix(dump.stdout)
     found: dict[str, list[dict[str, Any]]] = {}
     for symbol, info in used.items():
