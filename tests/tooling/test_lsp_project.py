@@ -271,5 +271,7 @@ def test_workspace_symbols_search_the_projects_at_the_workspace_roots(project):
         params = {"textDocument": {"uri": main}, "position": place(MAIN, "let mut pair", 8)}
         lit = client.request("textDocument/documentHighlight", params, 3)["result"]
         assert [(h["range"]["start"]["line"], h["kind"]) for h in lit] == [(7, 3), (8, 2), (9, 2), (10, 2)]
+        lenses = client.request("textDocument/codeLens", {"textDocument": {"uri": main}}, 4)["result"]
+        assert [(lens["command"]["command"], lens["range"]["start"]["line"]) for lens in lenses] == [("cairn.run", 6)]
     finally:
         client.close()
