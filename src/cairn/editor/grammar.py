@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[3]
 # Words the parser reads in one position only; anywhere else they are ordinary names (the parser says where).
 CONTEXTUAL = {"after", "align", "exclusive", "fold", "into", "lends", "packed", "plan", "recipe", "require", "scan"}
 CONTEXTUAL |= {"test", "layout", "volatile", "out", "clobbers", "implements", "when", "needs", "use", *PLAN_ITEMS}
-CONTEXTUAL |= {"blocks", "threads", "shared", "barrier", "warp"}  # a cooperative region
+CONTEXTUAL |= {"blocks", "threads", "shared", "barrier", "warp", "pipeline", "depth"}  # a cooperative region
 
 # class -> (TextMate scope, Vim group, words). Every reserved word is in exactly one class.
 WORDS: dict[str, tuple[str, str, set[str]]] = {
@@ -78,6 +78,8 @@ CONTEXT: dict[str, tuple[str, str]] = {
     "shared": ("storage.type.binding.cairn", r"(?=\s+[A-Za-z_]\w*\s*:)"),
     "barrier": ("keyword.control.concurrency.cairn", r"(?=\s*;)"),
     "warp": ("keyword.control.concurrency.cairn", r"(?=\s+yield\b)"),
+    "pipeline": ("storage.type.binding.cairn", r"(?=\s+[A-Za-z_]\w*\s*:)"),
+    "depth": ("keyword.other.cairn", r"(?=\s+[A-Za-z0-9_])"),
     **dict.fromkeys(PLAN_ITEMS, ("keyword.other.plan.cairn", r"(?=\s+[0-9])")),  # the items a plan sets
 }
 FAMILIES = (*(f.rstrip(":") for f in EFFECT_FAMILIES), "read", "write", "lane")  # as effects.py names them

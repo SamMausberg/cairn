@@ -1,0 +1,12 @@
+# The device configuration: the same kernels with their views @device, and a driver that moves the data across. Any
+# @device view sends the whole program through nvcc, so the host project stays buildable where there is no GPU. The
+# suite compiles this for sm_120 and never runs it; it runs only under `make gpu`:
+#
+#   cairn run examples/cooperative/gpu.toml
+[project]
+name = "cooperative-gpu"
+sources = ["src/device_kernels.cairn", "src/device_main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

@@ -16,14 +16,14 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-CALLEE` | [tests](cards/tests.md) |  |
 | `E-CAST` | [storage](cards/storage.md) |  |
 | `E-COLLECT-CAPACITY` |  | The collector's extent must be exactly the output's capacity. |
-| `E-COOP-BARRIER` | [cooperative](cards/cooperative.md) |  |
-| `E-COOP-CONFLICT` | [cooperative](cards/cooperative.md) |  |
-| `E-COOP-GLOBAL` | [cooperative](cards/cooperative.md) |  |
-| `E-COOP-REUSE` | [cooperative](cards/cooperative.md) |  |
+| `E-COOP-BARRIER` | [cooperative](cards/cooperative.md) | Move the barrier out from under a condition on a thread name; the whole block must reach it. |
+| `E-COOP-CONFLICT` | [cooperative](cards/cooperative.md) | Give each thread its own element of the shared array, for example tile[t], in a phase. |
+| `E-COOP-GLOBAL` | [cooperative](cards/cooperative.md) | Write each outside element from one thread, at an index built as block * width + thread. |
+| `E-COOP-REUSE` | [cooperative](cards/cooperative.md) | Put a barrier after the last read of the old value, before the thread rewrites the element. |
 | `E-COOP-SHAPE` | [cooperative](cards/cooperative.md) |  |
 | `E-COOP-SHARED` | [cooperative](cards/cooperative.md) |  |
 | `E-COOP-UNDECIDED` | [cooperative](cards/cooperative.md) |  |
-| `E-COOP-UNORDERED` | [cooperative](cards/cooperative.md) |  |
+| `E-COOP-UNORDERED` | [cooperative](cards/cooperative.md) | Put a barrier between the write and the read the refusal names; every thread must reach it. |
 | `E-COOP-WARP` | [cooperative](cards/cooperative.md), [fragments](cards/fragments.md) |  |
 | `E-DECLARATION` |  | Write only the one function's body; add or remove no declaration. |
 | `E-DISCARD` | [sums](cards/sums.md) |  |
@@ -90,6 +90,9 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-SHADOW` |  | Choose a fresh descriptive name; nothing may shadow another name. |
 | `E-SIGNATURE` |  | Keep the parameters, return type and ceiling exactly as written; change only the body. |
 | `E-STACK-LIMIT` | [memory](cards/memory.md) | Declare less stack storage, or a buffer if the ceiling allows alloc. Do not hide the cost. |
+| `E-STAGE-BUSY` | [cooperative](cards/cooperative.md) | Put a barrier after release and before the next fill, or give the pipeline one more stage. |
+| `E-STAGE-LOOP` | [cooperative](cards/cooperative.md) |  |
+| `E-STAGE-UNREADY` | [cooperative](cards/cooperative.md) | Wait for the stage before reading it, and read it before release. |
 | `E-SYMBOL` |  | Name a function or type exactly as a packet or a body shows it. |
 | `E-TARGET-FEATURE` | [fragments](cards/fragments.md) |  |
 | `E-TEST` | [tests](cards/tests.md) |  |

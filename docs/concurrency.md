@@ -689,3 +689,58 @@ fn transpose(gx:usize, gy:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
 A thread obeys everything a lane obeys: it cannot assign a scalar from outside (`E-PARALLEL-WRITE`), start another region (`E-PARALLEL-NEST`), do I/O (`E-PARALLEL-CALL`), or reach the other side's memory (`E-PLACEMENT`). The row gains `par:device` or `par:host`, `zero_init` for the shared arrays, and `trap` for the guards; the receipt lists each array's bytes and the block's total under `local_storage`.
 
 On the device the region is one launch of blocks of `T` threads, the arrays in static shared memory, `barrier` as `__syncthreads()` and the warp operations as `__shfl_*_sync` over the whole warp, on the calling thread's execution context, returning once its stream has run the region, as `parallel` does. It compiles for `sm_120` and has not run on a GPU. On the host each block's threads are real threads meeting at a `std::barrier`, two blocks at a time, so the thread sanitizer checks the phase rule on real runs; the host lowering creates `2 * T` threads per region and is not a fast path.
+
+A `pipeline` is shared memory the block fills from an outside array while its threads read another part of it. `pipeline tiles:u64[256] depth 2;` declares two stages of 256 elements of a 4- or 8-byte scalar. `tiles.fill(x, start, count)` starts copying `x[start .. start + count]` into the next free stage and zeroes the rest of it; `tiles.wait()` waits, in every thread, for the oldest stage in flight, which then reads as `tiles[i]`; `tiles.release()` says the threads are done reading it, and the next barrier frees it. The whole block reaches each of these together (`E-COOP-BARRIER`).
+
+```cairn
+// out[r * 256 + t] is the sum of x[r * cols + t], x[r * cols + t + 256], ...: row r, a tile at a time.
+fn strided_sums[D:nat](rows:usize, cols:usize, n:usize, x:ro<u64>[n], m:usize, out:rw<u64>[m]) {
+  let steps = (cols + 255) / 256;
+  blocks r in rows threads t in 256 {
+    pipeline tiles:u64[256] depth D;
+    for k in 0..D - 1 {                            // D - 1 tiles on their way before the first is read
+      let start = min(k * 256, cols);
+      tiles.fill(x, r * cols + start, min(256, cols - start));
+    }
+    let mut sum:u64 = 0;
+    for k in 0..steps {
+      let ahead = min((k + D - 1) * 256, cols);
+      tiles.fill(x, r * cols + ahead, min(256, cols - ahead));
+      tiles.wait();                                // tile k has landed
+      sum += tiles[t];
+      tiles.release();
+      barrier;                                     // every thread has read tile k: its stage is free
+    }
+    out[r * 256 + t] = sum;
+  }
+}
+
+fn double(rows:usize, cols:usize, n:usize, x:ro<u64>[n], m:usize, out:rw<u64>[m]) { strided_sums[2](rows, cols, n, x, m, out); }
+```
+
+The checker follows each stage through the body: available, transfer in flight, readable, readers in flight, available again at the next barrier. It refuses a read, `release` or `wait` with no stage in the state it needs (`E-STAGE-UNREADY`), a `fill` with no free stage and a `wait` while a stage is still readable (`E-STAGE-BUSY`), and a loop or an `if` that leaves a pipeline in another state than it found it (`E-STAGE-LOOP`). A refused `fill` names the stage and the reads that may still be running.
+
+```cairn rejects E-STAGE-BUSY
+fn sums(rows:usize, cols:usize, n:usize, x:ro<u64>[n], m:usize, out:rw<u64>[m]) {
+  let steps = (cols + 255) / 256;
+  blocks r in rows threads t in 256 {
+    pipeline tiles:u64[256] depth 2;
+    tiles.fill(x, r * cols, min(256, cols));
+    let mut sum:u64 = 0;
+    for k in 0..steps {
+      let ahead = min((k + 1) * 256, cols);
+      tiles.fill(x, r * cols + ahead, min(256, cols - ahead));
+      tiles.wait();
+      sum += tiles[255 - t];
+      tiles.release();                             // no barrier: the next fill reuses this stage
+    }
+    out[r * 256 + t] = sum;
+  }
+}
+```
+
+```text
+tiles.fill at line 9 would refill the stage of tiles released at line 12 while other threads may still be reading it (tiles[...] at line 11). Put a barrier after line 12 and before line 9 runs.
+```
+
+The depth is a constant of the declaration, so raising it changes only what a deeper pipeline needs: the block's shared memory (depth times the stage's bytes, in the receipt's `local_storage` and in the kernel's static shared memory) and how many copies a `wait` leaves in flight, which the checker counts (`cp.async.wait_group 1` at depth 2, `2` at depth 3). On the device a fill is one `cp.async` per element, committed as one group per thread; on the host it is each thread's own copy, so a read the checker let through too early would race with it under the thread sanitizer. `strided_sums[2]` and `strided_sums[3]` compute the same sums.

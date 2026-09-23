@@ -44,6 +44,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Cooperative regions: shape, shared arrays, barriers, warp operations, who reaches a statement together, lowering | `compiler/cooperative.py` | `s_blocks`, `Reach`, `participation`, `collective`, `lower_blocks` |
 | Two threads of a block at one shared element between barriers | `compiler/phases.py` | `Phases`, `check`, `check_array` |
 | One writer for every element of an array from outside a cooperative region | `compiler/footprints.py` | `Poly`, `Globals`, `disjoint`, `radix` |
+| Pipeline stages: declaration, the states each stage goes through, the waits' counts, lowering | `compiler/pipelines.py` | `s_pipeline`, `method`, `Stages`, `lower` |
 | The tensor-core multiply, its numerical contract and its lowering | `compiler/tensor.py` | `check_mma`, `lower_mma` |
 | Tensor-core fragments: their types, the warp operations on them, the layouts each family reads, their lowering | `compiler/fragments.py` | `valid`, `tile`, `consumer`, `check_mma`, `lower_load` |
 | `layout` declarations: storage layouts and spreads, coverage, owners, runs, bank conflicts, conversions, and `L.at(...)` in code | `compiler/layouts.py` | `value`, `cover`, `runs`, `conflicts`, `conversion`, `method`, `lower` |

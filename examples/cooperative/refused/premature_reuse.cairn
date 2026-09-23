@@ -1,0 +1,15 @@
+// Refused with E-COOP-REUSE: the block reuses its tile for a second batch while other threads may still be reading
+// the first. Thread t writes tile[t] for the second batch in the phase where thread t - 1 reads tile[t] of the first;
+// a barrier after the read of the first batch fixes it.
+fn pairs(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
+  blocks b in g threads t in 256 {
+    shared tile:u64[256] = zeroed;
+    let i = b * 256 + t;
+    if i < n { tile[t] = x[i]; }
+    barrier;
+    let first = tile[t] + tile[(t + 1) % 256];
+    tile[t] = first;
+    barrier;
+    if t == 0 { out[b] = tile[0]; }
+  }
+}

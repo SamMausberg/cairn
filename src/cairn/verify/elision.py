@@ -295,7 +295,7 @@ class Walk:
             self.block(s.body)
             del self.active[key]
             self.env = env
-        elif tag in {"shared", "warp_reduce"}:
+        elif tag in {"shared", "warp_reduce", "pipeline"}:
             for e in es:
                 self.expr(e)
             self.bind(s.name, tag == "warp_reduce" and s.ty == USIZE, None)

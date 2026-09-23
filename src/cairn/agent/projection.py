@@ -163,6 +163,8 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
                     f"{', '.join(names[count:])} in {', '.join(es[count:])} {nested(s.body)}")  # fmt: skip
         elif s.tag == "shared":
             line = f"shared {s.name}:{s.ty.value.display()}[{es[0]}] = zeroed;"
+        elif s.tag == "pipeline":
+            line = f"pipeline {s.name}:{s.ty.value.display()}[{es[0]}] depth {es[1]};"
         elif s.tag == "barrier":
             line = "barrier;"
         elif s.tag == "warp_reduce":

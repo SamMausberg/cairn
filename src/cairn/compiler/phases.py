@@ -25,12 +25,13 @@ An index outside the array is no access, since its bounds guard aborts the threa
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from itertools import count
 from typing import TYPE_CHECKING, Any
 
 from .footprints import Poly, assigned, lent, opaque
-from .tree import BOOL, USIZE, Expr, Stmt, fail, root
+from .tree import BOOL, USIZE, Expr, Stmt, fail, nested, root
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -291,7 +292,7 @@ class Phases:
     def stmt(self, s: Stmt, env: dict[str, Any], mask: list[int] | None):
         self.time += 1
         now, tag = float(self.time), s.tag
-        if tag == "barrier":
+        if synchronizes(s, self.block.pipelines):  # a barrier, or a pipeline's wait, which is one
             return self.barrier(s)
         if tag == "assign":
             target, value = s.exprs
@@ -307,7 +308,7 @@ class Phases:
         values = [self.expr(e, env, mask, now) for e in s.exprs if tag not in {"for", "while"}]
         if tag in {"let", "reg"}:
             env[s.name] = values[0]
-        elif tag in {"warp_reduce", "unpack", "stack", "shared"}:
+        elif tag in {"warp_reduce", "unpack", "stack", "shared", "pipeline"}:
             for name in [s.name, *(n.val for n in s.other_names)]:
                 env[name] = None
         elif tag == "if":
@@ -374,7 +375,7 @@ class Phases:
         lo = hi = None
         if s.tag == "for":
             lo, hi = (self.expr(e, env, mask, now) for e in s.exprs[:2])
-        synchronizing = holds_barrier(s.body)
+        synchronizing = holds_barrier(s.body, self.block.pipelines)
         numbers = all(isinstance(v, int) and not isinstance(v, bool) for v in (lo, hi))
         if s.tag == "for" and numbers and hi - lo <= UNROLL:
             return self.iterate(s, env, mask, range(lo, hi))
@@ -579,12 +580,21 @@ def between(first: int, second: int) -> str:
     return f"after line {first} and before line {second} runs"
 
 
-def holds_barrier(ss: list[Stmt]) -> bool:
-    return any(s.tag in SYNCHRONIZING or holds_barrier([*s.body, *s.other, *(x for a in s.arms for x in a.body)])
-               for s in ss)  # fmt: skip
+def synchronizes(s: Stmt, pipelines: Collection[str] = ()) -> bool:
+    """A statement that ends a phase for the whole block: a barrier, or a pipeline's wait, typed or not yet."""
+    if s.tag == "barrier":
+        return True
+    e = s.exprs[0] if s.tag == "expr" and s.exprs else None
+    if e is None or e.tag != "call":
+        return False
+    if isinstance(e.ref, tuple) and e.ref[:1] == ("stage",):
+        return e.ref[2] == "wait"
+    head, _, op = e.val.rpartition(".")
+    return op == "wait" and head in pipelines
 
 
-SYNCHRONIZING = {"barrier"}  # statements that end a phase for the whole block
+def holds_barrier(ss: list[Stmt], pipelines: Collection[str] = ()) -> bool:
+    return any(synchronizes(s, pipelines) or holds_barrier(nested(s), pipelines) for s in ss)
 
 
 def check(c: Checker, s: Stmt, block: Block, grid: list[Any]):

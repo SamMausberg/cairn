@@ -1,0 +1,11 @@
+// Refused with E-STAGE-UNREADY: the threads read the stage before waiting for its transfer, which may still be in
+// flight.
+fn first_tile(cols:usize, n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
+  blocks b in g threads t in 256 {
+    pipeline tiles:u64[256] depth 2;
+    tiles.fill(x, 0, min(256, n));
+    let v = tiles[t];
+    tiles.wait();
+    if t == 0 { out[b] = v; }
+  }
+}

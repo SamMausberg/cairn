@@ -1,0 +1,18 @@
+// Refused with E-STAGE-BUSY: the double-buffered row sum without the barrier after release. The next iteration's
+// fill would land in the stage the slowest threads may still be reading, and the refusal names those reads.
+fn row_sums(rows:usize, cols:usize, n:usize, x:ro<u64>[n], out:rw<u64>[rows]) {
+  let steps = (cols + 255) / 256;
+  blocks r in rows threads t in 256 {
+    pipeline tiles:u64[256] depth 2;
+    tiles.fill(x, r * cols, min(256, cols));
+    let mut sum:u64 = 0;
+    for k in 0..steps {
+      let ahead = min((k + 1) * 256, cols);
+      tiles.fill(x, r * cols + ahead, min(256, cols - ahead));
+      tiles.wait();
+      sum += tiles[t];
+      tiles.release();
+    }
+    if t == 0 { out[r] = sum; }
+  }
+}

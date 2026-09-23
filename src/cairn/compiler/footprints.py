@@ -148,9 +148,28 @@ def lent(e: Expr) -> list[tuple[Expr, str]]:
     """The arguments a call lends, with the mode each is lent in: rw for what it may write."""
     if isinstance(e.ref, Function):
         return [(a, t.mode) for a, (_, t) in zip(e.args, e.ref.params, strict=False) if t.mode != "value"]
+    if isinstance(e.ref, tuple) and e.ref[:1] == ("stage",) and e.ref[2] == "fill":  # a pipeline reads its source
+        return [(e.args[1], "ro")]
     if isinstance(e.ref, tuple) and e.val in {"swap", "take"}:
         return [(a, "rw") for a in e.args]
     return []
+
+
+def natural(e: Expr) -> int | None:
+    """The value of a usize expression built from literals, named constants and static naturals, when it is one."""
+    if e.tag == "int":
+        return int(e.val)
+    if e.tag == "name":
+        if isinstance(e.ref, Expr):
+            return natural(e.ref)
+        return e.ref if isinstance(e.ref, int) and not isinstance(e.ref, bool) else None
+    if e.tag == "binary" and e.val in {"+", "-", "*", "/", "%"} and len(e.args) == 2:
+        a, b = (natural(x) for x in e.args)
+        if a is None or b is None or (e.val in {"/", "%"} and b == 0):
+            return None
+        value = {"+": a + b, "-": a - b, "*": a * b, "/": a // max(b, 1), "%": a % max(b, 1)}[e.val]
+        return value if value >= 0 else None
+    return None
 
 
 @dataclass
@@ -339,7 +358,7 @@ class Globals:
             inner = dict(env)
             self.stmts(s.body, inner)
             self.join(env, [inner])
-        elif tag in {"warp_reduce", "unpack", "stack", "shared"}:
+        elif tag in {"warp_reduce", "unpack", "stack", "shared", "pipeline"}:
             for name in [s.name, *(n.val for n in s.other_names)]:
                 env[name] = None
 

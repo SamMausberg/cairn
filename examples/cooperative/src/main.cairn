@@ -1,0 +1,56 @@
+// Runs the cooperative kernels on host threads and holds each one to a plain loop that computes the same thing.
+
+fn plain_transpose(w:usize, h:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
+  for r in 0..h {
+    for c in 0..w { out[c * h + r] = x[r * w + c]; }
+  }
+}
+
+fn plain_sum(n:usize, x:ro<u64>[n], lo:usize, hi:usize) -> u64 {
+  let mut total:u64 = 0;
+  for i in lo..hi { total += x[i]; }
+  return total;
+}
+
+fn main() -> i32 {
+  let gx:usize = 3;
+  let gy:usize = 2;
+  let n = gx * 32 * gy * 32;
+  buffer x:f32[n] = zeroed;
+  for i in 0..n { x[i] = f32(i % 977) - 400.0; }
+  buffer out:f32[n] = zeroed;
+  buffer want:f32[n] = zeroed;
+  transpose(gx, gy, n, out, x);
+  plain_transpose(gx * 32, gy * 32, n, want, x);
+  for i in 0..n {
+    if to_bits(out[i]) != to_bits(want[i]) { return 1; }
+  }
+  let m:usize = 1000;
+  let g:usize = 5;
+  buffer values:u64[m] = zeroed;
+  for i in 0..m { values[i] = mul_wrap(u64(i), 2654435761) % 1000003; }
+  buffer sums:u64[g] = zeroed;
+  block_sums(m, values, g, sums);
+  for b in 0..g {
+    let lo = min(b * 256, m);
+    if sums[b] != plain_sum(m, values, lo, min(lo + 256, m)) { return 2; }
+  }
+  let rows:usize = 3;
+  let cols:usize = 700;
+  let cells = rows * cols;
+  buffer grid:u64[cells] = zeroed;
+  for i in 0..cells { grid[i] = u64(i * 7 % 1009); }
+  buffer double:u64[rows] = zeroed;
+  buffer triple:u64[rows] = zeroed;
+  row_sums[2](rows, cols, cells, grid, double);
+  row_sums[3](rows, cols, cells, grid, triple);
+  for r in 0..rows {
+    let want_row = plain_sum(cells, grid, r * cols, r * cols + cols);
+    if double[r] != want_row || triple[r] != want_row { return 3; }
+  }
+  println(
+    "transpose ", gx * 32, " x ", gy * 32, ", ", g, " block sums and ", rows,
+    " row sums agree with plain loops"
+  );
+  return 0;
+}

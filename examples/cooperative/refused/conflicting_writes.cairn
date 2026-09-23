@@ -1,0 +1,11 @@
+// Refused with E-COOP-CONFLICT: two threads of a block write one element of the shared array in the same phase.
+// Threads 2k and 2k + 1 both write partial[k], and whichever writes last wins.
+fn halves(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
+  blocks b in g threads t in 256 {
+    shared partial:u64[128] = zeroed;
+    let i = b * 256 + t;
+    if i < n { partial[t / 2] = x[i]; }
+    barrier;
+    if t == 0 { out[b] = partial[0]; }
+  }
+}

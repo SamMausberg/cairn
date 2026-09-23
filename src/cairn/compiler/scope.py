@@ -58,6 +58,7 @@ class Block:
     device: bool
     top: set[int] = field(default_factory=set)  # ids of the statements directly in the body, where arrays are declared
     shared: dict[str, tuple[Type, int, int]] = field(default_factory=dict)  # array -> (element, count, byte offset)
+    pipelines: dict[str, Any] = field(default_factory=dict)  # name -> its stages (compiler/pipelines.py)
     reach: dict[int, tuple[int, Any]] = field(default_factory=dict)  # id(node) -> (who reaches it together, why)
     bytes: int = 0  # shared memory each block holds: its arrays and stages, each on 16 bytes
 

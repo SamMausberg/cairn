@@ -96,8 +96,9 @@ class Checker:
     e_spawn, shared, lane_callee, plans = (concurrency.e_spawn, concurrency.shared, concurrency.lane_callee,
                                            concurrency.plans)  # fmt: skip
     judge_lane_callbacks, s_submit = concurrency.judge_lane_callbacks, concurrency.s_submit
-    s_blocks, s_shared, s_barrier, s_warp_reduce = (cooperative.s_blocks, cooperative.s_shared,
-                                                    cooperative.s_barrier, cooperative.s_warp_reduce)  # fmt: skip
+    s_blocks, s_shared, s_barrier, s_warp_reduce, s_pipeline = (cooperative.s_blocks, cooperative.s_shared,
+                                                                cooperative.s_barrier, cooperative.s_warp_reduce,
+                                                                cooperative.s_pipeline)  # fmt: skip
 
     e_int, e_float, e_bool, e_str, e_name = (expressions.e_int, expressions.e_float, expressions.e_bool,
                                              expressions.e_str, expressions.e_name)  # fmt: skip

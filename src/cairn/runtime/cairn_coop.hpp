@@ -35,6 +35,35 @@ template<class T> CR_HD inline T unbits(std::uint64_t b) noexcept {
   std::memcpy(&v, &b, sizeof(T));
   return v;
 }
+
+// Pipeline stages (compiler/pipelines.py): D stages of S elements in the block's shared memory, filled in ring order
+// and read in the same order. The checker has shown every fill lands in a stage nobody still reads and every read
+// follows its stage's wait, so the stage an operation means is the count of fills, or of waits, modulo D. Each thread
+// keeps both counts, and since every thread reaches every operation, they agree.
+template<class T, std::size_t S, std::size_t D> class Stages {
+  static constexpr std::size_t STRIDE = (S * sizeof(T) + 15) / 16 * 16 / sizeof(T);  // each stage on 16 bytes
+  T* base_;
+  std::size_t filled_ = 0, waited_ = 0;
+
+public:
+  CR_HD explicit Stages(unsigned char* memory) noexcept : base_(reinterpret_cast<T*>(memory)) {}
+  // The next stage receives from[start .. start + count) and zeros past count; each thread copies its own elements.
+  template<class Block> CR_HD void fill(Block& block, const T* from, std::size_t length, std::size_t start,
+                                        std::size_t count) noexcept {
+    if(count > S || start > length || count > length - start) trap();
+    T* to = base_ + (filled_ % D) * STRIDE;
+    for(std::size_t e = block.thread(); e < S; e += block.threads())
+      block.copy(to + e, from + start + (e < count ? e : 0), e < count);
+    block.commit();
+    ++filled_;
+  }
+  // The oldest stage in flight has landed, in every thread; at most PENDING later fills stay in flight.
+  template<std::size_t PENDING, class Block> CR_HD const T* wait(Block& block) noexcept {
+    block.template drain<PENDING>();
+    block.sync();
+    return base_ + (waited_++ % D) * STRIDE;
+  }
+};
 }  // namespace cr::coop
 
 #if !defined(__CUDA_ARCH__)
@@ -73,7 +102,7 @@ struct Warp {
 class Host {
   std::barrier<>& gate_;
   Warp* warps_;
-  std::size_t t_;
+  std::size_t t_, count_;
 
   template<class T> T exchange(T v, std::size_t from) noexcept {
     Warp& w = warps_[t_ / WARP];
@@ -86,10 +115,16 @@ class Host {
 
 public:
   unsigned char* const shared;
-  Host(std::barrier<>& gate, Warp* warps, unsigned char* memory, std::size_t t) noexcept
-      : gate_(gate), warps_(warps), t_(t), shared(memory) {}
+  Host(std::barrier<>& gate, Warp* warps, unsigned char* memory, std::size_t t, std::size_t count) noexcept
+      : gate_(gate), warps_(warps), t_(t), count_(count), shared(memory) {}
   void sync() noexcept { gate_.arrive_and_wait(); }
   std::size_t lane() const noexcept { return t_ % WARP; }
+  std::size_t thread() const noexcept { return t_; }
+  std::size_t threads() const noexcept { return count_; }
+  // A stage element lands at once, copied by this thread; the wait's barrier is what makes it every thread's.
+  template<class T> void copy(T* to, const T* from, bool inside) noexcept { *to = inside ? *from : T{}; }
+  void commit() noexcept {}
+  template<std::size_t PENDING> void drain() noexcept {}
   template<class T> T shuffle(T v, std::size_t from) noexcept {
     if(from >= WARP) trap();
     return exchange(v, from);
@@ -123,7 +158,7 @@ template<unsigned THREADS, std::size_t BYTES, class F> inline void run(std::size
   for(std::size_t k = 0; k < teams; ++k) held.push_back(std::make_unique<Team<THREADS, BYTES>>());
   auto one = [&body, &held, grid, teams](std::size_t k, std::size_t t) noexcept {
     Team<THREADS, BYTES>& team = *held[k];
-    Host context(team.gate, team.warps, team.shared, t);
+    Host context(team.gate, team.warps, team.shared, t, THREADS);
     for(std::size_t b = k; b < grid; b += teams) {
       if(t == 0) std::memset(team.shared, 0, sizeof(team.shared));
       team.gate.arrive_and_wait();  // the block's memory is zeroed before any thread uses it
@@ -150,6 +185,7 @@ template<unsigned THREADS, std::size_t BYTES, class F> inline void run(std::size
 #endif
 
 #if defined(__CUDACC__)
+#include <cuda_pipeline.h>
 #include "cairn_gpu.hpp"
 
 namespace cr::coop {
@@ -167,6 +203,15 @@ public:
   __device__ explicit Device(unsigned char* memory) : shared(memory) {}
   __device__ void sync() const { __syncthreads(); }
   __device__ std::size_t lane() const { return threadIdx.x % WARP; }
+  __device__ std::size_t thread() const { return threadIdx.x; }
+  __device__ std::size_t threads() const { return blockDim.x; }
+  // One asynchronous copy of an element into the stage, or its size in zeros, in this thread's current group.
+  template<class T> __device__ void copy(T* to, const T* from, bool inside) const {
+    static_assert(sizeof(T) == 4 || sizeof(T) == 8, "cp.async moves 4, 8 or 16 bytes");
+    __pipeline_memcpy_async(to, from, sizeof(T), inside ? 0 : sizeof(T));
+  }
+  __device__ void commit() const { __pipeline_commit(); }
+  template<std::size_t PENDING> __device__ void drain() const { __pipeline_wait_prior(PENDING); }
   template<class T> __device__ T shuffle(T v, std::size_t from) const {
     if(from >= WARP) trap();
     return through(v, [=](auto x) { return __shfl_sync(0xffffffffu, x, int(from)); });
@@ -194,6 +239,7 @@ blocks(std::size_t grid, F body) {
     for(std::size_t e = t; e < BYTES; e += THREADS) memory[e] = 0;
     __syncthreads();
     body(context, b, t);
+    __pipeline_wait_prior(0);  // a stage's fills still in flight land before the memory is zeroed again
     __syncthreads();  // every thread is done with the memory before the next block zeroes it
   }
 }

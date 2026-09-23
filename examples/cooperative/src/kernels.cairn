@@ -1,0 +1,76 @@
+// Three cooperative kernels, each a block of threads that share memory and meet at barriers.
+
+// out is x transposed, x holding 32 * gy rows of 32 * gx elements. Each block moves one 32 x 32 tile through
+// shared memory: it reads the tile's rows from x and writes its columns to out, so both run along memory. A tile row
+// holds 33 elements, so the 32 elements of one column sit in 32 different banks on the device.
+fn transpose(gx:usize, gy:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
+  let w = gx * 32;
+  let h = gy * 32;
+  blocks bx, by in gx, gy threads tx, ty in 32, 8 {
+    shared tile:f32[1056] = zeroed;
+    for k in 0..4 {
+      let r = ty + k * 8;
+      tile[r * 33 + tx] = x[(by * 32 + r) * w + bx * 32 + tx];
+    }
+    barrier;
+    for k in 0..4 {
+      let r = ty + k * 8;
+      out[(bx * 32 + r) * h + by * 32 + tx] = tile[tx * 33 + r];
+    }
+  }
+}
+
+// out[b] is the sum of x[256 * b .. 256 * b + 256], or of what of it lies before n. The block halves its 256
+// partial sums in shared memory down to one warp's 32, and the warp adds those with shuffles.
+fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
+  blocks b in g threads t in 256 {
+    shared partial:u64[256] = zeroed;
+    let i = b * 256 + t;
+    if i < n { partial[t] = x[i]; }
+    barrier;
+    for k in 0..3 {
+      let s:usize = shr(128, k);
+      if t < s { partial[t] = partial[t] + partial[t + s]; }
+      barrier;
+    }
+    if t < 32 {
+      let total = reduce + warp yield partial[t];
+      if t == 0 { out[b] = total; }
+    }
+  }
+}
+
+// out[r] is the sum of row r of x, rows of cols elements. Block r walks its row 256 elements at a time through a
+// pipeline of D stages: while its threads add one tile, the next D - 1 are on their way. D is the only thing that
+// differs between row_sums[2] and row_sums[3]: they compute the same sums.
+fn row_sums[D:nat](rows:usize, cols:usize, n:usize, x:ro<u64>[n], out:rw<u64>[rows]) {
+  let steps = (cols + 255) / 256;
+  blocks r in rows threads t in 256 {
+    pipeline tiles:u64[256] depth D;
+    shared partial:u64[256] = zeroed;
+    for k in 0..D - 1 {
+      let start = min(k * 256, cols);
+      tiles.fill(x, r * cols + start, min(256, cols - start));
+    }
+    let mut sum:u64 = 0;
+    for k in 0..steps {
+      let ahead = min((k + D - 1) * 256, cols);
+      tiles.fill(x, r * cols + ahead, min(256, cols - ahead));
+      tiles.wait();
+      sum += tiles[255 - t]; // an element another thread's copy brought in
+      tiles.release();
+      barrier;
+    }
+    partial[t] = sum;
+    barrier;
+    for k in 0..3 {
+      let s:usize = shr(128, k);
+      if t < s { partial[t] = partial[t] + partial[t + s]; }
+      barrier;
+    }
+    if t < 32 {
+      let total = reduce + warp yield partial[t];
+      if t == 0 { out[r] = total; }
+    }
+  }
+}

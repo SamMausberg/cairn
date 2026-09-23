@@ -461,6 +461,10 @@
      "match": "\\bclobbers\\b(?=\\s*\\(\\s*[a-z][a-z0-9]*\\s*[,)])"
     },
     {
+     "name": "keyword.other.cairn",
+     "match": "\\bdepth\\b(?=\\s+[A-Za-z0-9_])"
+    },
+    {
      "name": "keyword.control.concurrency.cairn",
      "match": "\\bexclusive\\b(?=\\s+[A-Za-z_]\\w*\\s+(?:for|parallel)\\b)"
     },
@@ -511,6 +515,10 @@
     {
      "name": "keyword.other.plan.cairn",
      "match": "\\bper_lane\\b(?=\\s+[0-9])"
+    },
+    {
+     "name": "storage.type.binding.cairn",
+     "match": "\\bpipeline\\b(?=\\s+[A-Za-z_]\\w*\\s*:)"
     },
     {
      "name": "keyword.declaration.cairn",

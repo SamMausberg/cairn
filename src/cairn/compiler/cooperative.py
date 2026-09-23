@@ -37,9 +37,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import execution, footprints, phases
+from . import execution, footprints, phases, pipelines
 from .constants import constant
 from .effects import DEVICE_SAFE, LANE_SAFE
+from .footprints import natural
+from .pipelines import lower_pipeline, s_pipeline  # noqa: F401  (the checker and the emitter bind them from here)
 from .scope import Binding, Block, Lanes
 from .tree import FLOAT, INT, NUMERIC, SCALAR, STORAGE, UNSIGNED, USIZE, Expr, Stmt, Type, fail, nested, root
 
@@ -52,7 +54,6 @@ WIDTHS = ("block", "warp", "thread")
 WARP_SIZE = 32
 SHARED_LIMIT = 48 * 1024  # static shared memory a block may hold on every NVIDIA device since compute 2.0
 SHUFFLES = {"shuffle", "shuffle_xor", "shuffle_down"}
-COLLECTIVE_WORDS = {"barrier": BLOCK, "warp_reduce": WARP}
 
 
 # Who reaches a statement together ---------------------------------------------------------------------------------
@@ -62,8 +63,8 @@ class Reach:
     """For every statement and call of a cooperative body, the widest group that reaches it together, and the
     condition that narrows it: the whole block, each warp whole, or single threads."""
 
-    def __init__(self, c: Checker, block: Block):
-        self.c, self.block = c, block
+    def __init__(self, c: Checker, block: Block, stages: set[str]):
+        self.c, self.block, self.stages = c, block, stages  # stages: the pipelines the body declares
         whole = block.extents[0] % WARP_SIZE == 0
         self.values: dict[str, tuple[int, Any]] = dict.fromkeys(block.grid, (BLOCK, None))
         for i, name in enumerate(block.threads):
@@ -178,7 +179,7 @@ class Reach:
         """A loop runs its body until nothing it assigns reaches further, and a break or continue that fewer threads
         reach than the loop's body narrows the whole body: after it, those threads are in another iteration."""
         leaving = next(iter(jumps(s.body)), None)
-        if leaving is not None and phases.holds_barrier(s.body):
+        if leaving is not None and phases.holds_barrier(s.body, self.stages):
             fail("E-COOP-BARRIER", f"A loop that holds a barrier runs every iteration whole in every thread; the "
                  f"{leaving.tag} at line {leaving.line} would take threads past it.", leaving)  # fmt: skip
         for _ in range(8):
@@ -253,9 +254,7 @@ def s_blocks(c: Checker, s: Stmt):
     extents = []
     for e in s.exprs[count:]:
         c.expr(e, USIZE)
-        value = (
-            int(e.val) if e.tag == "int" else int(e.ref.val) if isinstance(e.ref, Expr) and e.ref.tag == "int" else 0
-        )
+        value = natural(e) or 0
         if value < 1:
             fail("E-COOP-SHAPE", "A thread extent is a positive literal or constant: a block's shape is fixed when it "
                  "is compiled.", e)  # fmt: skip
@@ -268,7 +267,7 @@ def s_blocks(c: Checker, s: Stmt):
              f"is {total}.", s)  # fmt: skip
     device = "device" in placements(c, s.body)
     block = Block(grid, threads, extents, device, top={id(x) for x in s.body})
-    reach = Reach(c, block)
+    reach = Reach(c, block, {x.name for x in s.body if x.tag == "pipeline"})
     reach.run(s.body, (BLOCK, None))
     for name, node in zip(names, s.other_names, strict=True):
         c.bind(name, Binding(USIZE), node)
@@ -291,6 +290,7 @@ def s_blocks(c: Checker, s: Stmt):
     saved[5].update(c.effects)
     walker = footprints.Globals(c, lanes.outer)
     extent_polys = [walker.poly(e, {}) for e in s.exprs[:count]]
+    pipelines.check(c, s, block)
     phases.check(c, s, block, extent_polys)
     footprints.check(c, s, block, lanes.outer, extent_polys)
     c.lanes, c.coop, c.device_depth, c.loop_depth, _, c.effects = saved
@@ -301,8 +301,8 @@ def s_blocks(c: Checker, s: Stmt):
     c.effect("par:" + target)
     if len(grid) > 1:
         c.guard("grid")  # the product of the grid's extents is checked
-    if block.shared:
-        c.effect("zero_init")
+    if block.shared or block.pipelines:
+        c.effect("zero_init")  # a block's shared memory, its stages included, is zeroed where it starts
     c.counts["cooperative_regions"] = c.counts.get("cooperative_regions", 0) + 1
     c.resources[c.f.name].append({"name": "blocks", "kind": "blocks", "threads": total, "shared_bytes": block.bytes,
                                   "placement": target, "line": s.line})  # fmt: skip
@@ -332,7 +332,7 @@ def s_shared(c: Checker, s: Stmt):
         fail("E-COOP-SHARED", f"A shared array holds scalars; {element.display()} is not one.", s)
     c.expr(s.exprs[0], USIZE)
     e = s.exprs[0]
-    size = int(e.val) if e.tag == "int" else int(e.ref.val) if isinstance(e.ref, Expr) and e.ref.tag == "int" else 0
+    size = natural(e) or 0
     if size < 1:
         fail("E-COOP-SHARED", "A shared array's length is a positive literal or constant.", e)
     width = c.sizeof(element) * size

@@ -195,6 +195,17 @@ class StatementParser(ExpressionParser):
             extent = self.expr()
             self.need("]", "=", "zeroed", ";")
             return Stmt("shared", n, element, [extent], **at)
+        if t.s == "pipeline" and IDENT.fullmatch(self.ahead(1)) and self.ahead(2) == ":":  # stages a block fills
+            self.i += 1
+            n = self.ident()
+            self.need(":")
+            element = Type(self.path())
+            self.need("[")
+            size = self.expr()
+            self.need("]", "depth")
+            depth = self.expr()
+            self.need(";")
+            return Stmt("pipeline", n, element, [size, depth], **at)
         if t.s == "barrier" and self.ahead(1) == ";":  # every thread of a cooperative block meets here
             self.i += 2
             return Stmt("barrier", **at)

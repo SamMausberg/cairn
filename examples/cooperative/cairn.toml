@@ -1,0 +1,7 @@
+[project]
+name = "cooperative"
+sources = ["src/kernels.cairn", "src/main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

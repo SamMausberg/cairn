@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import facts, implementations, layouts, rings
+from . import facts, implementations, layouts, pipelines, rings
 from .builtins import SOFT, TABLE, WRAPPING
 from .scope import Binding
 from .syntax import copied, lent_part
@@ -75,6 +75,8 @@ def e_call(c: Checker, e: Expr, expected: Type | None) -> Type:
         return c.shared(e, n, shared, args[1:])
     if shared.name == "IoRing":
         return rings.method(c, e, n, args[1:])
+    if receiver is not None and receiver.tag == "name" and c.coop is not None and receiver.val in c.coop.pipelines:
+        return pipelines.method(c, e, receiver.val, n, args[1:])  # a cooperative region's stages
     home = c.p.modules.get(shared.name, "") if receiver is not None else ""
     with c.within(home or c.module):  # A method is found in its receiver's home module first.
         method = c.qualify(n, c.fs, node=e) if home else None
