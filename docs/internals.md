@@ -73,7 +73,8 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 |---|---|
 | `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard is host and device callable |
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
-| `cairn_parallel.hpp` | the host lane pool with its pooled reduction and two-pass scan, the crew of reusable task threads, linear tasks, task groups with a bounded completion ring, `Mutex` and `Atomic` with explicit orders |
+| `cairn_parallel.hpp` | the host lane pool with its pooled reduction and two-pass scan, `Mutex` and `Atomic` with explicit orders; it includes `cairn_tasks.hpp` |
+| `cairn_tasks.hpp` | the crew of reusable task threads, linear tasks, task groups with a bounded completion ring |
 | `cairn_kernels.hpp` | the device side of every region in plain CUDA: the lane, chunk and staged-tile kernels, and their launch on a stream the caller names, with no execution context |
 | `cairn_gpu.hpp` | CUDA as the machine `cairn_exec.hpp` runs on: CUB's calls, streams, events, allocation and copies; and synchronous entry points (`launch`, `Ticket`, `reduce`, `scan`, `compact`) that wait for the whole device and that generated code does not call |
 | `cairn_exec.hpp` | what generated code calls for device work, written once for any machine: the calling thread's execution context, device owners, regions on its stream, reductions, scans and compactions in its arena, queued work on lent lanes, a C caller's own stream |
