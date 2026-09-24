@@ -4,7 +4,7 @@ What `cairn export --harness` wrote and how far each submission got without a GP
 
 ## What ran
 
-On one x86-64 machine under WSL2 (Linux 6.18), shared with four other agents, at `ed322b2`, with g++ 13.3, nvcc 13.2 (V13.2.78) and Python 3.12.3. Torch came from two wheels in a scratch virtual environment, never a CAIRN dependency. torch 2.9.0+cpu, from PyTorch's CPU index, ran every step. torch 2.9.0+cu130 (`torch-2.9.0+cu130-cp312-cp312-manylinux_2_28_x86_64.whl`, sha256 `cc241ffb20428f6a44c299ca06b934445606cf1fa48f3b68ef3af0a04c86bc3b`) was unpacked for its headers and libraries, compiled and linked against, and never imported. sol-execbench 1.0.2 was installed from its repository with `--no-deps`, for its pydantic models.
+On one x86-64 machine under WSL2 (Linux 6.18), shared with four other agents, at `d50f4c8`, with g++ 13.3, nvcc 13.2 (V13.2.78) and Python 3.12.3. Torch came from two wheels in a scratch virtual environment, never a CAIRN dependency. torch 2.9.0+cpu, from PyTorch's CPU index, ran every step. torch 2.9.0+cu130 (`torch-2.9.0+cu130-cp312-cp312-manylinux_2_28_x86_64.whl`, sha256 `cc241ffb20428f6a44c299ca06b934445606cf1fa48f3b68ef3af0a04c86bc3b`) was unpacked for its headers and libraries, compiled and linked against, and never imported. sol-execbench 1.0.2 was installed from its repository with `--no-deps`, for its pydantic models.
 
 The adapter follows these upstream revisions, which `src/cairn/projects/harness.py` pins and `tools/checks/harness_records.py` checks against its clones:
 
@@ -14,7 +14,7 @@ The adapter follows these upstream revisions, which `src/cairn/projects/harness.
 | GPU MODE | gpu-mode/reference-kernels, and gpu-mode/popcorn-cli for the commands | `f3295bb6bd559bae4659d2d8fc45edb1394251b1`, `036b3ead604f1e9f404cbee5cf0e48377ef0766f` |
 | KernelBench | ScalingIntelligence/KernelBench | `423217d9fda91e0c2d67e4a43bf62f96f6d104f1` |
 
-`tests/projects/test_harness.py` and `tests/projects/test_harness_torch.py` ran under the CPU torch at `c7a4821`, with `CAIRN_TORCH_CUDA_ROOT` naming the cu130 wheel's torch directory: 37 passed, none skipped. The torch half built and ran these:
+`tests/projects/test_harness.py` and `tests/projects/test_harness_torch.py` ran under the CPU torch at `d50f4c8`, with `CAIRN_TORCH_CUDA_ROOT` naming the cu130 wheel's torch directory: 37 passed, none skipped. The torch half built and ran these:
 
 | Test | What it showed |
 |---|---|

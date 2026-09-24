@@ -391,7 +391,8 @@ def s_blocks(c: Checker, s: Stmt, main: Block | None = None):
     c.effect("par:" + target)
     if len(grid) > 1:
         c.guard("grid")  # the product of the grid's extents is checked
-    if block.shared or block.pipelines:
+    laid_out(block, s.body)
+    if block.zeroed:
         c.effect("zero_init")  # a block's shared memory, its stages included, is zeroed where it starts
     s.ref = block
     if main is not None:
@@ -457,7 +458,8 @@ def placements(c: Checker, ss: list[Stmt]) -> set[str]:
 
 
 def s_shared(c: Checker, s: Stmt):
-    """`shared tile:f32[N] = zeroed;`: one array per block, zeroed where the block starts, every thread's."""
+    """`shared tile:f32[N] = zeroed;`: one array per block, zeroed where the block starts, every thread's. Written
+    `shared tile:f32[N];` it is not zeroed, and the phase rule shows every element a thread reads was written first."""
     if c.coop is None or id(s) not in c.coop.top:
         fail("E-COOP-SHARED", "A shared array is declared directly in the body of a cooperative region, where every "
              "thread of the block declares it together.", s)  # fmt: skip
@@ -470,18 +472,37 @@ def s_shared(c: Checker, s: Stmt):
     if size < 1:
         fail("E-COOP-SHARED", "A shared array's length is a positive literal or constant.", e)
     width = c.sizeof(element) * size
-    offset = c.coop.bytes
-    c.coop.bytes += -(-width // ALIGN) * ALIGN  # the next array starts on ALIGN bytes too
-    if c.coop.bytes > SHARED_LIMIT:
+    zeroed = s.op != "unzeroed"
+    if zeroed:
+        offset = c.coop.bytes
+        c.coop.bytes += -(-width // ALIGN) * ALIGN  # the next array starts on ALIGN bytes too
+    else:  # placed once the body is checked, after every zeroed array and stage (laid_out)
+        offset = -1
+        c.coop.unzeroed[s.name] = -(-width // ALIGN) * ALIGN
+    held = c.coop.bytes + sum(c.coop.unzeroed.values())
+    if held > SHARED_LIMIT:
         fail("E-COOP-SHARED", f"A block's shared arrays hold at most {SHARED_LIMIT} bytes; with {s.name} they hold "
-             f"{c.coop.bytes}.", s)  # fmt: skip
+             f"{held}.", s)  # fmt: skip
     c.coop.shared[s.name] = (element, size, offset)
     place = "device" if c.coop.device else "host"
     c.bind(s.name, Binding(Type(element.name, "rw", str(size), element.args, place)), s)
-    c.effect("zero_init")
+    if zeroed:
+        c.effect("zero_init")
     c.resources[c.f.name].append({"name": s.name, "kind": "shared", "element": element.display(), "capacity": size,
-                                  "bytes": width, "initialization": "zeroed", "line": s.line})  # fmt: skip
+                                  "bytes": width, "initialization": "zeroed" if zeroed else "written before read",
+                                  "line": s.line})  # fmt: skip
     s.ref = (element, size, offset)
+
+
+def laid_out(block: Block, body: list[Stmt]):
+    """Place the arrays declared without `= zeroed` after everything a block's start zeroes, each on ALIGN bytes."""
+    block.zeroed = block.bytes
+    after = block.bytes
+    for s in (x for x in body if x.tag == "shared" and x.op == "unzeroed"):
+        element, size, _ = s.ref
+        s.ref = block.shared[s.name] = (element, size, after)
+        after += block.unzeroed[s.name]
+    block.bytes = after
 
 
 def s_barrier(c: Checker, s: Stmt):
@@ -561,12 +582,17 @@ def lower_blocks(g: Emitter, s: Stmt, es: list[str]):
         context = f"{execution.CONTEXT}, " if block.device else ""  # the thread's execution context
         if s.other:  # the region's finish, after every block (compiler/finish.py)
             return finish.lower(g, s, f"{entry}_then", f"{context}{total}", lanes)
-        g.put(f"cr::coop::{entry}<{block.count}, {block.bytes}>({context}{total}, {lanes});")
+        g.put(f"cr::coop::{entry}<{memory(block)}>({context}{total}, {lanes});")
 
     g.nest("{", whole)
 
 
 NAMED = "[[maybe_unused]] const std::size_t"  # a body need not use every name; nvcc would refuse it unused
+
+
+def memory(block: Block) -> str:
+    """A launch's threads and shared bytes, and the leading bytes it zeroes when an array goes unzeroed."""
+    return f"{block.count}, {block.bytes}" + (f", {block.zeroed}" if block.zeroed != block.bytes else "")
 
 
 def lambda_head(block: Block) -> str:

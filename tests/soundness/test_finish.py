@@ -2,8 +2,8 @@
 once, after every block of the region, and sees everything they wrote.
 
 Every rule has a rejection naming its code. A one-pass reduction runs on host threads under both compilers, for grids
-of no blocks to seventy, held to a plain loop; under the thread sanitizer it is clean, and a finish started beside the
-blocks rather than after them is reported, so the oracle bites. The device program runs emulated on host threads, and
+of no blocks to seventy, held to a plain loop, and is clean under the thread sanitizer; run with each finish before its
+blocks, it fails its own checks, so the oracle bites. The device program runs emulated on host threads, and
 its device lowering, one launch whose last block finishes, compiles for sm_120, read back with cuobjdump. Nothing runs
 on a GPU.
 """
@@ -155,24 +155,25 @@ def test_the_finish_reads_what_every_block_wrote_without_a_race(tmp_path):
     assert done.returncode == 0 and "ThreadSanitizer" not in done.stderr, done.stderr[-3000:]
 
 
-BESIDE = """#include <thread>
-namespace cr::coop {
-template<unsigned THREADS, std::size_t BYTES, class F, class G> void beside(std::size_t grid, F body, G finish) noexcept {
-  std::thread blocks([&] { run<THREADS, BYTES>(grid, body); });
+BEFORE = """namespace cr::coop {
+template<unsigned THREADS, std::size_t BYTES, class F, class G> void before(std::size_t grid, F body, G finish) noexcept {
   run<THREADS, BYTES>(1, finish);
-  blocks.join();
+  run<THREADS, BYTES>(grid, body);
 }
 }  // namespace cr::coop
 """
 
 
-def test_the_thread_sanitizer_reports_a_finish_that_does_not_wait_for_the_blocks(tmp_path):
-    """The oracle bites: the finish started beside the blocks reads partial[b] while block b may still write it."""
+def test_a_finish_run_before_the_blocks_it_waits_for_reads_what_is_not_there_yet(tmp_path):
+    """The oracle bites: with the emitted C++ running each finish before its blocks, which the lowering never does, the
+    finish reads partial sums and bins no block has written, and the program's own checks fail. (A finish started
+    beside its blocks is a race the thread sanitizer reports only when both run at once, which a busy machine does
+    not always arrange, so the order is reversed here instead.)"""
     cpp = compile_source(HOST)[0]
     head, _, rest = cpp.partition("\nvoid ")
-    cpp = head + "\n" + BESIDE + "void " + rest.replace("cr::coop::run_then<", "cr::coop::beside<")
-    done = watched(tmp_path, cpp, "clang++", "thread")
-    assert done.returncode != 0 and "ThreadSanitizer: data race" in done.stderr, done.stderr[-3000:]
+    cpp = head + "\n" + BEFORE + "void " + rest.replace("cr::coop::run_then<", "cr::coop::before<")
+    done = contract(tmp_path, cpp, "clang++")
+    assert done.returncode in {1, 2}, (done.returncode, done.stderr[-2000:])
 
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])

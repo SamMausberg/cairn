@@ -1,0 +1,50 @@
+// Runs both sums on host threads and holds them to a plain loop: exactly, on whole numbers whose every partial sum f32
+// holds, and within the bound of an f32 sum in any order on fractions.
+
+fn plain(n:usize, x:ro<f32>[n]) -> f64 {
+  let mut s:f64 = 0.0;
+  for i in 0..n { s += f64(x[i]); }
+  return s;
+}
+
+fn size(n:usize, x:ro<f32>[n]) -> f64 {
+  let mut s:f64 = 0.0;
+  for i in 0..n { s += abs(f64(x[i])); }
+  return s;
+}
+
+fn check(n:usize, g:usize, whole:bool) -> i32 {
+  buffer x:f32[n] = zeroed;
+  for i in 0..n {
+    let k = mul_wrap(u64(i), 2654435761) % 1000;
+    if whole { x[i] = f32(k % 5); } else { x[i] = f32(k) / 64.0 - 7.8125; } // whole sums stay below 2^24
+  }
+  buffer partial:f32[g] = zeroed;
+  buffer out:f32[1] = zeroed;
+  buffer unordered:f32[1] = zeroed;
+  sum(n, x, g, partial, out);
+  sum_unordered(n, x, g, unordered);
+  let want = plain(n, x);
+  let bound = f64(n + g) * size(n, x) / 8388608.0; // (k - 1) * 2^-23 of the magnitudes, k < n + g adds
+  if whole && (f64(out[0]) != want || f64(unordered[0]) != want) { return 1; }
+  if abs(f64(out[0]) - want) > bound || abs(f64(unordered[0]) - want) > bound { return 2; }
+  return 0;
+}
+
+fn main() -> i32 {
+  buffer sizes:usize[4] = zeroed;
+  sizes[0] = 0;
+  sizes[1] = 7;
+  sizes[2] = 1001;
+  sizes[3] = 30000;
+  for a in 0..4 {
+    for g in 1..5 {
+      let exact = check(sizes[a], g, true);
+      if exact != 0 { return exact; }
+      let near = check(sizes[a], g, false);
+      if near != 0 { return near; }
+    }
+  }
+  println("the one-pass and the atomic sums agree with a plain loop on host threads");
+  return 0;
+}

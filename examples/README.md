@@ -23,6 +23,7 @@ The test suite builds and runs each project here where its tools are present. [d
 | [agent](agent) | the fixture behind the edit and repair loop ([more](../docs/examples.md#examplesagent)) |
 | [implementations](implementations) | one prefix sum, three validated implementations, one searched over its parameter, and a scripted agent session ([more](../docs/examples.md#examplesimplementations)) |
 | [cooperative](cooperative) | three cooperative kernels run on host threads and held to plain loops; `gpu.toml` is the device build, `tuned.toml` a row sum whose block shape and pipeline depth `cairn tune` searches, and `refused/` five programs the phase rule refuses ([more](../docs/examples.md#examplescooperative)) |
+| [reduction](reduction) | an f32 sum in one launch, with wide streaming loads, warp and block sums through shared memory nobody zeroes, and a finish; beside it the same sum through an atomic add; `gpu.toml` is the device build ([more](../docs/examples.md#examplesreduction)) |
 | [tensor](tensor) | single files: a transpose through a shared tile laid out three ways, and two tensor-core multiplies written with fragments ([more](../docs/examples.md#examplestensor)) |
 | [foreign/host](foreign/host) | a 256-bin histogram and the vendored C++ implementation `cairn foreign` holds to it ([more](../docs/examples.md#examplesforeign)) |
 | [foreign/device](foreign/device) | a 3-point blend and the vendored CUDA kernel that implements it; the comparison runs only under `make gpu` ([more](../docs/examples.md#examplesforeign)) |

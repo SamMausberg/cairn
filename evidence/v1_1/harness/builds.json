@@ -26,19 +26,19 @@
         "absolute": 0.01,
         "relative": 0.01
       },
-      "harness": "7256ac6af4542226b9ec6b503c85971ab3f56290385f3b2a49c0e1c3deb90c76",
-      "export": "c304260c1c0e06eb074e58c2079978785f6cfb34e46408ad01106f3222fb86ed",
+      "harness": "53c3fa0ad5f61232dd3ecedf7900168ba2c3ade4fbfc52c7392f713717d30b7b",
+      "export": "6fa15d093c047be93fe24bee90380959c39fdd9bb5a1fecc38bb8e191353894f",
       "entry": "cq_rmsnorm",
       "schema": "accepted by sol_execbench.core.Solution and Definition",
       "build": {
         "status": "compiled-and-linked",
-        "seconds": 96.5,
+        "seconds": 27.2,
         "with_cuda": true,
         "objects": [
           "main.o",
           "program.cuda.o"
         ],
-        "library_sha256": "aa39d4e7f9d5aa63cfafa4c9229d8dac529d46b4d98d522e1389763f3d73c879"
+        "library_sha256": "9745f239953f7b861a24f0f5de619af1001d644592445ac346495292afcd7d78"
       }
     },
     {
@@ -50,19 +50,19 @@
         "absolute": 0.01,
         "relative": 0.01
       },
-      "harness": "e4431a8aac67200088cb9c7fcbb3b56cac6f308d3ad45bc07019fb6a16cb0c38",
-      "export": "21bb719155c72a56257c44763b9dd1af89a58ba03aa9ac975c5e2866b9b28989",
+      "harness": "51625d712640b22f466e422ce1d60b44e501073a5e2bbb49bfa4740eb6174feb",
+      "export": "0662a545d560ebb5654b3c62e52613d509f6170f902b79234710e3029256ade5",
       "entry": "cf_reference",
       "schema": "accepted by sol_execbench.core.Solution and Definition",
       "build": {
         "status": "compiled-and-linked",
-        "seconds": 84.1,
+        "seconds": 30.2,
         "with_cuda": false,
         "objects": [
           "main.o",
           "program.o"
         ],
-        "library_sha256": "9504433a6c1aabc94d5ef22949a96332ecca254f188999902598bc0084d327f2"
+        "library_sha256": "8c6c687ca011482ac3f5bd0a7f2b585583134684ae2a92fdd9c94f667babe922"
       }
     },
     {
@@ -74,19 +74,19 @@
         "absolute": 0.01,
         "relative": 0.01
       },
-      "harness": "03150a60a0568682b09bbaea51051fc64320bcf29384a10652d16553c14fd1d4",
-      "export": "8abbc3e80cac13fe9f4c6a3921c7591307bd6f843df7740ec574bf757f9d8a3a",
+      "harness": "f84d91a04b478f8263d62bc3d4f33b11860671af7dfea9fae8557c5fe1b5d290",
+      "export": "218a7742fcb5435b374b590a51d3a7db72da6278e1e5b3cd9c2fef7c00d2f90b",
       "entry": "cf_reference",
       "schema": "accepted by sol_execbench.core.Solution and Definition",
       "build": {
         "status": "compiled-and-linked",
-        "seconds": 83.2,
+        "seconds": 31.8,
         "with_cuda": false,
         "objects": [
           "main.o",
           "program.o"
         ],
-        "library_sha256": "0d8b38178f5f1dbc90ba6bbb48dff5ed9ae9c50f00253b603883faddf370e21f"
+        "library_sha256": "b68406eede76c504ed2b5f264f8fa8bfe911c903b788c21df6f0ad54b6519208"
       }
     },
     {
@@ -98,19 +98,19 @@
         "absolute": 0.01,
         "relative": 0.01
       },
-      "harness": "9514da27bee9e0d3fd615b8e0b127a21673a837b5f55187eb184176883fd3dba",
-      "export": "e156fb910847c3941476da6faf5eec0d430b012cc34ed3f7a6f0bc16f18dc060",
+      "harness": "2d7189c41e6337896af594a36b289d44cf81abfad2c9709de5f8e41b3e3216e6",
+      "export": "b25fe416f4c8150c449c7cbd82aec38b507377e79079c11613c2b10eb1877c2d",
       "entry": "cf_reference",
       "schema": "accepted by sol_execbench.core.Solution and Definition",
       "build": {
         "status": "compiled-and-linked",
-        "seconds": 96.3,
+        "seconds": 31.6,
         "with_cuda": false,
         "objects": [
           "main.o",
           "program.o"
         ],
-        "library_sha256": "58942edd28a511ea61216a0840ee892adea7572de67e2fbdcd9af9f7725a7ac2"
+        "library_sha256": "8629c2ffca62c0ffb226440033e04761d6016957f464efe96e8cb63396444dfb"
       }
     }
   ],
@@ -120,8 +120,8 @@
       "problem": "gpumode/problems/pmpp_v2/vectoradd_py",
       "project": "examples/harness",
       "function": "vectoradd",
-      "harness": "a7db887223aa904ac11e8fea3cb530dee481ae591a9935e2269b6ce0c16324ca",
-      "export": "ce2757a0ce86d4231c4881170a0f57c753f951ed768d1842877329ea2d317d4b",
+      "harness": "55778a8c2e40c35376db413397074bbb2548335855cb4aa2493fa4e5c3226f0c",
+      "export": "a3ea25d2727c973e567beb363ef9197a190704946f48cce13aa6d62dc6aa4c31",
       "entry": "cq_vectoradd",
       "kernelbench_static_check": {
         "valid": true,
@@ -130,13 +130,13 @@
       },
       "build": {
         "status": "compiled-and-linked",
-        "seconds": 199.3,
+        "seconds": 63.1,
         "with_cuda": true,
         "objects": [
           "cuda.cuda.o",
           "main.o"
         ],
-        "library_sha256": "e26c7c1eb8afe0f0562b06654a4192d6300ac935fc5260fad6fa0c58387913f8"
+        "library_sha256": "2774ec3db54b2a85959a5cc26b2bf44ec5a5fe1e5a5b37eff5dc266777b544bc"
       }
     },
     {
@@ -144,8 +144,8 @@
       "problem": "kernelbench/KernelBench/level1/19_ReLU.py",
       "project": "examples/harness",
       "function": "relu",
-      "harness": "399d5169b884c5033739a69430412f0ff0fb9d44406f0df1ce57c016237634fc",
-      "export": "ce2757a0ce86d4231c4881170a0f57c753f951ed768d1842877329ea2d317d4b",
+      "harness": "a0e0ea7c45ab34207d6ef9abfec849e882e2ec44d02ca87c0e49e648b29fe874",
+      "export": "a3ea25d2727c973e567beb363ef9197a190704946f48cce13aa6d62dc6aa4c31",
       "entry": "cq_relu",
       "kernelbench_static_check": {
         "valid": true,
@@ -154,13 +154,13 @@
       },
       "build": {
         "status": "compiled-and-linked",
-        "seconds": 203.7,
+        "seconds": 67.4,
         "with_cuda": true,
         "objects": [
           "cuda.cuda.o",
           "main.o"
         ],
-        "library_sha256": "49f5150c46af64a986dc142719f02e1c63d1715d9e53024805b119c6f2df4ffa"
+        "library_sha256": "e2bf611f7a4ebaee03033a445d43b8ab08ccf94e0d728a1dc42a81200b82c7b9"
       }
     }
   ],

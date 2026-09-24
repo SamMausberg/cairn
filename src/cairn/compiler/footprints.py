@@ -160,7 +160,7 @@ def arguments(e: Expr) -> list[Expr]:
 def lent(e: Expr) -> list[tuple[Expr, str]]:
     """The arguments a call lends, with the mode each is lent in: rw for what it may write."""
     if isinstance(e.ref, tuple) and len(e.ref) == 2 and isinstance(e.ref[1], Wide):  # a wide load or store
-        return [(e.ref[1].part, "rw" if e.val == "store_wide" else "ro")]
+        return [(e.ref[1].part, "store" if e.val == "store_wide" else "ro")]  # a store writes every element
     if isinstance(e.ref, tuple) and len(e.ref) == 2 and isinstance(e.ref[1], Atomic):  # an atomic update
         return [(e.args[0], "atomic")]
     if isinstance(e.ref, Function):
@@ -278,7 +278,7 @@ class Globals:
                 elif a.tag == "slice":
                     for x in a.args[1:]:
                         self.reads(x, env)
-                    self.record(a, env, mode == "rw")
+                    self.record(a, env, mode in {"rw", "store"})
                 elif a.tag == "index":
                     self.reads(a.args[1], env)
                     self.record(a, env, mode in {"rw", "atomic"}, atomic=mode == "atomic")

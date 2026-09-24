@@ -2,6 +2,7 @@
 no caller can change what another reads, and that a copy emits the same C++ and receipt as a compile from scratch."""
 
 import shutil
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,9 @@ S = (
     "fn fill(n:usize, out:rw<u64>[n]) { for i in 0..n { out[i] = step(u64(i)); } }\n"
 )
 BROKEN = S.replace("return step(x);", "return step(true);") + "fn other() -> u64 { return false; }\n"
-EXAMPLES = sorted([*(ROOT / "examples").rglob("*.toml"), *(ROOT / "examples/basics").glob("*.cairn")])
+# Project manifests only: a harness mapping under examples/ is a .toml too.
+MANIFESTS = [p for p in (ROOT / "examples").rglob("*.toml") if "project" in tomllib.loads(p.read_text())]
+EXAMPLES = sorted([*MANIFESTS, *(ROOT / "examples/basics").glob("*.cairn")])
 
 
 @pytest.fixture

@@ -1,0 +1,7 @@
+[project]
+name = "reduction"
+sources = ["src/sum.cairn", "src/main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"
