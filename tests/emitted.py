@@ -21,6 +21,9 @@ from cairn.projects.target import parse
 from cairn.projects.toolchain import command
 from support import device_lock, device_reason
 
+# nvcc's host compiler in a device build a test makes without naming one: g++, or the compiler CAIRN_TEST_NVCC_HOST
+# names. The CI device jobs run every test that compiles device code once under g++ and once under clang++.
+NVCC_HOST = os.environ.get("CAIRN_TEST_NVCC_HOST", "g++")
 SANITIZED = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
 WARNINGS = ["-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-unused-variable"]
 
@@ -124,7 +127,7 @@ def contract(tmp_path: Path, cpp: str, cxx: str, *extra: str, cuda=False, timeou
     return subprocess.run([*under, executable], capture_output=True, text=True, timeout=timeout, env=env)
 
 
-def device_build(tmp_path: Path, cpp: str, entry: str | None = None, ptx=False, timeout=600, cxx="g++") -> Path:
+def device_build(tmp_path: Path, cpp: str, entry: str | None = None, ptx=False, timeout=600, cxx=NVCC_HOST) -> Path:
     """`cpp` compiled by the project's own device command line for sm_120, a named architecture, so nothing asks the
     device and nothing runs, with `cxx` as nvcc's host compiler; the object, or with `ptx` the PTX. Skips the test
     when nvcc or `cxx` is absent."""

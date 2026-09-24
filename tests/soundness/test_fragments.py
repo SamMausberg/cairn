@@ -18,7 +18,7 @@ import pytest
 from cairn.compiler import layout_algebra as A
 from cairn.compiler import layouts as L
 from cairn.compiler.cairnc import compile_program, compile_source
-from emitted import device_build, refused, run, sanitized
+from emitted import NVCC_HOST, device_build, refused, run, sanitized
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / "src/cairn/runtime"
@@ -107,8 +107,8 @@ def test_the_device_operations_compile_for_sm_120_to_tensor_core_instructions(tm
     if not shutil.which("nvcc") or not shutil.which("cuobjdump"):
         pytest.skip("needs nvcc and cuobjdump")
     cubin = tmp_path / "fragment_device.cubin"
-    line = ["nvcc", "-std=c++20", "-arch=sm_120", "-cubin", f"-I{RUNTIME}", str(NATIVE / "fragment_device.cu"),
-            "-o", str(cubin)]  # fmt: skip
+    line = ["nvcc", "-std=c++20", "-arch=sm_120", "-ccbin", NVCC_HOST, "-cubin", f"-I{RUNTIME}",
+            str(NATIVE / "fragment_device.cu"), "-o", str(cubin)]  # fmt: skip
     built = subprocess.run(line, capture_output=True, text=True, timeout=600)
     assert built.returncode == 0, built.stderr[-3000:]
     sass = subprocess.run(["cuobjdump", "-sass", str(cubin)], capture_output=True, text=True, timeout=120).stdout

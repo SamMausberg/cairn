@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 
 from cairn.projects.target import DeviceTarget, parse, resolve
+from emitted import NVCC_HOST
 from support import device_lock, device_reason
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -240,7 +241,8 @@ def device_line(source: str, out: Path, device: DeviceTarget | None = None) -> l
     """nvcc's command for one device test, for `device`, or the target resolved here (the GPU make gpu runs on)."""
     host = ["-Xcompiler", ",".join(f.replace("-fno-exceptions", "-fexceptions") for f in HOST)]
     arch = (device or resolve()).flags()
-    return ["nvcc", *STRICT, *DEVICE, *arch, *host, f"-I{RUNTIME}", str(NATIVE / source), "-o", str(out)]
+    ccbin = ["-ccbin", NVCC_HOST]
+    return ["nvcc", *STRICT, *DEVICE, *arch, *ccbin, *host, f"-I{RUNTIME}", str(NATIVE / source), "-o", str(out)]
 
 
 @pytest.mark.skipif(not shutil.which("nvcc"), reason="nvcc is not installed")

@@ -24,7 +24,7 @@ from cairn.projects.build import build
 from cairn.projects.project import load_project
 from cairn.projects.target import FEATURES, LIMITS, DeviceTarget, parse, resolve
 from cairn.projects.toolchain import command
-from emitted import code_of
+from emitted import NVCC_HOST, code_of
 
 SCALE = "fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i]; } }\n"
 MMA = "fn mm(c:rw<f32>[4]@device, a:ro<T>[4]@device, b:ro<T>[4]@device) { mma_unordered(2, 2, 2, c, a, b); }\n"
@@ -237,13 +237,13 @@ def test_a_bad_flag_is_refused_with_its_code(tmp_path, capsys):
 
 @NVCC
 def test_the_build_receipt_records_the_target_its_command_used(tmp_path):
-    record = build(load_project(project(tmp_path, "sm_120a")), output=tmp_path / "build", cxx="g++", timeout=300)
+    record = build(load_project(project(tmp_path, "sm_120a")), output=tmp_path / "build", cxx=NVCC_HOST, timeout=300)
     assert record["status"] == "native-built", record.get("stderr", "")[-3000:]
     assert "-arch=sm_120a" in record["command"]
     held = record["device_target"]
     assert held["name"] == "sm_120a" and held["origin"] == "manifest" and held["required_features"] == ["device_lanes"]
     assert held["toolkit"]["release"] and "mma_f8f6f4" in held["features"]
-    flagged = build(load_project(tmp_path), output=tmp_path / "b2", cxx="g++", device_target="sm_120", timeout=300)
+    flagged = build(load_project(tmp_path), output=tmp_path / "b2", cxx=NVCC_HOST, device_target="sm_120", timeout=300)
     assert "-arch=sm_120" in flagged["command"] and flagged["device_target"]["origin"] == "flag"
 
 

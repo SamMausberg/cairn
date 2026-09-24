@@ -16,7 +16,7 @@ import pytest
 from cairn.perf import on_device
 from cairn.perf.tune import tune
 from cairn.projects.target import parse, toolkit
-from emitted import emit
+from emitted import NVCC_HOST, emit
 from support import DEVICE_LOCK
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -117,7 +117,7 @@ def test_device_plans_are_priced_but_not_timed_without_the_target(monkeypatch):
 def test_the_timed_program_compiles_for_the_device_without_touching_it(tmp_path, source, symbol, sizes):
     text = on_device.program(source, symbol, sizes)
     unit, _ = emit(tmp_path, text, entry=None)
-    command = ["nvcc", "-std=c++20", "-O3", "--fmad=false", "-arch=sm_120", "--extended-lambda",
+    command = ["nvcc", "-std=c++20", "-O3", "--fmad=false", "-arch=sm_120", "-ccbin", NVCC_HOST, "--extended-lambda",
                "--expt-relaxed-constexpr", "-x", "cu", unit, "-o", str(tmp_path / "timed")]  # fmt: skip
     done = subprocess.run(command, capture_output=True, text=True, timeout=600)
     assert done.returncode == 0, done.stderr[-3000:]  # linked, and never run

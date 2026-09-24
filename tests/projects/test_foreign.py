@@ -21,14 +21,16 @@ from cairn.verify import boundaries
 from cairn.verify.device_validation import cases_as_tests
 from cairn.verify.foreign import passed, report
 from cairn.verify.runner import run_tests
-from emitted import SANITIZED, WARNINGS, code_of, on_device, refused
+from emitted import NVCC_HOST, SANITIZED, WARNINGS, code_of, on_device, refused
 
 ROOT = Path(__file__).resolve().parents[2]
 HOST = ROOT / "examples/foreign/host"
 DEVICE = ROOT / "examples/foreign/device"
 KERNEL = 'extern "k" fn k(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) launch(n, 256) effects();\n'
 READS = 'extern "r" fn r(n:usize, x:ro<f32>[n]@device) launch(n, 256) effects();\n'  # lends nothing lanes write
-needs_nvcc = pytest.mark.skipif(not shutil.which("nvcc") or not shutil.which("g++"), reason="needs nvcc and g++")
+needs_nvcc = pytest.mark.skipif(
+    not shutil.which("nvcc") or not shutil.which(NVCC_HOST), reason=f"needs nvcc and {NVCC_HOST}"
+)
 
 REJECTIONS = {
     "a launched kernel returns nothing": (
@@ -188,7 +190,7 @@ def test_the_vendored_benchmark_is_the_repository_s_own_byte_for_byte():
 
 @needs_nvcc
 def test_the_cuda_sources_build_for_sm_120_and_ptxas_reports_their_kernels():
-    record = report(load_project(DEVICE), "stencil_tiled", compilers=("g++",))
+    record = report(load_project(DEVICE), "stencil_tiled", compilers=(NVCC_HOST,))
     assert record["native_built"]["status"] == "native-built"
     kernels = record["device_inspected"]["sources"]["vendor/stencil.cu"]["kernels"]
     tiled = next(v for k, v in kernels.items() if k.startswith("stencil_1d_tiled"))
@@ -202,7 +204,7 @@ def test_the_cuda_sources_build_for_sm_120_and_ptxas_reports_their_kernels():
 
 @needs_nvcc
 def test_an_unlinked_cuda_source_is_built_with_the_program_s_flags_and_inspected(tmp_path):
-    record = build(load_project(DEVICE), cxx="g++", output=tmp_path, timeout=300)
+    record = build(load_project(DEVICE), cxx=NVCC_HOST, output=tmp_path, timeout=300)
     assert record["status"] == "native-built", record.get("stderr", "")[-3000:]
     by_path = {f["path"]: f for f in record["foreign"]}
     benchmark, tiled = by_path["vendor/parallel_gpu.cu"], by_path["vendor/stencil.cu"]
@@ -222,7 +224,7 @@ def test_the_device_implementation_runs_against_its_reference_on_the_gpu(tmp_pat
         reference = next(f for f in compile_program(project.source)[0].functions if f.name == "stencil_1d")
         cases = boundaries.generate(reference, {}, {"largest_extent": 256}, budget=12, device=True)
         tests, names, _ = cases_as_tests(project.source, "stencil_1d", "stencil_tiled", cases)
-        done = run_tests(replace(project, source=project.source + "\n" + tests), cxx="g++", chosen="device_",
+        done = run_tests(replace(project, source=project.source + "\n" + tests), cxx=NVCC_HOST, chosen="device_",
                          output=tmp_path)  # fmt: skip
         assert done["status"] == "passed-test-blocks" and done["passed"] == len(names), json.dumps(done)[-3000:]
 

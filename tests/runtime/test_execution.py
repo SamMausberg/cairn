@@ -20,7 +20,7 @@ from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
 from cairn.compiler.header import header
 from cairn.projects.build import build
 from cairn.projects.project import load_project
-from emitted import contract, device_build, on_device, sanitized
+from emitted import NVCC_HOST, contract, device_build, on_device, sanitized
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME, HOST = ROOT / "src/cairn/runtime", ROOT / "tests/runtime"
@@ -359,11 +359,11 @@ def test_a_c_host_hands_over_its_own_stream(tmp_path):
     assert built.returncode == 0, built.stderr[-4000:]
     done = subprocess.run([str(exe)], capture_output=True, text=True, timeout=120)
     assert done.returncode == 0 and done.stdout == "wrong 0\n", done.stdout + done.stderr[-3000:]
-    if shutil.which("nvcc") and shutil.which("g++"):
+    if shutil.which("nvcc") and shutil.which(NVCC_HOST):
         (tmp_path / "project/src").mkdir(parents=True)
         (tmp_path / "project/src/lib.cairn").write_text(LIBRARY)
         (tmp_path / "project/cairn.toml").write_text('[project]\nname = "devlib"\nsources = ["src/lib.cairn"]\n')
-        record = build(load_project(tmp_path / "project"), output=tmp_path / "build", cxx="g++", header=True,
+        record = build(load_project(tmp_path / "project"), output=tmp_path / "build", cxx=NVCC_HOST, header=True,
                        device_target="sm_120", timeout=300)  # fmt: skip
         assert record["status"] == "native-built", record.get("stderr", "")[-3000:]
         assert "cairn_devlib_device_stream" in Path(record["header"]).read_text()

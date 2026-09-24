@@ -17,7 +17,7 @@ from cairn.cli import main
 from cairn.compiler.cairnc import RUNTIME_FILES
 from cairn.projects import export as exported
 from cairn.projects.project import digest, load_project
-from emitted import code_of
+from emitted import NVCC_HOST, code_of
 
 NVCC = pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")
 
@@ -185,7 +185,7 @@ def test_the_command_line_exports_checks_builds_and_refuses(tmp_path, capsys):
 @NVCC
 def test_a_device_export_separates_the_kernels_from_the_launch_wrappers_and_never_runs(tmp_path):
     root = project(tmp_path, DEVICE, "scaled")
-    exported.export(load_project(root), tmp_path / "dev", cxx="g++", device_target="sm_120")
+    exported.export(load_project(root), tmp_path / "dev", cxx=NVCC_HOST, device_target="sm_120")
     record = json.loads((tmp_path / "dev" / exported.RECORD).read_text())
     assert (
         "program.cu" in record["files"] and record["device_target"] == "sm_120" and "-arch=sm_120" in record["command"]
