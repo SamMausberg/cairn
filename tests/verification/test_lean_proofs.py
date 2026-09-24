@@ -10,14 +10,14 @@ Two levels of evidence:
 """
 
 import json
-import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+from support import find_lake, lean_environment
 
 ROOT = Path(__file__).resolve().parents[2]
 PROOFS = ROOT / "proofs"
@@ -27,8 +27,6 @@ GENERATED = PROOFS / "Cairn" / "CollectorCertificates.lean"
 FORBIDDEN_AXIOMS = ("sorryAx", "Lean.ofReduceBool", "Lean.trustCompiler")
 EXPECTED_AXIOMS = ("propext", "Quot.sound", "Classical.choice")
 BANNED_SOURCE_TOKENS = ("sorry", "native_decide", "axiom ", "unsafe ", "implemented_by")
-
-ELAN_BIN = Path.home() / ".elan" / "bin"
 
 # The ownership and lease calculus: these must exist, be audited and stay free of excluded middle.
 OWNERSHIP_THEOREMS = (
@@ -117,22 +115,6 @@ OWNERSHIP_THEOREMS = (
 AXIOM_LINE = re.compile(r"^'(?P<name>.+)' (?:depends on axioms: \[(?P<axioms>.*)\]|does not depend on any axioms)$")
 
 
-def find_lake() -> str | None:
-    """`lake` on PATH, or the elan shim in the user's home directory."""
-    found = shutil.which("lake")
-    if found:
-        return found
-    candidate = ELAN_BIN / "lake"
-    return str(candidate) if candidate.is_file() and os.access(candidate, os.X_OK) else None
-
-
-def lake_environment() -> dict[str, str]:
-    environment = dict(os.environ)
-    if ELAN_BIN.is_dir():
-        environment["PATH"] = str(ELAN_BIN) + os.pathsep + environment.get("PATH", "")
-    return environment
-
-
 def strip_lean_comments(text: str) -> str:
     """Drop `/- ... -/` blocks (including `/--` and `/-!`) and `--` line comments."""
     text = re.sub(r"/-.*?-/", " ", text, flags=re.DOTALL)
@@ -193,7 +175,7 @@ def test_lake_build_succeeds_and_axioms_are_clean():
             "Install with: curl https://elan.lean-lang.org/elan-init.sh -sSf | sh -s -- -y "
             "--default-toolchain none"
         )
-    environment = lake_environment()
+    environment = lean_environment()
     build = subprocess.run([lake, "build"], cwd=PROOFS, capture_output=True, text=True, env=environment, timeout=3600)
     output = build.stdout + build.stderr
     assert build.returncode == 0, output

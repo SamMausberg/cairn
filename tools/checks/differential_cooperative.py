@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.compiler.cairnc import Diagnostic, compile_source
-from checks.differential_ownership import find_lake, run_lean
+from support import find_lake, run_lean
 
 REFUSED = {"E-COOP-CONFLICT", "E-COOP-UNORDERED", "E-COOP-REUSE", "E-COOP-BARRIER"}
 OPS = {"add": "+", "sub": "-", "mul": "*", "div": "/", "mod": "%", "xor": "^"}

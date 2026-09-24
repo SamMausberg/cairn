@@ -27,19 +27,15 @@ import itertools
 import json
 import os
 import random
-import shutil
-import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "src"))
+sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.compiler.cairnc import Diagnostic, compile_program
-
-PROOFS = ROOT / "proofs"
-ELAN_BIN = Path.home() / ".elan" / "bin"
+from support import find_lake, run_lean
 
 # One row per shape the generator may emit.  The CAIRN column is what `render_cairn` writes and
 # the Lean column is what `render_lean` writes, from the same intermediate statement.
@@ -598,21 +594,6 @@ def python_verdict(source: str) -> tuple[bool, str]:
     return True, ""
 
 
-def find_lake() -> str | None:
-    found = shutil.which("lake")
-    if found:
-        return found
-    candidate = ELAN_BIN / "lake"
-    return str(candidate) if candidate.is_file() and os.access(candidate, os.X_OK) else None
-
-
-def lean_environment() -> dict[str, str]:
-    environment = dict(os.environ)
-    if ELAN_BIN.is_dir():
-        environment["PATH"] = str(ELAN_BIN) + os.pathsep + environment.get("PATH", "")
-    return environment
-
-
 def lean_source(rendered: list[str], names: list[str], chunk: int = 100) -> str:
     """One file: a `Program` literal per generated program, and one `#eval` per chunk of them.
 
@@ -633,28 +614,6 @@ def lean_source(rendered: list[str], names: list[str], chunk: int = 100) -> str:
     lines.append("")
     lines.append("end CairnDifferential")
     return "\n".join(lines) + "\n"
-
-
-def run_lean(text: str, lake: str, target: Path, timeout: int) -> str:
-    """Write `text` to `target`, run it once with `lake env lean`, and return what it printed.
-
-    `lake env lean` needs the modules it imports already compiled, so a first failure is answered by
-    building `proofs/` once and trying again: that covers a checkout whose `.lake` is cold, and
-    a build another process was part way through.  A second failure is reported, never ignored.
-    """
-    target.write_text(text, encoding="utf-8")
-    command = [lake, "env", "lean", str(target)]
-    done = subprocess.run(command, cwd=PROOFS, capture_output=True, text=True, env=lean_environment(), timeout=timeout)
-    if done.returncode != 0:
-        subprocess.run(
-            [lake, "build"], cwd=PROOFS, capture_output=True, text=True, env=lean_environment(), timeout=timeout
-        )
-        done = subprocess.run(
-            command, cwd=PROOFS, capture_output=True, text=True, env=lean_environment(), timeout=timeout
-        )
-    if done.returncode != 0:
-        raise RuntimeError("lake env lean failed:\n" + done.stdout[-4000:] + done.stderr[-4000:])
-    return done.stdout
 
 
 def lean_verdicts(text: str, lake: str, target: Path, timeout: int) -> dict[str, bool]:

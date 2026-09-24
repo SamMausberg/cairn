@@ -25,7 +25,7 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.compiler import facts as F
 from cairn.compiler.scope import Binding
 from cairn.compiler.tree import USIZE, Expr, Type
-from checks.differential_ownership import find_lake, run_lean
+from support import find_lake, run_lean
 
 ATOMS = 4  # x0..x3 are immutable usize values; m0 is one that can change.
 STRIDES = (2, 4, 8, 256)

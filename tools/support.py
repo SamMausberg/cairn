@@ -260,3 +260,47 @@ def check_generated(generate, committed: Path, command: str, **compare) -> int:
     status = {"committed": str(committed.relative_to(ROOT)), "in_sync": not differ, "differ": differ}
     print(json.dumps({**(summary or {}), **status, **({"regenerate": command} if differ else {})}, indent=2))
     return 1 if differ else 0
+
+
+# Lean: the differential harnesses and the proof tests run generated files against proofs/ with these.
+
+PROOFS = ROOT / "proofs"
+ELAN_BIN = Path.home() / ".elan" / "bin"
+
+
+def find_lake() -> str | None:
+    """`lake` on PATH, or the elan shim in the user's home directory."""
+    found = shutil.which("lake")
+    if found:
+        return found
+    candidate = ELAN_BIN / "lake"
+    return str(candidate) if candidate.is_file() and os.access(candidate, os.X_OK) else None
+
+
+def lean_environment() -> dict[str, str]:
+    environment = dict(os.environ)
+    if ELAN_BIN.is_dir():
+        environment["PATH"] = str(ELAN_BIN) + os.pathsep + environment.get("PATH", "")
+    return environment
+
+
+def run_lean(text: str, lake: str, target: Path, timeout: int) -> str:
+    """Write `text` to `target`, run it once with `lake env lean`, and return what it printed.
+
+    `lake env lean` needs the modules it imports already compiled, so a first failure is answered by
+    building `proofs/` once and trying again: that covers a checkout whose `.lake` is cold, and
+    a build another process was part way through.  A second failure is reported, never ignored.
+    """
+    target.write_text(text, encoding="utf-8")
+    command = [lake, "env", "lean", str(target)]
+    done = subprocess.run(command, cwd=PROOFS, capture_output=True, text=True, env=lean_environment(), timeout=timeout)
+    if done.returncode != 0:
+        subprocess.run(
+            [lake, "build"], cwd=PROOFS, capture_output=True, text=True, env=lean_environment(), timeout=timeout
+        )
+        done = subprocess.run(
+            command, cwd=PROOFS, capture_output=True, text=True, env=lean_environment(), timeout=timeout
+        )
+    if done.returncode != 0:
+        raise RuntimeError("lake env lean failed:\n" + done.stdout[-4000:] + done.stderr[-4000:])
+    return done.stdout

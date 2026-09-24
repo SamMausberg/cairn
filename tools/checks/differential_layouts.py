@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.compiler import layout_algebra as L
 from cairn.compiler.tree import Diagnostic
-from checks.differential_ownership import find_lake, run_lean
+from support import find_lake, run_lean
 
 
 def storage(rng: random.Random, rank: int) -> L.Layout:
