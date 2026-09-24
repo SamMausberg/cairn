@@ -141,6 +141,45 @@ def schema(out: Path, definition: Path) -> str:
     return "accepted by sol_execbench.core.Solution and Definition"
 
 
+def emulated(project: Path, problem: Path, largest: int = 256) -> dict:
+    """The RMSNorm kernel built with --emulate, its device work on host threads and its device memory host memory,
+    called through its ctypes binding on CPU tensors, and compared under SOL-ExecBench's own formula and tolerance
+    with the definition's PyTorch reference, for each workload of at most `largest` rows: an emulated cooperative
+    region runs a block's 256 threads as host threads, too slowly for the rest."""
+    import ctypes
+
+    from cairn.compiler.header import binding
+    from cairn.projects.build import build
+
+    loaded = load_project(project)
+    built = build(loaded, output=project / "build", cxx="g++", kind="library", header=True, emulate=True, timeout=300)
+    namespace: dict = {}
+    exec(binding(loaded.source, loaded.name, lambda f: loaded.wrote(f.line), True), namespace)
+    lib = namespace["load"](built["artifact"])
+    definition = json.loads((problem / "definition.json").read_text())
+    reference: dict = {}
+    exec(definition["reference"], reference)
+    torch.manual_seed(200)  # SOL-ExecBench's BenchmarkConfig seed
+    rows = []
+    for line in (problem / "workload.jsonl").read_text().splitlines():
+        workload = json.loads(line)
+        batch = workload["axes"]["batch_size"]
+        if batch > largest:
+            continue
+        x, w = torch.randn(batch, 4096, dtype=torch.bfloat16), torch.randn(4096, dtype=torch.bfloat16)
+        out = torch.empty_like(x)
+        pointer = ctypes.POINTER(namespace["cairn_bf16"])
+        lib.cf_rmsnorm(batch, x.numel(), *(ctypes.cast(t.data_ptr(), pointer) for t in (x, w, out)))
+        tolerance = {"max_atol": 1e-2, "max_rtol": 1e-2, **(workload.get("tolerance") or {})}
+        got, want = out.float(), reference["run"](x, w).float()
+        within = (got - want).abs() <= tolerance["max_atol"] + tolerance["max_rtol"] * want.abs()
+        rows.append({"batch_size": batch, "matched_ratio": within.float().mean().item(),
+                     "max_abs_error": (got - want).abs().max().item(),
+                     "bit_equal_ratio": (got == want).float().mean().item()})  # fmt: skip
+    return {"built": built["status"], "emulation": built.get("emulation"), "workloads": rows,
+            "skipped": f"workloads of more than {largest} rows"}  # fmt: skip
+
+
 def static_check(path: Path, upstream: Path) -> dict:
     """KernelBench's static checker, from the pinned clone, over a generated file."""
     spec = importlib.util.spec_from_file_location("checker", upstream / "src/kernelbench/kernel_static_checker.py")
@@ -196,6 +235,8 @@ def main() -> int:
                 source.write_text(text[: text.rindex("{\n}")] + RMSNORM)
             out = work / f"{name}-sol"
             written = harness.write(load_project(work / name), "sol-execbench", function, out, cxx="g++")
+            if name == "rmsnorm":
+                record["rmsnorm_emulated"] = emulated(work / name, work / name / "problem")
             record["solutions"].append({
                 "problem": f"sol/{folder}", "definition": made["definition"], "function": function,
                 "kernel": "RMSNorm in a cooperative region" if name == "rmsnorm" else "none: the body is empty",
