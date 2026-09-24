@@ -124,6 +124,17 @@ def test_every_example_project_is_indexed_and_every_bench_folder_has_a_readme():
     assert not bare, f"give these bench folders a README.md: {bare}"
 
 
+def test_every_module_of_the_package_has_an_owner_line():
+    """AGENTS.md's ownership table, or a table of docs/internals.md, names every module and runtime header."""
+    rows = [line for doc in ("AGENTS.md", "docs/internals.md") for line in (ROOT / doc).read_text().splitlines()
+            if line.startswith("|")]  # fmt: skip
+    cells = {piece for row in rows for cell in re.findall(r"`([^`]+)`", row) for piece in re.split(r"[\s,]+", cell)}
+    package = [n.removeprefix("src/cairn/") for n in tracked() if re.match(r"src/cairn/.+\.(py|hpp)$", n)]
+    unnamed = [n for n in package if Path(n).name not in {"__init__.py", "__main__.py"} and n not in cells
+               and f"src/cairn/{n}" not in cells and Path(n).name not in cells]  # fmt: skip
+    assert not unnamed, f"say what these own in AGENTS.md's table: {unnamed}"
+
+
 def test_make_help_names_every_target():
     """`make help` is how a newcomer finds the gates, so every target the Makefile declares is in it."""
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")

@@ -6,6 +6,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 
 | File | Owns |
 |---|---|
+| `compiler/cairnc.py` | the facade: parse through judge (`compile_program`), then the certificates and the emitter (`generate`) |
 | `compiler/lexing.py` | tokens and reserved words |
 | `compiler/tree.py` | the syntax tree, the scalar vocabulary, `Diagnostic` |
 | `compiler/syntax.py` | the parser's declarations and entry point, and source ranges |
@@ -54,7 +55,9 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `projects/foreign.py` | vendored C++ and CUDA a manifest's `[foreign]` names: built by the project's command line, held to each extern's types, inspected |
 | `projects/revision.py` | a program as a path or a git revision holds it |
 | `projects/new.py` | what `cairn new` writes: the default project or a packaged template, and the AGENTS.md each gets |
+| `projects/graph.py` | `cairn graph`: which file declares into which module, imports, exports, and hashes of text and interface |
 | `cli.py`, `commands.py` | the command line: `main` runs each command; `commands.py` declares every command and option it parses |
+| `version.py` | the version, one of the places `tests/tooling/test_release.py` holds together |
 | `agent/agent_tools.py` | edit sessions, packets and the host that names them by handle |
 | `agent/evidence.py` | what a packet may say is established about a function |
 | `agent/history.py` | what was tried, failed, measured or hypothesized for each candidate, under its identity, and analyses kept by key |
@@ -65,13 +68,22 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `agent/skill.py` | the agent skill under `skills/cairn/`, written from the cards, the fixes and the command line |
 | `agent/mcp.py`, `agent/mcp_tools.py` | `cairn mcp`: the Model Context Protocol over stdio, and the tools it serves from the hosts |
 | `agent/write_back.py` | a change a host admitted written back to the files a session read, only while they hold what it was judged against |
+| `agent/projection.py` | the canonical projection: source printed back from the tree, which reparses to itself and compiles to the same C++ |
+| `agent/state.py`, `agent/explain.py`, `agent/shot.py` | `cairn state`, `cairn explain` and `cairn shot`: a program's state for an agent, where it pays at run time, what it drew |
+| `agent/diagnostics.py`, `agent/sketches.py` | what a model reads back when a reply is refused, with the smallest fix; named expression sketches and their bounded search |
 | `editor/grammar.py` | the editor grammars, generated from the compiler's vocabulary |
 | `editor/terminal.py` | what a person at a terminal reads, beside the JSON record |
+| `editor/formatting.py`, `editor/docs.py`, `editor/shells.py`, `editor/changes.py` | `cairn fmt`, `cairn doc`, `cairn completions`, and how `cairn diff` reads at a terminal and in a pull request |
+| `editor/lsp.py`, `editor/document.py`, `editor/workspace.py` | `cairn lsp`: the server, one open buffer, and references and rename across a project |
+| `editor/completion.py`, `editor/navigation.py`, `editor/names.py`, `editor/members.py`, `editor/highlighting.py`, `editor/hints.py`, `editor/lenses.py`, `editor/fixes.py`, `editor/edits.py` | one language-server feature each: completion, hover and definition, names in scope, fields and variants, semantic tokens, inlay hints, code lenses, quick fixes, references and formatting edits |
 | `perf/work.py` | what a function does each time it runs, counted from the typed tree, which a prediction prices |
 | `perf/counts.py` | what a count is: polynomials in a function's extents, and the work, region and cost records the counting fills |
 | `perf/cooperative_work.py`, `perf/cooperative_model.py` | what a cooperative region's threads do, counted as their warps run it from the phase rule's run of one block; and its price: the blocks an SM holds, a pipeline's copies in flight, a launch and four rates |
 | `perf/model.py`, `perf/profile.py` | a predicted time, and what one machine can do |
+| `perf/report.py` | what `cairn predict` answers: each function's work, its cost as a formula, a time at each size, and a change's difference |
+| `perf/calibrate.py`, `perf/native.py`, `perf/device.py` | a host measured into a profile; a loop's cycles from llvm-mca; a kernel's resources from ptxas and cuobjdump, nothing launched |
 | `perf/on_device.py` | the only device timing, under the owner's make targets |
+| `perf/measure.py` | the only host timing: a function built with the build's flags beside a driver, its median block timed; never device code |
 | `perf/plan_source.py` | a function's plan as source text: the plans the checker resolves to it, and where a new one is written |
 | `perf/regions.py` | names for a function's parallel regions that survive edits which do not touch them |
 | `perf/search.py`, `perf/tune.py` | the bounded search over a function's plans: the space, what the checker accepts, the budgets, measurement |
@@ -87,6 +99,8 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `verify/scalar_symbolic.py` | the SMT translator |
 | `verify/scalar_concrete.py` | the concrete replay |
 | `verify/scalar_semantics.py` | the query, the counterexample check and the receipt |
+| `verify/smt_bridge.py`, `verify/verification.py` | the optional Z3 C-API bridge; whole-module equivalence, which fails closed on any entry it cannot cover |
+| `verify/linear_certificates.py`, `verify/testing.py` | the checker of the collector's linear certificates; finite task contracts run in a child process |
 
 Project manifests are data, never build scripts. The formatter owns layout: `ruff format` at 120 columns, `cairn fmt` for `.cairn`. The smallest clear program wins, never by hiding a cost or deleting a check. No source file is longer than 800 lines; split by responsibility, under a name that says what the piece owns.
 
