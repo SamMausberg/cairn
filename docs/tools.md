@@ -500,7 +500,7 @@ A score keeps its benchmark's meaning, and the record states it. SOL-ExecBench's
 
 `cairn new DIR --from-sol-execbench definition.json` starts a project from a problem. It writes the reference's signature, with a `usize` per variable axis, a `const` per fixed one and an `@device` view per tensor, above an empty body and the PyTorch reference as a comment; `harness.toml`; the problem's files; and `policy.json`, with the tightest `max_atol` and `max_rtol` any workload states, for `cairn validate --policy`. The benchmark also requires a matched ratio where CAIRN requires every element, fails any NaN or infinity where CAIRN agrees a NaN with a NaN, compares in f32 where CAIRN compares in f64, and may cap the largest error; the answer and `harness.toml` say which of these apply. The device target defaults to `sm_100a`, the B200 the benchmark runs on.
 
-`tests/projects/test_harness_torch.py` builds each format with CPU torch and runs a host-view kernel on CPU tensors against the benchmark's reference. It skips where torch is absent.
+`tests/projects/test_harness_torch.py` builds each format with CPU torch and runs a host-view kernel on CPU tensors against the benchmark's reference; it skips where torch is absent. [The evidence](../evidence/v1_1/harness/README.md) says where it ran, and records device builds compiled and linked for sm_100a against a CUDA torch and never run.
 
 ## cairn build --incremental
 
