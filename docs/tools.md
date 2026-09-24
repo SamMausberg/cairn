@@ -533,7 +533,7 @@ cairn_binary(name = "shop", srcs = ["shop.cairn"], deps = [":pricing"])
 cairn_test(name = "pricing_test", size = "small", srcs = ["pricing/pricing_test.cairn"], deps = [":pricing"])
 ```
 
-`examples/bazel` is that workspace, where `bazel build //...`, `bazel run //:shop` and `bazel test //...` work with nothing fetched. Its `MODULE.bazel` names this checkout with `cairn.local(path = "../..")`; without it the rules run the `cairn` on `PATH`. The rules use the host's Python and C++ compiler, not a hermetic toolchain. Each action copies its sources into a fresh directory with a manifest, because a project refuses a source that is a symbolic link, which is how Bazel lays out inputs.
+`examples/bazel` is that workspace, where `bazel build //...`, `bazel run //:shop` and `bazel test //...` work with nothing fetched. Its `MODULE.bazel` names this checkout with `cairn.local(path = "../..")`; without it the rules run the `cairn` on `PATH`. The rules use the host's Python and C++ compiler, not a hermetic toolchain. A checkout's `bin/cairn` runs under the `python3` on the `PATH` Bazel was started with, which must be 3.11 or later, because the `PATH` Bazel gives each action may name an older one, as Ubuntu 22.04's does. Each action copies its sources into a fresh directory with a manifest, because a project refuses a source that is a symbolic link, which is how Bazel lays out inputs.
 
 ## cairn lsp
 

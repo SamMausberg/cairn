@@ -174,8 +174,9 @@ def test_the_bazel_example_builds_runs_and_tests_its_cairn_targets(tmp_path):
     root = ["--output_user_root", str(tmp_path / "root")]
     env = {**os.environ, "HOME": os.environ.get("HOME", str(tmp_path))}
 
-    def bazel_do(*args: str) -> subprocess.CompletedProcess:
-        return subprocess.run([bazel, *root, *args], cwd=workspace, capture_output=True, text=True, env=env,
+    def bazel_do(*args: str, path: str | None = None) -> subprocess.CompletedProcess:
+        where = {**env, "PATH": path} if path else env
+        return subprocess.run([bazel, *root, *args], cwd=workspace, capture_output=True, text=True, env=where,
                               timeout=900)  # fmt: skip
 
     try:
@@ -196,5 +197,11 @@ def test_the_bazel_example_builds_runs_and_tests_its_cairn_targets(tmp_path):
         )
         refused_build = bazel_do("build", "//:geometry")  # the validation action runs cairn check
         assert refused_build.returncode != 0 and "E-" in refused_build.stderr, refused_build.stderr[-4000:]
+        older = tmp_path / "older"  # a python3 first on PATH that is not 3.11 or later
+        older.mkdir()
+        (older / "python3").write_text("#!/bin/sh\nexit 1\n")
+        (older / "python3").chmod(0o755)
+        stale = bazel_do("build", "//:shop", path=f"{older}:{os.environ['PATH']}")
+        assert stale.returncode != 0 and "CAIRN needs Python 3.11 or later" in stale.stderr, stale.stderr[-4000:]
     finally:
         bazel_do("shutdown")
