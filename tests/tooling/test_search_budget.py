@@ -181,11 +181,13 @@ def test_a_compile_that_would_outlast_the_budget_is_stopped_there(tmp_path, monk
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     for item in ("block", "per_lane", "vector"):
         monkeypatch.setitem(search.SPACE, item, (0,))
+    spare = after(BLUR, "blur")  # ten checks' time on this machine, loaded or not, and at least two seconds
+    seconds = 2 * spare  # the four candidates' checks fit in the half kept for them, so one compile starts
     began = time.monotonic()
-    result = tune(BLUR, "blur", [{"n": 1e7}], MACHINE, budget=Budget(compiles=8, seconds=4),
+    result = tune(BLUR, "blur", [{"n": 1e7}], MACHINE, budget=Budget(compiles=8, seconds=seconds),
                   device_target=parse("sm_120"))  # fmt: skip
     took = time.monotonic() - began
-    assert took < 4 + after(BLUR, "blur"), took  # the stub would have slept a minute
+    assert took < seconds + spare, took  # the stub would have slept a minute
     undone = result["budget"]["undone"]
     assert undone["not inspected: stopped at the time budget"] == 1 and result["budget"]["compiles"]["started"] == 1
     assert "not inspected: out of time" in undone
