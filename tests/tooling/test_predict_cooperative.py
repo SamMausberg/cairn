@@ -14,7 +14,7 @@ from cairn.agent.explain import explain
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_program, compile_source
 from cairn.perf import report
-from cairn.perf.device import kernels
+from cairn.perf.device import available, kernels
 from cairn.perf.feedback import compare, parse_candidate
 from cairn.perf.profile import packaged
 from cairn.perf.search import Budget
@@ -224,7 +224,8 @@ def test_tune_searches_block_shape_and_depth_as_an_implementation_s_parameters()
     assert set(priced) == {(128, 2), (128, 3), (256, 2), (256, 3)} and answer["space"]["configurations"] == 5
     assert priced[(128, 3)] < priced[(128, 2)] and priced[(256, 3)] < priced[(256, 2)]  # 64 rows: latency bound
     assert answer["chosen"]["plan"] == "(no plan for row_totals)"  # none validated: none chosen
-    assert answer["budget"]["undone"] == {"not inspected: compile budget spent": 5}
+    why = "compile budget spent" if available() else "nvcc and cuobjdump are needed"  # CI has no nvcc
+    assert answer["budget"]["undone"] == {f"not inspected: {why}": 5}
 
 
 def test_compare_reports_what_the_checker_laid_out_for_two_instances():
