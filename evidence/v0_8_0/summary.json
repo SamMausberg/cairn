@@ -3,7 +3,7 @@
   "commit": "855bea585b56efcf1c3d7c68bb277d9bc3aa6e79",
   "worktree_dirty": false,
   "host": {
-    "version": "1.0.0",
+    "version": "0.8.0",
     "python": "3.13.15",
     "platform": "Linux-6.8.0-1062-nvidia-64k-aarch64-with-glibc2.35",
     "clang++": "/usr/bin/clang++",

@@ -1,7 +1,7 @@
 {
   "runs": {
     "per_statement_threads": {
-      "note": "CAIRN 1.1: every parallel statement creates and joins its own threads (runtime headers taken from commit 4ff485a).",
+      "note": "CAIRN 0.8.1: every parallel statement creates and joins its own threads (runtime headers taken from commit 4ff485a).",
       "runtime_headers": "/tmp/claude-1000/-home-ubuntu/78055d39-ea6a-4ecb-85cc-07920485a9c1/scratchpad/pool/v11",
       "runtime_header_sha256": "07ddc90cb621f331ee5e64270e5cbf328ae18a236e1dbac6e7ac7b5600fdeccf",
       "by_compiler": {

@@ -3,7 +3,7 @@
   "commit": "ca709c8b22d944ee9614a71c31d52756f14a2a47",
   "worktree_dirty": false,
   "host": {
-    "version": "1.4.0",
+    "version": "1.0.0-candidate",
     "python": "3.12.3",
     "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
     "clang++": "/opt/llvm-21.1.8/bin/clang++",

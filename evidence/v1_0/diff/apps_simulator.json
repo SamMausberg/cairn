@@ -1,6 +1,6 @@
 {
   "schema": "cairn.diff/1",
-  "compiler": "cairn-native/1.3.0",
+  "compiler": "cairn-native/0.8.3",
   "compared": "two sources, each checked and lowered by this compiler; not two compilers",
   "summary": {
     "identical-code": 6,
@@ -109,7 +109,7 @@
     }
   },
   "old": {
-    "named": "v1.3.0",
+    "named": "v0.8.3",
     "kind": "revision",
     "commit": "1daf0875fae976bf914984ce0fd66c8304bcaf67"
   },

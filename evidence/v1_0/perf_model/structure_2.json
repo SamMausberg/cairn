@@ -9,7 +9,7 @@
  "refit": "Nothing was fitted to these records. The profile gained two facts calibration had computed but not written: eight physical cores, and the working set each level's bandwidth was timed at.",
  "machine": "AMD Ryzen 7 7800X3D, 8 cores, 16 lanes, 96 MiB L3, WSL2, clang++ 21.1.8; shared with five other agents, load average 11 to 13 on 16 threads during every measurement taken in this pass.",
  "validation": {
-  "v1_3_record_against_its_medians": {
+  "v0_8_3_record_against_its_medians": {
    "before": {
     "clang++": {
      "points": 60,

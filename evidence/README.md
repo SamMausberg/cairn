@@ -12,7 +12,7 @@ What ran, on which machine, and what it found, one directory per release. A reco
 
 The 0.5 and 0.6 checkpoints (unit, native and sanitizer runs, codegen comparisons, wheel builds) are the earliest records; they stay in `evidence/v0_5/` and `evidence/v0_6/` of the `v0.8.3` tag.
 
-A record names the tree it ran in, and some paths have moved since:
+Records written before the release numbering had their version names and fields renamed to it in one commit, and git history holds them as written. A record names the tree it ran in, and some paths have moved since:
 
 | Path in a record | Path now |
 |---|---|
