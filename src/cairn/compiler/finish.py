@@ -75,4 +75,5 @@ def lower(g: Emitter, s: Stmt, entry: str, head: str, body: str):
 
     last = g.inner(lambda: lambda_head(done), inside)
     shared = max(block.bytes, done.bytes)  # the finish reuses the last block's shared memory
-    g.put(f"cr::coop::{entry}<{block.count}, {shared}>({head}, {body}, {last});")
+    zeroed = f", {block.zeroed}, {done.zeroed}" if (block.zeroed, done.zeroed) != (shared, shared) else ""
+    g.put(f"cr::coop::{entry}<{block.count}, {shared}{zeroed}>({head}, {body}, {last});")

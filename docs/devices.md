@@ -160,6 +160,44 @@ fn shift(g:usize, out:rw<u64>[g]) {
 }
 ```
 
+A shared array declared with no initializer, `shared warps:u32[8];`, is not zeroed where each block starts. The checker accepts it when every element a thread reads was written first, by that thread earlier or by any thread before a barrier between them, whichever way the body runs. The same run of one block that checks the phases shows it: a write under a condition the block may not take, in a loop that may not run or by a callee counts for nothing, and a read at an index the checker cannot follow is accepted only once every element of the array was written, as a lookup table every thread fills before a barrier is.
+
+```cairn
+fn block_max(n:usize, x:ro<u32>[n], g:usize, out:rw<u32>[g]) {
+  blocks b in g threads t in 256 {
+    shared warps:u32[8];                           // no zero fill: every element read is written first
+    let i = b * 256 + t;
+    let mut v:u32 = 0;
+    if i < n { v = x[i]; }
+    let w = reduce max warp yield v;
+    if t % 32 == 0 { warps[t / 32] = w; }
+    barrier;
+    if t < 32 {
+      let mut m:u32 = 0;
+      if t < 8 { m = warps[t]; }
+      let top = reduce max warp yield m;
+      if t == 0 { out[b] = top; }
+    }
+  }
+}
+```
+
+A read of an element nobody surely wrote first is `E-COOP-UNWRITTEN`, and an atomic update counts as a read. The row has no `zero_init` for such an array, the receipt says it starts `written before read`, and the device zeroes only the arrays declared `= zeroed`. On the host an unzeroed array starts each block filled with a pattern, so a read the rule let through would show.
+
+```cairn rejects E-COOP-UNWRITTEN
+fn flags(g:usize, out:rw<u32>[g]) {
+  blocks b in g threads t in 256 {
+    shared warps:u32[8];
+    if t % 32 == 0 { warps[t / 32] = 1; }
+    if t < 8 && warps[t] > 0 { if t == 0 { out[b] = 1; } }   // no barrier: warps[1] is thread 32's
+  }
+}
+```
+
+```text
+warps is declared without `= zeroed`, and thread t = 1 reads warps[1] at line 5, and no thread surely wrote that element first. Write it first, in this thread or in another before a barrier, or declare the array `= zeroed`.
+```
+
 An array from outside the region is shared by every block, and no barrier orders two blocks. Each of its elements may be written by at most one thread of one block, and read by another only if nobody writes it (`E-COOP-GLOBAL`), [atomic updates](concurrency.md#atomics-and-mutexes) aside: any thread may update any element atomically, and an array so updated is touched no other way in the region (`E-ATOMIC-MIXED`). The checker shows this when the index is a sum of the block, thread and loop names, each times a weight larger than all the lighter terms add up to. `b * 256 + t` is such a sum, and so is the transpose's `(bx * 32 + ty + 8 * k) * h + by * 32 + tx` when `h` is `32 * gy`. A condition on the index, `if col < h`, counts toward that bound, when the names it sums all count up or all count down. A loop whose range moves with another name, such as `for c in l..l + 2`, is bounded by nothing. A thread may read the elements it writes, as `c += ...` does, when the read's index is the write's, in the same loop or in another over the same range, under the write's conditions.
 
 ```cairn
@@ -216,7 +254,7 @@ The finish has the region's number of threads, under names and extents of its ow
 
 On the host the finish is one more team of threads, started after every block's threads have been joined. On the device the region stays one launch: each block, once done, has one thread fence its writes device-wide and count the block in a counter the execution context keeps, and the block that brings the count to the grid's fences again, runs the finish and puts the counter back to zero. The counter is the context's scratch, allocated by its first finish, so the row gains `gpu_alloc` and `gpu_free` as a device `reduce`'s does, and such a function has no enqueued entry. It compiles for `sm_120` and has not run on a GPU.
 
-A closure in the body may run in any phase and any thread, so it names no shared array, pipeline or array from outside (`E-COOP-UNDECIDED`). A thread obeys everything a lane obeys: it cannot assign a scalar from outside (`E-PARALLEL-WRITE`), start another region (`E-PARALLEL-NEST`), do I/O (`E-PARALLEL-CALL`), or reach the other side's memory (`E-PLACEMENT`). The row gains `par:device` or `par:host`, `zero_init` for the shared arrays, and `trap` for the guards; the receipt lists each array's bytes and the block's total under `local_storage`.
+A closure in the body may run in any phase and any thread, so it names no shared array, pipeline or array from outside (`E-COOP-UNDECIDED`). A thread obeys everything a lane obeys: it cannot assign a scalar from outside (`E-PARALLEL-WRITE`), start another region (`E-PARALLEL-NEST`), do I/O (`E-PARALLEL-CALL`), or reach the other side's memory (`E-PLACEMENT`). The row gains `par:device` or `par:host`, `zero_init` for the shared arrays declared `= zeroed`, and `trap` for the guards; the receipt lists each array's bytes and the block's total under `local_storage`.
 
 On the device the region is one launch on the thread's execution context, as `parallel` is: blocks of `T` threads, the arrays in static shared memory, `barrier` as `__syncthreads()` and the warp operations as `__shfl_*_sync` over the whole warp. It compiles for `sm_120` and has not run on a GPU. On the host each block's threads are real threads meeting at a `std::barrier`, two blocks at a time, so the thread sanitizer checks the phase rule on real runs. This lowering creates `2 * T` threads per region and is not a fast path.
 
@@ -348,7 +386,7 @@ Fast CUDA kernels lean on a known set of features. The table says how a CAIRN pr
 | Atomics on device memory | `atomicAdd`, `atomicMax`, `atomicCAS` | safe: [`atomic_add_wrap(x[i], v)`](concurrency.md#atomics-and-mutexes) and its kin, from any lane or thread, never beside a plain access of the array in one region | accepted, E-ATOMIC-MIXED |
 | Atomics on shared memory | `atomicAdd` on `__shared__` | safe: the same updates on a shared array, apart from its plain accesses by a barrier | accepted, E-ATOMIC-MIXED |
 | A last block that finishes, grid-wide sync | `__threadfence` and an atomic ticket, `grid.sync()` | safe for a last block: a region's [finish](#cooperative-regions), `then threads t in T { }`; a grid-wide barrier inside a kernel is foreign | accepted, E-COOP-SHAPE |
-| Shared memory nobody zeroes | `__shared__ float s[256];` | not written: a shared array is `= zeroed`, and the row says `zero_init` | E-PARSE |
+| Shared memory nobody zeroes | `__shared__ float s[256];` | safe: `shared s:f32[256];`, when every element a thread reads was [written first](#cooperative-regions) | accepted, E-COOP-UNWRITTEN |
 | Warp vote and ballot | `__ballot_sync`, `__any_sync` | safe as `reduce \| warp yield` of one bit a lane, five shuffles where CUDA takes one vote | accepted |
 | Warp match | `__match_any_sync` | foreign | E-CALLEE |
 | Shuffles | `__shfl_sync`, `__shfl_xor_sync`, `__shfl_down_sync`, `__shfl_up_sync` | safe: `shuffle`, `shuffle_xor`, `shuffle_down`; there is no `shuffle_up` | accepted, E-CALLEE |

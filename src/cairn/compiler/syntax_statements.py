@@ -200,7 +200,10 @@ class StatementParser(ExpressionParser):
             element = Type(self.path())
             self.need("[")
             extent = self.expr()
-            self.need("]", "=", "zeroed", ";")
+            self.need("]")
+            if self.eat(";"):  # no initializer: every element read is written first (compiler/phases.py)
+                return Stmt("shared", n, element, [extent], op="unzeroed", **at)
+            self.need("=", "zeroed", ";")
             return Stmt("shared", n, element, [extent], **at)
         if t.s == "pipeline" and IDENT.fullmatch(self.ahead(1)) and self.ahead(2) == ":":  # stages a block fills
             self.i += 1

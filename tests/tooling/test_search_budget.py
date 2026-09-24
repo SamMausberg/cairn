@@ -17,6 +17,7 @@ from cairn.perf.plan_source import Placement, written
 from cairn.perf.resources import Inspector
 from cairn.perf.search import Budget, Order, axes, lowered
 from cairn.perf.tune import tune
+from cairn.projects import target
 from cairn.projects.target import parse
 
 MIX = """fn mix(v:u64) -> u64 {
@@ -164,18 +165,29 @@ def stub(directory, name: str, answers: str):
     path.chmod(0o755)
 
 
-def test_a_compile_that_would_outlast_the_budget_is_stopped_there(tmp_path, monkeypatch):
+@pytest.fixture
+def fresh_toolkit():
+    """The toolkit asked again inside a test that puts a stub nvcc on PATH, and again after it: `target.toolkit`
+    keeps its first answer for the process, which without a real nvcc is that there is none."""
+    target.toolkit.cache_clear()
+    yield
+    target.toolkit.cache_clear()
+
+
+def test_a_compile_that_would_outlast_the_budget_is_stopped_there(tmp_path, monkeypatch, fresh_toolkit):
     stub(tmp_path, "nvcc", '*--version*) echo "Cuda compilation tools, release 13.2, V13.2.51" ;;\n'
          '*--list-gpu-code*) echo sm_120 ;;')  # fmt: skip
     stub(tmp_path, "cuobjdump", "")
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     for item in ("block", "per_lane", "vector"):
         monkeypatch.setitem(search.SPACE, item, (0,))
+    spare = after(BLUR, "blur")  # ten checks' time on this machine, loaded or not, and at least two seconds
+    seconds = 2 * spare  # the four candidates' checks fit in the half kept for them, so one compile starts
     began = time.monotonic()
-    result = tune(BLUR, "blur", [{"n": 1e7}], MACHINE, budget=Budget(compiles=8, seconds=4),
+    result = tune(BLUR, "blur", [{"n": 1e7}], MACHINE, budget=Budget(compiles=8, seconds=seconds),
                   device_target=parse("sm_120"))  # fmt: skip
     took = time.monotonic() - began
-    assert took < 4 + after(BLUR, "blur"), took  # the stub would have slept a minute
+    assert took < seconds + spare, took  # the stub would have slept a minute
     undone = result["budget"]["undone"]
     assert undone["not inspected: stopped at the time budget"] == 1 and result["budget"]["compiles"]["started"] == 1
     assert "not inspected: out of time" in undone

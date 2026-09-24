@@ -315,7 +315,7 @@
       "ran_on_gpu": "no",
       "sanitizers": "partial: thread under both compilers, which reports a removed barrier; Compute Sanitizer has not run",
       "measured": "no: predicted only",
-      "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "evidence/v1_0/predict_cooperative/README.md", "tests/soundness/test_cooperative.py"]
+      "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "evidence/v1_0/predict_cooperative/README.md", "tests/soundness/test_cooperative.py", "tests/projects/test_reduction_example.py", "evidence/v1_1/kernels/README.md"]
     },
     {
       "feature": "A cooperative region's finish: `then threads t in T { }`",
@@ -328,6 +328,18 @@
       "sanitizers": "partial: thread, which reports a finish that does not wait for the blocks; Compute Sanitizer has not run",
       "measured": "no",
       "records": ["tests/soundness/test_finish.py"]
+    },
+    {
+      "feature": "Shared arrays nobody zeroes",
+      "side": "device",
+      "docs": "devices.md#cooperative-regions",
+      "implemented": "yes",
+      "compiles": "yes: sm_120, zeroing none of them where a block starts",
+      "ran_on_cpu": "yes: on host threads under both compilers, and emulated, each block starting them filled with a pattern",
+      "ran_on_gpu": "no",
+      "sanitizers": "partial: thread, and address and undefined under clang++; Compute Sanitizer has not run",
+      "measured": "no",
+      "records": ["tests/soundness/test_written.py"]
     },
     {
       "feature": "Pipeline stages",

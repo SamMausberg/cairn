@@ -1,0 +1,72 @@
+// The sum of n f32 values in one launch, written as a fast CUDA reduction is: each thread streams its grid-stride
+// share of x sixteen bytes at a time, each warp adds its threads' sums with shuffles, each block adds its warps' sums
+// through shared memory nobody zeroes, and the block that finishes last adds the blocks' sums. Nothing is unsafe.
+// Every addition has an order the program fixes, so the sum is the same on every run with the same grid.
+fn sum(n:usize, x:ro<f32>[n]@device, g:usize, partial:rw<f32>[g]@device, out:rw<f32>[1]@device) {
+  let quads = n / 4;
+  blocks b in g threads t in 256 {
+    shared warps:f32[8]; // no zero fill: warp w writes warps[w] before any read
+    let mut s:f32 = 0.0;
+    let mut q = b * 256 + t;
+    while q < quads { // one 16-byte load, past the caches, each time round
+      let v = load_wide[4](x, 4 * q, Cache.streaming);
+      s = s + ((v[0] + v[1]) + (v[2] + v[3]));
+      q += g * 256;
+    }
+    let tail = 4 * quads + b * 256 + t; // the last n % 4 elements, a thread each
+    if tail < n { s = s + x[tail]; }
+    let w = reduce + warp yield s;
+    if t % 32 == 0 { warps[t / 32] = w; }
+    barrier;
+    if t < 32 {
+      let mut m:f32 = 0.0;
+      if t < 8 { m = warps[t]; }
+      let total = reduce + warp yield m;
+      if t == 0 { partial[b] = total; }
+    }
+  } then threads t in 256 { // once, after every block, in the block that ends last
+    shared warps:f32[8];
+    let mut s:f32 = 0.0;
+    let mut k = t;
+    while k < g {
+      s = s + partial[k];
+      k += 256;
+    }
+    let w = reduce + warp yield s;
+    if t % 32 == 0 { warps[t / 32] = w; }
+    barrier;
+    if t < 32 {
+      let mut m:f32 = 0.0;
+      if t < 8 { m = warps[t]; }
+      let total = reduce + warp yield m;
+      if t == 0 { out[0] = total; }
+    }
+  }
+}
+
+// The same sum with no partials: each block adds its sum into out[0] atomically, in the order the blocks finish, so
+// the last bits may differ from run to run within the bound docs/numerics.md states. out[0] starts at zero.
+fn sum_unordered(n:usize, x:ro<f32>[n]@device, g:usize, out:rw<f32>[1]@device) {
+  let quads = n / 4;
+  blocks b in g threads t in 256 {
+    shared warps:f32[8];
+    let mut s:f32 = 0.0;
+    let mut q = b * 256 + t;
+    while q < quads {
+      let v = load_wide[4](x, 4 * q, Cache.streaming);
+      s = s + ((v[0] + v[1]) + (v[2] + v[3]));
+      q += g * 256;
+    }
+    let tail = 4 * quads + b * 256 + t;
+    if tail < n { s = s + x[tail]; }
+    let w = reduce + warp yield s;
+    if t % 32 == 0 { warps[t / 32] = w; }
+    barrier;
+    if t < 32 {
+      let mut m:f32 = 0.0;
+      if t < 8 { m = warps[t]; }
+      let total = reduce + warp yield m;
+      if t == 0 { atomic_add_unordered(out[0], total); }
+    }
+  }
+}

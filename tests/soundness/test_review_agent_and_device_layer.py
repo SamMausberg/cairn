@@ -8,7 +8,7 @@ import shutil
 
 import pytest
 
-from cairn.compiler.cairnc import Diagnostic, compile_program
+from cairn.compiler.cairnc import Diagnostic, compile_program, compile_source
 from cairn.projects.target import parse
 from cairn.verify.validation import validate
 
@@ -194,3 +194,93 @@ def test_a_call_through_a_function_value_that_may_reach_an_unjudged_function_is_
     which it had left out, and the check ended on a KeyError, so every later refusal was lost and the fault hidden."""
     record = every(source)
     assert record.get("not_judged", 0) >= 2, record
+
+
+# --- Open: cairn tune chooses an implementation on a validation made under any policy -------------------------------
+
+ZERO = """fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut sum:u64 = 0;
+  for i in 0..n { sum = add_wrap(sum, xs[i]); }
+  return sum;
+}
+
+fn total_zero(n:usize, xs:ro<u64>[n]) -> u64 implements total {
+  return 0;
+}
+"""
+
+
+@pytest.mark.xfail(strict=True, reason="open: cairn tune cites a validation made under any domain and tolerance")
+@pytest.mark.skipif(not shutil.which("clang++"), reason="needs clang++")
+def test_tune_does_not_choose_an_implementation_validated_on_one_point_of_its_domain(tmp_path):
+    """`total_zero` returns 0 for every input. Validated with the domain narrowed to n = 0, it passed, Z3 called it
+    equivalent there, and the history kept it as finite-tested; `cairn tune` then chose `plan total use total_zero;`
+    for n = 1e6, and `--write` would write it. The history's contract digests the domain and the tolerance, but the
+    search cites a validation under any contract."""
+    from cairn.perf.tune import tune
+    from cairn.projects.project import load_project
+    from cairn.verify.validation import validate_project
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/main.cairn").write_text(ZERO)
+    (tmp_path / "cairn.toml").write_text('[project]\nname = "weak"\nsources = ["src/main.cairn"]\n')
+    history = tmp_path / "history"
+    narrow = {"domain": {"extents": {"n": [0, 0]}}, "budget": 4}
+    record = validate_project(load_project(tmp_path), "total_zero", narrow, history=history)
+    assert record["status"] == "passed"
+    answer = tune(ZERO, "total", [{"n": 1e6}], history=history)
+    assert answer["chosen"].get("use") != "total_zero", answer["chosen"]
+
+
+# --- Fixed: a shared table every thread wrote before a barrier was refused where a data index read it --------------
+
+LOOKUP = """fn lookup(g:usize, n:usize, table:ro<u32>[32], x:ro<u32>[n], out:rw<u32>[n]) {
+  blocks b in g threads t in 32 {
+    shared lut:u32[32];
+    lut[t] = table[t];
+    barrier;
+    let i = b * 32 + t;
+    if i < n { out[i] = lut[usize(x[i] % 32)]; }
+  }
+}
+
+fn check(n:usize) -> i32 {
+  buffer table:u32[32] = zeroed;
+  for j in 0..32 { table[j] = u32(j) * 7 + 3; }
+  buffer x:u32[n] = zeroed;
+  for j in 0..n { x[j] = u32(j) * 13; }
+  buffer out:u32[n] = zeroed;
+  lookup((n + 31) / 32, n, table, x, out);
+  for j in 0..n { if out[j] != table[usize(x[j] % 32)] { return 1; } }
+  return 0;
+}
+
+fn main() -> i32 { return check(100); }
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_shared_table_written_whole_before_a_barrier_may_be_read_at_any_index(tmp_path, cxx):
+    """Every element of `lut` is written before the barrier, so whichever element a data index names was written
+    first, and an index past the end stops at its guard. The rule refused any index it could not follow, even there,
+    which pushed a lookup table to `= zeroed` and a fill it does not need. It runs on host threads, where an unzeroed
+    array starts each block filled with a pattern, and gives the table's values under both compilers."""
+    from emitted import contract
+
+    cpp = compile_source(LOOKUP)[0]
+    flags = ("-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all") if cxx == "clang++" else ()
+    done = contract(tmp_path, cpp, cxx, *flags)
+    assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+
+
+def test_a_table_written_in_part_is_still_refused_at_an_index_it_cannot_follow():
+    from emitted import refused
+
+    refused("E-COOP-UNWRITTEN", LOOKUP.replace("lut[t] = table[t];", "if t < 31 { lut[t] = table[t]; }"))
+
+
+def test_the_lookup_table_s_threads_race_nowhere(tmp_path):
+    from emitted import watched
+
+    done = watched(tmp_path, compile_source(LOOKUP)[0], "clang++", "thread")
+    assert done.returncode == 0 and "ThreadSanitizer" not in done.stderr, done.stderr[-3000:]

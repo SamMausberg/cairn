@@ -1,0 +1,60 @@
+// Moves the data to the device, runs both sums there and holds them to a plain loop on the host, as src/main.cairn
+// does on host threads. Only `make gpu` runs this on a GPU; the suite compiles it for sm_120 and runs it emulated.
+
+fn plain(n:usize, x:ro<f32>[n]) -> f64 {
+  let mut s:f64 = 0.0;
+  for i in 0..n { s += f64(x[i]); }
+  return s;
+}
+
+fn size(n:usize, x:ro<f32>[n]) -> f64 {
+  let mut s:f64 = 0.0;
+  for i in 0..n { s += abs(f64(x[i])); }
+  return s;
+}
+
+fn check(n:usize, g:usize, whole:bool) -> i32 {
+  buffer x:f32[n] = zeroed;
+  for i in 0..n {
+    let k = mul_wrap(u64(i), 2654435761) % 1000;
+    if whole { x[i] = f32(k % 5); } else { x[i] = f32(k) / 64.0 - 7.8125; } // whole sums stay below 2^24
+  }
+  buffer dx:f32[n]@device = zeroed;
+  buffer partial:f32[g]@device = zeroed;
+  buffer dout:f32[1]@device = zeroed;
+  buffer dunordered:f32[1]@device = zeroed;
+  transfer(dx, x);
+  sum(n, dx, g, partial, dout);
+  sum_unordered(n, dx, g, dunordered);
+  buffer out:f32[1] = zeroed;
+  buffer unordered:f32[1] = zeroed;
+  transfer(out, dout);
+  transfer(unordered, dunordered);
+  let want = plain(n, x);
+  let bound = f64(n + g) * size(n, x) / 8388608.0; // (k - 1) * 2^-23 of the magnitudes, k < n + g adds
+  if whole && (f64(out[0]) != want || f64(unordered[0]) != want) { return 1; }
+  if abs(f64(out[0]) - want) > bound || abs(f64(unordered[0]) - want) > bound { return 2; }
+  return 0;
+}
+
+fn main() -> i32 {
+  buffer sizes:usize[4] = zeroed;
+  sizes[0] = 0;
+  sizes[1] = 7;
+  sizes[2] = 1001;
+  sizes[3] = 100000;
+  buffer grids:usize[3] = zeroed;
+  grids[0] = 1;
+  grids[1] = 5;
+  grids[2] = 70;
+  for a in 0..4 {
+    for c in 0..3 {
+      let exact = check(sizes[a], grids[c], true);
+      if exact != 0 { return exact; }
+      let near = check(sizes[a], grids[c], false);
+      if near != 0 { return near; }
+    }
+  }
+  println("the one-pass and the atomic sums agree with a plain loop on the device");
+  return 0;
+}

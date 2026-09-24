@@ -22,27 +22,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .block_run import LANES, RANGE, TRAP, BlockRun, Event
+from .block_run import LANES, TRAP, Event
 from .footprints import Poly
 from .tree import Stmt, fail
+from .written import Written
 
 if TYPE_CHECKING:
     from .checking import Checker
     from .scope import Block
 
 
-class Phases(BlockRun):
+class Phases(Written):
     """One block's run that refuses each phase in which two threads touch one shared element and either writes."""
 
     def whom(self, x: tuple[int, Event]) -> str:
         return f"a lane of warp {x[0] // LANES} of the block" if x[1].warp else self.who(x[0])
-
-    def who(self, t: int) -> str:
-        names, extents, parts = self.block.threads, self.block.extents, []
-        for n, k in zip(names, extents, strict=True):
-            parts.append(f"{n} = {t % k}")
-            t //= k
-        return "thread " + ", ".join(parts)
 
     def check(self, events: list[Event]):
         """Refuse a phase in which two threads touch one element of a shared array and either writes."""
@@ -89,16 +83,6 @@ class Phases(BlockRun):
         everything = [*vague, *(y for g in groups for y in g)]
         for t, ev in vague:
             self.apart(array, [(t, ev)], everything)
-
-    def elements(self, index: Any, t: int) -> list[Any]:
-        if isinstance(index, tuple):
-            lo, hi = self.at(index[1], t), self.at(index[2], t)
-            if lo is TRAP or hi is TRAP:
-                return []
-            if isinstance(lo, int) and isinstance(hi, int) and not isinstance(lo, bool) and hi - lo <= RANGE:
-                return list(range(lo, hi))
-            return [None]
-        return [self.at(index, t)]
 
     def apart(self, array: str, a: list[tuple[int, Event]], b: list[tuple[int, Event]]):
         """Accesses whose indexes differ by a symbol, or are unknown: they may meet, so a write among them by one
@@ -172,6 +156,7 @@ def check(c: Checker, s: Stmt, block: Block, grid: list[Any]):
     if not block.shared:
         return
     run = Phases(c, block, {name: n for name, (_, n, _) in block.shared.items()}, node=s)
+    run.written(set(block.unzeroed))  # the arrays declared without `= zeroed` (compiler/written.py)
     env: dict[str, Any] = {}
     t = list(range(block.count))
     for name, extent in zip(block.threads, block.extents, strict=True):
