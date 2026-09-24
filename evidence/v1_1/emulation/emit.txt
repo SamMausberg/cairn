@@ -1,0 +1,12 @@
+# The first 16 hex digits of the sha256 of `cairn emit` for each device program: by the compiler at 91e2eb0 (main) and with --emulate added (branch).
+examples/cooperative/gpu.toml main=e575234b6e9eb06f branch=e575234b6e9eb06f identical
+examples/cooperative/tuned.toml main=e3a8d34aafc063a2 branch=e3a8d34aafc063a2 identical
+examples/apps/gpu_pipeline main=52d30c6699c30852 branch=52d30c6699c30852 identical
+examples/apps/matmul/gpu.toml main=31d25c0416a9f35c branch=31d25c0416a9f35c identical
+examples/apps/analytics/gpu.toml main=12a471c8b795f52c branch=12a471c8b795f52c identical
+examples/apps/simulator main=a23424d3f8c95b44 branch=a23424d3f8c95b44 identical
+demos/numeric/gpu.toml main=62515074db087023 branch=62515074db087023 identical
+examples/tensor/tile32.cairn main=80bb43e4a038425a branch=80bb43e4a038425a identical
+examples/tensor/tile64.cairn main=02728395dc78e61b branch=02728395dc78e61b identical
+examples/tensor/transpose.cairn main=7b06735366c40804 branch=7b06735366c40804 identical
+examples/foreign/device main=89e0e00030f5c76d branch=89e0e00030f5c76d identical

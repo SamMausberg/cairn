@@ -1,0 +1,144 @@
+{
+  "schema": "cairn.evidence.emulation/1",
+  "machine": {
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "processor": "x86_64"
+  },
+  "compilers": {
+    "clang++": "clang version 21.1.8 (https://github.com/llvm/llvm-project 2078da43e25a4623cab2d0d60decddf709aaea28)",
+    "g++": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+  },
+  "runs": [
+    {
+      "example": "examples/cooperative/gpu.toml",
+      "cxx": "clang++",
+      "build": "native-built",
+      "judged_against": "sm_120",
+      "exit_code": 0,
+      "last_line": "device: transpose, block sums and row sums agree with plain loops",
+      "build_seconds": 1.5
+    },
+    {
+      "example": "examples/cooperative/gpu.toml",
+      "cxx": "g++",
+      "build": "native-built",
+      "judged_against": "sm_120",
+      "exit_code": 0,
+      "last_line": "device: transpose, block sums and row sums agree with plain loops",
+      "build_seconds": 2.6
+    },
+    {
+      "example": "examples/apps/gpu_pipeline",
+      "cxx": "clang++",
+      "build": "native-built",
+      "judged_against": "sm_120",
+      "exit_code": 0,
+      "last_line": "gpu_pipeline: device result matches the host",
+      "build_seconds": 1.0
+    },
+    {
+      "example": "examples/apps/gpu_pipeline",
+      "cxx": "g++",
+      "build": "native-built",
+      "judged_against": "sm_120",
+      "exit_code": 0,
+      "last_line": "gpu_pipeline: device result matches the host",
+      "build_seconds": 1.5
+    },
+    {
+      "example": "examples/apps/matmul/gpu.toml",
+      "cxx": "clang++",
+      "build": "native-built",
+      "judged_against": "sm_120",
+      "exit_code": 0,
+      "last_line": "device layer: 256 x 512 x 1024, 0 outputs outside the contract",
+      "build_seconds": 0.8
+    },
+    {
+      "example": "examples/apps/matmul/gpu.toml",
+      "cxx": "g++",
+      "build": "native-built",
+      "judged_against": "sm_120",
+      "exit_code": 0,
+      "last_line": "device layer: 256 x 512 x 1024, 0 outputs outside the contract",
+      "build_seconds": 1.5
+    },
+    {
+      "example": "examples/apps/analytics/gpu.toml",
+      "cxx": "clang++",
+      "build": "native-built",
+      "judged_against": "sm_120",
+      "exit_code": 0,
+      "last_line": "analytics: the device agrees with the host bit for bit",
+      "build_seconds": 1.4
+    },
+    {
+      "example": "examples/apps/analytics/gpu.toml",
+      "cxx": "g++",
+      "build": "native-built",
+      "judged_against": "sm_120",
+      "exit_code": 0,
+      "last_line": "analytics: the device agrees with the host bit for bit",
+      "build_seconds": 1.9
+    },
+    {
+      "example": "examples/apps/simulator",
+      "cxx": "clang++",
+      "build": "native-built",
+      "judged_against": "sm_120",
+      "exit_code": 0,
+      "last_line": "simulator: all three back ends agree bit for bit",
+      "build_seconds": 1.0
+    },
+    {
+      "example": "examples/apps/simulator",
+      "cxx": "g++",
+      "build": "native-built",
+      "judged_against": "sm_120",
+      "exit_code": 0,
+      "last_line": "simulator: all three back ends agree bit for bit",
+      "build_seconds": 1.7
+    },
+    {
+      "example": "demos/numeric/gpu.toml",
+      "cxx": "clang++",
+      "build": "native-built",
+      "judged_against": "sm_120",
+      "exit_code": 0,
+      "last_line": "largest distance from the f64 reference 0.000014842041622387114, contract 0.00476837158203125",
+      "build_seconds": 1.1
+    },
+    {
+      "example": "demos/numeric/gpu.toml",
+      "cxx": "g++",
+      "build": "native-built",
+      "judged_against": "sm_120",
+      "exit_code": 0,
+      "last_line": "largest distance from the f64 reference 0.000014842041622387114, contract 0.00476837158203125",
+      "build_seconds": 1.6
+    }
+  ],
+  "seeded_validation": {
+    "without_emulate": "unknown",
+    "wrong_at_a_partial_tile": {
+      "status": "failed",
+      "evidence": "finite-tested-emulated",
+      "shrunk_to": {
+        "n": 1,
+        "out": [
+          0
+        ],
+        "x": [
+          1
+        ]
+      },
+      "cases": 3
+    },
+    "corrected": {
+      "status": "passed",
+      "evidence": "finite-tested-emulated",
+      "cases": 48
+    }
+  },
+  "gpu": "nothing ran on a GPU"
+}
