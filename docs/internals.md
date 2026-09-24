@@ -20,6 +20,8 @@ A project becomes a native artifact in nine stages, and nothing but the emitter 
 
 `compiler/cairnc.py` is the facade. `compile_program` runs parse through judge. `generate` checks the collector's seventeen certificates before it emits a line, and the `Emitter` asks the independent audit (`verify/elision.py`) to accept every discharged guard, writing the guard of each one it refuses.
 
+`compiler/compilations.py` makes each of those stages run once per distinct source in a process, for the tools that ask for one again and again: the edit, plan and implementation hosts, `cairn state`, `cairn mcp` and `cairn lsp`. A compile is keyed by the source, the compiler the process loaded (`implementation_hash()` with the runtime headers), the `std` files as they are on disk now, and whether the check captures sites or reports every refusal. It keeps the check, and the parse and the emission once a caller asks for them, as pickles, and every refusal as its record, and each caller unpickles its own copy, so what one caller changes no other caller reads. An accepted check answers a caller with either `every`, and one that captured sites answers a caller that wants none. At most 16 sources and 256 MiB of pickles are kept, the source used least recently going first. `tests/agent/test_compilations.py` holds that a copy of every example emits the same C++ and receipt as a compile from scratch.
+
 Checking is one pass per function over one typed tree, and each generic instance is checked as ordinary code. One `Checker` class holds the program-wide tables and the walk over bodies. Each rule group is a module of functions taking the checker first, bound as methods by an explicit table so mypy checks every call, and `s_<tag>` and `e_<tag>` dispatch on the tree node's tag.
 
 | Rule | File | Functions |
@@ -87,6 +89,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 | `cairn_io.hpp` | the I/O ring over io_uring: fixed berths that own each operation's `Buf`, completion-order collection, a wait that drains before it releases |
 | `cairn_fragment.hpp` | tensor-core fragments: on the host every thread of a warp holding each whole and storing its lane's elements, on the device WMMA and `mma.sync` with `ldmatrix` |
 | `cairn_layout.hpp` | a layout's coordinate checked against its extent, and CuTe's swizzle, on the host and in a device lane alike |
+| `cairn_access.hpp` | wide loads and stores with their two guards and the cache operator a hint names, and atomic updates of one element: one instruction on the device, K plain accesses or a `std::atomic_ref` on the host |
 | `cairn_float.hpp` | the storage floats `f16 bf16 f8e4m3 f8e5m2`: one integer routine that rounds on the host and in a device lane alike, `quantize` and `quantize_stochastic` |
 | `cairn_tensor.hpp` | `mma_unordered`: the reference loop on the host, and on the device 64 x 64 tensor-core tiles over two shared-memory stages, written once against the operations a tile is given so a host test runs every thread's phases |
 | `cairn_coop.hpp` | cooperative regions: on the host each block's threads as real threads at a `std::barrier`, two blocks at a time, with warp exchanges through per-warp slots; on the device one launch with static shared memory, `__syncthreads` and `__shfl_*_sync` |
@@ -176,19 +179,19 @@ These harnesses write under `results/`, which is not tracked, one subdirectory p
 
 `.github/workflows/ci.yml` runs on every pull request, every push to `main` and every Monday. A pull request needs one check, `ci-passed`, which passes only when every other job passed, so a job added later is required once it is in that job's `needs`; `tests/tooling/test_workflow.py` fails until it is. Every action is pinned by commit, the workflow reads the repository and writes nothing, and no job sets `CAIRN_GPU_TESTS`, so device code is compiled on runners without a GPU and never run.
 
-| Job | What it catches | Runner |
-|---|---|---|
-| `checks` | formatting, lint and types; a stale API reference; the examples, certificates and scalar equivalence | ubuntu-24.04 |
-| `tests`, four parts | the whole suite under the runner's Clang 18, GCC 13 and Python 3.12 | ubuntu-24.04 |
-| `proofs` | the Lean build, its axiom audit, and the differential runs against the checker | ubuntu-24.04 |
-| `device`, four | device code nvcc refuses: under CUDA 12.9 and 13.2, each with g++ and with clang++ as nvcc's host compiler, every test that compiles device code, and every device example built for sm_80, sm_90a, sm_100a and sm_120 | ubuntu-24.04 |
-| `compilers`, two | runtime headers and emitted C++ another compiler refuses or builds differently: the runtime, soundness, project and language tests under GCC 11 and Clang 13, the oldest supported, and under GCC 15 and Clang 23 | ubuntu-22.04, ubuntu-26.04 |
-| `python`, three | the compiler, the agent layer, the tools and the verifiers under Python 3.11, 3.13 and 3.14 | ubuntu-24.04 |
-| `arm` | an AArch64 host: the runtime, soundness and project tests, and the freestanding image under `qemu-system-aarch64`, which must run rather than skip | ubuntu-24.04-arm |
-| `package` | a file the sdist or the wheel leaves out: `cairn` installed from the wheel built from the sdist and run away from the checkout, and the Claude Code plugin from a clean copy of the repository | ubuntu-24.04 |
-| `ci-passed` | any job above that failed, was cancelled or was skipped | ubuntu-24.04 |
+| Job | What it catches | Runner | Time |
+|---|---|---|---|
+| `checks` | formatting, lint and types; a stale API reference; the examples, certificates and scalar equivalence | ubuntu-24.04 | 1 min |
+| `tests`, four parts | the whole suite under the runner's Clang 18, GCC 13 and Python 3.12 | ubuntu-24.04 | 4 to 6 min |
+| `proofs` | the Lean build, its axiom audit, and the differential runs against the checker | ubuntu-24.04 | 2 min |
+| `device`, four | device code nvcc refuses: under CUDA 12.9 and 13.2, each with g++ and with clang++ as nvcc's host compiler, every test that compiles device code, and every device example built for sm_80, sm_90a, sm_100a and sm_120 | ubuntu-24.04 | 12 to 15 min |
+| `compilers`, two | runtime headers and emitted C++ another compiler refuses or builds differently: the runtime, soundness, project and language tests under GCC 11 and Clang 13, the oldest supported, and under GCC 15 and Clang 23 | ubuntu-22.04, ubuntu-26.04 | 9 to 11 min |
+| `python`, three | the compiler, the agent layer, the tools and the verifiers under Python 3.11, 3.13 and 3.14 | ubuntu-24.04 | 6 to 8 min |
+| `arm` | an AArch64 host: the runtime, soundness and project tests, and the freestanding image under `qemu-system-aarch64`, which must run rather than skip | ubuntu-24.04-arm | 6 min |
+| `package` | a file the sdist or the wheel leaves out: `cairn` installed from the wheel built from the sdist and run away from the checkout, and the Claude Code plugin from a clean copy of the repository | ubuntu-24.04 | 1 min |
+| `ci-passed` | any job above that failed, was cancelled or was skipped | ubuntu-24.04 | seconds |
 
-The device job's tests are `make device-build` where nvcc is installed. A test's own device builds give nvcc g++ unless `CAIRN_TEST_NVCC_HOST` names another host compiler, as `make device-build NVCC_HOST=clang++` does; `cairn build` gives it clang++. NVIDIA's and LLVM's packages and pip's downloads are cached between runs.
+The jobs run at once, so a run takes about as long as its longest device job, 15 minutes in the runs of September 2026, and a push to `main` queues behind the run before it rather than cancelling it. The device job's tests are `make device-build` where nvcc is installed. A test's own device builds give nvcc g++ unless `CAIRN_TEST_NVCC_HOST` names another host compiler, as `make device-build NVCC_HOST=clang++` does; `cairn build` gives it clang++. NVIDIA's and LLVM's packages, elan with the pinned Lean toolchain, and pip's downloads are cached between runs, and the proofs job tries a failed toolchain download four times before it fails.
 
 ## Safety and trust
 

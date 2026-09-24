@@ -174,6 +174,18 @@
       "records": ["evidence/v1_0/implementations/README.md", "tests/language/test_implementations.py"]
     },
     {
+      "feature": "`cairn tune`: the bounded search over plans and implementations",
+      "side": "host",
+      "docs": "tools.md#cairn-tune",
+      "implemented": "yes",
+      "compiles": "yes: x86-64, clang++, the host candidates `--measure` times",
+      "ran_on_cpu": "yes: x86-64, the suite and the searches evidence/v1_1/search records",
+      "ran_on_gpu": "n/a",
+      "sanitizers": "n/a",
+      "measured": "yes: the search's own cost, its checks, compiles and wall time before and after lazy generation",
+      "records": ["tests/tooling/test_search.py", "tests/tooling/test_search_budget.py", "tests/tooling/test_tune_objective.py", "evidence/v1_0/search/README.md", "evidence/v1_1/search/README.md"]
+    },
+    {
       "feature": "Libraries and their C header",
       "side": "host",
       "docs": "tools.md#cairn-build---header",
@@ -208,6 +220,18 @@
       "sanitizers": "yes: address, undefined and leak; thread on cooperative regions",
       "measured": "n/a: an emulated time measures host threads, never a device",
       "records": ["evidence/v1_1/emulation/README.md", "tests/projects/test_emulation.py"]
+    },
+    {
+      "feature": "One compile per source for the hosts, `cairn mcp` and `cairn lsp`",
+      "side": "host",
+      "docs": "tools.md#cairn-mcp",
+      "implemented": "yes",
+      "compiles": "n/a: the compiler's own tooling, which builds no program of its own",
+      "ran_on_cpu": "yes: every example emits the same C++ and receipt from a kept copy as from scratch",
+      "ran_on_gpu": "n/a",
+      "sanitizers": "n/a",
+      "measured": "yes: MCP checks, edit sessions and edit-then-check cycles before and after, on one loaded machine",
+      "records": ["evidence/v1_1/workspace/README.md", "tests/agent/test_compilations.py", "tests/agent/test_mcp.py"]
     },
     {
       "feature": "Device regions, `reduce`, `scan` and `compact`",
@@ -258,6 +282,30 @@
       "records": ["tests/soundness/test_plans.py", "tests/soundness/test_staging.py", "evidence/v1_0/execution/README.md"]
     },
     {
+      "feature": "Wide loads and stores: `load_wide[K]`, `store_wide` and `Cache` hints",
+      "side": "device",
+      "docs": "devices.md#wide-loads-and-stores",
+      "implemented": "yes",
+      "compiles": "yes: sm_120, to LDG.E.EF.128, STG.E.EF.128, LDG.E.128.CONSTANT, LDS.128 and STS.128",
+      "ran_on_cpu": "yes: in host code, host lanes and host threads, and emulated, under both compilers",
+      "ran_on_gpu": "no",
+      "sanitizers": "partial: address and undefined under clang++, thread on host threads; Compute Sanitizer has not run",
+      "measured": "no",
+      "records": ["tests/soundness/test_wide.py"]
+    },
+    {
+      "feature": "Atomic updates of one element in lanes and threads",
+      "side": "device",
+      "docs": "concurrency.md#atomics-and-mutexes",
+      "implemented": "yes",
+      "compiles": "yes: sm_120, to RED, ATOMG and ATOMS",
+      "ran_on_cpu": "yes: on host lanes and host threads under both compilers, and emulated",
+      "ran_on_gpu": "no",
+      "sanitizers": "partial: thread, which reports an update made plain, and address and undefined under clang++; Compute Sanitizer has not run",
+      "measured": "no",
+      "records": ["tests/soundness/test_atomics.py"]
+    },
+    {
       "feature": "Cooperative regions: shared arrays, barriers and warp operations",
       "side": "device",
       "docs": "devices.md#cooperative-regions",
@@ -268,6 +316,18 @@
       "sanitizers": "partial: thread under both compilers, which reports a removed barrier; Compute Sanitizer has not run",
       "measured": "no: predicted only",
       "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "evidence/v1_0/predict_cooperative/README.md", "tests/soundness/test_cooperative.py"]
+    },
+    {
+      "feature": "A cooperative region's finish: `then threads t in T { }`",
+      "side": "device",
+      "docs": "devices.md#cooperative-regions",
+      "implemented": "yes",
+      "compiles": "yes: sm_120, one launch whose last block runs the finish",
+      "ran_on_cpu": "yes: one more team of host threads after the blocks, grids of 0 to 70 blocks, under both compilers, and emulated",
+      "ran_on_gpu": "no",
+      "sanitizers": "partial: thread, which reports a finish that does not wait for the blocks; Compute Sanitizer has not run",
+      "measured": "no",
+      "records": ["tests/soundness/test_finish.py"]
     },
     {
       "feature": "Pipeline stages",
@@ -352,6 +412,54 @@
       "sanitizers": "no: each Compute Sanitizer tool runs only under make gpu",
       "measured": "n/a",
       "records": ["evidence/v1_0/foreign/README.md", "evidence/v1_1/emulation/README.md", "tests/verification/test_device_validation.py"]
+    },
+    {
+      "feature": "`cairn tune` on device candidates",
+      "side": "device",
+      "docs": "tools.md#cairn-tune",
+      "implemented": "yes",
+      "compiles": "yes: sm_120, read by ptxas and cuobjdump, nothing launched",
+      "ran_on_cpu": "n/a",
+      "ran_on_gpu": "no: make tune-device has not run",
+      "sanitizers": "n/a",
+      "measured": "partial: its compiles and the search's wall time, evidence/v1_1/search; no device time",
+      "records": ["tests/tooling/test_search.py", "tests/tooling/test_search_budget.py", "tests/tooling/test_search_instances.py", "evidence/v1_0/search/README.md", "evidence/v1_1/search/README.md"]
+    },
+    {
+      "feature": "SOL-ExecBench solutions, and projects from its problems",
+      "side": "device",
+      "docs": "devices.md#benchmark-submissions",
+      "implemented": "yes",
+      "compiles": "yes: sm_100a, compiled and linked against torch 2.9.0+cu130 as SOL-ExecBench's build_ext.py builds a solution, and accepted by its pydantic models",
+      "ran_on_cpu": "yes: a host-view solution built by torch.utils.cpp_extension.load equals the reference with CPU torch, and an emulated RMSNorm is within SOL-ExecBench's tolerance on nine workloads",
+      "ran_on_gpu": "no",
+      "sanitizers": "no",
+      "measured": "no",
+      "records": ["evidence/v1_1/harness/README.md", "tests/projects/test_harness.py", "tests/projects/test_harness_torch.py"]
+    },
+    {
+      "feature": "GPU MODE submissions",
+      "side": "device",
+      "docs": "devices.md#benchmark-submissions",
+      "implemented": "yes",
+      "compiles": "yes: sm_100a through load_inline, compiled and linked against torch 2.9.0+cu130",
+      "ran_on_cpu": "yes: a host-view submission built by load_inline returns the reference's output with CPU torch",
+      "ran_on_gpu": "no",
+      "sanitizers": "no",
+      "measured": "no",
+      "records": ["evidence/v1_1/harness/README.md", "tests/projects/test_harness.py", "tests/projects/test_harness_torch.py"]
+    },
+    {
+      "feature": "KernelBench `ModelNew`",
+      "side": "device",
+      "docs": "devices.md#benchmark-submissions",
+      "implemented": "yes",
+      "compiles": "yes: sm_100a through load_inline, compiled and linked against torch 2.9.0+cu130, and valid under KernelBench's static checker",
+      "ran_on_cpu": "yes: a host-view ModelNew built by load_inline equals the problem's Model with CPU torch",
+      "ran_on_gpu": "no",
+      "sanitizers": "no",
+      "measured": "no",
+      "records": ["evidence/v1_1/harness/README.md", "tests/projects/test_harness.py", "tests/projects/test_harness_torch.py"]
     }
   ]
 }

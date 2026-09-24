@@ -35,39 +35,64 @@ plan f { vector 4; }""",
 }""",
             "accepted",
         ),
-        ("""fn f(n:usize, x:ro<f32>[n]@device) -> f32 { let v = load_wide(x, 0); return 0.0; }""", "E-CALLEE"),
+        (
+            """fn f(g:usize, n:usize, x:ro<f32>[n]@device, out:rw<f32>[g]@device) {
+  blocks b in g threads t in 32 {
+    let v = load_wide[4](x, 4 * (b * 32 + t), Cache.streaming);
+    let total = reduce + warp yield v[0] + v[1] + v[2] + v[3];
+    if t == 0 { out[b] = total; }
+  }
+}""",
+            "accepted",
+        ),
+        ("""fn f(n:usize, x:ro<f64>[n]@device) -> f64 { let v = load_wide[4](x, 0); return v[0]; }""", "E-WIDE"),
     ],
     "Atomics on device memory": [
         (
-            """fn f(n:usize, out:rw<u64>[n]@device, total:ro<Atomic[u64]>) {
-  parallel i in n { out[i] = 1; let v = total.fetch_add(1, Order.relaxed); }
+            """fn f(n:usize, x:ro<u32>[n]@device, bins:rw<u32>[256]@device, best:rw<i64>[1]@device) {
+  parallel i in n {
+    atomic_add_wrap(bins[usize(x[i] & 255)], 1);
+    let before = atomic_max(best[0], i64(x[i]));
+  }
 }""",
-            "E-PLACEMENT",
+            "accepted",
         ),
         (
-            """fn f(n:usize, out:rw<u32>[n]@device, x:ro<u32>[n]@device) {
-  parallel i in n { let v = x[i]; unsafe { asm ptx sm_70 "red.global.add.u32 [%0], %1;" (out, v) effects(write:out); } }
+            """fn f(n:usize, x:ro<u32>[n]@device, bins:rw<u32>[n]@device) {
+  parallel i in n { atomic_add_wrap(bins[usize(x[i]) % n], 1); bins[i] = 0; }
 }""",
-            "E-PARALLEL-RACE",
+            "E-ATOMIC-MIXED",
         ),
     ],
     "Atomics on shared memory": [
         (
-            """fn f(g:usize, n:usize, x:ro<u32>[n]@device) {
-  blocks b in g threads t in 32 {
-    shared h:u32[32] = zeroed;
-    let v = x[0];
-    unsafe { asm ptx sm_70 "red.shared.add.u32 [%0], %1;" (h, v) effects(write:h); }
+            """fn f(g:usize, n:usize, x:ro<u32>[n]@device, bins:rw<u32>[256]@device) {
+  blocks b in g threads t in 256 {
+    shared local:u32[256] = zeroed;
+    if b * 256 + t < n { atomic_add_wrap(local[usize(x[b * 256 + t] & 255)], 1); }
+    barrier;
+    atomic_add_wrap(bins[t], local[t]);
   }
 }""",
-            "E-COOP-CONFLICT",
-        )
+            "accepted",
+        ),
+        (
+            """fn f(g:usize, n:usize, x:ro<u32>[n]@device, bins:rw<u32>[256]@device) {
+  blocks b in g threads t in 256 {
+    shared local:u32[256] = zeroed;
+    if b * 256 + t < n { atomic_add_wrap(local[usize(x[b * 256 + t] & 255)], 1); }
+    atomic_add_wrap(bins[t], local[t]);
+  }
+}""",
+            "E-ATOMIC-MIXED",
+        ),
     ],
     "A last block that finishes, grid-wide sync": [
         (
             """fn f(g:usize, partial:rw<u64>[g]@device, out:rw<u64>[1]@device) {
-  blocks b in g threads t in 32 { if t == 0 { partial[b] = u64(b); } }
-  blocks b in 1 threads t in 32 {
+  blocks b in g threads t in 32 {
+    if t == 0 { partial[b] = u64(b); }
+  } then threads t in 32 {
     if t == 0 {
       let mut sum:u64 = 0;
       for k in 0..g { sum = add_wrap(sum, partial[k]); }
@@ -76,7 +101,13 @@ plan f { vector 4; }""",
   }
 }""",
             "accepted",
-        )
+        ),
+        (
+            """fn f(g:usize, out:rw<u64>[g]@device) {
+  blocks b in g threads t in 64 { if t == 0 { out[b] = 1; } } then threads t in 32 { let v = t; }
+}""",
+            "E-COOP-SHAPE",
+        ),
     ],
     "Shared memory nobody zeroes": [
         ("""fn f(g:usize) { blocks b in g threads t in 32 { shared s:u32[32]; s[t] = 1; } }""", "E-PARSE")
@@ -243,10 +274,13 @@ fn tile(a:ro<f16>[256]@device) {
             "accepted",
         ),
         (
-            """fn f(g:usize, n:usize, out:rw<u32>[n]@device, next:ro<Atomic[u64]>) {
-  blocks b in g threads t in 32 { let k = next.fetch_add(1, Order.relaxed); if t == 0 { out[b] = 1; } }
+            """fn f(g:usize, n:usize, out:rw<u32>[n]@device, next:rw<usize>[1]@device) {
+  blocks b in g threads t in 32 {
+    let k = atomic_add_wrap(next[0], 1);
+    if k < n { out[k] = 1; }
+  }
 }""",
-            "E-PLACEMENT",
+            "E-COOP-GLOBAL",
         ),
     ],
     "Streams": [

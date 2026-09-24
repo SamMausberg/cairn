@@ -2,6 +2,7 @@
 the address and undefined sanitizers, and PTX in the SASS nvcc makes of it for sm_120."""
 
 import math
+import re
 import shutil
 import subprocess
 
@@ -13,7 +14,7 @@ from cairn.compiler.cairnc import compile_source
 from cairn.compiler.machine import host, satisfies
 from cairn.projects.build import build as build_project
 from cairn.projects.project import load_project
-from emitted import code_of, device_build, refused, watched
+from emitted import code_of, contract, device_build, on_device, refused, watched
 
 HOST = host()
 OTHER = "aarch64" if HOST == "x86_64" else "x86_64"
@@ -348,3 +349,86 @@ fn block_bits(n:usize, x:ro<u32>[n]@device, g:usize, out:rw<u32>[g]@device) {
 
 def test_a_thread_of_a_cooperative_region_runs_typed_ptx(tmp_path):
     assert "BREV" in sass(tmp_path, COOPERATIVE)
+
+
+def passes(cpp: str, name: str) -> list[list[str]]:
+    """The variables of `name`'s lane body in the order it first reads them, as the host pass and the device pass of
+    nvcc each preprocess it: the variables its closure captures."""
+    body = "\n".join(line for line in cpp.splitlines() if not line.lstrip().startswith("#include"))
+    seen = []
+    for defined in ([], ["-D__CUDA_ARCH__=1200"]):
+        text = subprocess.run(["g++", "-E", "-P", *defined, "-x", "c++", "-"], input=body, capture_output=True,
+                              text=True, check=True).stdout  # fmt: skip
+        lane = text.split(f"ci_{name}(")[-1].split("[=]", 1)[1].split("\n}\n")[0]
+        order: list[str] = []
+        for word in re.findall(r"\bv_[a-z0-9_]+\b", lane):
+            if word not in order:
+                order.append(word)
+        seen.append(order)
+    return seen
+
+
+WIDE = """
+fn sums4(n:usize, x:ro<f32>[n]@device, m:usize, out:rw<f32>[m]@device) {
+  parallel i in m {
+    let offset:u64 = u64(i) * 16;
+    unsafe {
+      asm ptx sm_75 "{ .reg .u64 a; add.u64 a, %4, %5; ld.global.cg.v4.f32 {%0, %1, %2, %3}, [a]; }" (out a0:f32, out a1:f32, out a2:f32, out a3:f32, x, offset) effects(read:x);
+      out[i] = (a0 + a1) + (a2 + a3);
+    }
+  }
+}
+"""
+
+
+@pytest.mark.skipif(not shutil.which("g++"), reason="needs g++")
+def test_both_passes_of_a_lane_read_the_same_variables():
+    """nvcc builds a lane's kernel from a closure it lays out in each pass, and a kernel whose captures differ between
+    the passes does not launch: measured on an RTX 5070 Ti, a lane whose view reached only its PTX failed with
+    'invalid resource handle', and a cooperative region's with 'invalid device function'. Every input is evaluated
+    in both passes, so both read the same variables in the same order."""
+    for source, name in ((PTX, "reversed"), (WIDE, "sums4"), (COOPERATIVE, "block_bits")):
+        host_pass, device_pass = passes(compile_source(source)[0], name)
+        assert host_pass == device_pass, (name, host_pass, device_pass)
+    assert "v_x" in passes(compile_source(WIDE)[0], "sums4")[0]  # the view the PTX alone reads
+
+
+RUNS = (
+    WIDE
+    + PTX
+    + COOPERATIVE
+    + """
+fn main() -> i32 {
+  let n:usize = 4096;
+  let q:usize = n / 4;
+  let g:usize = n / 256;
+  buffer x:f32[n]@device = zeroed;
+  buffer bits:u32[n]@device = zeroed;
+  buffer out:f32[q]@device = zeroed;
+  buffer turned:u32[n]@device = zeroed;
+  buffer firsts:u32[g]@device = zeroed;
+  parallel i in n { x[i] = f32(i % 8); bits[i] = u32(i); }
+  sums4(x, out);
+  reversed(turned, bits);
+  block_bits(bits, firsts);
+  buffer back:f32[q] = zeroed;
+  buffer flipped:u32[n] = zeroed;
+  buffer first:u32[g] = zeroed;
+  transfer(back, out);
+  transfer(flipped, turned);
+  transfer(first, firsts);
+  for k in 0..q { if back[k] != f32((4 * k) % 8 + (4 * k + 1) % 8 + (4 * k + 2) % 8 + (4 * k + 3) % 8) { return 1; } }
+  if flipped[1] != 2147483648 || flipped[2] != 1073741824 { return 2; }
+  if first[0] != 0 || first[1] != 8388608 { return 3; }
+  return 0;
+}
+"""
+)
+
+
+def test_typed_ptx_in_a_lane_and_a_cooperative_region_runs_on_the_device(tmp_path):
+    """Run only under `make gpu`: a 16-byte load in a lane, a bit reversal in a lane and in a cooperative region."""
+    cpp = compile_source(RUNS)[0]
+    with on_device():
+        done = contract(tmp_path, cpp, "g++", cuda=True, timeout=600)
+    assert done.returncode == 0, (done.returncode, done.stderr[-2000:])

@@ -7,6 +7,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | File | Owns |
 |---|---|
 | `compiler/cairnc.py` | the facade: parse through judge (`compile_program`), then the certificates and the emitter (`generate`) |
+| `compiler/compilations.py` | one compile per distinct source in a process: what the hosts, `cairn state`, `cairn mcp` and `cairn lsp` read, the key it is kept under, the copy each caller gets, and the bound on what is kept |
 | `compiler/lexing.py` | tokens and reserved words |
 | `compiler/tree.py` | the syntax tree, the scalar vocabulary, `Diagnostic` |
 | `compiler/syntax.py` | the parser's declarations and entry point, and source ranges |
@@ -25,6 +26,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/chunks.py` | which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering |
 | `compiler/staging.py` | which arrays a plan's `stage` loads into a device block's shared tile, and that lowering |
 | `compiler/cooperative.py` | cooperative regions (`blocks ... threads ...`): their shape, shared arrays, barriers and warp operations, who reaches a statement together, and their lowering |
+| `compiler/finish.py` | a cooperative region's finish, `then threads t in T { }`: its rule, and its lowering as the last block of one launch |
 | `compiler/phases.py` | the phase rule: between two barriers no two threads of a block touch one shared element where either writes |
 | `compiler/block_run.py` | a cooperative body run for every thread of one block together, recording each phase's accesses for the phase rule and the census |
 | `compiler/footprints.py` | index polynomials, and the rule that each element of an array from outside a cooperative region has one writer |
@@ -41,6 +43,8 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/constants.py` | constant folding |
 | `compiler/facts.py` | what the checker established about `usize` values, which lowering uses to drop a guard |
 | `compiler/builtins.py` | every primitive's rule, beside its lowering |
+| `compiler/wide.py` | wide loads and stores: `load_wide[K]` and `store_wide`, their cache hints, the part each reaches, their lowering |
+| `compiler/atomics.py` | atomic updates of one element: their rule, the class they form beside plain accesses, their numerical contract, their lowering |
 | `compiler/machine.py` | the machine: `mmio_read`, `mmio_write`, `asm` and typed assembly, their rules and target requirements beside their lowering |
 | `compiler/launches.py` | an `extern` CUDA kernel's `launch(threads, block)`: its rule beside its lowering |
 | `compiler/printing.py` | `print`, `println`, `eprint`, `eprintln` and `format`: what each argument writes, and their lowering |
@@ -48,12 +52,16 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/region_lowering.py` | the lowering of `parallel`, `reduce`, `scan` and `compact` on host or device lanes, and of a fused chain as one region |
 | `compiler/execution.py` | which runtime operation each piece of device work lowers to, on the calling thread's execution context |
 | `compiler/header.py` | the C header of a library build: its declarations, the layouts it states, what cannot cross |
-| `runtime/*.hpp` | guards, owners, threads, rings, storage floats, the tensor-core multiply, device calls, execution contexts, the emulated device machine |
+| `runtime/*.hpp` | guards, owners, threads, rings, storage floats, wide accesses and atomic updates, the tensor-core multiply, device calls, execution contexts, the emulated device machine |
 | `projects/project.py` | manifests, vendored dependencies, the line-to-file map |
 | `projects/toolchain.py` | every native flag, and the closed table of system libraries |
 | `projects/target.py` | the device target: its spelling, how it is resolved, the features and limits it has, and the results it refuses |
 | `projects/emulation.py` | a device program built for the host (`--emulate`): what the host cannot run as the device would, and what its records say |
 | `projects/export.py` | an export: the program a build compiles and the record pinning it, and the builds, runs, tests and comparisons that take it |
+| `projects/harness.py` | `cairn export --harness`: each benchmark format and the upstream commit it follows, the `cairn.harness/1` record, and the commands it prints and never runs |
+| `projects/harness_mapping.py` | `harness.toml`: which benchmark argument feeds which parameter, with its dtype and shape, checked against the signature |
+| `projects/harness_sources.py` | the PyTorch binding of a checked entry, and the submission file each benchmark reads around an export |
+| `projects/harness_import.py` | `cairn new --from-sol-execbench`: a project from a SOL-ExecBench problem's definition and workloads |
 | `projects/foreign.py` | vendored C++ and CUDA a manifest's `[foreign]` names: built by the project's command line, held to each extern's types, inspected |
 | `projects/revision.py` | a program as a path or a git revision holds it |
 | `projects/new.py` | what `cairn new` writes: the default project or a packaged template, and the AGENTS.md each gets |
@@ -89,6 +97,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `perf/plan_source.py` | a function's plan as source text: the plans the checker resolves to it, and where a new one is written |
 | `perf/regions.py` | names for a function's parallel regions that survive edits which do not touch them |
 | `perf/search.py`, `perf/tune.py` | the bounded search over a function's plans: the space, what the checker accepts, the budgets, measurement |
+| `perf/objective.py` | what a search ranks candidates by when it prices them at several sizes |
 | `perf/resources.py` | what a compiled candidate uses on the device, for one target, kept by what was compiled |
 | `perf/feedback.py` | the difference report between two candidates, each line labelled by the kind of evidence it is |
 | `verify/elision.py` | the independent check of every guard lowering leaves out |

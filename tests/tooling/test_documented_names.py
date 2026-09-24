@@ -15,7 +15,9 @@ TOOLS = ROOT / "docs" / "tools.md"
 NAMED = re.compile(r"\bE-[A-Z0-9]+(?:-[A-Z0-9]+)*(?:-\*)?")
 PLACEHOLDER = {"E-CODE"}  # how docs/README.md writes the code a `cairn rejects` block states
 RESTATES = {"agent/teaching.py", "agent/diagnostics.py", "agent/skill.py"}  # they explain codes and emit none
-OTHER_TOOLS = set("python python3 npm npx code make c++ cc ln nm size qemu-system-aarch64".split())  # not cairn's flags
+OTHER_TOOLS = set(
+    "python python3 npm npx code make c++ cc ln nm size qemu-system-aarch64 nvcc sol-execbench popcorn".split()
+)  # not cairn's flags
 
 
 def documents() -> list[Path]:

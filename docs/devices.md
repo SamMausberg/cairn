@@ -78,7 +78,7 @@ fn smooth(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, tmp:rw<f32>[n]@de
 }
 ```
 
-The rule reads the function's effect row, which covers everything it calls. The row may not hold a transfer to or from host memory, a device allocation (a `buffer`, or the scratch of a device `reduce`, `scan` or `compact`, whose result returns to the host), queued work or a wait, I/O, a foreign call, a machine register, host assembly, a call through a function value, an atomic or a lock, and the function may take no `@unified` view. These are everything through which the host reads device memory or waits on the device, so work queued before the one wait reaches nothing the host reads earlier. When the function returns the host sees every result, and a guard that fired in a lane has aborted the process, just as when each region waited. A device operation whose result the host reads, such as a copy to host memory, still waits where it stands, and it waits for everything queued before it.
+The rule reads the function's effect row, which covers everything it calls. The row may not hold a transfer to or from host memory, a device allocation (a `buffer`, or the scratch of a device `reduce`, `scan` or `compact`, whose result returns to the host), queued work or a wait, I/O, a foreign call, a machine register, host assembly, a call through a function value, a lock, or an atomic update outside a device region, and the function may take no `@unified` view. These are everything through which the host reads device memory, waits on the device or lets another host thread see progress, so work queued before the one wait reaches nothing the host reads earlier. An atomic update in a device lane, such as a histogram's, is device work like any other. When the function returns the host sees every result, and a guard that fired in a lane has aborted the process, just as when each region waited. A device operation whose result the host reads, such as a copy to host memory, still waits where it stands, and it waits for everything queued before it.
 
 A device library's C header gives each such function a second entry, `cq_NAME(stream, ...)`. It checks its arguments as `cf_NAME` does, queues the same work on the caller's stream after what the caller queued there, and returns without waiting. It makes no stream, event or allocation, so PyTorch or any CUDA program can call it on its current stream, or capture it in a CUDA graph. The first call of each kernel in a process reads the kernel's attributes once. `cf_NAME` stays synchronous. A function the rule refuses has no `cq_` entry, and the header lists it under `E-ENQUEUE` with the reason:
 
@@ -160,7 +160,7 @@ fn shift(g:usize, out:rw<u64>[g]) {
 }
 ```
 
-An array from outside the region is shared by every block, and no barrier orders two blocks. Each of its elements may be written by at most one thread of one block, and read by another only if nobody writes it (`E-COOP-GLOBAL`). The checker shows this when the index is a sum of the block, thread and loop names, each times a weight larger than all the lighter terms add up to. `b * 256 + t` is such a sum, and so is the transpose's `(bx * 32 + ty + 8 * k) * h + by * 32 + tx` when `h` is `32 * gy`. A condition on the index, `if col < h`, counts toward that bound, when the names it sums all count up or all count down. A loop whose range moves with another name, such as `for c in l..l + 2`, is bounded by nothing. A thread may read the elements it writes, as `c += ...` does, when the read's index is the write's, in the same loop or in another over the same range, under the write's conditions.
+An array from outside the region is shared by every block, and no barrier orders two blocks. Each of its elements may be written by at most one thread of one block, and read by another only if nobody writes it (`E-COOP-GLOBAL`), [atomic updates](concurrency.md#atomics-and-mutexes) aside: any thread may update any element atomically, and an array so updated is touched no other way in the region (`E-ATOMIC-MIXED`). The checker shows this when the index is a sum of the block, thread and loop names, each times a weight larger than all the lighter terms add up to. `b * 256 + t` is such a sum, and so is the transpose's `(bx * 32 + ty + 8 * k) * h + by * 32 + tx` when `h` is `32 * gy`. A condition on the index, `if col < h`, counts toward that bound, when the names it sums all count up or all count down. A loop whose range moves with another name, such as `for c in l..l + 2`, is bounded by nothing. A thread may read the elements it writes, as `c += ...` does, when the read's index is the write's, in the same loop or in another over the same range, under the write's conditions.
 
 ```cairn
 // out is x transposed: x has 32 * gy rows of 32 * gx elements.
@@ -181,6 +181,40 @@ fn transpose(gx:usize, gy:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
   }
 }
 ```
+
+A region may end with a finish, `then threads t in T { }`, which runs once, in one block, after every block of the region has finished. Everything the blocks wrote is visible to it, so it may read any element of an array they wrote, plainly or atomically, which no thread of the region may. A one-pass reduction leaves each block's partial sum in `partial[b]` and adds the partials in the finish:
+
+```cairn
+fn total(n:usize, x:ro<u64>[n], g:usize, partial:rw<u64>[g], out:rw<u64>[1]) {
+  blocks b in g threads t in 256 {
+    shared warps:u64[8] = zeroed;
+    let mut sum:u64 = 0;
+    let mut i = b * 256 + t;
+    while i < n {                                  // a grid-stride share of x
+      sum = add_wrap(sum, x[i]);
+      i += g * 256;
+    }
+    let w = reduce add_wrap warp yield sum;
+    if t % 32 == 0 { warps[t / 32] = w; }
+    barrier;
+    if t == 0 {
+      let mut s:u64 = 0;
+      for k in 0..8 { s = add_wrap(s, warps[k]); }
+      partial[b] = s;
+    }
+  } then threads t in 256 {                        // once, after every block
+    if t == 0 {
+      let mut s:u64 = 0;
+      for k in 0..g { s = add_wrap(s, partial[k]); }
+      out[0] = s;
+    }
+  }
+}
+```
+
+The finish has the region's number of threads, under names and extents of its own (`E-COOP-SHAPE`), and no block name. Nothing of a block is in scope: the finish declares its own shared arrays, and every rule of a region holds inside it. It runs where the region runs (`E-PLACEMENT`), exactly once, also when the grid has no blocks, so a reduction over nothing writes its identity. With floats every sum above has an order the program fixes, so the answer is the same on every run with the same grid; an `atomic_add_unordered` into `out[0]` needs no partials and adds in the order the hardware picks.
+
+On the host the finish is one more team of threads, started after every block's threads have been joined. On the device the region stays one launch: each block, once done, has one thread fence its writes device-wide and count the block in a counter the execution context keeps, and the block that brings the count to the grid's fences again, runs the finish and puts the counter back to zero. The counter is the context's scratch, allocated by its first finish, so the row gains `gpu_alloc` and `gpu_free` as a device `reduce`'s does, and such a function has no enqueued entry. It compiles for `sm_120` and has not run on a GPU.
 
 A closure in the body may run in any phase and any thread, so it names no shared array, pipeline or array from outside (`E-COOP-UNDECIDED`). A thread obeys everything a lane obeys: it cannot assign a scalar from outside (`E-PARALLEL-WRITE`), start another region (`E-PARALLEL-NEST`), do I/O (`E-PARALLEL-CALL`), or reach the other side's memory (`E-PLACEMENT`). The row gains `par:device` or `par:host`, `zero_init` for the shared arrays, and `trap` for the guards; the receipt lists each array's bytes and the block's total under `local_storage`.
 
@@ -241,6 +275,38 @@ tiles.fill at line 9 would refill the stage of tiles released at line 12 while o
 
 The depth is a constant of the declaration, and `strided_sums[2]` and `strided_sums[3]` compute the same sums. Raising it changes only the block's shared memory (depth times the stage's bytes, in the receipt's `local_storage` and the kernel's static shared memory) and how many copies a `wait` leaves in flight, which the checker counts: `cp.async.wait_group 1` at depth 2, `2` at depth 3. [`cairn predict`](tools.md#cairn-predict) prices what the depth changes: the shared memory, the blocks an SM holds, and the copies each block keeps in flight. On the device a fill is one `cp.async` per element, committed as one group per thread. On the host it is each thread's own copy, so a read the checker let through too early would race with it under the thread sanitizer.
 
+## Wide loads and stores
+
+`load_wide[K](x, i)` reads `x[i]` to `x[i + K - 1]` as one `Array[T, K]`, and `store_wide(x, i, v)` writes one back. On the device each is one access of up to 16 bytes, the widest a thread moves at once, with the cache behaviour a hint names.
+
+```cairn
+// Each lane scales four adjacent elements, streaming x and out past caches that will not see them again.
+fn scaled(m:usize, n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, a:f32) {
+  parallel i in m {
+    let v = load_wide[4](x, 4 * i, Cache.streaming);
+    let mut w = Array[f32, 4]();
+    for k in 0..4 { w[k] = a * v[k]; }
+    store_wide(out, 4 * i, w, Cache.streaming);
+  }
+}
+```
+
+`K` is a constant power of two, and `K` elements of a scalar or storage float fill at most 16 bytes: 4 `f32`, 8 `f16`, 2 `f64`, 16 `u8` (`E-WIDE`). A store takes an `Array` of the array's own element type. Each access traps unless its `K` elements lie inside the array and `x[i]` sits on `K * sizeof(T)` bytes. PTX leaves a misaligned vector access undefined, and a view the caller passes may start anywhere its element's alignment allows, so the second guard stays; where `i` is a multiple of `K`, nvcc reduces it to one test of the base pointer. The host checks both guards too, so a host or emulated run traps where a device run would.
+
+A hint is written by name: `Cache.all` (the default), `Cache.l2` (`.cg`), `Cache.streaming` (`.cs`), `Cache.last_use` (`.lu`, loads only) and `Cache.read_only` (`.nc`, the path `__ldg` takes). `Cache.read_only` reads only an `ro` view of device memory, which nothing writes while it is lent. A block's shared memory has no caches to hint, so a shared array takes no hint but `Cache.all`. On the host an access is `K` ordinary loads or stores, and the hint says nothing.
+
+```cairn rejects E-WIDE
+fn wide(n:usize, x:ro<f64>[n]@device, out:rw<f64>[n]@device) {
+  parallel i in n / 4 { let v = load_wide[4](x, 4 * i); store_wide(out, 4 * i, v); }    // 32 bytes at once
+}
+```
+
+```text
+load_wide moves a power of two of elements in one access of at most 16 bytes: f64 takes 1 to 2, and 4 is not one of them.
+```
+
+Every other rule sees an access as the part `x[i..i + K]` it reaches. A lane that stores `out[4 * i..4 * i + 4]` owns that block of `out` (`E-PARALLEL-RACE` otherwise), and the phase rule and the rule that each outside element has one writer count all `K` elements. The row gains `read:x` or `write:x` and `trap`, and [`cairn explain`](tools.md#cairn-explain) lists each access with the bytes it moves and its cache operator. The example above compiles for sm_120 to `LDG.E.EF.128` and `STG.E.EF.128` with no local memory, and has not run on a GPU.
+
 ## Emulating device code on the host
 
 `--emulate` builds, runs and tests a device program on a machine without a GPU. Every device region, collector, cooperative region, `kernel fn`, transfer and queued ticket then runs on host threads, so a kernel can be checked for correctness where no device is.
@@ -278,10 +344,10 @@ Fast CUDA kernels lean on a known set of features. The table says how a CAIRN pr
 
 | Feature | CUDA | CAIRN | Checked |
 |---|---|---|---|
-| 16-byte loads and stores with a cache hint | `float4`, `__ldg`, `__ldcg`, `__ldcs`, `__stcs` | safe only as `plan f { vector 4; }` over `x[i]` in a device `parallel` region; typed PTX anywhere else | accepted, `load_wide` is E-CALLEE |
-| Atomics on device memory | `atomicAdd`, `atomicMax`, `atomicCAS` | foreign: an `Atomic` is a host object, and typed PTX that writes an array is a whole-array write a lane may not make | E-PLACEMENT, E-PARALLEL-RACE |
-| Atomics on shared memory | `atomicAdd` on `__shared__` | foreign: typed PTX writes the array in every thread of a phase | E-COOP-CONFLICT |
-| A last block that finishes, grid-wide sync | `__threadfence` and an atomic ticket, `grid.sync()` | foreign: two regions are two launches | accepted |
+| 16-byte loads and stores with a cache hint | `float4`, `__ldg`, `__ldcg`, `__ldcs`, `__stcs` | safe: [`load_wide[K]` and `store_wide`](#wide-loads-and-stores) with a `Cache` hint, in any code, and `plan f { vector 4; }` over `x[i]` in a device `parallel` region | accepted, E-WIDE |
+| Atomics on device memory | `atomicAdd`, `atomicMax`, `atomicCAS` | safe: [`atomic_add_wrap(x[i], v)`](concurrency.md#atomics-and-mutexes) and its kin, from any lane or thread, never beside a plain access of the array in one region | accepted, E-ATOMIC-MIXED |
+| Atomics on shared memory | `atomicAdd` on `__shared__` | safe: the same updates on a shared array, apart from its plain accesses by a barrier | accepted, E-ATOMIC-MIXED |
+| A last block that finishes, grid-wide sync | `__threadfence` and an atomic ticket, `grid.sync()` | safe for a last block: a region's [finish](#cooperative-regions), `then threads t in T { }`; a grid-wide barrier inside a kernel is foreign | accepted, E-COOP-SHAPE |
 | Shared memory nobody zeroes | `__shared__ float s[256];` | not written: a shared array is `= zeroed`, and the row says `zero_init` | E-PARSE |
 | Warp vote and ballot | `__ballot_sync`, `__any_sync` | safe as `reduce \| warp yield` of one bit a lane, five shuffles where CUDA takes one vote | accepted |
 | Warp match | `__match_any_sync` | foreign | E-CALLEE |
@@ -298,8 +364,63 @@ Fast CUDA kernels lean on a known set of features. The table says how a CAIRN pr
 | `wgmma`, TMA, clusters, distributed shared memory | `wgmma.mma_async`, `cp.async.bulk.tensor`, `__cluster_dims__` | foreign, on a target that has the feature; `TmemAcc` is refused where it is not lowered | E-TARGET-FEATURE |
 | Block-wide cooperative groups | `this_thread_block().sync()`, `tiled_partition<32>` | safe: `barrier;` and the warp operations | accepted |
 | Memory fences, `__nanosleep` | `__threadfence()`, `__nanosleep(ns)` | typed PTX, a fence declared as `effects(fence)` | accepted |
-| Persistent kernels | one block an SM and a work loop | safe with a static schedule; a work counter shared by blocks is foreign | accepted, E-PLACEMENT |
+| Persistent kernels | one block an SM and a work loop | safe with a static schedule, and a work counter is an atomic update; writes at the index a counter hands out are foreign, since no rule shows them one writer | accepted, E-COOP-GLOBAL |
 | Streams | `cudaStream_t`, events | safe: `spawn parallel ... after t` and `spawn transfer` queue work on a stream of their own; a cooperative region is not queued | accepted, E-PARSE |
 | CUDA graphs | `cudaGraph_t` | foreign: host code in a vendored `.cu` | none |
 
 `tests/soundness/test_expressiveness.py` holds the table. For each row it compiles the spellings the row names and requires what the last column says: accepted, or refused with that code. A row whose check is `none` has nothing to compile.
+
+## Benchmark submissions
+
+`cairn export --harness` packages one CAIRN function for a kernel benchmark: a SOL-ExecBench `solution.json`, a GPU MODE `submission.py` or a KernelBench `ModelNew`. Beside it are the export it embeds and `harness.json`, a `cairn.harness/1` record of the format and the upstream commit it follows, the function and its signature, the mapping, the entry the binding calls, the flags and why, and the export's identity.
+
+```sh
+cairn new rmsnorm --from-sol-execbench problems/rmsnorm/definition.json   # a signature, harness.toml, policy.json
+cairn export rmsnorm --harness sol-execbench --symbol rmsnorm --out out/rmsnorm
+cairn export out/rmsnorm                                                  # {"status": "harness-intact", ...}
+```
+
+The submission calls the library through a PyTorch binding. Before any pointer crosses, the binding checks each tensor's dtype, device, contiguity, dimensions and element count against the mapping and the signature, refuses a written tensor that overlaps another and a number that does not fit its parameter, and raises a Python exception that names the argument. It then queues the device work on the caller's current torch stream through the no-wait entry `cq_rmsnorm` and returns without waiting. A function the header lists under `E-ENQUEUE`, such as one that transfers from host memory, is called through `cf_rmsnorm` with the torch stream bound by `NAME_device_stream`, and returns once its work there has finished. The record names the entry and, for the second, the reason.
+
+`harness.toml`, beside the manifest or named by `--mapping`, is data: which benchmark argument feeds which parameter, in the order the benchmark passes them, with its dtype and shape.
+
+```toml
+[axes]
+hidden_size = 4096                   # fixed; any other axis is read from the first tensor whose shape names it
+
+[extents]
+n = "batch_size * hidden_size"       # each usize parameter no argument feeds: + - * / over axes, checked
+
+[[argument]]
+name = "hidden_states"
+parameter = "x"
+dtype = "bfloat16"
+shape = ["batch_size", "hidden_size"]
+
+[[argument]]
+name = "output"
+parameter = "out"
+dtype = "bfloat16"
+shape = ["batch_size", "hidden_size"]
+output = true                        # a destination the benchmark allocated
+```
+
+An argument without `shape` is a Python number. A `[[result]]` is a tensor the adapter allocates and returns. `[benchmark]` names SOL-ExecBench's `definition`, GPU MODE's `leaderboard` and `gpu`, and the `problem` the printed commands evaluate. KernelBench's `forward` gets only inputs, so its outputs are results, and SOL-ExecBench passes every output preallocated after the inputs, so it takes none. A dtype is spelled as the benchmark or as CAIRN spells it, `bfloat16` or `bf16`, and `float4_e2m1fn_x2` and the other formats CAIRN has no type for are refused by name. A mapping the signature does not bear writes nothing:
+
+| Refused | Code |
+|---|---|
+| a parameter fed twice or by nothing, an axis no shape names, an extent beyond `+ - * /`, an input CAIRN writes | `E-HARNESS-MAPPING` |
+| a dtype other than the parameter's element type, a format CAIRN lacks, a float feeding an integer | `E-HARNESS-DTYPE` |
+| a function with no C entry, such as one that takes an owner | `E-HARNESS-SYMBOL` |
+| a result for SOL-ExecBench, a destination for KernelBench, a returned value, a solution naming no definition | `E-HARNESS-FORMAT` |
+| a device target whose code does not load on the GPU the mapping names | `E-TARGET-MISMATCH` |
+
+The flags keep CAIRN's numerics. SOL-ExecBench compiles with `nvcc -O3 --use_fast_math` unless a solution says otherwise, so `compile_options` gives `nvcc -std=c++20 -O3 --fmad=false -arch=sm_100a --extended-lambda --expt-relaxed-constexpr -Xcompiler -ffp-contract=off,-fno-fast-math` for the device target, and `c++ -std=c++20 -O3 -ffp-contract=off -fno-fast-math` for the binding. GPU MODE and KernelBench pass the same flags to `load_inline`. Their Python files embed the export's sources one line per line and check each one's sha256 before the build.
+
+Nothing here runs an evaluator, submits or opens a connection. The record lists the commands that would, for you to run: `sol-execbench PROBLEM --solution solution.json`, KernelBench's `scripts/run_and_check.py`, and `popcorn submit --mode test`, `benchmark`, `profile` or `leaderboard`. `popcorn submit --mode leaderboard` is a public ranked submission under your name on gpumode.com.
+
+A score keeps its benchmark's meaning, and the record states it. SOL-ExecBench's `S = 1 / (1 + (T_k - T_SOL) / (T_b - T_SOL))` is 0.5 at its PyTorch baseline and 1.0 at its modelled speed of light, so 0.74 is not 74 percent of anything. GPU MODE ranks by the benchmarks' mean times, by their geometric mean under `ranking_by: geom`. KernelBench's `fast_p` is the fraction of problems solved correctly and faster than PyTorch by more than `p`. None of these is the speed-of-light fraction `cairn predict` reports.
+
+`cairn new DIR --from-sol-execbench definition.json` starts a project from a problem. It writes the reference's signature, with a `usize` per variable axis, a `const` per fixed one and an `@device` view per tensor, above an empty body and the PyTorch reference as a comment; `harness.toml`; the problem's files; and `policy.json`, with the tightest `max_atol` and `max_rtol` any workload states, for `cairn validate --policy`. The benchmark also requires a matched ratio where CAIRN requires every element, fails any NaN or infinity where CAIRN agrees a NaN with a NaN, compares in f32 where CAIRN compares in f64, and may cap the largest error; the answer and `harness.toml` say which of these apply. The device target defaults to `sm_100a`, the B200 the benchmark runs on.
+
+`tests/projects/test_harness_torch.py` builds each format with CPU torch and runs a host-view kernel on CPU tensors against the benchmark's reference; it skips where torch is absent. [The evidence](../evidence/v1_1/harness/README.md) says where it ran, and records device builds compiled and linked for sm_100a against a CUDA torch and never run.

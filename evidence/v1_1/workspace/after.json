@@ -1,0 +1,188 @@
+{
+  "root": "(this repository)",
+  "machine": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "projects": {
+    "analytics": {
+      "source_bytes": 32630,
+      "symbol": "analytics.cols.chain",
+      "load_average": [
+        630.9912109375,
+        630.9912109375
+      ],
+      "summary": {
+        "first_check": 0.3598174779999681,
+        "later_check_median": 0.00547886899948935,
+        "first_open": 0.0701264560011623,
+        "second_open": 0.04029571199862403,
+        "cycle_median": 0.37023165799837443,
+        "check_after_edit_median": 0.0034567749989946606,
+        "peak_resident_kib": 66904
+      },
+      "calls": {
+        "checks": [
+          {
+            "seconds": 0.3598174779999681,
+            "cached": false
+          },
+          {
+            "seconds": 0.004192944999886095,
+            "cached": true
+          },
+          {
+            "seconds": 0.007874679000451579,
+            "cached": true
+          },
+          {
+            "seconds": 0.006829818001278909,
+            "cached": true
+          },
+          {
+            "seconds": 0.00547886899948935,
+            "cached": true
+          },
+          {
+            "seconds": 0.006048405999536044,
+            "cached": true
+          },
+          {
+            "seconds": 0.004717764999440988,
+            "cached": true
+          },
+          {
+            "seconds": 0.00402984100037429,
+            "cached": true
+          },
+          {
+            "seconds": 0.008291688000099384,
+            "cached": true
+          },
+          {
+            "seconds": 0.0041332769997097785,
+            "cached": true
+          }
+        ],
+        "opens": [
+          {
+            "seconds": 0.0701264560011623
+          },
+          {
+            "seconds": 0.04029571199862403
+          }
+        ],
+        "cycles": [
+          {
+            "open": 0.026105217999429442,
+            "edit": 0.32323205800094,
+            "check": 0.0039462630011257716,
+            "cached": true
+          },
+          {
+            "open": 0.04121474500061595,
+            "edit": 0.3255601379987638,
+            "check": 0.0034567749989946606,
+            "cached": true
+          },
+          {
+            "open": 0.05612689999907161,
+            "edit": 0.32700584099984553,
+            "check": 0.0033265309994021663,
+            "cached": true
+          }
+        ],
+        "peak_resident_kib": 66904
+      }
+    },
+    "generated_185": {
+      "source_bytes": 241079,
+      "symbol": "big.m185.fold_185",
+      "load_average": [
+        630.9912109375,
+        538.3134765625
+      ],
+      "summary": {
+        "first_check": 1.5981166589990607,
+        "later_check_median": 0.01601290100006736,
+        "first_open": 0.6470698369994352,
+        "second_open": 0.38088576199879753,
+        "cycle_median": 2.3587546199996723,
+        "check_after_edit_median": 0.016700472000593436,
+        "peak_resident_kib": 320276
+      },
+      "calls": {
+        "checks": [
+          {
+            "seconds": 1.5981166589990607,
+            "cached": false
+          },
+          {
+            "seconds": 0.01601290100006736,
+            "cached": true
+          },
+          {
+            "seconds": 0.018272781000632676,
+            "cached": true
+          },
+          {
+            "seconds": 0.023292440000659553,
+            "cached": true
+          },
+          {
+            "seconds": 0.015758633000586997,
+            "cached": true
+          },
+          {
+            "seconds": 0.013426509000055376,
+            "cached": true
+          },
+          {
+            "seconds": 0.015403991001221584,
+            "cached": true
+          },
+          {
+            "seconds": 0.015805799999725423,
+            "cached": true
+          },
+          {
+            "seconds": 0.025521739000396337,
+            "cached": true
+          },
+          {
+            "seconds": 0.017917895000209683,
+            "cached": true
+          }
+        ],
+        "opens": [
+          {
+            "seconds": 0.6470698369994352
+          },
+          {
+            "seconds": 0.38088576199879753
+          }
+        ],
+        "cycles": [
+          {
+            "open": 0.33621694599969487,
+            "edit": 2.138384470999881,
+            "check": 0.014651661998868803,
+            "cached": true
+          },
+          {
+            "open": 0.2761212790010177,
+            "edit": 1.9840214960004232,
+            "check": 0.017383076001351583,
+            "cached": true
+          },
+          {
+            "open": 0.26515903899962723,
+            "edit": 2.0768951089994516,
+            "check": 0.016700472000593436,
+            "cached": true
+          }
+        ],
+        "peak_resident_kib": 320276
+      }
+    }
+  },
+  "commit": "5fa28866a04854045bab6a335a83a374e01fc258"
+}

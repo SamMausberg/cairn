@@ -52,6 +52,11 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"predict", "tune", "export"}, "--at", {"action": "append", "default": [], "metavar": "NAME=SIZE[,NAME=SIZE]", "help":
                                    "Price at these sizes (repeatable); predict defaults a function of one extent to "
                                    "1e3, 1e5 and 1e7."}),
+    ({"tune"}, "--shapes", {"type": Path, "metavar": "SHAPES.json", "help": "More sizes to tune for, each with a "
+                            "weight: a JSON list of {\"at\": \"n=1e6\", \"weight\": 2}."}),
+    ({"tune"}, "--objective", {"choices": ["geomean", "mean"], "default": "geomean", "help": "How the times at "
+                               "the sizes fold into the one that ranks candidates: the geometric mean (default), "
+                               "as GPU MODE scores a list of shapes, or the arithmetic mean; weighted by --shapes."}),
     ({"tune"}, "--measure", {"type": int, "default": 0, "metavar": "K", "help": "Time the K best-ranked plans and "
                              "the current one on this host, halving each round."}),
     ({"tune"}, "--device", {"action": "store_true", "help": "Time device plans on the device; only make "
@@ -116,6 +121,12 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"export"}, "--tests", {"action": "store_true", "help": "Export the test blocks' program; cairn test runs it."}),
     ({"export"}, "--time", {"metavar": "SYMBOL", "help": "Export SYMBOL beside a timing driver at the --at sizes; "
                             "cairn run of the export measures it."}),
+    ({"export"}, "--harness", {"choices": ["sol-execbench", "gpumode", "kernelbench"], "help": "Package --symbol "
+                               "as this benchmark's submission beside its export and a record; runs and submits "
+                               "nothing, and prints the commands that would."}),
+    ({"export"}, "--symbol", {"metavar": "F", "help": "With --harness: the function the benchmark calls."}),
+    ({"export"}, "--mapping", {"type": Path, "metavar": "HARNESS.toml", "help": "With --harness: which benchmark "
+                               "argument feeds which parameter; default: harness.toml beside the manifest."}),
     ({"export"}, "--compare", {"type": Path, "metavar": "OTHER", "help": "With an export: whether OTHER is the same "
                                "code, function by function; exit 1 when it is not."}),
     ({"test"}, "--test", {"default": "", "metavar": "NAME", "help": "Run the one test block of exactly this name "
@@ -170,6 +181,11 @@ def parser() -> argparse.ArgumentParser:
     new.add_argument("directory", type=Path)
     new.add_argument("--template", choices=templates(), default="default", help="default: the average the guide "
                      "walks through; cli, lib, service and parallel: a starting point for each kind of program.")  # fmt: skip
+    new.add_argument("--from-sol-execbench", type=Path, metavar="DEFINITION.json", help="A library project for "
+                     "this SOL-ExecBench problem: the reference's signature, the tolerance of its workload.jsonl as "
+                     "a validation policy, and harness.toml.")  # fmt: skip
+    new.add_argument("--device-target", metavar="SM", help="With --from-sol-execbench: the manifest's device "
+                     "target; default: sm_100a, the B200 the benchmark runs on.")  # fmt: skip
     for name, help in COMMANDS.items():
         c = sub.add_parser(name, help=help, parents=[shared])
         c.add_argument(

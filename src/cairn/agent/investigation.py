@@ -58,15 +58,15 @@ def investigation(source: str, symbol: str, where: str | Path, targets: dict[str
     """The packet for `symbol` of `source` from the history at `where`, current for `targets`, a mapping from a
     name (host, device) to what `agent/history.py` keeps as a target: a description or its digest. `vendored`
     (history.vendored) pins the project's foreign sources."""
-    from ..compiler.cairnc import compile_program
+    from ..compiler import compilations
     from ..perf.plan_source import Placement, contract, shown, written
     from ..perf.regions import identified
     from ..perf.tune import label
     from .projection import signature
 
-    placement = Placement(source, symbol)
-    _, _, receipts = compile_program(source)
-    base, promised = kept.as_written(source, symbol), contract(source, symbol)
+    checked = compilations.program(source)
+    placement, receipts = Placement(source, symbol, checked[:2]), checked[2]
+    base, promised = kept.as_written(source, symbol), contract(source, symbol, checked)
     held = {name: t if isinstance(t, str) else kept.digest(t) for name, t in targets.items()}
     split = kept.History(where).judged(symbol, base, {kept.digest(promised)}, set(held.values()))
     for r in [r for r in split["stale"] if r["kind"] == "validation" and set(r["stale"]) <= {"contract", "target"}]:

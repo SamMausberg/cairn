@@ -1,0 +1,188 @@
+{
+  "root": "(git archive of the before commit)",
+  "machine": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "projects": {
+    "analytics": {
+      "source_bytes": 32630,
+      "symbol": "analytics.cols.chain",
+      "load_average": [
+        985.66455078125,
+        916.2939453125
+      ],
+      "summary": {
+        "first_check": 0.3098364599991328,
+        "later_check_median": 0.297793002000617,
+        "first_open": 0.6533261669992498,
+        "second_open": 0.6310051990003558,
+        "cycle_median": 1.3472615970003972,
+        "check_after_edit_median": 0.3324847590010904,
+        "peak_resident_kib": 61044
+      },
+      "calls": {
+        "checks": [
+          {
+            "seconds": 0.3098364599991328,
+            "cached": null
+          },
+          {
+            "seconds": 0.26531343199894764,
+            "cached": null
+          },
+          {
+            "seconds": 0.32704893100162735,
+            "cached": null
+          },
+          {
+            "seconds": 0.3620724299998983,
+            "cached": null
+          },
+          {
+            "seconds": 0.28857067299941264,
+            "cached": null
+          },
+          {
+            "seconds": 0.252356922999752,
+            "cached": null
+          },
+          {
+            "seconds": 0.3024700229998416,
+            "cached": null
+          },
+          {
+            "seconds": 0.3054780860002211,
+            "cached": null
+          },
+          {
+            "seconds": 0.297793002000617,
+            "cached": null
+          },
+          {
+            "seconds": 0.27458581199971377,
+            "cached": null
+          }
+        ],
+        "opens": [
+          {
+            "seconds": 0.6533261669992498
+          },
+          {
+            "seconds": 0.6310051990003558
+          }
+        ],
+        "cycles": [
+          {
+            "open": 0.637547161000839,
+            "edit": 0.3032833880006365,
+            "check": 0.32448146600108885,
+            "cached": null
+          },
+          {
+            "open": 0.6815045679995819,
+            "edit": 0.3332722699997248,
+            "check": 0.3324847590010904,
+            "cached": null
+          },
+          {
+            "open": 0.6188706800003274,
+            "edit": 0.39530750199992326,
+            "check": 0.3918194779998885,
+            "cached": null
+          }
+        ],
+        "peak_resident_kib": 61044
+      }
+    },
+    "generated_185": {
+      "source_bytes": 241079,
+      "symbol": "big.m185.fold_185",
+      "load_average": [
+        916.2939453125,
+        630.9912109375
+      ],
+      "summary": {
+        "first_check": 1.9119853800002602,
+        "later_check_median": 2.2329403559997445,
+        "first_open": 4.711759194000479,
+        "second_open": 5.099896933999844,
+        "cycle_median": 7.5614682260002155,
+        "check_after_edit_median": 1.5480740809998679,
+        "peak_resident_kib": 261156
+      },
+      "calls": {
+        "checks": [
+          {
+            "seconds": 1.9119853800002602,
+            "cached": null
+          },
+          {
+            "seconds": 3.0701724250011466,
+            "cached": null
+          },
+          {
+            "seconds": 2.532474124998771,
+            "cached": null
+          },
+          {
+            "seconds": 2.6750355869990017,
+            "cached": null
+          },
+          {
+            "seconds": 2.996092834000592,
+            "cached": null
+          },
+          {
+            "seconds": 1.9897177160000865,
+            "cached": null
+          },
+          {
+            "seconds": 2.126978099000553,
+            "cached": null
+          },
+          {
+            "seconds": 2.2329403559997445,
+            "cached": null
+          },
+          {
+            "seconds": 1.736512233999747,
+            "cached": null
+          },
+          {
+            "seconds": 1.4311268599994946,
+            "cached": null
+          }
+        ],
+        "opens": [
+          {
+            "seconds": 4.711759194000479
+          },
+          {
+            "seconds": 5.099896933999844
+          }
+        ],
+        "cycles": [
+          {
+            "open": 3.575968515000568,
+            "edit": 3.2174422340012825,
+            "check": 1.6917948219997925,
+            "cached": null
+          },
+          {
+            "open": 4.119426997000119,
+            "edit": 2.058849074999671,
+            "check": 1.383192154000426,
+            "cached": null
+          },
+          {
+            "open": 2.964245507999294,
+            "edit": 2.431477286001609,
+            "check": 1.5480740809998679,
+            "cached": null
+          }
+        ],
+        "peak_resident_kib": 261156
+      }
+    }
+  },
+  "commit": "dd3f75e8e96917b5b3f200fec54d4bcb4162a4f9"
+}

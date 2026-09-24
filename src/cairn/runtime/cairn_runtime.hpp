@@ -58,12 +58,23 @@ template<class T> CR_HD inline bool sub(T a,T b,T* r) noexcept {
   return __builtin_sub_overflow(a,b,r);
 #endif
 }
+// A product overflows exactly when its high half is not the sign of its low half: the high word of a 64-bit
+// product (mul.hi), or the whole product of narrower operands in 64 bits. No division, which a checked multiply
+// in a lane would otherwise pay each time it runs.
 template<class T> CR_HD inline bool mul(T a,T b,T* r) noexcept {
 #if defined(__CUDA_ARCH__)
-  *r=static_cast<T>(std::uint64_t(a)*std::uint64_t(b));
-  if(a==T(0)) return false;
-  if constexpr(std::is_signed_v<T>) if(a==T(-1)) return b==std::numeric_limits<T>::min();
-  return *r/a!=b;
+  if constexpr(sizeof(T)==8) {
+    const unsigned long long x=static_cast<unsigned long long>(a), y=static_cast<unsigned long long>(b);
+    *r=static_cast<T>(x*y);
+    if constexpr(std::is_signed_v<T>)
+      return __mul64hi(static_cast<long long>(a),static_cast<long long>(b))!=(static_cast<long long>(*r)>>63);
+    else return __umul64hi(x,y)!=0;
+  } else {
+    using W=std::conditional_t<std::is_signed_v<T>,long long,unsigned long long>;
+    const W w=static_cast<W>(a)*static_cast<W>(b);
+    *r=static_cast<T>(w);
+    return w!=static_cast<W>(*r);
+  }
 #else
   return __builtin_mul_overflow(a,b,r);
 #endif

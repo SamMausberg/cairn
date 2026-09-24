@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import compile_source
+from ..compiler import compilations
 from ..projects.build import build
 from ..projects.project import Project, ProjectError, load_project
 from ..verify.testing import limited
@@ -29,7 +29,7 @@ LIMIT = 256  # frames collected from one run
 
 def rows(source: str, names: list[str]) -> dict[str, list[str]]:
     """The effect row of each named function, as the checker infers it for the whole program."""
-    functions = compile_source(source)[1]["functions"]
+    functions = compilations.emitted(source)[1]["functions"]
     missing = [n for n in names if n not in functions]
     if missing:
         raise ProjectError(f"No function {missing[0]} to report; name one the program defines.")

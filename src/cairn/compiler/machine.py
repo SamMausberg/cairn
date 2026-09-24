@@ -297,14 +297,20 @@ def lower_asm(g: Emitter, s: Stmt, es: list[str]):
     parts = [g.quoted(a.template), ", ".join(outs), ", ".join(ins), ", ".join(clobbers)]
     while len(parts) > 1 and not parts[-1]:
         parts.pop()
-    statement = [*before, f"__asm__{volatile}({' : '.join(parts)});"]
+    statement = f"__asm__{volatile}({' : '.join(parts)});"
     if not ptx:
-        return g.puts(*statement)
+        return g.puts(*before, statement)
+    # Both passes evaluate every input, so a lane body holding the statement reads the same variables in the same
+    # order on the host as on the device: nvcc launches an extended lambda's kernel only when its captures agree.
     wanted = g.quoted(f"The PTX {g.site(s.line)} needs {a.capability}; this device pass is for another architecture")
-    g.puts("#if defined(__CUDA_ARCH__)", f"#if !({requirement(a.capability)})", f"#error {wanted}", "#endif")
-    g.nest("{", lambda: g.puts(*statement))
-    g.puts("#else", *(f"static_cast<void>(v_{op.name});" for op in s.ref if op.kind in {"out", "inout"}))
-    g.puts("cr::trap();", "#endif")
+    held = [line.split()[2] for line in before] + [f"v_{op.name}" for op in s.ref if op.kind in {"out", "inout"}]
+
+    def statements():
+        g.puts(*before, "#if defined(__CUDA_ARCH__)", f"#if !({requirement(a.capability)})", f"#error {wanted}")
+        g.puts("#endif", statement, "#else", *(f"static_cast<void>({name});" for name in held), "cr::trap();")
+        g.put("#endif")
+
+    g.nest("{", statements)
 
 
 def records(f: Function) -> list[dict[str, Any]]:

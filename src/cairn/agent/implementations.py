@@ -27,7 +27,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import Diagnostic, Parser, compile_source, fail
+from ..compiler import compilations
+from ..compiler.cairnc import Diagnostic, Parser, fail
 from ..compiler.lexing import lex
 from ..projects.target import DeviceTarget
 from ..verify import agreement
@@ -35,6 +36,7 @@ from ..verify.validation import EMULATED, FINITE, Policy, failure, held, refusal
 from .agent_tools import digest, load_json_strict, stable_json
 from .diagnostics import explain, located
 from .projection import local, signature
+from .state import delta, state
 from .teaching import select_cards
 
 PROTOCOL = "cairn.implementation/1"
@@ -104,13 +106,13 @@ class ImplementationSession:
                  regressions: Path | None = None, cxx: str = "clang++", emulate: DeviceTarget | None = None):  # fmt: skip
         self.source, self.policy, self.regressions, self.cxx = source, Policy.of(policy), regressions, cxx
         self.emulate = emulate  # the device target device code is judged against and run for on host threads
-        self.parsed = Parser(source).parse()
+        self.parsed = compilations.parsed(source)
         found = [f for f in self.parsed.functions if reference in (f.name, local(f.name)) and not f.implements]
         if len(found) != 1:
             fail("E-SYMBOL", f"No single function {reference} to implement.")
         self.f = found[0]
         self.reference = self.f.name
-        self.receipt = compile_source(source)[1]["functions"]
+        self.receipt = compilations.emitted(source)[1]["functions"]
         mine = self.receipt[self.reference]
         declaration = source[self.f.start : self.f.end]
         record = self.policy.record()
@@ -193,11 +195,11 @@ class ImplementationSession:
         if full in existing:  # a changed implementation: the old declaration goes, the new one takes its place
             old = next(f for f in self.parsed.functions if f.name == full)
             base = base[: old.start] + base[old.end :]
-        at = next(f for f in Parser(base).parse().functions if f.name == self.reference).end
+        at = next(f for f in compilations.parsed(base).functions if f.name == self.reference).end
         rest = base[at:]  # the reference's own line break stays with it, so one blank line parts each declaration
         candidate = base[:at] + "\n\n" + text.strip("\n") + ("" if rest.startswith(("\n", "\r\n")) else "\n") + rest
         try:
-            receipt = compile_source(candidate)[1]["functions"]
+            receipt = compilations.emitted(candidate)[1]["functions"]
         except Diagnostic as e:
             raise located(e, candidate, at + 2, text.strip("\n")) from None
         added = {n for n in receipt if n not in self.receipt}
@@ -265,7 +267,8 @@ class ImplementationHost:
         done = {"protocol": PROTOCOL, "status": "validated", "implementation": name}
         emulated = [r["emulation"] for r in found.values() if "emulation" in r]
         claim = EMULATED.format(target=emulated[0]["judged_against"]) if emulated else FINITE
-        tail = {"claim": claim, "candidate_sha256": digest(candidate), "selected": False,
+        changed = delta(state(s.source), state(candidate))["modules"]  # what the program gained, and any row it moved
+        tail = {"claim": claim, "candidate_sha256": digest(candidate), "selected": False, "changed": changed,
                 **({"emulation": emulated[0]} if emulated else {})}  # fmt: skip
         if not instances:
             return {**done, **found[name], **tail}

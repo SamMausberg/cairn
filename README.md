@@ -109,7 +109,7 @@ fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@devic
 
 ## Install
 
-You need Linux on x86-64 or AArch64, Python 3.11 or later, and Clang or GCC with C++20. The compiler has no third-party Python dependency.
+You need Linux on x86-64 or AArch64, Python 3.11 or later, and GCC 11 or Clang 13 or later. The compiler has no third-party Python dependency.
 
 ```sh
 git clone https://github.com/SamMausberg/cairn && cd cairn
@@ -125,7 +125,7 @@ claude plugin marketplace add SamMausberg/cairn
 claude plugin install cairn@cairn
 ```
 
-Optional tools switch on more checks and are never downloaded: CUDA `nvcc` for device code, `libz3` for `verify` and `diff`, Lean 4 for `proofs/`, and `qemu-system-aarch64` for the bare-metal target.
+Optional tools switch on more checks and are never downloaded: `nvcc` from CUDA 12.9 or later for device code, `libz3` for `verify` and `diff`, Lean 4 for `proofs/`, and `qemu-system-aarch64` for the bare-metal target.
 
 ## Run
 

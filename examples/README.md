@@ -26,6 +26,7 @@ The test suite builds and runs each project here where its tools are present. [d
 | [tensor](tensor) | single files: a transpose through a shared tile laid out three ways, and two tensor-core multiplies written with fragments ([more](../docs/examples.md#examplestensor)) |
 | [foreign/host](foreign/host) | a 256-bin histogram and the vendored C++ implementation `cairn foreign` holds to it ([more](../docs/examples.md#examplesforeign)) |
 | [foreign/device](foreign/device) | a 3-point blend and the vendored CUDA kernel that implements it; the comparison runs only under `make gpu` ([more](../docs/examples.md#examplesforeign)) |
+| [harness](harness) | GPU MODE's vectoradd_v2 and KernelBench's level-1 ReLU as CAIRN kernels, each with the mapping `cairn export --harness` packages it by ([more](../docs/examples.md#examplesharness)) |
 | [bazel](bazel) | a Bazel workspace that builds, runs and tests CAIRN code with nothing fetched ([more](../docs/examples.md#examplesbazel)) |
 
-`apps/simulator`, `apps/gpu_pipeline`, the `gpu.toml` builds and `foreign/device` need `nvcc`, and their device code runs only under `make gpu`. `embedded` needs `qemu-system-aarch64` on an AArch64 host, and `bazel` needs Bazel. Everything else needs only a C++20 compiler.
+`apps/simulator`, `apps/gpu_pipeline`, the `gpu.toml` builds, `foreign/device` and `harness` need `nvcc`, and their device code runs only under `make gpu`. `embedded` needs `qemu-system-aarch64` on an AArch64 host, and `bazel` needs Bazel. Everything else needs only a C++20 compiler.

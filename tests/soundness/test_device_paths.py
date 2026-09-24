@@ -90,7 +90,8 @@ def test_a_vectored_lane_moves_its_chunks_in_single_wide_accesses_on_the_device(
     """Compiled for sm_120 and never run: the PTX holds one 128-bit load per read chunk and one store per written
     chunk, where the scalar lanes make 32-bit ones."""
     ptx = device_build(tmp_path, compile_source(SAXPY + "plan saxpy { vector 4; }")[0], ptx=True).read_text()
-    assert len(re.findall(r"ld\.global\.v4\.b32", ptx)) == 2 and len(re.findall(r"st\.global\.v4\.b32", ptx)) == 1
+    # CUDA 13 writes a 128-bit access of four floats .v4.b32, and CUDA 12.9 .v4.f32.
+    assert len(re.findall(r"ld\.global\.v4\.[bf]32", ptx)) == 2 and len(re.findall(r"st\.global\.v4\.[bf]32", ptx)) == 1
 
 
 def predicted(source: str, name: str, sizes: dict[str, float]) -> dict:

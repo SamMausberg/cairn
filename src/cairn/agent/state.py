@@ -15,10 +15,11 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any
 
-from ..compiler.cairnc import VERSION, Diagnostic, Parser, compile_program
+from ..compiler import compilations
+from ..compiler.cairnc import VERSION, Diagnostic, compile_program
 from .diagnostics import explain
 from .projection import declarations, local, signature
 
@@ -50,33 +51,48 @@ def sealed(value: dict[str, Any]) -> dict[str, Any]:
 
 def state(source: str, evidence: list[Any] | None = None, locate: Callable[[Diagnostic], dict] | None = None) -> dict:
     """The state of `source` now. `evidence` is attached as given; `locate` maps a diagnostic to its file."""
-    modules: dict[str, dict[str, Any]] = {}
     diagnostics: list[dict[str, Any]] = []
     types = ""
     try:
-        program, _, receipts = compile_program(source)
+        program, _, receipts = compilations.program(source)
         functions = [(f, receipts[f.name]["effects"]) for f in program.functions if own(f.name) and f.name in receipts]
         types = "\n".join(text for name, text in declarations(program).items() if own(name))
     except Diagnostic as error:
         diagnostics.append({**explain(error, source), **(locate(error) if locate else {})})
         try:
-            parsed = Parser(source).parse()
+            parsed = compilations.parsed(source)
         except Diagnostic:
             parsed = None
         functions = [(f, None) for f in (parsed.functions if parsed else [])]
-    for f, effects in functions:
-        module, name = written(f)
-        modules.setdefault(module, {})[name] = [signature(f), effects]
     return sealed({
         "protocol": PROTOCOL,
         "profile": VERSION,
         "status": "rejected" if diagnostics else "typed",
         "source_sha256": hashlib.sha256(source.encode()).hexdigest(),
-        "modules": {m: dict(sorted(fs.items())) for m, fs in sorted(modules.items())},
+        "modules": entries(functions),
         "types": types,
         "diagnostics": diagnostics,
         "evidence": list(evidence or []),
     })  # fmt: skip
+
+
+def entries(functions: Iterable[tuple[Any, list[str] | None]]) -> dict[str, dict[str, Any]]:
+    """Each function with its row as a state names it, by module: `[signature, effect row]`."""
+    modules: dict[str, dict[str, Any]] = {}
+    for f, effects in functions:
+        module, name = written(f)
+        modules.setdefault(module, {})[name] = [signature(f), effects]
+    return {m: dict(sorted(fs.items())) for m, fs in sorted(modules.items())}
+
+
+def moved(before: dict[str, dict[str, Any]], after: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """By module, each function whose entry differs from `before` to `after`: its new entry, or None where it is gone."""
+    changed: dict[str, dict[str, Any]] = {}
+    for module in sorted(set(before) | set(after)):
+        old, new = before.get(module, {}), after.get(module, {})
+        if found := {n: new.get(n) for n in sorted(set(old) | set(new)) if old.get(n) != new.get(n)}:
+            changed[module] = found
+    return changed
 
 
 def delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
@@ -84,18 +100,12 @@ def delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
     diagnostics and evidence whenever they differ. Applying it to `before` gives `after`."""
     if before.get("protocol") != PROTOCOL or after.get("protocol") != PROTOCOL:
         raise ValueError("A delta runs between two cairn.state/1 objects.")
-    changed: dict[str, dict[str, Any]] = {}
-    for module in sorted(set(before["modules"]) | set(after["modules"])):
-        old, new = before["modules"].get(module, {}), after["modules"].get(module, {})
-        moved = {n: new.get(n) for n in sorted(set(old) | set(new)) if old.get(n) != new.get(n)}
-        if moved:
-            changed[module] = moved
     same = ("profile", "status", "source_sha256", "types", "diagnostics", "evidence")
     return {
         "protocol": DELTA,
         "since": before["digest"],
         "digest": after["digest"],
-        "modules": changed,
+        "modules": moved(before["modules"], after["modules"]),
         **{k: after[k] for k in same if before[k] != after[k]},
     }
 
@@ -105,8 +115,8 @@ def apply(before: dict[str, Any], change: dict[str, Any]) -> dict[str, Any]:
     if change.get("protocol") != DELTA or change.get("since") != before.get("digest"):
         raise ValueError("This delta was taken from another state.")
     modules = {m: dict(fs) for m, fs in before["modules"].items()}
-    for module, moved in change["modules"].items():
-        for name, entry in moved.items():
+    for module, named in change["modules"].items():
+        for name, entry in named.items():
             if entry is None:
                 modules.get(module, {}).pop(name, None)
             else:

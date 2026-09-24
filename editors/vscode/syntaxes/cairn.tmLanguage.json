@@ -554,6 +554,10 @@
     },
     {
      "name": "keyword.control.concurrency.cairn",
+     "match": "\\bthen\\b(?=\\s+threads\\b)"
+    },
+    {
+     "name": "keyword.control.concurrency.cairn",
      "match": "\\bthreads\\b(?=\\s+[A-Za-z_]\\w*\\s*(?:,|in\\b))"
     },
     {
@@ -684,7 +688,7 @@
    "patterns": [
     {
      "name": "support.function.builtin.cairn",
-     "match": "\\b(?:quantize_stochastic|mma_unordered|shuffle_down|shuffle_xor|mmio_write|assert_eq|from_bits|mma_store|mmio_read|add_wrap|eprintln|mma_load|mul_wrap|quantize|shl_wrap|sub_wrap|transfer|collect|mma_get|mma_set|println|shuffle|to_bits|assert|eprint|format|floor|print|trunc|ceil|sqrt|swap|take|wait|abs|asm|len|max|min|shr)\\b(?=(?:\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])?\\s*\\()"
+     "match": "\\b(?:atomic_add_unordered|quantize_stochastic|atomic_add_wrap|mma_unordered|shuffle_down|shuffle_xor|atomic_and|atomic_cas|atomic_max|atomic_min|atomic_xor|mmio_write|store_wide|assert_eq|atomic_or|from_bits|load_wide|mma_store|mmio_read|add_wrap|eprintln|mma_load|mul_wrap|quantize|shl_wrap|sub_wrap|transfer|collect|mma_get|mma_set|println|shuffle|to_bits|assert|eprint|format|floor|print|trunc|ceil|sqrt|swap|take|wait|abs|asm|len|max|min|shr)\\b(?=(?:\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])?\\s*\\()"
     },
     {
      "name": "entity.name.function.member.cairn",

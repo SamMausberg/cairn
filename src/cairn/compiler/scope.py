@@ -45,6 +45,7 @@ class Lanes:
     outer: set[str]
     home: Any = None  # The closure the region began in: `return` may leave a newer closure, never the lane.
     accesses: list[tuple[str, int | None, bool, Expr]] = field(default_factory=list)  # root, block stride, write
+    atomics: list[tuple[str, Expr]] = field(default_factory=list)  # root, element: atomic updates (atomics.py)
 
 
 @dataclass

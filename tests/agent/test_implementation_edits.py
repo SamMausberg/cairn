@@ -73,6 +73,8 @@ def test_a_validated_implementation_advances_the_source_and_is_not_selected(host
     assert answer["finite"]["status"] == "passed" and answer["finite"]["implementation_ran"] > 0
     assert answer["claim"].startswith("finite-tested") and answer["selected"] is False
     assert answer["select_with"] == "plan total use total_by4;" and len(answer["identity"]) == 64
+    signature = "fn total_by4(n:usize, xs:ro<u64>[n]@host) -> u64 implements total when ((n % 4) == 0)"
+    assert answer["changed"] == {"": {"total_by4": [signature, answer["effects"]]}}  # what the program gained
     now = host.source("i1")
     assert BY4 in now and "plan total" not in now
     receipt = compile_source(now)[1]["functions"]["total"]

@@ -25,6 +25,7 @@ The test suite builds and runs every project under `examples/`. Start with `hell
 | [cooperative](#examplescooperative) | three cooperative kernels on host threads, held to plain loops, with their device build, a searched block shape and pipeline depth, and five refused programs |
 | [tensor](#examplestensor) | a transpose through a shared tile laid out three ways, and two tensor-core multiplies written with fragments |
 | [foreign](#examplesforeign) | a vendored C++ histogram and a vendored CUDA kernel, each an implementation of a CAIRN reference |
+| [harness](#examplesharness) | two benchmark problems as CAIRN kernels, with the mappings that package them as submissions |
 | [bazel](#examplesbazel) | a Bazel workspace that builds, runs and tests CAIRN code with nothing fetched |
 
 `apps/simulator`, `apps/gpu_pipeline`, the `gpu.toml` configurations and `foreign/device` need nvcc and a CUDA device, and the suite runs their device code only under `make gpu`. `bazel` needs Bazel. `embedded` needs `qemu-system-aarch64` on an AArch64 host. Everything else needs only a C++20 compiler.
@@ -492,6 +493,17 @@ cairn foreign examples/foreign/device --implementation stencil_tiled --device-ta
 ```
 
 [tools.md](tools.md#cairn-foreign) shows what `cairn foreign` reports for each. The device kernel is compiled for sm_120 and inspected; its validation runs only under `make gpu`.
+
+## examples/harness
+
+Two benchmark problems written as CAIRN device kernels: GPU MODE's `vectoradd_v2`, which adds two float16 matrices, and KernelBench's level-1 ReLU. `harness.toml` maps GPU MODE's input tuple `(A, B, output)` onto `vectoradd`, and `kernelbench.toml` maps `forward(x)` onto `relu`, whose output the adapter allocates.
+
+```sh
+cairn export examples/harness --harness gpumode --symbol vectoradd --out out/vectoradd
+cairn export examples/harness --harness kernelbench --symbol relu --mapping examples/harness/kernelbench.toml --out out/relu
+```
+
+Each writes the submission, the export it embeds and a `cairn.harness/1` record, and prints the commands that would evaluate or submit it ([devices.md](devices.md#benchmark-submissions)). Both compile for sm_100a; neither has run on a GPU.
 
 ## examples/bazel
 

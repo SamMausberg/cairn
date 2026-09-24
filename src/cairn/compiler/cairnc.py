@@ -106,9 +106,11 @@ def compile_source(source: str, origin: Any = "", roots: tuple[str, ...] = (), k
 
 
 def generate(source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool = False, sites: Any = None,
-             parsed: Program | None = None,
-             every: bool = False) -> tuple[list[str], list[tuple[str, list[str]]], dict]:  # fmt: skip
-    p, checker, receipts = compile_program(source, parsed=parsed, every=every)
+             parsed: Program | None = None, every: bool = False,
+             checked: tuple[Program, Checker, dict[str, Any]] | None = None
+             ) -> tuple[list[str], list[tuple[str, list[str]]], dict]:  # fmt: skip
+    """`checked`, when given, is what `compile_program(source)` answered, which the emitter takes over."""
+    p, checker, receipts = checked or compile_program(source, parsed=parsed, every=every)
     certificate = audit_collector()  # The collector's unchecked store is emitted only under this gate.
     emitter = Emitter(p, checker, origin, roots, keep=keep_guards, sites=sites)
     for name, verdict in emitter.elision.items():  # What lowering leaves out is what the audit accepted.

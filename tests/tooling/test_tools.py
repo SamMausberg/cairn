@@ -477,3 +477,15 @@ def test_device_examples():
     rows = {row["target"]: row for row in out["rows"]}
     assert rows["sm_120"]["status"] == "native-built" and out["failed"] == 0 and not out["ran_on_a_device"]
     assert rows["sm_75"]["status"] == "refused" and rows["sm_75"]["code"] == "E-TARGET-FEATURE"  # mma_sync needs sm_80
+
+
+def test_workspace_measure(tmp_path):
+    """The workspace timing runs end to end over a real `cairn mcp`, and its record says which checks the server
+    answered from a compile it already made."""
+    out = tmp_path / "measure.json"
+    tool(
+        "bench/workspace/measure.py", "--only", "analytics", "--checks", "2", "--cycles", "1", "--out", out, timeout=600
+    )
+    row = json.loads(out.read_text())["projects"]["analytics"]
+    assert [c["cached"] for c in row["calls"]["checks"]] == [False, True]
+    assert row["calls"]["cycles"][0]["cached"] and row["summary"]["peak_resident_kib"] > 0

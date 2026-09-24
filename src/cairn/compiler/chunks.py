@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import execution, layout_algebra
+from . import atomics, execution, layout_algebra
 from .tree import FLOAT, INT, STORAGE, Expr, Stmt, fail, is_view, nested
 
 if TYPE_CHECKING:
@@ -70,12 +70,14 @@ def chunkable(s: Stmt) -> dict[str, tuple[Any, bool, bool, Expr]]:
             seen[e.val] = seen.get(e.val, 0) + 1
         if e.tag == "index" and e.args[0].tag == "name" and e.args[0].val in names:
             indexed.setdefault(e.args[0].val, []).append(e)
+    updated = {id(e.args[0]) for e in exprs(s.body) if e.tag == "call" and e.val in atomics.NAMES and e.args}
     targets = {id(a.exprs[0]) for a in assignments(s.body)}
     top = {id(a.exprs[0]) for a in s.body if a.tag == "assign" and not a.op}
     chosen: dict[str, tuple[Any, bool, bool, Expr]] = {}
     for name, uses in indexed.items():
         at_i = all(u.args[1].tag == "name" and u.args[1].val == (s.binder or s.name) and u.established for u in uses)
         element, view = uses[0].ty, uses[0].args[0]
+        at_i = at_i and not any(id(u) in updated for u in uses)  # an atomic update reaches memory, not a chunk
         if not at_i or seen.get(name) != len(uses) or not is_view(view.ty) or element.name not in ELEMENTS:
             continue
         loaded, stored = any(id(u) not in top for u in uses), any(id(u) in targets for u in uses)
