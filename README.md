@@ -11,7 +11,7 @@ CAIRN is a systems programming language for code that AI agents write and people
 - The compiler's hosts admit an agent's edit, plan or implementation only if everything they pin still holds, and `cairn diff OLD NEW` says per function whether a change compiled to identical code, is SMT-equivalent, or changed behaviour, with an input that shows it.
 - `cairn predict` prices a function without running it, `cairn tune` searches plans and implementations within compile and run budgets and keeps a history a fresh agent resumes from, and `cairn shot` returns the frames a UI drew.
 
-These are properties of the design, checked by the tests and proofs listed under [limitations](#limitations-and-what-you-trust). The [Claude Code plugin](#install) gives an agent the rules in about 4,000 tokens; in a six-session smoke comparison, sessions with it cost 0.51 times as much as sessions without it, and every session solved its task ([evidence/v1_0/skill](evidence/v1_0/skill/README.md)). The preregistered equal-budget benchmark ran before the plugin existed: CAIRN subjects solved every task, as C++ and Rust subjects did, and used 11.6 times the tokens of C++ subjects, most of it reading the documentation ([results](evidence/v1_0/ai_benchmark/RESULTS.md)). Whether the plugin closes that gap is untested.
+These are properties of the design, checked by the tests and proofs listed under [limitations](#limitations-and-what-you-trust). The [Claude Code plugin](#install) gives an agent the rules in about 4,600 tokens; in a six-session smoke comparison, sessions with it cost 0.51 times as much as sessions without it, and every session solved its task ([evidence/v1_0/skill](evidence/v1_0/skill/README.md)). The preregistered equal-budget benchmark ran before the plugin existed: CAIRN subjects solved every task, as C++ and Rust subjects did, and used 11.6 times the tokens of C++ subjects, most of it reading the documentation ([results](evidence/v1_0/ai_benchmark/RESULTS.md)). Whether the plugin closes that gap is untested.
 
 ## Example
 
@@ -84,7 +84,7 @@ You need Linux on x86-64 or AArch64, Python 3.11 or later, and Clang or GCC with
 ```sh
 git clone https://github.com/SamMausberg/cairn && cd cairn
 python3 -m venv .venv && . .venv/bin/activate
-pip install -e .                   # '.[dev]' adds pytest, ruff and mypy
+pip install -e .                   # '.[dev]' adds pytest, ruff, mypy and setuptools
 cairn doctor                       # which optional tools are present
 ```
 
@@ -129,11 +129,11 @@ The demo agents are scripted replies; what the host, the compiler, Z3 and the pr
 
 CAIRN 1.0 was developed and measured on one machine. A later major version may still change the language.
 
-The compiler is not proved correct. The checker and the C++ emitter are about 8,100 lines of Python (`src/cairn/compiler`), and the runtime is about 2,600 lines of C++ headers (`src/cairn/runtime`). The Lean proofs are about models written by hand beside that code. Differential tests compare the models with the checker on generated programs, which shows agreement on samples, not that the Python implements the model.
+The compiler is not proved correct. The checker and the C++ emitter are about 12,900 lines of Python (`src/cairn/compiler`), and the runtime is about 3,500 lines of C++ headers (`src/cairn/runtime`). The Lean proofs are about models written by hand beside that code. Differential tests compare the models with the checker on generated programs, which shows agreement on samples, not that the Python implements the model.
 
 | You trust | For | Checked by |
 |---|---|---|
-| The Python parser, checker and emitter | every program | about 3,800 tests, rejection tables from seven adversarial reviews, differential runs against the Lean models |
+| The Python parser, checker and emitter | every program | about 4,900 tests, rejection tables from eight adversarial reviews, differential runs against the Lean models |
 | The runtime headers | owners, threads, the lane pool, rings, device calls | native runs under Clang and GCC with the address, leak, undefined and thread sanitizers |
 | Clang or GCC, and nvcc | native and device code | nothing in this repository |
 | `unsafe` blocks, `extern` declarations, typed `asm` and foreign implementations | the foreign boundary, MMIO, inline assembly, vendored C++ and CUDA | the effects and contracts they declare, trusted as written; a foreign implementation is finite-tested against its reference where it ran |
