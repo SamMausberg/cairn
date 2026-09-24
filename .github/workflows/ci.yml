@@ -97,9 +97,27 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install the pinned Lean toolchain and the Python dependencies
+      - name: Keep elan and the pinned Lean toolchain between runs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.elan
+          key: elan-${{ runner.os }}-${{ hashFiles('proofs/lean-toolchain') }}
+      # A download from elan's or Lean's servers can fail for a moment, as one did on main, so each is tried four
+      # times over about two minutes before the job fails. With the cache, neither is fetched.
+      - name: Install elan and the pinned Lean toolchain where the cache holds neither
         run: |
-          curl https://elan.lean-lang.org/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
+          retry() { for wait in 10 30 60; do "$@" && return; echo "failed; trying again in $wait s"; sleep "$wait"; done; "$@"; }
+          elan="$HOME/.elan/bin/elan"
+          if [ ! -x "$elan" ]; then
+            retry curl -sSfLo "$RUNNER_TEMP/elan-init.sh" https://elan.lean-lang.org/elan-init.sh
+            retry sh "$RUNNER_TEMP/elan-init.sh" -y --default-toolchain none
+          fi
+          toolchain="$(cat proofs/lean-toolchain)"
+          if ! "$elan" toolchain list | awk '{print $1}' | grep -xF "$toolchain" > /dev/null; then
+            retry "$elan" toolchain install "$toolchain"
+          fi
+      - name: Install the Python dependencies
+        run: |
           python3 -m venv .venv
           .venv/bin/python -m pip install -e '.[dev]'
       - name: Certificates in step with the proofs, the Lean build with its axiom audit, and the differential run
