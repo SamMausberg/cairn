@@ -50,3 +50,5 @@ The host-visible measures are secondary: they are what the protocol controls, an
 ## Known weaknesses
 
 Twelve small repairs in three example programs, in a language the subjects have not seen before. One model family, which also wrote the language, the cards, the tasks and the bug reports. The planted bugs are single-line mutations, so they reward reading one function closely and may favour the focused arm. The hidden checks are finite. Subjects are audited from their transcripts, not isolated by the operating system. With twelve pairs, the trial can show a large difference and cannot show a small one. `o200k_base` is not the subjects' own tokenizer, which is why the primary measure is the platform's count.
+
+Before any subject ran, the version name in the question was changed to the release numbering (1.0.0, with the earlier milestones as 0.8.0 to 0.8.3). Nothing else changed.
