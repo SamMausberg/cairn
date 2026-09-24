@@ -168,6 +168,9 @@ def test_the_bazel_example_builds_runs_and_tests_its_cairn_targets(tmp_path):
         (workspace / "MODULE.bazel").read_text().replace('"../../bazel"', f'"{ROOT / "bazel"}"')
         .replace('cairn.local(path = "../..")', f'cairn.local(path = "{ROOT}")')
     )  # fmt: skip
+    if ROOT.is_relative_to("/tmp"):  # Bazel's sandbox mounts its own /tmp, which hides a checkout there
+        with (workspace / ".bazelrc").open("a") as rc:
+            rc.write(f"build --sandbox_add_mount_pair={ROOT}\n")
     root = ["--output_user_root", str(tmp_path / "root")]
     env = {**os.environ, "HOME": os.environ.get("HOME", str(tmp_path))}
 
