@@ -22,8 +22,12 @@ The test suite builds and runs every project under `examples/`. Start with `hell
 | [sketch](#examplessketch) | one named choice settled by SMT, with no model |
 | [agent](#examplesagent) | the fixture behind the edit and repair loop |
 | [implementations](#examplesimplementations) | one prefix sum, three validated implementations, one searched over its parameter, and a scripted agent session |
+| [cooperative](#examplescooperative) | three cooperative kernels on host threads, held to plain loops, with their device build, a searched block shape and pipeline depth, and five refused programs |
+| [tensor](#examplestensor) | a transpose through a shared tile laid out three ways, and two tensor-core multiplies written with fragments |
+| [foreign](#examplesforeign) | a vendored C++ histogram and a vendored CUDA kernel, each an implementation of a CAIRN reference |
+| [bazel](#examplesbazel) | a Bazel workspace that builds, runs and tests CAIRN code with nothing fetched |
 
-`apps/simulator`, `apps/gpu_pipeline`, `apps/analytics/gpu.toml` and `apps/matmul/gpu.toml` need nvcc and a CUDA device, and the suite runs their device code only under `make gpu`. `embedded` needs `qemu-system-aarch64` on an AArch64 host. Everything else needs only a C++20 compiler.
+`apps/simulator`, `apps/gpu_pipeline`, the `gpu.toml` configurations and `foreign/device` need nvcc and a CUDA device, and the suite runs their device code only under `make gpu`. `bazel` needs Bazel. `embedded` needs `qemu-system-aarch64` on an AArch64 host. Everything else needs only a C++20 compiler.
 
 ## examples/hello
 
@@ -445,3 +449,56 @@ python3 examples/implementations/loop.py  # the scripted session below, as JSON
 `bench/search/instances.py` validates each instance, then lets `cairn tune` choose among them; [evidence/v1_0/search](../evidence/v1_0/search/README.md) records one run.
 
 `loop.py` opens an [implementation session](agents.md#implementation-sessions) on `prefix` under `policy.json` and replays four fixed replies. `candidates/prefix_blocks_wrong.cairn` restarts each block of eight at zero; validation refuses it with the input it shrank to, `n = 16` with a single 1 at `xs[7]`, and keeps that input in `regressions/prefix.json`. The same reply with a looser tolerance is `E-TOLERANCE`, and with a smaller domain `E-DOMAIN`. `candidates/prefix_blocks.cairn` carries the sum across blocks and validates. The replies are fixed text; everything the host, the compiler and the native runs say is computed on each run.
+
+## examples/cooperative
+
+Three [cooperative regions](devices.md#cooperative-regions): a transpose that moves each 32 x 32 tile through a padded shared tile, block sums that halve 256 partial sums in shared memory and finish with a warp sum, and row sums that read each row through a pipeline, at depth 2 and at depth 3. `main` runs them on host threads and holds each result to a plain loop.
+
+```sh
+cairn run examples/cooperative
+```
+
+```text
+transpose 96 x 64, 5 block sums and 3 row sums agree with plain loops
+```
+
+`gpu.toml` is the same kernels over `@device` views with a driver that moves the data across; the suite compiles it for sm_120 and runs it only under `make gpu`. `tuned.toml` holds `row_totals` and an implementation, `row_totals_tiled[T, D]`, whose block shape and pipeline depth `cairn tune` searches ([tools.md](tools.md#cairn-tune)); none of its instances is chosen until a device validation holds.
+
+```sh
+cairn tune examples/cooperative/tuned.toml --symbol row_totals --at rows=64,cols=1e5 --device-target sm_120
+```
+
+`refused/` holds one program per refusal of the phase and stage rules: `conflicting_writes.cairn` (`E-COOP-CONFLICT`), `omitted_barrier.cairn` (`E-COOP-UNORDERED`), `premature_reuse.cairn` (`E-COOP-REUSE`), `stage_not_landed.cairn` (`E-STAGE-UNREADY`) and `stage_still_read.cairn` (`E-STAGE-BUSY`). The host runs are clean under ThreadSanitizer with both compilers, and removing a barrier from the emitted C++ makes the sanitizer report a race ([evidence/v1_0/cooperative](../evidence/v1_0/cooperative/README.md)).
+
+## examples/tensor
+
+Three single files, each a program of cooperative regions with [layouts](memory.md#layouts). `transpose.cairn` transposes through a 32 x 32 shared tile stored row-major, padded and swizzled; the threads are the same each time and only the layout differs. `cairn explain` says what that changes: reading the tile a column at a time takes 32 bank ways row-major and 1 padded or swizzled.
+
+```sh
+cairn run examples/tensor/transpose.cairn       # exits 0 when all three transposes agree
+cairn explain examples/tensor/transpose.cairn   # bank_ways and conversions for each spread
+```
+
+`tile64.cairn` and `tile32.cairn` add `a * b` into `c` with [tensor-core fragments](numerics.md#tensor-core-fragments), under `mma_unordered`'s signature and contract. `tile64` is the tiling `mma_unordered` fixes: 64 x 64 tiles, four warps of 2 x 2 WMMA fragments, k in steps of 32 through two padded stages. `tile32` is another: 64 x 32 tiles, eight warps of two `mma.sync` fragments, one stage whose A tile is swizzled. `tests/soundness/test_tensor_kernels.py` runs both on the host under both compilers and ThreadSanitizer on generated shapes with partial tiles. Both compile for sm_120 and have not run on a GPU ([evidence/v1_0/tensor](../evidence/v1_0/tensor/README.md)).
+
+## examples/foreign
+
+Two projects that bring existing code in as [foreign implementations](memory.md#foreign-implementations). In `foreign/host`, `vendor/histogram.cpp` computes the 256-bin histogram `histogram_u32` defines, and `plan histogram_u32 use histogram_interleaved;` runs it. In `foreign/device`, `vendor/stencil.cu` is a CUDA kernel for the 3-point blend `stencil_1d` defines, launched through `launch(threads, block)`; `vendor/parallel_gpu.cu` is compiled and inspected with the program's flags and not linked.
+
+```sh
+cairn run examples/foreign/host        # bin 7 holds 7 samples
+cairn foreign examples/foreign/host --implementation histogram_interleaved
+cairn foreign examples/foreign/device --implementation stencil_tiled --device-target sm_120
+```
+
+[tools.md](tools.md#cairn-foreign) shows what `cairn foreign` reports for each. The device kernel is compiled for sm_120 and inspected; its validation runs only under `make gpu`.
+
+## examples/bazel
+
+A Bazel workspace for [`rules_cairn`](tools.md#large-projects-and-bazel): two libraries, `geometry` and `pricing`, a binary `shop` and a test, each a `.cairn` file. A library is checked on its own as a validation action, and a binary or test builds its sources and its dependencies' as one program.
+
+```sh
+cd examples/bazel && bazel test //...
+```
+
+`MODULE.bazel` names this checkout with `cairn.local(path = "../..")`, so nothing is fetched.
