@@ -288,7 +288,7 @@ def test_a_vector_plan_and_a_stage_plan_ask_the_layout_what_they_used_to_compute
 
 
 def test_a_rule_that_runs_the_body_with_numbers_gets_the_layout_s_answer():
-    """`layouts.apply` is what compiler/phases.py asks of `L.at(...)` and `D.row(t, v)` when it runs a cooperative
+    """`layouts.apply` is what compiler/block_run.py asks of `L.at(...)` and `D.row(t, v)` when it runs a cooperative
     body thread by thread: the offset or coordinate, IndexError where the program traps, None for a symbol."""
     from cairn.compiler.tree import Expr
 

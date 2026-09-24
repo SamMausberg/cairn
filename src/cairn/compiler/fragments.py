@@ -214,7 +214,7 @@ def footprint(c: Checker, e: Expr, i: int, j: int) -> list[tuple[int, int | None
     """The elements a fragment load or store at fragment coordinates (i, j) touches, each with the one lane that
     writes it (a store: its holder under mma.sync, which the phase rule uses only for that family) or None (a load:
     every lane of the warp reads every element on the host). The phase rule records them per thread
-    (compiler/phases.py)."""
+    (compiler/block_run.py)."""
     _, _, (_, role, _, shape, name, _) = e.ref
     v = layouts.value(c, name)
     assert isinstance(v, layout_algebra.Layout)  # a fragment moves only through a storage layout (`tile`)

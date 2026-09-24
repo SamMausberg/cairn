@@ -15,7 +15,7 @@ its number of blocks, a polynomial in the function's extents, and its body is wh
 - a branch costs what the warps that enter it issue.
 
 Which lanes of a warp take part in each access and each branch, and which bank or sector each reaches, comes from the
-census: the body run for every thread of one block by the phase rule's own evaluator (compiler/phases.py), with the
+census: the body run for every thread of one block by the phase rule's own evaluator (compiler/block_run.py), with the
 block names and everything from outside as symbols. Where the census cannot place the lanes, as for an index read
 from data or lanes whose offsets differ by a symbol, an access is priced a sector a lane, or conflict free in shared
 memory, and the region names its line. Nothing here is timed.
@@ -26,7 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..compiler import fragments, phases
+from ..compiler import block_run, fragments
 from ..compiler.cooperative import SHUFFLES, WARP_SIZE
 from ..compiler.footprints import Poly as Symbolic
 from ..compiler.tree import FLOAT, USIZE, Expr, Stmt, Type, nested, root
@@ -100,16 +100,16 @@ def wavefronts(offsets: list[tuple[int, int]], size: int) -> int:
 
 
 @dataclass
-class Census(phases.Phases):
+class Census(block_run.BlockRun):
     """The phase rule's run of one block, keeping what each access and each branch did instead of judging it."""
 
     local: set[str] = field(default_factory=set)  # shared arrays and pipelines
     sizes: dict[str, int] = field(default_factory=dict)
     sites: dict[int, Site] = field(default_factory=dict)  # id(index expression) -> what it did
     branches: dict[int, list[Any]] = field(default_factory=dict)  # id(if) -> one split per execution
-    seen: dict[int, phases.Event] = field(default_factory=dict)  # held, so no later event reuses an id
+    seen: dict[int, block_run.Event] = field(default_factory=dict)  # held, so no later event reuses an id
 
-    def check(self, events: list[phases.Event]):
+    def check(self, events: list[block_run.Event]):
         """One phase's accesses. An array from outside moves each sector the block touches in the phase once: the
         warps' later touches of it find it in the SM's L1, so every access pays its share of the phase's sectors."""
         fresh = [ev for ev in events if id(ev) not in self.seen]  # an event sits in every alternative open then
@@ -125,7 +125,7 @@ class Census(phases.Phases):
             for site, sectors in pairs:
                 site.cost += len(sectors) * union / total
 
-    def place(self, ev: phases.Event) -> tuple[Site, set[Any]] | None:
+    def place(self, ev: block_run.Event) -> tuple[Site, set[Any]] | None:
         """Count one block-wide access: a shared one's wavefronts, warp by warp; for an outside array, the sectors
         its lanes touch, which `check` shares out, or a sector a lane where the census cannot place them."""
         node = ev.node
@@ -145,11 +145,11 @@ class Census(phases.Phases):
             values = [self.at(ev.index, t) for t in lanes]
             if not lanes:
                 continue
-            if any(v is None or v is phases.TRAP or isinstance(v, bool) for v in values):
+            if any(v is None or v is block_run.TRAP or isinstance(v, bool) for v in values):
                 site.vague = True  # read from data, or past what the evaluator follows
                 site.cost += -(-len(lanes) * size // PHASE_BYTES) if shared else len(lanes)
                 continue
-            polys = [phases.as_poly(v) for v in values]
+            polys = [block_run.as_poly(v) for v in values]
             if not shared:  # lanes whose offsets differ by a symbol, a row apart, are in different sectors
                 sectors |= {(p.key, p.offset * size // SECTOR) for p in polys}
             elif len({p.key for p in polys}) > 1:
@@ -166,7 +166,7 @@ class Census(phases.Phases):
     def split(self, cond: Any, mask: list[int] | None) -> tuple[float, float, float, float] | None:
         """(the share of the live warps that enter the body, the share that enter the else, whether any enters the
         body, whether any enters the else), or None when the block goes one way the census cannot tell."""
-        if cond is phases.TRAP:
+        if cond is block_run.TRAP:
             return None
         if not isinstance(cond, list) and mask is None:
             return (1.0, 0.0, 1.0, 0.0) if cond is True else (0.0, 1.0, 0.0, 1.0) if cond is False else None

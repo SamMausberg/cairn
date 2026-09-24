@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import execution, footprints, fragments, phases, pipelines
+from . import block_run, execution, footprints, fragments, phases, pipelines
 from .constants import constant
 from .effects import DEVICE_SAFE, LANE_SAFE
 from .footprints import natural
@@ -262,7 +262,7 @@ class Reach:
         """A loop runs its body until nothing it assigns reaches further, and a break or continue that fewer threads
         reach than the loop's body narrows the whole body: after it, those threads are in another iteration."""
         leaving = next(iter(jumps(s.body)), None)
-        if leaving is not None and phases.holds_barrier(s.body, self.stages):
+        if leaving is not None and block_run.holds_barrier(s.body, self.stages):
             fail("E-COOP-BARRIER", f"A loop that holds a barrier runs every iteration whole in every thread; the "
                  f"{leaving.tag} at line {leaving.line} would take threads past it.", leaving)  # fmt: skip
         while True:  # levels only rise, so this reaches its fixed point

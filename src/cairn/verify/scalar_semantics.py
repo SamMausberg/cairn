@@ -134,6 +134,7 @@ def implementation_hash():
                 "compiler/staging.py",
                 "compiler/cooperative.py",
                 "compiler/phases.py",
+                "compiler/block_run.py",
                 "compiler/footprints.py",
                 "compiler/pipelines.py",
                 "compiler/tensor.py",

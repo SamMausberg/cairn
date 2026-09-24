@@ -271,7 +271,7 @@ def consumer(c: Checker, v: Layout, layout: str, args: list[Expr], node: Any):
 
 def apply(c: Checker, e: Expr, given: tuple[Any, ...]) -> int | None:
     """What a checked `L.at(...)`, `D.row(t, v)`, `D.col(t, v)` or `D.at(t, v)` gives for these argument values,
-    for a rule that runs a body with numbers (compiler/phases.py): None when an argument is not a number, and
+    for a rule that runs a body with numbers (compiler/block_run.py): None when an argument is not a number, and
     IndexError when one is outside its extent, where the program traps."""
     if not all(isinstance(x, int) and not isinstance(x, bool) for x in given):
         return None

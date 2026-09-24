@@ -43,6 +43,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | A plan's `stage` and its lowering | `compiler/staging.py` | `stageable`, `staged`, `lower` |
 | Cooperative regions, who reaches a statement, and their lowering | `compiler/cooperative.py` | `s_blocks`, `Reach`, `participation`, `collective`, `lower_blocks` |
 | The phase rule: no two threads of a block at one shared element between barriers | `compiler/phases.py` | `Phases`, `check`, `check_array` |
+| A cooperative body run for every thread of one block together, phase by phase | `compiler/block_run.py` | `BlockRun`, `arith`, `holds_barrier` |
 | One writer for every element of an array from outside a cooperative region | `compiler/footprints.py` | `Poly`, `Globals`, `disjoint`, `radix` |
 | Pipeline stages and their lowering | `compiler/pipelines.py` | `s_pipeline`, `method`, `Stages`, `lower` |
 | The tensor-core multiply, its numerical contract and its lowering | `compiler/tensor.py` | `check_mma`, `lower_mma` |
