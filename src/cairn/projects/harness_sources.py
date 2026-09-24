@@ -93,10 +93,15 @@ class Library:
     no_wait: str | None  # cq_NAME, the entry that enqueues on a stream and returns without waiting, when declared
     cuda: bool
     ctypes: dict[str, str]  # each parameter's C type, as the header declares it, of its value or its element
+    why_waits: str = ""  # why the header gives the function no enqueued entry (E-ENQUEUE), when it says
 
     @property
     def header(self) -> str:
         return self.name + ".h"
+
+    @property
+    def no_wait_name(self) -> str:
+        return self.entry.replace("cf_", "cq_", 1)
 
 
 def c_type(t: Type, library: Library, parameter: str, single: bool) -> str:
@@ -187,7 +192,7 @@ def entry(mapping: Mapping, library: Library, value: dict[str, str], single: boo
     if library.no_wait:
         return [f"  // {library.no_wait} enqueues on the current torch stream and returns without waiting.",
                 f"  {library.no_wait}({stream}, {call});"]  # fmt: skip
-    missing = library.entry.replace("cf_", "cq_", 1)
+    missing = library.no_wait_name
     return [f"  // The library declares no {missing}, so {library.entry} runs on the current torch stream, after what",
             "  // torch queued there, and returns once its own work there has finished.",
             f"  {library.stream}({stream});", f"  {library.entry}({call});", f"  {library.stream}(nullptr);"]  # fmt: skip

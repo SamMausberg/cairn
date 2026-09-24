@@ -103,7 +103,22 @@ def library(export_dir: Path, record: dict[str, Any], mapping: Mapping, header: 
     ctypes = {n: header.ctype(t) for n, t in mapping.function.params}
     cuda = record.get("device_target") is not None
     return Library(name, entry, stream.group(1) if stream else None,
-                   no_wait if re.search(rf"\b{no_wait}\(", declared) else None, cuda, ctypes)  # fmt: skip
+                   no_wait if re.search(rf"\b{no_wait}\(", declared) else None, cuda, ctypes,
+                   waiting(declared, mapping.function.name))  # fmt: skip
+
+
+def waiting(declared: str, function: str) -> str:
+    """Why the header gives `function` no enqueued entry, as its E-ENQUEUE comment says, or ""."""
+    if "No enqueued entry" not in declared:
+        return ""
+    said: list[str] = []
+    for line in declared.split("No enqueued entry", 1)[1].splitlines()[1:]:
+        text = line.removeprefix(" * ")
+        if line.strip() == "*/" or (said and said[-1].endswith(".")):
+            break
+        if said or text.startswith(f"{function}: "):
+            said.append(text)
+    return " ".join(said).removeprefix(f"{function}: ").removesuffix(".")
 
 
 def entry_record(lib: Library) -> dict[str, Any]:
@@ -111,11 +126,13 @@ def entry_record(lib: Library) -> dict[str, Any]:
         return {"symbol": lib.entry, "stream": None, "waits": "a host library: the call returns when its work is done"}
     if lib.no_wait:
         return {"symbol": lib.no_wait, "stream": "torch.cuda.current_stream().cuda_stream",
-                "waits": "none: the work is enqueued on the stream and the call returns"}  # fmt: skip
+                "waits": "none: the work is queued on the stream and the call returns",
+                "failure": "a guard that fails in a device lane traps, which poisons the CUDA context; torch's next "
+                "synchronization raises cudaErrorLaunchFailure"}  # fmt: skip
     return {"symbol": lib.entry, "stream": f"torch.cuda.current_stream().cuda_stream, bound by {lib.stream}",
             "waits": f"{lib.entry} returns once its own work on the stream has finished",
-            "no_wait_entry": f"{lib.entry.replace('cf_', 'cq_', 1)} is not declared by this library's header; the "
-            "binding calls it, with no wait, once the header declares it"}  # fmt: skip
+            "no_wait_entry": f"the header declares no {lib.no_wait_name}"
+            + (f" ({lib.why_waits}, E-ENQUEUE)" if lib.why_waits else "")}  # fmt: skip
 
 
 def hardware(fmt: str, mapping: Mapping, record: dict[str, Any]) -> list[str]:

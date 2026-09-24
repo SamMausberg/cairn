@@ -284,10 +284,33 @@ def test_a_device_solution_compiles_for_its_target_and_binds_the_torch_stream(tm
     assert options["cuda_cflags"][-2:] == ["-Xcompiler", "-ffp-contract=off,-fno-fast-math"]
     assert solution["spec"]["target_hardware"] == ["B200", "LOCAL"]
     glue = next(s["content"] for s in solution["sources"] if s["path"] == "main.cpp")
-    assert "cairn_kernels_device_stream(static_cast<void*>(at::cuda::getCurrentCUDAStream().stream()));" in glue
+    assert "cq_axpy(static_cast<void*>(at::cuda::getCurrentCUDAStream().stream()), p_n" in glue
+    assert "cf_axpy(" not in glue and "device_stream(" not in glue  # queued on torch's stream, with no wait
     record = json.loads((out / "harness.json").read_text())
-    assert record["entry"]["symbol"] == "cf_axpy" and "cq_axpy is not declared" in record["entry"]["no_wait_entry"]
+    assert record["entry"]["symbol"] == "cq_axpy" and record["entry"]["waits"].startswith("none")
     assert record["export"]["device_target"] == "sm_100a"
+
+
+STAGED = """
+// out = 2 * x, with x copied from the host first.
+pub fn doubled(n:usize, x:ro<f32>[n], out:rw<f32>[n]@device) {
+  transfer(out, x);
+  parallel i in n { out[i] = 2.0 * out[i]; }
+}
+"""
+STAGED_MAP = RELU.replace('"batch * dim"', '"size"').replace('["batch", "dim"]', '["size"]')
+
+
+@NVCC
+def test_a_function_that_must_wait_is_called_through_the_waiting_entry_and_the_record_says_why(tmp_path):
+    root = project(tmp_path, STAGED, STAGED_MAP)
+    harness.write(load_project(root), "kernelbench", "doubled", tmp_path / "kb", cxx="g++", device_target="sm_100a")
+    model = (tmp_path / "kb/model_new.py").read_text()
+    assert "cairn_kernels_device_stream(static_cast<void*>(at::cuda::getCurrentCUDAStream().stream()));" in model
+    assert "cf_doubled(p_n" in model and "cairn_kernels_device_stream(nullptr);" in model
+    assert "t_x.device().is_cpu()" in model and ".device(device)" in model  # x on the host, the result on the device
+    entry = json.loads((tmp_path / "kb/harness.json").read_text())["entry"]
+    assert entry["symbol"] == "cf_doubled" and "transfers from host memory" in entry["no_wait_entry"]
 
 
 @NVCC

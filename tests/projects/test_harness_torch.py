@@ -19,12 +19,33 @@ import pytest
 torch = pytest.importorskip("torch")
 extension = pytest.importorskip("torch.utils.cpp_extension")
 
-from test_harness import AXPY, DEVICE, RELU, project  # noqa: E402
+from test_harness import AXPY, DEVICE, RELU, STAGED, project  # noqa: E402
 
 from cairn.projects import harness  # noqa: E402
 from cairn.projects.project import load_project  # noqa: E402
 
 NVCC = pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")
+# The staged function as SOL-ExecBench passes it: x on the host, out a device destination.
+STAGED_SOL = """
+[benchmark]
+definition = "doubled_f32"
+
+[extents]
+n = "size"
+
+[[argument]]
+name = "x"
+parameter = "x"
+dtype = "float32"
+shape = ["size"]
+
+[[argument]]
+name = "out"
+parameter = "out"
+dtype = "float32"
+shape = ["size"]
+output = true
+"""
 
 
 @pytest.fixture(autouse=True)
@@ -125,16 +146,21 @@ def test_a_device_program_compiles_with_nvcc_against_torch_headers_as_load_inlin
 
 
 @NVCC
-def test_the_device_binding_compiles_against_a_cuda_torch_s_headers(tmp_path):
+@pytest.mark.parametrize("source, mapping, symbol, called", [
+    (DEVICE, AXPY, "axpy", "cq_axpy("),  # queued on torch's stream, with no wait
+    (STAGED, STAGED_SOL, "doubled", "cf_doubled("),  # E-ENQUEUE: it transfers from the host, so it waits
+])  # fmt: skip
+def test_the_device_binding_compiles_against_a_cuda_torch_s_headers(tmp_path, source, mapping, symbol, called):
     torch_root = Path(os.environ.get("CAIRN_TORCH_CUDA_ROOT", Path(torch.__file__).parent))
     if not (torch_root / "include/c10/cuda/impl/cuda_cmake_macros.h").is_file():
         pytest.skip("a CPU wheel has no c10/cuda/impl/cuda_cmake_macros.h, which a CUDA build of torch generates; "
                     "set CAIRN_TORCH_CUDA_ROOT to the torch directory of a CUDA wheel")  # fmt: skip
-    root = project(tmp_path, DEVICE, AXPY)
-    harness.write(load_project(root), "sol-execbench", "axpy", tmp_path / "sol", cxx="g++", device_target="sm_100a")
+    root = project(tmp_path, source, mapping)
+    harness.write(load_project(root), "sol-execbench", symbol, tmp_path / "sol", cxx="g++", device_target="sm_100a")
     solution = json.loads((tmp_path / "sol" / "solution.json").read_text())
-    for source in solution["sources"]:
-        (tmp_path / source["path"]).write_text(source["content"])
+    for source_file in solution["sources"]:
+        (tmp_path / source_file["path"]).write_text(source_file["content"])
+    assert called in (tmp_path / "main.cpp").read_text()
     cuda = Path(shutil.which("nvcc")).parents[1] / "include"
     includes = [f"-I{tmp_path}", f"-isystem{torch_root / 'include'}",
                 f"-isystem{torch_root / 'include/torch/csrc/api/include'}", f"-isystem{cuda}"]  # fmt: skip
