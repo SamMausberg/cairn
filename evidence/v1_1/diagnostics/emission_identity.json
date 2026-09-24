@@ -1,0 +1,9 @@
+{
+ "what": "tools/checks/emission_identity.py's programs and records at 2b1658f and at 91e2eb0, matched by program text, since a test line that moved is the same program",
+ "base_programs": 1801,
+ "new_programs": 1820,
+ "same_text": 1801,
+ "emits": 788,
+ "refused": 1013,
+ "differ": 0
+}

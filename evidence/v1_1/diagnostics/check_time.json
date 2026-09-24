@@ -1,0 +1,42 @@
+{
+ "what": "compile_program on the combined source, one cold process per run, 11 runs of each arm interleaved",
+ "arms": {
+  "base": "2b1658f, the parent of 91e2eb0",
+  "new": "91e2eb0 without every (build, run, test and the hosts)",
+  "new_every": "91e2eb0 with every=True (cairn check, emit, the language server, the MCP check tool)"
+ },
+ "programs": {
+  "examples/apps/analytics": {
+   "lines": 637,
+   "functions": 172,
+   "base": {
+    "median_s": 0.162,
+    "min_s": 0.127
+   },
+   "new": {
+    "median_s": 0.159,
+    "min_s": 0.133
+   },
+   "new_every": {
+    "median_s": 0.158,
+    "min_s": 0.126
+   }
+  },
+  "bench/scale/generate.py --modules 370": {
+   "lines": 19327,
+   "functions": 2223,
+   "base": {
+    "median_s": 1.492,
+    "min_s": 1.349
+   },
+   "new": {
+    "median_s": 1.446,
+    "min_s": 1.327
+   },
+   "new_every": {
+    "median_s": 1.447,
+    "min_s": 1.339
+   }
+  }
+ }
+}
