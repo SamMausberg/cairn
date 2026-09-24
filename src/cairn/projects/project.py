@@ -23,6 +23,13 @@ SEGMENT = re.compile(r"[A-Za-z0-9_.-]+")
 MAX_SOURCES = 1024  # source files one manifest lists; the bytes they hold together are held to MAX_SOURCE
 MAX_DEPENDENCIES = 64  # vendored projects one manifest names, each at most 4 deep
 FOREIGN_SUFFIXES = (".cpp", ".cc", ".cu")  # what a [foreign] table vendors: C++ sources and CUDA sources
+MARK = "\ufeff"  # a byte-order mark: a file may start with one, and its text is what follows
+
+
+def decoded(data: bytes) -> str:
+    """A file's text: its bytes as UTF-8, after the byte-order mark it may start with. `agent/write_back.py` puts the
+    mark back, and the file's own line endings, when it writes a file this read."""
+    return data.decode("utf-8").removeprefix(MARK)
 
 
 def read_text(path: Path, limit: int) -> str:
@@ -35,7 +42,7 @@ def read_text(path: Path, limit: int) -> str:
             data += stream.read(limit + 1 - want)
     if len(data) > limit:
         raise ProjectError(f"{path.name} exceeds its {limit}-byte input limit.")
-    return data.decode("utf-8")
+    return decoded(data)
 
 
 def source_of(path: Path, given: Mapping[Path, str] | None) -> str:
@@ -43,7 +50,7 @@ def source_of(path: Path, given: Mapping[Path, str] | None) -> str:
     held = given.get(path.resolve()) if given else None
     if held is not None and len(held.encode()) > MAX_SOURCE:
         raise ProjectError(f"{path.name} exceeds its {MAX_SOURCE}-byte input limit.")
-    return held if held is not None else read_text(path, MAX_SOURCE)
+    return held.removeprefix(MARK) if held is not None else read_text(path, MAX_SOURCE)
 
 
 def agree(a: str, b: str, most: int) -> int:

@@ -453,6 +453,8 @@ target = "hosted"       # or a board such as "aarch64-virt"
 libraries = ["z"]       # system libraries this project's own externs call, by name
 ```
 
+Each source is UTF-8, and may start with a byte-order mark, which is not part of its text, and end its lines in LF or CRLF. A tool that writes a source back, `cairn tune --write` or a session of [`cairn mcp`](tools.md#cairn-mcp), keeps both as the file had them.
+
 A name under `libraries` is a row of the closed table in `projects/toolchain.py`, never a flag or a path. A packaged module links its own library (`std.zlib` links zlib), so only a project's own `extern` declarations need the line. An unknown name is refused when the manifest is read.
 
 A [freestanding target](tools.md#the-freestanding-target) refuses any program whose rows need a hosted runtime. Builds use fresh directories, and the generated C++ keeps the C ABI for every function whose signature is C compatible. A library exports every function, and an executable holds what its `main` reaches. `--debug` adds symbols and `#line` maps, and [`--incremental`](tools.md#cairn-build---incremental) compiles one cached object per module.

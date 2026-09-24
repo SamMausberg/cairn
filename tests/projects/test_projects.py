@@ -110,6 +110,20 @@ def test_project_is_ordered_and_pinned(tmp_path):
     assert load_project(root).receipt() != original
 
 
+def test_a_file_that_starts_with_a_byte_order_mark_is_read_after_it(tmp_path, capsys):
+    """Editors on Windows may save one. Only a leading mark is the mark: one anywhere else is a character (E-LEX)."""
+    root = make(tmp_path)
+    plain = load_project(root).source
+    for name in ("src/math.cairn", "src/main.cairn"):
+        (root / name).write_bytes(b"\xef\xbb\xbf" + (root / name).read_bytes())
+    assert load_project(root).source == plain
+    assert main(["check", str(root), "--format", "json"]) == 0
+    capsys.readouterr()
+    (root / "src/main.cairn").write_bytes((root / "src/main.cairn").read_bytes() + "\ufeff".encode())
+    assert main(["check", str(root), "--format", "json"]) == 1
+    assert json.loads(capsys.readouterr().out)["code"] == "E-LEX"
+
+
 def test_a_tree_may_hold_a_second_manifest_named_by_its_path(tmp_path):
     root = make(tmp_path)
     (root / "small.toml").write_text('[project]\nname = "small"\nsources = ["src/math.cairn"]\n')

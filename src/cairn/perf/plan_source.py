@@ -148,7 +148,9 @@ def write_plan(manifest: Any, symbol: str, chosen: dict[str, Any], use: Any = KE
     The plans the checker resolves to the function are removed from whichever file holds them, and the new one is
     written after the declaration under the name its own module gives it. Unless `use` is KEEP, the selection of an
     implementation is replaced the same way: by `plan f use g;` for `use` g, or by none for None. The files are
-    written only when the whole project still checks with every edit in place, and never a vendored file."""
+    written only when the whole project still checks with every edit in place, and never a vendored file, each in
+    its own form: its byte-order mark and line endings kept (`agent/write_back.py`)."""
+    from ..agent.write_back import replace
     from ..compiler.cairnc import compile_source
     from ..projects.project import ProjectError, contained_file, load_project
 
@@ -162,6 +164,7 @@ def write_plan(manifest: Any, symbol: str, chosen: dict[str, Any], use: Any = KE
     if unit is None or unit.path in project.vendored_units:
         raise ProjectError(nowhere)
     starts = [0, *(i + 1 for i, ch in enumerate(project.source) if ch == "\n")]
+    held = dict(zip((u.path for u in project.units), project.layout()[1], strict=True))  # each file's text, as read
     files: dict[str, tuple[Path, int, str]] = {}  # unit path -> (file, where it starts in the source, its text)
     for edit in where.edits(written(chosen), use):
         owner = project.unit_at(project.source.count("\n", 0, edit.start) + 1)
@@ -169,7 +172,7 @@ def write_plan(manifest: Any, symbol: str, chosen: dict[str, Any], use: Any = KE
             raise ProjectError(f"A plan of {symbol} is written outside this project's own files; nothing was written.")
         path = contained_file(project.root, owner.path, ".cairn")
         at = starts[owner.first_line - 1]
-        _, _, body = files.get(owner.path, (path, at, path.read_text(encoding="utf-8")))
+        _, _, body = files.get(owner.path, (path, at, held[owner.path]))
         files[owner.path] = (path, at, body[: edit.start - at] + edit.text + body[edit.end - at :])
     given = {path.resolve(): body for path, _, body in files.values()}
     try:
@@ -177,6 +180,5 @@ def write_plan(manifest: Any, symbol: str, chosen: dict[str, Any], use: Any = KE
     except Diagnostic as error:
         raise ProjectError(f"The plan chosen for {symbol} would leave the project refused ({error.data['code']}: "
                            f"{error.data['message']}); nothing was written.") from error  # fmt: skip
-    for path, _, body in files.values():
-        path.write_text(body, encoding="utf-8")
+    replace(project.root, {p: body for p, (_, _, body) in files.items()}, expected={p: held[p] for p in files})
     return unit.path
