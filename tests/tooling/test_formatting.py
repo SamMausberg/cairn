@@ -32,8 +32,10 @@ def lexable(text):
 
 
 def repository_sources():
-    return sorted(
-        p for p in ROOT.rglob("*.cairn") if not {".venv", ".claude", "build"} & set(p.relative_to(ROOT).parts)
+    return sorted(  # files only: the .cairn directory cairn tune and cairn mcp keep beside a manifest matches too
+        p
+        for p in ROOT.rglob("*.cairn")
+        if p.is_file() and not {".venv", ".claude", "build"} & set(p.relative_to(ROOT).parts)
     )
 
 
@@ -332,6 +334,7 @@ def write(directory, name, text):
 def test_fmt_rewrites_in_place(tmp_path, capsys):
     path = write(tmp_path, "src/a.cairn", "fn f(a:u64,b:u64)->u64{return a+b;}\n")
     clean = write(tmp_path, "src/b.cairn", "fn g() -> u64 { return 1; }\n")
+    write(tmp_path, ".cairn/history/records.jsonl", "")  # the history cairn tune keeps beside a manifest
     assert main(["fmt", str(tmp_path)]) == 0
     assert path.read_text() == "fn f(a:u64, b:u64) -> u64 { return a + b; }\n"
     assert clean.read_text() == "fn g() -> u64 { return 1; }\n"

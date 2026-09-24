@@ -326,7 +326,8 @@ def format_source(text: str) -> str:
 
 
 def sources(paths: list[Path]) -> list[Path]:
-    return [q for p in paths for q in (sorted(p.rglob("*.cairn")) if p.is_dir() else [p])]
+    """The files under each directory, never the .cairn directory cairn tune and cairn mcp keep beside a manifest."""
+    return [q for p in paths for q in (sorted(q for q in p.rglob("*.cairn") if q.is_file()) if p.is_dir() else [p])]
 
 
 def format_paths(paths: list[Path], check: bool = False, diff: bool = False) -> int:

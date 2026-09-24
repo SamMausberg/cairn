@@ -8,7 +8,7 @@ make demo-implement                                 # or: python3 demos/implemen
 
 ## What happens
 
-`run.py` copies the project to `results/demos/implement/sumsq` and starts `cairn mcp` beside it. `implementation_open` pins the reference, a relative tolerance of 2^-40 on the result, 128 generated cases from seed 0 and extents up to 4096, each by digest, and answers with a packet of 7,353 bytes: the reference's declaration and row, six rule cards and the form of a reply.
+`run.py` copies the project to `results/demos/implement/sumsq` and starts `cairn mcp` beside it. `implementation_open` pins the reference and the policy in `policy.json`, each by digest: a relative tolerance of 2^-40 on the result, 128 generated cases from seed 0 and extents up to 4096. It answers with a packet of 7,353 bytes: the reference's declaration and row, six rule cards and the form of a reply.
 
 The agent's first submission, `sumsq_by4`, keeps four running sums `when n >= 4`. Four sums round differently from one, so it also asks for a relative tolerance of 1e-6. The host refuses it before compiling anything:
 

@@ -19,6 +19,7 @@ from cairn.agent import write_back
 from cairn.agent.mcp import PROTOCOLS, Server
 from cairn.agent.mcp_tools import TOOLS, Tools
 from cairn.compiler.cairnc import compile_source
+from cairn.editor.formatting import format_source
 from cairn.projects.project import ProjectError, load_project
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -274,6 +275,7 @@ def test_an_implementation_session_writes_a_validated_implementation_beside_its_
         assert answer["select_with"] == "plan prefix use prefix_blocks;" and not answer["selected"]
         written = (root / "src/prefix.cairn").read_text()
         assert written.startswith(original[: original.index("// Four elements")]) and "fn prefix_blocks(" in written
+        assert format_source(written) == written  # cairn fmt --check still passes on the file it wrote
         receipts = compile_source(load_project(root).source)[1]["functions"]
         assert "prefix_blocks" in receipts["prefix"]["implementations"]
         kept = (root / ".cairn/history/records.jsonl").read_text().splitlines()

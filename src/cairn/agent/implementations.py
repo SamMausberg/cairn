@@ -173,7 +173,8 @@ class ImplementationSession:
             old = next(f for f in self.parsed.functions if f.name == full)
             base = base[: old.start] + base[old.end :]
         at = next(f for f in Parser(base).parse().functions if f.name == self.reference).end
-        candidate = base[:at] + "\n\n" + text.strip("\n") + "\n" + base[at:]
+        rest = base[at:]  # the reference's own line break stays with it, so one blank line parts each declaration
+        candidate = base[:at] + "\n\n" + text.strip("\n") + ("" if rest.startswith("\n") else "\n") + rest
         try:
             receipt = compile_source(candidate)[1]["functions"]
         except Diagnostic as e:
