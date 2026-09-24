@@ -182,6 +182,40 @@ fn transpose(gx:usize, gy:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
 }
 ```
 
+A region may end with a finish, `then threads t in T { }`, which runs once, in one block, after every block of the region has finished. Everything the blocks wrote is visible to it, so it may read any element of an array they wrote, plainly or atomically, which no thread of the region may. A one-pass reduction leaves each block's partial sum in `partial[b]` and adds the partials in the finish:
+
+```cairn
+fn total(n:usize, x:ro<u64>[n], g:usize, partial:rw<u64>[g], out:rw<u64>[1]) {
+  blocks b in g threads t in 256 {
+    shared warps:u64[8] = zeroed;
+    let mut sum:u64 = 0;
+    let mut i = b * 256 + t;
+    while i < n {                                  // a grid-stride share of x
+      sum = add_wrap(sum, x[i]);
+      i += g * 256;
+    }
+    let w = reduce add_wrap warp yield sum;
+    if t % 32 == 0 { warps[t / 32] = w; }
+    barrier;
+    if t == 0 {
+      let mut s:u64 = 0;
+      for k in 0..8 { s = add_wrap(s, warps[k]); }
+      partial[b] = s;
+    }
+  } then threads t in 256 {                        // once, after every block
+    if t == 0 {
+      let mut s:u64 = 0;
+      for k in 0..g { s = add_wrap(s, partial[k]); }
+      out[0] = s;
+    }
+  }
+}
+```
+
+The finish has the region's number of threads, under names and extents of its own (`E-COOP-SHAPE`), and no block name. Nothing of a block is in scope: the finish declares its own shared arrays, and every rule of a region holds inside it. It runs where the region runs (`E-PLACEMENT`), exactly once, also when the grid has no blocks, so a reduction over nothing writes its identity. With floats every sum above has an order the program fixes, so the answer is the same on every run with the same grid; an `atomic_add_unordered` into `out[0]` needs no partials and adds in the order the hardware picks.
+
+On the host the finish is one more team of threads, started after every block's threads have been joined. On the device the region stays one launch: each block, once done, has one thread fence its writes device-wide and count the block in a counter the execution context keeps, and the block that brings the count to the grid's fences again, runs the finish and puts the counter back to zero. The counter is the context's scratch, allocated by its first finish, so the row gains `gpu_alloc` and `gpu_free` as a device `reduce`'s does, and such a function has no enqueued entry. It compiles for `sm_120` and has not run on a GPU.
+
 A closure in the body may run in any phase and any thread, so it names no shared array, pipeline or array from outside (`E-COOP-UNDECIDED`). A thread obeys everything a lane obeys: it cannot assign a scalar from outside (`E-PARALLEL-WRITE`), start another region (`E-PARALLEL-NEST`), do I/O (`E-PARALLEL-CALL`), or reach the other side's memory (`E-PLACEMENT`). The row gains `par:device` or `par:host`, `zero_init` for the shared arrays, and `trap` for the guards; the receipt lists each array's bytes and the block's total under `local_storage`.
 
 On the device the region is one launch on the thread's execution context, as `parallel` is: blocks of `T` threads, the arrays in static shared memory, `barrier` as `__syncthreads()` and the warp operations as `__shfl_*_sync` over the whole warp. It compiles for `sm_120` and has not run on a GPU. On the host each block's threads are real threads meeting at a `std::barrier`, two blocks at a time, so the thread sanitizer checks the phase rule on real runs. This lowering creates `2 * T` threads per region and is not a fast path.
@@ -313,7 +347,7 @@ Fast CUDA kernels lean on a known set of features. The table says how a CAIRN pr
 | 16-byte loads and stores with a cache hint | `float4`, `__ldg`, `__ldcg`, `__ldcs`, `__stcs` | safe: [`load_wide[K]` and `store_wide`](#wide-loads-and-stores) with a `Cache` hint, in any code, and `plan f { vector 4; }` over `x[i]` in a device `parallel` region | accepted, E-WIDE |
 | Atomics on device memory | `atomicAdd`, `atomicMax`, `atomicCAS` | safe: [`atomic_add_wrap(x[i], v)`](concurrency.md#atomics-and-mutexes) and its kin, from any lane or thread, never beside a plain access of the array in one region | accepted, E-ATOMIC-MIXED |
 | Atomics on shared memory | `atomicAdd` on `__shared__` | safe: the same updates on a shared array, apart from its plain accesses by a barrier | accepted, E-ATOMIC-MIXED |
-| A last block that finishes, grid-wide sync | `__threadfence` and an atomic ticket, `grid.sync()` | foreign: two regions are two launches | accepted |
+| A last block that finishes, grid-wide sync | `__threadfence` and an atomic ticket, `grid.sync()` | safe for a last block: a region's [finish](#cooperative-regions), `then threads t in T { }`; a grid-wide barrier inside a kernel is foreign | accepted, E-COOP-SHAPE |
 | Shared memory nobody zeroes | `__shared__ float s[256];` | not written: a shared array is `= zeroed`, and the row says `zero_init` | E-PARSE |
 | Warp vote and ballot | `__ballot_sync`, `__any_sync` | safe as `reduce \| warp yield` of one bit a lane, five shuffles where CUDA takes one vote | accepted |
 | Warp match | `__match_any_sync` | foreign | E-CALLEE |

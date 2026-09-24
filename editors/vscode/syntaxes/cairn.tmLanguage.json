@@ -554,6 +554,10 @@
     },
     {
      "name": "keyword.control.concurrency.cairn",
+     "match": "\\bthen\\b(?=\\s+threads\\b)"
+    },
+    {
+     "name": "keyword.control.concurrency.cairn",
      "match": "\\bthreads\\b(?=\\s+[A-Za-z_]\\w*\\s*(?:,|in\\b))"
     },
     {

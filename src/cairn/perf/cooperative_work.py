@@ -251,7 +251,7 @@ class Tally:
         self.local = set(self.block.shared) | set(self.block.pipelines)
         f = k.f
         regions = [x for x in walked(f.body) if x.tag == "blocks" and x.ref.device == self.block.device] if f else [s]
-        ordinal = regions.index(s)
+        ordinal = next((k for k, x in enumerate(regions) if x is s), len(regions))  # a finish follows every region
         self.shape = Shape(f.name if f is not None else "", ordinal, self.block.device, self.block.count,
                            tuple(self.block.extents), self.block.bytes,
                            census=found if isinstance(found, str) else "")  # fmt: skip
@@ -418,3 +418,5 @@ def region(k: Any, s: Stmt, at: Frame) -> None:
         k.note(f"line {line}: the lanes of this access differ by a symbol or by data, so it is priced a sector a "
                "lane, or without bank conflicts in shared memory")  # fmt: skip
     k.cost.regions.append(Region("cooperative", s.line, blocks, at.times, body, coop=shape))
+    for done in s.other:  # the region's finish: one more block, as a region of one (compiler/finish.py)
+        region(k, done.ref, at)

@@ -134,6 +134,7 @@ def implementation_hash():
                 "compiler/chunks.py",
                 "compiler/staging.py",
                 "compiler/cooperative.py",
+                "compiler/finish.py",
                 "compiler/phases.py",
                 "compiler/block_run.py",
                 "compiler/footprints.py",

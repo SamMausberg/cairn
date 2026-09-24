@@ -84,7 +84,8 @@ class StatementParser(ExpressionParser):
 
     def cooperative(self, at: dict[str, Any]) -> Stmt:
         """`blocks b in G threads t in T { }`, up to three names and extents a side; `blocks` and `threads` are words
-        only here. The block names come first in `other_names`, and `op` says how many there are."""
+        only here. The block names come first in `other_names`, and `op` says how many there are. A finish, `then
+        threads t in T { }`, is the one statement in `other`: its thread names and extents, and its body."""
         self.need("blocks")
         names = self.binders()
         extents = self.extents(len(names))
@@ -94,7 +95,13 @@ class StatementParser(ExpressionParser):
         count = len(names)
         names += self.binders()
         extents += self.extents(len(names) - count)
-        return Stmt("blocks", exprs=extents, body=self.block(), other_names=names, op=str(count), **at)
+        body, finish = self.block(), []
+        if self.t.s == "then" and self.ahead(1) == "threads":  # `then` is a word only here
+            where: dict[str, Any] = {"line": self.t.line, "col": self.t.col}
+            self.i += 2
+            threads = self.binders()
+            finish = [Stmt("finish", exprs=self.extents(len(threads)), body=self.block(), other_names=threads, **where)]
+        return Stmt("blocks", exprs=extents, body=body, other=finish, other_names=names, op=str(count), **at)
 
     def binders(self) -> list[Expr]:
         found: list[Expr] = []

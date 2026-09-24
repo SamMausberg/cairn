@@ -294,6 +294,18 @@
       "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "evidence/v1_0/predict_cooperative/README.md", "tests/soundness/test_cooperative.py"]
     },
     {
+      "feature": "A cooperative region's finish: `then threads t in T { }`",
+      "side": "device",
+      "docs": "devices.md#cooperative-regions",
+      "implemented": "yes",
+      "compiles": "yes: sm_120, one launch whose last block runs the finish",
+      "ran_on_cpu": "yes: one more team of host threads after the blocks, grids of 0 to 70 blocks, under both compilers, and emulated",
+      "ran_on_gpu": "no",
+      "sanitizers": "partial: thread, which reports a finish that does not wait for the blocks; Compute Sanitizer has not run",
+      "measured": "no",
+      "records": ["tests/soundness/test_finish.py"]
+    },
+    {
       "feature": "Pipeline stages",
       "side": "device",
       "docs": "devices.md#cooperative-regions",

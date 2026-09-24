@@ -14,6 +14,9 @@
 // same number of steps, BYTES of static shared memory zeroed at each step, barriers as __syncthreads and warp
 // operations as __shfl_*_sync over the full warp, on the calling thread's execution context: the call returns once
 // that stream has run the region, as a `parallel` region does, and nothing waits for the rest of the device.
+//
+// A region with a finish runs it once, after every block: on the host as one more team, on the device in the block that
+// finishes last, still one launch (compiler/finish.py).
 #pragma once
 #include <cstddef>
 #include <cstdint>
@@ -181,6 +184,14 @@ template<unsigned THREADS, std::size_t BYTES, class F> inline void run(std::size
   for(pthread_t id : threads) pthread_join(id, nullptr);
 }
 
+// A region with a finish (compiler/finish.py): every block, then, once every block's threads have been joined, one
+// team of the same threads runs the finish, as block 0 of a grid of one. It runs when the grid is empty too.
+template<unsigned THREADS, std::size_t BYTES, class F, class G> inline void run_then(std::size_t grid, F body,
+                                                                                    G finish) noexcept {
+  run<THREADS, BYTES>(grid, body);
+  run<THREADS, BYTES>(1, finish);
+}
+
 }  // namespace cr::coop
 #endif
 
@@ -245,6 +256,40 @@ blocks(std::size_t grid, F body) {
   }
 }
 
+// A region with a finish, as one launch. Each block, once it has run its share of the grid, counts itself in
+// `arrived`: its threads' writes are ordered before thread 0's fence by the loop's last barrier, the fence makes them
+// visible device-wide, and the atomic add counts the block, as cooperative groups' grid barrier does. The block that
+// brings the count to the grid's knows every other block has finished; after a second fence it zeroes its shared
+// memory, runs the finish as block 0 of a grid of one, and puts the counter back to zero for the next launch.
+template<unsigned THREADS, std::size_t BYTES, class F, class G> __global__ void __launch_bounds__(THREADS)
+blocks_then(std::size_t grid, F body, G finish, unsigned* arrived) {
+  __shared__ __align__(128) unsigned char memory[BYTES ? BYTES : 16];
+  __shared__ bool last;
+  Device context(memory);
+  const std::size_t t = threadIdx.x;
+  for(std::size_t b = blockIdx.x; b < grid; b += gridDim.x) {
+    if constexpr(BYTES > 0)
+      for(std::size_t e = t; e < BYTES; e += THREADS) memory[e] = 0;
+    __syncthreads();
+    body(context, b, t);
+    __pipeline_wait_prior(0);
+    __syncthreads();
+  }
+  if(t == 0) {
+    __threadfence();  // this block's writes, every thread's, before it is counted
+    last = atomicAdd(arrived, 1u) == gridDim.x - 1;
+    if(last) __threadfence();  // every other block's writes, before the finish reads them
+  }
+  __syncthreads();
+  if(!last) return;
+  if constexpr(BYTES > 0)
+    for(std::size_t e = t; e < BYTES; e += THREADS) memory[e] = 0;
+  __syncthreads();
+  finish(context, 0, t);
+  __pipeline_wait_prior(0);
+  if(t == 0) *arrived = 0;  // every block has counted itself: nothing else touches it before this launch ends
+}
+
 // On the calling thread's execution context (cairn_exec.hpp), returning once its stream has run the region.
 template<unsigned THREADS, std::size_t BYTES, class F>
 inline void launch(gpu::Context& ctx, std::size_t grid, F body) noexcept {
@@ -255,6 +300,17 @@ inline void launch(gpu::Context& ctx, std::size_t grid, F body) noexcept {
   const unsigned g = grid < gpu::MAX_GRID ? unsigned(grid) : gpu::MAX_GRID;
   reuse::synchronous(ctx, [&](cudaStream_t s) {
     blocks<THREADS, BYTES><<<g, THREADS, 0, s>>>(grid, body);
+    gpu::check(cudaGetLastError());
+  });
+}
+template<unsigned THREADS, std::size_t BYTES, class F, class G>
+inline void launch_then(gpu::Context& ctx, std::size_t grid, F body, G finish) noexcept {
+  static_assert(THREADS % WARP == 0 && THREADS >= WARP && THREADS <= 1024, "a block runs whole warps");
+  static_assert(BYTES <= 48 * 1024, "static shared memory holds 48 KiB");
+  static_assert(std::is_trivially_copyable_v<F> && std::is_trivially_copyable_v<G>, "the bodies cross as arguments");
+  const unsigned g = grid < 1 ? 1u : grid < gpu::MAX_GRID ? unsigned(grid) : gpu::MAX_GRID;  // the finish runs once
+  reuse::synchronous(ctx, [&](cudaStream_t s) {
+    blocks_then<THREADS, BYTES><<<g, THREADS, 0, s>>>(grid, body, finish, ctx.ticket(s));
     gpu::check(cudaGetLastError());
   });
 }

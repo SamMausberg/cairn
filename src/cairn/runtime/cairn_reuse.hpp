@@ -79,6 +79,7 @@ public:
     if(lent_ != 0 || leased_ || holding_) trap();
     if(used_) api_.sync_event(marker_);  // nothing below may go while the device still reads the arena
     if(arena_) api_.free(arena_);
+    if(ticket_) api_.free(ticket_);  // synchronous work, the only kind that uses it, has finished
     for(Lane* lane = free_; lane != nullptr;) {
       Lane* next = lane->next;
       api_.destroy_event(lane->event);
@@ -210,6 +211,17 @@ public:
     leased_ = false;
   }
 
+  // The word a cooperative region with a finish counts its finished blocks in (cairn_coop.hpp): made and zeroed on
+  // `stream` at the first use, and zero again whenever no such region is in flight, since the last block puts it
+  // back. Only the context's synchronous work uses it, and that never overlaps on the device.
+  unsigned* ticket(Stream stream) noexcept {
+    if(!ticket_) {
+      ticket_ = static_cast<unsigned*>(api_.alloc(sizeof(unsigned)));
+      api_.zero(ticket_, sizeof(unsigned), stream);
+    }
+    return ticket_;
+  }
+
   std::size_t capacity() const noexcept { return capacity_; }
   std::size_t streams_made() const noexcept { return made_; }
   std::size_t lent() const noexcept { return lent_; }
@@ -250,6 +262,7 @@ private:
   Lane* free_ = nullptr;
   std::size_t lent_ = 0, made_ = 0, grown_ = 0;
   void* arena_ = nullptr;
+  unsigned* ticket_ = nullptr;
   std::size_t capacity_ = 0;
   Event marker_{};       // recorded after the arena's last user; the next user's stream waits on it
   bool marked_ = false;  // whether marker_ has been made

@@ -90,8 +90,9 @@ plan f { vector 4; }""",
     "A last block that finishes, grid-wide sync": [
         (
             """fn f(g:usize, partial:rw<u64>[g]@device, out:rw<u64>[1]@device) {
-  blocks b in g threads t in 32 { if t == 0 { partial[b] = u64(b); } }
-  blocks b in 1 threads t in 32 {
+  blocks b in g threads t in 32 {
+    if t == 0 { partial[b] = u64(b); }
+  } then threads t in 32 {
     if t == 0 {
       let mut sum:u64 = 0;
       for k in 0..g { sum = add_wrap(sum, partial[k]); }
@@ -100,7 +101,13 @@ plan f { vector 4; }""",
   }
 }""",
             "accepted",
-        )
+        ),
+        (
+            """fn f(g:usize, out:rw<u64>[g]@device) {
+  blocks b in g threads t in 64 { if t == 0 { out[b] = 1; } } then threads t in 32 { let v = t; }
+}""",
+            "E-COOP-SHAPE",
+        ),
     ],
     "Shared memory nobody zeroes": [
         ("""fn f(g:usize) { blocks b in g threads t in 32 { shared s:u32[32]; s[t] = 1; } }""", "E-PARSE")

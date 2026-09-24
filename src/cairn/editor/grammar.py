@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[3]
 # Words the parser reads in one position only; anywhere else they are ordinary names (the parser says where).
 CONTEXTUAL = {"after", "align", "exclusive", "fold", "into", "lends", "packed", "plan", "recipe", "require", "scan"}
 CONTEXTUAL |= {"test", "layout", "implements", "when", "needs", "use", "tune", *PLAN_ITEMS}
-CONTEXTUAL |= {"blocks", "threads", "shared", "barrier", "warp", "pipeline", "depth"}  # a cooperative region
+CONTEXTUAL |= {"blocks", "threads", "then", "shared", "barrier", "warp", "pipeline", "depth"}  # a cooperative region
 CONTEXTUAL |= {"volatile", "out", "clobbers", "launch"}  # typed assembly and launched kernels (compiler/machine.py)
 
 # class -> (TextMate scope, Vim group, words). Every reserved word is in exactly one class.
@@ -77,6 +77,7 @@ CONTEXT: dict[str, tuple[str, str]] = {
     "clobbers": ("storage.modifier.cairn", r"(?=\s*\(\s*[a-z][a-z0-9]*\s*[,)])"),  # `clobbers(rax, rdx)`
     # a cooperative region: `blocks b in g threads t in 256 {`, `shared s:u64[8] = zeroed;`, `barrier;`, `reduce + warp`
     **dict.fromkeys(("blocks", "threads"), ("keyword.control.concurrency.cairn", r"(?=\s+[A-Za-z_]\w*\s*(?:,|in\b))")),
+    "then": ("keyword.control.concurrency.cairn", r"(?=\s+threads\b)"),  # a region's finish
     "shared": ("storage.type.binding.cairn", r"(?=\s+[A-Za-z_]\w*\s*:)"),
     "barrier": ("keyword.control.concurrency.cairn", r"(?=\s*;)"),
     "warp": ("keyword.control.concurrency.cairn", r"(?=\s+yield\b)"),
