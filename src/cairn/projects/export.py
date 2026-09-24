@@ -392,6 +392,10 @@ def compare(one: Path, other: Path) -> dict[str, Any]:
 def command(a: Any) -> tuple[dict[str, Any], int]:
     """What `cairn export`, and `cairn build`, `run` and `test` of an export directory, answer, and the exit status."""
     where = Path(a.path)
+    if a.command == "export" and (a.harness or (where / "harness.json").is_file()):
+        from .harness import command as harness
+
+        return harness(a)
     if a.command == "export" and not (where / RECORD).is_file():
         from ..perf.report import parse_sizes
         from .project import load_project

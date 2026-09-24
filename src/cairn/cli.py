@@ -170,6 +170,15 @@ def main(argv: list[str] | None = None) -> int:
             terminal.rules(record) if terminal.human(FORMAT) else report(record)
             return 0
         if a.command == "new":
+            if a.from_sol_execbench:
+                from .projects.harness_import import create
+
+                if a.template != "default":
+                    raise ProjectError("--from-sol-execbench writes its own project; it takes no --template.")
+                report(create(a.directory, a.from_sol_execbench, a.device_target), brief=True)
+                return 0
+            if a.device_target:
+                raise ProjectError("--device-target names the target of a --from-sol-execbench project.")
             report(create_project(a.directory, a.template), brief=True)
             return 0
         if a.command == "fmt":

@@ -5,7 +5,7 @@ Every tool here ships with the compiler, needs no Python package outside the sta
 | Command | What it does | Described in |
 |---|---|---|
 | `cairn doctor` | reports the local compilers and tools; downloads nothing | [guide.md](guide.md#install) |
-| `cairn new DIR --template T` | writes a project from a template: `default`, `cli`, `lib`, `service` or `parallel` | [guide.md](guide.md#a-project) |
+| `cairn new DIR --template T` | writes a project from a template: `default`, `cli`, `lib`, `service` or `parallel`; or, with `--from-sol-execbench`, from a benchmark problem | [guide.md](guide.md#a-project), [--from-sol-execbench](#cairn-export---harness) |
 | `cairn check`, `cairn build`, `cairn run` | accepts or refuses a program; builds it with a receipt; runs it under process limits | [guide.md](guide.md#check-run-test), [a watched check](#a-watched-check-and-shell-completions), [--incremental](#cairn-build---incremental), [--header](#cairn-build---header), [targets](#the-device-target) |
 | `cairn emit`, `cairn expand` | prints the C++ the program lowers to; prints what every `derive` generated | [--ctypes](#cairn-build---header), [expand](#cairn-doc-and-cairn-expand) |
 | `cairn test` | runs test blocks, each in its own process, and task contracts | [cairn test](#cairn-test) |
@@ -14,7 +14,7 @@ Every tool here ships with the compiler, needs no Python package outside the sta
 | `cairn explain`, `cairn predict`, `cairn tune` | where each function pays at run time; its predicted time; the bounded search over its plans and implementations | [explain](#cairn-explain), [predict](#cairn-predict), [tune](#cairn-tune) |
 | `cairn validate`, `cairn foreign` | an implementation tested against its reference; what a foreign implementation has | [validate](#cairn-validate), [foreign](#cairn-foreign) |
 | `cairn verify`, `cairn diff`, `cairn certificates` | SMT equivalence of two sources; the class of every function between two versions; the collector certificates | [verification.md](verification.md#value-level-source-equivalence), [diff](#cairn-diff), [certificates](verification.md#the-collector-certificates-and-the-loop-model) |
-| `cairn export` | the exact program a build compiles, with a record that pins it | [export](#cairn-export) |
+| `cairn export` | the exact program a build compiles, with a record that pins it; with `--harness`, a SOL-ExecBench, GPU MODE or KernelBench submission around it | [export](#cairn-export), [--harness](#cairn-export---harness) |
 | `cairn doc`, `cairn graph` | the API reference; the module graph | [doc](#cairn-doc-and-cairn-expand), [graph](#large-projects-and-bazel) |
 | `cairn rules` | the rule card of a diagnostic code, a card by name, or the cards a program selects | [rules](#cairn-rules) |
 | `cairn fmt`, `cairn lsp`, `cairn mcp`, `cairn completions` | the formatter; the language server; the MCP server; shell completions | [fmt](#cairn-fmt), [lsp](#cairn-lsp), [mcp](#cairn-mcp), [completions](#a-watched-check-and-shell-completions) |
@@ -446,6 +446,61 @@ An export is data, not a build script. The identity is a digest anyone can recom
 The record names each runtime header's role in a device export. The device implementation is `cairn_kernels.hpp` and the guards a lane calls, whose kernels launch on a stream the caller names, with no execution context. The launch wrappers are `cairn_gpu.hpp`, `cairn_exec.hpp` and `cairn_reuse.hpp`; an application can point them at its own stream (`NAME_device_stream`) or replace them with another machine, as the suite's host machine does.
 
 `cairn export DIR --compare OTHER` says whether two exports are the same code: each function's canonical emission, as `cairn diff` compares it, each runtime header, the command, the compilers and the target. It exits 1 when they differ, so a check can hold back a change to a known-fast implementation. Same code is not the same speed: compare timings only between exports built alike, with the same `--time` harness, on the same machine.
+
+## cairn export --harness
+
+`cairn export --harness` packages one CAIRN function for a kernel benchmark: a SOL-ExecBench `solution.json`, a GPU MODE `submission.py` or a KernelBench `ModelNew`. Beside it are the export it embeds and `harness.json`, a `cairn.harness/1` record of the format and the upstream commit it follows, the function and its signature, the mapping, the entry the binding calls, the flags and why, and the export's identity.
+
+```sh
+cairn new rmsnorm --from-sol-execbench problems/rmsnorm/definition.json   # a signature, harness.toml, policy.json
+cairn export rmsnorm --harness sol-execbench --symbol rmsnorm --out out/rmsnorm
+cairn export out/rmsnorm                                                  # {"status": "harness-intact", ...}
+```
+
+The submission calls the library's checked entry, `cf_rmsnorm`, through a PyTorch binding. Before any pointer crosses, the binding checks each tensor's dtype, device, contiguity, dimensions and element count against the mapping and the signature, refuses a written tensor that overlaps another and a number that does not fit its parameter, and raises a Python exception that names the argument. Device work runs on the caller's current torch stream, bound with `NAME_device_stream`, and the call returns once that work has finished. When the library's header declares the no-wait entry `cq_rmsnorm`, the binding calls it on the stream instead, and the record says which one it calls.
+
+`harness.toml`, beside the manifest or named by `--mapping`, is data: which benchmark argument feeds which parameter, in the order the benchmark passes them, with its dtype and shape.
+
+```toml
+[axes]
+hidden_size = 4096                   # fixed; any other axis is read from the first tensor whose shape names it
+
+[extents]
+n = "batch_size * hidden_size"       # each usize parameter no argument feeds: + - * / over axes, checked
+
+[[argument]]
+name = "hidden_states"
+parameter = "x"
+dtype = "bfloat16"
+shape = ["batch_size", "hidden_size"]
+
+[[argument]]
+name = "output"
+parameter = "out"
+dtype = "bfloat16"
+shape = ["batch_size", "hidden_size"]
+output = true                        # a destination the benchmark allocated
+```
+
+An argument without `shape` is a Python number. A `[[result]]` is a tensor the adapter allocates and returns. `[benchmark]` names SOL-ExecBench's `definition`, GPU MODE's `leaderboard` and `gpu`, and the `problem` the printed commands evaluate. KernelBench's `forward` gets only inputs, so its outputs are results, and SOL-ExecBench passes every output preallocated after the inputs, so it takes none. A dtype is spelled as the benchmark or as CAIRN spells it, `bfloat16` or `bf16`, and `float4_e2m1fn_x2` and the other formats CAIRN has no type for are refused by name. A mapping the signature does not bear writes nothing:
+
+| Refused | Code |
+|---|---|
+| a parameter fed twice or by nothing, an axis no shape names, an extent beyond `+ - * /`, an input CAIRN writes | `E-HARNESS-MAPPING` |
+| a dtype other than the parameter's element type, a format CAIRN lacks, a float feeding an integer | `E-HARNESS-DTYPE` |
+| a function with no C entry, such as one that takes an owner | `E-HARNESS-SYMBOL` |
+| a result for SOL-ExecBench, a destination for KernelBench, a returned value, a solution naming no definition | `E-HARNESS-FORMAT` |
+| a device target whose code does not load on the GPU the mapping names | `E-TARGET-MISMATCH` |
+
+The flags keep CAIRN's numerics. SOL-ExecBench compiles with `nvcc -O3 --use_fast_math` unless a solution says otherwise, so `compile_options` gives `nvcc -std=c++20 -O3 --fmad=false -arch=sm_100a --extended-lambda --expt-relaxed-constexpr -Xcompiler -ffp-contract=off,-fno-fast-math` for the device target, and `c++ -std=c++20 -O3 -ffp-contract=off -fno-fast-math` for the binding. GPU MODE and KernelBench pass the same flags to `load_inline`. Their Python files embed the export's sources one line per line and check each one's sha256 before the build.
+
+Nothing here runs an evaluator, submits or opens a connection. The record lists the commands that would, for you to run: `sol-execbench PROBLEM --solution solution.json`, KernelBench's `scripts/run_and_check.py`, and `popcorn submit --mode test`, `benchmark`, `profile` or `leaderboard`. `popcorn submit --mode leaderboard` is a public ranked submission under your name on gpumode.com.
+
+A score keeps its benchmark's meaning, and the record states it. SOL-ExecBench's `S = 1 / (1 + (T_k - T_SOL) / (T_b - T_SOL))` is 0.5 at its PyTorch baseline and 1.0 at its modelled speed of light, so 0.74 is not 74 percent of anything. GPU MODE ranks by the benchmarks' mean times, by their geometric mean under `ranking_by: geom`. KernelBench's `fast_p` is the fraction of problems solved correctly and faster than PyTorch by more than `p`. None of these is the speed-of-light fraction `cairn predict` reports.
+
+`cairn new DIR --from-sol-execbench definition.json` starts a project from a problem. It writes the reference's signature, with a `usize` per variable axis, a `const` per fixed one and an `@device` view per tensor, above an empty body and the PyTorch reference as a comment; `harness.toml`; the problem's files; and `policy.json`, with the tightest `max_atol` and `max_rtol` any workload states, for `cairn validate --policy`. The benchmark also requires a matched ratio where CAIRN requires every element, fails any NaN or infinity where CAIRN agrees a NaN with a NaN, compares in f32 where CAIRN compares in f64, and may cap the largest error; the answer and `harness.toml` say which of these apply. The device target defaults to `sm_100a`, the B200 the benchmark runs on.
+
+`tests/projects/test_harness_torch.py` builds each format with CPU torch and runs a host-view kernel on CPU tensors against the benchmark's reference. It skips where torch is absent.
 
 ## cairn build --incremental
 

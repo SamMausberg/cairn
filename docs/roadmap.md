@@ -43,3 +43,4 @@ Each gate below is open. A gate closes when its tests, its documentation and its
 
 - A package registry, version resolution and fetching. Dependencies are vendored and pinned by hash, and the package installs from a checkout.
 - An owner crossing the C boundary (no release function is generated for a `Buf`), two CAIRN headers in one translation unit (their `ct_` names collide), and the header and ctypes binding on any platform but x86-64 Linux.
+- Benchmark submissions that ran. `cairn export --harness` writes SOL-ExecBench, GPU MODE and KernelBench submissions that build against a CUDA torch for sm_100a, and none has run on a GPU, under an official evaluator or on a leaderboard. GPU MODE's AMD tasks need HIP, which CAIRN does not emit. NVFP4 and the MX scale formats have no CAIRN type, so a problem on them is refused by name. A KernelBench `Model` with parameters or constructor inputs has no adapter yet.

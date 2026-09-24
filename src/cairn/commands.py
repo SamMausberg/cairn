@@ -121,6 +121,12 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"export"}, "--tests", {"action": "store_true", "help": "Export the test blocks' program; cairn test runs it."}),
     ({"export"}, "--time", {"metavar": "SYMBOL", "help": "Export SYMBOL beside a timing driver at the --at sizes; "
                             "cairn run of the export measures it."}),
+    ({"export"}, "--harness", {"choices": ["sol-execbench", "gpumode", "kernelbench"], "help": "Package --symbol "
+                               "as this benchmark's submission beside its export and a record; runs and submits "
+                               "nothing, and prints the commands that would."}),
+    ({"export"}, "--symbol", {"metavar": "F", "help": "With --harness: the function the benchmark calls."}),
+    ({"export"}, "--mapping", {"type": Path, "metavar": "HARNESS.toml", "help": "With --harness: which benchmark "
+                               "argument feeds which parameter; default: harness.toml beside the manifest."}),
     ({"export"}, "--compare", {"type": Path, "metavar": "OTHER", "help": "With an export: whether OTHER is the same "
                                "code, function by function; exit 1 when it is not."}),
     ({"test"}, "--test", {"default": "", "metavar": "NAME", "help": "Run the one test block of exactly this name "
@@ -175,6 +181,11 @@ def parser() -> argparse.ArgumentParser:
     new.add_argument("directory", type=Path)
     new.add_argument("--template", choices=templates(), default="default", help="default: the average the guide "
                      "walks through; cli, lib, service and parallel: a starting point for each kind of program.")  # fmt: skip
+    new.add_argument("--from-sol-execbench", type=Path, metavar="DEFINITION.json", help="A library project for "
+                     "this SOL-ExecBench problem: the reference's signature, the tolerance of its workload.jsonl as "
+                     "a validation policy, and harness.toml.")  # fmt: skip
+    new.add_argument("--device-target", metavar="SM", help="With --from-sol-execbench: the manifest's device "
+                     "target; default: sm_100a, the B200 the benchmark runs on.")  # fmt: skip
     for name, help in COMMANDS.items():
         c = sub.add_parser(name, help=help, parents=[shared])
         c.add_argument(

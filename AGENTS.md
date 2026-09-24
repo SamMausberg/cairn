@@ -58,6 +58,10 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `projects/target.py` | the device target: its spelling, how it is resolved, the features and limits it has, and the results it refuses |
 | `projects/emulation.py` | a device program built for the host (`--emulate`): what the host cannot run as the device would, and what its records say |
 | `projects/export.py` | an export: the program a build compiles and the record pinning it, and the builds, runs, tests and comparisons that take it |
+| `projects/harness.py` | `cairn export --harness`: each benchmark format and the upstream commit it follows, the `cairn.harness/1` record, and the commands it prints and never runs |
+| `projects/harness_mapping.py` | `harness.toml`: which benchmark argument feeds which parameter, with its dtype and shape, checked against the signature |
+| `projects/harness_sources.py` | the PyTorch binding of a checked entry, and the submission file each benchmark reads around an export |
+| `projects/harness_import.py` | `cairn new --from-sol-execbench`: a project from a SOL-ExecBench problem's definition and workloads |
 | `projects/foreign.py` | vendored C++ and CUDA a manifest's `[foreign]` names: built by the project's command line, held to each extern's types, inspected |
 | `projects/revision.py` | a program as a path or a git revision holds it |
 | `projects/new.py` | what `cairn new` writes: the default project or a packaged template, and the AGENTS.md each gets |
