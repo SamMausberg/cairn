@@ -6,6 +6,7 @@ body and the tile poisoned first, under the sanitizers and against the unplanned
 sm_120 here and never run: the runs that compare a staged region with the unplanned one are in `make gpu`.
 """
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -105,8 +106,12 @@ def test_every_tile_a_staged_region_loads_holds_what_its_lanes_read(tmp_path, cx
 def test_a_staged_region_reads_shared_memory_on_the_device(tmp_path):
     """Compiled for sm_120 and never run: the tile is stored to and read from shared memory between barriers."""
     ptx = device_build(tmp_path, compile_source(BLUR + "plan blur { stage 2; block 128; }")[0], ptx=True).read_text()
-    assert ptx.count("ld.global.b32") == 1 and ptx.count("ld.shared.b32") == 6  # one tile load, six reads
-    assert ptx.count("st.shared.b32") == 1 and ptx.count("bar.sync") == 2
+
+    def count(op: str) -> int:  # a 32-bit access: CUDA 13 writes it .b32, CUDA 12.9 .f32
+        return len(re.findall(re.escape(op) + r"\.[bf]32\b", ptx))
+
+    assert count("ld.global") == 1 and count("ld.shared") == 6  # one tile load, six reads
+    assert count("st.shared") == 1 and ptx.count("bar.sync") == 2
 
 
 ON_DEVICE = """
