@@ -266,12 +266,11 @@ def main(argv: list[str] | None = None) -> int:
             from .compiler.header import binding, header
 
             mine = lambda f: project.wrote(f.line)  # noqa: E731
+            cuda = "cuda" in compile_source(project.source)[1]["requires"]
             print(
-                binding(project.source, project.name, mine)
+                binding(project.source, project.name, mine, cuda)
                 if a.ctypes
-                else header(
-                    project.source, project.name, mine, "cuda" in compile_source(project.source)[1]["requires"]
-                )[0],
+                else header(project.source, project.name, mine, cuda)[0],
                 end="",
             )
             return 0

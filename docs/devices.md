@@ -67,6 +67,34 @@ A region does not wait for queued work it does not touch; each ticket is waited 
 
 A C program that owns a stream hands it to a device library with `NAME_device_stream(stream)`, which `cairn build --header` declares ([tools.md](tools.md#cairn-build---header)). The calling thread's synchronous device work then runs on that stream, after what the caller queued there, and queued work starts after it too; `NULL` gives the thread its own stream back. A device view the library takes is a pointer to memory the caller owns.
 
+### One wait, or none
+
+A function whose device work nothing on the host can see before it returns waits once, when it returns, instead of after each region. `smooth` below waits once for both regions; a function with a single region waits once either way and compiles as before.
+
+```cairn
+fn smooth(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, tmp:rw<f32>[n]@device) {
+  parallel i in n { tmp[i] = 2.0 * x[i]; }
+  parallel i in n { out[i] = tmp[i] + 1.0; }     // one wait for both, when smooth returns
+}
+```
+
+The rule reads the function's effect row, which covers everything it calls. The row may not hold a transfer to or from host memory, a device allocation (a `buffer`, or the scratch of a device `reduce`, `scan` or `compact`, whose result returns to the host), queued work or a wait, I/O, a foreign call, a machine register, host assembly, a call through a function value, an atomic or a lock, and the function may take no `@unified` view. These are everything through which the host reads device memory or waits on the device, so work queued before the one wait reaches nothing the host reads earlier. When the function returns the host sees every result, and a guard that fired in a lane has aborted the process, just as when each region waited. A device operation whose result the host reads, such as a copy to host memory, still waits where it stands, and it waits for everything queued before it.
+
+A device library's C header gives each such function a second entry, `cq_NAME(stream, ...)`. It checks its arguments as `cf_NAME` does, queues the same work on the caller's stream after what the caller queued there, and returns without waiting. It makes no stream, event or allocation, so PyTorch or any CUDA program can call it on its current stream, or capture it in a CUDA graph. The first call of each kernel in a process reads the kernel's attributes once. `cf_NAME` stays synchronous. A function the rule refuses has no `cq_` entry, and the header lists it under `E-ENQUEUE` with the reason:
+
+```c
+void cf_smooth(size_t n, float *out, const float *x, float *tmp);
+void cq_smooth(void *stream, size_t n, float *out, const float *x, float *tmp);
+/* No enqueued entry (E-ENQUEUE), because each must wait on the host before it returns:
+ * total: it allocates device memory: a device buffer, or the scratch of a device reduce, scan or compact, whose
+ * result returns to the host (no form of the language writes such a result to a device view yet).
+ */
+```
+
+Under `cq_NAME` a failed guard is observed later than the call. The guard's `__trap()` ends its kernel and poisons the device context, so nothing queued after it runs and every later CUDA call in the process fails with `cudaErrorLaunchFailure`. The caller's next synchronization reports it (`cudaStreamSynchronize` returns it, `torch.cuda.synchronize()` raises it), and the next CAIRN entry the process calls aborts. What the kernel wrote before it trapped stays in device memory no copy can reach any more; that is why a `@unified` view, which the host reads without a CUDA call, keeps a function from having an enqueued entry.
+
+The suite's host machine counts every CUDA call the runtime makes (`tests/runtime/test_enqueue.py`). An enqueued call of a cooperative region, two regions and a device copy made no wait, stream, event or allocation, even as the thread's first device work; its checked entry waited once, where it had waited four times; and a copy to host memory after enqueued work waited first. The CUDA build compiles for sm_120.
+
 ## Cooperative regions
 
 `blocks b in G threads t in T { body }` runs `G` blocks of `T` threads. A block's threads share the arrays the body declares `shared` and wait for each other at `barrier`, so, unlike `parallel` lanes, they may read what another thread wrote once a barrier lies between. A region runs on the device when a view it indexes is `@device`, and on host threads otherwise.

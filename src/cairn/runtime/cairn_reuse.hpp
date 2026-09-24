@@ -5,6 +5,9 @@
 // What a context holds is declared when it is made: a budget reserves scratch up front, may allow growth up
 // to a stated limit, and answers a request beyond that limit with a defined failure instead of allocating.
 // A caller that owns a stream may bind it: synchronous work then runs on it, after what the caller queued there.
+// Synchronous work may be held: a run of it queues on one lane and waits once, when the run ends, and a call a caller
+// enqueues on its own stream does not wait at all. Making a context calls nothing on the machine; its events and
+// streams are made by the first work that needs them.
 //
 // Beside the context are the operations device work runs through, written once against the machine: synchronous
 // work on the context's own lane, queued work on a lane lent until its wait, and the reductions, scans and
@@ -64,7 +67,6 @@ public:
   explicit Context(Budget budget, Allocation how = Allocation::synchronous, Api api = Api{}) noexcept
       : api_(std::move(api)), budget_(budget), how_(how) {
     if(budget_.most < budget_.reserve) budget_.most = budget_.reserve;  // a limit below the reserve grants nothing
-    marker_ = api_.make_event();
     if(budget_.reserve) arena_ = api_.alloc(budget_.reserve), capacity_ = budget_.reserve;
   }
   Context(const Context&) = delete;
@@ -74,7 +76,7 @@ public:
   // Every lane must have come back: a lane still lent is work nobody waited for, which traps like a ticket. A
   // bound stream is the caller's, and is never destroyed here.
   ~Context() noexcept {
-    if(lent_ != 0 || leased_) trap();
+    if(lent_ != 0 || leased_ || holding_) trap();
     if(used_) api_.sync_event(marker_);  // nothing below may go while the device still reads the arena
     if(arena_) api_.free(arena_);
     for(Lane* lane = free_; lane != nullptr;) {
@@ -85,14 +87,15 @@ public:
       lane = next;
     }
     if(bound_event_) api_.destroy_event(bound_.event);
-    api_.destroy_event(marker_);
+    if(marked_) api_.destroy_event(marker_);
   }
 
   // A lane whose earlier work has completed, or a new one: never waits, and never shares a stream, so two
   // operations lent two lanes stay as independent as two tickets with streams of their own. `synchronous` asks
-  // for the lane synchronous work runs on, which is the bound stream while one is bound. Any other lane lent while
-  // a stream is bound starts after what was queued there.
+  // for the lane synchronous work runs on: the lane a held run already queues on, else the bound stream while one
+  // is bound. Any other lane lent while a run is held or a stream is bound starts after what was queued there.
   Lane* lend(bool synchronous = false) noexcept {
+    if(synchronous && held_) return held_;  // still lent, since the run began
     if(synchronous && binding_) {
       if(bound_lent_) trap();  // synchronous work does not nest
       bound_lent_ = true;
@@ -110,15 +113,18 @@ public:
     }
     lane->next = nullptr;
     ++lent_;
-    if(binding_) {
-      api_.record(bound_.event, bound_.stream);
-      api_.wait_event(lane->stream, bound_.event);
+    if(held_ || binding_) {
+      Lane& before = held_ ? *held_ : bound_;
+      api_.record(event(before), before.stream);
+      api_.wait_event(lane->stream, before.event);
     }
     return lane;
   }
-  // Wait for the lane's work, then keep the lane for the next operation.
+  // Wait for the lane's work, then keep the lane for the next operation. The caller's stream under an enqueued call
+  // is the one lane nothing here waits for: the caller synchronizes it.
   void give_back(Lane* lane) noexcept {
-    api_.sync_stream(lane->stream);
+    if(lane == held_) held_ = nullptr;
+    if(!(enqueued_ && lane == &bound_)) api_.sync_stream(lane->stream);
     --lent_;
     if(lane == &bound_) {
       bound_lent_ = false;
@@ -128,16 +134,55 @@ public:
     free_ = lane;
   }
 
+  // The end of an operation on the lane lend(true) gave: wait for its work, or, while a run is held, keep the lane
+  // and leave the wait to the run's end.
+  void finish(Lane* lane) noexcept {
+    if(holding_) held_ = lane;
+    else give_back(lane);
+  }
+
   // Synchronous work runs on `stream`, which the caller owns and keeps alive, after what it queued there.
   void bind(Stream stream) noexcept {
-    if(bound_lent_) trap();
-    if(!bound_event_) bound_.event = api_.make_event(), bound_event_ = true;
+    if(bound_lent_ || enqueued_) trap();
     bound_.stream = stream;
     binding_ = true;
   }
   void unbind() noexcept {
-    if(bound_lent_) trap();
+    if(bound_lent_ || enqueued_) trap();
     binding_ = false;
+  }
+
+  // A held run: synchronous work queues on one lane and nothing waits until the outermost run settles, once. Only
+  // work nothing on the host reads before the run ends may be held (compiler/execution.py); an operation whose
+  // result the host reads calls observed() first, which waits for the run so far.
+  void hold() noexcept { ++holding_; }
+  void settle() noexcept {
+    if(!holding_) trap();
+    if(--holding_ == 0 && held_) give_back(held_);
+  }
+  // An enqueued call: the run is held on the caller's stream and never waits, since the caller synchronizes that
+  // stream. It starts from a thread holding nothing and ends with the thread's own binding back.
+  void enqueue(Stream stream) noexcept {
+    if(enqueued_ || holding_ || bound_lent_) trap();
+    saved_ = {binding_, bound_.stream};
+    bound_.stream = stream;
+    binding_ = enqueued_ = true;
+    holding_ = 1;
+  }
+  void leave() noexcept {
+    if(!enqueued_ || holding_ != 1) trap();
+    if(held_) give_back(held_);  // no wait: the caller's stream
+    holding_ = 0;
+    enqueued_ = false;
+    binding_ = saved_.binding;
+    bound_.stream = saved_.stream;
+  }
+  // Before an operation whose result the host reads when it returns, or which waits on the host: what a held run
+  // queued is waited for first. Under an enqueued call nothing may wait, so it traps; the compiler admits no such
+  // operation there.
+  void observed() noexcept {
+    if(enqueued_) trap();
+    if(held_) give_back(held_);
   }
 
   // Scratch of at least `bytes` for work about to be queued on `lane`. The work is ordered after the arena's
@@ -151,6 +196,7 @@ public:
       if(bytes > budget_.most) return Scratch::over_budget;
       grow(bytes, lane);
     }
+    if(!marked_) marker_ = api_.make_event(), marked_ = true;
     if(used_) api_.wait_event(lane.stream, marker_);
     *out = arena_;
     leased_ = true;
@@ -169,9 +215,14 @@ public:
   std::size_t lent() const noexcept { return lent_; }
   std::size_t grown() const noexcept { return grown_; }  // how many times the arena was replaced by a larger one
   bool bound() const noexcept { return binding_; }
+  bool enqueued() const noexcept { return enqueued_; }
   Api& api() noexcept { return api_; }
 
 private:
+  Event event(Lane& lane) noexcept {  // the lane's event; the bound stream's is made the first time it is needed
+    if(&lane == &bound_ && !bound_event_) bound_.event = api_.make_event(), bound_event_ = true;
+    return lane.event;
+  }
   void grow(std::size_t bytes, Lane& lane) noexcept {
     void* old = std::exchange(arena_, nullptr);
     if(how_ == Allocation::stream_ordered) {
@@ -201,10 +252,18 @@ private:
   void* arena_ = nullptr;
   std::size_t capacity_ = 0;
   Event marker_{};       // recorded after the arena's last user; the next user's stream waits on it
+  bool marked_ = false;  // whether marker_ has been made
   bool used_ = false;    // whether marker_ has been recorded since the arena last changed
   bool leased_ = false;  // between acquire and release
   Lane bound_{};         // the caller's stream while one is bound, and an event of this context's own
   bool binding_ = false, bound_lent_ = false, bound_event_ = false;
+  std::size_t holding_ = 0;  // held runs open on this thread
+  Lane* held_ = nullptr;     // the lane a held run queues on, lent until the run settles
+  bool enqueued_ = false;    // an enqueued call: held on the caller's stream, never waited for here
+  struct {
+    bool binding;
+    Stream stream;
+  } saved_{};  // the thread's binding, back when the enqueued call leaves
 };
 
 // Queued work on a lane a context lent. Linear like a ticket: exactly one wait() consumes it, and that hands the
@@ -232,8 +291,17 @@ public:
 };
 
 // Synchronous work: `queue(stream)` queues it on the context's synchronous lane, and the call returns once that
-// lane has finished it. Nothing else is waited for, and after the lane's first use nothing is made.
+// lane has finished it, or at once in a held run, whose end waits for it. Nothing else is waited for, and after the
+// lane's first use nothing is made.
 template<class Api, class Q> inline void synchronous(Context<Api>& ctx, Q&& queue) noexcept {
+  typename Context<Api>::Lane* lane = ctx.lend(true);
+  queue(lane->stream);
+  ctx.finish(lane);
+}
+// The same for work whose result the host reads when the call returns, such as a copy to host memory: it waits,
+// in a held run too, and traps under an enqueued call, which never waits.
+template<class Api, class Q> inline void observed(Context<Api>& ctx, Q&& queue) noexcept {
+  ctx.observed();
   typename Context<Api>::Lane* lane = ctx.lend(true);
   queue(lane->stream);
   ctx.give_back(lane);
@@ -277,6 +345,7 @@ inline Scratch reduce(Context<Api>& ctx, T& result, std::size_t n, T identity, O
     result = identity;
     return Scratch::ok;
   }
+  ctx.observed();
   Api& api = ctx.api();
   typename Context<Api>::Lane* lane = ctx.lend(true);
   const Indexed<T, F> in{value};
@@ -304,6 +373,7 @@ inline Scratch reduce(Context<Api>& ctx, T& result, std::size_t n, T identity, O
 template<class Api, class T, class Op, class F, class... After>
 inline Lent<Api> reduce_to(Context<Api>& ctx, T* out, std::size_t n, T identity, Op op, F value, Scratch* answer,
                            const After&... after) noexcept {
+  ctx.observed();
   Api& api = ctx.api();
   Lent<Api> t(ctx);
   (t.follow(after.mark()), ...);
@@ -335,6 +405,7 @@ inline Scratch scan(Context<Api>& ctx, T& total, R* out, std::size_t n, T identi
     total = identity;
     return Scratch::ok;
   }
+  ctx.observed();
   Api& api = ctx.api();
   typename Context<Api>::Lane* lane = ctx.lend(true);
   const Indexed<T, F> in{value};
@@ -367,6 +438,7 @@ template<class Api, class T, class P, class F>
 inline Scratch compact(Context<Api>& ctx, std::size_t* used, T* out, std::size_t n, P pred, F value) noexcept {
   *used = 0;
   if(!n) return Scratch::ok;
+  ctx.observed();
   Api& api = ctx.api();
   typename Context<Api>::Lane* lane = ctx.lend(true);
   std::size_t need = 0;

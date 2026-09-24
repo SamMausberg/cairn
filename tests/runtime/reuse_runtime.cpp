@@ -255,6 +255,71 @@ static void test_a_bound_stream_stays_the_callers() {
   CHECK(m.violations == 0);
 }
 
+// A held run: synchronous operations queue on one lane and nothing runs them until the run settles, once. An
+// operation whose result the host reads first waits for what the run queued, and a lane lent meanwhile starts after
+// it on the device.
+static void test_a_held_run_waits_once() {
+  Machine m;
+  void* p = m.block();
+  m.live.insert(p);
+  {
+    Context c(Budget{0, 0}, Allocation::synchronous, Mock{&m});
+    c.hold();
+    for(int k = 1; k <= 3; ++k) {
+      Context::Lane* lane = c.lend(true);
+      m.queue[lane->stream].push_back({Machine::touch, p, -1, 0, k});
+      c.finish(lane);
+    }
+    CHECK(m.order.empty() && c.streams_made() == 1 && c.lent() == 1);  // queued on one lane, nothing waited for
+    Context::Lane* other = c.lend();
+    m.queue[other->stream].push_back({Machine::touch, p, -1, 0, 4});
+    c.give_back(other);  // its stream first waits for the run's work
+    CHECK((m.order == std::vector<int>{1, 2, 3, 4}));
+    Context::Lane* lane = c.lend(true);
+    m.queue[lane->stream].push_back({Machine::touch, p, -1, 0, 5});
+    c.finish(lane);
+    c.observed();  // a copy to host memory would come next: the run so far is waited for
+    CHECK((m.order == std::vector<int>{1, 2, 3, 4, 5}) && c.lent() == 0);
+    lane = c.lend(true);
+    m.queue[lane->stream].push_back({Machine::touch, p, -1, 0, 6});
+    c.finish(lane);
+    c.settle();
+    CHECK((m.order == std::vector<int>{1, 2, 3, 4, 5, 6}) && c.lent() == 0);
+  }
+  CHECK(m.violations == 0 && m.streams == m.streams_gone);
+}
+
+// An enqueued call runs on the caller's stream and waits for nothing: the context made no stream and no event,
+// the work is still queued when the call ends, and the thread's own binding is back.
+static void test_an_enqueued_call_leaves_the_wait_to_the_caller() {
+  Machine m;
+  const int mine = m.make_stream(), theirs = m.make_stream();
+  void* p = m.block();
+  m.live.insert(p);
+  {
+    Context c(Budget{0, 0}, Allocation::synchronous, Mock{&m});
+    c.bind(theirs);
+    c.enqueue(mine);
+    c.hold();  // a held body inside the call: only the call's end matters
+    for(int k = 1; k <= 2; ++k) {
+      Context::Lane* lane = c.lend(true);
+      CHECK(lane->stream == mine);
+      m.queue[lane->stream].push_back({Machine::touch, p, -1, 0, k});
+      c.finish(lane);
+    }
+    c.settle();
+    c.leave();
+    CHECK(m.order.empty() && m.done[mine] == 0 && c.lent() == 0);
+    CHECK(c.streams_made() == 0 && m.event_count == 0 && c.bound() && !c.enqueued());
+    m.run(mine);  // the caller synchronizes its stream
+    CHECK((m.order == std::vector<int>{1, 2}));
+    Context::Lane* lane = c.lend(true);
+    CHECK(lane->stream == theirs);
+    c.give_back(lane);
+  }
+  CHECK(m.violations == 0);
+}
+
 static int death(const char* name) {
   Machine m;
   if(!std::strcmp(name, "lane_not_given_back")) {
@@ -275,6 +340,17 @@ static int death(const char* name) {
     c.bind(m.make_stream());
     (void)c.lend(true);
     (void)c.lend(true);  // synchronous work does not nest on the caller's stream
+  } else if(!std::strcmp(name, "observed_while_enqueued")) {
+    Context c(Budget{64, 64}, Allocation::synchronous, Mock{&m});
+    c.enqueue(m.make_stream());
+    c.observed();  // a result the host would read, where nothing may wait
+  } else if(!std::strcmp(name, "enqueued_inside_a_held_run")) {
+    Context c(Budget{64, 64}, Allocation::synchronous, Mock{&m});
+    c.hold();
+    c.enqueue(m.make_stream());
+  } else if(!std::strcmp(name, "settled_without_a_run")) {
+    Context c(Budget{64, 64}, Allocation::synchronous, Mock{&m});
+    c.settle();
   } else {
     std::fprintf(stderr, "unknown death case %s\n", name);
     return 2;
@@ -284,8 +360,9 @@ static int death(const char* name) {
 }
 
 int main(int argc, char** argv) {
-  static const char* cases[] = {"lane_not_given_back", "scratch_acquired_twice", "released_without_acquire",
-                                "bound_lane_lent_twice"};
+  static const char* cases[] = {"lane_not_given_back",     "scratch_acquired_twice",     "released_without_acquire",
+                                "bound_lane_lent_twice",   "observed_while_enqueued",    "enqueued_inside_a_held_run",
+                                "settled_without_a_run"};
   if(argc > 1 && !std::strcmp(argv[1], "--list")) {
     for(const char* c : cases) std::printf("%s\n", c);
     return 0;
@@ -296,6 +373,8 @@ int main(int argc, char** argv) {
   test_a_budget_answers_or_grows_as_declared();
   test_a_context_ends_after_its_last_user();
   test_a_bound_stream_stays_the_callers();
+  test_a_held_run_waits_once();
+  test_an_enqueued_call_leaves_the_wait_to_the_caller();
   std::printf("reuse_runtime: %s after %ld checks\n", failures ? "FAILED" : "ok", checked);
   return failures ? 1 : 0;
 }

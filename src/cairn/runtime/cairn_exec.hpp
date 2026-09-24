@@ -9,6 +9,8 @@
 // context is made by the thread's first device operation and kept for the thread's life: a pipeline run again
 // makes no stream, allocates no temporary and waits for nothing but its own work. A C host that owns a stream binds
 // it (bind below), and the thread's synchronous work then runs on that stream, after what the host queued there.
+// A Held run waits once at its end for all it queued, and an Enqueued call queues on the caller's stream and never
+// waits; the compiler uses them only where nothing on the host reads device memory before they end.
 #pragma once
 #include <cstring>
 #include <type_traits>
@@ -38,6 +40,31 @@ inline void use_stream(void* stream) noexcept {
   else here().unbind();
 }
 
+// A run of synchronous device work that waits once, when the outermost run ends, instead of after each operation.
+// The lowering holds a function's body in one when its row shows that nothing in it reads device memory on the
+// host, waits on the host or allocates (compiler/execution.py): by the time the run ends the host sees every
+// result, and a guard that fired in a lane has aborted the process, as when each operation waited.
+class Held final {
+public:
+  Held() noexcept { here().hold(); }
+  ~Held() noexcept { here().settle(); }
+  Held(const Held&) = delete;
+  Held& operator=(const Held&) = delete;
+};
+
+// A library's enqueued entry (cq_NAME in its C header): the call's device work queues on `stream`, a cudaStream_t
+// the caller owns (null for the legacy default stream), after what the caller queued there, and nothing waits for
+// it, allocates or makes a stream or an event, so the caller may capture the call in a CUDA graph. A guard that
+// fails in a lane ends its kernel with __trap, which poisons the context: no later work runs, and the caller's
+// next synchronization reports the failure.
+class Enqueued final {
+public:
+  explicit Enqueued(void* stream) noexcept { here().enqueue(static_cast<typename Machine::Stream>(stream)); }
+  ~Enqueued() noexcept { here().leave(); }
+  Enqueued(const Enqueued&) = delete;
+  Enqueued& operator=(const Enqueued&) = delete;
+};
+
 // Scoped owners, like cr::Buffer: zero initialized, released at scope exit, never copied, moved or returned. A
 // failed allocation traps; n == 0 is legal and owns nothing. Device and unified storage is zeroed on the thread's
 // synchronous lane, which is waited for, so later work on any stream sees zeros.
@@ -49,12 +76,16 @@ public:
     const std::size_t b = reuse::span<T>(n);
     if(!b) return;
     Context& ctx = here();
+    ctx.observed();
     p_ = static_cast<T*>(ctx.api().allocate(W, b));
     if constexpr(W == Where::pinned) std::memset(p_, 0, b);
-    else reuse::synchronous(ctx, [&](typename Machine::Stream s) { ctx.api().zero(p_, b, s); });
+    else reuse::observed(ctx, [&](typename Machine::Stream s) { ctx.api().zero(p_, b, s); });
   }
   ~Owner() noexcept {
-    if(p_) here().api().release(W, p_);
+    if(!p_) return;
+    Context& ctx = here();
+    ctx.observed();  // nothing still queued may reach the storage once it is released
+    ctx.api().release(W, p_);
   }
   Owner(const Owner&) = delete;
   Owner& operator=(const Owner&) = delete;
@@ -117,10 +148,13 @@ inline void run_staged(Context& ctx, std::size_t n, L load, F body, S bytes, uns
   });
 }
 
-// `transfer(dst, src)`: n elements across, on the context's stream, returning once they have crossed.
+// `transfer(dst, src)`: n elements across, on the context's stream, returning once they have crossed. A copy
+// between two device views is device work like a region; one to or from host memory is waited for, held or not.
 template<class T> inline void copy_on(Context& ctx, T* dst, const T* src, std::size_t n, Dir d) noexcept {
   if(!n) return;
-  reuse::synchronous(ctx, [&](typename Machine::Stream s) { ctx.api().copy(dst, src, reuse::span<T>(n), d, s); });
+  auto queue = [&](typename Machine::Stream s) { ctx.api().copy(dst, src, reuse::span<T>(n), d, s); };
+  if(d == Dir::d2d) reuse::synchronous(ctx, queue);
+  else reuse::observed(ctx, queue);
 }
 
 // `reduce` over device views, with its result on the host. The runtime default budget has no limit, so over_budget
@@ -148,6 +182,7 @@ inline std::size_t compact_on(Context& ctx, T* out, std::size_t n, P pred, F val
 // the tickets in `after...`, returned at once. The lane comes back at the ticket's wait, once its work is done.
 template<class F, class... After> inline Lent queue(Context& ctx, std::size_t n, F body, const After&... after) noexcept {
   static_assert(std::is_trivially_copyable_v<F>, "a lane body crosses over as kernel arguments");
+  ctx.observed();  // its wait is the host's
   Lent t(ctx);
   (t.follow(after.mark()), ...);
   if(n) ctx.api().template lanes<1>(n, body, t.stream(), reuse::BLOCK, 1);
@@ -155,6 +190,7 @@ template<class F, class... After> inline Lent queue(Context& ctx, std::size_t n,
 }
 template<class T, class... After>
 inline Lent queue_copy(Context& ctx, T* dst, const T* src, std::size_t n, Dir d, const After&... after) noexcept {
+  ctx.observed();
   Lent t(ctx);
   (t.follow(after.mark()), ...);
   if(n) ctx.api().copy(dst, src, reuse::span<T>(n), d, t.stream());

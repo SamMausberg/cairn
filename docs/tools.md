@@ -469,6 +469,8 @@ samples = (ctypes.c_int64 * 6)(4, 8, 15, 16, 23, 42)
 assert lib.cf_summarize(6, samples).max == 42
 ```
 
+A device library's header adds two things. `NAME_device_stream(stream)` moves the calling thread's device work onto a stream the caller owns. `cq_NAME(void *stream, ...)`, beside `cf_NAME` for each function whose work the host cannot see before it returns, queues that work on `stream` and returns without waiting, making no stream, event or allocation, so a caller can capture it in a CUDA graph; the ctypes module takes the stream as a pointer, such as `torch.cuda.current_stream().cuda_stream`. A function that must wait on the host has no `cq_` entry, and the header lists why (`E-ENQUEUE`). [devices.md](devices.md#one-wait-or-none) has the rule, and where a failed device guard is observed under `cq_`.
+
 `tests/projects/test_interop.py` builds the example under both compilers, runs it under AddressSanitizer and UndefinedBehaviorSanitizer, requires overlapping, misaligned and null views to abort, and compiles headers of nested, packed, aligned and storage-float records as C11 and C++17.
 
 A library that runs device work also declares `void NAME_device_stream(void *stream)`, which puts the calling thread's device work on a `cudaStream_t` the caller owns ([devices.md](devices.md#device-execution)).

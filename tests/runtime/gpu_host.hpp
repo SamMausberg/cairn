@@ -6,7 +6,9 @@
 // exactly sized allocation, filled with a pattern first, so a read outside what the block loaded reads the pattern
 // and one past the tile is an AddressSanitizer error), and a copy is a memcpy. Every stream and event made, every
 // allocation, launch, copy and wait is counted in cr::gpu::counted, which a test reads between calls. The machine has
-// no whole-device wait to count: no operation of cairn_exec.hpp can ask for one.
+// no whole-device wait to count: no operation of cairn_exec.hpp can ask for one. While `capturing` is set, as a
+// CUDA graph capture would be, every call a capture refuses (a wait, a stream, an event, an allocation or a release)
+// is counted again as `refused`.
 #pragma once
 #include <atomic>
 #include <cstdlib>
@@ -24,6 +26,8 @@ struct Counts {  // atomic, since every host thread has an execution context of 
   std::atomic<std::size_t> launches{0}, copies{0}, library_calls{0}, stream_waits{0}, event_waits{0}, records{0};
   std::atomic<const void*> last_stream{nullptr};  // the stream the last launch or copy was queued on
   std::atomic<std::size_t> most_by_one_thread{0};  // the most streams any one host thread has made
+  std::atomic<bool> capturing{false};
+  std::atomic<std::size_t> refused{0};  // calls made while capturing that a stream capture would refuse
 };
 inline Counts counted;
 inline thread_local std::size_t made_here = 0;
@@ -35,10 +39,15 @@ struct HostEvent {
   std::size_t id;
 };
 
+inline void capture_refuses() noexcept {
+  if(counted.capturing) ++counted.refused;
+}
+
 struct Host {
   using Stream = HostStream*;
   using Event = HostEvent*;
   Stream make_stream() noexcept {
+    capture_refuses();
     const std::size_t mine = ++made_here;
     for(std::size_t most = counted.most_by_one_thread; mine > most && !counted.most_by_one_thread.compare_exchange_weak(most, mine);) {
     }
@@ -48,35 +57,48 @@ struct Host {
     ++counted.streams_destroyed;
     delete s;
   }
-  Event make_event() noexcept { return new HostEvent{++counted.events}; }
+  Event make_event() noexcept {
+    capture_refuses();
+    return new HostEvent{++counted.events};
+  }
   void destroy_event(Event e) noexcept {
     ++counted.events_destroyed;
     delete e;
   }
   void record(Event, Stream) noexcept { ++counted.records; }
   void wait_event(Stream, Event) noexcept {}
-  void sync_stream(Stream) noexcept { ++counted.stream_waits; }
-  void sync_event(Event) noexcept { ++counted.event_waits; }
+  void sync_stream(Stream) noexcept {
+    capture_refuses();
+    ++counted.stream_waits;
+  }
+  void sync_event(Event) noexcept {
+    capture_refuses();
+    ++counted.event_waits;
+  }
   static void* storage(std::size_t b) noexcept {
     void* p = std::aligned_alloc(reuse::ALIGN, reuse::aligned(b ? b : 1));
     if(!p) trap();
     return p;
   }
   void* alloc(std::size_t b) noexcept {
+    capture_refuses();
     ++counted.scratch_allocations;
     return storage(b);
   }
   void free(void* p) noexcept {
+    capture_refuses();
     ++counted.frees;
     std::free(p);
   }
   void* alloc_async(std::size_t b, Stream) noexcept { return alloc(b); }
   void free_async(void* p, Stream) noexcept { free(p); }
   void* allocate(Where, std::size_t b) noexcept {
+    capture_refuses();
     ++counted.allocations;
     return storage(b);
   }
   void release(Where, void* p) noexcept {
+    capture_refuses();
     ++counted.frees;
     std::free(p);
   }
