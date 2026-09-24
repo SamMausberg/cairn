@@ -68,7 +68,7 @@ def unwaited(c: Checker, f: Function) -> str:
     device memory: then it may be held to one wait, or enqueued on a caller's stream with none. An atomic update in
     a device lane is device work; one in host code or a host lane is something another host thread can see."""
     for effect in sorted(c.rows.get(f.name, set())):
-        if effect == "atomic" and not host_atomics(c, f.body, set()):
+        if effect == "atomic" and not host_atomics(c, ran(c, f), set()):
             continue
         if effect in OBSERVES:
             return OBSERVES[effect]
@@ -87,6 +87,11 @@ def held(c: Checker, f: Function) -> bool:
     return operations(c, f.body) > 1
 
 
+def ran(c: Checker, f: Function) -> list[Stmt]:
+    """What a call of `f` may run: its body, and the body of each implementation a plan may run in its place."""
+    return [*f.body, *(s for g in c.alternatives.get(f.name, ()) if g in c.fs for s in c.fs[g].body)]
+
+
 def host_atomics(c: Checker, ss: list[Stmt], seen: set[str]) -> bool:
     """Whether the statements, or a function they call from host code, update memory atomically outside a device
     region: in host code, a host lane or a host cooperative thread, or through a host `Atomic`."""
@@ -98,7 +103,7 @@ def host_atomics(c: Checker, ss: list[Stmt], seen: set[str]) -> bool:
             return True
         if e.tag == "call" and isinstance(e.ref, Function) and e.ref.name not in seen:
             seen.add(e.ref.name)
-            if host_atomics(c, e.ref.body, seen):
+            if host_atomics(c, ran(c, e.ref), seen):
                 return True
         return any(found(a) for a in e.args)
 

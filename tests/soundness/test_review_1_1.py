@@ -114,3 +114,35 @@ def test_a_host_validation_asked_to_emulate_says_it_ran_on_the_host():
     record = validate(TOTAL, "total", "total_by2", {"budget": 8}, emulate=parse("sm_120"))
     assert record["status"] == "passed" and record["evidence"] == "finite-tested" and "emulation" not in record
     assert record["target"] == {"kind": "host"}, record["target"]
+
+
+# --- Fixed: an implementation's host atomic update let its reference's callers skip their waits --------------------
+
+COUNTED = """fn bump(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, hits:ro<Atomic[u64]>)
+    effects(pure, read:x, write:out, read:hits, par:device, atomic) {
+  parallel i in n { out[i] = 2.0 * x[i]; }
+}
+fn bump_counted(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, hits:ro<Atomic[u64]>) implements bump {
+  parallel i in n { out[i] = 2.0 * x[i]; }
+  let _ = hits.fetch_add(1, Order.relaxed);
+}
+plan bump use bump_counted;
+fn twice(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, hits:ro<Atomic[u64]>) {
+  bump(n, out, x, hits);
+  bump(n, out, x, hits);
+}
+"""
+
+
+@pytest.mark.parametrize("name", ["bump", "twice"])
+def test_a_host_atomic_update_in_a_selected_implementation_keeps_every_wait(name):
+    """A function's row holds `atomic` from the implementation its reference runs, and an update of host memory is
+    something another host thread sees. The rule that lets a device lane's atomic update wait once walked only the
+    bodies a call names, never the implementation a plan runs in the reference's place, so `twice` was held to one
+    wait while each `bump_counted` bumped `hits` before its region had run."""
+    from cairn.compiler import execution
+
+    _, checker, _ = compile_program(COUNTED)
+    assert "atomic" in checker.rows[name]
+    assert execution.unwaited(checker, checker.fs[name]) == execution.OBSERVES["atomic"]
+    assert not execution.held(checker, checker.fs[name])
