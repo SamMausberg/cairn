@@ -5,7 +5,8 @@ Without `every` (compile_program) nothing here changes a check: the first refusa
 declaration runs inside `refusing`. A refusal there is kept, what that check added to the program-wide tables (an
 instance, a layout, an implementation it began) is taken back, and the next declaration is checked. The first
 refusal is the one a check that stops meets. A later one is reported only when no other refusal can explain it: a
-rule that reads the rows of what a function calls is judged only where no refused body is reached, and a refusal met
+rule that reads the rows of what a function calls is judged only where no refused body is reached, nor a reference
+whose row its implementations have not yet joined, and a refusal met
 again through what two checks share is said once. Nothing here is mechanically proved.
 """
 
@@ -116,7 +117,8 @@ def rest(c: Checker):
 
 def independent(c: Checker) -> set[str]:
     """The functions whose rows reach no refused body: every one whose check finished, but those that call, or make
-    an indirect call that may reach, one that did not, and those that reach them. The others join `unjudged`."""
+    an indirect call that may reach, one that did not, those whose row an implementation joins, and those that reach
+    them. The others join `unjudged`."""
     connect_dispatches(c)
     known, callers = set(c.local_effects), dict[str, set[str]]()
     for n in known:
@@ -125,12 +127,27 @@ def independent(c: Checker) -> set[str]:
     todo = [n for n in known if any(q not in known for q in c.calls[n])]
     if any(g not in known for g in c.address_taken):
         todo += [n for n in known if "indirect_call" in c.local_effects[n]]
+    todo += sorted(references(c) & known)
     while todo:
         n = todo.pop()
         if n not in c.unjudged:
             c.unjudged.add(n)
             todo += callers.get(n, ())
     return known - c.unjudged
+
+
+def references(c: Checker) -> set[str]:
+    """Every function an implementation names. A reference's row joins its implementations' only once the rules of
+    implementations have run (implementations.joined), which a check with a refusal never reaches."""
+    named = set()
+    for f in c.p.functions:
+        if f.implements is not None:
+            try:
+                with c.within(f.module):
+                    named.add(c.qualify(f.implements.reference, c.fs))
+            except Diagnostic:  # a reference it may not name is the implementation rules' refusal, never reached
+                continue
+    return named - {None}
 
 
 def reaches(c: Checker, name: str, targets: set[str]) -> bool:
