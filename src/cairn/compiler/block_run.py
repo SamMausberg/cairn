@@ -115,6 +115,7 @@ class Event:
     time: float
     mask: list[int] | None  # which threads make it: 0 no, 1 yes, 2 perhaps; None all
     warp: bool = False  # one write by each warp that makes it, in a lane nobody names (a WMMA store)
+    atomic: bool = False  # an atomic update, which races no other atomic update (compiler/atomics.py)
 
 
 @dataclass
@@ -257,6 +258,8 @@ class BlockRun:
             if a.tag == "slice":
                 lo, hi = (self.expr(x, env, mask, now) for x in a.args[1:3])
                 self.record(name, ("part", lo, hi), mode == "rw", a, now, mask)
+            elif a.tag == "index" and mode == "atomic":  # one indivisible update (compiler/atomics.py)
+                self.record(name, self.expr(a.args[1], env, mask, now), True, a, now + 0.5, mask, atomic=True)
             elif a.tag == "index":
                 i = self.expr(a.args[1], env, mask, now)
                 if mode == "rw":
@@ -319,9 +322,10 @@ class BlockRun:
             only = [(1 if mask is None else mask[t]) * (t % LANES == holder) for t in range(self.T)]
             self.record(array, index, True, e, now, only)
 
-    def record(self, array: str, index: Any, write: bool, node: Any, time: float, mask: list[int] | None, warp=False):
+    def record(self, array: str, index: Any, write: bool, node: Any, time: float, mask: list[int] | None, warp=False,
+               atomic=False):  # fmt: skip
         for alternative in self.open:
-            alternative.append(Event(array, index, write, node, time, mask, warp))
+            alternative.append(Event(array, index, write, node, time, mask, warp, atomic))
 
     # Statements ----------------------------------------------------------------------------------------------
 

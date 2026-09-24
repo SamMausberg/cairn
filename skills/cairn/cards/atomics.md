@@ -1,0 +1,7 @@
+# The atomics card
+
+Selected by atomic_add_unordered atomic_add_wrap atomic_and atomic_cas atomic_max atomic_min atomic_or atomic_xor. Codes: E-ATOMIC E-ATOMIC-MIXED.
+
+```text
+atomic_add_wrap(bins[k], 1); updates one element of an array in one indivisible step and returns its old value, from host code, any lane or any cooperative thread, host or device: atomic_add_wrap (u32 u64 usize, modular as add_wrap: an atomic add cannot check overflow), atomic_min, atomic_max and atomic_cas(x[i], expected, desired) (u32 i32 u64 i64 usize; cas stores desired where x[i] held expected and returns the old value either way), atomic_and, atomic_or, atomic_xor (u32 u64 usize), atomic_add_unordered (f32 f64: adds rounded in the order threads arrive, an f32 add flushing subnormals on the device; the receipt states the bound). The first argument is the element x[i], written in place, of a writable array (E-ATOMIC). Updates are relaxed and race no other update, so any lane may update any element; an array a region updates atomically is not read or written plainly in it (E-ATOMIC-MIXED): anywhere in a parallel region, anywhere in a cooperative region for an outside array, between barriers for a shared one. Read results after the region, after a barrier, or in the region's finish. The old value differs by thread: a barrier under a condition on it is E-COOP-BARRIER. Row: atomic, write:x; nested in an expression it is E-EFFECT-ORDER, so bind it: let old = atomic_max(best[0], v);
+```

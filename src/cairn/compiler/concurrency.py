@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from . import chunks, facts, fusion, staging, wide
+from . import atomics, chunks, facts, fusion, staging, wide
 from .builtins import WRAPPING, crossing
 from .effects import DEVICE_SAFE, LANE_SAFE
 from .scope import Binding, Lanes
@@ -60,8 +60,12 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
     if excess:  # A lane's own row obeys the rule its callees obey.
         fail("E-PARALLEL-CALL", f"A {target} lane cannot {', '.join(excess)}.", s)
     saved[4].update(c.effects)
-    written = {name for name, _, write, _ in c.lanes.accesses if write}
-    touched = sorted({name for name, *_ in c.lanes.accesses})  # What a queued region holds until its wait.
+    updated = dict(c.lanes.atomics)  # arrays the lanes update atomically, which they touch no other way
+    for name, _, _, node in c.lanes.accesses:
+        if name in updated:
+            atomics.mixed(name, updated[name], node, "read or written plainly in the same region")
+    written = {name for name, _, write, _ in c.lanes.accesses if write} | set(updated)
+    touched = sorted({name for name, *_ in c.lanes.accesses} | set(updated))  # What a queued region holds.
     c.borrowed = [(name + "[]", "rw" if name in written else "ro") for name in touched]
     strides: dict[str, int] = {}
     for name, stride, _, node in c.lanes.accesses:  # Lanes' blocks of one stride are disjoint; of two, they meet.
@@ -70,6 +74,7 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
                  f"or only its own block {name}[{binder} * S + j] with j below one constant S.", node)  # fmt: skip
     s.block = max((stride or 1 for _, stride, _, _ in c.lanes.accesses), default=1)  # A lane costs its block.
     s.touched = tuple((name, stride, write) for name, stride, write, _ in c.lanes.accesses)  # what fusion reads
+    s.touched += tuple((name, None, True) for name in updated)  # an atomic update is no lane's own element
     c.lanes, c.device_depth, c.loop_depth, _, c.effects = saved
     del c.env[binder], c.facts[known:]
     if s.tag != "parallel" and target == "device":  # The runtime's scan and reduction need device scratch.

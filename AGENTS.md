@@ -42,6 +42,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/facts.py` | what the checker established about `usize` values, which lowering uses to drop a guard |
 | `compiler/builtins.py` | every primitive's rule, beside its lowering |
 | `compiler/wide.py` | wide loads and stores: `load_wide[K]` and `store_wide`, their cache hints, the part each reaches, their lowering |
+| `compiler/atomics.py` | atomic updates of one element: their rule, the class they form beside plain accesses, their numerical contract, their lowering |
 | `compiler/machine.py` | the machine: `mmio_read`, `mmio_write`, `asm` and typed assembly, their rules and target requirements beside their lowering |
 | `compiler/launches.py` | an `extern` CUDA kernel's `launch(threads, block)`: its rule beside its lowering |
 | `compiler/printing.py` | `print`, `println`, `eprint`, `eprintln` and `format`: what each argument writes, and their lowering |
@@ -49,7 +50,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/region_lowering.py` | the lowering of `parallel`, `reduce`, `scan` and `compact` on host or device lanes, and of a fused chain as one region |
 | `compiler/execution.py` | which runtime operation each piece of device work lowers to, on the calling thread's execution context |
 | `compiler/header.py` | the C header of a library build: its declarations, the layouts it states, what cannot cross |
-| `runtime/*.hpp` | guards, owners, threads, rings, storage floats, wide accesses, the tensor-core multiply, device calls, execution contexts, the emulated device machine |
+| `runtime/*.hpp` | guards, owners, threads, rings, storage floats, wide accesses and atomic updates, the tensor-core multiply, device calls, execution contexts, the emulated device machine |
 | `projects/project.py` | manifests, vendored dependencies, the line-to-file map |
 | `projects/toolchain.py` | every native flag, and the closed table of system libraries |
 | `projects/target.py` | the device target: its spelling, how it is resolved, the features and limits it has, and the results it refuses |

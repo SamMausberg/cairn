@@ -75,7 +75,7 @@ class Phases(BlockRun):
                         cells.setdefault((idx.key, idx.offset), []).append((t, ev))
         for (key, offset), touches in cells.items():
             for writer in (x for x in touches if x[1].write):
-                others = [x for x in touches if not one(x, writer)]
+                others = [x for x in touches if clash(x, writer)]
                 if others:
                     element = repr(Poly({**dict(key), (): offset})) if key else str(offset)
                     self.refuse(array, element, writer, next((x for x in others if x[1].write), others[0]))
@@ -105,19 +105,30 @@ class Phases(BlockRun):
         thread beside any access by another is undecided."""
         for writes, others in ((a, b), (b, a)):
             for x in (x for x in writes if x[1].write):
-                y = next((y for y in others if not one(y, x)), None)
+                y = next((y for y in others if clash(y, x)), None)
                 if y is not None:
                     self.undecided(array, x, y)
 
     def undecided(self, array: str, x: tuple[int, Event], y: tuple[int, Event]):
         first, second = sorted((x, y), key=lambda z: z[1].time)
+        self.atomic(array, first, second, "reads or writes plainly an element the checker cannot tell from it")
         fail("E-COOP-UNDECIDED", f"The checker cannot tell whether {array}[...] at line {first[1].node.line} "
              f"({self.whom(first)}) and at line {second[1].node.line} ({self.whom(second)}) are one element, "
              "and one of them writes it in the same phase. Index shared arrays by the thread and loop names and "
              "constants, or put a barrier between the two.", second[1].node, array=array)  # fmt: skip
 
+    def atomic(self, array: str, a: tuple[int, Event], b: tuple[int, Event], how: str):
+        """Refuse an atomic update and a plain access by another thread in one phase: E-ATOMIC-MIXED."""
+        if a[1].atomic or b[1].atomic:
+            update, plain = (a, b) if a[1].atomic else (b, a)
+            fail("E-ATOMIC-MIXED", f"{array}[...] is updated atomically by {self.whom(update)} at line "
+                 f"{update[1].node.line}, and {self.whom(plain)} {how} at line {plain[1].node.line} in the same phase: "
+                 "a plain access of an element another thread updates atomically sees half an update or undoes one. "
+                 f"Put a barrier {between(a[1].node.line, b[1].node.line)}.", b[1].node, array=array)  # fmt: skip
+
     def refuse(self, array: str, element: str, x: tuple[int, Event], y: tuple[int, Event]):
         a, b = (x, y) if x[1].time <= y[1].time else (y, x)
+        self.atomic(array, a, b, "reads or writes it plainly")
         where = f"line {a[1].node.line}" if a[1].node.line == b[1].node.line else \
             f"lines {a[1].node.line} and {b[1].node.line}"  # fmt: skip
         if x[1].write and y[1].write:
@@ -142,6 +153,11 @@ def one(x: tuple[int, Event], y: tuple[int, Event]) -> bool:
     if x[1].warp or y[1].warp:
         return x[1] is y[1] and x[0] // LANES == y[0] // LANES
     return x[0] == y[0]
+
+
+def clash(x: tuple[int, Event], y: tuple[int, Event]) -> bool:
+    """Whether two accesses to one element may conflict: made by two threads, and not both atomic updates."""
+    return not one(x, y) and not (x[1].atomic and y[1].atomic)
 
 
 def between(first: int, second: int) -> str:

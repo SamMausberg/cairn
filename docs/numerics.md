@@ -121,6 +121,14 @@ On the host every thread of a warp holds each fragment whole, adds in increasing
 
 Two matrix multiplies with `mma_unordered`'s signature are written this way in `examples/tensor`: `tile64`, the tiling `mma_unordered` fixes (64 x 64 tiles, four warps of 2 x 2 WMMA fragments, k in steps of 32 through two padded stages), and `tile32`, another (64 x 32 tiles, eight warps of two `mma.sync` fragments, one stage whose A tile is swizzled). On generated shapes with partial tiles in every direction, each output of both lies within the contract's bound of the exact sum and equals the reference loop's bit for bit under both compilers. Their threads run clean under the thread sanitizer. Both compile for sm_120, to `HMMA.16816.F32` and `HMMA.16816.F32.BF16` fed by `LDSM`, and have not run on a GPU ([evidence](../evidence/v1_0/tensor/README.md)).
 
+## Atomic float addition
+
+`atomic_add_unordered(x[i], v)` adds an `f32` or `f64` into one element from any number of lanes or threads at once ([concurrency.md](concurrency.md#atomics-and-mutexes)). The adds happen one at a time, each rounded to nearest, in the order the threads arrive, which the hardware and the host's scheduler pick, so two runs may differ in the last places. Its name says so, as `mma_unordered`'s does.
+
+The contract, and nothing stronger: after `k` adds the element is its old value plus every added value, each partial sum rounded once, in some order. On the device an `f32` add also flushes a subnormal operand or result to zero, as PTX's `atom.add.f32` does, and an `f64` add does not. So an `f32` element ends within `k * 2^-23 * (|old| + sum |v|) + k * 2^-125` of the exact sum while `k` is below `2^22`, and an `f64` one within `k * 2^-52 * (|old| + sum |v|)` while `k` is below `2^51`. The receipt lists the contract under `numerics`, and `cairn verify` answers `unknown` for a function that holds one.
+
+A sum that must come out the same on every run folds in an order the program fixes instead: `reduce +` on the host, `reduce + warp` within a warp.
+
 ## Gradients
 
 `derive grad for f;` generates `f_grad`, the reverse-mode derivative of `f`, as an ordinary function that `cairn expand` prints and the checker checks. `derive grad[w, b] for f;` differentiates only the named parameters; without a list, every float parameter and `ro` float view is differentiated.
@@ -190,7 +198,8 @@ A device program built with `--emulate` ([devices.md](devices.md#emulating-devic
 | `mma_unordered`, on whole matrices or on fragments | may differ within the contract's bound: the emulation adds in increasing k, which is the reference loop's order, and the tensor cores in an order the hardware picks |
 | `reduce OP warp` and the shuffles | the same: one fixed butterfly on both sides |
 | `load_wide` and `store_wide` | the same: `K` plain accesses on the host move the bytes one access moves on the device, and a hint changes no value |
-| atomics, float atomics included | none to differ: device code has no atomics |
+| integer atomic updates | the same final values of `atomic_add_wrap`, `min`, `max`, `and`, `or` and `xor`, whose operators commute; the old values threads get back, and what `atomic_cas` leaves, follow the order the threads arrive in, on either side |
+| `atomic_add_unordered` | may differ in the last places, within its bound: the host's scheduler and the hardware pick the order, and a device `f32` add flushes subnormals |
 | warp-synchronous code and memory ordering | nothing to observe: a block's threads share memory only across the barriers the phase rule demands, a warp operation needs its whole warp, and a lane touches only its own elements of what any lane writes |
 
 So an emulated run of `examples/tensor` equals the reference loop bit for bit, and a device run is held only to the contract's bound. Whether the tensor cores meet that bound is checked only by `make gpu`.
