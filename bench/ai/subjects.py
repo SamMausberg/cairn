@@ -231,11 +231,14 @@ def command(limits: dict, plugin: Path | None = None) -> list[str]:
 
 def isolated(argv: list[str], scratch: Path, keep: list[Path], hide: list[tuple[str, str]]) -> list[str]:
     """`argv` run where it sees `scratch` as its /tmp, an empty directory at each path of `hide` (with the mode given),
-    and the directories of `keep` where they are: isolation.py, in a user and mount namespace of its own, as the
-    caller's user and group."""
+    the directories of `keep` where they are, and only its own processes: isolation.py, in user, mount and process
+    namespaces of its own, as the caller's user and group."""
     spec = {"tmp": str(scratch), "keep": [str(k) for k in keep], "hide": hide, "uid": os.getuid(), "gid": os.getgid()}
     script = Path(__file__).resolve().parent / "isolation.py"
-    return ["unshare", "-Urm", "/usr/bin/python3", str(script), json.dumps(spec), "--", *argv]
+    # A process namespace of its own as well: the session sees and signals only its own processes, and whatever it
+    # leaves running ends with it.
+    namespaces = ["unshare", "-Urm", "--pid", "--fork", "--kill-child", "--mount-proc"]
+    return [*namespaces, "/usr/bin/python3", str(script), json.dumps(spec), "--", *argv]
 
 
 def hidden(root: Path) -> list[tuple[str, str]]:

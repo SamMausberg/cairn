@@ -102,8 +102,9 @@ def test_a_subject_of_the_study_sees_its_own_tmp_and_work_and_the_runs_stay_outs
     assert (str(ROOT), "0555") in hide and ("/runs/runs", "0755") in hide and ("/runs/tmp", "0755") in hide
     assert (str(Path.home() / ".claude" / "projects"), "1777") in hide
     argv = subjects.isolated(["claude", "-p", "hello"], Path("/runs/tmp/x/cpp"), [Path("/runs/runs/x/cpp")], hide)
-    assert argv[:3] == ["unshare", "-Urm", "/usr/bin/python3"] and argv[-4:] == ["--", "claude", "-p", "hello"]
-    spec = json.loads(argv[4])
+    assert argv[:2] == ["unshare", "-Urm"] and "--pid" in argv and "--kill-child" in argv
+    assert argv[-4:] == ["--", "claude", "-p", "hello"]
+    spec = json.loads(argv[argv.index("/usr/bin/python3") + 2])
     assert spec["tmp"] == "/runs/tmp/x/cpp" and spec["keep"] == ["/runs/runs/x/cpp"] and spec["uid"] == os.getuid()
     assert harness.STUDIES["v1_1"]["isolated"] and not harness.STUDIES["v1_0"]["isolated"]
     assert Path("/tmp") not in harness.STUDIES["v1_1"]["root"].parents
@@ -122,13 +123,15 @@ def test_an_isolated_command_sees_its_own_tmp_and_sandbox_and_not_the_repository
     (sandbox / "mine.txt").write_text("mine\n")
     (other / "theirs.txt").write_text("theirs")
     hide = [(str(ROOT), "0555"), (str(root / "runs"), "0755")]
-    probe = f"ls {ROOT}; ls {root / 'runs'}; cat {sandbox / 'mine.txt'}; echo x > /tmp/made; id -u"
+    probe = f"ls {ROOT}; ls {root / 'runs'}; cat {sandbox / 'mine.txt'}; echo x > /tmp/made; id -u; ls /proc | grep -c '^[0-9]'"
     done = subprocess.run(subjects.isolated(["sh", "-c", probe], scratch, [sandbox], hide), capture_output=True,
                           text=True, timeout=60)  # fmt: skip
     if done.returncode != 0 and "Operation not permitted" in done.stderr:
         pytest.skip("this machine does not allow user namespaces")
     assert done.returncode == 0, done.stderr
-    assert done.stdout.split() == ["x", "mine", str(os.getuid())]  # the checkout is empty; only its own run is there
+    # The checkout is empty, only its own run is there, and it sees only its own few processes.
+    seen = done.stdout.split()
+    assert seen[:3] == ["x", "mine", str(os.getuid())] and int(seen[3]) < 10, seen
     assert (scratch / "made").read_text() == "x\n" and (ROOT / "bench").exists()
 
 
