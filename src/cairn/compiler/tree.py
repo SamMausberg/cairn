@@ -29,6 +29,8 @@ def clone(node: Node) -> Node:
 
 
 class Diagnostic(Exception):
+    abandoned: BaseException | None = None  # what ended a check reporting every refusal early: a fault, not a refusal
+
     def __init__(self, code: str, message: str, line: int = 0, column: int = 0, **details):
         super().__init__(message)
         self.data = {
@@ -41,6 +43,13 @@ class Diagnostic(Exception):
             "trust": "prototype-not-verified",
             **details,
         }
+
+    @classmethod
+    def of(cls, data: dict) -> Diagnostic:
+        """The diagnostic a record describes, as a further refusal of a check is carried."""
+        error = cls(data["code"], data["message"])
+        error.data = dict(data)
+        return error
 
 
 def fail(code: str, message: str, node: Any = None, **details) -> NoReturn:

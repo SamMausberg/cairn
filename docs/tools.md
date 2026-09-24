@@ -32,6 +32,23 @@ error[E-LEASED]: data is lent to left until wait(left).
 
 A misspelled name gets the nearest name in scope (`= help: did you mean total?`), and a program stopped by a failed guard is reported as stopped by `SIGABRT`.
 
+## Every refusal in one check
+
+`cairn check` reports every refusal it can judge on its own, so three mistakes in three functions cost one check, not three. The record is the first refusal exactly as a check that stopped there would report it, with the others beside it:
+
+```json
+{"protocol": "cairn.diagnostic/2", "status": "rejected", "code": "E-TYPE-MISMATCH",
+ "message": "Expected u32, got u64.", "line": 2, "column": 15, "file": "three.cairn", ...,
+ "further": [{"code": "E-UNBOUND", "message": "Unbound name missing.", "line": 7, "column": 14, ...},
+             {"code": "E-TYPE-MISMATCH", "message": "Expected bool, got u64.", "line": 11, "column": 10, ...}]}
+```
+
+Each entry of `further` is a whole diagnostic at its own file, line and column, in source order. A record lists at most twenty, and `further_omitted` counts the rest. `not_judged` counts the program's functions that got no verdict because of a refusal; none of them is accepted. A script that reads one diagnostic reads what it always read, and the exit status is 1 either way. At a terminal each refusal is shown beside its line, and a last line counts them.
+
+A refusal that may follow from another is never reported. Once a function's body is refused its effect row is unknown, so a function that reaches it is not held to its ceiling or to operand order, and is counted in `not_judged`. A refusal met again through a generic function or a type that two functions use is reported once. A refused type or signature ends the check once every type or signature is checked, and a refused constant ends it at once, since whatever names the declaration would be judged against half of it. A parse error is reported alone. The rules about lanes, plans, implementations, fusion and layouts run only on a program nothing else refuses.
+
+`cairn emit`, the language server and the MCP `check` tool report every refusal the same way. `cairn build`, `run` and `test`, and the edit, plan and implementation hosts, stop at the first. `tools/checks/refusal_differential.py` checks every refused program the repository holds both ways, and the first refusal must come out identical.
+
 ## A watched check and shell completions
 
 ```sh
@@ -452,7 +469,7 @@ cairn lsp      # speaks JSON-RPC with Content-Length framing on stdin/stdout
 
 | Request | What it answers |
 | --- | --- |
-| diagnostics | the compiler's diagnostic, its repair hint and the exact token range |
+| diagnostics | every refusal of the check, each with its repair hint on its exact token range |
 | hover | the type of the smallest checked expression, the expected type, and a function's signature, effect row and comment |
 | documentSymbol, workspace/symbol | the declarations of a document, or of the open projects |
 | definition | the name's declaration, in the project or the packaged `std` |
@@ -473,11 +490,11 @@ cairn lsp      # speaks JSON-RPC with Content-Length framing on stdin/stdout
   "activeSignature": 0, "activeParameter": 1}}
 ```
 
-A buffer being typed rarely compiles, so each feature takes its context from the current tokens and its meaning from the last analysis that compiled: after `let y = p.` the fields of `p` are still offered. A document a `cairn.toml` lists is analysed with its whole project, so names from sibling files resolve and a refusal in one file shows on every open file of the project.
+A buffer being typed rarely compiles, so each feature takes its context from the current tokens and its meaning from the last analysis that compiled: after `let y = p.` the fields of `p` are still offered. A document a `cairn.toml` lists is analysed with its whole project, so names from sibling files resolve. The project's first refusal shows on every open file of it, and each further refusal only on the file it is in.
 
 A rename is one checked transaction. The edited project must compile again with every function's effect row, callees, guard sites and allocations as they were under the new name, so a rename that misses an occurrence or catches one too many is refused. References and a rename of a function follow it into `fn g(...) implements f` and `plan f use g;`. Renaming either function gives the implementation a new identity, since the identity digests both declarations as written, and a validation kept for the old one no longer holds. Fields and variants are renamed from the types the checker gave each expression. Library declarations, foreign functions, `main` and trait members are refused with the reason. Outside a project, references and rename cover only what one document can prove, and answer nothing where that is not enough.
 
-A compiler failure becomes a diagnostic, never an exception. Known limits: diagnostics stop at the first compiler error, as the compiler does; `definition` picks the first declaration with a matching name; there is no format-on-type; and no quick fix ever widens an effect ceiling, a borrow mode or a signature.
+A compiler failure becomes a diagnostic, never an exception. Known limits: `definition` picks the first declaration with a matching name; there is no format-on-type; and no quick fix ever widens an effect ceiling, a borrow mode or a signature.
 
 ## cairn mcp
 
@@ -489,7 +506,7 @@ cairn mcp      # speaks the Model Context Protocol: one JSON-RPC 2.0 message per
 
 | Tool | What it calls |
 |---|---|
-| `check` | `cairn check`: `typed`, or the refusal with its code, file, line and repair hint |
+| `check` | `cairn check`: `typed`, or every refusal, each with its code, file, line and repair hint |
 | `edit_open`, `edit_request` | a [guarded edit session](agents.md#packets) and its `cairn.edit/2` requests |
 | `plan_open`, `plan_reply` | a [plan session](agents.md#plan-edits) and its `cairn.plan/1` replies |
 | `implementation_open`, `implementation_submit` | an [implementation session](agents.md#implementation-sessions) and its submissions |

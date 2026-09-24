@@ -124,6 +124,7 @@ def implementation_hash():
                 "compiler/scope.py",
                 "compiler/facts.py",
                 "compiler/checking.py",
+                "compiler/refusals.py",
                 "compiler/statements.py",
                 "compiler/expressions.py",
                 "compiler/calls.py",

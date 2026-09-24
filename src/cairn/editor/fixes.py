@@ -113,22 +113,22 @@ FIXES = {"E-MATCH-COVERAGE": missing_arms, "E-IMMUTABLE": make_mutable, "E-CALLE
 
 
 def code_actions(doc: Document, uri: str, span: dict) -> list[dict]:
-    """The quick fixes for the buffer's diagnostic, when the requested range touches it."""
-    error, shown = doc.error, doc.diagnostics[0] if doc.diagnostics else None
-    if not error or shown is None or error["code"] not in FIXES:
-        return []
+    """The quick fixes for each of the buffer's diagnostics whose range the requested range touches."""
     lo, hi = doc.offset(span.get("start") or {}), doc.offset(span.get("end") or {})
-    start, end = doc.offset(shown["range"]["start"]), doc.offset(shown["range"]["end"])
-    if hi < start or lo > end:
-        return []
-    at = next((k for k, t in enumerate(doc.code) if t.start == start), -1)
-    return [
-        {
-            "title": title,
-            "kind": "quickfix",
-            "diagnostics": [shown],
-            "isPreferred": True,
-            "edit": {"changes": {uri: edits}},
-        }
-        for title, edits in FIXES[error["code"]](doc, error, at)
-    ]
+    actions = []
+    for error, shown in zip(doc.errors, doc.diagnostics, strict=False):
+        start, end = doc.offset(shown["range"]["start"]), doc.offset(shown["range"]["end"])
+        if error["code"] not in FIXES or hi < start or lo > end:
+            continue
+        at = next((k for k, t in enumerate(doc.code) if t.start == start), -1)
+        actions += [
+            {
+                "title": title,
+                "kind": "quickfix",
+                "diagnostics": [shown],
+                "isPreferred": True,
+                "edit": {"changes": {uri: edits}},
+            }
+            for title, edits in FIXES[error["code"]](doc, error, at)
+        ]
+    return actions

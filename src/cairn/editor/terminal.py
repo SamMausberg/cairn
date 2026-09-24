@@ -11,11 +11,13 @@ import os
 import re
 import signal
 import sys
+from collections.abc import Callable
 from typing import TextIO
 
 from ..compiler.lexing import TOKEN
 
 SHOWN = {"protocol", "status", "code", "message", "line", "column", "trust", "file", "module"}  # in the header
+TALLIED = {"further", "further_omitted", "not_judged"}  # said once, after every refusal of a check (`tally`)
 CHOICES = ("available_names", "available_variants")  # a misspelling is answered with the nearest of these
 
 
@@ -52,7 +54,7 @@ def diagnostic(data: dict, source: str, stream: TextIO | None = None) -> None:
         print(s(f"{line} |", "1;34") + f" {text}", file=stream)
         print(s(f"{gutter} |", "1;34") + " " + s(mark, "1;31"), file=stream)
     for key, value in data.items():
-        if key in SHOWN or key == "source_line" or value in (None, "", []):
+        if key in SHOWN or key in TALLIED or key == "source_line" or value in (None, "", []):
             continue
         if key in CHOICES and isinstance(value, list):
             asked = re.findall(r"[A-Za-z_][A-Za-z_0-9]*", data.get("message", ""))
@@ -64,6 +66,30 @@ def diagnostic(data: dict, source: str, stream: TextIO | None = None) -> None:
         if shown in data.get("message", ""):  # the message already says it
             continue
         print(f"  {s('= note', '1;36')}: {key.replace('_', ' ')}: {shown}", file=stream)
+
+
+def refusals(located: dict, raw: dict, source: Callable[[dict], str], stream: TextIO | None = None) -> None:
+    """Every refusal of one check, each beside its own line, then a line that counts them. `located` is the record at
+    each file's own lines, `raw` the same at the lines of `source(d)`, the text a refusal `d` is in."""
+    placed, given = [located, *located.get("further", [])], [raw, *raw.get("further", [])]
+    for k, (d, at) in enumerate(zip(placed, given, strict=True)):
+        if k:
+            print(file=stream or sys.stderr)
+        diagnostic({**d, "source_line": at["line"]}, source(d), stream)
+    tally(located, stream)
+
+
+def tally(data: dict, stream: TextIO | None = None) -> None:
+    """After the refusals of one check: how many there were, and how many functions they left without a verdict."""
+    stream = stream or sys.stderr
+    s = paint(stream)
+    omitted, lost = data.get("further_omitted", 0), data.get("not_judged", 0)
+    count = 1 + len(data.get("further", [])) + omitted
+    if count == 1 and not lost:
+        return
+    said = f"{count} refusal{'s' * (count > 1)}" + (f", {omitted} not shown" if omitted else "")
+    said += f"; {lost} function{'s' * (lost > 1)} not judged because of {'them' if count > 1 else 'it'}" if lost else ""
+    print(s("error", "1;31") + s(f": {said}", "1"), file=stream)
 
 
 def excerpt(source: str, line: int) -> str | None:

@@ -146,6 +146,16 @@ def test_check_answers_typed_or_the_refusal_at_its_file_and_line(client, project
     assert not failed and record["status"] == "typed"
 
 
+def test_check_answers_every_refusal_each_at_its_file_and_line_with_its_fix(project):
+    (project / "src/lib.cairn").write_text(LIB.replace("add_wrap(x, 1)", "add_wrap(x, y)"))
+    (project / "src/other.cairn").write_text(OTHER.replace("u64(i)", "u32(i)"))
+    record, failed = Tools(project).call("check", {"path": "."})
+    assert failed and (record["code"], record["file"], record["line"]) == ("E-UNBOUND", "src/lib.cairn", 8)
+    [further] = record["further"]
+    assert (further["code"], further["file"], further["line"]) == ("E-TYPE-MISMATCH", "src/other.cairn", 3)
+    assert further["repair_hint"].startswith("Convert explicitly") and "u32(i)" in further["source_line"]
+
+
 def test_an_edit_session_writes_an_admitted_edit_back_and_nothing_else(client, project):
     before = files(project)
     packet, failed = client.tool("edit_open", path=".", symbol="lib.bump")

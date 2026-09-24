@@ -32,6 +32,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Places, second-class borrows, moves, leases, aliasing | `compiler/places.py` | `path`, `place`, `overlaps`, `leased`, `lend`, `consume`, `disjoint` |
 | Tasks and tickets, lanes and regions, atomics, placement | `compiler/concurrency.py` | `e_spawn`, `region`, `s_parallel`, `s_reduce`, `s_scan`, `judge_lane_callbacks`, `host_only` |
 | Effect vocabulary, fixed point, operand order | `compiler/effects.py` | `fixed_point`, `audit` |
+| Every independent refusal of one check: what is kept, what a failed check takes back, what is judged after one | `compiler/refusals.py` | `refusing`, `rollback`, `rest`, `verdict` |
 | Traits, bounds, overlap, dynamic tables | `compiler/traits.py` | `implemented`, `dispatch`, `vtable`, `certify` |
 | Constant folding | `compiler/constants.py` | `constant`, `fold` |
 | I/O rings and their lowering | `compiler/rings.py` | `check_ring`, `method`, `waited`, `lower` |
@@ -156,6 +157,7 @@ A rejection table maps a sentence naming a rule to a diagnostic code and a progr
 | `tools/corpus/curriculum_verify.py`, `mutation_checks.py` | teaching programs against independent finite oracles; one hand-authored defect per algorithm family, all of which the finite tests must catch |
 | `tools/checks/density.py`, `export_lean_certificates.py` | lexical density accounting over the whole compiler; `--check` fails when `collector_rules()` and `proofs/` have drifted |
 | `tools/checks/emission_identity.py` | whether a source change left the C++ and effect rows of every example, `std`, test program and docs block as they were, optionally up to two named C++ identities, and with `--normalize guards` whether it only discharged guards |
+| `tools/checks/refusal_differential.py` | every refused example, test program and docs block checked again reporting every refusal: the first refusal identical, each further one a whole diagnostic in source order, and no check ended early on a fault |
 | `tools/checks/differential_ownership.py` | generated programs of a shared fragment, as CAIRN source and Lean `Program` literals, classified alike by the checker and the Lean `accepts` |
 | `tools/checks/differential_cooperative.py` | generated cooperative regions of a shared fragment, as CAIRN source and `Cooperative.lean` terms, decided alike by `compiler/phases.py` and the model's `program` |
 | `tools/checks/differential_guards.py` | generated programs built as emitted and with every guard and checked entry kept, under both compilers and the sanitizers, returning the same value or trap on every input; a mismatch is minimized into a program to keep |

@@ -52,7 +52,7 @@ class Document:
         self.program: Program | None = None
         self._scopes: list[tuple[int, str]] | None = None  # where each module this text sits in begins, once asked
         self.rows: dict[str, list[str]] = {}  # function -> its effect row, for hovers
-        self.error: dict = {}  # the compiler's diagnostic with every detail it carries, for code actions
+        self.errors: list[dict] = []  # each diagnostic's record with every detail it carries, for code actions
         self.sites, self.diagnostics = self._analyse() if analyse else ([], [])
         self.good: Document | None = self if self.program is not None else previous.good if previous else None
 
@@ -106,8 +106,12 @@ class Document:
         source, start = (self.within[0], self.within[1]) if self.within else (self.text, 0)
         try:
             program, checker, receipts = analysis(source)
-        except Diagnostic as error:
-            return [], [self._report(error)]
+        except Diagnostic as error:  # the first refusal on every file of a project, each further one on its own
+            first = self._report(error)
+            further = (self._report(Diagnostic.of(d), anywhere=False) for d in error.data.get("further", []))
+            reported = [r for r in (first, *further) if r is not None]
+            self.errors = [d for _, d in reported]
+            return [], [shown for shown, _ in reported]
         except Exception as error:  # A compiler failure is reported, never raised at the client.
             return [], [problem(self.span(0, 0), "E-INTERNAL", f"{type(error).__name__}: {error}")]
         # The checker takes each template out of the program once it has checked it; an editor wants
@@ -125,26 +129,33 @@ class Document:
         ]
         return sites, []
 
-    def _report(self, error: Diagnostic) -> dict:
-        d = self.error = explain(error, self.within[0] if self.within else self.text)
+    def _report(self, error: Diagnostic, anywhere: bool = True) -> tuple[dict, dict] | None:
+        """One refusal as an LSP diagnostic, beside its record for code actions. A refusal in another file of the
+        project, or in a library module, is said at the top of this one with where it is, or with `anywhere` false
+        not at all."""
+        d = explain(error, self.within[0] if self.within else self.text)
         line, column = int(d.get("line") or 0), int(d.get("column") or 0)
+        if not anywhere and d.get("module"):
+            return None
         if self.within and line > 0:  # a line of the project: this file's own, or another file's, said where
             first = self.within[0].count("\n", 0, self.within[1])
             if d.get("module") or not first < line <= first + len(self.starts):
+                if not anywhere:
+                    return None
                 file, at = (library_path(d["module"]), line) if d.get("module") else self.within[2](line)
                 where = f"{file}:{at}"
-                d = self.error = {**d, "message": f"{where}: {d['message']}", "line": 0, "column": 0}
+                d = {**d, "message": f"{where}: {d['message']}", "line": 0, "column": 0}
                 line = column = 0
             else:
                 line -= first
-                d = self.error = {**d, "line": line}
+                d = {**d, "line": line}
         start = end = 0
         if line > 0:
             start = min(self.starts[min(line, len(self.starts)) - 1] + max(column - 1, 0), len(self.text))
             end = next((t.end for t in self.code if t.start == start), start)
         hint = d.get("repair_hint")
         shown = problem(self.span(start, end), d["code"], d["message"] + ("\n" + hint if hint else ""))
-        return {**shown, "data": {k: d[k] for k in ("code", "repair_hint", "source_line") if k in d}}
+        return {**shown, "data": {k: d[k] for k in ("code", "repair_hint", "source_line") if k in d}}, d
 
 
 _LAST: list[Any] = []  # the one source analysed last, and its answer: the open files of a project share it
@@ -155,7 +166,7 @@ def analysis(source: str) -> tuple[Any, Any, Any]:
     analysis; a refusal is raised again for each of them."""
     if not _LAST or _LAST[0] != source:
         try:
-            answer: Any = compile_program(source, capture_sites=True)
+            answer: Any = compile_program(source, capture_sites=True, every=True)
         except Diagnostic as error:
             answer = error
         _LAST[:] = [source, answer]

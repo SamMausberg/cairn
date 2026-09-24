@@ -16,7 +16,18 @@ from contextlib import contextmanager
 from operator import attrgetter
 from typing import Any
 
-from . import calls, concurrency, cooperative, expressions, implementations, launches, machine, places, statements
+from . import (
+    calls,
+    concurrency,
+    cooperative,
+    expressions,
+    implementations,
+    launches,
+    machine,
+    places,
+    refusals,
+    statements,
+)
 from .builtins import SOFT, TABLE
 from .concurrency import ORDERS, PINNED
 from .constants import constant
@@ -112,8 +123,14 @@ class Checker:
     e_call, invoke, indirect, repeatable = calls.e_call, calls.invoke, calls.indirect, calls.repeatable
     view_argument, construct, establish = calls.view_argument, calls.construct, calls.establish
 
-    def __init__(self, program: Program, capture_sites: bool = False):
+    refusing, rest, verdict = refusals.refusing, refusals.rest, refusals.verdict
+
+    def __init__(self, program: Program, capture_sites: bool = False, every: bool = False):
         self.p = program
+        # With `every`, a refusal is kept and the check goes on: (about, whether it read callees' rows, it, its key).
+        self.refusals: list[tuple[str, bool, Diagnostic, tuple]] | None = [] if every else None
+        self.unjudged: set[str] = set()  # functions a refusal left without a verdict
+        self.abandoned: BaseException | None = None  # what ended such a check early, when it was not a refusal
         self.capture_sites = capture_sites
         self.sites: list[dict[str, Any]] = []
         self.fs = {f.name: f for f in program.functions}
@@ -375,29 +392,40 @@ class Checker:
     # Whole program -----------------------------------------------------------------------------
 
     def prepare(self) -> list[Function]:
-        """Types, constants and every concrete signature: what any body needs before it can be checked."""
+        """Types, constants and every concrete signature: what any body needs before it can be checked.
+
+        Where every refusal is reported, each kind is checked whole, and a refused one ends the check after it: what
+        names a refused declaration would be judged against half of it."""
         for name in self.types:
             if not self.p.generics.get(name) and (name != "Order" or "Order" in self.p.modules):
-                with self.within(self.p.modules.get(name, "")):
+                with self.refusing(name), self.within(self.p.modules.get(name, "")):
                     self.define(Type(name))
-        for name in list(self.p.consts):
-            constant(self, name, [])
+        for name in [] if self.refusals else list(self.p.consts):
+            with self.refusing(name):
+                constant(self, name, [])
+            if self.refusals:  # one constant is folded again inside another, so only the first refusal is its own
+                break
         concrete = [f for f in self.p.functions if not f.generics or f.bindings]
-        for f in concrete:
-            self.signature(f)
+        for f in [] if self.refusals else concrete:
+            with self.refusing(f.name):
+                self.signature(f)
+        if self.refusals:
+            self.unjudged.update(f.name for f in concrete)
+            return []
         hold_impls(self, concrete)
         return concrete
 
     def bodies(self):
         for f in self.prepare():  # Generic instances are appended, and checked, at their first use.
-            try:
-                self.function(f)
-            except Diagnostic as error:  # The position is the recipe's: say which derivation this copy came from.
-                error.data.update({"derived": f.source_name} if f.source_name.startswith("derive ") else {})
-                inner = self.s.f.module  # the innermost body checked, since an instance is checked inside its caller
-                if inner in self.p.sources and "module" not in error.data:
-                    error.data["module"] = inner  # its line counts in that library module's own file
-                raise
+            with self.refusing(f.name):
+                try:
+                    self.function(f)
+                except Diagnostic as error:  # The position is the recipe's: say which derivation this copy came from.
+                    error.data.update({"derived": f.source_name} if f.source_name.startswith("derive ") else {})
+                    inner = self.s.f.module  # the innermost body checked, as an instance is checked inside its caller
+                    if inner in self.p.sources and "module" not in error.data:
+                        error.data["module"] = inner  # its line counts in that library module's own file
+                    raise
 
     def judge(self) -> dict[str, set[str]]:
         """The rules that need every row: ceilings, operand order, and what a lane may reach."""
@@ -410,8 +438,11 @@ class Checker:
                          "unused templates are not silently ignored.")  # fmt: skip
                 self.unchecked.append(f.name)
         connect_dispatches(self)
-        effects = implementations.joined(self, fixed_point(self))
+        effects = fixed_point(self)
+        effects = effects if self.refusals else implementations.joined(self, effects)
         audit(self, effects)
+        if self.refusals:  # a refused row may be what refuses the rules below
+            return effects
         self.judge_lane_callbacks(effects)
         kernels = [(f.name, True, f, f.name) for f in self.p.functions if f.kernel]
         for callee, device, node, caller in [*self.lane_calls, *kernels]:
@@ -436,10 +467,18 @@ class Checker:
         return effects
 
     def check(self) -> dict[str, Any]:
-        self.bodies()
-        implementations.check(self)
-        planned = concurrency.plans(self)
-        effects = self.rows = self.judge()
+        try:
+            self.bodies()
+            if self.refusals:
+                self.rest()
+            else:
+                implementations.check(self)
+                planned = concurrency.plans(self)
+                effects = self.rows = self.judge()
+        except refusals.Stopped:
+            self.unjudged.update(self.fs)
+        if self.refusals:
+            raise self.verdict()
         concurrency.fusions(self, effects)
         tests = {f.name for f in self.p.functions if f.test}  # `cairn test` runs them; no other build holds one
         return {

@@ -48,6 +48,11 @@ def preconditions(items: list[str]) -> dict[str, str]:
     return given
 
 
+def written(d: dict, own: str) -> str:
+    """The text a refusal's line counts in: a linked library module's own file, or the program's."""
+    return (library_source(d["module"]) if d.get("module", "").startswith("std.") else None) or own
+
+
 REFUSED = {"counterexample", "rejected", "invalid-contract", "invalid-domain", "invalid-reference"}  # verify exits 1
 
 
@@ -234,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if a.command in {"check", "emit"}:
             generated, receipt = compile_source(
-                project.source, keep_guards=getattr(a, "keep_guards", False), sites=project.site
+                project.source, keep_guards=getattr(a, "keep_guards", False), sites=project.site, every=True
             )
             if a.command == "emit":
                 print(generated, end="")
@@ -444,10 +449,8 @@ def main(argv: list[str] | None = None) -> int:
     except Diagnostic as error:
         located = project.locate(error) if project else error.data
         if terminal.human(FORMAT):
-            shown = library_source(located["module"]) if located.get("module", "").startswith("std.") else None
-            terminal.diagnostic(
-                {**located, "source_line": error.data["line"]}, shown or (project.source if project else "")
-            )
+            own = project.source if project else ""
+            terminal.refusals(located, error.data, lambda d: written(d, own))
         else:
             report(located)
         return 1

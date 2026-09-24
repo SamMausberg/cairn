@@ -254,3 +254,14 @@ def test_the_new_features_over_the_protocol():
         assert [a["title"] for a in actions] == ["Declare x as let mut"]
     finally:
         c.close()
+
+
+def test_every_refusal_is_a_diagnostic_on_its_own_range_with_its_own_fix():
+    text = "fn f() -> bool = 1;\nfn main() -> i32 { let x:u64 = 1; x = 2; return 0; }\n"
+    doc = Document(text)
+    assert [(d["code"], d["range"]["start"]) for d in doc.diagnostics] == [
+        ("E-TYPE-MISMATCH", place(text, "1;")),
+        ("E-IMMUTABLE", place(text, "x = 2")),
+    ]
+    title, out, left = fixed(text, "x = 2")  # the fix of the second refusal, and the first is still there
+    assert title == "Declare x as let mut" and "let mut x:u64 = 1;" in out and left == "E-TYPE-MISMATCH"

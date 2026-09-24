@@ -35,11 +35,16 @@ def write_program(directory: Path, name: str, cpp: str) -> Path:
     return directory / name
 
 
-def compile_program(source: str, capture_sites: bool = False,
-                    parsed: Program | None = None) -> tuple[Program, Checker, dict[str, Any]]:  # fmt: skip
-    """`parsed`, when given, is `Parser(source).parse()` already made by the caller, and is linked in place."""
+def compile_program(source: str, capture_sites: bool = False, parsed: Program | None = None,
+                    every: bool = False) -> tuple[Program, Checker, dict[str, Any]]:  # fmt: skip
+    """`parsed`, when given, is `Parser(source).parse()` already made by the caller, and is linked in place.
+
+    With `every`, the checker goes on after a refusal wherever the rest can still be judged: the Diagnostic raised is
+    the first refusal as it is without `every`, and its record adds `further`, every other refusal no earlier one
+    explains, in source order, at most twenty of them (`further_omitted` counts the rest), and `not_judged`, how many
+    of the program's functions got no verdict because of a refusal. A parse error is reported alone."""
     p = specialize(derive(link(parsed or Parser(source).parse())))
-    checker = Checker(p, capture_sites)
+    checker = Checker(p, capture_sites, every)
     receipts = checker.check()
     layouts.settle(checker)  # a layout no function uses is still held to its rules
     return p, checker, receipts
@@ -92,17 +97,18 @@ def joined(interface: list[str], bodies: list[tuple[str, list[str]]]) -> str:
 
 
 def compile_source(source: str, origin: Any = "", roots: tuple[str, ...] = (), keep_guards: bool = False,
-                   sites: Any = None) -> tuple[str, dict[str, Any]]:  # fmt: skip
+                   sites: Any = None, every: bool = False) -> tuple[str, dict[str, Any]]:  # fmt: skip
     """Generated C++ and its receipt; `origin` names the source in #line directives for debug builds,
-    `keep_guards` writes every guard, including the ones the checker showed cannot fail, and `sites` maps a line to
-    the (file, line) a failed assert names."""
-    interface, bodies, manifest = generate(source, origin, roots, keep_guards, sites)
+    `keep_guards` writes every guard, including the ones the checker showed cannot fail, `sites` maps a line to
+    the (file, line) a failed assert names, and `every` reports every refusal (`compile_program`)."""
+    interface, bodies, manifest = generate(source, origin, roots, keep_guards, sites, every=every)
     return joined(interface, bodies), manifest
 
 
 def generate(source: str, origin: Any, roots: tuple[str, ...], keep_guards: bool = False, sites: Any = None,
-             parsed: Program | None = None) -> tuple[list[str], list[tuple[str, list[str]]], dict]:  # fmt: skip
-    p, checker, receipts = compile_program(source, parsed=parsed)
+             parsed: Program | None = None,
+             every: bool = False) -> tuple[list[str], list[tuple[str, list[str]]], dict]:  # fmt: skip
+    p, checker, receipts = compile_program(source, parsed=parsed, every=every)
     certificate = audit_collector()  # The collector's unchecked store is emitted only under this gate.
     emitter = Emitter(p, checker, origin, roots, keep=keep_guards, sites=sites)
     for name, verdict in emitter.elision.items():  # What lowering leaves out is what the audit accepted.

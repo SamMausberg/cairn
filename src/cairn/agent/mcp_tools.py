@@ -146,7 +146,7 @@ class Tools:
     def check(self, a: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         source, files = self.program(a)
         try:
-            receipt = compile_source(source)[1]
+            receipt = compile_source(source, every=True)[1]
         except Diagnostic as error:
             return refusal(error, source, files), True
         library = sum(1 for n in receipt["functions"] if n.startswith("std."))
@@ -310,5 +310,11 @@ def document(a: dict[str, Any], key: str) -> dict[str, Any]:
 
 
 def refusal(error: Diagnostic, source: str, files: Files | None) -> dict[str, Any]:
-    """A refused program as the command line reports it: the diagnostic with its fix, at its file and line."""
-    return {**explain(error, source), **(files.project.locate(error) if files else {})}
+    """A refused program as the command line reports it: the diagnostic with its fix, at its file and line, and so
+    each further refusal a check found."""
+    located = files.project.locate(error) if files else error.data
+    record = {**explain(error, source), **located}
+    if further := error.data.get("further"):
+        record["further"] = [{**explain(Diagnostic.of(d), source), **placed}
+                             for d, placed in zip(further, located["further"], strict=True)]  # fmt: skip
+    return record

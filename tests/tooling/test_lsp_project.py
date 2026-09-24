@@ -443,3 +443,22 @@ def test_one_document_alone_follows_implements_and_plan_use():
         assert len(one_document_references(doc, "file:///alone.cairn", text.index(needle) + offset)) == count
         edits = one_document_rename(doc, "file:///alone.cairn", text.index(needle) + offset, "fresh")["changes"]
         compile_source(applied(doc, edits["file:///alone.cairn"]))
+
+
+def test_each_file_shows_the_first_refusal_and_every_further_one_of_its_own(project):
+    """The first refusal of the project reaches every open file, as it always has; each further one shows only in
+    the file it is in, on its own range."""
+    geo, main = ((project / f"src/{name}.cairn").resolve().as_uri() for name in ("geo", "main"))
+    buffers = {
+        geo: GEO.replace("p.a * p.b", "p.a * p.c"),
+        main: MAIN.replace("  return 0;", "  let z:bool = 1;\n  return 0;"),
+    }
+    shown = {}
+    for uri, text in buffers.items():
+        doc = Document(text, within=ws_module.within(*ws_module.context(uri, buffers), uri))
+        shown[uri] = [(d["code"], d["range"]["start"]["line"], d["message"].split("\n")[0]) for d in doc.diagnostics]
+    assert shown[geo] == [("E-FIELD", 6, "Unknown field c.")]
+    assert shown[main] == [
+        ("E-FIELD", 0, "src/geo.cairn:7: Unknown field c."),
+        ("E-TYPE-MISMATCH", 11, "Expected bool, got u64."),
+    ]

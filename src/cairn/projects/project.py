@@ -125,7 +125,14 @@ class Project:
         return unit is None or unit.path not in self.vendored_units
 
     def locate(self, error: Diagnostic) -> dict:
-        result = dict(error.data)
+        """The record of `error` at the file and line it names, and so is each further refusal it carries."""
+        result = self.place(error.data)
+        if "further" in result:
+            result["further"] = [self.place(d) for d in result["further"]]
+        return result
+
+    def place(self, data: dict) -> dict:
+        result = dict(data)
         if result.get("module", "").startswith("std."):  # a line of a linked library module, in its own file
             return {**result, "file": str(library_path(result["module"]))}
         unit = self.unit_at(result.get("line", 0))

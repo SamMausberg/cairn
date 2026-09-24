@@ -35,9 +35,10 @@ def allowed(ceiling: tuple[str, ...]) -> set[str]:
     return set(ceiling) | (PURE if "pure" in ceiling else set())
 
 
-def fixed_point(c: Checker) -> dict[str, set[str]]:
-    """Least fixed point of E_f = L_f + divergence + renamed callee footprints."""
-    effects = {n: set(es) for n, es in c.local_effects.items()}
+def fixed_point(c: Checker, names: set[str] | None = None) -> dict[str, set[str]]:
+    """Least fixed point of E_f = L_f + divergence + renamed callee footprints; of `names` alone when given, a set
+    that holds everything its members call."""
+    effects = {n: set(es) for n, es in c.local_effects.items() if names is None or n in names}
     for n in effects:
         todo, visited = list(c.calls[n]), set()
         while todo:
@@ -76,13 +77,14 @@ def fixed_point(c: Checker) -> dict[str, set[str]]:
         fail("E-EFFECT-LIMIT", "Effect fixed point exceeded its finite universe.")
     for f in c.p.functions:
         c.judging = f.name
-        if f.effects is not None and not f.extern:
+        if f.effects is not None and not f.extern and f.name in effects:
             reads = "pure" in f.effects
             excess = {
                 e for e in effects[f.name] if e not in allowed(f.effects) and not (reads and e.startswith("read:"))
             }
             if excess:
-                fail("E-EFFECT-CEILING", f"{f.name} exceeds its declared effects.", f, added_effects=sorted(excess))
+                with c.refusing(f.name, rows=True):
+                    fail("E-EFFECT-CEILING", f"{f.name} exceeds its declared effects.", f, added_effects=sorted(excess))
     return effects
 
 
@@ -91,7 +93,7 @@ OBSERVABLE |= SYNCHRONIZATION
 OBSERVED = ("ffi:", "transfer:", "par:", "asm:")  # families whose every member the outside world can observe
 
 
-def audit(c: Checker, effects: dict[str, set[str]]):
+def audit(c: Checker, effects: dict[str, set[str]], names: set[str] | None = None):
     """Costs stay visible and operands cannot tell which ran first (C++ leaves their order open): a call that
     writes through a borrow or allocates is never a nested operand; a nested call may not move, take or (as a
     closure) write a place that another operand names; a call the outside world can observe (I/O, the machine,
@@ -100,7 +102,8 @@ def audit(c: Checker, effects: dict[str, set[str]]):
 
     Acquiring storage is the order-sensitive half, so `alloc` is on that list and `free` is not: a release runs
     where a scope ends, which C++ sequences itself, and it writes no place another operand can name. A function
-    that only drops an owner it was given carries `free` alone, and stays an ordinary nested operand."""
+    that only drops an owner it was given carries `free` alone, and stays an ordinary nested operand. With `names`,
+    only those functions are held to it."""
 
     def mentioned(e: Expr, out: list[tuple[int, str]]) -> list[tuple[int, str]]:
         """Every place an operand names, a closure's captures included, with the node that names it."""
@@ -196,4 +199,6 @@ def audit(c: Checker, effects: dict[str, set[str]]):
                 block(arm.body)
 
     for f in c.p.functions:
-        block(f.body)
+        if names is None or f.name in names:
+            with c.refusing(f.name, rows=True):
+                block(f.body)
