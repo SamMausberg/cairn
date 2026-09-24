@@ -4,7 +4,7 @@ This file fixes the design of the trial before any subject runs. Anything that c
 
 ## Question
 
-Does the focused packet, which shows a function's source and the interfaces around it and discloses more only when the agent asks, lower the total effort of a model repairing one function, at equal correctness, compared with the component packet of CAIRN 1.3, which shows the whole call-graph component at once?
+Does the focused packet, which shows a function's source and the interfaces around it and discloses more only when the agent asks, lower the total effort of a model repairing one function, at equal correctness, compared with the component packet of CAIRN 0.8.3, which shows the whole call-graph component at once?
 
 The proposed target is half the effort. It is a target for the measurement, not a claim, and the rules below say what may be claimed from the numbers.
 

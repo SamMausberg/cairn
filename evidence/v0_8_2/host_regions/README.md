@@ -1,10 +1,6 @@
 # Host parallel regions: threads per statement, then a lane pool
 
-`benchmark.json` holds two runs of `bench/host_regions.cpp` on the same machine, with the same
-flags, minutes apart. `per_statement_threads` builds it against the CAIRN 0.8.1 runtime headers
-(commit `4ff485a`), where every `parallel` statement creates and joins its own threads.
-`lane_pool` builds it against this branch, where the first region of a process creates the lanes
-and every later region reuses them. Reproduce either with:
+`benchmark.json` holds two runs of `bench/host_regions.cpp` on the same machine, with the same flags, minutes apart. `per_statement_threads` builds it against the CAIRN 0.8.1 runtime headers (commit `4ff485a`), where every `parallel` statement creates and joins its own threads. `lane_pool` builds it against this branch, where the first region of a process creates the lanes and every later region reuses them. Reproduce either with:
 
 ```
 python3 bench/host_regions.py --label lane_pool
@@ -13,30 +9,15 @@ python3 bench/host_regions.py --runtime <dir of 0.8.1 headers> --label per_state
 
 ## What was measured
 
-One machine: a rented GH200, 64 AArch64 cores, Linux 6.8, nothing else running, no CPU pinned
-(a region wants every core, so pinning would measure one). Both compilers the project supports,
-g++ 11.4 and clang++ 15.0.7, with `src/cairn/toolchain.py`'s own flags for an executable
-(`-std=c++20 -O3 -ffp-contract=off -fno-fast-math -fno-exceptions -fno-rtti -Wall -Wextra -Werror
--march=armv8.2-a`). Medians of nine timed blocks after one warm up (five above 1e6 elements, three
-above 1e7); a block repeats a small region until it covers sixteen million elements and the total
-is divided back, so no row is a measurement of the clock's resolution. Every case is checked
-against the sequential result before it is reported, and nothing is written if one disagrees.
+One machine: a rented GH200, 64 AArch64 cores, Linux 6.8, nothing else running, no CPU pinned (a region wants every core, so pinning would measure one). Both compilers the project supports, g++ 11.4 and clang++ 15.0.7, with `src/cairn/toolchain.py`'s own flags for an executable (`-std=c++20 -O3 -ffp-contract=off -fno-fast-math -fno-exceptions -fno-rtti -Wall -Wextra -Werror -march=armv8.2-a`). Medians of nine timed blocks after one warm up (five above 1e6 elements, three above 1e7). A block repeats a small region until it covers sixteen million elements and the total is divided back, so no row is a measurement of the clock's resolution. Every case is checked against the sequential result before it is reported, and nothing is written if one disagrees.
 
-Two lane bodies, chosen to bracket what an element can cost:
+Two lane bodies bracket what an element can cost. `saxpy_f32` is `out[i] = a * x[i] + y[i]`: two flops over twelve bytes, vectorized, about 0.11 ns an element, so a large region of it is bound by memory bandwidth, not by the cores. `mixed_u64` is eight rounds of xor-shift and multiply in registers, about 1.5 ns an element, so a large region of it is bound by the cores.
 
-- **`saxpy_f32`**: `out[i] = a * x[i] + y[i]`. Two flops over twelve bytes, vectorized, about
-  0.11 ns an element. A large region of it is bound by memory bandwidth, not by the cores.
-- **`mixed_u64`**: eight rounds of xor-shift and multiply in registers, about 1.5 ns an element.
-  A large region of it is bound by the cores.
-
-Region sizes run from 1e3 to 1e8. A separate section runs a thousand regions of 64, 1024 and
-16384 elements one after another, with a compiler barrier between them on both sides, so the
-sequential side is a thousand separate loops rather than one nest the compiler may fold.
+Region sizes run from 1e3 to 1e8. A separate section runs a thousand regions of 64, 1024 and 16384 elements one after another, with a compiler barrier between them on both sides, so the sequential side is a thousand separate loops rather than one nest the compiler may fold.
 
 ## What it says
 
-Times in milliseconds for one region, medians, g++ (clang++ agrees within the noise; both are in
-the file). "seq" is the sequential loop the statement replaces.
+Times in milliseconds for one region, medians, g++ (clang++ agrees within the noise; both are in the file). "seq" is the sequential loop the statement replaces.
 
 | n | seq | per-statement threads | lane pool | before ×| after × |
 |---|---|---|---|---|---|
@@ -61,41 +42,25 @@ A thousand regions in a row, microseconds each (g++):
 | 1024 | 0.407 | 1413 | 0.406 |
 | 16384 | 6.63 | 1413 | 3.98 |
 
-**Crossover** — the smallest ladder size from which the region beat the loop by a quarter and kept
-beating it at every larger size, identical under both compilers:
+The crossover is the smallest ladder size from which the region beat the loop by a quarter and kept beating it at every larger size. It was the same under both compilers:
 
 | | saxpy (cheap) | mixed (dear) |
 |---|---|---|
 | per-statement threads | 1e7 | 3e6 |
 | lane pool | 1e5 | 3e4 |
 
-A region cost about 1.3 ms before, whatever its size, because it created and joined sixty-three
-threads. It now costs nothing at all below sixteen thousand elements, where it is compiled as the
-loop it replaces, and about 0.45 µs for each further lane it engages above that. The crossover
-fell by a hundredfold for both bodies. At 1e8 elements the two runtimes are level: there the
-thread creation was already amortized, and `mixed` at 1e8 is 4% slower with the pool, which is
-within this machine's run-to-run spread at three repetitions.
+A region cost about 1.3 ms before, whatever its size, because it created and joined sixty-three threads. It now costs nothing below sixteen thousand elements, where it is compiled as the loop it replaces, and about 0.45 µs for each further lane it engages above that. The crossover fell a hundredfold for both bodies. At 1e8 elements the two runtimes are level: there the thread creation was already amortized, and `mixed` at 1e8 is 4% slower with the pool, which is within this machine's run-to-run spread at three repetitions.
 
 ## What was not measured
 
-- **One machine, one architecture.** Nothing here says anything about x86-64, about more than one
-  socket or memory domain, or about a machine whose cores are shared with another process.
-- **No tuned baseline.** The comparison is against the sequential loop the same source would
-  otherwise write, which is what a CAIRN `for` compiles to. No OpenMP, TBB or hand-written thread
-  pool was built with equal flags and equal safety boundaries, so this is not a claim that CAIRN's
-  host regions are fast, only that they cost far less than they did and that they no longer lose
-  to the loop they replace.
-- **Two cheap bodies.** Both lane bodies read and write one element and nothing else. A body that
-  allocates, locks or takes wildly different time per index is not represented, though the runtime
-  is tested for those in `tests/native/parallel_runtime.cpp`.
-- **Regions back to back.** Every timed block runs its regions one after another, so the workers
-  are awake. A worker that has been idle for more than about sixty microseconds goes to sleep, and
-  waking one was measured separately at about twenty-five microseconds; a two-lane region whose
-  helper had gone to sleep cost about 10 µs against about 4 µs awake. That cost is not in the
-  table. It is bounded, it is paid once per burst of regions, and it is the reason the runtime
-  wakes only the lanes a region can use rather than all of them.
-- **Not the device.** Host regions only. `evidence/v0_8_0/gpu/benchmark.json` measures CUDA lanes;
-  nothing here was re-measured against them, and that file's `host_parallel_ms` column is the
-  0.8.1 runtime and was deliberately left as it was recorded.
-- **Not a statistical study.** Medians of a few runs on one afternoon, with no confidence
-  intervals. Rows within about a tenth of each other should be read as equal.
+One machine, one architecture. Nothing here says anything about x86-64, about more than one socket or memory domain, or about a machine whose cores are shared with another process.
+
+No tuned baseline. The comparison is against the sequential loop the same source would otherwise write, which is what a CAIRN `for` compiles to. No OpenMP, TBB or hand-written thread pool was built with equal flags and equal safety boundaries. This is not a claim that CAIRN's host regions are fast, only that they cost far less than they did and no longer lose to the loop they replace.
+
+Two cheap bodies. Both lane bodies read and write one element and nothing else. A body that allocates, locks or takes very different time per index is not represented, though `tests/native/parallel_runtime.cpp` tests the runtime on those.
+
+Regions back to back. Every timed block runs its regions one after another, so the workers are awake. A worker idle for more than about sixty microseconds goes to sleep, and waking one was measured separately at about twenty-five microseconds; a two-lane region whose helper had gone to sleep cost about 10 µs against about 4 µs awake. That cost is not in the table. It is bounded and paid once per burst of regions, and it is why the runtime wakes only the lanes a region can use rather than all of them.
+
+Not the device. Host regions only. `evidence/v0_8_0/gpu/benchmark.json` measures CUDA lanes; nothing here was measured again against them, and that file's `host_parallel_ms` column is the 0.8.1 runtime, left as it was recorded.
+
+Not a statistical study. Medians of a few runs on one afternoon, with no confidence intervals. Rows within about a tenth of each other should be read as equal.

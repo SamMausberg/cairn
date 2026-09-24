@@ -1,6 +1,6 @@
 # Compiler, suite and lane-pool speed
 
-Records of the speed work after 1.4.0, taken on 2026-09-23 on one AMD Ryzen 7 7800X3D (8 cores, 16 threads, 1 MB L2 a core, 96 MB L3) under WSL2, with clang++ 21.1.8, g++ 13.3.0 and Python 3.12. Five other agents were building and testing on the machine the whole time, and the load average ran from 5 to 32 on 16 threads. Every time below is therefore a median over interleaved runs, beside its spread, and no ratio from here should be quoted as a quiet machine's. What does not depend on load, such as identical output and the affinity count, is exact.
+Records of the speed work after the candidate of 2026-09-22 (`ca709c8`), taken on 2026-09-23 on one AMD Ryzen 7 7800X3D (8 cores, 16 threads, 1 MB L2 a core, 96 MB L3) under WSL2, with clang++ 21.1.8, g++ 13.3.0 and Python 3.12. Five other agents were building and testing on the machine the whole time, and the load average ran from 5 to 32 on 16 threads. Every time below is therefore a median over interleaved runs, beside its spread, and no ratio from here should be quoted as a quiet machine's. What does not depend on load, such as identical output and the affinity count, is exact.
 
 | File | What it holds |
 |---|---|

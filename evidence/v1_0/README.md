@@ -13,8 +13,8 @@ Each directory is one record of the work between `v0.8.3` and 1.0.0, taken as it
 | `protocol_trial/` | What was checked before the preregistered edit-protocol trial may run; the trial has not run. |
 | `diff/` | `cairn diff v0.8.3` against a later commit for the library and every example project: each function's class, its changes and the semantic-version verdict. |
 | `review/` | Two adversarial reviews of the tools and runtime added after `v0.8.3`: what was attacked, found, fixed and held. |
-| `demos/` | The demos. |
-| `perf/`, `trim/`, `scale/` | The compiler, the test suite, CI and the lane pool; the pass that shared duplicated logic in `src/cairn`; check, build, rebuild and editor times of generated projects up to 77,000 lines, and the size limits. |
+| `demos/` | What each program under `demos/` printed and drew when it ran. |
+| `perf/`, `trim/`, `scale/` | The speed of the compiler, the test suite, CI and the lane pool; the pass that removed duplicated logic from `src/cairn`; check, build, rebuild and editor times of generated projects up to 77,000 lines, and the size limits. |
 | `ai_benchmark/` | The preregistered equal-budget benchmark of CAIRN, C++ and Rust; its `RESULTS.md` says what ran and what did not. |
 | `skill/` | A six-run smoke comparison of sessions with and without the Claude Code plugin, and what the MCP server adds to a session. |
 | `execution/` | What a repeated device pipeline makes, allocates and waits for on the thread's execution context, counted on a host stand-in. |

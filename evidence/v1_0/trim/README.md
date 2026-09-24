@@ -16,7 +16,7 @@ A pass on 2026-09-23 over the package under `src/cairn` that removed duplicated 
 | `runtime/`, `std/`, `templates/`, `targets/` | 0 | 0 | 0 | 0 |
 | **all of `src/cairn`** | **-187** | **-231** | **-1,491** | **-0.41%** |
 
-These are the sums of each TRIM commit against its parent, so the other agents' work in the same files is left out. At `67d5c46` the package held 27,164 lines and 367,747 tokens. At `586a217`, with every agent's changes included, it holds 27,028 lines and 366,926 tokens. Tokens are `tiktoken`'s `o200k_base`, counted over whole files, comments and docstrings included.
+These are the sums of the eleven commits, each against its parent, so other work in the same files is left out. At `67d5c46` the package held 27,164 lines and 367,747 tokens. At `586a217`, with every agent's changes included, it holds 27,028 lines and 366,926 tokens. Tokens are `tiktoken`'s `o200k_base`, counted over whole files, comments and docstrings included.
 
 What was shared:
 
