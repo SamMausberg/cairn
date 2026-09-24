@@ -146,6 +146,33 @@ def test_check_answers_typed_or_the_refusal_at_its_file_and_line(client, project
     assert not failed and record["status"] == "typed"
 
 
+def test_a_second_check_of_an_unchanged_project_answers_from_the_cache_and_says_so(client, project):
+    first, _ = client.tool("check", path=".")
+    again, _ = client.tool("check", path=".")
+    assert not first["cached"] and again["cached"] and {**first, "cached": True} == again
+    (project / "src/other.cairn").write_text(OTHER + "\n// saved by a person\n")  # noticed by its digest
+    touched, _ = client.tool("check", path=".")
+    assert not touched["cached"] and touched["status"] == "typed"
+    (project / "src/other.cairn").write_text(OTHER)
+    back, _ = client.tool("check", path=".")
+    assert back["cached"]  # the text it held before is still kept
+    (project / "src/lib.cairn").write_text(LIB.replace("add_wrap(x, 1)", "add_wrap(x, y)"))
+    refused, failed = client.tool("check", path=".")
+    kept, failed_again = client.tool("check", path=".")
+    assert failed and failed_again and not refused["cached"] and kept == {**refused, "cached": True}
+
+
+def test_the_server_keeps_no_more_compiles_than_its_bound(project, monkeypatch):
+    from cairn.compiler import compilations
+
+    monkeypatch.setattr(compilations, "CACHE", compilations.Cache(entries=1))
+    tools = Tools(project)
+    assert not tools.call("check", {"path": "."})[0]["cached"]
+    assert not tools.call("check", {"source": "fn f(x:u64) -> u64 { return x + 1; }\n"})[0]["cached"]
+    assert not tools.call("check", {"path": "."})[0]["cached"]  # the other source took its place
+    assert compilations.CACHE.stats()["sources"] == 1
+
+
 def test_check_answers_every_refusal_each_at_its_file_and_line_with_its_fix(project):
     (project / "src/lib.cairn").write_text(LIB.replace("add_wrap(x, 1)", "add_wrap(x, y)"))
     (project / "src/other.cairn").write_text(OTHER.replace("u64(i)", "u32(i)"))
@@ -233,6 +260,23 @@ def test_state_and_a_delta_since_a_digest_this_server_sent(client, project):
     assert not failed and change["modules"] == {"lib": {"bump": None}}
     unknown, failed = client.tool("state", path=".", since="0" * 64)
     assert failed and unknown["code"] == "E-SESSION"
+
+
+def test_state_after_the_first_answers_only_what_changed_unless_the_whole_is_asked(client, project):
+    first, _ = client.tool("state", path=".")
+    same, failed = client.tool("state", path=".")
+    assert not failed and same == {"protocol": "cairn.state-delta/1", "since": first["digest"],
+                                   "digest": first["digest"], "modules": {}}  # fmt: skip
+    packet, _ = client.tool("edit_open", path=".", symbol="lib.spread")
+    answer, failed = client.tool("edit_request", request={**packet["draft_protocol"], "replacement": "{ }"})
+    assert not failed and answer["written"] == ["src/lib.cairn"]
+    change, failed = client.tool("state", path=".")
+    assert not failed and change["since"] == first["digest"] and list(change["modules"]) == ["lib"]
+    assert list(change["modules"]["lib"]) == ["spread"] and "write:out" not in change["modules"]["lib"]["spread"][1]
+    whole, failed = client.tool("state", path=".", whole=True)
+    assert not failed and whole["protocol"] == "cairn.state/1" and whole["digest"] == change["digest"]
+    both, failed = client.tool("state", path=".", since=first["digest"], whole=True)
+    assert failed and both["code"] == "E-REQUEST"
 
 
 # The same rules without a process: the version table, and the split of a combined source into files.

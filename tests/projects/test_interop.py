@@ -103,6 +103,20 @@ def test_a_call_inside_cairn_reaches_the_lean_body_and_a_foreign_one_the_checked
     assert "cr::view(v_xs" in entry and "return ci_spread(" in entry
 
 
+# A failed static assertion as each supported compiler words it: Clang 13 and 14, newer Clang, and g++.
+FAILED_ASSERTION = re.compile(r"static(_assert| assertion) failed")
+WORDINGS = [
+    "p.cpp:1:1: error: static_assert failed due to requirement 'sizeof(int) == 3' \"x\"",
+    "p.cpp:1:15: error: static assertion failed due to requirement 'sizeof(int) == 3': x",
+    "p.cpp:1:27: error: static assertion failed: x",
+]
+
+
+def test_the_failed_assertion_pattern_reads_every_supported_compiler_s_wording():
+    assert all(FAILED_ASSERTION.search(wording) for wording in WORDINGS)
+    assert not FAILED_ASSERTION.search("error: static _assert failed")
+
+
 def test_a_library_whose_header_would_lie_about_a_layout_does_not_build(tmp_path):
     built = library(tmp_path, "clang++")
     cpp = (built / "program.cpp").read_text()
@@ -110,7 +124,7 @@ def test_a_library_whose_header_would_lie_about_a_layout_does_not_build(tmp_path
     (built / "program.cpp").write_text(cpp.replace("sizeof(ct_Summary) == 32", "sizeof(ct_Summary) == 24"))
     done = subprocess.run(["clang++", "-std=c++20", "-fsyntax-only", f"-I{built}", built / "program.cpp"],
                           capture_output=True, text=True, timeout=120)  # fmt: skip
-    assert done.returncode != 0 and "static assertion failed" in done.stderr
+    assert done.returncode != 0 and FAILED_ASSERTION.search(done.stderr), done.stderr[-2000:]
 
 
 LAYOUTS = """

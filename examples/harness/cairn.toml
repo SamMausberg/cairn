@@ -1,0 +1,7 @@
+[project]
+name = "harness"
+sources = ["src/kernels.cairn"]
+
+[build]
+kind = "library"
+device_target = "sm_100a"

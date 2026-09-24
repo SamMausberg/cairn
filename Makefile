@@ -107,15 +107,17 @@ DEVICE_TESTS = tests/language/test_assembly.py tests/language/test_assert_eq.py 
   tests/language/test_layouts.py tests/language/test_storage_floats.py \
   tests/projects/test_app_matmul.py tests/projects/test_cooperative_examples.py tests/projects/test_demos.py \
   tests/projects/test_emulation.py::test_the_device_command_is_unchanged_when_emulation_is_off \
-  tests/projects/test_export.py \
+  tests/projects/test_export.py tests/projects/test_harness.py tests/projects/test_harness_torch.py \
   tests/projects/test_foreign.py tests/projects/test_test_blocks.py \
-  tests/runtime/test_enqueue.py tests/runtime/test_execution.py tests/runtime/test_native_runtime.py \
+  tests/runtime/test_device_arithmetic.py tests/runtime/test_enqueue.py tests/runtime/test_execution.py \
+  tests/runtime/test_native_runtime.py \
   tests/soundness/test_cooperative.py tests/soundness/test_device_paths.py tests/soundness/test_fragments.py \
   tests/soundness/test_fusion.py tests/soundness/test_pipelines.py tests/soundness/test_plans.py \
   tests/soundness/test_scan.py tests/soundness/test_staging.py tests/soundness/test_tensor.py \
-  tests/soundness/test_tensor_kernels.py \
+  tests/soundness/test_tensor_kernels.py tests/soundness/test_wide.py tests/soundness/test_atomics.py tests/soundness/test_finish.py \
   tests/tooling/test_device_cards.py tests/tooling/test_feedback.py tests/tooling/test_on_device.py \
   tests/tooling/test_predict.py tests/tooling/test_predict_cooperative.py tests/tooling/test_search.py \
+  tests/tooling/test_search_budget.py \
   tests/tooling/test_search_instances.py tests/tooling/test_target.py \
   tests/tooling/test_tools.py::test_parallel_gpu_flags tests/tooling/test_tools.py::test_device_examples \
   tests/verification/test_device_validation.py

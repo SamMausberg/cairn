@@ -392,6 +392,8 @@ def validate(source: str, reference: str, implementation: str, policy: Policy | 
             record["coverage"]["counterexample"] = record["smt"]["replay"]["status"]
     record["status"] = decided(record)
     record["evidence"] = emulation.EVIDENCE if s.emulated else "finite-tested"
+    if not s.emulated:  # a program with no device code ran on the host, whatever target it was offered
+        record["target"] = {"kind": "host"}
     if s.emulated:
         record["emulation"] = emulation.record(s.emulated)
         record["finite"]["claim"] = EMULATED.format(target=s.emulated.name)

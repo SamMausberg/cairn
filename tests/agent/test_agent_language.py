@@ -92,7 +92,8 @@ def test_every_card_is_reachable_from_tokens():
         'fn h[K:nat](d:ro<dyn T>, n:usize, x:rw<u64>[n]@device) { unsafe { g(); asm("nop"); } let t = spawn h(); wait(t);'
         " let b = Buf[u64](n); defer k(b); buffer s:u64[n] = zeroed; let c = compact x for i in n where true yield 1;"
         " parallel i in n { } apply(|v:u64| -> u64 { return v; }); match o { Option.None => {} } let r = IoRing(1);"
-        " let root = sqrt(2.0); let h = f16(root); assert(true); scan + x for i in n yield 1; println(root); barrier; }"
+        " let root = sqrt(2.0); let h = f16(root); assert(true); scan + x for i in n yield 1; println(root); barrier;"
+        " let v = load_wide[4](x, 0); atomic_add_wrap(x[0], 1); }"
         "family q = h[1..2]; derive wire for P; derive grad for h; struct L { data:Buf[u8]; len:usize; lends data[0..len]; }"
         " fn w(acc:WmmaAcc[f32, 16, 16, 16]) {}"
         "layout T = rows(4, 4);"

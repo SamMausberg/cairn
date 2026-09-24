@@ -47,7 +47,8 @@ BUILT = "build"  # where builds of an export go, inside it; never part of what t
 INCLUDE = re.compile(r'^#include "([^"]+)"', re.M)
 COMPILER = re.compile(r"(clang\+\+|g\+\+)(-[0-9][0-9.]*)?")  # the names a build finds its C++ compiler by
 PLAIN = re.compile(r"[A-Za-z0-9_-]{1,64}")  # an artifact's name, as `export` makes it from the project's
-DEVICE_SIDE = {"cairn_kernels.hpp", "cairn_runtime.hpp", "cairn_assert.hpp", "cairn_float.hpp", "cairn_layout.hpp"}
+DEVICE_SIDE = {"cairn_kernels.hpp", "cairn_runtime.hpp", "cairn_assert.hpp", "cairn_float.hpp", "cairn_layout.hpp",
+               "cairn_access.hpp"}  # fmt: skip
 LAUNCH = {"cairn_gpu.hpp", "cairn_exec.hpp", "cairn_reuse.hpp"}
 
 
@@ -391,6 +392,10 @@ def compare(one: Path, other: Path) -> dict[str, Any]:
 def command(a: Any) -> tuple[dict[str, Any], int]:
     """What `cairn export`, and `cairn build`, `run` and `test` of an export directory, answer, and the exit status."""
     where = Path(a.path)
+    if a.command == "export" and (a.harness or (where / "harness.json").is_file()):
+        from .harness import command as harness
+
+        return harness(a)
     if a.command == "export" and not (where / RECORD).is_file():
         from ..perf.report import parse_sizes
         from .project import load_project

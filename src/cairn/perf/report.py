@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..compiler.cairnc import compile_program
+from ..compiler.cairnc import compile_program, compile_source
 from ..compiler.tree import Diagnostic
 from ..projects.target import DeviceTarget, resolve
 from . import cooperative_model, model
@@ -87,6 +87,17 @@ def targeted(found: dict[str, Cost], profile: Profile, device: DeviceTarget | No
     return {"device_target": device.record(), "device_card": named}
 
 
+def demands(receipt: dict[str, Any], device: DeviceTarget) -> None:
+    """Refuse `device` as a device build of the program whose front-end receipt is `receipt` refuses it
+    (projects/build.py): a selected implementation's needs (E-IMPL-TARGET), then the program's own features
+    (E-TARGET-FEATURE). A prediction for code that cannot be built for a target is no prediction."""
+    from ..compiler.implementations import targeted as selected
+
+    if "cuda" in receipt["requires"]:
+        selected(receipt["functions"], device)
+        device.require(receipt["device_features"])
+
+
 def inspected(source: str, found: dict[str, Cost], device: DeviceTarget | None) -> dict[str, Any]:
     """Compile `source`'s device code for `device` and give each cooperative region what ptxas read of its kernel."""
     from .device import available, kernels
@@ -112,6 +123,8 @@ def report(source: str, sizes: list[dict[str, float]] | None = None, symbols: se
     out: dict[str, Any] = {}
     found = costs(source, symbols)
     target = targeted(found, chosen, device)
+    if target and device is not None:
+        demands(compile_source(source)[1], device)
     if inspect:
         target["inspection"] = inspected(source, found, device)
     for name, c in found.items():
@@ -172,12 +185,13 @@ def across(source: str, sizes: list[dict[str, float]] | None = None, symbols: se
            manifest: str | None = None, inspect: bool = False) -> dict[str, Any]:  # fmt: skip
     """Every function of `source` with device work, or `symbols` alone, priced on every packaged card at each of
     `sizes`: a row per card with its bound, its time and its fraction of speed of light. Each card's device target is
-    `flag` (--device-target), else `manifest`, else the card's own; a card that target's code does not run on is
-    listed with its refusal and not priced. With `inspect`, each target's code is compiled once and read by ptxas,
+    `flag` (--device-target), else `manifest`, else the card's own; a card that target's code does not run on, or a
+    target a build of the program refuses, is listed with its refusal and not priced. With `inspect`, each target's code is compiled once and read by ptxas,
     and its registers count on every card priced for that target. Host work is priced by `profile`, as always."""
     chosen = profile or default()
     listed: list[dict[str, Any]] = []
     groups: dict[DeviceTarget, list[tuple[str, Profile]]] = {}
+    receipt = compile_source(source)[1]
     for key, spec in cards().items():
         d = spec.device
         assert d is not None
@@ -186,6 +200,7 @@ def across(source: str, sizes: list[dict[str, float]] | None = None, symbols: se
         assert target is not None
         try:
             target.fits(spec.source["device"], f"The device card {key!r}")
+            demands(receipt, target)
         except Diagnostic as refused:
             listed.append({**entry, "refused": {"code": refused.data["code"], "message": refused.data["message"]}})
             continue

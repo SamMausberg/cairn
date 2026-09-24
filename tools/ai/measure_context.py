@@ -153,36 +153,6 @@ def measure_tasks(runs: list[tuple[str, str, list[str], list]], count) -> dict:
     return {"rows": rows, "summary": summary, "task_count": sum(len(r["tasks"]) for r in rows) // len(SETTINGS)}
 
 
-def remember(compile):
-    """`compile`, asked once per distinct call: a result is shared, a refusal is raised afresh each time."""
-    seen: dict = {}
-
-    def once(*args, **kwargs):
-        key = (args, tuple(sorted(kwargs.items())))
-        if key not in seen:
-            try:
-                seen[key] = (True, compile(*args, **kwargs))
-            except Diagnostic as e:
-                seen[key] = (False, e.data)
-        ok, value = seen[key]
-        if ok:
-            return value
-        error = Diagnostic(value["code"], value["message"])
-        error.data = copy.deepcopy(value)  # A host writes where in the reply it is into its own copy.
-        raise error
-
-    return once
-
-
-def compile_once() -> None:
-    """Every transcript recompiles the same few programs, so the process asks the compiler once per source text.
-    The answers, results and refusals alike, are the compiler's own."""
-    import cairn.agent.agent_tools as host
-
-    host.compile_source = remember(host.compile_source)
-    host.compile_program = remember(host.compile_program)
-
-
 def measure_cards(count) -> dict:
     prior = json.loads((ROOT / "tools/ai/cards_05.json").read_text())
     source = (ROOT / "examples/basics/native.cairn").read_text()
@@ -277,7 +247,6 @@ def main() -> int:
     ap.add_argument("--quick", action="store_true", help="Two programs, two tasks each: the shape, not the record.")
     ap.add_argument("--output", type=Path, default=ROOT / "results/context/context.json")
     args = ap.parse_args()
-    compile_once()
     counters = {"utf8_bytes": lambda s: len(s.encode("utf-8"))}
     found = tokenizer(args.tiktoken)
     if found:

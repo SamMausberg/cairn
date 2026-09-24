@@ -18,7 +18,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import Diagnostic, Parser, compile_source, fail
+from ..compiler import compilations
+from ..compiler.cairnc import Diagnostic, fail
 from ..projects.project import ProjectError
 from .agent_tools import EditHost, load_json_strict
 from .diagnostics import declared, explain
@@ -96,11 +97,12 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "state",
-        "description": "Return the program's signatures and effect rows under a digest, what changed since an earlier "
-        "digest, or with symbol one function's investigation.",
+        "description": "Return the program's signatures and effect rows under a digest, or only what changed since the "
+        "last state this server sent of that path, or with symbol one function's investigation.",
         "inputSchema": {"type": "object", "properties": {
             **WHERE, "symbol": SYMBOL,
             "since": {"type": "string", "description": "The digest of a state this server returned."},
+            "whole": {"type": "boolean", "description": "The whole state, even when this server sent one of that path."},
         }},
         "annotations": {"readOnlyHint": True},
     },
@@ -117,6 +119,7 @@ class Tools:
         self.edits, self.plans, self.implementations = EditHost(), PlanHost(), ImplementationHost()
         self.files: dict[str, Files] = {}  # by edit handle, plan session digest and implementation handle
         self.states: dict[str, dict[str, Any]] = {}  # every state and investigation this server sent, by digest
+        self.last: dict[tuple[str, ...], str] = {}  # the digest of the last one sent of each path, and symbol
 
     def call(self, name: str, arguments: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         """The result of one call of the tool `name`, one of TOOLS, and whether it is an error."""
@@ -147,13 +150,14 @@ class Tools:
 
     def check(self, a: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         source, files = self.program(a)
+        compiled = compilations.Compilation(source, every=True)
         try:
-            receipt = compile_source(source, every=True)[1]
+            receipt = compiled.emitted()[1]
         except Diagnostic as error:
-            return refusal(error, source, files, host=False), True
+            return {**refusal(error, source, files, host=False), "cached": compiled.cached}, True
         library = sum(1 for n in receipt["functions"] if n.startswith("std."))
         return {"status": "typed", "functions": receipt["function_count"], "library_functions": library,
-                "formal_status": "not-verified"}, False  # fmt: skip
+                "cached": compiled.cached, "formal_status": "not-verified"}, False  # fmt: skip
 
     def edit_open(self, a: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         source, files = self.program(a)
@@ -228,7 +232,7 @@ class Tools:
             fail("E-REQUEST", "emulate names a device target, as sm_120.")
         self.implementations.regressions = None
         if files is not None:  # the project's regressions file of this reference, and the policy it pinned
-            named = [f.name for f in Parser(source).parse().functions
+            named = [f.name for f in compilations.parsed(source).functions
                      if reference in (f.name, local(f.name)) and f.implements is None]  # fmt: skip
             path = files.project.root / "regressions" / f"{named[0] if len(named) == 1 else reference}.json"
             pinned = (kept(path, named[0])[1] or {}).get("policy") if len(named) == 1 else None
@@ -274,13 +278,20 @@ class Tools:
         from .state import delta, state
 
         source, files = self.program(a)
-        since = a.get("since")
+        since, whole = a.get("since"), a.get("whole", False)
+        if not isinstance(whole, bool) or (whole and since is not None):
+            fail("E-REQUEST", "whole is true or false, and a request with since asks for no whole state.")
         earlier = self.states.get(since) if isinstance(since, str) else None
         if since is not None and earlier is None:
             fail("E-SESSION", "This server sent no state with that digest; ask for the state.")
+        # Without since, what this server last sent of the same path is what the agent already has.
+        where = (str(files.path), a.get("symbol") or "") if files is not None else None
+        if since is None and not whole and where in self.last:
+            earlier = self.states[self.last[where]]
         if a.get("symbol") is None:
             now = state(source, locate=files.project.locate if files else None)
             self.states[now["digest"]] = now
+            self.last |= {where: now["digest"]} if where else {}
             return (delta(earlier, now) if earlier else now), now["status"] != "typed"
         from ..perf.resources import device_identity, host_target
         from ..projects.target import resolve
@@ -297,6 +308,7 @@ class Tools:
         history = project.root / ".cairn" / "history"
         packet = investigation.investigation(source, text(a, "symbol"), history, targets, vendored(project))
         self.states[packet["digest"]] = packet
+        self.last |= {where: packet["digest"]} if where else {}
         return (investigation.delta(earlier, packet) if earlier else packet), False
 
 

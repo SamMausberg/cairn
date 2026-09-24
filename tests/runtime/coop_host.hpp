@@ -13,4 +13,8 @@ template<unsigned THREADS, std::size_t BYTES, class F>
 inline void launch(gpu::Context& ctx, std::size_t grid, F body) noexcept {
   reuse::synchronous(ctx, [&](typename gpu::Machine::Stream) { run<THREADS, BYTES>(grid, body); });
 }
+template<unsigned THREADS, std::size_t BYTES, class F, class G>
+inline void launch_then(gpu::Context& ctx, std::size_t grid, F body, G finish) noexcept {
+  reuse::synchronous(ctx, [&](typename gpu::Machine::Stream) { run_then<THREADS, BYTES>(grid, body, finish); });
+}
 }  // namespace cr::coop

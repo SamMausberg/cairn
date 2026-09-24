@@ -8,9 +8,12 @@ not offered: an architecture outside the host family is rejected, not guessed.
 from __future__ import annotations
 
 import functools
+import os
 import platform
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 from .target import DeviceTarget, resolve, supported
@@ -165,11 +168,28 @@ def device_prefix(cxx: str, arch: str | None, kind: str, device: DeviceTarget) -
     # CUDA 13's cuda_pipeline.h and its barrier helpers define static inline functions clang reports as unused when
     # it is nvcc's host compiler; g++ does not, and nothing CAIRN writes is a static function.
     host.append("-Wno-unused-function")
-    # --fmad=false is the device half of -ffp-contract=off; relaxed constexpr lets guards use <limits>.
-    nvcc = ["-std=c++20", "-O3", "--fmad=false", *device.flags(), "--extended-lambda", "--expt-relaxed-constexpr"]
     shared = ["-shared"] if kind == "library" else []
-    return [find("nvcc"), *nvcc, "-Werror", "all-warnings", "-ccbin", find(cxx), "-x", "cu", *shared,
+    return [find("nvcc"), *nvcc_flags(device), "-Werror", "all-warnings", "-ccbin", find(cxx), "-x", "cu", *shared,
             "-Xcompiler", ",".join(host)]  # fmt: skip
+
+
+def nvcc_flags(device: DeviceTarget) -> list[str]:
+    """What nvcc is given for a CAIRN program's language and numerics on `device`, before any host flag. --fmad=false
+    is the device half of -ffp-contract=off; relaxed constexpr lets guards use <limits>."""
+    return ["-std=c++20", "-O3", "--fmad=false", *device.flags(), "--extended-lambda", "--expt-relaxed-constexpr"]
+
+
+def extension_flags(device: DeviceTarget | None) -> dict[str, list[str]]:
+    """What a PyTorch extension build (torch.utils.cpp_extension, as SOL-ExecBench, GPU MODE and KernelBench run it)
+    adds for a CAIRN program and its binding: the language standard and the numerical contract, on the host and, for
+    `device`, in nvcc with one -arch. torch puts -std=c++17 before these, which the later -std overrides, and adds no
+    architecture once a flag names one. Exceptions and RTTI stay on, as pybind11 and the binding's checks need them;
+    nothing in the runtime throws. Warnings are not errors here: torch's headers are not CAIRN's to hold to them."""
+    host = [f for f in STRICT if f not in {"-fno-exceptions", "-fno-rtti"}]
+    if device is None:
+        return {"cflags": host, "cuda_cflags": [], "ld_flags": []}
+    numerics = [f for f in host if f.startswith(("-ffp-contract", "-fno-fast-math"))]
+    return {"cflags": host, "cuda_cflags": [*nvcc_flags(device), "-Xcompiler", ",".join(numerics)], "ld_flags": []}
 
 
 def unit_commands(cxx: str, arch: str | None, kind: str) -> tuple[list[str], list[str]]:
@@ -205,6 +225,31 @@ def find(compiler: str) -> str:
     if not path:
         raise ProjectError(f"Native compiler unavailable: {compiler}. Nothing was downloaded.")
     return path
+
+
+def bounded(command: list[str], seconds: float, check: bool = False, **options) -> subprocess.CompletedProcess:
+    """`command` run to its end within `seconds`, its output captured as text, in a process group of its own. At
+    the limit, or on any interruption, every process in the group is killed and the error raised: a compiler
+    driver's children keep its pipes open after the driver alone is killed, so killing it would not end the wait.
+    A limit already reached starts nothing and raises subprocess.TimeoutExpired."""
+    if seconds <= 0:
+        raise subprocess.TimeoutExpired(command, seconds)
+    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                          start_new_session=True, **options) as running:  # fmt: skip
+        try:
+            out, err = running.communicate(timeout=seconds)
+        except BaseException:
+            os.killpg(running.pid, signal.SIGKILL)
+            running.communicate()
+            raise
+    if check and running.returncode:
+        raise subprocess.CalledProcessError(running.returncode, command, out, err)
+    return subprocess.CompletedProcess(command, running.returncode, out, err)
+
+
+def until(deadline: float | None, most: float) -> float:
+    """The seconds a step may take: `most`, or less when the monotonic `deadline` comes first."""
+    return most if deadline is None else min(most, deadline - time.monotonic())
 
 
 @functools.cache

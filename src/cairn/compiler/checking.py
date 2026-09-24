@@ -52,6 +52,9 @@ from .tree import (
     fail,
     is_view,
 )
+from .wide import CACHES
+
+BUILTIN_ENUMS = ("Order", "Cache")  # declared for every program, and defined only where a module declares its own
 
 
 def parts(layout: Any) -> list[Type]:
@@ -135,6 +138,7 @@ class Checker:
         self.sites: list[dict[str, Any]] = []
         self.fs = {f.name: f for f in program.functions}
         program.enums.setdefault("Order", ORDERS)
+        program.enums.setdefault("Cache", CACHES)  # the hints of a wide load or store (wide.py)
         self.types = {**program.records, **program.enums, **program.sums}
         for name in [*self.fs, *self.types, *program.consts, *program.traits]:
             if name in CPP or name in set(TABLE) - SOFT or name in INTRINSIC_TYPES:
@@ -177,6 +181,11 @@ class Checker:
         self.reaching = 0  # Depth inside a field path: its base is reached, not read whole.
         self.alternatives: dict[str, list[str]] = {}  # reference -> its implementations (implementations.py)
         self.selected: dict[str, str] = {}  # reference -> the implementation a plan runs
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """A copy of a finished check (compiler/compilations.py) keys what was typed ahead by the copied expressions."""
+        self.__dict__.update(state)
+        self.early = {id(e): e for e in self.early.values()}
 
     # Names and types ---------------------------------------------------------------------------
 
@@ -397,7 +406,7 @@ class Checker:
         Where every refusal is reported, each kind is checked whole, and a refused one ends the check after it: what
         names a refused declaration would be judged against half of it."""
         for name in self.types:
-            if not self.p.generics.get(name) and (name != "Order" or "Order" in self.p.modules):
+            if not self.p.generics.get(name) and (name not in BUILTIN_ENUMS or name in self.p.modules):
                 with self.refusing(name), self.within(self.p.modules.get(name, "")):
                     self.define(Type(name))
         for name in [] if self.refusals else list(self.p.consts):

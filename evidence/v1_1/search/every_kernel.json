@@ -1,0 +1,66 @@
+{
+ "schema": "cairn.search-wall/1",
+ "src": "the search of this change, --every",
+ "machine": {
+  "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+  "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "toolkit": {
+   "nvcc": "/usr/local/cuda/bin/nvcc",
+   "release": "13.2",
+   "version": "V13.2.78"
+  }
+ },
+ "compile_budget": 4,
+ "load_average": {
+  "before": [
+   249.671875,
+   501.521484375,
+   558.267578125
+  ],
+  "after": [
+   89.029296875,
+   339.2412109375,
+   485.638671875
+  ]
+ },
+ "programs": {
+  "device/blur": {
+   "every_kernel": {
+    "wall_s": 164.41,
+    "configurations": 240,
+    "checked": 240,
+    "legal": 160,
+    "rows": 160,
+    "compiles": {
+     "allowed": 256,
+     "started": 8,
+     "kept": 0
+    },
+    "readings": 8,
+    "rows_read": 160,
+    "best_predicted_ns": 113000.0,
+    "chosen": "(no plan for blur)",
+    "undone": {}
+   }
+  },
+  "device/two": {
+   "every_kernel": {
+    "wall_s": 119.02,
+    "configurations": 240,
+    "checked": 240,
+    "legal": 160,
+    "rows": 160,
+    "compiles": {
+     "allowed": 256,
+     "started": 8,
+     "kept": 0
+    },
+    "readings": 8,
+    "rows_read": 160,
+    "best_predicted_ns": 165600.0,
+    "chosen": "plan two { fuse 2; }",
+    "undone": {}
+   }
+  }
+ }
+}

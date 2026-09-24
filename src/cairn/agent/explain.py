@@ -19,8 +19,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from ..compiler import layouts
-from ..compiler.cairnc import compile_program, write_program
+from ..compiler import compilations, layouts, wide
+from ..compiler.cairnc import write_program
 from ..compiler.codegen import Emitter, demangled, mangle
 from ..compiler.cooperative import SHUFFLES
 from ..compiler.modules import library_path
@@ -30,7 +30,7 @@ from ..projects.toolchain import REMARKS, find, flags
 from ..projects.toolchain import version as compiler_version
 
 GUARDS = {  # The checker's name for each guard kind, and the runtime calls that are that guard in emitted C++.
-    "bounds": ("cr::at(", "cr::part("),
+    "bounds": ("cr::at(", "cr::part(", "cr::atomic::"),
     "overflow": ("cr::add<", "cr::sub<", "cr::mul<"),
     "division": ("cr::divide<", "cr::remainder<"),
     "conversion": ("cr::convert<", "cr::truncate<"),
@@ -42,6 +42,7 @@ GUARDS = {  # The checker's name for each guard kind, and the runtime calls that
     "assert": ("cr::check(", "cr::check_eq("),
     "layout": ("cr::layout::within(",),  # A coordinate or participant checked against its layout (layouts.py).
     "fragment": ("cr::frag::loaded<", "cr::frag::stored(", "cr::frag::get(", "cr::frag::set("),  # fragments.py
+    "wide": ("cr::wide::load<", "cr::wide::store<"),  # K elements inside the array, the first on the width (wide.py)
 }
 SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and how the emitter spells it.
     "wait": ".wait()",
@@ -202,6 +203,17 @@ def cooperative(f: Function, place, sizeof) -> list[dict[str, Any]]:
     return out
 
 
+def widened(f: Function, place) -> list[dict[str, Any]]:
+    """Each wide load and store of `f`, at its line: the elements and bytes its one access moves on the device and the
+    cache operator it asks for. On the host each is that many ordinary loads or stores and the hint says nothing."""
+    found = []
+    for s in walked(f.body):
+        for e in (e for top in s.exprs for e in calls(top)):
+            if e.val in wide.NAMES and isinstance(e.ref, tuple) and isinstance(e.ref[-1], wide.Wide):
+                found.append({"at": place(e.line), **wide.records(e)})
+    return found
+
+
 def calls(e: Expr) -> list[Expr]:
     found = [e] if e.tag == "call" else []
     for a in e.args:
@@ -223,7 +235,7 @@ def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None
     """
     if len(source.encode()) > MAX_SOURCE:
         raise ValueError("Source exceeds the 2 MB limit.")
-    p, checker, receipts = compile_program(source)
+    p, checker, receipts = compilations.program(source)
     at = (lambda line: (origin, line)) if isinstance(origin, str) else origin
     interface, bodies = Located(p, checker, at).units()
     names = {mangle(f.name): f.name for f in p.functions}
@@ -277,6 +289,7 @@ def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None
             "costly_calls": costly,
             "synchronization": synchronization,
             **({"cooperative": regions} if (regions := cooperative(f, place, checker.sizeof)) else {}),
+            **({"wide": accesses} if (accesses := widened(f, place)) else {}),
         }
 
     written = [f for f in p.functions if not f.extern and not f.test]  # a test is emitted only where it runs

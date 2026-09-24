@@ -32,7 +32,9 @@ from dataclasses import dataclass, field
 from itertools import count, permutations
 from typing import TYPE_CHECKING, Any
 
+from .atomics import Atomic, mixed
 from .tree import USIZE, Expr, Function, Stmt, fail, is_view, nested, root
+from .wide import Wide
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -147,8 +149,20 @@ def assigned(ss: list[Stmt]) -> set[str]:
     return found
 
 
+def arguments(e: Expr) -> list[Expr]:
+    """A call's arguments as the rules see them: a wide access reaches the part x[i .. i + K] of its array
+    (compiler/wide.py), and that part stands in its array's place."""
+    if isinstance(e.ref, tuple) and len(e.ref) == 2 and isinstance(e.ref[1], Wide) and e.args:
+        return [e.ref[1].part, *e.args[1:]]
+    return e.args
+
+
 def lent(e: Expr) -> list[tuple[Expr, str]]:
     """The arguments a call lends, with the mode each is lent in: rw for what it may write."""
+    if isinstance(e.ref, tuple) and len(e.ref) == 2 and isinstance(e.ref[1], Wide):  # a wide load or store
+        return [(e.ref[1].part, "rw" if e.val == "store_wide" else "ro")]
+    if isinstance(e.ref, tuple) and len(e.ref) == 2 and isinstance(e.ref[1], Atomic):  # an atomic update
+        return [(e.args[0], "atomic")]
     if isinstance(e.ref, Function):
         return [(a, t.mode) for a, (_, t) in zip(e.args, e.ref.params, strict=False) if t.mode != "value"]
     if isinstance(e.ref, tuple) and e.ref[:1] == ("stage",) and e.ref[2] == "fill":  # a pipeline reads its source
@@ -188,6 +202,7 @@ class Site:
     index: Poly | None  # None: not a polynomial the rule can read
     write: bool
     facts: tuple  # (lhs, bound) pairs, lhs <= bound, of the conditions it sits under
+    atomic: bool = False  # an atomic update (atomics.py), which never races another and counts toward no writer
 
 
 @dataclass
@@ -256,7 +271,7 @@ class Globals:
             return
         if e.tag == "call":
             given = {id(a): mode for a, mode in lent(e)}
-            for a in e.args:
+            for a in arguments(e):
                 mode = given.get(id(a))
                 if mode is None:
                     self.reads(a, env)
@@ -266,7 +281,7 @@ class Globals:
                     self.record(a, env, mode == "rw")
                 elif a.tag == "index":
                     self.reads(a.args[1], env)
-                    self.record(a, env, mode == "rw")
+                    self.record(a, env, mode in {"rw", "atomic"}, atomic=mode == "atomic")
                 elif a.tag == "name":
                     self.record(a, env, mode == "rw")
             return
@@ -275,7 +290,7 @@ class Globals:
         if e.tag == "index":
             self.record(e, env, write=False)
 
-    def record(self, e: Expr, env: dict[str, Poly | None], write: bool):
+    def record(self, e: Expr, env: dict[str, Poly | None], write: bool, atomic: bool = False):
         """One access: an element `x[i]`, a part `x[lo..hi]` (its first element plus a digit below its length), or
         a whole array lent to a call (a digit below its extent)."""
         base = e if e.tag == "name" else e.args[0]
@@ -296,7 +311,7 @@ class Globals:
                 digit = f"{name}[..]#{next(self.fresh)}"
                 self.digits[digit] = Digit(Poly(), hi - lo, agent=False)
                 index = lo + Poly.of(digit)
-        self.sites.setdefault(name, []).append(Site(e, index, write, tuple(self.facts)))
+        self.sites.setdefault(name, []).append(Site(e, index, write, tuple(self.facts), atomic))
 
     def condition(self, e: Expr, env: dict[str, Poly | None], truth: bool) -> list[tuple[Poly, Poly]]:
         """What `e` being `truth` says, as lhs <= bound pairs over polynomials."""
@@ -391,6 +406,12 @@ def check(c: Checker, s: Stmt, block: Block, outer: set[str], grid: list[Poly | 
         env[name] = Poly.of(name)
     walk.stmts(s.body, env)
     for name, sites in walk.sites.items():
+        updates = [x for x in sites if x.atomic]
+        if updates:  # no barrier orders two blocks, so an array updated atomically is touched no other way
+            plain = next((x for x in sites if not x.atomic), None)
+            if plain is not None:
+                mixed(name, updates[0].node, plain.node, "read or written plainly by the region's threads")
+            continue
         writes = [x for x in sites if x.write]
         if not writes:
             continue

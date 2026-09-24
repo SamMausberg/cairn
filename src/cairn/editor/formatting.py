@@ -26,7 +26,7 @@ NO_TRAIL = {"(", "[", ".", "..", ":", "@"}
 VALUES = {")", "]", "true", "false", "zeroed"}  # tokens that end a value, so `-` after them is binary
 CALLEES = {")", "]", "fn", "effects"}  # tokens that take `(` with no space before it
 OPENERS, CLOSERS = {"(", "[", "{"}, {")", "]", "}"}
-GLUE = {"else", ")", "]", ",", ";"}  # a closing brace keeps these on its own line
+GLUE = {"else", "then", ")", "]", ",", ";"}  # a closing brace keeps these on its own line
 
 
 @dataclass(slots=True)

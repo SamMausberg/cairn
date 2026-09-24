@@ -1,0 +1,13 @@
+// GPU MODE's vectoradd_v2 (reference-kernels, problems/pmpp_v2/vectoradd_py): output = A + B over float16, each
+// sum computed in f32 and rounded once to f16, as torch adds two half tensors.
+pub fn vectoradd(n:usize, a:ro<f16>[n]@device, b:ro<f16>[n]@device, output:rw<f16>[n]@device) {
+  parallel i in n { output[i] = f16(f32(a[i]) + f32(b[i])); }
+}
+
+// KernelBench level 1, problem 19 (KernelBench/level1/19_ReLU.py): ReLU, which keeps a NaN a NaN.
+pub fn relu(n:usize, x:ro<f32>[n]@device, out:rw<f32>[n]@device) {
+  parallel i in n {
+    let v = x[i];
+    if v < 0.0 { out[i] = 0.0; } else { out[i] = v; }
+  }
+}

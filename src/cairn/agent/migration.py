@@ -17,7 +17,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import Diagnostic, Parser, compile_program, fail
+from ..compiler import compilations
+from ..compiler.cairnc import Diagnostic, Parser, fail
 from ..compiler.effects import EFFECT_FAMILIES, EFFECTS
 from ..projects.project import Project, load_project
 from .agent_tools import digest, implementation, load_json_strict, stable_json
@@ -87,8 +88,8 @@ class Migration:
         self.effects = tuple(sorted(effects))
         if unknown := [e for e in self.effects if e not in EFFECTS and not e.startswith(EFFECT_FAMILIES)]:
             fail("E-MIGRATION", "The effects a migration allows are effect names.", effects=unknown)
-        self.parsed = Parser(self.project.source).parse()
-        self.program, _, self.receipts = compile_program(self.project.source)
+        self.parsed = compilations.parsed(self.project.source)
+        self.program, _, self.receipts = compilations.program(self.project.source)
         authored = {f.name: f for f in self.parsed.functions}
         changing = {symbol: to, **self.also}
         if missing := sorted(set(changing) - set(authored)):
@@ -208,7 +209,7 @@ class Migration:
         """The whole linked program with every replacement in place: signatures first, then types, declarations
         and rows. A refusal names the file and line of the new text, where the agent wrote it."""
         try:
-            whole = Parser(candidate).parse()
+            whole = compilations.parsed(candidate)
             if inventory(whole) != inventory(self.parsed):  # a comment ending a replacement would hide the line's rest
                 fail("E-DECLARATION", "A migration adds or removes no declaration.")
             parsed = {f.name: f for f in whole.functions}
@@ -218,7 +219,7 @@ class Migration:
                     fail("E-DECLARATION", "A migration adds or removes no declaration.", symbol=f.name)
                 if signature(parsed[f.name]) != wanted:
                     fail("E-SIGNATURE", f"{f.name} must have the signature {wanted}.", parsed[f.name], symbol=f.name)
-            _, _, after = compile_program(candidate)
+            _, _, after = compilations.program(candidate)
         except Diagnostic as e:
             line, single = 1, len(self.project.units) == 1 and candidate == bodies.get(self.project.units[0].path)
             for u in self.project.units:

@@ -1,0 +1,241 @@
+{
+  "schema": "cairn.evidence.harness/1",
+  "machine": "Linux 6.18.33.2-microsoft-standard-WSL2 x86_64",
+  "python": "3.12.3",
+  "torch_running": "2.9.0+cpu",
+  "torch_built_against": "2.9.0+cu130",
+  "nvcc": {
+    "nvcc": "/usr/local/cuda/bin/nvcc",
+    "release": "13.2",
+    "version": "V13.2.78"
+  },
+  "cxx": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "upstream": {
+    "sol-execbench": "a9fa0804c793d438e70850c33fe34426e66d53dd",
+    "gpumode": "f3295bb6bd559bae4659d2d8fc45edb1394251b1",
+    "kernelbench": "423217d9fda91e0c2d67e4a43bf62f96f6d104f1"
+  },
+  "device_target": "sm_100a",
+  "solutions": [
+    {
+      "problem": "sol/examples/cuda_cpp/rmsnorm",
+      "definition": "rmsnorm_h4096",
+      "function": "rmsnorm",
+      "kernel": "RMSNorm in a cooperative region",
+      "tolerance": {
+        "absolute": 0.01,
+        "relative": 0.01
+      },
+      "harness": "7256ac6af4542226b9ec6b503c85971ab3f56290385f3b2a49c0e1c3deb90c76",
+      "export": "c304260c1c0e06eb074e58c2079978785f6cfb34e46408ad01106f3222fb86ed",
+      "entry": "cq_rmsnorm",
+      "schema": "accepted by sol_execbench.core.Solution and Definition",
+      "build": {
+        "status": "compiled-and-linked",
+        "seconds": 96.5,
+        "with_cuda": true,
+        "objects": [
+          "main.o",
+          "program.cuda.o"
+        ],
+        "library_sha256": "aa39d4e7f9d5aa63cfafa4c9229d8dac529d46b4d98d522e1389763f3d73c879"
+      }
+    },
+    {
+      "problem": "sol/examples/cuda_cpp/flux_rope",
+      "definition": "black-forest-labs_FLUX.1-schnell_flux_rope_apply_rotation",
+      "function": "reference",
+      "kernel": "none: the body is empty",
+      "tolerance": {
+        "absolute": 0.01,
+        "relative": 0.01
+      },
+      "harness": "e4431a8aac67200088cb9c7fcbb3b56cac6f308d3ad45bc07019fb6a16cb0c38",
+      "export": "21bb719155c72a56257c44763b9dd1af89a58ba03aa9ac975c5e2866b9b28989",
+      "entry": "cf_reference",
+      "schema": "accepted by sol_execbench.core.Solution and Definition",
+      "build": {
+        "status": "compiled-and-linked",
+        "seconds": 84.1,
+        "with_cuda": false,
+        "objects": [
+          "main.o",
+          "program.o"
+        ],
+        "library_sha256": "9504433a6c1aabc94d5ef22949a96332ecca254f188999902598bc0084d327f2"
+      }
+    },
+    {
+      "problem": "sol/tests/sol_execbench/samples/gqa_paged_decode",
+      "definition": "gqa_paged_decode_h32_kv8_d128_ps1",
+      "function": "reference",
+      "kernel": "none: the body is empty",
+      "tolerance": {
+        "absolute": 0.01,
+        "relative": 0.01
+      },
+      "harness": "03150a60a0568682b09bbaea51051fc64320bcf29384a10652d16553c14fd1d4",
+      "export": "8abbc3e80cac13fe9f4c6a3921c7591307bd6f843df7740ec574bf757f9d8a3a",
+      "entry": "cf_reference",
+      "schema": "accepted by sol_execbench.core.Solution and Definition",
+      "build": {
+        "status": "compiled-and-linked",
+        "seconds": 83.2,
+        "with_cuda": false,
+        "objects": [
+          "main.o",
+          "program.o"
+        ],
+        "library_sha256": "0d8b38178f5f1dbc90ba6bbb48dff5ed9ae9c50f00253b603883faddf370e21f"
+      }
+    },
+    {
+      "problem": "sol/tests/sol_execbench/samples/gemma3_swiglu",
+      "definition": "google_gemma-3-12b-it_gemma3_fused_gate_up_projection_with_swiglu",
+      "function": "reference",
+      "kernel": "none: the body is empty",
+      "tolerance": {
+        "absolute": 0.01,
+        "relative": 0.01
+      },
+      "harness": "9514da27bee9e0d3fd615b8e0b127a21673a837b5f55187eb184176883fd3dba",
+      "export": "e156fb910847c3941476da6faf5eec0d430b012cc34ed3f7a6f0bc16f18dc060",
+      "entry": "cf_reference",
+      "schema": "accepted by sol_execbench.core.Solution and Definition",
+      "build": {
+        "status": "compiled-and-linked",
+        "seconds": 96.3,
+        "with_cuda": false,
+        "objects": [
+          "main.o",
+          "program.o"
+        ],
+        "library_sha256": "58942edd28a511ea61216a0840ee892adea7572de67e2fbdcd9af9f7725a7ac2"
+      }
+    }
+  ],
+  "submissions": [
+    {
+      "format": "gpumode",
+      "problem": "gpumode/problems/pmpp_v2/vectoradd_py",
+      "project": "examples/harness",
+      "function": "vectoradd",
+      "harness": "a7db887223aa904ac11e8fea3cb530dee481ae591a9935e2269b6ce0c16324ca",
+      "export": "ce2757a0ce86d4231c4881170a0f57c753f951ed768d1842877329ea2d317d4b",
+      "entry": "cq_vectoradd",
+      "kernelbench_static_check": {
+        "valid": true,
+        "errors": [],
+        "warnings": []
+      },
+      "build": {
+        "status": "compiled-and-linked",
+        "seconds": 199.3,
+        "with_cuda": true,
+        "objects": [
+          "cuda.cuda.o",
+          "main.o"
+        ],
+        "library_sha256": "e26c7c1eb8afe0f0562b06654a4192d6300ac935fc5260fad6fa0c58387913f8"
+      }
+    },
+    {
+      "format": "kernelbench",
+      "problem": "kernelbench/KernelBench/level1/19_ReLU.py",
+      "project": "examples/harness",
+      "function": "relu",
+      "harness": "399d5169b884c5033739a69430412f0ff0fb9d44406f0df1ce57c016237634fc",
+      "export": "ce2757a0ce86d4231c4881170a0f57c753f951ed768d1842877329ea2d317d4b",
+      "entry": "cq_relu",
+      "kernelbench_static_check": {
+        "valid": true,
+        "errors": [],
+        "warnings": []
+      },
+      "build": {
+        "status": "compiled-and-linked",
+        "seconds": 203.7,
+        "with_cuda": true,
+        "objects": [
+          "cuda.cuda.o",
+          "main.o"
+        ],
+        "library_sha256": "49f5150c46af64a986dc142719f02e1c63d1715d9e53024805b119c6f2df4ffa"
+      }
+    }
+  ],
+  "not_run": [
+    "nothing built here was loaded",
+    "no device code ran",
+    "no evaluator ran",
+    "nothing was submitted"
+  ],
+  "rmsnorm_emulated": {
+    "built": "native-built",
+    "emulation": {
+      "runs_on": "host",
+      "judged_against": "sm_100a",
+      "machine": "runtime/cairn_emulate.hpp",
+      "claim": "device work emulated on host threads for sm_100a: the program was judged against sm_100a and built for the host, so this is a host run, never a device run",
+      "not_checked": "what only nvcc or ptxas refuses: this build ran neither",
+      "differences": "docs/devices.md#emulating-device-code-on-the-host"
+    },
+    "workloads": [
+      {
+        "batch_size": 7,
+        "matched_ratio": 1.0,
+        "max_abs_error": 0.0,
+        "bit_equal_ratio": 1.0
+      },
+      {
+        "batch_size": 1,
+        "matched_ratio": 1.0,
+        "max_abs_error": 0.0,
+        "bit_equal_ratio": 1.0
+      },
+      {
+        "batch_size": 34,
+        "matched_ratio": 1.0,
+        "max_abs_error": 0.0,
+        "bit_equal_ratio": 1.0
+      },
+      {
+        "batch_size": 170,
+        "matched_ratio": 1.0,
+        "max_abs_error": 0.015625,
+        "bit_equal_ratio": 0.9999971389770508
+      },
+      {
+        "batch_size": 64,
+        "matched_ratio": 1.0,
+        "max_abs_error": 0.0,
+        "bit_equal_ratio": 1.0
+      },
+      {
+        "batch_size": 16,
+        "matched_ratio": 1.0,
+        "max_abs_error": 0.001953125,
+        "bit_equal_ratio": 0.9999847412109375
+      },
+      {
+        "batch_size": 63,
+        "matched_ratio": 1.0,
+        "max_abs_error": 0.0009765625,
+        "bit_equal_ratio": 0.9999922513961792
+      },
+      {
+        "batch_size": 79,
+        "matched_ratio": 1.0,
+        "max_abs_error": 0.00390625,
+        "bit_equal_ratio": 0.9999845623970032
+      },
+      {
+        "batch_size": 15,
+        "matched_ratio": 1.0,
+        "max_abs_error": 0.0,
+        "bit_equal_ratio": 1.0
+      }
+    ],
+    "skipped": "workloads of more than 256 rows"
+  }
+}

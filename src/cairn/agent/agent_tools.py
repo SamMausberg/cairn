@@ -14,13 +14,14 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import VERSION, Diagnostic, Function, Parser, compile_program, compile_source, fail
+from ..compiler import compilations
+from ..compiler.cairnc import VERSION, Diagnostic, Function, Parser, fail
 from ..compiler.effects import EFFECT_FAMILIES, EFFECTS
 from ..compiler.lexing import comment_above, lex
 from .diagnostics import explain, located
 from .evidence import MAX_EXPAND, MAX_REPLACEMENT, TERMS, classes, establish
 from .projection import declarations, derivation, function_source, local, related, signature, type_declarations
-from .state import delta, state, written
+from .state import delta, entries, moved, own, state, written
 from .teaching import select_cards
 
 PROTOCOL = "cairn.edit/1"  # A request bound by the session digest.
@@ -102,15 +103,16 @@ class EditSession:
             fail("E-CONTRACT", "Contract must be a host-owned JSON object.")
         if self.contract.get("symbol", symbol) != symbol:
             fail("E-CONTRACT", "Contract names another function.")
-        self.parsed = Parser(source).parse()
+        compiled = compilations.Compilation(source)  # one parse, one check and one emission, kept for other callers
+        self.parsed = compiled.parsed()
         authored = {f.name: f for f in self.parsed.functions}
         if symbol not in authored:
             fail("E-SYMBOL", "Edit an authored function, not a generated entry.")
         self.f = authored[symbol]
         if self.f.static:
             fail("E-EDIT-PROFILE", "Template-body editing is not implemented; edit ordinary functions.")
-        self.cpp, self.receipt = compile_source(source)
-        self.program, checker, _ = compile_program(source, capture_sites=True)
+        self.program, _, _ = compiled.program()
+        self.cpp, self.receipt = compiled.emitted()
         self.functions = {f.name: f for f in self.program.functions}
         fs = self.receipt["functions"]
         effects = fs[symbol]["effects"]
@@ -141,16 +143,26 @@ class EditSession:
             selected |= grown
         self.visible = selected
         self.shown: list[str] = []  # What `expand` has disclosed as source, in order.
-        self.sites: dict[str, dict[str, Any]] = {}
-        for site in checker.sites:
-            if site["symbol"] == symbol and site["end"] > site["start"]:
-                # Expressions inferred without an expected type are still checked in their original context.
-                key = digest(stable_json([digest(source), symbol, site["start"], site["end"]]))
-                self.sites[key] = {**site, "site": key, "source": source[site["start"] : site["end"]]}
-        ordered = sorted(self.sites, key=lambda k: (self.sites[k]["start"], self.sites[k]["end"]))
-        self.site_names = {f"x{i}": key for i, key in enumerate(ordered)}  # Short names for handle requests.
         self.implementation_hash = implementation()
         self.seal()
+
+    @functools.cached_property
+    def sites(self) -> dict[str, dict[str, Any]]:
+        """The edited function's expression sites, by key. A check that records sites costs about a third more than
+        one that does not, so it runs the first time a site is asked for, and a body edit never pays for it."""
+        checker, pinned, sites = compilations.program(self.source, sites=True)[1], digest(self.source), {}
+        for site in checker.sites:
+            if site["symbol"] == self.symbol and site["end"] > site["start"]:
+                # Expressions inferred without an expected type are still checked in their original context.
+                key = digest(stable_json([pinned, self.symbol, site["start"], site["end"]]))
+                sites[key] = {**site, "site": key, "source": self.source[site["start"] : site["end"]]}
+        return sites
+
+    @functools.cached_property
+    def site_names(self) -> dict[str, str]:
+        """Short names for handle requests, `x0` first in the source."""
+        ordered = sorted(self.sites, key=lambda k: (self.sites[k]["start"], self.sites[k]["end"]))
+        return {f"x{i}": key for i, key in enumerate(ordered)}
 
     def seal(self) -> None:
         """Bind the digest to everything an edit is judged against, including what it may call."""
@@ -390,10 +402,10 @@ class EditSession:
             fail("E-DECLARATION", "The replacement's last line comment would hide what follows its span on that "
                  "line; end the comment with a newline.")  # fmt: skip
         try:
-            receipt = compile_source(candidate)[1]
+            receipt = compilations.emitted(candidate)[1]
         except Diagnostic as e:  # Point into the reply the model wrote, not into the spliced whole.
             raise located(e, candidate, start + (kind == "expr"), reply) from None
-        f = next(f for f in Parser(candidate).parse().functions if f.name == self.symbol)
+        f = next(f for f in compilations.parsed(candidate).functions if f.name == self.symbol)
         if signature(f) != signature(self.f):
             fail("E-SIGNATURE", "Function signature changed.")
         before, after = self.receipt["functions"], receipt["functions"]
@@ -408,6 +420,11 @@ class EditSession:
                 fail("E-CALLER-EFFECT", "Candidate expands an unchanged caller footprint.", symbol=name,
                      added_effects=sorted(delta))  # fmt: skip
         kept = self.preserved(candidate) if self.preserve else "not-proved"
+        # What the edit did to the rest of the program: a caller's row loses what the new body no longer does. Only
+        # the edited function's guards can change, since each function's guards are its own body's.
+        others = [f for f in self.program.functions if f.name in after and f.name != self.symbol and own(f.name)]
+        changed = moved(entries((f, before[f.name]["effects"]) for f in others),
+                        entries((f, after[f.name]["effects"]) for f in others))  # fmt: skip
         return candidate, {
             "protocol": "cairn.admission/1",
             "status": "typed",
@@ -417,6 +434,7 @@ class EditSession:
             "effects": after[self.symbol]["effects"],
             "check_sites": after[self.symbol]["syntactic_check_sites"],
             "check_sites_before": before[self.symbol]["syntactic_check_sites"],
+            **({"changed": changed} if changed else {}),
             "runtime_cost": "unmeasured; guard-site counts are static, not execution costs",
             "source_outside_edit_unchanged": True,
             "contract_unchanged": True,

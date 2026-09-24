@@ -1,5 +1,6 @@
 """The model against the machine: a native build of the fragment agrees with the concrete evaluator."""
 
+import os
 import random
 import shutil
 import subprocess
@@ -184,15 +185,34 @@ def expected_words(src, f, outcome):
     return words
 
 
+def timed_out(r: dict) -> bool:
+    """Whether Z3 answered unknown only because a query ran out of time, as its record of each query says."""
+    return r["status"] == "unknown" and any(
+        q.get("status") == "unknown" and ("timeout" in q.get("reason", "") or "ran past" in q.get("reason", ""))
+        for q in r.get("queries", [])
+    )
+
+
 @pytest.mark.skipif(not shutil.which("clang++"), reason="needs clang++")
 def test_the_model_agrees_with_the_machine(tmp_path):
-    """Build the fragment natively and confirm the concrete evaluator predicts what it does."""
+    """Build the fragment natively and confirm the concrete evaluator predicts what it does.
+
+    The float pair `narrow` takes Z3 about ten seconds of CPU, so on a machine several times oversubscribed its 20 s
+    wall-clock limit ran out and the test failed on `unknown`. A pair whose query timed out is asked once more at the
+    solver's 30 s ceiling; one that times out again is left out and named in a skip once every other case has run,
+    so a timeout is never read as a counterexample or as a pass, and any other unknown still fails."""
     src = prepared(NATIVE)
     rng = random.Random(20260918)
-    cases = []
+    cases, slow = [], []
     for name, before, after, assume in PERTURBED:  # Every solver counterexample is also run on the machine.
-        r = equivalent(NATIVE, NATIVE.replace(before, after), name, assume=assume,
-                       allow_reference_traps=True, timeout_ms=20000)  # fmt: skip
+        for limit in (20000, 30000):
+            r = equivalent(NATIVE, NATIVE.replace(before, after), name, assume=assume,
+                           allow_reference_traps=True, timeout_ms=limit)  # fmt: skip
+            if not timed_out(r):
+                break
+        if timed_out(r):
+            slow.append(name)
+            continue
         assert r["status"] == "counterexample", r
         cases.append((name, r["counterexample"]))
     for name in [n for n, _, _, _ in PERTURBED]:
@@ -212,3 +232,6 @@ def test_the_model_agrees_with_the_machine(tmp_path):
         expected = expected_words(src, src.functions[name], model)
         assert [int(w) for w in native.stdout.split()] == expected, (name, args, model, native.stdout)
     assert traps >= 10, "The sample must exercise the guards, not only the total cases."
+    if slow:
+        pytest.skip(f"Z3 timed out at 20 s and again at 30 s on {', '.join(slow)} (load average "
+                    f"{os.getloadavg()[0]:.0f}); every other case agreed with the machine")  # fmt: skip

@@ -59,6 +59,10 @@ class Fact(tuple):
         fact.origin, fact.base = origin, base
         return fact
 
+    def __getnewargs__(self) -> tuple[str, str, int]:
+        """What a copy of the fact is made from; its origin and base come back with its other attributes."""
+        return self[0], self[1], self[2]
+
 
 def fixed(c: Checker, e: Expr) -> str | None:
     """The identity of a local, or a chain of its fields, whose value cannot change while it is in scope."""

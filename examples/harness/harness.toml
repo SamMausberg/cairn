@@ -1,0 +1,28 @@
+# GPU MODE's vectoradd_v2: custom_kernel(data) gets (A, B, output), N x N float16 tensors, and returns output.
+# cairn export examples/harness --harness gpumode --symbol vectoradd --out out/vectoradd
+
+[benchmark]
+leaderboard = "vectoradd_v2"
+gpu = "B200"
+
+[extents]
+n = "size * size"
+
+[[argument]]
+name = "A"
+parameter = "a"
+dtype = "float16"
+shape = ["size", "size"]
+
+[[argument]]
+name = "B"
+parameter = "b"
+dtype = "float16"
+shape = ["size", "size"]
+
+[[argument]]
+name = "output"
+parameter = "output"
+dtype = "float16"
+shape = ["size", "size"]
+output = true

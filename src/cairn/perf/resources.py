@@ -19,11 +19,12 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import Diagnostic, compile_source
+from ..compiler.cairnc import RUNTIME, Diagnostic, compile_source
 from ..projects.target import DeviceTarget, toolkit_record
 from . import device
 
 INSPECTOR = hashlib.sha256(Path(device.__file__).read_bytes()).hexdigest()  # a changed inspector reads afresh
+RUNTIME_SHA256 = hashlib.sha256(RUNTIME.encode()).hexdigest()  # the headers every emitted program includes
 BLOCK = 256  # the block a device region launches with when its plan names none (runtime/cairn_gpu.hpp)
 
 
@@ -75,28 +76,30 @@ class Inspector:
         self.target, self.history = target, history
         self.memory: dict[str, dict[str, Any]] = {}
 
-    def key(self, source: str) -> str:
-        cpp, receipt = compile_source(source)
-        parts = [hashlib.sha256(cpp.encode()).hexdigest(), receipt["runtime_sha256"], device_identity(self.target),
-                 INSPECTOR]  # fmt: skip
+    def key(self, source: str, cpp: str = "") -> str:
+        """The digest of what a compile of `source` reads; `cpp` is its emitted program when the caller has it."""
+        cpp = cpp or compile_source(source)[0]
+        parts = [hashlib.sha256(cpp.encode()).hexdigest(), RUNTIME_SHA256, device_identity(self.target), INSPECTOR]
         return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
-    def kept(self, source: str, name: str, program: Any) -> dict[str, Any] | None:
+    def kept(self, source: str, name: str, program: Any, cpp: str = "") -> dict[str, Any] | None:
         """The inspection kept for `source` on this target, or None. One that names another target is refused
         (E-TARGET-MISMATCH), which only a history written by hand can hold."""
-        key = self.key(source)
+        key = self.key(source, cpp)
         found = self.memory.get(key) or (self.history.analysis(key) if self.history is not None else None)
         if found:
             self.target.accept(found.get("device_target"), "A kept inspection")
         return {**found, "kept": True} if found else None
 
-    def inspect(self, source: str, name: str, program: Any, checker: Any = None) -> dict[str, Any]:
-        """Compile `source` for the target and read `name`'s kernels; the answer is kept under its key."""
-        key = self.key(source)
+    def inspect(self, source: str, name: str, program: Any, checker: Any = None, cpp: str = "",
+                seconds: float = 600.0) -> dict[str, Any]:  # fmt: skip
+        """Compile `source` for the target and read `name`'s kernels; the answer is kept under its key. A compile
+        that outlasts `seconds` is stopped with every process it started (subprocess.TimeoutExpired)."""
+        key = self.key(source, cpp)
         files: dict[str, bytes] = {}
         answer: dict[str, Any] = {"device_target": self.target.name, "key": key}
         try:
-            read = device.kernels(source, self.target, keep=files)
+            read = device.kernels(source, self.target, seconds, keep=files)
         except Diagnostic as refused:  # the program needs a feature the target lacks, or nvcc cannot build it
             read = {"status": "target-refused", "reason": f"{refused.data['code']}: {refused.data['message']}"}
         answer["status"] = read["status"]

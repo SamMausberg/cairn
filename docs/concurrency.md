@@ -269,9 +269,35 @@ fn main() -> i32 {
 }
 ```
 
+An element of an array can be updated atomically too, from host code, any lane or any thread of a cooperative region, on the host and the device alike. `atomic_add_wrap(x[i], v)` adds modulo 2^N on `u32`, `u64` and `usize`, as `add_wrap` does: no thread sees the whole sum, so an atomic add cannot check it for overflow. `atomic_min`, `atomic_max` and `atomic_cas(x[i], expected, desired)` take 32- and 64-bit integers, `atomic_and`, `atomic_or` and `atomic_xor` unsigned ones, and `atomic_add_unordered` adds an `f32` or `f64` in the order the threads arrive ([numerics.md](numerics.md#atomic-float-addition)). Each returns the element's old value, and each is relaxed: an element's updates happen one at a time, and they order nothing else. The first argument is the element itself, written in place (`E-ATOMIC`).
+
+```cairn
+fn histogram(n:usize, x:ro<u32>[n]@device, bins:rw<u32>[256]@device) {
+  parallel i in n { atomic_add_wrap(bins[usize(x[i] & 255)], 1); }      // any lane, any bin, at once
+}
+
+fn claim(n:usize, owner:rw<usize>[8], won:rw<u32>[n]) {
+  parallel i in n {
+    let old = atomic_cas(owner[i % 8], 0, i + 1);                        // one lane takes each slot
+    if old == 0 { won[i] = 1; } else { won[i] = 0; }
+  }
+}
+```
+
+Atomic updates are a class of their own. Two never race, so any lane may update any element, and the rules that give each element one writer do not count them. An array a region updates atomically is not also read or written plainly in it (`E-ATOMIC-MIXED`): anywhere in a `parallel` region, anywhere in a cooperative region for an array from outside, and between two barriers for a block's shared array. The result is read after the region, after a barrier, or in the region's finish. The row gains `atomic` and `write:x`, and the element's index is guarded as any index is.
+
+```cairn rejects E-ATOMIC-MIXED
+fn count(n:usize, x:ro<u32>[n], bins:rw<u32>[n]) {
+  parallel i in n {
+    atomic_add_wrap(bins[usize(x[i]) % n], 1);
+    bins[i] = 0;                                   // another lane may be updating bins[i]
+  }
+}
+```
+
 ## Parallel regions
 
-`parallel i in n { body }` runs one lane per index and completes before the next statement. Whatever any lane writes may be touched only at element `[i]` or inside the lane's own block (`E-PARALLEL-RACE`). A shared scalar cannot be assigned (`E-PARALLEL-WRITE`: use `reduce`), and lanes cannot return, nest or move an outer owner. What a lane calls must be pure-like (`E-PARALLEL-CALL`), though a host lane may also allocate, use atomics and lock.
+`parallel i in n { body }` runs one lane per index and completes before the next statement. Whatever any lane writes may be touched only at element `[i]` or inside the lane's own block (`E-PARALLEL-RACE`). A shared scalar cannot be assigned (`E-PARALLEL-WRITE`: use `reduce`), and lanes cannot return, nest or move an outer owner. What a lane calls must be pure-like (`E-PARALLEL-CALL`), though a host lane may also allocate, use atomics and lock, and any lane may [update an element atomically](#atomics-and-mutexes).
 
 ```cairn
 fn shade(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) { parallel i in n { out[i] = f(u64(i)); } }
@@ -367,7 +393,7 @@ fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i
 plan scale { block 128; per_lane 4; unroll 4; }   // 128 threads a block, about four indices each
 ```
 
-`vector W` has each device lane run `W` adjacent indices with one load and one store of at most 16 bytes per array it touches only at `x[i]`, so an `f32` array takes `vector 4` at most. A pointer not aligned to the chunk width runs the scalar lanes instead. `E-PLAN` refuses a width that is not a power of two, a chunk wider than 16 bytes, and `vector` beside `fuse`.
+`vector W` has each device lane run `W` adjacent indices with one load and one store of at most 16 bytes per array it touches only at `x[i]`, so an `f32` array takes `vector 4` at most. A pointer not aligned to the chunk width runs the scalar lanes instead. `E-PLAN` refuses a width that is not a power of two, a chunk wider than 16 bytes, and `vector` beside `fuse`. A lane that reaches its elements some other way says so itself with [`load_wide` and `store_wide`](devices.md#wide-loads-and-stores).
 
 ```cairn
 fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
