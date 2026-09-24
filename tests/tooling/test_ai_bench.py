@@ -3,7 +3,8 @@
 Every task has its spec, a starter and a reference in each of the three languages; its SPEC.md example agrees with
 the oracle, and every hidden case follows the input rules the subject is given. For two tasks, one of them threaded,
 each language's reference passes the hidden check and its starter fails it, through the same builds, sanitizers and
-comparisons that judge a subject. `python3 bench/ai/harness.py verify` runs that check for all ten tasks.
+comparisons that judge a subject. `python3 bench/ai/harness.py verify` runs that check for every task. The 1.1
+evaluation's arms, tasks and analysis are tested in test_ai_eval.py.
 """
 
 import shutil
@@ -26,10 +27,12 @@ needs_tools = pytest.mark.skipif(
 
 
 def test_every_task_has_a_spec_and_six_programs_and_is_preregistered():
-    text = (BENCH / "PREREGISTRATION.md").read_text(encoding="utf-8")
     assert {p.name for p in (BENCH / "tasks").iterdir() if p.is_dir()} == set(tasks.BY_NAME)
+    for study, names in (("PREREGISTRATION.md", tasks.ORIGINAL), ("PREREGISTRATION_V1_1.md", tasks.TASKS)):
+        text = (BENCH / study).read_text(encoding="utf-8")
+        for task in names:
+            assert f"`{task.name}`" in text, f"{task.name} is not named in {study}"
     for task in tasks.TASKS:
-        assert f"`{task.name}`" in text, f"{task.name} is not named in the preregistration"
         for which in ("starter", "reference"):
             for ext in checking.EXTENSION.values():
                 assert (BENCH / "tasks" / task.name / f"{which}.{ext}").exists(), (task.name, which, ext)
@@ -45,8 +48,12 @@ def test_every_example_agrees_with_its_oracle_and_every_hidden_case_follows_the_
 
 
 def test_a_repair_starter_is_its_reference_with_one_small_planted_defect():
+    # A repair of the 1.1 evaluation plants a defect CAIRN's checker refuses, so its CAIRN fix is held apart
+    # (tests/tooling/test_ai_eval.py); in C++ and Rust it is as small as every other repair's.
     for task in (t for t in tasks.TASKS if t.kind == "repair"):
-        for ext in checking.EXTENSION.values():
+        for language, ext in checking.EXTENSION.items():
+            if task in tasks.CHECKED and language == "cairn":
+                continue
             starter = (BENCH / "tasks" / task.name / f"starter.{ext}").read_text().splitlines()
             reference = (BENCH / "tasks" / task.name / f"reference.{ext}").read_text().splitlines()
             changed = [line for line in reference if line not in starter] + [
@@ -83,7 +90,8 @@ def test_the_subject_session_is_restricted_and_has_no_web_tools():
     tools = argv[argv.index("--tools") + 1].split(",")
     assert set(tools) == {"Bash", "Read", "Write", "Edit", "Glob", "Grep"}
     env = subjects.environment(Path("/nowhere/bin"))
-    assert not any(k.startswith(("CLAUDE", "CAIRN")) for k in env)
+    assert {k for k in env if k.startswith(("CLAUDE", "CAIRN"))} == {"CLAUDE_CODE_DISABLE_BUNDLED_SKILLS"}
+    assert env["ENABLE_CLAUDEAI_MCP_SERVERS"] == "false"
 
 
 def test_the_audit_flags_a_path_outside_the_sandbox_and_the_network(tmp_path):
@@ -147,4 +155,4 @@ def test_the_reference_passes_the_hidden_check_and_the_starter_fails_it(name, la
     passed = checking.judge(task, language, read("reference"), scratch=tmp_path / "reference")
     assert passed.passed, passed.record()
     failed = checking.judge(task, language, read("starter"), scratch=tmp_path / "starter")
-    assert not failed.passed and failed.reason in ("output", "exit", "sanitizer"), failed.record()
+    assert not failed.passed and failed.reason in ("output", "exit", "abort", "panic", "sanitizer"), failed.record()

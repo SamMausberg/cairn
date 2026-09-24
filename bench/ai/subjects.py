@@ -1,10 +1,13 @@
-"""Subjects: a fresh headless Claude Code session per task and language, in a sandbox outside the repository.
+"""Subjects: a fresh headless Claude Code session per task and arm, in a sandbox outside the repository.
 
-A sandbox holds TASK.md, the starter in its project layout and, for CAIRN, the language documentation. The session
-starts with no memory, no CLAUDE.md or AGENTS.md, no skills, no MCP servers and no web tools (`--restricted`,
-`--strict-mcp-config`, `--disable-slash-commands`, a fixed tool list), and its whole transcript is kept as JSON Lines.
-CAIRN is installed for the subjects from a wheel of this checkout into a virtual environment of its own, so the
-command they run is the installed compiler, and the repository is never on their path.
+An arm is a language and what the subject is given for it: `cpp` and `rust`; `cairn`, the documentation in the
+sandbox; and `plugin`, CAIRN's Claude Code plugin (its skill, the `cairn` command, its language server and `cairn mcp`)
+loaded from a read-only copy beside the sandbox. A sandbox holds TASK.md and the starter in its project layout. The
+session starts with no memory, no CLAUDE.md or AGENTS.md, no web tools and a fixed tool list (`--restricted`); every
+arm but `plugin` also has no skills and no MCP servers (`--strict-mcp-config`, `--disable-slash-commands`), and the
+`plugin` arm has only the plugin's. The whole transcript is kept as JSON Lines. CAIRN is installed for the subjects
+from a wheel of this checkout into a virtual environment of its own, so the command they run is the installed
+compiler, and the repository is never on their path.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ import sys
 import time
 from pathlib import Path
 
-from checking import CAIRN_TOML, CARGO_TOML, SOURCE
+from checking import CAIRN_TOML, CARGO_TOML, EMULATE, SOURCE
 from tasks import Task
 
 REPO = Path(__file__).resolve().parents[2]
@@ -28,6 +31,13 @@ TOOLS = "Bash,Read,Write,Edit,Glob,Grep"
 CAIRN_DOCS = ["guide.md", "language.md", "memory.md", "abstractions.md", "concurrency.md", "devices.md",
               "numerics.md", "library.md", "tools.md", "std_api.md"]  # fmt: skip
 LIMITS = {"model": "claude-sonnet-5", "effort": "high", "max_turns": 80, "max_budget_usd": 5.0, "wall_seconds": 2400}
+# The language each arm is written and judged in; `plugin` differs from `cairn` only in what the subject is given.
+LANGUAGE = {"plugin": "cairn", "cairn": "cairn", "cpp": "cpp", "rust": "rust"}
+# What the plugin arm's copy of the plugin holds: the manifest, the skill, the command and the documentation the
+# skill points to (`${CLAUDE_SKILL_DIR}/../../docs/`), as an install from this checkout has them, and nothing else.
+PLUGIN_PARTS = [".claude-plugin", "skills", "docs"]
+# No claude.ai connector and none of Claude Code's own bundled skills reach any arm.
+QUIET = {"ENABLE_CLAUDEAI_MCP_SERVERS": "false", "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"}
 
 JUDGED = {
     "cpp": (
@@ -45,27 +55,53 @@ JUDGED = {
         "language that compiles to C++, and you have probably never seen it. Its documentation is in `docs/`: start "
         "with `docs/guide.md`; `docs/language.md`, `docs/memory.md` and `docs/concurrency.md` are the reference, "
         "`docs/library.md` and `docs/std/` the standard library, and `docs/tools.md` the command line. The `cairn` "
-        "command is installed: `cairn check .` checks the program, `cairn run . < input.txt` builds and runs it, and "
-        "`cairn build .` builds it and says where the executable is.\n\n"
-        "The judged build is `cairn build .`, whose generated C++ is then compiled again with `clang++ -O1 -g "
+        "command is installed: `cairn check .` checks the program, `cairn run .{emulate} < input.txt` builds and runs "
+        "it, and `cairn build .{emulate}` builds it and says where the executable is.\n\n"
+        "The judged build is `cairn build .{emulate}`, whose generated C++ is then compiled again with `clang++ -O1 -g "
         "-fno-omit-frame-pointer -fno-sanitize-recover=all -pthread -fsanitize=address,undefined` and run with leak "
         "detection on{thread}. A sanitizer report or a failed CAIRN guard (a trap) fails the run."
     ),
 }
+# The plugin arm reads the same paragraph but for the documentation, which comes with the plugin instead.
+JUDGED["plugin"] = JUDGED["cairn"].replace(
+    "Its documentation is in `docs/`: start with `docs/guide.md`; `docs/language.md`, `docs/memory.md` and "
+    "`docs/concurrency.md` are the reference, `docs/library.md` and `docs/std/` the standard library, and "
+    "`docs/tools.md` the command line. The `cairn` command is installed:",
+    "The CAIRN plugin for Claude Code is installed in this session: its `cairn` skill, its language server and its "
+    "`cairn` MCP server. The `cairn` command is installed:",
+)
+# What a task asks of each language beyond its SPEC.md: the constructs a GPU-style task must be written with.
+NOTES = {
+    "block_scan": {
+        "cpp": "For this task the team is `std::thread`s that meet at a `std::barrier` (or `pthread_barrier_wait`), "
+        "and the judge checks that the program uses both.",
+        "rust": "For this task the team is threads from `std::thread` that meet at a `std::sync::Barrier`, and the "
+        "judge checks that the program uses both.",
+        "cairn": "For this task the team is a cooperative region, `blocks ... threads ...`, whose threads meet at "
+        "`barrier`, over `@device` arrays: the kernel is written for a GPU. There is no GPU here, so the judged build "
+        "emulates the device on host threads, and the judge checks that the program has `blocks ... threads`, "
+        "`barrier` and `@device`.",
+    }
+}
+PLUGIN_FILES = " and the files of the CAIRN plugin"
 THREAD_NOTE = ", and once more built with `-fsanitize=thread` in place of `-fsanitize=address,undefined`"
 
 
-def task_md(task: Task, language: str) -> str:
+def task_md(task: Task, arm: str) -> str:
     """TASK.md: the task's SPEC.md, then the environment and how the answer is judged, the same words for every
-    language but the paragraph about its build."""
+    arm but the paragraph about its build."""
+    language = LANGUAGE[arm]
     spec = task.spec.split("\n", 1)[1].lstrip("\n")
-    judged = JUDGED[language].format(thread=THREAD_NOTE if task.threads else "")
+    emulate = " " + " ".join(EMULATE) if task.emulate else ""
+    judged = JUDGED[arm].format(thread=THREAD_NOTE if task.threads else "", emulate=emulate)
+    if note := NOTES.get(task.name, {}).get(language):
+        judged += " " + note
     return (
         f"# Task: {task.name}\n\n{spec}\n"
         "## Your environment\n\n"
         "Work in this directory. Do not read, list or search any file outside it, except the compilers and tools you "
-        "run, and do not use the network. Your session has a fixed budget of turns, time and tokens, the same for "
-        "every language, so work steadily.\n\n"
+        f"run{PLUGIN_FILES if arm == 'plugin' else ''}, and do not use the network. Your session has a fixed budget "
+        "of turns, time and tokens, the same for every language, so work steadily.\n\n"
         f"{judged}\n\n"
         "## How your program is judged\n\n"
         f"When you stop, only `{SOURCE[language]}` is kept. It is built as above and run on hidden inputs that follow "
@@ -88,6 +124,10 @@ def toolchain(root: Path) -> Path:
     for name in CAIRN_DOCS:
         shutil.copy(REPO / "docs" / name, docs / name)
     shutil.copytree(REPO / "docs" / "std", docs / "std")
+    plugin = root / "plugin"
+    shutil.rmtree(plugin, ignore_errors=True)
+    for part in PLUGIN_PARTS:
+        shutil.copytree(REPO / part, plugin / part)
     vcs = ["git", "-C", str(REPO)]
     head = subprocess.run([*vcs, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     dirty = subprocess.run([*vcs, "status", "--porcelain", "--", "src", "docs"], capture_output=True, text=True).stdout
@@ -103,6 +143,8 @@ def toolchain(root: Path) -> Path:
                    check=True, capture_output=True)  # fmt: skip
     bin_dir.mkdir(parents=True, exist_ok=True)
     (bin_dir / "cairn").symlink_to(venv / "bin" / "cairn")
+    (plugin / "bin").mkdir()
+    (plugin / "bin" / "cairn").symlink_to(venv / "bin" / "cairn")
     return bin_dir
 
 
@@ -115,12 +157,14 @@ def environment(tools: Path) -> dict:
     env = {
         k: v for k, v in os.environ.items() if not k.startswith(("CAIRN", "CLAUDE", "VIRTUAL_ENV", "PYTHON", "VSCODE"))
     }
-    return {**env, "PATH": ":".join([str(tools), *keep])}
+    return {**env, **QUIET, "PATH": ":".join([str(tools), *keep])}
 
 
-def sandbox(task: Task, language: str, where: Path, docs: Path = REPO / "docs") -> Path:
-    """A fresh directory holding TASK.md, the starter in its project layout and, for CAIRN, the documentation."""
+def sandbox(task: Task, arm: str, where: Path, docs: Path = REPO / "docs") -> Path:
+    """A fresh directory holding TASK.md, the starter in its project layout and, for the `cairn` arm, the
+    documentation."""
     shutil.rmtree(where, ignore_errors=True)
+    language = LANGUAGE[arm]
     source = where / SOURCE[language]
     source.parent.mkdir(parents=True)
     ext = {"cpp": "cpp", "rust": "rs", "cairn": "cairn"}[language]
@@ -129,12 +173,33 @@ def sandbox(task: Task, language: str, where: Path, docs: Path = REPO / "docs") 
         (where / "Cargo.toml").write_text(CARGO_TOML)
     if language == "cairn":
         (where / "cairn.toml").write_text(CAIRN_TOML)
+    if arm == "cairn":
         (where / "docs").mkdir()
         for name in CAIRN_DOCS:
             shutil.copy(docs / name, where / "docs" / name)
         shutil.copytree(docs / "std", where / "docs" / "std")
-    (where / "TASK.md").write_text(task_md(task, language))
+    (where / "TASK.md").write_text(task_md(task, arm))
     return where
+
+
+def plugin_copy(source: Path, where: Path) -> Path:
+    """The plugin arm's own read-only copy of the plugin, beside its sandbox, so no subject can change what another
+    reads."""
+    unlock(where)
+    shutil.copytree(source, where, symlinks=True)
+    for path in [where, *where.rglob("*")]:
+        if not path.is_symlink():
+            path.chmod(path.stat().st_mode & ~0o222)
+    return where
+
+
+def unlock(where: Path) -> None:
+    """Remove a read-only copy made by `plugin_copy`."""
+    if where.exists():
+        for path in [where, *where.rglob("*")]:
+            if not path.is_symlink():
+                path.chmod(path.stat().st_mode | 0o200)
+        shutil.rmtree(where)
 
 
 def digest(where: Path) -> dict[str, str]:
@@ -146,25 +211,42 @@ def digest(where: Path) -> dict[str, str]:
     }
 
 
-def command(limits: dict) -> list[str]:
+def command(limits: dict, plugin: Path | None = None) -> list[str]:
+    """The session's command line. With `plugin`, the plugin arm's: that plugin loaded and readable, its skill and
+    MCP tools allowed, and no other skill or MCP server, which the environment's QUIET settings keep out."""
+    if plugin is None:
+        tools, allowed, isolation = TOOLS, TOOLS.replace(",", " "), ["--strict-mcp-config", "--disable-slash-commands"]
+    else:
+        tools = TOOLS + ",Skill"
+        allowed = tools.replace(",", " ") + " mcp__plugin_cairn_cairn"
+        isolation = ["--plugin-dir", str(plugin), "--add-dir", str(plugin)]
     return [
         "claude", "-p", PROMPT, "--model", limits["model"], "--effort", limits["effort"],
-        "--output-format", "stream-json", "--verbose", "--restricted", "--tools", TOOLS,
-        "--allowedTools", TOOLS.replace(",", " "), "--permission-mode", "dontAsk", "--strict-mcp-config",
-        "--disable-slash-commands", "--no-session-persistence", "--max-turns", str(limits["max_turns"]),
+        "--output-format", "stream-json", "--verbose", "--restricted", "--tools", tools,
+        "--allowedTools", allowed, "--permission-mode", "dontAsk", *isolation,
+        "--no-session-persistence", "--max-turns", str(limits["max_turns"]),
         "--max-budget-usd", str(limits["max_budget_usd"]),
     ]  # fmt: skip
 
 
-def run_subject(task: Task, language: str, where: Path, record_dir: Path, tools: Path, limits: dict) -> dict:
-    """Run one subject to the end in `where`; its transcript and final program go to `record_dir`."""
-    given = digest(sandbox(task, language, where, tools.parent / "docs"))
+def run_subject(
+    task: Task, arm: str, where: Path, record_dir: Path, tools: Path, limits: dict, plugin: Path | None = None
+) -> dict:
+    """Run one subject to the end in `where`; its transcript and final program go to `record_dir`. The plugin arm
+    gets its own copy of the plugin at `plugin`."""
+    language = LANGUAGE[arm]
+    given = digest(sandbox(task, arm, where, tools.parent / "docs"))
+    if arm == "plugin":
+        assert plugin is not None, "the plugin arm needs a place for its copy of the plugin"
+        given.update({f"plugin/{k}": v for k, v in digest(plugin_copy(tools.parent / "plugin", plugin)).items()})
+    else:
+        plugin = None
     record_dir.mkdir(parents=True, exist_ok=True)
     transcript = record_dir / "transcript.jsonl"
     started = time.time()
     with transcript.open("w") as out:
-        proc = subprocess.Popen(command(limits), cwd=where, env=environment(tools), stdout=out, stderr=subprocess.PIPE,
-                                stdin=subprocess.DEVNULL, text=True)  # fmt: skip
+        proc = subprocess.Popen(command(limits, plugin), cwd=where, env=environment(tools), stdout=out,
+                                stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True)  # fmt: skip
         try:
             _, err = proc.communicate(timeout=limits["wall_seconds"])
             killed = False
@@ -178,7 +260,9 @@ def run_subject(task: Task, language: str, where: Path, record_dir: Path, tools:
     result = last_result(transcript)
     return {
         "task": task.name,
+        "arm": arm,
         "language": language,
+        "plugin": str(plugin) if plugin else None,
         "limits": limits,
         "given": given,
         "wall_seconds": round(wall, 1),

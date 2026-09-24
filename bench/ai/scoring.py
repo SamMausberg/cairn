@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import statistics
 from pathlib import Path
@@ -35,6 +36,7 @@ COMPILE = re.compile(
     r"(?<![\w-])(cairn\s+(check|build|run|test)|clang\+\+|g\+\+|cargo\s+(build|run|check|test)|rustc)(?![\w+])"
 )
 FAILED = re.compile(r"error(\[E-?[\w-]+\])?:|error\[|panicked at|Sanitizer|runtime error|Aborted|core dumped")
+REJECTED = re.compile(r'"status":\s*"(rejected|unknown)"')
 
 
 def messages(transcript: Path):
@@ -76,20 +78,24 @@ def tool_calls(transcript: Path) -> list[dict]:
     return [calls[i] for i in order]
 
 
-def audit(transcript: Path, sandbox: str, root: str) -> dict:
+def audit(transcript: Path, sandbox: str, root: str, plugin: str | None = None) -> dict:
     """Every path named outside the sandbox and every network-looking command, with counts of what the subject ran.
 
-    `root` holds every sandbox and the installed CAIRN toolchain: a path under it is flagged unless it is the
-    subject's own sandbox or the toolchain, so one subject reaching another's sandbox is caught. Scratch files a
-    subject makes elsewhere under /tmp are its own and are not flagged."""
+    `root` holds every sandbox, every plugin arm's copy of the plugin and the installed CAIRN toolchain: a path under
+    it is flagged unless it is the subject's own sandbox, its own copy of the plugin or the toolchain, so one subject
+    reaching another's work is caught. A write into the plugin is flagged too. Scratch files a subject makes elsewhere
+    under /tmp are its own and are not flagged. Paths are read with `..` resolved, so the skill's own
+    `${CLAUDE_SKILL_DIR}/../../docs/` names the plugin's documentation."""
     tools = str(Path(root) / "toolchain")
     # The platform keeps a long tool output of the session in a file named after the sandbox and hands the subject
     # its path, so reading it back is the subject reading its own output.
     spilled = str(Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", sandbox)) + "/"
     home = (str(Path.home() / ".cargo"), str(Path.home() / ".rustup"), spilled)
+    own = (sandbox, tools, *([plugin] if plugin else []), *home, *TOOLCHAIN)
 
     def allowed(path: str) -> bool:
-        if path.startswith((sandbox, tools, *home, *TOOLCHAIN)):
+        path = os.path.normpath(path) + ("/" if path.endswith("/") else "")
+        if path.startswith(own):
             return True
         return path.startswith("/tmp/") and not path.startswith(root)
 
@@ -105,7 +111,8 @@ def audit(transcript: Path, sandbox: str, root: str) -> dict:
             for path in paths(text):
                 if not allowed(path) and path not in ("/", "/tmp"):
                     flags.append({"tool": name, "why": "path", "what": path, "command": text[:300]})
-            if ".." in re.findall(r"(?:^|[\s/'\"])(\.\.)(?:/|\s|$)", text):
+            relative = PATH.sub(" ", text)  # a `..` inside an absolute path is judged with the path
+            if ".." in re.findall(r"(?:^|[\s/'\"])(\.\.)(?:/|\s|$)", relative):
                 flags.append({"tool": name, "why": "parent", "what": text[:300]})
             if COMPILE.search(text):
                 compiles += 1
@@ -116,6 +123,12 @@ def audit(transcript: Path, sandbox: str, root: str) -> dict:
                 target = given.get(key)
                 if target and str(target).startswith("/") and not allowed(str(target)):
                     flags.append({"tool": name, "why": "path", "what": target})
+                if target and plugin and name in ("Write", "Edit") and os.path.normpath(str(target)).startswith(plugin):
+                    flags.append({"tool": name, "why": "plugin-write", "what": target})
+            if name.endswith("__check"):  # the plugin's MCP check is a compile run as `cairn check` is
+                compiles += 1
+                if call["error"] or REJECTED.search(call["result"]):
+                    failures += 1
     return {"tool_calls": counts, "compile_runs": compiles, "compile_runs_failed": failures, "flags": flags}
 
 
@@ -137,13 +150,17 @@ def tokens(result: dict | None) -> dict:
 
 def row(record: dict) -> dict:
     result = record.get("result") or {}
+    solved = bool(record.get("verdict", {}).get("passed")) and not record.get("contaminated")
+    failure = "contaminated" if record.get("contaminated") else record.get("verdict", {}).get("reason")
     return {
         "task": record["task"],
+        "arm": record.get("arm", record["language"]),
         "language": record["language"],
         "replicate": record.get("replicate", 1),
         "model": (record.get("limits") or {}).get("model"),
-        "solved": bool(record.get("verdict", {}).get("passed")) and not record.get("contaminated"),
+        "solved": solved,
         "verdict": record.get("verdict", {}).get("reason"),
+        "failure": None if solved else failure,
         "contaminated": bool(record.get("contaminated")),
         "stop": result.get("subtype"),
         "turns": result.get("num_turns"),
@@ -274,15 +291,17 @@ DIAGNOSTIC = {
 }
 
 
-def breakdown(transcript: Path, language: str) -> dict:
+def breakdown(transcript: Path, language: str, plugin: str | None = None) -> dict:
     """Where a subject's calls went, a description and not a preregistered measure: the calls that read the
-    documentation and the characters they returned, the other calls and theirs, and the compiler diagnostics seen."""
+    documentation (the `docs/` of the sandbox or the plugin, the skill and its cards) and the characters they
+    returned, the other calls and theirs, and the compiler diagnostics seen."""
     docs_calls = docs_chars = other_calls = other_chars = 0
     codes: dict[str, int] = {}
     for call in tool_calls(transcript):
         given = call["input"]
         target = str(given.get("file_path") or given.get("path") or given.get("command") or given.get("pattern") or "")
-        if "docs/" in target and not COMPILE.search(target):
+        documentation = "docs/" in target or (plugin is not None and plugin in target) or call["name"] == "Skill"
+        if documentation and not COMPILE.search(target):
             docs_calls += 1
             docs_chars += len(call["result"])
             continue  # the documentation quotes diagnostics of its own

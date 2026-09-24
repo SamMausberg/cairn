@@ -13,6 +13,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import checked
+
 HERE = Path(__file__).resolve().parent
 I64 = (-(2**63), 2**63 - 1)
 U64 = 2**64
@@ -28,6 +30,8 @@ class Task:
     threads: bool  # the program must run work on several threads, and ThreadSanitizer judges it too
     oracle: Callable[[bytes], bytes]
     cases: Callable[[random.Random], list[bytes]]
+    construct: str = ""  # what the judge requires the source to contain: "threads", or "blocks" for GPU-style blocks
+    emulate: bool = False  # CAIRN runs its device work on host threads: `cairn build --emulate`
 
     @property
     def spec(self) -> str:
@@ -525,9 +529,13 @@ VALID: dict[str, Callable[[bytes], bool]] = {
     "dedupe": valid_dedupe,
     "basis_points": valid_basis_points,
     "csv_field": lambda d: 0 <= int(d.partition(b"\n")[0]) <= 100,
+    "sieve": checked.valid_sieve,
+    "block_scan": checked.valid_block_scan,
+    "tally": checked.valid_tally,
 }
 
-TASKS = [
+# The ten tasks of the 1.0 benchmark, in its preregistered order.
+ORIGINAL = [
     Task("histogram", "implement", True, histogram, histogram_cases),
     Task("chunk_sums", "implement", True, chunk_sums, chunk_sums_cases),
     Task("records", "implement", False, records, records_cases),
@@ -539,6 +547,13 @@ TASKS = [
     Task("basis_points", "repair", False, basis_points, basis_points_cases),
     Task("csv_field", "repair", False, csv_field, csv_field_cases),
 ]
+# The 1.1 evaluation's tasks, where CAIRN's checks are the point (checked.py).
+CHECKED = [
+    Task("sieve", "implement", True, checked.sieve, checked.sieve_cases),
+    Task("block_scan", "implement", True, checked.block_scan, checked.block_scan_cases, "blocks", emulate=True),
+    Task("tally", "repair", True, checked.tally, checked.tally_cases),
+]
+TASKS = ORIGINAL + CHECKED
 BY_NAME = {t.name: t for t in TASKS}
 
 
