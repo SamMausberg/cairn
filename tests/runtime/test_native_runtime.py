@@ -177,6 +177,24 @@ def test_io_runtime_is_clean_under_address_and_ub(tmp_path: Path) -> None:
     assert done.returncode == 0 and "Sanitizer" not in done.stderr, done.stdout + done.stderr[-4000:]
 
 
+@pytest.mark.parametrize("compiler", HOSTS)
+def test_the_ring_builds_against_an_io_uring_h_that_does_not_include_the_time_types(compiler: str, tmp_path: Path):
+    """Linux 5.15's io_uring.h, which Ubuntu 22.04 ships, does not include linux/time_types.h, so the ring names
+    __kernel_timespec only because it includes that header itself. Here the installed io_uring.h without that line
+    stands in for the older one."""
+    installed = Path("/usr/include/linux/io_uring.h")
+    if not installed.is_file():
+        pytest.skip("the kernel's io_uring.h is not installed")
+    older = tmp_path / "include/linux/io_uring.h"
+    older.parent.mkdir(parents=True)
+    lines = installed.read_text(encoding="utf-8").splitlines(keepends=True)
+    older.write_text("".join(line for line in lines if line.strip() != "#include <linux/time_types.h>"))
+    probe = tmp_path / "ring.cpp"
+    probe.write_text('#include "cairn_io.hpp"\nint main() { return 0; }\n')
+    line = [compiler, *STRICT, *HOST, f"-I{tmp_path / 'include'}", f"-I{RUNTIME}", "-c", str(probe)]
+    build([*line, "-o", str(tmp_path / "ring.o")])
+
+
 def test_gpu_runtime(gpu_exe: Path) -> None:
     with device_lock():
         done = subprocess.run([str(gpu_exe)], capture_output=True, text=True)

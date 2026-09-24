@@ -13,6 +13,7 @@
 #include <cerrno>
 #include <cstdint>
 #include <cstring>
+#include <linux/time_types.h>  // __kernel_timespec, first: io_uring.h of Linux 5.15 does not include it
 #include <linux/io_uring.h>
 #include <memory>
 #include <new>
