@@ -194,3 +194,39 @@ def test_a_call_through_a_function_value_that_may_reach_an_unjudged_function_is_
     which it had left out, and the check ended on a KeyError, so every later refusal was lost and the fault hidden."""
     record = every(source)
     assert record.get("not_judged", 0) >= 2, record
+
+
+# --- Open: cairn tune chooses an implementation on a validation made under any policy -------------------------------
+
+ZERO = """fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut sum:u64 = 0;
+  for i in 0..n { sum = add_wrap(sum, xs[i]); }
+  return sum;
+}
+
+fn total_zero(n:usize, xs:ro<u64>[n]) -> u64 implements total {
+  return 0;
+}
+"""
+
+
+@pytest.mark.xfail(strict=True, reason="open: cairn tune cites a validation made under any domain and tolerance")
+@pytest.mark.skipif(not shutil.which("clang++"), reason="needs clang++")
+def test_tune_does_not_choose_an_implementation_validated_on_one_point_of_its_domain(tmp_path):
+    """`total_zero` returns 0 for every input. Validated with the domain narrowed to n = 0, it passed, Z3 called it
+    equivalent there, and the history kept it as finite-tested; `cairn tune` then chose `plan total use total_zero;`
+    for n = 1e6, and `--write` would write it. The history's contract digests the domain and the tolerance, but the
+    search cites a validation under any contract."""
+    from cairn.perf.tune import tune
+    from cairn.projects.project import load_project
+    from cairn.verify.validation import validate_project
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/main.cairn").write_text(ZERO)
+    (tmp_path / "cairn.toml").write_text('[project]\nname = "weak"\nsources = ["src/main.cairn"]\n')
+    history = tmp_path / "history"
+    narrow = {"domain": {"extents": {"n": [0, 0]}}, "budget": 4}
+    record = validate_project(load_project(tmp_path), "total_zero", narrow, history=history)
+    assert record["status"] == "passed"
+    answer = tune(ZERO, "total", [{"n": 1e6}], history=history)
+    assert answer["chosen"].get("use") != "total_zero", answer["chosen"]
