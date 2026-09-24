@@ -315,7 +315,7 @@
       "ran_on_gpu": "no",
       "sanitizers": "partial: thread under both compilers, which reports a removed barrier; Compute Sanitizer has not run",
       "measured": "no: predicted only",
-      "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "evidence/v1_0/predict_cooperative/README.md", "tests/soundness/test_cooperative.py"]
+      "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "evidence/v1_0/predict_cooperative/README.md", "tests/soundness/test_cooperative.py", "tests/projects/test_reduction_example.py", "evidence/v1_1/kernels/README.md"]
     },
     {
       "feature": "A cooperative region's finish: `then threads t in T { }`",

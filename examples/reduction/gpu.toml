@@ -1,0 +1,12 @@
+# The device configuration: the same sums with their views @device, and a driver that moves the data across. The suite
+# compiles this for sm_120, reads its SASS and runs it emulated on host threads; it runs on a GPU only under `make gpu`:
+#
+#   cairn run examples/reduction/gpu.toml
+#   cairn run examples/reduction/gpu.toml --emulate --device-target sm_120
+[project]
+name = "reduction-gpu"
+sources = ["src/device_sum.cairn", "src/device_main.cairn"]
+
+[build]
+kind = "exe"
+arch = "baseline"

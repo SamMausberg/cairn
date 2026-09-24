@@ -23,6 +23,7 @@ The test suite builds and runs every project under `examples/`. Start with `hell
 | [agent](#examplesagent) | the fixture behind the edit and repair loop |
 | [implementations](#examplesimplementations) | one prefix sum, three validated implementations, one searched over its parameter, and a scripted agent session |
 | [cooperative](#examplescooperative) | three cooperative kernels on host threads, held to plain loops, with their device build, a searched block shape and pipeline depth, and five refused programs |
+| [reduction](#examplesreduction) | an f32 sum in one launch: wide streaming loads, warp and block sums, a finish, and the same sum through an atomic add |
 | [tensor](#examplestensor) | a transpose through a shared tile laid out three ways, and two tensor-core multiplies written with fragments |
 | [foreign](#examplesforeign) | a vendored C++ histogram and a vendored CUDA kernel, each an implementation of a CAIRN reference |
 | [harness](#examplesharness) | two benchmark problems as CAIRN kernels, with the mappings that package them as submissions |
@@ -470,6 +471,20 @@ cairn tune examples/cooperative/tuned.toml --symbol row_totals --at rows=64,cols
 ```
 
 `refused/` holds one program per refusal of the phase and stage rules: `conflicting_writes.cairn` (`E-COOP-CONFLICT`), `omitted_barrier.cairn` (`E-COOP-UNORDERED`), `premature_reuse.cairn` (`E-COOP-REUSE`), `stage_not_landed.cairn` (`E-STAGE-UNREADY`) and `stage_still_read.cairn` (`E-STAGE-BUSY`). The host runs are clean under ThreadSanitizer with both compilers, and removing a barrier from the emitted C++ makes the sanitizer report a race ([evidence/v1_0/cooperative](../evidence/v1_0/cooperative/README.md)).
+
+## examples/reduction
+
+An f32 sum written as a fast CUDA reduction is, with nothing `unsafe`. Each thread streams its grid-stride share of `x` sixteen bytes at a time with [`load_wide[4]` and `Cache.streaming`](devices.md#wide-loads-and-stores), each warp adds its threads' sums with `reduce + warp`, each block adds its warps' sums through a shared array nobody zeroes, and the region's [finish](devices.md#cooperative-regions) adds the blocks' sums once every block is done. Every addition has an order the program fixes, so the sum is the same on every run with the same grid. `sum_unordered` is the same sum with no partials: each block adds its total into `out[0]` with `atomic_add_unordered`, in the order the blocks finish. `main` runs both on host threads and holds them to a plain loop, exactly on whole numbers whose every partial sum `f32` holds, and within the bound of an `f32` sum in any order on fractions.
+
+```sh
+cairn run examples/reduction
+```
+
+```text
+the one-pass and the atomic sums agree with a plain loop on host threads
+```
+
+`gpu.toml` is the same kernels over `@device` views with a driver that moves the data across. The suite runs it emulated on host threads and compiles it for sm_120, where the sum's loop is one `LDG.E.EF.128` a step with nothing in local memory ([evidence/v1_1/kernels](../evidence/v1_1/kernels/README.md)); it runs on a GPU only under `make gpu`, which has not run it.
 
 ## examples/tensor
 
