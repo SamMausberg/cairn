@@ -17,6 +17,8 @@ Work toward 1.1.0 on `main`, not released. Its records are under `evidence/v1_1/
 
 - A device function whose effects the host cannot observe waits once when it returns, and a library header adds `cq_NAME(stream, ...)`, which queues it on the caller's stream without waiting and can be captured in a CUDA graph (`E-ENQUEUE` names what keeps a function from it).
 - A checked multiply in a device lane tests the product's high half instead of dividing.
+- On an RTX 5070 Ti, a one-launch sum of 2^26 f32 written in safe CAIRN (`examples/reduction`, `sum_unordered`) ran through `cq_NAME` in 344 and 340 us of GPU time against 342 and 344 us for a hand-written one-pass CUDA kernel, where the owner's earlier CAIRN version took 656 to 679 us with a wait after each pass. Layer norm, a cooperative stencil and scalar-load reductions remain 11 to 26 percent slower (`evidence/v1_1/device_perf`).
+- Typed PTX written in a region's body launches; before, it failed on the device.
 - `--emulate` on `build`, `run`, `test` and `validate` judges a device program against its device target and runs its device work on host threads; what the host cannot run as a device would is `E-EMULATE`, and an emulated validation is `finite-tested-emulated`, which `cairn tune` uses only with `--accept-emulated`.
 - `cairn predict` and `cairn tune` price device work on eight packaged cards (A100, H100, H200, B200, L40S, RTX 4090, RTX 5090, RTX 5070 Ti) from NVIDIA's published figures, with `--card NAME`, `--card all` and `cairn cards`. No card has been measured.
 - `cairn tune` ranks candidates by one objective over several sizes, generates them lazily, compiles each distinct kernel once and holds its time budget.
