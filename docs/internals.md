@@ -87,7 +87,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 | `cairn_io.hpp` | the I/O ring over io_uring: fixed berths that own each operation's `Buf`, completion-order collection, a wait that drains before it releases |
 | `cairn_fragment.hpp` | tensor-core fragments: on the host every thread of a warp holding each whole and storing its lane's elements, on the device WMMA and `mma.sync` with `ldmatrix` |
 | `cairn_layout.hpp` | a layout's coordinate checked against its extent, and CuTe's swizzle, on the host and in a device lane alike |
-| `cairn_access.hpp` | wide loads and stores: their two guards, then one access with the cache operator a hint names on the device, and K plain accesses on the host |
+| `cairn_access.hpp` | wide loads and stores with their two guards and the cache operator a hint names, and atomic updates of one element: one instruction on the device, K plain accesses or a `std::atomic_ref` on the host |
 | `cairn_float.hpp` | the storage floats `f16 bf16 f8e4m3 f8e5m2`: one integer routine that rounds on the host and in a device lane alike, `quantize` and `quantize_stochastic` |
 | `cairn_tensor.hpp` | `mma_unordered`: the reference loop on the host, and on the device 64 x 64 tensor-core tiles over two shared-memory stages, written once against the operations a tile is given so a host test runs every thread's phases |
 | `cairn_coop.hpp` | cooperative regions: on the host each block's threads as real threads at a `std::barrier`, two blocks at a time, with warp exchanges through per-warp slots; on the device one launch with static shared memory, `__syncthreads` and `__shfl_*_sync` |

@@ -98,6 +98,7 @@ Each card states one part of the language and the codes of its rules. A host sen
 - [effects](cards/effects.md): effects extern pure unsafe
 - [parallel](cards/parallel.md): device parallel pinned reduce transfer unified
 - [wide](cards/wide.md): Cache load_wide store_wide
+- [atomics](cards/atomics.md): atomic_add_unordered atomic_add_wrap atomic_and atomic_cas atomic_max atomic_min atomic_or atomic_xor
 - [cooperative](cards/cooperative.md): barrier pipeline shuffle shuffle_down shuffle_xor warp
 - [tasks](cards/tasks.md): Atomic Group Mutex collect spawn wait
 - [rings](cards/rings.md): IoRing

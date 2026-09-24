@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import block_run, execution, footprints, fragments, phases, pipelines, wide
+from . import atomics, block_run, execution, footprints, fragments, phases, pipelines, wide
 from .constants import constant
 from .effects import DEVICE_SAFE, LANE_SAFE
 from .footprints import natural
@@ -74,7 +74,7 @@ ALIGN = 128  # where each shared array starts: tensor-core fragments load from 3
 SHUFFLES = {"shuffle", "shuffle_xor", "shuffle_down"}
 SHARED_STATE = {"Atomic", "Mutex"}  # what threads handed the same one may still see differently
 # The primitives that write an argument; every other one takes its arguments by value or ro (builtins.TABLE).
-WRITING = {"take", "swap", "transfer", "mma_store", "store_wide"}
+WRITING = {"take", "swap", "transfer", "mma_store", "store_wide", *atomics.NAMES}
 
 
 # Who reaches a statement together ---------------------------------------------------------------------------------
@@ -111,8 +111,8 @@ class Reach:
             return self.values.get(e.val, (BLOCK, None))
         if self.warp_wide(e):
             return WARP, e
-        if e.tag == "call" and (e.val in SHUFFLES or self.unshared(e)):
-            return THREAD, e
+        if e.tag == "call" and (e.val in SHUFFLES or e.val in atomics.NAMES or self.unshared(e)):
+            return THREAD, e  # another thread's value, or an element's old value, which each thread sees apart
         if e.tag == "index" and root(e).tag == "name" and root(e).val in self.private:
             return THREAD, e
         if e.tag == "lambda":

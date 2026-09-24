@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .atomics import NAMES as ATOMICS
 from .tree import Expr, Function, Stmt, fail, root
 
 if TYPE_CHECKING:
@@ -16,8 +17,8 @@ if TYPE_CHECKING:
 PURE = {"trap", "diverge", "local_read", "local_write", "stack_storage", "zero_init", "ffi_precondition"}
 LANE_SAFE = PURE | {"alloc", "free", "atomic", "lock"}  # What a host lane, and whatever it calls, may do.
 # What a device lane, and whatever it calls, may do: typed PTX (compiler/machine.py) whose declared effects stay
-# within this set and reads and writes the lane rule judged.
-DEVICE_SAFE = PURE | {"asm:ptx", "fence"}
+# within this set, reads and writes the lane rule judged, and atomic updates of one element (compiler/atomics.py).
+DEVICE_SAFE = PURE | {"asm:ptx", "fence", "atomic"}
 SYNCHRONIZATION = {"fence", "barrier"}  # declared by typed assembly, and trusted as written
 EFFECTS = LANE_SAFE | SYNCHRONIZATION | {"gpu_alloc", "gpu_free", "indirect_call", "dispatch", "spawn", "join", "io"}
 EFFECTS |= {"mmio", "asm"}
@@ -128,6 +129,9 @@ def audit(c: Checker, effects: dict[str, set[str]], names: set[str] | None = Non
             return changed, {"indirect_call"}
         if kind == "builtin" and call.val in {"take", "swap"}:
             return changed | set(named), set()
+        if kind == "builtin" and call.val in ATOMICS and call.args and root(call.args[0]).tag == "name":
+            updated = root(call.args[0]).val  # an atomic update of one element (atomics.py)
+            return changed | {updated}, {"atomic", "write:" + updated}
         machine = kind == "builtin" and call.val in {"transfer", "mmio_read", "mmio_write", "asm"}
         return changed, {"atomic"} if kind == "shared" else {"io"} if machine else set()
 

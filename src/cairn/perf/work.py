@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..compiler import chunks, fusion, wide
+from ..compiler import atomics, chunks, fusion, wide
 from ..compiler.builtins import WRAPPING
 from ..compiler.tree import FLOAT, INT, NUMERIC, Expr, Function, Stmt, Type, is_view
 from .cooperative_work import region
@@ -413,6 +413,9 @@ class Counter:
         name = e.val
         if kind == "builtin" and isinstance(ref[-1], wide.Wide):
             self.wide(e, ref[-1], at)
+        elif kind == "builtin" and name in atomics.NAMES:
+            at.work.op("atomic", at.times)
+            self.note(f"line {e.line}: an atomic update costs what its contention costs")
         elif kind == "builtin":
             if name in NUMERIC:
                 at.work.op("convert" if e.established or name in FLOAT else "convert_guard", at.times)

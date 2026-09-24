@@ -30,7 +30,7 @@ from ..projects.toolchain import REMARKS, find, flags
 from ..projects.toolchain import version as compiler_version
 
 GUARDS = {  # The checker's name for each guard kind, and the runtime calls that are that guard in emitted C++.
-    "bounds": ("cr::at(", "cr::part("),
+    "bounds": ("cr::at(", "cr::part(", "cr::atomic::"),
     "overflow": ("cr::add<", "cr::sub<", "cr::mul<"),
     "division": ("cr::divide<", "cr::remainder<"),
     "conversion": ("cr::convert<", "cr::truncate<"),

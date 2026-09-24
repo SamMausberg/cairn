@@ -160,7 +160,7 @@ fn shift(g:usize, out:rw<u64>[g]) {
 }
 ```
 
-An array from outside the region is shared by every block, and no barrier orders two blocks. Each of its elements may be written by at most one thread of one block, and read by another only if nobody writes it (`E-COOP-GLOBAL`). The checker shows this when the index is a sum of the block, thread and loop names, each times a weight larger than all the lighter terms add up to. `b * 256 + t` is such a sum, and so is the transpose's `(bx * 32 + ty + 8 * k) * h + by * 32 + tx` when `h` is `32 * gy`. A condition on the index, `if col < h`, counts toward that bound, when the names it sums all count up or all count down. A loop whose range moves with another name, such as `for c in l..l + 2`, is bounded by nothing. A thread may read the elements it writes, as `c += ...` does, when the read's index is the write's, in the same loop or in another over the same range, under the write's conditions.
+An array from outside the region is shared by every block, and no barrier orders two blocks. Each of its elements may be written by at most one thread of one block, and read by another only if nobody writes it (`E-COOP-GLOBAL`), [atomic updates](concurrency.md#atomics-and-mutexes) aside: any thread may update any element atomically, and an array so updated is touched no other way in the region (`E-ATOMIC-MIXED`). The checker shows this when the index is a sum of the block, thread and loop names, each times a weight larger than all the lighter terms add up to. `b * 256 + t` is such a sum, and so is the transpose's `(bx * 32 + ty + 8 * k) * h + by * 32 + tx` when `h` is `32 * gy`. A condition on the index, `if col < h`, counts toward that bound, when the names it sums all count up or all count down. A loop whose range moves with another name, such as `for c in l..l + 2`, is bounded by nothing. A thread may read the elements it writes, as `c += ...` does, when the read's index is the write's, in the same loop or in another over the same range, under the write's conditions.
 
 ```cairn
 // out is x transposed: x has 32 * gy rows of 32 * gx elements.
@@ -311,8 +311,8 @@ Fast CUDA kernels lean on a known set of features. The table says how a CAIRN pr
 | Feature | CUDA | CAIRN | Checked |
 |---|---|---|---|
 | 16-byte loads and stores with a cache hint | `float4`, `__ldg`, `__ldcg`, `__ldcs`, `__stcs` | safe: [`load_wide[K]` and `store_wide`](#wide-loads-and-stores) with a `Cache` hint, in any code, and `plan f { vector 4; }` over `x[i]` in a device `parallel` region | accepted, E-WIDE |
-| Atomics on device memory | `atomicAdd`, `atomicMax`, `atomicCAS` | foreign: an `Atomic` is a host object, and typed PTX that writes an array is a whole-array write a lane may not make | E-PLACEMENT, E-PARALLEL-RACE |
-| Atomics on shared memory | `atomicAdd` on `__shared__` | foreign: typed PTX writes the array in every thread of a phase | E-COOP-CONFLICT |
+| Atomics on device memory | `atomicAdd`, `atomicMax`, `atomicCAS` | safe: [`atomic_add_wrap(x[i], v)`](concurrency.md#atomics-and-mutexes) and its kin, from any lane or thread, never beside a plain access of the array in one region | accepted, E-ATOMIC-MIXED |
+| Atomics on shared memory | `atomicAdd` on `__shared__` | safe: the same updates on a shared array, apart from its plain accesses by a barrier | accepted, E-ATOMIC-MIXED |
 | A last block that finishes, grid-wide sync | `__threadfence` and an atomic ticket, `grid.sync()` | foreign: two regions are two launches | accepted |
 | Shared memory nobody zeroes | `__shared__ float s[256];` | not written: a shared array is `= zeroed`, and the row says `zero_init` | E-PARSE |
 | Warp vote and ballot | `__ballot_sync`, `__any_sync` | safe as `reduce \| warp yield` of one bit a lane, five shuffles where CUDA takes one vote | accepted |
@@ -330,7 +330,7 @@ Fast CUDA kernels lean on a known set of features. The table says how a CAIRN pr
 | `wgmma`, TMA, clusters, distributed shared memory | `wgmma.mma_async`, `cp.async.bulk.tensor`, `__cluster_dims__` | foreign, on a target that has the feature; `TmemAcc` is refused where it is not lowered | E-TARGET-FEATURE |
 | Block-wide cooperative groups | `this_thread_block().sync()`, `tiled_partition<32>` | safe: `barrier;` and the warp operations | accepted |
 | Memory fences, `__nanosleep` | `__threadfence()`, `__nanosleep(ns)` | typed PTX, a fence declared as `effects(fence)` | accepted |
-| Persistent kernels | one block an SM and a work loop | safe with a static schedule; a work counter shared by blocks is foreign | accepted, E-PLACEMENT |
+| Persistent kernels | one block an SM and a work loop | safe with a static schedule, and a work counter is an atomic update; writes at the index a counter hands out are foreign, since no rule shows them one writer | accepted, E-COOP-GLOBAL |
 | Streams | `cudaStream_t`, events | safe: `spawn parallel ... after t` and `spawn transfer` queue work on a stream of their own; a cooperative region is not queued | accepted, E-PARSE |
 | CUDA graphs | `cudaGraph_t` | foreign: host code in a vendored `.cu` | none |
 

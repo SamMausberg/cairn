@@ -270,6 +270,18 @@
       "records": ["tests/soundness/test_wide.py"]
     },
     {
+      "feature": "Atomic updates of one element in lanes and threads",
+      "side": "device",
+      "docs": "concurrency.md#atomics-and-mutexes",
+      "implemented": "yes",
+      "compiles": "yes: sm_120, to RED, ATOMG and ATOMS",
+      "ran_on_cpu": "yes: on host lanes and host threads under both compilers, and emulated",
+      "ran_on_gpu": "no",
+      "sanitizers": "partial: thread, which reports an update made plain, and address and undefined under clang++; Compute Sanitizer has not run",
+      "measured": "no",
+      "records": ["tests/soundness/test_atomics.py"]
+    },
+    {
       "feature": "Cooperative regions: shared arrays, barriers and warp operations",
       "side": "device",
       "docs": "devices.md#cooperative-regions",
