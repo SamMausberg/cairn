@@ -112,13 +112,14 @@ Bazel rules are in [bazel/](bazel/), with an example in [examples/bazel](example
 
 ## Demos
 
-Three demos, each one command from a fresh checkout; `tests/projects/test_demos.py` runs them.
+Four demos, each one command from a fresh checkout; `tests/projects/test_demos.py` runs them.
 
 | Demo | What you see | Command |
 |---|---|---|
 | [repair](demos/repair/README.md) | An agent fixes a bug through the edit host. The host refuses a debug print (`E-EFFECT-EXPANSION`) and a tidy-up that changes behaviour (`E-PRESERVE`, with the input `x = 0, lo = 16, hi = 12`). `cairn diff` then reports the fixed function as changed at `us = 100`, the tidied one as SMT-equivalent, and a major version bump. | `make demo-repair` |
 | [numeric](demos/numeric/README.md) | A 1024 x 1024 heat-plate sweep written once runs on host threads and as CUDA lanes. The host result stays within 0.0000148 of an f64 reference, against a stated bound of 0.0048, and has the same bits as a plain C++ loop. The device half compiles for sm_120 and has not run yet. | `make demo-numeric` |
 | [visual](demos/visual/README.md) | An agent asks what a program draws, reads in the layout record that a colour bar covers the plot, moves it, and gets back the new frames and the effect rows the edit changed (none). | `make demo-visual` |
+| [implement](demos/implement/README.md) | An agent writes faster implementations of a sum of squares through `cairn mcp`. The host refuses a looser tolerance (`E-TOLERANCE`), and validation refuses a candidate that drops the tail, shrunk to `n = 5` (`E-VALIDATION`). The corrected one and four instances of a parameterized one validate, and `cairn tune` times them on this host, writes the fastest, and labels each line of the difference. | `make demo-implement` |
 
 ![the visual demo's plate viewer after 5000 sweeps](demos/visual/frames/after-4.png)
 
@@ -189,7 +190,7 @@ src/cairn/     compiler/ runtime/ std/ verify/ agent/ editor/ perf/ projects/ te
 .claude-plugin/ the Claude Code plugin and marketplace manifests
 skills/        cairn/: the Agent Skill, generated from the compiler's rule cards
 proofs/        Lean 4: collector certificates, ownership and lease calculus, lane pool, guard elision, layouts, cooperative regions
-demos/         the three demos above
+demos/         the four demos above
 examples/      runnable projects (hello/ systems/ apps/ cooperative/ tensor/ implementations/ foreign/ ...) and tool inputs
 bazel/         rules_cairn: Bazel rules for CAIRN libraries, binaries and tests
 tests/         the suite: language/ soundness/ verification/ projects/ runtime/ tooling/ agent/

@@ -31,7 +31,7 @@ The first release. The sections below it are the internal milestones that came b
 - `skills/cairn/` is an Agent Skill generated from the compiler's rule cards, fixes and commands, and the repository is a Claude Code plugin and marketplace (`claude plugin marketplace add SamMausberg/cairn`): the skill, `cairn` on `PATH`, `cairn lsp` for diagnostics after every edit, and `cairn mcp`. In a six-session smoke comparison, run before `cairn mcp` existed, sessions with the plugin cost 0.51 times as much as sessions without it and every session solved its task (`evidence/v1_0/skill`).
 - `cairn mcp` serves check, state and the edit, plan and implementation hosts over MCP, and writes an admitted change back to its files only while they are unchanged and inside the served directory (`E-SESSION`).
 - Every new project has an `AGENTS.md` and a `CLAUDE.md` that imports it.
-- A rename follows `implements` and `plan f use g`.
+- A rename follows `implements` and `plan f use g`, `cairn fmt` skips the `.cairn` history directory, and an implementation a session writes back stays formatted.
 
 ### Language
 
@@ -70,7 +70,7 @@ The first release. The sections below it are the internal milestones that came b
 ### Documentation and repository
 
 - The documentation is fourteen files under `docs/`, device programming now a chapter of its own, each written to one style and checked by the suite: every example compiles, every refusal has its code, every documented code, command and option exists in the source, and every relative link resolves.
-- `demos/` holds one-command demos of an agent repair, a CPU and GPU numeric workload and a visual app.
+- `demos/` holds one-command demos of an agent repair, a CPU and GPU numeric workload, a visual app, and the implementation loop (`make demo-implement`): a refused tolerance, a refused candidate with its shrunk input, validated implementations and a timed `cairn tune`.
 - Every tracked file is at most 800 lines; the parser, the checker's rule groups, the device layer and the agent tools are split by responsibility, and `AGENTS.md` names the owner of each file.
 - CI runs lint, the suite in four shards and the proofs on every push.
 

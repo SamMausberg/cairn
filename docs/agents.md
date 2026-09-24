@@ -178,7 +178,7 @@ A function's implementations are not part of its source. A candidate that select
 
 ## Implementation sessions
 
-An implementation session (`cairn.implementation/1`, `agent/implementations.py`) opens on one reference and admits new [implementations](abstractions.md#implementations) of it, each validated against the reference before the host keeps it, so a faster algorithm cannot change what the function means.
+An implementation session (`cairn.implementation/1`, `agent/implementations.py`) opens on one reference and admits new [implementations](abstractions.md#implementations) of it, each validated against the reference before the host keeps it, so a faster algorithm cannot change what the function means. [demos/implement](../demos/implement/README.md) runs one end to end through `cairn mcp`.
 
 ```python
 from pathlib import Path
