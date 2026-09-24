@@ -25,7 +25,7 @@ from . import (
 from .builtins import SHARED, TABLE
 from .checking import Checker
 from .expressions import COMPARISONS
-from .tree import CPP, FLOAT, STORAGE, VOID, Expr, Function, Program, Stmt, Type, fail, is_view, nested
+from .tree import CPP, FLOAT, STORAGE, VOID, Expr, Function, Program, Stmt, Type, fail, is_view, local, nested
 
 RUNTIME_FILES = {
     p.name: p.read_text(encoding="utf-8") for p in sorted((Path(__file__).parents[1] / "runtime").glob("*.hpp"))
@@ -51,10 +51,6 @@ def demangled(symbol: str, names: Collection[str]) -> str | None:
         if found in names:
             return found
     return None
-
-
-def local(name: str) -> str:
-    return name.rsplit(".", 1)[-1]
 
 
 def bare(condition: str) -> str:

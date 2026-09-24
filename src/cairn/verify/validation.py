@@ -473,7 +473,7 @@ def replay(source: str, record: dict[str, Any], cxx: str = "clang++", libraries:
 
 def local(name: str | None) -> str | None:
     """A function's name without its module; an instance keeps its values."""
-    from ..compiler.implementations import local as named
+    from ..compiler.tree import local as named
 
     return named(name) if name else None
 

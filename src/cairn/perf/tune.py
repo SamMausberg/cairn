@@ -21,6 +21,7 @@ from typing import Any
 
 from ..agent import history as kept
 from ..compiler.cairnc import compile_program
+from ..compiler.tree import local
 from ..projects.target import DeviceTarget, resolve
 from . import model
 from .counts import Cost
@@ -98,10 +99,6 @@ def validations(source: str, name: str, receipts: dict[str, Any], alternatives: 
         if found:
             out[g] = {"evidence": found[-1]["detail"].get("evidence"), "record": found[-1]["id"]}
     return out
-
-
-def local(name: str) -> str:
-    return name.rsplit(".", 1)[-1]
 
 
 def placed(r: Any) -> str:

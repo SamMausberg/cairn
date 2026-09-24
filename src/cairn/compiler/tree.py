@@ -308,6 +308,12 @@ def nested(s: Stmt) -> list[Stmt]:
     return [*s.body, *s.other, *(x for arm in s.arms for x in arm.body)]
 
 
+def local(name: str) -> str:
+    """A name without its module, an instance's values kept: `m.total_by[8]` is `total_by[8]`."""
+    base, bracket, rest = name.partition("[")
+    return base.rsplit(".", 1)[-1] + bracket + rest
+
+
 def root(e: Expr) -> Expr:
     while e.tag in {"field", "index", "slice"}:
         e = e.args[0]

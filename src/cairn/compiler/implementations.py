@@ -61,6 +61,7 @@ from .tree import (
     clone,
     fail,
     is_view,
+    local,
     nested,
 )
 
@@ -128,12 +129,6 @@ def parameterized(c: Checker, f: Function) -> None:
 def instance(template: str, values: tuple[int, ...] | list[int]) -> str:
     """The name of an instance, as a generic instance is named: `total_by[8]`, `tiled[4, 2]`."""
     return f"{template}[{', '.join(str(v) for v in values)}]"
-
-
-def local(name: str) -> str:
-    """A name without its module, an instance's values kept: `m.total_by[8]` is `total_by[8]`."""
-    base, bracket, rest = name.partition("[")
-    return base.rsplit(".", 1)[-1] + bracket + rest
 
 
 def listed(f: Function) -> dict[str, tuple[int, ...]]:

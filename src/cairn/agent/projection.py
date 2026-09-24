@@ -15,15 +15,12 @@ from ..compiler.expansion import declared, derive
 from ..compiler.lexing import lex
 from ..compiler.modules import link
 from ..compiler.syntax import ARM_STATEMENTS
+from ..compiler.tree import local
 
 
 def generics(params: list[tuple[str, str]]) -> str:
     shown = ", ".join(n if kind == "type" else f"{n}:{kind.replace('+', ' + ')}" for n, kind in params)
     return f"[{shown}]" if params else ""
-
-
-def local(name: str) -> str:
-    return name.rsplit(".", 1)[-1]
 
 
 def signature(f: Function) -> str:
