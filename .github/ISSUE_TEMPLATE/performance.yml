@@ -1,0 +1,44 @@
+name: "Performance"
+description: "A function is slower than it should be, or a prediction disagrees with a measurement."
+labels:
+  - "kind:performance"
+body:
+  - type: textarea
+    id: function
+    attributes:
+      label: "The function"
+      description: "The program, or the smallest part of it that still shows the cost, and the symbol."
+      render: "cairn"
+    validations:
+      required: true
+  - type: textarea
+    id: predict
+    attributes:
+      label: "What cairn predict says"
+      description: "cairn predict PATH --symbol f --at n=... --format json"
+      render: "json"
+    validations:
+      required: true
+  - type: textarea
+    id: explain
+    attributes:
+      label: "What cairn explain says"
+      description: "cairn explain PATH --symbol f"
+      render: "text"
+    validations:
+      required: true
+  - type: textarea
+    id: machine
+    attributes:
+      label: "The machine"
+      description: "CPU, GPU and driver if device code is involved, and the output of cairn doctor --format json."
+      render: "json"
+    validations:
+      required: true
+  - type: textarea
+    id: measured
+    attributes:
+      label: "What was measured, and how"
+      description: "The command, the sizes, how many runs and which statistic, the times, and what you compared against (a C++ or CUDA version, an earlier commit)."
+    validations:
+      required: true

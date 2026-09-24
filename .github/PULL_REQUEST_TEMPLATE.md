@@ -1,13 +1,7 @@
-What is now true, in one sentence:
+What changes and why:
 
-How it is checked (commands and what they reported):
+How it was checked (the commands and what they reported):
 
-For a language change, each of these is in this pull request ([AGENTS.md](../AGENTS.md) says why):
+What a reviewer should look at (a rule it touches, generated code it changes, evidence it adds or loses, the targets compiled or run):
 
-- [ ] the elaboration and failure policy
-- [ ] the effects it adds
-- [ ] a rejection test naming its diagnostic code
-- [ ] a behaviour test run natively under g++ and clang++ with the sanitizer that bites
-- [ ] a rule card in `agent/teaching.py`
-- [ ] the reference entry and `docs/project/capabilities.json`
-- [ ] the canonical projection round-tripping to identical native code
+Rules: the title is one plain sentence saying what is now true, since it becomes the squash commit's subject. Three to six plain lines above, no emojis, no attribution trailers, tests and docs in the same change, CI green. A language change carries everything [AGENTS.md](../AGENTS.md) lists for one.

@@ -1,0 +1,45 @@
+name: "Bug"
+description: "The compiler, a tool or the runtime does something the documentation says it should not."
+labels:
+  - "kind:bug"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An accepted program that races, aliases, uses a moved owner or skips a guard is a soundness bug. Report it privately as [SECURITY.md](https://github.com/SamMausberg/cairn/blob/main/SECURITY.md) says, not here.
+  - type: textarea
+    id: program
+    attributes:
+      label: "The smallest program that shows it"
+      render: "cairn"
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: "The command you ran"
+      placeholder: "cairn run bug.cairn --format json"
+    validations:
+      required: true
+  - type: textarea
+    id: record
+    attributes:
+      label: "What it printed"
+      description: "With `--format json` the command prints its whole record. Paste all of it."
+      render: "json"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "What the documentation says should happen"
+      description: "Link the section of docs/ that says so."
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "The output of cairn doctor --format json"
+      render: "json"
+    validations:
+      required: true

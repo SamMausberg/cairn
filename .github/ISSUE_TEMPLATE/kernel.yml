@@ -1,0 +1,34 @@
+name: "Kernel or benchmark request"
+description: "A problem you want written in CAIRN, with the reference that says what the right answer is."
+labels:
+  - "kind:kernel"
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: "The problem"
+      description: "What it computes, the element types and the sizes that matter."
+    validations:
+      required: true
+  - type: textarea
+    id: reference
+    attributes:
+      label: "The reference"
+      description: "A program, a library call or a formula that defines the right answer, and the tolerance a float result is held to."
+    validations:
+      required: true
+  - type: input
+    id: target
+    attributes:
+      label: "The target"
+      description: "The GPU and its sm_NN target, or host only."
+      placeholder: "sm_90 on an H100"
+    validations:
+      required: true
+  - type: input
+    id: leaderboard
+    attributes:
+      label: "The leaderboard or benchmark suite, if any"
+      description: "A link, and the entry it would be compared with."
+    validations:
+      required: false

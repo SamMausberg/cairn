@@ -1,0 +1,34 @@
+name: "Language change"
+description: "A new form, rule or library function."
+labels:
+  - "kind:language"
+body:
+  - type: textarea
+    id: program
+    attributes:
+      label: "What a program can do with it that it cannot do now"
+      description: "A short program that uses it."
+      render: "cairn"
+    validations:
+      required: true
+  - type: textarea
+    id: elaboration
+    attributes:
+      label: "The elaboration"
+      description: "What it means in terms of forms the language already has, and when it is refused."
+    validations:
+      required: true
+  - type: textarea
+    id: cost
+    attributes:
+      label: "The cost boundary"
+      description: "Which effects it adds to a row, and what it allocates, waits on or synchronizes."
+    validations:
+      required: true
+  - type: textarea
+    id: refusal
+    attributes:
+      label: "The refusal"
+      description: "The diagnostic code a wrong use is refused with, and an example of that use."
+    validations:
+      required: true

@@ -226,7 +226,7 @@ make wheel audit
 
 Tag the commit the evidence names with the version the ten places state, and push `main` and the tag; a release that does not pass every gate on a committed tree is not tagged. A release claims only what its evidence shows: a speed, a GPU advantage or an AI result needs an executed run recorded under `evidence/`, with losses beside wins. `docs/project/capabilities.json` and [roadmap.md](roadmap.md) are rewritten at each release.
 
-`tools/release/publish_private.py`, the one scripted path that touches a remote, creates a new private personal repository and pushes `main` to it:
+`tools/release/publish_private.py`, one of the two scripted paths that touch a remote, creates a new private personal repository and pushes `main` to it:
 
 ```sh
 python tools/release/publish_private.py SamMausberg/cairn             # local-only dry run
@@ -234,3 +234,5 @@ python tools/release/publish_private.py SamMausberg/cairn --execute   # needs an
 ```
 
 It first runs `tools/release/audit_repository.py`, which scans every committed blob for credential patterns and binaries (not an exhaustive detector). It then requires a clean tree with no remote, creates the repository, checks it is private before and after a non-force push, and registers `origin`; it never asks for a token, deletes or changes visibility. Its tests fake every remote call, so they cannot show that a real account accepts the push.
+
+`tools/release/sync_labels.py` is the other. It makes the repository's labels the ones [.github/labels.yml](../.github/labels.yml) names, creating or updating each with `gh label create --force`, and never deletes one. `--dry-run` prints the commands and runs none; under a test or in CI it refuses to call `gh`. Its test runs it against a fake `gh` that must never be called, so it cannot show that GitHub accepts the labels.
