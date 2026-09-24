@@ -52,7 +52,7 @@ struct Tally { above:u64; sum:u64; top:u64; }
 
 // The tally of values[lo..hi]: the values above t, their sum, and the largest value.
 fn tally_chunk(n:usize, values:ro<u64>[n], lo:usize, hi:usize, t:u64) -> Tally {
-  let mut total = Tally(0, 0, 0);  // each task's own
+  let mut total = Tally(0, 0, 0); // each task's own
   for i in lo..hi {
     if values[i] > t {
       total.above += 1;
@@ -75,12 +75,17 @@ fn main() -> i32 {
     let v = next_u64(inp);
     values[i] = v;
   }
-  let mut total = Tally(0, 0, 0);  // shared by every task
+  let mut total = Tally(0, 0, 0); // shared by every task
   let workers = Group[Tally](k);
   for j in 0..k {
     spawn tally_chunk(values, n * j / k, n * (j + 1) / k, t) into workers;
   }
-  for _ in 0..k { let part = collect(workers); total = Tally(total.above + part.above, add_wrap(total.sum, part.sum), max(total.top, part.top)); }
+  for _ in 0..k {
+    let part = collect(workers);
+    total = Tally(
+      total.above + part.above, add_wrap(total.sum, part.sum), max(total.top, part.top)
+    );
+  }
   wait(workers);
   println("above ", total.above);
   println("sum ", total.sum);

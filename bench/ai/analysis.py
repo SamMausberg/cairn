@@ -57,8 +57,10 @@ def interval(values: list[float]) -> list[float]:
     return [pick(0.025), pick(0.975)]
 
 
-def rounded(x: float, places: int = 4) -> float | str:
-    return "inf" if math.isinf(x) else ("nan" if math.isnan(x) else round(x, places))
+def rounded(x: float, places: int = 4) -> float | int | str:
+    if math.isinf(x) or math.isnan(x):
+        return "inf" if math.isinf(x) else "nan"
+    return round(x) if places == 0 else round(x, places)
 
 
 def bootstrap(table: list[dict[str, dict]], arms: tuple[str, ...]) -> dict:
@@ -89,8 +91,9 @@ def bootstrap(table: list[dict[str, dict]], arms: tuple[str, ...]) -> dict:
         chosen = [table[rng.randrange(len(table))] for _ in table]
         for name, value in estimates(chosen).items():
             record(name, value)
-    return {name: {"estimate": rounded(point[name]), "interval_95": [rounded(x) for x in interval(draws[name])]}
-            for name in point}  # fmt: skip
+    places = lambda name: 0 if name.endswith(".tokens_per_solved") else 4  # noqa: E731
+    return {name: {"estimate": rounded(point[name], places(name)),
+                   "interval_95": [rounded(x, places(name)) for x in interval(draws[name])]} for name in point}  # fmt: skip
 
 
 def safety(rows: list[dict], arms: tuple[str, ...]) -> dict:
@@ -148,7 +151,7 @@ def markdown(result: dict, rows: list[dict], arms: tuple[str, ...]) -> str:
     spread of turns and time, the safety failures, and every subject's row."""
     b = result["bootstrap"]
     show = lambda name: f"{b[name]['estimate']} [{b[name]['interval_95'][0]}, {b[name]['interval_95'][1]}]"  # noqa: E731
-    lines = [f"{result['cells']} cells, {result['resamples']} resamples of the cells, seed {result['seed']}.", "",
+    lines = [f"Cells: {result['cells']}. Resamples of the cells: {result['resamples']}, seed {result['seed']}.", "",
              "| arm | subjects | solved | solve rate [95%] | USD per solved task [95%] | tokens per solved task [95%] |",
              "|---|---|---|---|---|---|"]  # fmt: skip
     for arm in arms:

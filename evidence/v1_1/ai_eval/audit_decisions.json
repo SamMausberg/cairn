@@ -1,0 +1,12 @@
+{
+ "pilot/r1/block_scan/plugin": {
+  "contaminated": false,
+  "flag": "/tmp/cairn-aieval-pilot",
+  "reason": "the right side of `ls <its own plugin>/skills/cairn/../../docs/ || find /tmp/cairn-aieval-pilot -maxdepth 4 -iname docs`; the ls listed its own plugin's docs and succeeded, so the find never ran"
+ },
+ "pilot/r1/block_scan/cpp": {
+  "contaminated": false,
+  "flag": "/sys/fs/cgroup/cpu.max, /sys/fs/cgroup/cpu/cpu.cfs_quota_us, /sys/fs/cgroup/cpu/cpu.cfs_period_us",
+  "reason": "the machine's CPU limits, which the subject read while it chose how many threads to start; system settings that hold nothing of the task"
+ }
+}

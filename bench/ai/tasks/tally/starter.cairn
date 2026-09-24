@@ -73,7 +73,7 @@ fn main() -> i32 {
     let v = next_u64(inp);
     values[i] = v;
   }
-  let mut total = Tally(0, 0, 0);  // shared by every task
+  let mut total = Tally(0, 0, 0); // shared by every task
   let workers = Group[void](k);
   for j in 0..k {
     spawn tally_chunk(values, n * j / k, n * (j + 1) / k, t, total) into workers;

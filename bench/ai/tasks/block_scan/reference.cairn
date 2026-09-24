@@ -50,7 +50,9 @@ fn next_u64(inp:rw<Input>) -> u64 {
 
 // Each block of 256 threads scans its 256 values in shared memory, in eight steps with a barrier on either side
 // of every read of another thread's element; thread 0 keeps the block's total.
-fn scan_blocks(n:usize, x:ro<u64>[n]@device, out:rw<u64>[n]@device, g:usize, totals:rw<u64>[g]@device) {
+fn scan_blocks(
+  n:usize, x:ro<u64>[n]@device, out:rw<u64>[n]@device, g:usize, totals:rw<u64>[g]@device
+) {
   blocks b in g threads t in 256 {
     shared s:u64[256] = zeroed;
     let i = b * 256 + t;
@@ -60,9 +62,9 @@ fn scan_blocks(n:usize, x:ro<u64>[n]@device, out:rw<u64>[n]@device, g:usize, tot
       let d:usize = shl_wrap(1, k);
       let mut v:u64 = 0;
       if t >= d { v = s[t - d]; }
-      barrier;                                     // every thread has read before any writes
+      barrier; // every thread has read before any writes
       s[t] = s[t] + v;
-      barrier;                                     // every thread has written before the next step reads
+      barrier; // every thread has written before the next step reads
     }
     if i < n { out[i] = s[t]; }
     if t == 0 { totals[b] = s[255]; }

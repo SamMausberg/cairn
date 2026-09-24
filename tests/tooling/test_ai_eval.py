@@ -91,6 +91,18 @@ def test_the_plugin_session_loads_only_the_plugin():
     assert "--plugin-dir" not in plain and "--strict-mcp-config" in plain
 
 
+def test_a_subject_of_the_study_gets_a_tmp_of_its_own_and_the_runs_stay_outside_tmp(tmp_path):
+    argv = subjects.private_tmp(["claude", "-p", "hello"], Path("/runs/tmp/counted/r1/x/cpp"))
+    assert argv[:3] == ["unshare", "-Urm", "sh"] and argv[-3:] == ["claude", "-p", "hello"]
+    assert "mount --bind" in argv[4] and argv[6] == "/runs/tmp/counted/r1/x/cpp"
+    assert harness.STUDIES["v1_1"]["private_tmp"] and not harness.STUDIES["v1_0"]["private_tmp"]
+    assert Path("/tmp") not in harness.STUDIES["v1_1"]["root"].parents
+    with pytest.raises(SystemExit):
+        harness.main(["--study", "v1_1", "run", "--phase", "counted", "--root", "/tmp/cairn-aieval"])
+    with pytest.raises(SystemExit):
+        harness.main(["--study", "v1_1", "run", "--phase", "primary", "--root", str(tmp_path)])
+
+
 def test_the_audit_allows_the_subjects_own_plugin_and_flags_another_and_a_write_into_it(tmp_path):
     plugin = "/root/plugins/counted/r1/x/plugin"
     other = "/root/plugins/counted/r2/x/plugin"

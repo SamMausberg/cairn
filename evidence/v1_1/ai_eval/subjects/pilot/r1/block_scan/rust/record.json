@@ -1,0 +1,112 @@
+{
+ "task": "block_scan",
+ "arm": "rust",
+ "language": "rust",
+ "plugin": null,
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 453.0,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 20,
+  "duration_ms": 471909,
+  "duration_api_ms": 324163,
+  "total_cost_usd": 0.5038083999999998,
+  "usage": {
+   "input_tokens": 40,
+   "cache_creation_input_tokens": 31204,
+   "cache_read_input_tokens": 610962,
+   "output_tokens": 25672,
+   "output_tokens_details": {
+    "thinking_tokens": 17925
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 31204,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 315,
+     "cache_read_input_tokens": 41962,
+     "cache_creation_input_tokens": 594,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 594
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 40,
+    "outputTokens": 25672,
+    "cacheReadInputTokens": 610962,
+    "cacheCreationInputTokens": 31204,
+    "webSearchRequests": 0,
+    "costUSD": 0.5038083999999998,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 17925,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/cairn-aieval-pilot/runs/pilot/r1/block_scan/rust",
+ "toolchain_commit": "ba9eb6784d0d3772d01086a98cc2802845f13022",
+ "phase": "pilot",
+ "replicate": 1,
+ "study": "v1_1",
+ "infrastructure": false,
+ "source_bytes": 5353,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 17,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 1,
+   "Bash": 15,
+   "Write": 2,
+   "Edit": 1
+  },
+  "compile_runs": 4,
+  "compile_runs_failed": 0,
+  "flags": []
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_eval/pilot/r1/block_scan/rust/transcript.jsonl",
+  "sha256": "fb8670986c8cfb26e664a2e84768f6d2153b76c30fd64276dc5c6e0249a86fdd",
+  "bytes": 222639
+ },
+ "given_sha256": "bef275b8a3bb67c1585266450cb25e2db166d7b86ce61ca04f823b188a244130"
+}

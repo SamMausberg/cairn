@@ -1,0 +1,121 @@
+{
+ "task": "block_scan",
+ "arm": "plugin",
+ "language": "cairn",
+ "plugin": "/tmp/cairn-aieval-pilot/plugins/pilot/r1/block_scan/plugin",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 527.5,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 48,
+  "duration_ms": 548094,
+  "duration_api_ms": 429559,
+  "total_cost_usd": 1.3893172000000003,
+  "usage": {
+   "input_tokens": 80,
+   "cache_creation_input_tokens": 104938,
+   "cache_read_input_tokens": 2804126,
+   "output_tokens": 40858,
+   "output_tokens_details": {
+    "thinking_tokens": 30514
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 104938,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 313,
+     "cache_read_input_tokens": 102812,
+     "cache_creation_input_tokens": 2126,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 2126
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 80,
+    "outputTokens": 40858,
+    "cacheReadInputTokens": 2804126,
+    "cacheCreationInputTokens": 104938,
+    "webSearchRequests": 0,
+    "costUSD": 1.3893172000000003,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 30514,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/cairn-aieval-pilot/runs/pilot/r1/block_scan/plugin",
+ "toolchain_commit": "ba9eb6784d0d3772d01086a98cc2802845f13022",
+ "phase": "pilot",
+ "replicate": 1,
+ "study": "v1_1",
+ "infrastructure": false,
+ "source_bytes": 3532,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 17,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 16,
+   "Skill": 1,
+   "Bash": 23,
+   "Edit": 3,
+   "mcp__plugin_cairn_cairn__check": 3
+  },
+  "compile_runs": 8,
+  "compile_runs_failed": 3,
+  "flags": [
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/tmp/cairn-aieval-pilot",
+    "command": "ls /tmp/cairn-aieval-pilot/plugins/pilot/r1/block_scan/plugin/skills/cairn/../../docs/ 2>/dev/null || find /tmp/cairn-aieval-pilot -maxdepth 4 -iname \"docs\" 2>/dev/null"
+   }
+  ]
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_eval/pilot/r1/block_scan/plugin/transcript.jsonl",
+  "sha256": "92eb881e5901ad8a0370788be4505d91044fadebaf457f05f6017c8ea1011fd6",
+  "bytes": 539448
+ },
+ "given_sha256": "d86559b22901449de3bb1e7c96d589b8d42249eae16ec09b7d859dd29d8e0db7"
+}

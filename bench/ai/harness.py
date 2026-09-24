@@ -21,6 +21,7 @@ import shutil
 import sys
 import tempfile
 import threading
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -37,14 +38,17 @@ REPO = HERE.parents[1]
 BUDGET_STOPS = ("success", "error_max_turns", "error_max_budget_usd")
 SONNET, OPUS = "claude-sonnet-5", "claude-opus-5-5"
 # Each study: where its records go, its tasks in preregistered order, its arms, its phases and their models, how many
-# subjects may run at once, the platform cost after which no counted subject starts, and where its report goes.
+# subjects may run at once, the platform cost after which no counted subject starts, where its report goes, whether
+# each subject gets a /tmp of its own, and the default root of its runs, which a private /tmp keeps out of /tmp.
 STUDIES = {
     "v1_0": {"records": REPO / "results" / "ai_benchmark", "tasks": [t.name for t in ORIGINAL],
              "arms": ("cairn", "cpp", "rust"), "models": {"pilot": SONNET, "primary": SONNET, "secondary": OPUS},
-             "jobs": 1, "ceiling_usd": None, "out": REPO / "evidence" / "v1_0" / "ai_benchmark"},
+             "jobs": 1, "ceiling_usd": None, "out": REPO / "evidence" / "v1_0" / "ai_benchmark",
+             "private_tmp": False, "root": Path(tempfile.gettempdir()) / "cairn-aibench"},
     "v1_1": {"records": REPO / "results" / "ai_eval", "tasks": [t.name for t in TASKS],
              "arms": ("plugin", "cairn", "cpp", "rust"), "models": {"pilot": SONNET, "counted": SONNET},
-             "jobs": 3, "ceiling_usd": {"counted": 200.0}, "out": REPO / "evidence" / "v1_1" / "ai_eval"},
+             "jobs": 3, "ceiling_usd": {"counted": 200.0}, "out": REPO / "evidence" / "v1_1" / "ai_eval",
+             "private_tmp": True, "root": Path.home() / "cairn-aieval"},
 }  # fmt: skip
 RECORDS = STUDIES["v1_0"]["records"]
 
@@ -114,7 +118,8 @@ def run(phase: str, replicate: int, names: list[str], arms: list[str], root: Pat
     """Run every cell of one replicate in order, up to `jobs` subjects at once, each judged and audited as it ends.
 
     A cell with a record is skipped, so a stopped run continues where it stopped. No subject starts after a PAUSE
-    file appears, after an infrastructure failure, or once the phase's recorded cost reaches the study's ceiling."""
+    file appears, after an infrastructure failure, once the phase's recorded cost reaches the study's ceiling, or once
+    one cell has failed for infrastructure three times or the phase five times."""
     records, ceiling = STUDIES[study]["records"], (STUDIES[study]["ceiling_usd"] or {}).get(phase)
     tools = toolchain(root / "toolchain")
     cairn = [str(tools / "cairn")]
@@ -139,12 +144,22 @@ def run(phase: str, replicate: int, names: list[str], arms: list[str], root: Pat
                     print(f"the {phase} phase has spent its ceiling of {ceiling} USD; stopping", flush=True)
                     codes.append(5)
                     return None
+                failed = len(list(done.parent.glob("infrastructure-*.json")))
+                if failed >= 3 or len(list(records.glob(f"{phase}/r*/*/*/infrastructure-*.json"))) >= 5:
+                    print(f"{phase} has failed for infrastructure too often ({failed} here); stopping", flush=True)
+                    codes.append(6)
+                    return None
                 return task, arm
             return None
 
     def worker() -> None:
         while not stop.is_set() and (cell := next_cell()) is not None:
-            if not one(*cell):
+            try:
+                finished = one(*cell)
+            except Exception:  # the harness failed, not the subject: stop as for an infrastructure failure
+                traceback.print_exc()
+                finished = False
+            if not finished:
                 stop.set()
                 codes.append(3)
 
@@ -154,7 +169,8 @@ def run(phase: str, replicate: int, names: list[str], arms: list[str], root: Pat
         print(f"{phase} r{replicate}: {task} in {arm} ...", flush=True)
         where = root / "runs" / phase / f"r{replicate}" / task / arm
         plugin = root / "plugins" / phase / f"r{replicate}" / task / "plugin"
-        record = run_subject(BY_NAME[task], arm, where, cell, tools, limits, plugin)
+        scratch = root / "tmp" / phase / f"r{replicate}" / task / arm if STUDIES[study]["private_tmp"] else None
+        record = run_subject(BY_NAME[task], arm, where, cell, tools, limits, plugin, scratch)
         record.update(phase=phase, replicate=replicate, study=study)
         record["infrastructure"] = infrastructure(record)
         if record["infrastructure"]:
@@ -170,6 +186,8 @@ def run(phase: str, replicate: int, names: list[str], arms: list[str], root: Pat
         record["audit"] = audit(Path(record["transcript"]), record["sandbox"], str(root), record.get("plugin"))
         (cell / "record.json").write_text(json.dumps(record, indent=1))
         shutil.rmtree(record["sandbox"], ignore_errors=True)  # no later subject can reach this one's work
+        if scratch is not None:
+            shutil.rmtree(scratch, ignore_errors=True)
         unlock(plugin)
         r = row(record)
         print(f"  {task} in {arm}: {'solved' if r['solved'] else 'not solved'} ({r['verdict']}), stop {r['stop']}, "
@@ -283,9 +301,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--task", action="append", choices=[t.name for t in TASKS])
     r.add_argument("--arm", "--language", dest="arm", action="append", choices=list(LANGUAGE))
     r.add_argument("--jobs", type=int, help="subjects at once; default: the study's preregistered number")
-    r.add_argument(
-        "--root", type=Path, default=Path(tempfile.gettempdir()) / "cairn-aibench", help="outside the repository"
-    )
+    r.add_argument("--root", type=Path, help="outside the repository; default: the study's")
     r.add_argument("--model", help="default: the phase's preregistered model")
     t = sub.add_parser("report", help="summarize one phase")
     t.add_argument("--phase", required=True)
@@ -300,14 +316,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command in ("run", "report") and args.phase not in study["models"]:
         p.error(f"the {args.study} study's phases are {', '.join(study['models'])}")
     if args.command == "run":
-        if REPO in args.root.resolve().parents:
+        root = (args.root or study["root"]).resolve()
+        if root == REPO or REPO in root.parents:
             p.error("--root must be outside the repository")
+        if study["private_tmp"] and Path("/tmp") in [root, *root.parents]:
+            p.error("--root must be outside /tmp, which each subject replaces with a /tmp of its own")
         names = args.task or study["tasks"]
         arms = args.arm or list(study["arms"])
         if not set(names) <= set(study["tasks"]) or not set(arms) <= set(study["arms"]):
             p.error(f"the {args.study} study has the tasks {study['tasks']} and the arms {study['arms']}")
         limits = {**LIMITS, "model": args.model or study["models"][args.phase]}
-        return run(args.phase, args.replicate, names, arms, args.root, limits, args.study, args.jobs or study["jobs"])
+        return run(args.phase, args.replicate, names, arms, root, limits, args.study, args.jobs or study["jobs"])
     return report(args.phase, args.out or study["out"], args.root, args.study)
 
 

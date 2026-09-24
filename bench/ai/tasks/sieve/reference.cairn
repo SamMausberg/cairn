@@ -69,7 +69,9 @@ fn sieve_segment(m:usize, base:ro<u64>[m], index:usize, lo:u64, hi:u64) -> Segme
   for v in usize(max(lo, 2))..usize(hi) {
     if composite[v - usize(lo)] == 0 {
       let prime = u64(v);
-      if s.count == 0 { s.first = prime; } else if prime - s.last > s.gap { s.gap = prime - s.last; s.gap_at = s.last; }
+      if s.count == 0 {
+        s.first = prime;
+      } else if prime - s.last > s.gap { s.gap = prime - s.last; s.gap_at = s.last; }
       s.last = prime;
       s.count += 1;
       s.sum += prime;
@@ -114,7 +116,10 @@ fn main() -> i32 {
   for w in 0..k {
     let s = ordered[w];
     if s.count > 0 {
-      if all.count > 0 && s.first - all.last > all.gap { all.gap = s.first - all.last; all.gap_at = all.last; }
+      if all.count > 0 && s.first - all.last > all.gap {
+        all.gap = s.first - all.last;
+        all.gap_at = all.last;
+      }
       if s.gap > all.gap { all.gap = s.gap; all.gap_at = s.gap_at; }
       all.last = s.last;
       all.count += s.count;

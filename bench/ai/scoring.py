@@ -285,7 +285,7 @@ def markdown(table: dict) -> str:
 
 
 DIAGNOSTIC = {
-    "cairn": re.compile(r"\berror\[(E-[A-Z0-9-]+)\]|\"code\": \"(E-[A-Z0-9-]+)\""),
+    "cairn": re.compile(r"\berror\[(E-[A-Z0-9-]+)\]|\"code\":\s*\"(E-[A-Z0-9-]+)\""),
     "rust": re.compile(r"\berror\[(E\d{4})\]"),
     "cpp": re.compile(r"\berror: ()"),
 }
