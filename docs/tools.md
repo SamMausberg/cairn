@@ -145,7 +145,7 @@ The policy sets `tolerance` (`absolute` and `relative`, 0 by default), `domain` 
 
 ## cairn doc and cairn expand
 
-`cairn doc [path]` prints a Markdown reference of the checked program's public types, recipes and functions, with bounds, comments and inferred effect rows. For a cooperative region it adds the shared memory each block holds, per instance of a template. `cairn doc --std` documents the packaged library, and `make docs` writes it as [std_api.md](std_api.md) and one page per module, which the suite holds to the compiler's answer.
+`cairn doc [path]` prints a Markdown reference of the checked program's public types, recipes and functions, with bounds, comments and inferred effect rows. For a cooperative region it adds the shared memory each block holds, per instance of a template. `--module M` documents only the modules named. `cairn doc --std` documents the packaged library, and `make docs` writes it with `--pages docs` as [std_api.md](std_api.md) and one page per module, which the suite holds to the compiler's answer.
 
     $ cairn doc examples/hello
     # root module
