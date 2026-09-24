@@ -55,14 +55,16 @@ def test_blank_issues_are_off_and_a_soundness_bug_is_sent_to_the_security_policy
     assert any(link["url"].endswith("/SECURITY.md") for link in config["contact_links"])
 
 
-def test_the_pull_request_template_asks_what_agents_md_asks_in_a_few_lines():
+def test_the_pull_request_template_asks_for_every_section_agents_md_names():
     text = (ROOT / ".github/PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
-    lines = [line for line in text.splitlines() if line]
-    assert len(lines) == 4 and lines[-1].startswith("Rules:") and "no emojis" in lines[-1]
-    for asked in ("What changes and why", "How it was checked", "What a reviewer should look at"):
-        assert asked in text, asked
+    sections = [line[3:] for line in text.splitlines() if line.startswith("## ")]
+    assert sections == ["Summary", "Motivation", "Changes", "Behaviour and compatibility", "Testing",
+                        "Evidence and claims", "Performance", "Checklist"]  # fmt: skip
+    assert "Closes #N" in text and "No emojis" in text and "squash commit's subject" in text
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    assert "what changes and why, how it was checked" in agents and "what a reviewer should look at" in agents
+    assert "fills in every section of `.github/PULL_REQUEST_TEMPLATE.md`" in agents
+    for named in ("summary", "motivation", "behaviour and compatibility", "testing", "evidence and claims"):
+        assert named in agents, named
 
 
 def test_the_subset_reader_reads_blocks_and_refuses_what_yaml_may_read_otherwise():
