@@ -1,0 +1,21 @@
+cff-version: "1.2.0"
+message: "If you use CAIRN in your work, cite it with the metadata below."
+title: "CAIRN"
+abstract: "A systems language whose compiler rejects data races before a program runs, including races between the threads of a GPU kernel. It compiles to C++20 for the CPU and to CUDA for NVIDIA GPUs, and it is designed to be written by AI agents."
+type: "software"
+authors:
+  - given-names: "Sam"
+    family-names: "Mausberg"
+version: "1.0.0"
+repository-code: "https://github.com/SamMausberg/cairn"
+license:
+  - "MIT"
+  - "Apache-2.0"
+keywords:
+  - "compiler"
+  - "systems programming"
+  - "ownership"
+  - "data races"
+  - "CUDA"
+  - "GPU"
+  - "AI agents"

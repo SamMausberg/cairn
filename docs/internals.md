@@ -209,7 +209,7 @@ No script here changes the repository's visibility, force-pushes, deletes a remo
 
 A release is a tag on `main` whose evidence directory records what ran, on which machine, and what did not. Nothing is published by a test or a script.
 
-The version is stated in ten places that `tests/tooling/test_release.py` and `tests/tooling/test_skill.py` hold together: `pyproject.toml`, `src/cairn/version.py`, `proofs/lakefile.toml`, `editors/vscode/package.json`, the `profile` of `docs/project/capabilities.json`, the opening of the `base` rule card in `src/cairn/agent/teaching.py`, `bazel/MODULE.bazel` and `examples/bazel/MODULE.bazel`, and `.claude-plugin/plugin.json` and `marketplace.json`. `make editors` writes it into `skills/cairn/SKILL.md`. CHANGELOG.md gets one section per release.
+The version is stated in eleven places that `tests/tooling/test_release.py` and `tests/tooling/test_skill.py` hold together: `pyproject.toml`, `src/cairn/version.py`, `CITATION.cff`, `proofs/lakefile.toml`, `editors/vscode/package.json`, the `profile` of `docs/project/capabilities.json`, the opening of the `base` rule card in `src/cairn/agent/teaching.py`, `bazel/MODULE.bazel` and `examples/bazel/MODULE.bazel`, and `.claude-plugin/plugin.json` and `marketplace.json`. `make editors` writes it into `skills/cairn/SKILL.md`. CHANGELOG.md gets one section per release.
 
 Every change lands with the gates AGENTS.md lists. Then, on a clean committed tree:
 
@@ -224,7 +224,7 @@ make wheel audit
 
 `collect_evidence.py` runs the release gates and writes to `evidence/<release>/summary.json` each gate's command, status and output, the commit, and whether the tree was dirty. `collect_lean_evidence.py` records a from-scratch build of `proofs/` and the axiom audit under `lean/`. `RUN_NOTES.md` beside them names what did not run and why: a gate whose tool is absent is `unavailable`, never passed.
 
-Tag the commit the evidence names with the version the ten places state, and push `main` and the tag; a release that does not pass every gate on a committed tree is not tagged. A release claims only what its evidence shows: a speed, a GPU advantage or an AI result needs an executed run recorded under `evidence/`, with losses beside wins. `docs/project/capabilities.json` and [roadmap.md](roadmap.md) are rewritten at each release.
+Tag the commit the evidence names with the version the eleven places state, and push `main` and the tag; a release that does not pass every gate on a committed tree is not tagged. A release claims only what its evidence shows: a speed, a GPU advantage or an AI result needs an executed run recorded under `evidence/`, with losses beside wins. `docs/project/capabilities.json` and [roadmap.md](roadmap.md) are rewritten at each release.
 
 `tools/release/publish_private.py`, one of the two scripted paths that touch a remote, creates a new private personal repository and pushes `main` to it:
 
