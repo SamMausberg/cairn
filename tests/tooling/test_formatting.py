@@ -35,7 +35,7 @@ def repository_sources():
     return sorted(  # files only: the .cairn directory cairn tune and cairn mcp keep beside a manifest matches too
         p
         for p in ROOT.rglob("*.cairn")
-        if p.is_file() and not {".venv", ".claude", "build"} & set(p.relative_to(ROOT).parts)
+        if p.is_file() and not {".venv", ".claude", "build", "results"} & set(p.relative_to(ROOT).parts)
     )
 
 
