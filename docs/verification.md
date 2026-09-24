@@ -314,7 +314,7 @@ The rules of `checking.py` outside the calculus, such as linear values, leases o
 
 Each row below is one feature, and each column one claim about it: whether it is implemented, which targets its code compiles for, whether it has run on a CPU and on a GPU, which sanitizers watched it run, and whether its speed was measured. A cell is `yes`, `partial` (it says which part holds), `no`, `unknown` or `n/a`, followed by what it rests on. `unknown` means nobody has checked, and is never success. A GPU run or a measurement counts only with an executed record under `evidence/`; a device test that skips without a GPU is not one.
 
-Every host row is x86-64 Linux under clang++ and g++, which is what the reference machine and CI run. Hosted AArch64 last ran the suite on a GH200 at v0.8.2, before most of these features existed. On a device, "compiles" means nvcc and ptxas accepted the code for that target, and nothing more.
+A host row's claims are for x86-64 Linux under clang++ and g++, the reference machine the records were taken on, unless the row names another platform. Hosted AArch64 last ran the suite on a GH200 at v0.8.2, before most of these features existed, and a CI job on an AArch64 host counts here once its run is recorded. On a device, "compiles" means nvcc and ptxas accepted the code for that target, and nothing more.
 
 The rows are data, [project/capability_matrix.json](project/capability_matrix.json). To add a feature, add a row there, run `make docs`, and commit both; `tests/tooling/test_capability_matrix.py` fails while this table differs from the data, while a row names a record that does not exist, or while a GPU run or a measurement says `yes` without one under `evidence/`.
 
