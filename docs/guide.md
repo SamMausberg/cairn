@@ -143,10 +143,13 @@ error[E-TYPE-MISMATCH]: Expected u32, got u64.
   |
 3 |   let mean:u32 = average(10, 20);
   |                  ^^^^^^^
+  = help: convert explicitly, u32(x), which traps outside u32's range, or compute in u32.
+  = note: the base card states this rule: cairn rules E-TYPE-MISMATCH
 ```
 
 ```json
-{"status": "rejected", "code": "E-TYPE-MISMATCH", "message": "Expected u32, got u64.", "line": 3, "column": 18, "file": "src/main.cairn"}
+{"status": "rejected", "code": "E-TYPE-MISMATCH", "message": "Expected u32, got u64.", "line": 3, "column": 18, "file": "src/main.cairn",
+ "card": "base", "repair_hint": "Convert explicitly, u32(x), which traps outside u32's range, or compute in u32."}
 ```
 
 Nothing converts implicitly. `u32(average(10, 20))` writes the narrowing out and checks it at run time. The safety rules refuse a program the same way. A heap array is an owner, so using it as a value moves it, and the old name is dead:
@@ -166,9 +169,11 @@ error[E-MOVED]: data was moved.
   |
 5 |   return i32(average(data[0], 1));
   |                      ^^^^
+  = help: use it before it moves, move it once, or lend it (ro<T>, rw<T>) instead of passing it by value.
+  = note: the owners card states this rule: cairn rules E-MOVED
 ```
 
-Every diagnostic code has a paragraph in the reference, with a program it refuses.
+Every refusal names the rule card that states its rule, which `cairn rules` prints, and carries the fix when the compiler can state one without guessing. Every diagnostic code also has a paragraph in the reference, with a program it refuses.
 
 ## Format, document, edit
 
