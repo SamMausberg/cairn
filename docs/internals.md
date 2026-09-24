@@ -138,7 +138,7 @@ make gpu embedded  # CUDA runtime and lanes, and the QEMU board, where the hardw
 | `verification/` | the certificates, `proofs/` in step with `collector_rules()` and building, the checker and the Lean models deciding generated programs alike, the SMT translator against concrete replay, module coverage, the classes of `cairn diff` |
 | `projects/` | manifests, vendored dependencies, incremental builds, every application under `examples/apps/`, the `cairn new` templates, test blocks, a C++ host linking a CAIRN library, the freestanding image under QEMU with an exact UART transcript |
 | `runtime/` | the self-checking C++ and CUDA binaries beside it, at several `CAIRN_LANES` counts |
-| `tooling/` | `cairn fmt` over every `.cairn` in the checkout plus fuzz, a real `cairn lsp` and the extension's client, the grammars against a TextMate engine, `predict` and `tune`, terminal output and completions, the tree's own rules, publication against fakes, every script under `tools/` and `bench/` |
+| `tooling/` | `cairn fmt` over every `.cairn` in the checkout plus fuzz, a real `cairn lsp` and the extension's client, the grammars against a TextMate engine, `predict` and `tune`, terminal output and completions, the tree's own rules, the wheel built offline and what it holds, publication against fakes, every script under `tools/` and `bench/` |
 | `agent/` | projections, packets and their evidence classes, rule cards, sketches, guarded edits, migrations, plan edits, state and deltas, a real `cairn mcp` writing admitted changes back and refusing stale ones, and the canonical projection round-tripping every sample and `std` module to identical native code |
 | `oracles/` | not pytest modules: the Python oracles `tools/checks/verify.py` drives |
 

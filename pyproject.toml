@@ -32,7 +32,7 @@ Issues = "https://github.com/SamMausberg/cairn/issues"
 Changelog = "https://github.com/SamMausberg/cairn/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-dev = ["pytest==9.0.2", "pytest-xdist==3.8.0", "ruff==0.16.8", "mypy==2.3.1"]
+dev = ["pytest==9.0.2", "pytest-xdist==3.8.0", "ruff==0.16.8", "mypy==2.3.1", "setuptools==82.0.1"]  # make wheel builds offline
 
 [project.scripts]
 cairn = "cairn.cli:main"
