@@ -32,9 +32,10 @@ def test_the_device_kernels_are_the_host_kernels_on_device_views():
     assert device == [re.sub(r"((?:ro|rw)<\w+>\[\w+\])", r"\1@device", line) for line in host]
 
 
-def test_the_device_configuration_compiles_for_sm_120(tmp_path):
-    project = load_project(EXAMPLE / "gpu.toml")
-    device_build(tmp_path, compile_source(project.source)[0], entry="main")
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_the_device_configuration_compiles_for_sm_120(tmp_path, cxx):
+    project = load_project(EXAMPLE / "gpu.toml")  # its pipelines include cuda_pipeline.h, as the tensor runtime does
+    device_build(tmp_path, compile_source(project.source)[0], entry="main", cxx=cxx)
 
 
 def test_the_device_configuration_agrees_with_its_plain_loops(tmp_path):

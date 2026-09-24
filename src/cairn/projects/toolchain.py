@@ -153,6 +153,9 @@ def device_prefix(cxx: str, arch: str | None, kind: str, device: DeviceTarget) -
     # CCCL 3 (CUDA 13) writes unguarded throw and catch inside headers CUB's dispatch requires, so a
     # device program's host pass must parse exceptions. Nothing in the runtime throws; guards still abort.
     host = [("-fexceptions" if f == "-fno-exceptions" else f) for f in host]
+    # CUDA 13's cuda_pipeline.h and its barrier helpers define static inline functions clang reports as unused when
+    # it is nvcc's host compiler; g++ does not, and nothing CAIRN writes is a static function.
+    host.append("-Wno-unused-function")
     # --fmad=false is the device half of -ffp-contract=off; relaxed constexpr lets guards use <limits>.
     nvcc = ["-std=c++20", "-O3", "--fmad=false", *device.flags(), "--extended-lambda", "--expt-relaxed-constexpr"]
     shared = ["-shared"] if kind == "library" else []
