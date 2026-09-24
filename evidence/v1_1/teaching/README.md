@@ -20,27 +20,27 @@ python3 tools/ai/skill_tokens.py --output evidence/v1_1/teaching/after.json
 
 | What is read | Before | After | Change |
 |---|---|---|---|
-| `SKILL.md`, read whenever the skill fires | 3,381 | 2,645 | -21.8% |
-| the tour: `SKILL.md` and thirteen cards, each once | 7,657 | 7,022 | -8.3% |
-| one tour program alone, the mean of twelve | 4,350 | 3,506 | -19.4% |
-| `codes.md` | 2,726 | removed | |
-| every file of the skill | 15,927 | 13,792 | -13.4% |
-| every card's text as a host sends it | 8,868 | 8,889 | +0.2% |
+| `SKILL.md`, read whenever the skill fires | 3,381 | 2,720 | -19.6% |
+| the tour: `SKILL.md` and thirteen cards, each once | 7,657 | 7,150 | -6.6% |
+| one tour program alone, the mean of twelve | 4,350 | 3,585 | -17.6% |
+| `codes.md` | 2,726 | removed |  |
+| every file of the skill | 15,927 | 14,056 | -11.7% |
+| every card's text as a host sends it | 8,868 | 9,078 | +2.4% |
 
 | Tour program | Before | After |
 |---|---|---|
-| 1. Values, checked arithmetic, explicit conversions | 3,381 | 2,645 |
-| 2. Views | 4,032 | 3,075 |
-| 3. Records, sums, `match` and `try` | 4,136 | 3,189 |
-| 4. Generics | 4,464 | 3,622 |
-| 5. Traits, static and dynamic | 4,223 | 3,557 |
-| 6. Owners | 4,472 | 3,515 |
-| 7. Closures | 4,320 | 3,590 |
-| 8. Tasks | 4,586 | 3,834 |
-| 9. Lanes | 5,069 | 4,341 |
-| 10. Generators | 5,262 | 4,342 |
-| 11. Modules and the library | 4,447 | 3,498 |
-| 12. The foreign boundary | 3,809 | 2,858 |
+| 1. Values, checked arithmetic, explicit conversions | 3,381 | 2,720 |
+| 2. Views | 4,032 | 3,150 |
+| 3. Records, sums, `match` and `try` | 4,136 | 3,264 |
+| 4. Generics | 4,464 | 3,697 |
+| 5. Traits, static and dynamic | 4,223 | 3,632 |
+| 6. Owners | 4,472 | 3,590 |
+| 7. Closures | 4,320 | 3,665 |
+| 8. Tasks | 4,586 | 3,909 |
+| 9. Lanes | 5,069 | 4,469 |
+| 10. Generators | 5,262 | 4,417 |
+| 11. Modules and the library | 4,447 | 3,573 |
+| 12. The foreign boundary | 3,809 | 2,933 |
 
 ## What changed
 
@@ -48,7 +48,7 @@ The skill no longer repeats what a refusal now says. Every refusal names the car
 
 The closures card was sent for any program with `||` or `|` in it, which is most programs; it is now selected by a closure argument, a function type or `dyn`. That is most of the drop in the twelve single programs besides `SKILL.md`.
 
-No rule, limit or code was taken out of a card. The cards grew by six, for what the hosts, the command line and the compiler's limits refuse, and every card's text grew by the few rules that no card stated before, such as `const`; a card sent in a packet is 0.2% larger. The six new cards are not read to write a program.
+No rule, limit or code was taken out of a card. The cards grew by six, for what the hosts, the command line and the compiler's limits refuse, which no program's words select. The language cards gained the few rules no card stated before, such as `const`, and the route an agent takes when CAIRN cannot say its design: a foreign implementation in CUDA or C++, validated against the reference, named in `SKILL.md`'s loop and in the parallel, cooperative, implementations and assembly cards. That route is most of the 2.4% the cards' text grew by.
 
 ## What this does not show
 

@@ -1,12 +1,12 @@
 {
   "unit": "tiktoken/o200k_base",
   "files": {
-    "SKILL.md": 2645,
-    "cards/assembly.md": 434,
+    "SKILL.md": 2720,
+    "cards/assembly.md": 474,
     "cards/closures.md": 224,
     "cards/commands.md": 296,
     "cards/compact.md": 137,
-    "cards/cooperative.md": 918,
+    "cards/cooperative.md": 969,
     "cards/effects.md": 213,
     "cards/floats.md": 74,
     "cards/foreign.md": 346,
@@ -15,7 +15,7 @@
     "cards/generics.md": 338,
     "cards/gradients.md": 244,
     "cards/hosts.md": 384,
-    "cards/implementations.md": 719,
+    "cards/implementations.md": 764,
     "cards/layouts.md": 408,
     "cards/lends.md": 88,
     "cards/limits.md": 216,
@@ -24,7 +24,7 @@
     "cards/migrations.md": 184,
     "cards/modules.md": 108,
     "cards/owners.md": 520,
-    "cards/parallel.md": 801,
+    "cards/parallel.md": 854,
     "cards/printing.md": 210,
     "cards/records.md": 149,
     "cards/rings.md": 310,
@@ -37,9 +37,9 @@
     "cards/validation.md": 226,
     "cards/views.md": 201
   },
-  "skill_total": 13792,
-  "cards_total": 11147,
-  "card_texts": 8889,
+  "skill_total": 14056,
+  "cards_total": 11336,
+  "card_texts": 9078,
   "tour": {
     "programs": 12,
     "cards": [
@@ -57,25 +57,25 @@
       "tasks",
       "views"
     ],
-    "tokens": 7022,
+    "tokens": 7150,
     "per_program": {
       "1. Values, checked arithmetic, explicit conversions": {
         "cards": [],
-        "tokens": 2645
+        "tokens": 2720
       },
       "2. Views: borrowed arrays whose length is part of the type": {
         "cards": [
           "memory",
           "views"
         ],
-        "tokens": 3075
+        "tokens": 3150
       },
       "3. Records, sums, `match` and `try`": {
         "cards": [
           "records",
           "sums"
         ],
-        "tokens": 3189
+        "tokens": 3264
       },
       "4. Generics and what a parameter promises": {
         "cards": [
@@ -83,7 +83,7 @@
           "generics",
           "records"
         ],
-        "tokens": 3622
+        "tokens": 3697
       },
       "5. Traits, static and dynamic": {
         "cards": [
@@ -92,7 +92,7 @@
           "records",
           "views"
         ],
-        "tokens": 3557
+        "tokens": 3632
       },
       "6. Owners: moved, never copied, released at scope exit": {
         "cards": [
@@ -100,7 +100,7 @@
           "records",
           "views"
         ],
-        "tokens": 3515
+        "tokens": 3590
       },
       "7. Closures borrow exactly what they capture": {
         "cards": [
@@ -108,7 +108,7 @@
           "owners",
           "views"
         ],
-        "tokens": 3590
+        "tokens": 3665
       },
       "8. Tasks lease what they borrow": {
         "cards": [
@@ -116,7 +116,7 @@
           "tasks",
           "views"
         ],
-        "tokens": 3834
+        "tokens": 3909
       },
       "9. Lanes are race free by construction": {
         "cards": [
@@ -126,7 +126,7 @@
           "scan",
           "views"
         ],
-        "tokens": 4341
+        "tokens": 4469
       },
       "10. Generators are library code": {
         "cards": [
@@ -137,7 +137,7 @@
           "records",
           "views"
         ],
-        "tokens": 4342
+        "tokens": 4417
       },
       "11. Modules and the library": {
         "cards": [
@@ -146,13 +146,13 @@
           "sums",
           "views"
         ],
-        "tokens": 3498
+        "tokens": 3573
       },
       "12. The foreign boundary states its effects": {
         "cards": [
           "effects"
         ],
-        "tokens": 2858
+        "tokens": 2933
       }
     }
   }

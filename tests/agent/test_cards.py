@@ -78,3 +78,8 @@ def test_a_code_a_card_mentions_is_one_some_card_owns():
 def test_a_code_no_card_owns_has_no_card():
     assert card_of("E-LEASED") == "tasks" and card_of("E-SESSION") == "hosts" and card_of("E-INTERNAL") == "limits"
     assert card_of("E-MINE") is None and card_of(None) is None  # a recipe's require may choose its own code
+
+
+def test_where_an_agent_meets_a_limit_its_card_keeps_the_design_through_a_foreign_implementation():
+    for name in ("parallel", "cooperative", "implementations", "assembly"):
+        assert "foreign implementation" in CARDS[name] and "the foreign card" in CARDS[name], name

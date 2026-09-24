@@ -105,3 +105,8 @@ def test_each_eval_case_uses_read_only_tools_and_its_program_is_refused_with_the
             assert error.data["code"] == code, case.name
         else:
             raise AssertionError(f"{case.name}: the program checks, but the case grades a refusal")
+
+
+def test_the_loop_keeps_a_design_cairn_cannot_say_through_a_foreign_implementation():
+    loop = (SKILL / "SKILL.md").read_text(encoding="utf-8").split("## Loop")[1].split("## Core rules")[0]
+    assert "foreign implementation" in loop and "cairn validate" in loop and "cards/foreign.md" in loop
