@@ -24,7 +24,7 @@ python3 tools/ai/skill_tokens.py --output evidence/v1_1/teaching/after.json
 | the tour: `SKILL.md` and thirteen cards, each once | 7,657 | 7,150 | -6.6% |
 | one tour program alone, the mean of twelve | 4,350 | 3,585 | -17.6% |
 | `codes.md` | 2,726 | removed |  |
-| every file of the skill | 15,927 | 14,056 | -11.7% |
+| every file of the skill | 15,927 | 14,101 | -11.5% |
 | every card's text as a host sends it | 8,868 | 9,078 | +2.4% |
 
 | Tour program | Before | After |

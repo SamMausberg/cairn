@@ -4,7 +4,7 @@
     "SKILL.md": 2720,
     "cards/assembly.md": 474,
     "cards/closures.md": 224,
-    "cards/commands.md": 296,
+    "cards/commands.md": 341,
     "cards/compact.md": 137,
     "cards/cooperative.md": 969,
     "cards/effects.md": 213,
@@ -37,8 +37,8 @@
     "cards/validation.md": 226,
     "cards/views.md": 201
   },
-  "skill_total": 14056,
-  "cards_total": 11336,
+  "skill_total": 14101,
+  "cards_total": 11381,
   "card_texts": 9078,
   "tour": {
     "programs": 12,
