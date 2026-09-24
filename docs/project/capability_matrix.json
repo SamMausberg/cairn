@@ -424,6 +424,42 @@
       "sanitizers": "n/a",
       "measured": "partial: its compiles and the search's wall time, evidence/v1_1/search; no device time",
       "records": ["tests/tooling/test_search.py", "tests/tooling/test_search_budget.py", "tests/tooling/test_search_instances.py", "evidence/v1_0/search/README.md", "evidence/v1_1/search/README.md"]
+    },
+    {
+      "feature": "SOL-ExecBench solutions, and projects from its problems",
+      "side": "device",
+      "docs": "tools.md#cairn-export---harness",
+      "implemented": "yes",
+      "compiles": "yes: sm_100a, compiled and linked against torch 2.9.0+cu130 as SOL-ExecBench's build_ext.py builds a solution, and accepted by its pydantic models",
+      "ran_on_cpu": "yes: a host-view solution built by torch.utils.cpp_extension.load equals the reference with CPU torch, and an emulated RMSNorm is within SOL-ExecBench's tolerance on nine workloads",
+      "ran_on_gpu": "no",
+      "sanitizers": "no",
+      "measured": "no",
+      "records": ["evidence/v1_1/harness/README.md", "tests/projects/test_harness.py", "tests/projects/test_harness_torch.py"]
+    },
+    {
+      "feature": "GPU MODE submissions",
+      "side": "device",
+      "docs": "tools.md#cairn-export---harness",
+      "implemented": "yes",
+      "compiles": "yes: sm_100a through load_inline, compiled and linked against torch 2.9.0+cu130",
+      "ran_on_cpu": "yes: a host-view submission built by load_inline returns the reference's output with CPU torch",
+      "ran_on_gpu": "no",
+      "sanitizers": "no",
+      "measured": "no",
+      "records": ["evidence/v1_1/harness/README.md", "tests/projects/test_harness.py", "tests/projects/test_harness_torch.py"]
+    },
+    {
+      "feature": "KernelBench `ModelNew`",
+      "side": "device",
+      "docs": "tools.md#cairn-export---harness",
+      "implemented": "yes",
+      "compiles": "yes: sm_100a through load_inline, compiled and linked against torch 2.9.0+cu130, and valid under KernelBench's static checker",
+      "ran_on_cpu": "yes: a host-view ModelNew built by load_inline equals the problem's Model with CPU torch",
+      "ran_on_gpu": "no",
+      "sanitizers": "no",
+      "measured": "no",
+      "records": ["evidence/v1_1/harness/README.md", "tests/projects/test_harness.py", "tests/projects/test_harness_torch.py"]
     }
   ]
 }
