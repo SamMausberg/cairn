@@ -22,7 +22,7 @@ from typing import Any
 from ..compiler import compilations, layouts, wide
 from ..compiler.cairnc import write_program
 from ..compiler.codegen import Emitter, demangled, mangle
-from ..compiler.cooperative import SHUFFLES
+from ..compiler.cooperative import SHUFFLES, VOTES
 from ..compiler.modules import library_path
 from ..compiler.tree import Expr, Function, Stmt
 from ..perf.regions import walked
@@ -195,7 +195,7 @@ def cooperative(f: Function, place, sizeof) -> list[dict[str, Any]]:
                                            "wait_group": ref[3] if len(ref) > 3 else 0})  # fmt: skip
                 elif ref[:1] == ("stage",) and ref[2] == "fill":
                     found["copies"].append({"at": place(e.line), "pipeline": ref[1]})
-                elif e.val in SHUFFLES:
+                elif e.val in SHUFFLES | VOTES:
                     found["warp_collectives"].append({"at": place(e.line), "operation": e.val})
                 elif e.val in {"mma_unordered", "mma_load", "mma_store"} and ref[:1] == ("builtin",):
                     found["fragments"].append({"at": place(e.line), "operation": e.val})

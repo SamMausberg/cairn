@@ -45,6 +45,7 @@ from .footprints import natural
 from .pipelines import lower_pipeline, s_pipeline  # noqa: F401  (the checker and the emitter bind them from here)
 from .scope import Binding, Block, Lanes
 from .tree import (
+    BOOL,
     FLOAT,
     INT,
     NUMERIC,
@@ -71,7 +72,8 @@ WIDTHS = ("block", "warp", "thread")
 WARP_SIZE = 32
 SHARED_LIMIT = 48 * 1024  # static shared memory a block may hold on every NVIDIA device since compute 2.0
 ALIGN = 128  # where each shared array starts: tensor-core fragments load from 32 bytes on (compiler/fragments.py)
-SHUFFLES = {"shuffle", "shuffle_xor", "shuffle_down"}
+SHUFFLES = {"shuffle", "shuffle_xor", "shuffle_down", "shuffle_up"}
+VOTES = {"warp_any", "warp_all", "warp_ballot", "warp_match"}  # one vote or match instruction for the warp
 SHARED_STATE = {"Atomic", "Mutex"}  # what threads handed the same one may still see differently
 # The primitives that write an argument; every other one takes its arguments by value or ro (builtins.TABLE).
 WRITING = {"take", "swap", "transfer", "mma_store", "store_wide", *atomics.NAMES}
@@ -111,7 +113,10 @@ class Reach:
             return self.values.get(e.val, (BLOCK, None))
         if self.warp_wide(e):
             return WARP, e
-        if e.tag == "call" and (e.val in SHUFFLES or e.val in atomics.NAMES or self.unshared(e)):
+        if e.tag == "call" and e.val in VOTES - {"warp_match"} and e.args:  # the same in every thread of the warp
+            level = self.value(e.args[0])
+            return (min(level[0], WARP), level[1] if level[0] < WARP else e)
+        if e.tag == "call" and (e.val in SHUFFLES | {"warp_match"} or e.val in atomics.NAMES or self.unshared(e)):
             return THREAD, e  # another thread's value, or an element's old value, which each thread sees apart
         if e.tag == "index" and root(e).tag == "name" and root(e).val in self.private:
             return THREAD, e
@@ -182,7 +187,7 @@ class Reach:
         from .builtins import TABLE
 
         head, _, method = e.val.rpartition(".")
-        if head in self.stages or e.val in SHUFFLES:
+        if head in self.stages or e.val in SHUFFLES | VOTES:
             return
         try:
             found = None if head else self.c.qualify(e.val, self.c.fs)
@@ -527,8 +532,9 @@ def s_warp_reduce(c: Checker, s: Stmt):
 
 
 def check_shuffle(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
-    """`shuffle(v, lane)`, `shuffle_xor(v, mask)` and `shuffle_down(v, delta)`: v as another thread of the warp
-    holds it, every thread of the warp taking part. The lane, mask or delta is below 32, a guard."""
+    """`shuffle(v, lane)`, `shuffle_xor(v, mask)`, `shuffle_down(v, delta)` and `shuffle_up(v, delta)`: v as another
+    thread of the warp holds it, every thread of the warp taking part. The lane, mask or delta is below 32, a guard;
+    past either end of the warp a thread keeps its own v."""
     from .builtins import arity
 
     arity(e, args, 2, f"{e.val} takes a value and a lane: {e.val}(v, k).")
@@ -543,6 +549,30 @@ def check_shuffle(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected:
 
 def lower_shuffle(g: Emitter, e: Expr) -> str:
     return f"cr_blk.{e.val}({g.expr(e.args[0])}, {g.expr(e.args[1])})"
+
+
+def check_vote(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
+    """`warp_ballot(c)`: bit l set where lane l's c holds; `warp_any(c)` and `warp_all(c)`; `warp_match(v)`: the lanes
+    whose v has this lane's bits. One instruction for the warp, every thread of which takes part."""
+    from .builtins import arity
+
+    arity(e, args, 1, f"{e.val} takes one {'value' if e.val == 'warp_match' else 'condition'}: {e.val}(x).")
+    collective(c, e, WARP, e.val, "E-COOP-WARP")
+    if e.val != "warp_match":
+        c.expect(c.expr(args[0], BOOL), BOOL, args[0])
+        return Type("u32") if e.val == "warp_ballot" else BOOL
+    ty = c.expr(args[0])
+    if ty.mode != "value" or ty.name not in MATCHED:
+        fail("E-TYPE-MISMATCH", f"warp_match compares {', '.join(sorted(MATCHED))} across the warp, not "
+             f"{ty.display()}.", args[0])  # fmt: skip
+    return Type("u32")
+
+
+MATCHED = {"u32", "i32", "u64", "i64", "usize", "f32", "f64"}  # what __match_any_sync compares, bit for bit
+
+
+def lower_vote(g: Emitter, e: Expr) -> str:
+    return f"cr_blk.{e.val}({g.expr(e.args[0])})"
 
 
 # Lowering -----------------------------------------------------------------------------------------------------------

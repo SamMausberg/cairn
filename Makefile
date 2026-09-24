@@ -114,7 +114,7 @@ DEVICE_TESTS = tests/language/test_assembly.py tests/language/test_assert_eq.py 
   tests/soundness/test_cooperative.py tests/soundness/test_device_paths.py tests/soundness/test_fragments.py \
   tests/soundness/test_fusion.py tests/soundness/test_pipelines.py tests/soundness/test_plans.py \
   tests/soundness/test_scan.py tests/soundness/test_staging.py tests/soundness/test_tensor.py \
-  tests/soundness/test_tensor_kernels.py tests/soundness/test_wide.py tests/soundness/test_atomics.py tests/soundness/test_finish.py tests/soundness/test_written.py tests/projects/test_reduction_example.py \
+  tests/soundness/test_tensor_kernels.py tests/soundness/test_wide.py tests/soundness/test_atomics.py tests/soundness/test_finish.py tests/soundness/test_written.py tests/projects/test_reduction_example.py tests/soundness/test_votes.py \
   tests/tooling/test_device_cards.py tests/tooling/test_feedback.py tests/tooling/test_on_device.py \
   tests/tooling/test_predict.py tests/tooling/test_predict_cooperative.py tests/tooling/test_search.py \
   tests/tooling/test_search_budget.py \
