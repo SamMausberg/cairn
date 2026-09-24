@@ -191,7 +191,7 @@ These harnesses write under `results/`, which is not tracked, one subdirectory p
 | `package` | a file the sdist or the wheel leaves out: `cairn` installed from the wheel built from the sdist and run away from the checkout, and the Claude Code plugin from a clean copy of the repository | ubuntu-24.04 | 1 min |
 | `ci-passed` | any job above that failed, was cancelled or was skipped | ubuntu-24.04 | seconds |
 
-The jobs run at once, so a run takes about as long as its longest device job, 15 minutes in the runs of September 2026, and a push to `main` queues behind the run before it rather than cancelling it. The device job's tests are `make device-build` where nvcc is installed. A test's own device builds give nvcc g++ unless `CAIRN_TEST_NVCC_HOST` names another host compiler, as `make device-build NVCC_HOST=clang++` does; `cairn build` gives it clang++. NVIDIA's and LLVM's packages, elan with the pinned Lean toolchain, and pip's downloads are cached between runs, and the proofs job tries a failed toolchain download four times before it fails.
+The jobs run at once, so a run takes about as long as its longest device job, 15 minutes in the runs of September 2026 ([what they found](../evidence/v1_1/ci/README.md)), and a push to `main` queues behind the run before it rather than cancelling it. The device job's tests are `make device-build` where nvcc is installed. A test's own device builds give nvcc g++ unless `CAIRN_TEST_NVCC_HOST` names another host compiler, as `make device-build NVCC_HOST=clang++` does; `cairn build` gives it clang++. NVIDIA's and LLVM's packages, elan with the pinned Lean toolchain, and pip's downloads are cached between runs, and the proofs job tries a failed toolchain download four times before it fails.
 
 ## Safety and trust
 
