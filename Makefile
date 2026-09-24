@@ -75,6 +75,7 @@ lean:
 	$(PYTHON) tools/checks/differential_ownership.py --count 200
 	$(PYTHON) tools/checks/differential_facts.py --count 2000
 	$(PYTHON) tools/checks/differential_cooperative.py --count 1000
+	$(PYTHON) tools/checks/differential_layouts.py --count 1000
 
 # The device test run, in one process, one device run at a time (tools/support.py: device_reason, device_lock).
 # It and the two targets after it are the only ones that run code on a CUDA device; everything else leaves it alone.
