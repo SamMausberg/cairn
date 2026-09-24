@@ -243,3 +243,35 @@ Queued work runs to completion at its `spawn`, in program order. That is one of 
 [`cairn validate --emulate`](tools.md#cairn-validate) tests a device implementation against its reference this way, and its evidence is `finite-tested-emulated`: finite testing of the host emulation, never of the device. [`cairn tune`](tools.md#cairn-tune) chooses an implementation on that evidence only with `--accept-emulated`.
 
 Every record says the device work was emulated. The build receipt and the records of `cairn run`, `cairn test` and `cairn validate` carry `emulation`, with the target the program was judged against, and `cairn run` at a terminal prints the same note on standard error. An emulated result is evidence about the host and never about a device. It is not a way to time device code either: the lanes run on a few host threads and each block's threads meet at operating-system barriers, so a time a program prints measures that. [numerics.md](numerics.md#emulated-device-runs) says where an emulated result can differ from a device run.
+
+## What fast kernels use
+
+Fast CUDA kernels lean on a known set of features. The table says how a CAIRN program writes each one. Safe means checked CAIRN. Typed PTX means only inside `unsafe { asm ptx ... }`, whose declared effects are trusted as written ([memory.md](memory.md#layout-and-the-machine)). Foreign means a [foreign CUDA implementation](memory.md#foreign-implementations) of a CAIRN reference: vendored CUDA that `cairn foreign` builds and inspects and `cairn validate` holds to the reference. Every row that is not safe has that route, so a kernel that needs the feature takes it rather than a narrower design.
+
+| Feature | CUDA | CAIRN | Checked |
+|---|---|---|---|
+| 16-byte loads and stores with a cache hint | `float4`, `__ldg`, `__ldcg`, `__ldcs`, `__stcs` | safe only as `plan f { vector 4; }` over `x[i]` in a device `parallel` region; typed PTX anywhere else | accepted, `load_wide` is E-CALLEE |
+| Atomics on device memory | `atomicAdd`, `atomicMax`, `atomicCAS` | foreign: an `Atomic` is a host object, and typed PTX that writes an array is a whole-array write a lane may not make | E-PLACEMENT, E-PARALLEL-RACE |
+| Atomics on shared memory | `atomicAdd` on `__shared__` | foreign: typed PTX writes the array in every thread of a phase | E-COOP-CONFLICT |
+| A last block that finishes, grid-wide sync | `__threadfence` and an atomic ticket, `grid.sync()` | foreign: two regions are two launches | accepted |
+| Shared memory nobody zeroes | `__shared__ float s[256];` | not written: a shared array is `= zeroed`, and the row says `zero_init` | E-PARSE |
+| Warp vote and ballot | `__ballot_sync`, `__any_sync` | safe as `reduce \| warp yield` of one bit a lane, five shuffles where CUDA takes one vote | accepted |
+| Warp match | `__match_any_sync` | foreign | E-CALLEE |
+| Shuffles | `__shfl_sync`, `__shfl_xor_sync`, `__shfl_down_sync`, `__shfl_up_sync` | safe: `shuffle`, `shuffle_xor`, `shuffle_down`; there is no `shuffle_up` | accepted, E-CALLEE |
+| Grid-stride loops | `i += gridDim.x * blockDim.x` | safe: a `while` loop in a cooperative region, and the runtime strides a grid past 65,535 blocks | accepted |
+| Dynamic shared memory, more than 48 KiB | `extern __shared__`, `cudaFuncSetAttribute` | foreign: a shared array has a constant length, 48 KiB a block | E-COOP-SHARED |
+| Launch bounds | `__launch_bounds__(T, B)` | safe in part: a cooperative kernel is `__launch_bounds__(T)`, and blocks per SM are not stated | accepted |
+| Unrolling | `#pragma unroll` | safe: nvcc unrolls a loop of constant bounds, and `plan f { unroll U; }` a device region's index loop | accepted |
+| Packed half and bf16 math | `__hfma2`, `__hmul2` | typed PTX on the `u32` bits, since storage floats never compute | E-OPERATOR, accepted |
+| Fast approximate math | `__expf`, `__fdividef`, `rsqrtf` | typed PTX (`ex2.approx.f32`), since `std.math` is not callable in a lane | E-PARALLEL-CALL, accepted |
+| No-alias knowledge | `__restrict__` | the checker knows an `ro` view is not written during the call (`E-ALIAS` at every call), and the lowering does not tell nvcc | accepted |
+| Asynchronous copies | `cp.async` of 4, 8 or 16 bytes | safe as pipeline stages of 4- or 8-byte elements, one copy an element; 16-byte copies only inside `mma_unordered` | accepted, E-COOP-SHARED |
+| `ldmatrix`, `mma.sync` | `ldmatrix.sync`, `mma.sync.m16n8k16` | safe on f16 and bf16 through `MmaA`, `MmaB` and `MmaAcc`; other shapes and types foreign | accepted |
+| `wgmma`, TMA, clusters, distributed shared memory | `wgmma.mma_async`, `cp.async.bulk.tensor`, `__cluster_dims__` | foreign, on a target that has the feature; `TmemAcc` is refused where it is not lowered | E-TARGET-FEATURE |
+| Block-wide cooperative groups | `this_thread_block().sync()`, `tiled_partition<32>` | safe: `barrier;` and the warp operations | accepted |
+| Memory fences, `__nanosleep` | `__threadfence()`, `__nanosleep(ns)` | typed PTX, a fence declared as `effects(fence)` | accepted |
+| Persistent kernels | one block an SM and a work loop | safe with a static schedule; a work counter shared by blocks is foreign | accepted, E-PLACEMENT |
+| Streams | `cudaStream_t`, events | safe: `spawn parallel ... after t` and `spawn transfer` queue work on a stream of their own; a cooperative region is not queued | accepted, E-PARSE |
+| CUDA graphs | `cudaGraph_t` | foreign: host code in a vendored `.cu` | none |
+
+`tests/soundness/test_expressiveness.py` holds the table. For each row it compiles the spellings the row names and requires what the last column says: accepted, or refused with that code. A row whose check is `none` has nothing to compile.
