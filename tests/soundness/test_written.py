@@ -195,7 +195,10 @@ HELPER = "fn peek(k:usize, v:rw<f32>[k]) -> f32 = v[0];\n"
             "shared s:f32[256];\n    for k in 0..n {\n      s[t] = 1.0;\n      barrier;\n    }\n    let v = s[t];\n",
             "s[0]",
         ),
-        ("shared s:f32[256];\n    s[t] = 1.0;\n    barrier;\n    let v = s[usize(x[t % n]) % 256];\n", "cannot follow"),
+        (
+            "shared s:f32[256];\n    if t > 0 { s[t] = 1.0; }\n    barrier;\n    let v = s[usize(x[t % n]) % 256];\n",
+            "cannot follow",
+        ),
         ("shared s:f32[256];\n    if n > 5 { s[t] = 1.0; }\n    barrier;\n    let v = s[255 - t];\n", "s[255]"),
         ("shared s:u32[256];\n    atomic_add_wrap(s[t], 1);\n", "s[0]"),
         ("shared s:f32[256];\n    let v = s[t];\n    s[t] = v;\n", "no thread surely wrote"),

@@ -8,7 +8,7 @@ import shutil
 
 import pytest
 
-from cairn.compiler.cairnc import Diagnostic, compile_program
+from cairn.compiler.cairnc import Diagnostic, compile_program, compile_source
 from cairn.projects.target import parse
 from cairn.verify.validation import validate
 
@@ -230,3 +230,57 @@ def test_tune_does_not_choose_an_implementation_validated_on_one_point_of_its_do
     assert record["status"] == "passed"
     answer = tune(ZERO, "total", [{"n": 1e6}], history=history)
     assert answer["chosen"].get("use") != "total_zero", answer["chosen"]
+
+
+# --- Fixed: a shared table every thread wrote before a barrier was refused where a data index read it --------------
+
+LOOKUP = """fn lookup(g:usize, n:usize, table:ro<u32>[32], x:ro<u32>[n], out:rw<u32>[n]) {
+  blocks b in g threads t in 32 {
+    shared lut:u32[32];
+    lut[t] = table[t];
+    barrier;
+    let i = b * 32 + t;
+    if i < n { out[i] = lut[usize(x[i] % 32)]; }
+  }
+}
+
+fn check(n:usize) -> i32 {
+  buffer table:u32[32] = zeroed;
+  for j in 0..32 { table[j] = u32(j) * 7 + 3; }
+  buffer x:u32[n] = zeroed;
+  for j in 0..n { x[j] = u32(j) * 13; }
+  buffer out:u32[n] = zeroed;
+  lookup((n + 31) / 32, n, table, x, out);
+  for j in 0..n { if out[j] != table[usize(x[j] % 32)] { return 1; } }
+  return 0;
+}
+
+fn main() -> i32 { return check(100); }
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_shared_table_written_whole_before_a_barrier_may_be_read_at_any_index(tmp_path, cxx):
+    """Every element of `lut` is written before the barrier, so whichever element a data index names was written
+    first, and an index past the end stops at its guard. The rule refused any index it could not follow, even there,
+    which pushed a lookup table to `= zeroed` and a fill it does not need. It runs on host threads, where an unzeroed
+    array starts each block filled with a pattern, and gives the table's values under both compilers."""
+    from emitted import contract
+
+    cpp = compile_source(LOOKUP)[0]
+    flags = ("-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all") if cxx == "clang++" else ()
+    done = contract(tmp_path, cpp, cxx, *flags)
+    assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+
+
+def test_a_table_written_in_part_is_still_refused_at_an_index_it_cannot_follow():
+    from emitted import refused
+
+    refused("E-COOP-UNWRITTEN", LOOKUP.replace("lut[t] = table[t];", "if t < 31 { lut[t] = table[t]; }"))
+
+
+def test_the_lookup_table_s_threads_race_nowhere(tmp_path):
+    from emitted import watched
+
+    done = watched(tmp_path, compile_source(LOOKUP)[0], "clang++", "thread")
+    assert done.returncode == 0 and "ThreadSanitizer" not in done.stderr, done.stderr[-3000:]

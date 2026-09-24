@@ -160,7 +160,7 @@ fn shift(g:usize, out:rw<u64>[g]) {
 }
 ```
 
-A shared array declared with no initializer, `shared warps:u32[8];`, is not zeroed where each block starts. The checker accepts it when every element a thread reads was written first, by that thread earlier or by any thread before a barrier between them, whichever way the body runs. The same run of one block that checks the phases shows it: a write under a condition the block may not take, in a loop that may not run or by a callee counts for nothing, and neither does a read at an index the checker cannot follow.
+A shared array declared with no initializer, `shared warps:u32[8];`, is not zeroed where each block starts. The checker accepts it when every element a thread reads was written first, by that thread earlier or by any thread before a barrier between them, whichever way the body runs. The same run of one block that checks the phases shows it: a write under a condition the block may not take, in a loop that may not run or by a callee counts for nothing, and a read at an index the checker cannot follow is accepted only once every element of the array was written, as a lookup table every thread fills before a barrier is.
 
 ```cairn
 fn block_max(n:usize, x:ro<u32>[n], g:usize, out:rw<u32>[g]) {

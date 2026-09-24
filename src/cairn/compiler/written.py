@@ -13,7 +13,7 @@ callee to write (which may read it first) must reach elements written that way, 
 thread earlier in the phase. A write that may not happen (under an unknown condition, in a loop that may not run, or
 by a callee) makes nothing written. A branch the whole block takes one way it cannot tell keeps what both ways wrote;
 a loop whose trip count it cannot tell, and whose body holds a barrier, keeps what came before it. An index it cannot
-follow is refused, since it cannot show that element was written.
+follow is refused, since it cannot show that element was written, unless every element of the array was.
 
 Anything else is E-COOP-UNWRITTEN, naming the first element read before any write. Without a zero fill a block starts
 with what the last block on that SM left, which nothing may read; on the host the unzeroed arrays start each block
@@ -126,6 +126,7 @@ class Written(BlockRun):
     def reached(self, array: str, index: Any, node: Any, mask: list[int] | None):
         """Refuse a read of an unzeroed array that may reach an element nobody surely wrote first."""
         size = self.counts[array]
+        whole = all((array, (frozenset(), e)) in self.done for e in range(size))  # the array written throughout
         for alternative in self.open:
             for t in range(self.T):
                 if mask is not None and not mask[t]:
@@ -136,6 +137,8 @@ class Written(BlockRun):
                     key = keyed(idx)
                     if key is not None and ((array, key) in self.done or (array, key) in self.mine(alternative, t)):
                         continue
+                    if key is None and whole:
+                        continue  # every element was written first, so whichever one the index names was
                     shown = "..." if key is None else repr(idx)
                     why = "an index the checker cannot follow, so it cannot show the element was written first" \
                         if key is None else "and no thread surely wrote that element first"  # fmt: skip
