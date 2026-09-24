@@ -47,7 +47,8 @@ BUILT = "build"  # where builds of an export go, inside it; never part of what t
 INCLUDE = re.compile(r'^#include "([^"]+)"', re.M)
 COMPILER = re.compile(r"(clang\+\+|g\+\+)(-[0-9][0-9.]*)?")  # the names a build finds its C++ compiler by
 PLAIN = re.compile(r"[A-Za-z0-9_-]{1,64}")  # an artifact's name, as `export` makes it from the project's
-DEVICE_SIDE = {"cairn_kernels.hpp", "cairn_runtime.hpp", "cairn_assert.hpp", "cairn_float.hpp", "cairn_layout.hpp"}
+DEVICE_SIDE = {"cairn_kernels.hpp", "cairn_runtime.hpp", "cairn_assert.hpp", "cairn_float.hpp", "cairn_layout.hpp",
+               "cairn_access.hpp"}  # fmt: skip
 LAUNCH = {"cairn_gpu.hpp", "cairn_exec.hpp", "cairn_reuse.hpp"}
 
 

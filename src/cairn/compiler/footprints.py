@@ -33,6 +33,7 @@ from itertools import count, permutations
 from typing import TYPE_CHECKING, Any
 
 from .tree import USIZE, Expr, Function, Stmt, fail, is_view, nested, root
+from .wide import Wide
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -147,8 +148,18 @@ def assigned(ss: list[Stmt]) -> set[str]:
     return found
 
 
+def arguments(e: Expr) -> list[Expr]:
+    """A call's arguments as the rules see them: a wide access reaches the part x[i .. i + K] of its array
+    (compiler/wide.py), and that part stands in its array's place."""
+    if isinstance(e.ref, tuple) and len(e.ref) == 2 and isinstance(e.ref[1], Wide) and e.args:
+        return [e.ref[1].part, *e.args[1:]]
+    return e.args
+
+
 def lent(e: Expr) -> list[tuple[Expr, str]]:
     """The arguments a call lends, with the mode each is lent in: rw for what it may write."""
+    if isinstance(e.ref, tuple) and len(e.ref) == 2 and isinstance(e.ref[1], Wide):  # a wide load or store
+        return [(e.ref[1].part, "rw" if e.val == "store_wide" else "ro")]
     if isinstance(e.ref, Function):
         return [(a, t.mode) for a, (_, t) in zip(e.args, e.ref.params, strict=False) if t.mode != "value"]
     if isinstance(e.ref, tuple) and e.ref[:1] == ("stage",) and e.ref[2] == "fill":  # a pipeline reads its source
@@ -256,7 +267,7 @@ class Globals:
             return
         if e.tag == "call":
             given = {id(a): mode for a, mode in lent(e)}
-            for a in e.args:
+            for a in arguments(e):
                 mode = given.get(id(a))
                 if mode is None:
                     self.reads(a, env)

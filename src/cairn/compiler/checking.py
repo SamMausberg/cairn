@@ -52,6 +52,9 @@ from .tree import (
     fail,
     is_view,
 )
+from .wide import CACHES
+
+BUILTIN_ENUMS = ("Order", "Cache")  # declared for every program, and defined only where a module declares its own
 
 
 def parts(layout: Any) -> list[Type]:
@@ -135,6 +138,7 @@ class Checker:
         self.sites: list[dict[str, Any]] = []
         self.fs = {f.name: f for f in program.functions}
         program.enums.setdefault("Order", ORDERS)
+        program.enums.setdefault("Cache", CACHES)  # the hints of a wide load or store (wide.py)
         self.types = {**program.records, **program.enums, **program.sums}
         for name in [*self.fs, *self.types, *program.consts, *program.traits]:
             if name in CPP or name in set(TABLE) - SOFT or name in INTRINSIC_TYPES:
@@ -397,7 +401,7 @@ class Checker:
         Where every refusal is reported, each kind is checked whole, and a refused one ends the check after it: what
         names a refused declaration would be judged against half of it."""
         for name in self.types:
-            if not self.p.generics.get(name) and (name != "Order" or "Order" in self.p.modules):
+            if not self.p.generics.get(name) and (name not in BUILTIN_ENUMS or name in self.p.modules):
                 with self.refusing(name), self.within(self.p.modules.get(name, "")):
                     self.define(Type(name))
         for name in [] if self.refusals else list(self.p.consts):

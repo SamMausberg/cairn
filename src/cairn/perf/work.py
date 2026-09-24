@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..compiler import chunks, fusion
+from ..compiler import chunks, fusion, wide
 from ..compiler.builtins import WRAPPING
 from ..compiler.tree import FLOAT, INT, NUMERIC, Expr, Function, Stmt, Type, is_view
 from .cooperative_work import region
@@ -381,6 +381,25 @@ class Counter:
         add(at.work.writes if write else at.work.reads, key, at.times * element)
         widen(at.work.footprint, key, reach)
 
+    def wide(self, e: Expr, access: wide.Wide, at: Frame) -> None:
+        """A wide load or store (compiler/wide.py): one access of K adjacent elements and its guard, a stream of K
+        elements a pass where its index moves with a binder, as K accesses at [i] would be."""
+        write = e.val == "store_wide"
+        at.work.op("bounds_guard", at.times)
+        at.work.op("store" if write else "load", at.times)
+        key, index = path(e.args[0]), e.args[1]
+        if self.coop is not None and key.split(".")[0] in self.coop.local:  # a block's shared memory: its wavefronts
+            at.work.op("shared_wavefront", at.times * (-(-32 * access.bytes // 128) / 32))
+            add(at.work.writes if write else at.work.reads, "shared " + key.split(".")[0], at.times * access.bytes)
+            return
+        reach = self.extent(e.args[0].ty, key) * access.size if e.args[0].ty is not None else Poly()
+        if data_dependent(index, self.data, at.binders):
+            add(at.work.irregular, key, at.times)
+        elif mentioned(index) & set(at.binders) and (key, write) not in at.seen:
+            at.seen.add((key, write))
+            add(at.work.writes if write else at.work.reads, key, at.times * access.bytes)
+        widen(at.work.footprint, key, reach)
+
     def call(self, e: Expr, at: Frame) -> None:
         for a in e.args:
             self.expr(a, at)
@@ -392,7 +411,9 @@ class Counter:
             return
         kind = ref[0] if isinstance(ref, tuple) and ref else ""
         name = e.val
-        if kind == "builtin":
+        if kind == "builtin" and isinstance(ref[-1], wide.Wide):
+            self.wide(e, ref[-1], at)
+        elif kind == "builtin":
             if name in NUMERIC:
                 at.work.op("convert" if e.established or name in FLOAT else "convert_guard", at.times)
             elif name in WRAPPING or name in {"min", "max"}:

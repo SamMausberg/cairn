@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import block_run, execution, footprints, fragments, phases, pipelines
+from . import block_run, execution, footprints, fragments, phases, pipelines, wide
 from .constants import constant
 from .effects import DEVICE_SAFE, LANE_SAFE
 from .footprints import natural
@@ -74,7 +74,7 @@ ALIGN = 128  # where each shared array starts: tensor-core fragments load from 3
 SHUFFLES = {"shuffle", "shuffle_xor", "shuffle_down"}
 SHARED_STATE = {"Atomic", "Mutex"}  # what threads handed the same one may still see differently
 # The primitives that write an argument; every other one takes its arguments by value or ro (builtins.TABLE).
-WRITING = {"take", "swap", "transfer", "mma_store"}
+WRITING = {"take", "swap", "transfer", "mma_store", "store_wide"}
 
 
 # Who reaches a statement together ---------------------------------------------------------------------------------
@@ -436,8 +436,13 @@ def placements(c: Checker, ss: list[Stmt]) -> set[str]:
 
     def places(e: Expr) -> set[str]:
         mine = {c.env[root(e).val].ty.place} if e.tag == "index" and root(e).val in c.env else set()
-        if e.tag == "call" and e.val in fragments.OPERATIONS and e.args and root(e.args[0]).val in c.env:
-            mine.add(c.env[root(e.args[0]).val].ty.place)  # a fragment's tile is read where the region runs
+        if (
+            e.tag == "call"
+            and e.val in {*fragments.OPERATIONS, *wide.NAMES}
+            and e.args
+            and root(e.args[0]).val in c.env
+        ):
+            mine.add(c.env[root(e.args[0]).val].ty.place)  # a fragment's tile, or a wide access's array
         return mine.union(*(places(a) for a in e.args))
 
     found: set[str] = set()

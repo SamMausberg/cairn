@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from . import chunks, facts, fusion, staging
+from . import chunks, facts, fusion, staging, wide
 from .builtins import WRAPPING, crossing
 from .effects import DEVICE_SAFE, LANE_SAFE
 from .scope import Binding, Lanes
@@ -35,7 +35,8 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
         fail("E-PARALLEL-NEST", "A lane cannot start another parallel region.", s)
 
     def places(e: Expr) -> set[str]:
-        mine = {c.env[root(e).val].ty.place} if e.tag == "index" and root(e).val in c.env else set()
+        base = e if e.tag == "index" else e.args[0] if e.tag == "call" and e.val in wide.NAMES and e.args else None
+        mine = {c.env[root(base).val].ty.place} if base is not None and root(base).val in c.env else set()
         return mine.union(*(places(a) for a in e.args))
 
     def scan(ss: list[Stmt]) -> set[str]:

@@ -20,7 +20,7 @@ from itertools import count
 from typing import Any
 
 from . import fragments, layouts
-from .footprints import Poly, assigned, lent, opaque
+from .footprints import Poly, arguments, assigned, lent, opaque
 from .tree import BOOL, USIZE, Expr, Stmt, fail, nested, root
 
 MAX = 2**64 - 1
@@ -241,7 +241,7 @@ class BlockRun:
     def call(self, e: Expr, env: dict[str, Any], mask: list[int] | None, now: float) -> Any:
         given = {id(a): mode for a, mode in lent(e)}
         values = []
-        for a in e.args:
+        for a in arguments(e):
             mode = given.get(id(a))
             if mode is None or a.tag == "lambda":
                 values.append(self.expr(a, env, mask, now))

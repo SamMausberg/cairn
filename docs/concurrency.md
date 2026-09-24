@@ -367,7 +367,7 @@ fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i
 plan scale { block 128; per_lane 4; unroll 4; }   // 128 threads a block, about four indices each
 ```
 
-`vector W` has each device lane run `W` adjacent indices with one load and one store of at most 16 bytes per array it touches only at `x[i]`, so an `f32` array takes `vector 4` at most. A pointer not aligned to the chunk width runs the scalar lanes instead. `E-PLAN` refuses a width that is not a power of two, a chunk wider than 16 bytes, and `vector` beside `fuse`.
+`vector W` has each device lane run `W` adjacent indices with one load and one store of at most 16 bytes per array it touches only at `x[i]`, so an `f32` array takes `vector 4` at most. A pointer not aligned to the chunk width runs the scalar lanes instead. `E-PLAN` refuses a width that is not a power of two, a chunk wider than 16 bytes, and `vector` beside `fuse`. A lane that reaches its elements some other way says so itself with [`load_wide` and `store_wide`](devices.md#wide-loads-and-stores).
 
 ```cairn
 fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {

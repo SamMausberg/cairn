@@ -241,6 +241,38 @@ tiles.fill at line 9 would refill the stage of tiles released at line 12 while o
 
 The depth is a constant of the declaration, and `strided_sums[2]` and `strided_sums[3]` compute the same sums. Raising it changes only the block's shared memory (depth times the stage's bytes, in the receipt's `local_storage` and the kernel's static shared memory) and how many copies a `wait` leaves in flight, which the checker counts: `cp.async.wait_group 1` at depth 2, `2` at depth 3. [`cairn predict`](tools.md#cairn-predict) prices what the depth changes: the shared memory, the blocks an SM holds, and the copies each block keeps in flight. On the device a fill is one `cp.async` per element, committed as one group per thread. On the host it is each thread's own copy, so a read the checker let through too early would race with it under the thread sanitizer.
 
+## Wide loads and stores
+
+`load_wide[K](x, i)` reads `x[i]` to `x[i + K - 1]` as one `Array[T, K]`, and `store_wide(x, i, v)` writes one back. On the device each is one access of up to 16 bytes, the widest a thread moves at once, with the cache behaviour a hint names.
+
+```cairn
+// Each lane scales four adjacent elements, streaming x and out past caches that will not see them again.
+fn scaled(m:usize, n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, a:f32) {
+  parallel i in m {
+    let v = load_wide[4](x, 4 * i, Cache.streaming);
+    let mut w = Array[f32, 4]();
+    for k in 0..4 { w[k] = a * v[k]; }
+    store_wide(out, 4 * i, w, Cache.streaming);
+  }
+}
+```
+
+`K` is a constant power of two, and `K` elements of a scalar or storage float fill at most 16 bytes: 4 `f32`, 8 `f16`, 2 `f64`, 16 `u8` (`E-WIDE`). A store takes an `Array` of the array's own element type. Each access traps unless its `K` elements lie inside the array and `x[i]` sits on `K * sizeof(T)` bytes. PTX leaves a misaligned vector access undefined, and a view the caller passes may start anywhere its element's alignment allows, so the second guard stays; where `i` is a multiple of `K`, nvcc reduces it to one test of the base pointer. The host checks both guards too, so a host or emulated run traps where a device run would.
+
+A hint is written by name: `Cache.all` (the default), `Cache.l2` (`.cg`), `Cache.streaming` (`.cs`), `Cache.last_use` (`.lu`, loads only) and `Cache.read_only` (`.nc`, the path `__ldg` takes). `Cache.read_only` reads only an `ro` view of device memory, which nothing writes while it is lent. A block's shared memory has no caches to hint, so a shared array takes no hint but `Cache.all`. On the host an access is `K` ordinary loads or stores, and the hint says nothing.
+
+```cairn rejects E-WIDE
+fn wide(n:usize, x:ro<f64>[n]@device, out:rw<f64>[n]@device) {
+  parallel i in n / 4 { let v = load_wide[4](x, 4 * i); store_wide(out, 4 * i, v); }    // 32 bytes at once
+}
+```
+
+```text
+load_wide moves a power of two of elements in one access of at most 16 bytes: f64 takes 1 to 2, and 4 is not one of them.
+```
+
+Every other rule sees an access as the part `x[i..i + K]` it reaches. A lane that stores `out[4 * i..4 * i + 4]` owns that block of `out` (`E-PARALLEL-RACE` otherwise), and the phase rule and the rule that each outside element has one writer count all `K` elements. The row gains `read:x` or `write:x` and `trap`, and [`cairn explain`](tools.md#cairn-explain) lists each access with the bytes it moves and its cache operator. The example above compiles for sm_120 to `LDG.E.EF.128` and `STG.E.EF.128` with no local memory, and has not run on a GPU.
+
 ## Emulating device code on the host
 
 `--emulate` builds, runs and tests a device program on a machine without a GPU. Every device region, collector, cooperative region, `kernel fn`, transfer and queued ticket then runs on host threads, so a kernel can be checked for correctness where no device is.
@@ -278,7 +310,7 @@ Fast CUDA kernels lean on a known set of features. The table says how a CAIRN pr
 
 | Feature | CUDA | CAIRN | Checked |
 |---|---|---|---|
-| 16-byte loads and stores with a cache hint | `float4`, `__ldg`, `__ldcg`, `__ldcs`, `__stcs` | safe only as `plan f { vector 4; }` over `x[i]` in a device `parallel` region; typed PTX anywhere else | accepted, `load_wide` is E-CALLEE |
+| 16-byte loads and stores with a cache hint | `float4`, `__ldg`, `__ldcg`, `__ldcs`, `__stcs` | safe: [`load_wide[K]` and `store_wide`](#wide-loads-and-stores) with a `Cache` hint, in any code, and `plan f { vector 4; }` over `x[i]` in a device `parallel` region | accepted, E-WIDE |
 | Atomics on device memory | `atomicAdd`, `atomicMax`, `atomicCAS` | foreign: an `Atomic` is a host object, and typed PTX that writes an array is a whole-array write a lane may not make | E-PLACEMENT, E-PARALLEL-RACE |
 | Atomics on shared memory | `atomicAdd` on `__shared__` | foreign: typed PTX writes the array in every thread of a phase | E-COOP-CONFLICT |
 | A last block that finishes, grid-wide sync | `__threadfence` and an atomic ticket, `grid.sync()` | foreign: two regions are two launches | accepted |
