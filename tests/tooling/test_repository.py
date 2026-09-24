@@ -111,6 +111,19 @@ def test_every_relative_link_names_a_file_and_heading_that_exist():
     assert not dangling, "\n".join(dangling)
 
 
+def test_every_example_project_is_indexed_and_every_bench_folder_has_a_readme():
+    """A newcomer finds a program from examples/README.md and a measurement from its folder's README."""
+    names = tracked()
+    index = (ROOT / "examples/README.md").read_text(encoding="utf-8")
+    linked = {target.rstrip("/") for target in re.findall(r"\]\(([^)#\s]+)\)", index)}
+    projects = {str(Path(n).parent.relative_to("examples")) for n in names if re.match(r"examples/.+/cairn\.toml$", n)}
+    missing = [p for p in sorted(projects) if not any(p == d or p.startswith(d + "/") for d in linked & projects)]
+    assert not missing, f"list these in examples/README.md: {missing}"
+    folders = {n.split("/")[1] for n in names if n.startswith("bench/") and n.count("/") >= 2}
+    bare = sorted(f for f in folders if f"bench/{f}/README.md" not in names)
+    assert not bare, f"give these bench folders a README.md: {bare}"
+
+
 def test_make_help_names_every_target():
     """`make help` is how a newcomer finds the gates, so every target the Makefile declares is in it."""
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
