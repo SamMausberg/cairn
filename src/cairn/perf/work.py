@@ -281,16 +281,19 @@ class Counter:
         )
 
     def s_compact(self, s: Stmt, at: Frame) -> None:
+        """A compaction: in the calling thread, a loop; on the device, a region whose body is one index's work, as a
+        reduction's is, which the region's count multiplies."""
         out, hi, predicate, value = s.exprs
         count = self.size(hi) or Poly.var(f"?count@{s.line}")
-        inner = Frame(at.work if s.ref != "device" else Work(), at.times * count, (*at.binders, s.binder), at.lane)
+        device = s.ref == "device"
+        inner = Frame(Work(), ONE, (s.binder,), True) if device else at.inner(count, s.binder)
         inner.seen.add((path(out), True))
         self.expr(predicate, inner)
         self.expr(value, inner)
         size = self.c.sizeof(out.ty.value) if out.ty else 8
         add(inner.work.writes, path(out), inner.times * size)
         inner.work.op("collect", inner.times)  # a store at a count that moves with the data, one element at a time
-        if s.ref == "device":
+        if device:
             self.cost.regions.append(Region("device", s.line, count, at.times, inner.work))
 
     def s_defer(self, s: Stmt, at: Frame) -> None:

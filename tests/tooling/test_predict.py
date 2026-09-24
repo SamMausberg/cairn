@@ -104,6 +104,19 @@ def test_folds_that_wait_on_the_last_step_are_their_own_kind():
     assert suite("compact_even")["compact_even"].seq.ops["collect"].render() == "n"
 
 
+def test_a_device_compaction_is_counted_per_index():
+    """Its region's body is one index's work, which the region's count multiplies, as a reduction's is; counting the
+    whole loop in the body priced it by n squared."""
+    source = (SUITE / "compact_even" / "kernel.cairn").read_text().replace("[n]", "[n]@device")
+    (region,) = costs(source)["compact_even"].regions
+    assert (region.kind, region.count.render()) == ("device", "n")
+    assert rendered(region.body.reads) == {"x": "8"} and rendered(region.body.writes) == {"out": "8"}
+    assert region.body.ops["collect"].render() == "1"
+    c = costs(source)["compact_even"]
+    once, twice = (model.predict(c, MACHINE, {"n": n})["ns"] for n in (1e7, 2e7))
+    assert once < 1e6 and 1.9 < twice / once < 2.0  # 160 MB streamed, and twice that, beside one launch
+
+
 def test_tasks_carry_their_share():
     cost = suite("tasks_split")["tasks_split"]
     assert len(cost.tasks) == 4
