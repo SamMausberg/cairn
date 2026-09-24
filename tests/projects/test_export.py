@@ -16,7 +16,7 @@ import pytest
 from cairn.cli import main
 from cairn.compiler.cairnc import RUNTIME_FILES
 from cairn.projects import export as exported
-from cairn.projects.project import load_project
+from cairn.projects.project import digest, load_project
 from emitted import code_of
 
 NVCC = pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")
@@ -80,7 +80,7 @@ def test_an_export_holds_the_program_exactly_the_headers_it_includes_and_its_rec
     assert record["command"][0] == shutil.which("g++") and record["command"][-3:] == ["program.cpp", "-o", "summed"]
     assert record["compilers"]["cxx"]["version"].startswith("g++") and record["device_target"] is None
     assert record["identity"] == exported.identity(record) and set(record["functions"]) >= {"total", "main"}
-    assert {n: exported.sha(made / n) for n in record["files"]} == record["files"]
+    assert {n: digest(made / n) for n in record["files"]} == record["files"]
 
 
 def test_a_build_and_a_run_of_the_export_carry_its_identity(made, tmp_path):
