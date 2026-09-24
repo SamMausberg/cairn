@@ -146,3 +146,27 @@ def test_a_host_atomic_update_in_a_selected_implementation_keeps_every_wait(name
     assert "atomic" in checker.rows[name]
     assert execution.unwaited(checker, checker.fs[name]) == execution.OBSERVES["atomic"]
     assert not execution.held(checker, checker.fs[name])
+
+
+# --- Fixed: a prediction priced a program on a card whose target its build refuses ----------------------------------
+
+BULK = """fn scale(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, a:f32) { parallel i in n { out[i] = a * x[i]; } }
+fn scale_bulk(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, a:f32) implements scale needs(tma) {
+  parallel i in n { out[i] = a * x[i]; }
+}
+plan scale use scale_bulk;
+"""
+
+
+def test_a_prediction_for_a_target_the_build_refuses_is_refused_as_the_build_refuses_it():
+    """`plan scale use scale_bulk;` needs tma, which sm_80 lacks, so a build for sm_80 is E-IMPL-TARGET. `cairn predict
+    --card a100` and `--card all` still priced it on the A100 for sm_80, a time for code that cannot exist."""
+    from cairn.perf.profile import card, carrying, default
+    from cairn.perf.report import across, report
+
+    with pytest.raises(Diagnostic) as refused:
+        report(BULK, profile=carrying(default(), card("a100")), device=parse("sm_80"))
+    assert refused.value.data["code"] == "E-IMPL-TARGET"
+    cards = {c["card"]: c for c in across(BULK)["cards"]}
+    assert cards["a100-sxm4-80gb"]["refused"]["code"] == "E-IMPL-TARGET"
+    assert "refused" not in cards["h100-sxm5"] and cards["h100-sxm5"]["device_target"] == "sm_90a"
