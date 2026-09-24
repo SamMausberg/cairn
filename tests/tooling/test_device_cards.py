@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from cairn.cli import main
-from cairn.perf import report
+from cairn.perf import feedback, report
 from cairn.perf.profile import DEFAULT_CARD, Device, card, cards, carrying, default
 from cairn.projects import target
 from cairn.projects.project import load_project
@@ -180,12 +180,21 @@ def test_a_kernel_is_read_for_the_card_s_own_target(capsys):
 
 @NVCC
 def test_two_instances_are_compared_for_sm_90a_and_priced_on_the_h100(capsys):
-    """The compile-only inspection an agent without the GPU runs: ptxas for sm_90a, the model on the H100 card."""
+    """The compile-only inspection an agent without the GPU runs: ptxas for sm_90a, the model on the H100 card. The
+    reference and an instance differ in their registers, which ptxas reads; the four instances no longer do."""
     found = answer(capsys, "tune", str(COOPERATIVE / "tuned.toml"), "--symbol", "row_totals", "--at",
                    "rows=64,cols=1e5", "--device-target", "sm_90a", "--card", "h100", "--no-history", "--compare",
-                   "use row_totals_tiled[128, 2]", "--compare", "use row_totals_tiled[256, 3]")  # fmt: skip
+                   "", "--compare", "use row_totals_tiled[256, 3]")  # fmt: skip
     assert found["device_target"]["name"] == "sm_90a" and found["device_card"]["card"] == "h100-sxm5"
     said = [line["text"] for line in found["lines"]]
     assert any(text.startswith("registers per thread: ") for text in said)
-    assert any("published limits of the H100 SXM5 80GB" in line["by"] for line in found["lines"]
-               if line["kind"] == "hypothesis")  # fmt: skip
+    assert "static shared memory bytes per block: 0 -> 8192" in said
+
+
+def test_residency_that_registers_change_is_priced_on_the_card():
+    """Two readings whose registers let a different share of an SM's threads stay resident on the H100: the hypothesis
+    cites the card's published limits."""
+    read = {k: {"status": "read", "registers": regs, "shared_bytes": 0, "dynamic_shared_bytes": 0, "spill_bytes": 0,
+                "memory": {}} for k, regs in (("a", 32), ("b", 128))}  # fmt: skip
+    said = feedback.reasoning([], read, True, {"a": [[]], "b": [[]]}, "f", priced=card("h100").device)
+    assert any("published limits of the H100 SXM5 80GB" in line["by"] for line in said if line["kind"] == "hypothesis")
