@@ -116,6 +116,7 @@ def implementation_hash():
                 "verify/smt_bridge.py",
                 "verify/elision.py",
                 "compiler/cairnc.py",
+                "compiler/compilations.py",
                 "compiler/lexing.py",
                 "compiler/tree.py",
                 "compiler/syntax.py",

@@ -182,6 +182,11 @@ class Checker:
         self.alternatives: dict[str, list[str]] = {}  # reference -> its implementations (implementations.py)
         self.selected: dict[str, str] = {}  # reference -> the implementation a plan runs
 
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """A copy of a finished check (compiler/compilations.py) keys what was typed ahead by the copied expressions."""
+        self.__dict__.update(state)
+        self.early = {id(e): e for e in self.early.values()}
+
     # Names and types ---------------------------------------------------------------------------
 
     def qualify(self, name: str, *tables, node=None) -> str | None:

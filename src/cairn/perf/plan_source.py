@@ -14,7 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import Diagnostic, compile_program
+from ..compiler import compilations
+from ..compiler.cairnc import Diagnostic
 from ..compiler.concurrency import PLAN_ITEMS, planned_functions
 from ..compiler.lexing import lex
 from ..compiler.tree import Function, fail
@@ -90,7 +91,7 @@ class Placement:
     def __init__(self, source: str, symbol: str, checked: tuple[Any, Any] | None = None):
         """`checked` is the program and checker of `source` when the caller has them."""
         self.source = source
-        program, checker = checked or compile_program(source)[:2]
+        program, checker = checked or compilations.program(source)[:2]  # a copy of the one check of this source
         self.f = function(program, symbol)
         self.name = short(self.f)
         tokens = lex(source)
@@ -133,7 +134,7 @@ def contract(source: str, symbol: str, checked: tuple[Any, Any, dict] | None = N
     `checked` is what compile_program answered for `source` when the caller has it."""
     from ..agent.projection import signature
 
-    program, _, receipts = checked or compile_program(source)
+    program, _, receipts = checked or compilations.program(source)
     f = function(program, symbol)
     return {"kind": "plan", "signature": signature(f), "effects": receipts[f.name]["effects"]}
 

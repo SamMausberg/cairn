@@ -15,7 +15,8 @@ from typing import Any
 
 from ..agent.agent_tools import explain
 from ..agent.skill import card_link
-from ..compiler.cairnc import Diagnostic, compile_program
+from ..compiler import compilations
+from ..compiler.cairnc import Diagnostic
 from ..compiler.modules import library_path
 from ..compiler.syntax import IDENT, RESERVED, Program
 from .formatting import CLOSERS, OPENERS, Item, roles, scan
@@ -115,9 +116,6 @@ class Document:
             return [], [shown for shown, _ in reported]
         except Exception as error:  # A compiler failure is reported, never raised at the client.
             return [], [problem(self.span(0, 0), "E-INTERNAL", f"{type(error).__name__}: {error}")]
-        # The checker takes each template out of the program once it has checked it; an editor wants
-        # every declared function back, and none of the instances it made along the way.
-        program.functions = [f for f in checker.fs.values() if f.name in program.modules]
         self.program = program
         self.rows = {n: r["effects"] for n, r in receipts.items()}
         linked = tuple(module + "." for module in program.sources)
@@ -165,11 +163,16 @@ _LAST: list[Any] = []  # the one source analysed last, and its answer: the open 
 
 
 def analysis(source: str) -> tuple[Any, Any, Any]:
-    """`compile_program` with its sites, once per distinct source, so every open file of a project reads one
-    analysis; a refusal is raised again for each of them."""
+    """`compile_program` with its sites, once per distinct source in this process (compiler/compilations.py), so
+    every open file of a project reads one analysis and a text typed again is not checked again; a refusal is raised
+    again for each of them."""
     if not _LAST or _LAST[0] != source:
         try:
-            answer: Any = compile_program(source, capture_sites=True, every=True)
+            answer: Any = compilations.program(source, sites=True, every=True)
+            # The checker takes each template out of the program once it has checked it; an editor wants every
+            # declared function back, and none of the instances it made along the way.
+            program, checker, _ = answer
+            program.functions = [f for f in checker.fs.values() if f.name in program.modules]
         except Diagnostic as error:
             answer = error
         _LAST[:] = [source, answer]

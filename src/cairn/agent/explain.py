@@ -19,8 +19,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from ..compiler import layouts, wide
-from ..compiler.cairnc import compile_program, write_program
+from ..compiler import compilations, layouts, wide
+from ..compiler.cairnc import write_program
 from ..compiler.codegen import Emitter, demangled, mangle
 from ..compiler.cooperative import SHUFFLES
 from ..compiler.modules import library_path
@@ -235,7 +235,7 @@ def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None
     """
     if len(source.encode()) > MAX_SOURCE:
         raise ValueError("Source exceeds the 2 MB limit.")
-    p, checker, receipts = compile_program(source)
+    p, checker, receipts = compilations.program(source)
     at = (lambda line: (origin, line)) if isinstance(origin, str) else origin
     interface, bodies = Located(p, checker, at).units()
     names = {mangle(f.name): f.name for f in p.functions}

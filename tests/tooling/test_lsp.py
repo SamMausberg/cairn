@@ -260,6 +260,22 @@ def test_a_run_of_changes_to_one_file_is_analysed_once_at_its_last_text():
     assert kept == ["2", "x", "3", "hover", "5", None]  # a request between two changes keeps the first
 
 
+def test_a_text_typed_again_is_not_checked_again(monkeypatch):
+    from cairn.compiler import compilations
+    from cairn.editor import document
+
+    ran, real = [], compilations.compile_program
+    monkeypatch.setattr(compilations, "compile_program", lambda *a, **k: ran.append(a[0]) or real(*a, **k))
+    monkeypatch.setattr(compilations, "CACHE", compilations.Cache())
+    monkeypatch.setattr(document, "_LAST", [])
+    before, after = "fn f(x:u64) -> u64 { return x + 1; }\n", "fn f(x:u64) -> u64 { return x + 2; }\n"
+    first = Document(before)
+    Document(after, first)
+    undone = Document(before)  # an undo: the text of the first analysis again
+    assert ran == [before, after] and undone.sites == first.sites and undone.rows == first.rows
+    assert undone.program is not first.program  # its own copy: what one document does to it no other reads
+
+
 def test_a_burst_of_changes_leaves_the_diagnostics_and_answers_of_the_last_text(client):
     client.start()
     client.send("initialized")

@@ -37,6 +37,9 @@ class Trap:
     def __repr__(self) -> str:
         return "trap"
 
+    def __reduce__(self) -> str:
+        return "TRAP"  # a copy of it is the one value `is TRAP` recognizes
+
 
 TRAP = Trap()
 

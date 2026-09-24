@@ -22,7 +22,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..compiler.cairnc import compile_source, fail
+from ..compiler import compilations
+from ..compiler.cairnc import fail
 from ..compiler.concurrency import PLAN_ITEMS, POWERS
 from ..perf.plan_source import Placement, text, written
 from ..perf.tune import now, regions
@@ -40,14 +41,13 @@ class PlanSession:
 
     def __init__(self, source: str | Project, symbol: str, sizes: list[dict[str, float]] | None = None,
                  generation: int = 0):  # fmt: skip
-        from ..compiler.cairnc import compile_program
         from ..perf.work import count
 
         self.project = source if isinstance(source, Project) else None
         self.source = source.source if isinstance(source, Project) else source
         self.symbol, self.sizes = symbol, sizes or []
-        p, checker, _ = compile_program(self.source)
-        self.placement = Placement(self.source, symbol)  # the qualified name, in whichever module declares it
+        p, checker, _ = compilations.program(self.source)
+        self.placement = Placement(self.source, symbol, (p, checker))  # the name, in whichever module declares it
         self.f = self.placement.f
         cost = count(p, checker, {self.f.name})[self.f.name]
         kinds = {r.kind for r in cost.regions} & {"host", "device"}
@@ -56,7 +56,7 @@ class PlanSession:
         several = regions(p, self.f.name) > 1  # fuse joins two regions or more
         self.open = {k: v for k, v in PLAN_ITEMS.items() if v[0] in kinds or (v[0] == "either" and several)}
         self.current = written(now(cost))
-        self.receipt = compile_source(self.source)[1]["functions"]
+        self.receipt = compilations.emitted(self.source)[1]["functions"]
         self.generation = generation  # how many replies this function's plan has taken: a spent session is stale
         self.digest = digest(stable_json([PROTOCOL, digest(self.source), symbol, generation]))
 
@@ -111,7 +111,7 @@ class PlanSession:
                 )
         plan = written(items)
         candidate = self.placement.apply(plan)
-        receipt = compile_source(candidate)[1]["functions"]  # the whole linked program, checked again
+        receipt = compilations.emitted(candidate)[1]["functions"]  # the whole linked program, checked again
         scheduled = {"plan", "fused"}  # what a plan sets, and the regions its fuse joined
         mine = {k: v for k, v in receipt.get(self.f.name, {}).items() if k not in scheduled}
         others = {n: r for n, r in receipt.items() if n != self.f.name}

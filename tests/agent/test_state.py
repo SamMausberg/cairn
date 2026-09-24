@@ -68,6 +68,19 @@ def test_the_host_serves_the_state_after_each_admitted_edit_and_a_delta_since_on
     assert code(lambda: host.respond({**ask, "kind": "state", "since": first["digest"]})) == "E-REQUEST"
 
 
+def test_an_admitted_edit_names_every_other_function_whose_row_it_changed():
+    trapping = S.replace("return add_wrap(x, 1);", "return x + 1;")
+    host = EditHost()
+    host.open(trapping, "step")
+    answer = host.respond({"protocol": HANDLES, "handle": "e1", "kind": "body", "replacement": "{ return x ^ 1; }"})
+    assert answer["effects"] == [] and answer["check_sites"] == {} and answer["check_sites_before"] == {"overflow": 1}
+    moved = delta(state(trapping), state(trapping.replace("return x + 1;", "return x ^ 1;")))["modules"]
+    assert answer["changed"] == {"": {n: e for n, e in moved[""].items() if n != "step"}}
+    assert answer["changed"][""]["caller"] == ["fn caller(x:u64) -> u64", []]  # the caller no longer traps
+    kept = host.respond({"protocol": HANDLES, "handle": "e1", "kind": "body", "replacement": "{ return x + 2; }"})
+    assert kept["effects"] == ["trap"] and "changed" not in kept  # judged against the original, nothing else moved
+
+
 def test_state_prints_from_the_command_line_and_refreshes_from_a_saved_state(tmp_path, capsys):
     from cairn.cli import main
 

@@ -28,8 +28,9 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 from ..agent.projection import local
+from ..compiler import compilations
 from ..compiler.builtins import TABLE
-from ..compiler.cairnc import Diagnostic, compile_source
+from ..compiler.cairnc import Diagnostic
 from ..compiler.syntax import IDENT, RESERVED
 from ..projects.project import Project, ProjectError, contained_file, load_project
 from .document import Document, Item, binders, declarations, dotted, enclosing, flatten, line_starts, word_at
@@ -277,7 +278,7 @@ def rename(ws: Workspace, uri: str, offset: int, fresh: str) -> dict:
     # A declaration's receipt names change with it; a field or a variant names no function, so every entry stays.
     old, new = (named[1], renamed(named[1], fresh)) if named and named[0] not in MEMBERS else ("", "")
     try:
-        was, now = (unidentified(compile_source(s)[1]["functions"]) for s in (before, after))
+        was, now = (unidentified(compilations.emitted(s)[1]["functions"]) for s in (before, after))
     except Diagnostic as error:
         raise Refused(f"After the rename the project would not compile: {error.data['code']}: {error}") from None
     if old:

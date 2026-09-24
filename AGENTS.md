@@ -7,6 +7,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | File | Owns |
 |---|---|
 | `compiler/cairnc.py` | the facade: parse through judge (`compile_program`), then the certificates and the emitter (`generate`) |
+| `compiler/compilations.py` | one compile per distinct source in a process: what the hosts, `cairn state`, `cairn mcp` and `cairn lsp` read, the key it is kept under, the copy each caller gets, and the bound on what is kept |
 | `compiler/lexing.py` | tokens and reserved words |
 | `compiler/tree.py` | the syntax tree, the scalar vocabulary, `Diagnostic` |
 | `compiler/syntax.py` | the parser's declarations and entry point, and source ranges |
