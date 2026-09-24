@@ -4,9 +4,13 @@ it, and the attacks that were correctly refused or held, kept so that a later ch
 `evidence/v1_1/review/README.md` has the write-up.
 """
 
+import shutil
+
 import pytest
 
 from cairn.compiler.cairnc import Diagnostic, compile_program
+from cairn.projects.target import parse
+from cairn.verify.validation import validate
 
 # --- Fixed: a check that reports every refusal judged a row an implementation had not yet joined -------------------
 
@@ -85,3 +89,28 @@ def test_the_parallel_card_names_everything_that_keeps_a_function_waiting():
     said = next(p for p in CARDS["parallel"].split("\n") if "cq_NAME" in p)
     for construct in ("atomic", "lock", "function value", "machine register", "host assembly", "@unified"):
         assert construct in said, construct
+
+
+# --- Fixed: a validation asked to emulate a device said it had, for a program with no device code -----------------
+
+TOTAL = """fn total(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut sum:u64 = 0;
+  for i in 0..n { sum = add_wrap(sum, xs[i]); }
+  return sum;
+}
+
+fn total_by2(n:usize, xs:ro<u64>[n]) -> u64 implements total when n % 2 == 0 {
+  let mut a:u64 = 0;
+  for k in 0..n / 2 { a = add_wrap(a, add_wrap(xs[2 * k], xs[2 * k + 1])); }
+  return a;
+}
+"""
+
+
+@pytest.mark.skipif(not shutil.which("clang++"), reason="needs clang++")
+def test_a_host_validation_asked_to_emulate_says_it_ran_on_the_host():
+    """`cairn validate --emulate` of a program with no device code runs it as any host validation, and its evidence
+    is finite-tested; its record still named the device target as emulated, so one record said both."""
+    record = validate(TOTAL, "total", "total_by2", {"budget": 8}, emulate=parse("sm_120"))
+    assert record["status"] == "passed" and record["evidence"] == "finite-tested" and "emulation" not in record
+    assert record["target"] == {"kind": "host"}, record["target"]
