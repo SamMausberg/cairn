@@ -1,8 +1,9 @@
-"""The three demos under demos/: each runs here as a reader would run it, and tells the story its README tells.
+"""The four demos under demos/: each runs here as a reader would run it, and tells the story its README tells.
 
-The repair and visual demos replay a scripted agent through the real edit host, so what the host and the compiler say
-is computed fresh and checked here. The plate's host half runs under two lane counts and beside its C++ loop; its
-device half compiles for sm_120 here and runs only under `make gpu`, which writes results/demos/numeric/device.json.
+The repair, visual and implement demos replay a scripted agent through the real hosts, so what the host and the
+compiler say is computed fresh and checked here. The plate's host half runs under two lane counts and beside its C++
+loop; its device half compiles for sm_120 here and runs only under `make gpu`, which writes
+results/demos/numeric/device.json. The implement demo times on this host; which instance wins is not checked.
 """
 
 import json
@@ -119,3 +120,30 @@ def test_the_agent_sees_the_bar_cover_the_plate_and_moves_it(tmp_path):
     for fresh in sorted((tmp_path / "frames").glob("*.png")):
         committed = DEMOS / "visual/frames" / fresh.name
         assert decode_png(fresh.read_bytes()) == decode_png(committed.read_bytes()), f"{fresh.name} is stale"
+
+
+def test_the_host_refuses_a_looser_tolerance_and_a_dropped_tail_and_tune_times_only_what_validated(tmp_path):
+    done = script("implement", "--out", str(tmp_path))
+    assert done.returncode == 0, done.stdout + done.stderr
+    record = json.loads((tmp_path / "record.json").read_text())
+    loose, tail, fixed, blocks = (e["answer"] for e in record["exchanges"])
+    assert loose["code"] == "E-TOLERANCE" and loose["field"] == "tolerance"
+    failed = tail["finite"]["failed"]
+    assert tail["code"] == "E-VALIDATION" and failed["inputs"] == {"n": 5, "xs": [0.0, 0.0, 0.0, 0.0, 1.0]}
+    returned = [float.fromhex(failed[side]["return"]) for side in ("reference", "implementation")]
+    assert returned == [1.0, 0.0]  # the loop never reads xs[4]
+    kept = json.loads((tmp_path / "sumsq/regressions/sumsq.json").read_text())
+    assert [c["args"] for c in kept["cases"]] == [failed["inputs"]]
+    assert fixed["status"] == "validated" and fixed["when"] == "n % 4 == 0" and fixed["finite"]["kept_cases"] == 1
+    assert set(blocks["instances"]) == {f"sumsq_blocks[{k}]" for k in (4, 8, 16, 32)}
+    assert all(r["finite"]["status"] == "passed" for r in blocks["instances"].values())
+    bare, found = record["tune_without_history"], record["tune"]
+    assert bare["chosen"].get("use") is None  # no validation to cite: the reference, and nothing else timed
+    assert [set(r["measured_ns"]) for r in bare["rounds"]] == [{"(no plan for sumsq)"}]
+    validated = {r["plan"] for r in found["candidates"] if isinstance(r.get("validated"), dict)}
+    assert len(validated) == 5 and found["chosen"]["plan"] in validated
+    assert found["budget"]["runs"]["started"] <= found["budget"]["runs"]["allowed"] == 16
+    assert record["written"] == [found["chosen"]["plan"]]
+    kinds = {line["kind"] for line in record["compare"]["lines"]}
+    assert {"compiler observation", "runtime measurement", "hypothesis"} <= kinds
+    assert record["run"]["exit_code"] == 0 and "at every length from 0 to 63" in record["run"]["stdout"]

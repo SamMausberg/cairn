@@ -1,0 +1,664 @@
+{
+  "agent": "scripted: the submissions are demos/implement/candidates and the tolerance in run.py; no model wrote them",
+  "at": "n=65536",
+  "exchanges": [
+    {
+      "candidate": "sumsq_by4_tail.cairn",
+      "extra": {
+        "tolerance": {
+          "absolute": 0.0,
+          "relative": 1e-06
+        }
+      },
+      "error": true,
+      "answer": {
+        "protocol": "cairn.diagnostic/2",
+        "status": "rejected",
+        "code": "E-TOLERANCE",
+        "message": "tolerance is the host's: a submission carries protocol, handle, kind and source, and nothing it carries changes the reference, the tolerance, the test policy or the permitted inputs.",
+        "line": 0,
+        "column": 0,
+        "trust": "prototype-not-verified",
+        "field": "tolerance",
+        "repair_hint": "The tolerance is the host's: bring the implementation's result closer to the reference's.",
+        "automatic_edit": false,
+        "acceptance_boundary": "frontend only; not a semantic or machine proof"
+      }
+    },
+    {
+      "candidate": "sumsq_by4_tail.cairn",
+      "extra": {},
+      "error": true,
+      "answer": {
+        "protocol": "cairn.diagnostic/2",
+        "status": "rejected",
+        "code": "E-VALIDATION",
+        "message": "sumsq_by4 is not validated: failed against sumsq.",
+        "line": 0,
+        "column": 0,
+        "trust": "prototype-not-verified",
+        "finite": {
+          "claim": "finite-tested: the reference is an independent algorithm, but both are compiled by this compiler, so agreement on these cases is finite testing, never proof",
+          "kept_cases": 0,
+          "cases": 11,
+          "implementation_ran": 4,
+          "dispatch_ran": 11,
+          "status": "failed",
+          "failed": {
+            "inputs": {
+              "n": 5,
+              "xs": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "found_as": "n = 5: a tile plus one, 4 from the condition's >= 4; ones elements",
+            "shrunk_in": 18,
+            "reference": {
+              "outcome": "return",
+              "after": {},
+              "return": "0x1.0000000000000p+0"
+            },
+            "implementation": {
+              "outcome": "return",
+              "after": {},
+              "return": "0x0.0p+0"
+            },
+            "dispatch": {
+              "outcome": "return",
+              "after": {},
+              "return": "0x0.0p+0"
+            }
+          },
+          "kept": "sumsq/regressions/sumsq.json"
+        },
+        "smt": {
+          "status": "unknown",
+          "where": "(((n >= 4)) && (n >= 0 && n <= 4096)) && n <= 16",
+          "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided",
+          "reason": "Equivalence solver did not decide the obligation."
+        },
+        "identity": "ec59983b31f64ccd47db8d58752b68a0c760f7b5462650a0665a8f7e2fb7bcfb",
+        "implementation": "sumsq_by4",
+        "repair_hint": "At n = 5, xs = [0.0, 0.0, 0.0, 0.0, 1.0] the reference returns 0x1.0000000000000p+0 and the implementation returns 0x0.0p+0: fix the algorithm for every input its condition admits, not for that one.",
+        "automatic_edit": false,
+        "acceptance_boundary": "frontend only; not a semantic or machine proof"
+      }
+    },
+    {
+      "candidate": "sumsq_by4.cairn",
+      "extra": {},
+      "error": false,
+      "answer": {
+        "protocol": "cairn.implementation/1",
+        "status": "validated",
+        "implementation": "sumsq_by4",
+        "identity": "8e87761d826226a48cf343dafbfa5ef8e74ef89ef91c89a5427ba53fe3a8c980",
+        "when": "n % 4 == 0",
+        "effects": [
+          "ffi_precondition",
+          "read:xs",
+          "trap"
+        ],
+        "requires": {
+          "target": "host",
+          "host_lanes": false,
+          "tasks": false,
+          "heap_allocation_sites": 0,
+          "stack_bytes": 0
+        },
+        "finite": {
+          "status": "passed",
+          "cases": 129,
+          "implementation_ran": 49,
+          "kept_cases": 1
+        },
+        "smt": {
+          "status": "unknown",
+          "where": "((((n % 4) == 0)) && (n >= 0 && n <= 4096)) && n <= 16",
+          "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided",
+          "reason": "Equivalence solver did not decide the obligation."
+        },
+        "select_with": "plan sumsq use sumsq_by4;",
+        "claim": "finite-tested: the reference is an independent algorithm, but both are compiled by this compiler, so agreement on these cases is finite testing, never proof",
+        "candidate_sha256": "6039dc3a38361ecb217c456ae1f8988b69291c41657d2e53debb0c66c485048a",
+        "selected": false,
+        "written": [
+          "src/sumsq.cairn"
+        ]
+      }
+    },
+    {
+      "candidate": "sumsq_blocks.cairn",
+      "extra": {},
+      "error": false,
+      "answer": {
+        "protocol": "cairn.implementation/1",
+        "status": "validated",
+        "implementation": "sumsq_blocks",
+        "instances": {
+          "sumsq_blocks[4]": {
+            "identity": "1711bf12a4a33985b5e8d2e22b2182da75f57562daf2435418d3d6c41522258a",
+            "when": "n % 4 == 0",
+            "effects": [
+              "ffi_precondition",
+              "read:xs",
+              "trap"
+            ],
+            "requires": {
+              "target": "host",
+              "host_lanes": false,
+              "tasks": false,
+              "heap_allocation_sites": 0,
+              "stack_bytes": 0
+            },
+            "finite": {
+              "status": "passed",
+              "cases": 129,
+              "implementation_ran": 49,
+              "kept_cases": 1
+            },
+            "smt": {
+              "status": "unknown",
+              "where": "((((n % 4) == 0)) && (n >= 0 && n <= 4096)) && n <= 16",
+              "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided",
+              "reason": "Equivalence solver did not decide the obligation."
+            },
+            "select_with": "plan sumsq use sumsq_blocks[4];"
+          },
+          "sumsq_blocks[8]": {
+            "identity": "7c44cf4e76d7de7a30a4fc70a8f4a8d840850b591c307d12e79f429ad796c64c",
+            "when": "n % 8 == 0",
+            "effects": [
+              "ffi_precondition",
+              "read:xs",
+              "trap"
+            ],
+            "requires": {
+              "target": "host",
+              "host_lanes": false,
+              "tasks": false,
+              "heap_allocation_sites": 0,
+              "stack_bytes": 0
+            },
+            "finite": {
+              "status": "passed",
+              "cases": 129,
+              "implementation_ran": 42,
+              "kept_cases": 1
+            },
+            "smt": {
+              "status": "unknown",
+              "where": "((((n % 8) == 0)) && (n >= 0 && n <= 4096)) && n <= 16",
+              "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided",
+              "reason": "Equivalence solver did not decide the obligation."
+            },
+            "select_with": "plan sumsq use sumsq_blocks[8];"
+          },
+          "sumsq_blocks[16]": {
+            "identity": "f6a05708f3c00a19b9f3dc63e85f3b7ed50e4fb3ea0af9ff8819976f5612b002",
+            "when": "n % 16 == 0",
+            "effects": [
+              "ffi_precondition",
+              "read:xs",
+              "trap"
+            ],
+            "requires": {
+              "target": "host",
+              "host_lanes": false,
+              "tasks": false,
+              "heap_allocation_sites": 0,
+              "stack_bytes": 0
+            },
+            "finite": {
+              "status": "passed",
+              "cases": 129,
+              "implementation_ran": 35,
+              "kept_cases": 1
+            },
+            "smt": {
+              "status": "unknown",
+              "where": "((((n % 16) == 0)) && (n >= 0 && n <= 4096)) && n <= 16",
+              "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided",
+              "reason": "Equivalence solver did not decide the obligation."
+            },
+            "select_with": "plan sumsq use sumsq_blocks[16];"
+          },
+          "sumsq_blocks[32]": {
+            "identity": "296d2dd69f7bd6672eb1e401f8995900bed566cf1c7f740e19adeaf1ba8dc7b8",
+            "when": "n % 32 == 0",
+            "effects": [
+              "ffi_precondition",
+              "read:xs",
+              "trap"
+            ],
+            "requires": {
+              "target": "host",
+              "host_lanes": false,
+              "tasks": false,
+              "heap_allocation_sites": 0,
+              "stack_bytes": 0
+            },
+            "finite": {
+              "status": "passed",
+              "cases": 129,
+              "implementation_ran": 39,
+              "kept_cases": 1
+            },
+            "smt": {
+              "status": "smt-equivalent",
+              "where": "((((n % 32) == 0)) && (n >= 0 && n <= 4096)) && n <= 16",
+              "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided"
+            },
+            "select_with": "plan sumsq use sumsq_blocks[32];"
+          }
+        },
+        "claim": "finite-tested: the reference is an independent algorithm, but both are compiled by this compiler, so agreement on these cases is finite testing, never proof",
+        "candidate_sha256": "c66d1ebf8964c6c477a023680bac3c84e73f6b16d0502b09a2dcd5e57c5c97c9",
+        "selected": false,
+        "written": [
+          "src/sumsq.cairn"
+        ]
+      }
+    }
+  ],
+  "packet": {
+    "bytes": 7353,
+    "rule_cards": [
+      "base",
+      "calls",
+      "floats",
+      "implementations",
+      "integers",
+      "views"
+    ],
+    "pinned": {
+      "tolerance": {
+        "absolute": 0.0,
+        "relative": 9.094947017729282e-13
+      },
+      "tests": {
+        "budget": 128,
+        "seed": 0,
+        "probes": 300,
+        "seconds": 5
+      },
+      "domain": {
+        "largest_extent": 4096
+      },
+      "reference_sha256": "68e80794500806f72220e0ff7eae8d5f0da7abdac734c1f50e01b65445b3fc57",
+      "tolerance_sha256": "723f1da07c4f9b848ccd9dcd5a8ccc8b3fae0c7dfb5c8962430036aaa05df15e",
+      "tests_sha256": "b03a4bedff94fbc177b3c98699248c4dc7cc5004ffc4fc2e6e1481f253d37a64",
+      "domain_sha256": "c4e6b90a53710097f6e41a469cc0de06a87bbbc2dbb9290aec2b9a936ded8ca7"
+    }
+  },
+  "tune_without_history": {
+    "schema": "cairn.tune/2",
+    "function": "sumsq",
+    "sizes": [
+      {
+        "n": 65536.0
+      }
+    ],
+    "predicted": "Every plan the checker accepted is priced by cairn predict; a plan changes no result, so none needed checking. Registers and shared memory come from compiling the candidate, never from a run.",
+    "profile": {
+      "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+      "origin": "measured",
+      "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+    },
+    "target": {
+      "host": {
+        "arch": "x86-64"
+      }
+    },
+    "regions": [],
+    "current": "(no plan for sumsq)",
+    "space": {
+      "configurations": 6,
+      "checked": 6,
+      "legal": 6,
+      "refused": []
+    },
+    "candidates": [
+      {
+        "plan": "(no plan for sumsq)",
+        "predicted_ns": 37050.0
+      },
+      {
+        "plan": "plan sumsq use sumsq_blocks[32];",
+        "predicted_ns": 38210.0,
+        "use": "sumsq_blocks[32]",
+        "validated": "no validation holds: run cairn validate before using it",
+        "parameters": {
+          "K": 32
+        }
+      },
+      {
+        "plan": "plan sumsq use sumsq_blocks[16];",
+        "predicted_ns": 39360.0,
+        "use": "sumsq_blocks[16]",
+        "validated": "no validation holds: run cairn validate before using it",
+        "parameters": {
+          "K": 16
+        }
+      },
+      {
+        "plan": "plan sumsq use sumsq_blocks[8];",
+        "predicted_ns": 41680.0,
+        "use": "sumsq_blocks[8]",
+        "validated": "no validation holds: run cairn validate before using it",
+        "parameters": {
+          "K": 8
+        }
+      },
+      {
+        "plan": "plan sumsq use sumsq_blocks[4];",
+        "predicted_ns": 46310.0,
+        "use": "sumsq_blocks[4]",
+        "validated": "no validation holds: run cairn validate before using it",
+        "parameters": {
+          "K": 4
+        }
+      },
+      {
+        "plan": "plan sumsq use sumsq_by4;",
+        "predicted_ns": 106300.0,
+        "use": "sumsq_by4",
+        "validated": "no validation holds: run cairn validate before using it"
+      }
+    ],
+    "chosen": {
+      "plan": "(no plan for sumsq)",
+      "measured_ns": 45504.6
+    },
+    "implementations": [
+      "sumsq_by4",
+      "sumsq_blocks[4]",
+      "sumsq_blocks[8]",
+      "sumsq_blocks[16]",
+      "sumsq_blocks[32]"
+    ],
+    "measured": "Timed on this host by cairn.perf.measure, the median of each round's blocks; a busy machine adds noise, so a close measured order says little.",
+    "rounds": [
+      {
+        "blocks": 3,
+        "measured_ns": {
+          "(no plan for sumsq)": 45504.6
+        }
+      }
+    ],
+    "measured_best": "(no plan for sumsq)",
+    "pairs_ordered_as_predicted": "0 of 0",
+    "budget": {
+      "compiles": {
+        "allowed": 4,
+        "started": 0,
+        "kept": 0
+      },
+      "seconds": {
+        "allowed": 300.0,
+        "spent": 1.12
+      },
+      "runs": {
+        "allowed": null,
+        "started": 1,
+        "kept": 0
+      },
+      "undone": {}
+    }
+  },
+  "tune": {
+    "schema": "cairn.tune/2",
+    "function": "sumsq",
+    "sizes": [
+      {
+        "n": 65536.0
+      }
+    ],
+    "predicted": "Every plan the checker accepted is priced by cairn predict; a plan changes no result, so none needed checking. Registers and shared memory come from compiling the candidate, never from a run.",
+    "profile": {
+      "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+      "origin": "measured",
+      "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+    },
+    "target": {
+      "host": {
+        "arch": "x86-64"
+      }
+    },
+    "regions": [],
+    "current": "(no plan for sumsq)",
+    "space": {
+      "configurations": 6,
+      "checked": 6,
+      "legal": 6,
+      "refused": []
+    },
+    "candidates": [
+      {
+        "plan": "(no plan for sumsq)",
+        "predicted_ns": 37050.0
+      },
+      {
+        "plan": "plan sumsq use sumsq_blocks[32];",
+        "predicted_ns": 38210.0,
+        "use": "sumsq_blocks[32]",
+        "validated": {
+          "evidence": "finite-tested",
+          "record": "bbec067ea040c829"
+        },
+        "parameters": {
+          "K": 32
+        }
+      },
+      {
+        "plan": "plan sumsq use sumsq_blocks[16];",
+        "predicted_ns": 39360.0,
+        "use": "sumsq_blocks[16]",
+        "validated": {
+          "evidence": "finite-tested",
+          "record": "8b3499fdc352e34c"
+        },
+        "parameters": {
+          "K": 16
+        }
+      },
+      {
+        "plan": "plan sumsq use sumsq_blocks[8];",
+        "predicted_ns": 41680.0,
+        "use": "sumsq_blocks[8]",
+        "validated": {
+          "evidence": "finite-tested",
+          "record": "753457a894cb9352"
+        },
+        "parameters": {
+          "K": 8
+        }
+      },
+      {
+        "plan": "plan sumsq use sumsq_blocks[4];",
+        "predicted_ns": 46310.0,
+        "use": "sumsq_blocks[4]",
+        "validated": {
+          "evidence": "finite-tested",
+          "record": "6aec15e274b5ef6c"
+        },
+        "parameters": {
+          "K": 4
+        }
+      },
+      {
+        "plan": "plan sumsq use sumsq_by4;",
+        "predicted_ns": 106300.0,
+        "use": "sumsq_by4",
+        "validated": {
+          "evidence": "finite-tested",
+          "record": "ee95ef3afb76fb7d"
+        }
+      }
+    ],
+    "chosen": {
+      "plan": "plan sumsq use sumsq_blocks[8];",
+      "use": "sumsq_blocks[8]",
+      "measured_ns": 12516.7
+    },
+    "implementations": [
+      "sumsq_by4",
+      "sumsq_blocks[4]",
+      "sumsq_blocks[8]",
+      "sumsq_blocks[16]",
+      "sumsq_blocks[32]"
+    ],
+    "measured": "Timed on this host by cairn.perf.measure, the median of each round's blocks; a busy machine adds noise, so a close measured order says little.",
+    "rounds": [
+      {
+        "blocks": 3,
+        "measured_ns": {
+          "(no plan for sumsq)": 46204.4,
+          "plan sumsq use sumsq_blocks[32];": 20614.5,
+          "plan sumsq use sumsq_blocks[16];": 18873.9,
+          "plan sumsq use sumsq_blocks[8];": 12165.4,
+          "plan sumsq use sumsq_blocks[4];": 12296.9,
+          "plan sumsq use sumsq_by4;": 11770.0
+        }
+      },
+      {
+        "blocks": 6,
+        "measured_ns": {
+          "plan sumsq use sumsq_by4;": 13148.6,
+          "plan sumsq use sumsq_blocks[8];": 11035.8,
+          "plan sumsq use sumsq_blocks[4];": 12644.0
+        }
+      },
+      {
+        "blocks": 12,
+        "measured_ns": {
+          "plan sumsq use sumsq_blocks[8];": 12516.7,
+          "plan sumsq use sumsq_blocks[4];": 12897.4
+        }
+      }
+    ],
+    "measured_best": "plan sumsq use sumsq_blocks[8];",
+    "pairs_ordered_as_predicted": "3 of 15",
+    "budget": {
+      "compiles": {
+        "allowed": 4,
+        "started": 0,
+        "kept": 0
+      },
+      "seconds": {
+        "allowed": 120.0,
+        "spent": 11.74
+      },
+      "runs": {
+        "allowed": 16,
+        "started": 11,
+        "kept": 0
+      },
+      "undone": {}
+    },
+    "written": "src/sumsq.cairn"
+  },
+  "load_average": [
+    [
+      9.1337890625,
+      13.66357421875,
+      10.60791015625
+    ],
+    [
+      7.3994140625,
+      13.05908203125,
+      10.45849609375
+    ]
+  ],
+  "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+  "written": [
+    "plan sumsq use sumsq_blocks[8];"
+  ],
+  "compare": {
+    "schema": "cairn.compare/1",
+    "function": "sumsq",
+    "a": "(no plan for sumsq)",
+    "b": "plan sumsq use sumsq_blocks[8];",
+    "lines": [
+      {
+        "kind": "compiler observation",
+        "by": "cairn predict (the model, not a run)",
+        "text": "at n=65536: predicted 3.705e+04 ns -> 4.168e+04 ns; the model's bound compute -> compute; confidence high",
+        "sizes": {
+          "n": 65536.0
+        },
+        "a": 37050.0,
+        "b": 41680.0
+      },
+      {
+        "kind": "runtime measurement",
+        "by": "cairn.perf.measure: the candidate built with the project's flags beside a driver that fills each view, timed in blocks of at least 2 ms, the median of 3 blocks, on this host",
+        "text": "a at n=65536: median 4.62e+04 ns (min 4.54e+04, max 7.418e+04)",
+        "side": "a",
+        "sizes": {
+          "n": 65536.0
+        },
+        "median_ns": 46204.390625,
+        "record": "60072466b7c8af6e"
+      },
+      {
+        "kind": "runtime measurement",
+        "by": "cairn.perf.measure: the candidate built with the project's flags beside a driver that fills each view, timed in blocks of at least 2 ms, the median of 3 blocks, on this host",
+        "text": "b at n=65536: median 1.217e+04 ns (min 1.194e+04, max 1.225e+04)",
+        "side": "b",
+        "sizes": {
+          "n": 65536.0
+        },
+        "median_ns": 12165.414062,
+        "record": "44c30081be0f0ae3"
+      },
+      {
+        "kind": "runtime measurement",
+        "by": "cairn.perf.measure: the candidate built with the project's flags beside a driver that fills each view, timed in blocks of at least 2 ms, the median of 6 blocks, on this host",
+        "text": "b at n=65536: median 1.104e+04 ns (min 1.078e+04, max 1.151e+04)",
+        "side": "b",
+        "sizes": {
+          "n": 65536.0
+        },
+        "median_ns": 11035.761719,
+        "record": "27d6c7ecba2c2a63"
+      },
+      {
+        "kind": "runtime measurement",
+        "by": "cairn.perf.measure: the candidate built with the project's flags beside a driver that fills each view, timed in blocks of at least 2 ms, the median of 12 blocks, on this host",
+        "text": "b at n=65536: median 1.252e+04 ns (min 1.102e+04, max 1.328e+04)",
+        "side": "b",
+        "sizes": {
+          "n": 65536.0
+        },
+        "median_ns": 12516.714844,
+        "record": "1174600b06481c28"
+      },
+      {
+        "kind": "hypothesis",
+        "by": "the model against the measurement",
+        "text": "the model predicted x1.12 and the runs measured x0.271: the model leaves out what separates them"
+      },
+      {
+        "kind": "suggested experiment",
+        "by": "suggested, not run",
+        "text": "time a and b at the same sizes, interleaved: cairn tune --symbol sumsq --measure 2 --at ... with both plans on this host"
+      }
+    ],
+    "kinds": [
+      "compiler observation",
+      "runtime measurement",
+      "profiler observation",
+      "hypothesis",
+      "suggested experiment"
+    ]
+  },
+  "run": {
+    "exit_code": 0,
+    "stdout": "sumsq agrees with n (n + 1) (2n + 1) / 6 at every length from 0 to 63\n"
+  }
+}

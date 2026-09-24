@@ -1,0 +1,12 @@
+// The sums of squares of 1..n through whichever implementation the plan selects, against n (n + 1) (2n + 1) / 6.
+// Every partial sum is an integer below 2^53, so every order of the additions gives it exactly.
+fn main() -> i32 {
+  for n in 0..64 {
+    buffer xs:f64[n] = zeroed;
+    for i in 0..n { xs[i] = f64(i + 1); }
+    let exact = u64(n) * u64(n + 1) * u64(2 * n + 1) / 6;
+    if sumsq(n, xs) != f64(exact) { return 1; }
+  }
+  println("sumsq agrees with n (n + 1) (2n + 1) / 6 at every length from 0 to 63");
+  return 0;
+}

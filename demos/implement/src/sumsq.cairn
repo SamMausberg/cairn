@@ -1,0 +1,9 @@
+// The sum of squares of a vector, xs[0]^2 + ... + xs[n-1]^2: the reduction a vector norm or an RMS normalization
+// starts with. The reference adds one term at a time, so each addition depends on the one before it.
+// demos/implement/README.md follows an agent that writes faster implementations of it through the implementation
+// host, and `cairn tune` choosing among the ones that validated.
+fn sumsq(n:usize, xs:ro<f64>[n]) -> f64 {
+  let mut sum = 0.0;
+  for i in 0..n { sum += xs[i] * xs[i]; }
+  return sum;
+}

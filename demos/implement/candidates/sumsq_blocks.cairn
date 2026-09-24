@@ -1,0 +1,17 @@
+// Blocks of K terms, each summed from zero and then added to the total, so only the n / K additions into the total
+// depend on one another. The search tries each K the tune clause lists.
+fn sumsq_blocks[K:nat](n:usize, xs:ro<f64>[n]) -> f64
+  implements sumsq when n % K == 0 tune K in [4, 8, 16, 32] {
+  let mut sum = 0.0;
+  for k in 0..n / K {
+    sum += sumsq_block[K](xs[K * k..K * k + K]);
+  }
+  return sum;
+}
+
+// The sum of squares of one block of K terms.
+fn sumsq_block[K:nat](xs:ro<f64>[K]) -> f64 {
+  let mut sum = 0.0;
+  for j in 0..K { sum += xs[j] * xs[j]; }
+  return sum;
+}

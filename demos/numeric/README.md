@@ -35,7 +35,7 @@ After `STEPS` sweeps every cell is within `STEPS * 4 * 2^-24 * 100` of an f64 re
 ## What a run prints
 
 ```text
-plate: 1024 x 1024 cells, 200 sweeps on the host lanes in 163959 us
+plate: 1024 x 1024 cells, 200 sweeps on the host lanes in 77629 us
 plate: middle column 1, 4 and 16 rows below the hot edge: 92.045975, 68.95758, 10.992733
 plate: fingerprint of every cell's bits 13714961143245356297
 plate: largest distance from the f64 reference 0.000014842041622387114, contract 0.00476837158203125
@@ -45,7 +45,7 @@ Every program printed the same fingerprint: yes.
 
 The largest error is 0.0000148, about 300 times inside the contract. `run.py` then builds `baseline/plate.cpp`, the same loop as a C++ programmer writes it, with the same compiler and the flags CAIRN builds with. With `-DGUARDS` it makes the same checks per cell that the CAIRN build keeps (`cairn explain demos/numeric --symbol sweep` lists them), and with `-fopenmp` it is an OpenMP parallel for over as many threads as the lane pool. It runs every program in interleaved rounds and prints the median sweep time of each. Every C++ build prints the fingerprint above: all of them computed the same bits.
 
-The timings in [evidence/v1_0/demos](../../evidence/v1_0/demos/README.md) were taken while five other agents loaded the machine, and they are not a performance comparison: under that load OpenMP's static schedule waits on its slowest thread. Run `make demo-numeric` on a quiet machine before you quote a ratio.
+The timings in [evidence/v1_0/demos](../../evidence/v1_0/demos/README.md) come from one run while other agents worked on the machine, and they are not a performance comparison. Run `make demo-numeric` on a quiet machine before you quote a ratio.
 
 ## The device
 

@@ -1,0 +1,8 @@
+{
+  "tolerance": {"absolute": 0.0, "relative": 9.094947017729282e-13},
+  "domain": {"largest_extent": 4096},
+  "budget": 128,
+  "seed": 0,
+  "probes": 300,
+  "seconds": 5
+}

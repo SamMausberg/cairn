@@ -1,0 +1,15 @@
+// The scripted agent's first attempt: four running sums, so the additions form four independent chains instead of
+// one. It asks for four elements and forgets the ones past the last multiple of four.
+fn sumsq_by4(n:usize, xs:ro<f64>[n]) -> f64 implements sumsq when n >= 4 {
+  let mut a = 0.0;
+  let mut b = 0.0;
+  let mut c = 0.0;
+  let mut d = 0.0;
+  for k in 0..n / 4 {
+    a += xs[4 * k] * xs[4 * k];
+    b += xs[4 * k + 1] * xs[4 * k + 1];
+    c += xs[4 * k + 2] * xs[4 * k + 2];
+    d += xs[4 * k + 3] * xs[4 * k + 3];
+  }
+  return (a + b) + (c + d);
+}

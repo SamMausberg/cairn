@@ -1,7 +1,7 @@
 PYTHON ?= python3
 CAIRN = $(PYTHON) bin/cairn
 
-.PHONY: help docs editors all check lint format test native systems proof lean gpu tune-device calibrate-device embedded context wheel audit demo demo-repair demo-numeric demo-visual bench scale
+.PHONY: help docs editors all check lint format test native systems proof lean gpu tune-device calibrate-device embedded context wheel audit demo demo-repair demo-numeric demo-visual demo-implement bench scale
 all: lint test proof
 
 help:
@@ -29,6 +29,7 @@ help:
 	@echo 'demo-repair   an agent fixes a bug through the edit host, then cairn diff reviews it (demos/repair)'
 	@echo 'demo-numeric  the plate on the host lanes against f64 and a C++ loop (demos/numeric)'
 	@echo 'demo-visual   an agent sees a layout defect in a cairn shot and fixes it (demos/visual)'
+	@echo 'demo-implement  an agent writes faster implementations; validation refuses one, cairn tune times the rest (demos/implement)'
 
 check:
 	$(CAIRN) check examples/hello
@@ -127,3 +128,6 @@ demo-numeric:
 
 demo-visual:
 	$(PYTHON) demos/visual/run.py
+
+demo-implement:
+	$(PYTHON) demos/implement/run.py

@@ -9,92 +9,92 @@
   "same_bits": true,
   "load_average": [
     [
-      10.50390625,
-      13.90087890625,
-      13.880859375
+      1.14990234375,
+      4.67626953125,
+      7.6123046875
     ],
     [
-      16.224609375,
-      14.89892578125,
-      14.2099609375
+      2.23193359375,
+      4.80029296875,
+      7.62158203125
     ]
   ],
   "programs": [
     {
       "program": "cairn lanes",
-      "median_us": 194982,
-      "min_us": 141446,
-      "max_us": 232979,
+      "median_us": 73886,
+      "min_us": 70484,
+      "max_us": 77629,
       "runs_us": [
-        194982,
-        161556,
-        154916,
-        141446,
-        232979,
-        231804,
-        225616
+        77629,
+        73886,
+        75976,
+        74034,
+        70484,
+        73695,
+        71948
       ]
     },
     {
       "program": "cairn one lane",
-      "median_us": 395753,
-      "min_us": 352276,
-      "max_us": 455543,
+      "median_us": 225752,
+      "min_us": 206169,
+      "max_us": 231300,
       "runs_us": [
-        395753,
-        446105,
-        352366,
-        352276,
-        455543,
-        394831,
-        455413
+        230455,
+        231300,
+        216732,
+        206169,
+        225752,
+        230758,
+        215403
       ]
     },
     {
       "program": "c++ openmp, guards",
-      "median_us": 978184,
-      "min_us": 344680,
-      "max_us": 2376019,
+      "median_us": 236806,
+      "min_us": 126187,
+      "max_us": 418289,
       "runs_us": [
-        344680,
-        827975,
-        1471146,
-        805145,
-        1384547,
-        978184,
-        2376019
+        198704,
+        241156,
+        206866,
+        126187,
+        310222,
+        236806,
+        418289
       ]
     },
     {
       "program": "c++ one thread, guards",
-      "median_us": 396190,
-      "min_us": 325313,
-      "max_us": 513975,
+      "median_us": 210050,
+      "min_us": 197917,
+      "max_us": 227426,
       "runs_us": [
-        396190,
-        333761,
-        513975,
-        325313,
-        400728,
-        391973,
-        442567
+        197917,
+        202695,
+        210050,
+        209236,
+        217963,
+        215535,
+        227426
       ]
     },
     {
       "program": "c++ openmp, no guards",
-      "median_us": 1341955,
-      "min_us": 846566,
-      "max_us": 1958291,
+      "median_us": 253978,
+      "min_us": 151737,
+      "max_us": 660639,
       "runs_us": [
-        846566,
-        1079067,
-        1746182,
-        979957,
-        1341955,
-        1772242,
-        1958291
+        319760,
+        163247,
+        194996,
+        151737,
+        471237,
+        253978,
+        660639
       ]
     }
   ],
-  "cairn_output": "plate: 1024 x 1024 cells, 200 sweeps on the host lanes in 194982 us\nplate: middle column 1, 4 and 16 rows below the hot edge: 92.045975, 68.95758, 10.992733\nplate: fingerprint of every cell's bits 13714961143245356297\nplate: largest distance from the f64 reference 0.000014842041622387114, contract 0.00476837158203125\n"
+  "cairn_output": "plate: 1024 x 1024 cells, 200 sweeps on the host lanes in 77629 us\nplate: middle column 1, 4 and 16 rows below the hot edge: 92.045975, 68.95758, 10.992733\nplate: fingerprint of every cell's bits 13714961143245356297\nplate: largest distance from the f64 reference 0.000014842041622387114, contract 0.00476837158203125\n"
 }
