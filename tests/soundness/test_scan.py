@@ -339,7 +339,11 @@ def test_a_scan_is_priced_as_the_loop_it_writes_and_a_pooled_one_as_a_region(tmp
     source.write_text(PRICED)
     assert main(["predict", str(source), "--format", "json", "--at", "n=1000000"]) == 0
     rows = {name: row["predictions"][0] for name, row in json.loads(capsys.readouterr().out)["functions"].items()}
-    assert rows["plain"]["ns"] == rows["written"]["ns"] and rows["plain"]["confidence"] == "high"
+    # On a host whose architecture the packaged profile did not measure (an AArch64 one), every row says so.
+    machine = rows["written"]["why"]
+    assert all(why.startswith("the profile measured operations for") for why in machine)
+    assert rows["plain"]["ns"] == rows["written"]["ns"] and rows["plain"]["why"] == machine
+    assert rows["plain"]["confidence"] == ("medium" if machine else "high")
     assert rows["pooled"]["ns"] < rows["plain"]["ns"] and rows["pooled"]["confidence"] == "medium"
 
 
