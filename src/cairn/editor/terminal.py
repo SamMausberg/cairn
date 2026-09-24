@@ -136,6 +136,28 @@ def summary(result: dict, stream: TextIO | None = None) -> None:
         print(f"  {name}: {verdict}", file=stream)
 
 
+def rules(record: dict, stream: TextIO | None = None) -> None:
+    """`cairn rules`: each card under a line naming it and its codes, one paragraph per line; the list is one line a
+    card."""
+    stream = stream or sys.stdout
+    s = paint(stream)
+    if "always" in record:
+        print(f"Every program gets {', '.join(record['always'])}: cairn rules base prints one.", file=stream)
+    for card in record["cards"]:
+        codes = ", ".join(card["codes"])
+        if "text" not in card:
+            print(s(card["name"].ljust(16), "1") + (codes or "(no codes)"), file=stream)
+            continue
+        said = (
+            f"{record['code']} is a rule of the {card['name']} card"
+            if record.get("code")
+            else f"The {card['name']} card"
+        )
+        print("\n" + s(said, "1") + (f": {codes}" if codes else ""), file=stream)
+        for paragraph in card["text"].splitlines():
+            print(f"\n{paragraph}", file=stream)
+
+
 def validation(result: dict, stream: TextIO, s) -> None:
     """`cairn validate`: the finite result, then what Z3 established apart from it, and a failure's shrunk input."""
     finite, smt = result.get("finite", {}), result.get("smt", {})

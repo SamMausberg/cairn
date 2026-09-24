@@ -9,6 +9,9 @@ to the rule behind it (`card_of`). Shorter wording never grants edit authority.
 
 from __future__ import annotations
 
+import re
+from typing import Any
+
 from ..compiler.lexing import lex
 
 CARDS = {
@@ -72,7 +75,7 @@ The host splices a reply into the pinned original and rechecks the whole program
     "migrations": """cairn migrate PATH --symbol f --to SIGNATURE authorizes one interface change, --also NAME=SIGNATURE others with it and --allow EFFECT what rows may gain. The packet shows every function the migration may rewrite. A reply maps each function it rewrites to its whole new declaration: an authorized function (E-MIGRATION-SCOPE) with its own name and visibility, in the project's own files, at most 64 functions (E-MIGRATION), with the authorized signature (E-SIGNATURE), no declaration added or removed (E-DECLARATION) and no effect the host did not allow (E-CALLER-EFFECT). The whole program is rechecked, and every file is written or none.""",
     "sketches": """A host may ask for named expressions instead of a body. The reply is one JSON object that maps every slot to one expression string, with no other key, no comment in a value, 64000 bytes of choices and 128000 of reply at most (E-SKETCH-CHOICES). A sketch has 1 to 16 descriptive slot names (E-SKETCH-EMPTY, E-SKETCH-NAME), each on exactly one expression and none inside another (E-SKETCH-SITE, E-SKETCH-OVERLAP), and its slots are fixed once it is sent (E-SKETCH-SEALED). A semantic check needs a fixed reference of the same function (E-SKETCH-CONTRACT), and a search tries 1 to 4096 candidates within its budget (E-SKETCH-BUDGET).""",
     "validation": """An implementation session pins its reference, the tolerance, the test policy and the permitted inputs. A submission is one implementation of that reference, new or replacing one of the same name, with the helpers it calls and nothing else (E-DECLARATION); it never redefines the reference or implements another function (E-REFERENCE), and names no tolerance (E-TOLERANCE), cases, seed, budget, policy or test block (E-TEST-POLICY), and no domain, inputs or precondition (E-DOMAIN): narrow where it applies with when instead. The host rechecks the program under every rule of the implementations card and validates the submission against the reference under the pinned policy; a failing or undecided validation is E-VALIDATION, with the shrunk input when one failed. Fix the algorithm for every input its condition admits, not for that one.""",
-    "commands": """cairn prints a JSON record when piped and text at a terminal. E-PROJECT-OR-ENVIRONMENT, status unknown, says what a manifest, a path, an option or a tool of this machine lacks; it is no verdict on the program. A device target is sm_ and a compute capability with an optional f or a suffix, sm_120, from --device-target, [build] device_target or the one kind of GPU present (E-TARGET); what needs a feature the target lacks is E-TARGET-FEATURE, a record made for another target E-TARGET-MISMATCH, and a build needs an nvcc that compiles the target (E-TARGET-TOOLKIT). build, run and test check an export first: a directory that is none is E-EXPORT, a changed, added or removed file or an edited record E-EXPORT-TAMPERED, another compiler E-EXPORT-TOOLCHAIN.""",
+    "commands": """cairn prints a JSON record when piped and text at a terminal. E-PROJECT-OR-ENVIRONMENT, status unknown, says what a manifest, a path, an option or a tool of this machine lacks; it is no verdict on the program. A device target is sm_ and a compute capability with an optional f or a suffix, sm_120, from --device-target, [build] device_target or the one kind of GPU present (E-TARGET); what needs a feature the target lacks is E-TARGET-FEATURE, a record made for another target E-TARGET-MISMATCH, and a build needs an nvcc that compiles the target (E-TARGET-TOOLKIT). build, run and test check an export first: a directory that is none is E-EXPORT, a changed, added or removed file or an edited record E-EXPORT-TAMPERED, another compiler E-EXPORT-TOOLCHAIN. cairn rules takes a diagnostic code, a card's name or a source path, else E-RULE.""",
     "limits": """The compiler bounds its own work: 16000000 bytes of source (E-SOURCE-LIMIT), expressions nested 100 deep (E-DEPTH), 200000 expression visits while checking (E-AST-LIMIT), 32768 functions and 3200000 syntax nodes after expansion, 2048 copies from one recipe or from all families (E-EXPANSION-LIMIT), and a finite effect fixed point (E-EFFECT-LIMIT); split the program or the expression. E-INTERNAL and E-PROJECTION are faults of the compiler, never of the program: report them with the program. E-RESOURCE-OR-IO says the compiler could not read or hold its input, and establishes nothing about the program.""",
 }
 
@@ -123,7 +126,7 @@ CODES = {
     "E-SKETCH-CONTRACT E-SKETCH-BUDGET",
     "validation": "E-REFERENCE E-TOLERANCE E-TEST-POLICY E-DOMAIN E-VALIDATION",
     "commands": "E-PROJECT-OR-ENVIRONMENT E-TARGET E-TARGET-FEATURE E-TARGET-MISMATCH E-TARGET-TOOLKIT E-EXPORT "
-    "E-EXPORT-TAMPERED E-EXPORT-TOOLCHAIN",
+    "E-EXPORT-TAMPERED E-EXPORT-TOOLCHAIN E-RULE",
     "limits": "E-SOURCE-LIMIT E-DEPTH E-AST-LIMIT E-EXPANSION-LIMIT E-EFFECT-LIMIT E-INTERNAL E-PROJECTION "
     "E-RESOURCE-OR-IO",
 }
@@ -194,11 +197,37 @@ def program_cards(source: str) -> dict[str, str]:
 
 def triggers() -> dict[str, list[str]]:
     """The words that make `select_cards` send each card, found by asking it about every word the cards use."""
-    import re
-
     words = {w for text in CARDS.values() for w in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", text)} | {"|", "||"}
     found: dict[str, set[str]] = {}
     for word in words:
         for name in set(select_cards(word)) - set(CORE):
             found.setdefault(name, set()).add(word)
     return {name: sorted(found.get(name, ())) for name in CARDS}
+
+
+SCHEMA = "cairn.rules/1"
+CODE = re.compile(r"E-[A-Z0-9]+(?:-[A-Z0-9]+)*")
+
+
+def rules(asked: str = "", source: str | None = None) -> dict[str, Any] | None:
+    """What `cairn rules` answers, offline: with nothing asked every card and its codes; the card that owns a code; a
+    card by name; or, given a program's `source`, the cards it selects beyond the three every program gets. None when
+    `asked` is none of these."""
+    if source is not None:
+        chosen = [name for name in program_cards(source) if name not in CORE]
+        return {"schema": SCHEMA, "asked": asked, "always": list(CORE), "cards": [card(name) for name in chosen]}
+    if not asked:
+        words = triggers()
+        return {"schema": SCHEMA, "cards": [{**card(name, text=False), "words": words.get(name, [])}
+                                            for name in every_card()]}  # fmt: skip
+    if asked in every_card():
+        return {"schema": SCHEMA, "asked": asked, "cards": [card(asked)]}
+    if owner := card_of(asked):
+        return {"schema": SCHEMA, "asked": asked, "code": asked, "cards": [card(owner)]}
+    return None
+
+
+def card(name: str, text: bool = True) -> dict[str, Any]:
+    """One card as `cairn rules` gives it: its name, whether it is the language's or a tool's, its codes, its text."""
+    said = {"name": name, "kind": "language" if name in CARDS else "tool", "codes": sorted(CODES[name].split())}
+    return {**said, "text": every_card()[name]} if text else said

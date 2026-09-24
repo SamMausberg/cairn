@@ -202,6 +202,11 @@ def parser() -> argparse.ArgumentParser:
     d.add_argument("--no-predict", action="store_true", help="Leave out the predicted cost change.")
     sub.add_parser("certificates", help="Check collector arithmetic certificates; not a Lean/compiler proof.",
                    parents=[shared])  # fmt: skip
+    r = sub.add_parser("rules", help="Print a rule card, offline: the one that owns a diagnostic code, one by name, "
+                       "or those a program selects.", parents=[shared])  # fmt: skip
+    r.add_argument("asked", nargs="?", default="", metavar="CODE|CARD|PATH", help="E-LEASED, tasks, or a .cairn "
+                   "file or project; default: every card with its codes.")  # fmt: skip
+    r.add_argument("--list", action="store_true", help="Every card with its codes and the words that select it.")
     f = sub.add_parser("fmt", help="Format CAIRN sources in place; refuses any change to the token stream.")
     f.add_argument("paths", nargs="+", type=Path, help="Files, or directories searched for *.cairn.")
     f.add_argument("--check", action="store_true", help="Write nothing; exit 1 if any file would change.")

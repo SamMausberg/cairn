@@ -16,6 +16,7 @@ Every tool here ships with the compiler, needs no Python package outside the sta
 | `cairn verify`, `cairn diff`, `cairn certificates` | SMT equivalence of two sources; the class of every function between two versions; the collector certificates | [verification.md](verification.md#value-level-source-equivalence), [diff](#cairn-diff), [certificates](verification.md#the-collector-certificates-and-the-loop-model) |
 | `cairn export` | the exact program a build compiles, with a record that pins it | [export](#cairn-export) |
 | `cairn doc`, `cairn graph` | the API reference; the module graph | [doc](#cairn-doc-and-cairn-expand), [graph](#large-projects-and-bazel) |
+| `cairn rules` | the rule card of a diagnostic code, a card by name, or the cards a program selects | [rules](#cairn-rules) |
 | `cairn fmt`, `cairn lsp`, `cairn mcp`, `cairn completions` | the formatter; the language server; the MCP server; shell completions | [fmt](#cairn-fmt), [lsp](#cairn-lsp), [mcp](#cairn-mcp), [completions](#a-watched-check-and-shell-completions) |
 
 ## Output for people and for programs
@@ -48,6 +49,19 @@ Each entry of `further` is a whole diagnostic at its own file, line and column, 
 A refusal that may follow from another is never reported. Once a function's body is refused its effect row is unknown, so a function that reaches it is not held to its ceiling or to operand order, and is counted in `not_judged`. A refusal met again through a generic function or a type that two functions use is reported once. A refused type or signature ends the check once every type or signature is checked, and a refused constant ends it at once, since whatever names the declaration would be judged against half of it. A parse error is reported alone. The rules about lanes, plans, implementations, fusion and layouts run only on a program nothing else refuses.
 
 `cairn emit`, the language server and the MCP `check` tool report every refusal the same way. `cairn build`, `run` and `test`, and the edit, plan and implementation hosts, stop at the first. `tools/checks/refusal_differential.py` checks every refused program the repository holds both ways, and the first refusal must come out identical.
+
+## cairn rules
+
+```sh
+cairn rules E-LEASED          # the card that states the rule behind a code
+cairn rules tasks             # a card by name
+cairn rules src/main.cairn    # the cards a program selects beyond base, integers and calls
+cairn rules --list            # every card, its codes and the words that select it
+```
+
+`cairn rules` prints the compiler's rule cards, offline and without compiling anything. Every code the compiler, the hosts and `cairn` emit belongs to exactly one card, so a refusal always leads to the rule behind it. Thirty-one cards state the language. Six more state what the hosts, the command line and the compiler's own limits refuse: `hosts`, `migrations`, `sketches`, `validation`, `commands` and `limits`.
+
+Given a file or a project, it prints the cards the program's words select, which are the cards a host sends an agent editing it. A code no card states, such as one a recipe's `require` chose, and a word that is no code, card or path are refused with `E-RULE`. The record is `cairn.rules/1`: each card's name, kind, codes and text.
 
 ## A watched check and shell completions
 

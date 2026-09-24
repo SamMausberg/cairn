@@ -15,7 +15,7 @@ CAIRN is its own language, not Rust, C++ or Python with different spelling. The 
 ## Loop
 
 1. Write the program. One file with `fn main() -> i32` runs as is; `cairn new NAME` makes a project (a data-only `cairn.toml`, `src/`, a test).
-2. Run `cairn check PATH --format json` until it prints `"status": "typed"`. A refusal names a `code`, a line and a column, and `further` lists every other refusal the check could judge on its own, so fix them all before checking again. Look each code up in [codes.md](codes.md), read the card it names, and change the code the rule is about. Never widen an effect ceiling, turn `ro` into `rw`, add `unsafe` or delete a check to get past a refusal.
+2. Run `cairn check PATH --format json` until it prints `"status": "typed"`. A refusal names a `code`, a line and a column, and `further` lists every other refusal the check could judge on its own, so fix them all before checking again. `cairn rules CODE` prints the card that states a code's rule ([codes.md](codes.md) maps them too); change the code the rule is about. Never widen an effect ceiling, turn `ro` into `rw`, add `unsafe` or delete a check to get past a refusal.
 3. `cairn test PATH` runs every `test` block in a process of its own; `cairn run PATH` builds and runs, with arguments after `--`.
 4. Before tuning, read the costs instead of guessing: `cairn doc PATH` prints each signature with its effect row, `cairn explain PATH` the guards, allocations and waits left at run time, `cairn predict PATH` a time per function from a machine profile, without running anything.
 5. To make a function faster, leave it as the reference and write an implementation beside it: `fn g(...) implements f when COND { }`, with natural parameters to search if useful. `cairn validate PATH --symbol g` tests it against the reference on generated boundary inputs, `cairn tune PATH --symbol f` searches plans and validated implementations within its budgets and `--write` selects the winner (`plan f use g;`). Never edit the reference, a tolerance or a test to make an implementation pass.
@@ -147,6 +147,7 @@ A command that reports takes `--format json`, the default when its output is pip
 | `cairn verify` | SMT source equivalence, not native or Lean verification. |
 | `cairn diff` | What changed between two versions, function by function, and on what evidence. |
 | `cairn certificates` | Check collector arithmetic certificates; not a Lean/compiler proof. |
+| `cairn rules` | Print a rule card, offline: the one that owns a diagnostic code, one by name, or those a program selects. |
 | `cairn fmt` | Format CAIRN sources in place; refuses any change to the token stream. |
 | `cairn lsp` | Speak the Language Server Protocol over stdin/stdout. |
 | `cairn mcp` | Serve check, state and the edit, plan and implementation hosts to an agent over the Model Context Protocol on stdin/stdout; an admitted change is written back to its files. |

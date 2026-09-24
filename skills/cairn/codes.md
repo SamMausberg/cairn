@@ -157,6 +157,7 @@ Each code the compiler, the hosts and `cairn` can name, with the card that state
 | `E-REQUEST` | [hosts](cards/hosts.md) |  |
 | `E-RESOURCE-OR-IO` | [limits](cards/limits.md) |  |
 | `E-RETURN` | [base](SKILL.md#core-rules) | End every path with a return; there is no implicit tail return. |
+| `E-RULE` | [commands](cards/commands.md) |  |
 | `E-SCAN-EXTENT` | [scan](cards/scan.md) |  |
 | `E-SCAN-OP` | [scan](cards/scan.md) |  |
 | `E-SCAN-ORDER` | [scan](cards/scan.md) |  |

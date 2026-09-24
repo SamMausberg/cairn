@@ -154,6 +154,20 @@ def main(argv: list[str] | None = None) -> int:
 
             report(audit_collector())
             return 0
+        if a.command == "rules":  # the cards, offline: nothing is compiled
+            from .agent.teaching import CODE, every_card, rules
+
+            asked = "" if a.list else a.asked
+            path = asked and asked not in every_card() and not CODE.fullmatch(asked) and Path(asked).exists()
+            record = rules(asked, load_project(asked).source if path else None)
+            if record is None and CODE.fullmatch(asked):
+                raise Diagnostic("E-RULE", f"No card states {asked}: the compiler, the hosts and cairn never emit it. "
+                                 "A code a recipe's require chooses is explained by its message.")  # fmt: skip
+            if record is None:
+                raise Diagnostic("E-RULE", f"{asked!r} is no diagnostic code, card or path; cairn rules --list names "
+                                 "every card.")  # fmt: skip
+            terminal.rules(record) if terminal.human(FORMAT) else report(record)
+            return 0
         if a.command == "new":
             report(create_project(a.directory, a.template), brief=True)
             return 0
