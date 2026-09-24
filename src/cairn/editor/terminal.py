@@ -139,7 +139,7 @@ def rules(record: dict, stream: TextIO | None = None) -> None:
     stream = stream or sys.stdout
     s = paint(stream)
     if "always" in record:
-        print(f"Every program gets {', '.join(record['always'])}: cairn rules base prints one.", file=stream)
+        print(f"Every program also gets {', '.join(record['always'])}; cairn rules NAME prints one.", file=stream)
     for card in record["cards"]:
         codes = ", ".join(card["codes"])
         if "text" not in card:
