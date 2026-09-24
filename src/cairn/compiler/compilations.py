@@ -6,9 +6,9 @@ packaged `std` modules as they are on disk now (`library`, since each link reads
 captures expression sites, and whether it reports every refusal. The device target and emulation are not inputs of a
 compile: `projects/target.py` and `projects/emulation.py` judge its receipt afterwards.
 
-What a compile made is kept as bytes, never as objects a caller holds: the parse, the checked program with its checker
-and receipts as the check left them, each pickled, a refusal's record, and, once a caller asks, the emitted C++ with
-its manifest. Every caller unpickles its own copy, so a change one caller makes to what it got is never read by
+What a compile made is kept as bytes, never as objects a caller holds: the checked program with its checker and
+receipts as the check left them, pickled, and a refusal's record; and once a caller asks for one, the parse and the
+emitted C++ with its manifest. Every caller unpickles its own copy, so a change one caller makes to what it got is never read by
 another. A caller whose request ran a stage takes the objects that stage made, which nobody else has seen.
 
 A check that captures sites answers one that does not, with the sites left out. An accepted program checks the same
