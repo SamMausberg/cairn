@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..compiler import block_run, fragments
-from ..compiler.cooperative import SHUFFLES, WARP_SIZE
+from ..compiler.cooperative import SHUFFLES, VOTES, WARP_SIZE
 from ..compiler.footprints import Poly as Symbolic
 from ..compiler.tree import FLOAT, USIZE, Expr, Stmt, Type, nested, root
 from .counts import ONE, Frame, Poly, Region, Work, add, data_dependent, path, widen
@@ -362,7 +362,7 @@ class Tally:
             return True
         if not (isinstance(ref, tuple) and ref[:1] == ("builtin",)):
             return False
-        if e.val in SHUFFLES:
+        if e.val in SHUFFLES | VOTES:  # a vote issues as a shuffle does: one instruction for the warp
             at.work.op("shuffle", times)
             self.shape.collectives[e.line] = e.val
             return True

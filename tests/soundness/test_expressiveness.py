@@ -124,24 +124,35 @@ plan f { vector 4; }""",
             """fn f(g:usize, n:usize, x:ro<u32>[n], out:rw<u32>[n]) {
   blocks b in g threads t in 32 {
     let i = b * 32 + t;
-    let mut bit:u32 = 0;
-    if i < n && x[i] > 0 { bit = shl_wrap(1, t); }
-    let ballot = reduce | warp yield bit;
-    if i < n { out[i] = ballot; }
+    let ballot = warp_ballot(i < n && x[i] > 0);
+    let some = warp_any(i < n);
+    let every = warp_all(i < n);
+    if i < n && some && every { out[i] = ballot; }
+  }
+}""",
+            "accepted",
+        ),
+        (
+            """fn f(g:usize) { blocks b in g threads t in 32 { if t < 4 { let v = warp_ballot(true); } } }""",
+            "E-COOP-WARP",
+        ),
+    ],
+    "Warp match": [
+        ("""fn f(g:usize) { blocks b in g threads t in 32 { let m = warp_match(t % 4); } }""", "accepted"),
+        ("""fn f(g:usize) { blocks b in g threads t in 32 { let m = warp_match(t < 4); } }""", "E-TYPE-MISMATCH"),
+    ],
+    "Shuffles": [
+        (
+            """fn f(g:usize) {
+  blocks b in g threads t in 32 {
+    let a = shuffle(t, 0);
+    let c = shuffle_xor(t, 1);
+    let d = shuffle_down(t, 1);
+    let e = shuffle_up(t, 1);
   }
 }""",
             "accepted",
         )
-    ],
-    "Warp match": [("""fn f(g:usize) { blocks b in g threads t in 32 { let m = match_any(t); } }""", "E-CALLEE")],
-    "Shuffles": [
-        (
-            """fn f(g:usize) {
-  blocks b in g threads t in 32 { let a = shuffle(t, 0); let c = shuffle_xor(t, 1); let d = shuffle_down(t, 1); }
-}""",
-            "accepted",
-        ),
-        ("""fn f(g:usize) { blocks b in g threads t in 32 { let v = shuffle_up(t, 1); } }""", "E-CALLEE"),
     ],
     "Grid-stride loops": [
         (

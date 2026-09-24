@@ -40,6 +40,8 @@ __all__ = ["NORMALIZE", "UNGUARDED", "arguments", "guard_count"]
 def programs() -> dict[str, str]:
     out = {}
     for manifest in sorted((ROOT / "examples").rglob("*.toml")):
+        if "[project]" not in manifest.read_text(encoding="utf-8"):
+            continue  # a harness.toml maps a benchmark's arguments; it is no manifest
         try:
             out["project:" + str(manifest.relative_to(ROOT))] = load_project(manifest).source
         except ProjectError as e:

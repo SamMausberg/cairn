@@ -141,9 +141,30 @@ public:
     const std::size_t from = lane() + delta;
     return exchange(v, from < WARP ? from : lane());
   }
+  template<class T> T shuffle_up(T v, std::size_t delta) noexcept {
+    if(delta >= WARP) trap();
+    return exchange(v, lane() >= delta ? lane() - delta : lane());
+  }
   template<class T, class Op> T reduce(T v, Op op) noexcept {
     for(unsigned m = WARP / 2; m; m /= 2) v = op(v, exchange(v, lane() ^ m));
     return v;
+  }
+  // A vote: every thread of the warp publishes a word and reads all 32, and bit l of the answer is `same(lane l's)`.
+  template<class Same> std::uint32_t gather(std::uint64_t mine, Same same) noexcept {
+    Warp& w = warps_[t_ / WARP];
+    w.slot[t_ % WARP] = mine;
+    w.gate.arrive_and_wait();
+    std::uint32_t found = 0;
+    for(unsigned l = 0; l < WARP; ++l) found |= std::uint32_t(same(w.slot[l])) << l;
+    w.gate.arrive_and_wait();
+    return found;
+  }
+  std::uint32_t warp_ballot(bool c) noexcept { return gather(c, [](std::uint64_t s) { return s != 0; }); }
+  bool warp_any(bool c) noexcept { return warp_ballot(c) != 0; }
+  bool warp_all(bool c) noexcept { return warp_ballot(c) == 0xffffffffu; }
+  template<class T> std::uint32_t warp_match(T v) noexcept {
+    const std::uint64_t b = bits(v);
+    return gather(b, [b](std::uint64_t s) { return s == b; });
   }
 };
 
@@ -241,9 +262,20 @@ public:
     if(delta >= WARP) trap();
     return through(v, [=](auto x) { return __shfl_down_sync(0xffffffffu, x, unsigned(delta)); });
   }
+  template<class T> __device__ T shuffle_up(T v, std::size_t delta) const {
+    if(delta >= WARP) trap();
+    return through(v, [=](auto x) { return __shfl_up_sync(0xffffffffu, x, unsigned(delta)); });
+  }
   template<class T, class Op> __device__ T reduce(T v, Op op) const {
     for(unsigned m = WARP / 2; m; m /= 2) v = op(v, shuffle_xor(v, m));
     return v;
+  }
+  __device__ std::uint32_t warp_ballot(bool c) const { return __ballot_sync(0xffffffffu, c); }
+  __device__ bool warp_any(bool c) const { return __any_sync(0xffffffffu, c) != 0; }
+  __device__ bool warp_all(bool c) const { return __all_sync(0xffffffffu, c) != 0; }
+  template<class T> __device__ std::uint32_t warp_match(T v) const {
+    if constexpr(std::is_same_v<T, std::size_t>) return __match_any_sync(0xffffffffu, (unsigned long long)v);
+    else return __match_any_sync(0xffffffffu, v);
   }
 };
 

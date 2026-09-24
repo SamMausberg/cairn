@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.1.0.dev0
+
+Work toward 1.1.0 on `main`, not released. Its records are under `evidence/v1_1/`, and what is left is the [roadmap](https://github.com/users/SamMausberg/projects/2) and the [v1.1 milestone](https://github.com/SamMausberg/cairn/milestone/1).
+
+### Kernels
+
+- `load_wide[K](x, i)` and `store_wide` move up to 16 bytes of adjacent elements in one access, with a cache hint named from `Cache` (`E-WIDE`), in host code, lanes and cooperative threads.
+- Lanes and cooperative threads update an element atomically: `atomic_add_wrap`, `atomic_min`, `atomic_max`, `atomic_cas`, `atomic_and`, `atomic_or`, `atomic_xor` and `atomic_add_unordered`, never beside a plain access of the same array in one region (`E-ATOMIC-MIXED`).
+- A cooperative region may end with a finish that runs once, in one block, after every block, and stays one launch on the device.
+- A shared array declared with no initializer is not zeroed, when every element a thread reads was written first (`E-COOP-UNWRITTEN`).
+- Warps vote with `warp_ballot`, `warp_any`, `warp_all` and `warp_match`, and `shuffle_up` joins the shuffles.
+- `examples/reduction` sums f32 in one launch with wide streaming loads, an unzeroed shared array and a finish, with nothing `unsafe`. `docs/devices.md` lists what fast CUDA kernels use and how CAIRN writes each one.
+
+### Device execution and performance
+
+- A device function whose effects the host cannot observe waits once when it returns, and a library header adds `cq_NAME(stream, ...)`, which queues it on the caller's stream without waiting and can be captured in a CUDA graph (`E-ENQUEUE` names what keeps a function from it).
+- A checked multiply in a device lane tests the product's high half instead of dividing.
+- `--emulate` on `build`, `run`, `test` and `validate` judges a device program against its device target and runs its device work on host threads; what the host cannot run as a device would is `E-EMULATE`, and an emulated validation is `finite-tested-emulated`, which `cairn tune` uses only with `--accept-emulated`.
+- `cairn predict` and `cairn tune` price device work on eight packaged cards (A100, H100, H200, B200, L40S, RTX 4090, RTX 5090, RTX 5070 Ti) from NVIDIA's published figures, with `--card NAME`, `--card all` and `cairn cards`. No card has been measured.
+- `cairn tune` ranks candidates by one objective over several sizes, generates them lazily, compiles each distinct kernel once and holds its time budget.
+
+### Benchmarks and interop
+
+- `cairn export --harness sol-execbench|gpumode|kernelbench` writes a function as a submission for that benchmark, bound to PyTorch's current stream through `cq_NAME`, and `cairn new --from-sol-execbench` starts a project from a problem. Nothing is submitted or run on a GPU by these commands.
+
+### Agents
+
+- One check reports every independent refusal: the first exactly as before, the rest in `further`, and `not_judged` counts functions a refusal left without a verdict.
+- Every refusal names the rule card that states its rule and, where the compiler can state it, the smallest fix; `cairn rules` prints a card offline, and every diagnostic code belongs to one card. The skill costs 19.6 percent fewer tokens; no model has been run to show agents do better with it.
+- The hosts, `cairn state`, `cairn mcp` and the language server share one compile per distinct source.
+- `cairn tune --write` and every session write files with CRLF endings or a byte-order mark in their own form instead of refusing them.
+
+### Validation
+
+- Host validation, regression replay, the implementation session and the generated device tests compare floats under one versioned numerical policy, and a Z3 counterexample is replayed natively and fails the validation it breaks.
+
+### Repository
+
+- CI compiles device code under CUDA 12.9 and 13.2 with both host compilers, tests the oldest and newest supported compilers (GCC 11, Clang 13 and later), every Python from 3.11, an AArch64 host with the freestanding image under QEMU and the installed package, and reports one `ci-passed` check.
+- Every change reaches `main` through a pull request that fills in the template and merges when CI passes. Issues are filed through forms, labels are data in `.github/labels.yml`, `CITATION.cff` cites the project, and `docs/verification.md` has a capability matrix generated from data.
+- An adversarial review of everything since 1.0.0 fixed eight defects (`evidence/v1_1/review`). One stays open and is pinned by a strict expected failure: `cairn tune` chooses implementations on validations made under any domain and tolerance.
+
 ## 1.0.0
 
 The first release. The sections below it are the internal milestones that came before it, 0.5.0 to 0.8.3.

@@ -71,6 +71,8 @@ cairn tune examples/cooperative/tuned.toml --symbol row_totals --card h100 --at 
 
 `cairn predict` prices device work from the published specifications of eight GPUs, from the A100 to the B200 and the RTX 5090. `cairn tune` compiles its candidates for that GPU's target and reads registers and shared memory from ptxas, with nothing launched. These are predictions from datasheets and compiler reports. None of the eight cards has been checked against a measurement.
 
+A device library's header gives each function whose effects the host cannot observe a `cq_NAME(stream, ...)` entry, which queues its work on the caller's stream without waiting, so PyTorch or any CUDA program can call it or capture it in a CUDA graph. `cairn export --harness sol-execbench|gpumode|kernelbench` packages a function as a submission for that benchmark, bound to PyTorch's current stream; it writes the files and the command, and never submits or runs anything.
+
 ## A CPU example
 
 The same rules apply to threads on the CPU. Two tasks fill the two halves of an array:
@@ -109,7 +111,7 @@ fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@devic
 
 ## Install
 
-You need Linux on x86-64 or AArch64, Python 3.11 or later, and GCC 11 or Clang 13 or later. The compiler has no third-party Python dependency.
+You need Linux on x86-64 or AArch64, Python 3.11 or later, and GCC 11 or later or Clang 13 or later. The compiler has no third-party Python dependency.
 
 ```sh
 git clone https://github.com/SamMausberg/cairn && cd cairn
@@ -158,11 +160,11 @@ The demo agents are scripted. What the host, the compiler, Z3 and the programs r
 
 CAIRN 1.0 was developed and measured on one machine, and a later major version may still change the language.
 
-The compiler is not proved correct. The checker and the C++ emitter are about 13,100 lines of Python (`src/cairn/compiler`), and the runtime is about 3,700 lines of C++ headers (`src/cairn/runtime`). The Lean proofs cover models written by hand beside that code. Differential tests compare those models with the checker on generated programs, which shows agreement on samples, not that the Python implements the model.
+The compiler is not proved correct. The checker and the C++ emitter are about 14,300 lines of Python (`src/cairn/compiler`), and the runtime is about 4,100 lines of C++ headers (`src/cairn/runtime`). The Lean proofs cover models written by hand beside that code. Differential tests compare those models with the checker on generated programs, which shows agreement on samples, not that the Python implements the model.
 
 | You trust | For | Checked by |
 |---|---|---|
-| The Python parser, checker and emitter | every program | about 5,000 tests, rejection tables from eight adversarial reviews, differential runs against the Lean models |
+| The Python parser, checker and emitter | every program | about 5,500 tests, rejection tables from nine adversarial reviews, differential runs against the Lean models |
 | The runtime headers | owners, threads, the lane pool, rings, device calls | native runs under Clang and GCC with the address, leak, undefined-behaviour and thread sanitizers |
 | Clang or GCC, and nvcc | native and device code | nothing in this repository |
 | `unsafe` blocks, `extern` declarations, typed `asm` and foreign implementations | the foreign boundary, MMIO, inline assembly, vendored C++ and CUDA | the effects and contracts they declare, taken as written; a foreign implementation is also tested against its reference |

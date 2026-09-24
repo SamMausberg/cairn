@@ -4,10 +4,10 @@ import json
 import pathlib
 import re
 
-from cairn import __version__
 from cairn.agent import skill
 from cairn.agent.teaching import CORE, OWNER, every_card
 from cairn.compiler.cairnc import Diagnostic, compile_source
+from cairn.version import __semver__
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SKILL = ROOT / "skills" / "cairn"
@@ -65,9 +65,9 @@ def test_the_example_in_the_skill_compiles():
 def test_the_plugin_and_its_marketplace_state_this_release():
     plugin = json.loads((ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
     market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8"))
-    assert plugin["name"] == "cairn" and plugin["version"] == __version__
+    assert plugin["name"] == "cairn" and plugin["version"] == __semver__
     [entry] = market["plugins"]
-    assert entry["name"] == plugin["name"] and entry["version"] == __version__ and entry["source"] == "./"
+    assert entry["name"] == plugin["name"] and entry["version"] == __semver__ and entry["source"] == "./"
     server = plugin["lspServers"]["cairn"]
     assert server["command"] == "${CLAUDE_PLUGIN_ROOT}/bin/cairn" and server["args"] == ["lsp"]
     assert (ROOT / "bin/cairn").stat().st_mode & 0o111  # the plugin's bin/ goes on PATH as it is

@@ -37,7 +37,7 @@ SOFT = {"take", "swap", "transfer", "wait", "collect", *machine.NAMES}
 MATH = {"sqrt", "floor", "ceil", "trunc", "abs", "to_bits"}  # a program's own function of the name wins
 SOFT |= MATH | printing.NAMES | {"quantize", "quantize_stochastic", "from_bits", "assert", "assert_eq", "mma_unordered"}
 SOFT |= {"mma_load", "mma_store", "mma_get", "mma_set"}  # tensor-core fragments (fragments.py)
-SOFT |= cooperative.SHUFFLES  # a program's own function of the name wins
+SOFT |= cooperative.SHUFFLES | cooperative.VOTES  # a program's own function of the name wins
 SOFT |= set(wide.NAMES)  # wide loads and stores (wide.py)
 SOFT |= set(atomics.NAMES)  # atomic updates of one element (atomics.py)
 QUANTIZED = [*STORAGE, "i8", "u8", "i16", "u16"]  # where one rounding of x / scale is exact (cairn_float.hpp)
@@ -398,6 +398,7 @@ TABLE: dict[str, tuple[Any, Any]] = {
     "mma_set": (fragments.check_set, fragments.lower_set),
     **dict.fromkeys(fragments.TYPES, (fragments.check_fill, fragments.lower_fill)),
     **dict.fromkeys(cooperative.SHUFFLES, (cooperative.check_shuffle, cooperative.lower_shuffle)),
+    **dict.fromkeys(cooperative.VOTES, (cooperative.check_vote, cooperative.lower_vote)),
     "load_wide": (wide.check_load, wide.lower),
     "store_wide": (wide.check_store, wide.lower),
     **dict.fromkeys(atomics.NAMES, (atomics.check, atomics.lower)),

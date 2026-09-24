@@ -11,7 +11,7 @@ import pytest
 
 from cairn.compiler.cairnc import compile_program
 from cairn.editor.highlighting import KINDS, MODIFIERS
-from cairn.version import __version__
+from cairn.version import __semver__
 
 ROOT = Path(__file__).resolve().parents[2]
 EDITOR = ROOT / "editors" / "vscode"
@@ -43,7 +43,7 @@ def test_the_manifest_points_at_files_that_exist():
 
 def test_the_manifest_matches_the_package_and_its_license():
     m = manifest()
-    assert m["version"] == __version__
+    assert m["version"] == __semver__
     assert m["license"] == "(MIT OR Apache-2.0)"
     assert (EDITOR / "LICENSE").read_text(encoding="utf-8").endswith((ROOT / "LICENSE-MIT").read_text(encoding="utf-8"))
 
