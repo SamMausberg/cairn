@@ -36,6 +36,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/rings.py` | I/O rings: their declaration, the operations that move owners in and out, their lowering |
 | `compiler/implementations.py` | alternative implementations of a function: their declaration, condition, contract, selection by a plan and the dispatch that lowers it |
 | `compiler/effects.py` | the effect vocabulary, the fixed point, the operand-order audit |
+| `compiler/refusals.py` | every independent refusal of one check: what a failed check takes back, what can still be judged after a refusal, and the record that carries them |
 | `compiler/traits.py` | who implements what, what a bound promises, the one place an instance is made |
 | `compiler/constants.py` | constant folding |
 | `compiler/facts.py` | what the checker established about `usize` values, which lowering uses to drop a guard |
