@@ -1,0 +1,30 @@
+// One Jacobi sweep of a w x h grid (n = w * h elements, row after row): each interior point becomes the mean of its
+// four neighbours, and the border is copied.
+
+// As a parallel region over every element, which finds its column with i % w.
+pub fn jacobi(w:usize, n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
+  parallel i in n {
+    let c = i % w;
+    if i >= w && i + w < n && c > 0 && c + 1 < w {
+      out[i] = 0.25 * (x[i - 1] + x[i + 1] + x[i - w] + x[i + w]);
+    } else {
+      out[i] = x[i];
+    }
+  }
+}
+
+// As a cooperative region of 32 x 8 threads a block, each thread one element, w = 32 * gx and h = 8 * gy.
+pub fn jacobi_blocks(gx:usize, gy:usize, n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
+  let w = gx * 32;
+  let h = gy * 8;
+  blocks bx, by in gx, gy threads tx, ty in 32, 8 {
+    let col = bx * 32 + tx;
+    let row = by * 8 + ty;
+    let i = row * w + col;
+    if row > 0 && row + 1 < h && col > 0 && col + 1 < w {
+      out[i] = 0.25 * (x[i - 1] + x[i + 1] + x[i - w] + x[i + w]);
+    } else {
+      out[i] = x[i];
+    }
+  }
+}

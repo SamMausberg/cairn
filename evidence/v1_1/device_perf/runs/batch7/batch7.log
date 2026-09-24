@@ -1,0 +1,32 @@
+batch batch7 start 2026-09-24T12:50:46-07:00
+smi 2026-09-24T12:50:46-07:00 13 %, 3076 MiB, 43
+busy: waiting 300 s (wait 1)
+smi 2026-09-24T12:55:31-07:00 6 %, 3234 MiB, 41
+run 1 reduce_wide final args=default 2026-09-24T12:55:31-07:00
+  status 0 seconds 1.6377
+  driver events in the last 3 minutes: 0
+run 2 reduce final args=default 2026-09-24T12:55:46-07:00
+  status 0 seconds 2.57865
+  driver events in the last 3 minutes: 0
+run 3 reduce_wide final2 args=default 2026-09-24T12:56:01-07:00
+  status 0 seconds 2.12816
+  driver events in the last 3 minutes: 0
+run 4 reduce final2 args=default 2026-09-24T12:56:16-07:00
+  status 0 seconds 4.21888
+  driver events in the last 3 minutes: 0
+run 5 saxpy final2 args=default 2026-09-24T12:56:31-07:00
+  status 0 seconds 1.90608
+  driver events in the last 3 minutes: 0
+run 6 layernorm final2 args=default 2026-09-24T12:56:46-07:00
+  status 0 seconds 1.10629
+  driver events in the last 3 minutes: 0
+run 7 transpose final2 args=default 2026-09-24T12:56:58-07:00
+  status 0 seconds 2.00364
+  driver events in the last 3 minutes: 0
+run 8 stencil final2 args=default 2026-09-24T12:57:12-07:00
+  status 0 seconds 1.48747
+  driver events in the last 3 minutes: 0
+resets check 2026-09-24T12:57:14-07:00 over the last 8 minutes
+system events: 0, application LiveKernelEvent: 0
+smi after 11 %, 3019 MiB, 45
+batch batch7 end 2026-09-24T12:57:15-07:00

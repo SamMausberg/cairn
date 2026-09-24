@@ -1,0 +1,15 @@
+batch batch8 start 2026-09-24T13:14:42-07:00
+smi 2026-09-24T13:14:42-07:00 10 %, 2905 MiB, 42
+run 1 reduction final5 args=default 2026-09-24T13:14:42-07:00
+  status 0 seconds 2.20739
+  driver events in the last 3 minutes: 0
+run 2 reduce_wide final5 args=default 2026-09-24T13:14:57-07:00
+  status 0 seconds 2.91346
+  driver events in the last 3 minutes: 0
+run 3 reduction final6 args=default 2026-09-24T13:15:12-07:00
+  status 0 seconds 2.21201
+  driver events in the last 3 minutes: 0
+resets check 2026-09-24T13:15:15-07:00 over the last 2 minutes
+system events: 0, application LiveKernelEvent: 0
+smi after 13 %, 2822 MiB, 43
+batch batch8 end 2026-09-24T13:15:17-07:00

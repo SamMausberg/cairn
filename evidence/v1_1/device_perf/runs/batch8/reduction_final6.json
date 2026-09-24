@@ -1,0 +1,17 @@
+{
+  "pair": "reduction", "device": "NVIDIA GeForce RTX 5070 Ti", "sm": "12.0", "sms": 70, "driver_api": 13020, "runtime_api": 13020,
+  "rows": [
+    {"variant": "one_pass_v4_lastblock", "side": "cuda", "n": 16777216, "reps": 60, "gpu_us": 95.31, "host_us": 137.35, "return_us": 18.17, "gpu_us_min": 88.67, "host_us_min": 111.59, "burst_us": 88.14, "relative_error": 0},
+    {"variant": "one_pass_finish", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 98.86, "host_us": 142.88, "return_us": 100.21, "gpu_us_min": 72.10, "host_us_min": 99.88, "burst_us": 227.73, "relative_error": 0},
+    {"variant": "one_pass_atomic_enqueued", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 99.14, "host_us": 139.08, "return_us": 26.17, "gpu_us_min": 87.01, "host_us_min": 118.90, "burst_us": 86.53, "relative_error": 0},
+    {"variant": "one_pass_atomic", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 157.62, "host_us": 201.31, "return_us": 152.80, "gpu_us_min": 118.59, "host_us_min": 145.77, "burst_us": 254.85, "relative_error": 0},
+    {"variant": "two_pass_load_wide_enqueued", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 98.70, "host_us": 139.42, "return_us": 30.66, "gpu_us_min": 89.86, "host_us_min": 117.54, "burst_us": 90.31, "relative_error": 0},
+    {"variant": "memset_4_bytes", "side": "cuda", "n": 16777216, "reps": 60, "gpu_us": 13.31, "host_us": 72.61, "return_us": 18.99, "gpu_us_min": 0.93, "host_us_min": 38.95, "burst_us": 8.19, "relative_error": 0},
+    {"variant": "one_pass_v4_lastblock", "side": "cuda", "n": 67108864, "reps": 60, "gpu_us": 343.47, "host_us": 403.04, "return_us": 21.97, "gpu_us_min": 324.90, "host_us_min": 343.81, "burst_us": 375.70, "relative_error": 0},
+    {"variant": "one_pass_finish", "side": "cairn", "n": 67108864, "reps": 60, "gpu_us": 407.38, "host_us": 497.11, "return_us": 406.99, "gpu_us_min": 319.42, "host_us_min": 350.82, "burst_us": 616.87, "relative_error": 0},
+    {"variant": "one_pass_atomic_enqueued", "side": "cairn", "n": 67108864, "reps": 60, "gpu_us": 340.35, "host_us": 409.27, "return_us": 29.09, "gpu_us_min": 327.17, "host_us_min": 351.26, "burst_us": 377.74, "relative_error": 1.79e-07},
+    {"variant": "one_pass_atomic", "side": "cairn", "n": 67108864, "reps": 60, "gpu_us": 474.66, "host_us": 637.26, "return_us": 448.15, "gpu_us_min": 366.02, "host_us_min": 410.20, "burst_us": 686.58, "relative_error": 1.79e-07},
+    {"variant": "two_pass_load_wide_enqueued", "side": "cairn", "n": 67108864, "reps": 60, "gpu_us": 348.91, "host_us": 415.43, "return_us": 33.06, "gpu_us_min": 331.68, "host_us_min": 349.58, "burst_us": 397.09, "relative_error": 0},
+    {"variant": "memset_4_bytes", "side": "cuda", "n": 67108864, "reps": 60, "gpu_us": 10.19, "host_us": 82.79, "return_us": 23.37, "gpu_us_min": 0.93, "host_us_min": 45.34, "burst_us": 5.55, "relative_error": 0}
+  ]
+}

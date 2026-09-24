@@ -1,0 +1,17 @@
+{
+  "pair": "saxpy", "device": "NVIDIA GeForce RTX 5070 Ti", "sm": "12.0", "sms": 70, "driver_api": 13020, "runtime_api": 13020,
+  "rows": [
+    {"variant": "saxpy", "side": "cuda", "n": 4194304, "reps": 60, "gpu_us": 37.36, "host_us": 100.74, "return_us": 23.96, "gpu_us_min": 27.49, "host_us_min": 55.62, "burst_us": 31.11, "relative_error": 0},
+    {"variant": "saxpy", "side": "cairn", "n": 4194304, "reps": 60, "gpu_us": 91.78, "host_us": 145.52, "return_us": 87.52, "gpu_us_min": 54.69, "host_us_min": 84.26, "burst_us": 111.68, "relative_error": 0},
+    {"variant": "saxpy_twice", "side": "cuda", "n": 4194304, "reps": 60, "gpu_us": 60.69, "host_us": 120.55, "return_us": 24.35, "gpu_us_min": 49.82, "host_us_min": 75.15, "burst_us": 49.55, "relative_error": 0},
+    {"variant": "saxpy_twice", "side": "cairn", "n": 4194304, "reps": 60, "gpu_us": 128.03, "host_us": 192.56, "return_us": 123.59, "gpu_us_min": 66.94, "host_us_min": 101.34, "burst_us": 133.26, "relative_error": 0},
+    {"variant": "saxpy_enqueued", "side": "cairn", "n": 4194304, "reps": 60, "gpu_us": 37.14, "host_us": 93.99, "return_us": 21.34, "gpu_us_min": 27.14, "host_us_min": 52.17, "burst_us": 29.21, "relative_error": 0},
+    {"variant": "saxpy_twice_enqueued", "side": "cairn", "n": 4194304, "reps": 60, "gpu_us": 78.59, "host_us": 131.75, "return_us": 30.24, "gpu_us_min": 55.84, "host_us_min": 79.88, "burst_us": 50.77, "relative_error": 0},
+    {"variant": "saxpy", "side": "cuda", "n": 16777216, "reps": 60, "gpu_us": 265.04, "host_us": 367.30, "return_us": 27.90, "gpu_us_min": 246.21, "host_us_min": 319.09, "burst_us": 300.47, "relative_error": 0},
+    {"variant": "saxpy", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 345.04, "host_us": 478.03, "return_us": 361.60, "gpu_us_min": 293.89, "host_us_min": 365.48, "burst_us": 393.52, "relative_error": 0},
+    {"variant": "saxpy_twice", "side": "cuda", "n": 16777216, "reps": 60, "gpu_us": 522.29, "host_us": 632.76, "return_us": 29.36, "gpu_us_min": 511.17, "host_us_min": 572.27, "burst_us": 601.36, "relative_error": 0},
+    {"variant": "saxpy_twice", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 602.80, "host_us": 842.95, "return_us": 660.15, "gpu_us_min": 543.17, "host_us_min": 645.34, "burst_us": 724.56, "relative_error": 0},
+    {"variant": "saxpy_enqueued", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 263.30, "host_us": 369.15, "return_us": 24.34, "gpu_us_min": 246.85, "host_us_min": 304.40, "burst_us": 297.30, "relative_error": 0},
+    {"variant": "saxpy_twice_enqueued", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 523.84, "host_us": 635.61, "return_us": 35.49, "gpu_us_min": 507.84, "host_us_min": 588.29, "burst_us": 599.62, "relative_error": 0}
+  ]
+}

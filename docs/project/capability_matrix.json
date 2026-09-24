@@ -240,10 +240,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120 in the suite; sm_80, sm_89, sm_90a, sm_100a and sm_120a for the suite's kernels",
       "ran_on_cpu": "yes: emulated, and on a host stand-in for the CUDA runtime",
-      "ran_on_gpu": "no: the runtime's map, reduce and compaction ran on an RTX 5070 Ti at v0.8.3, before the execution context; the current lowering has not run",
+      "ran_on_gpu": "partial: `parallel` regions and the `reduce` collector ran on an RTX 5070 Ti in bench/device, each result checked against CUDA or the exact sum; `scan` and `compact` have not run since v0.8.3",
       "sanitizers": "partial: the host sanitizers on emulated builds; Compute Sanitizer has not run",
-      "measured": "no: timed only at v0.8.3",
-      "records": ["evidence/v0_8_3/gpu/benchmark.json", "evidence/v1_1/catalog/README.md", "evidence/v1_1/emulation/README.md", "evidence/v1_0/execution/README.md"]
+      "measured": "partial: regions and `reduce` against hand-written CUDA on an RTX 5070 Ti; `scan` and `compact` untimed",
+      "records": ["evidence/v0_8_3/gpu/benchmark.json", "evidence/v1_1/catalog/README.md", "evidence/v1_1/emulation/README.md", "evidence/v1_0/execution/README.md", "evidence/v1_1/device_perf/README.md"]
     },
     {
       "feature": "Guards in device lanes",
@@ -252,10 +252,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120",
       "ran_on_cpu": "yes: emulated, where a failing guard aborts with SIGABRT",
-      "ran_on_gpu": "no: the device death tests run only under make gpu, which has not run since v0.8.3",
+      "ran_on_gpu": "partial: the checked multiply, add and subtract of every integer type on 1.6 million operand pairs on an RTX 5070 Ti, none trapping; a guard that fails has not run since v0.8.3",
       "sanitizers": "partial: address on emulated builds reports a read past a device array; Compute Sanitizer has not run",
-      "measured": "no",
-      "records": ["tests/projects/test_emulation.py", "evidence/v1_0/RUN_NOTES.md"]
+      "measured": "partial: what checked index arithmetic adds to kernel time against unchecked CUDA",
+      "records": ["tests/projects/test_emulation.py", "evidence/v1_0/RUN_NOTES.md", "evidence/v1_1/device_perf/README.md"]
     },
     {
       "feature": "Transfers, queued device work and the execution context",
@@ -264,10 +264,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120",
       "ran_on_cpu": "yes: on a host stand-in that counts every stream, allocation and wait, and emulated",
-      "ran_on_gpu": "no",
+      "ran_on_gpu": "partial: the execution context on a caller's stream, a held function's one wait and `cq_` entries with none, and a CUDA graph capture of them, on an RTX 5070 Ti; queued work has not run",
       "sanitizers": "partial: thread and undefined on the host stand-in; Compute Sanitizer has not run",
-      "measured": "no",
-      "records": ["evidence/v1_0/execution/README.md", "tests/runtime/test_execution.py", "evidence/v1_1/emulation/README.md"]
+      "measured": "partial: the host waits a call makes and what each costs on an RTX 5070 Ti under WSL2",
+      "records": ["evidence/v1_0/execution/README.md", "tests/runtime/test_execution.py", "evidence/v1_1/emulation/README.md", "evidence/v1_1/device_perf/README.md"]
     },
     {
       "feature": "Device plans: `block`, `per_lane`, `unroll`, `vector` and `stage`",
@@ -288,10 +288,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120, to LDG.E.EF.128, STG.E.EF.128, LDG.E.128.CONSTANT, LDS.128 and STS.128",
       "ran_on_cpu": "yes: in host code, host lanes and host threads, and emulated, under both compilers",
-      "ran_on_gpu": "no",
+      "ran_on_gpu": "partial: `load_wide[4]` with `Cache.l2` in a cooperative region on an RTX 5070 Ti, its sum checked; `store_wide` has not run",
       "sanitizers": "partial: address and undefined under clang++, thread on host threads; Compute Sanitizer has not run",
-      "measured": "no",
-      "records": ["tests/soundness/test_wide.py"]
+      "measured": "partial: that load in a two-pass sum against CUDA's `__ldcg` on an RTX 5070 Ti",
+      "records": ["tests/soundness/test_wide.py", "evidence/v1_1/device_perf/README.md"]
     },
     {
       "feature": "Atomic updates of one element in lanes and threads",
@@ -312,10 +312,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_80, sm_89, sm_90a, sm_100a and sm_120a",
       "ran_on_cpu": "yes: each block's threads as host threads at a barrier, under both compilers",
-      "ran_on_gpu": "no",
+      "ran_on_gpu": "yes: layer norm, transpose, stencil and two-pass sums on an RTX 5070 Ti, each result checked against CUDA",
       "sanitizers": "partial: thread under both compilers, which reports a removed barrier; Compute Sanitizer has not run",
-      "measured": "no: predicted only",
-      "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "evidence/v1_0/predict_cooperative/README.md", "tests/soundness/test_cooperative.py", "tests/projects/test_reduction_example.py", "evidence/v1_1/kernels/README.md", "tests/soundness/test_votes.py"]
+      "measured": "yes: against hand-written CUDA of the same algorithms on an RTX 5070 Ti",
+      "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "evidence/v1_0/predict_cooperative/README.md", "tests/soundness/test_cooperative.py", "tests/projects/test_reduction_example.py", "evidence/v1_1/kernels/README.md", "tests/soundness/test_votes.py", "evidence/v1_1/device_perf/README.md"]
     },
     {
       "feature": "A cooperative region's finish: `then threads t in T { }`",
@@ -396,10 +396,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120, with the SASS it names read back",
       "ran_on_cpu": "no: `--emulate` refuses it",
-      "ran_on_gpu": "no",
+      "ran_on_gpu": "yes: 16-byte loads and `brev` in a `parallel` and a cooperative region on an RTX 5070 Ti, once PTX in a region's body launched",
       "sanitizers": "no",
-      "measured": "no",
-      "records": ["evidence/v1_0/foreign/README.md", "tests/language/test_assembly.py"]
+      "measured": "yes: a two-pass sum with 16-byte PTX loads against CUDA on an RTX 5070 Ti",
+      "records": ["evidence/v1_0/foreign/README.md", "tests/language/test_assembly.py", "evidence/v1_1/device_perf/README.md"]
     },
     {
       "feature": "Foreign CUDA implementations and `launch`",

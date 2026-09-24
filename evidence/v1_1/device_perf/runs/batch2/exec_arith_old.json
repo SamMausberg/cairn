@@ -1,0 +1,9 @@
+u8: 202401 pairs, 0 wrong
+i8: 202401 pairs, 0 wrong
+u16: 202401 pairs, 0 wrong
+i16: 202401 pairs, 0 wrong
+u32: 202401 pairs, 0 wrong
+i32: 202401 pairs, 0 wrong
+u64: 202401 pairs, 0 wrong
+i64: 202401 pairs, 0 wrong
+gpu arithmetic: ok

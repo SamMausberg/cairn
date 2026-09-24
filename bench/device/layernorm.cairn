@@ -1,0 +1,53 @@
+// Layer normalization of each row of x (rows of cols elements): out = (x - mean) / sqrt(var + 1e-5) * gamma + beta.
+// One block of 256 threads a row: the row's sum, then the sum of its squared differences, each folded through a
+// warp's shuffles and eight warps' partial sums in shared memory.
+pub fn layernorm(
+  rows:usize, cols:usize, n:usize, x:ro<f32>[n]@device, gamma:ro<f32>[cols]@device,
+  beta:ro<f32>[cols]@device, out:rw<f32>[n]@device
+) {
+  let steps = (cols + 255) / 256;
+  let count = f32(cols);
+  blocks r in rows threads t in 256 {
+    shared warps:f32[8] = zeroed;
+    shared stats:f32[2] = zeroed;
+    let mut sum:f32 = 0.0;
+    for k in 0..steps {
+      let c = k * 256 + t;
+      if c < cols { sum += x[r * cols + c]; }
+    }
+    let s = reduce + warp yield sum;
+    if t % 32 == 0 { warps[t / 32] = s; }
+    barrier;
+    if t < 32 {
+      let mut w:f32 = 0.0;
+      if t < 8 { w = warps[t]; }
+      let total = reduce + warp yield w;
+      if t == 0 { stats[0] = total / count; }
+    }
+    barrier;
+    let mean = stats[0];
+    let mut squares:f32 = 0.0;
+    for k in 0..steps {
+      let c = k * 256 + t;
+      if c < cols {
+        let d = x[r * cols + c] - mean;
+        squares += d * d;
+      }
+    }
+    let q = reduce + warp yield squares;
+    if t % 32 == 0 { warps[t / 32] = q; }
+    barrier;
+    if t < 32 {
+      let mut w:f32 = 0.0;
+      if t < 8 { w = warps[t]; }
+      let total = reduce + warp yield w;
+      if t == 0 { stats[1] = 1.0 / sqrt(total / count + 0.00001); }
+    }
+    barrier;
+    let scale = stats[1];
+    for k in 0..steps {
+      let c = k * 256 + t;
+      if c < cols { out[r * cols + c] = (x[r * cols + c] - mean) * scale * gamma[c] + beta[c]; }
+    }
+  }
+}

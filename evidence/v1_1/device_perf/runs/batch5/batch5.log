@@ -1,0 +1,24 @@
+batch batch5 start 2026-09-24T11:28:41-07:00
+smi 2026-09-24T11:28:42-07:00 1 %, 3256 MiB, 35
+run 1 exec diag3_0 args=$SCRATCH/diag3/diag3 0 2026-09-24T11:28:42-07:00
+  status 0 seconds 1.14302
+  driver events in the last 3 minutes: 0
+run 2 exec diag3_1 args=$SCRATCH/diag3/diag3 1 2026-09-24T11:28:56-07:00
+  status 0 seconds 1.12072
+  driver events in the last 3 minutes: 0
+run 3 exec diag3_2 args=$SCRATCH/diag3/diag3 2 2026-09-24T11:29:10-07:00
+  status 0 seconds 0.6064
+  driver events in the last 3 minutes: 0
+run 4 exec diag3_3 args=$SCRATCH/diag3/diag3 3 2026-09-24T11:29:22-07:00
+  status 0 seconds 1.11513
+  driver events in the last 3 minutes: 0
+run 5 capture fix args=default 2026-09-24T11:29:37-07:00
+  status 0 seconds 2.89279
+  driver events in the last 3 minutes: 0
+run 6 reduce fix args=default 2026-09-24T11:29:51-07:00
+  status 0 seconds 5.3338
+  driver events in the last 3 minutes: 0
+resets check 2026-09-24T11:29:57-07:00 over the last 3 minutes
+system events: 0, application LiveKernelEvent: 0
+smi after 6 %, 3331 MiB, 38
+batch batch5 end 2026-09-24T11:29:58-07:00

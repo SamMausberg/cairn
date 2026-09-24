@@ -1,0 +1,126 @@
+// The sum of a large f32 array, in the designs CAIRN can say today. Each writes the total to out[0] on the device.
+
+// Pass one: block b adds x[(k * g + b) * 256 + t] over k in each thread, the block's 256 sums fold to one, and
+// partial[b] has one writer. Pass two: one block folds the g partial sums the same way.
+fn block_sums(n:usize, x:ro<f32>[n]@device, g:usize, partial:rw<f32>[g]@device) {
+  let steps = (n + g * 256 - 1) / (g * 256);
+  blocks b in g threads t in 256 {
+    shared warps:f32[8] = zeroed;
+    let mut sum:f32 = 0.0;
+    for k in 0..steps {
+      let i = (k * g + b) * 256 + t;
+      if i < n { sum += x[i]; }
+    }
+    let v = reduce + warp yield sum;
+    if t % 32 == 0 { warps[t / 32] = v; }
+    barrier;
+    if t < 32 {
+      let mut w:f32 = 0.0;
+      if t < 8 { w = warps[t]; }
+      let total = reduce + warp yield w;
+      if t == 0 { partial[b] = total; }
+    }
+  }
+}
+
+fn final_sum(g:usize, partial:ro<f32>[g]@device, out:rw<f32>[1]@device) {
+  let steps = (g + 1023) / 1024;
+  blocks b in 1 threads t in 1024 {
+    shared warps:f32[32] = zeroed;
+    let mut sum:f32 = 0.0;
+    for k in 0..steps {
+      let i = k * 1024 + t;
+      if i < g { sum += partial[i]; }
+    }
+    let v = reduce + warp yield sum;
+    if t % 32 == 0 { warps[t / 32] = v; }
+    barrier;
+    if t < 32 {
+      let total = reduce + warp yield warps[t];
+      if t == 0 { out[b] = total; }
+    }
+  }
+}
+
+// The two-pass design with scalar loads: every access checked, nothing unsafe.
+pub fn sum_two_pass(
+  n:usize, x:ro<f32>[n]@device, g:usize, partial:rw<f32>[g]@device, out:rw<f32>[1]@device
+) {
+  block_sums(n, x, g, partial);
+  final_sum(g, partial, out);
+}
+
+// Pass one with 16-byte loads that bypass L1 (ld.global.cg.v4.f32), which CAIRN can say only as unsafe typed PTX:
+// thread t of block b reads the four elements from 4 * ((k * g + b) * 256 + t), and the tail past a whole chunk
+// one at a time.
+fn block_sums_wide(n:usize, x:ro<f32>[n]@device, g:usize, partial:rw<f32>[g]@device) {
+  let chunks = n / 4;
+  let steps = (chunks + g * 256 - 1) / (g * 256);
+  blocks b in g threads t in 256 {
+    shared warps:f32[8] = zeroed;
+    let mut sum:f32 = 0.0;
+    for k in 0..steps {
+      let c = (k * g + b) * 256 + t;
+      if c < chunks {
+        let offset:u64 = u64(c) * 16;
+        unsafe {
+          asm ptx sm_75 "{ .reg .u64 a; add.u64 a, %4, %5; ld.global.cg.v4.f32 {%0, %1, %2, %3}, [a]; }"(
+            out a0:f32, out a1:f32, out a2:f32, out a3:f32, x, offset
+          ) effects(read:x);
+          sum += (a0 + a1) + (a2 + a3);
+        }
+      }
+    }
+    let tail = chunks * 4 + b * 256 + t;
+    if tail < n { sum += x[tail]; }
+    let v = reduce + warp yield sum;
+    if t % 32 == 0 { warps[t / 32] = v; }
+    barrier;
+    if t < 32 {
+      let mut w:f32 = 0.0;
+      if t < 8 { w = warps[t]; }
+      let total = reduce + warp yield w;
+      if t == 0 { partial[b] = total; }
+    }
+  }
+}
+
+pub fn sum_two_pass_ptx(
+  n:usize, x:ro<f32>[n]@device, g:usize, partial:rw<f32>[g]@device, out:rw<f32>[1]@device
+) {
+  block_sums_wide(n, x, g, partial);
+  final_sum(g, partial, out);
+}
+
+// One element per thread and a block per 256 elements, as examples/cooperative's block_sums: g is (n + 255) / 256.
+fn block_sums_each(n:usize, x:ro<f32>[n]@device, g:usize, partial:rw<f32>[g]@device) {
+  blocks b in g threads t in 256 {
+    shared warps:f32[8] = zeroed;
+    let i = b * 256 + t;
+    let mut sum:f32 = 0.0;
+    if i < n { sum = x[i]; }
+    let v = reduce + warp yield sum;
+    if t % 32 == 0 { warps[t / 32] = v; }
+    barrier;
+    if t < 32 {
+      let mut w:f32 = 0.0;
+      if t < 8 { w = warps[t]; }
+      let total = reduce + warp yield w;
+      if t == 0 { partial[b] = total; }
+    }
+  }
+}
+
+pub fn sum_per_thread(
+  n:usize, x:ro<f32>[n]@device, g:usize, partial:rw<f32>[g]@device, out:rw<f32>[1]@device
+) {
+  block_sums_each(n, x, g, partial);
+  final_sum(g, partial, out);
+}
+
+// The collector: one statement, lowered to CUB's device reduction on the execution context, with the total copied
+// back to the host.
+pub fn sum_collector(n:usize, x:ro<f32>[n]@device) -> f32 {
+  let total = reduce + parallel i in n yield x[i];
+  return total;
+}

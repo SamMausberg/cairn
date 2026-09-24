@@ -1,0 +1,13 @@
+// The smallest device work there is, so a call's time is what reaching the device costs.
+pub fn touch(n:usize, x:rw<f32>[n]@device) { parallel i in n { x[i] = x[i] + 1.0; } }
+
+pub fn touch_twice(n:usize, x:rw<f32>[n]@device) {
+  parallel i in n { x[i] = x[i] + 1.0; }
+  parallel i in n { x[i] = x[i] - 1.0; }
+}
+
+// A device reduction whose total the host gets back: a launch, a copy of 4 bytes and a wait.
+pub fn total(n:usize, x:ro<f32>[n]@device) -> f32 {
+  let t = reduce + parallel i in n yield x[i];
+  return t;
+}

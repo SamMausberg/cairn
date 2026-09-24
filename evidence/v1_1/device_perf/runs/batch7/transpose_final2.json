@@ -1,0 +1,11 @@
+{
+  "pair": "transpose", "device": "NVIDIA GeForce RTX 5070 Ti", "sm": "12.0", "sms": 70, "driver_api": 13020, "runtime_api": 13020,
+  "rows": [
+    {"variant": "transpose", "side": "cuda", "n": 16777216, "reps": 30, "gpu_us": 196.18, "host_us": 305.01, "return_us": 27.62, "gpu_us_min": 177.82, "host_us_min": 240.88, "burst_us": 189.44, "relative_error": 0},
+    {"variant": "transpose", "side": "cairn", "n": 16777216, "reps": 30, "gpu_us": 273.20, "host_us": 405.75, "return_us": 287.54, "gpu_us_min": 224.32, "host_us_min": 281.78, "burst_us": 273.55, "relative_error": 0},
+    {"variant": "transpose_enqueued", "side": "cairn", "n": 16777216, "reps": 30, "gpu_us": 195.15, "host_us": 260.28, "return_us": 24.52, "gpu_us_min": 188.80, "host_us_min": 230.63, "burst_us": 202.52, "relative_error": 0},
+    {"variant": "transpose", "side": "cuda", "n": 67108864, "reps": 30, "gpu_us": 766.08, "host_us": 903.41, "return_us": 30.37, "gpu_us_min": 743.23, "host_us_min": 844.77, "burst_us": 918.17, "relative_error": 0},
+    {"variant": "transpose", "side": "cairn", "n": 67108864, "reps": 30, "gpu_us": 913.39, "host_us": 1196.67, "return_us": 944.23, "gpu_us_min": 808.29, "host_us_min": 926.15, "burst_us": 952.87, "relative_error": 0},
+    {"variant": "transpose_enqueued", "side": "cairn", "n": 67108864, "reps": 30, "gpu_us": 790.88, "host_us": 884.64, "return_us": 27.18, "gpu_us_min": 776.67, "host_us_min": 854.39, "burst_us": 944.29, "relative_error": 0}
+  ]
+}

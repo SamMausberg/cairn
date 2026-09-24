@@ -1,0 +1,13 @@
+{
+  "pair": "saxpy", "device": "NVIDIA GeForce RTX 5070 Ti", "sm": "12.0", "sms": 70, "driver_api": 13020, "runtime_api": 13020,
+  "rows": [
+    {"variant": "saxpy", "side": "cuda", "n": 4194304, "reps": 60, "gpu_us": 31.82, "host_us": 64.80, "return_us": 13.50, "gpu_us_min": 28.19, "host_us_min": 52.38, "burst_us": 29.51, "relative_error": 0},
+    {"variant": "saxpy", "side": "cairn", "n": 4194304, "reps": 60, "gpu_us": 74.40, "host_us": 118.95, "return_us": 78.16, "gpu_us_min": 57.47, "host_us_min": 88.62, "burst_us": 103.77, "relative_error": 0},
+    {"variant": "saxpy_twice", "side": "cuda", "n": 4194304, "reps": 60, "gpu_us": 57.62, "host_us": 93.43, "return_us": 20.50, "gpu_us_min": 53.63, "host_us_min": 80.46, "burst_us": 63.96, "relative_error": 0},
+    {"variant": "saxpy_twice", "side": "cairn", "n": 4194304, "reps": 60, "gpu_us": 130.02, "host_us": 178.01, "return_us": 138.88, "gpu_us_min": 108.13, "host_us_min": 145.58, "burst_us": 221.70, "relative_error": 0},
+    {"variant": "saxpy", "side": "cuda", "n": 16777216, "reps": 60, "gpu_us": 282.83, "host_us": 346.65, "return_us": 56.74, "gpu_us_min": 257.15, "host_us_min": 299.16, "burst_us": 261.50, "relative_error": 0},
+    {"variant": "saxpy", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 362.70, "host_us": 435.94, "return_us": 378.15, "gpu_us_min": 300.90, "host_us_min": 363.45, "burst_us": 352.21, "relative_error": 0},
+    {"variant": "saxpy_twice", "side": "cuda", "n": 16777216, "reps": 60, "gpu_us": 558.56, "host_us": 658.99, "return_us": 103.23, "gpu_us_min": 506.21, "host_us_min": 559.55, "burst_us": 520.65, "relative_error": 0},
+    {"variant": "saxpy_twice", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 703.14, "host_us": 802.34, "return_us": 732.15, "gpu_us_min": 606.91, "host_us_min": 676.49, "burst_us": 1056.77, "relative_error": 0}
+  ]
+}

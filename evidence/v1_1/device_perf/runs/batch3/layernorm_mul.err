@@ -1,0 +1,6 @@
+warm-up cuda/layernorm n=4194304
+warm-up cairn/layernorm n=4194304
+warm-up cairn/layernorm_enqueued n=4194304
+warm-up cuda/layernorm n=16777216
+warm-up cairn/layernorm n=16777216
+warm-up cairn/layernorm_enqueued n=16777216

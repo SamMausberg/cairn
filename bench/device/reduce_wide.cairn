@@ -1,0 +1,102 @@
+// The owner's two-pass sum with its 16-byte loads written safely: load_wide in place of unsafe typed PTX.
+
+fn block_sums_wide(n:usize, x:ro<f32>[n]@device, g:usize, partial:rw<f32>[g]@device) {
+  let chunks = n / 4;
+  let steps = (chunks + g * 256 - 1) / (g * 256);
+  blocks b in g threads t in 256 {
+    shared warps:f32[8] = zeroed;
+    let mut sum:f32 = 0.0;
+    for k in 0..steps {
+      let c = (k * g + b) * 256 + t;
+      if c < chunks {
+        let v = load_wide[4](x, 4 * c, Cache.l2);
+        sum += (v[0] + v[1]) + (v[2] + v[3]);
+      }
+    }
+    let tail = chunks * 4 + b * 256 + t;
+    if tail < n { sum += x[tail]; }
+    let s = reduce + warp yield sum;
+    if t % 32 == 0 { warps[t / 32] = s; }
+    barrier;
+    if t < 32 {
+      let mut w:f32 = 0.0;
+      if t < 8 { w = warps[t]; }
+      let total = reduce + warp yield w;
+      if t == 0 { partial[b] = total; }
+    }
+  }
+}
+
+fn final_sum(g:usize, partial:ro<f32>[g]@device, out:rw<f32>[1]@device) {
+  let steps = (g + 1023) / 1024;
+  blocks b in 1 threads t in 1024 {
+    shared warps:f32[32] = zeroed;
+    let mut sum:f32 = 0.0;
+    for k in 0..steps {
+      let i = k * 1024 + t;
+      if i < g { sum += partial[i]; }
+    }
+    let v = reduce + warp yield sum;
+    if t % 32 == 0 { warps[t / 32] = v; }
+    barrier;
+    if t < 32 {
+      let total = reduce + warp yield warps[t];
+      if t == 0 { out[b] = total; }
+    }
+  }
+}
+
+pub fn sum_wide(
+  n:usize, x:ro<f32>[n]@device, g:usize, partial:rw<f32>[g]@device, out:rw<f32>[1]@device
+) {
+  block_sums_wide(n, x, g, partial);
+  final_sum(g, partial, out);
+}
+
+// The design the owner wanted, one launch: each block's sum to partial[b], and a finish that adds the partial sums
+// once every block is done.
+pub fn sum_one_pass(
+  n:usize, x:ro<f32>[n]@device, g:usize, partial:rw<f32>[g]@device, out:rw<f32>[1]@device
+) {
+  let chunks = n / 4;
+  let steps = (chunks + g * 256 - 1) / (g * 256);
+  blocks b in g threads t in 256 {
+    shared warps:f32[8] = zeroed;
+    let mut sum:f32 = 0.0;
+    for k in 0..steps {
+      let c = (k * g + b) * 256 + t;
+      if c < chunks {
+        let v = load_wide[4](x, 4 * c, Cache.l2);
+        sum += (v[0] + v[1]) + (v[2] + v[3]);
+      }
+    }
+    let tail = chunks * 4 + b * 256 + t;
+    if tail < n { sum += x[tail]; }
+    let s = reduce + warp yield sum;
+    if t % 32 == 0 { warps[t / 32] = s; }
+    barrier;
+    if t < 32 {
+      let mut w:f32 = 0.0;
+      if t < 8 { w = warps[t]; }
+      let total = reduce + warp yield w;
+      if t == 0 { partial[b] = total; }
+    }
+  } then threads t in 256 {
+    shared sums:f32[8] = zeroed;
+    let steps_g = (g + 255) / 256;
+    let mut s:f32 = 0.0;
+    for k in 0..steps_g {
+      let i = k * 256 + t;
+      if i < g { s += partial[i]; }
+    }
+    let v = reduce + warp yield s;
+    if t % 32 == 0 { sums[t / 32] = v; }
+    barrier;
+    if t < 32 {
+      let mut w:f32 = 0.0;
+      if t < 8 { w = sums[t]; }
+      let total = reduce + warp yield w;
+      if t == 0 { out[0] = total; }
+    }
+  }
+}

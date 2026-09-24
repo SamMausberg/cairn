@@ -1,0 +1,26 @@
+batch batch1 start 2026-09-24T10:18:57-07:00
+smi 2026-09-24T10:18:58-07:00 10 %, 2796 MiB, 38
+run 1 overheads before reps=default 2026-09-24T10:18:58-07:00
+  status 0 seconds 1.76829
+  driver events in the last 3 minutes: 0
+run 2 reduce before reps=default 2026-09-24T10:19:12-07:00
+  status 250 seconds 2.58991
+  stderr: cairn: cuda: invalid device function
+timeout: the monitored command dumped core
+  driver events in the last 3 minutes: 0
+run 3 saxpy before reps=default 2026-09-24T10:19:26-07:00
+  status 0 seconds 1.76054
+  driver events in the last 3 minutes: 0
+run 4 layernorm before reps=default 2026-09-24T10:19:41-07:00
+  status 0 seconds 2.13877
+  driver events in the last 3 minutes: 0
+run 5 transpose before reps=default 2026-09-24T10:19:54-07:00
+  status 0 seconds 2.50114
+  driver events in the last 3 minutes: 0
+run 6 stencil before reps=default 2026-09-24T10:20:10-07:00
+  status 0 seconds 1.3609
+  driver events in the last 3 minutes: 0
+resets check 2026-09-24T10:20:12-07:00 over the last 3 minutes
+system events: 0, application LiveKernelEvent: 0
+smi after 0 %, 2844 MiB, 38
+batch batch1 end 2026-09-24T10:20:13-07:00

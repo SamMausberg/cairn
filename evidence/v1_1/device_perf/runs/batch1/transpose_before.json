@@ -1,0 +1,9 @@
+{
+  "pair": "transpose", "device": "NVIDIA GeForce RTX 5070 Ti", "sm": "12.0", "sms": 70, "driver_api": 13020, "runtime_api": 13020,
+  "rows": [
+    {"variant": "transpose", "side": "cuda", "n": 16777216, "reps": 30, "gpu_us": 188.16, "host_us": 476.38, "return_us": 28.04, "gpu_us_min": 177.89, "relative_error": 0},
+    {"variant": "transpose", "side": "cairn", "n": 16777216, "reps": 30, "gpu_us": 494.50, "host_us": 644.21, "return_us": 396.00, "gpu_us_min": 254.85, "relative_error": 0},
+    {"variant": "transpose", "side": "cuda", "n": 67108864, "reps": 30, "gpu_us": 770.62, "host_us": 905.64, "return_us": 29.23, "gpu_us_min": 738.98, "relative_error": 0},
+    {"variant": "transpose", "side": "cairn", "n": 67108864, "reps": 30, "gpu_us": 995.02, "host_us": 1334.35, "return_us": 1108.74, "gpu_us_min": 875.14, "relative_error": 0}
+  ]
+}

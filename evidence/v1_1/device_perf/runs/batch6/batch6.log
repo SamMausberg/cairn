@@ -1,0 +1,42 @@
+batch batch6 start 2026-09-24T12:16:13-07:00
+smi 2026-09-24T12:16:13-07:00 9 %, 3005 MiB, 40
+run 1 overheads before2 args=default 2026-09-24T12:16:13-07:00
+  status 0 seconds 3.27908
+  driver events in the last 3 minutes: 0
+run 2 overheads final args=default 2026-09-24T12:16:29-07:00
+  status 0 seconds 2.47771
+  driver events in the last 3 minutes: 0
+run 3 reduce before2 args=60 ptx 2026-09-24T12:16:43-07:00
+  status 0 seconds 5.91217
+  driver events in the last 3 minutes: 0
+run 4 reduce final args=default 2026-09-24T12:17:02-07:00
+  status 0 seconds 3.82572
+  driver events in the last 3 minutes: 0
+run 5 saxpy before2 args=default 2026-09-24T12:17:18-07:00
+  status 0 seconds 2.38839
+  driver events in the last 3 minutes: 0
+run 6 saxpy final args=default 2026-09-24T12:17:34-07:00
+  status 0 seconds 1.01213
+  driver events in the last 3 minutes: 0
+run 7 layernorm final args=default 2026-09-24T12:17:47-07:00
+  status 0 seconds 2.22273
+  driver events in the last 3 minutes: 0
+run 8 transpose final args=default 2026-09-24T12:18:02-07:00
+  status 0 seconds 1.54289
+  driver events in the last 3 minutes: 0
+run 9 stencil final args=default 2026-09-24T12:18:17-07:00
+  status 0 seconds 2.98778
+  driver events in the last 3 minutes: 0
+run 10 capture final args=default 2026-09-24T12:18:33-07:00
+  status 0 seconds 1.94713
+  driver events in the last 3 minutes: 0
+run 11 exec asm_ptx_runs args=$SCRATCH/asmrun/p 2026-09-24T12:18:46-07:00
+  status 0 seconds 1.08257
+  driver events in the last 3 minutes: 0
+run 12 reduce final args=default 2026-09-24T12:19:00-07:00
+  status 0 seconds 6.33496
+  driver events in the last 3 minutes: 0
+resets check 2026-09-24T12:19:06-07:00 over the last 4 minutes
+system events: 0, application LiveKernelEvent: 0
+smi after 11 %, 3260 MiB, 43
+batch batch6 end 2026-09-24T12:19:07-07:00

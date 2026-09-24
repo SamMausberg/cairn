@@ -1,0 +1,17 @@
+{
+  "pair": "overheads", "device": "NVIDIA GeForce RTX 5070 Ti", "sm": "12.0", "sms": 70, "driver_api": 13020, "runtime_api": 13020,
+  "rows": [
+    {"variant": "empty_launch", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 10.14, "host_us": 61.34, "return_us": 15.03, "gpu_us_min": 1.95, "host_us_min": 28.42, "burst_us": 9.27, "relative_error": 0},
+    {"variant": "launch_and_wait", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 62.56, "host_us": 108.64, "return_us": 59.54, "gpu_us_min": 20.29, "host_us_min": 35.14, "burst_us": 43.15, "relative_error": 0},
+    {"variant": "copy_4_bytes_pinned_and_wait", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 115.71, "host_us": 177.05, "return_us": 102.28, "gpu_us_min": 77.18, "host_us_min": 98.01, "burst_us": 52.73, "relative_error": 0},
+    {"variant": "copy_4_bytes_pageable_and_wait", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 61.52, "host_us": 133.97, "return_us": 71.27, "gpu_us_min": 23.49, "host_us_min": 64.69, "burst_us": 46.42, "relative_error": 0},
+    {"variant": "touch", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 52.19, "host_us": 128.57, "return_us": 27.65, "gpu_us_min": 11.36, "host_us_min": 46.79, "burst_us": 14.17, "relative_error": 0},
+    {"variant": "touch", "side": "cairn", "n": 256, "reps": 200, "gpu_us": 65.15, "host_us": 121.00, "return_us": 67.05, "gpu_us_min": 18.91, "host_us_min": 37.35, "burst_us": 43.99, "relative_error": 0},
+    {"variant": "touch_twice", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 15.97, "host_us": 80.39, "return_us": 23.25, "gpu_us_min": 5.95, "host_us_min": 33.35, "burst_us": 23.96, "relative_error": 0},
+    {"variant": "touch_twice", "side": "cairn", "n": 256, "reps": 200, "gpu_us": 66.10, "host_us": 119.22, "return_us": 63.64, "gpu_us_min": 25.28, "host_us_min": 44.54, "burst_us": 56.47, "relative_error": 0},
+    {"variant": "total_to_host", "side": "cairn", "n": 256, "reps": 200, "gpu_us": 149.94, "host_us": 221.95, "return_us": 147.87, "gpu_us_min": 85.63, "host_us_min": 116.34, "burst_us": 109.04, "relative_error": 0},
+    {"variant": "touch_enqueued", "side": "cairn", "n": 256, "reps": 200, "gpu_us": 51.65, "host_us": 122.75, "return_us": 27.89, "gpu_us_min": 11.49, "host_us_min": 48.53, "burst_us": 12.08, "relative_error": 0},
+    {"variant": "touch_twice_enqueued", "side": "cairn", "n": 256, "reps": 200, "gpu_us": 16.26, "host_us": 77.73, "return_us": 27.26, "gpu_us_min": 4.29, "host_us_min": 34.60, "burst_us": 22.10, "relative_error": 0},
+    {"variant": "burst_of_1000_empty_launches", "side": "cuda", "n": 1000, "reps": 5, "gpu_us": 17568.61, "host_us": 18851.62, "return_us": 11489.41, "gpu_us_min": 8981.25, "host_us_min": 9561.28, "burst_us": 0.00, "relative_error": 0}
+  ]
+}

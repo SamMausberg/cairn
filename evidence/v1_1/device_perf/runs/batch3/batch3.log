@@ -1,0 +1,58 @@
+batch batch3 start 2026-09-24T10:57:43-07:00
+smi 2026-09-24T10:57:43-07:00 28 %, 6521 MiB, 54
+busy: waiting 300 s (wait 1)
+smi 2026-09-24T11:02:30-07:00 97 %, 10727 MiB, 81
+busy: waiting 300 s (wait 2)
+smi 2026-09-24T11:07:19-07:00 5 %, 3181 MiB, 44
+run 1 exec diag args=$SCRATCH/diag/diag 2026-09-24T11:07:19-07:00
+  status 0 seconds 2.05136
+  driver events in the last 3 minutes: 0
+run 2 reduce held args=default 2026-09-24T11:07:35-07:00
+  status 250 seconds 2.7726
+  stderr: warm-up cairn/two_pass_ptx_v4 n=16777216
+cairn: cuda: invalid device function
+timeout: the monitored command dumped core
+  driver events in the last 3 minutes: 0
+run 3 reduce held args=60 collector 2026-09-24T11:07:51-07:00
+  status 250 seconds 3.59887
+  stderr: warm-up cairn/two_pass_ptx_v4 n=16777216
+cairn: cuda: invalid device function
+timeout: the monitored command dumped core
+  driver events in the last 3 minutes: 0
+run 4 reduce mul args=60 collector 2026-09-24T11:08:07-07:00
+  status 250 seconds 3.6005
+  stderr: warm-up cairn/two_pass_ptx_v4 n=16777216
+cairn: cuda: invalid device function
+timeout: the monitored command dumped core
+  driver events in the last 3 minutes: 0
+run 5 reduce grid args=60 collector 2026-09-24T11:08:24-07:00
+  status 250 seconds 4.41381
+  stderr: warm-up cairn/two_pass_ptx_v4 n=16777216
+cairn: cuda: invalid device function
+timeout: the monitored command dumped core
+  driver events in the last 3 minutes: 0
+run 6 layernorm mul args=default 2026-09-24T11:08:41-07:00
+  status 0 seconds 3.336
+  driver events in the last 3 minutes: 0
+run 7 layernorm grid args=default 2026-09-24T11:08:57-07:00
+  status 0 seconds 2.78486
+  driver events in the last 3 minutes: 0
+run 8 transpose mul args=default 2026-09-24T11:09:11-07:00
+  status 0 seconds 3.80806
+  driver events in the last 3 minutes: 0
+run 9 transpose grid args=default 2026-09-24T11:09:28-07:00
+  status 0 seconds 3.94155
+  driver events in the last 3 minutes: 0
+run 10 stencil mul args=default 2026-09-24T11:09:43-07:00
+  status 0 seconds 4.30625
+  driver events in the last 3 minutes: 0
+run 11 stencil grid args=default 2026-09-24T11:10:01-07:00
+  status 0 seconds 3.70785
+  driver events in the last 3 minutes: 0
+run 12 saxpy grid args=default 2026-09-24T11:10:16-07:00
+  status 0 seconds 2.39798
+  driver events in the last 3 minutes: 0
+resets check 2026-09-24T11:10:19-07:00 over the last 14 minutes
+system events: 0, application LiveKernelEvent: 0
+smi after 6 %, 2974 MiB, 42
+batch batch3 end 2026-09-24T11:10:20-07:00

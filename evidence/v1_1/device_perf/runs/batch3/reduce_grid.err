@@ -1,0 +1,11 @@
+warm-up cuda/one_pass_v4_lastblock n=16777216
+warm-up cuda/two_pass_v4 n=16777216
+warm-up cuda/two_pass_scalar n=16777216
+warm-up cuda/two_pass_per_thread n=16777216
+warm-up cuda/two_pass_per_thread_zeroed n=16777216
+warm-up cuda/two_pass_per_thread_zeroed_capped n=16777216
+warm-up cuda/cub_to_host n=16777216
+warm-up cairn/two_pass_scalar n=16777216
+warm-up cairn/two_pass_ptx_v4 n=16777216
+cairn: cuda: invalid device function
+timeout: the monitored command dumped core

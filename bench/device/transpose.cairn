@@ -1,0 +1,18 @@
+// out is x transposed, x holding 32 * gy rows of 32 * gx elements: examples/cooperative's transpose. Each block moves
+// one 32 x 32 tile through shared memory, its rows 33 elements apart so a column's elements sit in 32 banks.
+pub fn transpose(gx:usize, gy:usize, n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
+  let w = gx * 32;
+  let h = gy * 32;
+  blocks bx, by in gx, gy threads tx, ty in 32, 8 {
+    shared tile:f32[1056] = zeroed;
+    for k in 0..4 {
+      let r = ty + k * 8;
+      tile[r * 33 + tx] = x[(by * 32 + r) * w + bx * 32 + tx];
+    }
+    barrier;
+    for k in 0..4 {
+      let r = ty + k * 8;
+      out[(bx * 32 + r) * h + by * 32 + tx] = tile[tx * 33 + r];
+    }
+  }
+}

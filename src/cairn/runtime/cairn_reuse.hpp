@@ -25,7 +25,7 @@
 #include "cairn_runtime.hpp"
 namespace cr::reuse {
 
-constexpr unsigned BLOCK = 256, MAX_GRID = 65535, WARP = 32;  // a region's default block, the widest grid, a warp
+constexpr unsigned BLOCK = 256, MAX_GRID = 65535, WARP = 32;  // as cairn_kernels.hpp's: a block, a grid's cap, a warp
 constexpr std::size_t ALIGN = 256;  // what cudaMalloc guarantees, and what CUB's temporary storage wants
 constexpr std::size_t UNBOUNDED = std::numeric_limits<std::size_t>::max();
 

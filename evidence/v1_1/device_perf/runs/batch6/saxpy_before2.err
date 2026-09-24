@@ -1,0 +1,8 @@
+warm-up cuda/saxpy n=4194304
+warm-up cairn/saxpy n=4194304
+warm-up cuda/saxpy_twice n=4194304
+warm-up cairn/saxpy_twice n=4194304
+warm-up cuda/saxpy n=16777216
+warm-up cairn/saxpy n=16777216
+warm-up cuda/saxpy_twice n=16777216
+warm-up cairn/saxpy_twice n=16777216

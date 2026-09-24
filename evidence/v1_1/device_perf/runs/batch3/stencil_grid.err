@@ -1,0 +1,10 @@
+warm-up cuda/jacobi n=8388608
+warm-up cairn/jacobi_parallel n=8388608
+warm-up cairn/jacobi_blocks n=8388608
+warm-up cairn/jacobi_parallel_enqueued n=8388608
+warm-up cairn/jacobi_blocks_enqueued n=8388608
+warm-up cuda/jacobi n=33554432
+warm-up cairn/jacobi_parallel n=33554432
+warm-up cairn/jacobi_blocks n=33554432
+warm-up cairn/jacobi_parallel_enqueued n=33554432
+warm-up cairn/jacobi_blocks_enqueued n=33554432

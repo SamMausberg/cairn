@@ -1,0 +1,40 @@
+batch batch2 start 2026-09-24T10:38:51-07:00
+smi 2026-09-24T10:38:51-07:00 1 %, 2863 MiB, 36
+run 1 overheads before reps=default 2026-09-24T10:38:51-07:00
+  status 0 seconds 2.04279
+  driver events in the last 3 minutes: 0
+run 2 overheads held reps=default 2026-09-24T10:39:05-07:00
+  status 0 seconds 2.18693
+  driver events in the last 3 minutes: 0
+run 3 reduce before reps=default 2026-09-24T10:39:20-07:00
+  status 250 seconds 2.92806
+  stderr: cairn: cuda: invalid device function
+timeout: the monitored command dumped core
+  driver events in the last 3 minutes: 0
+run 4 reduce held reps=default 2026-09-24T10:39:34-07:00
+  status 250 seconds 2.49922
+  stderr: cairn: cuda: invalid device function
+timeout: the monitored command dumped core
+  driver events in the last 3 minutes: 0
+run 5 saxpy before reps=default 2026-09-24T10:39:49-07:00
+  status 0 seconds 1.88157
+  driver events in the last 3 minutes: 0
+run 6 saxpy held reps=default 2026-09-24T10:40:02-07:00
+  status 0 seconds 1.80849
+  driver events in the last 3 minutes: 0
+run 7 layernorm held reps=default 2026-09-24T10:40:17-07:00
+  status 0 seconds 1.54458
+  driver events in the last 3 minutes: 0
+run 8 transpose held reps=default 2026-09-24T10:40:31-07:00
+  status 0 seconds 2.9686
+  driver events in the last 3 minutes: 0
+run 9 stencil held reps=default 2026-09-24T10:40:45-07:00
+  status 0 seconds 2.28829
+  driver events in the last 3 minutes: 0
+run 10 exec arith_old reps=$SCRATCH/gpu_arith_old 2026-09-24T10:41:01-07:00
+  status 0 seconds 0.799585
+  driver events in the last 3 minutes: 0
+run 11 exec arith_new reps=$SCRATCH/gpu_arith_new 2026-09-24T10:41:13-07:00
+  status 0 seconds 0.944673
+  driver events in the last 3 minutes: 0
+resets check (manual, after the script's tail was cut short by an edit) 2026-09-24T10:41:24-07:00: system 0, application LiveKernelEvent 0

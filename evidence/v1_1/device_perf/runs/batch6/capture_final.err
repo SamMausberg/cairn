@@ -1,0 +1,5 @@
+capture of the enqueued entries: no error
+warm-up cuda/scale_shift_graph n=16777216
+warm-up cairn/scale_shift_and_sum_graph n=16777216
+warm-up cairn/scale_shift_and_sum_enqueued n=16777216
+warm-up cairn/scale_shift_enqueued n=16777216

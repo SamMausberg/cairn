@@ -1,0 +1,30 @@
+pub fn region(n:usize, x:rw<f32>[n]@device) { parallel i in n { x[i] = x[i] + 1.0; } }
+pub fn two_regions(n:usize, x:rw<f32>[n]@device) {
+  parallel i in n { x[i] = x[i] + 1.0; }
+  parallel i in n { x[i] = x[i] - 1.0; }
+}
+pub fn coop(g:usize, out:rw<u32>[g]@device) { blocks b in g threads t in 32 { if t == 0 { out[b] = u32(b); } } }
+pub fn to_device(n:usize, d:rw<f32>[n]@device, h:ro<f32>[n]) { transfer(d, h); }
+pub fn to_host(n:usize, h:rw<f32>[n], d:ro<f32>[n]@device) { transfer(h, d); }
+pub fn device_copy(n:usize, d:rw<f32>[n]@device, e:ro<f32>[n]@device) { transfer(d, e); }
+pub fn total(n:usize, x:ro<u32>[n]@device) -> u64 {
+  let t = reduce + parallel i in n yield u64(x[i]);
+  return t;
+}
+pub fn prefix(n:usize, out:rw<u32>[n]@device, x:ro<u32>[n]@device) -> u32 {
+  let last = scan + out parallel i in n yield x[i] % 16;
+  return last;
+}
+pub fn keep(n:usize, out:rw<u32>[n]@device, x:ro<u32>[n]@device) -> usize {
+  let used = compact out for i in n where x[i] % 3 == 0 yield x[i];
+  return used;
+}
+pub fn scratch(n:usize, x:rw<f32>[n]@device) {
+  buffer t:f32[n]@device = zeroed;
+  parallel i in n { t[i] = x[i]; }
+  parallel i in n { x[i] = t[i] * 2.0; }
+}
+pub fn queued(n:usize, x:rw<f32>[n]@device) {
+  let t = spawn parallel i in n { x[i] = 1.0; };
+  wait(t);
+}

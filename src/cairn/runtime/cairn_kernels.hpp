@@ -55,7 +55,10 @@ inline void check(cudaError_t e) noexcept {
   trap();
 }
 
-constexpr unsigned BLOCK = 256, MAX_GRID = 65535, WARP = 32;  // a region's default block, the widest grid, a warp
+// A region's default block; the most blocks one launch takes, past which blocks loop (the device allows 2^31 - 1, and
+// a cooperative region of short blocks ran faster capped here than with a block of its own for each block of the
+// region: evidence/v1_1/device_perf); a warp.
+constexpr unsigned BLOCK = 256, MAX_GRID = 65535, WARP = 32;
 
 // One lane per i, strided so that n is limited by memory rather than by a grid dimension. Every i below n runs
 // exactly once whatever the grid and block, which is why a plan may choose them: `block` threads a block, a grid

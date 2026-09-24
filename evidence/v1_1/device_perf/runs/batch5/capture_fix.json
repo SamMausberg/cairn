@@ -1,0 +1,9 @@
+{
+  "pair": "capture", "device": "NVIDIA GeForce RTX 5070 Ti", "sm": "12.0", "sms": 70, "driver_api": 13020, "runtime_api": 13020, "cairn_graph_nodes": 4, "first_calls_captured": "no error",
+  "rows": [
+    {"variant": "scale_shift_graph", "side": "cuda", "n": 16777216, "reps": 60, "gpu_us": 353.10, "host_us": 457.78, "return_us": 31.02, "gpu_us_min": 336.58, "host_us_min": 403.43, "burst_us": 360.35, "relative_error": 0},
+    {"variant": "scale_shift_and_sum_graph", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 469.36, "host_us": 605.01, "return_us": 50.54, "gpu_us_min": 434.08, "host_us_min": 520.28, "burst_us": 450.32, "relative_error": 0},
+    {"variant": "scale_shift_and_sum_enqueued", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 448.40, "host_us": 584.12, "return_us": 67.28, "gpu_us_min": 429.57, "host_us_min": 505.05, "burst_us": 444.61, "relative_error": 0},
+    {"variant": "scale_shift_enqueued", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 331.81, "host_us": 442.89, "return_us": 41.66, "gpu_us_min": 313.82, "host_us_min": 381.44, "burst_us": 362.31, "relative_error": 0}
+  ]
+}

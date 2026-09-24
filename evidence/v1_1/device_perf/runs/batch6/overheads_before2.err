@@ -1,0 +1,9 @@
+warm-up cuda/empty_launch n=256
+warm-up cuda/launch_and_wait n=256
+warm-up cuda/copy_4_bytes_pinned_and_wait n=256
+warm-up cuda/copy_4_bytes_pageable_and_wait n=256
+warm-up cuda/touch n=256
+warm-up cairn/touch n=256
+warm-up cuda/touch_twice n=256
+warm-up cairn/touch_twice n=256
+warm-up cairn/total_to_host n=256

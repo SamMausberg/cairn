@@ -1,0 +1,8 @@
+batch batch8 start 2026-09-24T13:01:41-07:00
+smi 2026-09-24T13:01:41-07:00 12 %, 2986 MiB, 43
+busy: waiting 300 s (wait 1)
+smi 2026-09-24T13:06:29-07:00 13 %, 2998 MiB, 42
+busy: waiting 300 s (wait 2)
+smi 2026-09-24T13:11:24-07:00 15 %, 2963 MiB, 43
+busy: waiting 300 s (wait 3)
+killed before any device process ran 2026-09-24T13:12:11-07:00; restarted as batch 8 with the reduction example

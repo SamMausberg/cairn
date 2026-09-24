@@ -93,7 +93,7 @@ void cq_smooth(void *stream, size_t n, float *out, const float *x, float *tmp);
 
 Under `cq_NAME` a failed guard is observed later than the call. The guard's `__trap()` ends its kernel and poisons the device context, so nothing queued after it runs and every later CUDA call in the process fails with `cudaErrorLaunchFailure`. The caller's next synchronization reports it (`cudaStreamSynchronize` returns it, `torch.cuda.synchronize()` raises it), and the next CAIRN entry the process calls aborts. What the kernel wrote before it trapped stays in device memory no copy can reach any more; that is why a `@unified` view, which the host reads without a CUDA call, keeps a function from having an enqueued entry.
 
-The suite's host machine counts every CUDA call the runtime makes (`tests/runtime/test_enqueue.py`). An enqueued call of a cooperative region, two regions and a device copy made no wait, stream, event or allocation, even as the thread's first device work; its checked entry waited once, where it had waited four times; and a copy to host memory after enqueued work waited first. The CUDA build compiles for sm_120.
+The suite's host machine counts every CUDA call the runtime makes (`tests/runtime/test_enqueue.py`). An enqueued call of a cooperative region, two regions and a device copy made no wait, stream, event or allocation, even as the thread's first device work; its checked entry waited once, where it had waited four times; and a copy to host memory after enqueued work waited first. On an RTX 5070 Ti under WSL2, where a launch and its wait took about 100 us of host time, the owner-style two-pass sum of 2^26 floats took 656 to 679 us a call with a wait after each pass, 466 to 550 us with one, and 341 to 344 us through `cq_`, against 336 to 337 us for one-pass CUDA; a CUDA graph captured the entries as the process's first CUDA work ([evidence/v1_1/device_perf](../evidence/v1_1/device_perf/README.md)).
 
 ## Cooperative regions
 
@@ -406,7 +406,7 @@ Fast CUDA kernels lean on a known set of features. The table says how a CAIRN pr
 | Memory fences, `__nanosleep` | `__threadfence()`, `__nanosleep(ns)` | typed PTX, a fence declared as `effects(fence)` | accepted |
 | Persistent kernels | one block an SM and a work loop | safe with a static schedule, and a work counter is an atomic update; writes at the index a counter hands out are foreign, since no rule shows them one writer | accepted, E-COOP-GLOBAL |
 | Streams | `cudaStream_t`, events | safe: `spawn parallel ... after t` and `spawn transfer` queue work on a stream of their own; a cooperative region is not queued | accepted, E-PARSE |
-| CUDA graphs | `cudaGraph_t` | foreign: host code in a vendored `.cu` | none |
+| CUDA graphs | `cudaGraph_t` | safe for a library's caller: `cq_NAME` queues its work on the caller's stream with no wait, so the caller captures it ([one wait, or none](#one-wait-or-none)); a graph built inside CAIRN code is foreign | none |
 
 `tests/soundness/test_expressiveness.py` holds the table. For each row it compiles the spellings the row names and requires what the last column says: accepted, or refused with that code. A row whose check is `none` has nothing to compile.
 

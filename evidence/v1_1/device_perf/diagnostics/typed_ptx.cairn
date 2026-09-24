@@ -1,0 +1,52 @@
+// The wide load of reduce.cairn's block_sums_wide, in four places, to find which one the device refuses.
+pub fn wide_coop(n:usize, x:ro<f32>[n]@device, g:usize, out:rw<f32>[g]@device) {
+  let chunks = n / 4;
+  blocks b in g threads t in 32 {
+    let mut sum:f32 = 0.0;
+    let c = b * 32 + t;
+    if c < chunks {
+      let offset:u64 = u64(c) * 16;
+      unsafe {
+        asm ptx sm_75 "{ .reg .u64 a; add.u64 a, %4, %5; ld.global.cg.v4.f32 {%0, %1, %2, %3}, [a]; }" (out a0:f32, out a1:f32, out a2:f32, out a3:f32, x, offset) effects(read:x);
+        sum = (a0 + a1) + (a2 + a3);
+      }
+    }
+    if t == 0 { out[b] = sum; }
+  }
+}
+
+pub fn wide_lanes(n:usize, x:ro<f32>[n]@device, m:usize, out:rw<f32>[m]@device) {
+  parallel i in m {
+    let offset:u64 = u64(i) * 16;
+    unsafe {
+      asm ptx sm_75 "{ .reg .u64 a; add.u64 a, %4, %5; ld.global.cg.v4.f32 {%0, %1, %2, %3}, [a]; }" (out a0:f32, out a1:f32, out a2:f32, out a3:f32, x, offset) effects(read:x);
+      out[i] = (a0 + a1) + (a2 + a3);
+    }
+  }
+}
+
+kernel fn load4(n:usize, x:ro<f32>[n]@device, offset:u64) -> f32 {
+  unsafe {
+    asm ptx sm_75 "{ .reg .u64 a; add.u64 a, %4, %5; ld.global.cg.v4.f32 {%0, %1, %2, %3}, [a]; }" (out a0:f32, out a1:f32, out a2:f32, out a3:f32, x, offset) effects(read:x);
+    return (a0 + a1) + (a2 + a3);
+  }
+}
+
+pub fn wide_kernel_fn(n:usize, x:ro<f32>[n]@device, g:usize, out:rw<f32>[g]@device) {
+  let chunks = n / 4;
+  blocks b in g threads t in 32 {
+    let mut sum:f32 = 0.0;
+    let c = b * 32 + t;
+    if c < chunks { sum = load4(x, u64(c) * 16); }
+    if t == 0 { out[b] = sum; }
+  }
+}
+
+pub fn scalar_coop(n:usize, x:ro<f32>[n]@device, g:usize, out:rw<f32>[g]@device) {
+  blocks b in g threads t in 32 {
+    let mut sum:f32 = 0.0;
+    let c = b * 32 + t;
+    if c < n { sum = x[c]; }
+    if t == 0 { out[b] = sum; }
+  }
+}

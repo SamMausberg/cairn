@@ -1,0 +1,12 @@
+warm-up cuda/one_pass_v4_lastblock n=16777216
+warm-up cairn/one_pass_finish n=16777216
+warm-up cairn/one_pass_atomic_enqueued n=16777216
+warm-up cairn/one_pass_atomic n=16777216
+warm-up cairn/two_pass_load_wide_enqueued n=16777216
+warm-up cuda/memset_4_bytes n=16777216
+warm-up cuda/one_pass_v4_lastblock n=67108864
+warm-up cairn/one_pass_finish n=67108864
+warm-up cairn/one_pass_atomic_enqueued n=67108864
+warm-up cairn/one_pass_atomic n=67108864
+warm-up cairn/two_pass_load_wide_enqueued n=67108864
+warm-up cuda/memset_4_bytes n=67108864

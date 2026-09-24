@@ -1,0 +1,15 @@
+{
+  "pair": "overheads", "device": "NVIDIA GeForce RTX 5070 Ti", "sm": "12.0", "sms": 70, "driver_api": 13020, "runtime_api": 13020,
+  "rows": [
+    {"variant": "empty_launch", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 51.82, "host_us": 106.52, "return_us": 36.55, "gpu_us_min": 11.23, "relative_error": 0},
+    {"variant": "launch_and_wait", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 57.60, "host_us": 106.34, "return_us": 65.05, "gpu_us_min": 20.13, "relative_error": 0},
+    {"variant": "copy_4_bytes_pinned_and_wait", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 97.58, "host_us": 137.90, "return_us": 92.12, "gpu_us_min": 57.34, "relative_error": 0},
+    {"variant": "copy_4_bytes_pageable_and_wait", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 47.22, "host_us": 115.62, "return_us": 59.60, "gpu_us_min": 15.90, "relative_error": 0},
+    {"variant": "touch", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 56.34, "host_us": 116.81, "return_us": 38.64, "gpu_us_min": 17.06, "relative_error": 0},
+    {"variant": "touch", "side": "cairn", "n": 256, "reps": 200, "gpu_us": 62.27, "host_us": 109.90, "return_us": 67.70, "gpu_us_min": 19.97, "relative_error": 0},
+    {"variant": "touch_twice", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 31.62, "host_us": 83.20, "return_us": 37.07, "gpu_us_min": 4.45, "relative_error": 0},
+    {"variant": "touch_twice", "side": "cairn", "n": 256, "reps": 200, "gpu_us": 99.38, "host_us": 145.79, "return_us": 108.34, "gpu_us_min": 45.09, "relative_error": 0},
+    {"variant": "total_to_host", "side": "cairn", "n": 256, "reps": 200, "gpu_us": 135.52, "host_us": 177.17, "return_us": 127.49, "gpu_us_min": 88.03, "relative_error": 0},
+    {"variant": "burst_of_1000_empty_launches", "side": "cuda", "n": 1000, "reps": 5, "gpu_us": 20373.18, "host_us": 21213.11, "return_us": 20582.12, "gpu_us_min": 14007.74, "relative_error": 0}
+  ]
+}

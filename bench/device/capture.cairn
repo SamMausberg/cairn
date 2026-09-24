@@ -1,0 +1,52 @@
+// What a caller captures in a CUDA graph through the enqueued entries: two regions, and the two-pass sum.
+pub fn scale_shift(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, tmp:rw<f32>[n]@device) {
+  parallel i in n { tmp[i] = 2.0 * x[i]; }
+  parallel i in n { out[i] = tmp[i] + 1.0; }
+}
+
+fn block_sums(n:usize, x:ro<f32>[n]@device, g:usize, partial:rw<f32>[g]@device) {
+  let steps = (n + g * 256 - 1) / (g * 256);
+  blocks b in g threads t in 256 {
+    shared warps:f32[8] = zeroed;
+    let mut sum:f32 = 0.0;
+    for k in 0..steps {
+      let i = (k * g + b) * 256 + t;
+      if i < n { sum += x[i]; }
+    }
+    let v = reduce + warp yield sum;
+    if t % 32 == 0 { warps[t / 32] = v; }
+    barrier;
+    if t < 32 {
+      let mut w:f32 = 0.0;
+      if t < 8 { w = warps[t]; }
+      let total = reduce + warp yield w;
+      if t == 0 { partial[b] = total; }
+    }
+  }
+}
+
+fn final_sum(g:usize, partial:ro<f32>[g]@device, out:rw<f32>[1]@device) {
+  let steps = (g + 1023) / 1024;
+  blocks b in 1 threads t in 1024 {
+    shared warps:f32[32] = zeroed;
+    let mut sum:f32 = 0.0;
+    for k in 0..steps {
+      let i = k * 1024 + t;
+      if i < g { sum += partial[i]; }
+    }
+    let v = reduce + warp yield sum;
+    if t % 32 == 0 { warps[t / 32] = v; }
+    barrier;
+    if t < 32 {
+      let total = reduce + warp yield warps[t];
+      if t == 0 { out[b] = total; }
+    }
+  }
+}
+
+pub fn sum(
+  n:usize, x:ro<f32>[n]@device, g:usize, partial:rw<f32>[g]@device, out:rw<f32>[1]@device
+) {
+  block_sums(n, x, g, partial);
+  final_sum(g, partial, out);
+}

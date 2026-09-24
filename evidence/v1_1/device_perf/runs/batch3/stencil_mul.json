@@ -1,0 +1,15 @@
+{
+  "pair": "stencil", "device": "NVIDIA GeForce RTX 5070 Ti", "sm": "12.0", "sms": 70, "driver_api": 13020, "runtime_api": 13020,
+  "rows": [
+    {"variant": "jacobi", "side": "cuda", "n": 8388608, "reps": 30, "gpu_us": 120.00, "host_us": 212.58, "return_us": 33.33, "gpu_us_min": 90.24, "host_us_min": 134.46, "burst_us": 92.25, "relative_error": 0},
+    {"variant": "jacobi_parallel", "side": "cairn", "n": 8388608, "reps": 30, "gpu_us": 219.15, "host_us": 344.23, "return_us": 267.22, "gpu_us_min": 132.64, "host_us_min": 170.79, "burst_us": 481.58, "relative_error": 0},
+    {"variant": "jacobi_blocks", "side": "cairn", "n": 8388608, "reps": 30, "gpu_us": 201.65, "host_us": 312.20, "return_us": 200.87, "gpu_us_min": 143.01, "host_us_min": 183.34, "burst_us": 521.50, "relative_error": 0},
+    {"variant": "jacobi_parallel_enqueued", "side": "cairn", "n": 8388608, "reps": 30, "gpu_us": 125.04, "host_us": 208.43, "return_us": 43.55, "gpu_us_min": 93.98, "host_us_min": 134.39, "burst_us": 95.97, "relative_error": 0},
+    {"variant": "jacobi_blocks_enqueued", "side": "cairn", "n": 8388608, "reps": 30, "gpu_us": 141.06, "host_us": 232.72, "return_us": 38.34, "gpu_us_min": 108.22, "host_us_min": 153.05, "burst_us": 110.11, "relative_error": 0},
+    {"variant": "jacobi", "side": "cuda", "n": 33554432, "reps": 30, "gpu_us": 361.98, "host_us": 621.50, "return_us": 38.28, "gpu_us_min": 352.67, "host_us_min": 429.78, "burst_us": 387.54, "relative_error": 0},
+    {"variant": "jacobi_parallel", "side": "cairn", "n": 33554432, "reps": 30, "gpu_us": 641.57, "host_us": 945.57, "return_us": 775.30, "gpu_us_min": 438.05, "host_us_min": 524.22, "burst_us": 1421.76, "relative_error": 0},
+    {"variant": "jacobi_blocks", "side": "cairn", "n": 33554432, "reps": 30, "gpu_us": 663.62, "host_us": 775.80, "return_us": 638.00, "gpu_us_min": 480.54, "host_us_min": 533.64, "burst_us": 1148.60, "relative_error": 0},
+    {"variant": "jacobi_parallel_enqueued", "side": "cairn", "n": 33554432, "reps": 30, "gpu_us": 371.36, "host_us": 519.19, "return_us": 31.27, "gpu_us_min": 354.02, "host_us_min": 446.84, "burst_us": 397.32, "relative_error": 0},
+    {"variant": "jacobi_blocks_enqueued", "side": "cairn", "n": 33554432, "reps": 30, "gpu_us": 446.02, "host_us": 847.14, "return_us": 33.02, "gpu_us_min": 425.86, "host_us_min": 532.35, "burst_us": 500.32, "relative_error": 0}
+  ]
+}

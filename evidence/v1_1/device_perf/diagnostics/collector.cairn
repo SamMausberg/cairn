@@ -1,0 +1,8 @@
+pub fn total(n:usize, x:ro<f32>[n]@device) -> f32 {
+  let t = reduce + parallel i in n yield x[i];
+  return t;
+}
+pub fn total_u32(n:usize, x:ro<u32>[n]@device) -> u64 {
+  let t = reduce + parallel i in n yield u64(x[i]);
+  return t;
+}

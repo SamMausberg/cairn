@@ -1,0 +1,6 @@
+warm-up cuda/transpose n=16777216
+warm-up cairn/transpose n=16777216
+warm-up cairn/transpose_enqueued n=16777216
+warm-up cuda/transpose n=67108864
+warm-up cairn/transpose n=67108864
+warm-up cairn/transpose_enqueued n=67108864

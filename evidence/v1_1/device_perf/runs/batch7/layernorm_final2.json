@@ -1,0 +1,11 @@
+{
+  "pair": "layernorm", "device": "NVIDIA GeForce RTX 5070 Ti", "sm": "12.0", "sms": 70, "driver_api": 13020, "runtime_api": 13020,
+  "rows": [
+    {"variant": "layernorm", "side": "cuda", "n": 4194304, "reps": 60, "gpu_us": 32.35, "host_us": 97.96, "return_us": 23.54, "gpu_us_min": 24.29, "host_us_min": 56.89, "burst_us": 24.24, "relative_error": 0},
+    {"variant": "layernorm", "side": "cairn", "n": 4194304, "reps": 60, "gpu_us": 111.58, "host_us": 176.95, "return_us": 118.98, "gpu_us_min": 67.55, "host_us_min": 94.95, "burst_us": 122.16, "relative_error": 7.91e-08},
+    {"variant": "layernorm_enqueued", "side": "cairn", "n": 4194304, "reps": 60, "gpu_us": 51.82, "host_us": 126.26, "return_us": 19.93, "gpu_us_min": 46.82, "host_us_min": 69.86, "burst_us": 43.66, "relative_error": 7.91e-08},
+    {"variant": "layernorm", "side": "cuda", "n": 16777216, "reps": 60, "gpu_us": 177.41, "host_us": 260.04, "return_us": 31.52, "gpu_us_min": 167.52, "host_us_min": 217.23, "burst_us": 178.09, "relative_error": 0},
+    {"variant": "layernorm", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 285.47, "host_us": 384.97, "return_us": 300.09, "gpu_us_min": 240.19, "host_us_min": 292.02, "burst_us": 332.83, "relative_error": 7.91e-08},
+    {"variant": "layernorm_enqueued", "side": "cairn", "n": 16777216, "reps": 60, "gpu_us": 214.11, "host_us": 293.15, "return_us": 25.53, "gpu_us_min": 206.69, "host_us_min": 243.47, "burst_us": 246.47, "relative_error": 7.91e-08}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "pair": "stencil", "device": "NVIDIA GeForce RTX 5070 Ti", "sm": "12.0", "sms": 70, "driver_api": 13020, "runtime_api": 13020,
+  "rows": [
+    {"variant": "jacobi", "side": "cuda", "n": 8388608, "reps": 30, "gpu_us": 99.65, "host_us": 154.45, "return_us": 29.60, "gpu_us_min": 94.02, "relative_error": 0},
+    {"variant": "jacobi_parallel", "side": "cairn", "n": 8388608, "reps": 30, "gpu_us": 174.50, "host_us": 236.43, "return_us": 181.02, "gpu_us_min": 131.20, "relative_error": 0},
+    {"variant": "jacobi_blocks", "side": "cairn", "n": 8388608, "reps": 30, "gpu_us": 176.06, "host_us": 237.99, "return_us": 176.83, "gpu_us_min": 155.46, "relative_error": 0},
+    {"variant": "jacobi", "side": "cuda", "n": 33554432, "reps": 30, "gpu_us": 388.82, "host_us": 493.76, "return_us": 58.41, "gpu_us_min": 360.51, "relative_error": 0},
+    {"variant": "jacobi_parallel", "side": "cairn", "n": 33554432, "reps": 30, "gpu_us": 474.50, "host_us": 577.36, "return_us": 476.21, "gpu_us_min": 410.24, "relative_error": 0},
+    {"variant": "jacobi_blocks", "side": "cairn", "n": 33554432, "reps": 30, "gpu_us": 553.60, "host_us": 629.22, "return_us": 578.33, "gpu_us_min": 522.78, "relative_error": 0}
+  ]
+}

@@ -1,0 +1,12 @@
+// out = a * x + y, one lane an element.
+pub fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
+  parallel i in n { out[i] = a * x[i] + y[i]; }
+}
+
+// Two regions back to back, as a pipeline has them: out = a * x + y, then y = b * out + x.
+pub fn saxpy_twice(
+  n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:rw<f32>[n]@device, a:f32, b:f32
+) {
+  parallel i in n { out[i] = a * x[i] + y[i]; }
+  parallel i in n { y[i] = b * out[i] + x[i]; }
+}

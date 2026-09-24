@@ -1,0 +1,15 @@
+{
+  "pair": "overheads", "device": "NVIDIA GeForce RTX 5070 Ti", "sm": "12.0", "sms": 70, "driver_api": 13020, "runtime_api": 13020,
+  "rows": [
+    {"variant": "empty_launch", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 52.75, "host_us": 107.40, "return_us": 31.77, "gpu_us_min": 10.34, "host_us_min": 46.24, "burst_us": 14.49, "relative_error": 0},
+    {"variant": "launch_and_wait", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 46.42, "host_us": 94.37, "return_us": 54.80, "gpu_us_min": 18.91, "host_us_min": 46.31, "burst_us": 41.59, "relative_error": 0},
+    {"variant": "copy_4_bytes_pinned_and_wait", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 100.70, "host_us": 141.06, "return_us": 94.38, "gpu_us_min": 72.74, "host_us_min": 101.00, "burst_us": 56.15, "relative_error": 0},
+    {"variant": "copy_4_bytes_pageable_and_wait", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 44.24, "host_us": 102.96, "return_us": 55.00, "gpu_us_min": 27.36, "host_us_min": 68.60, "burst_us": 47.26, "relative_error": 0},
+    {"variant": "touch", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 53.23, "host_us": 110.47, "return_us": 29.24, "gpu_us_min": 10.75, "host_us_min": 48.81, "burst_us": 13.00, "relative_error": 0},
+    {"variant": "touch", "side": "cairn", "n": 256, "reps": 200, "gpu_us": 47.28, "host_us": 95.14, "return_us": 56.87, "gpu_us_min": 21.50, "host_us_min": 45.77, "burst_us": 39.48, "relative_error": 0},
+    {"variant": "touch_twice", "side": "cuda", "n": 256, "reps": 200, "gpu_us": 18.08, "host_us": 70.00, "return_us": 27.04, "gpu_us_min": 10.66, "host_us_min": 34.22, "burst_us": 23.09, "relative_error": 0},
+    {"variant": "touch_twice", "side": "cairn", "n": 256, "reps": 200, "gpu_us": 100.32, "host_us": 140.65, "return_us": 98.10, "gpu_us_min": 36.48, "host_us_min": 60.63, "burst_us": 76.01, "relative_error": 0},
+    {"variant": "total_to_host", "side": "cairn", "n": 256, "reps": 200, "gpu_us": 136.70, "host_us": 181.92, "return_us": 129.92, "gpu_us_min": 87.65, "host_us_min": 113.84, "burst_us": 110.54, "relative_error": 0},
+    {"variant": "burst_of_1000_empty_launches", "side": "cuda", "n": 1000, "reps": 5, "gpu_us": 16052.00, "host_us": 16818.77, "return_us": 16436.62, "gpu_us_min": 10064.70, "host_us_min": 11508.59, "burst_us": 0.00, "relative_error": 0}
+  ]
+}

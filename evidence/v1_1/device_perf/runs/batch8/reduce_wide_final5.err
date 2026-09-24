@@ -1,0 +1,10 @@
+warm-up cuda/one_pass_v4_lastblock n=16777216
+warm-up cuda/two_pass_v4 n=16777216
+warm-up cairn/two_pass_load_wide n=16777216
+warm-up cairn/two_pass_load_wide_enqueued n=16777216
+warm-up cairn/one_pass_load_wide_finish n=16777216
+warm-up cuda/one_pass_v4_lastblock n=67108864
+warm-up cuda/two_pass_v4 n=67108864
+warm-up cairn/two_pass_load_wide n=67108864
+warm-up cairn/two_pass_load_wide_enqueued n=67108864
+warm-up cairn/one_pass_load_wide_finish n=67108864
