@@ -16,10 +16,11 @@ permissions:
 defaults:
   run:
     shell: bash  # bash -eo pipefail, so a failing command before a pipe fails its step
-# A newer push to the same branch supersedes a run still going, so a burst of commits costs one run, not one each.
+# A newer push to a pull request supersedes its run still going. On main a run always finishes, so every verdict there
+# is whole, and a burst of pushes queues only its latest commit behind it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   checks:
     runs-on: ubuntu-24.04
