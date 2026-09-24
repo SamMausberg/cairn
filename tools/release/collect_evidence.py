@@ -45,8 +45,11 @@ def run(command: list[str], timeout: int = 1800) -> dict:
 
 
 def lines(*patterns: str) -> int:
-    """Formatted source lines, blank and comment lines included: the honest upper bound."""
-    return sum(len(p.read_text(encoding="utf-8").splitlines()) for pattern in patterns for p in ROOT.glob(pattern))
+    """Formatted lines of the tracked files the patterns match, blank and comment lines included: the honest upper
+    bound. Untracked files (caches, build output) are not counted."""
+    tracked = set(subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True).stdout.splitlines())
+    found = {p for pattern in patterns for p in ROOT.glob(pattern) if p.relative_to(ROOT).as_posix() in tracked}
+    return sum(len(p.read_text(encoding="utf-8").splitlines()) for p in found)
 
 
 def main() -> int:
