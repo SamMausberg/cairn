@@ -55,7 +55,7 @@ def test_every_app_typechecks(name):
     generated, receipt = compile_source(load_project(APPS / name).source)
     assert receipt["function_count"] > 0
     # The app's own generics are all instantiated; what is left unchecked is std API it does
-    # not use, which tests/language/test_std.py instantiates instead.
+    # not use, which tests/language/test_std_api.py instantiates instead.
     assert all(name.startswith("std.") for name in receipt["uninstantiated_templates"])
     assert "int main" not in generated  # the entry point is added by the build, not the source
 
