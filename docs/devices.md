@@ -1,6 +1,6 @@
 # Devices
 
-A `parallel` region, a collector or a cooperative region runs on the GPU when a view it indexes is `@device`, and on host threads otherwise. The regions, plans and collectors themselves are in [concurrency.md](concurrency.md).
+A `parallel` region, a collector or a cooperative region runs on the GPU when a view it indexes is `@device`, and on host threads otherwise. `parallel` regions, plans and the collectors themselves are in [concurrency.md](concurrency.md).
 
 ## Placement and device memory
 

@@ -429,7 +429,7 @@ python3 tools/ai/demo.py --out /tmp/agentdemo
 
 ## examples/implementations
 
-One reference, `prefix`, the inclusive prefix sum written as the loop that defines it, and three [implementations](abstractions.md#implementations): `prefix_by4`, four elements a step where `n % 4 == 0`; `prefix_by[K]`, one part of `K` elements a step through `prefix_part[K]`, so a part's guard is checked once for its `K` elements, with `tune K in [4, 8, 16, 32]`; and `prefix_lanes`, a pooled `scan` once `n >= 65536`, which the reference's ceiling (`par:host`) admits. `plan prefix use prefix_by4;` selects the first, and `main` checks every length from 0 to 39 against `n * (n + 1) / 2`.
+One reference, `prefix`, is the inclusive prefix sum written as the loop that defines it. It has three [implementations](abstractions.md#implementations): `prefix_by4`, four elements a step where `n % 4 == 0`; `prefix_by[K]`, one part of `K` elements a step through `prefix_part[K]`, so a part's guard is checked once for its `K` elements, with `tune K in [4, 8, 16, 32]`; and `prefix_lanes`, a pooled `scan` once `n >= 65536`, which the reference's ceiling (`par:host`) admits. `plan prefix use prefix_by4;` selects the first, and `main` checks every length from 0 to 39 against `n * (n + 1) / 2`.
 
 ```sh
 cairn run examples/implementations        # prefix sums agree at every length from 0 to 39

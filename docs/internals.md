@@ -174,7 +174,7 @@ Outside `unsafe` and `extern`, an accepted program cannot use a moved owner, lea
 "process": { "effects": ["ffi:getpid", "io"], "syntactic_check_sites": { "unsafe_blocks": 1 } }
 ```
 
-An extern's signature and effects are trusted as written, and so are the effects [typed assembly](memory.md#layout-and-the-machine) declares, and so is the contract of a [foreign implementation](memory.md#foreign-implementations), which `cairn foreign` holds to its reference only on the inputs it ran. A foreign caller of an exported function must supply live, initialized, correctly typed storage for every borrow; the entry guards cannot prove provenance or exclude concurrent foreign access. Those guards run only in the exported `cf_` symbol (`checked-entries/1` among the receipt's trusted lowering rules).
+An extern's signature and effects are trusted as written, as are the effects [typed assembly](memory.md#layout-and-the-machine) declares and the contract of a [foreign implementation](memory.md#foreign-implementations), which `cairn foreign` holds to its reference only on the inputs it ran. A foreign caller of an exported function must supply live, initialized, correctly typed storage for every borrow; the entry guards cannot prove provenance or exclude concurrent foreign access. Those guards run only in the exported `cf_` symbol (`checked-entries/1` among the receipt's trusted lowering rules).
 
 Manifests are data and accept local listed paths only: no hooks, commands, downloads, arbitrary flags, traversal or symlinks. Each rule is pinned in `tests/projects/test_projects.py`:
 
@@ -214,7 +214,7 @@ python3 tools/release/collect_lean_evidence.py --release "$RELEASE"
 make wheel audit
 ```
 
-`collect_evidence.py` runs the release gates and writes each gate's command, status and output, the commit and whether the tree was dirty to `evidence/<release>/summary.json`, and `collect_lean_evidence.py` records a from-scratch build of `proofs/` and the axiom audit under `lean/`. `RUN_NOTES.md` beside them names what did not run and why: a gate whose tool is absent is `unavailable`, never passed.
+`collect_evidence.py` runs the release gates and writes to `evidence/<release>/summary.json` each gate's command, status and output, the commit, and whether the tree was dirty. `collect_lean_evidence.py` records a from-scratch build of `proofs/` and the axiom audit under `lean/`. `RUN_NOTES.md` beside them names what did not run and why: a gate whose tool is absent is `unavailable`, never passed.
 
 Tag the commit the evidence names with the version the six places state, and push `main` and the tag; a release that does not pass every gate on a committed tree is not tagged. A release claims only what its evidence shows: a speed, a GPU advantage or an AI result needs an executed run recorded under `evidence/`, with losses beside wins. `docs/project/capabilities.json` and [roadmap.md](roadmap.md) are rewritten at each release.
 

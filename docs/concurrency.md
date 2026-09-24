@@ -1,6 +1,6 @@
 # Tasks and lanes
 
-Placement and device memory, queued device work, device execution and cooperative regions are in [devices.md](devices.md).
+Tasks and task groups run declared functions on threads of their own, an I/O ring keeps kernel operations in flight, and a parallel region or a collector runs one body per index on host threads or device lanes. Placement, queued device work, device execution and cooperative regions are in [devices.md](devices.md).
 
 ## Tasks and leases
 

@@ -62,7 +62,7 @@ cairn new echo --template service    # a server that keeps every client's receiv
 cairn new squares --template parallel  # a host region, a checked reduce and a plan that splits it
 ```
 
-The test suite creates, builds, runs and tests every template. Every new project also gets an `AGENTS.md`, under 25 lines, that tells a coding agent the check, test and run loop, where the rules are (the CAIRN skill and `cairn doc --std`), and never to widen a ceiling or weaken a test to get past a refusal. A one-line `CLAUDE.md` imports it for Claude Code, which reads that file instead.
+The test suite creates, builds, runs and tests every template. Every new project also gets an `AGENTS.md` of under 25 lines. It tells a coding agent the check, test and run loop, where the rules are (the CAIRN skill and `cairn doc --std`), and never to widen a ceiling or weaken a test to get past a refusal. A one-line `CLAUDE.md` imports it for Claude Code, which reads that file instead.
 
 ## Check, run, test
 
