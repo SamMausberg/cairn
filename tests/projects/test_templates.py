@@ -10,9 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from cairn.agent.skill import commands
 from cairn.cli import main
+from cairn.commands import parser
 from cairn.compiler.cairnc import compile_source
+from cairn.editor.shells import commands
 from cairn.projects.build import build
 from cairn.projects.new import GUIDE, create_project, templates
 from cairn.projects.project import ProjectError, load_project
@@ -39,7 +40,7 @@ def test_every_template_is_a_project_whose_tests_pass_as_created(tmp_path, templ
     assert (root / "CLAUDE.md").read_text() == "@AGENTS.md\n"  # Claude Code reads CLAUDE.md, which imports it
     for said in ("cairn check . --format json", "cairn test .", "cairn run .", "cairn doc --std", "effect ceiling"):
         assert said in guide
-    named = {name for name, _ in commands()}
+    named = set(commands(parser()))
     assert set(re.findall(r"`cairn ([a-z]+)", guide)) <= named  # every command it names exists
 
 

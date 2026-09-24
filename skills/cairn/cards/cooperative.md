@@ -1,6 +1,6 @@
 # The cooperative card
 
-Sent to an agent when the program uses `barrier`, `pipeline`, `shuffle`, `shuffle_down`, `shuffle_xor`, `warp`. Codes: `E-COOP-BARRIER`, `E-COOP-CONFLICT`, `E-COOP-GLOBAL`, `E-COOP-REUSE`, `E-COOP-SHAPE`, `E-COOP-SHARED`, `E-COOP-UNDECIDED`, `E-COOP-UNORDERED`, `E-COOP-WARP`, `E-STAGE-BUSY`, `E-STAGE-LOOP`, `E-STAGE-UNREADY`.
+Selected by barrier pipeline shuffle shuffle_down shuffle_xor warp. Codes: E-COOP-BARRIER E-COOP-CONFLICT E-COOP-GLOBAL E-COOP-REUSE E-COOP-SHAPE E-COOP-SHARED E-COOP-UNDECIDED E-COOP-UNORDERED E-COOP-WARP E-STAGE-BUSY E-STAGE-LOOP E-STAGE-UNREADY.
 
 ```text
 blocks b in g threads t in 256 { ... } runs g blocks of 256 threads, b and t usize; up to three names a side, fastest first (blocks bx, by in gx, gy threads tx, ty in 32, 8: thread tx + 32 * ty). Thread extents are literals or constants, whole warps, 32 to 1024 in all (E-COOP-SHAPE). shared tile:f32[1056] = zeroed; declares directly in the body one array per block, zeroed where each block starts, 48 KiB in all (E-COOP-SHARED). barrier; waits for every thread of the block: never under a condition on a thread name, nor in a loop with break or continue (E-COOP-BARRIER). A local assigned from t, lent rw to a call, written through an element or assigned by a closure differs between threads, as does what an atomic or typed asm returns, and the right side of && or || runs only where the left lets it. Runs on the device when a view it indexes is @device, else on host threads; its row gains par:device or par:host and zero_init.

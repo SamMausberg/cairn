@@ -275,7 +275,7 @@ The receipt records the reference and candidate hashes, the domain, the query ha
 
 ## The skill and the Claude Code plugin
 
-`skills/cairn/` is an [Agent Skill](https://agentskills.io). `SKILL.md` holds the loop of check, test and run, and of validate and tune for implementations, the three cards every packet carries, an example that compiles, the costliest mistakes and every command. `codes.md` maps each diagnostic code to its card and fix, and `cards/` holds the other thirty-four cards. An agent lists only the description, about 180 tokens, and reads `SKILL.md`, 12 KB, when a task involves CAIRN. `python -m cairn.agent.skill` writes the directory from `teaching.py`, `diagnostics.py` and the command line's parser, `make editors` runs it, and `tests/tooling/test_skill.py` fails while a committed file differs from a fresh render.
+`skills/cairn/` is an [Agent Skill](https://agentskills.io). `SKILL.md` holds the loop of check, test and run, and of validate and tune for implementations, the three cards every packet carries with their codes, an example that compiles, an index of the cards and the costliest mistakes. `cards/` holds the other thirty-four cards, each with its codes. The skill leaves out what a refusal says: a refusal names its card and carries its fix, `cairn rules` prints any card, and `cairn --help` lists every command. An agent lists only the description, about 180 tokens, and reads `SKILL.md` when a task involves CAIRN. `python -m cairn.agent.skill` writes the directory from `teaching.py`, `make editors` runs it, and `tests/tooling/test_skill.py` fails while a committed file differs from a fresh render.
 
 The repository is also a Claude Code plugin and its own marketplace:
 

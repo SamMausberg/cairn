@@ -4,13 +4,13 @@ This is a CAIRN project. CAIRN is a checked systems language that compiles to C+
 
 ## The loop
 
-1. `cairn check . --format json` until it prints `"status": "typed"`. A refusal names one `code`, a file, a line and a column.
+1. `cairn check . --format json` until it prints `"status": "typed"`. A refusal names one `code`, a file, a line and a column, the `card` that states its rule and, when the compiler can state one, a `repair_hint`.
 2. `cairn test .` runs every `test` block in a process of its own.
 3. `cairn run .` builds and runs; the program's arguments go after `--`.
 
 ## Where the rules are
 
-The CAIRN agent skill holds them: `skills/cairn/` of the CAIRN repository, or the Claude Code plugin, which also puts `cairn` on `PATH`. Its `codes.md` maps each diagnostic code to the card that states the rule and to the fix. `cairn doc --std` lists every signature of the standard library, and `cairn doc .` this project's, each with its effect row. Nothing else exists: no library a file does not declare or import, and no syntax from Rust, C++ or Python.
+The CAIRN agent skill holds them: `skills/cairn/` of the CAIRN repository, or the Claude Code plugin, which also puts `cairn` on `PATH`. `cairn rules CODE` prints the card a refusal names, offline. `cairn doc --std` lists every signature of the standard library, and `cairn doc .` this project's, each with its effect row. Nothing else exists: no library a file does not declare or import, and no syntax from Rust, C++ or Python.
 
 ## What not to do
 

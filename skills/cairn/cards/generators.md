@@ -1,6 +1,6 @@
 # The generators card
 
-Sent to an agent when the program uses `derive`, `family`, `recipe`. Codes: `E-DERIVE-COLLISION`, `E-DERIVE-DOMAIN`, `E-DERIVE-FIELD`, `E-DERIVE-RECIPE`, `E-DERIVE-TYPE`, `E-FAMILY-LIMIT`, `E-FAMILY-TARGET`, `E-RECIPE`, `E-RECIPE-STATIC`, `E-UNINSTANTIATED`.
+Selected by derive family recipe. Codes: E-DERIVE-COLLISION E-DERIVE-DOMAIN E-DERIVE-FIELD E-DERIVE-RECIPE E-DERIVE-TYPE E-FAMILY-LIMIT E-FAMILY-TARGET E-RECIPE E-RECIPE-STATIC E-UNINSTANTIATED.
 
 ```text
 A function may declare one [K:nat] parameter. family gain = scale[1..257]; instantiates gain_1..gain_256 with bounded expansion and no runtime dispatcher. No semicolon follows a function block. Generated entries are not direct edit targets; read the generator's contract. Large expansion is not a measured advantage over compact C++ templates.

@@ -6,6 +6,7 @@ import re
 
 from cairn import __version__
 from cairn.agent import skill
+from cairn.agent.teaching import CORE, OWNER, every_card
 from cairn.compiler.cairnc import Diagnostic, compile_source
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -47,10 +48,10 @@ def test_every_link_in_the_skill_reaches_a_file():
 
 def test_every_card_and_every_code_is_in_the_skill_file_that_holds_its_card():
     files = skill.render()
-    for name in skill.every_card():
-        assert name in skill.CORE or f"cards/{name}.md" in files
-    for code, card in skill.OWNER.items():
-        assert code in files["SKILL.md" if card in skill.CORE else f"cards/{card}.md"], (code, card)
+    for name in every_card():
+        assert name in CORE or f"cards/{name}.md" in files
+    for code, card in OWNER.items():
+        assert code in files["SKILL.md" if card in CORE else f"cards/{card}.md"], (code, card)
 
 
 def test_the_example_in_the_skill_compiles():

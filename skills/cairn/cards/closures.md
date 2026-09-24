@@ -1,6 +1,6 @@
 # The closures card
 
-Sent to an agent when the program uses `dyn`. Codes: `E-CLOSURE`, `E-DYN`, `E-FN-TYPE`.
+Selected by dyn. Codes: E-CLOSURE E-DYN E-FN-TYPE.
 
 ```text
 fn(u64) -> u64 is a copyable code pointer to a plain declared function of values. ro<fn(u64) -> u64> is a borrowed callable: pass a declared function or write the closure in place, apply(n, xs, |x:u64| -> u64 { return x + bias; }). A closure captures its scope by reference, exists only as that argument, never allocates, and its effects belong to the function that wrote it. What it captures it borrows for that call (rw where it writes), so the same call cannot lend, move or write those places.

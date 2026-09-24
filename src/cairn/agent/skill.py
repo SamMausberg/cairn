@@ -3,24 +3,23 @@
 The skill follows the Agent Skills format (a `SKILL.md` with `name` and `description`, then files it points to), so
 Claude Code, the Claude apps and other agents that read that format load it the same way. It costs an agent almost
 nothing until it is used: only the description is listed. `SKILL.md` then gives the loop, the three rule cards
-every packet carries, an example that compiles, and an index; a card, the table of refusals or a chapter of `docs/`
-is read only when the program needs it.
+every packet carries, an example that compiles, and an index; a card or a chapter of `docs/` is read only when the
+program needs it. What a refusal teaches is not repeated: the refusal names its card and carries its fix, and
+`cairn rules` prints any card, so the skill holds each rule once and every command is in `cairn --help`.
 
-Nothing here is written by hand twice. The cards and the words that select them come from `teaching.py`, the fixes
-from `diagnostics.py`, the commands from the command line's parser. `python -m cairn.agent.skill` rewrites the
-directory, `--check` fails while a committed file differs from a fresh render, and `make editors` runs it.
+Nothing here is written by hand twice. The cards, their codes and the words that select them come from
+`teaching.py`. `python -m cairn.agent.skill` rewrites the directory, `--check` fails while a committed file differs
+from a fresh render, and `make editors` runs it.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from pathlib import Path
 
 from ..version import __version__
-from .diagnostics import HINTS
-from .teaching import CARDS, CODES, CORE, OWNER, TOOL_CARDS, every_card, triggers
+from .teaching import CARDS, CODES, CORE, TOOL_CARDS, every_card, triggers
 
 ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / "skills" / "cairn"
@@ -69,11 +68,13 @@ fn main() -> i32 {
 
 LOOP = """\
 1. Write the program. One file with `fn main() -> i32` runs as is; `cairn new NAME` makes a project (a data-only `cairn.toml`, `src/`, a test).
-2. Run `cairn check PATH --format json` until it prints `"status": "typed"`. A refusal names a `code`, a line and a column, and `further` lists every other refusal the check could judge on its own, so fix them all before checking again. `cairn rules CODE` prints the card that states a code's rule ([codes.md](codes.md) maps them too); change the code the rule is about. Never widen an effect ceiling, turn `ro` into `rw`, add `unsafe` or delete a check to get past a refusal.
+2. Run `cairn check PATH --format json` until it prints `"status": "typed"`. A refusal gives a `code`, a line and a column, the `card` that states its rule (`cairn rules CODE` prints it) and, when the compiler can state one, a `repair_hint`; `further` lists every other refusal the check could judge on its own, each the same way, so fix them all before checking again. Change the code the rule is about. Never widen an effect ceiling, turn `ro` into `rw`, add `unsafe` or delete a check to get past a refusal.
 3. `cairn test PATH` runs every `test` block in a process of its own; `cairn run PATH` builds and runs, with arguments after `--`.
-4. Before tuning, read the costs instead of guessing: `cairn doc PATH` prints each signature with its effect row, `cairn explain PATH` the guards, allocations and waits left at run time, `cairn predict PATH` a time per function from a machine profile, without running anything.
+4. Read the costs instead of guessing: `cairn doc PATH` prints each signature with its effect row, `cairn explain PATH` the guards, allocations and waits left at run time, `cairn predict PATH` a time per function from a machine profile, without running anything.
 5. To make a function faster, leave it as the reference and write an implementation beside it: `fn g(...) implements f when COND { }`, with natural parameters to search if useful. `cairn validate PATH --symbol g` tests it against the reference on generated boundary inputs, `cairn tune PATH --symbol f` searches plans and validated implementations within its budgets and `--write` selects the winner (`plan f use g;`). Never edit the reference, a tolerance or a test to make an implementation pass.
-6. An agent without a shell gets the same through `cairn mcp`: `check`, `state`, and the edit, plan and implementation sessions, which write an admitted change back to its files."""
+6. An agent without a shell gets the same through `cairn mcp`: `check`, `state`, and the edit, plan and implementation sessions, which write an admitted change back to its files.
+
+`cairn --help` lists every command, and a command that reports prints JSON when piped."""
 
 AVOID = """\
 - Habits from Rust or C++: there are no `&`/`&mut` references, lifetimes, `::` paths, `as` casts (write `u64(x)`) or tail-expression returns. `impl` is only `impl Trait for T`; `value.f(args)` calls a plain `fn f(v, args)` from the type's module. Text is `ro<u8>[n]` or `Vec[u8]`; there is no `String`.
@@ -88,47 +89,30 @@ def card_link(name: str) -> str:
     return (here.as_uri() if here.is_file() else f"{REPOSITORY}/blob/main/skills/cairn/{page}") + anchor
 
 
-def commands() -> list[tuple[str, str]]:
-    from ..commands import parser
-
-    sub = next(a for a in parser()._actions if isinstance(a, argparse._SubParsersAction))
-    return [(c.dest, " ".join((c.help or "").split())) for c in sub._choices_actions]
-
-
 def paragraphs(text: str) -> str:
     """A card, one paragraph per line, as a text block: its `Buf[u64](n)` is code, never a Markdown link."""
     return "```text\n" + "\n\n".join(line.strip() for line in text.strip().splitlines() if line.strip()) + "\n```"
 
 
-def card_file(name: str, words: list[str]) -> str:
-    uses = ", ".join(f"`{w}`" for w in words) if words else "the forms it describes"
-    said = f"Sent to an agent when the program uses {uses}." if name in CARDS else "A refusal names this card."
+SELECTED = {"views": ["ro", "rw"], "records": ["struct", "enum"], "sums": ["enum"]}  # what a host's packet also reads
+
+
+def selected_by(name: str, found: dict[str, list[str]]) -> str:
+    return " ".join(SELECTED.get(name, []) + found.get(name, []))
+
+
+def card_file(name: str, words: str) -> str:
+    said = f"Selected by {words}." if name in CARDS else "A host or the command line names this card in a refusal."
     if listed := CODES[name].split():
-        said += " Codes: " + ", ".join(f"`{c}`" for c in sorted(listed)) + "."
+        said += " Codes: " + " ".join(sorted(listed)) + "."
     return f"# The {name} card\n\n{said}\n\n{paragraphs(every_card()[name])}\n"
-
-
-def codes_file() -> str:
-    rows = ["# Refusals", "", "Each code the compiler, the hosts and `cairn` can name, with the card that states its "
-            "rule. The fix is the smallest change that keeps the program's meaning.", "",
-            "| Code | Card | Fix |", "|---|---|---|"]  # fmt: skip
-    for code, card in sorted(OWNER.items()):
-        where = f"[{card}](cards/{card}.md)" if card not in CORE else f"[{card}](SKILL.md#core-rules)"
-        rows.append(f"| `{code}` | {where} | {HINTS.get(code, '')} |")
-    rows += ["", "Codes are stable across releases."]
-    return "\n".join(rows) + "\n"
 
 
 def skill_file() -> str:
     found = triggers()
-    index = ["| Card | Read it when the program uses |", "|---|---|"]
-    for name in CARDS:
-        if name not in CORE:
-            words = ", ".join(f"`{w}`" for w in found[name]) or "the forms it describes"
-            index.append(f"| [{name}](cards/{name}.md) | {words} |")
-    table = ["| Command | What it does |", "|---|---|"] + [f"| `cairn {c}` | {h} |" for c, h in commands()]
+    index = [f"- [{n}](cards/{n}.md): {selected_by(n, found)}" for n in CARDS if n not in CORE]
     core = "\n\n".join(paragraphs(CARDS[name]) for name in CORE)
-    core += "\n\nTheir codes: " + "; ".join(f"{n} " + ", ".join(sorted(CODES[n].split())) for n in CORE) + "."
+    core += "\n\nTheir codes: " + "; ".join(f"{n} " + " ".join(sorted(CODES[n].split())) for n in CORE) + "."
     front = "\n".join([
         "---", "name: cairn", f"description: {json.dumps(DESCRIPTION)}", "license: MIT OR Apache-2.0",
         f"compatibility: {json.dumps(COMPATIBILITY)}", "metadata:", f'  version: "{__version__}"',
@@ -137,26 +121,25 @@ def skill_file() -> str:
     body = [
         "# CAIRN", "",
         "CAIRN is its own language, not Rust, C++ or Python with different spelling. The compiler refuses races, "
-        "uses of moved values and unchecked effects before anything runs, traps on overflow and out-of-bounds "
-        "access, and infers what each function costs. Read the core rules below before writing code, and a card "
-        "before using what it covers. This file's directory holds `codes.md` and `cards/`; in Claude Code it is "
-        "`${CLAUDE_SKILL_DIR}`, so a card is `${CLAUDE_SKILL_DIR}/cards/owners.md`.", "",
+        "uses of moved values and unchecked effects before anything runs, and traps on overflow and out-of-bounds "
+        "access. Read the core rules below before writing code, and a card before using what it covers. A card is "
+        "`cards/NAME.md` beside this file (`${CLAUDE_SKILL_DIR}/cards/owners.md` in Claude Code), and `cairn rules "
+        "NAME` prints it.", "",
         "## Loop", "", LOOP, "",
         "## Core rules", "", core, "",
         "## A program", "", "Tasks, leases, a test block and a checked reduction; `cairn run` prints `total = 499500`.",
         "", "```cairn", EXAMPLE.rstrip(), "```", "",
-        "## Cards", "", "Each card states one part of the language and the codes of its rules. The compiler sends "
-        "the same cards to an agent it hosts, picked by the words below.", "", *index, "",
-        "A refusal from a host or the command line names one of " + ", ".join(f"[{n}](cards/{n}.md)" for n in TOOL_CARDS)
+        "## Cards", "", "Each card states one part of the language and the codes of its rules. A host sends an agent "
+        "the cards its program's words select, below, and `cairn rules FILE` names them.", "", *index, "",
+        "A refusal from a host or the command line may name " + ", ".join(f"[{n}](cards/{n}.md)" for n in TOOL_CARDS)
         + ".", "",
         "## Mistakes that cost the most", "", AVOID, "",
-        "## Commands", "", "A command that reports takes `--format json`, the default when its output is piped.", "", *table, "",
         "## More", "",
-        "The reference is the `docs/` directory of the CAIRN repository: `language.md`, `memory.md`, "
-        "`abstractions.md`, `concurrency.md`, `devices.md` and `numerics.md` for the language, `library.md` and `std/` for the "
-        "standard library, `tools.md` for the commands, `agents.md` for the edit host. From a checkout or the "
-        f"Claude Code plugin it is `${{CLAUDE_SKILL_DIR}}/../../docs/`; otherwise {REPOSITORY}/tree/main/docs. Every "
-        "example there compiles, so copy from it rather than from memory of another language.",
+        "The reference is `docs/` of the CAIRN repository, `${CLAUDE_SKILL_DIR}/../../docs/` from a checkout or the "
+        f"Claude Code plugin, else {REPOSITORY}/tree/main/docs: `language.md`, `memory.md`, `abstractions.md`, "
+        "`concurrency.md`, `devices.md` and `numerics.md` for the language, `library.md` for the standard library, "
+        "`tools.md` for the commands, `agents.md` for the hosts. Every example there compiles, so copy from it rather "
+        "than from memory of another language.",
     ]  # fmt: skip
     return front + "\n\n" + "\n".join(body) + "\n"
 
@@ -164,8 +147,8 @@ def skill_file() -> str:
 def render() -> dict[str, str]:
     """Every file of the skill, by its path under `skills/cairn/`."""
     found = triggers()
-    files = {"SKILL.md": skill_file(), "codes.md": codes_file()}
-    files |= {f"cards/{n}.md": card_file(n, found.get(n, [])) for n in every_card() if n not in CORE}
+    files = {"SKILL.md": skill_file()}
+    files |= {f"cards/{n}.md": card_file(n, selected_by(n, found)) for n in every_card() if n not in CORE}
     return files
 
 

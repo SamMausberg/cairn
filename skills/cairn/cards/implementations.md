@@ -1,6 +1,6 @@
 # The implementations card
 
-Sent to an agent when the program uses `implements`. Codes: `E-IMPL-CALL`, `E-IMPL-EFFECT`, `E-IMPL-NUMERICS`, `E-IMPL-PARAM`, `E-IMPL-SIGNATURE`, `E-IMPL-TARGET`, `E-IMPL-USE`, `E-IMPL-WHEN`, `E-IMPLEMENTS`.
+Selected by implements. Codes: E-IMPL-CALL E-IMPL-EFFECT E-IMPL-NUMERICS E-IMPL-PARAM E-IMPL-SIGNATURE E-IMPL-TARGET E-IMPL-USE E-IMPL-WHEN E-IMPLEMENTS.
 
 ```text
 fn total_by4(n:usize, xs:ro<u64>[n]) -> u64 implements total when n % 4 == 0 { ... } is a separately written implementation of the reference total: exactly its parameters, types, extents, placements and result (E-IMPL-SIGNATURE), declared in total's module, not generic over types, not a kernel, and never an implementation of an implementation (E-IMPLEMENTS). Its row stays inside total's declared ceiling, or inside total's own row when total declares none (E-IMPL-EFFECT: a while loop adds diverge, a Buf alloc, a parallel region par:host), and it writes no rounding total does not write (E-IMPL-NUMERICS).
