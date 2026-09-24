@@ -31,7 +31,7 @@ The server held 5.7 MiB more at its peak on analytics and 57.8 MiB more on the g
 
 ## What the tests establish
 
-`tests/agent/test_compilations.py` compiles every example project and `examples/basics` program from scratch and from a kept copy, and requires the same C++, the same manifest and the same receipts, with and without `every` and expression sites. That is finite testing on those 25 inputs, not a proof that a copy is faithful for every program. The same file holds that a change a caller makes to what it got never reaches the next caller, and that a changed source, a changed `std` file or a changed compiler digest compiles again.
+`tests/agent/test_compilations.py` compiles every example project and `examples/basics` program from scratch and from a kept copy, and requires the same C++, the same manifest and the same receipts, with and without `every` and expression sites. That is finite testing on those inputs, 25 when this record was made and 28 once the harness and reduction examples landed, not a proof that a copy is faithful for every program. The same file holds that a change a caller makes to what it got never reaches the next caller, and that a changed source, a changed `std` file or a changed compiler digest compiles again.
 
 ## What did not run
 
