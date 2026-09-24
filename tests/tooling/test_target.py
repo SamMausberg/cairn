@@ -148,7 +148,8 @@ def test_ptxas_reports_for_suffixed_targets_are_read():
 def test_the_device_command_names_the_target_and_never_native(tmp_path):
     line = command("g++", "p.cu", str(tmp_path / "p"), kind="exe", cuda=True, device=parse("sm_120f"))
     assert "-arch=sm_120f" in line and not any("native" in part for part in line)
-    assert code_of(lambda: command("g++", "p.cu", "p", cuda=True, device=parse("sm_101a"))) == "E-TARGET-TOOLKIT"
+    unbuilt = "sm_130a" if 101 in target.toolkit()["compiles"] else "sm_101a"  # nvcc 13 dropped sm_101; 12.9 has it
+    assert code_of(lambda: command("g++", "p.cu", "p", cuda=True, device=parse(unbuilt))) == "E-TARGET-TOOLKIT"
 
 
 @NVCC
@@ -176,7 +177,7 @@ PROBED = ["sm_75", "sm_80", "sm_89", "sm_90", "sm_90a", "sm_100", "sm_100a", "sm
 @NVCC
 def test_the_feature_table_is_what_ptxas_assembles(tmp_path):
     """Each probe is one instruction; ptxas assembles it for a target exactly when the table says it provides the
-    feature. Compiled to a cubin, never run."""
+    feature, on every target the installed nvcc compiles (CUDA 12.9 has no sm_110). Compiled to a cubin, never run."""
     probes = {
         name: f'__global__ void p() {{ asm volatile("{f.probe}"); }}\n' for name, f in FEATURES.items() if f.probe
     }
@@ -184,7 +185,7 @@ def test_the_feature_table_is_what_ptxas_assembles(tmp_path):
     jobs = []
     for name, text in probes.items():
         (tmp_path / f"{name}.cu").write_text(text)
-        jobs += [(name, spelling) for spelling in PROBED]
+        jobs += [(name, spelling) for spelling in PROBED if parse(spelling).sm in target.toolkit()["compiles"]]
 
     def assembles(job: tuple[str, str]) -> bool:
         name, spelling = job
