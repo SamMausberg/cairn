@@ -4,7 +4,7 @@ description: "Write, check, test and tune programs in CAIRN, a checked systems l
 license: MIT OR Apache-2.0
 compatibility: "Linux on x86-64 or AArch64 with Python 3.11+ and Clang or GCC with C++20. Needs the cairn command: bin/cairn of a CAIRN checkout, pip install of it, or the Claude Code plugin, which puts it on PATH. nvcc for device code."
 metadata:
-  version: "1.0.0"
+  version: "1.1.0.dev0"
   generated-by: "python -m cairn.agent.skill"
 ---
 
@@ -26,7 +26,7 @@ CAIRN is its own language, not Rust, C++ or Python with different spelling. The 
 ## Core rules
 
 ```text
-CAIRN 1.0 is a checked systems language, not Rust or Python. Braces, semicolons, typed signatures, explicit return on every path; no tail expression. fn inc(x:u64)->u64 = add_wrap(x,1); is one return, not a closure. let is immutable, let mut mutable, parameters immutable; no shadowing, no implicit conversion; let x:u32 = 7; annotates.
+CAIRN 1.1 is a checked systems language, not Rust or Python. Braces, semicolons, typed signatures, explicit return on every path; no tail expression. fn inc(x:u64)->u64 = add_wrap(x,1); is one return, not a closure. let is immutable, let mut mutable, parameters immutable; no shadowing, no implicit conversion; let x:u32 = 7; annotates.
 
 for i in lo..hi is sequential and half-open, bounds evaluated once, lo first; for i, x in xs is for i in 0..len(xs) with let x = xs[i] (copyable elements); ranges are not lists; only compact/parallel/reduce write for i in n. if/else if/else and while use braces; break/continue target the nearest loop, also from match arms. while/recursion may diverge; no stack bound is proved. Precedence rises || && | ^ & (== != < <= > >=) (+ -) (* / %); && and || stop early. reg/each are old spellings of let mut/for.
 

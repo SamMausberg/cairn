@@ -13,6 +13,7 @@ import zipfile
 import pytest
 
 from cairn import __version__
+from cairn.version import __semver__
 from release.yaml_subset import read
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -27,18 +28,19 @@ def test_the_version_is_stated_once():
     citation = read(ROOT / "CITATION.cff")
     major_minor = ".".join(__version__.split(".")[:2])
     assert pyproject["project"]["version"] == __version__
-    assert lakefile["version"] == __version__
-    assert extension["version"] == __version__
+    assert __semver__ == re.sub(r"\.dev(\d+)$", r"-dev.\1", __version__)  # one version, two spellings
+    assert lakefile["version"] == __semver__
+    assert extension["version"] == __semver__
     assert capabilities["profile"] == "cairn-native/" + __version__
     assert citation["version"] == __version__ and citation["repository-code"].endswith("/cairn")
     assert f"CAIRN {major_minor} is a checked systems language" in card
     for module in ("bazel/MODULE.bazel", "examples/bazel/MODULE.bazel"):  # the Bazel rules carry the release too
-        assert f'"rules_cairn", version = "{__version__}"' in (ROOT / module).read_text(encoding="utf-8"), module
+        assert f'"rules_cairn", version = "{__semver__}"' in (ROOT / module).read_text(encoding="utf-8"), module
 
 
 def test_the_changelog_opens_with_this_release():
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    sections = re.findall(r"^## (\d+\.\d+\.\d+)$", changelog, flags=re.M)
+    sections = re.findall(r"^## (\d+\.\d+\.\d+(?:\.dev\d+)?)$", changelog, flags=re.M)
     assert sections and sections[0] == __version__, sections[:2]
 
 

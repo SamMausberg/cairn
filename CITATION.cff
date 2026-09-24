@@ -6,7 +6,7 @@ type: "software"
 authors:
   - given-names: "Sam"
     family-names: "Mausberg"
-version: "1.0.0"
+version: "1.1.0.dev0"
 repository-code: "https://github.com/SamMausberg/cairn"
 license:
   - "MIT"
