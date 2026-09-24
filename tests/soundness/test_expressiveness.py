@@ -35,7 +35,17 @@ plan f { vector 4; }""",
 }""",
             "accepted",
         ),
-        ("""fn f(n:usize, x:ro<f32>[n]@device) -> f32 { let v = load_wide(x, 0); return 0.0; }""", "E-CALLEE"),
+        (
+            """fn f(g:usize, n:usize, x:ro<f32>[n]@device, out:rw<f32>[g]@device) {
+  blocks b in g threads t in 32 {
+    let v = load_wide[4](x, 4 * (b * 32 + t), Cache.streaming);
+    let total = reduce + warp yield v[0] + v[1] + v[2] + v[3];
+    if t == 0 { out[b] = total; }
+  }
+}""",
+            "accepted",
+        ),
+        ("""fn f(n:usize, x:ro<f64>[n]@device) -> f64 { let v = load_wide[4](x, 0); return v[0]; }""", "E-WIDE"),
     ],
     "Atomics on device memory": [
         (

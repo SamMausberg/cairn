@@ -97,6 +97,7 @@ Each card states one part of the language and the codes of its rules. A host sen
 - [foreign](cards/foreign.md): launch
 - [effects](cards/effects.md): effects extern pure unsafe
 - [parallel](cards/parallel.md): device parallel pinned reduce transfer unified
+- [wide](cards/wide.md): Cache load_wide store_wide
 - [cooperative](cards/cooperative.md): barrier pipeline shuffle shuffle_down shuffle_xor warp
 - [tasks](cards/tasks.md): Atomic Group Mutex collect spawn wait
 - [rings](cards/rings.md): IoRing

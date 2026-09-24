@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import cooperative, execution, facts, fragments, machine, printing, rings, tensor
+from . import cooperative, execution, facts, fragments, machine, printing, rings, tensor, wide
 from .traits import vtable
 from .tree import (
     BOOL,
@@ -38,6 +38,7 @@ MATH = {"sqrt", "floor", "ceil", "trunc", "abs", "to_bits"}  # a program's own f
 SOFT |= MATH | printing.NAMES | {"quantize", "quantize_stochastic", "from_bits", "assert", "assert_eq", "mma_unordered"}
 SOFT |= {"mma_load", "mma_store", "mma_get", "mma_set"}  # tensor-core fragments (fragments.py)
 SOFT |= cooperative.SHUFFLES  # a program's own function of the name wins
+SOFT |= set(wide.NAMES)  # wide loads and stores (wide.py)
 QUANTIZED = [*STORAGE, "i8", "u8", "i16", "u16"]  # where one rounding of x / scale is exact (cairn_float.hpp)
 PATTERN = {"f32": "u32", "f64": "u64", **{n: "u16" if STORAGE[n][0] + STORAGE[n][1] > 7 else "u8" for n in STORAGE}}
 F32 = Type("f32")
@@ -396,6 +397,8 @@ TABLE: dict[str, tuple[Any, Any]] = {
     "mma_set": (fragments.check_set, fragments.lower_set),
     **dict.fromkeys(fragments.TYPES, (fragments.check_fill, fragments.lower_fill)),
     **dict.fromkeys(cooperative.SHUFFLES, (cooperative.check_shuffle, cooperative.lower_shuffle)),
+    "load_wide": (wide.check_load, wide.lower),
+    "store_wide": (wide.check_store, wide.lower),
     "wait": (check_wait, lambda g, e: f"{g.expr(e.args[0])}.wait()"),
     "collect": (check_collect, lambda g, e: f"{g.expr(e.args[0])}.collect()"),
     "Group": (check_group, lower_construct),

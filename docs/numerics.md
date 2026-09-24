@@ -189,6 +189,7 @@ A device program built with `--emulate` ([devices.md](devices.md#emulating-devic
 | a device `reduce` or `scan` over floats | may differ in the last places: the device combines in a tree whose order is unspecified, and the emulation in index order, as a host `reduce + for` does |
 | `mma_unordered`, on whole matrices or on fragments | may differ within the contract's bound: the emulation adds in increasing k, which is the reference loop's order, and the tensor cores in an order the hardware picks |
 | `reduce OP warp` and the shuffles | the same: one fixed butterfly on both sides |
+| `load_wide` and `store_wide` | the same: `K` plain accesses on the host move the bytes one access moves on the device, and a hint changes no value |
 | atomics, float atomics included | none to differ: device code has no atomics |
 | warp-synchronous code and memory ordering | nothing to observe: a block's threads share memory only across the barriers the phase rule demands, a warp operation needs its whole warp, and a lane touches only its own elements of what any lane writes |
 

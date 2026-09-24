@@ -258,6 +258,18 @@
       "records": ["tests/soundness/test_plans.py", "tests/soundness/test_staging.py", "evidence/v1_0/execution/README.md"]
     },
     {
+      "feature": "Wide loads and stores: `load_wide[K]`, `store_wide` and `Cache` hints",
+      "side": "device",
+      "docs": "devices.md#wide-loads-and-stores",
+      "implemented": "yes",
+      "compiles": "yes: sm_120, to LDG.E.EF.128, STG.E.EF.128, LDG.E.128.CONSTANT, LDS.128 and STS.128",
+      "ran_on_cpu": "yes: in host code, host lanes and host threads, and emulated, under both compilers",
+      "ran_on_gpu": "no",
+      "sanitizers": "partial: address and undefined under clang++, thread on host threads; Compute Sanitizer has not run",
+      "measured": "no",
+      "records": ["tests/soundness/test_wide.py"]
+    },
+    {
       "feature": "Cooperative regions: shared arrays, barriers and warp operations",
       "side": "device",
       "docs": "devices.md#cooperative-regions",
