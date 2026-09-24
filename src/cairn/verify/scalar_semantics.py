@@ -138,6 +138,7 @@ def implementation_hash():
                 "compiler/pipelines.py",
                 "compiler/tensor.py",
                 "compiler/layouts.py",
+                "compiler/layout_algebra.py",
                 "compiler/fragments.py",
                 "compiler/rings.py",
                 "compiler/implementations.py",

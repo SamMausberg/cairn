@@ -47,7 +47,8 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Pipeline stages and their lowering | `compiler/pipelines.py` | `s_pipeline`, `method`, `Stages`, `lower` |
 | The tensor-core multiply, its numerical contract and its lowering | `compiler/tensor.py` | `check_mma`, `lower_mma` |
 | Tensor-core fragments and their lowering | `compiler/fragments.py` | `valid`, `tile`, `consumer`, `check_mma`, `lower_load` |
-| `layout` declarations: coverage, owners, runs, bank conflicts, conversions, `L.at(...)` | `compiler/layouts.py` | `value`, `cover`, `runs`, `conflicts`, `conversion`, `method`, `lower` |
+| `layout` declarations, their receipt, `L.at(...)` and its lowering | `compiler/layouts.py` | `value`, `evaluate`, `explained`, `method`, `apply`, `lower` |
+| Layouts as values: coverage, owners, runs, bank conflicts, conversions | `compiler/layout_algebra.py` | `Layout`, `Spread`, `cover`, `exactly_once`, `runs`, `conflicts`, `conversion` |
 | Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
 | The runtime operation each piece of device work lowers to | `compiler/execution.py` | `call`, `unrolled` |
 | `mmio_read`, `mmio_write`, `asm` and typed assembly, beside their lowering | `compiler/machine.py` | `check_machine`, `s_asm`, `lower_asm`, `unbuildable` |

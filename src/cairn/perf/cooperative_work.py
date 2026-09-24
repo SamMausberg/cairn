@@ -89,7 +89,7 @@ class Site:
 
 def wavefronts(offsets: list[tuple[int, int]], size: int) -> int:
     """The wavefronts one warp's access takes: its lanes in groups that move 128 bytes, each group as many as the
-    busiest bank has distinct words to serve (compiler/layouts.py `conflicts` counts the same for a spread)."""
+    busiest bank has distinct words to serve (compiler/layout_algebra.py `conflicts` counts the same for a spread)."""
     per = max(1, min(WARP_SIZE, PHASE_BYTES // size))
     groups: dict[int, dict[int, set[int]]] = {}
     for lane, o in offsets:

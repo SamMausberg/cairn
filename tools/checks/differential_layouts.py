@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Differential check: `compiler/layouts.py` and `proofs/Cairn/Layout.lean` judge the same generated layouts alike.
+"""Differential check: `compiler/layout_algebra.py` and `proofs/Cairn/Layout.lean` judge the same generated layouts alike.
 
 A declared spread must give every element of its tile exactly one holder, and a declared storage layout every element
 its own offset. `Layout.lean` writes both rules as their definitions and proves what a layout that passes promises;
-`layouts.py` counts holders in one pass and finds shared offsets with a table. This harness generates storage
+`layout_algebra.py` counts holders in one pass and finds shared offsets with a table. This harness generates storage
 layouts and spreads, among them the ones `spread`, `transpose`, `swizzle` and `inverse` make and the reads `stage` places, asks the real Python functions
 (`cover`, `injective`) for their verdicts, renders the same layouts as Lean terms, and requires the verdicts to
 match on every input: a coordinate outside the tile, the first element held twice, the first left to nobody, and
@@ -22,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
-from cairn.compiler import layouts as L
+from cairn.compiler import layout_algebra as L
 from cairn.compiler.tree import Diagnostic
 from checks.differential_ownership import find_lake, run_lean
 

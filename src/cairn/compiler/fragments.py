@@ -47,7 +47,7 @@ from __future__ import annotations
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
-from . import layouts
+from . import layout_algebra, layouts
 from .tree import USIZE, VOID, Expr, Type, fail, is_view, root
 
 if TYPE_CHECKING:
@@ -145,7 +145,7 @@ def tile(c: Checker, e: Expr, array: Expr, written: Expr, coords: list[Expr], ty
     family, role, element, shape = valid(ty, e)
     name = layouts.named(c, written)
     v = layouts.value(c, name) if name else None
-    if not isinstance(v, layouts.Layout) or len(v.shape) != 2:
+    if not isinstance(v, layout_algebra.Layout) or len(v.shape) != 2:
         fail("E-LAYOUT-CONSUMER", "A fragment moves through a 2-D storage layout, named by its declaration; "
              "the second argument names none.", written)  # fmt: skip
     rows, cols = extent(role, shape)
@@ -177,12 +177,19 @@ def tile(c: Checker, e: Expr, array: Expr, written: Expr, coords: list[Expr], ty
 
 
 def consumer(
-    family: str, role: str, shared: bool, v: layouts.Layout, name: str, size: int, grid: tuple[int, int], node: Any
+    family: str,
+    role: str,
+    shared: bool,
+    v: layout_algebra.Layout,
+    name: str,
+    size: int,
+    grid: tuple[int, int],
+    node: Any,
 ):
     """Whether this family's loads and stores can read `v`: WMMA through a pointer and a leading dimension, mma.sync
     from shared memory through ldmatrix's row addresses, anything else element by element."""
     if family == "wmma":
-        form = layouts.affine(v)
+        form = layout_algebra.affine(v)
         if form is None or (role != "acc" and form[0] != "row"):
             how = "row-major" if role != "acc" else "row- or column-major"
             fail("E-LAYOUT-CONSUMER", f"WMMA reads a fragment through a pointer and a leading dimension, so {name} "
@@ -197,7 +204,7 @@ def consumer(
                 if v.offset((i * rows, j * cols)) * size % 32:
                     fail("E-LAYOUT-CONSUMER", f"WMMA reads a fragment from 32 bytes on, and fragment ({i}, {j}) "
                          f"of {name} starts {v.offset((i * rows, j * cols)) * size} bytes in.", node)  # fmt: skip
-    elif family == "mma_sync" and shared and role != "acc" and not layouts.rows16(v, size):
+    elif family == "mma_sync" and shared and role != "acc" and not layout_algebra.rows16(v, size):
         fail("E-LAYOUT-CONSUMER", f"ldmatrix reads each 16 bytes of a row from one address; {name} splits a run of "
              "16 bytes, or starts one off 16 bytes: keep a swizzle's base at 16 bytes and a pad a multiple of 16 "
              "bytes.", node)  # fmt: skip
@@ -210,7 +217,7 @@ def footprint(c: Checker, e: Expr, i: int, j: int) -> list[tuple[int, int | None
     (compiler/phases.py)."""
     _, _, (_, role, _, shape, name, _) = e.ref
     v = layouts.value(c, name)
-    assert isinstance(v, layouts.Layout)  # a fragment moves only through a storage layout (`tile`)
+    assert isinstance(v, layout_algebra.Layout)  # a fragment moves only through a storage layout (`tile`)
     rows, cols = extent(role, shape)
     if not (0 <= i < v.shape[0] // rows and 0 <= j < v.shape[1] // cols):
         raise IndexError(f"fragment ({i}, {j}) is outside {name}'s grid of {rows} x {cols} fragments")
@@ -366,7 +373,7 @@ def lower_load(g: Emitter, e: Expr) -> str:
     need(g, ty)
     data = held(g, e.args[0], name)
     at = offset(g, e, name, role, shape, e.args[2:])
-    form = layouts.affine(g.c.folded[name]) or ("row", 0)
+    form = layout_algebra.affine(g.c.folded[name]) or ("row", 0)
     return (f"cr::frag::loaded<{spelled(g, ty)}>({data}, {at}, {form[1]}, {'true' if form[0] == 'row' else 'false'}, "
             f"{'true' if shared else 'false'})")  # fmt: skip
 
@@ -376,7 +383,7 @@ def lower_store(g: Emitter, e: Expr) -> str:
     need(g, ty)
     data = held(g, e.args[0], name)
     at = offset(g, e, name, role, shape, e.args[2:4])
-    form = layouts.affine(g.c.folded[name]) or ("row", 0)
+    form = layout_algebra.affine(g.c.folded[name]) or ("row", 0)
     return (f"cr::frag::stored({g.expr(e.args[4])}, {data}, {at}, {form[1]}, {'true' if form[0] == 'row' else 'false'}, "
             f"unsigned(cr_blk.lane()))")  # fmt: skip
 

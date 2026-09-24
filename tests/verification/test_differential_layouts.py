@@ -1,9 +1,9 @@
-"""`compiler/layouts.py` and `proofs/Cairn/Layout.lean` must judge the same layouts alike.
+"""`compiler/layout_algebra.py` and `proofs/Cairn/Layout.lean` must judge the same layouts alike.
 
 The Lean side proves that a spread that passes gives every element of its tile one holder, and that with a storage
 layout that passes no two holders write one offset. This comparison is what ties that proof to the Python the
 checker runs. A small run is part of `make test`; `CAIRN_DIFFERENTIAL_N` asks for a large one. The second test plants
-a slip in `layouts.py` and requires the comparison to report it, because a comparison that cannot fail is not
+a slip in `layout_algebra.py` and requires the comparison to report it, because a comparison that cannot fail is not
 evidence.
 """
 

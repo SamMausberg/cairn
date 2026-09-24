@@ -29,7 +29,8 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/pipelines.py` | pipeline stages in a cooperative region: their declaration, the states fill, wait and release move them through, their lowering |
 | `compiler/tensor.py` | the tensor-core multiply `mma_unordered`: its rule, its numerical contract and its lowering |
 | `compiler/fragments.py` | tensor-core fragments: their types, the warp operations on them, the layouts each family reads, their lowering |
-| `compiler/layouts.py` | `layout` declarations: storage layouts and spreads, what the checker answers from them, and `L.at(...)` in code |
+| `compiler/layouts.py` | `layout` declarations: their evaluation and rules, their receipt, and `L.at(...)` in code with its lowering |
+| `compiler/layout_algebra.py` | storage layouts and spreads as values: offsets, owners, coverage, distinct offsets, runs, bank conflicts, conversions |
 | `compiler/rings.py` | I/O rings: their declaration, the operations that move owners in and out, their lowering |
 | `compiler/implementations.py` | alternative implementations of a function: their declaration, condition, contract, selection by a plan and the dispatch that lowers it |
 | `compiler/effects.py` | the effect vocabulary, the fixed point, the operand-order audit |

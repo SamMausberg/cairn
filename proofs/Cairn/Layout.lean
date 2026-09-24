@@ -1,5 +1,5 @@
 /-
-The layout rules of `src/cairn/compiler/layouts.py`: a declared storage layout gives every element its own
+The layout rules of `src/cairn/compiler/layout_algebra.py`: a declared storage layout gives every element its own
 offset, and a declared spread gives every element of its tile exactly one (participant, value) holder.
 
 A storage layout is transliterated from the Python: each dimension is a list of modes, an extent and a stride,
@@ -76,7 +76,7 @@ def Storage.at (L : Storage) (e : Nat) : Nat := L.offset (unravel e L.shape)
 def Storage.shares (L : Storage) (e : Nat) : Bool := (List.range e).any (fun a => L.at a == L.at e)
 
 /-- The first element that shares its offset with an earlier one, with the earliest it shares it with: what
-`injective` in layouts.py reports, or `none` when every element has an offset of its own. -/
+`injective` in layout_algebra.py reports, or `none` when every element has an offset of its own. -/
 def Storage.clash (L : Storage) : Option (Nat × Nat) :=
   match (List.range (size L.shape)).find? L.shares with
   | none => none

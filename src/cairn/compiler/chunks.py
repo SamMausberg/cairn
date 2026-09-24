@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import execution, layouts
+from . import execution, layout_algebra
 from .tree import FLOAT, INT, STORAGE, Expr, Stmt, fail, is_view, nested
 
 if TYPE_CHECKING:
@@ -90,8 +90,8 @@ def vectored(c: Checker, s: Stmt, width: int, token: Any):
     chosen = chunkable(s)
     for name, (element, *_) in chosen.items():
         size = c.sizeof(element)
-        if layouts.moved(width, size) < width:  # the lane's chunk is more than one access moves
-            most = layouts.moved(WIDEST, size)
+        if layout_algebra.moved(width, size) < width:  # the lane's chunk is more than one access moves
+            most = layout_algebra.moved(WIDEST, size)
             fail("E-PLAN", f"vector {width} would move {width * size} bytes of {name} at once; a lane "
                  f"moves at most {WIDEST}, so {element.display()} takes vector {most} at most.", token)  # fmt: skip
     if not chosen:

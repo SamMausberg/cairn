@@ -11,6 +11,7 @@ import signal
 import pytest
 
 from cairn.agent.projection import canonical_source
+from cairn.compiler import layout_algebra as A
 from cairn.compiler import layouts as L
 from cairn.compiler.cairnc import compile_program, compile_source
 from emitted import contract, device_build, on_device, refused, run, sanitized, watched
@@ -110,7 +111,7 @@ def test_a_spread_gives_each_participant_the_elements_its_definition_does(shape)
     expected = spread_oracle(rows, cols, *rest)
     assert {(t, x): v.coords(t, x) for t in range(v.count) for x in range(v.each)} == expected
     for (t, x), at in list(expected.items())[:: max(1, len(expected) // 64)]:
-        assert L.owner(v, at) == [(t, x)]
+        assert A.owner(v, at) == [(t, x)]
 
 
 def test_the_tiles_differ_only_in_how_a_warp_meets_the_banks():
@@ -121,15 +122,15 @@ def test_the_tiles_differ_only_in_how_a_warp_meets_the_banks():
         table = [[store.tile.offset(store.coords(t, x)) for x in range(store.each)] for t in range(32)]
         banks = [len({o % 32 for o in column}) for column in zip(*table, strict=True)]
         ways[name] = 32 // min(banks)
-        assert L.conflicts(store, 4) == ways[name]
-        assert L.conflicts(value(transpose(tile), "LOAD"), 4) == 1
+        assert A.conflicts(store, 4) == ways[name]
+        assert A.conflicts(value(transpose(tile), "LOAD"), 4) == 1
     assert ways == {"rows": 32, "padded": 1, "swizzled": 1}
 
 
 def test_a_copy_in_sixteen_byte_runs_is_seen_where_the_tile_keeps_rows_whole():
     runs = {}
     for tile in ["rows(64, 32)", "pad(rows(64, 32), 8)", "swizzle(rows(64, 32), 2, 3, 3)", "cols(64, 32)"]:
-        runs[tile] = L.runs(value(f"layout D = spread({tile}, 32, 4, 1, 8);", "D"), 2)
+        runs[tile] = A.runs(value(f"layout D = spread({tile}, 32, 4, 1, 8);", "D"), 2)
     assert runs == {"rows(64, 32)": 8, "pad(rows(64, 32), 8)": 8, "swizzle(rows(64, 32), 2, 3, 3)": 8,
                     "cols(64, 32)": 1}  # fmt: skip
 
@@ -142,9 +143,9 @@ layout BLOCKED = spread(T, 8, 32, 4, 1);
 layout WIDE = spread(T, 32, 8, 1, 4);
 """
     held = {n: value(source, n) for n in ["A", "B", "BLOCKED", "WIDE"]}
-    assert L.conversion(held["A"], held["B"]) == "none"
-    assert L.conversion(held["A"], held["BLOCKED"]) == "shared"  # rows move between warps
-    assert L.conversion(held["A"], held["WIDE"]) == "shared"
+    assert A.conversion(held["A"], held["B"]) == "none"
+    assert A.conversion(held["A"], held["BLOCKED"]) == "shared"  # rows move between warps
+    assert A.conversion(held["A"], held["WIDE"]) == "shared"
     lanes = """layout T = rows(4, 32);
 layout ROWS = spread(T, 1, 32, 4, 1);
 layout PAIRS = spread(T, 2, 16, 2, 2);
@@ -152,16 +153,16 @@ layout ACROSS = spread(rows(2, 64), 1, 32, 1, 2);
 layout DOWN = transpose(spread(rows(64, 2), 32, 1, 2, 2));
 """
     rows, pairs, across, down = (value(lanes, n) for n in ["ROWS", "PAIRS", "ACROSS", "DOWN"])
-    assert L.conversion(rows, pairs) == "shuffle"  # 32 participants: one warp
-    assert L.conversion(across, down) == "registers"  # the same four elements each, in another order
+    assert A.conversion(rows, pairs) == "shuffle"  # 32 participants: one warp
+    assert A.conversion(across, down) == "registers"  # the same four elements each, in another order
 
 
 def test_a_consumer_that_takes_a_pointer_and_a_leading_dimension():
-    assert L.affine(value("layout T = pad(rows(64, 32), 8);", "T")) == ("row", 40)
-    assert L.affine(value("layout T = cols(16, 16);", "T")) == ("col", 16)
-    assert L.affine(value("layout T = swizzle(rows(64, 32), 2, 3, 3);", "T")) is None
-    assert L.rows16(value("layout T = swizzle(rows(64, 32), 2, 3, 3);", "T"), 2)
-    assert not L.rows16(value("layout T = pad(rows(64, 32), 4);", "T"), 2)  # rows start 8 bytes apart
+    assert A.affine(value("layout T = pad(rows(64, 32), 8);", "T")) == ("row", 40)
+    assert A.affine(value("layout T = cols(16, 16);", "T")) == ("col", 16)
+    assert A.affine(value("layout T = swizzle(rows(64, 32), 2, 3, 3);", "T")) is None
+    assert A.rows16(value("layout T = swizzle(rows(64, 32), 2, 3, 3);", "T"), 2)
+    assert not A.rows16(value("layout T = pad(rows(64, 32), 4);", "T"), 2)  # rows start 8 bytes apart
 
 
 @pytest.mark.parametrize(
@@ -273,17 +274,17 @@ def run_ok(source: str) -> bool:
 
 
 def test_a_vector_plan_and_a_stage_plan_ask_the_layout_what_they_used_to_compute():
-    """chunks.py and staging.py take these answers from layouts.py; they are the arithmetic the plans always used,
+    """chunks.py and staging.py take these answers from layout_algebra.py; they are the arithmetic the plans always used,
     at every width, element size, radius and offset a plan admits, so no plan is accepted or refused anew."""
     for size in (1, 2, 4, 8):
         for width in (2, 4, 8, 16):
-            assert (L.moved(width, size) == width) == (width * size <= 16), (width, size)
-        assert L.moved(16, size) == 16 // size
+            assert (A.moved(width, size) == width) == (width * size <= 16), (width, size)
+        assert A.moved(16, size) == 16 // size
     for radius in (1, 2, 3, 8, 31, 32):
         for low in range(-34, 35, 3):
             for high in range(low, 35, 6):
                 offsets = {low, high, (low + high) // 2}
-                assert L.halo(offsets, radius) == (max(abs(d) for d in offsets) <= radius), (offsets, radius)
+                assert A.halo(offsets, radius) == (max(abs(d) for d in offsets) <= radius), (offsets, radius)
 
 
 def test_a_rule_that_runs_the_body_with_numbers_gets_the_layout_s_answer():
@@ -311,8 +312,8 @@ def test_a_transpose_through_a_tile_moves_every_element_between_warps():
     for tile in TILES.values():
         _, checker, _ = compile_program(transpose(tile))
         load, store = L.value(checker, "LOAD"), L.value(checker, "STORE")
-        assert L.shares(load, store) and L.conversion(load, store) == "shared"
-        assert L.conversion(load, load) == "none"
+        assert A.shares(load, store) and A.conversion(load, store) == "shared"
+        assert A.conversion(load, load) == "none"
 
 
 def test_the_inverse_of_a_spread_says_which_pair_holds_each_element():
@@ -330,7 +331,7 @@ layout IR = inverse(R);
         rows, cols = d.tile.shape
         for r in range(rows):
             for c in range(cols):
-                assert [inv.coords(r, c)] == L.owner(d, (r, c)), (spread, r, c)
+                assert [inv.coords(r, c)] == A.owner(d, (r, c)), (spread, r, c)
     r, ir = L.value(checker, "R"), L.value(checker, "IR")
     assert all(r.offset(ir.coords(o, 0)) == o for o in range(32))
 

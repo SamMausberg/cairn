@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from cairn.compiler import layout_algebra as A
 from cairn.compiler import layouts as L
 from cairn.compiler.cairnc import compile_program, compile_source
 from emitted import device_build, refused, run, sanitized
@@ -81,7 +82,7 @@ def test_the_holder_of_each_accumulator_element_is_the_spread_the_ptx_isa_states
     acc = L.value(checker, "ACC")
     for r in range(16):
         for c in range(8):
-            ((lane, value),) = L.owner(acc, (r, c))
+            ((lane, value),) = A.owner(acc, (r, c))
             g, t = lane // 4, lane % 4
             assert lane == (r % 8) * 4 + (c % 8) // 2
             assert (r, c) == (g + 8 * (value // 2), 2 * t + value % 2)  # the ISA's c0..c3 of lane (g, t)
