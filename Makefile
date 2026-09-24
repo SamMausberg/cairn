@@ -109,7 +109,8 @@ DEVICE_TESTS = tests/language/test_assembly.py tests/language/test_assert_eq.py 
   tests/projects/test_emulation.py::test_the_device_command_is_unchanged_when_emulation_is_off \
   tests/projects/test_export.py \
   tests/projects/test_foreign.py tests/projects/test_test_blocks.py \
-  tests/runtime/test_enqueue.py tests/runtime/test_execution.py tests/runtime/test_native_runtime.py \
+  tests/runtime/test_device_arithmetic.py tests/runtime/test_enqueue.py tests/runtime/test_execution.py \
+  tests/runtime/test_native_runtime.py \
   tests/soundness/test_cooperative.py tests/soundness/test_device_paths.py tests/soundness/test_fragments.py \
   tests/soundness/test_fusion.py tests/soundness/test_pipelines.py tests/soundness/test_plans.py \
   tests/soundness/test_scan.py tests/soundness/test_staging.py tests/soundness/test_tensor.py \
