@@ -135,6 +135,11 @@ def test_an_isolated_command_sees_its_own_tmp_and_sandbox_and_not_the_repository
     assert (scratch / "made").read_text() == "x\n" and (ROOT / "bench").exists()
 
 
+def test_only_the_plugin_arm_has_a_copy_of_the_plugin_to_remove():
+    places = {arm: harness.plugin_place(Path("/runs"), "counted", 2, "sieve", arm) for arm in subjects.LANGUAGE}
+    assert places == {"plugin": Path("/runs/plugins/counted/r2/sieve/plugin"), "cairn": None, "cpp": None, "rust": None}
+
+
 def test_the_audit_allows_the_subjects_own_plugin_and_flags_another_and_a_write_into_it(tmp_path):
     plugin = "/root/plugins/counted/r1/x/plugin"
     other = "/root/plugins/counted/r2/x/plugin"
