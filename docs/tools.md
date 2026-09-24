@@ -29,9 +29,11 @@ error[E-LEASED]: data is lent to left until wait(left).
   |
 5 |   data[0] = 7;
   |   ^^^^
+  = help: touch it after the wait, or lend each task a part the other does not touch.
+  = note: the tasks card states this rule: cairn rules E-LEASED
 ```
 
-A misspelled name gets the nearest name in scope (`= help: did you mean total?`), and a program stopped by a failed guard is reported as stopped by `SIGABRT`.
+Every refusal names the rule card that owns its code, and [`cairn rules`](#cairn-rules) prints that card. Where the compiler can state the smallest fix without guessing, the refusal carries it as `= help`: a close name for a misspelled one (`did you mean total?`), the conversion between two numeric types, or the change a rule asks for. A code whose message already says the fix gets none, so nothing is said twice. The JSON record keeps every field it had and adds the two as `card` and `repair_hint`, from `check`, `build`, `run`, `test`, `validate` and every other command. A program stopped by a failed guard is reported as stopped by `SIGABRT`.
 
 ## Every refusal in one check
 
@@ -535,7 +537,7 @@ cairn lsp      # speaks JSON-RPC with Content-Length framing on stdin/stdout
 
 | Request | What it answers |
 | --- | --- |
-| diagnostics | every refusal of the check, each with its repair hint on its exact token range |
+| diagnostics | every refusal of the check, each with its repair hint on its exact token range and its rule card as `codeDescription` |
 | hover | the type of the smallest checked expression, the expected type, and a function's signature, effect row and comment |
 | documentSymbol, workspace/symbol | the declarations of a document, or of the open projects |
 | definition | the name's declaration, in the project or the packaged `std` |
@@ -572,7 +574,7 @@ cairn mcp      # speaks the Model Context Protocol: one JSON-RPC 2.0 message per
 
 | Tool | What it calls |
 |---|---|
-| `check` | `cairn check`: `typed`, or every refusal, each with its code, file, line and repair hint |
+| `check` | `cairn check`: `typed`, or every refusal, each with its code, file, line, card and repair hint |
 | `edit_open`, `edit_request` | a [guarded edit session](agents.md#packets) and its `cairn.edit/2` requests |
 | `plan_open`, `plan_reply` | a [plan session](agents.md#plan-edits) and its `cairn.plan/1` replies |
 | `implementation_open`, `implementation_submit` | an [implementation session](agents.md#implementation-sessions) and its submissions |

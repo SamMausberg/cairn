@@ -25,7 +25,7 @@ Each code the compiler, the hosts and `cairn` can name, with the card that state
 | `E-CAST` | [integers](SKILL.md#core-rules) |  |
 | `E-CLOSURE` | [closures](cards/closures.md) |  |
 | `E-COLLECT-BINDING` | [compact](cards/compact.md) |  |
-| `E-COLLECT-CAPACITY` | [compact](cards/compact.md) | The collector's extent must be exactly the output's capacity. |
+| `E-COLLECT-CAPACITY` | [compact](cards/compact.md) |  |
 | `E-COLLECT-SELF-READ` | [compact](cards/compact.md) |  |
 | `E-CONST` | [integers](SKILL.md#core-rules) |  |
 | `E-CONTEXT-CLOSURE` | [hosts](cards/hosts.md) |  |
@@ -93,7 +93,7 @@ Each code the compiler, the hosts and `cairn` can name, with the card that state
 | `E-IMPL-USE` | [implementations](cards/implementations.md) |  |
 | `E-IMPL-WHEN` | [implementations](cards/implementations.md) | Test only value parameters, with operations that cannot trap, such as n % 4 == 0 or n >= 64. |
 | `E-IMPLEMENTS` | [implementations](cards/implementations.md) |  |
-| `E-IMPORT` | [modules](cards/modules.md) | Only the project's modules and std.* can be imported. |
+| `E-IMPORT` | [modules](cards/modules.md) |  |
 | `E-INDEX` | [views](cards/views.md) |  |
 | `E-INFER` | [generics](cards/generics.md) |  |
 | `E-INTERNAL` | [limits](cards/limits.md) |  |
@@ -110,10 +110,10 @@ Each code the compiler, the hosts and `cairn` can name, with the card that state
 | `E-LINEAR-LEAK` | [owners](cards/owners.md) | Pass it to the function that consumes it, or defer that call, on every path. |
 | `E-LINEAR-STORAGE` | [owners](cards/owners.md) |  |
 | `E-LITERAL-RANGE` | [integers](SKILL.md#core-rules) |  |
-| `E-LOOP-CONTROL` | [base](SKILL.md#core-rules) | break and continue need an enclosing for or while loop. |
+| `E-LOOP-CONTROL` | [base](SKILL.md#core-rules) |  |
 | `E-LVALUE` | [base](SKILL.md#core-rules) |  |
 | `E-MANGLE` | [modules](cards/modules.md) |  |
-| `E-MATCH-BINDING` | [sums](cards/sums.md) | Bind one fresh immutable value only in an arm whose variant declares a payload. |
+| `E-MATCH-BINDING` | [sums](cards/sums.md) |  |
 | `E-MATCH-COVERAGE` | [sums](cards/sums.md) |  |
 | `E-MATCH-DUPLICATE` | [sums](cards/sums.md) |  |
 | `E-MATCH-TYPE` | [sums](cards/sums.md) |  |
@@ -163,7 +163,7 @@ Each code the compiler, the hosts and `cairn` can name, with the card that state
 | `E-SCAN-ORDER` | [scan](cards/scan.md) |  |
 | `E-SCAN-TARGET` | [scan](cards/scan.md) |  |
 | `E-SESSION` | [hosts](cards/hosts.md) | Refresh the packet from the host; never guess a digest or a handle. |
-| `E-SHADOW` | [base](SKILL.md#core-rules) | Choose a fresh descriptive name; nothing may shadow another name. |
+| `E-SHADOW` | [base](SKILL.md#core-rules) | Choose a fresh descriptive name. |
 | `E-SIGNATURE` | [hosts](cards/hosts.md) | Keep the parameters, return type and ceiling exactly as written; change only the body. |
 | `E-SITE` | [hosts](cards/hosts.md) |  |
 | `E-SKETCH-BUDGET` | [sketches](cards/sketches.md) |  |
@@ -198,7 +198,7 @@ Each code the compiler, the hosts and `cairn` can name, with the card that state
 | `E-TRY` | [sums](cards/sums.md) |  |
 | `E-TYPE` | [base](SKILL.md#core-rules) |  |
 | `E-TYPE-MISMATCH` | [base](SKILL.md#core-rules) | Use the expected type; an explicit conversion may trap. Do not change a signature to hide it. |
-| `E-UNBOUND` | [base](SKILL.md#core-rules) | Use a name from available_names, or declare it before this use. |
+| `E-UNBOUND` | [base](SKILL.md#core-rules) | Declare it before this use, or use a name in scope. |
 | `E-UNINSTANTIATED` | [generators](cards/generators.md) |  |
 | `E-UNPACK` | [owners](cards/owners.md) |  |
 | `E-UNREACHABLE` | [base](SKILL.md#core-rules) |  |
@@ -207,6 +207,6 @@ Each code the compiler, the hosts and `cairn` can name, with the card that state
 | `E-VARIANT-AMBIGUOUS` | [sums](cards/sums.md) |  |
 | `E-VIEW-ALIAS` | [views](cards/views.md) |  |
 | `E-WRAP-TYPE` | [integers](SKILL.md#core-rules) |  |
-| `E-WRITE-LEASE` | [views](cards/views.md) | This place is not writable here. Do not turn ro into rw: the host owns that contract. |
+| `E-WRITE-LEASE` | [views](cards/views.md) | Write through an rw borrow or a let mut local; never turn ro into rw to get past this. |
 
 Codes are stable across releases.

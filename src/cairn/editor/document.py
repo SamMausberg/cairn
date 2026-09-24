@@ -14,6 +14,7 @@ import re
 from typing import Any
 
 from ..agent.agent_tools import explain
+from ..agent.skill import card_link
 from ..compiler.cairnc import Diagnostic, compile_program
 from ..compiler.modules import library_path
 from ..compiler.syntax import IDENT, RESERVED, Program
@@ -133,7 +134,7 @@ class Document:
         """One refusal as an LSP diagnostic, beside its record for code actions. A refusal in another file of the
         project, or in a library module, is said at the top of this one with where it is, or with `anywhere` false
         not at all."""
-        d = explain(error, self.within[0] if self.within else self.text)
+        d = explain(error, self.within[0] if self.within else self.text, host=False)
         line, column = int(d.get("line") or 0), int(d.get("column") or 0)
         if not anywhere and d.get("module"):
             return None
@@ -153,9 +154,11 @@ class Document:
         if line > 0:
             start = min(self.starts[min(line, len(self.starts)) - 1] + max(column - 1, 0), len(self.text))
             end = next((t.end for t in self.code if t.start == start), start)
-        hint = d.get("repair_hint")
+        hint, card = d.get("repair_hint"), d.get("card")
         shown = problem(self.span(start, end), d["code"], d["message"] + ("\n" + hint if hint else ""))
-        return {**shown, "data": {k: d[k] for k in ("code", "repair_hint", "source_line") if k in d}}, d
+        if card:  # the card that states the rule, read where the skill keeps it
+            shown["codeDescription"] = {"href": card_link(card)}
+        return {**shown, "data": {k: d[k] for k in ("code", "repair_hint", "card", "source_line") if k in d}}, d
 
 
 _LAST: list[Any] = []  # the one source analysed last, and its answer: the open files of a project share it

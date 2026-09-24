@@ -6,9 +6,7 @@ gets this rendering unless `--format json` or `CAIRN_FORMAT=json` asks for the r
 
 from __future__ import annotations
 
-import difflib
 import os
-import re
 import signal
 import sys
 from collections.abc import Callable
@@ -18,7 +16,7 @@ from ..compiler.lexing import TOKEN
 
 SHOWN = {"protocol", "status", "code", "message", "line", "column", "trust", "file", "module"}  # in the header
 TALLIED = {"further", "further_omitted", "not_judged"}  # said once, after every refusal of a check (`tally`)
-CHOICES = ("available_names", "available_variants")  # a misspelling is answered with the nearest of these
+TAUGHT = {"repair_hint", "card", "source_line", "available_names", "available_variants", "available_fields"}  # below
 
 
 def human(choice: str | None, stream: TextIO | None = None) -> bool:
@@ -37,7 +35,8 @@ def paint(stream: TextIO):
 
 
 def diagnostic(data: dict, source: str, stream: TextIO | None = None) -> None:
-    """`error[E-CODE]: message`, the file position, and the line with the offending token underlined."""
+    """`error[E-CODE]: message`, the file position, the line with the offending token underlined, then what else the
+    record says, the fix as `= help` and the card that states the rule."""
     stream = stream or sys.stderr
     s = paint(stream)
     word = "unknown" if data.get("status") == "unknown" else "error"
@@ -54,18 +53,16 @@ def diagnostic(data: dict, source: str, stream: TextIO | None = None) -> None:
         print(s(f"{line} |", "1;34") + f" {text}", file=stream)
         print(s(f"{gutter} |", "1;34") + " " + s(mark, "1;31"), file=stream)
     for key, value in data.items():
-        if key in SHOWN or key in TALLIED or key == "source_line" or value in (None, "", []):
-            continue
-        if key in CHOICES and isinstance(value, list):
-            asked = re.findall(r"[A-Za-z_][A-Za-z_0-9]*", data.get("message", ""))
-            near = [m for a in asked for m in difflib.get_close_matches(a, [str(v) for v in value], 1)]
-            if near:
-                print(f"  {s('= help', '1;36')}: did you mean {near[0]}?", file=stream)
+        if key in SHOWN or key in TALLIED or key in TAUGHT or value in (None, "", []):
             continue
         shown = ", ".join(map(str, value)) if isinstance(value, list) else str(value)
         if shown in data.get("message", ""):  # the message already says it
             continue
         print(f"  {s('= note', '1;36')}: {key.replace('_', ' ')}: {shown}", file=stream)
+    if hint := data.get("repair_hint"):  # a close name among the available ones, or the smallest fix
+        print(f"  {s('= help', '1;36')}: {hint[:1].lower()}{hint[1:]}", file=stream)
+    if card := data.get("card"):
+        print(f"  {s('= note', '1;36')}: the {card} card states this rule: cairn rules {data['code']}", file=stream)
 
 
 def refusals(located: dict, raw: dict, source: Callable[[dict], str], stream: TextIO | None = None) -> None:

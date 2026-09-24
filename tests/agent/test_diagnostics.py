@@ -5,7 +5,7 @@ import json
 import pytest
 
 from cairn.agent.agent_tools import HANDLES, EditHost
-from cairn.agent.diagnostics import HINTS, fix
+from cairn.agent.diagnostics import HINTS, fix, taught
 
 S = (
     "fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {\n  let mut sum:u32 = 0;\n"
@@ -70,4 +70,26 @@ def test_a_code_whose_message_says_the_repair_carries_no_second_one():
     reply = refusal("{ let s:u32 = checksum(bytes) + checksum(bytes); let s:u32 = 1; return s; }")
     assert reply["code"] == "E-SHADOW" and reply["repair_hint"] == HINTS["E-SHADOW"]
     assert fix({"code": "E-EFFECT-ORDER", "message": "Bind a writing call to its own statement."}) is None
+    assert fix({"code": "E-LOOP-CONTROL", "message": "break requires an enclosing loop."}) is None
+    assert (
+        fix({"code": "E-IMPORT", "message": "Unknown module q; only project modules and std.* can be imported."})
+        is None
+    )
     assert fix({"code": "E-UNBOUND", "message": "Unbound name q.", "available_names": ["bytes"]}) == HINTS["E-UNBOUND"]
+
+
+def test_a_host_refusal_names_the_card_that_states_its_rule():
+    assert refusal("{ return checksum(bytez); }")["card"] == "base"
+    assert refusal("{ return hidden(1); }")["card"] == "hosts"
+    assert refusal("{ stack pad:u8[4] = zeroed; return checksum(pad); }")["card"] == "hosts"
+
+
+def test_outside_a_host_a_fix_never_speaks_of_one():
+    callee = {"code": "E-CALLEE", "message": "Unknown callable checksun; arbitrary C++ names are not allowed."}
+    assert taught(callee, ("checksum",)) == {**callee, "card": "calls", "repair_hint": "Did you mean checksum?"}
+    assert "repair_hint" not in taught({"code": "E-SESSION", "message": "Unknown handle."})
+    assert taught({"code": "E-SESSION", "message": "Unknown handle."}, host=True)["repair_hint"] == HINTS["E-SESSION"]
+    assert taught({"code": "E-MINE", "message": "A recipe chose this code."}) == {
+        "code": "E-MINE",
+        "message": "A recipe chose this code.",
+    }

@@ -203,7 +203,8 @@ def test_a_whole_session(client):
     assert reported[0]["code"] == "E-UNBOUND"
     assert reported[0]["range"] == {"start": {"line": 1, "character": 10}, "end": {"line": 1, "character": 22}}
     assert "missing_name" in reported[0]["message"]
-    assert reported[0]["data"]["repair_hint"]
+    assert reported[0]["data"]["repair_hint"] and reported[0]["data"]["card"] == "base"
+    assert reported[0]["codeDescription"]["href"].endswith("skills/cairn/SKILL.md#core-rules")  # the card, no recompile
 
     assert client.change(FIXED) == []
 

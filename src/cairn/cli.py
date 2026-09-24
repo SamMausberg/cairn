@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from . import __version__
+from .agent.diagnostics import declared, taught
 from .commands import parser
 from .compiler.cairnc import Diagnostic, certify_templates, compile_source
 from .compiler.modules import library_source
@@ -199,10 +200,11 @@ def main(argv: list[str] | None = None) -> int:
                               replays=a.replays, predict=not a.no_predict)  # fmt: skip
             except Diagnostic as error:  # placed in the version that is refused
                 refused = older if error.data.get("side") == "old" else newer
+                located = taught(refused.locate(error))
                 if terminal.human(FORMAT):
-                    terminal.diagnostic({**refused.locate(error), "source_line": error.data["line"]}, refused.source)
+                    terminal.diagnostic({**located, "source_line": error.data["line"]}, refused.source)
                 else:
-                    report(refused.locate(error))
+                    report(located)
                 return 1
             record["old"], record["new"] = (
                 {"named": v.named, "kind": v.kind, "commit": v.commit} for v in (older, newer)
@@ -316,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
                 m = Migration(a.path, a.symbol, a.to, dict(x.split("=", 1) for x in a.also), tuple(a.allow))
                 report(m.apply(read_text(a.reply, 16_000_000)) if a.reply else m.packet())
             except Diagnostic as error:
-                report(error.data)
+                report(taught(error.data, host=True))
                 return 1
             return 0
         if a.command == "foreign":  # a device implementation is built and inspected here, and never run
@@ -498,8 +500,10 @@ def main(argv: list[str] | None = None) -> int:
                 "memory_limit_mib": None if machine else a.memory_mib, "emulator": machine,
                 **emulated})  # fmt: skip
         return 0 if cp.returncode == 0 else 1
-    except Diagnostic as error:
-        located = project.locate(error) if project else error.data
+    except Diagnostic as error:  # the refusal with its card and the fix the compiler can state, where it can
+        codes = {d.get("code") for d in (error.data, *error.data.get("further", []))}
+        known = declared(project.source) if project and "E-CALLEE" in codes else ()
+        located = taught(project.locate(error) if project else error.data, known)
         if terminal.human(FORMAT):
             own = project.source if project else ""
             terminal.refusals(located, error.data, lambda d: written(d, own))
@@ -507,7 +511,7 @@ def main(argv: list[str] | None = None) -> int:
             report(located)
         return 1
     except (OSError, ValueError, RecursionError, subprocess.SubprocessError) as error:
-        unknown = {"status": "unknown", "code": "E-PROJECT-OR-ENVIRONMENT", "message": str(error)}
+        unknown = taught({"status": "unknown", "code": "E-PROJECT-OR-ENVIRONMENT", "message": str(error)})
         if terminal.human(FORMAT):
             terminal.diagnostic(unknown, "")
         else:

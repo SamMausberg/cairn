@@ -115,7 +115,8 @@ def test_one_refusal_alone_reads_as_it_always_has(tmp_path, capsys):
     source.write_text("fn f() -> bool = 1;\n")
     assert main(["check", str(source), "--format", "json"]) == 1
     assert set(json.loads(capsys.readouterr().out)) == {"protocol", "status", "code", "message", "line", "column",
-                                                        "trust", "expected_type", "actual_type", "file"}  # fmt: skip
+                                                        "trust", "expected_type", "actual_type", "file", "card",
+                                                        "repair_hint"}  # fmt: skip
     assert main(["check", str(source), "--format", "human"]) == 1
     assert not capsys.readouterr().err.splitlines()[-1].startswith("error: ")
 

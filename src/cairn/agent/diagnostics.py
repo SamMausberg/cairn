@@ -1,9 +1,11 @@
-"""What a model reads back when the compiler or the host refuses a reply.
+"""What a model or a person reads back when the compiler, a host or `cairn` refuses.
 
-A refusal carries the compiler's diagnostic, where it sits in the reply the model wrote, and the smallest fix
-the host can state without guessing: a close name for an unknown one, the construct behind an effect the
-ceiling does not allow, the request that discloses a callee. A code whose message already says how to repair
-it carries no hint, so nothing is said twice.
+Every refusal record names the rule card that owns its code (`teaching.card_of`) and carries the smallest fix the
+compiler can state without guessing: a close name for an unknown one, the construct behind an effect the ceiling
+does not allow, the request that discloses a callee, the conversion between two types. `taught` adds both to one
+record, wherever it is printed. A code whose message already says how to repair it carries no hint, so nothing is
+said twice, and a fix that speaks of a host's contract is given only inside a host. A host's refusal also says where
+it sits in the reply the model wrote (`located`).
 """
 
 from __future__ import annotations
@@ -12,16 +14,14 @@ import difflib
 from typing import Any
 
 from ..compiler.builtins import TABLE as BUILTINS
-from ..compiler.cairnc import Diagnostic
+from ..compiler.cairnc import Diagnostic, Parser
+from .teaching import TOOL_CARDS, card_of
 
 HINTS = {
-    "E-MATCH-BINDING": "Bind one fresh immutable value only in an arm whose variant declares a payload.",
-    "E-LOOP-CONTROL": "break and continue need an enclosing for or while loop.",
     "E-TYPE-MISMATCH": "Use the expected type; an explicit conversion may trap. Do not change a signature to hide it.",
     "E-IMMUTABLE": "Parameters and let bindings are immutable: copy it into a let mut local and change that.",
-    "E-WRITE-LEASE": "This place is not writable here. Do not turn ro into rw: the host owns that contract.",
-    "E-SHADOW": "Choose a fresh descriptive name; nothing may shadow another name.",
-    "E-COLLECT-CAPACITY": "The collector's extent must be exactly the output's capacity.",
+    "E-WRITE-LEASE": "Write through an rw borrow or a let mut local; never turn ro into rw to get past this.",
+    "E-SHADOW": "Choose a fresh descriptive name.",
     "E-RETURN": "End every path with a return; there is no implicit tail return.",
     "E-PARSE": "Use braces, semicolons and CAIRN's grammar, not Rust's or Python's.",
     "E-SESSION": "Refresh the packet from the host; never guess a digest or a handle.",
@@ -41,8 +41,7 @@ HINTS = {
     "E-LINEAR-LEAK": "Pass it to the function that consumes it, or defer that call, on every path.",
     "E-SIGNATURE": "Keep the parameters, return type and ceiling exactly as written; change only the body.",
     "E-DECLARATION": "Write only the one function's body; add or remove no declaration.",
-    "E-IMPORT": "Only the project's modules and std.* can be imported.",
-    "E-UNBOUND": "Use a name from available_names, or declare it before this use.",
+    "E-UNBOUND": "Declare it before this use, or use a name in scope.",
     "E-STACK-LIMIT": "Declare less stack storage, or a buffer if the ceiling allows alloc. Do not hide the cost.",
     "E-REFERENCE": "The reference is pinned: write a new function that implements it.",
     "E-TOLERANCE": "The tolerance is the host's: bring the implementation's result closer to the reference's.",
@@ -90,9 +89,12 @@ def close(name: str, names: Any) -> list[str]:
     return difflib.get_close_matches(name, sorted(set(names)), n=2, cutoff=0.6)
 
 
-def fix(d: dict[str, Any], known: tuple[str, ...] = ()) -> str | None:
-    """The deterministic hint for one diagnostic's data: computed where its data allows, else the static one."""
+def fix(d: dict[str, Any], known: tuple[str, ...] = (), host: bool = True) -> str | None:
+    """The deterministic hint for one diagnostic's data: computed where its data allows, else the static one. Outside
+    a host (`host` false) nothing is said about a host's contract or its expand request."""
     code = d.get("code")
+    if not host and card_of(code) in TOOL_CARDS:
+        return None
     if code == "E-UNBOUND" and (near := close(d["message"].removeprefix("Unbound name ").rstrip("."),
                                               d.get("available_names", ()))):  # fmt: skip
         return f"Did you mean {' or '.join(near)}?"
@@ -105,7 +107,8 @@ def fix(d: dict[str, Any], known: tuple[str, ...] = ()) -> str | None:
     if code == "E-CALLEE" and d["message"].startswith("Unknown callable "):
         name = d["message"].removeprefix("Unknown callable ").split(";")[0]
         near = close(name, [*known, *BUILTINS])
-        return (f"Did you mean {' or '.join(near)}? " if near else "") + "Expand a function before calling it."
+        said = f"Did you mean {' or '.join(near)}?" if near else ""
+        return (said + " Expand a function before calling it.").strip() if host else said or None
     if code in {"E-EFFECT-EXPANSION", "E-CALLER-EFFECT"} and d.get("added_effects"):
         brought = "; ".join(f"{e}: {cause(e)}" for e in d["added_effects"])
         return f"Remove what brings {brought}. The ceiling is the host's."
@@ -144,11 +147,33 @@ def observed(outcome: dict[str, Any]) -> str:
     return " and ".join(said) or "returns"
 
 
-def explain(error: Diagnostic, source: str = "", known: tuple[str, ...] = ()) -> dict[str, Any]:
-    """A diagnostic as a model reads it: the refusal, the line it names and the fix, if the host can state one."""
-    d = dict(error.data)
-    if hint := fix(d, known):
-        d["repair_hint"] = hint
+def taught(d: dict[str, Any], known: tuple[str, ...] = (), host: bool = False) -> dict[str, Any]:
+    """One refusal record with the card that owns its code and, where the compiler can state one without guessing,
+    the smallest fix, and so each refusal under `further`. Every field it had keeps its meaning; `known` are names a
+    close one may be taken from."""
+    said = dict(d)
+    if card := card_of(d.get("code")):
+        said["card"] = card
+    if hint := fix(d, known, host):
+        said["repair_hint"] = hint
+    if isinstance(d.get("further"), list):
+        said["further"] = [taught(f, known, host) for f in d["further"]]
+    return said
+
+
+def declared(source: str) -> tuple[str, ...]:
+    """The functions `source` declares, by full and local name, for a close name to come from; none if it does not
+    parse."""
+    try:
+        functions = Parser(source).parse().functions
+    except Diagnostic:
+        return ()
+    return tuple(sorted({n for f in functions for n in (f.name, f.name.rsplit(".", 1)[-1])}))
+
+
+def explain(error: Diagnostic, source: str = "", known: tuple[str, ...] = (), host: bool = True) -> dict[str, Any]:
+    """A diagnostic as a model reads it: the refusal, the line it names, its card and the fix, if one can be stated."""
+    d = taught(error.data, known, host)
     d["automatic_edit"] = False
     line = d.get("line", 0)
     if "source_line" not in d and 1 <= line <= len(source.splitlines()):

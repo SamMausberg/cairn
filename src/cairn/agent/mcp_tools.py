@@ -21,7 +21,7 @@ from typing import Any
 from ..compiler.cairnc import Diagnostic, Parser, compile_source, fail
 from ..projects.project import ProjectError
 from .agent_tools import EditHost, load_json_strict
-from .diagnostics import explain
+from .diagnostics import declared, explain
 from .implementations import ImplementationHost
 from .plans import PlanHost
 from .projection import local
@@ -150,7 +150,7 @@ class Tools:
         try:
             receipt = compile_source(source, every=True)[1]
         except Diagnostic as error:
-            return refusal(error, source, files), True
+            return refusal(error, source, files, host=False), True
         library = sum(1 for n in receipt["functions"] if n.startswith("std."))
         return {"status": "typed", "functions": receipt["function_count"], "library_functions": library,
                 "formal_status": "not-verified"}, False  # fmt: skip
@@ -315,12 +315,14 @@ def document(a: dict[str, Any], key: str) -> dict[str, Any]:
     return value
 
 
-def refusal(error: Diagnostic, source: str, files: Files | None) -> dict[str, Any]:
-    """A refused program as the command line reports it: the diagnostic with its fix, at its file and line, and so
-    each further refusal a check found."""
+def refusal(error: Diagnostic, source: str, files: Files | None, host: bool = True) -> dict[str, Any]:
+    """A refused program as the command line reports it: the diagnostic with its card and fix, at its file and line, and
+    so each further refusal a check found; `host` false for `check`, where no host's contract applies."""
     located = files.project.locate(error) if files else error.data
-    record = {**explain(error, source), **located}
-    if further := error.data.get("further"):
-        record["further"] = [{**explain(Diagnostic.of(d), source), **placed}
+    further = error.data.get("further") or []
+    known = declared(source) if not host and "E-CALLEE" in {d.get("code") for d in (error.data, *further)} else ()
+    record = {**explain(error, source, known, host), **located}
+    if further:
+        record["further"] = [{**explain(Diagnostic.of(d), source, known, host), **placed}
                              for d, placed in zip(further, located["further"], strict=True)]  # fmt: skip
     return record

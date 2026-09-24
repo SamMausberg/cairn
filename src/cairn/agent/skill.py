@@ -81,6 +81,13 @@ AVOID = """\
 - Guessing a fix: each diagnostic code has one rule behind it, and its card says what that rule accepts."""
 
 
+def card_link(name: str) -> str:
+    """Where a person or an editor reads a card: its page in this checkout's skill, else in the repository's."""
+    page, anchor = ("SKILL.md", "#core-rules") if name in CORE else (f"cards/{name}.md", "")
+    here = OUT / page
+    return (here.as_uri() if here.is_file() else f"{REPOSITORY}/blob/main/skills/cairn/{page}") + anchor
+
+
 def commands() -> list[tuple[str, str]]:
     from ..commands import parser
 
