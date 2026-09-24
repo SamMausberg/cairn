@@ -35,8 +35,8 @@ PROGRAMS = {  # a refusal from each part of the language: (program, code, card, 
 def test_a_refusal_names_its_card_and_its_fix_as_json(tmp_path, capsys, part):
     source, code, card, hint = PROGRAMS[part]
     (tmp_path / "p.cairn").write_text(source)
-    for command in ("check", "build"):
-        assert main([command, str(tmp_path / "p.cairn"), "--format", "json"]) == 1
+    for command in (["check"], ["build"], ["validate", "--symbol", "g"]):
+        assert main([*command, str(tmp_path / "p.cairn"), "--format", "json"]) == 1
         record = json.loads(capsys.readouterr().out)
         assert (record["code"], record["card"], record.get("repair_hint")) == (code, card, hint), command
         assert record["protocol"] == "cairn.diagnostic/2" and record["file"] == "p.cairn" and record["line"] > 0
