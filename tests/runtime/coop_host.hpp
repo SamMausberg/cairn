@@ -9,12 +9,14 @@
 
 namespace cr::coop {
 using Device = Host;
-template<unsigned THREADS, std::size_t BYTES, class F>
+template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO = BYTES, class F>
 inline void launch(gpu::Context& ctx, std::size_t grid, F body) noexcept {
-  reuse::synchronous(ctx, [&](typename gpu::Machine::Stream) { run<THREADS, BYTES>(grid, body); });
+  reuse::synchronous(ctx, [&](typename gpu::Machine::Stream) { run<THREADS, BYTES, ZERO>(grid, body); });
 }
-template<unsigned THREADS, std::size_t BYTES, class F, class G>
+template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO = BYTES, std::size_t FINISH = BYTES, class F, class G>
 inline void launch_then(gpu::Context& ctx, std::size_t grid, F body, G finish) noexcept {
-  reuse::synchronous(ctx, [&](typename gpu::Machine::Stream) { run_then<THREADS, BYTES>(grid, body, finish); });
+  reuse::synchronous(ctx, [&](typename gpu::Machine::Stream) {
+    run_then<THREADS, BYTES, ZERO, FINISH>(grid, body, finish);
+  });
 }
 }  // namespace cr::coop

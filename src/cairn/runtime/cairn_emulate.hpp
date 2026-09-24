@@ -136,14 +136,15 @@ namespace cr::coop {
 // A device region's body takes the host's block context: each block's threads are host threads at a std::barrier,
 // two blocks at a time, on the calling thread's synchronous lane, as the device launch runs on its stream.
 using Device = Host;
-template<unsigned THREADS, std::size_t BYTES, class F> inline void launch(gpu::Context& ctx, std::size_t grid, F body) noexcept {
+template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO = BYTES, class F>
+inline void launch(gpu::Context& ctx, std::size_t grid, F body) noexcept {
   static_assert(BYTES <= 48 * 1024, "static shared memory holds 48 KiB");
-  reuse::synchronous(ctx, [&](gpu::Machine::Stream) { run<THREADS, BYTES>(grid, body); });
+  reuse::synchronous(ctx, [&](gpu::Machine::Stream) { run<THREADS, BYTES, ZERO>(grid, body); });
 }
-template<unsigned THREADS, std::size_t BYTES, class F, class G>
+template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO = BYTES, std::size_t FINISH = BYTES, class F, class G>
 inline void launch_then(gpu::Context& ctx, std::size_t grid, F body, G finish) noexcept {
   static_assert(BYTES <= 48 * 1024, "static shared memory holds 48 KiB");
-  reuse::synchronous(ctx, [&](gpu::Machine::Stream) { run_then<THREADS, BYTES>(grid, body, finish); });
+  reuse::synchronous(ctx, [&](gpu::Machine::Stream) { run_then<THREADS, BYTES, ZERO, FINISH>(grid, body, finish); });
 }
 }  // namespace cr::coop
 
