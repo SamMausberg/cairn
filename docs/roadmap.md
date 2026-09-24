@@ -1,6 +1,6 @@
 # Remaining gates
 
-Each gate below is open. A gate closes when its tests, its documentation and its evidence exist. [project/capabilities.json](project/capabilities.json) holds the same list as data, and the reference files say what already works.
+Each gate below is open. A gate closes when its tests, its documentation and its evidence exist. [project/capabilities.json](project/capabilities.json) holds the same list as data, the reference files say what already works, and [verification.md](verification.md#what-each-feature-has-shown) says what each feature has shown: compiled, run on a CPU or a GPU, sanitizer-tested, measured.
 
 ## Language
 

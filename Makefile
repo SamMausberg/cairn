@@ -20,7 +20,7 @@ help:
 	@echo 'embedded  the freestanding image under QEMU (needs an AArch64 host)'
 	@echo 'bench     the preregistered CPU baseline suite (hours)'
 	@echo 'scale     check, build, rebuild and editor times of generated projects of 10k to 77k lines (an hour)'
-	@echo 'docs      regenerate docs/std_api.md and docs/std/'
+	@echo 'docs      regenerate docs/std_api.md, docs/std/ and the capability matrix in docs/verification.md'
 	@echo 'editors   regenerate the TextMate and Vim grammars and the agent skill from the compiler'
 	@echo 'context   measure edit packets, cards and refusals in tokens, on scripted transcripts'
 	@echo 'wheel     build the package offline into dist/'
@@ -102,6 +102,7 @@ embedded:
 
 docs:
 	$(CAIRN) doc --std --pages docs --format json > /dev/null
+	$(PYTHON) tools/release/capability_matrix.py
 
 editors:
 	PYTHONPATH=src $(PYTHON) -m cairn.editor.grammar
