@@ -8,6 +8,7 @@ emitted C++ reads it and fails, so the oracle bites. The device lowering zeroes 
 device program runs emulated on host threads. Nothing runs on a GPU.
 """
 
+import re
 import shutil
 
 import pytest
@@ -149,7 +150,8 @@ def test_the_device_kernel_zeroes_nothing_where_its_arrays_are_unzeroed(tmp_path
     zeroed = compile_source(kernel.replace("[256];", "[256] = zeroed;").replace("[1];", "[1] = zeroed;"))[0]
     assert "cr::coop::launch<256, 2176>" in zeroed
     zeroed_ptx = device_build(tmp_path / "zeroed", zeroed, ptx=True).read_text()
-    assert "st.shared.b8" in zeroed_ptx and "st.shared.b8" not in unzeroed
+    byte = re.compile(r"st\.shared\.[bu]8\b")  # a byte store: CUDA 13 writes it .b8, CUDA 12.9 .u8
+    assert byte.search(zeroed_ptx) and not byte.search(unzeroed)
 
 
 def test_the_row_loses_zero_init_and_the_receipt_says_how_each_array_starts():
