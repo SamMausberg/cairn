@@ -48,10 +48,11 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/region_lowering.py` | the lowering of `parallel`, `reduce`, `scan` and `compact` on host or device lanes, and of a fused chain as one region |
 | `compiler/execution.py` | which runtime operation each piece of device work lowers to, on the calling thread's execution context |
 | `compiler/header.py` | the C header of a library build: its declarations, the layouts it states, what cannot cross |
-| `runtime/*.hpp` | guards, owners, threads, rings, storage floats, the tensor-core multiply, device calls, execution contexts |
+| `runtime/*.hpp` | guards, owners, threads, rings, storage floats, the tensor-core multiply, device calls, execution contexts, the emulated device machine |
 | `projects/project.py` | manifests, vendored dependencies, the line-to-file map |
 | `projects/toolchain.py` | every native flag, and the closed table of system libraries |
 | `projects/target.py` | the device target: its spelling, how it is resolved, the features and limits it has, and the results it refuses |
+| `projects/emulation.py` | a device program built for the host (`--emulate`): what the host cannot run as the device would, and what its records say |
 | `projects/export.py` | an export: the program a build compiles and the record pinning it, and the builds, runs, tests and comparisons that take it |
 | `projects/foreign.py` | vendored C++ and CUDA a manifest's `[foreign]` names: built by the project's command line, held to each extern's types, inspected |
 | `projects/revision.py` | a program as a path or a git revision holds it |

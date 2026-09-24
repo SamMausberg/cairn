@@ -239,6 +239,9 @@ def main(argv: list[str] | None = None) -> int:
         ):
             from .projects import export
 
+            if getattr(a, "emulate", False):
+                raise ProjectError("An export builds as its record pins it; --emulate builds a project, not an export.")
+
             exported, exit_status = export.command(a)
             report(exported)
             return exit_status
@@ -398,7 +401,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(feedback.lines_for_people(answer)) if terminal.human(FORMAT) else report(answer)
                 return 0
             answer = tune(project.source, a.symbol[0], priced.parse_sizes(a.at), supplied, arch, a.measure, a.cxx,
-                          a.device, device, budget, kept, vendored(project))  # fmt: skip
+                          a.device, device, budget, kept, vendored(project), a.accept_emulated)  # fmt: skip
             if a.write:  # Only the plan line changes, in the file that declares the function, and only if it checks.
                 use = answer["chosen"].get("use") if "implementations" in answer else KEEP  # the reference: none
                 answer["written"] = write_plan(a.path, a.symbol[0], answer["chosen"], use)
@@ -413,7 +416,8 @@ def main(argv: list[str] | None = None) -> int:
             from .verify.validation import validate_project
 
             given = load_json_strict(read_text(a.policy, 200_000)) if a.policy else None
-            record = validate_project(project, a.symbol, given, a.cxx, a.regressions, a.history)
+            device = resolve_device(a.device_target, project.device_target) if a.emulate else None
+            record = validate_project(project, a.symbol, given, a.cxx, a.regressions, a.history, device)
             report(record, brief=True)
             return 0 if record["status"] == "passed" else 1 if record["status"] in {"failed", "rejected"} else 2
         if a.command == "test":
@@ -428,12 +432,14 @@ def main(argv: list[str] | None = None) -> int:
             blocks = {"status": "no-test-blocks", "tests": []}  # --contract runs that contract alone
             if not a.contract:
                 blocks = run_tests(project, cxx=a.cxx, chosen=a.test or a.filter, exact=bool(a.test), jobs=a.jobs,
-                                   timeout=a.timeout, memory_mib=a.memory_mib)  # fmt: skip
+                                   timeout=a.timeout, memory_mib=a.memory_mib, device_target=a.device_target,
+                                   emulate=a.emulate)  # fmt: skip
             if not paths and not blocks["tests"] and blocks["status"] == "no-test-blocks":
                 named = f" named {a.test!r}" if a.test else f" whose name contains {a.filter!r}" if a.filter else ""
                 raise ProjectError(f"No tests{named}: write a test block, add project.tests or supply --contract.")
+            emulating = resolve_device(a.device_target, project.device_target, required=False) if a.emulate else None
             results = [{"contract": path.name, **evaluate(project.source, load_json_strict(read_text(path, 2_000_000)),
-                                                          a.cxx, project.libraries)} for path in paths]  # fmt: skip
+                                                          a.cxx, project.libraries, emulating)} for path in paths]  # fmt: skip
             passed = all(x["status"] == "passed-finite-tests" for x in results)
             passed &= blocks["status"] in {"passed-test-blocks", "no-test-blocks"}
             status = "passed-finite-tests" if passed else "tests-not-passed"
@@ -444,7 +450,7 @@ def main(argv: list[str] | None = None) -> int:
         result = build(project, output=a.out, cxx=a.cxx, arch=a.arch, kind="exe" if a.command == "run" else a.kind,
                        timeout=a.timeout, target=a.target, debug=a.debug, incremental=a.incremental,
                        keep_guards=a.keep_guards, header=getattr(a, "header", False),
-                       device_target=a.device_target)  # fmt: skip
+                       device_target=a.device_target, emulate=a.emulate)  # fmt: skip
         if a.command == "build" or result["status"] != "native-built":
             report(result, brief=True)
             return 0 if result["status"] == "native-built" else 2
@@ -453,14 +459,18 @@ def main(argv: list[str] | None = None) -> int:
 
         # A freestanding image is not a host process: it runs in the emulator its target names.
         machine = emulator(result["target"], result["artifact"])
-        cuda = "cuda" in result["frontend"]["requires"]  # Unified addressing reserves far more than it uses.
+        # Unified addressing reserves far more than it uses; an emulated program's device memory is host memory.
+        cuda = "cuda" in result["frontend"]["requires"] and "emulation" not in result
         limits = functools.partial(limited, a.timeout, None if cuda else a.memory_mib)
+        emulated = {"emulation": result["emulation"]} if "emulation" in result else {}
 
         if machine and a.arguments:
             raise ProjectError("A freestanding image is started by its board, with no arguments.")
         started = machine or [result["artifact"], *a.arguments]
         run: dict = {"stdin": subprocess.DEVNULL} if machine else {"preexec_fn": limits}
         if terminal.human(FORMAT):  # A person sees the program itself: its streams are the terminal's.
+            if emulated:
+                print(f"note: {result['emulation']['claim']}", file=sys.stderr, flush=True)
             code = subprocess.run(started, timeout=a.timeout, check=False, **run).returncode
             if code:
                 print(f"error: {project.name} {terminal.ended(code)}", file=sys.stderr)
@@ -471,7 +481,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         report({"status": "program-exited", "exit_code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr,
                 "build_directory": result["directory"], "security_sandbox": False,
-                "memory_limit_mib": None if machine else a.memory_mib, "emulator": machine})  # fmt: skip
+                "memory_limit_mib": None if machine else a.memory_mib, "emulator": machine,
+                **emulated})  # fmt: skip
         return 0 if cp.returncode == 0 else 1
     except Diagnostic as error:
         located = project.locate(error) if project else error.data

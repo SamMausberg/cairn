@@ -189,6 +189,72 @@ fn main() -> i32 {
 """
 
 
+EMULATED = """
+fn same(m:usize, n:usize, k:usize) -> i32 {
+  let mk = m * k;
+  let kn = k * n;
+  let mn = m * n;
+  buffer a:T[mk] = zeroed;
+  buffer b:T[kn] = zeroed;
+  buffer c:f32[mn] = zeroed;
+  buffer want:f32[mn] = zeroed;
+  for e in 0..mk { a[e] = T(f32(i64(e % 13) - 6) / 4.0); }
+  for e in 0..kn { b[e] = T(f32(i64(e % 7) - 3) / 8.0); }
+  for e in 0..mn { c[e] = f32(e % 5); want[e] = c[e]; }
+  mma_unordered(m, n, k, want, a, b);
+  buffer da:T[mk]@device = zeroed;
+  buffer db:T[kn]@device = zeroed;
+  buffer dc:f32[mn]@device = zeroed;
+  buffer dd:f32[mn]@device = zeroed;
+  transfer(da, a);
+  transfer(db, b);
+  transfer(dc, c);
+  transfer(dd, c);
+  NAME(m, n, k, mn, dc, mk, da, kn, db);
+  mma_unordered(m, n, k, dd, da, db);
+  buffer got:f32[mn] = zeroed;
+  buffer whole:f32[mn] = zeroed;
+  transfer(got, dc);
+  transfer(whole, dd);
+  for e in 0..mn {
+    if to_bits(got[e]) != to_bits(want[e]) || to_bits(whole[e]) != to_bits(want[e]) { return 1; }
+  }
+  return 0;
+}
+fn main() -> i32 {
+  let one = same(1, 1, 1);
+  let tails = same(65, 63, 33);
+  let wide = same(130, 70, 100);
+  let whole = same(64, 64, 32);
+  let rowless = same(0, 4, 4);
+  let deep = same(3, 5, 0);
+  return one + tails + wide + whole + rowless + deep;
+}
+"""
+
+
+def emulated(name: str) -> str:
+    """The device program with a harness that holds the kernel, and the device's own mma_unordered, to the host's
+    reference loop bit for bit, for a build with `--emulate`."""
+    return (TENSOR / f"{name}.cairn").read_text() + EMULATED.replace("T", KERNELS[name][0]).replace("NAME", name)
+
+
+@pytest.mark.parametrize("cxx", ["g++", "clang++"])
+@pytest.mark.parametrize("name", KERNELS)
+def test_each_kernel_emulated_on_the_host_equals_the_reference_loop_bit_for_bit(tmp_path, name, cxx):
+    """Built for the host with --emulate: the kernel's region on host threads, each thread holding its fragments
+    whole and adding in increasing k, and the device's mma_unordered the reference loop, so both give the host's
+    bits on partial tiles in every direction. Not a device run: the hardware's order is `make gpu`'s to check."""
+    done = contract(tmp_path, compile_source(emulated(name))[0], cxx, emulate=True, timeout=600)
+    assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+
+
+@pytest.mark.parametrize("name", KERNELS)
+def test_each_kernel_emulated_races_nowhere_under_the_thread_sanitizer(tmp_path, name):
+    done = watched(tmp_path, compile_source(emulated(name))[0], "clang++", "thread", emulate=True)
+    assert done.returncode == 0 and "ThreadSanitizer" not in done.stderr, done.stderr[-3000:]
+
+
 @pytest.mark.parametrize("cxx", ["g++", "clang++"])
 def test_one_transpose_through_three_shared_layouts(tmp_path, cxx):
     done = run(tmp_path, compile_source((TENSOR / "transpose.cairn").read_text())[0], *sanitized(cxx), "-pthread",

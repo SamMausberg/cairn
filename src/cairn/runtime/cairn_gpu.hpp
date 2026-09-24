@@ -5,6 +5,7 @@
 // wait for the whole device or make a stream per ticket, as they always did, and generated code no longer calls
 // them. Every entry point is synchronous unless its name says otherwise, and any CUDA error aborts the process.
 #pragma once
+#if !defined(CAIRN_EMULATE)  // an emulated build reads cairn_emulate.hpp, its host machine, before the program
 #include <cstdio>
 #include <cstring>
 #include <cub/device/device_reduce.cuh>
@@ -275,3 +276,4 @@ inline std::size_t compact(T* out, std::size_t n, P pred, F value) noexcept {
   return last + (tail ? 1 : 0);
 }
 }  // namespace cr::gpu
+#endif

@@ -31,6 +31,7 @@ Each code `cairn check` can name that a card states or the host has a fix for. R
 | `E-EFFECT-CEILING` | [effects](cards/effects.md) |  |
 | `E-EFFECT-EXPANSION` |  | Change the implementation, not the ceiling: the host owns it. |
 | `E-EFFECT-ORDER` | [calls](SKILL.md#core-rules), [assembly](cards/assembly.md), [tests](cards/tests.md) |  |
+| `E-EMULATE` | [parallel](cards/parallel.md) |  |
 | `E-EXTENT` | [owners](cards/owners.md) |  |
 | `E-EXTENT-FIELD` | [owners](cards/owners.md) |  |
 | `E-FORMAT-TARGET` | [printing](cards/printing.md) |  |

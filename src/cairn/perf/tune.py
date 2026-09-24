@@ -22,6 +22,7 @@ from typing import Any
 from ..agent import history as kept
 from ..compiler.cairnc import compile_program
 from ..compiler.tree import local
+from ..projects.emulation import EVIDENCE as EMULATED
 from ..projects.target import DeviceTarget, resolve
 from . import model
 from .counts import Cost
@@ -86,18 +87,27 @@ def label(name: str, key: Key) -> str:
 
 
 def validations(source: str, name: str, receipts: dict[str, Any], alternatives: list[str],
-                recorder: Recorder | None) -> dict[str, Any]:  # fmt: skip
+                recorder: Recorder | None, emulated: bool = False) -> dict[str, Any]:  # fmt: skip
     """For each implementation of `name`, the validation the history holds for it as it is now (its identity with
     everything it calls, `history.selectable`, the reference as written, this compiler); none without a history. An
-    implementation without one is searched and priced but never chosen or timed: selecting it could change a result."""
+    implementation without one is searched and priced but never chosen or timed: selecting it could change a result.
+    A validation that ran on a host emulation of the device (projects/emulation.py) counts only when `emulated`, the
+    user's `--accept-emulated`; otherwise the row says it is the only evidence, and the implementation is not chosen."""
     if recorder is None:
         return {}
     table = recorder.implementations
     out: dict[str, Any] = {}
     for g in alternatives:
         found = recorder.history.holding(name, recorder.base, "validation", table.get(g, {}).get("identity"))
-        if found:
-            out[g] = {"evidence": found[-1]["detail"].get("evidence"), "record": found[-1]["id"]}
+        direct = [r for r in found if r["detail"].get("evidence") != EMULATED]
+        if direct or (found and emulated):
+            r = (direct or found)[-1]
+            judged = {"judged_against": r["detail"]["judged_against"]} if "judged_against" in r["detail"] else {}
+            out[g] = {"evidence": r["detail"].get("evidence"), **judged, "record": r["id"]}
+        elif found:
+            target = found[-1]["detail"].get("judged_against", "a device target")
+            out[g] = (f"only {EMULATED} evidence holds, on a host emulation of {target}: pass --accept-emulated to "
+                      "choose it on that evidence")  # fmt: skip
     return out
 
 
@@ -136,10 +146,12 @@ def row(name: str, c: Candidate, regions: list[str], validated: dict[str, Any] |
 def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile | None = None,
          arch: str | None = None, measure: int = 0, cxx: str = "clang++", device: bool = False,
          device_target: DeviceTarget | None = None, budget: Budget | None = None,
-         history: str | Path | None = None, vendored: dict[str, str] | None = None) -> dict[str, Any]:  # fmt: skip
+         history: str | Path | None = None, vendored: dict[str, str] | None = None,
+         accept_emulated: bool = False) -> dict[str, Any]:  # fmt: skip
     """Every legal plan of `name` ranked by prediction at `sizes`, device candidates compiled within `budget` for one
     device target, `device_target` or the one resolved here; with `measure`, that many of the best timed. `history`
-    is a directory to record into and answer from; `vendored` (history.vendored) pins the project's foreign sources."""
+    is a directory to record into and answer from; `vendored` (history.vendored) pins the project's foreign sources.
+    `accept_emulated` lets an implementation validated only on a host emulation of the device be chosen."""
     from .report import targeted
 
     chosen, spent = profile or default(), Spent(budget or Budget())
@@ -197,7 +209,7 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
         raise ValueError(f"The checker refused every plan of {name} the search tried.")
     named = identified(source, name)
     ids = [r["id"] for r in named]
-    validated = validations(source, name, receipts, alternatives, recorder)
+    validated = validations(source, name, receipts, alternatives, recorder, accept_emulated)
     rows = [row(name, x, ids, validated) for x in legal]
     table = receipts[name].get("implementations", {})
     for r, x in zip(rows, legal, strict=True):  # an instance of a parameterized implementation: its values
@@ -374,7 +386,10 @@ def lines(result: dict[str, Any], shown_rows: int = 8) -> str:
         read = row.get("resources", {})
         seen = f"  {read['registers']} registers, {read['spill_bytes']} spilled" if "registers" in read else ""
         held = row.get("validated")
-        held = "" if held is None else f"  {held['evidence']}" if isinstance(held, dict) else "  not validated"
+        judged = f" for {held['judged_against']}" if isinstance(held, dict) and "judged_against" in held else ""
+        emulated_only = isinstance(held, str) and held.startswith(f"only {EMULATED}")
+        held = ("" if held is None else f"  {held['evidence']}{judged}" if isinstance(held, dict)
+                else f"  only {EMULATED}" if emulated_only else "  not validated")  # fmt: skip
         out.append(f"  {i:>2}  {row['plan']:<44} {duration(row['predicted_ns']):>10} predicted{seen}{held}")
     if len(result["candidates"]) > shown_rows:
         out.append(f"      and {len(result['candidates']) - shown_rows} more")

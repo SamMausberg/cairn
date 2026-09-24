@@ -212,3 +212,34 @@ tiles.fill at line 9 would refill the stage of tiles released at line 12 while o
 ```
 
 The depth is a constant of the declaration, and `strided_sums[2]` and `strided_sums[3]` compute the same sums. Raising it changes only the block's shared memory (depth times the stage's bytes, in the receipt's `local_storage` and the kernel's static shared memory) and how many copies a `wait` leaves in flight, which the checker counts: `cp.async.wait_group 1` at depth 2, `2` at depth 3. [`cairn predict`](tools.md#cairn-predict) prices what the depth changes: the shared memory, the blocks an SM holds, and the copies each block keeps in flight. On the device a fill is one `cp.async` per element, committed as one group per thread. On the host it is each thread's own copy, so a read the checker let through too early would race with it under the thread sanitizer.
+
+## Emulating device code on the host
+
+`--emulate` builds, runs and tests a device program on a machine without a GPU. Every device region, collector, cooperative region, `kernel fn`, transfer and queued ticket then runs on host threads, so a kernel can be checked for correctness where no device is.
+
+```sh
+cairn run examples/cooperative/gpu.toml --emulate --device-target sm_120
+cairn test my_kernels --emulate --device-target sm_90a
+cairn validate my_kernels --symbol scale_tiles --emulate --device-target sm_120
+```
+
+The program is still judged against a device target, resolved as a device build resolves it ([tools.md](tools.md#the-device-target)), so a program that emulates is one that would build for that target. What the target refuses, emulation refuses with the same code: `E-TARGET-FEATURE` for a feature it lacks, `E-IMPL-TARGET` for a selected implementation that needs one, `E-ASM-TARGET` for PTX of a later architecture. nvcc does not run, so what only nvcc or ptxas would refuse is not checked, and the record says so.
+
+The C++ is the program nvcc would compile, byte for byte. The host compiler builds it with `CAIRN_EMULATE` defined, and `runtime/cairn_emulate.hpp` becomes the machine under the execution context. Device memory is host memory of exactly the size asked for, a region's lanes run on the host lane pool, a staged block loads its whole tile before any lane reads it, and a reduction, scan and compaction fold in index order. A cooperative region's threads are host threads at a `std::barrier`, each thread holds its fragments whole, and `mma_unordered` is the reference loop.
+
+What the host cannot run as the device would is refused before any compiler runs, never approximated:
+
+| Refused with `E-EMULATE` | Why |
+|---|---|
+| typed PTX, `asm ptx ...` | the host pass of a lane traps where the PTX stands |
+| an `extern` kernel with `launch(...)` | the host has its declaration and not its body |
+| vendored CUDA in the manifest's `[foreign]` table | only nvcc builds it and only a device runs it |
+| a device feature the host does not model: `clusters`, `tma`, `wgmma`, `tcgen05`, `mma_f8f6f4` | nothing lowers it for the host |
+
+Guards behave as they do on the host: a guard that fails in a lane aborts the process with `SIGABRT`. A device array is a host allocation of exactly its bytes, so a read one element past it is a heap overflow the address sanitizer reports. A cooperative region's threads are real threads, so the thread sanitizer reports a phase whose barrier is missing. `tests/projects/test_emulation.py` shows both by taking the guard and the barrier out of the emitted C++.
+
+Queued work runs to completion at its `spawn`, in program order. That is one of the orders the language allows. Work queued `after` a ticket starts after it, and that ticket was spawned earlier. The host touches nothing a live ticket leases, so it cannot see the work finish early, and two tickets that are not ordered touch nothing in common. A guard that fails in queued work aborts at the `spawn` rather than at the `wait`.
+
+[`cairn validate --emulate`](tools.md#cairn-validate) tests a device implementation against its reference this way, and its evidence is `finite-tested-emulated`: finite testing of the host emulation, never of the device. [`cairn tune`](tools.md#cairn-tune) chooses an implementation on that evidence only with `--accept-emulated`.
+
+Every record says the device work was emulated. The build receipt and the records of `cairn run`, `cairn test` and `cairn validate` carry `emulation`, with the target the program was judged against, and `cairn run` at a terminal prints the same note on standard error. An emulated result is evidence about the host and never about a device. It is not a way to time device code either: the lanes run on a few host threads and each block's threads meet at operating-system barriers, so a time a program prints measures that. [numerics.md](numerics.md#emulated-device-runs) says where an emulated result can differ from a device run.

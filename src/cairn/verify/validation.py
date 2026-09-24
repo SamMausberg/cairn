@@ -10,8 +10,11 @@ bit for bit, or for floats under the numerical policy of verify/agreement.py and
 The reference is an independent algorithm, but both are checked and lowered by this compiler, so agreement is finite
 testing on the cases that ran, never proof. A failing case is shrunk while it still fails (extents, offsets, then
 values) and kept in the project's regressions file, which `cairn test` replays. Where the SMT fragment covers both
-functions, `smt` reports what Z3 established apart from the finite result. Nothing here runs device code: a device
-implementation is `unknown` here, and verify/device_validation.py is the `make gpu` path.
+functions, `smt` reports what Z3 established apart from the finite result. Nothing here runs on a device: a device
+implementation is `unknown`, and verify/device_validation.py is the `make gpu` path, unless `emulate` names a device
+target. Then both libraries are judged against that target and built for the host with their device work on host
+threads (projects/emulation.py), and a pass is `finite-tested-emulated`, evidence about the host emulation of that
+target and never `finite-tested` on the device.
 """
 
 from __future__ import annotations
@@ -29,6 +32,8 @@ from ..compiler.cairnc import Diagnostic, Function, Parser, compile_program, com
 from ..compiler.codegen import mangle
 from ..compiler.lexing import IDENT, lex
 from ..compiler.tree import FLOAT
+from ..projects import emulation
+from ..projects.target import DeviceTarget
 from ..projects.toolchain import command as native_command
 from ..projects.toolchain import link_flags, linked
 from . import agreement, boundaries
@@ -40,6 +45,14 @@ REGRESSIONS = "cairn.regressions/1"
 FINITE = (
     "finite-tested: the reference is an independent algorithm, but both are compiled by this compiler, so agreement "
     "on these cases is finite testing, never proof"
+)
+EMULATED = (
+    "finite-tested-emulated: both ran on a host emulation of {target}, so agreement on these cases is finite testing "
+    "of the emulation, never of the device and never proof"
+)
+DEVICE = (
+    "the program holds device code, and nothing runs on a device outside make gpu; --emulate runs its device work "
+    "on host threads, judged against a device target"
 )
 
 
@@ -107,6 +120,7 @@ class Subject:
     applies: str | None  # the implementation's condition as a function, or None when it applies everywhere
     params: list[Param]
     returns: str
+    emulated: DeviceTarget | None = None  # the target its device work was judged against, run on host threads
 
     def call(self, calls: Calls, lib: str, symbol: str, case: Case, seconds: int, returns: str | None = None):
         request = {"lib": lib, "symbol": symbol, "params": [p.__dict__ for p in self.params],
@@ -176,9 +190,11 @@ def body_of(base: str, declared: Function, checked: Function) -> str:
 
 
 def subject(source: str, reference: str, implementation: str, cxx: str, directory: Path,
-            libraries: tuple[str, ...] = (), objects: tuple[str, ...] = ()) -> tuple[Subject, str]:  # fmt: skip
+            libraries: tuple[str, ...] = (), objects: tuple[str, ...] = (),
+            emulate: DeviceTarget | None = None) -> tuple[Subject, str]:  # fmt: skip
     """Both libraries built, and the program with no selection (what `smt` compares); `objects` are a project's
-    vendored C++, linked into each (projects/foreign.py)."""
+    vendored C++, linked into each (projects/foreign.py). With `emulate`, a program with device code is judged against
+    that target and built for the host (projects/emulation.py)."""
     from ..agent.projection import local
 
     p, _, receipts = compile_program(source)
@@ -187,7 +203,7 @@ def subject(source: str, reference: str, implementation: str, cxx: str, director
     if impl is None or receipts.get(implementation, {}).get("implements") != reference:
         raise ValueError(f"{implementation} is not an implementation of {reference}.")
     ref = fs[reference]
-    params = boundaries.signature(ref)
+    params = boundaries.signature(ref, device=emulate is not None)
     when = condition(impl)
     base = without_selection(source, p, reference)
     p = Parser(base).parse()  # where each declaration now stands
@@ -199,15 +215,19 @@ def subject(source: str, reference: str, implementation: str, cxx: str, director
         predicate = f"\nfn {applies}({ps}) -> bool = {when};\n"
     with_predicate = base[: impl.end] + predicate + base[impl.end :]
     selected = base[: impl.end] + f"\nplan {local(reference)} use {local(implementation)};\n" + base[impl.end :]
-    built = {}
+    built, emulated = {}, None
     for name, text in (("base", with_predicate), ("selected", selected)):
         cpp, receipt = compile_source(text)
-        if "cuda" in receipt["requires"]:
-            raise Unsupported("the program holds device code, and nothing runs on a device outside make gpu.")
+        cuda = "cuda" in receipt["requires"]
+        if cuda and emulate is None:
+            raise Unsupported(DEVICE + ".")
+        if cuda:
+            emulated = emulation.judged(emulate, receipt, text)
         where = directory / name
         where.mkdir(parents=True, exist_ok=True)
         write_program(where, "program.cpp", cpp)
-        line = native_command(cxx, str(where / "program.cpp"), str(where / "program.so"))
+        line = native_command(cxx, str(where / "program.cpp"), str(where / "program.so"), cuda=cuda, device=emulated,
+                              emulate=cuda)  # fmt: skip
         line[line.index("-o") : line.index("-o")] = objects
         line += link_flags(linked(libraries, receipt["modules"]))
         done = subprocess.run(line, capture_output=True, text=True, timeout=300)
@@ -218,7 +238,7 @@ def subject(source: str, reference: str, implementation: str, cxx: str, director
     symbol = {"reference": "cf_" + mangle(reference), "implementation": "cf_" + mangle(implementation),
               "applies": "cf_" + mangle(module + applies) if applies else None}  # fmt: skip
     return Subject(reference, built["base"], built["selected"], symbol["reference"], symbol["implementation"],
-                   symbol["applies"], params, ref.ret.name), base  # fmt: skip
+                   symbol["applies"], params, ref.ret.name, emulated), base  # fmt: skip
 
 
 def shrink(subject: Subject, calls: Calls, case: Case, policy: Policy) -> tuple[Case, dict[str, Any], int]:
@@ -318,8 +338,10 @@ def keep(path: Path, reference: str, case: Case, implementation: str, policy: Po
 
 def validate(source: str, reference: str, implementation: str, policy: Policy | dict[str, Any] | None = None,
              cxx: str = "clang++", regressions: Path | None = None, libraries: tuple[str, ...] = (),
-             smt_timeout_ms: int = 3000, objects: tuple[str, ...] = ()) -> dict[str, Any]:  # fmt: skip
-    """The validation record of one implementation: finite results and, apart from them, what Z3 established."""
+             smt_timeout_ms: int = 3000, objects: tuple[str, ...] = (),
+             emulate: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
+    """The validation record of one implementation: finite results and, apart from them, what Z3 established. With
+    `emulate`, device code runs on host threads judged against that target, and the evidence says so."""
     policy = policy if isinstance(policy, Policy) else Policy.of(policy)
     record: dict[str, Any] = {"schema": SCHEMA, "reference": reference, "implementation": implementation,
                               "policy": policy.record()}  # fmt: skip
@@ -336,16 +358,21 @@ def validate(source: str, reference: str, implementation: str, policy: Policy | 
     fs = {f.name: f for f in p.functions}
     with tempfile.TemporaryDirectory(prefix="cairn-validate-") as tmp:
         try:
-            s, base = subject(source, reference, implementation, cxx, Path(tmp), libraries, objects)
+            s, base = subject(source, reference, implementation, cxx, Path(tmp), libraries, objects, emulate)
             found = boundaries.tiles(p, fs[implementation], receipts[implementation].get("plan"))
             cases, _ = kept(regressions, reference)
-            fresh_cases = boundaries.generate(fs[reference], found, policy.domain, policy.budget, policy.seed)
+            fresh_cases = boundaries.generate(fs[reference], found, policy.domain, policy.budget, policy.seed,
+                                              device=s.emulated is not None)  # fmt: skip
         except Unsupported as e:
             return {**record, "status": "unknown", "reason": str(e)}
         record["tiles"] = {str(k): v for k, v in sorted(found.items())}
         record["finite"] = finite(s, [*cases, *fresh_cases], len(cases), policy, regressions, implementation)
         record["smt"] = smt(base, reference, implementation, fs[implementation], policy, smt_timeout_ms)
     record["status"] = record["finite"]["status"]
+    record["evidence"] = emulation.EVIDENCE if s.emulated else "finite-tested"
+    if s.emulated:
+        record["emulation"] = emulation.record(s.emulated)
+        record["finite"]["claim"] = EMULATED.format(target=s.emulated.name)
     return record
 
 
@@ -430,9 +457,11 @@ def summary(r: dict[str, Any], where: str, bounded: bool = False) -> dict[str, A
     return out
 
 
-def replay(source: str, record: dict[str, Any], cxx: str = "clang++", libraries: tuple[str, ...] = ()) -> dict:
+def replay(source: str, record: dict[str, Any], cxx: str = "clang++", libraries: tuple[str, ...] = (),
+           emulate: DeviceTarget | None = None) -> dict:  # fmt: skip
     """A project's kept regressions, as `cairn test` runs them: every implementation of the reference on every kept
-    case, against the reference; generated cases are `cairn validate`'s."""
+    case, against the reference; generated cases are `cairn validate`'s. With `emulate`, device code runs on host
+    threads judged against that target."""
     reference = record.get("reference", "")
     try:
         receipts = compile_program(source)[2]
@@ -446,20 +475,22 @@ def replay(source: str, record: dict[str, Any], cxx: str = "clang++", libraries:
                if not implementations else "the file keeps no case")  # fmt: skip
         return {"status": "unknown", "reference": reference, "cases": len(cases), "implementations": {},
                 "reason": why + "; nothing was tested.", "claim": FINITE}  # fmt: skip
-    results = {}
+    results, emulated = {}, None
     for implementation in implementations:
         with tempfile.TemporaryDirectory(prefix="cairn-replay-") as tmp:
             try:
-                s, _ = subject(source, reference, implementation, cxx, Path(tmp), libraries)
+                s, _ = subject(source, reference, implementation, cxx, Path(tmp), libraries, emulate=emulate)
             except (Unsupported, ValueError, RuntimeError) as e:
                 results[implementation] = {"status": "unknown", "reason": str(e)}
                 continue
             results[implementation] = finite(s, cases, len(cases), policy, None, implementation, vacuous=True)
+            emulated = emulated or s.emulated
     ok = all(r["status"] == "passed" for r in results.values())
     status = "passed-finite-tests" if ok else "unknown" if all(r["status"] != "failed" for r in results.values()) else (
         "failed-tests")  # fmt: skip
-    return {"status": status, "reference": reference, "cases": len(cases), "implementations": results,
-            "claim": FINITE}  # fmt: skip
+    claim = EMULATED.format(target=emulated.name) if emulated else FINITE
+    return {"status": status, "reference": reference, "cases": len(cases), "implementations": results, "claim": claim,
+            **({"emulation": emulation.record(emulated)} if emulated else {})}  # fmt: skip
 
 
 def local(name: str | None) -> str | None:
@@ -470,11 +501,13 @@ def local(name: str | None) -> str | None:
 
 
 def validate_project(project: Any, symbol: str, policy: dict[str, Any] | None = None, cxx: str = "clang++",
-                     regressions: Path | None = None, history: Path | None = None) -> dict[str, Any]:  # fmt: skip
+                     regressions: Path | None = None, history: Path | None = None,
+                     emulate: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
     """`cairn validate --symbol g`: g against the function it implements, with the policy given, else the one the
     project's regressions file of that function pinned when it kept its first case, else the defaults. A failing case
     is kept in that file, `regressions/<reference>.json` unless named, which `cairn test` replays once the manifest
-    lists it under tests."""
+    lists it under tests. `emulate` (`--emulate`) is the device target device code is judged against and emulated
+    for."""
     from ..projects import foreign
     from ..projects.project import ProjectError
 
@@ -493,7 +526,8 @@ def validate_project(project: Any, symbol: str, policy: dict[str, Any] | None = 
     chosen = policy if policy is not None else (pinned or {}).get("policy")
     with tempfile.TemporaryDirectory(prefix="cairn-vendored-") as vendored:  # a foreign implementation's C++
         objects = tuple(foreign.host_objects(project, Path(vendored), cxx)) if project.foreign else ()
-        record = validate(project.source, reference, name, chosen, cxx, path, project.libraries, objects=objects)
+        record = validate(project.source, reference, name, chosen, cxx, path, project.libraries, objects=objects,
+                          emulate=emulate)  # fmt: skip
     relative = path.resolve().relative_to(project.root.resolve()).as_posix() if path.resolve().is_relative_to(
         project.root.resolve()) else str(path)  # fmt: skip
     record["regressions"] = {"file": relative, "exists": path.is_file(),
@@ -518,7 +552,11 @@ def remembered(where: Path, source: str, reference: str, implementation: str, re
     finite = record["finite"]
     entry = {"identity": record["identity"], "implementation": implementation, "finite": finite["status"],
              "smt": record["smt"]["status"], **pinned(source[ref.start : ref.end], record["policy"]),
-             "variant": history.selectable(source, {implementation: record}, vendored)[implementation]["identity"]}  # fmt: skip
+             "variant": history.selectable(source, {implementation: record}, vendored)[implementation]["identity"],
+             "evidence": record["evidence"]}  # fmt: skip
+    if "emulation" in record:  # kept under the target it emulated, never as the host's or a device's
+        judged = record["emulation"]["judged_against"]
+        entry |= {"target": emulation.target(judged), "judged_against": judged}
     if record["status"] == "passed":
         entry["status"] = "validated"
     else:
@@ -527,11 +565,12 @@ def remembered(where: Path, source: str, reference: str, implementation: str, re
     return remember(where, history.as_written(source, reference), reference, entry)["id"]
 
 
-def evaluate(source: str, contract: dict[str, Any], cxx: str = "clang++", libraries: tuple[str, ...] = ()) -> dict:
-    """One file of a manifest's tests: kept regressions are replayed through the validator, a task contract runs
-    through verify/testing.py."""
+def evaluate(source: str, contract: dict[str, Any], cxx: str = "clang++", libraries: tuple[str, ...] = (),
+             emulate: DeviceTarget | None = None) -> dict:  # fmt: skip
+    """One file of a manifest's tests: kept regressions are replayed through the validator, with device code emulated
+    for `emulate`; a task contract runs through verify/testing.py."""
     if isinstance(contract, dict) and contract.get("schema") == REGRESSIONS:
-        return replay(source, contract, cxx, libraries)
+        return replay(source, contract, cxx, libraries, emulate)
     from .testing import evaluate as task
 
     return task(source, contract, cxx, libraries)

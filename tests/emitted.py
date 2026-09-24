@@ -110,14 +110,17 @@ def native(tmp_path: Path, source: str, cxx="clang++", timeout=180):
     return done
 
 
-def contract(tmp_path: Path, cpp: str, cxx: str, *extra: str, cuda=False, timeout=240, env=None, under=()):
-    """`cpp` built by the project's own command line for `cxx` plus `extra`, then run once `under` a wrapper."""
+def contract(tmp_path: Path, cpp: str, cxx: str, *extra: str, cuda=False, timeout=240, env=None, under=(),
+             emulate=False):  # fmt: skip
+    """`cpp` built by the project's own command line for `cxx` plus `extra`, then run once `under` a wrapper. With
+    `emulate`, a device program is built for the host, its device work on host threads (projects/emulation.py)."""
     if not shutil.which(cxx):
         pytest.skip(f"{cxx} unavailable")
-    if cuda and (reason := device_reason()):  # A device program runs inside `on_device` or not at all.
+    if cuda and not emulate and (reason := device_reason()):  # A device program runs inside `on_device` or not at all.
         pytest.skip(reason)
     source, executable = emit(tmp_path, cpp)
-    subprocess.run([*command(cxx, source, executable, kind="exe", cuda=cuda), *extra], check=True, timeout=timeout)
+    line = command(cxx, source, executable, kind="exe", cuda=cuda or emulate, emulate=emulate)
+    subprocess.run([*line, *extra], check=True, timeout=timeout)
     return subprocess.run([*under, executable], capture_output=True, text=True, timeout=timeout, env=env)
 
 
@@ -136,13 +139,14 @@ def device_build(tmp_path: Path, cpp: str, entry: str | None = None, ptx=False, 
     return Path(target)
 
 
-def watched(tmp_path: Path, cpp: str, cxx: str, sanitizer: str):
+def watched(tmp_path: Path, cpp: str, cxx: str, sanitizer: str, emulate=False):
     """The project's own build under `sanitizer`, with leak detection, run without address randomization, which
-    ThreadSanitizer needs on newer kernels."""
+    ThreadSanitizer needs on newer kernels; with `emulate`, a device program's emulated build."""
     if not shutil.which(cxx) or not shutil.which("setarch"):
         pytest.skip(f"needs {cxx} and setarch")
     env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=1"}
-    return contract(tmp_path, cpp, cxx, "-g", f"-fsanitize={sanitizer}", timeout=300, env=env, under=("setarch", "-R"))
+    return contract(tmp_path, cpp, cxx, "-g", f"-fsanitize={sanitizer}", timeout=300, env=env, under=("setarch", "-R"),
+                    emulate=emulate)  # fmt: skip
 
 
 @contextlib.contextmanager

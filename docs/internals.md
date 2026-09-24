@@ -63,6 +63,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | The numerical policy: when a float result agrees with the reference's, for the host and for generated tests | `verify/agreement.py` | `agrees`, `same`, `helper`, `stated` |
 | Native flags, the closed table of system libraries, the freestanding effect ban | `projects/toolchain.py` | `command`, `flags`, `LIBRARIES`, `audit_effects` |
 | The device target | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits` |
+| A device program built for the host: what emulation refuses and what its records say | `projects/emulation.py` | `check`, `record`, `MODELED` |
 | Exports and the commands that take one | `projects/export.py` | `export`, `check`, `build`, `run`, `test`, `compare` |
 
 Per-function state lives in one `Scope`, swapped when an instance is checked in the middle of its caller, so instantiation is re-entrant. Every concrete signature is resolved before any body is checked.
@@ -79,6 +80,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 | `cairn_tasks.hpp` | the crew of reusable task threads, linear tasks, task groups with a bounded completion ring |
 | `cairn_kernels.hpp` | the device side of every region in plain CUDA: the lane, chunk and staged-tile kernels, and their launch on a stream the caller names, with no execution context |
 | `cairn_gpu.hpp` | CUDA as the machine `cairn_exec.hpp` runs on: CUB's calls, streams, events, allocation and copies; and synchronous entry points (`launch`, `Ticket`, `reduce`, `scan`, `compact`) that wait for the whole device and that generated code does not call |
+| `cairn_emulate.hpp` | the machine an emulated build runs device work on, read before the program while `CAIRN_EMULATE` leaves CUDA out of `cairn_gpu.hpp`: host memory, lanes on the host lane pool, collectors in index order, cooperative regions on host threads, the reference multiply |
 | `cairn_exec.hpp` | what generated code calls for device work, written once for any machine: the calling thread's execution context, device owners, regions on its stream, reductions, scans and compactions in its arena, queued work on lent lanes, a C caller's own stream |
 | `cairn_reuse.hpp` | execution contexts apart from the machine: lanes (a stream and its event) lent until their work completes, one scratch arena ordered between its users, a declared budget, a caller's bound stream; and the reductions, scans and compactions written against the machine |
 | `cairn_io.hpp` | the I/O ring over io_uring: fixed berths that own each operation's `Buf`, completion-order collection, a wait that drains before it releases |

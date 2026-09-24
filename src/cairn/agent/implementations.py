@@ -29,7 +29,8 @@ from typing import Any
 
 from ..compiler.cairnc import Diagnostic, Parser, compile_source, fail
 from ..compiler.lexing import lex
-from ..verify.validation import FINITE, Policy, validate
+from ..projects.target import DeviceTarget
+from ..verify.validation import EMULATED, FINITE, Policy, validate
 from .agent_tools import digest, load_json_strict, stable_json
 from .diagnostics import explain, located
 from .projection import local, signature
@@ -66,17 +67,19 @@ def pinned(declaration: str, policy: dict[str, Any]) -> dict[str, str]:
 def remember(where: Path, base: str, reference: str, entry: dict[str, Any]) -> dict[str, Any]:
     """One submission or validation as a candidate-history record (agent/history.py): its identity is the reference
     as written (`base`, history.as_written), the implementation's own identity with everything it calls
-    (`variant`, history.selectable), or the submission's digest when it has none, the pinned contract and the host,
-    where validation ran. The candidate is named `plan f use g;`, as
+    (`variant`, history.selectable), or the submission's digest when it has none, the pinned contract and where
+    validation ran: the host, or the host emulation of a device target. The candidate is named `plan f use g;`, as
     `cairn tune` names the same selection, so one implementation has one name in the history."""
     from ..perf.plan_source import selecting
     from . import history
 
     contract = {k: entry[k] for k in CONTRACT}
     variant = entry.get("variant") or entry.get("identity")
-    who = history.identity(base, variant or entry["submission_sha256"], contract, "host")
-    if entry["status"] == "validated":
-        kind, detail = "validation", {"evidence": "finite-tested", "finite": entry["finite"], "smt": entry["smt"]}
+    who = history.identity(base, variant or entry["submission_sha256"], contract, entry.get("target", "host"))
+    if entry["status"] == "validated":  # the evidence class the validation established: emulated runs say so
+        kind, detail = "validation", {"evidence": entry.get("evidence", "finite-tested"), "finite": entry["finite"],
+                                      "smt": entry["smt"]}  # fmt: skip
+        detail |= {"judged_against": entry["judged_against"]} if entry.get("judged_against") else {}
     else:
         stage = "validation" if entry["code"] == "E-VALIDATION" else "check"
         detail = {"stage": stage, "why": f"{entry['code']}: {entry['why']}",
@@ -90,8 +93,9 @@ class ImplementationSession:
     """One reference of one program, open to new implementations of it and to nothing else."""
 
     def __init__(self, source: str, reference: str, policy: dict[str, Any] | None = None,
-                 regressions: Path | None = None, cxx: str = "clang++"):  # fmt: skip
+                 regressions: Path | None = None, cxx: str = "clang++", emulate: DeviceTarget | None = None):  # fmt: skip
         self.source, self.policy, self.regressions, self.cxx = source, Policy.of(policy), regressions, cxx
+        self.emulate = emulate  # the device target device code is judged against and run for on host threads
         self.parsed = Parser(source).parse()
         found = [f for f in self.parsed.functions if reference in (f.name, local(f.name)) and not f.implements]
         if len(found) != 1:
@@ -135,7 +139,15 @@ class ImplementationSession:
             "note": "Submit one implementation of the reference, and any helpers it calls; the host rechecks the "
             "program, validates it against the reference on boundary inputs, and decides whether it runs.",
             "boundaries": list(PINNED),
+            **self.emulated(),
         }
+
+    def emulated(self) -> dict[str, str]:
+        """What the packet says when device code is validated on host threads (projects/emulation.py)."""
+        if self.emulate is None:
+            return {}
+        said = f"device code is validated on host threads, judged against {self.emulate.name}: finite-tested-emulated"
+        return {"emulation": said + ", never a device run"}
 
     def submit(self, text: Any) -> tuple[str, dict[str, Any], str]:
         """Check one submission: the candidate program, its receipt and the implementation's name, or a refusal."""
@@ -198,9 +210,12 @@ class ImplementationHost:
         self.submissions: list[dict[str, Any]] = []
         self.bases: dict[str, str] = {}  # a session's source digest -> its reference as written (history.as_written)
 
-    def open(self, source: str, reference: str, policy: dict[str, Any] | None = None) -> dict[str, Any]:
+    def open(self, source: str, reference: str, policy: dict[str, Any] | None = None,
+             emulate: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
+        """A session on `reference`; with `emulate`, a device implementation is validated on host threads, judged
+        against that target (projects/emulation.py)."""
         handle = f"i{len(self.sessions) + 1}"
-        self.sessions[handle] = ImplementationSession(source, reference, policy, self.regressions, self.cxx)
+        self.sessions[handle] = ImplementationSession(source, reference, policy, self.regressions, self.cxx, emulate)
         return {**self.sessions[handle].packet(), "handle": handle,
                 "reply": {**self.sessions[handle].packet()["reply"], "handle": handle}}  # fmt: skip
 
@@ -235,10 +250,14 @@ class ImplementationHost:
         table = receipt[s.reference]["implementations"]
         instances = [n for n, r in table.items() if r.get("instance_of") == name]  # each value its own validation
         found = {one: self.validated(s, entry, candidate, receipt, one) for one in instances or [name]}
-        successor = ImplementationSession(candidate, s.reference, s.policy.record(), s.regressions, self.cxx)
+        successor = ImplementationSession(candidate, s.reference, s.policy.record(), s.regressions, self.cxx,
+                                          s.emulate)  # fmt: skip
         self.sessions[request["handle"]] = successor
         done = {"protocol": PROTOCOL, "status": "validated", "implementation": name}
-        tail = {"claim": FINITE, "candidate_sha256": digest(candidate), "selected": False}
+        emulated = [r["emulation"] for r in found.values() if "emulation" in r]
+        claim = EMULATED.format(target=emulated[0]["judged_against"]) if emulated else FINITE
+        tail = {"claim": claim, "candidate_sha256": digest(candidate), "selected": False,
+                **({"emulation": emulated[0]} if emulated else {})}  # fmt: skip
         if not instances:
             return {**done, **found[name], **tail}
         return {**done, "instances": found, **tail}
@@ -247,10 +266,17 @@ class ImplementationHost:
                   name: str) -> dict[str, Any]:  # fmt: skip
         """Validate the implementation `name`, or one instance of a parameterized one, against the reference under
         the pinned policy, and keep the result; what the answer says of it, or E-VALIDATION."""
-        record = validate(candidate, s.reference, name, s.policy, self.cxx, s.regressions)
+        record = validate(candidate, s.reference, name, s.policy, self.cxx, s.regressions, emulate=s.emulate)
         info = receipt[s.reference]["implementations"][name]
         entry = {**entry, "implementation": name, "identity": info["identity"], "finite": record.get(
             "finite", {}).get("status", record["status"]), "smt": record.get("smt", {}).get("status")}  # fmt: skip
+        if "evidence" in record:
+            entry["evidence"] = record["evidence"]
+        if "emulation" in record:  # kept under the target it emulated, never as the host's or a device's
+            from ..projects.emulation import target
+
+            judged = record["emulation"]["judged_against"]
+            entry |= {"target": target(judged), "judged_against": judged}
         if self.records is not None:  # kept under what the implementation calls too, so an edited helper is stale
             from . import history
 
@@ -271,6 +297,8 @@ class ImplementationHost:
             "requires": info["requires"],
             "finite": {k: finite[k] for k in ("status", "cases", "implementation_ran", "kept_cases")},
             "smt": record["smt"],
+            "evidence": record["evidence"],
+            **({"emulation": record["emulation"]} if "emulation" in record else {}),
             "select_with": f"plan {local(s.reference)} use {local(name)};",
         }
 

@@ -174,3 +174,22 @@ The adjoint of x[(i + 1) % n] adds into d_x at another lane's element; read x at
 ```
 
 The derivative is that of the formulas, not of their rounding. The suite holds gradients to central differences and, where torch is present, to its autograd, under both compilers and the sanitizers. That is finite testing, not a proof.
+
+## Emulated device runs
+
+A device program built with `--emulate` ([devices.md](devices.md#emulating-device-code-on-the-host)) gives the host's bits wherever the language fixes them, and a device agrees wherever the language says it does. Where the language leaves an order to the hardware, the emulation takes one legal order and a device may take another.
+
+| What a program computes | An emulated run against a device run |
+|---|---|
+| integer arithmetic, conversions and every guard | the same: each is the same C++ on both sides, and a failed guard aborts either way |
+| `+ - * /` and `sqrt` on `f32` and `f64` | the same bits: the host builds with `-ffp-contract=off -fno-fast-math` and nvcc with `--fmad=false`, so nothing becomes a fused multiply-add, and CUDA's default division and square root are correctly rounded and keep subnormals, as the host's are and do |
+| `floor`, `ceil`, `trunc`, `abs`, storage-float conversions, `quantize` | the same: each is exact or one integer routine on both sides |
+| `exp`, `log`, `sin` and the other libm functions | never in device code: a lane cannot call `std.math` (`E-PARALLEL-CALL`), so neither libm nor CUDA's libdevice runs there |
+| a device `reduce` or `scan` over integers | the same: every operator admitted is associative, and a checked `+` traps exactly when the total overflows |
+| a device `reduce` or `scan` over floats | may differ in the last places: the device combines in a tree whose order is unspecified, and the emulation in index order, as a host `reduce + for` does |
+| `mma_unordered`, on whole matrices or on fragments | may differ within the contract's bound: the emulation adds in increasing k, which is the reference loop's order, and the tensor cores in an order the hardware picks |
+| `reduce OP warp` and the shuffles | the same: one fixed butterfly on both sides |
+| atomics, float atomics included | none to differ: device code has no atomics |
+| warp-synchronous code and memory ordering | nothing to observe: a block's threads share memory only across the barriers the phase rule demands, a warp operation needs its whole warp, and a lane touches only its own elements of what any lane writes |
+
+So an emulated run of `examples/tensor` equals the reference loop bit for bit, and a device run is held only to the contract's bound. Whether the tensor cores meet that bound is checked only by `make gpu`.

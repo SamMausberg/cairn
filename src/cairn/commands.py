@@ -58,6 +58,9 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                             "tune-device, the owner's target, allows it to run."}),
     ({"tune"}, "--write", {"action": "store_true", "help": "Write the chosen plan into the file that declares the "
                            "function."}),
+    ({"tune"}, "--accept-emulated", {"action": "store_true", "help": "Let an implementation whose validation ran "
+                                     "only on a host emulation of the device be chosen and timed; its row names "
+                                     "that evidence."}),
     ({"tune"}, "--budget-compiles", {"type": int, "default": 4, "metavar": "N", "help": "Device compiles the search "
                                      "may start for resource inspection; kept inspections are free."}),
     ({"tune"}, "--budget-seconds", {"type": float, "default": 300.0, "metavar": "S", "help": "Wall time of the "
@@ -89,10 +92,13 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"build", "run"}, "--target", {"choices": sorted(TARGETS), "help": "Freestanding profile; default hosted."}),
     ({"foreign"}, "--implementation", {"required": True, "metavar": "NAME", "help": "The implementation, whose "
                                        "body calls what a [foreign] source of the manifest defines."}),
-    ({"build", "run", "predict", "tune", "state", "export", "foreign"}, "--device-target", {"metavar": "SM", "help": "The GPU's compilation "
+    ({"build", "run", "test", "validate", "predict", "tune", "state", "export", "foreign"}, "--device-target", {"metavar": "SM", "help": "The GPU's compilation "
                                                                "target, as sm_120, sm_120f or sm_120a; default: "
                                                                "[build] device_target, else the GPU nvidia-smi "
                                                                "reports."}),
+    ({"build", "run", "test", "validate"}, "--emulate", {"action": "store_true", "help": "Run device work on host "
+                                                        "threads, judged against the device target: a host run for "
+                                                        "correctness, never a device run or a timing."}),
     ({"build", "run", "test", "shot"}, "--timeout", {"type": int, "default": 60}),
     ({"build", "run"}, "--debug", {"action": "store_true", "help": "Debug symbols that point at the CAIRN source."}),
     ({"build", "run"}, "--incremental", {"action": "store_true", "help": "One object per module, reused by content "

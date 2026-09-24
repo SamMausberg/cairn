@@ -54,7 +54,7 @@ class Case:
 
 def signature(f: Function, device: bool = False) -> list[Param]:
     """The parameters as the validator feeds them, or Unsupported with the reason. A device view is fed only to the
-    device tests `make gpu` runs (`device`)."""
+    device tests `make gpu` runs, or to a validation that emulates the device on the host (`device`)."""
     views = {t.extent for _, t in f.params if is_view(t)}
     out = []
     for n, t in f.params:
@@ -62,7 +62,10 @@ def signature(f: Function, device: bool = False) -> list[Param]:
             if t.name not in SCALARS or t.args:
                 raise Unsupported(f"{n} is a view of {t.value.display()}; the validator feeds views of scalars.")
             if t.place == "device" and not device:
-                raise Unsupported(f"{n} lives on the device, and nothing runs on a device outside make gpu.")
+                raise Unsupported(
+                    f"{n} lives on the device, and nothing runs on a device outside make gpu; "
+                    "--emulate runs device code on host threads, judged against a device target."
+                )
             out.append(Param(n, "view", t.name, t.extent, t.mode))
         elif t.mode != "value" or t.name not in SCALARS:
             raise Unsupported(f"{n} is {t.display()}; the validator feeds scalars and views of scalars.")

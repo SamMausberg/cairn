@@ -133,18 +133,27 @@ def flags(arch: str | None = None, kind: str = "library", target: str | None = N
 
 
 def command(cxx: str, source: str, artifact: str, arch: str | None = None, kind: str = "library", cuda=False,
-            target: str | None = None, device: DeviceTarget | None = None):  # fmt: skip
+            target: str | None = None, device: DeviceTarget | None = None, emulate: bool = False):  # fmt: skip
     """The one native command line. Device programs go through nvcc with the same host contract, for `device`, the
-    device target the caller resolved (projects/target.py), or the one detected here when it gives none. `arch`
-    is the CPU's, for the host pass; the two are never mixed."""
+    device target the caller resolved (projects/target.py), or the one detected here when it gives none; with
+    `emulate`, the host compiler builds the same program with its device work on host threads, and no nvcc runs.
+    `arch` is the CPU's, for the host pass; the two are never mixed."""
     if profile(target):
         start = TARGET_ROOT / str(target)
         script, boot = start / "link.ld", start / "start.S"
         return [find(cxx), *flags(arch, kind, target), f"-Wl,-T,{script}", source, str(boot), "-o", artifact]
-    if not cuda:
-        return [find(cxx), *flags(arch, kind), source, "-o", artifact]
+    if not cuda or emulate:
+        return [find(cxx), *flags(arch, kind), *(emulated(source) if cuda else []), source, "-o", artifact]
     chosen = supported(device or resolve())
     return [*device_prefix(cxx, arch, kind, chosen), source, "-o", artifact]
+
+
+def emulated(source: str) -> list[str]:
+    """What the host compiler is given to build a device program with its device work on host threads
+    (projects/emulation.py): CAIRN_EMULATE, which leaves CUDA out of cairn_gpu.hpp, and the machine that takes its
+    place, runtime/cairn_emulate.hpp beside the program, read before the program's first line. The program's own
+    text is the device build's, so the `#pragma unroll` a vector region writes for nvcc is one g++ does not know."""
+    return ["-Wno-unknown-pragmas", "-DCAIRN_EMULATE=1", "-include", str(Path(source).parent / "cairn_emulate.hpp")]
 
 
 def device_prefix(cxx: str, arch: str | None, kind: str, device: DeviceTarget) -> list[str]:

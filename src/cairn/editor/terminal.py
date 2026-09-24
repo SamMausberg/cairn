@@ -119,6 +119,8 @@ def summary(result: dict, stream: TextIO | None = None) -> None:
         "tests-not-passed": lambda: cases(result),
     }.get(status, lambda: str(result.get("message") or result.get("stderr") or "").strip())()
     print(s(status, "1;32" if good else "1;31") + (f": {detail}" if detail else ""), file=stream)
+    if emulated := result.get("emulation") or result.get("blocks", {}).get("emulation"):
+        print(f"  {emulated['claim']}", file=stream)
     for test in result.get("tests", []):
         if test.get("status") != "passed-finite-tests":
             print(f"  {test.get('contract')}: {test.get('status')} {test.get('message', '')}".rstrip(), file=stream)
@@ -140,9 +142,9 @@ def validation(result: dict, stream: TextIO, s) -> None:
     status = str(result.get("status", ""))
     said = f"{result.get('implementation')} against {result.get('reference')}"
     if finite:
-        said += (
-            f", {plural(finite.get('cases', 0), 'case')} ({finite.get('implementation_ran', 0)} ran it), finite-tested"
-        )
+        emulated = result.get("emulation", {}).get("judged_against")
+        tested = f"finite-tested on a host emulation of {emulated}, not on a device" if emulated else "finite-tested"
+        said += f", {plural(finite.get('cases', 0), 'case')} ({finite.get('implementation_ran', 0)} ran it), {tested}"
     print(s(status, "1;32" if status == "passed" else "1;31") + f": {said}", file=stream)
     if failed := finite.get("failed"):
         shown = ", ".join(f"{k} = {v}" for k, v in failed.get("inputs", {}).items())

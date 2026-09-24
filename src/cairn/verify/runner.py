@@ -47,22 +47,25 @@ def reason(done: subprocess.CompletedProcess) -> str:
 
 
 def run_tests(project: Project, *, cxx: str = "clang++", chosen: str = "", exact: bool = False, jobs: int = 0,
-              timeout: int = 60, memory_mib: int = 1024, output: Path | None = None) -> dict:  # fmt: skip
+              timeout: int = 60, memory_mib: int = 1024, output: Path | None = None, device_target: str | None = None,
+              emulate: bool = False) -> dict:  # fmt: skip
     """Build every selected test into one executable under `output` (the project's build/ by default), then run each
-    in its own process, `jobs` at a time."""
+    in its own process, `jobs` at a time. With `emulate`, a device program's tests run their device work on host
+    threads, judged against `device_target` (projects/emulation.py)."""
     if project.target != "hosted":
         fail("E-TEST", f"Tests run as host processes, and target {project.target} has no host to run them on.")
     tests = written(project, chosen, exact)
     record: dict = {"status": "no-test-blocks", "tests": [], "passed": 0, "failed": 0}
     if not tests:
         return record
-    built = build(
-        project, output=output, cxx=cxx, timeout=min(300, max(timeout, 60)), tests=tuple(f.name for f in tests)
-    )
+    built = build(project, output=output, cxx=cxx, timeout=min(300, max(timeout, 60)),
+                  tests=tuple(f.name for f in tests), device_target=device_target, emulate=emulate)  # fmt: skip
     record["build"] = {k: built.get(k) for k in ("status", "artifact", "directory", "exit_code", "stderr", "message")}
+    record.update({"emulation": built["emulation"]} if "emulation" in built else {})
     if built["status"] != "native-built":
         return {**record, "status": built["status"]}
-    cuda = "cuda" in built["frontend"]["requires"]  # Unified addressing reserves far more than it uses.
+    # Unified addressing reserves far more than it uses; an emulated program's device memory is host memory.
+    cuda = "cuda" in built["frontend"]["requires"] and "emulation" not in built
     limits = functools.partial(limited, timeout, None if cuda else memory_mib)
 
     def one(index: int) -> dict:

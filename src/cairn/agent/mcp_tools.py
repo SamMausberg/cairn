@@ -82,6 +82,8 @@ TOOLS: list[dict[str, Any]] = [
             **WHERE, "reference": SYMBOL,
             "policy": {"type": "object", "description": "tolerance, domain, budget, seed, probes, seconds; a "
                        "project's regressions file pins its own."},
+            "emulate": {"type": "string", "description": "A device target, as sm_120: validate device code on host "
+                        "threads, judged against it. The evidence is finite-tested-emulated, never a device run."},
         }, "required": ["reference"]},
         "annotations": {"readOnlyHint": True},
     },
@@ -215,12 +217,15 @@ class Tools:
         return answer, False
 
     def implementation_open(self, a: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        from ..projects.target import parse
         from ..verify.validation import Policy, kept
 
         source, files = self.program(a)
-        reference, policy = text(a, "reference"), a.get("policy")
+        reference, policy, emulate = text(a, "reference"), a.get("policy"), a.get("emulate")
         if policy is not None and not isinstance(policy, dict):
             fail("E-REQUEST", "policy is an object: tolerance, domain, budget, seed, probes, seconds.")
+        if emulate is not None and not isinstance(emulate, str):
+            fail("E-REQUEST", "emulate names a device target, as sm_120.")
         self.implementations.regressions = None
         if files is not None:  # the project's regressions file of this reference, and the policy it pinned
             named = [f.name for f in Parser(source).parse().functions
@@ -233,7 +238,8 @@ class Tools:
             policy = pinned if pinned is not None else policy
             self.implementations.regressions = path
         try:
-            packet = self.implementations.open(source, reference, policy)
+            device = parse(emulate) if emulate is not None else None  # E-TARGET for another spelling
+            packet = self.implementations.open(source, reference, policy, device)
         except Diagnostic as error:
             return refusal(error, source, files), True
         if files is not None:

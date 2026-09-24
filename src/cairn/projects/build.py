@@ -19,7 +19,7 @@ from ..compiler.header import header as c_header
 from ..compiler.implementations import targeted
 from ..compiler.machine import unbuildable
 from ..compiler.tree import Diagnostic
-from . import foreign
+from . import emulation, foreign
 from .project import Project, ProjectError
 from .target import resolve
 from .toolchain import audit_effects, find, flags, host_family, link_flags, linked, precompiled, profile, unit_commands
@@ -169,7 +169,10 @@ def emitted(project: Project, *, kind: str, tests: tuple[str, ...] = (), header:
 def build(project: Project, *, output: Path | None = None, cxx: str = "clang++", arch: str | None = None,
           kind: str | None = None, timeout: int = 60, target: str | None = None, debug: bool = False,
           incremental: bool = False, keep_guards: bool = False, tests: tuple[str, ...] = (),
-          header: bool = False, device_target: str | None = None) -> dict:  # fmt: skip
+          header: bool = False, device_target: str | None = None, emulate: bool = False) -> dict:  # fmt: skip
+    """Build `project` into a fresh directory under `output` and return its receipt. A device program is built by nvcc
+    for its device target, or with `emulate` by `cxx` for the host, judged against that target, its device work on
+    host threads (projects/emulation.py)."""
     kind = "exe" if tests else kind or project.kind  # A test build is an executable whose main runs one test.
     target = target or project.target
     bare = bool(profile(target))
@@ -205,9 +208,12 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         device = device.require(receipt["device_features"])
     if why := unbuildable(receipt["requires"], host_family(), device.name if device else ""):
         raise Diagnostic("E-ASM-TARGET", why)  # assembly builds only for the machine it names
+    emulated = emulate and device is not None  # judged against the target above, then built for the host
+    if emulated:
+        emulation.check(project.source, receipt, project.foreign)
     if project.foreign and bare:
         raise ProjectError(f"Target {target} builds one image from CAIRN alone; it compiles no vendored source.")
-    command = native_command(cxx, str(cpp), str(artifact), arch or project.arch, kind, cuda, target, device)
+    command = native_command(cxx, str(cpp), str(artifact), arch or project.arch, kind, cuda, target, device, emulated)
     libraries = [] if bare else linked(project.libraries, receipt["modules"])  # an image refuses ffi effects above
     command += link_flags(libraries)
     if debug:  # Symbols plus #line directives: a debugger steps through the .cairn files.
@@ -223,6 +229,7 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         "kind": kind,
         "target": target,
         **({"device_target": device.record()} if device else {}),
+        **({"emulation": emulation.record(device)} if emulated and device else {}),
         **({"libraries": libraries} if libraries else {}),
         "command": command,
         "generated_sha256": hashlib.sha256(generated.encode()).hexdigest(),
@@ -238,7 +245,7 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
             project, directory, cxx, arch or project.arch, kind, device, timeout
         )
         at = command.index("-o")  # nvcc's `-x cu` would read an object as source, so its linker is handed them
-        command[at:at] = [part for obj in vendored for part in (["-Xlinker", obj] if cuda else [obj])]
+        command[at:at] = [part for obj in vendored for part in (["-Xlinker", obj] if cuda and not emulated else [obj])]
         record.update({"foreign": foreign_built} if foreign_built else {})
         if incremental and not bare and not cuda:  # Device code and images stay one unit.
             stub = generated[generated.rindex("\n// entry\n") :] if "\n// entry\n" in generated else ""
