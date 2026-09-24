@@ -99,18 +99,19 @@ def context(uri: str, buffers: dict[str, str]) -> tuple[Project, list[File]] | N
             project = load_project(home / MANIFEST, given)
         except (ProjectError, OSError, ValueError, Diagnostic):
             return None
-        files = files_of(project, given)
+        files = files_of(project)
         if path.resolve().as_uri() in {f.uri for f in files}:
             return project, files
     return None
 
 
-def files_of(project: Project, given: dict[Path, str]) -> list[File]:
-    """Every file of a loaded project, as the editor holds it, with where it starts in the combined source."""
+def files_of(project: Project) -> list[File]:
+    """Every file of a loaded project, as the editor holds it, with where it starts in the combined source. Each text
+    is the one the project read, from the editor or the disk, so an offset into the combined source is an offset into
+    it: a file's carriage returns are kept and its byte-order mark is not part of it."""
     starts, files = line_starts(project.source), []
-    for unit in project.units:
+    for unit, text in zip(project.units, project.layout()[1], strict=True):
         file = (project.root / unit.path).resolve()
-        text = given.get(file) if file in given else file.read_text(encoding="utf-8")
         files.append(File(file.as_uri(), text, starts[unit.first_line - 1], project.source))
     return files
 
@@ -124,7 +125,7 @@ def workspace_symbols(query: str, buffers: dict[str, str], roots: list[str]) -> 
         home = path_of(root)
         if home is not None and (home / MANIFEST).is_file():
             with suppress(ProjectError, OSError, ValueError, Diagnostic):  # a broken manifest has no symbols
-                files |= {f.uri: f for f in files_of(load_project(home / MANIFEST, given), given)}
+                files |= {f.uri: f for f in files_of(load_project(home / MANIFEST, given))}
     for uri, text in buffers.items():
         held = context(uri, buffers)
         files |= {f.uri: f for f in held[1]} if held else {uri: File(uri, text, 0)}

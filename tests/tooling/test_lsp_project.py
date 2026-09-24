@@ -121,6 +121,16 @@ def test_a_rename_is_applied_to_every_file_and_the_project_still_builds(project,
     assert subprocess.run([record["artifact"]], timeout=30).returncode == 0
 
 
+@pytest.mark.parametrize("crlf,mark", [(True, False), (False, True), (True, True)], ids=["crlf", "mark", "both"])
+def test_a_crlf_or_marked_file_the_editor_has_not_opened_is_found_at_its_own_characters(project, crlf, mark):
+    geo = GEO.replace("\n", "\r\n") if crlf else GEO
+    (project / "src/geo.cairn").write_bytes((b"\xef\xbb\xbf" if mark else b"") + geo.encode())
+    ws, uri = opened(project)
+    found = [r["range"] for r in references(ws, uri, MAIN.index("geo.scale(p") + 5) if r["uri"].endswith("geo.cairn")]
+    at = GEO.splitlines()[4].index("scale")
+    assert found == [{"start": {"line": 4, "character": at}, "end": {"line": 4, "character": at + 5}}]
+
+
 def test_an_unsaved_buffer_is_what_the_project_is_read_as(project):
     typed = MAIN.replace("  return 0;\n}", "  twice(pair);\n  return 0;\n}")
     ws, uri = opened(project, **{"main.cairn": typed})
@@ -337,7 +347,7 @@ def test_the_rule_read_from_tokens_is_the_compiler_s_on_every_example_project():
     root = pathlib.Path(__file__).resolve().parents[2]
     for manifest in sorted((root / "examples").rglob("cairn.toml")):
         project = load_project(manifest)
-        for f in ws_module.files_of(project, {}):
+        for f in ws_module.files_of(project):
             inside = (project.source, f.start, project.site)
             asked, read = Document(f.text, within=inside), Document(f.text, analyse=False, within=inside)
             assert asked.program is not None and asked.modules() == read.modules(), (manifest, f.uri)
