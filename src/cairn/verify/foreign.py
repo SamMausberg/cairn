@@ -115,11 +115,12 @@ def device_tests(project: Project, reference: str, name: str, cxx: str, device_t
     p, _, _ = compile_program(project.source)
     ref = next(f for f in p.functions if f.name == reference)
     cases = boundaries.generate(ref, {}, {"largest_extent": 256}, budget=12, device=True)
-    tests, names = cases_as_tests(project.source, reference, name, cases)
-    tested = replace(project, source=project.source + "\n" + tests)
+    generated = cases_as_tests(project.source, reference, name, cases)
+    tested = replace(project, source=project.source + "\n" + generated.source)
     built = build(tested, cxx=cxx, output=where / "device-tests", device_target=device_target, timeout=300,
-                  tests=tuple(f"test${n}" for n in names))  # fmt: skip
-    record = {"status": "not-run", "reason": ON_DEVICE, "cases": len(names), "built": built["status"]}
+                  tests=tuple(f"test${n}" for n in generated.names))  # fmt: skip
+    record = {"status": "not-run", "reason": ON_DEVICE, "cases": len(generated.names), "coverage": generated.coverage,
+              "built": built["status"]}  # fmt: skip
     return record | ({"stderr": built.get("stderr", "")[-4000:]} if built["status"] != "native-built" else {})
 
 

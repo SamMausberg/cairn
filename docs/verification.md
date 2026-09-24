@@ -314,6 +314,10 @@ The rules of `checking.py` outside the calculus, such as linear values, leases o
 
 [`cairn validate`](tools.md#cairn-validate) and the implementation session hold an implementation to its reference by running both on inputs from the contract. The reference is an independent algorithm, which makes it an oracle, but not an independent compiler: a fault in the shared parser, checker, lowering or runtime can make both wrong alike. A pass is finite testing of exactly the cases that ran, and an implementation no case reached, or a call past its limit, is `unknown`. Z3's answer on the same pair is reported beside it, never merged into it, and decides a loop only up to the unrolling bound the record names.
 
+Float results agree under one numerical policy, `cairn.agreement/1` in `verify/agreement.py`. Both values widen exactly to f64, a storage float through f32, and every rule computes in f64. The first rule that applies decides: a NaN agrees with any NaN and with nothing else; two equal values agree when their bits match, so `-0.0` and `0.0` agree only under a tolerance; an infinity agrees only with itself; otherwise `|r - c| <= absolute + relative * |r|`, where `r` is the reference's value. The relative part scales the reference, as `numpy.isclose` scales its second argument, so a wrong result cannot widen its own bound.
+
+The rules are written once, as CAIRN expressions. Host validation, `cairn test`'s replay of kept cases and the implementation session evaluate them as Python, and the generated device tests carry them as a CAIRN function the compiler lowers. `tests/verification/test_agreement.py` requires the same verdict from both renderings on one table of pairs, NaNs, both zeros, infinities, subnormals and the largest finite value among them, under clang++ and g++.
+
 ## Pinned versions and the audit
 
 | Component | Version |

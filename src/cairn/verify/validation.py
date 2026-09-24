@@ -5,7 +5,7 @@ body and `cf_g` the implementation's, and once with `plan f use g;`, where `cf_f
 verify/boundaries.py, after the project's kept regressions, runs the reference, the dispatch on every input, and the
 implementation where its condition holds, each call in a process of its own (verify/isolated_calls.py, the
 discipline of verify/runner.py), so a trap or a crash is that call's outcome and nothing else's. Two traps agree; a result agrees
-bit for bit, or within the host's tolerance for floats.
+bit for bit, or for floats under the numerical policy of verify/agreement.py and the host's tolerance.
 
 The reference is an independent algorithm, but both are checked and lowered by this compiler, so agreement is finite
 testing on the cases that ran, never proof. A failing case is shrunk while it still fails (extents, offsets, then
@@ -31,7 +31,7 @@ from ..compiler.lexing import IDENT, lex
 from ..compiler.tree import FLOAT
 from ..projects.toolchain import command as native_command
 from ..projects.toolchain import link_flags, linked
-from . import boundaries
+from . import agreement, boundaries
 from .boundaries import Case, Param, Unsupported
 from .isolated_calls import Calls
 
@@ -76,27 +76,18 @@ class Policy:
                 "probes": self.probes, "seconds": self.seconds}  # fmt: skip
 
 
-def same(ty: str, a: Any, b: Any, tolerance: dict[str, float]) -> bool:
-    if ty not in FLOAT or a == b:
-        return a == b
-    x, y = float.fromhex(a), float.fromhex(b)
-    if math.isnan(x) or math.isnan(y) or math.isinf(x) or math.isinf(y):
-        return (math.isnan(x) and math.isnan(y)) or x == y
-    if x == y:  # -0.0 and 0.0: equal as numbers, not as bits, so only a tolerance lets them agree
-        return any(v > 0 for v in tolerance.values())
-    return abs(x - y) <= tolerance.get("absolute", 0.0) + tolerance.get("relative", 0.0) * abs(y)
-
-
 def agree(expected: dict[str, Any], actual: dict[str, Any], returns: str, params: list[Param],
           tolerance: dict[str, float]) -> bool | None:  # fmt: skip
-    """Whether two outcomes agree; None when either did not finish, which decides nothing."""
+    """Whether the reference's outcome `expected` and another's `actual` agree under the numerical policy
+    (verify/agreement.py); None when either did not finish, which decides nothing."""
     if "timeout" in {expected["outcome"], actual["outcome"]}:
         return None
     if expected["outcome"] != "return" or actual["outcome"] != "return":
         return expected["outcome"] == actual["outcome"] == "trap"
-    if returns != "void" and not same(returns, expected["return"], actual["return"], tolerance):
+    if returns != "void" and not agreement.same(returns, expected["return"], actual["return"], tolerance):
         return False
     types = {p.name: p.ty for p in params}
+    same = agreement.same
     return all(
         len(expected["after"][n]) == len(actual["after"][n])
         and all(same(types[n], a, b, tolerance) for a, b in zip(expected["after"][n], actual["after"][n], strict=True))

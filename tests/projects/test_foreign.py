@@ -195,7 +195,8 @@ def test_the_cuda_sources_build_for_sm_120_and_ptxas_reports_their_kernels():
     assert tiled["shared_bytes"] == 4 * (256 + 2) and tiled["registers"] > 0 and tiled["spill_bytes"] == 0
     tested = record["finite_tested"]
     assert tested["status"] == "not-run" and "make gpu" in tested["reason"]
-    assert tested["built"] == "native-built" and tested["cases"] > 0
+    assert tested["built"] == "native-built" and tested["cases"] == tested["coverage"]["written"] > 0
+    assert tested["coverage"]["left_out"] == {}  # every generated case was written
     assert passed(record)  # not running is not failing, and not passing either: finite_tested says not-run
 
 
@@ -220,7 +221,7 @@ def test_the_device_implementation_runs_against_its_reference_on_the_gpu(tmp_pat
         project = load_project(DEVICE)
         reference = next(f for f in compile_program(project.source)[0].functions if f.name == "stencil_1d")
         cases = boundaries.generate(reference, {}, {"largest_extent": 256}, budget=12, device=True)
-        tests, names = cases_as_tests(project.source, "stencil_1d", "stencil_tiled", cases)
+        tests, names, _ = cases_as_tests(project.source, "stencil_1d", "stencil_tiled", cases)
         done = run_tests(replace(project, source=project.source + "\n" + tests), cxx="g++", chosen="device_",
                          output=tmp_path)  # fmt: skip
         assert done["status"] == "passed-test-blocks" and done["passed"] == len(names), json.dumps(done)[-3000:]

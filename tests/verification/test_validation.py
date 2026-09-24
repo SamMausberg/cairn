@@ -144,6 +144,14 @@ def test_a_float_result_agrees_within_the_host_s_tolerance_and_no_further():
     assert failed["reference"]["return"] != failed["implementation"]["return"]  # bits apart, as hexadecimal text
 
 
+def test_the_relative_tolerance_scales_the_reference_on_the_host_as_on_the_device():
+    source = "fn f(x:f64) -> f64 = 100.0;\nfn g(x:f64) -> f64 implements f = 111.0;\n"
+    tenth = {"tolerance": {"absolute": 0.0, "relative": 0.1}}
+    assert validate(source, "f", "g", tenth)["status"] == "failed"  # 11 > 0.1 * 100
+    backwards = "fn f(x:f64) -> f64 = 111.0;\nfn g(x:f64) -> f64 implements f = 100.0;\n"
+    assert validate(backwards, "f", "g", tenth)["status"] == "passed"  # 11 <= 0.1 * 111
+
+
 def test_an_implementation_no_case_reaches_is_unknown():
     never = BY4.replace("when n % 4 == 0", "when n == 123456789").replace("total_by4", "total_far")
     assert validate(TOTAL + never, "total", "total_far", SMALL)["status"] == "unknown"

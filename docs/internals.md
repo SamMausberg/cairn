@@ -59,6 +59,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Manifests, vendored dependencies | `projects/project.py` | `read_manifest`, `contained_file`, `claim`, `dependencies` |
 | Vendored C++ and CUDA, compiled by the program's command line and held to their externs' types | `projects/foreign.py` | `compile_sources`, `binding`, `inspect` |
 | What a foreign implementation has: its contract, build, device inspection and validation | `verify/foreign.py` | `identify`, `report`, `device_tests` |
+| The numerical policy: when a float result agrees with the reference's, for the host and for generated tests | `verify/agreement.py` | `agrees`, `same`, `helper`, `stated` |
 | Native flags, the closed table of system libraries, the freestanding effect ban | `projects/toolchain.py` | `command`, `flags`, `LIBRARIES`, `audit_effects` |
 | The device target | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits` |
 | Exports and the commands that take one | `projects/export.py` | `export`, `check`, `build`, `run`, `test`, `compare` |
