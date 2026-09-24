@@ -111,7 +111,7 @@ Each card states one part of the language and the codes of its rules. A host sen
 - [lends](cards/lends.md): lends
 - [modules](cards/modules.md): import module pub
 
-A refusal from a host or the command line may name [hosts](cards/hosts.md), [migrations](cards/migrations.md), [sketches](cards/sketches.md), [validation](cards/validation.md), [commands](cards/commands.md), [limits](cards/limits.md).
+A refusal from a host or the command line may name [hosts](cards/hosts.md), [migrations](cards/migrations.md), [sketches](cards/sketches.md), [validation](cards/validation.md), [commands](cards/commands.md), [harness](cards/harness.md), [limits](cards/limits.md).
 
 ## Mistakes that cost the most
 

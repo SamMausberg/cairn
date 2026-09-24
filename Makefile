@@ -107,7 +107,7 @@ DEVICE_TESTS = tests/language/test_assembly.py tests/language/test_assert_eq.py 
   tests/language/test_layouts.py tests/language/test_storage_floats.py \
   tests/projects/test_app_matmul.py tests/projects/test_cooperative_examples.py tests/projects/test_demos.py \
   tests/projects/test_emulation.py::test_the_device_command_is_unchanged_when_emulation_is_off \
-  tests/projects/test_export.py \
+  tests/projects/test_export.py tests/projects/test_harness.py tests/projects/test_harness_torch.py \
   tests/projects/test_foreign.py tests/projects/test_test_blocks.py \
   tests/runtime/test_device_arithmetic.py tests/runtime/test_enqueue.py tests/runtime/test_execution.py \
   tests/runtime/test_native_runtime.py \
