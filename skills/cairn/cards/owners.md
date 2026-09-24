@@ -1,9 +1,9 @@
 # The owners card
 
-Sent to an agent when the program uses `Array`, `Buf`, `defer`, `linear`, `swap`, `take`. Codes: `E-EXTENT`, `E-EXTENT-FIELD`, `E-LINEAR-BRANCH`, `E-LINEAR-LEAK`, `E-MOVE-IN-LOOP`, `E-MOVED`, `E-PARTIAL-MOVE`.
+Sent to an agent when the program uses `Array`, `Buf`, `defer`, `linear`, `swap`, `take`. Codes: `E-DEFER`, `E-EXTENT-FIELD`, `E-LINEAR-BRANCH`, `E-LINEAR-LEAK`, `E-LINEAR-STORAGE`, `E-MOVE-BORROW`, `E-MOVE-IN-LOOP`, `E-MOVED`, `E-PARTIAL-MOVE`, `E-UNPACK`.
 
 ```text
-let mut b = Buf[u64](n); is a first-class zeroed heap array, and Array[u64, 4]() an inline one. Owners are affine: binding, passing by value or returning one moves it, and the old name is dead (E-MOVED). An owner never moves out of a place (E-PARTIAL-MOVE): take(place) moves it out and leaves zero, swap(a, b) exchanges two places, and let Conn(sock, sent) = c; consumes a whole record and binds every field, the way out for a linear field. An outer owner cannot move inside a loop, closure or lane (E-MOVE-IN-LOOP).
+let mut b = Buf[u64](n); is a first-class zeroed heap array, and Array[u64, 4]() an inline one. Owners are affine: binding, passing by value or returning one moves it, and the old name is dead (E-MOVED). An owner never moves out of a place or a borrow (E-PARTIAL-MOVE, E-MOVE-BORROW): take(place) moves it out and leaves zero, swap(a, b) exchanges two places, and let Conn(sock, sent) = c; consumes a whole record and binds every field, the way out for a linear field. An outer owner cannot move inside a loop, closure or lane (E-MOVE-IN-LOOP).
 
 A linear struct value is consumed exactly once on every path (E-LINEAR-LEAK, E-LINEAR-BRANCH); defer call(x); schedules that one visible call for every normal exit of its block. ro<T> and rw<T> borrow one value and read and assign like it; x[lo..hi] passes a part of an array with one dynamic guard, and two parts are disjoint only if they visibly share a boundary.
 

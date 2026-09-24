@@ -15,19 +15,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
 from ..version import __version__
 from .diagnostics import HINTS
-from .teaching import CARDS, select_cards
+from .teaching import CARDS, CODES, CORE, OWNER, TOOL_CARDS, every_card, triggers
 
 ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / "skills" / "cairn"
-CORE = ("base", "integers", "calls")  # sent with every packet, so SKILL.md holds them whole
-CODE = re.compile(r"E-[A-Z0-9]+(?:-[A-Z0-9]+)*")
-WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 REPOSITORY = "https://github.com/SamMausberg/cairn"
 
 DESCRIPTION = (
@@ -85,25 +81,6 @@ AVOID = """\
 - Guessing a fix: each diagnostic code has one rule behind it, and its card says what that rule accepts."""
 
 
-def triggers() -> dict[str, list[str]]:
-    """The words that make `select_cards` send each card, found by asking it about every word the cards use."""
-    words = {w for text in CARDS.values() for w in WORD.findall(text)} | {"|", "||"}
-    found: dict[str, set[str]] = {}
-    for word in words:
-        for name in set(select_cards(word)) - set(CORE):
-            found.setdefault(name, set()).add(word)
-    return {name: sorted(found.get(name, ())) for name in CARDS}
-
-
-def codes() -> dict[str, list[str]]:
-    """Each diagnostic code a card names, with the cards that name it."""
-    named: dict[str, list[str]] = {}
-    for name, text in CARDS.items():
-        for code in sorted(set(CODE.findall(text))):
-            named.setdefault(code, []).append(name)
-    return named
-
-
 def commands() -> list[tuple[str, str]]:
     from ..commands import parser
 
@@ -118,23 +95,20 @@ def paragraphs(text: str) -> str:
 
 def card_file(name: str, words: list[str]) -> str:
     uses = ", ".join(f"`{w}`" for w in words) if words else "the forms it describes"
-    listed = sorted(set(CODE.findall(CARDS[name])))
-    said = f"Sent to an agent when the program uses {uses}."
-    if listed:
-        said += " Codes: " + ", ".join(f"`{c}`" for c in listed) + "."
-    return f"# The {name} card\n\n{said}\n\n{paragraphs(CARDS[name])}\n"
+    said = f"Sent to an agent when the program uses {uses}." if name in CARDS else "A refusal names this card."
+    if listed := CODES[name].split():
+        said += " Codes: " + ", ".join(f"`{c}`" for c in sorted(listed)) + "."
+    return f"# The {name} card\n\n{said}\n\n{paragraphs(every_card()[name])}\n"
 
 
 def codes_file() -> str:
-    named = codes()
-    rows = ["# Refusals", "", "Each code `cairn check` can name that a card states or the host has a fix for. "
-            "Read the card for the rule; the fix is the smallest change that keeps the program's meaning.", "",
+    rows = ["# Refusals", "", "Each code the compiler, the hosts and `cairn` can name, with the card that states its "
+            "rule. The fix is the smallest change that keeps the program's meaning.", "",
             "| Code | Card | Fix |", "|---|---|---|"]  # fmt: skip
-    for code in sorted(set(named) | set(HINTS)):
-        cards = ", ".join(f"[{c}](cards/{c}.md)" if c not in CORE else f"[{c}](SKILL.md#core-rules)"
-                          for c in named.get(code, []))  # fmt: skip
-        rows.append(f"| `{code}` | {cards} | {HINTS.get(code, '')} |")
-    rows += ["", "A code not listed here says what to change in its message. Codes are stable across releases."]
+    for code, card in sorted(OWNER.items()):
+        where = f"[{card}](cards/{card}.md)" if card not in CORE else f"[{card}](SKILL.md#core-rules)"
+        rows.append(f"| `{code}` | {where} | {HINTS.get(code, '')} |")
+    rows += ["", "Codes are stable across releases."]
     return "\n".join(rows) + "\n"
 
 
@@ -147,6 +121,7 @@ def skill_file() -> str:
             index.append(f"| [{name}](cards/{name}.md) | {words} |")
     table = ["| Command | What it does |", "|---|---|"] + [f"| `cairn {c}` | {h} |" for c, h in commands()]
     core = "\n\n".join(paragraphs(CARDS[name]) for name in CORE)
+    core += "\n\nTheir codes: " + "; ".join(f"{n} " + ", ".join(sorted(CODES[n].split())) for n in CORE) + "."
     front = "\n".join([
         "---", "name: cairn", f"description: {json.dumps(DESCRIPTION)}", "license: MIT OR Apache-2.0",
         f"compatibility: {json.dumps(COMPATIBILITY)}", "metadata:", f'  version: "{__version__}"',
@@ -165,6 +140,8 @@ def skill_file() -> str:
         "", "```cairn", EXAMPLE.rstrip(), "```", "",
         "## Cards", "", "Each card states one part of the language and the codes of its rules. The compiler sends "
         "the same cards to an agent it hosts, picked by the words below.", "", *index, "",
+        "A refusal from a host or the command line names one of " + ", ".join(f"[{n}](cards/{n}.md)" for n in TOOL_CARDS)
+        + ".", "",
         "## Mistakes that cost the most", "", AVOID, "",
         "## Commands", "", "A command that reports takes `--format json`, the default when its output is piped.", "", *table, "",
         "## More", "",
@@ -181,7 +158,7 @@ def render() -> dict[str, str]:
     """Every file of the skill, by its path under `skills/cairn/`."""
     found = triggers()
     files = {"SKILL.md": skill_file(), "codes.md": codes_file()}
-    files |= {f"cards/{n}.md": card_file(n, found[n]) for n in CARDS if n not in CORE}
+    files |= {f"cards/{n}.md": card_file(n, found.get(n, [])) for n in every_card() if n not in CORE}
     return files
 
 

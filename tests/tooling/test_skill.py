@@ -45,12 +45,12 @@ def test_every_link_in_the_skill_reaches_a_file():
                 assert (page.parent / target).exists(), (page, target)
 
 
-def test_every_card_and_every_code_the_cards_name_is_in_the_skill():
+def test_every_card_and_every_code_is_in_the_skill_file_that_holds_its_card():
     files = skill.render()
-    for name in skill.CARDS:
+    for name in skill.every_card():
         assert name in skill.CORE or f"cards/{name}.md" in files
-    for code in skill.codes():
-        assert f"`{code}`" in files["codes.md"]
+    for code, card in skill.OWNER.items():
+        assert code in files["SKILL.md" if card in skill.CORE else f"cards/{card}.md"], (code, card)
 
 
 def test_the_example_in_the_skill_compiles():

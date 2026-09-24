@@ -1,8 +1,13 @@
-"""Feature-selected semantic cards. Shorter wording never grants edit authority.
+"""The rule cards: what each part of CAIRN accepts and refuses, and the diagnostic code of each rule.
 
-`base`, `integers` and `calls` go with every packet, so no other card repeats what they say. A card holds one
-paragraph per line and names the diagnostic codes of the rules it states, so a refusal maps back to its card.
+`CARDS` are the language's. `base`, `integers` and `calls` go with every packet, so no other card repeats what they
+say, and the others are selected from the lexical tokens of the source at hand. `TOOL_CARDS` state what the hosts, the
+command line and the compiler's own limits refuse; no source selects them, and a refusal names them. A card holds one
+paragraph per line and names every code it owns, and `CODES` gives each code exactly one card, so a refusal maps back
+to the rule behind it (`card_of`). Shorter wording never grants edit authority.
 """
+
+from __future__ import annotations
 
 from ..compiler.lexing import lex
 
@@ -10,7 +15,7 @@ CARDS = {
     "base": """CAIRN 1.0 is a checked systems language, not Rust or Python. Braces, semicolons, typed signatures, explicit return on every path; no tail expression. fn inc(x:u64)->u64 = add_wrap(x,1); is one return, not a closure. let is immutable, let mut mutable, parameters immutable; no shadowing, no implicit conversion; let x:u32 = 7; annotates.
 for i in lo..hi is sequential and half-open, bounds evaluated once, lo first; for i, x in xs is for i in 0..len(xs) with let x = xs[i] (copyable elements); ranges are not lists; only compact/parallel/reduce write for i in n. if/else if/else and while use braces; break/continue target the nearest loop, also from match arms. while/recursion may diverge; no stack bound is proved. Precedence rises || && | ^ & (== != < <= > >=) (+ -) (* / %); && and || stop early. reg/each are old spellings of let mut/for.
 No inheritance, overloading, exceptions or hidden allocation; indentation is insignificant. Other features have cards, sent when used. Preserve the fixed task. Typed, tested, SMT-equivalent and Lean-checked are different claims.""",
-    "integers": """Types: bool, u8/u16/u32/u64, usize (64-bit), i8/i16/i32/i64. +,-,* trap on overflow in every build, and so does x += e; add_wrap/sub_wrap/mul_wrap are unsigned and modular, so x+1 and add_wrap(x,1) differ at the maximum. /,% trap on zero or signed min/-1; signed remainder truncates toward zero, unlike Python. shl_wrap(x,k), shr(x,k): unsigned x, usize k below the width. &,|,^,~ are unsigned; min/max integer-only. Conversions are explicit calls, u64(x), range checked: narrowing traps outside the target; float to integer truncates toward zero, trapping on NaN or out of range. Literals take the expected type, else u64/f64. Never weaken arithmetic or the trap/domain policy to pass a check.""",
+    "integers": """Types: bool, u8/u16/u32/u64, usize (64-bit), i8/i16/i32/i64. +,-,* and x += e trap on overflow in every build; add_wrap/sub_wrap/mul_wrap are unsigned and modular, so x+1 and add_wrap(x,1) differ at the maximum. /,% trap on zero or signed min/-1; signed remainder truncates toward zero, unlike Python. shl_wrap(x,k), shr(x,k): unsigned x, usize k below the width. &,|,^,~ are unsigned; min/max integer-only. Conversions are explicit calls, u64(x), range checked: narrowing traps outside the target; float to integer truncates toward zero, trapping on NaN or out of range. Literals take the expected type, else u64/f64. const K:u64 = 4 * 1024; folds at compile time. Never weaken arithmetic or the trap/domain policy to pass a check.""",
     "views": """ro<T>[n] and rw<T>[n] borrow host storage; @host is optional, not a transfer. An extent is a literal or an earlier immutable usize parameter; a call omits all or none (E-ARITY): f(xs) is f(len(xs),xs). Indexes are usize and bounds-checked; len(view) reads metadata. Read-only views may alias; an rw view is disjoint from every other view of the call (E-ALIAS). Entry checks cover null/alignment/overflow/overlap numerically; the caller supplies live, initialized, typed storage with no conflicting access. A declared field extent gives len(c.price) the identity c.rows: no part. No view returns, resizing, implicit copy or parallelism.""",
     "compact": """let used = compact out for i in n where p yield v; out is an rw borrow or scoped buffer of capacity exactly n (or len(out)); p is bool, v has the element type, and neither may read out or call a writing or allocating function. Selected values fill a stable prefix in order; the tail is unchanged; no allocation or synchronization; the private cursor emits at most once per input. Its arithmetic certificates do not prove the compiler, ownership rules or native backend.""",
     "scan": """let total = scan + out for i in n yield v; writes out[i] = v(0) + ... + v(i) and binds the whole; scan + exclusive out ... writes what came before i, so out[0] is the identity; a scan nobody reads the total of is a statement. The operators are reduce's: add_wrap, mul_wrap, & | ^ min max on integers, checked + on unsigned integers only (it traps exactly when the in-order total overflows), + and * on floats only in a sequential for scan (E-SCAN-OP, E-SCAN-ORDER). out is an rw view or buffer of exactly n elements (E-SCAN-TARGET, E-SCAN-EXTENT); v runs once per i and reads out only at out[i]. scan op parallel runs two passes on the lane pool and gives the in-order answer; over @device views it is CUB's scan, which takes device scratch (gpu_alloc, gpu_free).""",
@@ -26,8 +31,8 @@ derive name[naturals] for Type; expands before checking into code of the derivin
     "memory": """buffer scratch:u64[n] = zeroed; explicitly allocates zeroed heap storage; stack scratch:u64[32] = zeroed; explicitly reserves zeroed stack storage. Elements are non-linear values (E-LINEAR-STORAGE). Stack capacity is a literal; a function's stack declarations total at most 65536 bytes (E-STACK-LIMIT), not a bound on recursion, spills or native stack. Bind computed heap capacity to an immutable usize first (E-OWNER-EXTENT). The array is neither copyable nor returnable; lend it to helpers. len(scratch) is metadata; elements are writable without mut. Buf[u64](n) is the same array as a movable owner. Release is at normal scope exit, return, break and continue. Allocation failure and guards abort, promising no cleanup. No manual free or escaping borrow. Receipts expose alloc/free/zero_init and private reads/writes.""",
     "sums": """enum Parsed {Ok(Header); Short(usize); Empty;} is a tagged sum, enum Result[T, E] {Ok(T); Err(E);} a generic one; payloads are any value type. Parsed.Short(n) may be written Short(n) where the sum is expected (return, typed let, assignment, argument, ==), unless a local, constant, function or type has that name (E-VARIANT-AMBIGUOUS). match p { Ok(h)=>return h.size; Short(n)=>return 0; Empty=>{ n = 0; } } has exactly one arm per variant, no wildcard (E-MATCH-COVERAGE); an arm names a variant of the subject and is a block or one return, break, continue, assignment or call; binders are fresh, immutable, local to the arm; the subject is evaluated once; matching an owner consumes it. A sum is copyable if its payloads are; no heap allocation, no unchecked payload access. try x on a two-variant sum (success first) yields the success payload or returns the failure from the enclosing function, whose return type is a two-variant sum with the same failure payload (E-TRY). It is the only propagation form; nothing unwraps implicitly, and f(x); may not drop such a sum (E-DISCARD): try f(x); or let _ = f(x);. Err(_) and for _ bind nothing; a linear payload is never _ (E-LINEAR-LEAK). Foreign callers must supply a valid tag and its initialized payload.""",
     "generics": """fn largest[T](a:T, b:T) -> T and struct Pair[T] { a:T; b:T; } take type parameters; [K:nat] is a static natural. Instances are monomorphized on demand and each is checked as ordinary code; type arguments are inferred from values, literals and the expected type, or written f[u64](x), Pair[u8](1, 2), Option[u64].None.
-trait Shape { fn area(self:ro<Self>) -> u64; } with impl Shape for Square { ... } dispatches statically on the Self argument, and [S:Shape] is checked when the instance is made. Bounds join with +: a trait, a kind (copy: reusable; affine: droppable and storable; none: may be linear) or a scalar class (integer unsigned signed float numeric scalar: operators and literals allowed). value.f(a) is f(value, a), found first in the module of the receiver's type. A ro<T> or rw<T> parameter borrows the named place you pass (a local, a field, another borrow): write area(sq), never &sq, and rw needs a mutable place. There is no implicit boxing.""",
-    "owners": """let mut b = Buf[u64](n); is a first-class zeroed heap array, and Array[u64, 4]() an inline one. Owners are affine: binding, passing by value or returning one moves it, and the old name is dead (E-MOVED). An owner never moves out of a place (E-PARTIAL-MOVE): take(place) moves it out and leaves zero, swap(a, b) exchanges two places, and let Conn(sock, sent) = c; consumes a whole record and binds every field, the way out for a linear field. An outer owner cannot move inside a loop, closure or lane (E-MOVE-IN-LOOP).
+trait Shape { fn area(self:ro<Self>) -> u64; } with impl Shape for Square { ... } dispatches statically on the Self argument, and [S:Shape] is checked when the instance is made. Bounds join with +: a trait, a kind (copy: reusable; affine: droppable and storable; none: may be linear) or a scalar class (integer unsigned signed float numeric scalar: operators and literals allowed). value.f(a) is f(value, a), found first in the module of the receiver's type; Trait.f(value) picks between two traits' f (E-TRAIT-AMBIGUOUS). A ro<T> or rw<T> parameter borrows the named place you pass (a local, a field, another borrow): write area(sq), never &sq, and rw needs a mutable place. There is no implicit boxing.""",
+    "owners": """let mut b = Buf[u64](n); is a first-class zeroed heap array, and Array[u64, 4]() an inline one. Owners are affine: binding, passing by value or returning one moves it, and the old name is dead (E-MOVED). An owner never moves out of a place or a borrow (E-PARTIAL-MOVE, E-MOVE-BORROW): take(place) moves it out and leaves zero, swap(a, b) exchanges two places, and let Conn(sock, sent) = c; consumes a whole record and binds every field, the way out for a linear field. An outer owner cannot move inside a loop, closure or lane (E-MOVE-IN-LOOP).
 A linear struct value is consumed exactly once on every path (E-LINEAR-LEAK, E-LINEAR-BRANCH); defer call(x); schedules that one visible call for every normal exit of its block. ro<T> and rw<T> borrow one value and read and assign like it; x[lo..hi] passes a part of an array with one dynamic guard, and two parts are disjoint only if they visibly share a boundary.
 Letting an owner go charges free where the release is: the end of the block or match arm holding it, a return that leaves while it is held, a function handed one that passes it on to nobody, and the place a new value is assigned over. A linear value need not own storage, so consuming one charges nothing on its own.
 In struct Chart { rows:usize; price:Buf[f64][rows]; } the extent is an earlier usize field of the record (E-EXTENT), and len(c.price) == c.rows then holds of every value, so total(c.rows, c.price) passes the field whole with no part guard. Nothing checks it at run time, so Chart(n, Buf[f64](n)) writes the Buf inline on the same n as rows, and neither half is assigned, taken, swapped or lent rw alone (E-EXTENT-FIELD). Moving, take, swap and zeroed storage carry the record whole and keep it.""",
@@ -60,6 +65,80 @@ fn total_by[K:nat](n:usize, xs:ro<u64>[n]) -> u64 implements total when n % K ==
     "lends": """struct Vec[T] { data:Buf[T]; len:usize; lends data[0..len]; } lends that part: named where a view is expected, v is v.data[0..v.len], guarded and leased as written, and for x in v walks it. Bounds are literals or usize fields (E-LENDS).""",
     "modules": """module net.http; names the module of what follows, and pub exports. import net.http; allows http.get(...); import a.b as c; renames; import std.core (Option, Result); also brings those names in unqualified. std.* ships with the compiler and nothing is downloaded. A private name of another module is not callable (E-PRIVATE): request context instead of guessing.""",
 }
+
+TOOL_CARDS = {
+    "hosts": """An agent edits through a host that holds the program, sends a packet and admits or refuses each reply; cairn mcp serves the same hosts. A request is JSON of the protocol its packet names, with exactly its fields and kinds (E-REQUEST). A handle, digest or state the host did not send, a spent session, or one whose source, files or toolchain moved on is E-SESSION: ask again or open a new session, never guess. A symbol names exactly one authored function, with its module when two modules declare the name (E-SYMBOL); a site is one the packet lists (E-SITE); a template is not edited (E-EDIT-PROFILE); the host's own contract, evidence and allowed effects are well formed or E-CONTRACT.
+The host splices a reply into the pinned original and rechecks the whole program. It refuses a changed signature (E-SIGNATURE), a declaration added, removed or hidden behind a trailing comment (E-DECLARATION), an effect beyond the ceiling (E-EFFECT-EXPANSION) or new in a caller's row (E-CALLER-EFFECT), a call of a function the packet did not show (E-CONTEXT-CLOSURE: expand it first), and under preserve a change of behaviour or of code (E-PRESERVE, with an input where it differs when there is one). The signature, the ceiling and the contract are the host's; change the body.""",
+    "migrations": """cairn migrate PATH --symbol f --to SIGNATURE authorizes one interface change, --also NAME=SIGNATURE others with it and --allow EFFECT what rows may gain. The packet shows every function the migration may rewrite. A reply maps each function it rewrites to its whole new declaration: an authorized function (E-MIGRATION-SCOPE) with its own name and visibility, in the project's own files, at most 64 functions (E-MIGRATION), with the authorized signature (E-SIGNATURE), no declaration added or removed (E-DECLARATION) and no effect the host did not allow (E-CALLER-EFFECT). The whole program is rechecked, and every file is written or none.""",
+    "sketches": """A host may ask for named expressions instead of a body. The reply is one JSON object that maps every slot to one expression string, with no other key, no comment in a value, 64000 bytes of choices and 128000 of reply at most (E-SKETCH-CHOICES). A sketch has 1 to 16 descriptive slot names (E-SKETCH-EMPTY, E-SKETCH-NAME), each on exactly one expression and none inside another (E-SKETCH-SITE, E-SKETCH-OVERLAP), and its slots are fixed once it is sent (E-SKETCH-SEALED). A semantic check needs a fixed reference of the same function (E-SKETCH-CONTRACT), and a search tries 1 to 4096 candidates within its budget (E-SKETCH-BUDGET).""",
+    "validation": """An implementation session pins its reference, the tolerance, the test policy and the permitted inputs. A submission is one implementation of that reference, new or replacing one of the same name, with the helpers it calls and nothing else (E-DECLARATION); it never redefines the reference or implements another function (E-REFERENCE), and names no tolerance (E-TOLERANCE), cases, seed, budget, policy or test block (E-TEST-POLICY), and no domain, inputs or precondition (E-DOMAIN): narrow where it applies with when instead. The host rechecks the program under every rule of the implementations card and validates the submission against the reference under the pinned policy; a failing or undecided validation is E-VALIDATION, with the shrunk input when one failed. Fix the algorithm for every input its condition admits, not for that one.""",
+    "commands": """cairn prints a JSON record when piped and text at a terminal. E-PROJECT-OR-ENVIRONMENT, status unknown, says what a manifest, a path, an option or a tool of this machine lacks; it is no verdict on the program. A device target is sm_ and a compute capability with an optional f or a suffix, sm_120, from --device-target, [build] device_target or the one kind of GPU present (E-TARGET); what needs a feature the target lacks is E-TARGET-FEATURE, a record made for another target E-TARGET-MISMATCH, and a build needs an nvcc that compiles the target (E-TARGET-TOOLKIT). build, run and test check an export first: a directory that is none is E-EXPORT, a changed, added or removed file or an edited record E-EXPORT-TAMPERED, another compiler E-EXPORT-TOOLCHAIN.""",
+    "limits": """The compiler bounds its own work: 16000000 bytes of source (E-SOURCE-LIMIT), expressions nested 100 deep (E-DEPTH), 200000 expression visits while checking (E-AST-LIMIT), 32768 functions and 3200000 syntax nodes after expansion, 2048 copies from one recipe or from all families (E-EXPANSION-LIMIT), and a finite effect fixed point (E-EFFECT-LIMIT); split the program or the expression. E-INTERNAL and E-PROJECTION are faults of the compiler, never of the program: report them with the program. E-RESOURCE-OR-IO says the compiler could not read or hold its input, and establishes nothing about the program.""",
+}
+
+CORE = ("base", "integers", "calls")  # sent with every packet
+CODES = {
+    "base": "E-PARSE E-LEX E-NAME E-RETURN E-UNREACHABLE E-EXPRESSION-BODY E-IMMUTABLE E-LVALUE E-UNBOUND E-SHADOW "
+    "E-DUPLICATE E-PARAM E-BUILTIN-NAME E-TYPE E-TYPE-MISMATCH E-ELEMENT-LOOP E-LOOP-CONTROL",
+    "integers": "E-WRAP-TYPE E-OPERATOR E-MINMAX E-CAST E-LITERAL-RANGE E-CONST",
+    "calls": "E-CALLEE E-CALL E-ARITY E-EFFECT-ORDER E-DISCARD",
+    "views": "E-EXTENT E-CALL-SHAPE E-CALL-VIEW E-VIEW-ALIAS E-INDEX E-LEN E-WRITE-LEASE E-ALIAS E-ESCAPE",
+    "compact": "E-COLLECT-BINDING E-COLLECT-CAPACITY E-COLLECT-SELF-READ",
+    "scan": "E-SCAN-OP E-SCAN-ORDER E-SCAN-TARGET E-SCAN-EXTENT",
+    "floats": "",
+    "math": "E-MATH-TYPE",
+    "storage": "E-QUANTIZE E-MMA",
+    "gradients": "E-GRAD E-GRAD-FORM E-GRAD-CALL E-GRAD-RACE",
+    "records": "E-RECORD E-FIELD E-RECORD-TYPE E-ALIGN E-ENUM",
+    "generators": "E-FAMILY-TARGET E-FAMILY-LIMIT E-UNINSTANTIATED E-DERIVE-FIELD E-RECIPE E-RECIPE-STATIC "
+    "E-DERIVE-DOMAIN E-DERIVE-RECIPE E-DERIVE-TYPE E-DERIVE-COLLISION",
+    "memory": "E-OWNER-ELEMENT E-STACK-EXTENT E-STACK-LIMIT E-OWNER-EXTENT",
+    "sums": "E-SUM-PAYLOAD E-SUM-ARITY E-VARIANT-AMBIGUOUS E-ENUM-VARIANT E-MATCH-TYPE E-MATCH-COVERAGE "
+    "E-MATCH-DUPLICATE E-MATCH-BINDING E-TRY",
+    "generics": "E-STATIC E-INFER E-GENERIC-ARITY E-GENERIC-KIND E-TRAIT-IMPL E-TRAIT-OVERLAP E-BOUND E-TRAIT-AMBIGUOUS",
+    "owners": "E-MOVED E-PARTIAL-MOVE E-MOVE-BORROW E-UNPACK E-MOVE-IN-LOOP E-LINEAR-LEAK E-LINEAR-BRANCH "
+    "E-LINEAR-STORAGE E-DEFER E-EXTENT-FIELD",
+    "assembly": "E-ASM-TARGET E-ASM-OPERANDS E-ASM-CONSTRAINT E-ASM-EFFECT E-ASM-CLOBBER E-ASM-LANE",
+    "foreign": "E-LAUNCH E-FOREIGN",
+    "effects": "E-EFFECT-CEILING E-EXTERN E-EXTERN-EFFECTS E-UNSAFE",
+    "parallel": "E-PLACE E-PLACEMENT E-PARALLEL-RACE E-PARALLEL-WRITE E-REDUCE-OP E-REDUCE-ORDER E-PLAN E-EMULATE "
+    "E-PARALLEL-CONTROL E-PARALLEL-NEST E-PARALLEL-CALL",
+    "cooperative": "E-COOP-SHAPE E-COOP-SHARED E-COOP-BARRIER E-COOP-CONFLICT E-COOP-UNORDERED E-COOP-REUSE "
+    "E-COOP-UNDECIDED E-COOP-GLOBAL E-COOP-WARP E-STAGE-UNREADY E-STAGE-BUSY E-STAGE-LOOP",
+    "tasks": "E-SPAWN E-LEASED",
+    "rings": "E-PINNED",
+    "closures": "E-FN-TYPE E-CLOSURE E-DYN",
+    "tests": "E-TEST E-ASSERT-EQ",
+    "implementations": "E-IMPL-SIGNATURE E-IMPLEMENTS E-IMPL-EFFECT E-IMPL-NUMERICS E-IMPL-WHEN E-IMPL-USE "
+    "E-IMPL-TARGET E-IMPL-CALL E-IMPL-PARAM",
+    "printing": "E-PRINT-ARG E-FORMAT-TARGET",
+    "layouts": "E-LAYOUT-OVERLAP E-LAYOUT-GAP E-LAYOUT-CONSUMER E-LAYOUT",
+    "fragments": "E-FRAGMENT",
+    "lends": "E-LENDS",
+    "modules": "E-IMPORT E-PRIVATE E-MANGLE",
+    "hosts": "E-REQUEST E-SESSION E-SYMBOL E-SITE E-EDIT-PROFILE E-CONTRACT E-SIGNATURE E-DECLARATION "
+    "E-EFFECT-EXPANSION E-CALLER-EFFECT E-CONTEXT-CLOSURE E-PRESERVE",
+    "migrations": "E-MIGRATION-SCOPE E-MIGRATION",
+    "sketches": "E-SKETCH-CHOICES E-SKETCH-EMPTY E-SKETCH-NAME E-SKETCH-SITE E-SKETCH-OVERLAP E-SKETCH-SEALED "
+    "E-SKETCH-CONTRACT E-SKETCH-BUDGET",
+    "validation": "E-REFERENCE E-TOLERANCE E-TEST-POLICY E-DOMAIN E-VALIDATION",
+    "commands": "E-PROJECT-OR-ENVIRONMENT E-TARGET E-TARGET-FEATURE E-TARGET-MISMATCH E-TARGET-TOOLKIT E-EXPORT "
+    "E-EXPORT-TAMPERED E-EXPORT-TOOLCHAIN",
+    "limits": "E-SOURCE-LIMIT E-DEPTH E-AST-LIMIT E-EXPANSION-LIMIT E-EFFECT-LIMIT E-INTERNAL E-PROJECTION "
+    "E-RESOURCE-OR-IO",
+}
+OWNER = {code: name for name, codes in CODES.items() for code in codes.split()}
+
+
+def every_card() -> dict[str, str]:
+    """The language's cards, then the hosts' and the command line's."""
+    return CARDS | TOOL_CARDS
+
+
+def card_of(code: object) -> str | None:
+    """The one card that states the rule behind a diagnostic code; None for a code no card owns, such as one a
+    recipe's `require` chose."""
+    return OWNER.get(code) if isinstance(code, str) else None
 
 
 def select_cards(source: str, has_views: bool = False, has_records: bool = False, has_sums: bool = False,
@@ -98,10 +177,28 @@ def select_cards(source: str, has_views: bool = False, has_records: bool = False
         "closures": words & {"|", "||", "dyn"} and ("dyn" in words or "fn" in words),
         "modules": words & {"module", "import", "pub"},
     }
-    return {name: CARDS[name] for name in ["base", "integers", "calls", *(n for n, on in wanted.items() if on)]}
+    return {name: CARDS[name] for name in [*CORE, *(n for n, on in wanted.items() if on)]}
 
 
 def has_generic_brackets(source: str) -> bool:
     """`fn f[T]`, `struct S[T]` or `enum E[T]`: a declaration keyword, a name, then `[`."""
     tokens = [t.s for t in lex(source)]
     return any(a in {"fn", "struct", "enum"} and c == "[" for a, c in zip(tokens, tokens[2:], strict=False))
+
+
+def program_cards(source: str) -> dict[str, str]:
+    """The cards a whole program selects, with views, records and sums found from its own tokens."""
+    words = {t.s for t in lex(source)}
+    return select_cards(source, bool(words & {"ro", "rw"}), "struct" in words, "enum" in words)
+
+
+def triggers() -> dict[str, list[str]]:
+    """The words that make `select_cards` send each card, found by asking it about every word the cards use."""
+    import re
+
+    words = {w for text in CARDS.values() for w in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", text)} | {"|", "||"}
+    found: dict[str, set[str]] = {}
+    for word in words:
+        for name in set(select_cards(word)) - set(CORE):
+            found.setdefault(name, set()).add(word)
+    return {name: sorted(found.get(name, ())) for name in CARDS}

@@ -32,12 +32,14 @@ No inheritance, overloading, exceptions or hidden allocation; indentation is ins
 ```
 
 ```text
-Types: bool, u8/u16/u32/u64, usize (64-bit), i8/i16/i32/i64. +,-,* trap on overflow in every build, and so does x += e; add_wrap/sub_wrap/mul_wrap are unsigned and modular, so x+1 and add_wrap(x,1) differ at the maximum. /,% trap on zero or signed min/-1; signed remainder truncates toward zero, unlike Python. shl_wrap(x,k), shr(x,k): unsigned x, usize k below the width. &,|,^,~ are unsigned; min/max integer-only. Conversions are explicit calls, u64(x), range checked: narrowing traps outside the target; float to integer truncates toward zero, trapping on NaN or out of range. Literals take the expected type, else u64/f64. Never weaken arithmetic or the trap/domain policy to pass a check.
+Types: bool, u8/u16/u32/u64, usize (64-bit), i8/i16/i32/i64. +,-,* and x += e trap on overflow in every build; add_wrap/sub_wrap/mul_wrap are unsigned and modular, so x+1 and add_wrap(x,1) differ at the maximum. /,% trap on zero or signed min/-1; signed remainder truncates toward zero, unlike Python. shl_wrap(x,k), shr(x,k): unsigned x, usize k below the width. &,|,^,~ are unsigned; min/max integer-only. Conversions are explicit calls, u64(x), range checked: narrowing traps outside the target; float to integer truncates toward zero, trapping on NaN or out of range. Literals take the expected type, else u64/f64. const K:u64 = 4 * 1024; folds at compile time. Never weaken arithmetic or the trap/domain policy to pass a check.
 ```
 
 ```text
 Call declared functions and listed primitives, never invented libraries; expand an undisclosed function before calling it. A call that writes through a borrow or allocates is a whole statement (f(x); drops a result), initializer or condition, never a nested operand (E-EFFECT-ORDER); one that only releases may nest, since the drop runs where C++ ends the scope. Rows substitute the caller's arguments, recursive calls included. What a callee's interface establishes, and what it leaves to its body, is the packet's evidence.
 ```
+
+Their codes: base E-BUILTIN-NAME, E-DUPLICATE, E-ELEMENT-LOOP, E-EXPRESSION-BODY, E-IMMUTABLE, E-LEX, E-LOOP-CONTROL, E-LVALUE, E-NAME, E-PARAM, E-PARSE, E-RETURN, E-SHADOW, E-TYPE, E-TYPE-MISMATCH, E-UNBOUND, E-UNREACHABLE; integers E-CAST, E-CONST, E-LITERAL-RANGE, E-MINMAX, E-OPERATOR, E-WRAP-TYPE; calls E-ARITY, E-CALL, E-CALLEE, E-DISCARD, E-EFFECT-ORDER.
 
 ## A program
 
@@ -106,6 +108,8 @@ Each card states one part of the language and the codes of its rules. The compil
 | [fragments](cards/fragments.md) | `MmaA`, `MmaAcc`, `MmaB`, `TmemAcc`, `WmmaA`, `WmmaAcc`, `WmmaB` |
 | [lends](cards/lends.md) | `lends` |
 | [modules](cards/modules.md) | `import`, `module`, `pub` |
+
+A refusal from a host or the command line names one of [hosts](cards/hosts.md), [migrations](cards/migrations.md), [sketches](cards/sketches.md), [validation](cards/validation.md), [commands](cards/commands.md), [limits](cards/limits.md).
 
 ## Mistakes that cost the most
 

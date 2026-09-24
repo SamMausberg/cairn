@@ -4,7 +4,7 @@ An agent edits CAIRN through a host, which holds the program, shows the agent a 
 
 ## The rule cards
 
-`src/cairn/agent/teaching.py` holds thirty-one rule cards, one per part of the language, named in `CARDS`. Each states what its part accepts and refuses, with the diagnostic code of each rule, so a refusal leads back to its card. `base`, `integers` and `calls` go with every packet, and the others are picked by the lexical tokens of the source at hand, so a packet carries only what its program uses.
+`src/cairn/agent/teaching.py` holds thirty-one rule cards, one per part of the language, named in `CARDS`, and six in `TOOL_CARDS` for what the hosts, the command line and the compiler's own limits refuse. Each card states what its part accepts and refuses and names the diagnostic code of each rule. `CODES` gives every code exactly one card, so a refusal leads back to the rule behind it, and `tests/agent/test_cards.py` fails on a code the package can emit that no card owns. `base`, `integers` and `calls` go with every packet, and the other language cards are picked by the lexical tokens of the source at hand, so a packet carries only what its program uses. No source picks a tool card.
 
 ## Packets
 
@@ -275,7 +275,7 @@ The receipt records the reference and candidate hashes, the domain, the query ha
 
 ## The skill and the Claude Code plugin
 
-`skills/cairn/` is an [Agent Skill](https://agentskills.io). `SKILL.md` holds the loop of check, test and run, and of validate and tune for implementations, the three cards every packet carries, an example that compiles, the costliest mistakes and every command. `codes.md` maps each diagnostic code to its card and fix, and `cards/` holds the other twenty-eight cards. An agent lists only the description, about 180 tokens, and reads `SKILL.md`, 12 KB, when a task involves CAIRN. `python -m cairn.agent.skill` writes the directory from `teaching.py`, `diagnostics.py` and the command line's parser, `make editors` runs it, and `tests/tooling/test_skill.py` fails while a committed file differs from a fresh render.
+`skills/cairn/` is an [Agent Skill](https://agentskills.io). `SKILL.md` holds the loop of check, test and run, and of validate and tune for implementations, the three cards every packet carries, an example that compiles, the costliest mistakes and every command. `codes.md` maps each diagnostic code to its card and fix, and `cards/` holds the other thirty-four cards. An agent lists only the description, about 180 tokens, and reads `SKILL.md`, 12 KB, when a task involves CAIRN. `python -m cairn.agent.skill` writes the directory from `teaching.py`, `diagnostics.py` and the command line's parser, `make editors` runs it, and `tests/tooling/test_skill.py` fails while a committed file differs from a fresh render.
 
 The repository is also a Claude Code plugin and its own marketplace:
 

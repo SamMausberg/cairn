@@ -1,6 +1,6 @@
 # The tasks card
 
-Sent to an agent when the program uses `Atomic`, `Group`, `Mutex`, `collect`, `spawn`, `wait`. Codes: `E-LEASED`.
+Sent to an agent when the program uses `Atomic`, `Group`, `Mutex`, `collect`, `spawn`, `wait`. Codes: `E-LEASED`, `E-SPAWN`.
 
 ```text
 let t = spawn f(args); runs a declared function on its own thread and gives a linear ticket that wait(t) must consume in the same function; let r = wait(t); is f's result, and wait(t); alone serves when f returns nothing. Until then every place lent to the task is leased (E-LEASED): nobody writes what it reads or touches what it writes, and visibly disjoint parts (d[0..mid], d[mid..n]) may be lent mutably to different tasks. What is leased is the place lent, not the local it sits in: two fields of one record (spawn f(box.a) beside spawn g(box.b)) go to two tasks, and len(box.a) still reads while box.a's elements are lent, while lending the record whole leases every field in it, and box.a = Buf[u64](2) under a lease of box.a is refused.

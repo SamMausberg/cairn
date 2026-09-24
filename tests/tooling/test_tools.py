@@ -195,6 +195,19 @@ def test_measure_context(tmp_path):
     assert sum(focused["by_kind"].values()) == focused["total_once"]
 
 
+def test_skill_tokens():
+    """What an agent reads of the skill, and of it to write the tour; a count, not evidence that a model does better."""
+    from support import tokenizer
+
+    record = parsed(tool("tools/ai/skill_tokens.py"))
+    assert record["unit"] == (tokenizer() or ["utf8_bytes"])[0]
+    assert set(record["files"]) == {
+        p.relative_to(ROOT / "skills/cairn").as_posix() for p in (ROOT / "skills/cairn").rglob("*.md")
+    }
+    assert record["tour"]["programs"] == 12 and set(record["tour"]["cards"]) <= {n[6:-3] for n in record["files"]}
+    assert record["files"]["SKILL.md"] < record["tour"]["tokens"] < record["skill_total"]
+
+
 @needs_clang
 def test_mutation_checks():
     printed = tool("tools/corpus/mutation_checks.py", timeout=600)

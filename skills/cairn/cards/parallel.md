@@ -1,6 +1,6 @@
 # The parallel card
 
-Sent to an agent when the program uses `device`, `parallel`, `pinned`, `reduce`, `transfer`, `unified`. Codes: `E-EMULATE`, `E-PARALLEL-RACE`, `E-PLAN`, `E-REDUCE-ORDER`.
+Sent to an agent when the program uses `device`, `parallel`, `pinned`, `reduce`, `transfer`, `unified`. Codes: `E-EMULATE`, `E-PARALLEL-CALL`, `E-PARALLEL-CONTROL`, `E-PARALLEL-NEST`, `E-PARALLEL-RACE`, `E-PARALLEL-WRITE`, `E-PLACE`, `E-PLACEMENT`, `E-PLAN`, `E-REDUCE-OP`, `E-REDUCE-ORDER`.
 
 ```text
 parallel i in n { out[i] = a * x[i] + y[i]; } runs one lane per index and finishes before the next statement. Placement is part of a view type: @host (the default), @pinned, @unified, @device. Indexing a @device view makes the region CUDA lanes, otherwise host threads; host code cannot index @device memory and lanes cannot index the other side; a @pinned or @unified view may be passed where @host is asked, and @unified also as @device. The first host region of a process creates the lane pool and later ones reuse it; a small one is just the loop.
