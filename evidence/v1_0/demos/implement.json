@@ -124,7 +124,7 @@
         },
         "select_with": "plan sumsq use sumsq_by4;",
         "claim": "finite-tested: the reference is an independent algorithm, but both are compiled by this compiler, so agreement on these cases is finite testing, never proof",
-        "candidate_sha256": "6039dc3a38361ecb217c456ae1f8988b69291c41657d2e53debb0c66c485048a",
+        "candidate_sha256": "947a0b45fe7750d3f8bf6be3c4e4eb7a023728f4f878465f6d36d4543dee7a9e",
         "selected": false,
         "written": [
           "src/sumsq.cairn"
@@ -249,15 +249,16 @@
               "kept_cases": 1
             },
             "smt": {
-              "status": "smt-equivalent",
+              "status": "unknown",
               "where": "((((n % 32) == 0)) && (n >= 0 && n <= 4096)) && n <= 16",
-              "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided"
+              "bounded": "only where every usize parameter is within the unrolling bound; beyond it nothing is decided",
+              "reason": "The comparison ran past its 14 s limit and was stopped."
             },
             "select_with": "plan sumsq use sumsq_blocks[32];"
           }
         },
         "claim": "finite-tested: the reference is an independent algorithm, but both are compiled by this compiler, so agreement on these cases is finite testing, never proof",
-        "candidate_sha256": "c66d1ebf8964c6c477a023680bac3c84e73f6b16d0502b09a2dcd5e57c5c97c9",
+        "candidate_sha256": "2edd09ae049b0164a4fa8187ed83cb06826c54d1d48d91db1961f2b09997c417",
         "selected": false,
         "written": [
           "src/sumsq.cairn"
@@ -372,7 +373,7 @@
     ],
     "chosen": {
       "plan": "(no plan for sumsq)",
-      "measured_ns": 45504.6
+      "measured_ns": 46803.8
     },
     "implementations": [
       "sumsq_by4",
@@ -386,7 +387,7 @@
       {
         "blocks": 3,
         "measured_ns": {
-          "(no plan for sumsq)": 45504.6
+          "(no plan for sumsq)": 46803.8
         }
       }
     ],
@@ -400,7 +401,7 @@
       },
       "seconds": {
         "allowed": 300.0,
-        "spent": 1.12
+        "spent": 1.39
       },
       "runs": {
         "allowed": null,
@@ -448,7 +449,7 @@
         "use": "sumsq_blocks[32]",
         "validated": {
           "evidence": "finite-tested",
-          "record": "bbec067ea040c829"
+          "record": "898f169279f41292"
         },
         "parameters": {
           "K": 32
@@ -460,7 +461,7 @@
         "use": "sumsq_blocks[16]",
         "validated": {
           "evidence": "finite-tested",
-          "record": "8b3499fdc352e34c"
+          "record": "6d12fc71a8664cf0"
         },
         "parameters": {
           "K": 16
@@ -472,7 +473,7 @@
         "use": "sumsq_blocks[8]",
         "validated": {
           "evidence": "finite-tested",
-          "record": "753457a894cb9352"
+          "record": "6605413c409d83e7"
         },
         "parameters": {
           "K": 8
@@ -484,7 +485,7 @@
         "use": "sumsq_blocks[4]",
         "validated": {
           "evidence": "finite-tested",
-          "record": "6aec15e274b5ef6c"
+          "record": "2a345d8011ec516a"
         },
         "parameters": {
           "K": 4
@@ -496,14 +497,14 @@
         "use": "sumsq_by4",
         "validated": {
           "evidence": "finite-tested",
-          "record": "ee95ef3afb76fb7d"
+          "record": "93c37bdd54fbc1c5"
         }
       }
     ],
     "chosen": {
-      "plan": "plan sumsq use sumsq_blocks[8];",
-      "use": "sumsq_blocks[8]",
-      "measured_ns": 12516.7
+      "plan": "plan sumsq use sumsq_blocks[4];",
+      "use": "sumsq_blocks[4]",
+      "measured_ns": 12773.1
     },
     "implementations": [
       "sumsq_by4",
@@ -517,31 +518,31 @@
       {
         "blocks": 3,
         "measured_ns": {
-          "(no plan for sumsq)": 46204.4,
-          "plan sumsq use sumsq_blocks[32];": 20614.5,
-          "plan sumsq use sumsq_blocks[16];": 18873.9,
-          "plan sumsq use sumsq_blocks[8];": 12165.4,
-          "plan sumsq use sumsq_blocks[4];": 12296.9,
-          "plan sumsq use sumsq_by4;": 11770.0
+          "(no plan for sumsq)": 44127.2,
+          "plan sumsq use sumsq_blocks[32];": 25947.0,
+          "plan sumsq use sumsq_blocks[16];": 17184.7,
+          "plan sumsq use sumsq_blocks[8];": 11498.1,
+          "plan sumsq use sumsq_blocks[4];": 13329.8,
+          "plan sumsq use sumsq_by4;": 12239.1
         }
       },
       {
         "blocks": 6,
         "measured_ns": {
-          "plan sumsq use sumsq_by4;": 13148.6,
-          "plan sumsq use sumsq_blocks[8];": 11035.8,
-          "plan sumsq use sumsq_blocks[4];": 12644.0
+          "plan sumsq use sumsq_blocks[8];": 12227.1,
+          "plan sumsq use sumsq_by4;": 23411.5,
+          "plan sumsq use sumsq_blocks[4];": 13001.8
         }
       },
       {
         "blocks": 12,
         "measured_ns": {
-          "plan sumsq use sumsq_blocks[8];": 12516.7,
-          "plan sumsq use sumsq_blocks[4];": 12897.4
+          "plan sumsq use sumsq_blocks[8];": 13242.8,
+          "plan sumsq use sumsq_blocks[4];": 12773.1
         }
       }
     ],
-    "measured_best": "plan sumsq use sumsq_blocks[8];",
+    "measured_best": "plan sumsq use sumsq_blocks[4];",
     "pairs_ordered_as_predicted": "3 of 15",
     "budget": {
       "compiles": {
@@ -551,7 +552,7 @@
       },
       "seconds": {
         "allowed": 120.0,
-        "spent": 11.74
+        "spent": 13.8
       },
       "runs": {
         "allowed": 16,
@@ -564,84 +565,84 @@
   },
   "load_average": [
     [
-      9.1337890625,
-      13.66357421875,
-      10.60791015625
+      7.04638671875,
+      9.9150390625,
+      10.08740234375
     ],
     [
-      7.3994140625,
-      13.05908203125,
-      10.45849609375
+      6.931640625,
+      9.75390625,
+      10.0322265625
     ]
   ],
   "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
   "written": [
-    "plan sumsq use sumsq_blocks[8];"
+    "plan sumsq use sumsq_blocks[4];"
   ],
   "compare": {
     "schema": "cairn.compare/1",
     "function": "sumsq",
     "a": "(no plan for sumsq)",
-    "b": "plan sumsq use sumsq_blocks[8];",
+    "b": "plan sumsq use sumsq_blocks[4];",
     "lines": [
       {
         "kind": "compiler observation",
         "by": "cairn predict (the model, not a run)",
-        "text": "at n=65536: predicted 3.705e+04 ns -> 4.168e+04 ns; the model's bound compute -> compute; confidence high",
+        "text": "at n=65536: predicted 3.705e+04 ns -> 4.631e+04 ns; the model's bound compute -> compute; confidence high",
         "sizes": {
           "n": 65536.0
         },
         "a": 37050.0,
-        "b": 41680.0
+        "b": 46310.0
       },
       {
         "kind": "runtime measurement",
         "by": "cairn.perf.measure: the candidate built with the project's flags beside a driver that fills each view, timed in blocks of at least 2 ms, the median of 3 blocks, on this host",
-        "text": "a at n=65536: median 4.62e+04 ns (min 4.54e+04, max 7.418e+04)",
+        "text": "a at n=65536: median 4.413e+04 ns (min 4.374e+04, max 4.53e+04)",
         "side": "a",
         "sizes": {
           "n": 65536.0
         },
-        "median_ns": 46204.390625,
-        "record": "60072466b7c8af6e"
+        "median_ns": 44127.1875,
+        "record": "d7eec5488d3d34e8"
       },
       {
         "kind": "runtime measurement",
         "by": "cairn.perf.measure: the candidate built with the project's flags beside a driver that fills each view, timed in blocks of at least 2 ms, the median of 3 blocks, on this host",
-        "text": "b at n=65536: median 1.217e+04 ns (min 1.194e+04, max 1.225e+04)",
+        "text": "b at n=65536: median 1.333e+04 ns (min 1.218e+04, max 1.385e+04)",
         "side": "b",
         "sizes": {
           "n": 65536.0
         },
-        "median_ns": 12165.414062,
-        "record": "44c30081be0f0ae3"
+        "median_ns": 13329.785156,
+        "record": "631524cd2149c656"
       },
       {
         "kind": "runtime measurement",
         "by": "cairn.perf.measure: the candidate built with the project's flags beside a driver that fills each view, timed in blocks of at least 2 ms, the median of 6 blocks, on this host",
-        "text": "b at n=65536: median 1.104e+04 ns (min 1.078e+04, max 1.151e+04)",
+        "text": "b at n=65536: median 1.3e+04 ns (min 1.17e+04, max 1.426e+04)",
         "side": "b",
         "sizes": {
           "n": 65536.0
         },
-        "median_ns": 11035.761719,
-        "record": "27d6c7ecba2c2a63"
+        "median_ns": 13001.820312,
+        "record": "afef9f686c8c0c59"
       },
       {
         "kind": "runtime measurement",
         "by": "cairn.perf.measure: the candidate built with the project's flags beside a driver that fills each view, timed in blocks of at least 2 ms, the median of 12 blocks, on this host",
-        "text": "b at n=65536: median 1.252e+04 ns (min 1.102e+04, max 1.328e+04)",
+        "text": "b at n=65536: median 1.277e+04 ns (min 1.081e+04, max 1.658e+04)",
         "side": "b",
         "sizes": {
           "n": 65536.0
         },
-        "median_ns": 12516.714844,
-        "record": "1174600b06481c28"
+        "median_ns": 12773.128906,
+        "record": "1b8ef808b209908e"
       },
       {
         "kind": "hypothesis",
         "by": "the model against the measurement",
-        "text": "the model predicted x1.12 and the runs measured x0.271: the model leaves out what separates them"
+        "text": "the model predicted x1.25 and the runs measured x0.289: the model leaves out what separates them"
       },
       {
         "kind": "suggested experiment",
