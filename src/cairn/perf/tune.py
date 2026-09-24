@@ -364,11 +364,12 @@ def timed(source: str, name: str, ranked: list[Any], current: Any, sizes: list[d
 def lines(result: dict[str, Any], shown_rows: int = 8) -> str:
     """The answer for a person: the space, the best-ranked few with what a compile read, what was measured, and what
     the budget spent and left undone."""
-    from .report import duration
+    from .report import duration, priced_on
 
     space_ = result["space"]
     out = [f"{result['function']}: {space_['configurations']} plans, {space_['legal']} accepted, "
            f"{space_['configurations'] - space_['legal']} refused or unchecked; now {result['current']}"]  # fmt: skip
+    out += priced_on(result)
     for i, row in enumerate(result["candidates"][:shown_rows], 1):
         read = row.get("resources", {})
         seen = f"  {read['registers']} registers, {read['spill_bytes']} spilled" if "registers" in read else ""

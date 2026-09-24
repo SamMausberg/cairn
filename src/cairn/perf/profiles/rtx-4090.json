@@ -1,0 +1,46 @@
+{
+  "schema": "cairn.machine/1",
+  "name": "NVIDIA GeForce RTX 4090 (AD102, compute capability 8.9)",
+  "origin": "specification",
+  "notes": "Published figures, not a measurement: no device run has confirmed any of them, and none has run here. launch_ns, link_ns, memory_efficiency, occupancy_to_saturate and memory_latency_ns are assumptions, the same on every packaged card, marked as such below.",
+  "source": {
+    "published": ["sms", "cores_per_sm", "ghz", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "warp", "tensor", "register_unit", "shared_reserved", "shared_bytes_per_clock"],
+    "derived": ["flops.f64"],
+    "assumed": ["launch_ns", "link_ns", "memory_efficiency", "occupancy_to_saturate", "memory_latency_ns"],
+    "documents": {
+      "whitepaper": "NVIDIA Ada GPU Architecture whitepaper v2.1, Appendix A, Table 2, the GeForce RTX 4090 column (https://images.nvidia.com/aem-dam/Solutions/geforce/ada/nvidia-ada-gpu-architecture.pdf)",
+      "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+    },
+    "sms": "Ada whitepaper: 128 SMs of 128 CUDA cores, GPU boost clock 2520 MHz.",
+    "dram_gbps": "Ada whitepaper: 24 GB GDDR6X at 1008 GB/s.",
+    "flops": "Ada whitepaper: Peak FP32 82.6 TFLOPS, Peak INT32 TOPS 41.3 (IMAD-based, 64 INT32 lanes an SM counted at 2 operations a clock). f64 is derived: FP64 at 1/64 of FP32 (Guide, Table 30).",
+    "tensor": "Ada whitepaper, dense (the sparse figures are twice these), with FP32 accumulate, which mma_unordered's f32 accumulator uses: FP16 and BF16 165.2, FP8 330.3, TF32 82.6 TFLOPS. With FP16 accumulate, FP16 runs at 330.3. The model reads tensor_f16; the others are recorded for a reader.",
+    "link_gbps": "Ada whitepaper: PCI Express Gen 4; at x16, 32 GB/s each way, before protocol overhead.",
+    "occupancy": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html), 8.9 column: 64 K registers, 48 warps (1536 threads) and 100 KB of shared memory an SM; the CUDA C++ Programming Guide 12.9, section 20, says for each of 8.x, 9.0, 10.x and 12.0 that the 1 KB of shared memory not made available to a thread block is reserved for system use (shared_reserved); the CUDA Occupancy Calculator allocates registers a warp at a time in units of 256 (register_unit). No limit on resident blocks per SM is applied here.",
+    "shared_bytes_per_clock": "CUDA C++ Programming Guide: shared memory has 32 banks, each 32 bits wide a clock cycle.",
+    "memory_latency_ns": "Assumed. NVIDIA publishes no device-memory latency and no run here has measured one; it prices only a pipeline's asynchronous copies, as the bytes in flight over this latency. Every packaged card assumes the same 500 ns."
+  },
+  "host": null,
+  "device": {
+    "name": "GeForce RTX 4090",
+    "compute_capability": "8.9",
+    "sms": 128,
+    "cores_per_sm": 128,
+    "ghz": 2.52,
+    "dram_gbps": 1008.0,
+    "flops": {"f32": 82600.0, "i32": 41300.0, "f64": 1290.0, "tensor_tf32": 82600.0, "tensor_f16": 165200.0, "tensor_bf16": 165200.0, "tensor_f8": 330300.0},
+    "launch_ns": 8000.0,
+    "link_gbps": 32.0,
+    "link_ns": 10000.0,
+    "memory_efficiency": 0.85,
+    "occupancy_to_saturate": 0.5,
+    "registers_per_sm": 65536,
+    "threads_per_sm": 1536,
+    "shared_per_sm": 102400,
+    "warp": 32,
+    "register_unit": 256,
+    "shared_reserved": 1024,
+    "shared_bytes_per_clock": 128,
+    "memory_latency_ns": 500.0
+  }
+}

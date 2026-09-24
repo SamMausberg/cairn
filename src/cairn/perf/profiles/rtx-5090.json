@@ -1,0 +1,46 @@
+{
+  "schema": "cairn.machine/1",
+  "name": "NVIDIA GeForce RTX 5090 (GB202, compute capability 12.0)",
+  "origin": "specification",
+  "notes": "Published figures, not a measurement: no device run has confirmed any of them, and none has run here. launch_ns, link_ns, memory_efficiency, occupancy_to_saturate and memory_latency_ns are assumptions, the same on every packaged card, marked as such below.",
+  "source": {
+    "published": ["sms", "cores_per_sm", "ghz", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "warp", "tensor", "register_unit", "shared_reserved", "shared_bytes_per_clock"],
+    "derived": ["flops.f64"],
+    "assumed": ["launch_ns", "link_ns", "memory_efficiency", "occupancy_to_saturate", "memory_latency_ns"],
+    "documents": {
+      "whitepaper": "NVIDIA RTX Blackwell GPU Architecture whitepaper V1.1, Appendix A, Table 3, the GeForce RTX 5090 column (https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf)",
+      "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+    },
+    "sms": "RTX Blackwell whitepaper: 170 SMs of 128 CUDA cores, GPU boost clock 2407 MHz.",
+    "dram_gbps": "RTX Blackwell whitepaper: 32 GB GDDR7 at 1792 GB/s.",
+    "flops": "RTX Blackwell whitepaper: Peak FP32 104.8 TFLOPS and Peak INT32 TOPS 104.8, since Blackwell's cores issue either. f64 is derived: FP64 at 1/64 of FP32 (Guide, Table 30).",
+    "tensor": "RTX Blackwell whitepaper, dense (the sparse figures are twice these), with FP32 accumulate: FP16 and BF16 209.5, FP8 419, FP4 1676, TF32 104.8 TFLOPS. The model reads tensor_f16; the others are recorded for a reader.",
+    "link_gbps": "RTX Blackwell whitepaper: PCI Express Gen 5; at x16, 64 GB/s each way, before protocol overhead.",
+    "occupancy": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html), 12.x column: 64 K registers, 48 warps (1536 threads) and 100 KB of shared memory an SM; the CUDA C++ Programming Guide 12.9, section 20, says for each of 8.x, 9.0, 10.x and 12.0 that the 1 KB of shared memory not made available to a thread block is reserved for system use (shared_reserved); the CUDA Occupancy Calculator allocates registers a warp at a time in units of 256 (register_unit). No limit on resident blocks per SM is applied here.",
+    "shared_bytes_per_clock": "CUDA C++ Programming Guide: shared memory has 32 banks, each 32 bits wide a clock cycle.",
+    "memory_latency_ns": "Assumed. NVIDIA publishes no device-memory latency and no run here has measured one; it prices only a pipeline's asynchronous copies, as the bytes in flight over this latency. Every packaged card assumes the same 500 ns."
+  },
+  "host": null,
+  "device": {
+    "name": "GeForce RTX 5090",
+    "compute_capability": "12.0",
+    "sms": 170,
+    "cores_per_sm": 128,
+    "ghz": 2.407,
+    "dram_gbps": 1792.0,
+    "flops": {"f32": 104800.0, "i32": 104800.0, "f64": 1638.0, "tensor_tf32": 104800.0, "tensor_f16": 209500.0, "tensor_bf16": 209500.0, "tensor_f8": 419000.0, "tensor_f4": 1676000.0},
+    "launch_ns": 8000.0,
+    "link_gbps": 64.0,
+    "link_ns": 10000.0,
+    "memory_efficiency": 0.85,
+    "occupancy_to_saturate": 0.5,
+    "registers_per_sm": 65536,
+    "threads_per_sm": 1536,
+    "shared_per_sm": 102400,
+    "warp": 32,
+    "register_unit": 256,
+    "shared_reserved": 1024,
+    "shared_bytes_per_clock": 128,
+    "memory_latency_ns": 500.0
+  }
+}

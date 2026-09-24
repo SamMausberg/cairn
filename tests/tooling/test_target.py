@@ -18,7 +18,7 @@ from cairn.cli import main
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.perf import report as priced
 from cairn.perf.device import resources
-from cairn.perf.profile import Profile, packaged
+from cairn.perf.profile import Profile, cards, packaged
 from cairn.projects import target
 from cairn.projects.build import build
 from cairn.projects.project import load_project
@@ -118,13 +118,18 @@ def test_a_result_recorded_for_another_target_is_refused():
     assert parse("sm_120") == DeviceTarget(120, "", "detected") and parse("sm_120") != parse("sm_120a")
 
 
-def test_the_limits_agree_with_the_packaged_device_card():
-    card = packaged("rtx-5070-ti").device
+@pytest.mark.parametrize("key", list(cards()))
+def test_the_limits_agree_with_each_packaged_device_card(key):
+    card = cards()[key].device
     limits = parse(f"sm_{card.compute_capability.replace('.', '')}").limits
-    assert limits == LIMITS[120]
+    assert limits is not None, f"{key}: no LIMITS row for compute capability {card.compute_capability}"
     assert (limits.registers_per_sm, limits.warps_per_sm * 32, limits.shared_per_sm) == (
         card.registers_per_sm, card.threads_per_sm, card.shared_per_sm)  # fmt: skip
-    assert parse("sm_121").limits is None and parse("sm_121").record()["limits_origin"].startswith("unknown")
+
+
+def test_a_capability_without_a_published_row_has_unknown_limits():
+    assert LIMITS[120] == LIMITS[121]  # the programming guide's 12.x column
+    assert parse("sm_88").limits is None and parse("sm_88").record()["limits_origin"].startswith("unknown")
 
 
 def test_ptxas_reports_for_suffixed_targets_are_read():
@@ -164,7 +169,8 @@ F8F6F4 = """__global__ void p(float* out) {
   out[0] = d0 + d1 + d2 + d3;
 }
 """
-PROBED = ["sm_75", "sm_80", "sm_89", "sm_90", "sm_90a", "sm_100", "sm_100a", "sm_100f", "sm_120", "sm_120f", "sm_120a"]
+PROBED = ["sm_75", "sm_80", "sm_89", "sm_90", "sm_90a", "sm_100", "sm_100a", "sm_100f", "sm_103", "sm_103a", "sm_110f",
+          "sm_120", "sm_120f", "sm_120a", "sm_121", "sm_121a"]  # fmt: skip
 
 
 @NVCC

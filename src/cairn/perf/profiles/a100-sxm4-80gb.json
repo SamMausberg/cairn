@@ -1,0 +1,47 @@
+{
+  "schema": "cairn.machine/1",
+  "name": "NVIDIA A100 SXM4 80GB (GA100, compute capability 8.0)",
+  "origin": "specification",
+  "notes": "Published figures, not a measurement: no device run has confirmed any of them, and none has run here. launch_ns, link_ns, memory_efficiency, occupancy_to_saturate and memory_latency_ns are assumptions, the same on every packaged card, marked as such below.",
+  "source": {
+    "published": ["sms", "cores_per_sm", "ghz", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "warp", "tensor", "register_unit", "shared_reserved", "shared_bytes_per_clock"],
+    "assumed": ["launch_ns", "link_ns", "memory_efficiency", "occupancy_to_saturate", "memory_latency_ns"],
+    "documents": {
+      "datasheet": "NVIDIA A100 Tensor Core GPU datasheet, the A100 80GB SXM column (https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/nvidia-a100-datasheet-us-nvidia-1758950-r4-web.pdf)",
+      "whitepaper": "NVIDIA A100 Tensor Core GPU Architecture whitepaper, Table 3 (https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf)",
+      "hopper_whitepaper": "NVIDIA H100 Tensor Core GPU Architecture whitepaper, Table 3, the A100 column (https://resources.nvidia.com/en-us-hopper-architecture/nvidia-h100-tensor-c)",
+      "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+    },
+    "sms": "Ampere whitepaper: 108 SMs of 64 FP32 cores each, 6912 in all, GPU boost clock 1410 MHz; the 80GB SXM4's datasheet figures are the same compute at the same clock.",
+    "dram_gbps": "Datasheet, A100 80GB SXM: GPU memory bandwidth 2,039 GB/s (HBM2e).",
+    "flops": "Datasheet and Ampere whitepaper: FP32 19.5 TFLOPS (6912 cores, 2 operations per fused multiply-add, 1.41 GHz), FP64 9.7 TFLOPS. i32 is the Hopper whitepaper's Peak INT32 TOPS for A100, 19.5: 64 INT32 cores an SM, counted as the whitepapers count them, 2 operations per core a clock, the convention every packaged card follows.",
+    "tensor": "Datasheet, dense (the sparse figures are twice these): TF32 Tensor Core 156 TFLOPS, BFLOAT16 and FP16 Tensor Core 312 TFLOPS. Compute capability 8.0 has no FP8 or FP4 tensor cores (Guide, Table 33). The model reads tensor_f16; the others are recorded for a reader.",
+    "link_gbps": "Datasheet: PCIe Gen4 64 GB/s, both directions together, so 32 GB/s each way, before protocol overhead. NVLink joins GPUs to each other, not to the host.",
+    "occupancy": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html), 8.0 column: 64 K registers, 64 warps (2048 threads) and 164 KB of shared memory an SM; the CUDA C++ Programming Guide 12.9, section 20, says for each of 8.x, 9.0, 10.x and 12.0 that the 1 KB of shared memory not made available to a thread block is reserved for system use (shared_reserved); the CUDA Occupancy Calculator allocates registers a warp at a time in units of 256 (register_unit). No limit on resident blocks per SM is applied here.",
+    "shared_bytes_per_clock": "CUDA C++ Programming Guide: shared memory has 32 banks, each 32 bits wide a clock cycle.",
+    "memory_latency_ns": "Assumed. NVIDIA publishes no device-memory latency and no run here has measured one; it prices only a pipeline's asynchronous copies, as the bytes in flight over this latency. Every packaged card assumes the same 500 ns."
+  },
+  "host": null,
+  "device": {
+    "name": "A100 SXM4 80GB",
+    "compute_capability": "8.0",
+    "sms": 108,
+    "cores_per_sm": 64,
+    "ghz": 1.41,
+    "dram_gbps": 2039.0,
+    "flops": {"f32": 19500.0, "i32": 19500.0, "f64": 9700.0, "tensor_tf32": 156000.0, "tensor_f16": 312000.0, "tensor_bf16": 312000.0},
+    "launch_ns": 8000.0,
+    "link_gbps": 32.0,
+    "link_ns": 10000.0,
+    "memory_efficiency": 0.85,
+    "occupancy_to_saturate": 0.5,
+    "registers_per_sm": 65536,
+    "threads_per_sm": 2048,
+    "shared_per_sm": 167936,
+    "warp": 32,
+    "register_unit": 256,
+    "shared_reserved": 1024,
+    "shared_bytes_per_clock": 128,
+    "memory_latency_ns": 500.0
+  }
+}

@@ -78,6 +78,10 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"predict", "shot"}, "--against", {"type": Path, "metavar": "BEFORE", "help": "What changing BEFORE into this "
                                          "program does: predicted costs, or for shot the rows of --symbol."}),
     ({"predict", "tune"}, "--profile", {"type": Path, "help": "A cairn.machine/1 profile; default: the packaged one."}),
+    ({"predict", "tune"}, "--card", {"metavar": "CARD", "help": "Price device work on this packaged device card, "
+                                     "published figures that no run here measured (cairn cards lists them; h100 "
+                                     "names h100-sxm5). Without --device-target or a manifest target, the target is "
+                                     "the card's own. predict also takes all: a row per card."}),
     ({"predict"}, "--inspect", {"action": "store_true", "help": "Compile the device code for the device target and "
                                 "read each cooperative region's registers from ptxas; nothing runs."}),
     ({"build", "run", "export"}, "--out", {"type": Path}),
@@ -154,6 +158,8 @@ def parser() -> argparse.ArgumentParser:
                         "record. Default: human on a terminal, json when piped, or CAIRN_FORMAT.")  # fmt: skip
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor", help="Report local tools; never downloads them.", parents=[shared])
+    sub.add_parser("cards", help="List the device cards predict and tune price device work on: NVIDIA's published "
+                   "figures and the assumptions each names, none measured.", parents=[shared])  # fmt: skip
     new = sub.add_parser("new", help="Create a project from a template; it is data only.", parents=[shared])
     new.add_argument("directory", type=Path)
     new.add_argument("--template", choices=templates(), default="default", help="default: the average the guide "

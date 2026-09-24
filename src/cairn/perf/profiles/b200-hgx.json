@@ -1,0 +1,51 @@
+{
+  "schema": "cairn.machine/1",
+  "name": "NVIDIA B200 in HGX B200 (compute capability 10.0)",
+  "origin": "specification",
+  "notes": "Published figures, not a measurement: no device run has confirmed any of them, and none has run here. launch_ns, link_ns, memory_efficiency, occupancy_to_saturate and memory_latency_ns are assumptions, the same on every packaged card, marked as such below.",
+  "source": {
+    "published": ["sms", "cores_per_sm", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "warp", "tensor", "register_unit", "shared_reserved", "shared_bytes_per_clock"],
+    "derived": ["ghz", "flops.i32"],
+    "assumed": ["launch_ns", "link_ns", "memory_efficiency", "occupancy_to_saturate", "memory_latency_ns"],
+    "documents": {
+      "datasheet": "NVIDIA Blackwell datasheet (October 2025), Technical Specifications, the HGX B200 column (https://dam-cdn.nvd.orangelogic.com/AssetLink/y441155802qub41q118b2852i557jem5.pdf, linked from https://www.nvidia.com/en-us/data-center/hgx/)",
+      "hgx": "NVIDIA HGX platform specifications, the HGX B200 column, for eight GPUs (https://www.nvidia.com/en-us/data-center/hgx/)",
+      "sms": "NVIDIA Technical Blog, Boost GPU Memory Performance with No Code Changes Using NVIDIA CUDA MPS, December 2025 (https://developer.nvidia.com/blog/boost-gpu-memory-performance-with-no-code-changes-using-nvidia-cuda-mps/)",
+      "sections": "CUDA C++ Programming Guide 12.9, section 20, Compute Capabilities, and Table 7 of arithmetic throughput (https://docs.nvidia.com/cuda/archive/12.9.1/cuda-c-programming-guide/index.html)",
+      "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+    },
+    "sms": "NVIDIA Technical Blog: an HGX B200's Blackwell GPUs normally have 148 SMs.",
+    "cores_per_sm": "CUDA C++ Programming Guide 12.9, section 20.9.1, compute capability 10.x: an SM has 128 FP32 cores, 64 FP64 cores and 64 INT32 cores; Table 7 gives 128 32-bit floating-point results and 64 32-bit integer adds a clock an SM.",
+    "ghz": "Derived: NVIDIA publishes no B200 clock; the datasheet's FP32 75 TFLOPS on 148 x 128 cores at 2 operations per fused multiply-add is 1.979 GHz.",
+    "dram_gbps": "Datasheet, individual HGX B200 GPU: 180 GB HBM3E at 7.7 TB/s.",
+    "flops": "Datasheet: FP32 75 TFLOPS, FP64 and FP64 tensor 37 TFLOPS. i32 is derived as the other cards' is: 64 INT32 cores an SM against 128 FP32 cores, so half of f32.",
+    "tensor": "HGX specifications for eight GPUs, sparse, divided by eight and halved for dense: TF32 18 PFLOPS, FP16 and BF16 36, FP8 72; FP4 is given dense, 72 PFLOPS. The datasheet's individual column agrees and rounds TF32 to 2.2 PFLOPS sparse. The model reads tensor_f16; the others are recorded for a reader.",
+    "link_gbps": "Datasheet: PCIe Gen5 128 GB/s, both directions together, so 64 GB/s each way, before protocol overhead.",
+    "occupancy": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html), 10.0 column: 64 K registers, 64 warps (2048 threads) and 228 KB of shared memory an SM; the CUDA C++ Programming Guide 12.9, section 20, says for each of 8.x, 9.0, 10.x and 12.0 that the 1 KB of shared memory not made available to a thread block is reserved for system use (shared_reserved); the CUDA Occupancy Calculator allocates registers a warp at a time in units of 256 (register_unit). No limit on resident blocks per SM is applied here.",
+    "shared_bytes_per_clock": "CUDA C++ Programming Guide: shared memory has 32 banks, each 32 bits wide a clock cycle.",
+    "memory_latency_ns": "Assumed. NVIDIA publishes no device-memory latency and no run here has measured one; it prices only a pipeline's asynchronous copies, as the bytes in flight over this latency. Every packaged card assumes the same 500 ns."
+  },
+  "host": null,
+  "device": {
+    "name": "B200 (HGX B200)",
+    "compute_capability": "10.0",
+    "sms": 148,
+    "cores_per_sm": 128,
+    "ghz": 1.979,
+    "dram_gbps": 7700.0,
+    "flops": {"f32": 75000.0, "i32": 37500.0, "f64": 37000.0, "tensor_tf32": 1125000.0, "tensor_f16": 2250000.0, "tensor_bf16": 2250000.0, "tensor_f8": 4500000.0, "tensor_f4": 9000000.0},
+    "launch_ns": 8000.0,
+    "link_gbps": 64.0,
+    "link_ns": 10000.0,
+    "memory_efficiency": 0.85,
+    "occupancy_to_saturate": 0.5,
+    "registers_per_sm": 65536,
+    "threads_per_sm": 2048,
+    "shared_per_sm": 233472,
+    "warp": 32,
+    "register_unit": 256,
+    "shared_reserved": 1024,
+    "shared_bytes_per_clock": 128,
+    "memory_latency_ns": 500.0
+  }
+}

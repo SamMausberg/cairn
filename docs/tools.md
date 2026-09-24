@@ -253,6 +253,45 @@ row_sums[3]  8.01 us + 8.09 ns*rows (launch, up to rows=512); 8.01 us + 8.11 ns*
 
 At depth 2 the same region holds 6144 bytes a block, keeps 2 stages in flight and is predicted at 106 us. `--against` names what a change did to each region: `tiles.depth 2 -> 3; shared_bytes_per_block 6144 -> 8192`.
 
+### Other GPUs
+
+`--card CARD` prices device work on a packaged device card in place of the RTX 5070 Ti, so an agent can ask how a kernel does on a GPU it does not have. `cairn cards` lists them. A card is named by its key or the start of one before a hyphen, so `--card h100` is `h100-sxm5`; any other name is refused with `E-DEVICE-CARD`.
+
+```text
+$ cairn cards
+card             cc     SMs    GHz   GB/s    f32 f16 tensor f8 tensor  device
+a100-sxm4-80gb   8.0    108   1.41   2039   19.5        312         -  A100 SXM4 80GB
+b200-hgx         10.0   148  1.979   7700     75       2250      4500  B200 (HGX B200)
+h100-sxm5        9.0    132   1.98   3352   66.9      989.4    1978.9  H100 SXM5 80GB
+h200-sxm         9.0    132   1.98   4800     67      989.5      1979  H200 SXM 141GB
+l40s             8.9    142   2.52    864   91.6     362.05       733  L40S
+rtx-4090         8.9    128   2.52   1008   82.6      165.2     330.3  GeForce RTX 4090
+rtx-5070-ti      12.0    70  2.452    896  43.94       87.9     175.8  RTX 5070 Ti
+rtx-5090         12.0   170  2.407   1792  104.8      209.5       419  GeForce RTX 5090
+```
+
+Every figure on a card is NVIDIA's published specification, and tensor rates are the dense ones. The card's `source` names the document behind each figure: the GPU's datasheet or architecture whitepaper, and the CUDA Programming Guide's tables per compute capability. A figure NVIDIA does not publish for that product is either derived from ones it does, listed under `derived` with how, or assumed and listed under `assumed`. The B200's clock is derived: its 75 TFLOPS of FP32 over 148 SMs of 128 cores is 1.979 GHz. The launch cost, the link's fixed cost, the share of peak bandwidth a stream reaches, the occupancy that keeps memory busy and the memory latency are assumed, the same on every card. No card has been measured. The B300 and the GB10 have no card: NVIDIA publishes no clock for either, and its SM counts for the B300 disagree.
+
+The card also gives the device target when neither `--device-target` nor `[build] device_target` names one. That target is the card's own compute capability, arch-specific from sm_90 on, since a card describes exactly one device (`sm_90a` for the H100), and portable before (`sm_80` for the A100). So `--card h100 --inspect` compiles the kernels for sm_90a and reads their registers with ptxas, with no GPU present. A named target is kept, and a card its code does not run on is refused with `E-TARGET-MISMATCH`, as `--device-target sm_120 --card h100` is.
+
+`--card all` prices every card at once. Each function with device work gets a row per card at each size, with its bound, its time and its fraction of speed of light:
+
+```text
+$ cairn predict examples/tensor/tile32.cairn --card all --at m=4096,n=4096,k=4096,cn=16777216,an=16777216,bn=16777216
+predicted from published specifications, not measured: 8 cards; host work on AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64
+tile32  m=4096, n=4096, k=4096, cn=1.67772e+07, an=1.67772e+07, bn=1.67772e+07
+  a100-sxm4-80gb   sm_80       5.93 ms  shared memory        100% of speed of light   low
+  b200-hgx         sm_100a     3.09 ms  shared memory        100% of speed of light   low
+  h100-sxm5        sm_90a      3.46 ms  shared memory        100% of speed of light   low
+  h200-sxm         sm_90a      3.46 ms  shared memory        100% of speed of light   low
+  l40s             sm_89       9.24 ms  device memory        85% of speed of light    low
+  rtx-4090         sm_89       7.92 ms  device memory        85% of speed of light    low
+  rtx-5070-ti      sm_120a     8.91 ms  device memory        85% of speed of light    low
+  rtx-5090         sm_120a     4.46 ms  device memory        85% of speed of light    low
+```
+
+The same kernel is bound by shared memory on the data-center cards and by device memory on the others, which is the kind of difference the rows are for. Each card is priced for its own target unless one is named; a named target prices only the cards its code runs on and lists the others as refused. A function without device work is listed once, since no card changes it. `--inspect` compiles once for each target.
+
 ## cairn tune
 
 `cairn tune [path] --symbol f --at n=1e7` chooses `f`'s [plan](concurrency.md#plans) by a bounded search. A plan changes no result, so every candidate the checker accepts is correct and the search only asks which is fastest. A function is named with its module, as in `--symbol lib.spread`. `--write` puts the chosen plan after the function's declaration and removes any plan that named it elsewhere, only if the whole project still checks.
@@ -264,6 +303,8 @@ When `f` has [implementations](abstractions.md#implementations), each is a candi
 An implementation with [natural parameters](abstractions.md#implementations) is searched over the values its `tune` clause lists. Each instance is a candidate of its own: checked, priced, compiled for its kernels when it runs device code, and chosen or timed only while the history holds a validation of that instance. Its row reads `plan prefix use prefix_by[16];` with its `parameters`, and `--write` writes that line. The checker has already held every listed instance to the implementation rules; the budgets bound how many the search compiles and times. `--compare "use prefix_by[8]" --compare "use prefix_by[32]"` compares two instances.
 
 A cooperative region's block shape and a pipeline's depth are such parameters: `threads t in T` and `pipeline tiles:u64[T] depth D;` take a natural, so `fn row_totals_tiled[T:nat, D:nat](...) implements row_totals tune T in [128, 256], D in [2, 3]` ([examples/cooperative/tuned.toml](../examples/cooperative/tuned.toml)) gives the search four instances. Each is priced as above and compiled for its own kernel, whose registers, shared memory and SASS digest its row shows. None is chosen until a validation of it holds, which a device implementation gets only under `make gpu`. `--compare` adds the checker's own difference between two instances: `tiles: stages: 2 -> 3`.
+
+`--card CARD` prices the candidates on a [packaged card](#other-gpus) and gives the device target from it when nothing names one, so a search for a GPU this machine lacks compiles for that GPU and prices on its specification. `cairn tune examples/cooperative/tuned.toml --symbol row_totals --at rows=64,cols=1e5 --device-target sm_90a --card h100 --compare "use row_totals_tiled[128, 2]" --compare "use row_totals_tiled[256, 3]"` reads each instance's registers from ptxas for sm_90a and prices both on the H100 card; nothing runs.
 
 Device candidates are then compiled for the [device target](#the-device-target) in predicted order; among candidates priced alike, one whose kernel items (`unroll`, `vector`, `stage`, `fuse`) no earlier compile covered goes first. Nothing runs: ptxas and cuobjdump report registers, spilled bytes, stack, static shared memory and instructions, and a staged tile's shared memory is computed from the plan. Registers and shared memory enter the price through occupancy, and `chosen` is the best-ranked candidate a compile read. Each compile is kept by the digest of what it read: the emitted program, the runtime headers, the target, the toolkit and the inspector. A program already compiled costs nothing, and a kept reading for another target is refused (`E-TARGET-MISMATCH`). `resources.sass` digests the SASS, so candidates with the same device code show one digest, as `blur` with and without `block 128` does. Without a device target nothing is compiled, and the answer says so.
 
@@ -572,7 +613,7 @@ GitHub has no CAIRN grammar, so `.gitattributes` has it highlight `.cairn` files
 
 A program that indexes `@device` views is built for one device target, spelled as nvcc spells it and apart from the CPU architecture `--arch` names. `sm_120` runs on compute capability 12.0 and every later 12.x device, `sm_120f` adds the features the family shares and runs on its devices from 12.0, and `sm_120a` adds every feature of exactly 12.0 and runs only there.
 
-`--device-target` on `build`, `run`, `predict` and `tune` names the target, else `[build] device_target`, else the one GPU `nvidia-smi` reports, which asks the driver and launches nothing. With none of these a device build is refused with `E-TARGET`; nothing defaults to `-arch=native`.
+`--device-target` on `build`, `run`, `predict` and `tune` names the target, else `[build] device_target`, else, for `predict` and `tune`, the target of the [card](#other-gpus) `--card` names, else the one GPU `nvidia-smi` reports, which asks the driver and launches nothing. With none of these a device build is refused with `E-TARGET`; nothing defaults to `-arch=native`.
 
 ```toml
 [build]
@@ -589,7 +630,7 @@ The target is resolved once and every stage receives the same one: nvcc's `-arch
 | a program needing a feature the target lacks: `bf16` on sm_75, `mma_f8f6f4` on plain sm_120, `tcgen05` on any sm_120 | `E-TARGET-FEATURE` |
 | a result recorded for another target: a ptxas report, a timing, a measured device card, or a card for a device the target's code does not run on | `E-TARGET-MISMATCH` |
 
-The features are `FEATURES` in `src/cairn/projects/target.py`. `tests/tooling/test_target.py` assembles one probe instruction per feature for eleven targets and holds the table to what ptxas accepts. The limits (registers per thread, shared memory per block and per SM, threads per block, warps per SM) are the CUDA programming guide's for 7.5 through 12.0, a specification rather than a measurement. A target without a row has unknown limits, and its record says so.
+The features are `FEATURES` in `src/cairn/projects/target.py`. `tests/tooling/test_target.py` assembles one probe instruction per feature for sixteen targets and holds the table to what ptxas accepts. The limits (registers per thread, shared memory per block and per SM, threads per block, warps per SM) are the CUDA Programming Guide's for 7.5, 8.0, 8.6, 8.7, 8.9, 9.0, 10.0, 10.3, 10.7, 11.0, 12.0 and 12.1, a specification rather than a measurement, and every packaged card is held to its row. A target without a row has unknown limits, and its record says so.
 
 ## The freestanding target
 

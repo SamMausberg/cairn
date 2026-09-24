@@ -6,12 +6,16 @@
   "source": {
     "published": ["sms", "cores_per_sm", "ghz", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "warp", "tensor", "register_unit", "shared_reserved", "shared_bytes_per_clock"],
     "assumed": ["launch_ns", "link_ns", "memory_efficiency", "occupancy_to_saturate", "memory_latency_ns"],
+    "documents": {
+      "whitepaper": "NVIDIA RTX Blackwell GPU Architecture whitepaper V1.1, Appendix B, the GeForce RTX 5070 Ti column (https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf)",
+      "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+    },
     "occupancy": "CUDA C++ Programming Guide: from compute capability 8.0 on, 1 KB of an SM's shared memory is reserved for system use in each resident block (shared_reserved), and 12.0 gives an SM 100 KB, 64 K registers and 48 warps; the CUDA Occupancy Calculator allocates registers a warp at a time in units of 256 (register_unit). No limit on resident blocks per SM is applied here.",
     "shared_bytes_per_clock": "CUDA C++ Programming Guide: shared memory has 32 banks, each 32 bits wide a clock cycle.",
     "memory_latency_ns": "Assumed. NVIDIA publishes no device-memory latency and no run here has measured one; it prices only a pipeline's asynchronous copies, as the bytes in flight over this latency.",
     "flops": "f32 is 2 operations per fused multiply-add on 8960 cores at the 2.452 GHz boost clock; Blackwell's cores issue either f32 or i32, so i32 is the same; f64 runs at 1/64 of f32.",
     "link_gbps": "PCIe 5.0 x16, per direction, before protocol overhead.",
-    "tensor": "NVIDIA RTX Blackwell GPU Architecture whitepaper V1.1, the RTX 5070 Ti column, dense: Peak FP16 and Peak BF16 Tensor TFLOPS with FP32 Accumulate 87.9, Peak FP8 Tensor TFLOPS with FP32 Accumulate 175.8. mma_unordered widens an 8-bit float to f16, so every format it takes runs at the f16 figure; tensor_f8 is the rate a native FP8 multiply would have."
+    "tensor": "NVIDIA RTX Blackwell GPU Architecture whitepaper V1.1, the RTX 5070 Ti column, dense: Peak FP16 and Peak BF16 Tensor TFLOPS with FP32 Accumulate 87.9, Peak FP8 Tensor TFLOPS with FP32 Accumulate 175.8, Peak FP4 with FP32 Accumulate 703, Peak TF32 43.9. mma_unordered widens an 8-bit float to f16, so every format it takes runs at the f16 figure; tensor_f8 is the rate a native FP8 multiply would have, and tensor_bf16, tensor_tf32 and tensor_f4 are recorded for a reader."
   },
   "host": null,
   "device": {
@@ -21,7 +25,7 @@
     "cores_per_sm": 128,
     "ghz": 2.452,
     "dram_gbps": 896.0,
-    "flops": {"f32": 43940.0, "i32": 43940.0, "f64": 686.6, "tensor_f16": 87900.0, "tensor_f8": 175800.0},
+    "flops": {"f32": 43940.0, "i32": 43940.0, "f64": 686.6, "tensor_tf32": 43900.0, "tensor_f16": 87900.0, "tensor_bf16": 87900.0, "tensor_f8": 175800.0, "tensor_f4": 703000.0},
     "launch_ns": 8000.0,
     "link_gbps": 64.0,
     "link_ns": 10000.0,

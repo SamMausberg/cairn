@@ -1,0 +1,48 @@
+{
+  "schema": "cairn.machine/1",
+  "name": "NVIDIA H200 SXM 141GB (GH100, compute capability 9.0)",
+  "origin": "specification",
+  "notes": "Published figures, not a measurement: no device run has confirmed any of them, and none has run here. launch_ns, link_ns, memory_efficiency, occupancy_to_saturate and memory_latency_ns are assumptions, the same on every packaged card, marked as such below.",
+  "source": {
+    "published": ["sms", "cores_per_sm", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "warp", "tensor", "register_unit", "shared_reserved", "shared_bytes_per_clock"],
+    "derived": ["ghz", "flops.i32"],
+    "assumed": ["launch_ns", "link_ns", "memory_efficiency", "occupancy_to_saturate", "memory_latency_ns"],
+    "documents": {
+      "datasheet": "NVIDIA H200 Tensor Core GPU datasheet, the H200 SXM column, preliminary specifications (https://dam-cdn.nvd.orangelogic.com/AssetLink/b2kt2580e5b6424if22lg65223m6ghjb.pdf, linked from https://resources.nvidia.com/en-us-hopper-architecture/nvidia-h100-tensor-c)",
+      "overview": "NVIDIA, CUDA Programming and Optimization (2024), the NVIDIA H200 SXM overview (https://developer-blogs.nvidia.com/wp-content/uploads/2024/08/CUDA-Programming-and-Optimization.pdf)",
+      "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+    },
+    "sms": "NVIDIA's CUDA Programming and Optimization overview of the H200 SXM: 132 SMs, each with 128 FP32 cores, 64 FP64 cores and 64 INT32 cores.",
+    "ghz": "Derived: the datasheet's FP32 67 TFLOPS on 132 x 128 cores at 2 operations per fused multiply-add is 1.98 GHz, the H100 SXM5's published FP32 boost clock. NVIDIA publishes no H200 clock.",
+    "dram_gbps": "Datasheet: GPU memory bandwidth 4.8 TB/s (HBM3e, 141 GB).",
+    "flops": "Datasheet: FP32 67 TFLOPS, FP64 34 TFLOPS. i32 is derived as the other cards' is: 64 INT32 cores an SM, 2 operations each a clock, at 1.98 GHz on 132 SMs.",
+    "tensor": "Datasheet, whose tensor figures are with sparsity; dense is half: TF32 989/2, BFLOAT16 and FP16 1,979/2, FP8 3,958/2 TFLOPS. The model reads tensor_f16; the others are recorded for a reader.",
+    "link_gbps": "Datasheet: PCIe Gen5 128 GB/s, both directions together, so 64 GB/s each way, before protocol overhead.",
+    "occupancy": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html), 9.0 column: 64 K registers, 64 warps (2048 threads) and 228 KB of shared memory an SM; the CUDA C++ Programming Guide 12.9, section 20, says for each of 8.x, 9.0, 10.x and 12.0 that the 1 KB of shared memory not made available to a thread block is reserved for system use (shared_reserved); the CUDA Occupancy Calculator allocates registers a warp at a time in units of 256 (register_unit). No limit on resident blocks per SM is applied here.",
+    "shared_bytes_per_clock": "CUDA C++ Programming Guide: shared memory has 32 banks, each 32 bits wide a clock cycle.",
+    "memory_latency_ns": "Assumed. NVIDIA publishes no device-memory latency and no run here has measured one; it prices only a pipeline's asynchronous copies, as the bytes in flight over this latency. Every packaged card assumes the same 500 ns."
+  },
+  "host": null,
+  "device": {
+    "name": "H200 SXM 141GB",
+    "compute_capability": "9.0",
+    "sms": 132,
+    "cores_per_sm": 128,
+    "ghz": 1.98,
+    "dram_gbps": 4800.0,
+    "flops": {"f32": 67000.0, "i32": 33500.0, "f64": 34000.0, "tensor_tf32": 494500.0, "tensor_f16": 989500.0, "tensor_bf16": 989500.0, "tensor_f8": 1979000.0},
+    "launch_ns": 8000.0,
+    "link_gbps": 64.0,
+    "link_ns": 10000.0,
+    "memory_efficiency": 0.85,
+    "occupancy_to_saturate": 0.5,
+    "registers_per_sm": 65536,
+    "threads_per_sm": 2048,
+    "shared_per_sm": 233472,
+    "warp": 32,
+    "register_unit": 256,
+    "shared_reserved": 1024,
+    "shared_bytes_per_clock": 128,
+    "memory_latency_ns": 500.0
+  }
+}

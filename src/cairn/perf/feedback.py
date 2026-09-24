@@ -22,7 +22,7 @@ from ..compiler.cairnc import compile_program
 from ..projects.target import DeviceTarget, resolve
 from . import cooperative_model, model
 from .plan_source import Placement, Plan, contract, written
-from .profile import Profile, default
+from .profile import Device, Profile, card, default
 from .resources import Inspector, device_identity, host_target
 from .tune import label, variant
 from .work import count
@@ -86,9 +86,10 @@ def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]
     one resolved here. A candidate is a plan, or a plan and the implementation it selects (`parse_candidate`);
     without one, the reference runs."""
     from ..agent import history as kept
+    from .report import targeted
     from .tune import keyed
 
-    chosen, card = profile or default(), target or resolve(required=False)
+    chosen, target = profile or default(), target or resolve(required=False)
     placement = Placement(source, name)
     module = placement.f.module
     sides = {k: (plan, f"{module}.{use}" if use and module and "." not in use else use)
@@ -110,10 +111,11 @@ def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]
         for what, x, y in cooperative_model.checked(costs)
     ]
     device = any(r.kind == "device" or (r.coop is not None and r.coop.device) for k in "ab" for r in costs[k].regions)
+    on = targeted(costs, chosen, target) if device else {}  # the card that prices a and b runs the target's code
     if device:
         from .device import available
 
-        inspector = Inspector(card, kept.History(history) if history is not None else None) if card else None
+        inspector = Inspector(target, kept.History(history) if history is not None else None) if target else None
         for k in "ab" if inspector else ():
             found = inspector.kept(programs[k], runs[k], checked[k][0])
             if found is None and compiles > 0 and available():
@@ -138,9 +140,9 @@ def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]
                     lines.append(line(COMPILER, "cuobjdump", what, a=x, b=y))
         else:
             missing = " and ".join(sorted({"a", "b"} - {k for k, r in read.items() if r["status"] == "read"}))
-            why = "nvcc and cuobjdump are needed, or the compile budget was spent" if card else "no device target"
+            why = "nvcc and cuobjdump are needed, or the compile budget was spent" if target else "no device target"
             lines.append(line(COMPILER, "this report", f"no device resources for {missing}: {why}"))
-    targets = {kept.digest(host_target(arch, cxx)), device_identity(card)}
+    targets = {kept.digest(host_target(arch, cxx)), device_identity(target)}
     table = kept.selectable(
         source, checked["a"][2].get(name, {}).get("implementations"), vendored
     )  # with what each calls
@@ -148,11 +150,11 @@ def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]
     held = history_lines(source, name, variants, sizes, history, targets) if history is not None else {}
     lines += held.get("lines", [])
     threads = {k: next((r.coop.threads for r in costs[k].regions if r.coop is not None), 0) for k in "ab"}
-    lines += reasoning(lines, read, device, sides, name, threads)
+    lines += reasoning(lines, read, device, sides, name, threads, chosen.device)
     if history is not None:  # what the report only supposes goes into the history as that, and nothing more
         pair = {"compare": [variants["a"], variants["b"]]}
         made = kept.identity(kept.as_written(source, name), pair, contract(source, name),
-                             device_identity(card) if device else kept.digest(host_target(arch, cxx)))  # fmt: skip
+                             device_identity(target) if device else kept.digest(host_target(arch, cxx)))  # fmt: skip
         named = f"{label(name, sides['b'])} against {label(name, sides['a'])}"
         claims = [kept.record(history, "hypothesis", name, named, made, {"claim": x["text"], "by": x["by"]}, pair)
                   for x in lines if x["kind"] == HYPOTHESIS]  # fmt: skip
@@ -165,6 +167,7 @@ def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]
         "function": name,
         "a": label(name, sides["a"]),
         "b": label(name, sides["b"]),
+        **{k: v for k, v in on.items() if k in {"device_card", "device_target"}},
         "lines": lines,
         "kinds": [COMPILER, MEASURED, PROFILER, HYPOTHESIS, EXPERIMENT],
     }
@@ -207,9 +210,9 @@ def history_lines(source: str, name: str, sides: dict[str, Any], sizes: list[dic
 
 
 def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], device: bool, sides: dict[str, Any],
-              name: str, threads: dict[str, int] | None = None) -> list[dict[str, Any]]:  # fmt: skip
-    """Hypotheses the observations allow, each with the experiment that would test it. None is stated as a cause."""
-    from .profile import device as card
+              name: str, threads: dict[str, int] | None = None, priced: Device | None = None) -> list[dict[str, Any]]:  # fmt: skip
+    """Hypotheses the observations allow, each with the experiment that would test it, the occupancy ones on the card
+    `priced`, the packaged default without one. None is stated as a cause."""
 
     out: list[dict[str, Any]] = []
     run = ("make tune-device FILE=... SYMBOL=" + name + " AT=...  (the owner's target; nothing here runs the device)"
@@ -221,7 +224,7 @@ def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], devi
                         "the indices per thread) or from noise"))  # fmt: skip
     if len(got) == 2:
         a, b = got["a"], got["b"]
-        spec = card()
+        spec = priced or card().device
         if spec is not None and a["registers"] != b["registers"]:
             block = {
                 k: (threads or {}).get(k) or dict(sides[k][0]).get("block", 256) for k in "ab"
@@ -229,7 +232,7 @@ def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], devi
             resident = {k: spec.occupancy(got[k]["registers"], block[k], got[k]["shared_bytes"] +
                                           got[k]["dynamic_shared_bytes"]) for k in "ab"}  # fmt: skip
             if resident["a"] != resident["b"]:
-                out.append(line(HYPOTHESIS, "derived from the registers and the device profile's published limits",
+                out.append(line(HYPOTHESIS, f"derived from the registers and the published limits of the {spec.name}",
                                 f"at most {resident['a']:.0%} -> {resident['b']:.0%} of an SM's threads can be resident; "
                                 "if the candidate with fewer is slower, fewer warps hiding memory latency may be why"))  # fmt: skip
         if b["spill_bytes"] != a["spill_bytes"]:
@@ -268,6 +271,8 @@ def other(side: str) -> str:
 
 def lines_for_people(report: dict[str, Any]) -> str:
     """The report for a person: one line each, its label first."""
-    out = [f"{report['function']}: {report['a']}  ->  {report['b']}"]
+    from .report import priced_on
+
+    out = [f"{report['function']}: {report['a']}  ->  {report['b']}", *(f"  {x}" for x in priced_on(report))]
     out += [f"  [{x['kind']}] {x['by']}: {x['text']}" for x in report["lines"]]
     return "\n".join(out)

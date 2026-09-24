@@ -120,6 +120,7 @@ A command that reports takes `--format json`, the default when its output is pip
 | Command | What it does |
 |---|---|
 | `cairn doctor` | Report local tools; never downloads them. |
+| `cairn cards` | List the device cards predict and tune price device work on: NVIDIA's published figures and the assumptions each names, none measured. |
 | `cairn new` | Create a project from a template; it is data only. |
 | `cairn check` | Accept or refuse a program: syntax, types, ownership, leases, lanes, placement, effects. |
 | `cairn emit` | Print the C++ the program lowers to. |

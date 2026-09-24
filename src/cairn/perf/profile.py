@@ -4,6 +4,9 @@ kind of operation with and without vectors, and what the lane pool, a task and a
 A profile is data. `origin` says where its numbers came from: `measured` by `cairn.perf.calibrate` on the machine it
 names, or `specification` from a vendor's published figures, which no run has confirmed. The model carries the
 origin into every prediction it makes from the profile.
+
+A device card is a packaged profile with a device and no host: one GPU's published figures, each with the document
+it came from. `card()` is how anything reads one, by its key, and `cards()` lists them.
 """
 
 from __future__ import annotations
@@ -160,6 +163,65 @@ def packaged(name: str) -> Profile:
     return Profile.load(PROFILES / f"{name}.json")
 
 
+DEFAULT_CARD = "rtx-5070-ti"  # what prices device work when neither the profile nor the command names a card
+
+
+def cards() -> dict[str, Profile]:
+    """Every packaged device card by its key, the file's name: a profile with a device and no host."""
+    found = {path.stem: Profile.load(path) for path in sorted(PROFILES.glob("*.json"))}
+    for key, p in found.items():
+        p.source["card"] = key
+    return {key: p for key, p in found.items() if p.device is not None and p.host is None}
+
+
+def card(name: str = DEFAULT_CARD) -> Profile:
+    """The packaged card `name`: its key, or the start of exactly one key before a hyphen, so `h100` is
+    `h100-sxm5`. Any other name is E-DEVICE-CARD, with the keys there are. This is how anything reads a card."""
+    from ..compiler.tree import Diagnostic
+
+    known = cards()
+    found = [name] if name in known else [key for key in known if key.startswith(f"{name}-")]
+    if len(found) != 1:
+        which = f"names {' and '.join(found)}" if found else "names no packaged card"
+        raise Diagnostic("E-DEVICE-CARD", f"{name!r} {which}; the cards are {', '.join(known)}. `cairn cards` lists "
+                         "them.", card=name)  # fmt: skip
+    return known[found[0]]
+
+
+def carrying(profile: Profile, chosen: Profile) -> Profile:
+    """`profile`'s host with the device of the card `chosen`: what prices a program's host work and, on that card,
+    its device work. The host's origin stays the profile's; the card's is its own."""
+    return Profile(profile.name, profile.origin, profile.notes, profile.host, chosen.device,
+                   {**profile.source, "device": chosen.source["device"], "card": chosen.source.get("card"),
+                    "card_origin": chosen.origin})  # fmt: skip
+
+
+def described(chosen: Profile) -> dict[str, Any]:
+    """A card as `cairn cards` lists it and a prediction names it: its key, device, capability and headline
+    figures, and where they came from."""
+    d, said = chosen.device, chosen.source.get("source", {})
+    assert d is not None
+    return {"card": chosen.source.get("card") or chosen.name, "name": chosen.name, "device": d.name,
+            "compute_capability": d.compute_capability, "origin": chosen.origin, "sms": d.sms, "ghz": d.ghz,
+            "dram_gbps": d.dram_gbps, "flops": d.flops, "threads_per_sm": d.threads_per_sm,
+            "shared_per_sm": d.shared_per_sm, "derived": said.get("derived", []), "assumed": said.get("assumed", []),
+            "documents": said.get("documents", {})}  # fmt: skip
+
+
+def listing(found: list[dict[str, Any]]) -> str:
+    """`cairn cards` for a person: a line per card, dense rates in TFLOPS, and what none of them is."""
+    out = [f"{'card':<16} {'cc':<5} {'SMs':>4} {'GHz':>6} {'GB/s':>6} {'f32':>6} {'f16 tensor':>10} {'f8 tensor':>9}  "
+           "device"]  # fmt: skip
+    for c in found:
+        rate = {k: f"{v / 1000:g}" for k, v in c["flops"].items()}
+        out.append(f"{c['card']:<16} {c['compute_capability']:<5} {c['sms']:>4} {c['ghz']:>6g} {c['dram_gbps']:>6g} "
+                   f"{rate['f32']:>6} {rate.get('tensor_f16', '-'):>10} {rate.get('tensor_f8', '-'):>9}  "
+                   f"{c['device']}")  # fmt: skip
+    out.append("NVIDIA's published figures (a specification, dense tensor rates in TFLOPS), with the launch, latency and "
+               "efficiency each card assumes; no card was measured. --format json gives every figure.")  # fmt: skip
+    return "\n".join(out)
+
+
 def default() -> Profile:
     """The profile this package ships for the machine it runs on: measured where one exists, else the closest.
 
@@ -173,8 +235,3 @@ def default() -> Profile:
     if platform.machine() not in {"x86_64", "AMD64"}:
         host.notes = f"Measured on another machine ({host.name}); calibrate this one for its own numbers."
     return host
-
-
-def device(name: str = "rtx-5070-ti") -> Device | None:
-    found = packaged(name)
-    return found.device

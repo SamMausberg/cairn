@@ -7,10 +7,11 @@ from __future__ import annotations
 from typing import Any
 
 from ..compiler.cairnc import compile_program
-from ..projects.target import DeviceTarget
+from ..compiler.tree import Diagnostic
+from ..projects.target import DeviceTarget, resolve
 from . import cooperative_model, model
 from .counts import Cost, Work
-from .profile import Device, Profile, default, packaged
+from .profile import Device, Profile, card, cards, carrying, default
 from .work import count
 
 LADDER = (1e3, 1e5, 1e7)  # the sizes a one-extent function is priced at when none are given
@@ -63,19 +64,27 @@ def costs(source: str, symbols: set[str] | None) -> dict[str, Cost]:
     return found
 
 
+def on_device(c: Cost) -> bool:
+    """Whether a device card prices part of `c`: a device region, a tensor-core multiply or a transfer."""
+    return bool(c.transfers) or any(r.kind in {"device", "tensor"} or (r.coop is not None and r.coop.device)
+                                    for r in c.regions)  # fmt: skip
+
+
 def targeted(found: dict[str, Cost], profile: Profile, device: DeviceTarget | None) -> dict[str, Any]:
     """The device target a prediction with device work is for, held to the device card that prices that work: the
-    profile's own, or the packaged one the model falls back to. Without a target it names the card alone."""
-    device_work = any(r.kind in {"device", "tensor"} or (r.coop is not None and r.coop.device)
-                      for c in found.values() for r in c.regions)  # fmt: skip
-    if not device_work and not any(c.transfers for c in found.values()):
+    profile's own, or the packaged one the model falls back to. The answer names the card, and the target when
+    there is one."""
+    if not any(on_device(c) for c in found.values()):
         return {}
-    card = (profile if profile.device else packaged("rtx-5070-ti")).source["device"]
+    chosen = profile if profile.device else card()
+    table = chosen.source["device"]
+    named = {"card": chosen.source.get("card"), "name": table["name"],
+             "compute_capability": table.get("compute_capability"),
+             "origin": chosen.source.get("card_origin", chosen.origin)}  # fmt: skip
     if device is None:
-        return {"device_target": None, "device_card": {"name": card["name"], "compute_capability":
-                                                       card.get("compute_capability")}}  # fmt: skip
-    device.fits(card, f"The device card {card['name']!r}")
-    return {"device_target": device.record()}
+        return {"device_target": None, "device_card": named}
+    device.fits(table, f"The device card {table['name']!r}")
+    return {"device_target": device.record(), "device_card": named}
 
 
 def inspected(source: str, found: dict[str, Cost], device: DeviceTarget | None) -> dict[str, Any]:
@@ -108,7 +117,7 @@ def report(source: str, sizes: list[dict[str, float]] | None = None, symbols: se
     for name, c in found.items():
         entry = {
             "line": c.line,
-            **described(c, chosen.device or packaged("rtx-5070-ti").device, site),
+            **described(c, chosen.device or card().device, site),
             "formula": model.formula(c, chosen, arch),
         }
         entry["predictions"] = [{"sizes": s, **model.predict(c, chosen, s, arch)} for s in ladder(c, sizes or [])]
@@ -152,6 +161,73 @@ def delta(before: str, after: str, sizes: list[dict[str, float]] | None = None, 
             "only_before": sorted(set(old) - set(new)), "only_after": sorted(set(new) - set(old))}  # fmt: skip
 
 
+ACROSS = (
+    "Predictions from published specifications and the assumptions each card names; nothing was built or run, "
+    "and no card's figures were measured."
+)
+
+
+def across(source: str, sizes: list[dict[str, float]] | None = None, symbols: set[str] | None = None,
+           profile: Profile | None = None, arch: str | None = None, flag: str | None = None,
+           manifest: str | None = None, inspect: bool = False) -> dict[str, Any]:  # fmt: skip
+    """Every function of `source` with device work, or `symbols` alone, priced on every packaged card at each of
+    `sizes`: a row per card with its bound, its time and its fraction of speed of light. Each card's device target is
+    `flag` (--device-target), else `manifest`, else the card's own; a card that target's code does not run on is
+    listed with its refusal and not priced. With `inspect`, each target's code is compiled once and read by ptxas,
+    and its registers count on every card priced for that target. Host work is priced by `profile`, as always."""
+    chosen = profile or default()
+    listed: list[dict[str, Any]] = []
+    groups: dict[DeviceTarget, list[tuple[str, Profile]]] = {}
+    for key, spec in cards().items():
+        d = spec.device
+        assert d is not None
+        entry = {"card": key, "name": d.name, "compute_capability": d.compute_capability, "origin": spec.origin}
+        target = resolve(flag, manifest, card=(d.compute_capability, key))
+        assert target is not None
+        try:
+            target.fits(spec.source["device"], f"The device card {key!r}")
+        except Diagnostic as refused:
+            listed.append({**entry, "refused": {"code": refused.data["code"], "message": refused.data["message"]}})
+            continue
+        listed.append({**entry, "device_target": target.name, "target_origin": target.origin})
+        groups.setdefault(target, []).append((key, spec))
+    functions: dict[str, Any] = {}
+    host_only: set[str] = set()
+    inspections: dict[str, Any] = {}
+    found = costs(source, symbols) if groups else {}
+    for target, group in groups.items():
+        if inspect:  # this target's registers and shared memory, in place of the last target's
+            for r in (r for c in found.values() for r in c.regions):
+                r.registers, r.shared = 0, 0
+            inspections[target.name] = inspected(source, found, target)
+        for name, c in found.items():
+            if not on_device(c):
+                host_only.add(name)
+                continue
+            at = functions.setdefault(name, {"line": c.line, "predictions": [{"sizes": s, "cards": []}
+                                                                               for s in ladder(c, sizes or [])]})  # fmt: skip
+            for key, spec in group:
+                priced = carrying(chosen, spec)
+                for row in at["predictions"]:
+                    p = model.predict(c, priced, row["sizes"], arch)
+                    row["cards"].append({"card": key, "device_target": target.name, "ns": p["ns"], "bound": p["bound"],
+                                         "speed_of_light": p["speed_of_light"], "confidence": p["confidence"]})  # fmt: skip
+    order = list(cards())
+    for entry in functions.values():
+        for row in entry["predictions"]:
+            row["cards"].sort(key=lambda r: order.index(r["card"]))
+    return {
+        "schema": "cairn.predict.cards/1",
+        "predicted": ACROSS,
+        "profile": chosen.describe(),
+        "arch": arch or model.measured(chosen),
+        "cards": listed,
+        **({"inspection": inspections} if inspect else {}),
+        "functions": functions,
+        "host_only": sorted(host_only),
+    }
+
+
 def duration(ns: float) -> str:
     for unit, scale in (("s", 1e9), ("ms", 1e6), ("us", 1e3)):
         if ns >= scale:
@@ -159,9 +235,19 @@ def duration(ns: float) -> str:
     return f"{ns:.3g} ns"
 
 
+def priced_on(result: dict[str, Any]) -> list[str]:
+    """The line that names the card an answer priced device work on, and the target, when there was device work."""
+    found, target = result.get("device_card"), result.get("device_target")
+    if not found:
+        return []
+    return [f"device work priced on {found['card'] or found['name']} ({found['origin']}), compute capability "
+            f"{found['compute_capability']}" + (f", for {target['name']}" if target else "")]  # fmt: skip
+
+
 def lines(result: dict[str, Any]) -> str:
     """The same answer for a person: one line per function, one per size, the parts only when there are several."""
     out = [f"predicted, not measured: {result['profile']['name']} ({result['profile']['origin']}), {result['arch']}"]
+    out += priced_on(result)
     for name, entry in result["functions"].items():
         if "predictions" not in entry:  # a delta: before, after and the ratio at each size
             out.append(f"{name}")
@@ -181,6 +267,26 @@ def lines(result: dict[str, Any]) -> str:
             out.append(f"  {sizes:<12} {duration(p['ns']):>10}  {p['bound']:<20} {light:<24} {p['confidence']}")
             out += [cooperative_model.said_at(part) for part in p["parts"] if "cooperative region" in part["what"]]
             out += [f"    because {why}" for why in p["why"] if p["confidence"] == "low"]
+    return "\n".join(out)
+
+
+def lines_across(result: dict[str, Any]) -> str:
+    """`--card all` for a person: each function and size, then a line per card."""
+    priced = sum("refused" not in c for c in result["cards"])
+    out = [f"predicted from published specifications, not measured: {priced} cards; host work on "
+           f"{result['profile']['name']} ({result['profile']['origin']}), {result['arch']}"]  # fmt: skip
+    for name, entry in result["functions"].items():
+        for row in entry["predictions"]:
+            sizes = ", ".join(f"{k}={v:g}" for k, v in row["sizes"].items()) or "-"
+            out.append(f"{name}  {sizes}")
+            for c in row["cards"]:
+                light = f"{c['speed_of_light']:.0%} of speed of light" if c["speed_of_light"] else ""
+                out.append(f"  {c['card']:<16} {c['device_target']:<8} {duration(c['ns']):>10}  {c['bound']:<20} "
+                           f"{light:<24} {c['confidence']}")  # fmt: skip
+    out += [f"refused {c['card']}: {c['refused']['code']} {c['refused']['message']}" for c in result["cards"]
+            if "refused" in c]  # fmt: skip
+    if result["host_only"]:
+        out.append(f"no device work, so no card changes it: {', '.join(result['host_only'])}")
     return "\n".join(out)
 
 

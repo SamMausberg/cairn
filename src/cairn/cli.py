@@ -56,6 +56,19 @@ def written(d: dict, own: str) -> str:
 REFUSED = {"counterexample", "rejected", "invalid-contract", "invalid-domain", "invalid-reference"}  # verify exits 1
 
 
+def carded(supplied, name: str | None) -> tuple:
+    """`--card NAME`: the profile that prices host work on this machine and device work on that card, and the
+    card's compute capability and key, from which the device target is resolved when nothing names one."""
+    if not name:
+        return supplied, None
+    if name == "all":
+        raise ProjectError("--card all is for cairn predict; a search or a comparison prices one card.")
+    from .perf.profile import card, carrying, default
+
+    chosen = card(name)
+    return carrying(supplied or default(), chosen), (chosen.device.compute_capability, chosen.source["card"])
+
+
 def stamps(path: str) -> tuple:
     """What a watched check compares between rounds: each file the project reads, with its time and size."""
     try:
@@ -129,6 +142,12 @@ def main(argv: list[str] | None = None) -> int:
                 print("\n".join(f"{k:<20} {'missing' if v is None else v}" for k, v in tools.items()))
             else:
                 report(tools)
+            return 0
+        if a.command == "cards":
+            from .perf.profile import cards, described, listing
+
+            found = [described(c) for c in cards().values()]
+            print(listing(found)) if terminal.human(FORMAT) else report({"schema": "cairn.cards/1", "cards": found})
             return 0
         if a.command == "certificates":
             from .verify.linear_certificates import audit_collector
@@ -337,7 +356,15 @@ def main(argv: list[str] | None = None) -> int:
             chosen = set(a.symbol) if a.symbol else None
             sizes, supplied = priced.parse_sizes(a.at), Profile.load(a.profile) if a.profile else None
             arch = resolve_arch(a.arch or project.arch)
-            device = resolve_device(a.device_target, project.device_target, required=a.inspect)
+            if a.card == "all":  # a row per card, each for its own target unless one is named
+                if a.against:
+                    raise ProjectError("--card all prices one version on every card; compare two on one card.")
+                answer = priced.across(project.source, sizes, chosen, supplied, arch, a.device_target,
+                                       project.device_target, a.inspect)  # fmt: skip
+                print(priced.lines_across(answer)) if terminal.human(FORMAT) else report(answer)
+                return 0
+            supplied, card = carded(supplied, a.card)
+            device = resolve_device(a.device_target, project.device_target, required=a.inspect, card=card)
             if a.against:
                 before = load_project(a.against).source
                 answer = priced.delta(before, project.source, sizes, chosen, supplied, arch, device, a.inspect)
@@ -354,9 +381,9 @@ def main(argv: list[str] | None = None) -> int:
             from .perf.tune import delta as tune_delta
             from .perf.tune import lines as tune_lines
 
-            supplied = Profile.load(a.profile) if a.profile else None
+            supplied, card = carded(Profile.load(a.profile) if a.profile else None, a.card)
             arch = resolve_arch(a.arch or project.arch)
-            device = resolve_device(a.device_target, project.device_target, required=False)
+            device = resolve_device(a.device_target, project.device_target, required=False, card=card)
             budget = Budget(a.budget_compiles, a.budget_seconds, a.budget_runs)
             kept = None if a.no_history else a.history or project.root / ".cairn" / "history"
             if a.compare:  # a difference report between two plans, in place of a search

@@ -1,0 +1,49 @@
+{
+  "schema": "cairn.machine/1",
+  "name": "NVIDIA L40S (AD102, compute capability 8.9)",
+  "origin": "specification",
+  "notes": "Published figures, not a measurement: no device run has confirmed any of them, and none has run here. launch_ns, link_ns, memory_efficiency, occupancy_to_saturate and memory_latency_ns are assumptions, the same on every packaged card, marked as such below.",
+  "source": {
+    "published": ["cores_per_sm", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "warp", "tensor", "register_unit", "shared_reserved", "shared_bytes_per_clock"],
+    "derived": ["sms", "ghz", "flops.i32", "flops.f64"],
+    "assumed": ["launch_ns", "link_ns", "memory_efficiency", "occupancy_to_saturate", "memory_latency_ns"],
+    "documents": {
+      "product_page": "NVIDIA L40S product specifications (https://www.nvidia.com/en-us/data-center/l40s/)",
+      "whitepaper": "NVIDIA Ada GPU Architecture whitepaper, Appendix C, the L40 column (https://images.nvidia.com/aem-dam/Solutions/geforce/ada/nvidia-ada-gpu-architecture.pdf)",
+      "sections": "CUDA C++ Programming Guide 12.9, section 20, Compute Capabilities, and Table 7 of arithmetic throughput (https://docs.nvidia.com/cuda/archive/12.9.1/cuda-c-programming-guide/index.html)",
+      "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+    },
+    "sms": "Derived: the product page gives 18,176 CUDA cores, 568 tensor cores and 142 RT cores, and an Ada SM has 128 CUDA cores, 4 tensor cores and one RT core (Ada whitepaper), so 142 SMs, as the whitepaper lists for the L40 with the same cores.",
+    "ghz": "Derived: NVIDIA publishes no L40S clock; the product page's FP32 91.6 TFLOPS on 18,176 cores at 2 operations per fused multiply-add is 2.52 GHz.",
+    "dram_gbps": "Product page: 48 GB GDDR6 at 864 GB/s.",
+    "flops": "Product page: FP32 91.6 TFLOPS. i32 and f64 are derived from the Programming Guide 12.9, section 20.7.1: an 8.9 SM has 128 FP32 cores, 64 INT32 cores and 2 FP64 cores, so i32 is half of f32 and f64 1/64 of it.",
+    "tensor": "Product page, dense (the sparse figures are twice these): TF32 183, BFLOAT16 and FP16 362.05, FP8 733 TFLOPS. The page does not name the accumulator; the model reads tensor_f16 for an f32 accumulator, as the page's figure. The others are recorded for a reader.",
+    "link_gbps": "Product page: PCIe Gen4 x16, 64 GB/s bidirectional, so 32 GB/s each way, before protocol overhead.",
+    "occupancy": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html), 8.9 column: 64 K registers, 48 warps (1536 threads) and 100 KB of shared memory an SM; the CUDA C++ Programming Guide 12.9, section 20, says for each of 8.x, 9.0, 10.x and 12.0 that the 1 KB of shared memory not made available to a thread block is reserved for system use (shared_reserved); the CUDA Occupancy Calculator allocates registers a warp at a time in units of 256 (register_unit). No limit on resident blocks per SM is applied here.",
+    "shared_bytes_per_clock": "CUDA C++ Programming Guide: shared memory has 32 banks, each 32 bits wide a clock cycle.",
+    "memory_latency_ns": "Assumed. NVIDIA publishes no device-memory latency and no run here has measured one; it prices only a pipeline's asynchronous copies, as the bytes in flight over this latency. Every packaged card assumes the same 500 ns."
+  },
+  "host": null,
+  "device": {
+    "name": "L40S",
+    "compute_capability": "8.9",
+    "sms": 142,
+    "cores_per_sm": 128,
+    "ghz": 2.52,
+    "dram_gbps": 864.0,
+    "flops": {"f32": 91600.0, "i32": 45800.0, "f64": 1431.0, "tensor_tf32": 183000.0, "tensor_f16": 362050.0, "tensor_bf16": 362050.0, "tensor_f8": 733000.0},
+    "launch_ns": 8000.0,
+    "link_gbps": 32.0,
+    "link_ns": 10000.0,
+    "memory_efficiency": 0.85,
+    "occupancy_to_saturate": 0.5,
+    "registers_per_sm": 65536,
+    "threads_per_sm": 1536,
+    "shared_per_sm": 102400,
+    "warp": 32,
+    "register_unit": 256,
+    "shared_reserved": 1024,
+    "shared_bytes_per_clock": 128,
+    "memory_latency_ns": 500.0
+  }
+}

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .counts import Cost, Poly, Region, Work
-from .profile import Device, Host, Profile, packaged
+from .profile import Device, Host, Profile, card
 
 # What calibration saw vectorize on the reference machine: anything else keeps a loop scalar, and so does anything a
 # profile's own calibration names in `keeps_scalar` for the -march profile the code is built for.
@@ -186,7 +186,7 @@ def region(r: Region, host: Host, arch: str, sizes: dict[str, float], missing: s
         from . import cooperative_model
 
         if r.coop.device:
-            return cooperative_model.priced(r, device or packaged("rtx-5070-ti").device, sizes, missing)
+            return cooperative_model.priced(r, device or card().device, sizes, missing)
         return cooperative_model.on_host(r, host, arch, sizes, missing)
     n, runs = value(r.count, sizes, missing), value(r.runs, sizes, missing)
     each = dict(sizes)
@@ -197,9 +197,9 @@ def region(r: Region, host: Host, arch: str, sizes: dict[str, float], missing: s
     wide = r.kind in {"host", "pooled"} and n * max(r.weight, 1) >= cutoff and r.plan[1] != 1
     grain_given = r.plan[0] or 0
     if r.kind == "device":
-        return lanes(r, device or packaged("rtx-5070-ti").device, sizes, missing)
+        return lanes(r, device or card().device, sizes, missing)
     if r.kind == "tensor":
-        return tensor(r, device or packaged("rtx-5070-ti").device, sizes, missing)
+        return tensor(r, device or card().device, sizes, missing)
     if wide or (grain_given and n >= 2):
         least = grain_given or max(1, grain // max(r.weight, 1))
         used = min(host.lanes, max(1, int(n // least)), r.plan[1] or host.lanes)
@@ -249,14 +249,14 @@ def pieces(c: Cost, host: Host, arch: str, sizes: dict[str, float], missing: set
            device: Device | None = None) -> list[Piece]:  # fmt: skip
     out = [sequential(c, host, arch, sizes, missing)]
     out += [region(r, host, arch, sizes, missing, device) for r in c.regions]
-    card = device or (packaged("rtx-5070-ti").device if c.transfers else None)
+    linked = device or (card().device if c.transfers else None)
     for way, moved in c.transfers.items():  # a transfer crosses the link, h2h copies on the host
         size = value(moved, sizes, missing)
-        if way == "h2h" or card is None:
+        if way == "h2h" or linked is None:
             out.append(Piece(f"transfer {way}", size / host.bandwidth("write", host.level(size, 1), 1), "copy"))
         else:
-            out.append(Piece(f"transfer {way}", card.link_ns + size / card.link_gbps, "the host-device link",
-                             size / card.link_gbps))  # fmt: skip
+            out.append(Piece(f"transfer {way}", linked.link_ns + size / linked.link_gbps, "the host-device link",
+                             size / linked.link_gbps))  # fmt: skip
     if (t := tasks(c, host, arch, sizes, missing)) is not None:
         out.append(t)
     zeroed = value(c.allocated, sizes, missing)

@@ -7,8 +7,8 @@ family target: it adds the features a family shares, and runs on the family's de
 later. `a` is the arch-specific target: it adds every feature of exactly one compute capability, and runs only there.
 
 A target is resolved once, from the command line's `--device-target`, else the manifest's `[build] device_target`,
-else the one GPU `nvidia-smi` reports, which asks the driver's management library and launches nothing. The record
-says which. Everything downstream receives the same object: the native command, the device inspector, tuning,
+else the device card a prediction is priced on (`perf/profile.py`), else the one GPU `nvidia-smi` reports, which asks
+the driver's management library and launches nothing. The record says which. Everything downstream receives the same object: the native command, the device inspector, tuning,
 prediction's device profile, device timing and the build receipt. A result recorded for another target is refused
 (`E-TARGET-MISMATCH`), never approximated, and a feature the target lacks is refused (`E-TARGET-FEATURE`).
 """
@@ -85,8 +85,9 @@ class Limits:
 
 
 KIB = 1024
-# CUDA C++ Programming Guide, "Technical Specifications per Compute Capability": a specification, not a
-# measurement. A compute capability this table lacks has unknown limits, and whatever needs them says so.
+# CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31, whose 12.x column holds for 12.0 and 12.1:
+# a specification, not a measurement. A compute capability this table lacks has unknown limits, and whatever needs
+# them says so.
 LIMITS = {
     75: Limits(255, 65536, 1024, 32, 48 * KIB, 64 * KIB, 64 * KIB),
     80: Limits(255, 65536, 1024, 64, 48 * KIB, 163 * KIB, 164 * KIB),
@@ -95,9 +96,13 @@ LIMITS = {
     89: Limits(255, 65536, 1024, 48, 48 * KIB, 99 * KIB, 100 * KIB),
     90: Limits(255, 65536, 1024, 64, 48 * KIB, 227 * KIB, 228 * KIB),
     100: Limits(255, 65536, 1024, 64, 48 * KIB, 227 * KIB, 228 * KIB),
+    103: Limits(255, 65536, 1024, 64, 48 * KIB, 227 * KIB, 228 * KIB),
+    107: Limits(255, 65536, 1024, 32, 48 * KIB, 327 * KIB, 328 * KIB),
+    110: Limits(255, 65536, 1024, 48, 48 * KIB, 227 * KIB, 228 * KIB),
     120: Limits(255, 65536, 1024, 48, 48 * KIB, 99 * KIB, 100 * KIB),
+    121: Limits(255, 65536, 1024, 48, 48 * KIB, 99 * KIB, 100 * KIB),
 }
-LIMITS_ORIGIN = "specification: CUDA C++ Programming Guide, technical specifications per compute capability"
+LIMITS_ORIGIN = "specification: CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31"
 
 
 def refuse(code: str, message: str, **details) -> Diagnostic:
@@ -184,7 +189,8 @@ class DeviceTarget:
         if not self.runs_on(capability):
             shown = capability or "unknown"
             raise refuse("E-TARGET-MISMATCH", f"{what} describes a device of compute capability {shown}, where code "
-                         f"for {self.name} does not run; price it with a profile of a device it runs on.",
+                         f"for {self.name} does not run; price on a card of a device it runs on (cairn cards), or "
+                         "name a target that runs on this one with --device-target.",
                          target=self.name, recorded=capability)  # fmt: skip
         if card.get("target"):
             self.accept(card["target"], what)
@@ -289,13 +295,25 @@ def detect() -> tuple[str, str] | None:
     return rows[0]
 
 
-def resolve(flag: str | None = None, manifest: str | None = None, required: bool = True) -> DeviceTarget | None:
-    """The device target of a run: `flag` (--device-target), else `manifest` ([build] device_target), else the GPU
-    detected here. With nothing to go on, E-TARGET when `required`, else None."""
+def carded(capability: str, card: str) -> DeviceTarget:
+    """The target of a device card's own compute capability (`card` names the card): arch-specific from sm_90 on,
+    since a card describes exactly one device and that target has every feature it has, and portable before."""
+    major, _, minor = capability.partition(".")
+    sm = int(major) * 10 + int(minor)
+    return parse(f"sm_{sm}{'a' if sm >= FIRST['a'] else ''}", f"card: {card} is compute capability {capability}")
+
+
+def resolve(flag: str | None = None, manifest: str | None = None, required: bool = True,
+            card: tuple[str, str] | None = None) -> DeviceTarget | None:  # fmt: skip
+    """The device target of a run: `flag` (--device-target), else `manifest` ([build] device_target), else the
+    target of `card`, the compute capability and name of the card a prediction is priced on, else the GPU detected
+    here. With nothing to go on, E-TARGET when `required`, else None."""
     if flag:
         return parse(flag, "flag")
     if manifest:
         return parse(manifest, "manifest")
+    if card:
+        return carded(*card)
     found = detect()
     if found:
         capability, name = found
