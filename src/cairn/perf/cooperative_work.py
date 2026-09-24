@@ -271,6 +271,8 @@ class Tally:
         if tag == "barrier":
             at.work.op("barrier", times)
             self.shape.barriers.append(s.line)
+        elif tag == "shared" and s.op == "unzeroed":  # nothing is done where the block starts
+            pass
         elif tag in {"shared", "pipeline"}:  # zeroed where the block starts, a share by every thread
             held = self.block.shared[s.name] if tag == "shared" else None
             size = self.k.c.sizeof(held[0]) * held[1] if held else next(

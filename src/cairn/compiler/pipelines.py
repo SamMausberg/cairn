@@ -84,9 +84,9 @@ def s_pipeline(c: Checker, s: Stmt):
     stage = -(-size * ELEMENTS[element.name] // 16) * 16
     offset = c.coop.bytes
     c.coop.bytes += -(-stage * depth // ALIGN) * ALIGN  # what follows starts on ALIGN bytes, as after an array
-    if c.coop.bytes > SHARED_LIMIT:
+    if (held := c.coop.bytes + sum(c.coop.unzeroed.values())) > SHARED_LIMIT:
         fail("E-COOP-SHARED", f"A block's shared arrays and stages hold at most {SHARED_LIMIT} bytes; with {s.name}'s "
-             f"{depth} stages of {stage} bytes they hold {c.coop.bytes}.", s)  # fmt: skip
+             f"{depth} stages of {stage} bytes they hold {held}.", s)  # fmt: skip
     c.coop.pipelines[s.name] = Pipeline(element, size, depth, offset)
     place = "device" if c.coop.device else "host"
     from .scope import Binding

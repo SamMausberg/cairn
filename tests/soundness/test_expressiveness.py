@@ -110,7 +110,14 @@ plan f { vector 4; }""",
         ),
     ],
     "Shared memory nobody zeroes": [
-        ("""fn f(g:usize) { blocks b in g threads t in 32 { shared s:u32[32]; s[t] = 1; } }""", "E-PARSE")
+        (
+            """fn f(g:usize) { blocks b in g threads t in 32 { shared s:u32[32]; s[t] = 1; barrier; let v = s[31 - t]; } }""",
+            "accepted",
+        ),
+        (
+            """fn f(g:usize) { blocks b in g threads t in 32 { shared s:u32[32]; s[t] = 1; let v = s[31 - t]; } }""",
+            "E-COOP-UNWRITTEN",
+        ),
     ],
     "Warp vote and ballot": [
         (

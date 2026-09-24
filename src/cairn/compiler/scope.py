@@ -63,6 +63,8 @@ class Block:
     reach: dict[int, tuple[int, Any]] = field(default_factory=dict)  # id(node) -> (who reaches it together, why)
     levels: dict[int, tuple[int, Any]] = field(default_factory=dict)  # id(call argument) -> (how widely shared, why)
     bytes: int = 0  # shared memory each block holds: its arrays and stages, each on 16 bytes
+    zeroed: int = 0  # the leading bytes zeroed where a block starts; the arrays declared without `= zeroed` follow
+    unzeroed: dict[str, int] = field(default_factory=dict)  # such an array -> its offset among them, until laid out
 
     @property
     def count(self) -> int:

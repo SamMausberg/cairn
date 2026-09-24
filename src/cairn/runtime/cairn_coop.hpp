@@ -153,7 +153,10 @@ template<unsigned THREADS, std::size_t BYTES> struct Team {
   Warp warps[THREADS / WARP];
 };
 
-template<unsigned THREADS, std::size_t BYTES, class F> inline void run(std::size_t grid, F body) noexcept {
+// ZERO: the leading bytes a block's start zeroes; the arrays declared without `= zeroed` lie past them. The host fills
+// those with a pattern where each block starts, so a read the checker let through before a write would show.
+template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO = BYTES, class F>
+inline void run(std::size_t grid, F body) noexcept {
   static_assert(THREADS % WARP == 0 && THREADS >= WARP && THREADS <= 1024, "a block runs whole warps");
   if(!grid) return;
   const std::size_t teams = grid < TEAMS ? grid : TEAMS;
@@ -163,7 +166,10 @@ template<unsigned THREADS, std::size_t BYTES, class F> inline void run(std::size
     Team<THREADS, BYTES>& team = *held[k];
     Host context(team.gate, team.warps, team.shared, t, THREADS);
     for(std::size_t b = k; b < grid; b += teams) {
-      if(t == 0) std::memset(team.shared, 0, sizeof(team.shared));
+      if(t == 0) {
+        if constexpr(ZERO > 0) std::memset(team.shared, 0, ZERO);
+        if constexpr(BYTES > ZERO) std::memset(team.shared + ZERO, 0x7f, BYTES - ZERO);
+      }
       team.gate.arrive_and_wait();  // the block's memory is zeroed before any thread uses it
       body(context, b, t);
       team.gate.arrive_and_wait();  // every thread is done with it before the next block zeroes it
@@ -186,10 +192,10 @@ template<unsigned THREADS, std::size_t BYTES, class F> inline void run(std::size
 
 // A region with a finish (compiler/finish.py): every block, then, once every block's threads have been joined, one
 // team of the same threads runs the finish, as block 0 of a grid of one. It runs when the grid is empty too.
-template<unsigned THREADS, std::size_t BYTES, class F, class G> inline void run_then(std::size_t grid, F body,
-                                                                                    G finish) noexcept {
-  run<THREADS, BYTES>(grid, body);
-  run<THREADS, BYTES>(1, finish);
+template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO = BYTES, std::size_t FINISH = BYTES, class F, class G>
+inline void run_then(std::size_t grid, F body, G finish) noexcept {
+  run<THREADS, BYTES, ZERO>(grid, body);
+  run<THREADS, BYTES, FINISH>(1, finish);
 }
 
 }  // namespace cr::coop
@@ -241,14 +247,14 @@ public:
   }
 };
 
-template<unsigned THREADS, std::size_t BYTES, class F> __global__ void __launch_bounds__(THREADS)
+template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO, class F> __global__ void __launch_bounds__(THREADS)
 blocks(std::size_t grid, F body) {
   __shared__ __align__(128) unsigned char memory[BYTES ? BYTES : 16];
   Device context(memory);
   const std::size_t t = threadIdx.x;
   for(std::size_t b = blockIdx.x; b < grid; b += gridDim.x) {  // the same trip count for the whole block
-    if constexpr(BYTES > 0)  // a region without arrays zeroes nothing; nvcc refuses the comparison with 0
-      for(std::size_t e = t; e < BYTES; e += THREADS) memory[e] = 0;
+    if constexpr(ZERO > 0)  // a region without zeroed arrays zeroes nothing; nvcc refuses the comparison with 0
+      for(std::size_t e = t; e < ZERO; e += THREADS) memory[e] = 0;
     __syncthreads();
     body(context, b, t);
     __pipeline_wait_prior(0);  // a stage's fills still in flight land before the memory is zeroed again
@@ -261,15 +267,15 @@ blocks(std::size_t grid, F body) {
 // visible device-wide, and the atomic add counts the block, as cooperative groups' grid barrier does. The block that
 // brings the count to the grid's knows every other block has finished; after a second fence it zeroes its shared
 // memory, runs the finish as block 0 of a grid of one, and puts the counter back to zero for the next launch.
-template<unsigned THREADS, std::size_t BYTES, class F, class G> __global__ void __launch_bounds__(THREADS)
-blocks_then(std::size_t grid, F body, G finish, unsigned* arrived) {
+template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO, std::size_t FINISH, class F, class G>
+__global__ void __launch_bounds__(THREADS) blocks_then(std::size_t grid, F body, G finish, unsigned* arrived) {
   __shared__ __align__(128) unsigned char memory[BYTES ? BYTES : 16];
   __shared__ bool last;
   Device context(memory);
   const std::size_t t = threadIdx.x;
   for(std::size_t b = blockIdx.x; b < grid; b += gridDim.x) {
-    if constexpr(BYTES > 0)
-      for(std::size_t e = t; e < BYTES; e += THREADS) memory[e] = 0;
+    if constexpr(ZERO > 0)
+      for(std::size_t e = t; e < ZERO; e += THREADS) memory[e] = 0;
     __syncthreads();
     body(context, b, t);
     __pipeline_wait_prior(0);
@@ -282,8 +288,8 @@ blocks_then(std::size_t grid, F body, G finish, unsigned* arrived) {
   }
   __syncthreads();
   if(!last) return;
-  if constexpr(BYTES > 0)
-    for(std::size_t e = t; e < BYTES; e += THREADS) memory[e] = 0;
+  if constexpr(FINISH > 0)
+    for(std::size_t e = t; e < FINISH; e += THREADS) memory[e] = 0;
   __syncthreads();
   finish(context, 0, t);
   __pipeline_wait_prior(0);
@@ -291,7 +297,7 @@ blocks_then(std::size_t grid, F body, G finish, unsigned* arrived) {
 }
 
 // On the calling thread's execution context (cairn_exec.hpp), returning once its stream has run the region.
-template<unsigned THREADS, std::size_t BYTES, class F>
+template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO = BYTES, class F>
 inline void launch(gpu::Context& ctx, std::size_t grid, F body) noexcept {
   static_assert(THREADS % WARP == 0 && THREADS >= WARP && THREADS <= 1024, "a block runs whole warps");
   static_assert(BYTES <= 48 * 1024, "static shared memory holds 48 KiB");
@@ -299,18 +305,18 @@ inline void launch(gpu::Context& ctx, std::size_t grid, F body) noexcept {
   if(!grid) return;
   const unsigned g = grid < gpu::MAX_GRID ? unsigned(grid) : gpu::MAX_GRID;
   reuse::synchronous(ctx, [&](cudaStream_t s) {
-    blocks<THREADS, BYTES><<<g, THREADS, 0, s>>>(grid, body);
+    blocks<THREADS, BYTES, ZERO><<<g, THREADS, 0, s>>>(grid, body);
     gpu::check(cudaGetLastError());
   });
 }
-template<unsigned THREADS, std::size_t BYTES, class F, class G>
+template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO = BYTES, std::size_t FINISH = BYTES, class F, class G>
 inline void launch_then(gpu::Context& ctx, std::size_t grid, F body, G finish) noexcept {
   static_assert(THREADS % WARP == 0 && THREADS >= WARP && THREADS <= 1024, "a block runs whole warps");
   static_assert(BYTES <= 48 * 1024, "static shared memory holds 48 KiB");
   static_assert(std::is_trivially_copyable_v<F> && std::is_trivially_copyable_v<G>, "the bodies cross as arguments");
   const unsigned g = grid < 1 ? 1u : grid < gpu::MAX_GRID ? unsigned(grid) : gpu::MAX_GRID;  // the finish runs once
   reuse::synchronous(ctx, [&](cudaStream_t s) {
-    blocks_then<THREADS, BYTES><<<g, THREADS, 0, s>>>(grid, body, finish, ctx.ticket(s));
+    blocks_then<THREADS, BYTES, ZERO, FINISH><<<g, THREADS, 0, s>>>(grid, body, finish, ctx.ticket(s));
     gpu::check(cudaGetLastError());
   });
 }

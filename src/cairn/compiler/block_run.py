@@ -116,6 +116,7 @@ class Event:
     mask: list[int] | None  # which threads make it: 0 no, 1 yes, 2 perhaps; None all
     warp: bool = False  # one write by each warp that makes it, in a lane nobody names (a WMMA store)
     atomic: bool = False  # an atomic update, which races no other atomic update (compiler/atomics.py)
+    sure: bool = True  # a write that surely stores every element it names; not a part lent to be written
 
 
 @dataclass
@@ -257,16 +258,17 @@ class BlockRun:
                 continue
             if a.tag == "slice":
                 lo, hi = (self.expr(x, env, mask, now) for x in a.args[1:3])
-                self.record(name, ("part", lo, hi), mode == "rw", a, now, mask)
+                written = mode in {"rw", "store"}  # a store writes all of it; a callee lent it may not
+                self.record(name, ("part", lo, hi), written, a, now, mask, sure=mode == "store")
             elif a.tag == "index" and mode == "atomic":  # one indivisible update (compiler/atomics.py)
                 self.record(name, self.expr(a.args[1], env, mask, now), True, a, now + 0.5, mask, atomic=True)
             elif a.tag == "index":
                 i = self.expr(a.args[1], env, mask, now)
                 if mode == "rw":
                     self.record(name, i, False, a, now, mask)
-                self.record(name, i, mode == "rw", a, now + 0.5, mask)
+                self.record(name, i, mode == "rw", a, now + 0.5, mask, sure=False)
             else:
-                self.record(name, ("part", 0, self.counts[name]), mode == "rw", a, now, mask)
+                self.record(name, ("part", 0, self.counts[name]), mode == "rw", a, now, mask, sure=False)
         if isinstance(e.ref, tuple) and e.ref[:1] == ("layout",):  # `L.at(r, c)`, `D.row(t, v)`: compiler/layouts.py
             return self.each(lambda *xs: laid(self.c, e, xs), *values)
         if e.val in fragments.OPERATIONS and isinstance(e.ref, tuple) and len(e.ref) == 3:
@@ -323,9 +325,21 @@ class BlockRun:
             self.record(array, index, True, e, now, only)
 
     def record(self, array: str, index: Any, write: bool, node: Any, time: float, mask: list[int] | None, warp=False,
-               atomic=False):  # fmt: skip
+               atomic=False, sure=True):  # fmt: skip
         for alternative in self.open:
-            alternative.append(Event(array, index, write, node, time, mask, warp, atomic))
+            alternative.append(Event(array, index, write, node, time, mask, warp, atomic, sure))
+
+    # What a subclass carries along the run beside the open phase: a branch every thread takes one way, a loop of
+    # unknown trip count and a `while` the rule could not count each run their bodies on what it held before them.
+
+    def snapshot(self) -> Any:
+        return None
+
+    def restore(self, state: Any):
+        pass
+
+    def meet(self, a: Any, b: Any) -> Any:
+        return None
 
     # Statements ----------------------------------------------------------------------------------------------
 
@@ -375,7 +389,7 @@ class BlockRun:
                 kind, _, name = effect.partition(":")
                 if kind in {"read", "write"} and name in self.counts:
                     whole = ("part", 0, self.counts[name])
-                    self.record(name, whole, kind == "write", s, now + 0.5 * (kind == "write"), mask)
+                    self.record(name, whole, kind == "write", s, now + 0.5 * (kind == "write"), mask, sure=False)
             for name, *_ in s.assembly.outputs:
                 env[name] = None
         elif tag in {"break", "continue"} and self.loops:
@@ -396,15 +410,18 @@ class BlockRun:
             if isinstance(cond, bool):
                 return self.stmts(s.body if cond else s.other, env, None)
             before, results = self.open, []  # one way for the whole block, unknown which: two alternatives
-            snapshot = dict(env)
-            arms = []
+            snapshot, held = dict(env), self.snapshot()
+            arms, kept = [], []
             for body in (s.body, s.other):
                 self.open = [list(x) for x in before]
+                self.restore(held)
                 inner = dict(snapshot)
                 self.stmts(body, inner, None)
                 results += self.open
                 arms.append(inner)
+                kept.append(self.snapshot())
             self.open = self.merged(results)
+            self.restore(self.meet(*kept))
             for name in env:
                 env[name] = self.each(join, arms[0].get(name), arms[1].get(name))
             return None
@@ -481,7 +498,7 @@ class BlockRun:
     def counted(self, s: Stmt, env: dict[str, Any], now: float) -> bool:
         """Run a while loop whose condition the block evaluates alike, one iteration at a time, when it ends within
         UNROLL iterations; otherwise leave everything as it was and say so."""
-        saved = (dict(env), [list(x) for x in self.open], self.time)
+        saved = (dict(env), [list(x) for x in self.open], self.time, self.snapshot())
         loop = Loop([0] * self.T, [0] * self.T)
         self.loops.append(loop)
         for _ in range(UNROLL):
@@ -497,13 +514,14 @@ class BlockRun:
         env.clear()
         env.update(saved[0])
         self.open, self.time = saved[1], saved[2]
+        self.restore(saved[3])
         return False
 
     def generic(self, s: Stmt, env: dict[str, Any], mask: list[int] | None, lo: Any):
         """A loop with a barrier inside and a trip count the rule does not know, all threads in step: no iteration
         (the phase before goes on after it), a first one begun in the phase before, and a generic iteration s + 1
         begun in the tail of iteration s, whose own tail goes on after the loop."""
-        before = [list(x) for x in self.open]
+        before, held = [list(x) for x in self.open], self.snapshot()
         name = s.name if s.tag == "for" and s.name != "_" else ""
 
         def once(scope: dict[str, Any], value: Any):
@@ -517,6 +535,7 @@ class BlockRun:
         once(dict(env), lo)
         after_first = self.open
         self.open = [[]]
+        self.restore(held)  # iteration s may be the first: nothing the loop wrote is known to be there yet
         atom = Poly.of(f"{name or 'loop'}#{next(self.fresh)}")
         generic = dict(env)
         once(generic, atom)
@@ -524,6 +543,7 @@ class BlockRun:
             generic[widened] = None
         once(generic, atom + Poly.of(1))
         self.open = self.merged([*before, *after_first, *self.open])
+        self.restore(held)  # and the loop may not have run at all
         for widened in assigned(s.body) & set(env):
             env[widened] = None
 
