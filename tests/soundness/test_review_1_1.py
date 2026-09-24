@@ -70,3 +70,18 @@ def test_the_conversion_a_type_mismatch_suggests_is_stated_as_it_behaves(want, g
         assert "trap" not in hint and "round" in hint, hint
     else:
         assert "traps outside" in hint, hint
+
+
+# --- Fixed: the parallel card left out what keeps a function from its one wait and its cq_NAME entry ---------------
+
+
+def test_the_parallel_card_names_everything_that_keeps_a_function_waiting():
+    """compiler/execution.py waits after each operation when a row holds an atomic, a lock, a call through a function
+    value, a machine register or host assembly, and gives no cq_NAME entry. The card listed only transfers, device
+    allocation, tickets, I/O, foreign calls and @unified views, so an agent could expect an enqueued entry for a
+    function that takes a lock."""
+    from cairn.agent.teaching import CARDS
+
+    said = next(p for p in CARDS["parallel"].split("\n") if "cq_NAME" in p)
+    for construct in ("atomic", "lock", "function value", "machine register", "host assembly", "@unified"):
+        assert construct in said, construct
