@@ -1,0 +1,132 @@
+{
+ "task": "block_scan",
+ "arm": "cpp",
+ "language": "cpp",
+ "plugin": null,
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "wall_seconds": 598.2,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 39,
+  "duration_ms": 622116,
+  "duration_api_ms": 429212,
+  "total_cost_usd": 0.9381692000000003,
+  "usage": {
+   "input_tokens": 78,
+   "cache_creation_input_tokens": 55316,
+   "cache_read_input_tokens": 1580396,
+   "output_tokens": 40067,
+   "output_tokens_details": {
+    "thinking_tokens": 27645
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 55316,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 260,
+     "cache_read_input_tokens": 67381,
+     "cache_creation_input_tokens": 428,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 428
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 78,
+    "outputTokens": 40067,
+    "cacheReadInputTokens": 1580396,
+    "cacheCreationInputTokens": 55316,
+    "webSearchRequests": 0,
+    "costUSD": 0.9381692000000003,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 27645,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/tmp/cairn-aieval-pilot/runs/pilot/r1/block_scan/cpp",
+ "toolchain_commit": "ba9eb6784d0d3772d01086a98cc2802845f13022",
+ "phase": "pilot",
+ "replicate": 1,
+ "study": "v1_1",
+ "infrastructure": false,
+ "source_bytes": 3436,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 17,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 4,
+   "Bash": 29,
+   "Write": 2,
+   "Edit": 3
+  },
+  "compile_runs": 9,
+  "compile_runs_failed": 0,
+  "flags": [
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/sys/fs/cgroup/cpu.max",
+    "command": "cat /sys/fs/cgroup/cpu.max 2>/dev/null; echo \"---\"; cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null; cat /sys/fs/cgroup/cpu/cpu.cfs_period_us 2>/dev/null; echo \"---\"; nproc --all"
+   },
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/sys/fs/cgroup/cpu/cpu.cfs_quota_us",
+    "command": "cat /sys/fs/cgroup/cpu.max 2>/dev/null; echo \"---\"; cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null; cat /sys/fs/cgroup/cpu/cpu.cfs_period_us 2>/dev/null; echo \"---\"; nproc --all"
+   },
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/sys/fs/cgroup/cpu/cpu.cfs_period_us",
+    "command": "cat /sys/fs/cgroup/cpu.max 2>/dev/null; echo \"---\"; cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null; cat /sys/fs/cgroup/cpu/cpu.cfs_period_us 2>/dev/null; echo \"---\"; nproc --all"
+   }
+  ]
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_eval/pilot/r1/block_scan/cpp/transcript.jsonl",
+  "sha256": "3331a7c9fd73be9f5d9e65d393c04bb654a73edbc259073050f21444c8ca1153",
+  "bytes": 386359
+ },
+ "given_sha256": "c3c478b8b1a81e84d701764b29acd34eadbd0669f3f4dae23443efa3e08e93b4"
+}

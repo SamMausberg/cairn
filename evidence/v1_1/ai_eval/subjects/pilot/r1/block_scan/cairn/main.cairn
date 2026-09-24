@@ -1,0 +1,125 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+fn div_ceil(n:usize, d:usize) -> usize = (n + d - 1) / d;
+
+// Inclusive scan of one 256-wide block, in shared memory, with a barrier between every step.
+fn block_scan(n:usize, x:ro<u64>[n]@device, g:usize, out:rw<u64>[n]@device, totals:rw<u64>[g]@device) {
+  blocks b in g threads t in 256 {
+    shared s:u64[256] = zeroed;
+    let i = b * 256 + t;
+    if i < n { s[t] = x[i]; }
+    barrier;
+    for step in 0..8 {
+      let d:usize = shl_wrap(1, step);
+      let has = t >= d;
+      let mut temp:u64 = 0;
+      if has { temp = s[t - d] + s[t]; }         // every read happens before any write of this step
+      barrier;
+      if has { s[t] = temp; }
+      barrier;
+    }
+    if i < n { out[i] = s[t]; }
+    if t == 0 { totals[b] = s[255]; }
+  }
+}
+
+// The exclusive prefix of each block's total, so block b's elements can be offset by every earlier block.
+fn scan_totals(g:usize, offsets:rw<u64>[g], totals:ro<u64>[g]) {
+  let mut running:u64 = 0;
+  for b in 0..g {
+    offsets[b] = running;
+    running += totals[b];
+  }
+}
+
+fn run_scan(n:usize, values:ro<u64>[n], results:rw<u64>[n]) {
+  let g = div_ceil(n, 256);
+  buffer dev_x:u64[n]@device = zeroed;
+  buffer dev_out:u64[n]@device = zeroed;
+  buffer dev_totals:u64[g]@device = zeroed;
+  transfer(dev_x, values);
+  block_scan(n, dev_x, g, dev_out, dev_totals);
+  buffer totals_host:u64[g] = zeroed;
+  transfer(totals_host, dev_totals);
+  buffer offsets_host:u64[g] = zeroed;
+  scan_totals(g, offsets_host, totals_host);
+  transfer(results, dev_out);
+  for i in 0..n {
+    let b = i / 256;
+    results[i] = results[i] + offsets_host[b];
+  }
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let raw_n = next_u64(inp);
+  let n = usize(raw_n);
+  if n == 0 { return 0; }
+  buffer values:u64[n] = zeroed;
+  for i in 0..n { values[i] = next_u64(inp); }
+  buffer results:u64[n] = zeroed;
+  run_scan(n, values, results);
+  for i in 0..n { println(results[i]); }
+  return 0;
+}

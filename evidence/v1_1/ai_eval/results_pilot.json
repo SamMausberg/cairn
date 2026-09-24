@@ -1,0 +1,590 @@
+{
+ "phase": "pilot",
+ "cells": 1,
+ "resamples": 10000,
+ "seed": 20260924,
+ "bootstrap": {
+  "plugin.solve_rate": {
+   "estimate": 1.0,
+   "interval_95": [
+    1.0,
+    1.0
+   ]
+  },
+  "plugin.usd_per_solved": {
+   "estimate": 1.3893,
+   "interval_95": [
+    1.3893,
+    1.3893
+   ]
+  },
+  "plugin.tokens_per_solved": {
+   "estimate": 2950002,
+   "interval_95": [
+    2950002,
+    2950002
+   ]
+  },
+  "cairn.solve_rate": {
+   "estimate": 1.0,
+   "interval_95": [
+    1.0,
+    1.0
+   ]
+  },
+  "cairn.usd_per_solved": {
+   "estimate": 1.4205,
+   "interval_95": [
+    1.4205,
+    1.4205
+   ]
+  },
+  "cairn.tokens_per_solved": {
+   "estimate": 3327198,
+   "interval_95": [
+    3327198,
+    3327198
+   ]
+  },
+  "cpp.solve_rate": {
+   "estimate": 1.0,
+   "interval_95": [
+    1.0,
+    1.0
+   ]
+  },
+  "cpp.usd_per_solved": {
+   "estimate": 0.9382,
+   "interval_95": [
+    0.9382,
+    0.9382
+   ]
+  },
+  "cpp.tokens_per_solved": {
+   "estimate": 1675857,
+   "interval_95": [
+    1675857,
+    1675857
+   ]
+  },
+  "rust.solve_rate": {
+   "estimate": 1.0,
+   "interval_95": [
+    1.0,
+    1.0
+   ]
+  },
+  "rust.usd_per_solved": {
+   "estimate": 0.5038,
+   "interval_95": [
+    0.5038,
+    0.5038
+   ]
+  },
+  "rust.tokens_per_solved": {
+   "estimate": 667878,
+   "interval_95": [
+    667878,
+    667878
+   ]
+  },
+  "plugin/cairn.usd_per_solved": {
+   "estimate": 0.978,
+   "interval_95": [
+    0.978,
+    0.978
+   ]
+  },
+  "plugin/cairn.tokens_per_solved": {
+   "estimate": 1,
+   "interval_95": [
+    1,
+    1
+   ]
+  },
+  "plugin/cpp.usd_per_solved": {
+   "estimate": 1.4808,
+   "interval_95": [
+    1.4808,
+    1.4808
+   ]
+  },
+  "plugin/cpp.tokens_per_solved": {
+   "estimate": 2,
+   "interval_95": [
+    2,
+    2
+   ]
+  },
+  "plugin/rust.usd_per_solved": {
+   "estimate": 2.7576,
+   "interval_95": [
+    2.7576,
+    2.7576
+   ]
+  },
+  "plugin/rust.tokens_per_solved": {
+   "estimate": 4,
+   "interval_95": [
+    4,
+    4
+   ]
+  },
+  "cairn/cpp.usd_per_solved": {
+   "estimate": 1.5141,
+   "interval_95": [
+    1.5141,
+    1.5141
+   ]
+  },
+  "cairn/cpp.tokens_per_solved": {
+   "estimate": 2,
+   "interval_95": [
+    2,
+    2
+   ]
+  },
+  "cairn/rust.usd_per_solved": {
+   "estimate": 2.8196,
+   "interval_95": [
+    2.8196,
+    2.8196
+   ]
+  },
+  "cairn/rust.tokens_per_solved": {
+   "estimate": 5,
+   "interval_95": [
+    5,
+    5
+   ]
+  },
+  "cpp/rust.usd_per_solved": {
+   "estimate": 1.8622,
+   "interval_95": [
+    1.8622,
+    1.8622
+   ]
+  },
+  "cpp/rust.tokens_per_solved": {
+   "estimate": 3,
+   "interval_95": [
+    3,
+    3
+   ]
+  }
+ },
+ "spread": {
+  "plugin": {
+   "subjects": 1,
+   "solved": 1,
+   "turns": {
+    "median": 48,
+    "quartiles": [
+     48,
+     48
+    ],
+    "sum": 48
+   },
+   "wall_seconds": {
+    "median": 527.5,
+    "quartiles": [
+     527.5,
+     527.5
+    ],
+    "sum": 527.5
+   },
+   "tokens_total": {
+    "median": 2950002,
+    "quartiles": [
+     2950002,
+     2950002
+    ],
+    "sum": 2950002
+   },
+   "tokens_output": {
+    "median": 40858,
+    "quartiles": [
+     40858,
+     40858
+    ],
+    "sum": 40858
+   },
+   "tokens_cost_usd": {
+    "median": 1.3893,
+    "quartiles": [
+     1.3893,
+     1.3893
+    ],
+    "sum": 1.3893
+   },
+   "compile_runs": {
+    "median": 8,
+    "quartiles": [
+     8,
+     8
+    ],
+    "sum": 8
+   }
+  },
+  "cairn": {
+   "subjects": 1,
+   "solved": 1,
+   "turns": {
+    "median": 38,
+    "quartiles": [
+     38,
+     38
+    ],
+    "sum": 38
+   },
+   "wall_seconds": {
+    "median": 631.6,
+    "quartiles": [
+     631.6,
+     631.6
+    ],
+    "sum": 631.6
+   },
+   "tokens_total": {
+    "median": 3327198,
+    "quartiles": [
+     3327198,
+     3327198
+    ],
+    "sum": 3327198
+   },
+   "tokens_output": {
+    "median": 34444,
+    "quartiles": [
+     34444,
+     34444
+    ],
+    "sum": 34444
+   },
+   "tokens_cost_usd": {
+    "median": 1.4205,
+    "quartiles": [
+     1.4205,
+     1.4205
+    ],
+    "sum": 1.4205
+   },
+   "compile_runs": {
+    "median": 10,
+    "quartiles": [
+     10,
+     10
+    ],
+    "sum": 10
+   }
+  },
+  "cpp": {
+   "subjects": 1,
+   "solved": 1,
+   "turns": {
+    "median": 39,
+    "quartiles": [
+     39,
+     39
+    ],
+    "sum": 39
+   },
+   "wall_seconds": {
+    "median": 598.2,
+    "quartiles": [
+     598.2,
+     598.2
+    ],
+    "sum": 598.2
+   },
+   "tokens_total": {
+    "median": 1675857,
+    "quartiles": [
+     1675857,
+     1675857
+    ],
+    "sum": 1675857
+   },
+   "tokens_output": {
+    "median": 40067,
+    "quartiles": [
+     40067,
+     40067
+    ],
+    "sum": 40067
+   },
+   "tokens_cost_usd": {
+    "median": 0.9382,
+    "quartiles": [
+     0.9382,
+     0.9382
+    ],
+    "sum": 0.9382
+   },
+   "compile_runs": {
+    "median": 9,
+    "quartiles": [
+     9,
+     9
+    ],
+    "sum": 9
+   }
+  },
+  "rust": {
+   "subjects": 1,
+   "solved": 1,
+   "turns": {
+    "median": 20,
+    "quartiles": [
+     20,
+     20
+    ],
+    "sum": 20
+   },
+   "wall_seconds": {
+    "median": 453.0,
+    "quartiles": [
+     453.0,
+     453.0
+    ],
+    "sum": 453.0
+   },
+   "tokens_total": {
+    "median": 667878,
+    "quartiles": [
+     667878,
+     667878
+    ],
+    "sum": 667878
+   },
+   "tokens_output": {
+    "median": 25672,
+    "quartiles": [
+     25672,
+     25672
+    ],
+    "sum": 25672
+   },
+   "tokens_cost_usd": {
+    "median": 0.5038,
+    "quartiles": [
+     0.5038,
+     0.5038
+    ],
+    "sum": 0.5038
+   },
+   "compile_runs": {
+    "median": 4,
+    "quartiles": [
+     4,
+     4
+    ],
+    "sum": 4
+   }
+  }
+ },
+ "safety_failures": {
+  "plugin": {
+   "sanitizer": 0,
+   "abort": 0,
+   "panic": 0,
+   "unsafe": 0
+  },
+  "cairn": {
+   "sanitizer": 0,
+   "abort": 0,
+   "panic": 0,
+   "unsafe": 0
+  },
+  "cpp": {
+   "sanitizer": 0,
+   "abort": 0,
+   "panic": 0,
+   "unsafe": 0
+  },
+  "rust": {
+   "sanitizer": 0,
+   "abort": 0,
+   "panic": 0,
+   "unsafe": 0
+  }
+ },
+ "solved_pairs": {
+  "plugin/cairn": {
+   "cells": 1,
+   "only_plugin": 0,
+   "only_cairn": 0,
+   "mcnemar_p": 1.0
+  },
+  "plugin/cpp": {
+   "cells": 1,
+   "only_plugin": 0,
+   "only_cpp": 0,
+   "mcnemar_p": 1.0
+  },
+  "plugin/rust": {
+   "cells": 1,
+   "only_plugin": 0,
+   "only_rust": 0,
+   "mcnemar_p": 1.0
+  },
+  "cairn/cpp": {
+   "cells": 1,
+   "only_cairn": 0,
+   "only_cpp": 0,
+   "mcnemar_p": 1.0
+  },
+  "cairn/rust": {
+   "cells": 1,
+   "only_cairn": 0,
+   "only_rust": 0,
+   "mcnemar_p": 1.0
+  },
+  "cpp/rust": {
+   "cells": 1,
+   "only_cpp": 0,
+   "only_rust": 0,
+   "mcnemar_p": 1.0
+  }
+ },
+ "rows": [
+  {
+   "task": "block_scan",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 38,
+   "wall_seconds": 631.6,
+   "tokens_input": 76,
+   "tokens_cache_creation": 109824,
+   "tokens_cache_read": 3182854,
+   "tokens_output": 34444,
+   "tokens_cost_usd": 1.4205,
+   "tokens_total": 3327198,
+   "compile_runs": 10,
+   "compile_runs_failed": 0,
+   "source_bytes": 3775,
+   "exploratory": {
+    "docs_calls": 13,
+    "docs_chars": 139914,
+    "other_calls": 24,
+    "other_chars": 19109,
+    "diagnostics": {
+     "E-COOP-GLOBAL": 1,
+     "E-EFFECT-ORDER": 1
+    }
+   }
+  },
+  {
+   "task": "block_scan",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 39,
+   "wall_seconds": 598.2,
+   "tokens_input": 78,
+   "tokens_cache_creation": 55316,
+   "tokens_cache_read": 1580396,
+   "tokens_output": 40067,
+   "tokens_cost_usd": 0.9382,
+   "tokens_total": 1675857,
+   "compile_runs": 9,
+   "compile_runs_failed": 0,
+   "source_bytes": 3436,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 38,
+    "other_chars": 26510,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "block_scan",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 48,
+   "wall_seconds": 527.5,
+   "tokens_input": 80,
+   "tokens_cache_creation": 104938,
+   "tokens_cache_read": 2804126,
+   "tokens_output": 40858,
+   "tokens_cost_usd": 1.3893,
+   "tokens_total": 2950002,
+   "compile_runs": 8,
+   "compile_runs_failed": 3,
+   "source_bytes": 3532,
+   "exploratory": {
+    "docs_calls": 20,
+    "docs_chars": 72002,
+    "other_calls": 26,
+    "other_chars": 19492,
+    "diagnostics": {
+     "E-TYPE-MISMATCH": 1,
+     "E-EFFECT-ORDER": 1
+    }
+   }
+  },
+  {
+   "task": "block_scan",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 20,
+   "wall_seconds": 453.0,
+   "tokens_input": 40,
+   "tokens_cache_creation": 31204,
+   "tokens_cache_read": 610962,
+   "tokens_output": 25672,
+   "tokens_cost_usd": 0.5038,
+   "tokens_total": 667878,
+   "compile_runs": 4,
+   "compile_runs_failed": 0,
+   "source_bytes": 5353,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 19,
+    "other_chars": 5136,
+    "diagnostics": {}
+   }
+  }
+ ],
+ "audit_decisions": {
+  "pilot/r1/block_scan/plugin": {
+   "contaminated": false,
+   "flag": "/tmp/cairn-aieval-pilot",
+   "reason": "the right side of `ls <its own plugin>/skills/cairn/../../docs/ || find /tmp/cairn-aieval-pilot -maxdepth 4 -iname docs`; the ls listed its own plugin's docs and succeeded, so the find never ran"
+  },
+  "pilot/r1/block_scan/cpp": {
+   "contaminated": false,
+   "flag": "/sys/fs/cgroup/cpu.max, /sys/fs/cgroup/cpu/cpu.cfs_quota_us, /sys/fs/cgroup/cpu/cpu.cfs_period_us",
+   "reason": "the machine's CPU limits, which the subject read while it chose how many threads to start; system settings that hold nothing of the task"
+  }
+ }
+}

@@ -1,0 +1,134 @@
+// Primes up to N by a segmented sieve: each task sieves its own segment in storage of its own.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// What one segment holds: its primes' count and sum, its first and last prime, and its largest inner gap.
+struct Segment { index:usize; count:u64; sum:u64; first:u64; last:u64; gap:u64; gap_at:u64; }
+
+// The primes in lo..hi, sieved in storage of the task's own by the base primes up to the square root of the bound.
+fn sieve_segment(m:usize, base:ro<u64>[m], index:usize, lo:u64, hi:u64) -> Segment {
+  let mut s = Segment(index, 0, 0, 0, 0, 0, 0);
+  if lo >= hi { return s; }
+  let mut composite = Buf[u8](usize(hi - lo));
+  for j in 0..m {
+    let p = base[j];
+    if p * p >= hi { break; }
+    let q = max(p * p, (lo + p - 1) / p * p);
+    let mut at = q;
+    while at < hi {
+      composite[usize(at - lo)] = 1;
+      at += p;
+    }
+  }
+  for v in usize(max(lo, 2))..usize(hi) {
+    if composite[v - usize(lo)] == 0 {
+      let prime = u64(v);
+      if s.count == 0 {
+        s.first = prime;
+      } else if prime - s.last > s.gap { s.gap = prime - s.last; s.gap_at = s.last; }
+      s.last = prime;
+      s.count += 1;
+      s.sum += prime;
+    }
+  }
+  return s;
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let n = next_u64(inp);
+  let mut root:u64 = 1;
+  while (root + 1) * (root + 1) <= n { root += 1; }
+  let mut small = Buf[u8](usize(root) + 1);
+  let mut base = Buf[u64](usize(root) + 1);
+  let mut m:usize = 0;
+  for p in 2..usize(root) + 1 {
+    if small[p] == 0 {
+      base[m] = u64(p);
+      m += 1;
+      let mut at = p * p;
+      while at <= usize(root) {
+        small[at] = 1;
+        at += p;
+      }
+    }
+  }
+  let k:usize = 8;
+  let parts = Group[Segment](k);
+  for w in 0..k {
+    let lo = (n + 1) * u64(w) / u64(k);
+    let hi = (n + 1) * u64(w + 1) / u64(k);
+    spawn sieve_segment(m, base[0..m], w, lo, hi) into parts;
+  }
+  let mut ordered = Buf[Segment](k);
+  for _ in 0..k {
+    let s = collect(parts);
+    ordered[s.index] = s;
+  }
+  wait(parts);
+  let mut all = Segment(0, 0, 0, 0, 0, 0, 0);
+  for w in 0..k {
+    let s = ordered[w];
+    if s.count > 0 {
+      if all.count > 0 && s.first - all.last > all.gap {
+        all.gap = s.first - all.last;
+        all.gap_at = all.last;
+      }
+      if s.gap > all.gap { all.gap = s.gap; all.gap_at = s.gap_at; }
+      all.last = s.last;
+      all.count += s.count;
+      all.sum += s.sum;
+    }
+  }
+  println("count ", all.count);
+  println("sum ", all.sum);
+  if all.count == 0 { println("last none"); } else { println("last ", all.last); }
+  if all.count < 2 { println("gap none"); } else { println("gap ", all.gap, " ", all.gap_at); }
+  return 0;
+}

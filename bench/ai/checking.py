@@ -14,6 +14,7 @@ import os
 import re
 import resource
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -54,7 +55,22 @@ THREADED = {
     "rust": re.compile(r"\bthread::(spawn|scope)\b"),
     "cairn": re.compile(r"\bspawn\b|\bparallel\b"),
 }
+# What a GPU-style task must contain: threads that meet at a barrier, and in CAIRN a cooperative region over device
+# memory, which the judged build runs on host threads (`cairn build --emulate`).
+BLOCKS = {
+    "cpp": [THREADED["cpp"], re.compile(r"std::barrier\b|\bpthread_barrier_wait\b")],
+    "rust": [THREADED["rust"], re.compile(r"\bBarrier\b")],
+    "cairn": [re.compile(r"\bblocks\b[^{]*\bthreads\b"), re.compile(r"\bbarrier\b"), re.compile(r"@device\b")],
+}
+EMULATE = ["--emulate", "--device-target", "sm_120"]
 UNSAFE = re.compile(r"\bunsafe\b")
+
+
+def constructs(task: Task, language: str) -> list[re.Pattern]:
+    """The patterns a program must match, after comments are removed, to answer `task` in `language`."""
+    if task.construct == "blocks":
+        return BLOCKS[language]
+    return [THREADED[language]] if task.threads else []
 
 
 def default_cairn() -> list[str]:
@@ -72,7 +88,8 @@ def strip_comments(text: str) -> str:
 @dataclass
 class Verdict:
     passed: bool
-    reason: str  # "passed", or what failed first: construct, unsafe, build, output, exit, sanitizer, timeout
+    # "passed", or what failed first: construct, unsafe, build, output, exit, abort, panic, sanitizer, timeout
+    reason: str
     builds: dict = field(default_factory=dict)
     failures: list = field(default_factory=list)  # (build, case index, what happened), at most a few
     cases: int = 0
@@ -88,7 +105,7 @@ class Verdict:
 
 
 def build(
-    language: str, source: str, where: Path, sanitizer: str, cairn: list[str] | None = None
+    language: str, source: str, where: Path, sanitizer: str, cairn: list[str] | None = None, emulate: bool = False
 ) -> tuple[Path | None, str]:
     """An executable of `source` for one judged build, or None and the log that says why."""
     where.mkdir(parents=True, exist_ok=True)
@@ -109,7 +126,9 @@ def build(
     (where / "src").mkdir(exist_ok=True)
     (where / "cairn.toml").write_text(CAIRN_TOML)
     (where / "src" / "main.cairn").write_text(source)
-    done = run([*(cairn or default_cairn()), "build", ".", "--format", "json"], where, 900)
+    done = run(
+        [*(cairn or default_cairn()), "build", ".", *(EMULATE if emulate else []), "--format", "json"], where, 900
+    )
     try:
         receipt = json.loads(done.stdout)
     except json.JSONDecodeError:
@@ -149,7 +168,7 @@ def judge(
 ) -> Verdict:
     """The hidden check of `source` as the answer to `task` in `language`."""
     code = strip_comments(source)
-    if task.threads and not THREADED[language].search(code):
+    if not all(pattern.search(code) for pattern in constructs(task, language)):
         return Verdict(False, "construct")
     if language in ("rust", "cairn") and UNSAFE.search(code):
         return Verdict(False, "unsafe")
@@ -163,7 +182,7 @@ def judge(
     verdict = Verdict(True, "passed", cases=len(cases))
     try:
         for sanitizer in sanitizers:
-            exe, log = build(language, source, root / sanitizer, sanitizer, cairn)
+            exe, log = build(language, source, root / sanitizer, sanitizer, cairn, task.emulate)
             verdict.builds[sanitizer] = "built" if exe else log[-3000:]
             if exe is None:
                 return Verdict(False, "build", verdict.builds, cases=len(cases))
@@ -188,6 +207,10 @@ def classify(done: subprocess.CompletedProcess, want: bytes) -> str | None:
         return "timeout"
     if b"Sanitizer" in err or b"runtime error:" in err:
         return "sanitizer"
+    if b"panicked at" in err:
+        return "panic"  # a Rust check: overflow, bounds, unwrap
+    if done.returncode == -signal.SIGABRT:
+        return "abort"  # a failed CAIRN guard, or a C++ abort
     if done.returncode != 0:
         return "exit"
     if done.stdout != want:
