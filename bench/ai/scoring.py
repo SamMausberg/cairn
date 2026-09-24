@@ -12,6 +12,7 @@ import math
 import os
 import re
 import statistics
+import subprocess
 from pathlib import Path
 
 # Paths a subject may name outside its sandbox: the compilers, their headers and libraries, and scratch devices.
@@ -24,6 +25,24 @@ PATH = re.compile(r"(?<![\w.$/-])(~[\w/.-]*|/[\w.+-][\w/.+-]*)")
 # A run of slashes is a floor division or a comment unless what follows names a directory at the root: `//etc/x` is
 # the path /etc/x, and `(n+1)//2` and `//note` are not paths.
 DOUBLED = re.compile(r"(?<![\w.$/-])/{2,}([\w.+-][\w/.+-]*)")
+
+
+# A walk or search of the whole file system names the root directory alone: `find / -name docs`, `grep -r x /`.
+WALK = re.compile(r"\b(find|ls|cd|du|tree|locate|rg|fd|grep\s+-\w*[rR]\w*)\b[^|;&]*?(?<![\w.$/~-])/(?=[\s;|&)'\"]|$)")
+# What a tool result may not show: a task's references, another run's records, or another checkout of the repository.
+ELSEWHERE = ("bench/ai/", "results/ai_", "evidence/v1_0/ai_benchmark", "evidence/v1_1/ai_eval")
+
+
+def checkouts() -> tuple[str, ...]:
+    """Every worktree of this repository, the main checkout included, each as a path prefix."""
+    here = Path(__file__).resolve().parents[2]
+    try:
+        listed = subprocess.run(["git", "-C", str(here), "worktree", "list", "--porcelain"], capture_output=True,
+                                text=True, timeout=30).stdout  # fmt: skip
+    except (OSError, subprocess.SubprocessError):
+        return (str(here) + "/",)
+    found = [line.split(" ", 1)[1] + "/" for line in listed.splitlines() if line.startswith("worktree ")]
+    return tuple(found) or (str(here) + "/",)
 
 
 def paths(text: str) -> list[str]:
@@ -92,6 +111,7 @@ def audit(transcript: Path, sandbox: str, root: str, plugin: str | None = None) 
     spilled = str(Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", sandbox)) + "/"
     home = (str(Path.home() / ".cargo"), str(Path.home() / ".rustup"), spilled)
     own = (sandbox, tools, *([plugin] if plugin else []), *home, *TOOLCHAIN)
+    others = (*checkouts(), *(f"{root}/{part}/" for part in ("runs", "plugins", "tmp")))
 
     def allowed(path: str) -> bool:
         path = os.path.normpath(path) + ("/" if path.endswith("/") else "")
@@ -104,10 +124,15 @@ def audit(transcript: Path, sandbox: str, root: str, plugin: str | None = None) 
     for call in tool_calls(transcript):
         name, given = call["name"], call["input"]
         counts[name] = counts.get(name, 0) + 1
+        shown = shows_elsewhere(call["result"], others, own)
+        if shown:
+            flags.append({"tool": name, "why": "result", "what": shown, "call": json.dumps(given)[:300]})
         if name == "Bash":
             text = given.get("command", "")
             if NETWORK.search(text):
                 flags.append({"tool": name, "why": "network", "what": text[:300]})
+            if WALK.search(text):
+                flags.append({"tool": name, "why": "root", "what": text[:300]})
             for path in paths(text):
                 if not allowed(path) and path not in ("/", "/tmp"):
                     flags.append({"tool": name, "why": "path", "what": path, "command": text[:300]})
@@ -130,6 +155,20 @@ def audit(transcript: Path, sandbox: str, root: str, plugin: str | None = None) 
                 if call["error"] or REJECTED.search(call["result"]):
                     failures += 1
     return {"tool_calls": counts, "compile_runs": compiles, "compile_runs_failed": failures, "flags": flags}
+
+
+def shows_elsewhere(result: str, others: tuple[str, ...], own: tuple[str, ...]) -> str:
+    """The first thing in a tool's result that names what the subject was not given: a path of another checkout of
+    the repository or of another subject under the run's root, or a task reference or run record by its folder."""
+    for match in PATH.finditer(result):
+        path = match.group(1)
+        if path.startswith(others) and not path.startswith(own):
+            return path[:200]
+    for marker in ELSEWHERE:
+        if marker in result:
+            at = result.index(marker)
+            return result[max(0, at - 80) : at + 80]
+    return ""
 
 
 def tokens(result: dict | None) -> dict:

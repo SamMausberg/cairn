@@ -18,6 +18,7 @@ import hashlib
 import json
 import lzma
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -31,7 +32,7 @@ sys.path.insert(0, str(HERE))
 import analysis
 from checking import EXTENSION, LANGUAGES, SOURCE, judge
 from scoring import audit, breakdown, markdown, pairs, row, summary
-from subjects import LANGUAGE, LIMITS, run_subject, toolchain, unlock
+from subjects import LANGUAGE, LIMITS, hidden, run_subject, toolchain, unlock
 from tasks import BY_NAME, ORIGINAL, TASKS, example
 
 REPO = HERE.parents[1]
@@ -39,16 +40,17 @@ BUDGET_STOPS = ("success", "error_max_turns", "error_max_budget_usd")
 SONNET, OPUS = "claude-sonnet-5", "claude-opus-5-5"
 # Each study: where its records go, its tasks in preregistered order, its arms, its phases and their models, how many
 # subjects may run at once, the platform cost after which no counted subject starts, where its report goes, whether
-# each subject gets a /tmp of its own, and the default root of its runs, which a private /tmp keeps out of /tmp.
+# each subject runs isolated (its own /tmp, and nothing of the checkouts, the other subjects or other sessions), and
+# the default root of its runs, which an isolated subject's own /tmp keeps out of /tmp.
 STUDIES = {
     "v1_0": {"records": REPO / "results" / "ai_benchmark", "tasks": [t.name for t in ORIGINAL],
              "arms": ("cairn", "cpp", "rust"), "models": {"pilot": SONNET, "primary": SONNET, "secondary": OPUS},
              "jobs": 1, "ceiling_usd": None, "out": REPO / "evidence" / "v1_0" / "ai_benchmark",
-             "private_tmp": False, "root": Path(tempfile.gettempdir()) / "cairn-aibench"},
+             "isolated": False, "root": Path(tempfile.gettempdir()) / "cairn-aibench"},
     "v1_1": {"records": REPO / "results" / "ai_eval", "tasks": [t.name for t in TASKS],
              "arms": ("plugin", "cairn", "cpp", "rust"), "models": {"pilot": SONNET, "counted": SONNET},
              "jobs": 3, "ceiling_usd": {"counted": 200.0}, "out": REPO / "evidence" / "v1_1" / "ai_eval",
-             "private_tmp": True, "root": Path.home() / "cairn-aieval"},
+             "isolated": True, "root": Path.home() / "cairn-aieval"},
 }  # fmt: skip
 RECORDS = STUDIES["v1_0"]["records"]
 
@@ -122,6 +124,9 @@ def run(phase: str, replicate: int, names: list[str], arms: list[str], root: Pat
     one cell has failed for infrastructure three times or the phase five times."""
     records, ceiling = STUDIES[study]["records"], (STUDIES[study]["ceiling_usd"] or {}).get(phase)
     tools = toolchain(root / "toolchain")
+    harness = subprocess.run(
+        ["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True, text=True
+    ).stdout.strip()
     cairn = [str(tools / "cairn")]
     stop = threading.Event()
     codes: list[int] = []
@@ -169,9 +174,10 @@ def run(phase: str, replicate: int, names: list[str], arms: list[str], root: Pat
         print(f"{phase} r{replicate}: {task} in {arm} ...", flush=True)
         where = root / "runs" / phase / f"r{replicate}" / task / arm
         plugin = root / "plugins" / phase / f"r{replicate}" / task / "plugin"
-        scratch = root / "tmp" / phase / f"r{replicate}" / task / arm if STUDIES[study]["private_tmp"] else None
-        record = run_subject(BY_NAME[task], arm, where, cell, tools, limits, plugin, scratch)
-        record.update(phase=phase, replicate=replicate, study=study)
+        scratch = root / "tmp" / phase / f"r{replicate}" / task / arm if STUDIES[study]["isolated"] else None
+        hide = hidden(root) if scratch is not None else None
+        record = run_subject(BY_NAME[task], arm, where, cell, tools, limits, plugin, scratch, hide)
+        record.update(phase=phase, replicate=replicate, study=study, harness_commit=harness)
         record["infrastructure"] = infrastructure(record)
         if record["infrastructure"]:
             (cell / f"infrastructure-{attempt}.json").write_text(json.dumps(record, indent=1))
@@ -319,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
         root = (args.root or study["root"]).resolve()
         if root == REPO or REPO in root.parents:
             p.error("--root must be outside the repository")
-        if study["private_tmp"] and Path("/tmp") in [root, *root.parents]:
+        if study["isolated"] and Path("/tmp") in [root, *root.parents]:
             p.error("--root must be outside /tmp, which each subject replaces with a /tmp of its own")
         names = args.task or study["tasks"]
         arms = args.arm or list(study["arms"])
