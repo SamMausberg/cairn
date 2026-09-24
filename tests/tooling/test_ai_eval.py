@@ -5,6 +5,7 @@ MCP tools allowed and no other skill or MCP server; the other arms keep the 1.0 
 race that CAIRN's checker refuses, C++'s thread sanitizer reports and Rust can only write with `unsafe`.
 """
 
+import importlib.util
 import json
 import math
 import shutil
@@ -19,10 +20,14 @@ BENCH = ROOT / "bench" / "ai"
 sys.path.insert(0, str(BENCH))
 import analysis  # noqa: E402
 import checking  # noqa: E402
-import harness  # noqa: E402
 import subjects  # noqa: E402
 import tasks  # noqa: E402
 from scoring import audit, breakdown  # noqa: E402
+
+# bench/suite has a harness.py too, which tests/tooling/test_bench_suite.py imports as `harness`.
+_spec = importlib.util.spec_from_file_location("ai_harness", BENCH / "harness.py")
+harness = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(harness)
 
 needs_tools = pytest.mark.skipif(
     not (shutil.which("clang++") and shutil.which("cargo") and shutil.which("setarch")),
