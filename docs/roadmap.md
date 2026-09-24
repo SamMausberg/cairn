@@ -1,6 +1,6 @@
 # Remaining gates
 
-Each gate below is open. A gate closes when its tests, its documentation and its evidence exist. [project/capabilities.json](project/capabilities.json) holds the same list as data, the reference files say what already works, and [verification.md](verification.md#what-each-feature-has-shown) says what each feature has shown: compiled, run on a CPU or a GPU, sanitizer-tested, measured.
+The [CAIRN roadmap](https://github.com/users/SamMausberg/projects/2) on GitHub tracks the work in flight and next, one issue per item. Each gate below is open. A gate closes when its tests, its documentation and its evidence exist. [project/capabilities.json](project/capabilities.json) holds the same list as data, the reference files say what already works, and [verification.md](verification.md#what-each-feature-has-shown) says what each feature has shown: compiled, run on a CPU or a GPU, sanitizer-tested, measured.
 
 ## Language
 

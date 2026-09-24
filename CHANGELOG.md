@@ -8,7 +8,7 @@ Work toward 1.1.0 on `main`, not released. Its records are under `evidence/v1_1/
 
 - `load_wide[K](x, i)` and `store_wide` move up to 16 bytes of adjacent elements in one access, with a cache hint named from `Cache` (`E-WIDE`), in host code, lanes and cooperative threads.
 - Lanes and cooperative threads update an element atomically: `atomic_add_wrap`, `atomic_min`, `atomic_max`, `atomic_cas`, `atomic_and`, `atomic_or`, `atomic_xor` and `atomic_add_unordered`, never beside a plain access of the same array in one region (`E-ATOMIC-MIXED`).
-- A cooperative region may end with a finish that runs once, in one block, after every block, and stays one launch on the device.
+- A cooperative region may end with a finish that runs once, in one block, after every block, and stays one launch on the device. Its block counter is a word of a table in the module's global memory, so a function with a finish allocates nothing and has a `cq_NAME` entry.
 - A shared array declared with no initializer is not zeroed, when every element a thread reads was written first (`E-COOP-UNWRITTEN`).
 - Warps vote with `warp_ballot`, `warp_any`, `warp_all` and `warp_match`, and `shuffle_up` joins the shuffles.
 - `examples/reduction` sums f32 in one launch with wide streaming loads, an unzeroed shared array and a finish, with nothing `unsafe`. `docs/devices.md` lists what fast CUDA kernels use and how CAIRN writes each one.
