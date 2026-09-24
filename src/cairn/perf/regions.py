@@ -69,18 +69,21 @@ def identified(source: str, function: str) -> list[dict[str, Any]]:
              "binder": s.binder or s.name} for name, s in zip(named(function, written), regions, strict=True)]  # fmt: skip
 
 
-def applied(source: str, function: str, checked: tuple[Any, Any] | None = None) -> dict[str, dict[str, Any]]:
+def applied(source: str, function: str, checked: tuple[Any, Any] | None = None,
+            names: list[str] | None = None) -> dict[str, dict[str, Any]]:  # fmt: skip
     """What the plan in `source` does to each named region of `function`: its launch or claim, and which arrays its
     vector chunks and its stage tiles. A fuse is named on every region of the chain it heads or joins. `checked` is
-    the program and checker of `source` when the caller has them."""
+    the program and checker of `source`, and `names` its regions' names in order, when the caller has them: a plan
+    changes neither, so a search names the regions once for all its candidates."""
     from ..compiler import fusion
 
     p, checker = checked or compile_program(source)[:2]
     f = next(f for f in p.functions if f.name == function and not f.bindings)
-    parsed = next(g for g in Parser(source).parse().functions if g.name == function)
+    if names is None:
+        parsed = next(g for g in Parser(source).parse().functions if g.name == function)
+        names = named(function, [s for s in walked(parsed.body) if s.tag == "parallel"])
     regions = [s for s in walked(f.body) if s.tag == "parallel"]
-    ids = dict(zip(map(id, regions), named(function, [s for s in walked(parsed.body) if s.tag == "parallel"]),
-                   strict=True))  # fmt: skip
+    ids = dict(zip(map(id, regions), names, strict=True))
     out: dict[str, dict[str, Any]] = {}
     for s in regions:
         done: dict[str, Any] = {}

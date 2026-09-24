@@ -8,9 +8,12 @@ not offered: an architecture outside the host family is rejected, not guessed.
 from __future__ import annotations
 
 import functools
+import os
 import platform
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 from .target import DeviceTarget, resolve, supported
@@ -205,6 +208,31 @@ def find(compiler: str) -> str:
     if not path:
         raise ProjectError(f"Native compiler unavailable: {compiler}. Nothing was downloaded.")
     return path
+
+
+def bounded(command: list[str], seconds: float, check: bool = False, **options) -> subprocess.CompletedProcess:
+    """`command` run to its end within `seconds`, its output captured as text, in a process group of its own. At
+    the limit, or on any interruption, every process in the group is killed and the error raised: a compiler
+    driver's children keep its pipes open after the driver alone is killed, so killing it would not end the wait.
+    A limit already reached starts nothing and raises subprocess.TimeoutExpired."""
+    if seconds <= 0:
+        raise subprocess.TimeoutExpired(command, seconds)
+    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                          start_new_session=True, **options) as running:  # fmt: skip
+        try:
+            out, err = running.communicate(timeout=seconds)
+        except BaseException:
+            os.killpg(running.pid, signal.SIGKILL)
+            running.communicate()
+            raise
+    if check and running.returncode:
+        raise subprocess.CalledProcessError(running.returncode, command, out, err)
+    return subprocess.CompletedProcess(command, running.returncode, out, err)
+
+
+def until(deadline: float | None, most: float) -> float:
+    """The seconds a step may take: `most`, or less when the monotonic `deadline` comes first."""
+    return most if deadline is None else min(most, deadline - time.monotonic())
 
 
 @functools.cache

@@ -18,7 +18,7 @@ from typing import Any
 
 from ..compiler.cairnc import compile_program, compile_source, write_program
 from ..compiler.tree import CPP, FLOAT, Type, is_view
-from ..projects.toolchain import find, flags
+from ..projects.toolchain import bounded, find, flags, until
 
 DRIVER = """
 #include <algorithm>
@@ -107,31 +107,34 @@ def driver(f: Any, sizes: Mapping[str, float], fills: dict[str, str], block_ns: 
     return DRIVER.format(declaration=declaration, setup="\n".join(setup), call=call, block_ns=block_ns, blocks=blocks)
 
 
-def build(source: str, cxx: str, arch: str | None, extra: tuple[str, ...], directory: Path) -> Path:
+def build(source: str, cxx: str, arch: str | None, extra: tuple[str, ...], directory: Path,
+          deadline: float | None = None) -> Path:  # fmt: skip
     """The program's C++ and the runtime headers in `directory`, compiled to one object with the build's flags."""
     cpp, receipt = compile_source(source)
     if "cuda" in receipt["requires"]:
         raise ValueError("A device program is never timed here: device runs belong to the owner's make target.")
     program, obj = write_program(directory, "program.cpp", cpp), directory / "program.o"
-    subprocess.run([find(cxx), *flags(arch, "exe"), *extra, "-c", str(program), "-o", str(obj)], check=True,
-                   capture_output=True, text=True, timeout=300)  # fmt: skip
+    bounded([find(cxx), *flags(arch, "exe"), *extra, "-c", str(program), "-o", str(obj)], until(deadline, 300), True)
     return obj
 
 
 def time(source: str, symbol: str, sizes: Mapping[str, float], *, fills: dict[str, str] | None = None,
          cxx: str = "clang++", arch: str | None = None, extra: tuple[str, ...] = (), block_ns: float = 2e6,
-         blocks: int = 9, lanes: int | None = None, timeout: int = 600) -> dict[str, Any]:  # fmt: skip
-    """The median time of one call of `symbol` at `sizes`, in nanoseconds, measured on this host."""
+         blocks: int = 9, lanes: int | None = None, timeout: int = 600,
+         deadline: float | None = None) -> dict[str, Any]:  # fmt: skip
+    """The median time of one call of `symbol` at `sizes`, in nanoseconds, measured on this host. With `deadline`
+    (time.monotonic), the builds and the run end by then, stopped with every process they started if they have not
+    (subprocess.TimeoutExpired)."""
     f = timed_function(source, symbol)
     with tempfile.TemporaryDirectory(prefix="cairn-time-") as scratch:
         directory = Path(scratch)
-        obj = build(source, cxx, arch, extra, directory)
+        obj = build(source, cxx, arch, extra, directory, deadline)
         (directory / "driver.cpp").write_text(driver(f, sizes, fills or {}, block_ns, blocks), encoding="utf-8")
         exe = directory / "timed"
-        subprocess.run([find(cxx), *flags(arch, "exe"), *extra, str(directory / "driver.cpp"), str(obj), "-o", str(exe), "-pthread"],
-                       check=True, capture_output=True, text=True, timeout=300)  # fmt: skip
+        bounded([find(cxx), *flags(arch, "exe"), *extra, str(directory / "driver.cpp"), str(obj), "-o", str(exe),
+                 "-pthread"], until(deadline, 300), True)  # fmt: skip
         env = dict(os.environ, **({"CAIRN_LANES": str(lanes)} if lanes else {}))
-        return outcome(subprocess.run([str(exe)], capture_output=True, text=True, timeout=timeout, env=env))
+        return outcome(bounded([str(exe)], until(deadline, timeout), env=env))
 
 
 def timed_function(source: str, symbol: str) -> Any:

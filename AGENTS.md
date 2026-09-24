@@ -92,6 +92,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `perf/plan_source.py` | a function's plan as source text: the plans the checker resolves to it, and where a new one is written |
 | `perf/regions.py` | names for a function's parallel regions that survive edits which do not touch them |
 | `perf/search.py`, `perf/tune.py` | the bounded search over a function's plans: the space, what the checker accepts, the budgets, measurement |
+| `perf/objective.py` | what a search ranks candidates by when it prices them at several sizes |
 | `perf/resources.py` | what a compiled candidate uses on the device, for one target, kept by what was compiled |
 | `perf/feedback.py` | the difference report between two candidates, each line labelled by the kind of evidence it is |
 | `verify/elision.py` | the independent check of every guard lowering leaves out |

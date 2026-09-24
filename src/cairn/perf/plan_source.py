@@ -87,9 +87,10 @@ class Placement:
     `plan f use g;` that selects one of its implementations, and the point right after its declaration. `apply` gives
     the source with a given plan, and a given selection or none, in their place."""
 
-    def __init__(self, source: str, symbol: str):
+    def __init__(self, source: str, symbol: str, checked: tuple[Any, Any] | None = None):
+        """`checked` is the program and checker of `source` when the caller has them."""
         self.source = source
-        program, checker, _ = compile_program(source)
+        program, checker = checked or compile_program(source)[:2]
         self.f = function(program, symbol)
         self.name = short(self.f)
         tokens = lex(source)
@@ -126,12 +127,13 @@ class Placement:
         return out
 
 
-def contract(source: str, symbol: str) -> dict[str, Any]:
+def contract(source: str, symbol: str, checked: tuple[Any, Any, dict] | None = None) -> dict[str, Any]:
     """What every plan of `symbol` must preserve, as a candidate's identity names it: the function's signature and
-    effect row, which the checker holds a plan to, and its body, which a plan cannot touch (`agent/history.py`)."""
+    effect row, which the checker holds a plan to, and its body, which a plan cannot touch (`agent/history.py`).
+    `checked` is what compile_program answered for `source` when the caller has it."""
     from ..agent.projection import signature
 
-    program, _, receipts = compile_program(source)
+    program, _, receipts = checked or compile_program(source)
     f = function(program, symbol)
     return {"kind": "plan", "signature": signature(f), "effects": receipts[f.name]["effects"]}
 

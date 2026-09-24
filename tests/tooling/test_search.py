@@ -71,14 +71,14 @@ def test_vector_beside_fuse_is_tried_and_the_checker_refuses_it():
     assert fused["applies_to"]["fuse"] == [[head, tail]]
 
 
-def test_a_spent_clock_leaves_the_rest_unchecked_and_says_so(monkeypatch):
+def test_a_spent_clock_leaves_the_rest_ungenerated_and_says_so(monkeypatch):
     from cairn.perf import search
 
     calls = iter(range(10_000))
-    monkeypatch.setattr(search.Spent, "out_of_time", lambda self: next(calls) >= 5)
+    monkeypatch.setattr(search.Spent, "out_of_time", lambda self, share=1.0: next(calls) >= 5)
     result = tune(MIX, "spread", [{"n": 1e6}], MACHINE)
     assert result["space"]["checked"] == 5 and len(result["candidates"]) == 5
-    assert result["budget"]["undone"] == {"not checked: out of time": result["space"]["configurations"] - 5}
+    assert result["budget"]["undone"] == {"not generated: out of time": result["space"]["configurations"] - 5}
     with pytest.raises(ValueError):
         Budget(compiles=-1)
 
@@ -128,7 +128,9 @@ def test_a_kept_inspection_answers_the_next_search_for_its_target_only(tmp_path)
                  device_target=parse("sm_120"))  # fmt: skip
     assert first["budget"]["compiles"] == {"allowed": 2, "started": 2, "kept": 0}
     read = [row for row in first["candidates"] if "resources" in row]
-    assert len(read) == 2 and len({row["resources"]["key"] for row in read}) == 2
+    compiled = [row for row in read if "same_kernels_as" not in row["resources"]]
+    assert len(compiled) == 2 and len({row["resources"]["key"] for row in compiled}) == 2
+    assert {row["resources"]["key"] for row in read} == {row["resources"]["key"] for row in compiled}  # launch variants
     assert first["chosen"] in read  # the chosen candidate is one a compile read
     again = tune(BLUR, "blur", [{"n": 1e7}], MACHINE, budget=Budget(compiles=0), history=tmp_path,
                  device_target=parse("sm_120"))  # fmt: skip

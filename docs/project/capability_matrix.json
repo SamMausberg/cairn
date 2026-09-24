@@ -174,6 +174,18 @@
       "records": ["evidence/v1_0/implementations/README.md", "tests/language/test_implementations.py"]
     },
     {
+      "feature": "`cairn tune`: the bounded search over plans and implementations",
+      "side": "host",
+      "docs": "tools.md#cairn-tune",
+      "implemented": "yes",
+      "compiles": "yes: x86-64, clang++, the host candidates `--measure` times",
+      "ran_on_cpu": "yes: x86-64, the suite and the searches evidence/v1_1/search records",
+      "ran_on_gpu": "n/a",
+      "sanitizers": "n/a",
+      "measured": "yes: the search's own cost, its checks, compiles and wall time before and after lazy generation",
+      "records": ["tests/tooling/test_search.py", "tests/tooling/test_search_budget.py", "tests/tooling/test_tune_objective.py", "evidence/v1_0/search/README.md", "evidence/v1_1/search/README.md"]
+    },
+    {
       "feature": "Libraries and their C header",
       "side": "host",
       "docs": "tools.md#cairn-build---header",
@@ -388,6 +400,18 @@
       "sanitizers": "no: each Compute Sanitizer tool runs only under make gpu",
       "measured": "n/a",
       "records": ["evidence/v1_0/foreign/README.md", "evidence/v1_1/emulation/README.md", "tests/verification/test_device_validation.py"]
+    },
+    {
+      "feature": "`cairn tune` on device candidates",
+      "side": "device",
+      "docs": "tools.md#cairn-tune",
+      "implemented": "yes",
+      "compiles": "yes: sm_120, read by ptxas and cuobjdump, nothing launched",
+      "ran_on_cpu": "n/a",
+      "ran_on_gpu": "no: make tune-device has not run",
+      "sanitizers": "n/a",
+      "measured": "partial: its compiles and the search's wall time, evidence/v1_1/search; no device time",
+      "records": ["tests/tooling/test_search.py", "tests/tooling/test_search_budget.py", "tests/tooling/test_search_instances.py", "evidence/v1_0/search/README.md", "evidence/v1_1/search/README.md"]
     }
   ]
 }

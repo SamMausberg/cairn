@@ -11,15 +11,15 @@ from __future__ import annotations
 import hashlib
 import re
 import shutil
-import subprocess
 import tempfile
+import time
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import compile_source, write_program
 from ..projects.target import DeviceTarget, resolve, supported
-from ..projects.toolchain import find
+from ..projects.toolchain import bounded, find, until
 
 ENTRY = re.compile(r"Compiling entry function '([^']+)' for '(sm_\d+[af]?)'")
 USED = re.compile(r"Used (\d+) registers")
@@ -89,11 +89,13 @@ def mix(sass: str) -> dict[str, Counter]:
     return out
 
 
-def kernels(source: str, target: DeviceTarget | None = None, timeout: int = 600,
+def kernels(source: str, target: DeviceTarget | None = None, timeout: float = 600,
             keep: dict[str, bytes] | None = None) -> dict[str, Any]:  # fmt: skip
     """Per CAIRN function with device lanes: each kernel's resources, instruction mix and memory instructions, for
     `target`, or the target resolved here when none is given. `keep`, when given, receives the compiled program, its
-    cubin, ptxas's log and the SASS, by file name."""
+    cubin, ptxas's log and the SASS, by file name. nvcc and cuobjdump together get `timeout` seconds, and are
+    stopped there with every process they started (subprocess.TimeoutExpired)."""
+    deadline = time.monotonic() + timeout
     if not available():
         return {"status": "not-run", "reason": "nvcc and cuobjdump are needed to read a kernel; neither was found."}
     chosen = supported(target or resolve())
@@ -111,10 +113,10 @@ def kernels(source: str, target: DeviceTarget | None = None, timeout: int = 600,
         program, cubin = write_program(directory, "program.cu", cpp), directory / "program.cubin"
         command = [find("nvcc"), "-std=c++20", "-O3", "--fmad=false", *chosen.flags(), "--extended-lambda",
                    "--expt-relaxed-constexpr", "-cubin", "-Xptxas", "-v", str(program), "-o", str(cubin)]  # fmt: skip
-        done = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+        done = bounded(command, until(deadline, timeout))
         if done.returncode:
             return {"status": "compile-failed", "stderr": done.stderr[-4000:]}
-        dump = subprocess.run([find("cuobjdump"), "-sass", str(cubin)], capture_output=True, text=True, timeout=120)
+        dump = bounded([find("cuobjdump"), "-sass", str(cubin)], until(deadline, 120))
         if keep is not None:
             keep |= {"program.cu": program.read_bytes(), "program.cubin": cubin.read_bytes(),
                      "ptxas.log": (done.stderr + done.stdout).encode(), "sass.txt": dump.stdout.encode()}  # fmt: skip

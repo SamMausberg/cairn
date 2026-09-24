@@ -52,6 +52,11 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"predict", "tune", "export"}, "--at", {"action": "append", "default": [], "metavar": "NAME=SIZE[,NAME=SIZE]", "help":
                                    "Price at these sizes (repeatable); predict defaults a function of one extent to "
                                    "1e3, 1e5 and 1e7."}),
+    ({"tune"}, "--shapes", {"type": Path, "metavar": "SHAPES.json", "help": "More sizes to tune for, each with a "
+                            "weight: a JSON list of {\"at\": \"n=1e6\", \"weight\": 2}."}),
+    ({"tune"}, "--objective", {"choices": ["geomean", "mean"], "default": "geomean", "help": "How the times at "
+                               "the sizes fold into the one that ranks candidates: the geometric mean (default), "
+                               "as GPU MODE scores a list of shapes, or the arithmetic mean; weighted by --shapes."}),
     ({"tune"}, "--measure", {"type": int, "default": 0, "metavar": "K", "help": "Time the K best-ranked plans and "
                              "the current one on this host, halving each round."}),
     ({"tune"}, "--device", {"action": "store_true", "help": "Time device plans on the device; only make "

@@ -116,6 +116,7 @@ DEVICE_TESTS = tests/language/test_assembly.py tests/language/test_assert_eq.py 
   tests/soundness/test_tensor_kernels.py tests/soundness/test_wide.py tests/soundness/test_atomics.py tests/soundness/test_finish.py \
   tests/tooling/test_device_cards.py tests/tooling/test_feedback.py tests/tooling/test_on_device.py \
   tests/tooling/test_predict.py tests/tooling/test_predict_cooperative.py tests/tooling/test_search.py \
+  tests/tooling/test_search_budget.py \
   tests/tooling/test_search_instances.py tests/tooling/test_target.py \
   tests/tooling/test_tools.py::test_parallel_gpu_flags tests/tooling/test_tools.py::test_device_examples \
   tests/verification/test_device_validation.py

@@ -404,6 +404,14 @@ def main(argv: list[str] | None = None) -> int:
             device = resolve_device(a.device_target, project.device_target, required=False, card=card)
             budget = Budget(a.budget_compiles, a.budget_seconds, a.budget_runs)
             kept = None if a.no_history else a.history or project.root / ".cairn" / "history"
+            sizes = priced.parse_sizes(a.at)
+            weights = [1.0] * len(sizes)
+            if a.shapes:  # after the --at sizes, each with its weight
+                from .agent.agent_tools import load_json_strict
+                from .perf.objective import shapes
+
+                more, heavy = shapes(load_json_strict(read_text(a.shapes, 1_000_000)))
+                sizes, weights = sizes + more, weights + heavy
             if a.compare:  # a difference report between two plans, in place of a search
                 from .perf import feedback
 
@@ -415,8 +423,8 @@ def main(argv: list[str] | None = None) -> int:
                                           vendored(project))  # fmt: skip
                 print(feedback.lines_for_people(answer)) if terminal.human(FORMAT) else report(answer)
                 return 0
-            answer = tune(project.source, a.symbol[0], priced.parse_sizes(a.at), supplied, arch, a.measure, a.cxx,
-                          a.device, device, budget, kept, vendored(project), a.accept_emulated)  # fmt: skip
+            answer = tune(project.source, a.symbol[0], sizes, supplied, arch, a.measure, a.cxx, a.device, device,
+                          budget, kept, vendored(project), a.accept_emulated, weights, a.objective)  # fmt: skip
             if a.write:  # Only the plan line changes, in the file that declares the function, and only if it checks.
                 use = answer["chosen"].get("use") if "implementations" in answer else KEEP  # the reference: none
                 answer["written"] = write_plan(a.path, a.symbol[0], answer["chosen"], use)
