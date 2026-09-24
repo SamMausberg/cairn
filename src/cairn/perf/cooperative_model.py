@@ -37,13 +37,6 @@ from .profile import Device, Host
 # cr::coop::blocks<THREADS, BYTES, the lambda>: its closure type numbered among the function's device regions
 KERNEL = re.compile(r"6blocksILj(\d+)ELm(\d+)E.*?UlRNS\d+_6DeviceEmmE(\d*)_")
 NOT_ISSUED = {"tensor", "shared_wavefront", "fill_bytes"}  # counted in operations, wavefronts or bytes, not issues
-EVIDENCE = {
-    "checked": "counted from the checked program",
-    "ptxas": "read from ptxas's report for the device target, a compiler observation; nothing ran",
-    "specification": "NVIDIA's published figures in the device profile, not a measurement",
-    "assumed": "the device profile's assumption, not published and not measured",
-    "model": "derived by the model from the figures above",
-}
 
 
 def resident(r: Region, card: Device) -> dict[str, Any]:
@@ -94,7 +87,7 @@ def described(r: Region, card: Device | None = None, site: Any = None) -> dict[s
         "warp_collectives": [{"at": at(line), "operation": what} for line, what in sorted(shape.collectives.items())],
         "fragments": [{"at": at(line), "operation": what} for line, what in sorted(shape.fragments.items())],
         "registers_per_thread": r.registers or None,
-        "evidence": {
+        "evidence": {  # checked: counted from the checked program; ptxas: its report for the target, nothing ran
             "shared_bytes_per_block": "checked",
             "pipelines": "checked",
             "barriers_per_thread": "checked",
