@@ -28,7 +28,7 @@ The first release. The sections below it are the internal milestones that came b
 
 ### Agents
 
-- `skills/cairn/` is an Agent Skill generated from the compiler's rule cards, fixes and commands, and the repository is a Claude Code plugin and marketplace (`claude plugin marketplace add SamMausberg/cairn`): the skill, `cairn` on `PATH`, `cairn lsp` for diagnostics after every edit, and `cairn mcp`. In a six-session smoke comparison, sessions with the plugin cost 0.51 times as much as sessions without it and every session solved its task (`evidence/v1_0/skill`).
+- `skills/cairn/` is an Agent Skill generated from the compiler's rule cards, fixes and commands, and the repository is a Claude Code plugin and marketplace (`claude plugin marketplace add SamMausberg/cairn`): the skill, `cairn` on `PATH`, `cairn lsp` for diagnostics after every edit, and `cairn mcp`. In a six-session smoke comparison, run before `cairn mcp` existed, sessions with the plugin cost 0.51 times as much as sessions without it and every session solved its task (`evidence/v1_0/skill`).
 - `cairn mcp` serves check, state and the edit, plan and implementation hosts over MCP, and writes an admitted change back to its files only while they are unchanged and inside the served directory (`E-SESSION`).
 - Every new project has an `AGENTS.md` and a `CLAUDE.md` that imports it.
 - A rename follows `implements` and `plan f use g`.
@@ -69,7 +69,7 @@ The first release. The sections below it are the internal milestones that came b
 
 ### Documentation and repository
 
-- The documentation is thirteen files under `docs/`, each written to one style and checked by the suite: every example compiles, every refusal has its code, and every relative link resolves.
+- The documentation is fourteen files under `docs/`, device programming now a chapter of its own, each written to one style and checked by the suite: every example compiles, every refusal has its code, every documented code, command and option exists in the source, and every relative link resolves.
 - `demos/` holds one-command demos of an agent repair, a CPU and GPU numeric workload and a visual app.
 - Every tracked file is at most 800 lines; the parser, the checker's rule groups, the device layer and the agent tools are split by responsibility, and `AGENTS.md` names the owner of each file.
 - CI runs lint, the suite in four shards and the proofs on every push.
@@ -170,7 +170,7 @@ The first release. The sections below it are the internal milestones that came b
 - Checked reduction: `reduce +` is offered on unsigned integers, on the host and on the device, and traps exactly when the total does not fit, in any order.
 - Evidence: a preregistered fresh-model pilot (`evidence/v0_8_1/ai_pilot`). Nine of nine tasks were solved from the rule cards alone, eight on the first compile, and every transcript was audited. The cards were then revised with what the subjects had to guess.
 - Source equivalence: the SMT model covers records, tag-only enums and payload sums with `match` and `try`, IEEE `f32` and `f64` under the compiler's strict floating contract, fixed local storage with its bounds guard, and loops with `break` and `continue` unrolled within a sixteen-iteration budget. A value is compared component by component, a sum by its tag and active payload only. Exceeding the budget is an obligation the solver must refute, and a returned NaN is reported unknown.
-- Proof: a core ownership and lease calculus in Lean (`proofs/Cairn/Ownership.lean`), with safety including race freedom and with witnesses that rejected programs really fault.
+- Proof: a core ownership and lease calculus in Lean (`proofs/Cairn/Ownership.lean`), with safety including race freedom and with witnesses that rejected programs fault.
 - Tasks: leases are path sensitive. A `wait` on a path that returns no longer ends the lease on the path that goes on, a race three earlier reviews had missed.
 - A fourth adversarial review of the 0.8.1 features found seven defects in recipe expansion and the incremental build. All are fixed and pinned.
 

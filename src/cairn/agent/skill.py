@@ -166,7 +166,7 @@ def skill_file() -> str:
         "## Cards", "", "Each card states one part of the language and the codes of its rules. The compiler sends "
         "the same cards to an agent it hosts, picked by the words below.", "", *index, "",
         "## Mistakes that cost the most", "", AVOID, "",
-        "## Commands", "", "Every command takes `--format json`, the default when output is piped.", "", *table, "",
+        "## Commands", "", "A command that reports takes `--format json`, the default when its output is piped.", "", *table, "",
         "## More", "",
         "The reference is the `docs/` directory of the CAIRN repository: `language.md`, `memory.md`, "
         "`abstractions.md`, `concurrency.md`, `devices.md` and `numerics.md` for the language, `library.md` and `std/` for the "

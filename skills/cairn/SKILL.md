@@ -115,7 +115,7 @@ Each card states one part of the language and the codes of its rules. The compil
 
 ## Commands
 
-Every command takes `--format json`, the default when output is piped.
+A command that reports takes `--format json`, the default when its output is piped.
 
 | Command | What it does |
 |---|---|
