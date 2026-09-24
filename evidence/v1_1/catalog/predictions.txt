@@ -1,0 +1,165 @@
+== compact_even
+predicted from published specifications, not measured: 8 cards; host work on AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
+compact_even  n=1e+07
+  a100-sxm4-80gb   sm_80        100 us  device memory        78% of speed of light    low
+  b200-hgx         sm_100a     32.5 us  device memory        64% of speed of light    low
+  h100-sxm5        sm_90a      64.2 us  device memory        74% of speed of light    low
+  h200-sxm         sm_90a      47.2 us  device memory        71% of speed of light    low
+  l40s             sm_89        226 us  device memory        82% of speed of light    low
+  rtx-4090         sm_89        195 us  device memory        82% of speed of light    low
+  rtx-5070-ti      sm_120a      218 us  device memory        82% of speed of light    low
+  rtx-5090         sm_120a      113 us  device memory        79% of speed of light    low
+== dot_f64
+predicted from published specifications, not measured: 8 cards; host work on AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
+dot_f64  n=1e+07
+  a100-sxm4-80gb   sm_80        100 us  device memory        78% of speed of light    low
+  b200-hgx         sm_100a     32.5 us  device memory        64% of speed of light    low
+  h100-sxm5        sm_90a      64.2 us  device memory        74% of speed of light    low
+  h200-sxm         sm_90a      47.2 us  device memory        71% of speed of light    low
+  l40s             sm_89        226 us  device memory        82% of speed of light    low
+  rtx-4090         sm_89        195 us  device memory        82% of speed of light    low
+  rtx-5070-ti      sm_120a      218 us  device memory        82% of speed of light    low
+  rtx-5090         sm_120a      113 us  device memory        79% of speed of light    low
+== histogram_u32
+refused: E-PLACEMENT device memory is not addressable from host code.
+== mixed_u64
+predicted from published specifications, not measured: 8 cards; host work on AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
+mixed_u64  n=1e+07
+  a100-sxm4-80gb   sm_80        100 us  device memory        78% of speed of light    low
+  b200-hgx         sm_100a     32.5 us  device memory        64% of speed of light    low
+  h100-sxm5        sm_90a      64.2 us  device memory        74% of speed of light    low
+  h200-sxm         sm_90a      47.2 us  device memory        71% of speed of light    low
+  l40s             sm_89        226 us  device memory        82% of speed of light    low
+  rtx-4090         sm_89        195 us  device memory        82% of speed of light    low
+  rtx-5070-ti      sm_120a      218 us  device memory        82% of speed of light    low
+  rtx-5090         sm_120a      113 us  device memory        79% of speed of light    low
+no device work, so no card changes it: mix
+== saxpy_f32
+predicted from published specifications, not measured: 8 cards; host work on AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
+saxpy_f32  n=1e+07
+  a100-sxm4-80gb   sm_80       77.2 us  device memory        76% of speed of light    low
+  b200-hgx         sm_100a     26.3 us  device memory        59% of speed of light    low
+  h100-sxm5        sm_90a      50.1 us  device memory        71% of speed of light    low
+  h200-sxm         sm_90a      37.4 us  device memory        67% of speed of light    low
+  l40s             sm_89        171 us  device memory        81% of speed of light    low
+  rtx-4090         sm_89        148 us  device memory        80% of speed of light    low
+  rtx-5070-ti      sm_120a      166 us  device memory        81% of speed of light    low
+  rtx-5090         sm_120a     86.8 us  device memory        77% of speed of light    low
+== stencil_1d
+predicted from published specifications, not measured: 8 cards; host work on AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
+stencil_1d  n=1e+07
+  a100-sxm4-80gb   sm_80       54.2 us  device memory        72% of speed of light    low
+  b200-hgx         sm_100a     20.2 us  device memory        51% of speed of light    low
+  h100-sxm5        sm_90a      36.1 us  device memory        66% of speed of light    low
+  h200-sxm         sm_90a      27.6 us  device memory        60% of speed of light    low
+  l40s             sm_89        117 us  device memory        79% of speed of light    low
+  rtx-4090         sm_89        101 us  device memory        78% of speed of light    low
+  rtx-5070-ti      sm_120a      113 us  device memory        79% of speed of light    low
+  rtx-5090         sm_120a     60.5 us  device memory        74% of speed of light    low
+stencil_1d_wrap  n=1e+07
+  a100-sxm4-80gb   sm_80       54.2 us  device memory        72% of speed of light    low
+  b200-hgx         sm_100a     20.2 us  device memory        51% of speed of light    low
+  h100-sxm5        sm_90a      36.1 us  device memory        66% of speed of light    low
+  h200-sxm         sm_90a      27.6 us  device memory        60% of speed of light    low
+  l40s             sm_89        117 us  device memory        79% of speed of light    low
+  rtx-4090         sm_89        101 us  device memory        78% of speed of light    low
+  rtx-5070-ti      sm_120a      113 us  device memory        79% of speed of light    low
+  rtx-5090         sm_120a     60.5 us  device memory        74% of speed of light    low
+no device work, so no card changes it: blend3
+== sum_u64_wrap
+refused: E-PLACEMENT total owns host memory, and a lane copies the values it captures; a device lane cannot use it.
+== tasks_split
+refused: E-PLACEMENT device memory is not addressable from host code.
+== examples/cooperative/gpu.toml transpose
+predicted from published specifications, not measured: 8 cards; host work on AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
+transpose  gx=128, gy=128, n=1.67772e+07
+  a100-sxm4-80gb   sm_80       85.4 us  device memory        77% of speed of light    low
+  b200-hgx         sm_100a     28.5 us  device memory        61% of speed of light    low
+  h100-sxm5        sm_90a      55.1 us  device memory        73% of speed of light    low
+  h200-sxm         sm_90a      40.9 us  device memory        68% of speed of light    low
+  l40s             sm_89        191 us  device memory        81% of speed of light    low
+  rtx-4090         sm_89        165 us  device memory        81% of speed of light    low
+  rtx-5070-ti      sm_120a      184 us  device memory        81% of speed of light    low
+  rtx-5090         sm_120a     96.1 us  device memory        78% of speed of light    low
+== examples/cooperative/gpu.toml block_sums
+predicted from published specifications, not measured: 8 cards; host work on AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
+block_sums  n=1e+08, g=390625
+  a100-sxm4-80gb   sm_80        477 us  device memory        84% of speed of light    low
+  b200-hgx         sm_100a      132 us  device memory        80% of speed of light    low
+  h100-sxm5        sm_90a       293 us  device memory        83% of speed of light    low
+  h200-sxm         sm_90a       207 us  device memory        82% of speed of light    low
+  l40s             sm_89       1.11 ms  device memory        84% of speed of light    low
+  rtx-4090         sm_89        956 us  device memory        84% of speed of light    low
+  rtx-5070-ti      sm_120a     1.07 ms  device memory        84% of speed of light    low
+  rtx-5090         sm_120a      541 us  device memory        84% of speed of light    low
+== examples/cooperative/gpu.toml row_sums[2], row_sums[3]
+predicted from published specifications, not measured: 8 cards; host work on AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
+row_sums[2]  rows=1000, cols=100000, n=1e+08
+  a100-sxm4-80gb   sm_80        472 us  device memory        84% of speed of light    low
+  b200-hgx         sm_100a      131 us  device memory        80% of speed of light    low
+  h100-sxm5        sm_90a       290 us  device memory        83% of speed of light    low
+  h200-sxm         sm_90a       205 us  device memory        82% of speed of light    low
+  l40s             sm_89        1.1 ms  device memory        84% of speed of light    low
+  rtx-4090         sm_89        946 us  device memory        84% of speed of light    low
+  rtx-5070-ti      sm_120a     1.06 ms  device memory        84% of speed of light    low
+  rtx-5090         sm_120a      536 us  device memory        84% of speed of light    low
+row_sums[3]  rows=1000, cols=100000, n=1e+08
+  a100-sxm4-80gb   sm_80        473 us  device memory        84% of speed of light    low
+  b200-hgx         sm_100a      131 us  device memory        80% of speed of light    low
+  h100-sxm5        sm_90a       291 us  device memory        83% of speed of light    low
+  h200-sxm         sm_90a       206 us  device memory        82% of speed of light    low
+  l40s             sm_89       1.11 ms  device memory        84% of speed of light    low
+  rtx-4090         sm_89        949 us  device memory        84% of speed of light    low
+  rtx-5070-ti      sm_120a     1.07 ms  device memory        84% of speed of light    low
+  rtx-5090         sm_120a      537 us  device memory        84% of speed of light    low
+== examples/cooperative/tuned.toml row_totals, row_totals_tiled[128, 2], row_totals_tiled[256, 3]
+predicted from published specifications, not measured: 8 cards; host work on AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
+row_totals  rows=64, cols=100000, n=6.4e+06
+  a100-sxm4-80gb   sm_80       6.39 ms  device memory        2% of speed of light     low
+  b200-hgx         sm_100a     2.32 ms  device memory        1% of speed of light     low
+  h100-sxm5        sm_90a      4.75 ms  device memory        1% of speed of light     low
+  h200-sxm         sm_90a      3.32 ms  device memory        1% of speed of light     low
+  l40s             sm_89       14.9 ms  device memory        2% of speed of light     low
+  rtx-4090         sm_89       11.5 ms  device memory        2% of speed of light     low
+  rtx-5070-ti      sm_120a     7.07 ms  device memory        3% of speed of light     low
+  rtx-5090         sm_120a     8.58 ms  device memory        1% of speed of light     low
+row_totals_tiled[128, 2]  rows=64, cols=100000, n=6.4e+06
+  a100-sxm4-80gb   sm_80        204 us  device memory        12% of speed of light    low
+  b200-hgx         sm_100a      204 us  device memory        3% of speed of light     low
+  h100-sxm5        sm_90a       204 us  device memory        8% of speed of light     low
+  h200-sxm         sm_90a       204 us  device memory        5% of speed of light     low
+  l40s             sm_89        204 us  device memory        29% of speed of light    low
+  rtx-4090         sm_89        204 us  device memory        25% of speed of light    low
+  rtx-5070-ti      sm_120a      204 us  device memory        28% of speed of light    low
+  rtx-5090         sm_120a      204 us  device memory        14% of speed of light    low
+row_totals_tiled[256, 3]  rows=64, cols=100000, n=6.4e+06
+  a100-sxm4-80gb   sm_80       73.6 us  device memory        34% of speed of light    low
+  b200-hgx         sm_100a     73.6 us  device memory        9% of speed of light     low
+  h100-sxm5        sm_90a      73.6 us  device memory        21% of speed of light    low
+  h200-sxm         sm_90a      73.6 us  device memory        15% of speed of light    low
+  l40s             sm_89       78.3 us  device memory        76% of speed of light    low
+  rtx-4090         sm_89       73.6 us  device memory        70% of speed of light    low
+  rtx-5070-ti      sm_120a     75.8 us  device memory        76% of speed of light    low
+  rtx-5090         sm_120a     73.6 us  device memory        39% of speed of light    low
+== examples/tensor/tile32.cairn tile32
+predicted from published specifications, not measured: 8 cards; host work on AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
+tile32  m=4096, n=4096, k=4096, cn=1.67772e+07, an=1.67772e+07, bn=1.67772e+07
+  a100-sxm4-80gb   sm_80       7.83 ms  device memory        76% of speed of light    low
+  b200-hgx         sm_100a     3.77 ms  issue                82% of speed of light    low
+  h100-sxm5        sm_90a      4.77 ms  device memory        72% of speed of light    low
+  h200-sxm         sm_90a      4.22 ms  issue                82% of speed of light    low
+  l40s             sm_89       13.8 ms  device memory        57% of speed of light    low
+  rtx-4090         sm_89       11.9 ms  device memory        57% of speed of light    low
+  rtx-5070-ti      sm_120a     13.4 ms  device memory        57% of speed of light    low
+  rtx-5090         sm_120a     6.68 ms  device memory        57% of speed of light    low
+== examples/tensor/tile64.cairn tile64
+predicted from published specifications, not measured: 8 cards; host work on AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes (measured), x86-64-v4
+tile64  m=4096, n=4096, k=4096, cn=1.67772e+07, an=1.67772e+07, bn=1.67772e+07
+  a100-sxm4-80gb   sm_80       6.19 ms  issue                68% of speed of light    low
+  b200-hgx         sm_100a     2.58 ms  issue                84% of speed of light    low
+  h100-sxm5        sm_90a      3.61 ms  issue                68% of speed of light    low
+  h200-sxm         sm_90a      3.61 ms  issue                68% of speed of light    low
+  l40s             sm_89       19.1 ms  device memory        28% of speed of light    low
+  rtx-4090         sm_89       16.4 ms  device memory        28% of speed of light    low
+  rtx-5070-ti      sm_120a     18.4 ms  device memory        28% of speed of light    low
+  rtx-5090         sm_120a      9.2 ms  device memory        28% of speed of light    low

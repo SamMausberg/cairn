@@ -301,7 +301,7 @@ tile32  m=4096, n=4096, k=4096, cn=1.67772e+07, an=1.67772e+07, bn=1.67772e+07
   rtx-5090         sm_120a     4.46 ms  device memory        85% of speed of light    low
 ```
 
-The same kernel is bound by shared memory on the data-center cards and by device memory on the others, which is the kind of difference the rows are for. Each card is priced for its own target unless one is named; a named target prices only the cards its code runs on and lists the others as refused. A function without device work is listed once, since no card changes it. `--inspect` compiles once for each target.
+The same kernel is bound by shared memory on the data-center cards and by device memory on the others, which is the kind of difference the rows are for. Each card is priced for its own target unless one is named; a named target prices only the cards its code runs on and lists the others as refused. A function without device work is listed once, since no card changes it. `--inspect` compiles once for each target. [evidence/v1_1/catalog](../evidence/v1_1/catalog/README.md) records these predictions for the suite's kernels and the device examples; they are predictions from specifications, and nothing ran.
 
 ## cairn tune
 

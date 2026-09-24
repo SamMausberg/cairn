@@ -1,0 +1,3236 @@
+{
+ "by": "cairn predict --card all --inspect: predictions from published specifications and ptxas's reading of each target's code; nothing ran",
+ "commit": "cefa139",
+ "toolkit": {
+  "nvcc": "/usr/local/cuda/bin/nvcc",
+  "release": "13.2",
+  "version": "V13.2.78"
+ },
+ "cards": [
+  {
+   "card": "a100-sxm4-80gb",
+   "name": "NVIDIA A100 SXM4 80GB (GA100, compute capability 8.0)",
+   "device": "A100 SXM4 80GB",
+   "compute_capability": "8.0",
+   "origin": "specification",
+   "sms": 108,
+   "ghz": 1.41,
+   "dram_gbps": 2039.0,
+   "flops": {
+    "f32": 19500.0,
+    "i32": 19500.0,
+    "f64": 9700.0,
+    "tensor_tf32": 156000.0,
+    "tensor_f16": 312000.0,
+    "tensor_bf16": 312000.0
+   },
+   "threads_per_sm": 2048,
+   "shared_per_sm": 167936,
+   "derived": [],
+   "assumed": [
+    "launch_ns",
+    "link_ns",
+    "memory_efficiency",
+    "occupancy_to_saturate",
+    "memory_latency_ns"
+   ],
+   "documents": {
+    "datasheet": "NVIDIA A100 Tensor Core GPU datasheet, the A100 80GB SXM column (https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/nvidia-a100-datasheet-us-nvidia-1758950-r4-web.pdf)",
+    "whitepaper": "NVIDIA A100 Tensor Core GPU Architecture whitepaper, Table 3 (https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf)",
+    "hopper_whitepaper": "NVIDIA H100 Tensor Core GPU Architecture whitepaper, Table 3, the A100 column (https://resources.nvidia.com/en-us-hopper-architecture/nvidia-h100-tensor-c)",
+    "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+   }
+  },
+  {
+   "card": "b200-hgx",
+   "name": "NVIDIA B200 in HGX B200 (compute capability 10.0)",
+   "device": "B200 (HGX B200)",
+   "compute_capability": "10.0",
+   "origin": "specification",
+   "sms": 148,
+   "ghz": 1.979,
+   "dram_gbps": 7700.0,
+   "flops": {
+    "f32": 75000.0,
+    "i32": 37500.0,
+    "f64": 37000.0,
+    "tensor_tf32": 1125000.0,
+    "tensor_f16": 2250000.0,
+    "tensor_bf16": 2250000.0,
+    "tensor_f8": 4500000.0,
+    "tensor_f4": 9000000.0
+   },
+   "threads_per_sm": 2048,
+   "shared_per_sm": 233472,
+   "derived": [
+    "ghz",
+    "flops.i32"
+   ],
+   "assumed": [
+    "launch_ns",
+    "link_ns",
+    "memory_efficiency",
+    "occupancy_to_saturate",
+    "memory_latency_ns"
+   ],
+   "documents": {
+    "datasheet": "NVIDIA Blackwell datasheet (October 2025), Technical Specifications, the HGX B200 column (https://dam-cdn.nvd.orangelogic.com/AssetLink/y441155802qub41q118b2852i557jem5.pdf, linked from https://www.nvidia.com/en-us/data-center/hgx/)",
+    "hgx": "NVIDIA HGX platform specifications, the HGX B200 column, for eight GPUs (https://www.nvidia.com/en-us/data-center/hgx/)",
+    "sms": "NVIDIA Technical Blog, Boost GPU Memory Performance with No Code Changes Using NVIDIA CUDA MPS, December 2025 (https://developer.nvidia.com/blog/boost-gpu-memory-performance-with-no-code-changes-using-nvidia-cuda-mps/)",
+    "sections": "CUDA C++ Programming Guide 12.9, section 20, Compute Capabilities, and Table 7 of arithmetic throughput (https://docs.nvidia.com/cuda/archive/12.9.1/cuda-c-programming-guide/index.html)",
+    "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+   }
+  },
+  {
+   "card": "h100-sxm5",
+   "name": "NVIDIA H100 SXM5 80GB (GH100, compute capability 9.0)",
+   "device": "H100 SXM5 80GB",
+   "compute_capability": "9.0",
+   "origin": "specification",
+   "sms": 132,
+   "ghz": 1.98,
+   "dram_gbps": 3352.0,
+   "flops": {
+    "f32": 66900.0,
+    "i32": 33500.0,
+    "f64": 33500.0,
+    "tensor_tf32": 494700.0,
+    "tensor_f16": 989400.0,
+    "tensor_bf16": 989400.0,
+    "tensor_f8": 1978900.0
+   },
+   "threads_per_sm": 2048,
+   "shared_per_sm": 233472,
+   "derived": [],
+   "assumed": [
+    "launch_ns",
+    "link_ns",
+    "memory_efficiency",
+    "occupancy_to_saturate",
+    "memory_latency_ns"
+   ],
+   "documents": {
+    "whitepaper": "NVIDIA H100 Tensor Core GPU Architecture whitepaper, Table 3, the H100 SXM5 column (https://resources.nvidia.com/en-us-hopper-architecture/nvidia-h100-tensor-c)",
+    "product_page": "NVIDIA H100 product specifications, the H100 SXM column (https://www.nvidia.com/en-us/data-center/h100/)",
+    "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+   }
+  },
+  {
+   "card": "h200-sxm",
+   "name": "NVIDIA H200 SXM 141GB (GH100, compute capability 9.0)",
+   "device": "H200 SXM 141GB",
+   "compute_capability": "9.0",
+   "origin": "specification",
+   "sms": 132,
+   "ghz": 1.98,
+   "dram_gbps": 4800.0,
+   "flops": {
+    "f32": 67000.0,
+    "i32": 33500.0,
+    "f64": 34000.0,
+    "tensor_tf32": 494500.0,
+    "tensor_f16": 989500.0,
+    "tensor_bf16": 989500.0,
+    "tensor_f8": 1979000.0
+   },
+   "threads_per_sm": 2048,
+   "shared_per_sm": 233472,
+   "derived": [
+    "ghz",
+    "flops.i32"
+   ],
+   "assumed": [
+    "launch_ns",
+    "link_ns",
+    "memory_efficiency",
+    "occupancy_to_saturate",
+    "memory_latency_ns"
+   ],
+   "documents": {
+    "datasheet": "NVIDIA H200 Tensor Core GPU datasheet, the H200 SXM column, preliminary specifications (https://dam-cdn.nvd.orangelogic.com/AssetLink/b2kt2580e5b6424if22lg65223m6ghjb.pdf, linked from https://resources.nvidia.com/en-us-hopper-architecture/nvidia-h100-tensor-c)",
+    "overview": "NVIDIA, CUDA Programming and Optimization (2024), the NVIDIA H200 SXM overview (https://developer-blogs.nvidia.com/wp-content/uploads/2024/08/CUDA-Programming-and-Optimization.pdf)",
+    "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+   }
+  },
+  {
+   "card": "l40s",
+   "name": "NVIDIA L40S (AD102, compute capability 8.9)",
+   "device": "L40S",
+   "compute_capability": "8.9",
+   "origin": "specification",
+   "sms": 142,
+   "ghz": 2.52,
+   "dram_gbps": 864.0,
+   "flops": {
+    "f32": 91600.0,
+    "i32": 45800.0,
+    "f64": 1431.0,
+    "tensor_tf32": 183000.0,
+    "tensor_f16": 362050.0,
+    "tensor_bf16": 362050.0,
+    "tensor_f8": 733000.0
+   },
+   "threads_per_sm": 1536,
+   "shared_per_sm": 102400,
+   "derived": [
+    "sms",
+    "ghz",
+    "flops.i32",
+    "flops.f64"
+   ],
+   "assumed": [
+    "launch_ns",
+    "link_ns",
+    "memory_efficiency",
+    "occupancy_to_saturate",
+    "memory_latency_ns"
+   ],
+   "documents": {
+    "product_page": "NVIDIA L40S product specifications (https://www.nvidia.com/en-us/data-center/l40s/)",
+    "whitepaper": "NVIDIA Ada GPU Architecture whitepaper, Appendix C, the L40 column (https://images.nvidia.com/aem-dam/Solutions/geforce/ada/nvidia-ada-gpu-architecture.pdf)",
+    "sections": "CUDA C++ Programming Guide 12.9, section 20, Compute Capabilities, and Table 7 of arithmetic throughput (https://docs.nvidia.com/cuda/archive/12.9.1/cuda-c-programming-guide/index.html)",
+    "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+   }
+  },
+  {
+   "card": "rtx-4090",
+   "name": "NVIDIA GeForce RTX 4090 (AD102, compute capability 8.9)",
+   "device": "GeForce RTX 4090",
+   "compute_capability": "8.9",
+   "origin": "specification",
+   "sms": 128,
+   "ghz": 2.52,
+   "dram_gbps": 1008.0,
+   "flops": {
+    "f32": 82600.0,
+    "i32": 41300.0,
+    "f64": 1290.0,
+    "tensor_tf32": 82600.0,
+    "tensor_f16": 165200.0,
+    "tensor_bf16": 165200.0,
+    "tensor_f8": 330300.0
+   },
+   "threads_per_sm": 1536,
+   "shared_per_sm": 102400,
+   "derived": [
+    "flops.f64"
+   ],
+   "assumed": [
+    "launch_ns",
+    "link_ns",
+    "memory_efficiency",
+    "occupancy_to_saturate",
+    "memory_latency_ns"
+   ],
+   "documents": {
+    "whitepaper": "NVIDIA Ada GPU Architecture whitepaper v2.1, Appendix A, Table 2, the GeForce RTX 4090 column (https://images.nvidia.com/aem-dam/Solutions/geforce/ada/nvidia-ada-gpu-architecture.pdf)",
+    "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+   }
+  },
+  {
+   "card": "rtx-5070-ti",
+   "name": "NVIDIA GeForce RTX 5070 Ti (GB203, compute capability 12.0)",
+   "device": "RTX 5070 Ti",
+   "compute_capability": "12.0",
+   "origin": "specification",
+   "sms": 70,
+   "ghz": 2.452,
+   "dram_gbps": 896.0,
+   "flops": {
+    "f32": 43940.0,
+    "i32": 43940.0,
+    "f64": 686.6,
+    "tensor_tf32": 43900.0,
+    "tensor_f16": 87900.0,
+    "tensor_bf16": 87900.0,
+    "tensor_f8": 175800.0,
+    "tensor_f4": 703000.0
+   },
+   "threads_per_sm": 1536,
+   "shared_per_sm": 102400,
+   "derived": [],
+   "assumed": [
+    "launch_ns",
+    "link_ns",
+    "memory_efficiency",
+    "occupancy_to_saturate",
+    "memory_latency_ns"
+   ],
+   "documents": {
+    "whitepaper": "NVIDIA RTX Blackwell GPU Architecture whitepaper V1.1, Appendix B, the GeForce RTX 5070 Ti column (https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf)",
+    "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+   }
+  },
+  {
+   "card": "rtx-5090",
+   "name": "NVIDIA GeForce RTX 5090 (GB202, compute capability 12.0)",
+   "device": "GeForce RTX 5090",
+   "compute_capability": "12.0",
+   "origin": "specification",
+   "sms": 170,
+   "ghz": 2.407,
+   "dram_gbps": 1792.0,
+   "flops": {
+    "f32": 104800.0,
+    "i32": 104800.0,
+    "f64": 1638.0,
+    "tensor_tf32": 104800.0,
+    "tensor_f16": 209500.0,
+    "tensor_bf16": 209500.0,
+    "tensor_f8": 419000.0,
+    "tensor_f4": 1676000.0
+   },
+   "threads_per_sm": 1536,
+   "shared_per_sm": 102400,
+   "derived": [
+    "flops.f64"
+   ],
+   "assumed": [
+    "launch_ns",
+    "link_ns",
+    "memory_efficiency",
+    "occupancy_to_saturate",
+    "memory_latency_ns"
+   ],
+   "documents": {
+    "whitepaper": "NVIDIA RTX Blackwell GPU Architecture whitepaper V1.1, Appendix A, Table 3, the GeForce RTX 5090 column (https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf)",
+    "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+   }
+  }
+ ],
+ "suite": {
+  "compact_even": {
+   "schema": "cairn.predict.cards/1",
+   "predicted": "Predictions from published specifications and the assumptions each card names; nothing was built or run, and no card's figures were measured.",
+   "profile": {
+    "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "origin": "measured",
+    "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+   },
+   "arch": "x86-64-v4",
+   "cards": [
+    {
+     "card": "a100-sxm4-80gb",
+     "name": "A100 SXM4 80GB",
+     "compute_capability": "8.0",
+     "origin": "specification",
+     "device_target": "sm_80",
+     "target_origin": "card: a100-sxm4-80gb is compute capability 8.0"
+    },
+    {
+     "card": "b200-hgx",
+     "name": "B200 (HGX B200)",
+     "compute_capability": "10.0",
+     "origin": "specification",
+     "device_target": "sm_100a",
+     "target_origin": "card: b200-hgx is compute capability 10.0"
+    },
+    {
+     "card": "h100-sxm5",
+     "name": "H100 SXM5 80GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h100-sxm5 is compute capability 9.0"
+    },
+    {
+     "card": "h200-sxm",
+     "name": "H200 SXM 141GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h200-sxm is compute capability 9.0"
+    },
+    {
+     "card": "l40s",
+     "name": "L40S",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: l40s is compute capability 8.9"
+    },
+    {
+     "card": "rtx-4090",
+     "name": "GeForce RTX 4090",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: rtx-4090 is compute capability 8.9"
+    },
+    {
+     "card": "rtx-5070-ti",
+     "name": "RTX 5070 Ti",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5070-ti is compute capability 12.0"
+    },
+    {
+     "card": "rtx-5090",
+     "name": "GeForce RTX 5090",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5090 is compute capability 12.0"
+    }
+   ],
+   "inspection": {
+    "sm_80": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_80",
+     "regions": []
+    },
+    "sm_100a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_100a",
+     "regions": []
+    },
+    "sm_90a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_90a",
+     "regions": []
+    },
+    "sm_89": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_89",
+     "regions": []
+    },
+    "sm_120a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_120a",
+     "regions": []
+    }
+   },
+   "functions": {
+    "compact_even": {
+     "line": 13,
+     "predictions": [
+      {
+       "sizes": {
+        "n": 10000000.0
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 100300.0,
+         "bound": "device memory",
+         "speed_of_light": 0.782,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 32450.0,
+         "bound": "device memory",
+         "speed_of_light": 0.64,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 64160.0,
+         "bound": "device memory",
+         "speed_of_light": 0.744,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 47220.0,
+         "bound": "device memory",
+         "speed_of_light": 0.706,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 225900.0,
+         "bound": "device memory",
+         "speed_of_light": 0.82,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 194700.0,
+         "bound": "device memory",
+         "speed_of_light": 0.815,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 218100.0,
+         "bound": "device memory",
+         "speed_of_light": 0.819,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 113000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.79,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "host_only": []
+  },
+  "dot_f64": {
+   "schema": "cairn.predict.cards/1",
+   "predicted": "Predictions from published specifications and the assumptions each card names; nothing was built or run, and no card's figures were measured.",
+   "profile": {
+    "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "origin": "measured",
+    "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+   },
+   "arch": "x86-64-v4",
+   "cards": [
+    {
+     "card": "a100-sxm4-80gb",
+     "name": "A100 SXM4 80GB",
+     "compute_capability": "8.0",
+     "origin": "specification",
+     "device_target": "sm_80",
+     "target_origin": "card: a100-sxm4-80gb is compute capability 8.0"
+    },
+    {
+     "card": "b200-hgx",
+     "name": "B200 (HGX B200)",
+     "compute_capability": "10.0",
+     "origin": "specification",
+     "device_target": "sm_100a",
+     "target_origin": "card: b200-hgx is compute capability 10.0"
+    },
+    {
+     "card": "h100-sxm5",
+     "name": "H100 SXM5 80GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h100-sxm5 is compute capability 9.0"
+    },
+    {
+     "card": "h200-sxm",
+     "name": "H200 SXM 141GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h200-sxm is compute capability 9.0"
+    },
+    {
+     "card": "l40s",
+     "name": "L40S",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: l40s is compute capability 8.9"
+    },
+    {
+     "card": "rtx-4090",
+     "name": "GeForce RTX 4090",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: rtx-4090 is compute capability 8.9"
+    },
+    {
+     "card": "rtx-5070-ti",
+     "name": "RTX 5070 Ti",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5070-ti is compute capability 12.0"
+    },
+    {
+     "card": "rtx-5090",
+     "name": "GeForce RTX 5090",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5090 is compute capability 12.0"
+    }
+   ],
+   "inspection": {
+    "sm_80": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_80",
+     "regions": []
+    },
+    "sm_100a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_100a",
+     "regions": []
+    },
+    "sm_90a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_90a",
+     "regions": []
+    },
+    "sm_89": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_89",
+     "regions": []
+    },
+    "sm_120a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_120a",
+     "regions": []
+    }
+   },
+   "functions": {
+    "dot_f64": {
+     "line": 14,
+     "predictions": [
+      {
+       "sizes": {
+        "n": 10000000.0
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 100300.0,
+         "bound": "device memory",
+         "speed_of_light": 0.782,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 32450.0,
+         "bound": "device memory",
+         "speed_of_light": 0.64,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 64160.0,
+         "bound": "device memory",
+         "speed_of_light": 0.744,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 47220.0,
+         "bound": "device memory",
+         "speed_of_light": 0.706,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 225900.0,
+         "bound": "device memory",
+         "speed_of_light": 0.82,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 194700.0,
+         "bound": "device memory",
+         "speed_of_light": 0.815,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 218100.0,
+         "bound": "device memory",
+         "speed_of_light": 0.819,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 113000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.79,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "host_only": []
+  },
+  "histogram_u32": {
+   "refused": {
+    "code": "E-PLACEMENT",
+    "message": "device memory is not addressable from host code."
+   }
+  },
+  "mixed_u64": {
+   "schema": "cairn.predict.cards/1",
+   "predicted": "Predictions from published specifications and the assumptions each card names; nothing was built or run, and no card's figures were measured.",
+   "profile": {
+    "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "origin": "measured",
+    "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+   },
+   "arch": "x86-64-v4",
+   "cards": [
+    {
+     "card": "a100-sxm4-80gb",
+     "name": "A100 SXM4 80GB",
+     "compute_capability": "8.0",
+     "origin": "specification",
+     "device_target": "sm_80",
+     "target_origin": "card: a100-sxm4-80gb is compute capability 8.0"
+    },
+    {
+     "card": "b200-hgx",
+     "name": "B200 (HGX B200)",
+     "compute_capability": "10.0",
+     "origin": "specification",
+     "device_target": "sm_100a",
+     "target_origin": "card: b200-hgx is compute capability 10.0"
+    },
+    {
+     "card": "h100-sxm5",
+     "name": "H100 SXM5 80GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h100-sxm5 is compute capability 9.0"
+    },
+    {
+     "card": "h200-sxm",
+     "name": "H200 SXM 141GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h200-sxm is compute capability 9.0"
+    },
+    {
+     "card": "l40s",
+     "name": "L40S",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: l40s is compute capability 8.9"
+    },
+    {
+     "card": "rtx-4090",
+     "name": "GeForce RTX 4090",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: rtx-4090 is compute capability 8.9"
+    },
+    {
+     "card": "rtx-5070-ti",
+     "name": "RTX 5070 Ti",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5070-ti is compute capability 12.0"
+    },
+    {
+     "card": "rtx-5090",
+     "name": "GeForce RTX 5090",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5090 is compute capability 12.0"
+    }
+   ],
+   "inspection": {
+    "sm_80": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_80",
+     "regions": []
+    },
+    "sm_100a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_100a",
+     "regions": []
+    },
+    "sm_90a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_90a",
+     "regions": []
+    },
+    "sm_89": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_89",
+     "regions": []
+    },
+    "sm_120a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_120a",
+     "regions": []
+    }
+   },
+   "functions": {
+    "mixed_u64": {
+     "line": 11,
+     "predictions": [
+      {
+       "sizes": {
+        "n": 10000000.0
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 100300.0,
+         "bound": "device memory",
+         "speed_of_light": 0.782,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 32450.0,
+         "bound": "device memory",
+         "speed_of_light": 0.64,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 64160.0,
+         "bound": "device memory",
+         "speed_of_light": 0.744,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 47220.0,
+         "bound": "device memory",
+         "speed_of_light": 0.706,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 225900.0,
+         "bound": "device memory",
+         "speed_of_light": 0.82,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 194700.0,
+         "bound": "device memory",
+         "speed_of_light": 0.815,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 218100.0,
+         "bound": "device memory",
+         "speed_of_light": 0.819,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 113000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.79,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "host_only": [
+    "mix"
+   ]
+  },
+  "saxpy_f32": {
+   "schema": "cairn.predict.cards/1",
+   "predicted": "Predictions from published specifications and the assumptions each card names; nothing was built or run, and no card's figures were measured.",
+   "profile": {
+    "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "origin": "measured",
+    "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+   },
+   "arch": "x86-64-v4",
+   "cards": [
+    {
+     "card": "a100-sxm4-80gb",
+     "name": "A100 SXM4 80GB",
+     "compute_capability": "8.0",
+     "origin": "specification",
+     "device_target": "sm_80",
+     "target_origin": "card: a100-sxm4-80gb is compute capability 8.0"
+    },
+    {
+     "card": "b200-hgx",
+     "name": "B200 (HGX B200)",
+     "compute_capability": "10.0",
+     "origin": "specification",
+     "device_target": "sm_100a",
+     "target_origin": "card: b200-hgx is compute capability 10.0"
+    },
+    {
+     "card": "h100-sxm5",
+     "name": "H100 SXM5 80GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h100-sxm5 is compute capability 9.0"
+    },
+    {
+     "card": "h200-sxm",
+     "name": "H200 SXM 141GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h200-sxm is compute capability 9.0"
+    },
+    {
+     "card": "l40s",
+     "name": "L40S",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: l40s is compute capability 8.9"
+    },
+    {
+     "card": "rtx-4090",
+     "name": "GeForce RTX 4090",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: rtx-4090 is compute capability 8.9"
+    },
+    {
+     "card": "rtx-5070-ti",
+     "name": "RTX 5070 Ti",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5070-ti is compute capability 12.0"
+    },
+    {
+     "card": "rtx-5090",
+     "name": "GeForce RTX 5090",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5090 is compute capability 12.0"
+    }
+   ],
+   "inspection": {
+    "sm_80": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_80",
+     "regions": []
+    },
+    "sm_100a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_100a",
+     "regions": []
+    },
+    "sm_90a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_90a",
+     "regions": []
+    },
+    "sm_89": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_89",
+     "regions": []
+    },
+    "sm_120a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_120a",
+     "regions": []
+    }
+   },
+   "functions": {
+    "saxpy_f32": {
+     "line": 4,
+     "predictions": [
+      {
+       "sizes": {
+        "n": 10000000.0
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 77240.0,
+         "bound": "device memory",
+         "speed_of_light": 0.762,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 26330.0,
+         "bound": "device memory",
+         "speed_of_light": 0.592,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 50120.0,
+         "bound": "device memory",
+         "speed_of_light": 0.714,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 37410.0,
+         "bound": "device memory",
+         "speed_of_light": 0.668,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 171400.0,
+         "bound": "device memory",
+         "speed_of_light": 0.81,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 148100.0,
+         "bound": "device memory",
+         "speed_of_light": 0.804,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 165600.0,
+         "bound": "device memory",
+         "speed_of_light": 0.809,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 86780.0,
+         "bound": "device memory",
+         "speed_of_light": 0.772,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "host_only": []
+  },
+  "stencil_1d": {
+   "schema": "cairn.predict.cards/1",
+   "predicted": "Predictions from published specifications and the assumptions each card names; nothing was built or run, and no card's figures were measured.",
+   "profile": {
+    "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "origin": "measured",
+    "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+   },
+   "arch": "x86-64-v4",
+   "cards": [
+    {
+     "card": "a100-sxm4-80gb",
+     "name": "A100 SXM4 80GB",
+     "compute_capability": "8.0",
+     "origin": "specification",
+     "device_target": "sm_80",
+     "target_origin": "card: a100-sxm4-80gb is compute capability 8.0"
+    },
+    {
+     "card": "b200-hgx",
+     "name": "B200 (HGX B200)",
+     "compute_capability": "10.0",
+     "origin": "specification",
+     "device_target": "sm_100a",
+     "target_origin": "card: b200-hgx is compute capability 10.0"
+    },
+    {
+     "card": "h100-sxm5",
+     "name": "H100 SXM5 80GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h100-sxm5 is compute capability 9.0"
+    },
+    {
+     "card": "h200-sxm",
+     "name": "H200 SXM 141GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h200-sxm is compute capability 9.0"
+    },
+    {
+     "card": "l40s",
+     "name": "L40S",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: l40s is compute capability 8.9"
+    },
+    {
+     "card": "rtx-4090",
+     "name": "GeForce RTX 4090",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: rtx-4090 is compute capability 8.9"
+    },
+    {
+     "card": "rtx-5070-ti",
+     "name": "RTX 5070 Ti",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5070-ti is compute capability 12.0"
+    },
+    {
+     "card": "rtx-5090",
+     "name": "GeForce RTX 5090",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5090 is compute capability 12.0"
+    }
+   ],
+   "inspection": {
+    "sm_80": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_80",
+     "regions": []
+    },
+    "sm_100a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_100a",
+     "regions": []
+    },
+    "sm_90a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_90a",
+     "regions": []
+    },
+    "sm_89": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_89",
+     "regions": []
+    },
+    "sm_120a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_120a",
+     "regions": []
+    }
+   },
+   "functions": {
+    "stencil_1d": {
+     "line": 24,
+     "predictions": [
+      {
+       "sizes": {
+        "n": 10000000.0
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 54160.0,
+         "bound": "device memory",
+         "speed_of_light": 0.724,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 20220.0,
+         "bound": "device memory",
+         "speed_of_light": 0.514,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 36080.0,
+         "bound": "device memory",
+         "speed_of_light": 0.662,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 27610.0,
+         "bound": "device memory",
+         "speed_of_light": 0.604,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 116900.0,
+         "bound": "device memory",
+         "speed_of_light": 0.792,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 101400.0,
+         "bound": "device memory",
+         "speed_of_light": 0.783,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 113000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.79,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 60520.0,
+         "bound": "device memory",
+         "speed_of_light": 0.738,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    },
+    "stencil_1d_wrap": {
+     "line": 34,
+     "predictions": [
+      {
+       "sizes": {
+        "n": 10000000.0
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 54160.0,
+         "bound": "device memory",
+         "speed_of_light": 0.724,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 20220.0,
+         "bound": "device memory",
+         "speed_of_light": 0.514,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 36080.0,
+         "bound": "device memory",
+         "speed_of_light": 0.662,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 27610.0,
+         "bound": "device memory",
+         "speed_of_light": 0.604,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 116900.0,
+         "bound": "device memory",
+         "speed_of_light": 0.792,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 101400.0,
+         "bound": "device memory",
+         "speed_of_light": 0.783,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 113000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.79,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 60520.0,
+         "bound": "device memory",
+         "speed_of_light": 0.738,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "host_only": [
+    "blend3"
+   ]
+  },
+  "sum_u64_wrap": {
+   "refused": {
+    "code": "E-PLACEMENT",
+    "message": "total owns host memory, and a lane copies the values it captures; a device lane cannot use it."
+   }
+  },
+  "tasks_split": {
+   "refused": {
+    "code": "E-PLACEMENT",
+    "message": "device memory is not addressable from host code."
+   }
+  }
+ },
+ "examples": {
+  "examples/cooperative/gpu.toml transpose": {
+   "schema": "cairn.predict.cards/1",
+   "predicted": "Predictions from published specifications and the assumptions each card names; nothing was built or run, and no card's figures were measured.",
+   "profile": {
+    "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "origin": "measured",
+    "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+   },
+   "arch": "x86-64-v4",
+   "cards": [
+    {
+     "card": "a100-sxm4-80gb",
+     "name": "A100 SXM4 80GB",
+     "compute_capability": "8.0",
+     "origin": "specification",
+     "device_target": "sm_80",
+     "target_origin": "card: a100-sxm4-80gb is compute capability 8.0"
+    },
+    {
+     "card": "b200-hgx",
+     "name": "B200 (HGX B200)",
+     "compute_capability": "10.0",
+     "origin": "specification",
+     "device_target": "sm_100a",
+     "target_origin": "card: b200-hgx is compute capability 10.0"
+    },
+    {
+     "card": "h100-sxm5",
+     "name": "H100 SXM5 80GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h100-sxm5 is compute capability 9.0"
+    },
+    {
+     "card": "h200-sxm",
+     "name": "H200 SXM 141GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h200-sxm is compute capability 9.0"
+    },
+    {
+     "card": "l40s",
+     "name": "L40S",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: l40s is compute capability 8.9"
+    },
+    {
+     "card": "rtx-4090",
+     "name": "GeForce RTX 4090",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: rtx-4090 is compute capability 8.9"
+    },
+    {
+     "card": "rtx-5070-ti",
+     "name": "RTX 5070 Ti",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5070-ti is compute capability 12.0"
+    },
+    {
+     "card": "rtx-5090",
+     "name": "GeForce RTX 5090",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5090 is compute capability 12.0"
+    }
+   ],
+   "inspection": {
+    "sm_80": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_80",
+     "regions": [
+      {
+       "function": "transpose",
+       "line": 10,
+       "status": "read",
+       "registers": 48,
+       "shared_bytes": 4224,
+       "checked_shared_bytes": 4224,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 2232
+      }
+     ]
+    },
+    "sm_100a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_100a",
+     "regions": [
+      {
+       "function": "transpose",
+       "line": 10,
+       "status": "read",
+       "registers": 40,
+       "shared_bytes": 4224,
+       "checked_shared_bytes": 4224,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 1096
+      }
+     ]
+    },
+    "sm_90a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_90a",
+     "regions": [
+      {
+       "function": "transpose",
+       "line": 10,
+       "status": "read",
+       "registers": 48,
+       "shared_bytes": 4224,
+       "checked_shared_bytes": 4224,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 2376
+      }
+     ]
+    },
+    "sm_89": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_89",
+     "regions": [
+      {
+       "function": "transpose",
+       "line": 10,
+       "status": "read",
+       "registers": 48,
+       "shared_bytes": 4224,
+       "checked_shared_bytes": 4224,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 2232
+      }
+     ]
+    },
+    "sm_120a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_120a",
+     "regions": [
+      {
+       "function": "transpose",
+       "line": 10,
+       "status": "read",
+       "registers": 40,
+       "shared_bytes": 4224,
+       "checked_shared_bytes": 4224,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 968
+      }
+     ]
+    }
+   },
+   "functions": {
+    "transpose": {
+     "line": 7,
+     "predictions": [
+      {
+       "sizes": {
+        "gx": 128,
+        "gy": 128,
+        "n": 16777216
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 85440.0,
+         "bound": "device memory",
+         "speed_of_light": 0.77,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 28510.0,
+         "bound": "device memory",
+         "speed_of_light": 0.611,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 55110.0,
+         "bound": "device memory",
+         "speed_of_light": 0.727,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 40900.0,
+         "bound": "device memory",
+         "speed_of_light": 0.684,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 190800.0,
+         "bound": "device memory",
+         "speed_of_light": 0.814,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 164700.0,
+         "bound": "device memory",
+         "speed_of_light": 0.809,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 184200.0,
+         "bound": "device memory",
+         "speed_of_light": 0.813,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 96120.0,
+         "bound": "device memory",
+         "speed_of_light": 0.779,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "host_only": []
+  },
+  "examples/cooperative/gpu.toml block_sums": {
+   "schema": "cairn.predict.cards/1",
+   "predicted": "Predictions from published specifications and the assumptions each card names; nothing was built or run, and no card's figures were measured.",
+   "profile": {
+    "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "origin": "measured",
+    "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+   },
+   "arch": "x86-64-v4",
+   "cards": [
+    {
+     "card": "a100-sxm4-80gb",
+     "name": "A100 SXM4 80GB",
+     "compute_capability": "8.0",
+     "origin": "specification",
+     "device_target": "sm_80",
+     "target_origin": "card: a100-sxm4-80gb is compute capability 8.0"
+    },
+    {
+     "card": "b200-hgx",
+     "name": "B200 (HGX B200)",
+     "compute_capability": "10.0",
+     "origin": "specification",
+     "device_target": "sm_100a",
+     "target_origin": "card: b200-hgx is compute capability 10.0"
+    },
+    {
+     "card": "h100-sxm5",
+     "name": "H100 SXM5 80GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h100-sxm5 is compute capability 9.0"
+    },
+    {
+     "card": "h200-sxm",
+     "name": "H200 SXM 141GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h200-sxm is compute capability 9.0"
+    },
+    {
+     "card": "l40s",
+     "name": "L40S",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: l40s is compute capability 8.9"
+    },
+    {
+     "card": "rtx-4090",
+     "name": "GeForce RTX 4090",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: rtx-4090 is compute capability 8.9"
+    },
+    {
+     "card": "rtx-5070-ti",
+     "name": "RTX 5070 Ti",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5070-ti is compute capability 12.0"
+    },
+    {
+     "card": "rtx-5090",
+     "name": "GeForce RTX 5090",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5090 is compute capability 12.0"
+    }
+   ],
+   "inspection": {
+    "sm_80": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_80",
+     "regions": [
+      {
+       "function": "block_sums",
+       "line": 27,
+       "status": "read",
+       "registers": 28,
+       "shared_bytes": 2048,
+       "checked_shared_bytes": 2048,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 448
+      }
+     ]
+    },
+    "sm_100a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_100a",
+     "regions": [
+      {
+       "function": "block_sums",
+       "line": 27,
+       "status": "read",
+       "registers": 22,
+       "shared_bytes": 2048,
+       "checked_shared_bytes": 2048,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 352
+      }
+     ]
+    },
+    "sm_90a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_90a",
+     "regions": [
+      {
+       "function": "block_sums",
+       "line": 27,
+       "status": "read",
+       "registers": 30,
+       "shared_bytes": 2048,
+       "checked_shared_bytes": 2048,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 472
+      }
+     ]
+    },
+    "sm_89": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_89",
+     "regions": [
+      {
+       "function": "block_sums",
+       "line": 27,
+       "status": "read",
+       "registers": 28,
+       "shared_bytes": 2048,
+       "checked_shared_bytes": 2048,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 432
+      }
+     ]
+    },
+    "sm_120a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_120a",
+     "regions": [
+      {
+       "function": "block_sums",
+       "line": 27,
+       "status": "read",
+       "registers": 24,
+       "shared_bytes": 2048,
+       "checked_shared_bytes": 2048,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 320
+      }
+     ]
+    }
+   },
+   "functions": {
+    "block_sums": {
+     "line": 26,
+     "predictions": [
+      {
+       "sizes": {
+        "n": 100000000.0,
+        "g": 390625
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 476800.0,
+         "bound": "device memory",
+         "speed_of_light": 0.836,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 132100.0,
+         "bound": "device memory",
+         "speed_of_light": 0.799,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 293200.0,
+         "bound": "device memory",
+         "speed_of_light": 0.827,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 207100.0,
+         "bound": "device memory",
+         "speed_of_light": 0.817,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 1114000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.844,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 956300.0,
+         "bound": "device memory",
+         "speed_of_light": 0.843,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 1075000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.844,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 541400.0,
+         "bound": "device memory",
+         "speed_of_light": 0.837,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "host_only": []
+  },
+  "examples/cooperative/gpu.toml row_sums[2], row_sums[3]": {
+   "schema": "cairn.predict.cards/1",
+   "predicted": "Predictions from published specifications and the assumptions each card names; nothing was built or run, and no card's figures were measured.",
+   "profile": {
+    "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "origin": "measured",
+    "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+   },
+   "arch": "x86-64-v4",
+   "cards": [
+    {
+     "card": "a100-sxm4-80gb",
+     "name": "A100 SXM4 80GB",
+     "compute_capability": "8.0",
+     "origin": "specification",
+     "device_target": "sm_80",
+     "target_origin": "card: a100-sxm4-80gb is compute capability 8.0"
+    },
+    {
+     "card": "b200-hgx",
+     "name": "B200 (HGX B200)",
+     "compute_capability": "10.0",
+     "origin": "specification",
+     "device_target": "sm_100a",
+     "target_origin": "card: b200-hgx is compute capability 10.0"
+    },
+    {
+     "card": "h100-sxm5",
+     "name": "H100 SXM5 80GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h100-sxm5 is compute capability 9.0"
+    },
+    {
+     "card": "h200-sxm",
+     "name": "H200 SXM 141GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h200-sxm is compute capability 9.0"
+    },
+    {
+     "card": "l40s",
+     "name": "L40S",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: l40s is compute capability 8.9"
+    },
+    {
+     "card": "rtx-4090",
+     "name": "GeForce RTX 4090",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: rtx-4090 is compute capability 8.9"
+    },
+    {
+     "card": "rtx-5070-ti",
+     "name": "RTX 5070 Ti",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5070-ti is compute capability 12.0"
+    },
+    {
+     "card": "rtx-5090",
+     "name": "GeForce RTX 5090",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5090 is compute capability 12.0"
+    }
+   ],
+   "inspection": {
+    "sm_80": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_80",
+     "regions": [
+      {
+       "function": "row_sums[2]",
+       "line": 49,
+       "status": "read",
+       "registers": 40,
+       "shared_bytes": 6144,
+       "checked_shared_bytes": 6144,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 648
+      },
+      {
+       "function": "row_sums[3]",
+       "line": 49,
+       "status": "read",
+       "registers": 40,
+       "shared_bytes": 8192,
+       "checked_shared_bytes": 8192,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 752
+      }
+     ]
+    },
+    "sm_100a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_100a",
+     "regions": [
+      {
+       "function": "row_sums[2]",
+       "line": 49,
+       "status": "read",
+       "registers": 38,
+       "shared_bytes": 6144,
+       "checked_shared_bytes": 6144,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 672
+      },
+      {
+       "function": "row_sums[3]",
+       "line": 49,
+       "status": "read",
+       "registers": 32,
+       "shared_bytes": 8192,
+       "checked_shared_bytes": 8192,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 584
+      }
+     ]
+    },
+    "sm_90a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_90a",
+     "regions": [
+      {
+       "function": "row_sums[2]",
+       "line": 49,
+       "status": "read",
+       "registers": 40,
+       "shared_bytes": 6144,
+       "checked_shared_bytes": 6144,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 688
+      },
+      {
+       "function": "row_sums[3]",
+       "line": 49,
+       "status": "read",
+       "registers": 40,
+       "shared_bytes": 8192,
+       "checked_shared_bytes": 8192,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 800
+      }
+     ]
+    },
+    "sm_89": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_89",
+     "regions": [
+      {
+       "function": "row_sums[2]",
+       "line": 49,
+       "status": "read",
+       "registers": 40,
+       "shared_bytes": 6144,
+       "checked_shared_bytes": 6144,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 632
+      },
+      {
+       "function": "row_sums[3]",
+       "line": 49,
+       "status": "read",
+       "registers": 40,
+       "shared_bytes": 8192,
+       "checked_shared_bytes": 8192,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 736
+      }
+     ]
+    },
+    "sm_120a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_120a",
+     "regions": [
+      {
+       "function": "row_sums[2]",
+       "line": 49,
+       "status": "read",
+       "registers": 44,
+       "shared_bytes": 6144,
+       "checked_shared_bytes": 6144,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 576
+      },
+      {
+       "function": "row_sums[3]",
+       "line": 49,
+       "status": "read",
+       "registers": 34,
+       "shared_bytes": 8192,
+       "checked_shared_bytes": 8192,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 488
+      }
+     ]
+    }
+   },
+   "functions": {
+    "row_sums[2]": {
+     "line": 47,
+     "predictions": [
+      {
+       "sizes": {
+        "rows": 1000,
+        "cols": 100000.0,
+        "n": 100000000.0
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 472000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.836,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 130900.0,
+         "bound": "device memory",
+         "speed_of_light": 0.798,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 290200.0,
+         "bound": "device memory",
+         "speed_of_light": 0.827,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 205100.0,
+         "bound": "device memory",
+         "speed_of_light": 0.817,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 1103000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.844,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 946500.0,
+         "bound": "device memory",
+         "speed_of_light": 0.843,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 1064000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.844,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 535900.0,
+         "bound": "device memory",
+         "speed_of_light": 0.837,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    },
+    "row_sums[3]": {
+     "line": 47,
+     "predictions": [
+      {
+       "sizes": {
+        "rows": 1000,
+        "cols": 100000.0,
+        "n": 100000000.0
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 473100.0,
+         "bound": "device memory",
+         "speed_of_light": 0.836,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 131200.0,
+         "bound": "device memory",
+         "speed_of_light": 0.798,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 290900.0,
+         "bound": "device memory",
+         "speed_of_light": 0.827,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 205600.0,
+         "bound": "device memory",
+         "speed_of_light": 0.817,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 1106000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.844,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 948900.0,
+         "bound": "device memory",
+         "speed_of_light": 0.843,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 1067000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.844,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 537300.0,
+         "bound": "device memory",
+         "speed_of_light": 0.837,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "host_only": []
+  },
+  "examples/cooperative/tuned.toml row_totals, row_totals_tiled[128, 2], row_totals_tiled[256, 3]": {
+   "schema": "cairn.predict.cards/1",
+   "predicted": "Predictions from published specifications and the assumptions each card names; nothing was built or run, and no card's figures were measured.",
+   "profile": {
+    "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "origin": "measured",
+    "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+   },
+   "arch": "x86-64-v4",
+   "cards": [
+    {
+     "card": "a100-sxm4-80gb",
+     "name": "A100 SXM4 80GB",
+     "compute_capability": "8.0",
+     "origin": "specification",
+     "device_target": "sm_80",
+     "target_origin": "card: a100-sxm4-80gb is compute capability 8.0"
+    },
+    {
+     "card": "b200-hgx",
+     "name": "B200 (HGX B200)",
+     "compute_capability": "10.0",
+     "origin": "specification",
+     "device_target": "sm_100a",
+     "target_origin": "card: b200-hgx is compute capability 10.0"
+    },
+    {
+     "card": "h100-sxm5",
+     "name": "H100 SXM5 80GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h100-sxm5 is compute capability 9.0"
+    },
+    {
+     "card": "h200-sxm",
+     "name": "H200 SXM 141GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h200-sxm is compute capability 9.0"
+    },
+    {
+     "card": "l40s",
+     "name": "L40S",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: l40s is compute capability 8.9"
+    },
+    {
+     "card": "rtx-4090",
+     "name": "GeForce RTX 4090",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: rtx-4090 is compute capability 8.9"
+    },
+    {
+     "card": "rtx-5070-ti",
+     "name": "RTX 5070 Ti",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5070-ti is compute capability 12.0"
+    },
+    {
+     "card": "rtx-5090",
+     "name": "GeForce RTX 5090",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5090 is compute capability 12.0"
+    }
+   ],
+   "inspection": {
+    "sm_80": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_80",
+     "regions": [
+      {
+       "function": "row_totals",
+       "line": 8,
+       "status": "read",
+       "registers": 20,
+       "shared_bytes": 0,
+       "checked_shared_bytes": 0,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 168
+      },
+      {
+       "function": "row_totals_tiled[128, 2]",
+       "line": 22,
+       "status": "read",
+       "registers": 32,
+       "shared_bytes": 3072,
+       "checked_shared_bytes": 3072,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 632
+      },
+      {
+       "function": "row_totals_tiled[256, 3]",
+       "line": 22,
+       "status": "read",
+       "registers": 32,
+       "shared_bytes": 8192,
+       "checked_shared_bytes": 8192,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 752
+      }
+     ]
+    },
+    "sm_100a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_100a",
+     "regions": [
+      {
+       "function": "row_totals",
+       "line": 8,
+       "status": "read",
+       "registers": 20,
+       "shared_bytes": 0,
+       "checked_shared_bytes": 0,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 96
+      },
+      {
+       "function": "row_totals_tiled[128, 2]",
+       "line": 22,
+       "status": "read",
+       "registers": 42,
+       "shared_bytes": 3072,
+       "checked_shared_bytes": 3072,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 664
+      },
+      {
+       "function": "row_totals_tiled[256, 3]",
+       "line": 22,
+       "status": "read",
+       "registers": 32,
+       "shared_bytes": 8192,
+       "checked_shared_bytes": 8192,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 584
+      }
+     ]
+    },
+    "sm_90a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_90a",
+     "regions": [
+      {
+       "function": "row_totals",
+       "line": 8,
+       "status": "read",
+       "registers": 20,
+       "shared_bytes": 0,
+       "checked_shared_bytes": 0,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 176
+      },
+      {
+       "function": "row_totals_tiled[128, 2]",
+       "line": 22,
+       "status": "read",
+       "registers": 40,
+       "shared_bytes": 3072,
+       "checked_shared_bytes": 3072,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 672
+      },
+      {
+       "function": "row_totals_tiled[256, 3]",
+       "line": 22,
+       "status": "read",
+       "registers": 32,
+       "shared_bytes": 8192,
+       "checked_shared_bytes": 8192,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 800
+      }
+     ]
+    },
+    "sm_89": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_89",
+     "regions": [
+      {
+       "function": "row_totals",
+       "line": 8,
+       "status": "read",
+       "registers": 22,
+       "shared_bytes": 0,
+       "checked_shared_bytes": 0,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 168
+      },
+      {
+       "function": "row_totals_tiled[128, 2]",
+       "line": 22,
+       "status": "read",
+       "registers": 36,
+       "shared_bytes": 3072,
+       "checked_shared_bytes": 3072,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 616
+      },
+      {
+       "function": "row_totals_tiled[256, 3]",
+       "line": 22,
+       "status": "read",
+       "registers": 34,
+       "shared_bytes": 8192,
+       "checked_shared_bytes": 8192,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 736
+      }
+     ]
+    },
+    "sm_120a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_120a",
+     "regions": [
+      {
+       "function": "row_totals",
+       "line": 8,
+       "status": "read",
+       "registers": 18,
+       "shared_bytes": 0,
+       "checked_shared_bytes": 0,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 88
+      },
+      {
+       "function": "row_totals_tiled[128, 2]",
+       "line": 22,
+       "status": "read",
+       "registers": 48,
+       "shared_bytes": 3072,
+       "checked_shared_bytes": 3072,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 560
+      },
+      {
+       "function": "row_totals_tiled[256, 3]",
+       "line": 22,
+       "status": "read",
+       "registers": 32,
+       "shared_bytes": 8192,
+       "checked_shared_bytes": 8192,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 488
+      }
+     ]
+    }
+   },
+   "functions": {
+    "row_totals": {
+     "line": 5,
+     "predictions": [
+      {
+       "sizes": {
+        "rows": 64,
+        "cols": 100000.0,
+        "n": 6400000.0
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 6389000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.016,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 2324000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.012,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 4752000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.013,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 3321000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.013,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 14860000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.016,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 11480000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.018,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 7067000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.032,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 8580000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.013,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    },
+    "row_totals_tiled[128, 2]": {
+     "line": 19,
+     "predictions": [
+      {
+       "sizes": {
+        "rows": 64,
+        "cols": 100000.0,
+        "n": 6400000.0
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 203800.0,
+         "bound": "device memory",
+         "speed_of_light": 0.124,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 203800.0,
+         "bound": "device memory",
+         "speed_of_light": 0.033,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 203800.0,
+         "bound": "device memory",
+         "speed_of_light": 0.075,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 203800.0,
+         "bound": "device memory",
+         "speed_of_light": 0.052,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 203800.0,
+         "bound": "device memory",
+         "speed_of_light": 0.291,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 203800.0,
+         "bound": "device memory",
+         "speed_of_light": 0.25,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 203800.0,
+         "bound": "device memory",
+         "speed_of_light": 0.281,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 203800.0,
+         "bound": "device memory",
+         "speed_of_light": 0.141,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    },
+    "row_totals_tiled[256, 3]": {
+     "line": 19,
+     "predictions": [
+      {
+       "sizes": {
+        "rows": 64,
+        "cols": 100000.0,
+        "n": 6400000.0
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 73610.0,
+         "bound": "device memory",
+         "speed_of_light": 0.344,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 73610.0,
+         "bound": "device memory",
+         "speed_of_light": 0.091,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 73610.0,
+         "bound": "device memory",
+         "speed_of_light": 0.209,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 73610.0,
+         "bound": "device memory",
+         "speed_of_light": 0.146,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 78270.0,
+         "bound": "device memory",
+         "speed_of_light": 0.763,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 73620.0,
+         "bound": "device memory",
+         "speed_of_light": 0.695,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 75750.0,
+         "bound": "device memory",
+         "speed_of_light": 0.76,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 73620.0,
+         "bound": "device memory",
+         "speed_of_light": 0.391,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "host_only": []
+  },
+  "examples/tensor/tile32.cairn tile32": {
+   "schema": "cairn.predict.cards/1",
+   "predicted": "Predictions from published specifications and the assumptions each card names; nothing was built or run, and no card's figures were measured.",
+   "profile": {
+    "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "origin": "measured",
+    "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+   },
+   "arch": "x86-64-v4",
+   "cards": [
+    {
+     "card": "a100-sxm4-80gb",
+     "name": "A100 SXM4 80GB",
+     "compute_capability": "8.0",
+     "origin": "specification",
+     "device_target": "sm_80",
+     "target_origin": "card: a100-sxm4-80gb is compute capability 8.0"
+    },
+    {
+     "card": "b200-hgx",
+     "name": "B200 (HGX B200)",
+     "compute_capability": "10.0",
+     "origin": "specification",
+     "device_target": "sm_100a",
+     "target_origin": "card: b200-hgx is compute capability 10.0"
+    },
+    {
+     "card": "h100-sxm5",
+     "name": "H100 SXM5 80GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h100-sxm5 is compute capability 9.0"
+    },
+    {
+     "card": "h200-sxm",
+     "name": "H200 SXM 141GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h200-sxm is compute capability 9.0"
+    },
+    {
+     "card": "l40s",
+     "name": "L40S",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: l40s is compute capability 8.9"
+    },
+    {
+     "card": "rtx-4090",
+     "name": "GeForce RTX 4090",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: rtx-4090 is compute capability 8.9"
+    },
+    {
+     "card": "rtx-5070-ti",
+     "name": "RTX 5070 Ti",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5070-ti is compute capability 12.0"
+    },
+    {
+     "card": "rtx-5090",
+     "name": "GeForce RTX 5090",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5090 is compute capability 12.0"
+    }
+   ],
+   "inspection": {
+    "sm_80": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_80",
+     "regions": [
+      {
+       "function": "tile32",
+       "line": 21,
+       "status": "read",
+       "registers": 106,
+       "shared_bytes": 14848,
+       "checked_shared_bytes": 14848,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 10392
+      }
+     ]
+    },
+    "sm_100a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_100a",
+     "regions": [
+      {
+       "function": "tile32",
+       "line": 21,
+       "status": "read",
+       "registers": 102,
+       "shared_bytes": 14848,
+       "checked_shared_bytes": 14848,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 5784
+      }
+     ]
+    },
+    "sm_90a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_90a",
+     "regions": [
+      {
+       "function": "tile32",
+       "line": 21,
+       "status": "read",
+       "registers": 108,
+       "shared_bytes": 14848,
+       "checked_shared_bytes": 14848,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 10632
+      }
+     ]
+    },
+    "sm_89": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_89",
+     "regions": [
+      {
+       "function": "tile32",
+       "line": 21,
+       "status": "read",
+       "registers": 106,
+       "shared_bytes": 14848,
+       "checked_shared_bytes": 14848,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 10392
+      }
+     ]
+    },
+    "sm_120a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_120a",
+     "regions": [
+      {
+       "function": "tile32",
+       "line": 21,
+       "status": "read",
+       "registers": 103,
+       "shared_bytes": 14848,
+       "checked_shared_bytes": 14848,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 5456
+      }
+     ]
+    }
+   },
+   "functions": {
+    "tile32": {
+     "line": 14,
+     "predictions": [
+      {
+       "sizes": {
+        "m": 4096,
+        "n": 4096,
+        "k": 4096,
+        "cn": 16777216,
+        "an": 16777216,
+        "bn": 16777216
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 7830000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.757,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 3772000.0,
+         "bound": "issue",
+         "speed_of_light": 0.817,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 4766000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.724,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 4221000.0,
+         "bound": "issue",
+         "speed_of_light": 0.818,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 13850000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.566,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 11870000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.566,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 13360000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.566,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 6683000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.566,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "host_only": []
+  },
+  "examples/tensor/tile64.cairn tile64": {
+   "schema": "cairn.predict.cards/1",
+   "predicted": "Predictions from published specifications and the assumptions each card names; nothing was built or run, and no card's figures were measured.",
+   "profile": {
+    "name": "AMD Ryzen 7 7800X3D 8-Core Processor, 16 lanes",
+    "origin": "measured",
+    "notes": "Measured on a shared machine: other processes ran, so each number is the least-disturbed of nine blocks, and a quiet machine may be a little faster."
+   },
+   "arch": "x86-64-v4",
+   "cards": [
+    {
+     "card": "a100-sxm4-80gb",
+     "name": "A100 SXM4 80GB",
+     "compute_capability": "8.0",
+     "origin": "specification",
+     "device_target": "sm_80",
+     "target_origin": "card: a100-sxm4-80gb is compute capability 8.0"
+    },
+    {
+     "card": "b200-hgx",
+     "name": "B200 (HGX B200)",
+     "compute_capability": "10.0",
+     "origin": "specification",
+     "device_target": "sm_100a",
+     "target_origin": "card: b200-hgx is compute capability 10.0"
+    },
+    {
+     "card": "h100-sxm5",
+     "name": "H100 SXM5 80GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h100-sxm5 is compute capability 9.0"
+    },
+    {
+     "card": "h200-sxm",
+     "name": "H200 SXM 141GB",
+     "compute_capability": "9.0",
+     "origin": "specification",
+     "device_target": "sm_90a",
+     "target_origin": "card: h200-sxm is compute capability 9.0"
+    },
+    {
+     "card": "l40s",
+     "name": "L40S",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: l40s is compute capability 8.9"
+    },
+    {
+     "card": "rtx-4090",
+     "name": "GeForce RTX 4090",
+     "compute_capability": "8.9",
+     "origin": "specification",
+     "device_target": "sm_89",
+     "target_origin": "card: rtx-4090 is compute capability 8.9"
+    },
+    {
+     "card": "rtx-5070-ti",
+     "name": "RTX 5070 Ti",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5070-ti is compute capability 12.0"
+    },
+    {
+     "card": "rtx-5090",
+     "name": "GeForce RTX 5090",
+     "compute_capability": "12.0",
+     "origin": "specification",
+     "device_target": "sm_120a",
+     "target_origin": "card: rtx-5090 is compute capability 12.0"
+    }
+   ],
+   "inspection": {
+    "sm_80": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_80",
+     "regions": [
+      {
+       "function": "tile64",
+       "line": 22,
+       "status": "read",
+       "registers": 124,
+       "shared_bytes": 36864,
+       "checked_shared_bytes": 36864,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 4816
+      }
+     ]
+    },
+    "sm_100a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_100a",
+     "regions": [
+      {
+       "function": "tile64",
+       "line": 22,
+       "status": "read",
+       "registers": 96,
+       "shared_bytes": 36864,
+       "checked_shared_bytes": 36864,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 2496
+      }
+     ]
+    },
+    "sm_90a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_90a",
+     "regions": [
+      {
+       "function": "tile64",
+       "line": 22,
+       "status": "read",
+       "registers": 128,
+       "shared_bytes": 36864,
+       "checked_shared_bytes": 36864,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 5016
+      }
+     ]
+    },
+    "sm_89": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_89",
+     "regions": [
+      {
+       "function": "tile64",
+       "line": 22,
+       "status": "read",
+       "registers": 120,
+       "shared_bytes": 36864,
+       "checked_shared_bytes": 36864,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 4800
+      }
+     ]
+    },
+    "sm_120a": {
+     "status": "read",
+     "by": "ptxas and cuobjdump, a compiler observation: nothing ran",
+     "device_target": "sm_120a",
+     "regions": [
+      {
+       "function": "tile64",
+       "line": 22,
+       "status": "read",
+       "registers": 102,
+       "shared_bytes": 36864,
+       "checked_shared_bytes": 36864,
+       "spill_bytes": 0,
+       "stack_bytes": 0,
+       "instructions": 2344
+      }
+     ]
+    }
+   },
+   "functions": {
+    "tile64": {
+     "line": 15,
+     "predictions": [
+      {
+       "sizes": {
+        "m": 4096,
+        "n": 4096,
+        "k": 4096,
+        "cn": 16777216,
+        "an": 16777216,
+        "bn": 16777216
+       },
+       "cards": [
+        {
+         "card": "a100-sxm4-80gb",
+         "device_target": "sm_80",
+         "ns": 6193000.0,
+         "bound": "issue",
+         "speed_of_light": 0.676,
+         "confidence": "low"
+        },
+        {
+         "card": "b200-hgx",
+         "device_target": "sm_100a",
+         "ns": 2581000.0,
+         "bound": "issue",
+         "speed_of_light": 0.844,
+         "confidence": "low"
+        },
+        {
+         "card": "h100-sxm5",
+         "device_target": "sm_90a",
+         "ns": 3608000.0,
+         "bound": "issue",
+         "speed_of_light": 0.676,
+         "confidence": "low"
+        },
+        {
+         "card": "h200-sxm",
+         "device_target": "sm_90a",
+         "ns": 3608000.0,
+         "bound": "issue",
+         "speed_of_light": 0.676,
+         "confidence": "low"
+        },
+        {
+         "card": "l40s",
+         "device_target": "sm_89",
+         "ns": 19080000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.283,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-4090",
+         "device_target": "sm_89",
+         "ns": 16360000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.283,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5070-ti",
+         "device_target": "sm_120a",
+         "ns": 18400000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.283,
+         "confidence": "low"
+        },
+        {
+         "card": "rtx-5090",
+         "device_target": "sm_120a",
+         "ns": 9204000.0,
+         "bound": "device memory",
+         "speed_of_light": 0.283,
+         "confidence": "low"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "host_only": []
+  }
+ }
+}
