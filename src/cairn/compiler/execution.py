@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
+from .atomics import NAMES as ATOMIC
 from .tree import Expr, Function, Stmt, is_view, nested
 
 if TYPE_CHECKING:
@@ -54,7 +55,7 @@ OBSERVES = {
     "asm:x86_64": "it holds host assembly",
     "asm:aarch64": "it holds host assembly",
     "indirect_call": "it calls a function value, whose work its row does not show",
-    "atomic": "it uses an atomic another host thread observes",
+    "atomic": "it updates host memory atomically, which another host thread observes",
     "lock": "it takes a lock another host thread observes",
 }
 ENQUEUE = "E-ENQUEUE"  # what a library header says of a function with device work and no enqueued entry
@@ -62,10 +63,13 @@ DEVICE_WORK = {"par:device", "transfer:d2d", "transfer:h2d", "transfer:d2h"}  # 
 HELD = "const cr::gpu::Held cr_held;"  # the run a function's body is held in (runtime/cairn_exec.hpp)
 
 
-def unwaited(row: set[str], f: Function) -> str:
+def unwaited(c: Checker, f: Function) -> str:
     """Why `f`'s device work must wait on the host before `f` returns, or "" when nothing in it lets the host observe
-    device memory: then it may be held to one wait, or enqueued on a caller's stream with none."""
-    for effect in sorted(row):
+    device memory: then it may be held to one wait, or enqueued on a caller's stream with none. An atomic update in
+    a device lane is device work; one in host code or a host lane is something another host thread can see."""
+    for effect in sorted(c.rows.get(f.name, set())):
+        if effect == "atomic" and not host_atomics(c, f.body, set()):
+            continue
         if effect in OBSERVES:
             return OBSERVES[effect]
         if effect.startswith("ffi:"):
@@ -78,9 +82,34 @@ def held(c: Checker, f: Function) -> bool:
     """Whether the lowering holds `f`'s body in one run: nothing in it observes device memory on the host, and it
     queues device work more than once (two operations, or one in a loop), so one wait replaces several."""
     row = c.rows.get(f.name, set())
-    if f.kernel or f.name in c.device_functions or not row & DEVICE_WORK or unwaited(row, f):
+    if f.kernel or f.name in c.device_functions or not row & DEVICE_WORK or unwaited(c, f):
         return False
     return operations(c, f.body) > 1
+
+
+def host_atomics(c: Checker, ss: list[Stmt], seen: set[str]) -> bool:
+    """Whether the statements, or a function they call from host code, update memory atomically outside a device
+    region: in host code, a host lane or a host cooperative thread, or through a host `Atomic`."""
+
+    def found(e: Expr) -> bool:
+        if e.tag == "lambda" and isinstance(e.ref, Function) and host_atomics(c, e.ref.body, seen):
+            return True
+        if e.tag == "call" and (e.val in ATOMIC or (isinstance(e.ref, tuple) and e.ref[:1] == ("shared",))):
+            return True
+        if e.tag == "call" and isinstance(e.ref, Function) and e.ref.name not in seen:
+            seen.add(e.ref.name)
+            if host_atomics(c, e.ref.body, seen):
+                return True
+        return any(found(a) for a in e.args)
+
+    for s in ss:
+        if (s.tag in {"parallel", "reduce", "scan", "compact"} and s.ref == "device") or (
+            s.tag == "blocks" and getattr(s.ref, "device", False)
+        ):
+            continue  # a device region's atomics update device memory
+        if any(found(e) for e in s.exprs) or host_atomics(c, nested(s), seen):
+            return True
+    return False
 
 
 def operations(c: Checker, ss: list[Stmt], times: int = 1) -> int:

@@ -198,3 +198,24 @@ def test_the_enqueued_entries_compile_for_sm_120(tmp_path):
     if shutil.which("nm"):
         symbols = subprocess.run(["nm", str(built)], capture_output=True, text=True, check=True).stdout
         assert " T cq_blocked" in symbols and " T cq_smooth" in symbols and "cq_total" not in symbols
+
+
+ATOMICS = """
+pub fn histogram(n:usize, x:ro<u32>[n]@device, bins:rw<u32>[256]@device) {
+  parallel i in n { let _ = atomic_add_wrap(bins[usize(x[i] & 255)], 1); }
+}
+
+pub fn counted(n:usize, x:rw<u32>[n]@device, h:ro<u32>[n], hits:rw<u32>[4]) {
+  parallel i in n { x[i] = x[i] + 1; }
+  parallel i in n { let _ = atomic_add_wrap(hits[usize(h[i] & 3)], 1); }
+}
+"""
+
+
+def test_an_atomic_in_a_device_lane_is_device_work_and_one_on_the_host_is_not():
+    """A device lane's atomic update touches device memory only; one in a host lane is seen by other host threads,
+    which could act on it before the device work before it was waited for."""
+    declared = header(ATOMICS, "lib", device=True)[0]
+    assert "void cq_histogram(void *stream, " in declared and "cq_counted" not in declared
+    refusal = " ".join(declared.split("No enqueued entry (E-ENQUEUE)")[1].split("*/")[0].split())
+    assert "counted: it updates host memory atomically" in refusal

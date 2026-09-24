@@ -230,7 +230,7 @@ class Header:
         declared = [*lines, f"{self.ctype(f.ret)} cf_{mangle(f.name)}({', '.join(params) or 'void'});"]
         row = self.c.rows.get(f.name, set())
         if self.device and row & execution.DEVICE_WORK:
-            if why := execution.unwaited(row, f):
+            if why := execution.unwaited(self.c, f):
                 self.waiting.append(f"{f.name}: {why}.")
             else:  # the same checks and work, queued on the caller's stream without a wait (ENQUEUED below)
                 self.enqueued.append(f)
