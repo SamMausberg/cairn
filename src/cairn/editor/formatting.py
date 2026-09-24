@@ -222,8 +222,9 @@ class Writer:
         self.lines.append(STEP * (self.indent + self.hang) + s.rstrip())
 
     def trailing(self, s: str) -> None:
-        if self.parts:
-            self.push(True, s.rstrip())
+        if self.parts:  # joined to the token before it, so no wrap can move it to a line of its own
+            sp, last, op = self.parts[-1]
+            self.parts[-1] = (sp, last + " " + s.rstrip(), op)
             self.flush(1)
         elif self.lines and self.lines[-1]:
             self.lines[-1] += " " + s.rstrip()
