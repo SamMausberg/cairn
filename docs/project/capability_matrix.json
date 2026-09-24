@@ -222,6 +222,18 @@
       "records": ["evidence/v1_1/emulation/README.md", "tests/projects/test_emulation.py"]
     },
     {
+      "feature": "One compile per source for the hosts, `cairn mcp` and `cairn lsp`",
+      "side": "host",
+      "docs": "tools.md#cairn-mcp",
+      "implemented": "yes",
+      "compiles": "n/a: the compiler's own tooling, which builds no program of its own",
+      "ran_on_cpu": "yes: every example emits the same C++ and receipt from a kept copy as from scratch",
+      "ran_on_gpu": "n/a",
+      "sanitizers": "n/a",
+      "measured": "yes: MCP checks, edit sessions and edit-then-check cycles before and after, on one loaded machine",
+      "records": ["evidence/v1_1/workspace/README.md", "tests/agent/test_compilations.py", "tests/agent/test_mcp.py"]
+    },
+    {
       "feature": "Device regions, `reduce`, `scan` and `compact`",
       "side": "device",
       "docs": "concurrency.md#parallel-regions",
