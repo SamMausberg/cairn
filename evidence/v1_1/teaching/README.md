@@ -21,11 +21,11 @@ python3 tools/ai/skill_tokens.py --output evidence/v1_1/teaching/after.json
 | What is read | Before | After | Change |
 |---|---|---|---|
 | `SKILL.md`, read whenever the skill fires | 3,381 | 2,720 | -19.6% |
-| the tour: `SKILL.md` and thirteen cards, each once | 7,657 | 7,150 | -6.6% |
-| one tour program alone, the mean of twelve | 4,350 | 3,585 | -17.6% |
+| the tour: `SKILL.md` and thirteen cards, each once | 7,657 | 7,240 | -5.4% |
+| one tour program alone, the mean of twelve | 4,350 | 3,592 | -17.4% |
 | `codes.md` | 2,726 | removed |  |
-| every file of the skill | 15,927 | 14,101 | -11.5% |
-| every card's text as a host sends it | 8,868 | 9,078 | +2.4% |
+| every file of the skill | 15,927 | 14,191 | -10.9% |
+| every card's text as a host sends it | 8,868 | 9,163 | +3.3% |
 
 | Tour program | Before | After |
 |---|---|---|
@@ -37,7 +37,7 @@ python3 tools/ai/skill_tokens.py --output evidence/v1_1/teaching/after.json
 | 6. Owners | 4,472 | 3,590 |
 | 7. Closures | 4,320 | 3,665 |
 | 8. Tasks | 4,586 | 3,909 |
-| 9. Lanes | 5,069 | 4,469 |
+| 9. Lanes | 5,069 | 4,559 |
 | 10. Generators | 5,262 | 4,417 |
 | 11. Modules and the library | 4,447 | 3,573 |
 | 12. The foreign boundary | 3,809 | 2,933 |
@@ -48,7 +48,7 @@ The skill no longer repeats what a refusal now says. Every refusal names the car
 
 The closures card was sent for any program with `||` or `|` in it, which is most programs; it is now selected by a closure argument, a function type or `dyn`. That is most of the drop in the twelve single programs besides `SKILL.md`.
 
-No rule, limit or code was taken out of a card. The cards grew by six, for what the hosts, the command line and the compiler's limits refuse, which no program's words select. The language cards gained the few rules no card stated before, such as `const`, and the route an agent takes when CAIRN cannot say its design: a foreign implementation in CUDA or C++, validated against the reference, named in `SKILL.md`'s loop and in the parallel, cooperative, implementations and assembly cards. That route is most of the 2.4% the cards' text grew by.
+No rule, limit or code was taken out of a card. The cards grew by six, for what the hosts, the command line and the compiler's limits refuse, which no program's words select. The language cards gained the few rules no card stated before, such as `const`, and the route an agent takes when CAIRN cannot say its design: a foreign implementation in CUDA or C++, validated against the reference, named in `SKILL.md`'s loop and in the parallel, cooperative, implementations and assembly cards. That route is most of the 3.3% the cards' text grew by; the rest is those rules and what other work added to the cards meanwhile, such as `--emulate` in the parallel card.
 
 ## What this does not show
 
