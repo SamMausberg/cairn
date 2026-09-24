@@ -50,3 +50,23 @@ def test_a_caller_of_a_reference_is_not_judged_on_a_row_its_implementations_have
     assert record["code"] == "E-UNBOUND"
     reported = [(d["code"], d["line"]) for d in record.get("further", [])]
     assert ("E-EFFECT-CEILING", 11) in reported or record.get("not_judged", 0) >= 2, record
+
+
+# --- Fixed: the fix for a type mismatch said a float conversion traps, which it never does --------------------------
+
+
+@pytest.mark.parametrize(
+    ("want", "got"), [("f32", "u64"), ("f32", "f64"), ("f64", "u64"), ("u32", "u64"), ("u8", "f32")]
+)
+def test_the_conversion_a_type_mismatch_suggests_is_stated_as_it_behaves(want, got):
+    """`f32(x)` rounds, to infinity past the range, and `f64(x)` of a u64 past 2^53 rounds too; only an integer
+    target is range checked (docs/language.md). The fix said every conversion traps outside its target's range, which
+    told an agent a rounding conversion was checked."""
+    from cairn.agent.diagnostics import fix
+
+    hint = fix({"code": "E-TYPE-MISMATCH", "message": "", "expected_type": want, "actual_type": got})
+    assert hint is not None and f"{want}(x)" in hint
+    if want in {"f32", "f64"}:
+        assert "trap" not in hint and "round" in hint, hint
+    else:
+        assert "traps outside" in hint, hint

@@ -119,6 +119,11 @@ def fix(d: dict[str, Any], known: tuple[str, ...] = (), host: bool = True) -> st
         return f"Ask first: an expand request naming {', '.join(d['symbols'])}."
     if code == "E-TYPE-MISMATCH" and {"expected_type", "actual_type"} <= set(d):
         want, got = d["expected_type"], d["actual_type"]
+        if want in {"f32", "f64"} and got in NUMERIC:  # only an integer target is range checked
+            return (
+                f"Convert explicitly, {want}(x), which rounds to the nearest {want} and is not range checked, "
+                f"or compute in {want}."
+            )
         if want in NUMERIC and got in NUMERIC:
             return f"Convert explicitly, {want}(x), which traps outside {want}'s range, or compute in {want}."
         if want == "bool" and got in NUMERIC:
