@@ -1,0 +1,146 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+struct ChunkResult { index:usize; overflowed:bool; sum:i64; }
+
+fn is_negative(x:i64) -> bool = x < 0;
+
+// Sums xs left to right in checked i64 arithmetic, reporting overflow instead of trapping or wrapping.
+fn sum_chunk(n:usize, xs:ro<i64>[n], index:usize) -> ChunkResult {
+  let mx:i64 = 9223372036854775807;
+  let mn:i64 = 0 - mx - 1;
+  let mut sum:i64 = 0;
+  let mut overflowed = false;
+  for x in xs {
+    if is_negative(x) {
+      if sum < mn - x { overflowed = true; break; }
+    } else {
+      if sum > mx - x { overflowed = true; break; }
+    }
+    sum = sum + x;
+  }
+  if overflowed { return ChunkResult(index, true, 0); }
+  return ChunkResult(index, false, sum);
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let raw_k = next_u64(inp);
+  let k = usize(raw_k);
+  let raw_n = next_u64(inp);
+  let n = usize(raw_n);
+
+  let mut values = Buf[i64](n);
+  for i in 0..n { values[i] = next_i64(inp); }
+
+  let mut sums = Buf[i64](k);
+  let mut overflowed = Buf[bool](k);
+
+  let group = Group[ChunkResult](k);
+  for j in 0..k {
+    let lo = (j * n) / k;
+    let hi = ((j + 1) * n) / k;
+    spawn sum_chunk(hi - lo, values[lo..hi], j) into group;
+  }
+  for _ in 0..k {
+    let r = collect(group);
+    sums[r.index] = r.sum;
+    overflowed[r.index] = r.overflowed;
+  }
+  wait(group);
+
+  let mut any_overflow = false;
+  for j in 0..k {
+    if overflowed[j] {
+      println("chunk ", j, " overflow");
+      any_overflow = true;
+    } else {
+      println("chunk ", j, " ", sums[j]);
+    }
+  }
+
+  if any_overflow {
+    println("total overflow");
+    return 0;
+  }
+
+  let mx:i64 = 9223372036854775807;
+  let mn:i64 = 0 - mx - 1;
+  let mut total:i64 = 0;
+  let mut total_overflow = false;
+  for j in 0..k {
+    let x = sums[j];
+    if is_negative(x) {
+      if total < mn - x { total_overflow = true; break; }
+    } else {
+      if total > mx - x { total_overflow = true; break; }
+    }
+    total = total + x;
+  }
+  if total_overflow {
+    println("total overflow");
+  } else {
+    println("total ", total);
+  }
+  return 0;
+}

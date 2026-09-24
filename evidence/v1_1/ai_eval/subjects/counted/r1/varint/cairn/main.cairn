@@ -1,0 +1,75 @@
+// Decodes a stream of unsigned LEB128 integers given as hexadecimal on standard input.
+import std.core (Option, Result);
+import std.io as io;
+import std.vec (Vec);
+
+// All of standard input.
+fn read_input() -> Vec[u8] {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return bytes;
+}
+
+fn nibble(c:u8) -> u8 {
+  if c <= '9' { return c - '0'; }
+  return c - 'a' + 10;
+}
+
+// The bytes the hexadecimal digits at the start of `hex` spell, up to the first byte that is not one.
+fn from_hex(n:usize, hex:ro<u8>[n]) -> Buf[u8] {
+  let mut digits:usize = 0;
+  while digits < n && hex[digits] > 32 { digits += 1; }
+  let m = digits / 2;
+  let mut out = Buf[u8](m);
+  for i in 0..m { out[i] = nibble(hex[2 * i]) * 16 + nibble(hex[2 * i + 1]); }
+  return out;
+}
+
+enum Status { Done(u64); Truncated; Overflow; }
+
+// Decodes the integer that starts at `pos`, advancing `pos` past it.
+fn decode(n:usize, bytes:ro<u8>[n], pos:rw<usize>) -> Status {
+  let mut value:u64 = 0;
+  let mut i:usize = 0;
+  while true {
+    if pos >= n { return Truncated; }
+    let b = bytes[pos];
+    if i == 9 && b > 1 { return Overflow; }
+    value = value | shl_wrap(u64(b & 127), 7 * i);
+    pos += 1;
+    if b < 128 { return Done(value); }
+    i += 1;
+  }
+  return Truncated;
+}
+
+fn main() -> i32 {
+  let input = read_input();
+  let bytes = from_hex(input);
+  let n = len(bytes);
+  let mut pos:usize = 0;
+  while pos < n {
+    let start = pos;
+    match decode(bytes, pos) {
+      Done(value) => println(value);
+      Truncated => {
+        println("err truncated ", start);
+        return 0;
+      }
+      Overflow => {
+        println("err overflow ", start);
+        return 0;
+      }
+    }
+  }
+  return 0;
+}

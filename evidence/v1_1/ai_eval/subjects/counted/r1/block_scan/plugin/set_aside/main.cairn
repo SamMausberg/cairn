@@ -1,0 +1,161 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// Scans each block of up to 256 values in shared memory (Hillis-Steele, double buffered so no
+// thread ever reads a slot another thread overwrites in the same phase), then writes each block's
+// inclusive scan to out and its total to block_sums.
+fn scan_blocks(n:usize, x:ro<u64>[n]@device, num_blocks:usize, out:rw<u64>[n]@device, block_sums:rw<u64>[num_blocks]@device) {
+  blocks b in num_blocks threads t in 256 {
+    shared s0:u64[256] = zeroed;
+    shared s1:u64[256] = zeroed;
+    let i = b * 256 + t;
+    let mut v0:u64 = 0;
+    if i < n { v0 = x[i]; }
+    s0[t] = v0;
+    barrier;
+    let mut v1:u64 = s0[t];
+    if t >= 1 { v1 = s0[t] + s0[t - 1]; }
+    s1[t] = v1;
+    barrier;
+    let mut v2:u64 = s1[t];
+    if t >= 2 { v2 = s1[t] + s1[t - 2]; }
+    s0[t] = v2;
+    barrier;
+    let mut v3:u64 = s0[t];
+    if t >= 4 { v3 = s0[t] + s0[t - 4]; }
+    s1[t] = v3;
+    barrier;
+    let mut v4:u64 = s1[t];
+    if t >= 8 { v4 = s1[t] + s1[t - 8]; }
+    s0[t] = v4;
+    barrier;
+    let mut v5:u64 = s0[t];
+    if t >= 16 { v5 = s0[t] + s0[t - 16]; }
+    s1[t] = v5;
+    barrier;
+    let mut v6:u64 = s1[t];
+    if t >= 32 { v6 = s1[t] + s1[t - 32]; }
+    s0[t] = v6;
+    barrier;
+    let mut v7:u64 = s0[t];
+    if t >= 64 { v7 = s0[t] + s0[t - 64]; }
+    s1[t] = v7;
+    barrier;
+    let mut v8:u64 = s1[t];
+    if t >= 128 { v8 = s1[t] + s1[t - 128]; }
+    s0[t] = v8;
+    barrier;
+    if i < n { out[i] = s0[t]; }
+    if t == 0 { block_sums[b] = s0[255]; }
+  }
+}
+
+// Adds every earlier block's total onto each of a block's already-scanned elements.
+fn add_block_offsets(n:usize, out:rw<u64>[n]@device, num_blocks:usize, offsets:ro<u64>[num_blocks]@device) {
+  blocks b in num_blocks threads t in 256 {
+    let i = b * 256 + t;
+    if i < n { out[i] = out[i] + offsets[b]; }
+  }
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let n_raw = next_u64(inp);
+  let n:usize = usize(n_raw);
+
+  if n == 0 { return 0; }
+
+  buffer host_x:u64[n] = zeroed;
+  for i in 0..n { host_x[i] = next_u64(inp); }
+
+  let num_blocks:usize = (n + 255) / 256;
+
+  buffer dev_x:u64[n]@device = zeroed;
+  buffer dev_out:u64[n]@device = zeroed;
+  buffer dev_block_sums:u64[num_blocks]@device = zeroed;
+  transfer(dev_x, host_x);
+
+  scan_blocks(n, dev_x, num_blocks, dev_out, dev_block_sums);
+
+  buffer host_block_sums:u64[num_blocks] = zeroed;
+  transfer(host_block_sums, dev_block_sums);
+
+  buffer host_block_offsets:u64[num_blocks] = zeroed;
+  let mut running:u64 = 0;
+  for b in 0..num_blocks {
+    host_block_offsets[b] = running;
+    running = running + host_block_sums[b];
+  }
+
+  buffer dev_block_offsets:u64[num_blocks]@device = zeroed;
+  transfer(dev_block_offsets, host_block_offsets);
+
+  add_block_offsets(n, dev_out, num_blocks, dev_block_offsets);
+
+  buffer host_out:u64[n] = zeroed;
+  transfer(host_out, dev_out);
+
+  for i in 0..n { println(host_out[i]); }
+
+  return 0;
+}

@@ -1,0 +1,1690 @@
+[
+ {
+  "task": "histogram",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "histogram",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "construct",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ },
+ {
+  "task": "histogram",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "histogram",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "construct",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ },
+ {
+  "task": "histogram",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "histogram",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "construct",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ },
+ {
+  "task": "chunk_sums",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 19,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "chunk_sums",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "construct",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ },
+ {
+  "task": "chunk_sums",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 19,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "chunk_sums",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "construct",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ },
+ {
+  "task": "chunk_sums",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 19,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "chunk_sums",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "construct",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ },
+ {
+  "task": "records",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 29,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "records",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 29,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    2,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    4,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    5,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "records",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 29,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "records",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 29,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    2,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    4,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    5,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "records",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 29,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "records",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 29,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": [
+   [
+    "debug",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    2,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    4,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    5,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "pool",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "pool",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 12,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    1,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    2,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    4,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "pool",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "pool",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 12,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    1,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    2,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    4,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "pool",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "pool",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 12,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": [
+   [
+    "debug",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    1,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    2,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    4,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "rle",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 32,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "rle",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 32,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    1,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    2,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    4,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "rle",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 32,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "rle",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 32,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    1,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    2,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    4,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "rle",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 32,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "rle",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 32,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": [
+   [
+    "debug",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    1,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    2,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    4,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "varint",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 27,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "varint",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "abort",
+  "cases": 27,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    2,
+    "abort",
+    ""
+   ],
+   [
+    "address",
+    3,
+    "abort",
+    ""
+   ],
+   [
+    "address",
+    4,
+    "abort",
+    ""
+   ],
+   [
+    "address",
+    5,
+    "abort",
+    ""
+   ],
+   [
+    "address",
+    9,
+    "abort",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "varint",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 27,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "varint",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "sanitizer",
+  "cases": 27,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    2,
+    "sanitizer",
+    "ts 8 application bytes):\n  Addressable:           00\n  Partially addressable: 01 02 03 04 05 06 07 \n  Heap left redzone:       fa\n  Freed heap region:       fd\n  Stack left redzone:      f1\n  Stack mid redzone:       f2\n  Stack right redzone:     f3\n  Stack after return:      f5\n  Stack use after scope:   f8\n  Global redzone:          f9\n  Global init order:       f6\n  Poisoned by user:        f7\n  Container overflow:      fc\n  Array cookie:            ac\n  Intra object redzone:    bb\n  ASan internal:           fe\n  Left alloca redzone:     ca\n  Right alloca redzone:    cb\n==3592265==ABORTING\n"
+   ],
+   [
+    "address",
+    3,
+    "sanitizer",
+    "ts 8 application bytes):\n  Addressable:           00\n  Partially addressable: 01 02 03 04 05 06 07 \n  Heap left redzone:       fa\n  Freed heap region:       fd\n  Stack left redzone:      f1\n  Stack mid redzone:       f2\n  Stack right redzone:     f3\n  Stack after return:      f5\n  Stack use after scope:   f8\n  Global redzone:          f9\n  Global init order:       f6\n  Poisoned by user:        f7\n  Container overflow:      fc\n  Array cookie:            ac\n  Intra object redzone:    bb\n  ASan internal:           fe\n  Left alloca redzone:     ca\n  Right alloca redzone:    cb\n==3592742==ABORTING\n"
+   ],
+   [
+    "address",
+    4,
+    "sanitizer",
+    "ts 8 application bytes):\n  Addressable:           00\n  Partially addressable: 01 02 03 04 05 06 07 \n  Heap left redzone:       fa\n  Freed heap region:       fd\n  Stack left redzone:      f1\n  Stack mid redzone:       f2\n  Stack right redzone:     f3\n  Stack after return:      f5\n  Stack use after scope:   f8\n  Global redzone:          f9\n  Global init order:       f6\n  Poisoned by user:        f7\n  Container overflow:      fc\n  Array cookie:            ac\n  Intra object redzone:    bb\n  ASan internal:           fe\n  Left alloca redzone:     ca\n  Right alloca redzone:    cb\n==3592853==ABORTING\n"
+   ],
+   [
+    "address",
+    5,
+    "sanitizer",
+    "ts 8 application bytes):\n  Addressable:           00\n  Partially addressable: 01 02 03 04 05 06 07 \n  Heap left redzone:       fa\n  Freed heap region:       fd\n  Stack left redzone:      f1\n  Stack mid redzone:       f2\n  Stack right redzone:     f3\n  Stack after return:      f5\n  Stack use after scope:   f8\n  Global redzone:          f9\n  Global init order:       f6\n  Poisoned by user:        f7\n  Container overflow:      fc\n  Array cookie:            ac\n  Intra object redzone:    bb\n  ASan internal:           fe\n  Left alloca redzone:     ca\n  Right alloca redzone:    cb\n==3593131==ABORTING\n"
+   ],
+   [
+    "address",
+    9,
+    "sanitizer",
+    "ts 8 application bytes):\n  Addressable:           00\n  Partially addressable: 01 02 03 04 05 06 07 \n  Heap left redzone:       fa\n  Freed heap region:       fd\n  Stack left redzone:      f1\n  Stack mid redzone:       f2\n  Stack right redzone:     f3\n  Stack after return:      f5\n  Stack use after scope:   f8\n  Global redzone:          f9\n  Global init order:       f6\n  Poisoned by user:        f7\n  Container overflow:      fc\n  Array cookie:            ac\n  Intra object redzone:    bb\n  ASan internal:           fe\n  Left alloca redzone:     ca\n  Right alloca redzone:    cb\n==3593340==ABORTING\n"
+   ]
+  ]
+ },
+ {
+  "task": "varint",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 27,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "varint",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "panic",
+  "cases": 27,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": [
+   [
+    "debug",
+    2,
+    "panic",
+    "\nthread 'main' (3593171) panicked at src/main.rs:21:17:\nindex out of bounds: the len is 1 but the index is 1\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ],
+   [
+    "debug",
+    3,
+    "panic",
+    "\nthread 'main' (3593175) panicked at src/main.rs:21:17:\nindex out of bounds: the len is 1 but the index is 1\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ],
+   [
+    "debug",
+    4,
+    "panic",
+    "\nthread 'main' (3593178) panicked at src/main.rs:21:17:\nindex out of bounds: the len is 2 but the index is 2\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ],
+   [
+    "debug",
+    5,
+    "panic",
+    "\nthread 'main' (3593201) panicked at src/main.rs:21:17:\nindex out of bounds: the len is 2 but the index is 2\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ],
+   [
+    "debug",
+    9,
+    "panic",
+    "\nthread 'main' (3593258) panicked at src/main.rs:21:17:\nindex out of bounds: the len is 9 but the index is 9\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ]
+  ]
+ },
+ {
+  "task": "split_sum",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "split_sum",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 12,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": [
+   [
+    "address",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    5,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    6,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    7,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "split_sum",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "split_sum",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 12,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": [
+   [
+    "address",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    5,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    6,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    7,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "split_sum",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "split_sum",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 12,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": [
+   [
+    "debug",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    5,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    6,
+    "output",
+    ""
+   ],
+   [
+    "debug",
+    7,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "dedupe",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 11,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "dedupe",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "abort",
+  "cases": 11,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    1,
+    "abort",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "dedupe",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 11,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "dedupe",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "sanitizer",
+  "cases": 11,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    1,
+    "sanitizer",
+    " runs(std::vector<long, std::allocator<long>> const&) /tmp/aibench-dedupe-cpp-_t2lv8_y/address/main.cpp:16:9\n    #2 0x55555566b9f0 in main /tmp/aibench-dedupe-cpp-_t2lv8_y/address/main.cpp:33:30\n    #3 0x7ffff782a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16\n    #4 0x7ffff782a28a in __libc_start_main csu/../csu/libc-start.c:360:3\n    #5 0x555555582414 in _start (/tmp/aibench-dedupe-cpp-_t2lv8_y/address/program+0x2e414)\n\nSUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:1148:34 \n"
+   ]
+  ]
+ },
+ {
+  "task": "dedupe",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 11,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "dedupe",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "panic",
+  "cases": 11,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": [
+   [
+    "debug",
+    1,
+    "panic",
+    "\nthread 'main' (3616918) panicked at src/main.rs:8:17:\nattempt to subtract with overflow\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ]
+  ]
+ },
+ {
+  "task": "basis_points",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 6,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "basis_points",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "abort",
+  "cases": 6,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    0,
+    "abort",
+    ""
+   ],
+   [
+    "address",
+    1,
+    "abort",
+    ""
+   ],
+   [
+    "address",
+    3,
+    "abort",
+    ""
+   ],
+   [
+    "address",
+    4,
+    "abort",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "basis_points",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 6,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "basis_points",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 6,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    0,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    1,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    3,
+    "output",
+    ""
+   ],
+   [
+    "address",
+    4,
+    "output",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "basis_points",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 6,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "basis_points",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "panic",
+  "cases": 6,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": [
+   [
+    "debug",
+    0,
+    "panic",
+    "\nthread 'main' (3620982) panicked at src/main.rs:6:5:\nattempt to multiply with overflow\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ],
+   [
+    "debug",
+    1,
+    "panic",
+    "\nthread 'main' (3620991) panicked at src/main.rs:6:5:\nattempt to multiply with overflow\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ],
+   [
+    "debug",
+    3,
+    "panic",
+    "\nthread 'main' (3621093) panicked at src/main.rs:6:5:\nattempt to multiply with overflow\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ],
+   [
+    "debug",
+    4,
+    "panic",
+    "\nthread 'main' (3621110) panicked at src/main.rs:6:5:\nattempt to multiply with overflow\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ]
+  ]
+ },
+ {
+  "task": "csv_field",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 20,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "csv_field",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "abort",
+  "cases": 20,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    2,
+    "abort",
+    ""
+   ],
+   [
+    "address",
+    4,
+    "abort",
+    ""
+   ],
+   [
+    "address",
+    5,
+    "abort",
+    ""
+   ],
+   [
+    "address",
+    6,
+    "abort",
+    ""
+   ],
+   [
+    "address",
+    7,
+    "abort",
+    ""
+   ]
+  ]
+ },
+ {
+  "task": "csv_field",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 20,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "csv_field",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "sanitizer",
+  "cases": 20,
+  "builds": {
+   "address": "built"
+  },
+  "failures": [
+   [
+    "address",
+    2,
+    "sanitizer",
+    "ts 8 application bytes):\n  Addressable:           00\n  Partially addressable: 01 02 03 04 05 06 07 \n  Heap left redzone:       fa\n  Freed heap region:       fd\n  Stack left redzone:      f1\n  Stack mid redzone:       f2\n  Stack right redzone:     f3\n  Stack after return:      f5\n  Stack use after scope:   f8\n  Global redzone:          f9\n  Global init order:       f6\n  Poisoned by user:        f7\n  Container overflow:      fc\n  Array cookie:            ac\n  Intra object redzone:    bb\n  ASan internal:           fe\n  Left alloca redzone:     ca\n  Right alloca redzone:    cb\n==3624707==ABORTING\n"
+   ],
+   [
+    "address",
+    4,
+    "sanitizer",
+    "ts 8 application bytes):\n  Addressable:           00\n  Partially addressable: 01 02 03 04 05 06 07 \n  Heap left redzone:       fa\n  Freed heap region:       fd\n  Stack left redzone:      f1\n  Stack mid redzone:       f2\n  Stack right redzone:     f3\n  Stack after return:      f5\n  Stack use after scope:   f8\n  Global redzone:          f9\n  Global init order:       f6\n  Poisoned by user:        f7\n  Container overflow:      fc\n  Array cookie:            ac\n  Intra object redzone:    bb\n  ASan internal:           fe\n  Left alloca redzone:     ca\n  Right alloca redzone:    cb\n==3624871==ABORTING\n"
+   ],
+   [
+    "address",
+    5,
+    "sanitizer",
+    "ts 8 application bytes):\n  Addressable:           00\n  Partially addressable: 01 02 03 04 05 06 07 \n  Heap left redzone:       fa\n  Freed heap region:       fd\n  Stack left redzone:      f1\n  Stack mid redzone:       f2\n  Stack right redzone:     f3\n  Stack after return:      f5\n  Stack use after scope:   f8\n  Global redzone:          f9\n  Global init order:       f6\n  Poisoned by user:        f7\n  Container overflow:      fc\n  Array cookie:            ac\n  Intra object redzone:    bb\n  ASan internal:           fe\n  Left alloca redzone:     ca\n  Right alloca redzone:    cb\n==3626323==ABORTING\n"
+   ],
+   [
+    "address",
+    6,
+    "sanitizer",
+    "ts 8 application bytes):\n  Addressable:           00\n  Partially addressable: 01 02 03 04 05 06 07 \n  Heap left redzone:       fa\n  Freed heap region:       fd\n  Stack left redzone:      f1\n  Stack mid redzone:       f2\n  Stack right redzone:     f3\n  Stack after return:      f5\n  Stack use after scope:   f8\n  Global redzone:          f9\n  Global init order:       f6\n  Poisoned by user:        f7\n  Container overflow:      fc\n  Array cookie:            ac\n  Intra object redzone:    bb\n  ASan internal:           fe\n  Left alloca redzone:     ca\n  Right alloca redzone:    cb\n==3628716==ABORTING\n"
+   ],
+   [
+    "address",
+    7,
+    "sanitizer",
+    "ts 8 application bytes):\n  Addressable:           00\n  Partially addressable: 01 02 03 04 05 06 07 \n  Heap left redzone:       fa\n  Freed heap region:       fd\n  Stack left redzone:      f1\n  Stack mid redzone:       f2\n  Stack right redzone:     f3\n  Stack after return:      f5\n  Stack use after scope:   f8\n  Global redzone:          f9\n  Global init order:       f6\n  Poisoned by user:        f7\n  Container overflow:      fc\n  Array cookie:            ac\n  Intra object redzone:    bb\n  ASan internal:           fe\n  Left alloca redzone:     ca\n  Right alloca redzone:    cb\n==3631735==ABORTING\n"
+   ]
+  ]
+ },
+ {
+  "task": "csv_field",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 20,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "csv_field",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "panic",
+  "cases": 20,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": [
+   [
+    "debug",
+    2,
+    "panic",
+    "\nthread 'main' (3628005) panicked at src/main.rs:18:11:\nindex out of bounds: the len is 3 but the index is 3\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ],
+   [
+    "debug",
+    4,
+    "panic",
+    "\nthread 'main' (3628187) panicked at src/main.rs:18:11:\nindex out of bounds: the len is 5 but the index is 5\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ],
+   [
+    "debug",
+    5,
+    "panic",
+    "\nthread 'main' (3628460) panicked at src/main.rs:18:11:\nindex out of bounds: the len is 7 but the index is 7\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ],
+   [
+    "debug",
+    6,
+    "panic",
+    "\nthread 'main' (3628605) panicked at src/main.rs:18:11:\nindex out of bounds: the len is 6 but the index is 6\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ],
+   [
+    "debug",
+    7,
+    "panic",
+    "\nthread 'main' (3629280) panicked at src/main.rs:18:11:\nindex out of bounds: the len is 5 but the index is 5\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+   ]
+  ]
+ },
+ {
+  "task": "sieve",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 28,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "sieve",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "construct",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ },
+ {
+  "task": "sieve",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 28,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "sieve",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "construct",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ },
+ {
+  "task": "sieve",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 28,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "sieve",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "construct",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ },
+ {
+  "task": "block_scan",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 17,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "block_scan",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "construct",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ },
+ {
+  "task": "block_scan",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 17,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "block_scan",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "construct",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ },
+ {
+  "task": "block_scan",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 17,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "block_scan",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "construct",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ },
+ {
+  "task": "tally",
+  "language": "cairn",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 11,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "tally",
+  "language": "cairn",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "build",
+  "cases": 11,
+  "builds": {
+   "address": "{\"status\": \"rejected\", \"code\": \"E-LEASED\", \"message\": \"total is lent to workers until wait(workers), and the next iteration would lend it again.\", \"line\": 79, \"column\": 5, \"stderr\": null}"
+  },
+  "failures": []
+ },
+ {
+  "task": "tally",
+  "language": "cpp",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 11,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "tally",
+  "language": "cpp",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "output",
+  "cases": 11,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": [
+   [
+    "address",
+    10,
+    "output",
+    ""
+   ],
+   [
+    "thread",
+    0,
+    "sanitizer",
+    "ct/compiler-rt/lib/tsan/rtl/tsan_interceptors_posix.cpp:1090:3 (program+0x6588a)\n    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State>>, void (*)()) <null> (libstdc++.so.6+0xeceb0) (BuildId: 753c6c8608b61d4e67be8f0c890e03e0aa046b8b)\n    #2 __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16 (libc.so.6+0x2a1c9) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)\n\nSUMMARY: ThreadSanitizer: data race (/lib/x86_64-linux-gnu/libstdc++.so.6+0xecdb3) (BuildId: 753c6c8608b61d4e67be8f0c890e03e0aa046b8b) \n==================\n"
+   ],
+   [
+    "thread",
+    3,
+    "sanitizer",
+    "ct/compiler-rt/lib/tsan/rtl/tsan_interceptors_posix.cpp:1090:3 (program+0x6588a)\n    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State>>, void (*)()) <null> (libstdc++.so.6+0xeceb0) (BuildId: 753c6c8608b61d4e67be8f0c890e03e0aa046b8b)\n    #2 __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16 (libc.so.6+0x2a1c9) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)\n\nSUMMARY: ThreadSanitizer: data race (/lib/x86_64-linux-gnu/libstdc++.so.6+0xecdb3) (BuildId: 753c6c8608b61d4e67be8f0c890e03e0aa046b8b) \n==================\n"
+   ],
+   [
+    "thread",
+    4,
+    "sanitizer",
+    "ct/compiler-rt/lib/tsan/rtl/tsan_interceptors_posix.cpp:1090:3 (program+0x6588a)\n    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State>>, void (*)()) <null> (libstdc++.so.6+0xeceb0) (BuildId: 753c6c8608b61d4e67be8f0c890e03e0aa046b8b)\n    #2 __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16 (libc.so.6+0x2a1c9) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)\n\nSUMMARY: ThreadSanitizer: data race (/lib/x86_64-linux-gnu/libstdc++.so.6+0xecdb3) (BuildId: 753c6c8608b61d4e67be8f0c890e03e0aa046b8b) \n==================\n"
+   ],
+   [
+    "thread",
+    5,
+    "sanitizer",
+    "ct/compiler-rt/lib/tsan/rtl/tsan_interceptors_posix.cpp:1090:3 (program+0x6588a)\n    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State>>, void (*)()) <null> (libstdc++.so.6+0xeceb0) (BuildId: 753c6c8608b61d4e67be8f0c890e03e0aa046b8b)\n    #2 __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16 (libc.so.6+0x2a1c9) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)\n\nSUMMARY: ThreadSanitizer: data race (/lib/x86_64-linux-gnu/libstdc++.so.6+0xecdb3) (BuildId: 753c6c8608b61d4e67be8f0c890e03e0aa046b8b) \n==================\n"
+   ]
+  ]
+ },
+ {
+  "task": "tally",
+  "language": "rust",
+  "program": "reference",
+  "as_required": true,
+  "passed": true,
+  "reason": "passed",
+  "cases": 11,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ {
+  "task": "tally",
+  "language": "rust",
+  "program": "starter",
+  "as_required": true,
+  "passed": false,
+  "reason": "unsafe",
+  "cases": 0,
+  "builds": {},
+  "failures": []
+ }
+]

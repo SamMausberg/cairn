@@ -1,0 +1,175 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+enum Kind { Empty; Digit; Format; Range; }
+struct FieldErr { kind:Kind; col:usize; }
+enum Field { Value(u64); Bad(FieldErr); }
+
+// The index of the first digit that is not '0', or the last index when every digit is '0'.
+fn strip_zero_start(n:usize, f:ro<u8>[n]@host) -> usize {
+  let mut i:usize = 0;
+  while i < n - 1 && f[i] == 48 { i += 1; }
+  return i;
+}
+
+fn id_in_range(n:usize, f:ro<u8>[n]@host) -> bool {
+  if n < 10 { return true; }
+  if n > 10 { return false; }
+  return text.compare(n, f, 10, "4294967295") <= 0;
+}
+
+fn qty_in_range(n:usize, f:ro<u8>[n]@host) -> bool {
+  if n < 5 { return true; }
+  if n > 5 { return false; }
+  return text.compare(n, f, 5, "65535") <= 0;
+}
+
+fn cents_in_range(n:usize, f:ro<u8>[n]@host) -> bool {
+  if n < 19 { return true; }
+  if n > 19 { return false; }
+  return text.compare(n, f, 19, "9223372036854775807") <= 0;
+}
+
+fn check_id(n:usize, f:ro<u8>[n]@host, start:usize) -> Field {
+  if n == 0 { return Bad(FieldErr(Empty, start + 1)); }
+  for i in 0..n { if f[i] < 48 || f[i] > 57 { return Bad(FieldErr(Digit, start + i + 1)); } }
+  let z = strip_zero_start(n, f);
+  let sig = n - z;
+  if !id_in_range(sig, f[z..n]) { return Bad(FieldErr(Range, start + 1)); }
+  match text.parse_u64(sig, f[z..n]) {
+    Ok(v) => return Value(v);
+    Err(_) => return Bad(FieldErr(Range, start + 1));
+  }
+}
+
+fn check_qty(n:usize, f:ro<u8>[n]@host, start:usize) -> Field {
+  if n == 0 { return Bad(FieldErr(Empty, start + 1)); }
+  for i in 0..n { if f[i] < 48 || f[i] > 57 { return Bad(FieldErr(Digit, start + i + 1)); } }
+  let z = strip_zero_start(n, f);
+  let sig = n - z;
+  if !qty_in_range(sig, f[z..n]) { return Bad(FieldErr(Range, start + 1)); }
+  match text.parse_u64(sig, f[z..n]) {
+    Ok(v) => return Value(v);
+    Err(_) => return Bad(FieldErr(Range, start + 1));
+  }
+}
+
+fn check_price(n:usize, f:ro<u8>[n]@host, start:usize) -> Field {
+  if n == 0 { return Bad(FieldErr(Empty, start + 1)); }
+  for i in 0..n {
+    if !((f[i] >= 48 && f[i] <= 57) || f[i] == 46) { return Bad(FieldErr(Digit, start + i + 1)); }
+  }
+  match text.find_byte(n, f, 46, 0) {
+    None => return Bad(FieldErr(Format, start + 1));
+    Some(d) => {
+      match text.find_byte(n, f, 46, d + 1) {
+        Some(_) => return Bad(FieldErr(Format, start + 1));
+        None => {
+          if d < 1 || n - d - 1 != 2 { return Bad(FieldErr(Format, start + 1)); }
+          let z = strip_zero_start(d, f[0..d]);
+          let sig = d - z;
+          if sig + 2 > 19 { return Bad(FieldErr(Range, start + 1)); }
+          stack buf:u8[19] = zeroed;
+          for i in 0..sig { buf[i] = f[z + i]; }
+          buf[sig] = f[d + 1];
+          buf[sig + 1] = f[d + 2];
+          if !cents_in_range(sig + 2, buf[0..sig + 2]) { return Bad(FieldErr(Range, start + 1)); }
+          match text.parse_u64(sig, f[z..d]) {
+            Ok(before) => {
+              match text.parse_u64(2, f[d + 1..n]) {
+                Ok(after) => return Value(before * 100 + after);
+                Err(_) => return Bad(FieldErr(Range, start + 1));
+              }
+            }
+            Err(_) => return Bad(FieldErr(Range, start + 1));
+          }
+        }
+      }
+    }
+  }
+}
+
+fn print_err(line_num:u64, e:FieldErr) {
+  match e.kind {
+    Empty => println("err ", line_num, " ", e.col, " empty");
+    Digit => println("err ", line_num, " ", e.col, " digit");
+    Format => println("err ", line_num, " ", e.col, " format");
+    Range => println("err ", line_num, " ", e.col, " range");
+  }
+}
+
+fn process_line(n:usize, line:ro<u8>[n]@host, line_num:u64) {
+  match text.find_byte(n, line, 44, 0) {
+    None => { println("err ", line_num, " ", n + 1, " missing"); return; }
+    Some(p1) => {
+      match text.find_byte(n, line, 44, p1 + 1) {
+        None => { println("err ", line_num, " ", n + 1, " missing"); return; }
+        Some(p2) => {
+          match text.find_byte(n, line, 44, p2 + 1) {
+            Some(p3) => { println("err ", line_num, " ", p3 + 1, " extra"); return; }
+            None => {
+              match check_id(p1, line[0..p1], 0) {
+                Bad(e) => { print_err(line_num, e); return; }
+                Value(idv) => {
+                  match check_qty(p2 - p1 - 1, line[p1 + 1..p2], p1 + 1) {
+                    Bad(e) => { print_err(line_num, e); return; }
+                    Value(qtyv) => {
+                      match check_price(n - p2 - 1, line[p2 + 1..n], p2 + 1) {
+                        Bad(e) => { print_err(line_num, e); return; }
+                        Value(cents) => { println("ok ", idv, " ", qtyv, " ", cents); return; }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn main() -> i32 {
+  let input = read_input();
+  let n = input.bytes.len;
+  let mut pos:usize = 0;
+  let mut line_num:u64 = 1;
+  while true {
+    if pos > n { break; }
+    match text.find_byte(n, input.bytes, 10, pos) {
+      Some(nl) => {
+        process_line(nl - pos, input.bytes.data[pos..nl], line_num);
+        pos = nl + 1;
+        line_num += 1;
+      }
+      None => {
+        if pos < n { process_line(n - pos, input.bytes.data[pos..n], line_num); }
+        break;
+      }
+    }
+  }
+  return 0;
+}

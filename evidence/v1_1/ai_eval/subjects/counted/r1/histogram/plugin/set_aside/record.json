@@ -1,0 +1,118 @@
+{
+ "task": "histogram",
+ "arm": "plugin",
+ "language": "cairn",
+ "plugin": "/home/sam/cairn-aieval/plugins/counted/r1/histogram/plugin",
+ "scratch": "/home/sam/cairn-aieval/tmp/counted/r1/histogram/plugin",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "started_at": 1790277817.1,
+ "wall_seconds": 496.8,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 57,
+  "duration_ms": 521856,
+  "duration_api_ms": 361420,
+  "total_cost_usd": 1.2046266000000003,
+  "usage": {
+   "input_tokens": 96,
+   "cache_creation_input_tokens": 73440,
+   "cache_read_input_tokens": 2844573,
+   "output_tokens": 34176,
+   "output_tokens_details": {
+    "thinking_tokens": 25893
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 73440,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 232,
+     "cache_read_input_tokens": 87606,
+     "cache_creation_input_tokens": 639,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 639
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 96,
+    "outputTokens": 34176,
+    "cacheReadInputTokens": 2844573,
+    "cacheCreationInputTokens": 73440,
+    "webSearchRequests": 0,
+    "costUSD": 1.2046266000000003,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 25893,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/home/sam/cairn-aieval/runs/counted/r1/histogram/plugin",
+ "toolchain_commit": "dd3f75e8e96917b5b3f200fec54d4bcb4162a4f9",
+ "phase": "counted",
+ "replicate": 1,
+ "study": "v1_1",
+ "infrastructure": false,
+ "source_bytes": 3107,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 8,
+   "Skill": 1,
+   "Bash": 36,
+   "Grep": 2,
+   "Glob": 3,
+   "mcp__plugin_cairn_cairn__check": 3,
+   "Edit": 2
+  },
+  "compile_runs": 10,
+  "compile_runs_failed": 1,
+  "flags": []
+ },
+ "harness_failure": "the plugin copy was removed 89 s into the session, when the cpp arm's cleanup ran (fixed in the harness; the cell ran again)",
+ "transcript": {
+  "path": "results/ai_eval/counted/r1/histogram/plugin/transcript.harness-0.jsonl",
+  "sha256": "21f8fef4c6d203183aa305bb227eeef1ac9531aed08f99aaba88163915a0bde1",
+  "bytes": 462314
+ },
+ "given_sha256": "ac7a4ea5af086422f4eb6cb2b0eabddfbc28266216c8341906fb56ccb3711459"
+}

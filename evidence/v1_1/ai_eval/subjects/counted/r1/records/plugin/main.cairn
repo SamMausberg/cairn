@@ -1,0 +1,286 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The column (1-indexed) of an absolute byte index within a line starting at lo.
+fn col_of(idx:usize, lo:usize) -> usize = (idx - lo) + 1;
+
+fn find_newline(bytes:ro<Vec[u8]>, from:usize) -> usize {
+  let n = bytes.len;
+  let mut i = from;
+  while i < n && bytes.data[i] != 10 { i += 1; }
+  return i;
+}
+
+// The first index in [lo,hi) that is not a decimal digit, or None.
+fn check_digits(bytes:ro<Vec[u8]>, lo:usize, hi:usize) -> Option[usize] {
+  let mut i = lo;
+  while i < hi {
+    let b = bytes.data[i];
+    if b < 48 || b > 57 { return Some(i); }
+    i += 1;
+  }
+  return None;
+}
+
+// The first index of the run's significant digits: leading zeros skipped, one digit kept at least.
+fn strip_zeros(bytes:ro<Vec[u8]>, lo:usize, hi:usize) -> usize {
+  let mut start = lo;
+  while start < hi - 1 && bytes.data[start] == 48 { start += 1; }
+  return start;
+}
+
+fn digits_value(bytes:ro<Vec[u8]>, lo:usize, hi:usize) -> u64 {
+  let mut val:u64 = 0;
+  let mut i = lo;
+  while i < hi {
+    val = val * 10 + u64(bytes.data[i] - 48);
+    i += 1;
+  }
+  return val;
+}
+
+enum RangeCheck { Fit(u64); TooBig; }
+
+// Compares the digits in [start,hi) (no leading zeros) against the canonical decimal max.
+fn compare_and_value(bytes:ro<Vec[u8]>, start:usize, hi:usize, mlen:usize, max:ro<u8>[mlen]) -> RangeCheck {
+  let stripped_len = hi - start;
+  if stripped_len > mlen { return TooBig; }
+  if stripped_len < mlen { return Fit(digits_value(bytes, start, hi)); }
+  let mut i:usize = 0;
+  let mut over = false;
+  let mut done = false;
+  while i < mlen && !done {
+    let a = bytes.data[start + i];
+    let m = max[i];
+    if a > m { over = true; done = true; }
+    else if a < m { done = true; }
+    i += 1;
+  }
+  if over { return TooBig; }
+  return Fit(digits_value(bytes, start, hi));
+}
+
+fn price_value(bytes:ro<Vec[u8]>, start:usize, dot:usize, after_lo:usize, hi:usize) -> u64 {
+  let before_val = digits_value(bytes, start, dot);
+  let after_val = digits_value(bytes, after_lo, hi);
+  return before_val * 100 + after_val;
+}
+
+// cents = concat(significant before-digits, the two after-digits); compared as decimal against i64::MAX.
+fn check_price_range(bytes:ro<Vec[u8]>, flo:usize, dot:usize, hi:usize) -> RangeCheck {
+  let start = strip_zeros(bytes, flo, dot);
+  let before_len = dot - start;
+  let after_lo = dot + 1;
+  let total_len = before_len + 2;
+  if total_len > 19 { return TooBig; }
+  if total_len < 19 { return Fit(price_value(bytes, start, dot, after_lo, hi)); }
+  let max_str = "9223372036854775807";
+  let mut i:usize = 0;
+  let mut over = false;
+  let mut done = false;
+  while i < before_len && !done {
+    let a = bytes.data[start + i];
+    let m = max_str[i];
+    if a > m { over = true; done = true; }
+    else if a < m { done = true; }
+    i += 1;
+  }
+  let mut j:usize = 0;
+  while j < 2 && !done {
+    let a = bytes.data[after_lo + j];
+    let m = max_str[before_len + j];
+    if a > m { over = true; done = true; }
+    else if a < m { done = true; }
+    j += 1;
+  }
+  if over { return TooBig; }
+  return Fit(price_value(bytes, start, dot, after_lo, hi));
+}
+
+// Checks empty, digit and range for id or qty; None means an error line was already printed.
+fn process_simple_field(bytes:ro<Vec[u8]>, lo:usize, flo:usize, fhi:usize, line_no:u64, mlen:usize, max:ro<u8>[mlen]) -> Option[u64] {
+  if fhi == flo {
+    println("err ", line_no, " ", col_of(flo, lo), " empty");
+    return None;
+  }
+  match check_digits(bytes, flo, fhi) {
+    Some(idx) => {
+      println("err ", line_no, " ", col_of(idx, lo), " digit");
+      return None;
+    }
+    None => {}
+  }
+  let start = strip_zeros(bytes, flo, fhi);
+  match compare_and_value(bytes, start, fhi, mlen, max) {
+    Fit(v) => return Some(v);
+    TooBig => {
+      println("err ", line_no, " ", col_of(flo, lo), " range");
+      return None;
+    }
+  }
+}
+
+fn process_price(bytes:ro<Vec[u8]>, lo:usize, flo:usize, fhi:usize, line_no:u64) -> Option[u64] {
+  if fhi == flo {
+    println("err ", line_no, " ", col_of(flo, lo), " empty");
+    return None;
+  }
+  let mut i = flo;
+  let mut bad_idx:usize = 0;
+  let mut has_bad = false;
+  while i < fhi && !has_bad {
+    let b = bytes.data[i];
+    if !((b >= 48 && b <= 57) || b == 46) { bad_idx = i; has_bad = true; }
+    i += 1;
+  }
+  if has_bad {
+    println("err ", line_no, " ", col_of(bad_idx, lo), " digit");
+    return None;
+  }
+  let mut dot_count:usize = 0;
+  let mut dot_pos = flo;
+  let mut j = flo;
+  while j < fhi {
+    if bytes.data[j] == 46 {
+      dot_count += 1;
+      dot_pos = j;
+    }
+    j += 1;
+  }
+  let mut format_ok = true;
+  if dot_count != 1 { format_ok = false; }
+  else {
+    let before_len = dot_pos - flo;
+    let after_len = fhi - dot_pos - 1;
+    if before_len < 1 || after_len != 2 { format_ok = false; }
+  }
+  if !format_ok {
+    println("err ", line_no, " ", col_of(flo, lo), " format");
+    return None;
+  }
+  match check_price_range(bytes, flo, dot_pos, fhi) {
+    Fit(v) => return Some(v);
+    TooBig => {
+      println("err ", line_no, " ", col_of(flo, lo), " range");
+      return None;
+    }
+  }
+}
+
+fn process_line(bytes:ro<Vec[u8]>, lo:usize, hi:usize, line_no:u64) {
+  let mut count:usize = 0;
+  let mut p0:usize = 0;
+  let mut p1:usize = 0;
+  let mut p2:usize = 0;
+  let mut i = lo;
+  while i < hi {
+    if bytes.data[i] == 44 {
+      if count == 0 { p0 = i; }
+      else if count == 1 { p1 = i; }
+      else if count == 2 { p2 = i; }
+      count += 1;
+    }
+    i += 1;
+  }
+  if count < 2 {
+    println("err ", line_no, " ", col_of(hi, lo), " missing");
+    return;
+  }
+  if count > 2 {
+    println("err ", line_no, " ", col_of(p2, lo), " extra");
+    return;
+  }
+  match process_simple_field(bytes, lo, lo, p0, line_no, 10, "4294967295") {
+    None => return;
+    Some(idv) => {
+      match process_simple_field(bytes, lo, p0 + 1, p1, line_no, 5, "65535") {
+        None => return;
+        Some(qv) => {
+          match process_price(bytes, lo, p1 + 1, hi, line_no) {
+            None => return;
+            Some(cv) => {
+              println("ok ", idv, " ", qv, " ", cv);
+              return;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn main() -> i32 {
+  let inp = read_input();
+  let total = inp.bytes.len;
+  let mut pos:usize = 0;
+  let mut line_no:u64 = 0;
+  while pos < total {
+    let line_end = find_newline(inp.bytes, pos);
+    line_no += 1;
+    process_line(inp.bytes, pos, line_end, line_no);
+    let mut next_pos = line_end;
+    if line_end < total { next_pos = line_end + 1; }
+    pos = next_pos;
+  }
+  return 0;
+}

@@ -1,0 +1,113 @@
+{
+ "task": "chunk_sums",
+ "arm": "rust",
+ "language": "rust",
+ "plugin": null,
+ "scratch": "/home/sam/cairn-aieval/tmp/counted/r1/chunk_sums/rust",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "started_at": 1790278330.1,
+ "wall_seconds": 26.6,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 7,
+  "duration_ms": 25335,
+  "duration_api_ms": 21175,
+  "total_cost_usd": 0.0637096,
+  "usage": {
+   "input_tokens": 14,
+   "cache_creation_input_tokens": 5135,
+   "cache_read_input_tokens": 105458,
+   "output_tokens": 2205,
+   "output_tokens_details": {
+    "thinking_tokens": 306
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 5135,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 120,
+     "cache_read_input_tokens": 16935,
+     "cache_creation_input_tokens": 693,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 693
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 14,
+    "outputTokens": 2205,
+    "cacheReadInputTokens": 105458,
+    "cacheCreationInputTokens": 5135,
+    "webSearchRequests": 0,
+    "costUSD": 0.0637096,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 306,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/home/sam/cairn-aieval/runs/counted/r1/chunk_sums/rust",
+ "toolchain_commit": "dd3f75e8e96917b5b3f200fec54d4bcb4162a4f9",
+ "phase": "counted",
+ "replicate": 1,
+ "study": "v1_1",
+ "infrastructure": false,
+ "source_bytes": 1896,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 19,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 1,
+   "Bash": 4,
+   "Write": 1
+  },
+  "compile_runs": 3,
+  "compile_runs_failed": 0,
+  "flags": []
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_eval/counted/r1/chunk_sums/rust/transcript.jsonl",
+  "sha256": "f50d115bb3061ad78c767bbcf628eb84a07fc358bd868f315066632a4dbe6924",
+  "bytes": 38617
+ },
+ "given_sha256": "6783eedd2ea2797fcfb3322d39975679d62ee4b035b8d7af4f802d1b5f6fe0a1"
+}

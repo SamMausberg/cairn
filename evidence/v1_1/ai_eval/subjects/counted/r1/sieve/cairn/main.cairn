@@ -1,0 +1,187 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// Primes up to and including `limit`, found by trial division against the primes already found.
+// Small (limit is at most sqrt(20000000)), so this runs on one thread.
+fn base_primes_upto(limit:usize) -> Vec[u64] {
+  let mut primes = vec.new[u64]();
+  if limit < 2 { return primes; }
+  for candidate in 2..(limit + 1) {
+    let c:u64 = u64(candidate);
+    let mut is_p = true;
+    let mut j:usize = 0;
+    while j < primes.len {
+      let p = primes.data[j];
+      if p * p > c { break; }
+      if c % p == 0 { is_p = false; break; }
+      j += 1;
+    }
+    if is_p { vec.push(primes, c); }
+  }
+  return primes;
+}
+
+// Marks every composite in [lo, lo + n) of `part`, using the primes up to sqrt of the largest
+// number the whole sieve covers. An ordinary sequential function: one task's own slice.
+fn sieve_range(n:usize, part:rw<u8>[n], lo:usize, m:usize, base_primes:ro<u64>[m]) {
+  let hi = lo + n;
+  let mut j:usize = 0;
+  while j < m {
+    let p = base_primes[j];
+    let pu:usize = usize(p);
+    let mut start:usize = pu * pu;
+    if start < lo {
+      let rem = lo % pu;
+      if rem == 0 { start = lo; } else { start = lo + (pu - rem); }
+    }
+    let mut at = start;
+    while at < hi {
+      part[at - lo] = 1;
+      at += pu;
+    }
+    j += 1;
+  }
+}
+
+// Splits [0, size) into eight contiguous slices and sieves them on eight tasks of their own.
+fn sieve_all(size:usize, is_composite:rw<u8>[size], m:usize, base_primes:ro<u64>[m]) {
+  let c1 = size / 8;
+  let c2 = 2 * size / 8;
+  let c3 = 3 * size / 8;
+  let c4 = 4 * size / 8;
+  let c5 = 5 * size / 8;
+  let c6 = 6 * size / 8;
+  let c7 = 7 * size / 8;
+  let t0 = spawn sieve_range(c1, is_composite[0..c1], 0, m, base_primes);
+  let t1 = spawn sieve_range(c2 - c1, is_composite[c1..c2], c1, m, base_primes);
+  let t2 = spawn sieve_range(c3 - c2, is_composite[c2..c3], c2, m, base_primes);
+  let t3 = spawn sieve_range(c4 - c3, is_composite[c3..c4], c3, m, base_primes);
+  let t4 = spawn sieve_range(c5 - c4, is_composite[c4..c5], c4, m, base_primes);
+  let t5 = spawn sieve_range(c6 - c5, is_composite[c5..c6], c5, m, base_primes);
+  let t6 = spawn sieve_range(c7 - c6, is_composite[c6..c7], c6, m, base_primes);
+  let t7 = spawn sieve_range(size - c7, is_composite[c7..size], c7, m, base_primes);
+  wait(t0);
+  wait(t1);
+  wait(t2);
+  wait(t3);
+  wait(t4);
+  wait(t5);
+  wait(t6);
+  wait(t7);
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let n = next_u64(inp);
+  if n < 2 {
+    println("count 0");
+    println("sum 0");
+    println("last none");
+    println("gap none");
+    return 0;
+  }
+  let size:usize = usize(n) + 1;
+  let mut is_composite = Buf[u8](size);
+
+  let mut limit:u64 = u64(sqrt(f64(n)));
+  while (limit + 1) * (limit + 1) <= n { limit = limit + 1; }
+  while limit > 0 && limit * limit > n { limit = limit - 1; }
+  let base_primes = base_primes_upto(usize(limit));
+
+  sieve_all(len(is_composite), is_composite, base_primes.len, base_primes);
+
+  let mut count:u64 = 0;
+  let mut sum:u64 = 0;
+  let mut last:u64 = 0;
+  let mut have_last = false;
+  let mut prev:u64 = 0;
+  let mut have_prev = false;
+  let mut gap:u64 = 0;
+  let mut gap_prime:u64 = 0;
+  let mut have_gap = false;
+  for i in 2..size {
+    if is_composite[i] == 0 {
+      let p:u64 = u64(i);
+      count += 1;
+      sum += p;
+      last = p;
+      have_last = true;
+      if have_prev {
+        let d = p - prev;
+        if !have_gap || d > gap {
+          gap = d;
+          gap_prime = prev;
+          have_gap = true;
+        }
+      }
+      prev = p;
+      have_prev = true;
+    }
+  }
+
+  println("count ", count);
+  println("sum ", sum);
+  if have_last { println("last ", last); } else { println("last none"); }
+  if have_gap { println("gap ", gap, " ", gap_prime); } else { println("gap none"); }
+  return 0;
+}

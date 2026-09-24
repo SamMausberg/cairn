@@ -1,0 +1,2502 @@
+{
+ "phase": "counted",
+ "cells": 14,
+ "resamples": 10000,
+ "seed": 20260924,
+ "bootstrap": {
+  "plugin.solve_rate": {
+   "estimate": 1.0,
+   "interval_95": [
+    1.0,
+    1.0
+   ]
+  },
+  "plugin.usd_per_solved": {
+   "estimate": 0.5731,
+   "interval_95": [
+    0.3445,
+    0.8343
+   ]
+  },
+  "plugin.tokens_per_solved": {
+   "estimate": 1337478,
+   "interval_95": [
+    783635,
+    1987261
+   ]
+  },
+  "cairn.solve_rate": {
+   "estimate": 1.0,
+   "interval_95": [
+    1.0,
+    1.0
+   ]
+  },
+  "cairn.usd_per_solved": {
+   "estimate": 0.8485,
+   "interval_95": [
+    0.5123,
+    1.1895
+   ]
+  },
+  "cairn.tokens_per_solved": {
+   "estimate": 2016668,
+   "interval_95": [
+    1197048,
+    2860443
+   ]
+  },
+  "cpp.solve_rate": {
+   "estimate": 1.0,
+   "interval_95": [
+    1.0,
+    1.0
+   ]
+  },
+  "cpp.usd_per_solved": {
+   "estimate": 0.153,
+   "interval_95": [
+    0.0889,
+    0.2486
+   ]
+  },
+  "cpp.tokens_per_solved": {
+   "estimate": 245348,
+   "interval_95": [
+    160385,
+    372882
+   ]
+  },
+  "rust.solve_rate": {
+   "estimate": 1.0,
+   "interval_95": [
+    1.0,
+    1.0
+   ]
+  },
+  "rust.usd_per_solved": {
+   "estimate": 0.1418,
+   "interval_95": [
+    0.0649,
+    0.276
+   ]
+  },
+  "rust.tokens_per_solved": {
+   "estimate": 219794,
+   "interval_95": [
+    114243,
+    419818
+   ]
+  },
+  "plugin/cairn.usd_per_solved": {
+   "estimate": 0.6755,
+   "interval_95": [
+    0.4945,
+    0.8862
+   ]
+  },
+  "plugin/cairn.tokens_per_solved": {
+   "estimate": 0.6632,
+   "interval_95": [
+    0.4711,
+    0.8955
+   ]
+  },
+  "plugin/cpp.usd_per_solved": {
+   "estimate": 3.747,
+   "interval_95": [
+    1.9876,
+    6.3072
+   ]
+  },
+  "plugin/cpp.tokens_per_solved": {
+   "estimate": 5.4514,
+   "interval_95": [
+    2.9296,
+    9.1375
+   ]
+  },
+  "plugin/rust.usd_per_solved": {
+   "estimate": 4.0424,
+   "interval_95": [
+    1.767,
+    9.2163
+   ]
+  },
+  "plugin/rust.tokens_per_solved": {
+   "estimate": 6.0851,
+   "interval_95": [
+    2.5937,
+    14.042
+   ]
+  },
+  "cairn/cpp.usd_per_solved": {
+   "estimate": 5.547,
+   "interval_95": [
+    3.3676,
+    8.7808
+   ]
+  },
+  "cairn/cpp.tokens_per_solved": {
+   "estimate": 8.2196,
+   "interval_95": [
+    5.1297,
+    12.6371
+   ]
+  },
+  "cairn/rust.usd_per_solved": {
+   "estimate": 5.9845,
+   "interval_95": [
+    3.0337,
+    12.9001
+   ]
+  },
+  "cairn/rust.tokens_per_solved": {
+   "estimate": 9.1753,
+   "interval_95": [
+    4.6552,
+    19.6485
+   ]
+  },
+  "cpp/rust.usd_per_solved": {
+   "estimate": 1.0789,
+   "interval_95": [
+    0.8658,
+    1.5387
+   ]
+  },
+  "cpp/rust.tokens_per_solved": {
+   "estimate": 1.1163,
+   "interval_95": [
+    0.8581,
+    1.6476
+   ]
+  }
+ },
+ "spread": {
+  "plugin": {
+   "subjects": 13,
+   "solved": 13,
+   "turns": {
+    "median": 32.0,
+    "quartiles": [
+     16.0,
+     34.0
+    ],
+    "sum": 413
+   },
+   "wall_seconds": {
+    "median": 133.9,
+    "quartiles": [
+     70.0,
+     366.8
+    ],
+    "sum": 3047.1
+   },
+   "tokens_total": {
+    "median": 951164.0,
+    "quartiles": [
+     371588.0,
+     1508821.0
+    ],
+    "sum": 17387208
+   },
+   "tokens_output": {
+    "median": 10488.0,
+    "quartiles": [
+     4981.0,
+     19687.0
+    ],
+    "sum": 213840
+   },
+   "tokens_cost_usd": {
+    "median": 0.41,
+    "quartiles": [
+     0.16,
+     0.87
+    ],
+    "sum": 7.4506
+   },
+   "compile_runs": {
+    "median": 10.0,
+    "quartiles": [
+     6.0,
+     11.0
+    ],
+    "sum": 121
+   }
+  },
+  "cairn": {
+   "subjects": 14,
+   "solved": 14,
+   "turns": {
+    "median": 34.0,
+    "quartiles": [
+     15.5,
+     44.5
+    ],
+    "sum": 431
+   },
+   "wall_seconds": {
+    "median": 294.4,
+    "quartiles": [
+     56.65,
+     481.9
+    ],
+    "sum": 3934.3
+   },
+   "tokens_total": {
+    "median": 1953361.0,
+    "quartiles": [
+     327313.25,
+     3477445.25
+    ],
+    "sum": 28233355
+   },
+   "tokens_output": {
+    "median": 20758.5,
+    "quartiles": [
+     4177.75,
+     36158.0
+    ],
+    "sum": 299333
+   },
+   "tokens_cost_usd": {
+    "median": 0.94,
+    "quartiles": [
+     0.15,
+     1.33
+    ],
+    "sum": 11.8784
+   },
+   "compile_runs": {
+    "median": 8.5,
+    "quartiles": [
+     6.0,
+     10.0
+    ],
+    "sum": 112
+   }
+  },
+  "cpp": {
+   "subjects": 14,
+   "solved": 14,
+   "turns": {
+    "median": 10.0,
+    "quartiles": [
+     8.0,
+     13.75
+    ],
+    "sum": 161
+   },
+   "wall_seconds": {
+    "median": 48.25,
+    "quartiles": [
+     29.15,
+     79.93
+    ],
+    "sum": 1324.8
+   },
+   "tokens_total": {
+    "median": 171883.0,
+    "quartiles": [
+     125070.25,
+     249142.25
+    ],
+    "sum": 3434867
+   },
+   "tokens_output": {
+    "median": 4199.5,
+    "quartiles": [
+     1735.25,
+     7162.5
+    ],
+    "sum": 94027
+   },
+   "tokens_cost_usd": {
+    "median": 0.1,
+    "quartiles": [
+     0.06,
+     0.16
+    ],
+    "sum": 2.1414
+   },
+   "compile_runs": {
+    "median": 2.0,
+    "quartiles": [
+     1.0,
+     2.0
+    ],
+    "sum": 30
+   }
+  },
+  "rust": {
+   "subjects": 13,
+   "solved": 13,
+   "turns": {
+    "median": 7.0,
+    "quartiles": [
+     6.0,
+     9.0
+    ],
+    "sum": 121
+   },
+   "wall_seconds": {
+    "median": 33.3,
+    "quartiles": [
+     19.4,
+     45.2
+    ],
+    "sum": 1075.0
+   },
+   "tokens_total": {
+    "median": 124697.0,
+    "quartiles": [
+     92626.0,
+     151241.0
+    ],
+    "sum": 2857325
+   },
+   "tokens_output": {
+    "median": 3189.0,
+    "quartiles": [
+     1347.0,
+     4264.0
+    ],
+    "sum": 80795
+   },
+   "tokens_cost_usd": {
+    "median": 0.08,
+    "quartiles": [
+     0.05,
+     0.1
+    ],
+    "sum": 1.8431
+   },
+   "compile_runs": {
+    "median": 1.0,
+    "quartiles": [
+     1.0,
+     2.0
+    ],
+    "sum": 27
+   }
+  }
+ },
+ "safety_failures": {
+  "plugin": {
+   "sanitizer": 0,
+   "abort": 0,
+   "panic": 0,
+   "unsafe": 0
+  },
+  "cairn": {
+   "sanitizer": 0,
+   "abort": 0,
+   "panic": 0,
+   "unsafe": 0
+  },
+  "cpp": {
+   "sanitizer": 0,
+   "abort": 0,
+   "panic": 0,
+   "unsafe": 0
+  },
+  "rust": {
+   "sanitizer": 0,
+   "abort": 0,
+   "panic": 0,
+   "unsafe": 0
+  }
+ },
+ "solved_pairs": {
+  "plugin/cairn": {
+   "cells": 13,
+   "only_plugin": 0,
+   "only_cairn": 0,
+   "mcnemar_p": 1.0
+  },
+  "plugin/cpp": {
+   "cells": 13,
+   "only_plugin": 0,
+   "only_cpp": 0,
+   "mcnemar_p": 1.0
+  },
+  "plugin/rust": {
+   "cells": 12,
+   "only_plugin": 0,
+   "only_rust": 0,
+   "mcnemar_p": 1.0
+  },
+  "cairn/cpp": {
+   "cells": 14,
+   "only_cairn": 0,
+   "only_cpp": 0,
+   "mcnemar_p": 1.0
+  },
+  "cairn/rust": {
+   "cells": 13,
+   "only_cairn": 0,
+   "only_rust": 0,
+   "mcnemar_p": 1.0
+  },
+  "cpp/rust": {
+   "cells": 13,
+   "only_cpp": 0,
+   "only_rust": 0,
+   "mcnemar_p": 1.0
+  }
+ },
+ "rows": [
+  {
+   "task": "basis_points",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 14,
+   "wall_seconds": 50.5,
+   "tokens_input": 28,
+   "tokens_cache_creation": 9949,
+   "tokens_cache_read": 248758,
+   "tokens_output": 4330,
+   "tokens_cost_usd": 0.1329,
+   "tokens_total": 263065,
+   "compile_runs": 4,
+   "compile_runs_failed": 0,
+   "source_bytes": 2141,
+   "exploratory": {
+    "docs_calls": 2,
+    "docs_chars": 712,
+    "other_calls": 11,
+    "other_chars": 7678,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "basis_points",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 8,
+   "wall_seconds": 29.9,
+   "tokens_input": 16,
+   "tokens_cache_creation": 4079,
+   "tokens_cache_read": 118590,
+   "tokens_output": 1468,
+   "tokens_cost_usd": 0.0547,
+   "tokens_total": 124153,
+   "compile_runs": 2,
+   "compile_runs_failed": 0,
+   "source_bytes": 679,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 7,
+    "other_chars": 3071,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "basis_points",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 13,
+   "wall_seconds": 51.4,
+   "tokens_input": 24,
+   "tokens_cache_creation": 11346,
+   "tokens_cache_read": 264787,
+   "tokens_output": 3734,
+   "tokens_cost_usd": 0.1357,
+   "tokens_total": 279891,
+   "compile_runs": 6,
+   "compile_runs_failed": 2,
+   "source_bytes": 1992,
+   "exploratory": {
+    "docs_calls": 2,
+    "docs_chars": 59,
+    "other_calls": 9,
+    "other_chars": 6615,
+    "diagnostics": {
+     "E-PROJECT-OR-ENVIRONMENT": 1
+    }
+   }
+  },
+  {
+   "task": "basis_points",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 6,
+   "wall_seconds": 14.1,
+   "tokens_input": 12,
+   "tokens_cache_creation": 3449,
+   "tokens_cache_read": 86068,
+   "tokens_output": 933,
+   "tokens_cost_usd": 0.0404,
+   "tokens_total": 90462,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 795,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 5,
+    "other_chars": 3283,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "block_scan",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 46,
+   "wall_seconds": 405.8,
+   "tokens_input": 80,
+   "tokens_cache_creation": 93825,
+   "tokens_cache_read": 3201551,
+   "tokens_output": 27109,
+   "tokens_cost_usd": 1.2869,
+   "tokens_total": 3322565,
+   "compile_runs": 11,
+   "compile_runs_failed": 0,
+   "source_bytes": 3923,
+   "exploratory": {
+    "docs_calls": 16,
+    "docs_chars": 123919,
+    "other_calls": 29,
+    "other_chars": 21760,
+    "diagnostics": {
+     "E-TYPE-MISMATCH": 2,
+     "E-COOP-GLOBAL": 1,
+     "E-EFFECT-ORDER": 1
+    }
+   }
+  },
+  {
+   "task": "block_scan",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 28,
+   "wall_seconds": 632.5,
+   "tokens_input": 56,
+   "tokens_cache_creation": 40301,
+   "tokens_cache_read": 890771,
+   "tokens_output": 34960,
+   "tokens_cost_usd": 0.6891,
+   "tokens_total": 966088,
+   "compile_runs": 8,
+   "compile_runs_failed": 0,
+   "source_bytes": 3017,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 27,
+    "other_chars": 5020,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "block_scan",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 31,
+   "wall_seconds": 620.1,
+   "tokens_input": 62,
+   "tokens_cache_creation": 50965,
+   "tokens_cache_read": 1214817,
+   "tokens_output": 41542,
+   "tokens_cost_usd": 0.8624,
+   "tokens_total": 1307386,
+   "compile_runs": 7,
+   "compile_runs_failed": 0,
+   "source_bytes": 4909,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 30,
+    "other_chars": 14829,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "chunk_sums",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 51,
+   "wall_seconds": 451.3,
+   "tokens_input": 94,
+   "tokens_cache_creation": 108922,
+   "tokens_cache_read": 3940097,
+   "tokens_output": 37431,
+   "tokens_cost_usd": 1.5982,
+   "tokens_total": 4086544,
+   "compile_runs": 11,
+   "compile_runs_failed": 0,
+   "source_bytes": 3695,
+   "exploratory": {
+    "docs_calls": 10,
+    "docs_chars": 102335,
+    "other_calls": 40,
+    "other_chars": 44550,
+    "diagnostics": {
+     "E-LITERAL-RANGE": 3,
+     "E-EFFECT-ORDER": 1
+    }
+   }
+  },
+  {
+   "task": "chunk_sums",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 8,
+   "wall_seconds": 54.5,
+   "tokens_input": 16,
+   "tokens_cache_creation": 7150,
+   "tokens_cache_read": 131550,
+   "tokens_output": 4291,
+   "tokens_cost_usd": 0.0979,
+   "tokens_total": 143007,
+   "compile_runs": 3,
+   "compile_runs_failed": 1,
+   "source_bytes": 1985,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 7,
+    "other_chars": 3448,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "chunk_sums",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 58,
+   "wall_seconds": 366.8,
+   "tokens_input": 100,
+   "tokens_cache_creation": 77525,
+   "tokens_cache_read": 2868748,
+   "tokens_output": 34327,
+   "tokens_cost_usd": 1.2273,
+   "tokens_total": 2980700,
+   "compile_runs": 10,
+   "compile_runs_failed": 0,
+   "source_bytes": 3875,
+   "exploratory": {
+    "docs_calls": 36,
+    "docs_chars": 65146,
+    "other_calls": 20,
+    "other_chars": 13164,
+    "diagnostics": {
+     "E-WRAP-TYPE": 1,
+     "E-EFFECT-ORDER": 1
+    }
+   }
+  },
+  {
+   "task": "chunk_sums",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 7,
+   "wall_seconds": 26.6,
+   "tokens_input": 14,
+   "tokens_cache_creation": 5135,
+   "tokens_cache_read": 105458,
+   "tokens_output": 2205,
+   "tokens_cost_usd": 0.0637,
+   "tokens_total": 112812,
+   "compile_runs": 3,
+   "compile_runs_failed": 0,
+   "source_bytes": 1896,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 6,
+    "other_chars": 3691,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "csv_field",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 17,
+   "wall_seconds": 52.0,
+   "tokens_input": 34,
+   "tokens_cache_creation": 11335,
+   "tokens_cache_read": 310039,
+   "tokens_output": 4127,
+   "tokens_cost_usd": 0.1487,
+   "tokens_total": 325535,
+   "compile_runs": 6,
+   "compile_runs_failed": 0,
+   "source_bytes": 1499,
+   "exploratory": {
+    "docs_calls": 1,
+    "docs_chars": 54,
+    "other_calls": 15,
+    "other_chars": 10849,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "csv_field",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 7,
+   "wall_seconds": 28.9,
+   "tokens_input": 14,
+   "tokens_cache_creation": 4296,
+   "tokens_cache_read": 103657,
+   "tokens_output": 1672,
+   "tokens_cost_usd": 0.0547,
+   "tokens_total": 109639,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 1288,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 6,
+    "other_chars": 3840,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "csv_field",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 15,
+   "wall_seconds": 70.0,
+   "tokens_input": 30,
+   "tokens_cache_creation": 10355,
+   "tokens_cache_read": 314865,
+   "tokens_output": 4981,
+   "tokens_cost_usd": 0.1543,
+   "tokens_total": 330231,
+   "compile_runs": 5,
+   "compile_runs_failed": 0,
+   "source_bytes": 1499,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 14,
+    "other_chars": 9264,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "csv_field",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 6,
+   "wall_seconds": 16.3,
+   "tokens_input": 12,
+   "tokens_cache_creation": 4044,
+   "tokens_cache_read": 87178,
+   "tokens_output": 1237,
+   "tokens_cost_usd": 0.046,
+   "tokens_total": 92471,
+   "compile_runs": 2,
+   "compile_runs_failed": 0,
+   "source_bytes": 1288,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 5,
+    "other_chars": 4002,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "dedupe",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 15,
+   "wall_seconds": 40.8,
+   "tokens_input": 30,
+   "tokens_cache_creation": 13957,
+   "tokens_cache_read": 315670,
+   "tokens_output": 2991,
+   "tokens_cost_usd": 0.1489,
+   "tokens_total": 332648,
+   "compile_runs": 6,
+   "compile_runs_failed": 0,
+   "source_bytes": 2622,
+   "exploratory": {
+    "docs_calls": 2,
+    "docs_chars": 9883,
+    "other_calls": 12,
+    "other_chars": 8863,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "dedupe",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 7,
+   "wall_seconds": 23.8,
+   "tokens_input": 14,
+   "tokens_cache_creation": 3971,
+   "tokens_cache_read": 102579,
+   "tokens_output": 1253,
+   "tokens_cost_usd": 0.049,
+   "tokens_total": 107817,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 1026,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 6,
+    "other_chars": 3317,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "dedupe",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 16,
+   "wall_seconds": 61.7,
+   "tokens_input": 30,
+   "tokens_cache_creation": 13695,
+   "tokens_cache_read": 354072,
+   "tokens_output": 3791,
+   "tokens_cost_usd": 0.1636,
+   "tokens_total": 371588,
+   "compile_runs": 6,
+   "compile_runs_failed": 0,
+   "source_bytes": 2622,
+   "exploratory": {
+    "docs_calls": 1,
+    "docs_chars": 28,
+    "other_calls": 13,
+    "other_chars": 10600,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "dedupe",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 6,
+   "wall_seconds": 14.6,
+   "tokens_input": 12,
+   "tokens_cache_creation": 3489,
+   "tokens_cache_read": 86071,
+   "tokens_output": 900,
+   "tokens_cost_usd": 0.0402,
+   "tokens_total": 90472,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 1073,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 5,
+    "other_chars": 3394,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "histogram",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 45,
+   "wall_seconds": 492.9,
+   "tokens_input": 90,
+   "tokens_cache_creation": 96071,
+   "tokens_cache_read": 3405546,
+   "tokens_output": 27365,
+   "tokens_cost_usd": 1.3392,
+   "tokens_total": 3529072,
+   "compile_runs": 10,
+   "compile_runs_failed": 1,
+   "source_bytes": 3050,
+   "exploratory": {
+    "docs_calls": 17,
+    "docs_chars": 123799,
+    "other_calls": 27,
+    "other_chars": 17269,
+    "diagnostics": {
+     "E-EFFECT-ORDER": 1
+    }
+   }
+  },
+  {
+   "task": "histogram",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 13,
+   "wall_seconds": 81.4,
+   "tokens_input": 26,
+   "tokens_cache_creation": 9359,
+   "tokens_cache_read": 230845,
+   "tokens_output": 6210,
+   "tokens_cost_usd": 0.1458,
+   "tokens_total": 246440,
+   "compile_runs": 2,
+   "compile_runs_failed": 0,
+   "source_bytes": 2321,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 12,
+    "other_chars": 3099,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "histogram",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 31,
+   "wall_seconds": 117.9,
+   "tokens_input": 56,
+   "tokens_cache_creation": 29527,
+   "tokens_cache_read": 911093,
+   "tokens_output": 10488,
+   "tokens_cost_usd": 0.4053,
+   "tokens_total": 951164,
+   "compile_runs": 10,
+   "compile_runs_failed": 2,
+   "source_bytes": 2710,
+   "exploratory": {
+    "docs_calls": 5,
+    "docs_chars": 5393,
+    "other_calls": 24,
+    "other_chars": 17880,
+    "diagnostics": {
+     "E-EFFECT-ORDER": 1
+    }
+   }
+  },
+  {
+   "task": "histogram",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 9,
+   "wall_seconds": 42.7,
+   "tokens_input": 18,
+   "tokens_cache_creation": 5966,
+   "tokens_cache_read": 140357,
+   "tokens_output": 3217,
+   "tokens_cost_usd": 0.0841,
+   "tokens_total": 149558,
+   "compile_runs": 5,
+   "compile_runs_failed": 0,
+   "source_bytes": 1670,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 8,
+    "other_chars": 3022,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "pool",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 45,
+   "wall_seconds": 503.5,
+   "tokens_input": 82,
+   "tokens_cache_creation": 113704,
+   "tokens_cache_read": 3755690,
+   "tokens_output": 46720,
+   "tokens_cost_usd": 1.6733,
+   "tokens_total": 3916196,
+   "compile_runs": 10,
+   "compile_runs_failed": 0,
+   "source_bytes": 7580,
+   "exploratory": {
+    "docs_calls": 13,
+    "docs_chars": 122951,
+    "other_calls": 31,
+    "other_chars": 15280,
+    "diagnostics": {
+     "E-EFFECT-ORDER": 1,
+     "E-TYPE-MISMATCH": 1
+    }
+   }
+  },
+  {
+   "task": "pool",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 14,
+   "wall_seconds": 97.4,
+   "tokens_input": 28,
+   "tokens_cache_creation": 13318,
+   "tokens_cache_read": 277004,
+   "tokens_output": 9805,
+   "tokens_cost_usd": 0.2068,
+   "tokens_total": 300155,
+   "compile_runs": 2,
+   "compile_runs_failed": 0,
+   "source_bytes": 3411,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 13,
+    "other_chars": 3563,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "pool",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 60,
+   "wall_seconds": 691.1,
+   "tokens_input": 108,
+   "tokens_cache_creation": 94687,
+   "tokens_cache_read": 3896656,
+   "tokens_output": 46616,
+   "tokens_cost_usd": 1.6245,
+   "tokens_total": 4038067,
+   "compile_runs": 9,
+   "compile_runs_failed": 2,
+   "source_bytes": 7134,
+   "exploratory": {
+    "docs_calls": 25,
+    "docs_chars": 72643,
+    "other_calls": 33,
+    "other_chars": 13352,
+    "diagnostics": {
+     "E-EFFECT-ORDER": 2
+    }
+   }
+  },
+  {
+   "task": "pool",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 7,
+   "wall_seconds": 45.2,
+   "tokens_input": 14,
+   "tokens_cache_creation": 7307,
+   "tokens_cache_read": 113112,
+   "tokens_output": 4264,
+   "tokens_cost_usd": 0.0945,
+   "tokens_total": 124697,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 4290,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 6,
+    "other_chars": 3783,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "records",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 36,
+   "wall_seconds": 492.1,
+   "tokens_input": 66,
+   "tokens_cache_creation": 85179,
+   "tokens_cache_read": 2295153,
+   "tokens_output": 42038,
+   "tokens_cost_usd": 1.2203,
+   "tokens_total": 2422436,
+   "compile_runs": 10,
+   "compile_runs_failed": 0,
+   "source_bytes": 5850,
+   "exploratory": {
+    "docs_calls": 12,
+    "docs_chars": 74180,
+    "other_calls": 23,
+    "other_chars": 13629,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "records",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 15,
+   "wall_seconds": 122.7,
+   "tokens_input": 30,
+   "tokens_cache_creation": 16097,
+   "tokens_cache_read": 331206,
+   "tokens_output": 11762,
+   "tokens_cost_usd": 0.2483,
+   "tokens_total": 359095,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 6097,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 14,
+    "other_chars": 5580,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "records",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 32,
+   "wall_seconds": 403.0,
+   "tokens_input": 54,
+   "tokens_cache_creation": 61476,
+   "tokens_cache_read": 1406220,
+   "tokens_output": 41071,
+   "tokens_cost_usd": 0.938,
+   "tokens_total": 1508821,
+   "compile_runs": 10,
+   "compile_runs_failed": 0,
+   "source_bytes": 8342,
+   "exploratory": {
+    "docs_calls": 11,
+    "docs_chars": 17514,
+    "other_calls": 19,
+    "other_chars": 13620,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "records",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 9,
+   "wall_seconds": 109.4,
+   "tokens_input": 18,
+   "tokens_cache_creation": 14024,
+   "tokens_cache_read": 179258,
+   "tokens_output": 10349,
+   "tokens_cost_usd": 0.1955,
+   "tokens_total": 203649,
+   "compile_runs": 2,
+   "compile_runs_failed": 0,
+   "source_bytes": 5105,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 8,
+    "other_chars": 5156,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "rle",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 32,
+   "wall_seconds": 198.0,
+   "tokens_input": 56,
+   "tokens_cache_creation": 56356,
+   "tokens_cache_read": 1413466,
+   "tokens_output": 14408,
+   "tokens_cost_usd": 0.6523,
+   "tokens_total": 1484286,
+   "compile_runs": 7,
+   "compile_runs_failed": 1,
+   "source_bytes": 3768,
+   "exploratory": {
+    "docs_calls": 9,
+    "docs_chars": 72529,
+    "other_calls": 22,
+    "other_chars": 14395,
+    "diagnostics": {
+     "E-EFFECT-ORDER": 1
+    }
+   }
+  },
+  {
+   "task": "rle",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 10,
+   "wall_seconds": 42.0,
+   "tokens_input": 20,
+   "tokens_cache_creation": 7039,
+   "tokens_cache_read": 166454,
+   "tokens_output": 4108,
+   "tokens_cost_usd": 0.1026,
+   "tokens_total": 177621,
+   "compile_runs": 2,
+   "compile_runs_failed": 0,
+   "source_bytes": 2107,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 9,
+    "other_chars": 3462,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "rle",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 32,
+   "wall_seconds": 334.5,
+   "tokens_input": 62,
+   "tokens_cache_creation": 49207,
+   "tokens_cache_read": 1425653,
+   "tokens_output": 15842,
+   "tokens_cost_usd": 0.6405,
+   "tokens_total": 1490764,
+   "compile_runs": 11,
+   "compile_runs_failed": 1,
+   "source_bytes": 3663,
+   "exploratory": {
+    "docs_calls": 11,
+    "docs_chars": 43529,
+    "other_calls": 19,
+    "other_chars": 12994,
+    "diagnostics": {
+     "E-VIEW-ALIAS": 1
+    }
+   }
+  },
+  {
+   "task": "rle",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 8,
+   "wall_seconds": 33.3,
+   "tokens_input": 16,
+   "tokens_cache_creation": 6136,
+   "tokens_cache_read": 125934,
+   "tokens_output": 3189,
+   "tokens_cost_usd": 0.0817,
+   "tokens_total": 135275,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 1738,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 7,
+    "other_chars": 3764,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "sieve",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 43,
+   "wall_seconds": 671.0,
+   "tokens_input": 86,
+   "tokens_cache_creation": 130248,
+   "tokens_cache_read": 4219590,
+   "tokens_output": 49445,
+   "tokens_cost_usd": 1.8595,
+   "tokens_total": 4399369,
+   "compile_runs": 9,
+   "compile_runs_failed": 0,
+   "source_bytes": 5615,
+   "exploratory": {
+    "docs_calls": 13,
+    "docs_chars": 149559,
+    "other_calls": 29,
+    "other_chars": 19559,
+    "diagnostics": {
+     "E-TYPE-MISMATCH": 1
+    }
+   }
+  },
+  {
+   "task": "sieve",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 12,
+   "wall_seconds": 75.5,
+   "tokens_input": 24,
+   "tokens_cache_creation": 10590,
+   "tokens_cache_read": 227681,
+   "tokens_output": 7480,
+   "tokens_cost_usd": 0.1627,
+   "tokens_total": 245775,
+   "compile_runs": 2,
+   "compile_runs_failed": 0,
+   "source_bytes": 3555,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 11,
+    "other_chars": 3392,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "sieve",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 48,
+   "wall_seconds": 419.2,
+   "tokens_input": 90,
+   "tokens_cache_creation": 55253,
+   "tokens_cache_read": 2282749,
+   "tokens_output": 19687,
+   "tokens_cost_usd": 0.8746,
+   "tokens_total": 2357779,
+   "compile_runs": 10,
+   "compile_runs_failed": 0,
+   "source_bytes": 3597,
+   "exploratory": {
+    "docs_calls": 15,
+    "docs_chars": 20410,
+    "other_calls": 31,
+    "other_chars": 41002,
+    "diagnostics": {
+     "E-LEN": 1,
+     "E-TYPE-MISMATCH": 1,
+     "E-EFFECT-ORDER": 1
+    }
+   }
+  },
+  {
+   "task": "sieve",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 8,
+   "wall_seconds": 70.5,
+   "tokens_input": 16,
+   "tokens_cache_creation": 9053,
+   "tokens_cache_read": 135673,
+   "tokens_output": 6499,
+   "tokens_cost_usd": 0.1284,
+   "tokens_total": 151241,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 4148,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 7,
+    "other_chars": 3184,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "split_sum",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 14,
+   "wall_seconds": 70.6,
+   "tokens_input": 28,
+   "tokens_cache_creation": 11861,
+   "tokens_cache_read": 257811,
+   "tokens_output": 3804,
+   "tokens_cost_usd": 0.1371,
+   "tokens_total": 273504,
+   "compile_runs": 5,
+   "compile_runs_failed": 0,
+   "source_bytes": 2252,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 13,
+    "other_chars": 14083,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "split_sum",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 8,
+   "wall_seconds": 27.0,
+   "tokens_input": 16,
+   "tokens_cache_creation": 4868,
+   "tokens_cache_read": 121013,
+   "tokens_output": 1925,
+   "tokens_cost_usd": 0.063,
+   "tokens_total": 127822,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 1139,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 7,
+    "other_chars": 3822,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "split_sum",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 34,
+   "wall_seconds": 248.0,
+   "tokens_input": 66,
+   "tokens_cache_creation": 28804,
+   "tokens_cache_read": 1041179,
+   "tokens_output": 10284,
+   "tokens_cost_usd": 0.4264,
+   "tokens_total": 1080333,
+   "compile_runs": 12,
+   "compile_runs_failed": 5,
+   "source_bytes": 2365,
+   "exploratory": {
+    "docs_calls": 2,
+    "docs_chars": 723,
+    "other_calls": 30,
+    "other_chars": 23756,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "split_sum",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 6,
+   "wall_seconds": 21.7,
+   "tokens_input": 12,
+   "tokens_cache_creation": 4037,
+   "tokens_cache_read": 87230,
+   "tokens_output": 1347,
+   "tokens_cost_usd": 0.0471,
+   "tokens_total": 92626,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 1152,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 5,
+    "other_chars": 3565,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "tally",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 23,
+   "wall_seconds": 76.6,
+   "tokens_input": 46,
+   "tokens_cache_creation": 26586,
+   "tokens_cache_read": 625573,
+   "tokens_output": 5635,
+   "tokens_cost_usd": 0.2879,
+   "tokens_total": 657840,
+   "compile_runs": 8,
+   "compile_runs_failed": 1,
+   "source_bytes": 2735,
+   "exploratory": {
+    "docs_calls": 1,
+    "docs_chars": 17453,
+    "other_calls": 21,
+    "other_chars": 25436,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "tally",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 10,
+   "wall_seconds": 34.4,
+   "tokens_input": 20,
+   "tokens_cache_creation": 6097,
+   "tokens_cache_read": 157312,
+   "tokens_output": 2716,
+   "tokens_cost_usd": 0.0831,
+   "tokens_total": 166145,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 1415,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 9,
+    "other_chars": 4276,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "tally",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 28,
+   "wall_seconds": 116.3,
+   "tokens_input": 54,
+   "tokens_cache_creation": 25166,
+   "tokens_cache_read": 791606,
+   "tokens_output": 9201,
+   "tokens_cost_usd": 0.3511,
+   "tokens_total": 826027,
+   "compile_runs": 13,
+   "compile_runs_failed": 1,
+   "source_bytes": 2717,
+   "exploratory": {
+    "docs_calls": 4,
+    "docs_chars": 1945,
+    "other_calls": 22,
+    "other_chars": 16300,
+    "diagnostics": {
+     "E-LEASED": 1,
+     "E-LINEAR-LEAK": 1,
+     "E-PROJECT-OR-ENVIRONMENT": 1
+    }
+   }
+  },
+  {
+   "task": "tally",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 11,
+   "wall_seconds": 41.1,
+   "tokens_input": 22,
+   "tokens_cache_creation": 7826,
+   "tokens_cache_read": 184635,
+   "tokens_output": 3601,
+   "tokens_cost_usd": 0.1043,
+   "tokens_total": 196084,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 1685,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 10,
+    "other_chars": 6390,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "varint",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 9,
+   "wall_seconds": 38.4,
+   "tokens_input": 18,
+   "tokens_cache_creation": 8386,
+   "tokens_cache_read": 145668,
+   "tokens_output": 1591,
+   "tokens_cost_usd": 0.0786,
+   "tokens_total": 155663,
+   "compile_runs": 4,
+   "compile_runs_failed": 0,
+   "source_bytes": 1933,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 8,
+    "other_chars": 11437,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "varint",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 7,
+   "wall_seconds": 20.2,
+   "tokens_input": 14,
+   "tokens_cache_creation": 4829,
+   "tokens_cache_read": 104573,
+   "tokens_output": 1651,
+   "tokens_cost_usd": 0.0568,
+   "tokens_total": 111067,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 1578,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 6,
+    "other_chars": 4524,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "varint",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 12,
+   "wall_seconds": 33.3,
+   "tokens_input": 24,
+   "tokens_cache_creation": 7335,
+   "tokens_cache_read": 232290,
+   "tokens_output": 2640,
+   "tokens_cost_usd": 0.1022,
+   "tokens_total": 242289,
+   "compile_runs": 6,
+   "compile_runs_failed": 0,
+   "source_bytes": 1933,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 11,
+    "other_chars": 8842,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "varint",
+   "arm": "rust",
+   "language": "rust",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 7,
+   "wall_seconds": 19.4,
+   "tokens_input": 14,
+   "tokens_cache_creation": 4685,
+   "tokens_cache_read": 104381,
+   "tokens_output": 1512,
+   "tokens_cost_usd": 0.0548,
+   "tokens_total": 110592,
+   "compile_runs": 1,
+   "compile_runs_failed": 0,
+   "source_bytes": 1543,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 6,
+    "other_chars": 4582,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "histogram",
+   "arm": "cairn",
+   "language": "cairn",
+   "replicate": 2,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 41,
+   "wall_seconds": 390.8,
+   "tokens_input": 72,
+   "tokens_cache_creation": 101206,
+   "tokens_cache_read": 2931015,
+   "tokens_output": 32339,
+   "tokens_cost_usd": 1.3146,
+   "tokens_total": 3064632,
+   "compile_runs": 11,
+   "compile_runs_failed": 0,
+   "source_bytes": 3252,
+   "exploratory": {
+    "docs_calls": 13,
+    "docs_chars": 127515,
+    "other_calls": 27,
+    "other_chars": 16577,
+    "diagnostics": {
+     "E-LEASED": 1,
+     "E-TYPE-MISMATCH": 1
+    }
+   }
+  },
+  {
+   "task": "histogram",
+   "arm": "cpp",
+   "language": "cpp",
+   "replicate": 2,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 14,
+   "wall_seconds": 54.6,
+   "tokens_input": 28,
+   "tokens_cache_creation": 8022,
+   "tokens_cache_read": 237267,
+   "tokens_output": 4726,
+   "tokens_cost_usd": 0.1269,
+   "tokens_total": 250043,
+   "compile_runs": 3,
+   "compile_runs_failed": 0,
+   "source_bytes": 2503,
+   "exploratory": {
+    "docs_calls": 0,
+    "docs_chars": 0,
+    "other_calls": 13,
+    "other_chars": 3312,
+    "diagnostics": {}
+   }
+  },
+  {
+   "task": "histogram",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 2,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 34,
+   "wall_seconds": 133.9,
+   "tokens_input": 54,
+   "tokens_cache_creation": 29359,
+   "tokens_cache_read": 888963,
+   "tokens_output": 11178,
+   "tokens_cost_usd": 0.4071,
+   "tokens_total": 929554,
+   "compile_runs": 13,
+   "compile_runs_failed": 2,
+   "source_bytes": 2953,
+   "exploratory": {
+    "docs_calls": 8,
+    "docs_chars": 9836,
+    "other_calls": 24,
+    "other_chars": 13223,
+    "diagnostics": {
+     "E-EFFECT-ORDER": 1,
+     "E-PROJECT-OR-ENVIRONMENT": 1
+    }
+   }
+  }
+ ],
+ "audit_decisions": {
+  "counted/r1/block_scan/cairn": {
+   "contaminated": false,
+   "flag": "/home/sam/cairn-aieval/runs/counted/r1/block_scan",
+   "reason": "git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+  },
+  "counted/r1/csv_field/cairn": {
+   "contaminated": false,
+   "flag": "/home/sam/cairn-aieval/runs/counted/r1/csv_field",
+   "reason": "git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+  },
+  "counted/r1/rle/cairn": {
+   "contaminated": false,
+   "flag": "/home/sam/cairn-aieval/runs/counted/r1/rle",
+   "reason": "git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+  },
+  "counted/r1/tally/cairn": {
+   "contaminated": false,
+   "flag": "/home/sam/cairn-aieval/runs/counted/r1/tally",
+   "reason": "git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+  },
+  "counted/r1/chunk_sums/plugin": {
+   "contaminated": false,
+   "flag": "/home/sam/cairn-aieval/runs/counted/r1/chunk_sums",
+   "reason": "git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+  },
+  "counted/r1/pool/cairn": {
+   "contaminated": false,
+   "flag": "/let, /home/sam/cairn-aieval/runs/counted/r1/pool",
+   "reason": "\"/let\" is a fragment of the subject's own shell text, not a path; the other is git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+  },
+  "counted/r1/records/plugin": {
+   "contaminated": false,
+   "flag": "find / (after an ls that succeeded), /home/sam/cairn-aieval/runs/counted/r1/records",
+   "reason": "the find is the right side of an `||` whose left side succeeded, so it never ran; the path is git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+  },
+  "counted/r1/rle/plugin": {
+   "contaminated": false,
+   "flag": "ls of its own task folder, /home/sam/cairn-aieval/runs/counted/r1/rle",
+   "reason": "the ls listed its own task folder under the isolation, which holds only its own sandbox; the path is git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+  },
+  "counted/r1/tally/plugin": {
+   "contaminated": false,
+   "flag": "/home/sam/cairn-aieval/plugins/counted/r1/tally",
+   "reason": "the folder of its own copy of the plugin (the copy was then kept per task), which it listed; nothing of another subject"
+  },
+  "counted/r1/chunk_sums/cairn": {
+   "contaminated": false,
+   "flag": "find / -iname \"*.py\" -path \"*cairn*\", /proc",
+   "reason": "a search of the whole file system before the isolation, whose first fifty lines were the installed toolchain's own Python files; \"/proc\" is a pattern in its grep -v, not a read. It read nothing outside what it was given"
+  },
+  "counted/r1/histogram/cairn": {
+   "contaminated": false,
+   "flag": "find / -iname \"*.cairn\" -path \"*std*\", /home/sam/cairn/build/lib/cairn/std/arena.cairn",
+   "reason": "a search of the whole file system before the isolation, which listed the standard library's sources in the main checkout's build folder; it read none of them and went on to its own docs/library.md. Library sources hold nothing of the task"
+  },
+  "counted/r1/sieve/cairn": {
+   "contaminated": false,
+   "flag": "find / -iname \"*.cairn\", ps aux, kill -9, pkill -9 -f \"find /\", /node_modules/, /home/sam/cairn-aieval/runs/counted/r1/sieve",
+   "reason": "a search of the whole file system before the isolation, moved to the background; the subject never read its output. It then listed processes and killed the `find` processes it saw, two of them the concurrent sieve plugin subject's (that subject was set aside for the harness failure in any case). \"/node_modules/\" is a pattern in its find; the last path is git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject. It read nothing outside what it was given"
+  },
+  "counted/r1/histogram/plugin/harness-0": {
+   "contaminated": false,
+   "flag": "find / -maxdepth 6 -iname docs -path \"*cairn*\"",
+   "reason": "a search of the whole file system before the isolation, moved to the background; its listing of the checkouts' docs folders went to the subject's own scratch file, which it never read. Set aside for the harness failure"
+  },
+  "counted/r1/chunk_sums/plugin/harness-0": {
+   "contaminated": false,
+   "flag": "find / (after an ls that succeeded), /numerics.md, /language.md",
+   "reason": "the find is the right side of an `||` whose left side succeeded, so it never ran; the two paths are the tails of shell variables inside its own plugin's docs. Set aside for the harness failure"
+  },
+  "counted/r1/block_scan/plugin/harness-0": {
+   "contaminated": false,
+   "flag": "find / (after an ls that succeeded), /std/",
+   "reason": "the find is the right side of an `||` whose left side succeeded; \"/std/\" is the tail of a shell variable inside its own plugin's docs. Set aside for the harness failure"
+  },
+  "counted/r1/records/plugin/harness-0": {
+   "contaminated": false,
+   "flag": "find / -maxdepth 6",
+   "reason": "a search of the whole file system under the isolation, after its plugin copy had been removed; it listed only what it was given. Set aside for the harness failure"
+  },
+  "counted/r1/pool/plugin/harness-0": {
+   "contaminated": false,
+   "flag": "/home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/../",
+   "reason": "the folder of its own copy of the plugin, which it listed; nothing of another subject. Set aside for the harness failure"
+  },
+  "counted/r1/sieve/plugin/harness-0": {
+   "contaminated": false,
+   "flag": "find / -maxdepth 6 -iname cairn -type d, /home/sam/cairn-aieval/runs/counted/r1/sieve",
+   "reason": "a search of the whole file system before the isolation, moved to the background and killed by another subject; it never read its output. The path is git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject. Set aside for the harness failure"
+  },
+  "counted/r1/basis_points/plugin/harness-0": {
+   "contaminated": false,
+   "flag": "/home/sam/cairn-aieval/runs/counted/r1/basis_points",
+   "reason": "git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject. Set aside for the harness failure"
+  },
+  "counted/r1/pool/plugin": {
+   "contaminated": false,
+   "flag": "find / -iname \"kvstore*\", /proc",
+   "reason": "a search of the whole file system under the isolation, where the checkouts, other subjects' folders and other sessions are empty, so the search could list only what the subject was given; \"/proc\" is the folder its find prunes"
+  },
+  "counted/r1/sieve/plugin": {
+   "contaminated": false,
+   "flag": "find / -name \"*.cairn\" -path \"*std/text*\", /proc, /home/sam/cairn-aieval/runs/counted/r1/sieve",
+   "reason": "a search of the whole file system under the isolation, where the checkouts, other subjects' folders and other sessions are empty, so the search could list only what the subject was given; \"/proc\" is the folder its find prunes, and the last path is git's message naming the mount point of its own isolation"
+  },
+  "counted/r1/split_sum/plugin": {
+   "contaminated": false,
+   "flag": "/proc/sys/kernel/threads-max, find / -name cairn_runtime.hpp",
+   "reason": "the machine's thread limit, a system setting that holds nothing of the task, and a search of the whole file system under the isolation, where the checkouts, other subjects' folders and other sessions are empty, so the search could list only what the subject was given"
+  }
+ },
+ "set_aside": [
+  {
+   "task": "basis_points",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 17,
+   "wall_seconds": 60.5,
+   "tokens_input": 32,
+   "tokens_cache_creation": 15567,
+   "tokens_cache_read": 385673,
+   "tokens_output": 5271,
+   "tokens_cost_usd": 0.1922,
+   "tokens_total": 406543,
+   "compile_runs": 6,
+   "compile_runs_failed": 1,
+   "source_bytes": 2053,
+   "why": "the plugin copy was removed 48 s into the session, when the cpp arm's cleanup ran (fixed in the harness; the cell ran again)",
+   "file": "results/ai_eval/counted/r1/basis_points/plugin/harness-0.json"
+  },
+  {
+   "task": "block_scan",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 58,
+   "wall_seconds": 448.7,
+   "tokens_input": 110,
+   "tokens_cache_creation": 88242,
+   "tokens_cache_read": 3720940,
+   "tokens_output": 38910,
+   "tokens_cost_usd": 1.4865,
+   "tokens_total": 3848202,
+   "compile_runs": 12,
+   "compile_runs_failed": 3,
+   "source_bytes": 4722,
+   "why": "the plugin copy was removed 396 s into the session, when the rust arm's cleanup ran (fixed in the harness; the cell ran again)",
+   "file": "results/ai_eval/counted/r1/block_scan/plugin/harness-0.json"
+  },
+  {
+   "task": "chunk_sums",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 55,
+   "wall_seconds": 406.0,
+   "tokens_input": 102,
+   "tokens_cache_creation": 84645,
+   "tokens_cache_read": 2996671,
+   "tokens_output": 34766,
+   "tokens_cost_usd": 1.2858,
+   "tokens_total": 3116184,
+   "compile_runs": 10,
+   "compile_runs_failed": 2,
+   "source_bytes": 4031,
+   "why": "the plugin copy was removed 29 s into the session, when the cpp arm's cleanup ran (fixed in the harness; the cell ran again)",
+   "file": "results/ai_eval/counted/r1/chunk_sums/plugin/harness-0.json"
+  },
+  {
+   "task": "csv_field",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 25,
+   "wall_seconds": 364.6,
+   "tokens_input": 50,
+   "tokens_cache_creation": 21415,
+   "tokens_cache_read": 640633,
+   "tokens_output": 10828,
+   "tokens_cost_usd": 0.3222,
+   "tokens_total": 672926,
+   "compile_runs": 6,
+   "compile_runs_failed": 0,
+   "source_bytes": 1499,
+   "why": "the plugin copy was removed 13 s into the session, when the cpp arm's cleanup ran (fixed in the harness; the cell ran again)",
+   "file": "results/ai_eval/counted/r1/csv_field/plugin/harness-0.json"
+  },
+  {
+   "task": "dedupe",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 19,
+   "wall_seconds": 70.6,
+   "tokens_input": 36,
+   "tokens_cache_creation": 15515,
+   "tokens_cache_read": 427465,
+   "tokens_output": 3996,
+   "tokens_cost_usd": 0.1876,
+   "tokens_total": 447012,
+   "compile_runs": 9,
+   "compile_runs_failed": 1,
+   "source_bytes": 2633,
+   "why": "the plugin copy was removed 69 s into the session, when the cairn arm's cleanup ran (fixed in the harness; the cell ran again)",
+   "file": "results/ai_eval/counted/r1/dedupe/plugin/harness-0.json"
+  },
+  {
+   "task": "histogram",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 57,
+   "wall_seconds": 496.8,
+   "tokens_input": 96,
+   "tokens_cache_creation": 73440,
+   "tokens_cache_read": 2844573,
+   "tokens_output": 34176,
+   "tokens_cost_usd": 1.2046,
+   "tokens_total": 2952285,
+   "compile_runs": 10,
+   "compile_runs_failed": 1,
+   "source_bytes": 3107,
+   "why": "the plugin copy was removed 89 s into the session, when the cpp arm's cleanup ran (fixed in the harness; the cell ran again)",
+   "file": "results/ai_eval/counted/r1/histogram/plugin/harness-0.json"
+  },
+  {
+   "task": "pool",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 43,
+   "wall_seconds": 379.4,
+   "tokens_input": 70,
+   "tokens_cache_creation": 62019,
+   "tokens_cache_read": 1768622,
+   "tokens_output": 37325,
+   "tokens_cost_usd": 0.9752,
+   "tokens_total": 1868036,
+   "compile_runs": 6,
+   "compile_runs_failed": 1,
+   "source_bytes": 7237,
+   "why": "the plugin copy was removed 47 s into the session, when the rust arm's cleanup ran (fixed in the harness; the cell ran again)",
+   "file": "results/ai_eval/counted/r1/pool/plugin/harness-0.json"
+  },
+  {
+   "task": "records",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 43,
+   "wall_seconds": 497.8,
+   "tokens_input": 76,
+   "tokens_cache_creation": 78857,
+   "tokens_cache_read": 2422231,
+   "tokens_output": 36597,
+   "tokens_cost_usd": 1.166,
+   "tokens_total": 2537761,
+   "compile_runs": 8,
+   "compile_runs_failed": 0,
+   "source_bytes": 6596,
+   "why": "the plugin copy was removed 18 s into the session, when the rust arm's cleanup ran (fixed in the harness; the cell ran again)",
+   "file": "results/ai_eval/counted/r1/records/plugin/harness-0.json"
+  },
+  {
+   "task": "sieve",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 50,
+   "wall_seconds": 477.0,
+   "tokens_input": 92,
+   "tokens_cache_creation": 60109,
+   "tokens_cache_read": 2241122,
+   "tokens_output": 25771,
+   "tokens_cost_usd": 0.9466,
+   "tokens_total": 2327094,
+   "compile_runs": 9,
+   "compile_runs_failed": 1,
+   "source_bytes": 4714,
+   "why": "the plugin copy was removed 2 s into the session, when the rust arm's cleanup ran (fixed in the harness; the cell ran again)",
+   "file": "results/ai_eval/counted/r1/sieve/plugin/harness-0.json"
+  },
+  {
+   "task": "split_sum",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 15,
+   "wall_seconds": 43.4,
+   "tokens_input": 28,
+   "tokens_cache_creation": 12989,
+   "tokens_cache_read": 315128,
+   "tokens_output": 2771,
+   "tokens_cost_usd": 0.1427,
+   "tokens_total": 330916,
+   "compile_runs": 5,
+   "compile_runs_failed": 1,
+   "source_bytes": 2336,
+   "why": "the plugin copy was removed 7 s into the session, when the rust arm's cleanup ran (fixed in the harness; the cell ran again)",
+   "file": "results/ai_eval/counted/r1/split_sum/plugin/harness-0.json"
+  },
+  {
+   "task": "varint",
+   "arm": "plugin",
+   "language": "cairn",
+   "replicate": 1,
+   "model": "claude-sonnet-5",
+   "solved": true,
+   "verdict": "passed",
+   "failure": null,
+   "contaminated": false,
+   "stop": "success",
+   "turns": 8,
+   "wall_seconds": 28.3,
+   "tokens_input": 16,
+   "tokens_cache_creation": 6196,
+   "tokens_cache_read": 143185,
+   "tokens_output": 1534,
+   "tokens_cost_usd": 0.0688,
+   "tokens_total": 150931,
+   "compile_runs": 3,
+   "compile_runs_failed": 0,
+   "source_bytes": 1933,
+   "why": "the plugin copy was removed 14 s into the session, when the rust arm's cleanup ran (fixed in the harness; the cell ran again)",
+   "file": "results/ai_eval/counted/r1/varint/plugin/harness-0.json"
+  }
+ ]
+}

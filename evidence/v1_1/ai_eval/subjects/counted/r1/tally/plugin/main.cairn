@@ -1,0 +1,94 @@
+// Tallies the values above a threshold on k tasks, one contiguous chunk each.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+struct Tally { above:u64; sum:u64; top:u64; }
+
+// Tallies the values of values[lo..hi] above t, on its own, and returns the result.
+fn tally_chunk(n:usize, values:ro<u64>[n], lo:usize, hi:usize, t:u64) -> Tally {
+  let mut total = Tally(0, 0, 0);
+  for i in lo..hi {
+    if values[i] > t {
+      total.above += 1;
+      total.sum = add_wrap(total.sum, values[i]);
+    }
+    if values[i] > total.top { total.top = values[i]; }
+  }
+  return total;
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let k_in = next_u64(inp);
+  let n_in = next_u64(inp);
+  let t = next_u64(inp);
+  let k = usize(k_in);
+  let n = usize(n_in);
+  let mut values = Buf[u64](n);
+  for i in 0..n {
+    let v = next_u64(inp);
+    values[i] = v;
+  }
+  let mut total = Tally(0, 0, 0);
+  let workers = Group[Tally](k);
+  for j in 0..k {
+    spawn tally_chunk(values, n * j / k, n * (j + 1) / k, t) into workers;
+  }
+  for j in 0..k {
+    let r = collect(workers);
+    total.above += r.above;
+    total.sum = add_wrap(total.sum, r.sum);
+    if r.top > total.top { total.top = r.top; }
+  }
+  wait(workers);
+  println("above ", total.above);
+  println("sum ", total.sum);
+  if n == 0 { println("max none"); } else { println("max ", total.top); }
+  return 0;
+}

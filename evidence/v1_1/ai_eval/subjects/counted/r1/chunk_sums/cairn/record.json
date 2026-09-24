@@ -1,0 +1,126 @@
+{
+ "task": "chunk_sums",
+ "arm": "cairn",
+ "language": "cairn",
+ "plugin": null,
+ "scratch": "/home/sam/cairn-aieval/tmp/counted/r1/chunk_sums/cairn",
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "started_at": 1790277952.5,
+ "wall_seconds": 451.3,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 51,
+  "duration_ms": 473478,
+  "duration_api_ms": 410048,
+  "total_cost_usd": 1.5982053999999997,
+  "usage": {
+   "input_tokens": 94,
+   "cache_creation_input_tokens": 108922,
+   "cache_read_input_tokens": 3940097,
+   "output_tokens": 37431,
+   "output_tokens_details": {
+    "thinking_tokens": 27515
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 108922,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 338,
+     "cache_read_input_tokens": 120926,
+     "cache_creation_input_tokens": 489,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 489
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 94,
+    "outputTokens": 37431,
+    "cacheReadInputTokens": 3940097,
+    "cacheCreationInputTokens": 108922,
+    "webSearchRequests": 0,
+    "costUSD": 1.5982053999999997,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 27515,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/home/sam/cairn-aieval/runs/counted/r1/chunk_sums/cairn",
+ "toolchain_commit": "dd3f75e8e96917b5b3f200fec54d4bcb4162a4f9",
+ "phase": "counted",
+ "replicate": 1,
+ "study": "v1_1",
+ "infrastructure": false,
+ "source_bytes": 3695,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 19,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 14,
+   "Bash": 29,
+   "Edit": 7
+  },
+  "compile_runs": 11,
+  "compile_runs_failed": 0,
+  "flags": [
+   {
+    "tool": "Bash",
+    "why": "root",
+    "what": "which cairn; python3 -c \"import cairn\" 2>&1 | head -5; find / -iname \"*.py\" -path \"*cairn*\" 2>/dev/null | grep -v \"/proc\" | head -50"
+   },
+   {
+    "tool": "Bash",
+    "why": "path",
+    "what": "/proc",
+    "command": "which cairn; python3 -c \"import cairn\" 2>&1 | head -5; find / -iname \"*.py\" -path \"*cairn*\" 2>/dev/null | grep -v \"/proc\" | head -50"
+   }
+  ]
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_eval/counted/r1/chunk_sums/cairn/transcript.jsonl",
+  "sha256": "6698b49c483b1644bf978d4192a7e4d8baf220fa52a529ac6f82d17949aed64c",
+  "bytes": 626268
+ },
+ "given_sha256": "3f6efc9bfb2a1a6cf17a2097a9d164556d0910bce4375a4066fabc067fef12d0"
+}

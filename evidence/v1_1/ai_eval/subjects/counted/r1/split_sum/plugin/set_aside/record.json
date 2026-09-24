@@ -1,0 +1,146 @@
+{
+ "task": "split_sum",
+ "arm": "plugin",
+ "language": "cairn",
+ "plugin": "/home/sam/cairn-aieval/plugins/counted/r1/split_sum/plugin",
+ "scratch": "/home/sam/cairn-aieval/tmp/counted/r1/split_sum/plugin",
+ "hidden": [
+  "/home/sam/cairn",
+  "/home/sam/cairn-wt/captain",
+  "/home/sam/cairn-wt/ci",
+  "/home/sam/cairn-wt/device-perf",
+  "/home/sam/cairn-wt/eval",
+  "/home/sam/cairn-wt/harness",
+  "/home/sam/cairn-wt/kernels",
+  "/home/sam/cairn-wt/review",
+  "/home/sam/cairn-wt/search",
+  "/home/sam/cairn-wt/workspace",
+  "/tmp/claude-1000/-home-sam-cairn/64da01d8-7cab-4032-b01f-7f321008f03e/scratchpad/kernels/audit-wt",
+  "/tmp/claude-1000/-home-sam-cairn/64da01d8-7cab-4032-b01f-7f321008f03e/scratchpad/kernels/stack-wt",
+  "/home/sam/cairn-aieval/runs",
+  "/home/sam/cairn-aieval/plugins",
+  "/home/sam/cairn-aieval/tmp",
+  "/home/sam/.claude/projects"
+ ],
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "started_at": 1790279649.2,
+ "load_average": {
+  "start": [
+   169.9,
+   116.3,
+   154.6
+  ],
+  "end": [
+   174.6,
+   125.2,
+   155.8
+  ]
+ },
+ "wall_seconds": 43.4,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 15,
+  "duration_ms": 44821,
+  "duration_api_ms": 31864,
+  "total_cost_usd": 0.1427476,
+  "usage": {
+   "input_tokens": 28,
+   "cache_creation_input_tokens": 12989,
+   "cache_read_input_tokens": 315128,
+   "output_tokens": 2771,
+   "output_tokens_details": {
+    "thinking_tokens": 312
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 12989,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 85,
+     "cache_read_input_tokens": 27293,
+     "cache_creation_input_tokens": 501,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 501
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 28,
+    "outputTokens": 2771,
+    "cacheReadInputTokens": 315128,
+    "cacheCreationInputTokens": 12989,
+    "webSearchRequests": 0,
+    "costUSD": 0.1427476,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 312,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/home/sam/cairn-aieval/runs/counted/r1/split_sum/plugin",
+ "toolchain_commit": "dd3f75e8e96917b5b3f200fec54d4bcb4162a4f9",
+ "phase": "counted",
+ "replicate": 1,
+ "study": "v1_1",
+ "harness_commit": "cdaf81e7aa247cac5f06c7e3a1569f00c367da93",
+ "infrastructure": false,
+ "source_bytes": 2336,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 12,
+  "builds": {
+   "address": "built",
+   "thread": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 3,
+   "Skill": 1,
+   "Edit": 2,
+   "Bash": 7
+  },
+  "compile_runs": 5,
+  "compile_runs_failed": 1,
+  "flags": []
+ },
+ "harness_failure": "the plugin copy was removed 7 s into the session, when the rust arm's cleanup ran (fixed in the harness; the cell ran again)",
+ "transcript": {
+  "path": "results/ai_eval/counted/r1/split_sum/plugin/transcript.harness-0.jsonl",
+  "sha256": "0cf8d61d90fe9255ebc221c1fb2e5206fd343ff0c02dca1b8a43703916ba89d5",
+  "bytes": 78814
+ },
+ "given_sha256": "4841b2a124d90ba9b1a9f56e51d4be588b6781a51db1a52401d9dc1908885d67"
+}
