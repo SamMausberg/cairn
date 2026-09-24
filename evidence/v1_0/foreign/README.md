@@ -1,6 +1,6 @@
 # Typed assembly and foreign implementations
 
-Taken on 2026-09-23 on one AMD Ryzen 7 7800X3D under WSL2 (Linux 6.18), with g++ 13.3, clang++ 21.1.8 and CUDA 13.2's nvcc and cuobjdump. Other agents were building and testing on the machine throughout; nothing here is a timing. `python3 evidence/v1_0/foreign/collect.py` writes the four records again. No GPU ran anything: device code was compiled for sm_120 and read with cuobjdump, and no binary that launches a kernel was executed.
+Taken on 2026-09-23 on one AMD Ryzen 7 7800X3D under WSL2 (Linux 6.18), with g++ 13.3, clang++ 21.1.8 and CUDA 13.2's nvcc and cuobjdump. Other agents were building and testing on the machine throughout; nothing here is a timing. `python3 tools/checks/foreign_records.py --out evidence/v1_0/foreign` writes the four records again. No GPU ran anything: device code was compiled for sm_120 and read with cuobjdump, and no binary that launches a kernel was executed.
 
 ## What ran
 

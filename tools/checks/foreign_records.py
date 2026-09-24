@@ -1,6 +1,11 @@
-"""Writes this folder's records from a checkout: python3 evidence/v1_0/foreign/collect.py. Nothing it runs launches
-a kernel. Device code is compiled for sm_120 and read with cuobjdump; host code is built and run on this machine."""
+"""The records of typed assembly and foreign implementations: assembly.json, host.json, device.json and
+inspection.json, written to --out (evidence/v1_0/foreign holds the 1.0.0 run). Nothing it runs launches a kernel.
+Device code is compiled for sm_120 and read with cuobjdump; host code is built and run on this machine.
 
+    python3 tools/checks/foreign_records.py --out results/foreign
+"""
+
+import argparse
 import json
 import platform
 import shutil
@@ -9,17 +14,16 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
-HERE = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tests"), str(ROOT / "tools")]
 
-from cairn.compiler.cairnc import compile_source, write_program  # noqa: E402
-from cairn.projects.foreign import inspect  # noqa: E402
-from cairn.projects.project import load_project  # noqa: E402
-from cairn.projects.target import parse  # noqa: E402
-from cairn.projects.toolchain import command  # noqa: E402
-from cairn.verify.foreign import report  # noqa: E402
-from language.test_assembly import PTX, X86, oracle  # noqa: E402
+from cairn.compiler.cairnc import compile_source, write_program
+from cairn.projects.foreign import inspect
+from cairn.projects.project import load_project
+from cairn.projects.target import parse
+from cairn.projects.toolchain import command
+from cairn.verify.foreign import report
+from language.test_assembly import PTX, X86, oracle
 
 SANITIZE = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
 
@@ -31,16 +35,19 @@ def version(tool: str) -> str:
 def assembly() -> dict:
     """The x86-64 statements built by each compiler under the sanitizers and run against Python's values, and the
     PTX statements compiled for sm_120 with the SASS instructions they became."""
-    out: dict = {"x86_64": {}, "ptx": {}}
+    host = platform.machine()  # X86 runs only here; the record keys its runs by the machine they ran on
+    out: dict = {host: {}, "ptx": {}}
     with tempfile.TemporaryDirectory() as scratch:
         directory = Path(scratch)
-        program = write_program(directory, "x86.cpp", compile_source(X86)[0] + "\nint main() { return cf_main(); }\n")
+        program = write_program(
+            directory, "host_asm.cpp", compile_source(X86)[0] + "\nint main() { return cf_main(); }\n"
+        )
         for cxx in ("g++", "clang++"):
-            exe = directory / f"x86_{cxx}"
+            exe = directory / f"host_asm_{cxx}"
             subprocess.run([cxx, *SANITIZE, str(program), "-o", str(exe)], check=True)
             done = subprocess.run([str(exe)], capture_output=True, text=True)
-            out["x86_64"][cxx] = {"exit": done.returncode, "stdout": done.stdout, "expected": oracle(),
-                                  "agrees": done.stdout == oracle(), "sanitizer_reports": "Sanitizer" in done.stderr}  # fmt: skip
+            out[host][cxx] = {"exit": done.returncode, "stdout": done.stdout, "expected": oracle(),
+                              "agrees": done.stdout == oracle(), "sanitizer_reports": "Sanitizer" in done.stderr}  # fmt: skip
         source = write_program(directory, "ptx.cu", compile_source(PTX)[0])
         target = directory / "ptx.o"
         line = [
@@ -55,6 +62,10 @@ def assembly() -> dict:
 
 
 def main() -> int:
+    ask = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ask.add_argument("--out", type=Path, default=ROOT / "results/foreign", help="The directory the records go to.")
+    out = ask.parse_args().out
+    out.mkdir(parents=True, exist_ok=True)
     machine = {"host": f"{platform.system()} {platform.machine()} {platform.release()}", "nvcc": version("nvcc"),
                "g++": version("g++").split("\n")[0], "cuobjdump": shutil.which("cuobjdump") is not None}  # fmt: skip
     host = report(load_project(ROOT / "examples/foreign/host"), "histogram_interleaved")
@@ -64,7 +75,7 @@ def main() -> int:
         sources = inspect(load_project(ROOT / "examples/foreign/device"), parse("sm_120"), Path(scratch))
     records = {"host.json": host, "device.json": device, "inspection.json": sources, "assembly.json": assembly()}
     for name, record in records.items():
-        (HERE / name).write_text(json.dumps({"machine": machine, **record}, indent=1) + "\n")
+        (out / name).write_text(json.dumps({"machine": machine, **record}, indent=1) + "\n")
     return 0
 
 
