@@ -684,6 +684,8 @@ device_target = "sm_120a"
 
 The target is resolved once and every stage receives the same one: nvcc's `-arch`, the kernel reader behind `cairn tune`, the device card `cairn predict` prices on, a device timing and a measured device profile. The build receipt records it under `device_target`: its name, how it was resolved, the features it provides and those the program needs, its resource limits and the nvcc release.
 
+nvcc runs the host half of a device build with the `--cxx` compiler, clang++ by default, and each CUDA release accepts a range of host compilers: CUDA 12.9 takes GCC up to 14 and Clang up to 19, and CUDA 13.2 takes GCC up to 15 and Clang up to 21. Where the default clang++ is newer than the toolkit accepts, name another with `--cxx`. CI builds every device test and every device example under both releases with g++ and with clang++ ([internals.md](internals.md#continuous-integration)).
+
 | Refused | Code |
 |---|---|
 | a spelling other than `sm_` and a compute capability with an optional `f` or `a`, `a` below sm_90 or `f` below sm_100, and GPUs of two capabilities with no target named | `E-TARGET` |
@@ -691,7 +693,7 @@ The target is resolved once and every stage receives the same one: nvcc's `-arch
 | a program needing a feature the target lacks: `bf16` on sm_75, `mma_f8f6f4` on plain sm_120, `tcgen05` on any sm_120 | `E-TARGET-FEATURE` |
 | a result recorded for another target: a ptxas report, a timing, a measured device card, or a card for a device the target's code does not run on | `E-TARGET-MISMATCH` |
 
-The features are `FEATURES` in `src/cairn/projects/target.py`. `tests/tooling/test_target.py` assembles one probe instruction per feature for sixteen targets and holds the table to what ptxas accepts. The limits (registers per thread, shared memory per block and per SM, threads per block, warps per SM) are the CUDA Programming Guide's for 7.5, 8.0, 8.6, 8.7, 8.9, 9.0, 10.0, 10.3, 10.7, 11.0, 12.0 and 12.1, a specification rather than a measurement, and every packaged card is held to its row. A target without a row has unknown limits, and its record says so.
+The features are `FEATURES` in `src/cairn/projects/target.py`. `tests/tooling/test_target.py` assembles one probe instruction per feature for each of sixteen targets the installed nvcc compiles and holds the table to what ptxas accepts. The limits (registers per thread, shared memory per block and per SM, threads per block, warps per SM) are the CUDA Programming Guide's for 7.5, 8.0, 8.6, 8.7, 8.9, 9.0, 10.0, 10.3, 10.7, 11.0, 12.0 and 12.1, a specification rather than a measurement, and every packaged card is held to its row. A target without a row has unknown limits, and its record says so.
 
 `--emulate` on `build`, `run` and `test` judges the program against the target and then builds it for the host, with its device work on host threads ([devices.md](devices.md#emulating-device-code-on-the-host)). nvcc does not run. What the host cannot run as the device would, typed PTX, a launched `extern` kernel, vendored CUDA and a feature it does not model, is refused with `E-EMULATE`, and the receipt's `emulation` names the target the program was judged against.
 
