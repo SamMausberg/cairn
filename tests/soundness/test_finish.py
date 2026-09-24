@@ -184,8 +184,8 @@ def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, c
 
 def test_the_device_lowering_is_one_launch_whose_last_block_finishes(tmp_path):
     """Compiled for sm_120 and read back with cuobjdump: one kernel for the region and its finish, a block counted by
-    one atomic add between two device-wide fences, each also invalidating L1 so the finish reads what other SMs
-    wrote. Nothing is kept in local memory."""
+    a compare-and-swap that claims its launch's word and an add, between two device-wide fences, each also
+    invalidating L1 so the finish reads what other SMs wrote. Nothing is kept in local memory."""
     if not shutil.which("cuobjdump") or not shutil.which("ptxas"):
         pytest.skip("needs ptxas and cuobjdump")
     kernels = DEVICE.split("\nfn check(")[0]
@@ -197,7 +197,8 @@ def test_the_device_lowering_is_one_launch_whose_last_block_finishes(tmp_path):
     assert built.returncode == 0, built.stderr[-3000:]
     sass = subprocess.run(["cuobjdump", "-sass", str(cubin)], capture_output=True, text=True, timeout=120).stdout
     kernel = sass.split("blocks_then")[2]  # the first region's kernel
-    assert kernel.count("MEMBAR.SC.GPU") == 2 and "CCTL.IVALL" in kernel and "ATOMG.E.ADD" in kernel
+    assert kernel.count("MEMBAR.SC.GPU") == 2 and "CCTL.IVALL" in kernel
+    assert "ATOMG.E.CAS.64" in kernel and "ATOMG.E.ADD.64" in kernel
     assert not re.search(r"\b(LDL|STL)\b", sass)
 
 

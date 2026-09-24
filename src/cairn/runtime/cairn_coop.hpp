@@ -16,11 +16,17 @@
 // that stream has run the region, as a `parallel` region does, and nothing waits for the rest of the device.
 //
 // A region with a finish runs it once, after every block: on the host as one more team, on the device in the block that
-// finishes last, still one launch (compiler/finish.py).
+// finishes last, still one launch (compiler/finish.py). The device counts its finished blocks in a word of a table in
+// the module's own global memory, so a call allocates nothing for it (Finishes, below).
 #pragma once
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <map>
+#include <mutex>
+#include <tuple>
 #include "cairn_runtime.hpp"
 
 namespace cr::coop {
@@ -67,11 +73,108 @@ public:
     return base_ + (waited_++ % D) * STRIDE;
   }
 };
+
+// The word a launch with a finish counts its finished blocks in holds the launch's tag, a number no other launch has,
+// above the count of blocks that have arrived; it is zero while no launch holds it. The first block to arrive claims
+// it, the others add one under the same tag, and the block that brings the count to the grid's is the last, which
+// puts the word back to zero once the finish has run. A block that finds another launch's tag there traps rather than
+// count with it: Finishes gives two launches one word only when their stream keeps them apart, so that happens only
+// after it gave the word of a stream used long ago to another while that stream's last launch was still running.
+inline constexpr unsigned COUNTED = 20;  // the low bits count blocks, of which a launch has at most 65535
+inline constexpr std::uint64_t TAGS = std::uint64_t(1) << (64 - COUNTED);
+inline constexpr unsigned SLOTS = 4096;  // words in the table, 32 KiB of each module's global memory
+
+CR_HD inline bool arrive(unsigned long long* word, std::uint64_t tag, unsigned grid) noexcept {
+  const unsigned long long mine = static_cast<unsigned long long>(tag) << COUNTED, count = (1ull << COUNTED) - 1;
+#if defined(__CUDA_ARCH__)
+  unsigned long long old = atomicCAS(word, 0ull, mine + 1);
+  if(old != 0 && old >> COUNTED == tag) old = atomicAdd(word, 1ull);
+#else
+  std::atomic_ref<unsigned long long> held(*word);
+  unsigned long long old = 0;
+  if(!held.compare_exchange_strong(old, mine + 1, std::memory_order_acq_rel) && old >> COUNTED == tag)
+    old = held.fetch_add(1, std::memory_order_acq_rel);
+#endif
+  if(old != 0 && old >> COUNTED != tag) trap();  // another launch still counts in this word
+  return (old & count) + 1 == grid;
+}
+CR_HD inline void depart(unsigned long long* word) noexcept {
+#if defined(__CUDA_ARCH__)
+  atomicExch(word, 0ull);
+#else
+  std::atomic_ref<unsigned long long>(*word).store(0, std::memory_order_release);
+#endif
+}
+
+struct Claim {
+  unsigned slot;      // the word, in the table of SLOTS
+  std::uint64_t tag;  // this launch's, never another's
+};
+
+// Which word each launch with a finish counts in. Launches queued on one stream run one after another, so each stream
+// keeps a word of its own, named by the id CUDA gives a stream for the life of the process. A captured launch keeps
+// a word for its stream within that capture sequence, and keeps it for good: its CUDA graph replays the launch, word
+// and tag included, whenever and on whatever stream it is launched, and the graph's own launches run one after
+// another. Two instances of one graph running at once share the word, as they share every array they write. When
+// every word is held, the stream that claimed one longest ago gives its word up; when every word belongs to a
+// capture, the process has captured more launches with a finish than the table holds, and traps.
+template<unsigned N> class Finishes final {
+public:
+  Claim claim(unsigned long long stream, bool captured, unsigned long long capture) noexcept {
+    const std::lock_guard<std::mutex> hold(lock_);
+    if(++tags_ == TAGS) trap();
+    const Key key{stream, captured, captured ? capture : 0};
+    auto found = held_.find(key);
+    if(found == held_.end()) found = held_.emplace(key, Held{free(), 0}).first;
+    found->second.used = tags_;
+    return {found->second.slot, tags_};
+  }
+
+private:
+  using Key = std::tuple<unsigned long long, bool, unsigned long long>;  // stream, captured, capture sequence
+  struct Held {
+    unsigned slot;
+    std::uint64_t used;  // the tag of its last launch
+  };
+  unsigned free() noexcept {
+    if(made_ < N) return made_++;
+    auto oldest = held_.end();
+    for(auto it = held_.begin(); it != held_.end(); ++it)
+      if(!std::get<1>(it->first) && (oldest == held_.end() || it->second.used < oldest->second.used)) oldest = it;
+    if(oldest == held_.end()) {
+      std::fputs("cairn: every counter of a region with a finish belongs to a captured graph\n", stderr);
+      trap();
+    }
+    const unsigned slot = oldest->second.slot;
+    held_.erase(oldest);
+    return slot;
+  }
+  std::mutex lock_;
+  std::map<Key, Held> held_;
+  unsigned made_ = 0;
+  std::uint64_t tags_ = 0;
+};
+inline Finishes<SLOTS>& finishes() noexcept {
+  static Finishes<SLOTS>* const table = new Finishes<SLOTS>;  // never destroyed: a thread may claim during exit
+  return *table;
+}
+// The claim for a launch on `stream` of the machine `api` (cairn_gpu.hpp, or a host stand-in).
+template<class Api> inline Claim claim(Api& api, typename Api::Stream stream) noexcept {
+  unsigned long long capture = 0;
+  const bool captured = api.capturing(stream, &capture);
+  return finishes().claim(api.stream_id(stream), captured, capture);
+}
+// A launch with a finish, queued as synchronous work of the execution context `ctx` (cairn_reuse.hpp, found by
+// argument lookup): `fire(stream, claim)` launches it on the lane's stream with the word claimed there. The device
+// launch below and the host stand-in (tests/runtime/coop_host.hpp) both come through here, so what the stand-in
+// counts a call making, and not making, is what the launch makes.
+template<class Context, class Fire> inline void queue_then(Context& ctx, Fire fire) noexcept {
+  synchronous(ctx, [&](auto stream) { fire(stream, claim(ctx.api(), stream)); });
+}
 }  // namespace cr::coop
 
 #if !defined(__CUDA_ARCH__)
 #include <barrier>
-#include <cstdio>
 #include <memory>
 #include <pthread.h>
 #include <vector>
@@ -294,17 +397,26 @@ blocks(std::size_t grid, F body) {
   }
 }
 
-// A region with a finish, as one launch. Each block, once it has run its share of the grid, counts itself in
-// `arrived`: its threads' writes are ordered before thread 0's fence by the loop's last barrier, the fence makes them
-// visible device-wide, and the atomic add counts the block, as cooperative groups' grid barrier does. The block that
-// brings the count to the grid's knows every other block has finished; after a second fence it zeroes its shared
-// memory, runs the finish as block 0 of a grid of one, and puts the counter back to zero for the next launch.
+// The words launches with a finish count their blocks in: the module's global memory, zero when it loads.
+__device__ inline unsigned long long* counters() {
+  static unsigned long long words[SLOTS];
+  return words;
+}
+
+// A region with a finish, as one launch. Each block, once it has run its share of the grid, counts itself in its
+// launch's word: its threads' writes are ordered before thread 0's fence by the loop's last barrier, the fence makes
+// them visible device-wide, and the atomic add counts the block, as cooperative groups' grid barrier does. The block
+// that brings the count to the grid's knows every other block has finished; after a second fence it zeroes its shared
+// memory, runs the finish as block 0 of a grid of one, and puts the word back to zero for the next launch.
 template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO, std::size_t FINISH, class F, class G>
-__global__ void __launch_bounds__(THREADS) blocks_then(std::size_t grid, F body, G finish, unsigned* arrived) {
+__global__ void __launch_bounds__(THREADS)
+blocks_then(std::size_t grid, F body, G finish, unsigned slot, std::uint64_t tag) {
   __shared__ __align__(128) unsigned char memory[BYTES ? BYTES : 16];
   __shared__ bool last;
   Device context(memory);
   const std::size_t t = threadIdx.x;
+  if(slot >= SLOTS) trap();
+  unsigned long long* const word = counters() + slot;
   for(std::size_t b = blockIdx.x; b < grid; b += gridDim.x) {
     if constexpr(ZERO > 0)
       for(std::size_t e = t; e < ZERO; e += THREADS) memory[e] = 0;
@@ -315,7 +427,7 @@ __global__ void __launch_bounds__(THREADS) blocks_then(std::size_t grid, F body,
   }
   if(t == 0) {
     __threadfence();  // this block's writes, every thread's, before it is counted
-    last = atomicAdd(arrived, 1u) == gridDim.x - 1;
+    last = arrive(word, tag, gridDim.x);
     if(last) __threadfence();  // every other block's writes, before the finish reads them
   }
   __syncthreads();
@@ -325,7 +437,7 @@ __global__ void __launch_bounds__(THREADS) blocks_then(std::size_t grid, F body,
   __syncthreads();
   finish(context, 0, t);
   __pipeline_wait_prior(0);
-  if(t == 0) *arrived = 0;  // every block has counted itself: nothing else touches it before this launch ends
+  if(t == 0) depart(word);  // every block has counted itself: nothing else touches it before this launch ends
 }
 
 // On the calling thread's execution context (cairn_exec.hpp), returning once its stream has run the region.
@@ -347,8 +459,8 @@ inline void launch_then(gpu::Context& ctx, std::size_t grid, F body, G finish) n
   static_assert(BYTES <= 48 * 1024, "static shared memory holds 48 KiB");
   static_assert(std::is_trivially_copyable_v<F> && std::is_trivially_copyable_v<G>, "the bodies cross as arguments");
   const unsigned g = grid < 1 ? 1u : grid < gpu::MAX_GRID ? unsigned(grid) : gpu::MAX_GRID;  // the finish runs once
-  reuse::synchronous(ctx, [&](cudaStream_t s) {
-    blocks_then<THREADS, BYTES, ZERO, FINISH><<<g, THREADS, 0, s>>>(grid, body, finish, ctx.ticket(s));
+  queue_then(ctx, [&](cudaStream_t s, Claim held) {
+    blocks_then<THREADS, BYTES, ZERO, FINISH><<<g, THREADS, 0, s>>>(grid, body, finish, held.slot, held.tag);
     gpu::check(cudaGetLastError());
   });
 }

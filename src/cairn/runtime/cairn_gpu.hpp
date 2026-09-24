@@ -61,6 +61,18 @@ struct Cuda {
   void destroy_event(Event e) noexcept { released(cudaEventDestroy(e)); }
   void record(Event e, Stream s) noexcept { check(cudaEventRecord(e, s)); }
   void wait_event(Stream s, Event e) noexcept { check(cudaStreamWaitEvent(s, e, 0)); }
+  // What names a stream for the life of the process, and whether it is capturing into a graph, with the capture
+  // sequence's id: two queries a capture allows, which make and wait for nothing.
+  unsigned long long stream_id(Stream s) noexcept {
+    unsigned long long id = 0;
+    check(cudaStreamGetId(s, &id));
+    return id;
+  }
+  bool capturing(Stream s, unsigned long long* id) noexcept {
+    cudaStreamCaptureStatus status = cudaStreamCaptureStatusNone;
+    check(cudaStreamGetCaptureInfo(s, &status, id));
+    return status != cudaStreamCaptureStatusNone;
+  }
   void sync_stream(Stream s) noexcept { check(cudaStreamSynchronize(s)); }
   void sync_event(Event e) noexcept { released(cudaEventSynchronize(e)); }
   void* alloc(std::size_t b) noexcept {

@@ -16,10 +16,10 @@ may read any element of an array the blocks wrote, plainly or atomically, which 
 It runs exactly once, also when the grid has no blocks: then it is the only block, and a reduction's finish writes the
 identity. On the host it is one more team of threads, started after every block's threads have been joined. On the
 device the region is still one launch (runtime/cairn_coop.hpp): each block, once done, has one thread make the block's
-writes visible device-wide (__threadfence) and add one to a counter in the execution context; the block that brings
-the count to the grid's runs the finish after one more fence, then puts the counter back to zero for the next launch.
-The counter is scratch of the execution context, allocated by its first finish, so a device region with a finish adds
-`gpu_alloc` and `gpu_free` to the row, as a device reduction's scratch does.
+writes visible device-wide (__threadfence) and add one to its launch's counter; the block that brings the count to the
+grid's runs the finish after one more fence, then puts the counter back to zero for the next launch. The counters are a
+table in the module's global memory, one for each stream that runs such launches, so a finish allocates nothing and
+adds nothing to the row: a function with one may be enqueued on a caller's stream and captured in a CUDA graph.
 """
 
 from __future__ import annotations
@@ -49,8 +49,6 @@ def check(c: Checker, s: Stmt, block: Block):
         fail("E-COOP-SHAPE", f"A region's finish runs in the block that finishes last, so it has the region's "
              f"{block.count} threads; {' x '.join(map(str, region.ref.extents))} is {region.ref.count}.", done)  # fmt: skip
     done.ref = region  # the finish as a region of one block: what lowering and pricing read
-    if block.device:  # the count of finished blocks is scratch of the execution context, made by its first finish
-        c.effects |= {"gpu_alloc", "gpu_free"}
 
 
 def placed(c: Checker, s: Stmt, main: Block) -> bool:

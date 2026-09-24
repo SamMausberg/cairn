@@ -13,10 +13,21 @@ template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO = BYTES, class F>
 inline void launch(gpu::Context& ctx, std::size_t grid, F body) noexcept {
   reuse::synchronous(ctx, [&](typename gpu::Machine::Stream) { run<THREADS, BYTES, ZERO>(grid, body); });
 }
+// A region with a finish claims its word as the device launch does (Finishes), and counts its blocks in the stand-in's
+// own table as the device's blocks would, one after another: the last to arrive, and only it, runs the finish, then
+// puts the word back. `finished` is the last claim, for a test to read.
+inline Claim finished{};
+inline unsigned long long words[SLOTS] = {};
 template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO = BYTES, std::size_t FINISH = BYTES, class F, class G>
 inline void launch_then(gpu::Context& ctx, std::size_t grid, F body, G finish) noexcept {
-  reuse::synchronous(ctx, [&](typename gpu::Machine::Stream) {
-    run_then<THREADS, BYTES, ZERO, FINISH>(grid, body, finish);
+  const unsigned g = grid < 1 ? 1u : grid < reuse::MAX_GRID ? unsigned(grid) : reuse::MAX_GRID;
+  queue_then(ctx, [&](typename gpu::Machine::Stream, Claim held) {
+    finished = held;
+    run<THREADS, BYTES, ZERO>(grid, body);
+    for(unsigned b = 0; b < g; ++b)
+      if(arrive(words + held.slot, held.tag, g) != (b == g - 1)) trap();
+    run<THREADS, BYTES, FINISH>(1, finish);
+    depart(words + held.slot);
   });
 }
 }  // namespace cr::coop

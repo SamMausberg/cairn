@@ -11,6 +11,7 @@
 // is counted again as `refused`.
 #pragma once
 #include <atomic>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -27,6 +28,7 @@ struct Counts {  // atomic, since every host thread has an execution context of 
   std::atomic<const void*> last_stream{nullptr};  // the stream the last launch or copy was queued on
   std::atomic<std::size_t> most_by_one_thread{0};  // the most streams any one host thread has made
   std::atomic<bool> capturing{false};
+  std::atomic<unsigned long long> capture{0};  // the capture sequence's id while capturing
   std::atomic<std::size_t> refused{0};  // calls made while capturing that a stream capture would refuse
 };
 inline Counts counted;
@@ -67,6 +69,12 @@ struct Host {
   }
   void record(Event, Stream) noexcept { ++counted.records; }
   void wait_event(Stream, Event) noexcept {}
+  // A stream's name, and whether a capture is on: queries a capture allows, so neither is refused.
+  unsigned long long stream_id(Stream s) noexcept { return reinterpret_cast<std::uintptr_t>(s); }
+  bool capturing(Stream, unsigned long long* id) noexcept {
+    *id = counted.capture;
+    return counted.capturing;
+  }
   void sync_stream(Stream) noexcept {
     capture_refuses();
     ++counted.stream_waits;
