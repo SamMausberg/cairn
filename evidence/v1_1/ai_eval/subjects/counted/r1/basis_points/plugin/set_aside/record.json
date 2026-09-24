@@ -1,0 +1,152 @@
+{
+ "task": "basis_points",
+ "arm": "plugin",
+ "language": "cairn",
+ "plugin": "/home/sam/cairn-aieval/plugins/counted/r1/basis_points/plugin",
+ "scratch": "/home/sam/cairn-aieval/tmp/counted/r1/basis_points/plugin",
+ "hidden": [
+  "/home/sam/cairn",
+  "/home/sam/cairn-wt/captain",
+  "/home/sam/cairn-wt/ci",
+  "/home/sam/cairn-wt/device-perf",
+  "/home/sam/cairn-wt/eval",
+  "/home/sam/cairn-wt/harness",
+  "/home/sam/cairn-wt/kernels",
+  "/home/sam/cairn-wt/review",
+  "/home/sam/cairn-wt/search",
+  "/home/sam/cairn-wt/workspace",
+  "/tmp/claude-1000/-home-sam-cairn/64da01d8-7cab-4032-b01f-7f321008f03e/scratchpad/kernels/audit-wt",
+  "/tmp/claude-1000/-home-sam-cairn/64da01d8-7cab-4032-b01f-7f321008f03e/scratchpad/kernels/stack-wt",
+  "/home/sam/cairn-aieval/runs",
+  "/home/sam/cairn-aieval/plugins",
+  "/home/sam/cairn-aieval/tmp",
+  "/home/sam/.claude/projects"
+ ],
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "started_at": 1790279747.4,
+ "load_average": {
+  "start": [
+   122.7,
+   117.2,
+   151.0
+  ],
+  "end": [
+   73.8,
+   103.7,
+   144.2
+  ]
+ },
+ "wall_seconds": 60.5,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 17,
+  "duration_ms": 61937,
+  "duration_api_ms": 54343,
+  "total_cost_usd": 0.19217659999999998,
+  "usage": {
+   "input_tokens": 32,
+   "cache_creation_input_tokens": 15567,
+   "cache_read_input_tokens": 385673,
+   "output_tokens": 5271,
+   "output_tokens_details": {
+    "thinking_tokens": 1761
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 15567,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 252,
+     "cache_read_input_tokens": 29969,
+     "cache_creation_input_tokens": 403,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 403
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 32,
+    "outputTokens": 5271,
+    "cacheReadInputTokens": 385673,
+    "cacheCreationInputTokens": 15567,
+    "webSearchRequests": 0,
+    "costUSD": 0.19217659999999998,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 1761,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/home/sam/cairn-aieval/runs/counted/r1/basis_points/plugin",
+ "toolchain_commit": "dd3f75e8e96917b5b3f200fec54d4bcb4162a4f9",
+ "phase": "counted",
+ "replicate": 1,
+ "study": "v1_1",
+ "harness_commit": "cdaf81e7aa247cac5f06c7e3a1569f00c367da93",
+ "infrastructure": false,
+ "source_bytes": 2053,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 6,
+  "builds": {
+   "address": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 2,
+   "Skill": 1,
+   "Edit": 1,
+   "Bash": 11
+  },
+  "compile_runs": 6,
+  "compile_runs_failed": 1,
+  "flags": [
+   {
+    "tool": "Bash",
+    "why": "result",
+    "what": "/home/sam/cairn-aieval/runs/counted/r1/basis_points",
+    "call": "{\"command\": \"rm -rf build && rm -f /tmp/stress_input.txt /tmp/stress_output.txt && git status\", \"description\": \"Remove build artifacts and temp files, check git status\"}"
+   }
+  ]
+ },
+ "harness_failure": "the plugin copy was removed 48 s into the session, when the cpp arm's cleanup ran (fixed in the harness; the cell ran again)",
+ "transcript": {
+  "path": "results/ai_eval/counted/r1/basis_points/plugin/transcript.harness-0.jsonl",
+  "sha256": "8b484ab03afb8dfadeffbfe14a68818bfafb85d76f34125740a61015a3002e35",
+  "bytes": 91409
+ },
+ "given_sha256": "8c59727a33f3096fb4037dc5f35d7c7f50c6c6549737dc6bb5ed9d1d40eff95b"
+}

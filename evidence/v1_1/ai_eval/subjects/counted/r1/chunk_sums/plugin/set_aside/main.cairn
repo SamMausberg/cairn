@@ -1,0 +1,155 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+struct ChunkResult { chunk:usize; sum:i64; overflowed:bool; }
+
+// sum + v, or None when that step would fall outside the signed 64-bit range.
+fn add_checked(sum:i64, v:i64, maxv:i64, minv:i64) -> Option[i64] {
+  if v >= 0 {
+    if sum > maxv - v { return None; }
+    return Some(sum + v);
+  }
+  if sum < minv - v { return None; }
+  return Some(sum + v);
+}
+
+fn chunk_sum(n:usize, xs:ro<i64>[n], j:usize) -> ChunkResult {
+  let maxv:i64 = 9223372036854775807;
+  let minv:i64 = (0 - maxv) - 1;
+  let mut sum:i64 = 0;
+  let mut overflowed:bool = false;
+  let mut i:usize = 0;
+  while i < n {
+    match add_checked(sum, xs[i], maxv, minv) {
+      Some(next) => { sum = next; }
+      None => { overflowed = true; break; }
+    }
+    i += 1;
+  }
+  return ChunkResult(j, sum, overflowed);
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let kv = next_u64(inp);
+  let k:usize = usize(kv);
+  let nv = next_u64(inp);
+  let n:usize = usize(nv);
+
+  let mut values = Buf[i64](n);
+  let mut idx:usize = 0;
+  while idx < n {
+    let v = next_i64(inp);
+    values[idx] = v;
+    idx += 1;
+  }
+
+  let mut results = Buf[ChunkResult](k);
+  let g = Group[ChunkResult](k);
+  let mut j:usize = 0;
+  while j < k {
+    let lo:usize = j * n / k;
+    let hi:usize = (j + 1) * n / k;
+    spawn chunk_sum(values[lo..hi], j) into g;
+    j += 1;
+  }
+  let mut c:usize = 0;
+  while c < k {
+    let r = collect(g);
+    results[r.chunk] = r;
+    c += 1;
+  }
+  wait(g);
+
+  let mut pj:usize = 0;
+  while pj < k {
+    let r = results[pj];
+    if r.overflowed {
+      println("chunk ", pj, " overflow");
+    } else {
+      println("chunk ", pj, " ", r.sum);
+    }
+    pj += 1;
+  }
+
+  let maxv:i64 = 9223372036854775807;
+  let minv:i64 = (0 - maxv) - 1;
+  let mut total_overflowed:bool = false;
+  let mut total:i64 = 0;
+  let mut tj:usize = 0;
+  while tj < k {
+    let r = results[tj];
+    if r.overflowed { total_overflowed = true; break; }
+    match add_checked(total, r.sum, maxv, minv) {
+      Some(next) => { total = next; }
+      None => { total_overflowed = true; break; }
+    }
+    tj += 1;
+  }
+  if total_overflowed {
+    println("total overflow");
+  } else {
+    println("total ", total);
+  }
+  return 0;
+}

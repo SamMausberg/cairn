@@ -91,7 +91,7 @@ def bootstrap(table: list[dict[str, dict]], arms: tuple[str, ...]) -> dict:
         chosen = [table[rng.randrange(len(table))] for _ in table]
         for name, value in estimates(chosen).items():
             record(name, value)
-    places = lambda name: 0 if name.endswith(".tokens_per_solved") else 4  # noqa: E731
+    places = lambda name: 0 if name.endswith(".tokens_per_solved") and "/" not in name else 4  # noqa: E731
     return {name: {"estimate": rounded(point[name], places(name)),
                    "interval_95": [rounded(x, places(name)) for x in interval(draws[name])]} for name in point}  # fmt: skip
 

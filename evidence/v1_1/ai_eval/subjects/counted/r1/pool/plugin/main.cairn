@@ -1,0 +1,241 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec as vec;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// Whether the given token names the given command word.
+fn token_is(inp:ro<Input>, s:Span, word:usize, name:ro<u8>[word]) -> bool {
+  return text.equal(s.hi - s.lo, inp.bytes.data[s.lo..s.hi], word, name);
+}
+
+// A pool slot: how many buffers it has held, whether it currently holds one, and its bytes.
+struct Slot { generation:u64; occupied:bool; buf:Vec[u8]; }
+
+// The pool of slots and the min-heap of free slot indices.
+struct Pool { slots:Vec[Slot]; free:Vec[usize]; }
+
+fn heap_push(h:rw<Vec[usize]>, x:usize) {
+  vec.push(h, x);
+  let mut i = h.len - 1;
+  while i > 0 {
+    let parent = (i - 1) / 2;
+    let pv = vec.get(h, parent);
+    let cv = vec.get(h, i);
+    if pv <= cv { break; }
+    vec.set(h, i, pv);
+    vec.set(h, parent, cv);
+    i = parent;
+  }
+}
+
+fn heap_pop_min(h:rw<Vec[usize]>) -> usize {
+  let top = vec.get(h, 0);
+  match vec.pop(h) {
+    Some(last) => {
+      if h.len > 0 {
+        vec.set(h, 0, last);
+        let mut i:usize = 0;
+        while true {
+          let l = 2 * i + 1;
+          let r = 2 * i + 2;
+          let mut smallest = i;
+          if l < h.len && vec.get(h, l) < vec.get(h, smallest) { smallest = l; }
+          if r < h.len && vec.get(h, r) < vec.get(h, smallest) { smallest = r; }
+          if smallest == i { break; }
+          let vi = vec.get(h, i);
+          let vs = vec.get(h, smallest);
+          vec.set(h, i, vs);
+          vec.set(h, smallest, vi);
+          i = smallest;
+        }
+      }
+    }
+    None => {}
+  }
+  return top;
+}
+
+// Places a fresh buffer of `size` zero bytes in the lowest free slot, returning its index.
+fn pool_alloc_slot(p:rw<Pool>, size:usize) -> usize {
+  stack zeros:u8[4096] = zeroed;
+  let mut i:usize = 0;
+  if p.free.len > 0 {
+    i = heap_pop_min(p.free);
+    p.slots.data[i].generation += 1;
+    p.slots.data[i].occupied = true;
+  } else {
+    let newbuf = vec.new[u8]();
+    let slot = Slot(1, true, newbuf);
+    vec.push(p.slots, slot);
+    i = p.slots.len - 1;
+  }
+  vec.extend_from(p.slots.data[i].buf, size, zeros[0..size]);
+  return i;
+}
+
+fn is_live(p:ro<Pool>, i:usize, g:u64) -> bool {
+  if i >= p.slots.len { return false; }
+  if !p.slots.data[i].occupied { return false; }
+  if p.slots.data[i].generation != g { return false; }
+  return true;
+}
+
+fn free_slot(p:rw<Pool>, i:usize) {
+  p.slots.data[i].occupied = false;
+  vec.clear(p.slots.data[i].buf);
+  heap_push(p.free, i);
+}
+
+fn cmd_new(p:rw<Pool>, size:u64) {
+  let i = pool_alloc_slot(p, usize(size));
+  let g = p.slots.data[i].generation;
+  println("h ", i, " ", g);
+}
+
+fn cmd_set(p:rw<Pool>, i:usize, g:u64, off:u64, val:u64) {
+  if !is_live(p, i, g) { println("stale"); return; }
+  let sz = p.slots.data[i].buf.len;
+  if off >= u64(sz) { println("bounds"); return; }
+  p.slots.data[i].buf.data[usize(off)] = u8(val);
+  println("ok");
+}
+
+fn cmd_sum(p:ro<Pool>, i:usize, g:u64) {
+  if !is_live(p, i, g) { println("stale"); return; }
+  let n = p.slots.data[i].buf.len;
+  let mut total:u64 = 0;
+  for k in 0..n { total += u64(p.slots.data[i].buf.data[k]); }
+  println(total);
+}
+
+fn cmd_move(p:rw<Pool>, i:usize, gi:u64, j:usize, gj:u64) {
+  if !is_live(p, i, gi) || !is_live(p, j, gj) { println("stale"); return; }
+  if i == j { println("same"); return; }
+  let src = take(p.slots.data[i].buf);
+  let src_len = src.len;
+  vec.extend_from(p.slots.data[j].buf, src_len, src);
+  free_slot(p, i);
+  let new_size = p.slots.data[j].buf.len;
+  println("ok ", new_size);
+}
+
+fn cmd_free(p:rw<Pool>, i:usize, g:u64) {
+  if !is_live(p, i, g) { println("stale"); return; }
+  free_slot(p, i);
+  println("ok");
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let empty_slots = vec.new[Slot]();
+  let empty_free = vec.new[usize]();
+  let mut pool = Pool(empty_slots, empty_free);
+  let mut running = true;
+  while running {
+    match next_token(inp) {
+      Some(cmd) => {
+        if token_is(inp, cmd, len("new"), "new") {
+          let size = next_u64(inp);
+          cmd_new(pool, size);
+        } else if token_is(inp, cmd, len("set"), "set") {
+          let i_raw = next_u64(inp);
+          let i = usize(i_raw);
+          let g = next_u64(inp);
+          let off = next_u64(inp);
+          let val = next_u64(inp);
+          cmd_set(pool, i, g, off, val);
+        } else if token_is(inp, cmd, len("sum"), "sum") {
+          let i_raw = next_u64(inp);
+          let i = usize(i_raw);
+          let g = next_u64(inp);
+          cmd_sum(pool, i, g);
+        } else if token_is(inp, cmd, len("move"), "move") {
+          let i_raw = next_u64(inp);
+          let i = usize(i_raw);
+          let gi = next_u64(inp);
+          let j_raw = next_u64(inp);
+          let j = usize(j_raw);
+          let gj = next_u64(inp);
+          cmd_move(pool, i, gi, j, gj);
+        } else if token_is(inp, cmd, len("free"), "free") {
+          let i_raw = next_u64(inp);
+          let i = usize(i_raw);
+          let g = next_u64(inp);
+          cmd_free(pool, i, g);
+        } else {
+          running = false;
+        }
+      }
+      None => { running = false; }
+    }
+  }
+  let mut live_l:u64 = 0;
+  let mut live_b:u64 = 0;
+  for i in 0..pool.slots.len {
+    if pool.slots.data[i].occupied {
+      live_l += 1;
+      live_b += u64(pool.slots.data[i].buf.len);
+    }
+  }
+  println("live ", live_l, " ", live_b);
+  return 0;
+}

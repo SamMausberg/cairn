@@ -1,0 +1,154 @@
+import std.io (read_stdin);
+import std.text (parse_u64);
+import std.vec (Vec, new, push);
+
+fn is_digit(b:u8) -> bool {
+  return b >= u8(48) && b <= u8(57);
+}
+
+fn read_bound() -> u64 {
+  let mut buf = Buf[u8](32);
+  let mut total:usize = 0;
+  while total < 32 {
+    match read_stdin(32 - total, buf[total..32]) {
+      Ok(count) => {
+        if count == 0 { break; }
+        total = total + count;
+      }
+      Err(_) => { break; }
+    }
+  }
+  let mut lo:usize = 0;
+  while lo < total && !is_digit(buf[lo]) { lo = lo + 1; }
+  let mut hi = lo;
+  while hi < total && is_digit(buf[hi]) { hi = hi + 1; }
+  match parse_u64(hi - lo, buf[lo..hi]) {
+    Ok(value) => { return value; }
+    Err(_) => { return 0; }
+  }
+}
+
+// Marks composites in seg, which covers the numbers [seg_start, seg_start + len),
+// using the primes up to sqrt(n) collected beforehand.
+fn mark_segment(len:usize, seg:rw<u8>[len], seg_start:usize, num_primes:usize, primes:ro<u64>[num_primes]) {
+  for k in 0..num_primes {
+    let p = usize(primes[k]);
+    let sq = p * p;
+    let mut start_val:usize = seg_start;
+    if sq > start_val { start_val = sq; }
+    let rem = start_val % p;
+    let mut first = start_val;
+    if rem != 0 { first = start_val + (p - rem); }
+    let end = seg_start + len;
+    let mut m = first;
+    while m < end {
+      seg[m - seg_start] = 1;
+      m = m + p;
+    }
+  }
+}
+
+fn isqrt(n:usize) -> usize {
+  let mut r:usize = 0;
+  while (r + 1) * (r + 1) <= n { r = r + 1; }
+  return r;
+}
+
+fn main() -> i32 {
+  let bound = read_bound();
+  let n = usize(bound);
+  if n < 2 {
+    println("count 0");
+    println("sum 0");
+    println("last none");
+    println("gap none");
+    return 0;
+  }
+
+  let mut sieve = Buf[u8](n + 1);
+  sieve[0] = 1;
+  sieve[1] = 1;
+
+  let limit = isqrt(n);
+  let mut primes = new[u64]();
+  if limit >= 2 {
+    let mut small = Buf[u8](limit + 1);
+    for p in 2..limit + 1 {
+      if small[p] == 0 {
+        push(primes, u64(p));
+        let mut m = p * p;
+        while m <= limit {
+          small[m] = 1;
+          m = m + p;
+        }
+      }
+    }
+  }
+
+  let s0:usize = 2;
+  let total_len = n - 1;
+  let base = total_len / 4;
+  let rem = total_len % 4;
+
+  let mut len0 = base;
+  if rem >= 1 { len0 = base + 1; }
+  let mut len1 = base;
+  if rem >= 2 { len1 = base + 1; }
+  let mut len2 = base;
+  if rem >= 3 { len2 = base + 1; }
+  let len3 = base;
+
+  let s1 = s0 + len0;
+  let s2 = s1 + len1;
+  let s3 = s2 + len2;
+  let s4 = s3 + len3;
+
+  let num_primes = primes.len;
+  let t0 = spawn mark_segment(len0, sieve[s0..s1], s0, num_primes, primes);
+  let t1 = spawn mark_segment(len1, sieve[s1..s2], s1, num_primes, primes);
+  let t2 = spawn mark_segment(len2, sieve[s2..s3], s2, num_primes, primes);
+  let t3 = spawn mark_segment(len3, sieve[s3..s4], s3, num_primes, primes);
+  wait(t0);
+  wait(t1);
+  wait(t2);
+  wait(t3);
+
+  let mut count:u64 = 0;
+  let mut sum:u64 = 0;
+  let mut last:u64 = 0;
+  let mut max_gap:u64 = 0;
+  let mut gap_prime:u64 = 0;
+  let mut prev:u64 = 0;
+  let mut has_prev = false;
+
+  for i in 2..n + 1 {
+    if sieve[i] == 0 {
+      count = count + 1;
+      sum = sum + u64(i);
+      last = u64(i);
+      if has_prev {
+        let gap = u64(i) - prev;
+        if gap > max_gap {
+          max_gap = gap;
+          gap_prime = prev;
+        }
+      }
+      prev = u64(i);
+      has_prev = true;
+    }
+  }
+
+  println("count ", count);
+  println("sum ", sum);
+  if count == 0 {
+    println("last none");
+  } else {
+    println("last ", last);
+  }
+  if count < 2 {
+    println("gap none");
+  } else {
+    println("gap ", max_gap, " ", gap_prime);
+  }
+  return 0;
+}

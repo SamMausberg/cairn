@@ -1,0 +1,232 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+struct Slot { buf:Vec[u8]; generation:u64; live:bool; byte_sum:u64; }
+
+// A buffer of size bytes, all zero.
+fn zero_vec(size:usize) -> Vec[u8] {
+  let mut v = vec.new[u8]();
+  if size > 0 {
+    let zeros = Buf[u8](size);
+    vec.extend_from(v, len(zeros), zeros);
+  }
+  return v;
+}
+
+// A binary min-heap of free slot numbers, so the lowest one is reused first.
+fn heap_push(h:rw<Vec[usize]>, value:usize) {
+  vec.push(h, value);
+  let mut i = h.len - 1;
+  while i > 0 {
+    let parent = (i - 1) / 2;
+    let pv = vec.get(h, parent);
+    let cv = vec.get(h, i);
+    if pv <= cv { break; }
+    vec.set(h, parent, cv);
+    vec.set(h, i, pv);
+    i = parent;
+  }
+}
+
+fn heap_pop_min(h:rw<Vec[usize]>) -> usize {
+  let top = vec.get(h, 0);
+  let last = h.len - 1;
+  let last_val = vec.get(h, last);
+  vec.truncate(h, last);
+  if h.len > 0 {
+    vec.set(h, 0, last_val);
+    let mut i:usize = 0;
+    while true {
+      let left = 2 * i + 1;
+      let right = 2 * i + 2;
+      let mut smallest = i;
+      if left < h.len {
+        let lv = vec.get(h, left);
+        let sv = vec.get(h, smallest);
+        if lv < sv { smallest = left; }
+      }
+      if right < h.len {
+        let rv = vec.get(h, right);
+        let sv2 = vec.get(h, smallest);
+        if rv < sv2 { smallest = right; }
+      }
+      if smallest == i { break; }
+      let a = vec.get(h, i);
+      let b = vec.get(h, smallest);
+      vec.set(h, i, b);
+      vec.set(h, smallest, a);
+      i = smallest;
+    }
+  }
+  return top;
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let mut pool = vec.new[Slot]();
+  let mut free_heap = vec.new[usize]();
+  let mut live_count:u64 = 0;
+  let mut live_bytes:u64 = 0;
+  let mut out = vec.new[u8]();
+
+  while true {
+    match next_token(inp) {
+      Some(cmd) => {
+        if text.equal(cmd.hi - cmd.lo, inp.bytes.data[cmd.lo..cmd.hi], 3, "new") {
+          let size_raw:u64 = next_u64(inp);
+          let size:usize = usize(size_raw);
+          let mut slot_idx:usize = 0;
+          if free_heap.len > 0 {
+            slot_idx = heap_pop_min(free_heap);
+            let newbuf = zero_vec(size);
+            pool.data[slot_idx].buf = newbuf;
+            pool.data[slot_idx].generation += 1;
+            pool.data[slot_idx].live = true;
+            pool.data[slot_idx].byte_sum = 0;
+          } else {
+            slot_idx = pool.len;
+            let newbuf = zero_vec(size);
+            vec.push(pool, Slot(newbuf, 1, true, 0));
+          }
+          live_count += 1;
+          live_bytes += u64(size);
+          format(out, "h ", u64(slot_idx), " ", pool.data[slot_idx].generation, "\n");
+        } else if text.equal(cmd.hi - cmd.lo, inp.bytes.data[cmd.lo..cmd.hi], 3, "set") {
+          let i_raw:u64 = next_u64(inp);
+          let i:usize = usize(i_raw);
+          let g:u64 = next_u64(inp);
+          let off:u64 = next_u64(inp);
+          let v:u64 = next_u64(inp);
+          if i < pool.len && pool.data[i].live && pool.data[i].generation == g {
+            let sz = pool.data[i].buf.len;
+            if off >= u64(sz) {
+              format(out, "bounds\n");
+            } else {
+              let oldv = pool.data[i].buf.data[usize(off)];
+              pool.data[i].byte_sum = pool.data[i].byte_sum - u64(oldv) + v;
+              pool.data[i].buf.data[usize(off)] = u8(v);
+              format(out, "ok\n");
+            }
+          } else {
+            format(out, "stale\n");
+          }
+        } else if text.equal(cmd.hi - cmd.lo, inp.bytes.data[cmd.lo..cmd.hi], 3, "sum") {
+          let i_raw:u64 = next_u64(inp);
+          let i:usize = usize(i_raw);
+          let g:u64 = next_u64(inp);
+          if i < pool.len && pool.data[i].live && pool.data[i].generation == g {
+            format(out, pool.data[i].byte_sum, "\n");
+          } else {
+            format(out, "stale\n");
+          }
+        } else if text.equal(cmd.hi - cmd.lo, inp.bytes.data[cmd.lo..cmd.hi], 4, "move") {
+          let i_raw:u64 = next_u64(inp);
+          let i:usize = usize(i_raw);
+          let g:u64 = next_u64(inp);
+          let j_raw:u64 = next_u64(inp);
+          let j:usize = usize(j_raw);
+          let h:u64 = next_u64(inp);
+          let i_valid = i < pool.len && pool.data[i].live && pool.data[i].generation == g;
+          let j_valid = j < pool.len && pool.data[j].live && pool.data[j].generation == h;
+          if !i_valid || !j_valid {
+            format(out, "stale\n");
+          } else if i == j && g == h {
+            format(out, "same\n");
+          } else {
+            let src_sum = pool.data[i].byte_sum;
+            let moved = take(pool.data[i].buf);
+            vec.extend_from(pool.data[j].buf, moved.len, moved);
+            pool.data[j].byte_sum += src_sum;
+            let newsize = pool.data[j].buf.len;
+            pool.data[i].live = false;
+            pool.data[i].byte_sum = 0;
+            heap_push(free_heap, i);
+            live_count -= 1;
+            format(out, "ok ", newsize, "\n");
+          }
+        } else if text.equal(cmd.hi - cmd.lo, inp.bytes.data[cmd.lo..cmd.hi], 4, "free") {
+          let i_raw:u64 = next_u64(inp);
+          let i:usize = usize(i_raw);
+          let g:u64 = next_u64(inp);
+          if i < pool.len && pool.data[i].live && pool.data[i].generation == g {
+            let sz = pool.data[i].buf.len;
+            pool.data[i].buf = vec.new[u8]();
+            pool.data[i].live = false;
+            pool.data[i].byte_sum = 0;
+            heap_push(free_heap, i);
+            live_count -= 1;
+            live_bytes -= u64(sz);
+            format(out, "ok\n");
+          } else {
+            format(out, "stale\n");
+          }
+        }
+      }
+      None => break;
+    }
+  }
+
+  format(out, "live ", live_count, " ", live_bytes, "\n");
+  print(out);
+  return 0;
+}

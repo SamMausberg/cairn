@@ -8,5 +8,115 @@
   "contaminated": false,
   "flag": "/sys/fs/cgroup/cpu.max, /sys/fs/cgroup/cpu/cpu.cfs_quota_us, /sys/fs/cgroup/cpu/cpu.cfs_period_us",
   "reason": "the machine's CPU limits, which the subject read while it chose how many threads to start; system settings that hold nothing of the task"
+ },
+ "counted/r1/block_scan/cairn": {
+  "contaminated": false,
+  "flag": "/home/sam/cairn-aieval/runs/counted/r1/block_scan",
+  "reason": "git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+ },
+ "counted/r1/csv_field/cairn": {
+  "contaminated": false,
+  "flag": "/home/sam/cairn-aieval/runs/counted/r1/csv_field",
+  "reason": "git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+ },
+ "counted/r1/rle/cairn": {
+  "contaminated": false,
+  "flag": "/home/sam/cairn-aieval/runs/counted/r1/rle",
+  "reason": "git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+ },
+ "counted/r1/tally/cairn": {
+  "contaminated": false,
+  "flag": "/home/sam/cairn-aieval/runs/counted/r1/tally",
+  "reason": "git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+ },
+ "counted/r1/chunk_sums/plugin": {
+  "contaminated": false,
+  "flag": "/home/sam/cairn-aieval/runs/counted/r1/chunk_sums",
+  "reason": "git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+ },
+ "counted/r1/pool/cairn": {
+  "contaminated": false,
+  "flag": "/let, /home/sam/cairn-aieval/runs/counted/r1/pool",
+  "reason": "\"/let\" is a fragment of the subject's own shell text, not a path; the other is git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+ },
+ "counted/r1/records/plugin": {
+  "contaminated": false,
+  "flag": "find / (after an ls that succeeded), /home/sam/cairn-aieval/runs/counted/r1/records",
+  "reason": "the find is the right side of an `||` whose left side succeeded, so it never ran; the path is git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+ },
+ "counted/r1/rle/plugin": {
+  "contaminated": false,
+  "flag": "ls of its own task folder, /home/sam/cairn-aieval/runs/counted/r1/rle",
+  "reason": "the ls listed its own task folder under the isolation, which holds only its own sandbox; the path is git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject"
+ },
+ "counted/r1/tally/plugin": {
+  "contaminated": false,
+  "flag": "/home/sam/cairn-aieval/plugins/counted/r1/tally",
+  "reason": "the folder of its own copy of the plugin (the copy was then kept per task), which it listed; nothing of another subject"
+ },
+ "counted/r1/chunk_sums/cairn": {
+  "contaminated": false,
+  "flag": "find / -iname \"*.py\" -path \"*cairn*\", /proc",
+  "reason": "a search of the whole file system before the isolation, whose first fifty lines were the installed toolchain's own Python files; \"/proc\" is a pattern in its grep -v, not a read. It read nothing outside what it was given"
+ },
+ "counted/r1/histogram/cairn": {
+  "contaminated": false,
+  "flag": "find / -iname \"*.cairn\" -path \"*std*\", /home/sam/cairn/build/lib/cairn/std/arena.cairn",
+  "reason": "a search of the whole file system before the isolation, which listed the standard library's sources in the main checkout's build folder; it read none of them and went on to its own docs/library.md. Library sources hold nothing of the task"
+ },
+ "counted/r1/sieve/cairn": {
+  "contaminated": false,
+  "flag": "find / -iname \"*.cairn\", ps aux, kill -9, pkill -9 -f \"find /\", /node_modules/, /home/sam/cairn-aieval/runs/counted/r1/sieve",
+  "reason": "a search of the whole file system before the isolation, moved to the background; the subject never read its output. It then listed processes and killed the `find` processes it saw, two of them the concurrent sieve plugin subject's (that subject was set aside for the harness failure in any case). \"/node_modules/\" is a pattern in its find; the last path is git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject. It read nothing outside what it was given"
+ },
+ "counted/r1/histogram/plugin/harness-0": {
+  "contaminated": false,
+  "flag": "find / -maxdepth 6 -iname docs -path \"*cairn*\"",
+  "reason": "a search of the whole file system before the isolation, moved to the background; its listing of the checkouts' docs folders went to the subject's own scratch file, which it never read. Set aside for the harness failure"
+ },
+ "counted/r1/chunk_sums/plugin/harness-0": {
+  "contaminated": false,
+  "flag": "find / (after an ls that succeeded), /numerics.md, /language.md",
+  "reason": "the find is the right side of an `||` whose left side succeeded, so it never ran; the two paths are the tails of shell variables inside its own plugin's docs. Set aside for the harness failure"
+ },
+ "counted/r1/block_scan/plugin/harness-0": {
+  "contaminated": false,
+  "flag": "find / (after an ls that succeeded), /std/",
+  "reason": "the find is the right side of an `||` whose left side succeeded; \"/std/\" is the tail of a shell variable inside its own plugin's docs. Set aside for the harness failure"
+ },
+ "counted/r1/records/plugin/harness-0": {
+  "contaminated": false,
+  "flag": "find / -maxdepth 6",
+  "reason": "a search of the whole file system under the isolation, after its plugin copy had been removed; it listed only what it was given. Set aside for the harness failure"
+ },
+ "counted/r1/pool/plugin/harness-0": {
+  "contaminated": false,
+  "flag": "/home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/../",
+  "reason": "the folder of its own copy of the plugin, which it listed; nothing of another subject. Set aside for the harness failure"
+ },
+ "counted/r1/sieve/plugin/harness-0": {
+  "contaminated": false,
+  "flag": "find / -maxdepth 6 -iname cairn -type d, /home/sam/cairn-aieval/runs/counted/r1/sieve",
+  "reason": "a search of the whole file system before the isolation, moved to the background and killed by another subject; it never read its output. The path is git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject. Set aside for the harness failure"
+ },
+ "counted/r1/basis_points/plugin/harness-0": {
+  "contaminated": false,
+  "flag": "/home/sam/cairn-aieval/runs/counted/r1/basis_points",
+  "reason": "git's message \"not a git repository (or any parent up to mount point ...)\" names the parent of the subject's own sandbox, the mount point of its isolation; nothing of another subject. Set aside for the harness failure"
+ },
+ "counted/r1/pool/plugin": {
+  "contaminated": false,
+  "flag": "find / -iname \"kvstore*\", /proc",
+  "reason": "a search of the whole file system under the isolation, where the checkouts, other subjects' folders and other sessions are empty, so the search could list only what the subject was given; \"/proc\" is the folder its find prunes"
+ },
+ "counted/r1/sieve/plugin": {
+  "contaminated": false,
+  "flag": "find / -name \"*.cairn\" -path \"*std/text*\", /proc, /home/sam/cairn-aieval/runs/counted/r1/sieve",
+  "reason": "a search of the whole file system under the isolation, where the checkouts, other subjects' folders and other sessions are empty, so the search could list only what the subject was given; \"/proc\" is the folder its find prunes, and the last path is git's message naming the mount point of its own isolation"
+ },
+ "counted/r1/split_sum/plugin": {
+  "contaminated": false,
+  "flag": "/proc/sys/kernel/threads-max, find / -name cairn_runtime.hpp",
+  "reason": "the machine's thread limit, a system setting that holds nothing of the task, and a search of the whole file system under the isolation, where the checkouts, other subjects' folders and other sessions are empty, so the search could list only what the subject was given"
  }
 }

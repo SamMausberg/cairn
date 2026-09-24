@@ -1,0 +1,125 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The value of one lowercase hex digit.
+fn hex_digit(b:u8) -> u8 {
+  if b >= 97 { return b - 97 + 10; }
+  return b - 48;
+}
+
+// The decoded byte at hex-digit position `lo + 2*i` of a buffer of ascii hex digits.
+fn hex_byte(n:usize, buf:ro<u8>[n], lo:usize, i:usize) -> u8 {
+  let hi = hex_digit(buf[lo + 2 * i]);
+  let at = hex_digit(buf[lo + 2 * i + 1]);
+  return hi * 16 + at;
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let cap = next_u64(inp);
+  let hex = next_token(inp);
+  let mut hex_lo:usize = inp.bytes.len;
+  let mut hex_hi:usize = inp.bytes.len;
+  match hex { Some(s) => { hex_lo = s.lo; hex_hi = s.hi; } None => {} }
+  let raw_n = (hex_hi - hex_lo) / 2;
+  let total = inp.bytes.len;
+
+  let mut out = vec.new[u8]();
+  let mut i:usize = 0;
+  while i < raw_n {
+    let o = i;
+    let c = hex_byte(total, inp.bytes.data[0..total], hex_lo, i);
+    if c < 128 {
+      let length = usize(c) + 1;
+      if i + 1 + length > raw_n {
+        println("err truncated ", o);
+        return 0;
+      }
+      if out.len + length > usize(cap) {
+        println("err full ", o);
+        return 0;
+      }
+      for k in 0..length { vec.push(out, hex_byte(total, inp.bytes.data[0..total], hex_lo, i + 1 + k)); }
+      i = i + 1 + length;
+    } else {
+      let count = usize(c) - 126;
+      if i + 1 >= raw_n {
+        println("err truncated ", o);
+        return 0;
+      }
+      let value = hex_byte(total, inp.bytes.data[0..total], hex_lo, i + 1);
+      if out.len + count > usize(cap) {
+        println("err full ", o);
+        return 0;
+      }
+      for k in 0..count { vec.push(out, value); }
+      i = i + 2;
+    }
+  }
+
+  let hash = text.hash_bytes(out.len, out.data[0..out.len]);
+  stack hexbuf:u8[16] = zeroed;
+  text.write_hex(hexbuf, hash, 16);
+  println("ok ", out.len, " ", hexbuf);
+  return 0;
+}

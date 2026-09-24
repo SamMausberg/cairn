@@ -1,0 +1,202 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+import std.fmt;
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+const COMMA:u8 = 44;
+const DOT:u8 = 46;
+const ZERO:u8 = 48;
+const NINE:u8 = 57;
+
+const ID_MAX_LEN:usize = 10;
+const ID_MAX:u64 = 4294967295;
+const QTY_MAX_LEN:usize = 5;
+const QTY_MAX:u64 = 65535;
+const PRICE_MAX_LEN:usize = 19;
+const PRICE_MAX:u64 = 9223372036854775807;
+
+enum Kind { Missing; Extra; Empty; Digit; Format; Range; }
+
+struct FieldCheck { ok:bool; value:u64; kind:Kind; col:usize; }
+
+// The value of a contiguous run of digits, or None when it has more significant digits than `maxlen` allows.
+fn digit_span_value(n:usize, s:ro<u8>[n], maxlen:usize) -> Option[u64] {
+  let mut i:usize = 0;
+  while i < n && s[i] == ZERO { i += 1; }
+  let k = n - i;
+  if k > maxlen { return None; }
+  let mut v:u64 = 0;
+  for j in i..n { v = v * 10 + u64(s[j] - ZERO); }
+  return Some(v);
+}
+
+// The value of two digit runs read as one number (the price's digits with the point removed).
+fn price_digits_value(n1:usize, s1:ro<u8>[n1], n2:usize, s2:ro<u8>[n2], maxlen:usize) -> Option[u64] {
+  let mut i:usize = 0;
+  while i < n1 && s1[i] == ZERO { i += 1; }
+  let mut skip2:usize = 0;
+  if i == n1 {
+    let mut j:usize = 0;
+    while j < n2 && s2[j] == ZERO { j += 1; }
+    skip2 = j;
+  }
+  let total = n1 + n2;
+  let skipped = i + skip2;
+  let k = total - skipped;
+  if k > maxlen { return None; }
+  let mut v:u64 = 0;
+  for j in i..n1 { v = v * 10 + u64(s1[j] - ZERO); }
+  for j in skip2..n2 { v = v * 10 + u64(s2[j] - ZERO); }
+  return Some(v);
+}
+
+// `id` or `qty`: an empty field, a non-digit byte, or a value above `maxval`.
+fn check_id_or_qty(n:usize, s:ro<u8>[n], start_col:usize, maxlen:usize, maxval:u64) -> FieldCheck {
+  if n == 0 { return FieldCheck(false, 0, Kind.Empty, start_col); }
+  for j in 0..n {
+    if s[j] < ZERO || s[j] > NINE {
+      return FieldCheck(false, 0, Kind.Digit, start_col + j);
+    }
+  }
+  match digit_span_value(n, s, maxlen) {
+    Some(v) => {
+      if v <= maxval { return FieldCheck(true, v, Kind.Empty, 0); }
+      return FieldCheck(false, 0, Kind.Range, start_col);
+    }
+    None => { return FieldCheck(false, 0, Kind.Range, start_col); }
+  }
+}
+
+// `price`: an empty field, a non-digit non-dot byte, a bad shape, or a value above the maximum.
+fn check_price(n:usize, s:ro<u8>[n], start_col:usize) -> FieldCheck {
+  if n == 0 { return FieldCheck(false, 0, Kind.Empty, start_col); }
+  for j in 0..n {
+    let b = s[j];
+    if (b < ZERO || b > NINE) && b != DOT {
+      return FieldCheck(false, 0, Kind.Digit, start_col + j);
+    }
+  }
+  match text.find_byte(n, s, DOT, 0) {
+    None => { return FieldCheck(false, 0, Kind.Format, start_col); }
+    Some(dot) => {
+      match text.find_byte(n, s, DOT, dot + 1) {
+        Some(second) => { return FieldCheck(false, 0, Kind.Format, start_col); }
+        None => {
+          let before = dot;
+          let after = n - dot - 1;
+          if before < 1 || after != 2 {
+            return FieldCheck(false, 0, Kind.Format, start_col);
+          }
+          match price_digits_value(before, s[0..dot], after, s[dot + 1..n], PRICE_MAX_LEN) {
+            Some(v) => {
+              if v <= PRICE_MAX { return FieldCheck(true, v, Kind.Empty, 0); }
+              return FieldCheck(false, 0, Kind.Range, start_col);
+            }
+            None => { return FieldCheck(false, 0, Kind.Range, start_col); }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn kind_name(k:Kind, out:rw<Vec[u8]>) {
+  match k {
+    Missing => { fmt.bytes(out, "missing"); }
+    Extra => { fmt.bytes(out, "extra"); }
+    Empty => { fmt.bytes(out, "empty"); }
+    Digit => { fmt.bytes(out, "digit"); }
+    Format => { fmt.bytes(out, "format"); }
+    Range => { fmt.bytes(out, "range"); }
+  }
+}
+
+fn output_err(lineno:u64, col:usize, k:Kind, out:rw<Vec[u8]>) {
+  fmt.bytes(out, "err ");
+  fmt.uint(out, lineno);
+  fmt.bytes(out, " ");
+  fmt.uint(out, u64(col));
+  fmt.bytes(out, " ");
+  kind_name(k, out);
+  fmt.bytes(out, "\n");
+}
+
+fn output_ok(id:u64, qty:u64, cents:u64, out:rw<Vec[u8]>) {
+  fmt.bytes(out, "ok ");
+  fmt.uint(out, id);
+  fmt.bytes(out, " ");
+  fmt.uint(out, qty);
+  fmt.bytes(out, " ");
+  fmt.uint(out, cents);
+  fmt.bytes(out, "\n");
+}
+
+fn process_line(n_line:usize, line:ro<u8>[n_line], lineno:u64, out:rw<Vec[u8]>) {
+  match text.find_byte(n_line, line, COMMA, 0) {
+    None => { output_err(lineno, n_line + 1, Kind.Missing, out); return; }
+    Some(c1) => {
+      match text.find_byte(n_line, line, COMMA, c1 + 1) {
+        None => { output_err(lineno, n_line + 1, Kind.Missing, out); return; }
+        Some(c2) => {
+          match text.find_byte(n_line, line, COMMA, c2 + 1) {
+            Some(c3) => { output_err(lineno, c3 + 1, Kind.Extra, out); return; }
+            None => {
+              let idcheck = check_id_or_qty(c1, line[0..c1], 1, ID_MAX_LEN, ID_MAX);
+              if !idcheck.ok { output_err(lineno, idcheck.col, idcheck.kind, out); return; }
+              let qtycheck = check_id_or_qty(c2 - (c1 + 1), line[c1 + 1..c2], c1 + 2, QTY_MAX_LEN, QTY_MAX);
+              if !qtycheck.ok { output_err(lineno, qtycheck.col, qtycheck.kind, out); return; }
+              let pricecheck = check_price(n_line - (c2 + 1), line[c2 + 1..n_line], c2 + 2);
+              if !pricecheck.ok { output_err(lineno, pricecheck.col, pricecheck.kind, out); return; }
+              output_ok(idcheck.value, qtycheck.value, pricecheck.value, out);
+              return;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn main() -> i32 {
+  let inp = read_input();
+  let n = inp.bytes.len;
+  let mut out = vec.new[u8]();
+  let mut line_start:usize = 0;
+  let mut lineno:u64 = 0;
+  let mut i:usize = 0;
+  while i < n {
+    if inp.bytes.data[i] == 10 {
+      lineno += 1;
+      process_line(i - line_start, inp.bytes.data[line_start..i], lineno, out);
+      line_start = i + 1;
+    }
+    i += 1;
+  }
+  if line_start < n {
+    lineno += 1;
+    process_line(n - line_start, inp.bytes.data[line_start..n], lineno, out);
+  }
+  io.print(out.len, out.data[0..out.len]);
+  return 0;
+}

@@ -1,0 +1,192 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+fn isqrt(n:usize) -> usize {
+  if n == 0 {
+    return 0;
+  }
+  let mut r:usize = usize(sqrt(f64(n)));
+  while (r + 1) * (r + 1) <= n {
+    r = r + 1;
+  }
+  while r * r > n {
+    r = r - 1;
+  }
+  return r;
+}
+
+// Sieves [2, cap) sequentially into a scratch array, writing the primes found into primes_out.
+fn small_primes(cap:usize, primes_out:rw<usize>[cap]) -> usize {
+  let mut composite = Buf[u8](cap);
+  let mut count:usize = 0;
+  for p in 2..cap {
+    if composite[p] == 0 {
+      primes_out[count] = p;
+      count = count + 1;
+      let mut j = p * p;
+      while j < cap {
+        composite[j] = 1;
+        j = j + p;
+      }
+    }
+  }
+  return count;
+}
+
+// Marks composites in view (global values [base, base + len)) using the given primes.
+fn mark_range(len:usize, view:rw<u8>[len], base:usize, primes_count:usize, primes:ro<usize>[primes_count]) {
+  for i in 0..primes_count {
+    let p = primes[i];
+    let p2 = p * p;
+    let mut low = base;
+    if p2 > base {
+      low = p2;
+    }
+    let mut start = low;
+    let rem = low % p;
+    if rem != 0 {
+      start = low + (p - rem);
+    }
+    let mut idx = start - base;
+    while idx < len {
+      view[idx] = 1;
+      idx = idx + p;
+    }
+  }
+}
+
+// Marks composites over the whole sieve, split across two threads.
+fn sieve_parallel(total:usize, sieve:rw<u8>[total], primes_count:usize, primes:ro<usize>[primes_count]) {
+  let mid = total / 2;
+  let left = spawn mark_range(sieve[0..mid], 0, primes);
+  let right = spawn mark_range(sieve[mid..total], mid, primes);
+  wait(left);
+  wait(right);
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let n64 = next_u64(inp);
+  let n = usize(n64);
+
+  if n < 2 {
+    println("count 0");
+    println("sum 0");
+    println("last none");
+    println("gap none");
+    return 0;
+  }
+
+  let total = n + 1;
+  let mut sieve = Buf[u8](total);
+  sieve[0] = 1;
+  sieve[1] = 1;
+
+  let limit = isqrt(n);
+  let cap = limit + 1;
+  let mut primes_buf = Buf[usize](cap);
+  let primes_count = small_primes(primes_buf);
+
+  sieve_parallel(sieve, primes_buf[0..primes_count]);
+
+  let mut count:usize = 0;
+  let mut sum:usize = 0;
+  let mut last:usize = 0;
+  let mut has_last = false;
+  let mut max_gap:usize = 0;
+  let mut gap_prime:usize = 0;
+  let mut prev:usize = 0;
+  let mut has_prev = false;
+
+  for i in 2..total {
+    if sieve[i] == 0 {
+      count = count + 1;
+      sum = sum + i;
+      last = i;
+      has_last = true;
+      if has_prev {
+        let gap = i - prev;
+        if gap > max_gap {
+          max_gap = gap;
+          gap_prime = prev;
+        }
+      }
+      prev = i;
+      has_prev = true;
+    }
+  }
+
+  println("count ", count);
+  println("sum ", sum);
+  if has_last {
+    println("last ", last);
+  } else {
+    println("last none");
+  }
+  if count >= 2 {
+    println("gap ", max_gap, " ", gap_prime);
+  } else {
+    println("gap none");
+  }
+  return 0;
+}

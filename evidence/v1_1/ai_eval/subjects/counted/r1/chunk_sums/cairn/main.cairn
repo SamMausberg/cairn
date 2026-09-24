@@ -1,0 +1,128 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+const I64_MAX:i64 = 9223372036854775807;
+
+// True when a + b would fall outside i64's range; never overflows itself.
+fn would_overflow_add(a:i64, b:i64) -> bool {
+  if b >= 0 { return a > I64_MAX - b; }
+  let min_minus_b = 0 - I64_MAX - 1 - b;
+  return a < min_minus_b;
+}
+
+struct ChunkResult { idx:usize; sum:i64; overflow:bool; }
+
+// Adds xs left to right from 0, stopping as soon as a partial sum overflows.
+fn sum_chunk(idx:usize, count:usize, xs:ro<i64>[count]) -> ChunkResult {
+  let mut sum:i64 = 0;
+  for i in 0..count {
+    let v = xs[i];
+    if would_overflow_add(sum, v) { return ChunkResult(idx, sum, true); }
+    sum = sum + v;
+  }
+  return ChunkResult(idx, sum, false);
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let kv = next_u64(inp);
+  let k = usize(kv);
+  let nv = next_u64(inp);
+  let n = usize(nv);
+
+  let mut values = vec.new[i64]();
+  for _ in 0..n { let x = next_i64(inp); vec.push(values, x); }
+
+  let mut chunk_sum = Buf[i64](k);
+  let mut chunk_overflow = Buf[bool](k);
+
+  let tasks = Group[ChunkResult](k);
+  for j in 0..k {
+    let lo = j * n / k;
+    let hi = (j + 1) * n / k;
+    spawn sum_chunk(j, values.data[lo..hi]) into tasks;
+  }
+  for _ in 0..k {
+    let r = collect(tasks);
+    chunk_sum[r.idx] = r.sum;
+    chunk_overflow[r.idx] = r.overflow;
+  }
+  wait(tasks);
+
+  let mut any_overflow = false;
+  for j in 0..k {
+    if chunk_overflow[j] { println("chunk ", j, " overflow"); any_overflow = true; }
+    else { println("chunk ", j, " ", chunk_sum[j]); }
+  }
+
+  let mut total_overflow = any_overflow;
+  let mut total:i64 = 0;
+  for j in 0..k {
+    if total_overflow { break; }
+    if would_overflow_add(total, chunk_sum[j]) { total_overflow = true; }
+    else { total = total + chunk_sum[j]; }
+  }
+  if total_overflow { println("total overflow"); }
+  else { println("total ", total); }
+  return 0;
+}

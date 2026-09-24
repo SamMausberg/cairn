@@ -1,0 +1,107 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+fn count_chunk(m:usize, vals:ro<u32>[m], shift:usize, out:rw<u64>[256]) {
+  for i in 0..m {
+    let bin:usize = usize(shr(vals[i], shift) & 255);
+    out[bin] = out[bin] + 1;
+  }
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let n_raw = next_u64(inp);
+  let n = usize(n_raw);
+  let shift_raw = next_u64(inp);
+  let shift = usize(shift_raw);
+  let mut vals = Buf[u32](n);
+  for i in 0..n {
+    let v_raw = next_u64(inp);
+    vals[i] = u32(v_raw);
+  }
+
+  let mut out = Buf[u64](1024);
+
+  let b0:usize = 0;
+  let b1:usize = n / 4;
+  let b2:usize = (n * 2) / 4;
+  let b3:usize = (n * 3) / 4;
+  let b4:usize = n;
+
+  let t0 = spawn count_chunk(vals[b0..b1], shift, out[0..256]);
+  let t1 = spawn count_chunk(vals[b1..b2], shift, out[256..512]);
+  let t2 = spawn count_chunk(vals[b2..b3], shift, out[512..768]);
+  let t3 = spawn count_chunk(vals[b3..b4], shift, out[768..1024]);
+  wait(t0);
+  wait(t1);
+  wait(t2);
+  wait(t3);
+
+  for bin in 0..256 {
+    let total = out[bin] + out[256 + bin] + out[512 + bin] + out[768 + bin];
+    if total != 0 {
+      println(bin, ' ', total);
+    }
+  }
+  return 0;
+}

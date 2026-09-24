@@ -1,8 +1,8 @@
 # The 1.1 evaluation: CAIRN with its plugin, CAIRN with its documentation, C++ and Rust
 
-This folder holds the records of the evaluation [bench/ai/PREREGISTRATION_V1_1.md](../../../bench/ai/PREREGISTRATION_V1_1.md) fixes. So far only its pilot has run. The counted run starts from the commit that brings the preregistration to main, and its results will be in `RESULTS.md` here.
+This folder holds the records of the evaluation [bench/ai/PREREGISTRATION_V1_1.md](../../../bench/ai/PREREGISTRATION_V1_1.md) fixes: its pilot, and its counted run as it stood when it stopped early, 54 of 156 subjects. [RESULTS.md](RESULTS.md) says what the counted subjects did and what may not be read into it, and [RUN_NOTES.md](RUN_NOTES.md) lists every event of the run. `tables_counted.md`, `results_counted.json` and `subjects/counted/` hold every counted subject, and the eleven set aside for a harness failure are under `subjects/counted/r1/*/plugin/set_aside/`. `verify.json` is the check of every reference and starter at the pinned commit, dd3f75e.
 
-## What ran
+## The pilot
 
 The pilot gave `block_scan` to one fresh subject per arm on 24 September 2026: `claude-sonnet-5` at effort `high` in Claude Code 2.1.281, three sessions at a time, each judged by the hidden check as it finished. The toolchain was a wheel of branch commit ba9eb67, whose compiler, documentation and skill are main's at 2679cb3. The machine is an AMD Ryzen 7 7800X3D (16 threads, 70 GB) under WSL2 (Linux 6.18, Ubuntu 24.04), with clang++ 21.1.8, g++ 13.3.0, cargo and rustc 1.95.0 and Python 3.12.3, shared with other agents' test suites.
 
@@ -12,4 +12,4 @@ After the pilot, `harness.py verify` showed every reference passing its hidden c
 
 ## What did not run
 
-The counted run has not started. No device code ran on a GPU: the CAIRN subjects' `block_scan` programs, and the judge's builds of them, ran the device work on host threads under `--emulate`. The pilot's subjects shared the machine's `/tmp`, which the counted run replaces with a `/tmp` of each subject's own.
+The counted run's remaining 102 subjects, and the rerun of the replicate 1 `block_scan` plugin cell. No device code ran on a GPU: the CAIRN subjects' `block_scan` programs, and the judge's builds of them, ran the device work on host threads under `--emulate`. The pilot's subjects shared the machine's `/tmp`, which the counted run replaced with a `/tmp` of each subject's own. The counted run used the same machine and tools as the pilot, the toolchain built from dd3f75e.

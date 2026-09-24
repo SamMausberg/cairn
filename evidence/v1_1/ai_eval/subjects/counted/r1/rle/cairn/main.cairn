@@ -1,0 +1,139 @@
+// The input helpers below are given; everything else is yours to write.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+struct Input { bytes:Vec[u8]; at:usize; }
+struct Span { lo:usize; hi:usize; }
+
+// All of standard input.
+fn read_input() -> Input {
+  let mut bytes = vec.new[u8]();
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => {
+        if got == 0 { more = false; } else { vec.extend_from(bytes, got, chunk[0..got]); }
+      }
+      Err(_) => more = false;
+    }
+  }
+  return Input(bytes, 0);
+}
+
+// The next run of bytes that are not spaces, tabs or line ends, or None at the end of the input.
+fn next_token(inp:rw<Input>) -> Option[Span] {
+  let n = inp.bytes.len;
+  let mut lo = inp.at;
+  while lo < n && inp.bytes.data[lo] <= 32 { lo += 1; }
+  if lo >= n { return None; }
+  let mut hi = lo;
+  while hi < n && inp.bytes.data[hi] > 32 { hi += 1; }
+  inp.at = hi;
+  return Some(Span(lo, hi));
+}
+
+// The next token as an unsigned integer; the input is well formed, so anything else is a guard failure.
+fn next_u64(inp:rw<Input>) -> u64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_u64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an unsigned integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The next token as a signed integer.
+fn next_i64(inp:rw<Input>) -> i64 {
+  match next_token(inp) {
+    Some(s) => {
+      match text.parse_i64(s.hi - s.lo, inp.bytes.data[s.lo..s.hi]) {
+        Ok(v) => return v;
+        Err(_) => { assert(false, "expected an integer"); return 0; }
+      }
+    }
+    None => { assert(false, "input ended early"); return 0; }
+  }
+}
+
+// The value of one lowercase hex digit ('0'-'9', 'a'-'f').
+fn hex_val(c:u8) -> u8 {
+  if c <= 57 { return c - 48; }
+  return c - 97 + 10;
+}
+
+fn main() -> i32 {
+  let mut inp = read_input();
+  let cap_u64 = next_u64(inp);
+  let cap = usize(cap_u64);
+
+  let mut decoded = vec.new[u8]();
+  match next_token(inp) {
+    Some(s) => {
+      let m = s.hi - s.lo;
+      let pairs = m / 2;
+      for i in 0..pairs {
+        let hi = hex_val(inp.bytes.data[s.lo + 2 * i]);
+        let lo = hex_val(inp.bytes.data[s.lo + 2 * i + 1]);
+        vec.push(decoded, hi * 16 + lo);
+      }
+    }
+    None => {}
+  }
+
+  let mut output = vec.new[u8]();
+  let n = decoded.len;
+  let mut pos:usize = 0;
+  let mut fail_kind:u8 = 0;
+  let mut fail_offset:usize = 0;
+
+  while pos < n {
+    let control_offset = pos;
+    let c = decoded.data[pos];
+    pos += 1;
+    if c < 128 {
+      let count:usize = usize(c) + 1;
+      if pos + count > n {
+        fail_kind = 1;
+        fail_offset = control_offset;
+        break;
+      }
+      if output.len + count > cap {
+        fail_kind = 2;
+        fail_offset = control_offset;
+        break;
+      }
+      vec.extend_from(output, count, decoded.data[pos..pos + count]);
+      pos += count;
+    } else {
+      if pos >= n {
+        fail_kind = 1;
+        fail_offset = control_offset;
+        break;
+      }
+      let value = decoded.data[pos];
+      pos += 1;
+      let count:usize = usize(c) - 126;
+      if output.len + count > cap {
+        fail_kind = 2;
+        fail_offset = control_offset;
+        break;
+      }
+      for i in 0..count { vec.push(output, value); }
+    }
+  }
+
+  if fail_kind == 1 { println("err truncated ", fail_offset); return 0; }
+  if fail_kind == 2 { println("err full ", fail_offset); return 0; }
+
+  let hash = text.hash_bytes(output.len, output);
+  stack hex:u8[16] = zeroed;
+  text.write_hex(16, hex, hash, 16);
+  println("ok ", output.len, " ", hex);
+  return 0;
+}

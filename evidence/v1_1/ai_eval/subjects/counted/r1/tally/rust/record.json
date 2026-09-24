@@ -1,0 +1,143 @@
+{
+ "task": "tally",
+ "arm": "rust",
+ "language": "rust",
+ "plugin": null,
+ "scratch": "/home/sam/cairn-aieval/tmp/counted/r1/tally/rust",
+ "hidden": [
+  "/home/sam/cairn",
+  "/home/sam/cairn-wt/captain",
+  "/home/sam/cairn-wt/ci",
+  "/home/sam/cairn-wt/device-perf",
+  "/home/sam/cairn-wt/eval",
+  "/home/sam/cairn-wt/harness",
+  "/home/sam/cairn-wt/kernels",
+  "/home/sam/cairn-wt/review",
+  "/home/sam/cairn-wt/workspace",
+  "/tmp/claude-1000/-home-sam-cairn/64da01d8-7cab-4032-b01f-7f321008f03e/scratchpad/kernels/audit-wt",
+  "/tmp/claude-1000/-home-sam-cairn/64da01d8-7cab-4032-b01f-7f321008f03e/scratchpad/kernels/stack-wt",
+  "/home/sam/cairn-aieval/runs",
+  "/home/sam/cairn-aieval/plugins",
+  "/home/sam/cairn-aieval/tmp",
+  "/home/sam/.claude/projects"
+ ],
+ "limits": {
+  "model": "claude-sonnet-5",
+  "effort": "high",
+  "max_turns": 80,
+  "max_budget_usd": 5.0,
+  "wall_seconds": 2400
+ },
+ "started_at": 1790281477.0,
+ "load_average": {
+  "start": [
+   624.3,
+   480.9,
+   367.1
+  ],
+  "end": [
+   757.7,
+   530.9,
+   388.6
+  ]
+ },
+ "wall_seconds": 41.1,
+ "killed_at_wall_limit": false,
+ "exit_code": 0,
+ "stderr": "",
+ "result": {
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 11,
+  "duration_ms": 39079,
+  "duration_api_ms": 35606,
+  "total_cost_usd": 0.10428499999999999,
+  "usage": {
+   "input_tokens": 22,
+   "cache_creation_input_tokens": 7826,
+   "cache_read_input_tokens": 184635,
+   "output_tokens": 3601,
+   "output_tokens_details": {
+    "thinking_tokens": 731
+   },
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 7826,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 2,
+     "output_tokens": 286,
+     "cache_read_input_tokens": 19766,
+     "cache_creation_input_tokens": 553,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 553
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-sonnet-5": {
+    "inputTokens": 22,
+    "outputTokens": 3601,
+    "cacheReadInputTokens": 184635,
+    "cacheCreationInputTokens": 7826,
+    "webSearchRequests": 0,
+    "costUSD": 0.10428499999999999,
+    "contextWindow": 1000000,
+    "maxOutputTokens": 64000,
+    "thinkingTokens": 731,
+    "canonicalModel": "claude-sonnet-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  },
+  "stop_reason": "end_turn",
+  "terminal_reason": "completed",
+  "permission_denials": [],
+  "api_error_status": null
+ },
+ "sandbox": "/home/sam/cairn-aieval/runs/counted/r1/tally/rust",
+ "toolchain_commit": "dd3f75e8e96917b5b3f200fec54d4bcb4162a4f9",
+ "phase": "counted",
+ "replicate": 1,
+ "study": "v1_1",
+ "harness_commit": "1e4cf82142527d664728ef2a5793cb8f276cef06",
+ "infrastructure": false,
+ "source_bytes": 1685,
+ "verdict": {
+  "passed": true,
+  "reason": "passed",
+  "cases": 11,
+  "builds": {
+   "debug": "built"
+  },
+  "failures": []
+ },
+ "audit": {
+  "tool_calls": {
+   "Read": 3,
+   "Edit": 3,
+   "Bash": 4
+  },
+  "compile_runs": 1,
+  "compile_runs_failed": 0,
+  "flags": []
+ },
+ "contaminated": false,
+ "transcript": {
+  "path": "results/ai_eval/counted/r1/tally/rust/transcript.jsonl",
+  "sha256": "ca24f0b96a1deea68b0f76cab604c7ee0eb729dde9f9a3f5b2cfd62bca873e53",
+  "bytes": 63529
+ },
+ "given_sha256": "101dec9b2a4396557287b5914893b7717cd7fce71fa26e6e02c58c2d6196db21"
+}
