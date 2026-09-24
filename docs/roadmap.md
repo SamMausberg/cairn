@@ -18,13 +18,15 @@ Each gate below is open. A gate closes when its tests, its documentation and its
 - The calculus extended to closures, `lane:f`, device placement, `reduce`, `compact`, queued device work, a group submitted to inside a loop, and declared field extents.
 - Proofs of what the calculus assumes of the emitter: that a part's guard runs on the spawning thread before the task starts (pinned by `tests/soundness` for `spawn` and `spawn ... into g`), and that `cairn_parallel.hpp` performs the proved region protocol under its memory orders.
 - The elision audit's own rules in Lean.
+- Lean models of the rule that each element of an array from outside a cooperative region has one writer (`E-COOP-GLOBAL`), of pipeline stages and of warp collectives. Finite tests and the adversarial review hold them now; `Cooperative.lean` models only the phase rule.
+- What the implementation-layer review did not attack: `launch(threads, block)` with blocks that are not whole warps or from a lane, one symbol in two vendored sources, shared arrays declared in loops and conditions, the execution contexts' scratch reuse, and routes to a reference through `dyn` or a trait method ([evidence/v1_0/review_implementation_layer](../evidence/v1_0/review_implementation_layer/README.md)). Validation also reports a Z3 counterexample beside a finite pass without failing on it or replaying it.
 - SMT coverage of an owner held inside a record, a sum or an array, recursion, concurrency, device placement, storage floats and quantization, a function that asserts, and unbounded loops without a precondition. Owners inside values are the next step.
 
 [verification.md](verification.md) says what each model contains, what it assumes and what it leaves out.
 
 ## Performance
 
-- Device validation. The device half of `cairn predict` is NVIDIA's published figures for one card. Device plans, the execution context, the tensor-core multiply, and storage floats, gradients and asserts in a lane compile for sm_120 and run only under the owner's `make gpu`, `make tune-device` and `make calibrate-device`, which have not run them. Until then no device prediction, plan or speed-of-light fraction is a measurement.
+- Device validation. The device half of `cairn predict` is NVIDIA's published figures for one card. Device plans, the execution context, the tensor-core multiply and its fragments, cooperative regions and pipeline stages, typed PTX in a lane, foreign CUDA implementations, and storage floats, gradients and asserts in a lane compile for sm_120. They run only under the owner's `make gpu`, `make tune-device` and `make calibrate-device`, which have not run them. Until then no device prediction, plan or speed-of-light fraction is a measurement, and nothing shows that `cairn predict` ranks a cooperative region's instances as a device would.
 - Measurements beyond one machine. One x86-64 host and one AArch64 host have been measured, nothing has run across more than one memory domain, and nothing is claimed against tuned C++ or CUDA.
 - `cairn predict`'s weak range: wide host regions of 1e5 to 1e7 elements, which it has predicted up to five times too fast (`evidence/v1_0/perf_model/`).
 - `dot_f64` in the preregistered suite loses to a reassociating reduction by design, because CAIRN keeps a float fold in its written order (`evidence/v1_0/bench/`).
@@ -32,6 +34,7 @@ Each gate below is open. A gate closes when its tests, its documentation and its
 ## AI evidence
 
 - An equal-budget comparison where the languages differ in what gets solved. The preregistered run ([bench/ai/PREREGISTRATION.md](../bench/ai/PREREGISTRATION.md), `evidence/v1_0/ai_benchmark/`) found every task solved in CAIRN, C++ and Rust, with CAIRN at 11.6 times the tokens of C++, mostly spent reading its documentation. Open: larger programs, other model families, and a CAIRN that costs a newcomer fewer tokens to learn.
+- The benchmark with the Claude Code plugin. The run above predates the skill, the plugin and `cairn mcp`; the plugin's only measurement is a six-session smoke comparison ([evidence/v1_0/skill](../evidence/v1_0/skill/README.md)), and the `bench/skill/` eval suite has not run.
 - The preregistered packet trial ([tools/ai/protocol_trial.md](../tools/ai/protocol_trial.md)), which needs fresh model subjects. The context savings in `evidence/v1_0/context/` come from authored transcripts and show nothing about how a model does.
 
 ## Packaging

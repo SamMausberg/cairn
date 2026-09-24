@@ -1,10 +1,10 @@
 # The AI edit protocol
 
-An agent edits CAIRN through a host, which holds the program, shows the agent a packet and decides whether its reply is kept. A request is an object of [project/edit_schema.json](project/edit_schema.json): a `cairn.edit/2` request names its session by a handle such as `e1` and is a `body` edit of a whole function, an `expr` edit of one site named like `x3`, or a request for more context. A replacement is at most 64000 UTF-8 bytes. [internals.md](internals.md#safety-and-trust) lists what a reply can never change, and [demos/repair](../demos/repair/README.md) shows a whole session.
+An agent edits CAIRN through a host, which holds the program, shows the agent a packet and decides whether its reply is kept. A request is an object of [project/edit_schema.json](project/edit_schema.json). A `cairn.edit/2` request names its session by a handle such as `e1`, and is a `body` edit of a whole function, an `expr` edit of one site named like `x3`, or a request for more context. A replacement is at most 64000 UTF-8 bytes. [internals.md](internals.md#safety-and-trust) lists what a reply can never change, and [demos/repair](../demos/repair/README.md) shows a whole session.
 
 ## The rule cards
 
-`src/cairn/agent/teaching.py` holds thirty rule cards, one per part of the language, named in `CARDS`. Each states what its part accepts and refuses, with the diagnostic code of each rule, so a refusal leads back to its card. `base`, `integers` and `calls` go with every packet, and the others are picked by the lexical tokens of the source at hand, so a packet carries only what its program uses.
+`src/cairn/agent/teaching.py` holds thirty-one rule cards, one per part of the language, named in `CARDS`. Each states what its part accepts and refuses, with the diagnostic code of each rule, so a refusal leads back to its card. `base`, `integers` and `calls` go with every packet, and the others are picked by the lexical tokens of the source at hand, so a packet carries only what its program uses.
 
 ## Packets
 
@@ -41,7 +41,7 @@ assert packet["dependencies"]["step"]["evidence"] == "smt-equivalent"
 
 ## Requests beyond an edit
 
-`expand` asks for up to 32 more functions or types; the host answers with each body as written, the types it uses and any card it adds, and the agent may then call what it expanded. `cairn inspect --symbol f --expand g` shows the same, and `--scope component` the whole call-graph component.
+`expand` asks for up to 32 more functions or types. The host answers with each body as written, the types it uses and any card it adds, and the agent may then call what it expanded. `cairn inspect --symbol f --expand g` shows the same, and `--scope component` the whole call-graph component.
 
 ```json
 {"protocol": "cairn.edit/2", "handle": "e1", "kind": "expand", "symbols": ["append", "Header"]}
@@ -51,7 +51,7 @@ assert packet["dependencies"]["step"]["evidence"] == "smt-equivalent"
 
 `predict`, as in `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "predict", "sizes": [{"n": 1e7}]}`, returns [`cairn predict`](tools.md#cairn-predict) for the disclosed functions, and after an admission the predicted ratio against the original at each size. A prediction is not evidence of speed, and the host still decides what is measured.
 
-`shot`, as in `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "shot", "functions": ["panel.ui.update"]}`, runs the latest admitted candidate once, headless, and returns every frame [`std.draw.capture`](library.md#stddraw) wrote, with the effect rows of the named functions and what each gained or lost against the original; `cairn shot app --symbol f` does the same from the command line. Nothing opens a window or touches a device.
+`shot`, as in `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "shot", "functions": ["panel.ui.update"]}`, runs the latest admitted candidate once, headless, and returns every frame [`std.draw.capture`](library.md#stddraw) wrote, with the effect rows of the named functions and what each gained or lost against the original. `cairn shot app --symbol f` does the same from the command line. Nothing opens a window or touches a device.
 
 ```json
 {"schema": "cairn.shot/1", "status": "shot", "exit_code": 0,
@@ -83,7 +83,7 @@ An admitted reply is `typed`, which says nothing yet about its behaviour. A refu
 
 The host keeps the digests behind each handle, so the agent never copies a hash, and sends each card and the terms once per host. On thirty scripted edits of five example programs, a focused packet with one expansion took about a quarter of the context of the component packet (`evidence/v1_0/context/`). No model took part in that measurement.
 
-For a refactoring the host puts `{"preserve": "equivalent"}` or `{"preserve": "identical"}` in the contract, and the candidate is compared with the original as [`cairn diff`](tools.md#cairn-diff) compares versions: `identical` admits only the original's code up to renaming, and `equivalent` also what Z3 shows behaves the same. Anything else is `E-PRESERVE`, with any witness input as the `repair_hint`. An admission names the class it established in `equivalence`, or `not-proved` without the contract.
+For a refactoring the host puts `{"preserve": "equivalent"}` or `{"preserve": "identical"}` in the contract, and the candidate is compared with the original as [`cairn diff`](tools.md#cairn-diff) compares versions. `identical` admits only the original's code up to renaming, and `equivalent` also what Z3 shows behaves the same. Anything else is `E-PRESERVE`, with any witness input as the `repair_hint`. An admission names the class it established in `equivalence`, or `not-proved` without the contract.
 
 ## The program's state
 
@@ -149,7 +149,17 @@ kept = record(".cairn/history", "hypothesis", "spread", "plan spread { lanes 4; 
 assert kept["kind"] == "hypothesis" and len(kept["id"]) == 16
 ```
 
-A record's identity has five parts: `source`, the function and everything it calls as lowered and canonicalized (so an edit elsewhere, a comment or a renamed local leaves it alone) with the variant that makes the candidate; `contract`, what the candidate must preserve; `target`; `compiler`, `implementation_hash()` with the runtime headers; and `artifact`, the build output when there is one. Each record has one kind, and a kind requires what makes it evidence:
+A record's identity has five parts:
+
+| Part | What it holds |
+|---|---|
+| `source` | the function and everything it calls, as lowered and canonicalized, with the variant that makes the candidate; an edit elsewhere, a comment or a renamed local leaves it alone |
+| `contract` | what the candidate must preserve |
+| `target` | the host architecture or device target |
+| `compiler` | `implementation_hash()` with the runtime headers |
+| `artifact` | the build output, when there is one |
+
+Each record has one kind, and a kind requires what makes it evidence:
 
 | Kind | Requires | What it is |
 |---|---|---|
@@ -162,7 +172,9 @@ A record's identity has five parts: `source`, the function and everything it cal
 | `hypothesis` | `claim` | an explanation nothing has confirmed |
 | `experiment` | `run`, `tests` | a run that would confirm or refute a hypothesis |
 
-`History(where).judged(function, base, contracts, targets)` returns a record as `current` while its source, contract and compiler match the program now and its target is one the caller works on, and otherwise under `stale` with the parts that moved. An equal record is kept once, and an analysis such as a compile's reading is kept under the digest of everything it read, with its files. A function's implementations are not part of its source: a candidate that selects one names it by its identity, by everything it calls as lowered and by the sha256 of each vendored source it reaches, so [`cairn tune`](tools.md#cairn-tune) and `cairn state --symbol` cite a validation only while the implementation, its helpers, its vendored sources and its reference are as they were. `judged` rebuilds a record's source from the variant it stored, so they compare that variant with the implementation as it is now. An implementation has one name in the history, the selection that runs it: `plan prefix use prefix_by4;`, or `plan prefix use prefix_by[16];` for an instance, whoever kept the record (`cairn tune`, `cairn validate --history` or an implementation session), so the investigation packet shows what was validated, compiled and measured of it under that one name.
+`History(where).judged(function, base, contracts, targets)` returns a record as `current` while its source, contract and compiler match the program now and its target is one the caller works on. Otherwise the record is under `stale`, with the parts that moved. An equal record is kept once, and an analysis such as a compile's reading is kept under the digest of everything it read, with its files.
+
+A function's implementations are not part of its source. A candidate that selects one names it by its identity, by everything it calls as lowered and by the sha256 of each vendored source it reaches. [`cairn tune`](tools.md#cairn-tune) and `cairn state --symbol` therefore cite a validation only while the implementation, its helpers, its vendored sources and its reference are as they were, and `judged` rebuilds a record's source from the variant it stored to compare it with the implementation as it is now. An implementation has one name in the history, the selection that runs it: `plan prefix use prefix_by4;`, or `plan prefix use prefix_by[16];` for an instance. The name is the same whoever kept the record (`cairn tune`, `cairn validate --history` or an implementation session), so the investigation packet shows what was validated, compiled and measured of it under that one name.
 
 ## Implementation sessions
 
@@ -183,7 +195,7 @@ answer = host.respond({"protocol": "cairn.implementation/1", "handle": "i1", "ki
 assert answer["status"] == "validated" and answer["select_with"] == "plan prefix use prefix_blocks;"
 ```
 
-The packet shows the reference's declaration, row, ceiling and roundings, the implementations it already has, and what the host pinned, each with its digest: the tolerance on float results, the test policy (cases, seed, shrinking budget, time per call) and the permitted inputs. A submission is one implementation of the reference, new or replacing one of the same name, and any helpers it calls. The host splices it in, rechecks the whole program with every `E-IMPL-*` rule, and runs [`cairn validate`](tools.md#cairn-validate) under the pinned policy. Only a validated implementation advances the source; the answer says how to select it, and selecting is the host's decision.
+The packet shows the reference's declaration, row, ceiling and roundings, and the implementations it already has. It also shows what the host pinned, each with its digest: the tolerance on float results, the test policy (cases, seed, shrinking budget, time per call) and the permitted inputs. A submission is one implementation of the reference, new or replacing one of the same name, and any helpers it calls. The host splices it in, rechecks the whole program with every `E-IMPL-*` rule, and runs [`cairn validate`](tools.md#cairn-validate) under the pinned policy. Only a validated implementation advances the source; the answer says how to select it, and selecting is the host's decision.
 
 | Code | Why |
 |---|---|
@@ -195,7 +207,9 @@ The packet shows the reference's declaration, row, ceiling and roundings, the im
 | `E-CALLER-EFFECT` | another function's row grew |
 | `E-VALIDATION` | validation failed, with the shrunk input in `finite.failed` and the `repair_hint`, or it could not decide, which is never success |
 
-The compiler's own refusals come back as they are (`E-IMPL-SIGNATURE`, `E-IMPL-WHEN`, `E-IMPL-EFFECT`, `E-IMPL-PARAM`, ...), located in the submission, and a failing case is kept in the regressions file for the project's next test run. A submission with [natural parameters](abstractions.md#implementations) is admitted only when every instance its `tune` clause lists validates; the answer gives each instance's result under `instances`, and a failing one is `E-VALIDATION` naming the instance. A validated answer holds the identity, the condition, the row, what the implementation requires of the machine, the finite result with its counts and its label, which says finite testing and never proof, and Z3's answer apart from it. When the host names a `records` directory, every submission goes to the [candidate history](#candidate-history): a `validation` record, or a `failure` record with its stage and why, under an identity made of the reference as written, the implementation's own identity, the pinned contract and the host. A `history` callback gets the same entry. [examples/implementations](examples.md#examplesimplementations) replays a scripted agent through one session.
+The compiler's own refusals come back as they are (`E-IMPL-SIGNATURE`, `E-IMPL-WHEN`, `E-IMPL-EFFECT`, `E-IMPL-PARAM`, ...), located in the submission, and a failing case is kept in the regressions file for the project's next test run. A submission with [natural parameters](abstractions.md#implementations) is admitted only when every instance its `tune` clause lists validates; the answer gives each instance's result under `instances`, and a failing one is `E-VALIDATION` naming the instance.
+
+A validated answer holds the identity, the condition, the row and what the implementation requires of the machine. It holds the finite result with its counts and its label, which says finite testing and never proof, and Z3's answer apart from it. When the host names a `records` directory, every submission goes to the [candidate history](#candidate-history): a `validation` record, or a `failure` record with its stage and why. Its identity is made of the reference as written, the implementation's own identity, the pinned contract and the host. A `history` callback gets the same entry. [examples/implementations](examples.md#examplesimplementations) replays a scripted agent through one session.
 
 ## Resuming an investigation
 
@@ -217,7 +231,7 @@ cairn state app --symbol lib.spread --since before.json    # only what changed
  "hypotheses": [], "experiments": [], "stale": {"records": 0, "by_part": {}}, ...}
 ```
 
-Beside the function's signature, row, plan, regions and current identity, the packet holds only the history that still holds: per candidate what was measured and by which procedure, what a compile read, what failed and why, and what was validated or profiled; the last searches and what they ranked best; and the hypotheses and suggested experiments, an experiment `done` once the runs it asks for are kept. A validation holds while the implementation, its reference and the compiler are as they were, under the policy and on the host it names, as `cairn tune` cites it. Records that no longer hold are counted under `stale` by the part that moved. The packet above was 2,959 bytes for a function with three measured candidates, and running the same `cairn tune --measure` again starts no run, since every measurement it needs is kept.
+Beside the function's signature, row, plan, regions and current identity, the packet holds only the history that still holds. For each candidate that is what was measured and by which procedure, what a compile read, what failed and why, and what was validated or profiled. It adds the last searches and what they ranked best, and the hypotheses and suggested experiments; an experiment is `done` once the runs it asks for are kept. A validation holds while the implementation, its reference and the compiler are as they were, under the policy and on the host it names, as `cairn tune` cites it. Records that no longer hold are counted under `stale` by the part that moved. The packet above was 2,959 bytes for a function with three measured candidates, and running the same `cairn tune --measure` again starts no run, since every measurement it needs is kept.
 
 ## Named choices
 
@@ -259,7 +273,7 @@ The receipt records the reference and candidate hashes, the domain, the query ha
 
 ## The skill and the Claude Code plugin
 
-`skills/cairn/` is an [Agent Skill](https://agentskills.io): `SKILL.md` holds the check, test and run loop, the three cards every packet carries and an example that compiles; `codes.md` maps each diagnostic code to its card and fix; `cards/` holds the other cards. An agent lists only the description, about 180 tokens, and reads `SKILL.md` (about 3,800 tokens) when a task involves CAIRN. `python -m cairn.agent.skill` writes the directory from `teaching.py`, `diagnostics.py` and the command line's parser, `make editors` runs it, and `tests/tooling/test_skill.py` fails while a committed file differs from a fresh render.
+`skills/cairn/` is an [Agent Skill](https://agentskills.io). `SKILL.md` holds the loop of check, test and run, and of validate and tune for implementations, the three cards every packet carries, an example that compiles, the costliest mistakes and every command. `codes.md` maps each diagnostic code to its card and fix, and `cards/` holds the other twenty-eight cards. An agent lists only the description, about 180 tokens, and reads `SKILL.md`, 12 KB, when a task involves CAIRN. `python -m cairn.agent.skill` writes the directory from `teaching.py`, `diagnostics.py` and the command line's parser, `make editors` runs it, and `tests/tooling/test_skill.py` fails while a committed file differs from a fresh render.
 
 The repository is also a Claude Code plugin and its own marketplace:
 
@@ -270,17 +284,17 @@ claude plugin install cairn@cairn
 
 The plugin adds the skill, puts `bin/cairn` on the session's `PATH`, and runs `cairn lsp` on `.cairn` files, so each edit returns the compiler's diagnostics to the agent. It needs Python 3.11 or later and a C++20 compiler and downloads nothing. Another agent that reads Agent Skills can load `skills/cairn/` directly, with `bin/cairn` of a checkout on its `PATH`.
 
-The plugin also starts [`cairn mcp`](tools.md#cairn-mcp), a Model Context Protocol server, so an agent without a shell reaches the same hosts: `check`, `state`, and the edit, plan and implementation sessions of this page, as eight tools. A session opened on a path writes each change its host admits back to the files it came from, and refuses as stale (`E-SESSION`) when a file changed since the session read it. Claude Desktop and other MCP clients start the same server as `bin/cairn` with the argument `mcp`. `claude plugin details` counts the skill's description, about 181 tokens, as the plugin's whole always-on cost and does not count MCP tool schemas; the eight tools' list is 4,061 bytes of JSON, about a thousand tokens more wherever a client loads tool schemas up front.
+The plugin also starts [`cairn mcp`](tools.md#cairn-mcp), a Model Context Protocol server, so an agent without a shell reaches the same hosts: `check`, `state`, and the edit, plan and implementation sessions of this page, as eight tools. A session opened on a path writes each change its host admits back to the files it came from, and refuses as stale (`E-SESSION`) when a file changed since the session read it. Claude Desktop and other MCP clients start the same server as `bin/cairn` with the argument `mcp`. `claude plugin details` counts the skill's description, about 180 tokens, as the plugin's whole always-on cost and does not count MCP tool schemas. The eight tools' list is 4,061 bytes of JSON: about a thousand tokens more for a client that loads tool schemas up front, and about 116 for Claude Code, which loads a schema only when a tool is searched for ([evidence/v1_0/skill](../evidence/v1_0/skill/README.md)).
 
-In a six-run smoke comparison (three small tasks, one `claude-sonnet-5` session each with and without the plugin), every session solved its task, and the sessions with the plugin cost 0.51 times as much and took 40 turns instead of 70, because they read two cards instead of searching the checkout ([evidence/v1_0/skill](../evidence/v1_0/skill/README.md)). One run per cell is not a benchmark.
+A six-run smoke comparison ran three small tasks, one `claude-sonnet-5` session each with and without the plugin, before the plugin had `cairn mcp`. Every session solved its task, and the sessions with the plugin cost 0.51 times as much and took 40 turns instead of 70, because they read two cards instead of searching the checkout ([evidence/v1_0/skill](../evidence/v1_0/skill/README.md)). One run per cell is not a benchmark.
 
-`bench/skill/` is a `claude plugin eval` suite, which `plugin.json` names under `experimental.evals`. Its six cases need only the Read, Glob, Grep and Skill tools: five refused programs, each graded by a regular expression for its diagnostic code, a rubric for the fix and whether the skill fired, and one checksum to write. `tests/tooling/test_skill.py` holds each program to the code its case grades. The suite has not been run.
+`bench/skill/` is a `claude plugin eval` suite, which `plugin.json` names under `experimental.evals`. Its six cases need only the Read, Glob, Grep and Skill tools. Five are refused programs, each graded by a regular expression for its diagnostic code, a rubric for the fix and whether the skill fired, and one is a checksum to write. `tests/tooling/test_skill.py` holds each program to the code its case grades. The suite has not been run.
 
 ## Training material and trials
 
 `tools/corpus/` holds hand-written teaching material in the protocol's format: 40 tasks in 14 algorithm families, each with an equivalent and an inequivalent implementation, 28 preference pairs, and 29 executed repair transcripts. Its answers ship, so none of it is a held-out test. Solver timeouts, failed translations and tool errors never become positive labels, and edits that weaken a signature or empty a domain are not rewarded.
 
-Two experiments are designed. [tools/ai/protocol_trial.md](../tools/ai/protocol_trial.md) compares the focused and component packets on twelve planted repairs, and has not run. [bench/ai/PREREGISTRATION.md](../bench/ai/PREREGISTRATION.md) gives ten tasks to fresh model subjects in CAIRN, C++ and Rust at equal budgets, with results under `evidence/v1_0/ai_benchmark/`. Only the second compares languages, and neither tests other model families or large programs.
+Two experiments are designed. [tools/ai/protocol_trial.md](../tools/ai/protocol_trial.md) compares the focused and component packets on twelve planted repairs, and has not run. [bench/ai/PREREGISTRATION.md](../bench/ai/PREREGISTRATION.md) gives ten tasks to fresh model subjects in CAIRN, C++ and Rust at equal budgets; it ran before the plugin existed, and its results are under `evidence/v1_0/ai_benchmark/`. Only the second compares languages, and neither tests other model families or large programs.
 
 ## Closed generator contracts
 
