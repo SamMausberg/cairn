@@ -36,7 +36,7 @@ The containers ran on the reference machine (x86-64, WSL2, Linux 6.18) under Doc
 
 ## What did not run
 
-No device code ran anywhere. The toolkits between 12.9 and 13.2 and after 13.2, GCC 12 to 14 and Clang 14 to 22 apart from the runners' defaults, and the weekly scheduled run, have not run. The `ci-passed` check has not yet been green on `main`. The runs failed first on the findings above, then on tests landed beside them, each fixed as it was found:
+No device code ran anywhere. The toolkits between 12.9 and 13.2 and after 13.2, GCC 12 to 14 and Clang 14 to 22 apart from the runners' defaults, and the weekly scheduled run, have not run. The `ci-passed` check was first green on `main` in run 36057378396 at f7d92d8, which passed all 20 jobs after this record was written. Before it, the runs failed first on the findings above, then on tests landed beside them, each fixed as it was found:
 
 | Run | Commit | Red on |
 |---|---|---|
