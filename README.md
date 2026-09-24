@@ -25,6 +25,7 @@ error[E-COOP-UNORDERED]: thread t = 255 reads tile[0] at line 7, which thread t 
   |
 7 |     if i < n { out[i] = tile[255 - t]; }
   |                         ^^^^
+  = note: the cooperative card states this rule: cairn rules E-COOP-UNORDERED
 ```
 
 The same checks cover every block of a launch. If every block writes `out[t]`, two blocks write the same element, and the kernel is refused with `E-COOP-GLOBAL`.

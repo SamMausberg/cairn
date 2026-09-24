@@ -20,7 +20,7 @@ PROGRAMS = {  # a refusal from each part of the language: (program, code, card, 
     "cooperative": ("fn reverse(g:usize, out:rw<u64>[g]) {\n  blocks b in g threads t in 256 {\n"
                     "    shared s:u64[256] = zeroed;\n    s[t] = u64(t);\n    let v = s[255 - t];\n"
                     "    if t == 0 { out[b] = v; }\n  }\n}\n", "E-COOP-UNORDERED", "cooperative",
-                    HINTS["E-COOP-UNORDERED"]),
+                    None),  # its message already says where the barrier goes
     "effects": ("fn f(n:usize) -> usize pure {\n  let b = Buf[u64](n);\n  return len(b);\n}\n", "E-EFFECT-CEILING",
                 "effects", None),
     "types": ("fn f(x:u32) -> u64 {\n  return x;\n}\n", "E-TYPE-MISMATCH", "base",

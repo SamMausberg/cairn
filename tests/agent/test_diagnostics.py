@@ -71,6 +71,18 @@ def test_a_code_whose_message_says_the_repair_carries_no_second_one():
     assert reply["code"] == "E-SHADOW" and reply["repair_hint"] == HINTS["E-SHADOW"]
     assert fix({"code": "E-EFFECT-ORDER", "message": "Bind a writing call to its own statement."}) is None
     assert fix({"code": "E-LOOP-CONTROL", "message": "break requires an enclosing loop."}) is None
+    for code in (
+        "E-COOP-UNORDERED",
+        "E-COOP-REUSE",
+        "E-COOP-CONFLICT",
+        "E-STAGE-BUSY",
+        "E-LINEAR-LEAK",
+        "E-IMPL-SIGNATURE",
+        "E-IMPL-CALL",
+        "E-IMPL-WHEN",
+        "E-IMPL-PARAM",
+    ):  # each message says what to change
+        assert fix({"code": code, "message": "The message says the fix."}) is None, code
     assert (
         fix({"code": "E-IMPORT", "message": "Unknown module q; only project modules and std.* can be imported."})
         is None
