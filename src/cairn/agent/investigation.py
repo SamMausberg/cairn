@@ -6,8 +6,9 @@ gives them) and the identity that holds now (the function as written, its contra
 From the candidate history it takes only records that hold now: for each candidate, what was measured and how, what
 a compile read, what failed and why, what was validated or profiled; the searches that ran and what they ranked best;
 and the hypotheses and suggested experiments, an experiment marked done when the runs it asks for are kept. A
-validation holds while the implementation, its reference and the compiler are as they were, under the policy and on
-the host it names, as `cairn tune` cites it.
+validation holds while the implementation, its reference and the compiler are as they were, under the tolerance and
+on the host it names, and only under this numerical policy and the native compiler the packet's host builds with, as
+`cairn tune` cites it.
 Records that no longer hold are counted by the part of their identity that moved and never shown as facts.
 
 `delta` gives only what changed since an earlier packet, and `apply` rebuilds the newer packet from it, as
@@ -19,6 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ..verify import agreement
 from . import history as kept
 from .state import sealed
 
@@ -70,6 +72,12 @@ def investigation(source: str, symbol: str, where: str | Path, targets: dict[str
     for r in [r for r in split["stale"] if r["kind"] == "validation" and set(r["stale"]) <= {"contract", "target"}]:
         split["stale"].remove(r)  # a validation holds under its own policy and host, as `cairn tune` cites it
         split["current"].append({k: v for k, v in r.items() if k != "stale"})
+    host = targets.get("host")
+    cxx = host.get("cxx") if isinstance(host, dict) else None
+    for r in [r for r in split["current"] if r["kind"] == "validation"]:
+        if parts := kept.unheld(r, agreement.DIGEST, cxx):  # made under another numerical policy or compiler
+            split["current"].remove(r)
+            split["stale"].append({**r, "stale": parts})
     implementations = receipts.get(placement.f.name, {}).get("implementations")
     now_implemented = {row["identity"] for row in kept.selectable(source, implementations, vendored).values()}
     for r in [r for r in split["current"] if implemented(r) not in (None, *now_implemented)]:

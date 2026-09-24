@@ -30,7 +30,8 @@ from typing import Any
 from ..compiler.cairnc import Diagnostic, Parser, compile_source, fail
 from ..compiler.lexing import lex
 from ..projects.target import DeviceTarget
-from ..verify.validation import EMULATED, FINITE, Policy, validate
+from ..verify import agreement
+from ..verify.validation import EMULATED, FINITE, Policy, failure, held, refusal, validate
 from .agent_tools import digest, load_json_strict, stable_json
 from .diagnostics import explain, located
 from .projection import local, signature
@@ -44,45 +45,52 @@ REACHES = {
     "tests": "E-TEST-POLICY", "test_policy": "E-TEST-POLICY", "budget": "E-TEST-POLICY", "seed": "E-TEST-POLICY",
     "cases": "E-TEST-POLICY", "probes": "E-TEST-POLICY", "seconds": "E-TEST-POLICY",
     "domain": "E-DOMAIN", "inputs": "E-DOMAIN", "assume": "E-DOMAIN", "precondition": "E-DOMAIN",
-    "largest_extent": "E-DOMAIN", "reference": "E-REFERENCE", "policy": "E-TEST-POLICY",
+    "largest_extent": "E-DOMAIN", "reference": "E-REFERENCE", "policy": "E-TEST-POLICY", "agreement": "E-TOLERANCE",
 }  # fmt: skip
 OTHER = ("records", "enums", "sums", "traits", "consts", "plans", "selections", "derivations", "families", "recipes",
          "imports")  # fmt: skip
 TESTS = ("budget", "seed", "probes", "seconds")  # the policy's test part; tolerance and domain are the others
-CONTRACT = ("reference_sha256", "tolerance_sha256", "tests_sha256", "domain_sha256")
-PINNED = ("the reference's declaration, signature, row, ceiling and roundings", "the tolerance on float results",
+CONTRACT = ("reference_sha256", "tolerance_sha256", "tests_sha256", "domain_sha256", "agreement_sha256")
+PINNED = ("the reference's declaration, signature, row, ceiling and roundings",
+          "the tolerance on float results and the numerical policy that applies it",
           "the test policy: cases, seed, shrinking and time", "the permitted inputs", "which implementation runs")  # fmt: skip
 
 
 def pinned(declaration: str, policy: dict[str, Any]) -> dict[str, str]:
-    """The digests of what a validation is held to: the reference's tokens, the tolerance, the tests and the inputs."""
+    """The digests of what a validation is held to: the reference's tokens, the tolerance, the tests, the inputs and
+    the numerical policy (verify/agreement.py) that compares float results."""
     return {
         "reference_sha256": digest(" ".join(t.s for t in lex(declaration))),
         "tolerance_sha256": digest(stable_json(policy["tolerance"])),
         "tests_sha256": digest(stable_json({k: policy[k] for k in TESTS})),
         "domain_sha256": digest(stable_json(policy["domain"])),
+        "agreement_sha256": agreement.DIGEST,
     }
 
 
 def remember(where: Path, base: str, reference: str, entry: dict[str, Any]) -> dict[str, Any]:
     """One submission or validation as a candidate-history record (agent/history.py): its identity is the reference
     as written (`base`, history.as_written), the implementation's own identity with everything it calls
-    (`variant`, history.selectable), or the submission's digest when it has none, the pinned contract and where
-    validation ran: the host, or the host emulation of a device target. The candidate is named `plan f use g;`, as
-    `cairn tune` names the same selection, so one implementation has one name in the history."""
+    (`variant`, history.selectable), or the submission's digest when it has none, the pinned contract with the
+    numerical policy, and where validation ran: the host, or the host emulation of a device target. The detail keeps
+    the numerical policy and the native compiler a validation was made under, which `history.unheld` reads. The
+    candidate is named `plan f use g;`, as `cairn tune` names the same selection, so one implementation has one name
+    in the history."""
     from ..perf.plan_source import selecting
     from . import history
 
     contract = {k: entry[k] for k in CONTRACT}
     variant = entry.get("variant") or entry.get("identity")
     who = history.identity(base, variant or entry["submission_sha256"], contract, entry.get("target", "host"))
+    made: dict[str, Any] = {k: entry[k] for k in ("agreement", "compiler") if k in entry}
     if entry["status"] == "validated":  # the evidence class the validation established: emulated runs say so
         kind, detail = "validation", {"evidence": entry.get("evidence", "finite-tested"), "finite": entry["finite"],
-                                      "smt": entry["smt"]}  # fmt: skip
+                                      "smt": entry["smt"], **made}  # fmt: skip
         detail |= {"judged_against": entry["judged_against"]} if entry.get("judged_against") else {}
+        detail |= {"replay": entry["replay"]} if "replay" in entry else {}
     else:
         stage = "validation" if entry["code"] == "E-VALIDATION" else "check"
-        detail = {"stage": stage, "why": f"{entry['code']}: {entry['why']}",
+        detail = {"stage": stage, "why": f"{entry['code']}: {entry['why']}", **made,
                   **({"inputs": entry["inputs"]} if entry.get("inputs") else {})}  # fmt: skip
         kind = "failure"
     named = selecting(reference, entry["implementation"]) if entry.get("implementation") else "submission"
@@ -112,6 +120,7 @@ class ImplementationSession:
             "domain": record["domain"],
             **pinned(declaration, record),
         }
+        self.pinned["agreement"] = {k: v for k, v in agreement.stated(record["tolerance"]).items() if k != "tolerance"}
         self.reference_view = {
             "symbol": self.reference,
             "source": declaration,
@@ -268,26 +277,18 @@ class ImplementationHost:
         the pinned policy, and keep the result; what the answer says of it, or E-VALIDATION."""
         record = validate(candidate, s.reference, name, s.policy, self.cxx, s.regressions, emulate=s.emulate)
         info = receipt[s.reference]["implementations"][name]
-        entry = {**entry, "implementation": name, "identity": info["identity"], "finite": record.get(
-            "finite", {}).get("status", record["status"]), "smt": record.get("smt", {}).get("status")}  # fmt: skip
-        if "evidence" in record:
-            entry["evidence"] = record["evidence"]
-        if "emulation" in record:  # kept under the target it emulated, never as the host's or a device's
-            from ..projects.emulation import target
-
-            judged = record["emulation"]["judged_against"]
-            entry |= {"target": target(judged), "judged_against": judged}
+        entry = {**entry, "implementation": name, "identity": info["identity"], **held(record)}
         if self.records is not None:  # kept under what the implementation calls too, so an edited helper is stale
             from . import history
 
             entry["variant"] = history.selectable(candidate, {name: info})[name]["identity"]
         if record["status"] != "passed":
             finite = record.get("finite", {})
-            self.log(s, {**entry, "status": "refused", "code": "E-VALIDATION", "why": finite.get("status", "unknown"),
-                         "inputs": finite.get("failed", {}).get("inputs")})  # fmt: skip
-            fail("E-VALIDATION", f"{name} is not validated: {finite.get('status', record['status'])} against "
-                 f"{s.reference}.", finite=finite or {"reason": record.get("reason")}, smt=record.get("smt"),
-                 identity=info["identity"], implementation=name)  # fmt: skip
+            self.log(s, {**entry, "status": "refused", "code": "E-VALIDATION", "why": refusal(record),
+                         "inputs": (failure(record) or {}).get("inputs")})  # fmt: skip
+            fail("E-VALIDATION", f"{name} is not validated: {record['status']} against {s.reference}.",
+                 finite=finite or {"reason": record.get("reason")}, smt=record.get("smt"), identity=info["identity"],
+                 implementation=name, **({"failed": failure(record)} if failure(record) else {}))  # fmt: skip
         self.log(s, {**entry, "status": "validated"})
         finite = record["finite"]
         return {

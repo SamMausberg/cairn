@@ -95,10 +95,39 @@ def test_a_wrong_implementation_is_refused_with_its_shrunk_input_and_kept(host, 
     assert host.seen[-1]["code"] == "E-VALIDATION" and len(host.seen[-1]["identity"]) == 64
 
 
+# Right everywhere but one input, which no boundary case holds and Z3 finds.
+DOOR = """fn total_door(n:usize, xs:ro<u64>[n]) -> u64 implements total {
+  if n == 1 && xs[0] == 12345 { return 0; }
+  let mut s:u64 = 0;
+  for i in 0..n { s += xs[i]; }
+  return s;
+}"""
+
+
+def test_an_implementation_z3_refutes_is_refused_although_every_finite_case_passed(host, tmp_path):
+    host.open(SOURCE, "total", POLICY)
+    refusal = host.reply(submit("i1", DOOR))
+    assert refusal["code"] == "E-VALIDATION" and refusal["finite"]["status"] == "passed", refusal
+    assert refusal["smt"]["replay"]["status"] == "failed" and refusal["failed"]["inputs"] == {"n": 1, "xs": [12345]}
+    assert "At n = 1, xs = [12345]" in refusal["repair_hint"]
+    kept = json.loads((tmp_path / "regressions" / "total.json").read_text())
+    assert [c["args"] for c in kept["cases"]] == [{"n": 1, "xs": [12345]}]
+    assert host.source("i1") == SOURCE and host.seen[-1]["inputs"] == {"n": 1, "xs": [12345]}
+    assert "Z3's counterexample" in host.seen[-1]["why"]
+
+
+def test_the_packet_pins_the_numerical_policy():
+    from cairn.verify import agreement
+
+    pinned = ImplementationHost().open(SOURCE, "total", POLICY)["pinned"]
+    assert pinned["agreement_sha256"] == agreement.DIGEST and pinned["agreement"]["relative_to"] == "the reference"
+
+
 @pytest.mark.parametrize(
     ("extra", "code"),
     [
         ({"tolerance": {"absolute": 1e-3, "relative": 0.0}}, "E-TOLERANCE"),  # loosening the tolerance
+        ({"agreement": {"relative_to": "the candidate"}}, "E-TOLERANCE"),  # or the policy that applies it
         ({"relative": 0.5}, "E-TOLERANCE"),
         ({"budget": 1}, "E-TEST-POLICY"),  # one case would pass anything
         ({"seed": 7}, "E-TEST-POLICY"),
@@ -165,6 +194,8 @@ def test_an_unknown_handle_or_protocol_is_refused(host):
 
 def test_every_submission_is_kept_in_the_candidate_history(tmp_path):
     from cairn.agent.history import History
+    from cairn.verify import agreement
+    from cairn.verify.validation import compiled_by
 
     host = ImplementationHost(records=tmp_path / "history")
     host.open(SOURCE, "total", POLICY)
@@ -180,6 +211,8 @@ def test_every_submission_is_kept_in_the_candidate_history(tmp_path):
     assert (
         kept[0]["identity"]["contract"] == kept[2]["identity"]["contract"] and kept[2]["identity"]["target"] == "host"
     )
+    assert kept[0]["detail"]["agreement"] == kept[2]["detail"]["agreement"] == agreement.DIGEST  # what they compared by
+    assert kept[0]["detail"]["compiler"] == kept[2]["detail"]["compiler"] == compiled_by("clang++")["version"]
 
 
 # K elements a step; the instance at 8 drops the first element of every step, the one at 2 is right.

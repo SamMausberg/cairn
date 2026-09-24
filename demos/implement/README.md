@@ -8,7 +8,7 @@ make demo-implement                                 # or: python3 demos/implemen
 
 ## What happens
 
-`run.py` copies the project to `results/demos/implement/sumsq` and starts `cairn mcp` beside it. `implementation_open` pins the reference and the policy in `policy.json`, each by digest: a relative tolerance of 2^-40 on the result, 128 generated cases from seed 0 and extents up to 4096. It answers with a packet of 7,353 bytes: the reference's declaration and row, six rule cards and the form of a reply.
+`run.py` copies the project to `results/demos/implement/sumsq` and starts `cairn mcp` beside it. `implementation_open` pins the reference and the policy in `policy.json`, each by digest: a relative tolerance of 2^-40 on the result, 128 generated cases from seed 0 and extents up to 4096. It answers with a packet of 7,650 bytes ([evidence/v1_1/validation](../../evidence/v1_1/validation/README.md)): the reference's declaration and row, six rule cards, the pinned numerical policy and the form of a reply.
 
 The agent's first submission, `sumsq_by4`, keeps four running sums `when n >= 4`. Four sums round differently from one, so it also asks for a relative tolerance of 1e-6. The host refuses it before compiling anything:
 
@@ -74,6 +74,6 @@ A zero tolerance refuses the correct `sumsq_by4`: `cairn validate` with an exact
 
 The agent is scripted: its four submissions are the files in `candidates/` and the tolerance in `run.py`, written by hand to show one refusal of each kind, and no model wrote them. Every refusal, validation, timing and search is computed on every run, and `tests/projects/test_demos.py` checks each outcome above except the times and which instance the search chooses, which depend on the machine.
 
-A validation is finite testing on the cases that ran, never proof: the reference and each implementation are compiled by the same compiler, so a fault they share would agree with itself. Z3 is asked apart from the tests, and its query covers only n <= 16, its unrolling bound. In the recorded run it answered `unknown` for all five, within its time limit; an earlier run answered `smt-equivalent` for `sumsq_blocks[32]`, where that bound leaves only n = 0.
+A validation is finite testing on the cases that ran, never proof: the reference and each implementation are compiled by the same compiler, so a fault they share would agree with itself. Z3 is asked apart from the tests, and its query covers only n <= 16, its unrolling bound. A counterexample it gave would be replayed natively under the pinned tolerance, and would refuse the implementation if it broke it. In the recorded run it answered `unknown` for all five, within its time limit; an earlier run answered `smt-equivalent` for `sumsq_blocks[32]`, where that bound leaves only n = 0.
 
 The times are host timing only, one run on a shared machine; [evidence/v1_0/demos](../../evidence/v1_0/demos/README.md) records the machine, its load and the run. They show every implementation faster than the reference at n = 65536 on that host. Which `K` wins is within the noise, and a run on a quiet machine may choose another. Nothing ran on a GPU.

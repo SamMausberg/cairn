@@ -16,7 +16,6 @@ for this process only. Nothing is launched and no device is touched.
 from __future__ import annotations
 
 import hashlib
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -38,15 +37,10 @@ def device_identity(target: DeviceTarget | None) -> str:
 
 def host_target(arch: str | None, cxx: str) -> dict[str, str]:
     """What a host candidate is built and run for: the processor, the -march profile and the compiler."""
-    from ..projects.project import ProjectError
-    from ..projects.toolchain import find, resolve_arch, version
+    from ..projects.toolchain import named, resolve_arch
     from .calibrate import cpu_model
 
-    try:
-        compiler = version(find(cxx)).splitlines()[0]
-    except (ProjectError, OSError, subprocess.SubprocessError):
-        compiler = f"{cxx} (not found)"
-    return {"kind": "host", "cpu": cpu_model(), "arch": resolve_arch(arch) or "baseline", "cxx": compiler}
+    return {"kind": "host", "cpu": cpu_model(), "arch": resolve_arch(arch) or "baseline", "cxx": named(cxx)}
 
 
 def tiles(program: Any, checker: Any, name: str) -> int:

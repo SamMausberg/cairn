@@ -110,7 +110,7 @@ def fix(d: dict[str, Any], known: tuple[str, ...] = (), host: bool = True) -> st
     if code == "E-IMPL-EFFECT" and d.get("added_effects"):
         brought = "; ".join(f"{e}: {cause(e)}" for e in d["added_effects"])
         return f"Remove what brings {brought}. The reference's ceiling is the host's."
-    if code == "E-VALIDATION" and isinstance(failed := (d.get("finite") or {}).get("failed"), dict):
+    if code == "E-VALIDATION" and isinstance(failed := d.get("failed") or (d.get("finite") or {}).get("failed"), dict):
         at = ", ".join(f"{k} = {v}" for k, v in failed["inputs"].items()) or "no input"
         return (f"At {at} the reference {observed(failed['reference'])} and the implementation "
                 f"{observed(failed.get('implementation', failed.get('dispatch', {})))}: fix the algorithm for every "

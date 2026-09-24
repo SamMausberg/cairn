@@ -11,7 +11,10 @@ Every record is about one candidate of one function and carries the candidate's 
 - `artifact`: the build output the record is about, when one was built.
 
 A record is current while its source, contract and compiler are what they are now and its target is one the caller
-works on. Otherwise it is stale: it is returned apart, with the parts that moved, and never as a current fact.
+works on. Otherwise it is stale: it is returned apart, with the parts that moved, and never as a current fact. A
+validation is kept under the numerical policy it compared by (verify/agreement.py) in its contract, and where it ran
+with the native compiler that built it in its target, and holds only under that policy and that compiler
+(`unheld`, `History.validations`).
 
 Each record has a kind (`KINDS`), and a kind requires what makes it evidence: a measurement its procedure, a
 profiler reading the run it came from, a hypothesis its claim. Records are appended to `records.jsonl` in the history
@@ -181,6 +184,16 @@ def record(where: str | Path, kind: str, function: str, candidate: str, identity
     return json.loads(line)
 
 
+def unheld(r: dict[str, Any], agreement: str, cxx: str | None) -> list[str]:
+    """The parts of a validation record that keep it from answering now beyond its source: `contract` when it was
+    made under another numerical policy than `agreement` (verify/agreement.py's digest), `target` when it was built
+    by another native compiler than `cxx` (its version line, when the caller names one). Empty when it holds."""
+    detail = r["detail"]
+    return ["contract"] * (detail.get("agreement") != agreement) + ["target"] * (
+        cxx is not None and detail.get("compiler") != cxx
+    )
+
+
 class History:
     """One history directory: its records, which of them hold now, and the analyses it keeps."""
 
@@ -224,6 +237,16 @@ class History:
         now = {"source": digest([base, variant]), "compiler": compiler()}
         return [r for r in self.records(function) if r["kind"] == kind and r["variant"] == variant
                 and all(r["identity"][part] == value for part, value in now.items())]  # fmt: skip
+
+    def validations(self, function: str, base: str, variant: Any, agreement: str, cxx: str | None) -> list[dict]:
+        """The validation records of `variant` that hold now: its source and compiler as they are (`holding`), made
+        under the numerical policy `agreement` by the native compiler `cxx` (`unheld`), and not refuted by an input
+        that failed validation under the same contract, such as a counterexample of Z3's that its replay confirmed
+        after the finite cases had passed. A validation that decided nothing refutes nothing."""
+        failed = {r["identity"]["contract"] for r in self.holding(function, base, "failure", variant)
+                  if r["detail"].get("stage") == "validation" and r["detail"].get("inputs")}  # fmt: skip
+        return [r for r in self.holding(function, base, "validation", variant)
+                if not unheld(r, agreement, cxx) and r["identity"]["contract"] not in failed]  # fmt: skip
 
     def judged(self, function: str, base: str, contracts: set[str], targets: set[str]) -> dict[str, list[dict]]:
         """`function`'s records split into `current` and `stale`, against the function as written now (`base`, the

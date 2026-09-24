@@ -51,6 +51,7 @@ class Recorder:
         self.where, self.name, self.contract = where, name, contract
         self.base = kept.as_written(source, name)
         self.host, self.device = kept.digest(host), device_identity(device)
+        self.cxx = host.get("cxx")  # the native compiler's version line, which a validation must have been built by
         self.history = kept.History(where)
         self.implementations = implementations or {}  # the receipt's table: each implementation's identity
 
@@ -89,16 +90,21 @@ def label(name: str, key: Key) -> str:
 def validations(source: str, name: str, receipts: dict[str, Any], alternatives: list[str],
                 recorder: Recorder | None, emulated: bool = False) -> dict[str, Any]:  # fmt: skip
     """For each implementation of `name`, the validation the history holds for it as it is now (its identity with
-    everything it calls, `history.selectable`, the reference as written, this compiler); none without a history. An
-    implementation without one is searched and priced but never chosen or timed: selecting it could change a result.
-    A validation that ran on a host emulation of the device (projects/emulation.py) counts only when `emulated`, the
-    user's `--accept-emulated`; otherwise the row says it is the only evidence, and the implementation is not chosen."""
+    everything it calls, `history.selectable`, the reference as written, this compiler, the numerical policy and the
+    native compiler the search builds with), unrefuted by an input that failed under the same contract; none without
+    a history. An implementation without one is searched and priced but never chosen or timed: selecting it could
+    change a result. A validation that ran on a host emulation of the device (projects/emulation.py) counts only when
+    `emulated`, the user's `--accept-emulated`; otherwise the row says it is the only evidence, and the implementation
+    is not chosen."""
+    from ..verify import agreement
+
     if recorder is None:
         return {}
     table = recorder.implementations
     out: dict[str, Any] = {}
     for g in alternatives:
-        found = recorder.history.holding(name, recorder.base, "validation", table.get(g, {}).get("identity"))
+        identity = table.get(g, {}).get("identity")
+        found = recorder.history.validations(name, recorder.base, identity, agreement.DIGEST, recorder.cxx)
         direct = [r for r in found if r["detail"].get("evidence") != EMULATED]
         if direct or (found and emulated):
             r = (direct or found)[-1]

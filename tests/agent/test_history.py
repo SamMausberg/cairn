@@ -108,3 +108,22 @@ def test_a_line_that_does_not_read_is_skipped(tmp_path):
     with (tmp_path / "records.jsonl").open("a") as out:
         out.write("not json\n" + json.dumps({"protocol": "other"}) + "\n")
     assert len(History(tmp_path).records()) == 1
+
+
+def test_a_validation_holds_under_its_policy_and_compiler_until_an_input_fails_under_its_contract(tmp_path):
+    base, clang = as_written(S, "spread"), "clang version 21"
+
+    def kept(kind: str, detail: dict, contract=CONTRACT) -> None:
+        record(tmp_path, kind, "spread", "plan spread use g;", identity(base, "g", contract, HOST), detail, "g")
+
+    def held(policy="p1", cxx=clang) -> int:
+        return len(History(tmp_path).validations("spread", base, "g", policy, cxx))
+
+    kept("validation", {"evidence": "finite-tested", "agreement": "p1", "compiler": clang})
+    assert held() == 1 and held(policy="p2") == 0 and held(cxx="g++ 15") == 0 and held(cxx=None) == 1
+    kept("failure", {"stage": "validation", "why": "E-VALIDATION: unknown", "agreement": "p1"})
+    assert held() == 1  # a validation that decided nothing refutes nothing
+    kept("failure", {"stage": "validation", "why": "E-VALIDATION: failed", "inputs": {"n": 1}}, {"other": 1})
+    assert held() == 1  # a failure under another contract says nothing of this one
+    kept("failure", {"stage": "validation", "why": "E-VALIDATION: failed", "inputs": {"n": 1}})
+    assert held() == 0

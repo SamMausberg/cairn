@@ -61,6 +61,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Vendored C++ and CUDA, compiled by the program's command line and held to their externs' types | `projects/foreign.py` | `compile_sources`, `binding`, `inspect` |
 | What a foreign implementation has: its contract, build, device inspection and validation | `verify/foreign.py` | `identify`, `report`, `device_tests` |
 | The numerical policy: when a float result agrees with the reference's, for the host and for generated tests | `verify/agreement.py` | `agrees`, `same`, `helper`, `stated` |
+| Z3's answer on an implementation, and its counterexample replayed through the finite path | `verify/counterexamples.py` | `smt`, `outside`, `replayed` |
 | Native flags, the closed table of system libraries, the freestanding effect ban | `projects/toolchain.py` | `command`, `flags`, `LIBRARIES`, `audit_effects` |
 | The device target | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits` |
 | A device program built for the host: what emulation refuses and what its records say | `projects/emulation.py` | `check`, `record`, `MODELED` |

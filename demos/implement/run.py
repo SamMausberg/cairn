@@ -99,11 +99,12 @@ def answered(name: str, answer: dict, project: Path) -> str:
     """The host's answer as the transcript shows it."""
     if answer.get("status") != "validated":
         head = f"refused {answer['code']}: {answer['message']}"
-        failed = answer.get("finite", {}).get("failed")
+        failed = answer.get("failed")  # found by a finite case, or by Z3's counterexample replayed natively
         if not failed:
             return head
+        found = answer["finite"] if answer["finite"].get("failed") else answer["smt"]["replay"]
         inputs = ", ".join(f"{k} = {v}" for k, v in failed["inputs"].items())
-        kept = answer["finite"].get("kept", "nowhere").replace(f"{project}/", "")
+        kept = found.get("kept", "nowhere").replace(f"{project}/", "")
         return (f"{head}\n    case {answer['finite']['cases']} failed ({failed['found_as']}), and "
                 f"{failed['shrunk_in']} runs shrank it to\n    {inputs}: {name} returns "
                 f"{number(failed['reference']['return'])}, {answer['implementation']} returns "

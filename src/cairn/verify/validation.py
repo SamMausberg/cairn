@@ -10,15 +10,20 @@ bit for bit, or for floats under the numerical policy of verify/agreement.py and
 The reference is an independent algorithm, but both are checked and lowered by this compiler, so agreement is finite
 testing on the cases that ran, never proof. A failing case is shrunk while it still fails (extents, offsets, then
 values) and kept in the project's regressions file, which `cairn test` replays. Where the SMT fragment covers both
-functions, `smt` reports what Z3 established apart from the finite result. Nothing here runs on a device: a device
-implementation is `unknown`, and verify/device_validation.py is the `make gpu` path, unless `emulate` names a device
-target. Then both libraries are judged against that target and built for the host with their device work on host
+functions, `smt` reports what Z3 established apart from the finite result, and a counterexample it gives is replayed
+through the same finite path (verify/counterexamples.py): one that breaks the policy fails the validation. The record
+states what it rests on: the source identity, the digests of what was built and run, the target, the native compiler,
+the numerical policy, and how many cases were generated, ran and were left out.
+
+Nothing here runs on a device: a device implementation is `unknown`, and verify/device_validation.py is the `make gpu`
+path, unless `emulate` names a device target. Then both libraries are judged against that target and built for the host with their device work on host
 threads (projects/emulation.py), and a pass is `finite-tested-emulated`, evidence about the host emulation of that
 target and never `finite-tested` on the device.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import shutil
@@ -35,7 +40,7 @@ from ..compiler.tree import FLOAT
 from ..projects import emulation
 from ..projects.target import DeviceTarget
 from ..projects.toolchain import command as native_command
-from ..projects.toolchain import link_flags, linked
+from ..projects.toolchain import link_flags, linked, named
 from . import agreement, boundaries
 from .boundaries import Case, Param, Unsupported
 from .isolated_calls import Calls
@@ -121,6 +126,7 @@ class Subject:
     params: list[Param]
     returns: str
     emulated: DeviceTarget | None = None  # the target its device work was judged against, run on host threads
+    artifacts: dict[str, dict[str, str]] = field(default_factory=dict)  # each library: its C++ and its build
 
     def call(self, calls: Calls, lib: str, symbol: str, case: Case, seconds: int, returns: str | None = None):
         request = {"lib": lib, "symbol": symbol, "params": [p.__dict__ for p in self.params],
@@ -215,7 +221,7 @@ def subject(source: str, reference: str, implementation: str, cxx: str, director
         predicate = f"\nfn {applies}({ps}) -> bool = {when};\n"
     with_predicate = base[: impl.end] + predicate + base[impl.end :]
     selected = base[: impl.end] + f"\nplan {local(reference)} use {local(implementation)};\n" + base[impl.end :]
-    built, emulated = {}, None
+    built, emulated, artifacts = {}, None, {}
     for name, text in (("base", with_predicate), ("selected", selected)):
         cpp, receipt = compile_source(text)
         cuda = "cuda" in receipt["requires"]
@@ -234,11 +240,13 @@ def subject(source: str, reference: str, implementation: str, cxx: str, director
         if done.returncode:
             raise RuntimeError(f"the {name} library did not build: {done.stderr[-2000:]}")
         built[name] = str(where / "program.so")
+        artifacts[name] = {"cpp_sha256": hashlib.sha256(cpp.encode()).hexdigest(),
+                           "library_sha256": hashlib.sha256((where / "program.so").read_bytes()).hexdigest()}  # fmt: skip
     module = ref.module + "." if ref.module else ""
     symbol = {"reference": "cf_" + mangle(reference), "implementation": "cf_" + mangle(implementation),
               "applies": "cf_" + mangle(module + applies) if applies else None}  # fmt: skip
     return Subject(reference, built["base"], built["selected"], symbol["reference"], symbol["implementation"],
-                   symbol["applies"], params, ref.ret.name, emulated), base  # fmt: skip
+                   symbol["applies"], params, ref.ret.name, emulated, artifacts), base  # fmt: skip
 
 
 def shrink(subject: Subject, calls: Calls, case: Case, policy: Policy) -> tuple[Case, dict[str, Any], int]:
@@ -340,11 +348,16 @@ def validate(source: str, reference: str, implementation: str, policy: Policy | 
              cxx: str = "clang++", regressions: Path | None = None, libraries: tuple[str, ...] = (),
              smt_timeout_ms: int = 3000, objects: tuple[str, ...] = (),
              emulate: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
-    """The validation record of one implementation: finite results and, apart from them, what Z3 established. With
-    `emulate`, device code runs on host threads judged against that target, and the evidence says so."""
+    """The validation record of one implementation: finite results, what Z3 established apart from them with its
+    counterexample replayed, and what the record rests on. With `emulate`, device code runs on host threads judged
+    against that target, and the evidence says so."""
+    from .counterexamples import replayed, smt
+
     policy = policy if isinstance(policy, Policy) else Policy.of(policy)
+    target = {"kind": "device", "device": emulate.name, "emulated": True} if emulate else {"kind": "host"}
     record: dict[str, Any] = {"schema": SCHEMA, "reference": reference, "implementation": implementation,
-                              "policy": policy.record()}  # fmt: skip
+                              "policy": policy.record(), "agreement": agreement.stated(policy.tolerance),
+                              "target": target, "compiler": compiled_by(cxx)}  # fmt: skip
     try:
         p, _, receipts = compile_program(source)
     except Diagnostic as e:
@@ -365,10 +378,19 @@ def validate(source: str, reference: str, implementation: str, policy: Policy | 
                                               device=s.emulated is not None)  # fmt: skip
         except Unsupported as e:
             return {**record, "status": "unknown", "reason": str(e)}
+        record["artifacts"] = s.artifacts
         record["tiles"] = {str(k): v for k, v in sorted(found.items())}
         record["finite"] = finite(s, [*cases, *fresh_cases], len(cases), policy, regressions, implementation)
+        record["coverage"] = coverage(record["finite"], len(fresh_cases), len(cases))
         record["smt"] = smt(base, reference, implementation, fs[implementation], policy, smt_timeout_ms)
-    record["status"] = record["finite"]["status"]
+        if record["smt"]["status"] == "counterexample":
+            record["smt"]["replay"] = (
+                {"status": "not-run", "reason": "The finite cases already failed."}
+                if record["finite"]["status"] == "failed"
+                else replayed(s, record["smt"], policy, regressions, implementation)
+            )
+            record["coverage"]["counterexample"] = record["smt"]["replay"]["status"]
+    record["status"] = decided(record)
     record["evidence"] = emulation.EVIDENCE if s.emulated else "finite-tested"
     if s.emulated:
         record["emulation"] = emulation.record(s.emulated)
@@ -376,10 +398,38 @@ def validate(source: str, reference: str, implementation: str, policy: Policy | 
     return record
 
 
+def compiled_by(cxx: str) -> dict[str, str]:
+    """The native compiler a validation builds with, named as a search's host target names it (toolchain.named), so a
+    validation by another compiler does not hold for `cairn tune`."""
+    return {"cxx": cxx, "version": named(cxx)}
+
+
+def coverage(result: dict[str, Any], generated: int, held: int) -> dict[str, Any]:
+    """How many cases were generated and kept, how many ran, and why the rest did not."""
+    left = generated + held - result["cases"]
+    return {"generated": generated, "kept": held, "ran": result["cases"],
+            "left_out": {"an earlier case failed, which ends the run": left} if left else {}}  # fmt: skip
+
+
+def decided(record: dict[str, Any]) -> str:
+    """The validation's status: failed when a finite case or Z3's replayed counterexample breaks the policy, passed
+    only when the finite cases passed and no counterexample is left undecided, unknown otherwise."""
+    finite, replay = record["finite"]["status"], record["smt"].get("replay", {}).get("status")
+    if "failed" in (finite, replay):
+        return "failed"
+    return "passed" if finite == "passed" and replay != "unknown" else "unknown"
+
+
+def failure(record: dict[str, Any]) -> dict[str, Any] | None:
+    """The shrunk failing case of a record, found by a finite case or by Z3's replayed counterexample, or None."""
+    return record.get("finite", {}).get("failed") or record.get("smt", {}).get("replay", {}).get("failed")
+
+
 def finite(s: Subject, cases: list[Case], held: int, policy: Policy, regressions: Path | None,
            implementation: str, vacuous: bool = False) -> dict[str, Any]:  # fmt: skip
-    """Run every case until one fails, shrink that one and keep it. Passing needs the implementation itself to have
-    run on some case, unless `vacuous` (a replay of kept cases, where the dispatch is what they test)."""
+    """Run every case until one fails, shrink that one and keep it. Passing needs some case to have run and the
+    implementation itself to have run on one, unless `vacuous` (a replay of kept cases, where the dispatch is what
+    they test)."""
     calls = Calls()
     try:
         out: dict[str, Any] = {"claim": FINITE, "kept_cases": held, "cases": 0, "implementation_ran": 0,
@@ -404,57 +454,14 @@ def finite(s: Subject, cases: list[Case], held: int, policy: Policy, regressions
                 return out
         if undecided:
             return {**out, "status": "unknown", "timed_out": undecided[:8]}
+        if not out["cases"]:
+            return {**out, "status": "unknown", "reason": "No case ran, so nothing was tested."}
         if not out["implementation_ran"] and not vacuous:
             return {**out, "status": "unknown", "reason": "No case met the implementation's condition, so it never "
                     "ran; admit more inputs or widen the condition."}  # fmt: skip
         return {**out, "status": "passed"}
     finally:
         calls.close()
-
-
-def smt(base: str, reference: str, implementation: str, impl: Function, policy: Policy,
-        timeout_ms: int) -> dict[str, Any]:  # fmt: skip
-    """What Z3 says of the implementation against the reference where its condition holds, apart from any test:
-    the reference's body replaced by the implementation's, compared in the modeled fragment."""
-    from ..agent.projection import format_expr
-    from ..compiler.implementations import fixed
-    from .diff import isolated
-    from .scalar_semantics import equivalent
-    from .scalar_values import MAX_UNROLL
-
-    parsed = Parser(base).parse()
-    ref, mine = next(f for f in parsed.functions if f.name == reference), written_as(parsed, impl)
-    candidate = base[: ref.body_start] + body_of(base, mine, impl) + base[ref.end :]
-    where = [format_expr(fixed(impl.implements.when))] if impl.implements and impl.implements.when is not None else []
-    views = {t.extent for _, t in ref.params if t.extent}
-    for name in (n for n, t in ref.params if n in views and t.name == "usize"):
-        lo, hi = policy.domain.get("extents", {}).get(name, [0, policy.domain.get("largest_extent", 4096)])
-        where.append(f"{name} >= {int(lo)} && {name} <= {int(hi)}")
-    assume = " && ".join(f"({w})" for w in where) or "true"
-
-    def ask(condition: str) -> dict[str, Any]:
-        return isolated(lambda: equivalent(base, candidate, reference, assume=condition, allow_reference_traps=True,
-                                           timeout_ms=timeout_ms), 3 * timeout_ms / 1000 + 5)  # fmt: skip
-
-    counts = [n for n, t in ref.params if t.name == "usize" and t.mode == "value"]
-    largest = policy.domain.get("largest_extent", 4096)
-    widest = max([largest, *(hi for _, hi in policy.domain.get("extents", {}).values())])
-    if counts and widest > MAX_UNROLL:  # a loop over an extent past the unrolling budget is never decided whole
-        bounded = " && ".join([f"({assume})", *(f"{n} <= {MAX_UNROLL}" for n in counts)])
-        return summary(ask(bounded), bounded, bounded=True)
-    return summary(ask(assume), assume)
-
-
-def summary(r: dict[str, Any], where: str, bounded: bool = False) -> dict[str, Any]:
-    status = r.get("status") or r.get("class", "unknown")
-    out = {"status": status, "where": where}
-    if bounded:
-        out["bounded"] = "only where every usize parameter is within the unrolling bound; beyond it nothing is decided"
-    if status == "counterexample":
-        out |= {k: r[k] for k in ("counterexample", "expected", "actual") if k in r}
-    elif status != "smt-equivalent":
-        out["reason"] = r.get("reason") or r.get("diagnostic", {}).get("message") or status
-    return out
 
 
 def replay(source: str, record: dict[str, Any], cxx: str = "clang++", libraries: tuple[str, ...] = (),
@@ -490,6 +497,7 @@ def replay(source: str, record: dict[str, Any], cxx: str = "clang++", libraries:
         "failed-tests")  # fmt: skip
     claim = EMULATED.format(target=emulated.name) if emulated else FINITE
     return {"status": status, "reference": reference, "cases": len(cases), "implementations": results, "claim": claim,
+            "agreement": agreement.stated(policy.tolerance), "compiler": compiled_by(cxx),
             **({"emulation": emulation.record(emulated)} if emulated else {})}  # fmt: skip
 
 
@@ -532,8 +540,9 @@ def validate_project(project: Any, symbol: str, policy: dict[str, Any] | None = 
         project.root.resolve()) else str(path)  # fmt: skip
     record["regressions"] = {"file": relative, "exists": path.is_file(),
                              "replayed_by_cairn_test": relative in project.contracts}  # fmt: skip
-    if "kept" in record.get("finite", {}):
-        record["finite"]["kept"] = record["finite"]["kept"].replace(str(path), relative)
+    for part in (record.get("finite", {}), record.get("smt", {}).get("replay", {})):
+        if "kept" in part:
+            part["kept"] = part["kept"].replace(str(path), relative)
     if history is not None and "finite" in record:
         from ..agent.history import vendored as pinned_sources
 
@@ -549,20 +558,39 @@ def remembered(where: Path, source: str, reference: str, implementation: str, re
     from ..agent.implementations import pinned, remember
 
     ref = next(f for f in Parser(source).parse().functions if f.name == reference)
-    finite = record["finite"]
-    entry = {"identity": record["identity"], "implementation": implementation, "finite": finite["status"],
-             "smt": record["smt"]["status"], **pinned(source[ref.start : ref.end], record["policy"]),
-             "variant": history.selectable(source, {implementation: record}, vendored)[implementation]["identity"],
-             "evidence": record["evidence"]}  # fmt: skip
-    if "emulation" in record:  # kept under the target it emulated, never as the host's or a device's
-        judged = record["emulation"]["judged_against"]
-        entry |= {"target": emulation.target(judged), "judged_against": judged}
+    entry = {"identity": record["identity"], "implementation": implementation, **held(record),
+             **pinned(source[ref.start : ref.end], record["policy"]),
+             "variant": history.selectable(source, {implementation: record}, vendored)[implementation]["identity"]}  # fmt: skip
     if record["status"] == "passed":
         entry["status"] = "validated"
     else:
-        entry |= {"status": "refused", "code": "E-VALIDATION", "why": finite.get("reason") or finite["status"],
-                  "inputs": finite.get("failed", {}).get("inputs")}  # fmt: skip
+        entry |= {"status": "refused", "code": "E-VALIDATION", "why": refusal(record),
+                  "inputs": (failure(record) or {}).get("inputs")}  # fmt: skip
     return remember(where, history.as_written(source, reference), reference, entry)["id"]
+
+
+def held(record: dict[str, Any]) -> dict[str, Any]:
+    """What a history record of a validation keeps from it: the evidence class, the finite status, Z3's with its
+    replay, the numerical policy's digest and the native compiler's version it was made under, and for an emulated
+    run the device target that judged it, under which it is kept, never as the host's or a device's."""
+    smt, finite = record.get("smt", {}), record.get("finite", {})
+    out = {"evidence": record.get("evidence", "finite-tested"), "finite": finite.get("status", record["status"]),
+           "smt": smt.get("status"), **({"replay": smt["replay"]["status"]} if "replay" in smt else {}),
+           "agreement": record["agreement"]["sha256"], "compiler": record["compiler"]["version"]}  # fmt: skip
+    if "emulation" in record:
+        judged = record["emulation"]["judged_against"]
+        out |= {"target": emulation.target(judged), "judged_against": judged}
+    return out
+
+
+def refusal(record: dict[str, Any]) -> str:
+    """Why a validation that did not pass did not, in a few words."""
+    finite, replay = record.get("finite", {}), record.get("smt", {}).get("replay", {})
+    if finite.get("status") == "passed" and replay.get("status") == "failed":
+        return "failed: Z3's counterexample, replayed natively, breaks the numerical policy"
+    if finite.get("status") == "passed" and replay.get("status") == "unknown":
+        return f"unknown: the replay of Z3's counterexample decided nothing: {replay['reason']}"
+    return finite.get("reason") or finite.get("status") or record.get("reason") or record["status"]
 
 
 def evaluate(source: str, contract: dict[str, Any], cxx: str = "clang++", libraries: tuple[str, ...] = (),

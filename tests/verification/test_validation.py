@@ -197,3 +197,127 @@ def test_cairn_validate_and_cairn_test_on_the_example_project(tmp_path):
     assert done.returncode == 0 and tested["tests"][0]["status"] == "passed-finite-tests", done.stdout[-2000:]
     instances = {f"prefix_by[{k}]" for k in (4, 8, 16, 32)}  # each instance of prefix_by replays the kept cases
     assert set(tested["tests"][0]["implementations"]) == {"prefix_by4", "prefix_lanes", *instances}
+
+
+# A reference and an implementation that differ at one input the boundaries never generate, which Z3 finds.
+DOOR = """fn same(n:usize, xs:ro<u64>[n]) -> u64 {
+  let mut s:u64 = 0;
+  for i in 0..n { s = add_wrap(s, xs[i]); }
+  return s;
+}
+
+fn same_door(n:usize, xs:ro<u64>[n]) -> u64 implements same {
+  if n == 1 && xs[0] == 12345 { return 0; }
+  let mut s:u64 = 0;
+  for i in 0..n { s = add_wrap(s, xs[i]); }
+  return s;
+}
+
+fn main() -> i32 { return 0; }
+"""
+
+
+def test_a_counterexample_that_breaks_the_policy_fails_the_validation_and_is_kept(tmp_path):
+    """The finite cases passed and Z3 named an input where the two differ; the record stood as `passed`."""
+    kept = tmp_path / "same.json"
+    record = validate(DOOR, "same", "same_door", SMALL, regressions=kept)
+    replay = record["smt"]["replay"]
+    assert record["finite"]["status"] == "passed" and record["smt"]["status"] == "counterexample"
+    assert record["status"] == "failed" and replay["status"] == "failed"
+    assert (
+        replay["failed"]["inputs"] == {"n": 1, "xs": [12345]} and replay["failed"]["found_as"] == "Z3's counterexample"
+    )
+    assert [c["args"] for c in json.loads(kept.read_text())["cases"]] == [{"n": 1, "xs": [12345]}]
+    assert record["coverage"]["counterexample"] == "failed" and record["coverage"]["ran"] == record["finite"]["cases"]
+
+
+def test_a_counterexample_outside_the_admitted_domain_leaves_the_finite_result_standing():
+    record = validate(DOOR, "same", "same_door", {**SMALL, "domain": {"largest_extent": 40, "values": {"xs": [0, 99]}}})
+    replay = record["smt"]["replay"]
+    assert record["status"] == "passed" and replay["status"] == "outside-domain" and "0..99" in replay["reason"]
+
+
+def test_a_counterexample_within_the_tolerance_is_said_to_be_so():
+    """Z3 compares exactly; -0.0 against 0.0 is a difference the policy forgives once a tolerance is given."""
+    source = "fn f(x:f64) -> f64 = x;\nfn g(x:f64) -> f64 implements f = x + 0.0;\n"
+    record = validate(source, "f", "g", {"tolerance": {"absolute": 1e-12, "relative": 0.0}})
+    replay = record["smt"]["replay"]
+    assert record["status"] == "passed" and replay["status"] == "within-policy" and replay["inputs"] == {"x": -0.0}
+    assert "within the policy's tolerance" in replay["reason"]
+    exact = validate(source, "f", "g")  # no tolerance: the finite cases fail first, and nothing is replayed
+    assert exact["status"] == "failed" and exact["smt"]["replay"]["status"] == "not-run"
+
+
+def test_the_record_states_what_it_rests_on():
+    from cairn.verify import agreement
+
+    record = validate(TOTAL + BY4, "total", "total_by4", SMALL)
+    assert record["agreement"]["sha256"] == agreement.DIGEST and record["agreement"]["relative_to"] == "the reference"
+    assert record["target"] == {"kind": "host"} and record["compiler"]["cxx"] == "clang++"
+    assert record["compiler"]["version"].startswith(("clang version", "Ubuntu clang", "Debian clang"))
+    assert set(record["artifacts"]) == {"base", "selected"}
+    assert all(len(v) == 64 for a in record["artifacts"].values() for v in a.values())
+    assert record["coverage"] == {"generated": record["finite"]["cases"], "kept": 0, "ran": record["finite"]["cases"],
+                                  "left_out": {}}  # fmt: skip
+
+
+def test_no_case_run_is_unknown_even_where_the_implementation_need_not_run():
+    from cairn.verify.validation import Policy, Subject, finite
+
+    nothing = Subject("f", "", "", "cf_f", "cf_g", None, [], "u64")  # nothing is called, so nothing is loaded
+    result = finite(nothing, [], 0, Policy(), None, "g", vacuous=True)
+    assert result["status"] == "unknown" and "No case ran" in result["reason"]
+
+
+def door_project(tmp_path: Path) -> Path:
+    root = tmp_path / "door"
+    (root / "src").mkdir(parents=True)
+    (root / "src/main.cairn").write_text(DOOR)
+    (root / "cairn.toml").write_text('[project]\nname = "door"\nsources = ["src/main.cairn"]\n')
+    (root / "policy.json").write_text(json.dumps(SMALL))
+    return root
+
+
+def test_cairn_tune_never_chooses_an_implementation_a_replayed_counterexample_refuted(tmp_path, capsys):
+    from cairn.cli import main
+
+    root, history = door_project(tmp_path), tmp_path / "history"
+    validate_ = ["validate", str(root), "--symbol", "same_door", "--policy", str(root / "policy.json"), "--history",
+                 str(history), "--format", "json"]  # fmt: skip
+    assert main(validate_) == 1
+    assert json.loads(capsys.readouterr().out)["smt"]["replay"]["status"] == "failed"
+    assert main(["tune", str(root), "--symbol", "same", "--at", "n=1e4", "--history", str(history), "--format",
+                 "json"]) == 0  # fmt: skip
+    answer = json.loads(capsys.readouterr().out)
+    [row] = [c for c in answer["candidates"] if c.get("use") == "same_door"]
+    assert isinstance(row["validated"], str) and answer["chosen"].get("use") is None
+
+
+def test_a_validation_holds_only_under_its_numerical_policy_and_its_compiler(tmp_path, capsys, monkeypatch):
+    """A validation built by g++, or made under another numerical policy, says nothing of what clang++ builds."""
+    from cairn.cli import main
+    from cairn.verify import agreement
+
+    root, history = tmp_path / "total", tmp_path / "history"
+    (root / "src").mkdir(parents=True)
+    (root / "src/main.cairn").write_text(TOTAL + BY4 + "fn main() -> i32 { return 0; }\n")
+    (root / "cairn.toml").write_text('[project]\nname = "total"\nsources = ["src/main.cairn"]\n')
+    (root / "policy.json").write_text(json.dumps(SMALL))
+    tune = ["tune", str(root), "--symbol", "total", "--at", "n=1e4", "--history", str(history), "--format", "json"]
+
+    def cited() -> object:
+        assert main(tune) == 0
+        return next(c for c in json.loads(capsys.readouterr().out)["candidates"] if c.get("use") == "total_by4")[
+            "validated"
+        ]
+
+    validate_ = ["validate", str(root), "--symbol", "total_by4", "--policy", str(root / "policy.json"), "--history",
+                 str(history), "--format", "json"]  # fmt: skip
+    assert main([*validate_, "--cxx", "g++"]) == 0
+    capsys.readouterr()
+    assert isinstance(cited(), str)  # tune builds with clang++
+    assert main(validate_) == 0
+    capsys.readouterr()
+    assert isinstance(cited(), dict)
+    monkeypatch.setattr(agreement, "DIGEST", "0" * 64)
+    assert isinstance(cited(), str)

@@ -213,3 +213,13 @@ def version(compiler: str) -> str:
     A cold compiler on a loaded two-core runner took more than the five seconds this once allowed, so it has two
     minutes."""
     return subprocess.run([compiler, "--version"], check=True, capture_output=True, text=True, timeout=120).stdout
+
+
+def named(cxx: str) -> str:
+    """A native compiler as a record names it: the first line of its `--version`, or that it was not found. A search's
+    host target and a validation name it alike, so `cairn tune` can tell whether a validation was built by its
+    compiler."""
+    try:
+        return version(find(cxx)).splitlines()[0]
+    except (ProjectError, OSError, subprocess.SubprocessError, IndexError):
+        return f"{cxx} (not found)"

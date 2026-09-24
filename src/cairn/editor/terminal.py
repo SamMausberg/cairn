@@ -156,8 +156,10 @@ def rules(record: dict, stream: TextIO | None = None) -> None:
 
 
 def validation(result: dict, stream: TextIO, s) -> None:
-    """`cairn validate`: the finite result, then what Z3 established apart from it, and a failure's shrunk input."""
+    """`cairn validate`: the finite result, a failure's shrunk input, then what Z3 established apart from it and what
+    its counterexample did when replayed."""
     finite, smt = result.get("finite", {}), result.get("smt", {})
+    replay = smt.get("replay", {})
     status = str(result.get("status", ""))
     said = f"{result.get('implementation')} against {result.get('reference')}"
     if finite:
@@ -165,13 +167,16 @@ def validation(result: dict, stream: TextIO, s) -> None:
         tested = f"finite-tested on a host emulation of {emulated}, not on a device" if emulated else "finite-tested"
         said += f", {plural(finite.get('cases', 0), 'case')} ({finite.get('implementation_ran', 0)} ran it), {tested}"
     print(s(status, "1;32" if status == "passed" else "1;31") + f": {said}", file=stream)
-    if failed := finite.get("failed"):
+    found = finite if finite.get("failed") else replay
+    if failed := found.get("failed"):
         shown = ", ".join(f"{k} = {v}" for k, v in failed.get("inputs", {}).items())
-        print(f"  fails at {shown}" + (f"; kept in {finite['kept']}" if finite.get("kept") else ""), file=stream)
+        print(f"  fails at {shown}" + (f"; kept in {found['kept']}" if found.get("kept") else ""), file=stream)
     if reason := result.get("reason") or finite.get("reason"):
         print(f"  {reason}", file=stream)
     if smt:
         print(f"  smt: {smt.get('status')} where {smt.get('where')}", file=stream)
+    if replay:
+        print(f"  its counterexample, replayed: {replay['status']}: {replay.get('reason', '')}".rstrip(), file=stream)
 
 
 def typed(result: dict) -> str:
