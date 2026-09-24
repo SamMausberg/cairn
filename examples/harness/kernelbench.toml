@@ -1,0 +1,17 @@
+# KernelBench's level-1 ReLU: ModelNew().forward(x) gets one float32 tensor of batch_size x dim and returns a new one.
+# cairn export examples/harness --harness kernelbench --symbol relu --mapping examples/harness/kernelbench.toml --out out/relu
+
+[extents]
+n = "batch_size * dim"
+
+[[argument]]
+name = "x"
+parameter = "x"
+dtype = "float32"
+shape = ["batch_size", "dim"]
+
+[[result]]
+name = "out"
+parameter = "out"
+dtype = "float32"
+shape = ["batch_size", "dim"]

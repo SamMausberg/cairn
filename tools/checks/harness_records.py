@@ -12,7 +12,7 @@ sol/, gpumode/ and kernelbench/, each at the commit projects/harness.py pins. --
 CUDA wheel, unpacked. Each build writes the ninja file the running torch writes (torch.utils.cpp_extension) and swaps
 in that root's headers and libraries, so it compiles and links what a GPU machine's torch would. Four SOL-ExecBench
 problems of the pinned repository become projects through `cairn new --from-sol-execbench`, one with an RMSNorm
-kernel written in CAIRN; GPU MODE's vectoradd_v2 and KernelBench's level-1 ReLU get CAIRN kernels of their own.
+kernel written in CAIRN; examples/harness packages GPU MODE's vectoradd_v2 and KernelBench's level-1 ReLU.
 Nothing here loads what it built, runs device code, runs an evaluator or submits. The record goes to --out.
 """
 
@@ -77,64 +77,6 @@ RMSNORM = """{
     }
   }
 }
-"""
-VECTORADD = """// GPU MODE's vectoradd_v2: output = A + B over float16, each sum rounded once to f16.
-pub fn vectoradd(n:usize, a:ro<f16>[n]@device, b:ro<f16>[n]@device, output:rw<f16>[n]@device) {
-  parallel i in n { output[i] = f16(f32(a[i]) + f32(b[i])); }
-}
-"""
-VECTORADD_MAP = """[benchmark]
-leaderboard = "vectoradd_v2"
-gpu = "B200"
-problem = "problem"
-
-[extents]
-n = "size * size"
-
-[[argument]]
-name = "A"
-parameter = "a"
-dtype = "float16"
-shape = ["size", "size"]
-
-[[argument]]
-name = "B"
-parameter = "b"
-dtype = "float16"
-shape = ["size", "size"]
-
-[[argument]]
-name = "output"
-parameter = "output"
-dtype = "float16"
-shape = ["size", "size"]
-output = true
-"""
-RELU = """// KernelBench level 1, problem 19: ReLU, which keeps a NaN a NaN.
-pub fn relu(n:usize, x:ro<f32>[n]@device, out:rw<f32>[n]@device) {
-  parallel i in n {
-    let v = x[i];
-    if v < 0.0 { out[i] = 0.0; } else { out[i] = v; }
-  }
-}
-"""
-RELU_MAP = """[benchmark]
-problem = "problem/19_ReLU.py"
-
-[extents]
-n = "batch_size * dim"
-
-[[argument]]
-name = "x"
-parameter = "x"
-dtype = "float32"
-shape = ["batch_size", "dim"]
-
-[[result]]
-name = "out"
-parameter = "out"
-dtype = "float32"
-shape = ["batch_size", "dim"]
 """
 
 
@@ -261,22 +203,21 @@ def main() -> int:
                 "entry": written["entry"]["symbol"], "schema": schema(out, definition),
                 "build": solution_build(out, work / f"{name}-stage", args.torch_root),
             })  # fmt: skip
-        for fmt, source, mapping, symbol, problem in (
-            ("gpumode", VECTORADD, VECTORADD_MAP, "vectoradd", "problems/pmpp_v2/vectoradd_py"),
-            ("kernelbench", RELU, RELU_MAP, "relu", "KernelBench/level1/19_ReLU.py"),
+        example = load_project(ROOT / "examples/harness")
+        for fmt, symbol, mapping, problem in (
+            ("gpumode", "vectoradd", None, "gpumode/problems/pmpp_v2/vectoradd_py"),
+            (
+                "kernelbench",
+                "relu",
+                ROOT / "examples/harness/kernelbench.toml",
+                "kernelbench/KernelBench/level1/19_ReLU.py",
+            ),
         ):
-            project = work / fmt
-            (project / "src").mkdir(parents=True)
-            (project / "src/main.cairn").write_text(source)
-            (project / "cairn.toml").write_text(f'[project]\nname = "{symbol}"\nsources = ["src/main.cairn"]\n\n'
-                                                f'[build]\nkind = "library"\ndevice_target = "{TARGET}"\n')  # fmt: skip
-            (project / "harness.toml").write_text(mapping)
             out = work / f"{fmt}-out"
-            written = harness.write(load_project(project), fmt, symbol, out, cxx="g++")
+            written = harness.write(example, fmt, symbol, out, cxx="g++", mapping_path=mapping)
             file = out / harness.FORMATS[fmt]["file"]
-            row = {"format": fmt, "problem": f"{'gpumode' if fmt == 'gpumode' else 'kernelbench'}/{problem}",
-                   "function": symbol, "harness": written["identity"], "export": written["export"],
-                   "entry": written["entry"]["symbol"],
+            row = {"format": fmt, "problem": problem, "project": "examples/harness", "function": symbol,
+                   "harness": written["identity"], "export": written["export"], "entry": written["entry"]["symbol"],
                    "kernelbench_static_check": static_check(file, args.upstream / "kernelbench"),
                    "build": inline_build(file, work / f"{fmt}-stage", args.torch_root)}  # fmt: skip
             record["submissions"].append(row)

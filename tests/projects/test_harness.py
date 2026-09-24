@@ -384,3 +384,18 @@ def test_a_definition_cairn_has_no_type_for_is_refused_and_nothing_is_written(tm
     with pytest.raises(ProjectError, match="NVFP4"):
         create(tmp_path / "fp4", tmp_path / "definition.json")
     assert not (tmp_path / "fp4").exists()
+
+
+@NVCC
+def test_the_example_packages_as_both_submissions(tmp_path):
+    example = Path(__file__).resolve().parents[2] / "examples/harness"
+    harness.write(load_project(example), "gpumode", "vectoradd", tmp_path / "gm", cxx="g++")
+    harness.write(load_project(example), "kernelbench", "relu", tmp_path / "kb", cxx="g++",
+                  mapping_path=example / "kernelbench.toml")  # fmt: skip
+    submission, model = tmp_path / "gm/submission.py", tmp_path / "kb/model_new.py"
+    for path in (submission, model):
+        py_compile.compile(str(path), doraise=True)
+    assert "A, B, output = data" in submission.read_text() and "cuda_sources=[_PROGRAM]" in submission.read_text()
+    assert "return _cairn.run(x)" in model.read_text()
+    record = json.loads((tmp_path / "gm/harness.json").read_text())
+    assert record["export"]["device_target"] == "sm_100a" and record["gpus"] == ["B200"]
