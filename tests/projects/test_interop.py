@@ -110,7 +110,8 @@ def test_a_library_whose_header_would_lie_about_a_layout_does_not_build(tmp_path
     (built / "program.cpp").write_text(cpp.replace("sizeof(ct_Summary) == 32", "sizeof(ct_Summary) == 24"))
     done = subprocess.run(["clang++", "-std=c++20", "-fsyntax-only", f"-I{built}", built / "program.cpp"],
                           capture_output=True, text=True, timeout=120)  # fmt: skip
-    assert done.returncode != 0 and "static assertion failed" in done.stderr
+    # Clang 13 and 14 say "static_assert failed"; newer ones and GCC say "static assertion failed".
+    assert done.returncode != 0 and re.search(r"static (assertion|_assert) failed", done.stderr), done.stderr[-2000:]
 
 
 LAYOUTS = """
