@@ -16,12 +16,11 @@ Records that no longer hold are counted by the part of their identity that moved
 
 from __future__ import annotations
 
-import hashlib
-import json
 from pathlib import Path
 from typing import Any
 
 from . import history as kept
+from .state import sealed
 
 PROTOCOL = "cairn.investigation/1"
 DELTA = "cairn.investigation-delta/1"
@@ -31,11 +30,6 @@ TERMS = (
     "a compiled one what ptxas and cuobjdump read, and a hypothesis is unconfirmed. Stale records are counted, never "
     "shown. Do not run again what is measured or compiled here."
 )
-
-
-def sealed(value: dict[str, Any]) -> dict[str, Any]:
-    body = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return {**value, "digest": hashlib.sha256(body.encode()).hexdigest()}
 
 
 def implemented(r: dict[str, Any]) -> str | None:

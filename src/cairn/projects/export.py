@@ -34,10 +34,9 @@ from typing import Any
 
 from ..compiler.cairnc import RUNTIME_FILES
 from ..compiler.machine import unbuildable
-from ..compiler.tree import Diagnostic
 from ..version import VERSION
-from .project import Project, ProjectError
-from .target import parse, resolve, toolkit_record
+from .project import Project, ProjectError, digest
+from .target import parse, refuse, resolve, toolkit_record
 from .toolchain import KINDS, find, host_family, link_flags, linked
 from .toolchain import command as native_command
 from .toolchain import version as compiler_version
@@ -50,10 +49,6 @@ COMPILER = re.compile(r"(clang\+\+|g\+\+)(-[0-9][0-9.]*)?")  # the names a build
 PLAIN = re.compile(r"[A-Za-z0-9_-]{1,64}")  # an artifact's name, as `export` makes it from the project's
 DEVICE_SIDE = {"cairn_kernels.hpp", "cairn_runtime.hpp", "cairn_assert.hpp", "cairn_float.hpp", "cairn_layout.hpp"}
 LAUNCH = {"cairn_gpu.hpp", "cairn_exec.hpp", "cairn_reuse.hpp"}
-
-
-def refuse(code: str, message: str, **details) -> Diagnostic:
-    return Diagnostic(code, message, **details)
 
 
 def closure(text: str) -> list[str]:
@@ -76,10 +71,6 @@ def role(name: str, program: str, cuda: bool) -> str:
     if not cuda:
         return "runtime"
     return "device" if name in DEVICE_SIDE else "launch" if name in LAUNCH else "host runtime"
-
-
-def sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def identity(record: dict[str, Any]) -> str:
@@ -150,7 +141,7 @@ def export(project: Project, out: Path, *, cxx: str = "clang++", arch: str | Non
     compilers = {"cxx": {"path": find(cxx), "version": compiler_version(find(cxx)).splitlines()[0]}}
     if cuda:
         compilers["nvcc"] = toolkit_record() or {}
-    files = {p.name: sha(p) for p in sorted(out.iterdir())}
+    files = {p.name: digest(p) for p in sorted(out.iterdir())}
     record: dict[str, Any] = {
         "schema": SCHEMA,
         "compiler": VERSION,
@@ -196,7 +187,7 @@ def check(directory: Path) -> dict[str, Any]:
     changed = sorted(
         n
         for n in listed & present
-        if (directory / n).is_symlink() or not (directory / n).is_file() or sha(directory / n) != record["files"][n]
+        if (directory / n).is_symlink() or not (directory / n).is_file() or digest(directory / n) != record["files"][n]
     )
     missing, added = sorted(listed - present), sorted(present - listed)
     if changed or missing or added:
@@ -281,7 +272,7 @@ def build(directory: Path, output: Path | None = None, timeout: int = 300) -> di
         "directory": str(fresh),
         "artifact": str(artifact),
         "elapsed_seconds": round(time.monotonic() - started, 3),
-        **({"artifact_sha256": sha(artifact)} if done.returncode == 0 and artifact.is_file() else {}),
+        **({"artifact_sha256": digest(artifact)} if done.returncode == 0 and artifact.is_file() else {}),
         **({"exit_code": done.returncode, "stderr": done.stderr[-8000:]} if done.returncode else {}),
     }
     (fresh / "build.json").write_text(json.dumps(built, indent=2) + "\n", encoding="utf-8")
