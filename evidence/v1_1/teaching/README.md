@@ -14,33 +14,33 @@ python3 tools/ai/skill_tokens.py --root before --output evidence/v1_1/teaching/b
 python3 tools/ai/skill_tokens.py --output evidence/v1_1/teaching/after.json
 ```
 
-`93dadac` is main before this work. `after.json` is the tree of the commit that adds this record.
+`93dadac` is main before this work. `after.json` is the tree of the commit that last wrote it, where the loop in `SKILL.md` also says that a check reports every refusal it can judge on its own.
 
 ## Counts
 
 | What is read | Before | After | Change |
 |---|---|---|---|
-| `SKILL.md`, read whenever the skill fires | 3,381 | 2,616 | -22.6% |
-| the tour: `SKILL.md` and thirteen cards, each once | 7,657 | 6,993 | -8.7% |
-| one tour program alone, the mean of twelve | 4,350 | 3,476 | -20.1% |
+| `SKILL.md`, read whenever the skill fires | 3,381 | 2,645 | -21.8% |
+| the tour: `SKILL.md` and thirteen cards, each once | 7,657 | 7,022 | -8.3% |
+| one tour program alone, the mean of twelve | 4,350 | 3,506 | -19.4% |
 | `codes.md` | 2,726 | removed | |
-| every file of the skill | 15,927 | 13,763 | -13.6% |
+| every file of the skill | 15,927 | 13,792 | -13.4% |
 | every card's text as a host sends it | 8,868 | 8,889 | +0.2% |
 
 | Tour program | Before | After |
 |---|---|---|
-| 1. Values, checked arithmetic, explicit conversions | 3,381 | 2,616 |
-| 2. Views | 4,032 | 3,046 |
-| 3. Records, sums, `match` and `try` | 4,136 | 3,160 |
-| 4. Generics | 4,464 | 3,593 |
-| 5. Traits, static and dynamic | 4,223 | 3,528 |
-| 6. Owners | 4,472 | 3,486 |
-| 7. Closures | 4,320 | 3,561 |
-| 8. Tasks | 4,586 | 3,805 |
-| 9. Lanes | 5,069 | 4,312 |
-| 10. Generators | 5,262 | 4,313 |
-| 11. Modules and the library | 4,447 | 3,469 |
-| 12. The foreign boundary | 3,809 | 2,829 |
+| 1. Values, checked arithmetic, explicit conversions | 3,381 | 2,645 |
+| 2. Views | 4,032 | 3,075 |
+| 3. Records, sums, `match` and `try` | 4,136 | 3,189 |
+| 4. Generics | 4,464 | 3,622 |
+| 5. Traits, static and dynamic | 4,223 | 3,557 |
+| 6. Owners | 4,472 | 3,515 |
+| 7. Closures | 4,320 | 3,590 |
+| 8. Tasks | 4,586 | 3,834 |
+| 9. Lanes | 5,069 | 4,341 |
+| 10. Generators | 5,262 | 4,342 |
+| 11. Modules and the library | 4,447 | 3,498 |
+| 12. The foreign boundary | 3,809 | 2,858 |
 
 ## What changed
 
