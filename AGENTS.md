@@ -25,6 +25,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/chunks.py` | which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering |
 | `compiler/staging.py` | which arrays a plan's `stage` loads into a device block's shared tile, and that lowering |
 | `compiler/cooperative.py` | cooperative regions (`blocks ... threads ...`): their shape, shared arrays, barriers and warp operations, who reaches a statement together, and their lowering |
+| `compiler/finish.py` | a cooperative region's finish, `then threads t in T { }`: its rule, and its lowering as the last block of one launch |
 | `compiler/phases.py` | the phase rule: between two barriers no two threads of a block touch one shared element where either writes |
 | `compiler/block_run.py` | a cooperative body run for every thread of one block together, recording each phase's accesses for the phase rule and the census |
 | `compiler/footprints.py` | index polynomials, and the rule that each element of an array from outside a cooperative region has one writer |

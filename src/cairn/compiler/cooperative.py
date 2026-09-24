@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import atomics, block_run, execution, footprints, fragments, phases, pipelines, wide
+from . import atomics, block_run, execution, finish, footprints, fragments, phases, pipelines, wide
 from .constants import constant
 from .effects import DEVICE_SAFE, LANE_SAFE
 from .footprints import natural
@@ -327,7 +327,8 @@ def collective(c: Checker, node: Any, width: int, what: str, code: str):
 # The region ---------------------------------------------------------------------------------------------------------
 
 
-def s_blocks(c: Checker, s: Stmt):
+def s_blocks(c: Checker, s: Stmt, main: Block | None = None):
+    """A region, or with `main` the finish of the region `main` (compiler/finish.py), which runs where it runs."""
     if c.lanes or c.f.kernel or c.coop is not None:
         fail("E-PARALLEL-NEST", "A cooperative region cannot start inside a lane, a kernel or another region.", s)
     count = int(s.op)
@@ -351,7 +352,7 @@ def s_blocks(c: Checker, s: Stmt):
     if total % WARP_SIZE or not WARP_SIZE <= total <= 1024:
         fail("E-COOP-SHAPE", f"A block runs whole warps, 32 to 1024 threads, a multiple of 32; {' x '.join(map(str, extents))} "
              f"is {total}.", s)  # fmt: skip
-    device = "device" in placements(c, s.body)
+    device = "device" in placements(c, s.body) if main is None else finish.placed(c, s, main)
     block = Block(grid, threads, extents, device, top={id(x) for x in s.body})
     held = {x.name: x.tag for x in s.body if x.tag in {"shared", "pipeline"}}
     outside = {n: "outside" for n, b in c.env.items() if is_view(b.ty) or b.ty.name in {"Buf", "Array"}}
@@ -392,10 +393,14 @@ def s_blocks(c: Checker, s: Stmt):
         c.guard("grid")  # the product of the grid's extents is checked
     if block.shared or block.pipelines:
         c.effect("zero_init")  # a block's shared memory, its stages included, is zeroed where it starts
+    s.ref = block
+    if main is not None:
+        return
     c.counts["cooperative_regions"] = c.counts.get("cooperative_regions", 0) + 1
     c.resources[c.f.name].append({"name": "blocks", "kind": "blocks", "threads": total, "shared_bytes": block.bytes,
                                   "placement": target, "line": s.line})  # fmt: skip
-    s.ref = block
+    if s.other:  # `then threads t in T { }`: once every block has finished
+        finish.check(c, s, block)
 
 
 def closures(c: Checker, ss: list[Stmt], held: dict[str, str]):
@@ -531,23 +536,17 @@ def lower_blocks(g: Emitter, s: Stmt, es: list[str]):
 
     def body():
         grid = [f"cr_g{k}" for k in range(count)]
-        named = "[[maybe_unused]] const std::size_t"  # a body need not use every name; nvcc would refuse it unused
         if count == 1:
-            g.put(f"{named} v_{block.grid[0]} = cr_b;")
+            g.put(f"{NAMED} v_{block.grid[0]} = cr_b;")
         else:
             below = "cr_b"
             for k, name in enumerate(block.grid):
-                g.put(f"{named} v_{name} = {below} % {grid[k]};" if k < count - 1 else f"{named} v_{name} = {below};")
+                g.put(f"{NAMED} v_{name} = {below} % {grid[k]};" if k < count - 1 else f"{NAMED} v_{name} = {below};")
                 below = f"({below} / {grid[k]})"
-        rest = "cr_t"
-        for k, (name, extent) in enumerate(zip(block.threads, block.extents, strict=True)):
-            last = k == len(block.threads) - 1
-            g.put(f"{named} v_{name} = {rest if last else f'{rest} % {extent}'};")
-            rest = f"{rest} / {extent}"
+        thread_names(g, block)
         g.block(s.body)
 
-    context = "Device" if block.device else "Host"
-    head = f"(cr::coop::{context}& cr_blk, std::size_t cr_b, std::size_t cr_t)"
+    head = lambda_head(block)
     entry = "launch" if block.device else "run"
 
     def whole():
@@ -558,11 +557,31 @@ def lower_blocks(g: Emitter, s: Stmt, es: list[str]):
             total = "cr_g0"
             for k in range(1, count):
                 total = f"cr::mul<std::size_t>({total}, cr_g{k})"  # the number of blocks is checked
-        lanes = g.inner(lambda: f"[=] CR_DEVICE{head}" if block.device else f"[&]{head} noexcept", body)
+        lanes = g.inner(lambda: head, body)
         context = f"{execution.CONTEXT}, " if block.device else ""  # the thread's execution context
+        if s.other:  # the region's finish, after every block (compiler/finish.py)
+            return finish.lower(g, s, f"{entry}_then", f"{context}{total}", lanes)
         g.put(f"cr::coop::{entry}<{block.count}, {block.bytes}>({context}{total}, {lanes});")
 
     g.nest("{", whole)
+
+
+NAMED = "[[maybe_unused]] const std::size_t"  # a body need not use every name; nvcc would refuse it unused
+
+
+def lambda_head(block: Block) -> str:
+    """The lambda a block's threads run: its context, its block number and its thread number."""
+    head = f"(cr::coop::{'Device' if block.device else 'Host'}& cr_blk, std::size_t cr_b, std::size_t cr_t)"
+    return f"[=] CR_DEVICE{head}" if block.device else f"[&]{head} noexcept"
+
+
+def thread_names(g: Emitter, block: Block):
+    """Each thread name from the thread's number, fastest first: thread (tx, ty) is thread tx + TX * ty."""
+    rest = "cr_t"
+    for k, (name, extent) in enumerate(zip(block.threads, block.extents, strict=True)):
+        last = k == len(block.threads) - 1
+        g.put(f"{NAMED} v_{name} = {rest if last else f'{rest} % {extent}'};")
+        rest = f"{rest} / {extent}"
 
 
 def lower_shared(g: Emitter, s: Stmt, es: list[str]):

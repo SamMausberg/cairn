@@ -21,7 +21,7 @@ syntax match cairnConstant /\v<\u[A-Z0-9_]*[A-Z0-9]>/
 syntax match cairnEnumMember /\v(<\u\w*\.)@<=\u\w*>/
 syntax match cairnSelf /\v<(self|Self)>/
 syntax match cairnPlacement /\v\@(host|device|pinned|unified)>/
-syntax match cairnContext /\v<(after|barrier|block|blocks|clobbers|depth|exclusive|fold|fuse|grain|implements|into|lanes|launch|layout|lends|needs|out|per_lane|pipeline|plan|recipe|require|scan|shared|stage|test|threads|tune|unroll|use|vector|volatile|warp|when)>\ze\s+[[:alnum:]_"$+*&|^-]/
+syntax match cairnContext /\v<(after|barrier|block|blocks|clobbers|depth|exclusive|fold|fuse|grain|implements|into|lanes|launch|layout|lends|needs|out|per_lane|pipeline|plan|recipe|require|scan|shared|stage|test|then|threads|tune|unroll|use|vector|volatile|warp|when)>\ze\s+[[:alnum:]_"$+*&|^-]/
 syntax match cairnContext /\v<packed>\ze\s*\{/
 syntax match cairnContext /\v<align>\ze\s*\(/
 syntax match cairnNumber /\v<(0x\x+|\d+(\.\d+)?([eE][+-]?\d+)?)>/

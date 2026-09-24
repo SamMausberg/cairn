@@ -295,6 +295,15 @@ class Walk:
             self.block(s.body)
             del self.active[key]
             self.env = env
+            for done in s.other:  # the finish: its thread names below their extents, no block name in scope
+                facts = []
+                for name, extent in zip((n.val for n in done.other_names), done.exprs, strict=True):
+                    self.bind(name, True)
+                    facts += self.bound(name, None, extent, True)
+                key = self.enter(("binder", id(done)), facts)
+                self.block(done.body)
+                del self.active[key]
+                self.env = env
         elif tag in {"shared", "warp_reduce", "pipeline"}:
             for e in es:
                 self.expr(e)

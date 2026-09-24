@@ -164,6 +164,9 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
             names, count = [n.val for n in s.other_names], int(s.op)
             line = (f"blocks {', '.join(names[:count])} in {', '.join(es[:count])} threads "
                     f"{', '.join(names[count:])} in {', '.join(es[count:])} {nested(s.body)}")  # fmt: skip
+            for done in s.other:  # the region's finish (compiler/finish.py)
+                line += (f" then threads {', '.join(n.val for n in done.other_names)} in "
+                         f"{', '.join(format_expr(e) for e in done.exprs)} {nested(done.body)}")  # fmt: skip
         elif s.tag == "shared":
             line = f"shared {s.name}:{s.ty.value.display()}[{es[0]}] = zeroed;"
         elif s.tag == "pipeline":

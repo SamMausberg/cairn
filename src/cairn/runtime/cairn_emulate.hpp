@@ -140,6 +140,11 @@ template<unsigned THREADS, std::size_t BYTES, class F> inline void launch(gpu::C
   static_assert(BYTES <= 48 * 1024, "static shared memory holds 48 KiB");
   reuse::synchronous(ctx, [&](gpu::Machine::Stream) { run<THREADS, BYTES>(grid, body); });
 }
+template<unsigned THREADS, std::size_t BYTES, class F, class G>
+inline void launch_then(gpu::Context& ctx, std::size_t grid, F body, G finish) noexcept {
+  static_assert(BYTES <= 48 * 1024, "static shared memory holds 48 KiB");
+  reuse::synchronous(ctx, [&](gpu::Machine::Stream) { run_then<THREADS, BYTES>(grid, body, finish); });
+}
 }  // namespace cr::coop
 
 namespace cr::tensor {
