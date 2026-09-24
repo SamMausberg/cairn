@@ -170,3 +170,27 @@ def test_a_prediction_for_a_target_the_build_refuses_is_refused_as_the_build_ref
     cards = {c["card"]: c for c in across(BULK)["cards"]}
     assert cards["a100-sxm4-80gb"]["refused"]["code"] == "E-IMPL-TARGET"
     assert "refused" not in cards["h100-sxm5"] and cards["h100-sxm5"]["device_target"] == "sm_90a"
+
+
+# --- Fixed: a function value that may be a function without a verdict ended the check on a KeyError ----------------
+
+VALUE = """fn bad() -> u64 { return missing; }
+fn h(n:u64) -> u64 = bad();
+fn apply(k:fn(u64) -> u64, n:u64) -> u64 = k(n);
+fn main() -> i32 { let x = apply(h, 1); return 0; }
+"""
+REFERENCE_VALUE = """fn apply(k:fn(u64) -> u64, n:u64) -> u64 = k(n);
+fn same(n:u64) -> u64 = n;
+fn f(n:u64) -> u64 = apply(same, n);
+fn g(n:u64) -> u64 implements f = apply(f, n);
+plan f use g;
+"""
+
+
+@pytest.mark.parametrize("source", [VALUE, REFERENCE_VALUE + BROKEN], ids=["refused-callee", "reference"])
+def test_a_call_through_a_function_value_that_may_reach_an_unjudged_function_is_not_judged(source):
+    """`h` is checked, but it calls a refused body, so its row is unknown and it gets no verdict. `apply` calls a
+    function value that may be `h`, and the ceilings were computed for it anyway: the fixed point read `h`'s row,
+    which it had left out, and the check ended on a KeyError, so every later refusal was lost and the fault hidden."""
+    record = every(source)
+    assert record.get("not_judged", 0) >= 2, record

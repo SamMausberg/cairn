@@ -116,23 +116,26 @@ def rest(c: Checker):
 
 
 def independent(c: Checker) -> set[str]:
-    """The functions whose rows reach no refused body: every one whose check finished, but those that call, or make
-    an indirect call that may reach, one that did not, those whose row an implementation joins, and those that reach
-    them. The others join `unjudged`."""
+    """The functions whose rows reach no refused body: every one whose check finished, but those that call one that
+    did not, those whose row an implementation joins, those that reach them, and those that make an indirect call
+    that may reach any of these. The others join `unjudged`."""
     connect_dispatches(c)
     known, callers = set(c.local_effects), dict[str, set[str]]()
     for n in known:
         for q in c.calls[n]:
             callers.setdefault(q, set()).add(n)
     todo = [n for n in known if any(q not in known for q in c.calls[n])]
-    if any(g not in known for g in c.address_taken):
-        todo += [n for n in known if "indirect_call" in c.local_effects[n]]
     todo += sorted(references(c) & known)
+    indirect = [n for n in known if "indirect_call" in c.local_effects[n]]
+    if any(g not in known for g in c.address_taken):
+        todo += indirect
     while todo:
         n = todo.pop()
         if n not in c.unjudged:
             c.unjudged.add(n)
             todo += callers.get(n, ())
+        if not todo and any(g not in known or g in c.unjudged for g in c.address_taken):
+            todo = [n for n in indirect if n not in c.unjudged]  # a function value may be one without a verdict
     return known - c.unjudged
 
 
