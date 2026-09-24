@@ -461,3 +461,19 @@ def test_host_region_benchmark_builds_under_the_contract(tmp_path):
         made = subprocess.run(line, capture_output=True, text=True, timeout=600)
         assert made.returncode == 0, made.stderr[-3000:]
         assert made.stderr == "", f"the benchmark must build without a warning:\n{made.stderr}"
+
+
+def test_device_examples():
+    """Every device example is found by what the compiler says it needs, and a build is one of three answers."""
+    listed = set(parsed(tool("tools/checks/device_examples.py", "--list"))["examples"])
+    assert {"examples/cooperative/gpu.toml", "examples/apps/simulator/cairn.toml", "examples/foreign/device/cairn.toml",
+            "examples/tensor/tile32.cairn", "demos/numeric/gpu.toml"} <= listed  # fmt: skip
+    hosted = {"examples/cooperative/cairn.toml", "examples/apps/matmul/cairn.toml", "examples/tensor/transpose.cairn"}
+    assert not listed & hosted
+    if not shutil.which("nvcc"):
+        pytest.skip("nvcc is not installed")
+    only = ("--only", "examples/tensor/tile32.cairn", "--targets", "sm_120", "sm_75", "--jobs", "2")
+    out = parsed(tool("tools/checks/device_examples.py", *only, timeout=900))
+    rows = {row["target"]: row for row in out["rows"]}
+    assert rows["sm_120"]["status"] == "native-built" and out["failed"] == 0 and not out["ran_on_a_device"]
+    assert rows["sm_75"]["status"] == "refused" and rows["sm_75"]["code"] == "E-TARGET-FEATURE"  # mma_sync needs sm_80

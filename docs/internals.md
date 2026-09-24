@@ -166,9 +166,29 @@ A rejection table maps a sentence naming a rule to a diagnostic code and a progr
 | `tools/checks/differential_guards.py` | generated programs built as emitted and with every guard and checked entry kept, under both compilers and the sanitizers, returning the same value or trap on every input; a mismatch is minimized into a program to keep |
 | `bench/suite/harness.py`, `report.py` | the eight kernels of [bench/suite/PREREGISTRATION.md](../bench/suite/PREREGISTRATION.md) under both compilers with the project's flags, each baseline guarded and unguarded, safety boundaries counted against the receipt, no result written when a case disagrees with its oracle; losses printed beside wins |
 
+| `tools/checks/device_examples.py` | every device example of the repository built by `cairn build` for each named target, sm_80, sm_90a, sm_100a and sm_120 by default, with nothing run; a target the installed nvcc does not compile is skipped and named |
+
 These harnesses write under `results/`, which is not tracked, one subdirectory per kind of output.
 
 `tools/corpus/` holds generated teaching fixtures beside the scripts that write and check them; no model was trained on them. Each generator's `--check` fails when a committed file differs from a fresh run, so a changed rule card, packet or receipt fails `tests/tooling/test_tools.py` with the command that regenerates it.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request, every push to `main` and every Monday. A pull request needs one check, `ci-passed`, which passes only when every other job passed, so a job added later is required once it is in that job's `needs`; `tests/tooling/test_workflow.py` fails until it is. Every action is pinned by commit, the workflow reads the repository and writes nothing, and no job sets `CAIRN_GPU_TESTS`, so device code is compiled on runners without a GPU and never run.
+
+| Job | What it catches | Runner |
+|---|---|---|
+| `checks` | formatting, lint and types; a stale API reference; the examples, certificates and scalar equivalence | ubuntu-24.04 |
+| `tests`, four parts | the whole suite under the runner's Clang 18, GCC 13 and Python 3.12 | ubuntu-24.04 |
+| `proofs` | the Lean build, its axiom audit, and the differential runs against the checker | ubuntu-24.04 |
+| `device`, four | device code nvcc refuses: under CUDA 12.9 and 13.2, each with g++ and with clang++ as nvcc's host compiler, every test that compiles device code, and every device example built for sm_80, sm_90a, sm_100a and sm_120 | ubuntu-24.04 |
+| `compilers`, two | runtime headers and emitted C++ another compiler refuses or builds differently: the runtime, soundness, project and language tests under GCC 11 and Clang 13, the oldest supported, and under GCC 15 and Clang 23 | ubuntu-22.04, ubuntu-26.04 |
+| `python`, three | the compiler, the agent layer, the tools and the verifiers under Python 3.11, 3.13 and 3.14 | ubuntu-24.04 |
+| `arm` | an AArch64 host: the runtime, soundness and project tests, and the freestanding image under `qemu-system-aarch64`, which must run rather than skip | ubuntu-24.04-arm |
+| `package` | a file the sdist or the wheel leaves out: `cairn` installed from the wheel built from the sdist and run away from the checkout, and the Claude Code plugin from a clean copy of the repository | ubuntu-24.04 |
+| `ci-passed` | any job above that failed, was cancelled or was skipped | ubuntu-24.04 |
+
+The device job's tests are `make device-build` where nvcc is installed. A test's own device builds give nvcc g++ unless `CAIRN_TEST_NVCC_HOST` names another host compiler, as `make device-build NVCC_HOST=clang++` does; `cairn build` gives it clang++. NVIDIA's and LLVM's packages and pip's downloads are cached between runs.
 
 ## Safety and trust
 

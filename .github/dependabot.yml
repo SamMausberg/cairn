@@ -1,0 +1,11 @@
+# Dependabot proposes new releases of the actions the workflows pin by commit, each as a pull request that CI holds
+# like any other. The package has no runtime dependency, and the development pins in pyproject.toml move by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

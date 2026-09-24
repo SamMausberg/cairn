@@ -1,11 +1,21 @@
 name: CI
+# The suite, the proofs, and what one runner does not reach: device code under two CUDA toolkits and both of nvcc's
+# host compilers, the oldest supported and the newest compilers, every supported Python, an AArch64 host, and the
+# package as a user installs it. docs/internals.md#continuous-integration says what each job catches. Nothing here
+# runs code on a GPU: no runner has one, and CAIRN_GPU_TESTS is never set, so every device run in the suite skips.
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # The runner images, the toolkits and the compilers change without a push; a weekly run notices.
+  schedule:
+    - cron: "23 5 * * 1"
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash  # bash -eo pipefail, so a failing command before a pipe fails its step
 # A newer push to the same branch supersedes a run still going, so a burst of commits costs one run, not one each.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -93,3 +103,265 @@ jobs:
           .venv/bin/python -m pip install -e '.[dev]'
       - name: Certificates in step with the proofs, the Lean build with its axiom audit, and the differential run
         run: PATH="$HOME/.elan/bin:$PATH" make lean PYTHON=.venv/bin/python
+  device:
+    name: device code compiles (CUDA ${{ matrix.cuda }}, ${{ matrix.host }} as nvcc's host compiler)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        cuda: ["12.9", "13.2"]
+        host: [g++, clang++]
+        # Each toolkit builds every example for all four targets, split between its two host-compiler jobs.
+        include:
+          - host: g++
+            targets: sm_80 sm_90a
+          - host: clang++
+            targets: sm_100a sm_120
+    steps:
+      - name: Checkout without retained credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Keep NVIDIA's packages between runs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-cuda
+          key: apt-cuda-${{ matrix.cuda }}-ubuntu-24.04-x64
+      # Only what a device build reads: nvcc with ptxas, the runtime headers and libraries and CUB; and what reads a
+      # kernel back: cuobjdump with nvdisasm for its instructions, cu++filt for its name. No driver: nothing launches.
+      - name: Install CUDA ${{ matrix.cuda }}'s compiler from NVIDIA's repository
+        env:
+          CUDA: ${{ matrix.cuda }}
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/keyring.deb" https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+          echo "d2a6b11c096396d868758b86dab1823b25e14d70333f1dfa74da5ddaf6a06dba  $RUNNER_TEMP/keyring.deb" | sha256sum -c -
+          sudo dpkg -i "$RUNNER_TEMP/keyring.deb"
+          sudo apt-get update
+          mkdir -p ~/apt-cuda/partial
+          v="${CUDA/./-}"
+          sudo apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-cuda" \
+            -o APT::Keep-Downloaded-Packages=true \
+            "cuda-nvcc-$v" "cuda-cudart-dev-$v" "cuda-cccl-$v" "cuda-cuobjdump-$v" "cuda-nvdisasm-$v" "cuda-cuxxfilt-$v"
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-cuda
+          echo "/usr/local/cuda-$CUDA/bin" >> "$GITHUB_PATH"
+      - name: Install the pinned development dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: The toolkit and the host compiler this job holds
+        run: |
+          nvcc --version
+          ${{ matrix.host }} --version
+          nvcc --version | grep -q "release ${{ matrix.cuda }},"
+      - name: Every test that compiles device code, nvcc given ${{ matrix.host }}, nothing run on a device
+        run: make device-build PYTHON=python NVCC_HOST=${{ matrix.host }}
+      - name: Every device example built by cairn build for ${{ matrix.targets }}
+        run: python tools/checks/device_examples.py --cxx ${{ matrix.host }} --targets ${{ matrix.targets }}
+  compilers:
+    name: native tests (${{ matrix.name }}, g++ ${{ matrix.gcc }} and clang++ ${{ matrix.clang }})
+    runs-on: ${{ matrix.image }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest supported: GCC 11 is the first with __builtin_bit_cast and <barrier>, which the runtime uses,
+          # and Clang 13 the first that knows every warning flag projects/toolchain.py passes.
+          - name: oldest supported
+            image: ubuntu-22.04
+            gcc: 11
+            clang: 13
+            python: "3.11"
+          - name: newest
+            image: ubuntu-26.04
+            gcc: 15
+            clang: 23
+            llvm: resolute
+            python: "3.14"
+    steps:
+      - name: Checkout without retained credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Keep the LLVM packages between runs
+        if: matrix.llvm
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-llvm
+          key: apt-llvm-${{ matrix.clang }}-${{ matrix.image }}
+      - name: Install clang ${{ matrix.clang }} and its sanitizer runtimes from apt.llvm.org
+        if: matrix.llvm
+        run: |
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > "$RUNNER_TEMP/llvm.gpg"
+          gpg --show-keys --with-colons "$RUNNER_TEMP/llvm.gpg" | grep -q '^fpr:*6084F3CF814B57C1CF12EFD515CF4D18AF4F7421:'
+          sudo install -m 644 "$RUNNER_TEMP/llvm.gpg" /usr/share/keyrings/llvm.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/${{ matrix.llvm }}/ llvm-toolchain-${{ matrix.llvm }}-${{ matrix.clang }} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          mkdir -p ~/apt-llvm/partial
+          sudo apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-llvm" \
+            -o APT::Keep-Downloaded-Packages=true "clang-${{ matrix.clang }}" "libclang-rt-${{ matrix.clang }}-dev"
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-llvm
+      # Every test names its compiler g++ or clang++, as cairn build does, so these two names are what changes.
+      - name: Make g++ and clang++ name GCC ${{ matrix.gcc }} and Clang ${{ matrix.clang }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/cxx"
+          for tool in gcc g++; do ln -s "/usr/bin/$tool-${{ matrix.gcc }}" "$RUNNER_TEMP/cxx/$tool"; done
+          echo "$RUNNER_TEMP/cxx" >> "$GITHUB_PATH"
+          echo "/usr/lib/llvm-${{ matrix.clang }}/bin" >> "$GITHUB_PATH"
+      - name: The compilers this job holds
+        run: |
+          g++ --version && clang++ --version
+          test "$(g++ -dumpversion)" = "${{ matrix.gcc }}"
+          clang++ --version | grep -q "clang version ${{ matrix.clang }}\."
+      - name: Install zlib, Z3 and the pinned development dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y zlib1g-dev libz3-4
+          python -m pip install -e '.[dev]'
+      # Cores go to a file, which RLIMIT_CORE of 0 turns off, as in the tests job. Older address sanitizers, Clang
+      # 14's among them, crash before main when the kernel spreads mappings over 32 bits of randomness, as newer
+      # kernels may; 28 bits, the older default, is what they were built for.
+      - name: Cores to a file, and the address randomness older sanitizers expect
+        run: sudo sysctl -w kernel.core_pattern=core vm.mmap_rnd_bits=28
+      - name: Runtime, soundness, project and language tests, built and run by these compilers
+        run: ulimit -c 0 && python -m pytest -q tests/runtime tests/soundness tests/projects tests/language -n auto --durations=15
+  python:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # The jobs above run on the runner's Python 3.12; these are the other supported releases.
+        python: ["3.11", "3.13", "3.14"]
+    steps:
+      - name: Checkout without retained credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install Z3 and the pinned development dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y libz3-4
+          python -m pip install -e '.[dev]'
+      - name: Cores to a file, as in the tests job
+        run: sudo sysctl -w kernel.core_pattern=core
+      - name: The compiler, the agent layer, the tools and the verifiers under this Python
+        run: ulimit -c 0 && python -m pytest -q tests/language tests/agent tests/tooling tests/verification -n auto --durations=15
+  arm:
+    name: AArch64 host, and the freestanding image under QEMU
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Checkout without retained credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install the compilers, Z3, QEMU and the pinned development dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y clang g++ libz3-4 qemu-system-arm
+          python -m pip install -e '.[dev]'
+      - name: Cores to a file, as in the tests job
+        run: sudo sysctl -w kernel.core_pattern=core
+      - name: Runtime, soundness and project tests on an AArch64 host
+        run: |
+          ulimit -c 0
+          python -m pytest -q tests/runtime tests/soundness tests/projects -n auto --durations=15 \
+            --ignore=tests/projects/test_freestanding.py
+      # The module skips as a whole without an AArch64 host or QEMU; here both are present, so a skip is a failure.
+      - name: The freestanding image runs under qemu-system-aarch64 with its exact transcript
+        run: |
+          python -m pytest -q -rs tests/projects/test_freestanding.py | tee "$RUNNER_TEMP/embedded.txt"
+          ! grep -q skipped "$RUNNER_TEMP/embedded.txt"
+  package:
+    name: the package and the plugin as a user installs them
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout without retained credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      # build makes the sdist, then the wheel from the sdist, so a file either leaves out is missing below.
+      - name: Build the sdist, and the wheel from it
+        run: |
+          python -m pip install build==1.6.1
+          python -m build --outdir "$RUNNER_TEMP/dist"
+          ls -l "$RUNNER_TEMP/dist"
+      - name: Install the wheel into a fresh environment
+        run: |
+          python -m venv "$RUNNER_TEMP/user"
+          "$RUNNER_TEMP/user/bin/pip" install "$RUNNER_TEMP"/dist/*.whl
+      - name: The installed cairn checks, runs, tests and builds copied examples, away from the checkout
+        working-directory: ${{ runner.temp }}
+        run: |
+          export PATH="$RUNNER_TEMP/user/bin:$PATH"
+          python -c 'import cairn, sys; assert "site-packages" in cairn.__file__, cairn.__file__; print(cairn.__file__)'
+          cairn doctor
+          cp -r "$GITHUB_WORKSPACE/examples/hello" "$GITHUB_WORKSPACE/examples/cooperative" .
+          cairn check hello
+          cairn run hello
+          cairn test hello
+          cairn build hello --cxx g++
+          cairn run cooperative/gpu.toml --emulate --device-target sm_120
+      # The plugin's marketplace entry is the repository itself: a clone, whose bin/cairn runs with no install.
+      - name: The Claude Code plugin from a clean copy of the repository
+        run: |
+          git archive --format=tar --prefix=plugin/ HEAD | tar -x -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP/plugin"
+          python3 - <<'EOF'
+          import json, os
+          plugin = json.load(open(".claude-plugin/plugin.json"))
+          for server in [*plugin["lspServers"].values(), *plugin["mcpServers"].values()]:
+              command = server["command"].replace("${CLAUDE_PLUGIN_ROOT}", os.getcwd())
+              assert os.access(command, os.X_OK), command
+          EOF
+          bin/cairn doctor
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | bin/cairn mcp > "$RUNNER_TEMP/mcp.jsonl"
+          python3 - "$RUNNER_TEMP/mcp.jsonl" <<'EOF'
+          import json, sys
+          hello, listed = [json.loads(line) for line in open(sys.argv[1]) if line.strip()]
+          assert hello["result"]["serverInfo"]["name"] == "cairn", hello
+          assert listed["result"]["tools"], listed
+          print(hello["result"]["serverInfo"], len(listed["result"]["tools"]), "tools")
+          EOF
+  # The one check a pull request needs: it passes only when every job above passed, so a job added later is
+  # required the moment it is listed here.
+  ci-passed:
+    name: ci-passed
+    if: always()
+    needs: [checks, tests, proofs, device, compilers, python, arm, package]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every job this workflow runs passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for result in $RESULTS; do test "$result" = success; done
