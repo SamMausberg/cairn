@@ -503,7 +503,7 @@ cairn export examples/harness --harness gpumode --symbol vectoradd --out out/vec
 cairn export examples/harness --harness kernelbench --symbol relu --mapping examples/harness/kernelbench.toml --out out/relu
 ```
 
-Each writes the submission, the export it embeds and a `cairn.harness/1` record, and prints the commands that would evaluate or submit it ([tools.md](tools.md#cairn-export---harness)). Both compile for sm_100a; neither has run on a GPU.
+Each writes the submission, the export it embeds and a `cairn.harness/1` record, and prints the commands that would evaluate or submit it ([devices.md](devices.md#benchmark-submissions)). Both compile for sm_100a; neither has run on a GPU.
 
 ## examples/bazel
 

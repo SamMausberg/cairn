@@ -1,6 +1,6 @@
 # Benchmark submissions
 
-What `cairn export --harness` wrote and how far each submission got without a GPU ([tools.md](../../../docs/tools.md#cairn-export---harness)): built as its benchmark builds it, against a CUDA build of torch, and, for host-view kernels, run on CPU tensors against the benchmark's reference. Nothing here ran on a GPU, under an official evaluator or on a leaderboard.
+What `cairn export --harness` wrote and how far each submission got without a GPU ([devices.md](../../../docs/devices.md#benchmark-submissions)): built as its benchmark builds it, against a CUDA build of torch, and, for host-view kernels, run on CPU tensors against the benchmark's reference. Nothing here ran on a GPU, under an official evaluator or on a leaderboard.
 
 ## What ran
 

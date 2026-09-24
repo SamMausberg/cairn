@@ -428,7 +428,7 @@
     {
       "feature": "SOL-ExecBench solutions, and projects from its problems",
       "side": "device",
-      "docs": "tools.md#cairn-export---harness",
+      "docs": "devices.md#benchmark-submissions",
       "implemented": "yes",
       "compiles": "yes: sm_100a, compiled and linked against torch 2.9.0+cu130 as SOL-ExecBench's build_ext.py builds a solution, and accepted by its pydantic models",
       "ran_on_cpu": "yes: a host-view solution built by torch.utils.cpp_extension.load equals the reference with CPU torch, and an emulated RMSNorm is within SOL-ExecBench's tolerance on nine workloads",
@@ -440,7 +440,7 @@
     {
       "feature": "GPU MODE submissions",
       "side": "device",
-      "docs": "tools.md#cairn-export---harness",
+      "docs": "devices.md#benchmark-submissions",
       "implemented": "yes",
       "compiles": "yes: sm_100a through load_inline, compiled and linked against torch 2.9.0+cu130",
       "ran_on_cpu": "yes: a host-view submission built by load_inline returns the reference's output with CPU torch",
@@ -452,7 +452,7 @@
     {
       "feature": "KernelBench `ModelNew`",
       "side": "device",
-      "docs": "tools.md#cairn-export---harness",
+      "docs": "devices.md#benchmark-submissions",
       "implemented": "yes",
       "compiles": "yes: sm_100a through load_inline, compiled and linked against torch 2.9.0+cu130, and valid under KernelBench's static checker",
       "ran_on_cpu": "yes: a host-view ModelNew built by load_inline equals the problem's Model with CPU torch",
