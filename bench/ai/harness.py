@@ -18,6 +18,7 @@ import hashlib
 import json
 import lzma
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -31,7 +32,7 @@ sys.path.insert(0, str(HERE))
 import analysis
 from checking import EXTENSION, LANGUAGES, SOURCE, judge
 from scoring import audit, breakdown, markdown, pairs, row, summary
-from subjects import LANGUAGE, LIMITS, run_subject, toolchain, unlock
+from subjects import LANGUAGE, LIMITS, hidden, run_subject, toolchain, unlock
 from tasks import BY_NAME, ORIGINAL, TASKS, example
 
 REPO = HERE.parents[1]
@@ -39,16 +40,17 @@ BUDGET_STOPS = ("success", "error_max_turns", "error_max_budget_usd")
 SONNET, OPUS = "claude-sonnet-5", "claude-opus-5-5"
 # Each study: where its records go, its tasks in preregistered order, its arms, its phases and their models, how many
 # subjects may run at once, the platform cost after which no counted subject starts, where its report goes, whether
-# each subject gets a /tmp of its own, and the default root of its runs, which a private /tmp keeps out of /tmp.
+# each subject runs isolated (its own /tmp, and nothing of the checkouts, the other subjects or other sessions), and
+# the default root of its runs, which an isolated subject's own /tmp keeps out of /tmp.
 STUDIES = {
     "v1_0": {"records": REPO / "results" / "ai_benchmark", "tasks": [t.name for t in ORIGINAL],
              "arms": ("cairn", "cpp", "rust"), "models": {"pilot": SONNET, "primary": SONNET, "secondary": OPUS},
              "jobs": 1, "ceiling_usd": None, "out": REPO / "evidence" / "v1_0" / "ai_benchmark",
-             "private_tmp": False, "root": Path(tempfile.gettempdir()) / "cairn-aibench"},
+             "isolated": False, "root": Path(tempfile.gettempdir()) / "cairn-aibench"},
     "v1_1": {"records": REPO / "results" / "ai_eval", "tasks": [t.name for t in TASKS],
              "arms": ("plugin", "cairn", "cpp", "rust"), "models": {"pilot": SONNET, "counted": SONNET},
              "jobs": 3, "ceiling_usd": {"counted": 200.0}, "out": REPO / "evidence" / "v1_1" / "ai_eval",
-             "private_tmp": True, "root": Path.home() / "cairn-aieval"},
+             "isolated": True, "root": Path.home() / "cairn-aieval"},
 }  # fmt: skip
 RECORDS = STUDIES["v1_0"]["records"]
 
@@ -97,10 +99,19 @@ def order(names: list[str], arms: list[str], study: str = "v1_0") -> list[tuple[
     return cells
 
 
+def plugin_place(root: Path, phase: str, replicate: int, task: str, arm: str) -> Path | None:
+    """Where the plugin arm's subject gets its own copy of the plugin. No other arm has one, so another arm's cleanup
+    never touches it: a copy kept per task was removed under a running plugin subject when a faster arm of the same
+    task finished."""
+    return root / "plugins" / phase / f"r{replicate}" / task / arm if arm == "plugin" else None
+
+
 def spent(records: Path, phase: str) -> float:
-    """The platform cost of every subject of a phase recorded so far, infrastructure failures included."""
+    """The platform cost of every subject of a phase recorded so far, infrastructure failures and subjects set aside
+    for a harness failure included."""
     total = 0.0
-    for path in [*records.glob(f"{phase}/r*/*/*/record.json"), *records.glob(f"{phase}/r*/*/*/infrastructure-*.json")]:
+    kinds = ("record.json", "infrastructure-*.json", "harness-*.json")
+    for path in [p for kind in kinds for p in records.glob(f"{phase}/r*/*/*/{kind}")]:
         total += ((json.loads(path.read_text()).get("result") or {}).get("total_cost_usd")) or 0.0
     return total
 
@@ -122,6 +133,9 @@ def run(phase: str, replicate: int, names: list[str], arms: list[str], root: Pat
     one cell has failed for infrastructure three times or the phase five times."""
     records, ceiling = STUDIES[study]["records"], (STUDIES[study]["ceiling_usd"] or {}).get(phase)
     tools = toolchain(root / "toolchain")
+    harness = subprocess.run(
+        ["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True, text=True
+    ).stdout.strip()
     cairn = [str(tools / "cairn")]
     stop = threading.Event()
     codes: list[int] = []
@@ -168,17 +182,19 @@ def run(phase: str, replicate: int, names: list[str], arms: list[str], root: Pat
         attempt = len(list(cell.glob("infrastructure-*.json"))) if cell.exists() else 0
         print(f"{phase} r{replicate}: {task} in {arm} ...", flush=True)
         where = root / "runs" / phase / f"r{replicate}" / task / arm
-        plugin = root / "plugins" / phase / f"r{replicate}" / task / "plugin"
-        scratch = root / "tmp" / phase / f"r{replicate}" / task / arm if STUDIES[study]["private_tmp"] else None
-        record = run_subject(BY_NAME[task], arm, where, cell, tools, limits, plugin, scratch)
-        record.update(phase=phase, replicate=replicate, study=study)
+        plugin = plugin_place(root, phase, replicate, task, arm)
+        scratch = root / "tmp" / phase / f"r{replicate}" / task / arm if STUDIES[study]["isolated"] else None
+        hide = hidden(root) if scratch is not None else None
+        record = run_subject(BY_NAME[task], arm, where, cell, tools, limits, plugin, scratch, hide)
+        record.update(phase=phase, replicate=replicate, study=study, harness_commit=harness)
         record["infrastructure"] = infrastructure(record)
         if record["infrastructure"]:
             (cell / f"infrastructure-{attempt}.json").write_text(json.dumps(record, indent=1))
             (cell / "record.json").unlink(missing_ok=True)
             print(f"  infrastructure failure: {(record.get('result') or {}).get('subtype')} {record['stderr'][-300:]}")
             print("  stopping; rerun `harness.py run` to continue from this cell")
-            unlock(plugin)
+            if plugin is not None:
+                unlock(plugin)
             return False
         source = (cell / Path(SOURCE[LANGUAGE[arm]]).name).read_text()
         record["source_bytes"] = len(source.encode())
@@ -188,7 +204,8 @@ def run(phase: str, replicate: int, names: list[str], arms: list[str], root: Pat
         shutil.rmtree(record["sandbox"], ignore_errors=True)  # no later subject can reach this one's work
         if scratch is not None:
             shutil.rmtree(scratch, ignore_errors=True)
-        unlock(plugin)
+        if plugin is not None:
+            unlock(plugin)
         r = row(record)
         print(f"  {task} in {arm}: {'solved' if r['solved'] else 'not solved'} ({r['verdict']}), stop {r['stop']}, "
               f"turns {r['turns']}, tokens {r.get('tokens_total')}, ${r.get('tokens_cost_usd')}, {r['wall_seconds']} s, "
@@ -239,6 +256,16 @@ def gathered(study: str, phase: str, out: Path, root: Path | None) -> tuple[list
     return records, {k: v for k, v in decisions.items() if k.startswith(f"{phase}/")}
 
 
+def set_aside(study: str, phase: str) -> list[dict]:
+    """The subjects a harness failure kept from their arm's conditions, each kept on file as harness-N.json beside
+    its transcript, whose cell ran again with a fresh subject."""
+    rows = []
+    for path in sorted((STUDIES[study]["records"] / phase).glob("r*/*/*/harness-*.json")):
+        record = json.loads(path.read_text())
+        rows.append({**row(record), "why": record.get("harness_failure"), "file": str(path.relative_to(REPO))})
+    return rows
+
+
 def report(phase: str, out: Path, root: Path | None = None, study: str = "v1_0") -> int:
     records, decisions = gathered(study, phase, out, root)
     rows = [
@@ -259,8 +286,10 @@ def report(phase: str, out: Path, root: Path | None = None, study: str = "v1_0")
         shown = {"summary": table["summary"], "pairs": table["pairs"]}
     else:
         arms = STUDIES[study]["arms"]
-        table = {"phase": phase, **analysis.analyse(rows, arms), "rows": rows, "audit_decisions": decisions}
-        (out / f"tables_{phase}.md").write_text(analysis.markdown(table, rows, arms) + exploratory(rows))
+        aside = set_aside(study, phase)
+        table = {"phase": phase, **analysis.analyse(rows, arms), "rows": rows, "audit_decisions": decisions,
+                 "set_aside": aside}  # fmt: skip
+        (out / f"tables_{phase}.md").write_text(analysis.markdown(table, rows, arms) + exploratory(rows) + apart(aside))
         shown = {"bootstrap": table["bootstrap"], "safety_failures": table["safety_failures"]}
     (out / f"results_{phase}.json").write_text(json.dumps(table, indent=1))
     for record in records:
@@ -269,6 +298,19 @@ def report(phase: str, out: Path, root: Path | None = None, study: str = "v1_0")
                transcripts=study != "v1_0")  # fmt: skip
     print(json.dumps(shown, indent=1))
     return 0
+
+
+def apart(aside: list[dict]) -> str:
+    """The subjects set aside for a harness failure, with their numbers; none of them is in any count above."""
+    if not aside:
+        return ""
+    lines = ["", "Set aside for a harness failure, reported and counted nowhere above; each cell ran again with a "
+             "fresh subject.", "", "| replicate | task | arm | solved | turns | tokens | cost (USD) | seconds | why |",
+             "|---|---|---|---|---|---|---|---|---|"]  # fmt: skip
+    for r in aside:
+        lines.append(f"| {r['replicate']} | {r['task']} | {r['arm']} | {'yes' if r['solved'] else 'no'} | {r['turns']} | "
+                     f"{r.get('tokens_total', '')} | {r.get('tokens_cost_usd', '')} | {r['wall_seconds']} | {r['why']} |")  # fmt: skip
+    return "\n".join(lines) + "\n"
 
 
 def exploratory(rows: list[dict]) -> str:
@@ -319,7 +361,7 @@ def main(argv: list[str] | None = None) -> int:
         root = (args.root or study["root"]).resolve()
         if root == REPO or REPO in root.parents:
             p.error("--root must be outside the repository")
-        if study["private_tmp"] and Path("/tmp") in [root, *root.parents]:
+        if study["isolated"] and Path("/tmp") in [root, *root.parents]:
             p.error("--root must be outside /tmp, which each subject replaces with a /tmp of its own")
         names = args.task or study["tasks"]
         arms = args.arm or list(study["arms"])

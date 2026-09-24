@@ -8,6 +8,7 @@ race that CAIRN's checker refuses, C++'s thread sanitizer reports and Rust can o
 import importlib.util
 import json
 import math
+import os
 import shutil
 import subprocess
 import sys
@@ -96,16 +97,47 @@ def test_the_plugin_session_loads_only_the_plugin():
     assert "--plugin-dir" not in plain and "--strict-mcp-config" in plain
 
 
-def test_a_subject_of_the_study_gets_a_tmp_of_its_own_and_the_runs_stay_outside_tmp(tmp_path):
-    argv = subjects.private_tmp(["claude", "-p", "hello"], Path("/runs/tmp/counted/r1/x/cpp"))
-    assert argv[:3] == ["unshare", "-Urm", "sh"] and argv[-3:] == ["claude", "-p", "hello"]
-    assert "mount --bind" in argv[4] and argv[6] == "/runs/tmp/counted/r1/x/cpp"
-    assert harness.STUDIES["v1_1"]["private_tmp"] and not harness.STUDIES["v1_0"]["private_tmp"]
+def test_a_subject_of_the_study_sees_its_own_tmp_and_work_and_the_runs_stay_outside_tmp(tmp_path):
+    hide = subjects.hidden(Path("/runs"))
+    assert (str(ROOT), "0555") in hide and ("/runs/runs", "0755") in hide and ("/runs/tmp", "0755") in hide
+    assert (str(Path.home() / ".claude" / "projects"), "1777") in hide
+    argv = subjects.isolated(["claude", "-p", "hello"], Path("/runs/tmp/x/cpp"), [Path("/runs/runs/x/cpp")], hide)
+    assert argv[:2] == ["unshare", "-Urm"] and "--pid" in argv and "--kill-child" in argv
+    assert argv[-4:] == ["--", "claude", "-p", "hello"]
+    spec = json.loads(argv[argv.index("/usr/bin/python3") + 2])
+    assert spec["tmp"] == "/runs/tmp/x/cpp" and spec["keep"] == ["/runs/runs/x/cpp"] and spec["uid"] == os.getuid()
+    assert harness.STUDIES["v1_1"]["isolated"] and not harness.STUDIES["v1_0"]["isolated"]
     assert Path("/tmp") not in harness.STUDIES["v1_1"]["root"].parents
     with pytest.raises(SystemExit):
         harness.main(["--study", "v1_1", "run", "--phase", "counted", "--root", "/tmp/cairn-aieval"])
     with pytest.raises(SystemExit):
         harness.main(["--study", "v1_1", "run", "--phase", "primary", "--root", str(tmp_path)])
+
+
+@pytest.mark.skipif(not shutil.which("unshare"), reason="isolation needs unshare")
+def test_an_isolated_command_sees_its_own_tmp_and_sandbox_and_not_the_repository(tmp_path):
+    root, sandbox, scratch = tmp_path / "root", tmp_path / "root" / "runs" / "x", tmp_path / "root" / "tmp" / "x"
+    other = root / "runs" / "y"
+    for d in (sandbox, scratch, other):
+        d.mkdir(parents=True)
+    (sandbox / "mine.txt").write_text("mine\n")
+    (other / "theirs.txt").write_text("theirs")
+    hide = [(str(ROOT), "0555"), (str(root / "runs"), "0755")]
+    probe = f"ls {ROOT}; ls {root / 'runs'}; cat {sandbox / 'mine.txt'}; echo x > /tmp/made; id -u; ls /proc | grep -c '^[0-9]'"
+    done = subprocess.run(subjects.isolated(["sh", "-c", probe], scratch, [sandbox], hide), capture_output=True,
+                          text=True, timeout=60)  # fmt: skip
+    if done.returncode != 0 and "Operation not permitted" in done.stderr:
+        pytest.skip("this machine does not allow user namespaces")
+    assert done.returncode == 0, done.stderr
+    # The checkout is empty, only its own run is there, and it sees only its own few processes.
+    seen = done.stdout.split()
+    assert seen[:3] == ["x", "mine", str(os.getuid())] and int(seen[3]) < 10, seen
+    assert (scratch / "made").read_text() == "x\n" and (ROOT / "bench").exists()
+
+
+def test_only_the_plugin_arm_has_a_copy_of_the_plugin_to_remove():
+    places = {arm: harness.plugin_place(Path("/runs"), "counted", 2, "sieve", arm) for arm in subjects.LANGUAGE}
+    assert places == {"plugin": Path("/runs/plugins/counted/r2/sieve/plugin"), "cairn": None, "cpp": None, "rust": None}
 
 
 def test_the_audit_allows_the_subjects_own_plugin_and_flags_another_and_a_write_into_it(tmp_path):
@@ -144,6 +176,31 @@ def test_the_audit_allows_the_subjects_own_plugin_and_flags_another_and_a_write_
     assert found["compile_runs"] == 1 and found["compile_runs_failed"] == 1
     described = breakdown(transcript, "cairn", plugin)
     assert described["docs_calls"] == 4  # its own two reads, the edit and the skill
+
+
+def test_the_audit_flags_a_search_of_the_whole_file_system_and_a_result_that_shows_another_subjects_work(tmp_path):
+    root, sandbox = "/root", "/root/runs/counted/r1/x/cairn"
+    commands = ["find / -maxdepth 6 -iname docs 2>/dev/null", "grep -rn blocks / 2>/dev/null", "cd / && ls",
+                "python3 -c 'print(7 / 2)'", "find . -name '*.cairn'", "cat src/main.cairn"]  # fmt: skip
+    results = [
+        "",
+        "",
+        "",
+        "3.5",
+        "/root/runs/counted/r1/x/plugin/src/main.cairn",
+        "see bench/ai/tasks/x/reference.cairn",
+    ]
+    uses = [{"type": "tool_use", "id": str(k), "name": "Bash", "input": {"command": c}} for k, c in enumerate(commands)]
+    back = [{"type": "tool_result", "tool_use_id": str(k), "content": r} for k, r in enumerate(results)]
+    lines = [{"type": "assistant", "message": {"content": uses}}, {"type": "user", "message": {"content": back}}]
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("".join(json.dumps(line) + "\n" for line in lines))
+    found = audit(transcript, sandbox, root)
+    assert [f["why"] for f in found["flags"]].count("root") == 3  # nor a division in a script
+    shown = [f["what"] for f in found["flags"] if f["why"] == "result"]
+    assert any(what.startswith("/root/runs/counted/r1/x/plugin/") for what in shown)  # another subject's program
+    assert any("bench/ai/tasks" in what for what in shown)  # a task's reference, by its folder
+    assert len(found["flags"]) == 5
 
 
 def row(task, replicate, arm, solved, usd, tokens, failure=None, contaminated=False):

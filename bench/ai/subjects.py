@@ -229,12 +229,27 @@ def command(limits: dict, plugin: Path | None = None) -> list[str]:
     ]  # fmt: skip
 
 
-def private_tmp(argv: list[str], scratch: Path) -> list[str]:
-    """`argv` run with a /tmp of its own: `scratch` mounted over /tmp in a user and mount namespace, and the process
-    back at the caller's user and group, so subjects running at once share no scratch file."""
-    mount = 'tmp=$1; uid=$2; gid=$3; shift 3; mount --bind "$tmp" /tmp && exec unshare --user --map-user="$uid" '
-    mount += '--map-group="$gid" -- "$@"'
-    return ["unshare", "-Urm", "sh", "-c", mount, "sh", str(scratch), str(os.getuid()), str(os.getgid()), *argv]
+def isolated(argv: list[str], scratch: Path, keep: list[Path], hide: list[tuple[str, str]]) -> list[str]:
+    """`argv` run where it sees `scratch` as its /tmp, an empty directory at each path of `hide` (with the mode given),
+    the directories of `keep` where they are, and only its own processes: isolation.py, in user, mount and process
+    namespaces of its own, as the caller's user and group."""
+    spec = {"tmp": str(scratch), "keep": [str(k) for k in keep], "hide": hide, "uid": os.getuid(), "gid": os.getgid()}
+    script = Path(__file__).resolve().parent / "isolation.py"
+    # A process namespace of its own as well: the session sees and signals only its own processes, and whatever it
+    # leaves running ends with it.
+    namespaces = ["unshare", "-Urm", "--pid", "--fork", "--kill-child", "--mount-proc"]
+    return [*namespaces, "/usr/bin/python3", str(script), json.dumps(spec), "--", *argv]
+
+
+def hidden(root: Path) -> list[tuple[str, str]]:
+    """What no subject sees: every checkout of the repository, every subject's sandbox, plugin copy and /tmp under the
+    run's root (its own are mounted back), and the saved sessions and tool output of every Claude Code session."""
+    here = Path(__file__).resolve().parents[2]
+    listed = subprocess.run(["git", "-C", str(here), "worktree", "list", "--porcelain"], capture_output=True, text=True)
+    checkouts = [line.split(" ", 1)[1] for line in listed.stdout.splitlines() if line.startswith("worktree ")]
+    runs = [str(root / part) for part in ("runs", "plugins", "tmp")]
+    return [*((c, "0555") for c in checkouts or [str(here)]), *((r, "0755") for r in runs),
+            (str(Path.home() / ".claude" / "projects"), "1777")]  # fmt: skip
 
 
 def run_subject(
@@ -246,9 +261,11 @@ def run_subject(
     limits: dict,
     plugin: Path | None = None,
     scratch: Path | None = None,
+    hide: list[tuple[str, str]] | None = None,
 ) -> dict:
     """Run one subject to the end in `where`; its transcript and final program go to `record_dir`. The plugin arm
-    gets its own copy of the plugin at `plugin`, and with `scratch` the session sees that directory as its /tmp."""
+    gets its own copy of the plugin at `plugin`. With `scratch` the session sees that directory as its /tmp, and
+    nothing at the paths of `hide` but its own sandbox and plugin."""
     language = LANGUAGE[arm]
     given = digest(sandbox(task, arm, where, tools.parent / "docs"))
     if arm == "plugin":
@@ -262,8 +279,8 @@ def run_subject(
     if scratch is not None:
         shutil.rmtree(scratch, ignore_errors=True)
         scratch.mkdir(parents=True)
-        argv = private_tmp(argv, scratch)
-    started = time.time()
+        argv = isolated(argv, scratch, [where, *([plugin] if plugin else [])], hide or [])
+    started, load = time.time(), [round(x, 1) for x in os.getloadavg()]
     with transcript.open("w") as out:
         proc = subprocess.Popen(argv, cwd=where, env=environment(tools), stdout=out, stderr=subprocess.PIPE,
                                 stdin=subprocess.DEVNULL, text=True)  # fmt: skip
@@ -284,9 +301,11 @@ def run_subject(
         "language": language,
         "plugin": str(plugin) if plugin else None,
         "scratch": str(scratch) if scratch else None,
+        "hidden": [path for path, _ in hide or []],
         "limits": limits,
         "given": given,
         "started_at": round(started, 1),
+        "load_average": {"start": load, "end": [round(x, 1) for x in os.getloadavg()]},  # 1, 5 and 15 minutes
         "wall_seconds": round(wall, 1),
         "killed_at_wall_limit": killed,
         "exit_code": proc.returncode,
