@@ -196,7 +196,7 @@ def test_a_call_through_a_function_value_that_may_reach_an_unjudged_function_is_
     assert record.get("not_judged", 0) >= 2, record
 
 
-# --- Open: cairn tune chooses an implementation on a validation made under any policy -------------------------------
+# --- Fixed: cairn tune chose an implementation on a validation made under any policy --------------------------------
 
 ZERO = """fn total(n:usize, xs:ro<u64>[n]) -> u64 {
   let mut sum:u64 = 0;
@@ -210,13 +210,13 @@ fn total_zero(n:usize, xs:ro<u64>[n]) -> u64 implements total {
 """
 
 
-@pytest.mark.xfail(strict=True, reason="open: cairn tune cites a validation made under any domain and tolerance")
 @pytest.mark.skipif(not shutil.which("clang++"), reason="needs clang++")
 def test_tune_does_not_choose_an_implementation_validated_on_one_point_of_its_domain(tmp_path):
     """`total_zero` returns 0 for every input. Validated with the domain narrowed to n = 0, it passed, Z3 called it
     equivalent there, and the history kept it as finite-tested; `cairn tune` then chose `plan total use total_zero;`
     for n = 1e6, and `--write` would write it. The history's contract digests the domain and the tolerance, but the
-    search cites a validation under any contract."""
+    search cited a validation under any contract; now it chooses only on one at least as strict as the reference's
+    policy, and the row says which policy the narrow one used."""
     from cairn.perf.tuning.tune import tune
     from cairn.projects.project import load_project
     from cairn.verify.validation.validation import validate_project
@@ -230,6 +230,9 @@ def test_tune_does_not_choose_an_implementation_validated_on_one_point_of_its_do
     assert record["status"] == "passed"
     answer = tune(ZERO, "total", [{"n": 1e6}], history=history)
     assert answer["chosen"].get("use") != "total_zero", answer["chosen"]
+    [row] = [r for r in answer["candidates"] if r.get("use") == "total_zero"]
+    assert row["validated"].startswith("validated only under a weaker policy than the reference's: it ran 4 generated")
+    assert '"extents": {"n": [0, 0]}' in row["validated"]
 
 
 # --- Fixed: a shared table every thread wrote before a barrier was refused where a data index read it --------------

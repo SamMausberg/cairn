@@ -16,11 +16,12 @@ established for the same identity: a kept inspection is not compiled again, and 
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ...agent import history as kept
 from ...compiler.cairnc import compile_program
@@ -37,6 +38,10 @@ from .plan_source import KEEP, Placement, Plan, contract, selecting, shown, text
 from .resources import Inspector, device_identity, host_target
 from .search import SPACE, Budget, Candidate, Order, Spent, axes, inspected, radii, refusals, searched, space
 
+if TYPE_CHECKING:
+    from ...verify.validation.validation import Policy
+
+WEAKER = "validated only under a weaker policy than the reference's"
 __all__ = ["SPACE", "Budget", "distinct", "now", "regions", "space", "tune"]
 PROCEDURE = {  # how a measurement was made, word for word: a kept one answers only for the same procedure
     False: "cairn.perf.measure: the candidate built with the project's flags beside a driver that fills each view, "
@@ -111,23 +116,28 @@ def label(name: str, key: Key) -> str:
 
 
 def validations(source: str, name: str, receipts: dict[str, Any], alternatives: list[str],
-                recorder: Recorder | None, emulated: bool = False) -> dict[str, Any]:  # fmt: skip
+                recorder: Recorder | None, emulated: bool = False, pinned: Any = None) -> dict[str, Any]:  # fmt: skip
     """For each implementation of `name`, the validation the history holds for it as it is now (its identity with
     everything it calls, `history.selectable`, the reference as written, this compiler, the numerical policy and the
     native compiler the search builds with), unrefuted by an input that failed under the same contract; none without
-    a history. An implementation without one is searched and priced but never chosen or timed: selecting it could
-    change a result. A validation that ran on a host emulation of the device (projects/emulation.py) counts only when
-    `emulated`, the user's `--accept-emulated`; otherwise the row says it is the only evidence, and the implementation
-    is not chosen."""
+    a history. It counts only when made under the reference's policy `pinned` or a stronger one (`Policy.weaker`),
+    else the row says which policy it was made under. An implementation without one is searched and priced but never
+    chosen or timed: selecting it could change a result. A validation that ran on a host emulation of the device
+    (projects/emulation.py) counts only when `emulated`, the user's `--accept-emulated`; otherwise the row says it is
+    the only evidence, and the implementation is not chosen."""
     from ...verify.validation import agreement
+    from ...verify.validation.validation import Policy
 
     if recorder is None:
         return {}
     table = recorder.implementations
+    wanted = Policy.of(pinned)
     out: dict[str, Any] = {}
     for g in alternatives:
         identity = table.get(g, {}).get("identity")
-        found = recorder.history.validations(name, recorder.base, identity, agreement.DIGEST, recorder.cxx)
+        held = recorder.history.validations(name, recorder.base, identity, agreement.DIGEST, recorder.cxx)
+        why = {r["id"]: weaker(r, wanted) for r in held}
+        found = [r for r in held if not why[r["id"]]]
         direct = [r for r in found if r["detail"].get("evidence") != EMULATED]
         if direct or (found and emulated):
             r = (direct or found)[-1]
@@ -137,7 +147,21 @@ def validations(source: str, name: str, receipts: dict[str, Any], alternatives: 
             target = found[-1]["detail"].get("judged_against", "a device target")
             out[g] = (f"only {EMULATED} evidence holds, on a host emulation of {target}: pass --accept-emulated to "
                       "choose it on that evidence")  # fmt: skip
+        elif held:
+            r = held[-1]
+            out[g] = (f"{WEAKER}: {why[r['id']]}. It was validated under {json.dumps(r['detail'].get('policy'))}; "
+                      "cairn validate with no --policy validates it under the reference's")  # fmt: skip
     return out
+
+
+def weaker(r: dict[str, Any], pinned: Policy) -> str:
+    """What keeps the validation record `r` from counting under the reference's policy `pinned`, or nothing."""
+    from ...verify.validation.validation import Policy
+
+    try:
+        return Policy.of(r["detail"]["policy"]).weaker(pinned)
+    except (KeyError, TypeError, ValueError):
+        return "it does not say which policy it was made under"
 
 
 def placed(r: Any) -> str:
@@ -204,12 +228,14 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
          device_target: DeviceTarget | None = None, budget: Budget | None = None,
          history: str | Path | None = None, vendored: dict[str, str] | None = None,
          accept_emulated: bool = False, weights: list[float] | None = None,
-         objective: str = "geomean") -> dict[str, Any]:  # fmt: skip
+         objective: str = "geomean", pinned: dict[str, Any] | None = None) -> dict[str, Any]:  # fmt: skip
     """Every legal plan of `name` ranked by prediction at `sizes`, by `objective` over them (perf/tuning/objective.py), each
     size weighed by `weights`; device candidates compiled within `budget` for one device target, `device_target` or
     the one resolved here; with `measure`, that many of the best timed. `history` is a directory to record into and
     answer from; `vendored` (history.vendored) pins the project's foreign sources. `accept_emulated` lets an
-    implementation validated only on a host emulation of the device be chosen."""
+    implementation validated only on a host emulation of the device be chosen. `pinned` is the policy the reference's
+    regressions file pinned (verify/validation/validation.pinned_policy), the defaults when None: an implementation is
+    chosen only on a validation at least as strict."""
     from ..device import available
     from ..report import targeted
 
@@ -270,7 +296,7 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     legal, agreed = reordered(legal, measured, goal)
     named = identified(source, name)
     ids = [r["id"] for r in named]
-    validated = validations(source, name, receipts, alternatives, recorder, accept_emulated)
+    validated = validations(source, name, receipts, alternatives, recorder, accept_emulated, pinned)
     rows = [row(name, x, ids, validated, measured.get(x.key()), goal) for x in legal]
     table = receipts[name].get("implementations", {})
     for r, x in zip(rows, legal, strict=True):  # an instance of a parameterized implementation: its values
@@ -489,9 +515,10 @@ def lines(result: dict[str, Any], shown_rows: int = 8) -> str:
         seen = f"  {read['registers']} registers, {read['spill_bytes']} spilled" if "registers" in read else ""
         held = row.get("validated")
         judged = f" for {held['judged_against']}" if isinstance(held, dict) and "judged_against" in held else ""
-        emulated_only = isinstance(held, str) and held.startswith(f"only {EMULATED}")
-        held = ("" if held is None else f"  {held['evidence']}{judged}" if isinstance(held, dict)
-                else f"  only {EMULATED}" if emulated_only else "  not validated")  # fmt: skip
+        if isinstance(held, str):
+            held = (f"  only {EMULATED}" if held.startswith(f"only {EMULATED}") else "  only under a weaker policy"
+                    if held.startswith(WEAKER) else "  not validated")  # fmt: skip
+        held = "" if held is None else f"  {held['evidence']}{judged}" if isinstance(held, dict) else held
         out.append(f"  {i:>2}  {row['plan']:<44} {duration(row['predicted_ns']):>10} predicted{seen}{held}")
         if several:
             times = zip(result["sizes"], row["predicted_ns_at"], strict=True)

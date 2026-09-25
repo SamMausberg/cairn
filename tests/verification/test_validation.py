@@ -17,7 +17,7 @@ from cairn.compiler.cairnc import Parser, compile_program
 from cairn.verify.validation import boundaries
 from cairn.verify.validation.boundaries import Unsupported
 from cairn.verify.validation.isolated_calls import Param
-from cairn.verify.validation.validation import FINITE, REGRESSIONS, agree, replay, validate
+from cairn.verify.validation.validation import FINITE, REGRESSIONS, Policy, agree, replay, validate
 
 ROOT = Path(__file__).resolve().parents[2]
 TOTAL = """fn total(n:usize, xs:ro<u64>[n]) -> u64 {
@@ -303,6 +303,9 @@ def test_a_validation_holds_only_under_its_numerical_policy_and_its_compiler(tmp
     (root / "src/main.cairn").write_text(TOTAL + BY4 + "fn main() -> i32 { return 0; }\n")
     (root / "cairn.toml").write_text('[project]\nname = "total"\nsources = ["src/main.cairn"]\n')
     (root / "policy.json").write_text(json.dumps(SMALL))
+    (root / "regressions").mkdir()  # the project pins SMALL, so a validation under it is one tune may choose on
+    pinned = {"schema": REGRESSIONS, "reference": "total", "policy": Policy.of(SMALL).record(), "cases": []}
+    (root / "regressions/total.json").write_text(json.dumps(pinned))
     tune = ["tune", str(root), "--symbol", "total", "--at", "n=1e4", "--history", str(history), "--format", "json"]
 
     def cited() -> object:
@@ -321,3 +324,22 @@ def test_a_validation_holds_only_under_its_numerical_policy_and_its_compiler(tmp
     assert isinstance(cited(), dict)
     monkeypatch.setattr(agreement, "DIGEST", "0" * 64)
     assert isinstance(cited(), str)
+
+
+def test_a_policy_is_weaker_than_the_reference_s_where_a_pass_under_it_covers_less():
+    """What cairn tune asks of a validation before it chooses on it: at least as many cases, no looser tolerance, and
+    a domain that admits every input the reference's does. A different seed takes nothing away."""
+    pinned = Policy.of({"domain": {"extents": {"n": [0, 64]}, "values": {"x": [-8, 8]}}, "budget": 64,
+                        "tolerance": {"absolute": 0.0, "relative": 1e-6}})  # fmt: skip
+    assert pinned.weaker(pinned) == ""
+    wider = {"domain": {"extents": {"n": [0, 128]}}, "tolerance": {"relative": 1e-9}, "budget": 256, "seed": 3}
+    assert Policy.of(wider).weaker(pinned) == ""
+    for change, said in [
+        ({"budget": 32}, "it ran 32 generated cases, where the reference's policy runs 64"),
+        ({"tolerance": {"absolute": 0.0, "relative": 1e-3}}, "its relative tolerance 0.001 is looser"),
+        ({"domain": {"extents": {"n": [1, 64]}, "values": {"x": [-8, 8]}}}, "it admits n in 1..64"),
+        ({"domain": {"largest_extent": 48, "values": {"x": [-8, 8]}}}, "it admits n in 0..48"),
+        ({"domain": {"extents": {"n": [0, 64]}, "largest_extent": 48}}, "it admits extents up to 48"),
+        ({"domain": {"extents": {"n": [0, 64]}, "values": {"x": [-4, 8]}}}, "it admits values of x in -4..8"),
+    ]:
+        assert Policy.of({**pinned.record(), **change}).weaker(pinned).startswith(said), change

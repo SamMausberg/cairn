@@ -222,7 +222,7 @@ class Tools:
 
     def implementation_open(self, a: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         from ...projects.target import parse
-        from ...verify.validation.validation import Policy, kept
+        from ...verify.validation.validation import Policy, pinned_policy, regressions_of
 
         source, files = self.program(a)
         reference, policy, emulate = text(a, "reference"), a.get("policy"), a.get("emulate")
@@ -234,8 +234,8 @@ class Tools:
         if files is not None:  # the project's regressions file of this reference, and the policy it pinned
             named = [f.name for f in compilations.parsed(source).functions
                      if reference in (f.name, local(f.name)) and f.implements is None]  # fmt: skip
-            path = files.project.root / "regressions" / f"{named[0] if len(named) == 1 else reference}.json"
-            pinned = (kept(path, named[0])[1] or {}).get("policy") if len(named) == 1 else None
+            path = regressions_of(files.project.root, named[0] if len(named) == 1 else reference)
+            pinned = pinned_policy(path, named[0]) if len(named) == 1 else None
             if pinned is not None and policy is not None and Policy.of(policy).record() != Policy.of(pinned).record():
                 fail("E-TEST-POLICY", f"{path.relative_to(files.project.root)} pins this reference's validation "
                      "policy; open the session without one.")  # fmt: skip

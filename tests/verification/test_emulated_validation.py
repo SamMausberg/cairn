@@ -93,12 +93,12 @@ def test_cairn_validate_emulate_on_a_project_and_what_tune_makes_of_it(tmp_path,
     assert kept["detail"]["evidence"] == "finite-tested-emulated" and kept["detail"]["judged_against"] == "sm_120"
     assert kept["identity"]["target"] == "host emulation of sm_120"
     sizes, budget = [{"n": 1e6}], Budget(compiles=0)
-    plain = tune(SCALE + FIXED, "scale", sizes, device_target=SM_120, budget=budget, history=history)
+    plain = tune(SCALE + FIXED, "scale", sizes, device_target=SM_120, budget=budget, history=history, pinned=SMALL)
     row = next(r for r in plain["candidates"] if r.get("use") == "scale_tiles")
     assert isinstance(row["validated"], str) and "--accept-emulated" in row["validated"]
     assert plain["chosen"].get("use") is None  # the reference: nothing else may be chosen on emulated evidence
     opted = tune(SCALE + FIXED, "scale", sizes, device_target=SM_120, budget=budget, history=history,
-                 accept_emulated=True)  # fmt: skip
+                 accept_emulated=True, pinned=SMALL)  # fmt: skip
     row = next(r for r in opted["candidates"] if r.get("use") == "scale_tiles")
     assert row["validated"]["evidence"] == "finite-tested-emulated" and row["validated"]["judged_against"] == "sm_120"
 

@@ -93,6 +93,32 @@ class Policy:
         return {"tolerance": self.tolerance, "domain": self.domain, "budget": self.budget, "seed": self.seed,
                 "probes": self.probes, "seconds": self.seconds}  # fmt: skip
 
+    def weaker(self, pinned: Policy) -> str:
+        """What makes a validation under this policy weaker evidence than one under `pinned`, the reference's: fewer
+        cases, a looser tolerance, or a domain that leaves out inputs `pinned` admits. Empty when nothing does, and
+        then `cairn tune` may choose on it. A policy does not know the reference's parameters, so an extent neither
+        domain names is compared at each one's `largest_extent`. The seed, the shrinking probes and the time per call
+        change which cases run and how a failure is reported, never how many inputs a pass covers."""
+        if self.budget < pinned.budget:
+            return f"it ran {self.budget} generated cases, where the reference's policy runs {pinned.budget}"
+        for side in ("absolute", "relative"):
+            mine, theirs = self.tolerance.get(side, 0.0), pinned.tolerance.get(side, 0.0)
+            if mine > theirs:
+                return f"its {side} tolerance {mine} is looser than the reference's {theirs}"
+        domain, wanted = self.domain, pinned.domain
+        for name in sorted({*domain.get("extents", {}), *wanted.get("extents", {})}):
+            (lo, hi), (least, most) = boundaries.admitted(domain, name), boundaries.admitted(wanted, name)
+            if lo > least or hi < most:
+                return f"it admits {name} in {lo}..{hi}, where the reference's policy admits {least}..{most}"
+        largest, most = (d.get("largest_extent", boundaries.LARGEST) for d in (domain, wanted))
+        if largest < most:
+            return f"it admits extents up to {largest}, where the reference's policy admits {most}"
+        for name in sorted({*domain.get("values", {}), *wanted.get("values", {})}):
+            (lo, hi), (least, most) = (d.get("values", {}).get(name, [None, None]) for d in (domain, wanted))
+            if (lo is not None and (least is None or lo > least)) or (hi is not None and (most is None or hi < most)):
+                return f"it admits values of {name} in {lo}..{hi}, where the reference's policy admits {least}..{most}"
+        return ""
+
 
 def agree(expected: dict[str, Any], actual: dict[str, Any], returns: str, params: list[Param],
           tolerance: dict[str, float]) -> bool | None:  # fmt: skip
@@ -320,6 +346,17 @@ def simpler(ty: str, v: Any) -> list[Any]:
     return list(dict.fromkeys(x for x in out if abs(x) < abs(v)))
 
 
+def regressions_of(root: Path, reference: str) -> Path:
+    """Where a project keeps the regressions file of `reference`: the cases `cairn test` replays, and the policy its
+    first kept case pinned."""
+    return root / "regressions" / f"{reference}.json"
+
+
+def pinned_policy(path: Path | None, reference: str) -> dict[str, Any] | None:
+    """The policy the regressions file `path` of `reference` pinned when it kept its first case, or None."""
+    return (kept(path, reference)[1] or {}).get("policy")
+
+
 def kept(path: Path | None, reference: str) -> tuple[list[Case], dict[str, Any] | None]:
     if path is None or not path.is_file():
         return [], None
@@ -531,9 +568,8 @@ def validate_project(project: Any, symbol: str, policy: dict[str, Any] | None = 
         raise ProjectError(f"{symbol} names {'no' if not found else 'more than one'} implementation; write "
                            "fn g(...) implements f ... and name g.")  # fmt: skip
     name, reference = found[0], receipts[found[0]]["implements"]
-    path = regressions or project.root / "regressions" / f"{reference}.json"
-    _, pinned = kept(path, reference)
-    chosen = policy if policy is not None else (pinned or {}).get("policy")
+    path = regressions or regressions_of(project.root, reference)
+    chosen = policy if policy is not None else pinned_policy(path, reference)
     with tempfile.TemporaryDirectory(prefix="cairn-vendored-") as vendored:  # a foreign implementation's C++
         objects = tuple(foreign.host_objects(project, Path(vendored), cxx)) if project.foreign else ()
         record = validate(project.source, reference, name, chosen, cxx, path, project.libraries, objects=objects,
@@ -573,12 +609,14 @@ def remembered(where: Path, source: str, reference: str, implementation: str, re
 
 def held(record: dict[str, Any]) -> dict[str, Any]:
     """What a history record of a validation keeps from it: the evidence class, the finite status, Z3's with its
-    replay, the numerical policy's digest and the native compiler's version it was made under, and for an emulated
-    run the device target that judged it, under which it is kept, never as the host's or a device's."""
+    replay, the numerical policy's digest, the validation policy and the native compiler's version it was made under,
+    and for an emulated run the device target that judged it, under which it is kept, never as the host's or a
+    device's."""
     smt, finite = record.get("smt", {}), record.get("finite", {})
     out = {"evidence": record.get("evidence", "finite-tested"), "finite": finite.get("status", record["status"]),
            "smt": smt.get("status"), **({"replay": smt["replay"]["status"]} if "replay" in smt else {}),
-           "agreement": record["agreement"]["sha256"], "compiler": record["compiler"]["version"]}  # fmt: skip
+           "agreement": record["agreement"]["sha256"], "compiler": record["compiler"]["version"],
+           "policy": record["policy"]}  # fmt: skip
     if "emulation" in record:
         judged = record["emulation"]["judged_against"]
         out |= {"target": emulation.target(judged), "judged_against": judged}

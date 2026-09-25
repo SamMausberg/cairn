@@ -407,6 +407,7 @@ def main(argv: list[str] | None = None) -> int:
             from .perf.tuning.tune import Budget, tune
             from .perf.tuning.tune import delta as tune_delta
             from .perf.tuning.tune import lines as tune_lines
+            from .verify.validation.validation import pinned_policy, regressions_of
 
             supplied, card = carded(Profile.load(a.profile) if a.profile else None, a.card)
             arch = resolve_arch(a.arch or project.arch)
@@ -432,8 +433,9 @@ def main(argv: list[str] | None = None) -> int:
                                           vendored(project))  # fmt: skip
                 print(feedback.lines_for_people(answer)) if terminal.human(FORMAT) else report(answer)
                 return 0
+            pinned = pinned_policy(regressions_of(project.root, a.symbol[0]), a.symbol[0])
             answer = tune(project.source, a.symbol[0], sizes, supplied, arch, a.measure, a.cxx, a.device, device,
-                          budget, kept, vendored(project), a.accept_emulated, weights, a.objective)  # fmt: skip
+                          budget, kept, vendored(project), a.accept_emulated, weights, a.objective, pinned)  # fmt: skip
             if a.write:  # Only the plan line changes, in the file that declares the function, and only if it checks.
                 use = answer["chosen"].get("use") if "implementations" in answer else KEEP  # the reference: none
                 answer["written"] = write_plan(a.path, a.symbol[0], answer["chosen"], use)
