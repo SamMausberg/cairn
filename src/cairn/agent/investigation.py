@@ -42,6 +42,19 @@ def implemented(r: dict[str, Any]) -> str | None:
     return variant if r["kind"] in {"validation", "failure"} and isinstance(variant, str) else None
 
 
+def of_project(project: Any, symbol: str, where: Path | None = None, cxx: str = "clang++", arch: str | None = None,
+               device_target: str | None = None) -> dict[str, Any]:  # fmt: skip
+    """The packet for `symbol` of a loaded project, current for the host `cxx` builds for at `arch` and for the
+    device target `device_target` or the manifest's, from the history at `where` or the one beside the manifest."""
+    from ..perf.tuning.resources import device_identity, host_target
+    from ..projects.target import resolve
+    from ..projects.toolchain import resolve_arch
+
+    device = resolve(device_target, project.device_target, required=False)
+    targets = {"host": host_target(resolve_arch(arch or project.arch), cxx), "device": device_identity(device)}
+    return investigation(project.source, symbol, where or kept.beside(project.root), targets, kept.vendored(project))
+
+
 def brief(r: dict[str, Any], procedures: dict[str, str] | None = None) -> dict[str, Any]:
     """A record as the packet shows it: its id, when, and its detail without what the packet already says. A
     procedure is named once under `procedures` and by its key after that."""
