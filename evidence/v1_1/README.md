@@ -15,6 +15,7 @@ Each directory is one record of the work after `v1.0.0`, taken as it landed. Its
 | `kernels/` | Wide loads and stores, atomic updates, a cooperative region's finish and shared arrays nobody zeroes, and `examples/reduction` rewritten without `unsafe`. |
 | `review/` | An adversarial review of what landed after 1.0.0: the attacks, and which held. |
 | `search/` | What `cairn tune`'s search costs before and after lazy generation and shared compiles. |
+| `speed/` | Where the test suite's time and `cairn check`'s went before the 1.1 speed work, and what each change of it cut, timed interleaved on the shared machine. |
 | `teaching/` | What the agent skill asks an agent to read, in tokens, before and after refusals carried their rule card and fix; no model ran. |
 | `validation/` | One numerical policy for every float comparison, device tests that write every input exactly, and Z3 counterexamples replayed natively. |
 | `workspace/` | What an agent waits for over `cairn mcp`, before and after one compile per distinct source. |
