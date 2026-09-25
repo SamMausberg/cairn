@@ -14,22 +14,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))  # holds no cairn package, so SRC still wins
-from sources import cairn_sources
-
-GUARDS = {
-    "bounds": r"\bcr::at\(",
-    "overflow": r"\bcr::(?:add|sub|mul)<",
-    "conversion": r"\bcr::(?:convert|truncate)<",
-    "division": r"\bcr::(?:divide|remainder)<",
-    "part": r"\bcr::part\(",
-    "entry": r"\bcr::(?:view|disjoint)\(",
-}
+from guards import corpus, counts
 
 
 def main() -> int:
@@ -42,19 +31,15 @@ def main() -> int:
     from cairn.compiler.cairnc import compile_source
     from cairn.projects.project import load_project
 
-    root = a.corpus.resolve()
-    paths = [*root.glob("examples/**/cairn.toml"), *cairn_sources(root / "examples/basics"),
-             *root.glob("bench/suite/kernels/*/kernel.cairn")]  # fmt: skip
     rows = {}
-    for path in sorted(paths):
-        name = str((path.parent if path.name == "cairn.toml" else path).relative_to(root))
+    for name, path in corpus(a.corpus.resolve()):
         try:
             text = load_project(path.parent).source if path.name == "cairn.toml" else path.read_text(encoding="utf-8")
             cpp = compile_source(text)[0]
         except Exception as e:  # A device or freestanding project that does not build here, or a refusal.
             rows[name] = {"skipped": type(e).__name__}
             continue
-        rows[name] = {kind: len(re.findall(pattern, cpp)) for kind, pattern in GUARDS.items()}
+        rows[name] = counts(cpp)
     total = sum((Counter(r) for r in rows.values() if "skipped" not in r), Counter())
     result = {"src": str(a.src), "corpus": str(a.corpus), "programs": rows, "total": dict(total)}
     if a.out:
