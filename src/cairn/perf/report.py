@@ -211,9 +211,9 @@ def across(source: str, sizes: list[dict[str, float]] | None = None, symbols: se
     inspections: dict[str, Any] = {}
     found = costs(source, symbols) if groups else {}
     for target, group in groups.items():
-        if inspect:  # this target's registers and shared memory, in place of the last target's
+        if inspect:  # this target's registers, shared memory and spills, in place of the last target's
             for r in (r for c in found.values() for r in c.regions):
-                r.registers, r.shared = 0, 0
+                r.registers, r.shared, r.spilled = 0, 0, 0
             inspections[target.name] = inspected(source, found, target)
         for name, c in found.items():
             if not on_device(c):

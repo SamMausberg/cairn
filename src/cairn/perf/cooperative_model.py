@@ -213,7 +213,7 @@ def read(costs: dict[str, Cost], kernels: dict[str, list[dict[str, Any]]]) -> li
                 out.setdefault(key, {"function": shape.function, "line": r.line, "status": "no kernel matched"})
                 continue
             e = found[0]
-            r.registers, r.shared = e["registers"], e["shared_bytes"]
+            r.registers, r.shared, r.spilled = e["registers"], e["shared_bytes"], e["spill_bytes"]
             out[key] = {"function": shape.function, "line": r.line, "status": "read", "registers": e["registers"],
                         "shared_bytes": e["shared_bytes"], "checked_shared_bytes": shape.shared_bytes,
                         "spill_bytes": e["spill_bytes"], "stack_bytes": e["stack_bytes"],

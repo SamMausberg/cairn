@@ -324,7 +324,7 @@ def priced(c: Cost, profile: Profile, sizes: list[dict[str, float]] | tuple[dict
     for r in trial.regions:
         if (r.kind == "device" or (r.coop is not None and r.coop.device)) and resources and resources.get(
                 "status") == "read":  # fmt: skip
-            r.registers = resources["registers"]
+            r.registers, r.spilled = resources["registers"], resources["spill_bytes"]
             r.shared = resources["shared_bytes"] + resources["dynamic_shared_bytes"]
     return [model.predict(trial, profile, s, arch)["ns"] for s in sizes]
 

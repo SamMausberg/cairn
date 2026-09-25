@@ -10,8 +10,12 @@ from test_predict import MACHINE
 
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_program
+from cairn.perf.model import predict
 from cairn.perf.tuning.plan_source import replanned, written
+from cairn.perf.tuning.search import Candidate, priced
 from cairn.perf.tuning.tune import distinct, space, tune
+from cairn.perf.tuning.tune import row as shown_row
+from cairn.perf.work import count
 
 MIX = """fn mix(v:u64) -> u64 {
   let mut w = v;
@@ -31,6 +35,28 @@ def test_every_candidate_is_a_plan_the_checker_accepts():
     predicted = [row["predicted_ns"] for row in result["candidates"]]
     assert predicted == sorted(predicted) and result["chosen"] == result["candidates"][0]
     assert result["current"] == "(no plan for spread)" and "none needed checking" in result["predicted"]
+
+
+DEVICE = "fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i]; } }\n"
+
+
+def test_a_candidate_that_spills_is_priced_as_without_the_spills_and_says_so():
+    """What ptxas reports of spills enters no price, so two readings that differ only in their spills rank alike, a
+    spilling candidate says so, and a prediction of its kernel says the time leaves the spills out."""
+    p, checker, _ = compile_program(DEVICE)
+    cost = count(p, checker, {"scale"})["scale"]
+    read = {"status": "read", "registers": 40, "shared_bytes": 0, "dynamic_shared_bytes": 0, "key": "k"}
+    sizes = [{"n": 1e7}]
+    alike = [priced(cost, MACHINE, sizes, None, {**read, "spill_bytes": spilled}) for spilled in (0, 64)]
+    assert alike[0] == alike[1]
+    spilling = Candidate(written({}), predicted_ns=alike[1][0], resources={**read, "spill_bytes": 64})
+    shown = shown_row("scale", spilling, [])["resources"]
+    assert shown["spill_bytes"] == 64 and shown["spills"] == "not priced"
+    (region,) = cost.regions
+    region.registers, region.spilled = 40, 64
+    found = predict(cost, MACHINE, sizes[0])
+    assert [x["spill_bytes"] for x in found["parts"] if "spill_bytes" in x] == [64]
+    assert any("64 bytes of spill stores and loads" in why and "not priced" in why for why in found["why"])
 
 
 def test_a_function_without_a_host_region_has_nothing_to_tune():

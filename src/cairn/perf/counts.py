@@ -158,6 +158,7 @@ class Region:
     launch: tuple[int, int, int] = (0, 0, 0)  # a device region's (block, per_lane, unroll)
     registers: int = 0  # what ptxas said its kernel uses, when something asked; 0 is not known
     shared: int = 0  # the shared memory one block uses, static and a staged tile's, when something read it
+    spilled: int = 0  # the bytes of spill stores and loads ptxas counted in its kernel's code, when something read it
     fuse: int = 0  # the fuse its plan sets, whether or not a chain formed
     vector: int = 0  # the vector its plan sets: adjacent indices a lane runs over chunks
     tensor: str = ""  # a tensor-core multiply's input format; its body holds the whole call's work, count one

@@ -13,9 +13,9 @@ import pytest
 from cairn.agent.explain import explain
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_program, compile_source
-from cairn.perf import report
-from cairn.perf.device import available, kernels
-from cairn.perf.profile import packaged
+from cairn.perf import cooperative_model, model, report
+from cairn.perf.device import available, kernels, resources
+from cairn.perf.profile import default, packaged
 from cairn.perf.tuning.feedback import compare, parse_candidate
 from cairn.perf.tuning.search import Budget
 from cairn.perf.tuning.tune import tune
@@ -108,6 +108,27 @@ def test_a_region_is_priced_by_its_blocks_and_threads_not_as_one_thread():
     assert any("published specification" in why for why in predicted["why"])
     sums = answer["functions"]["block_sums"]["regions"][0]["cooperative"]
     assert sums["warp_collectives"] == [{"at": "src/device_kernels.cairn:37", "operation": "reduce + warp"}]
+
+
+def test_spills_ptxas_reports_are_named_beside_the_time_and_not_priced():
+    """ptxas counts the bytes of spill instructions in a kernel's code, not how often they run or where their traffic
+    is served: the kernel is priced as it would be without them, and the prediction says what it leaves out."""
+    found = costs(SPARSE, "every8")
+    symbol = "_ZN2cr4coop6blocksILj256ELm0EZ9ci_every8mmPfPKfEUlRNS0_6DeviceEmmE_EEvmT1_"
+    log = (f"ptxas info    : Compiling entry function '{symbol}' for 'sm_120'\n"
+           f"ptxas info    : Function properties for {symbol}\n"
+           "    24 bytes stack frame, 16 bytes spill stores, 8 bytes spill loads\n"
+           "ptxas info    : Used 40 registers, used 1 barriers, 24 bytes cumulative stack size\n")  # fmt: skip
+    entry = {**resources(log)[symbol], "symbol": symbol, "instructions": 99}  # as perf/device.py reads ptxas -v
+    (said,) = cooperative_model.read(found, {"every8": [entry]})
+    assert said["status"] == "read" and said["spill_bytes"] == 24 and region(found["every8"]).spilled == 24
+    sizes = {"g": 1e4, "n": 2.56e6 * 8}
+    spilled = model.predict(found["every8"], default(), sizes)
+    assert part(spilled)["spill_bytes"] == 24
+    assert any("24 bytes of spill stores and loads" in why and "not priced" in why for why in spilled["why"])
+    region(found["every8"]).spilled = 0
+    plain = model.predict(found["every8"], default(), sizes)
+    assert plain["ns"] == spilled["ns"] and not any("spill" in why for why in plain["why"])
 
 
 def test_a_branch_costs_what_the_warps_that_enter_it_issue():
