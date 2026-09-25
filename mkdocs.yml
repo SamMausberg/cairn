@@ -1,0 +1,92 @@
+# The documentation site, built from docs/ by `make site` and published by .github/workflows/docs.yml.
+# tools/site/hooks.py highlights CAIRN, labels refused examples and points links that leave docs/ at GitHub.
+site_name: CAIRN
+site_description: A systems language whose compiler refuses data races, on the CPU and inside GPU kernels.
+site_url: https://sammausberg.github.io/cairn/
+repo_url: https://github.com/SamMausberg/cairn
+repo_name: SamMausberg/cairn
+edit_uri: edit/main/docs/
+docs_dir: docs
+exclude_docs: |
+  project/
+hooks:
+  - tools/site/hooks.py
+
+theme:
+  name: material
+  language: en
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.tracking
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: deep orange
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: deep orange
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+
+markdown_extensions:
+  - tables
+  - admonition
+  - attr_list
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+    absolute_links: info
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: info
+    unrecognized_links: warn
+
+nav:
+  - Home: README.md
+  - Start here:
+      - guide.md
+      - examples.md
+  - The language:
+      - language.md
+      - memory.md
+      - abstractions.md
+      - concurrency.md
+      - devices.md
+      - numerics.md
+  - The standard library:
+      - library.md
+      - std_api.md
+      - Modules: std/
+  - Tools:
+      - tools.md
+      - agents.md
+  - Trust and internals:
+      - verification.md
+      - internals.md
+  - Plans:
+      - roadmap.md

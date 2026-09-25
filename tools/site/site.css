@@ -1,0 +1,15 @@
+/* The documentation site's few additions to the Material theme. */
+
+/* A block the compiler refuses carries its diagnostic code in the title bar, in the colour of an error. */
+.refused > span.filename {
+  color: var(--md-code-hl-keyword-color);
+  border-left: 0.2rem solid #c62828;
+}
+.refused {
+  border-left: 0.2rem solid #c62828;
+}
+
+/* Tables of rules and claims are read cell by cell; let long cells wrap. */
+.md-typeset table:not([class]) td {
+  vertical-align: top;
+}

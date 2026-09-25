@@ -3,7 +3,7 @@ PYTHON ?= python3
 JOBS ?= auto
 CAIRN = $(PYTHON) bin/cairn
 
-.PHONY: help docs editors all check lint format test native systems proof lean gpu tune-device calibrate-device device-build embedded context wheel audit demo demo-repair demo-numeric demo-visual demo-implement bench scale
+.PHONY: help docs site editors all check lint format test native systems proof lean gpu tune-device calibrate-device device-build embedded context wheel audit demo demo-repair demo-numeric demo-visual demo-implement bench scale
 all: lint test proof
 
 help:
@@ -24,6 +24,7 @@ help:
 	@echo 'bench     the preregistered CPU baseline suite (hours)'
 	@echo 'scale     check, build, rebuild and editor times of generated projects of 10k to 77k lines (an hour)'
 	@echo 'docs      regenerate docs/std_api.md, docs/std/ and the capability matrix in docs/verification.md'
+	@echo 'site      build the documentation site from docs/ into site/ (pip install -r tools/site/requirements.txt)'
 	@echo 'editors   regenerate the TextMate and Vim grammars and the agent skill from the compiler'
 	@echo 'context   measure edit packets, cards and refusals in tokens, on scripted transcripts'
 	@echo 'wheel     build the package offline into dist/'
@@ -142,6 +143,9 @@ embedded:
 docs:
 	$(CAIRN) doc --std --pages docs --format json > /dev/null
 	$(PYTHON) tools/release/capability_matrix.py
+
+site:
+	NO_MKDOCS_2_WARNING=1 $(PYTHON) -m mkdocs build --strict
 
 editors:
 	PYTHONPATH=src $(PYTHON) -m cairn.editor.grammar

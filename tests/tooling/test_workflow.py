@@ -1,6 +1,6 @@
-"""The CI workflow's own rules: actions pinned by commit, read-only permissions, nothing run on a GPU, one check that
-needs every job, and a device job that reaches every test compiling device code; and the owner's `make gpu`, which
-reaches every test running device code.
+"""The CI workflow's own rules: actions pinned by commit, read-only permissions but for publishing the docs site,
+nothing run on a GPU, one check that needs every job, and a device job that reaches every test compiling device code;
+and the owner's `make gpu`, which reaches every test running device code.
 
 GitHub runs the workflow, not this suite, so these read its text: they fail on the change that would break a rule,
 before a run shows it or, for the pins and the permissions, where no run would.
@@ -38,11 +38,23 @@ def test_every_action_is_pinned_by_commit_and_names_its_release():
             assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40} # v\d+(\.\d+)*", used), f"{path.name}: {used}"
 
 
-def test_every_workflow_reads_the_repository_and_writes_nothing():
+# The one job of any workflow that writes: it publishes the documentation site built from main to GitHub Pages.
+PUBLISHES = {("docs.yml", "deploy"): ["id-token", "pages"]}
+
+
+def test_every_workflow_reads_the_repository_and_only_the_site_is_published():
+    """Every workflow reads the repository and writes nothing, except the docs workflow's deploy job, which holds
+    `pages: write` and `id-token: write` to publish the site and runs only for main, never for a pull request."""
     for path in WORKFLOWS:
         text = code(path)
         assert re.search(r"^permissions:\n  contents: read$", text, re.M), path.name
-        assert not re.search(r":\s*write\b", text), path.name
+        assert not re.search(r":\s*write\b", text[: text.index("\njobs:\n")]), path.name
+        for name, job in jobs(text).items():
+            writes = sorted(re.findall(r"^\s+([\w-]+):\s*write\b", job, re.M))
+            assert writes == PUBLISHES.get((path.name, name), []), (path.name, name, writes)
+            if writes:
+                main_only = "    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'"
+                assert re.search(rf"^{re.escape(main_only)}$", job, re.M), (path.name, name)
 
 
 def test_every_workflow_runs_on_pull_requests_and_on_main():
