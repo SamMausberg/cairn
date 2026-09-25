@@ -269,6 +269,8 @@ def invoke(c: Checker, e: Expr, f: Function, args: list[Expr], targs: tuple, exp
             c.expect(actual, Type(want.name, mode, extent, want.args, place), a, asked)
         else:
             actual = c.expr(a, consume=False)
+            if is_view(actual):  # `h(v)` of an array view where one value's borrow is expected
+                c.expect(actual, want, a)
             if want.mode == "rw" and not c.writable(a):
                 fail("E-WRITE-LEASE", "A mutable borrow needs a mutable local or an rw borrow.", a)
             c.expect(actual.value, want.value, a)

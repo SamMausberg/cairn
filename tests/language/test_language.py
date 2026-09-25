@@ -142,6 +142,20 @@ def test_rejections(code, body):
     refused(code, PRELUDE + helper + "fn main() -> i32 {" + body + "}")
 
 
+def test_a_view_where_one_value_s_borrow_is_expected_is_a_mismatch():
+    """`h(v)` of an array view for `h(x:ro<u64>)`, or a view as the key of `sort.search`, was typed and then refused
+    by the C++ compiler; the checker refuses it, and one element of the view is what such a parameter takes."""
+    view = "fn g(n:usize, v:rw<u64>[n]) -> u64 {"
+    for mode in ("ro", "rw"):
+        source = f"fn h(x:{mode}<u64>) -> u64 {{ return x; }}\n{view} return h(v); }}\nfn main() -> i32 {{ return 0; }}"
+        assert refused("E-TYPE-MISMATCH", source)["message"] == f"Expected {mode}<u64>, got rw<u64>[n]@host."
+        compile_source(source.replace("h(v)", "h(v[0])"))
+    search = "import std.sort as sort;\nfn s(n:usize, xs:ro<u8>[n], m:usize, key:ro<u8>[m]) {"
+    source = f"{search} let _ = sort.search(xs, key); }}\nfn main() -> i32 {{ return 0; }}"
+    assert refused("E-TYPE-MISMATCH", source)["message"] == "Expected ro<u8>, got ro<u8>[m]@host."
+    compile_source(source.replace("search(xs, key)", "search(xs, key[0])"))
+
+
 def test_disjoint_parts_are_accepted_and_guarded():
     source = PRELUDE + (
         "fn swap_parts(n:usize, a:rw<u64>[n], b:rw<u64>[n]) { swap(a[0], b[0]); }"
