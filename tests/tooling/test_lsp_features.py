@@ -114,6 +114,12 @@ def test_semantic_tokens_read_an_effect_row(doc):
     assert ("parameter", frozenset()) in kinds(doc, "xs")
 
 
+def test_semantic_tokens_color_a_test_block_as_a_function_with_locals():
+    doc = Document("fn one() -> u64 = 1;\ntest one_is_one { let got = one(); assert(got == 1); }\n")
+    assert kinds(doc, "one_is_one") == {("function", frozenset({"declaration"}))}
+    assert kinds(doc, "got") == {("variable", frozenset({"readonly"}))}
+
+
 def test_semantic_tokens_color_a_bare_variant_as_a_variant():
     text = """import std.core (Option);
 fn find(n:usize, xs:ro<u64>[n], x:u64) -> Option[usize] {

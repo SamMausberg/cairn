@@ -456,6 +456,12 @@ def test_completion_sees_a_binding_the_last_good_analysis_never_saw():
     assert {"Pair", "scale", "vec", "len", "u64", "match"} <= offered  # declarations, builtins, words
 
 
+def test_completion_beside_a_test_block_offers_what_code_may_call():
+    text = "fn one() -> u64 = 1;\ntest one_is_one { let got = one(); assert(got == 1); }\n"
+    offered = labels(Document(text), text, "one();", 1)
+    assert {"one", "got", "assert"} <= offered and "one_is_one" not in offered  # a test is run, never called
+
+
 def test_completion_offers_modules_after_import_and_recipes_after_derive():
     text = (
         "import std.core (Ord);\nstruct Pair { a:u64; b:u64; }\nderive eq for Pair;\nfn main() -> i32 { return 0; }\n"
