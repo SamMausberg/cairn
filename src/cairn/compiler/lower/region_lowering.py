@@ -1,10 +1,14 @@
 """The lowering of lane regions and collectors: the lambda every lane runs, which host threads and device lanes
 share; `parallel`, `reduce`, `scan` and `compact` on the host lane pool (runtime/cairn_parallel.hpp), in order, or
 on the calling thread's execution context (runtime/cairn_exec.hpp); and a chain of regions a plan fuses, run as one
-region. Their rules are in concurrency.py and fusion.py; the Emitter binds these functions as its methods."""
+region. Their rules are in concurrency.py and fusion.py; the Emitter binds these functions as its methods.
+
+A device `reduce`, `scan` or `compact` runs on CUB, which only such a program includes (runtime/cairn_cub.hpp): CUB's
+headers are about half of an nvcc build."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from ..plans import chunks, fusion, staging
@@ -24,6 +28,12 @@ def lane(g: Emitter, s: Stmt, body) -> str:
     g.need("cairn_gpu.hpp" if device else "cairn_parallel.hpp")
     binder = f"(std::size_t v_{s.binder or s.name})"
     return g.inner(lambda: f"[=] CR_DEVICE{binder}" if device else f"[&]{binder} noexcept", body)
+
+
+def collected(g: Emitter, name: str, arguments: list[str], templates: Iterable[object] = ()) -> str:
+    """A device collector's operation on the execution context, in a program that now includes CUB."""
+    g.need("cairn_cub.hpp")
+    return execution.call(name, arguments, templates)
 
 
 def s_parallel(g: Emitter, s: Stmt, es: list[str], body=None):
@@ -69,7 +79,7 @@ def s_reduce(g: Emitter, s: Stmt, es: list[str], before=None):
     if s.ref == "device" or s.pooled:  # Pooled: blocks the count fixes, each folded in order, then their totals.
         value = g.lane(s, lambda: [before and before(), g.put(f"return {g.expr(s.exprs[1])};")])
         fold, parts = g.combiner(s, carried, combine), [es[0], start]
-        total = (execution.call("reduce_on", [*parts, fold, value], [carried]) if s.ref == "device"
+        total = (collected(g, "reduce_on", [*parts, fold, value], [carried]) if s.ref == "device"
                  else f"cr::par::reduce<{carried}>({es[0]}, {start}, {fold}, {value})")  # fmt: skip
         return g.put(f"const {ty} v_{s.name} = {total}{'' if carried == ty else '.checked()'};")
     count = g.fresh("n")[0]  # Without `parallel`, a host reduction is an in-order fold; its extent is read once.
@@ -86,7 +96,7 @@ def s_scan(g: Emitter, s: Stmt, _: list[str]):
     if s.ref == "device" or s.pooled:  # The runtime writes each element; the yield is a lane's.
         each = g.lane(s, lambda: g.put(f"return {g.expr(value)};"))
         fold, parts = g.combiner(s, carried, combine), [g.expr(out), g.expr(hi), start]
-        called = (execution.call("scan_on", [*parts, fold, each], [exclusive, carried]) if s.ref == "device"
+        called = (collected(g, "scan_on", [*parts, fold, each], [exclusive, carried]) if s.ref == "device"
                   else f"cr::par::scan<{exclusive}, {carried}>({', '.join([*parts, fold, each])})")  # fmt: skip
         return g.put(f"const {ty} {total} = {called}{'' if carried == ty else '.checked()'};")
     count, i = g.fresh("n")[0], "v_" + s.binder  # In order: the yield, then the store it feeds, per index.
@@ -104,7 +114,7 @@ def s_compact(g: Emitter, s: Stmt, _: list[str]):
     if s.ref == "device":
         keep = g.lane(s, lambda: g.put(f"return {pred};"))
         project = g.lane(s, lambda: g.put(f"return {value};"))
-        return g.put(f"const std::size_t {used} = {execution.call('compact_on', [out, hi, keep, project])};")
+        return g.put(f"const std::size_t {used} = {collected(g, 'compact_on', [out, hi, keep, project])};")
 
     def selected():  # The only unchecked store: induction gives used <= i < n (Lean: store_index_lt_capacity).
         g.puts(f"{out}[{used}] = {value};", f"++{used};")

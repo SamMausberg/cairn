@@ -4,7 +4,8 @@ The directory holds the generated C++ (CUDA for a device program), exactly the r
 header of a library, and `export.json`: the command line `toolchain.command` gives for it, the device target, the
 compilers and their versions, a sha256 per file, and one identity over all of these. Each runtime header has a role:
 the device implementation (`cairn_kernels.hpp` and the guards a lane calls), the optional CAIRN launch wrappers
-(`cairn_gpu.hpp`, `cairn_exec.hpp`, `cairn_reuse.hpp`), or the host runtime.
+(`cairn_gpu.hpp`, `cairn_exec.hpp`, `cairn_reuse.hpp`, and `cairn_cub.hpp` for a device collector), or the host
+runtime.
 
 What validates or measures an export takes the directory itself. `check` refuses it when any file, the command, the
 compilers or the target differ from what the identity covers, or when a file was added (`E-EXPORT-TAMPERED`); a build
@@ -49,7 +50,7 @@ COMPILER = re.compile(r"(clang\+\+|g\+\+)(-[0-9][0-9.]*)?")  # the names a build
 PLAIN = re.compile(r"[A-Za-z0-9_-]{1,64}")  # an artifact's name, as `export` makes it from the project's
 DEVICE_SIDE = {"cairn_kernels.hpp", "cairn_runtime.hpp", "cairn_assert.hpp", "cairn_float.hpp", "cairn_layout.hpp",
                "cairn_access.hpp"}  # fmt: skip
-LAUNCH = {"cairn_gpu.hpp", "cairn_exec.hpp", "cairn_reuse.hpp"}
+LAUNCH = {"cairn_gpu.hpp", "cairn_exec.hpp", "cairn_reuse.hpp", "cairn_cub.hpp"}
 
 
 def closure(text: str) -> list[str]:

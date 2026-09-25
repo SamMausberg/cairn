@@ -1,15 +1,14 @@
 // CAIRN device runtime: CUDA as the machine of cairn_exec.hpp, which is what generated code calls, and the older
 // synchronous entry points kept beside it. The kernels themselves are cairn_kernels.hpp's; its opening note says
 // how a device program is built and how a guard that fires in a lane stops it. cairn_exec.hpp's operations wait
-// for their own stream; the older ones below (launch, launch_vector, launch_staged, reduce, scan, compact, Ticket)
-// wait for the whole device or make a stream per ticket, as they always did, and generated code no longer calls
-// them. Every entry point is synchronous unless its name says otherwise, and any CUDA error aborts the process.
+// for their own stream; the older ones below (launch, launch_vector, launch_staged, Ticket) and in cairn_cub.hpp
+// (reduce, scan, compact) wait for the whole device or make a stream per ticket, as they always did, and generated
+// code no longer calls them. Every entry point is synchronous unless its name says otherwise, and any CUDA error
+// aborts the process. CUB is not read here: cairn_cub.hpp brings it, only to a program with a device collector.
 #pragma once
 #if !defined(CAIRN_EMULATE)  // an emulated build reads cairn_emulate.hpp, its host machine, before the program
 #include <cstdio>
 #include <cstring>
-#include <cub/device/device_reduce.cuh>
-#include <cub/device/device_scan.cuh>
 #include <cuda_runtime.h>
 #include <iterator>
 #include "cairn_kernels.hpp"
@@ -111,19 +110,14 @@ struct Cuda {
   void staged_lanes(std::size_t n, L load, F body, S bytes, Stream s, unsigned block, std::size_t per_lane) noexcept {
     fire_staged<R, U>(n, load, body, bytes, s, block, per_lane);
   }
-  // CUB's calls: with a null `temp` each only says how many bytes of temporary storage it needs.
+  // CUB's calls, defined in cairn_cub.hpp: with a null `temp` each only says how many bytes of temporary storage it
+  // needs. A program without a device collector never instantiates them, so it never reads CUB.
   template<class In, class Out, class Fold, class T>
-  void reduce(void* temp, std::size_t& bytes, In in, Out out, std::size_t n, Fold fold, T identity, Stream s) noexcept {
-    check(cub::DeviceReduce::Reduce(temp, bytes, in, out, n, fold, identity, s));
-  }
+  void reduce(void* temp, std::size_t& bytes, In in, Out out, std::size_t n, Fold fold, T identity, Stream s) noexcept;
   template<class In, class Out, class Fold>
-  void inclusive_scan(void* temp, std::size_t& bytes, In in, Out out, Fold fold, std::size_t n, Stream s) noexcept {
-    check(cub::DeviceScan::InclusiveScan(temp, bytes, in, out, fold, n, s));
-  }
+  void inclusive_scan(void* temp, std::size_t& bytes, In in, Out out, Fold fold, std::size_t n, Stream s) noexcept;
   template<class In, class Out>
-  void exclusive_sum(void* temp, std::size_t& bytes, In in, Out out, std::size_t n, Stream s) noexcept {
-    check(cub::DeviceScan::ExclusiveSum(temp, bytes, in, out, n, s));
-  }
+  void exclusive_sum(void* temp, std::size_t& bytes, In in, Out out, std::size_t n, Stream s) noexcept;
 };
 using Machine = Cuda;
 }  // namespace cr::gpu
@@ -221,71 +215,6 @@ inline Ticket copy_after(const Ticket& dep, T* dst, const T* src, std::size_t n,
   t.follow(dep);
   if(n) check(cudaMemcpyAsync(dst, src, bytes<T>(n), kind(d), t.stream()));
   return t;
-}
-
-// Transform-reduce of value(i) over [0,n). Association order is unspecified by contract, so the
-// result is exact for associative integer ops and within the usual tolerance for float sums.
-template<class T, class Op, class F> inline T reduce(std::size_t n, T identity, Op op, F value) noexcept {
-  if(!n) return identity;
-  const Indexed<T, F> in{value};
-  const Binary<T, Op> fold{op};
-  Buffer<T> out(1);
-  std::size_t need = 0;
-  check(cub::DeviceReduce::Reduce(nullptr, need, in, out.data(), n, fold, identity));
-  Buffer<char> temp(need ? need : 1);  // a null temp pointer would mean "query" to CUB
-  check(cub::DeviceReduce::Reduce(temp.data(), need, in, out.data(), n, fold, identity));
-  T host = identity;
-  copy(&host, out.data(), std::size_t(1), Dir::d2h);
-  return host;
-}
-
-// Scan of value(i) over [0,n) into out: out[i] is op over value(0..i], or over value(0..i) when Exclusive, and
-// the answer is op over every value. The association order is CUB's, exact for the integer operators the language
-// admits here. The inclusive scan lands in device scratch first, so a value(i) that reads out[i] reads it before
-// anything writes it; one more pass writes out from the scratch, shifted by one place when Exclusive.
-template<bool Exclusive, class T, class R, class Op, class F>
-inline T scan(R* out, std::size_t n, T identity, Op op, F value) noexcept {
-  if(!n) return identity;
-  const Indexed<T, F> in{value};
-  const Binary<T, Op> fold{op};
-  Buffer<T> held(n);
-  T* h = held.data();
-  std::size_t need = 0;
-  check(cub::DeviceScan::InclusiveScan(nullptr, need, in, h, fold, n));
-  {
-    Buffer<char> temp(need ? need : 1);  // a null temp pointer would mean "query" to CUB
-    check(cub::DeviceScan::InclusiveScan(temp.data(), need, in, h, fold, n));
-    check(cudaDeviceSynchronize());
-  }
-  launch(n, [=] CR_DEVICE(std::size_t i) { out[i] = plain(Exclusive ? (i ? h[i - 1] : identity) : h[i]); });
-  T total = identity;
-  copy(&total, h + (n - 1), std::size_t(1), Dir::d2h);
-  return total;
-}
-
-// Stable compaction: value(i) for each selected i, in order, into the prefix of out; the tail of
-// out is left alone. pred runs exactly once per i (its answer is kept), value only when selected.
-template<class T, class P, class F>
-inline std::size_t compact(T* out, std::size_t n, P pred, F value) noexcept {
-  if(!n) return 0;
-  Buffer<unsigned char> keep(n);
-  Buffer<std::size_t> off(n);
-  unsigned char* k = keep.data();
-  std::size_t* o = off.data();
-  launch(n, [=] CR_DEVICE(std::size_t i) { k[i] = pred(i) ? 1 : 0; });
-  std::size_t need = 0;
-  check(cub::DeviceScan::ExclusiveSum(nullptr, need, k, o, n));
-  {
-    Buffer<char> temp(need ? need : 1);  // a null temp pointer would mean "query" to CUB
-    check(cub::DeviceScan::ExclusiveSum(temp.data(), need, k, o, n));
-    check(cudaDeviceSynchronize());
-  }
-  launch(n, [=] CR_DEVICE(std::size_t i) { if(k[i]) out[o[i]] = value(i); });
-  std::size_t last = 0;
-  unsigned char tail = 0;
-  copy(&last, o + (n - 1), std::size_t(1), Dir::d2h);
-  copy(&tail, k + (n - 1), std::size_t(1), Dir::d2h);
-  return last + (tail ? 1 : 0);
 }
 }  // namespace cr::gpu
 #endif
