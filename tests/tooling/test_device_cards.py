@@ -12,8 +12,9 @@ from pathlib import Path
 import pytest
 
 from cairn.cli import main
-from cairn.perf import feedback, report
+from cairn.perf import report
 from cairn.perf.profile import DEFAULT_CARD, Device, card, cards, carrying, default
+from cairn.perf.tuning import feedback
 from cairn.projects import target
 from cairn.projects.project import load_project
 from cairn.projects.target import resolve

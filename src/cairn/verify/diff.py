@@ -6,7 +6,7 @@ function of the program's own modules that both versions hold gets one class:
   identical-code    its emitted C++ is the same up to a consistent renaming (verify/emission.py), and so is that of
                     everything it calls: the native code that runs is the same code.
   smt-equivalent    Z3 found no admitted input on which the two differ in their result, in what they leave in an rw
-                    borrow or in whether they abort, within the modeled fragment (verify/scalar_semantics.py).
+                    borrow or in whether they abort, within the modeled fragment (verify/scalar/semantics.py).
   behavior-changed  an input on which they differ: found by Z3, replayed by the value model, and replayed by native
                     builds under each compiler present where the task runner takes the signature.
   unknown           none of these was established, and the reason says why. It is never counted as unchanged.
@@ -37,8 +37,8 @@ from ..compiler.syntax.lexing import lex
 from ..compiler.syntax.parser import Parser
 from ..compiler.syntax.tree import Arm, Expr, Function, Program, Stmt
 from .emission import CALLED, canonical, emitted, guard_count, unguarded
-from .scalar_semantics import equivalent
-from .scalar_values import MAX_SOURCE_BYTES, MAX_UNROLL
+from .scalar.semantics import equivalent
+from .scalar.values import MAX_SOURCE_BYTES, MAX_UNROLL
 
 ORDER = ["identical-code", "identical-source", "smt-equivalent", "behavior-changed", "unknown", "signature-changed",
          "renamed", "added", "removed"]  # fmt: skip

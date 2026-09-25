@@ -273,7 +273,7 @@ def test_a_card_measured_for_one_target_prices_no_other(tmp_path):
 
 @NVCC
 def test_tuning_reads_registers_for_the_target_it_records():
-    from cairn.perf.tune import tune
+    from cairn.perf.tuning.tune import tune
 
     result = tune(SCALE, "scale", [{"n": 1e7}], device_target=parse("sm_120f"))
     read = [row["resources"] for row in result["candidates"] if row.get("resources", {}).get("registers")]

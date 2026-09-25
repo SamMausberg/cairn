@@ -75,8 +75,8 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Manifests, vendored dependencies | `projects/project.py` | `read_manifest`, `contained_file`, `claim`, `dependencies` |
 | Vendored C++ and CUDA, compiled by the program's command line and held to their externs' types | `projects/foreign.py` | `compile_sources`, `binding`, `inspect` |
 | What a foreign implementation has: its contract, build, device inspection and validation | `verify/foreign.py` | `identify`, `report`, `device_tests` |
-| The numerical policy: when a float result agrees with the reference's, for the host and for generated tests | `verify/agreement.py` | `agrees`, `same`, `helper`, `stated` |
-| Z3's answer on an implementation, and its counterexample replayed through the finite path | `verify/counterexamples.py` | `smt`, `outside`, `replayed` |
+| The numerical policy: when a float result agrees with the reference's, for the host and for generated tests | `verify/validation/agreement.py` | `agrees`, `same`, `helper`, `stated` |
+| Z3's answer on an implementation, and its counterexample replayed through the finite path | `verify/validation/counterexamples.py` | `smt`, `outside`, `replayed` |
 | Native flags, the closed table of system libraries, the freestanding effect ban | `projects/toolchain.py` | `command`, `flags`, `LIBRARIES`, `audit_effects` |
 | The device target | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits` |
 | A device program built for the host: what emulation refuses and what its records say | `projects/emulation.py` | `check`, `record`, `MODELED` |
@@ -135,6 +135,18 @@ Device work runs on the calling thread's execution context, `cr::gpu::here()`, w
 The rest of the package is in the ownership table of [AGENTS.md](../AGENTS.md). In `perf/` only `measure.py`, on the host, and `on_device.py`, under the owner's targets, run a program. No agent, test generator or solver may rewrite the authority it is checked against, and native libraries never import the agent tooling or Z3.
 
 The wheel holds the compiler package, the runtime headers, the target support files, the `std` sources and the CLI. Tests, benchmarks, proofs and evidence stay out of it.
+
+Outside `compiler/`, each package keeps its modules at the top, apart from seven subpackages.
+
+| Package | Holds |
+|---|---|
+| `verify/scalar/` | value-level source equivalence: the value model, the SMT translator, the concrete replay, the query and receipt, the Z3 bridge |
+| `verify/validation/` | an implementation validated against its reference: boundary inputs, isolated calls, agreement, counterexamples, the device side |
+| `projects/harness/` | `cairn export --harness`, its `harness.toml` mapping and sources, and `cairn new --from-sol-execbench` |
+| `editor/lsp/` | `cairn lsp`: the server, one open buffer, a project's workspace, and one module per feature |
+| `agent/hosts/` | the edit, plan, implementation and migration hosts, and write-back |
+| `agent/mcp/` | `cairn mcp`: the server and the tools it serves |
+| `perf/tuning/` | `cairn tune`: the search, its objective, device resources, feedback, and a plan as source |
 
 ## Testing
 

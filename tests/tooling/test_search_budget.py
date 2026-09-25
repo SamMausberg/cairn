@@ -11,12 +11,13 @@ import pytest
 from test_predict import MACHINE
 
 from cairn.compiler.cairnc import compile_program, compile_source
-from cairn.perf import device, search
-from cairn.perf import tune as tuning
-from cairn.perf.plan_source import Placement, written
-from cairn.perf.resources import Inspector
-from cairn.perf.search import Budget, Order, axes, lowered
-from cairn.perf.tune import tune
+from cairn.perf import device
+from cairn.perf.tuning import search
+from cairn.perf.tuning import tune as tuning
+from cairn.perf.tuning.plan_source import Placement, written
+from cairn.perf.tuning.resources import Inspector
+from cairn.perf.tuning.search import Budget, Order, axes, lowered
+from cairn.perf.tuning.tune import tune
 from cairn.projects import target
 from cairn.projects.target import parse
 

@@ -14,10 +14,10 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler.cairnc import Parser, compile_program
-from cairn.verify import boundaries
-from cairn.verify.boundaries import Unsupported
-from cairn.verify.isolated_calls import Param
-from cairn.verify.validation import FINITE, REGRESSIONS, agree, replay, validate
+from cairn.verify.validation import boundaries
+from cairn.verify.validation.boundaries import Unsupported
+from cairn.verify.validation.isolated_calls import Param
+from cairn.verify.validation.validation import FINITE, REGRESSIONS, agree, replay, validate
 
 ROOT = Path(__file__).resolve().parents[2]
 TOTAL = """fn total(n:usize, xs:ro<u64>[n]) -> u64 {
@@ -249,7 +249,7 @@ def test_a_counterexample_within_the_tolerance_is_said_to_be_so():
 
 
 def test_the_record_states_what_it_rests_on():
-    from cairn.verify import agreement
+    from cairn.verify.validation import agreement
 
     record = validate(TOTAL + BY4, "total", "total_by4", SMALL)
     assert record["agreement"]["sha256"] == agreement.DIGEST and record["agreement"]["relative_to"] == "the reference"
@@ -262,7 +262,7 @@ def test_the_record_states_what_it_rests_on():
 
 
 def test_no_case_run_is_unknown_even_where_the_implementation_need_not_run():
-    from cairn.verify.validation import Policy, Subject, finite
+    from cairn.verify.validation.validation import Policy, Subject, finite
 
     nothing = Subject("f", "", "", "cf_f", "cf_g", None, [], "u64")  # nothing is called, so nothing is loaded
     result = finite(nothing, [], 0, Policy(), None, "g", vacuous=True)
@@ -296,7 +296,7 @@ def test_cairn_tune_never_chooses_an_implementation_a_replayed_counterexample_re
 def test_a_validation_holds_only_under_its_numerical_policy_and_its_compiler(tmp_path, capsys, monkeypatch):
     """A validation built by g++, or made under another numerical policy, says nothing of what clang++ builds."""
     from cairn.cli import main
-    from cairn.verify import agreement
+    from cairn.verify.validation import agreement
 
     root, history = tmp_path / "total", tmp_path / "history"
     (root / "src").mkdir(parents=True)

@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from cairn.agent.agent_tools import HANDLES, EditHost
 from cairn.agent.diagnostics import HINTS, fix, taught
+from cairn.agent.hosts.edits import HANDLES, EditHost
 
 S = (
     "fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {\n  let mut sum:u32 = 0;\n"

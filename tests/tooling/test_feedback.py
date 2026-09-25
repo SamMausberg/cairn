@@ -10,9 +10,9 @@ from test_predict import MACHINE
 
 from cairn.agent.history import History, as_written, digest, identity, record
 from cairn.cli import main
-from cairn.perf.feedback import EXPERIMENT, HYPOTHESIS, compare, lines_for_people, parse_candidate, parse_plan
-from cairn.perf.plan_source import contract
-from cairn.perf.resources import device_identity, host_target
+from cairn.perf.tuning.feedback import EXPERIMENT, HYPOTHESIS, compare, lines_for_people, parse_candidate, parse_plan
+from cairn.perf.tuning.plan_source import contract
+from cairn.perf.tuning.resources import device_identity, host_target
 from cairn.projects.target import parse
 
 MIX = """fn mix(v:u64) -> u64 {

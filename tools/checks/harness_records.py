@@ -8,7 +8,7 @@ its repository with --no-deps:
     python tools/checks/harness_records.py --upstream DIR --torch-root DIR
 
 --upstream holds clones of NVIDIA/SOL-ExecBench, gpu-mode/reference-kernels and ScalingIntelligence/KernelBench as
-sol/, gpumode/ and kernelbench/, each at the commit projects/harness.py pins. --torch-root is the torch directory of a
+sol/, gpumode/ and kernelbench/, each at the commit projects/harness/harness.py pins. --torch-root is the torch directory of a
 CUDA wheel, unpacked. Each build writes the ninja file the running torch writes (torch.utils.cpp_extension) and swaps
 in that root's headers and libraries, so it compiles and links what a GPU machine's torch would. Four SOL-ExecBench
 problems of the pinned repository become projects through `cairn new --from-sol-execbench`, one with an RMSNorm
@@ -35,8 +35,8 @@ sys.path.insert(0, str(ROOT / "src"))
 import torch
 import torch.utils.cpp_extension as ext
 
-from cairn.projects import harness
-from cairn.projects.harness_import import create
+from cairn.projects.harness import harness
+from cairn.projects.harness.importing import create
 from cairn.projects.project import load_project
 from cairn.projects.target import toolkit_record
 
@@ -203,7 +203,7 @@ def main() -> int:
                               text=True, check=True).stdout.strip()  # fmt: skip
         if head != harness.FORMATS[fmt]["upstream"]["commit"]:
             raise SystemExit(
-                f"{folder} is at {head}; projects/harness.py pins {harness.FORMATS[fmt]['upstream']['commit']}"
+                f"{folder} is at {head}; projects/harness/harness.py pins {harness.FORMATS[fmt]['upstream']['commit']}"
             )
         upstream[fmt] = head
     version = (args.torch_root / "version.py").read_text()

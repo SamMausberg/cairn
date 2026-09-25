@@ -20,7 +20,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "src"))
 
-from cairn.agent.implementations import PROTOCOL, ImplementationHost  # noqa: E402
+from cairn.agent.hosts.implementations import PROTOCOL, ImplementationHost  # noqa: E402
 from cairn.projects.project import load_project  # noqa: E402
 
 

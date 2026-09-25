@@ -9,7 +9,7 @@ from pathlib import Path
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
 from ai.agent_loop import run
-from cairn.agent.agent_tools import EditSession
+from cairn.agent.hosts.edits import EditSession
 from cairn.compiler.cairnc import compile_source
 
 

@@ -27,7 +27,7 @@ MARK = "\ufeff"  # a byte-order mark: a file may start with one, and its text is
 
 
 def decoded(data: bytes) -> str:
-    """A file's text: its bytes as UTF-8, after the byte-order mark it may start with. `agent/write_back.py` puts the
+    """A file's text: its bytes as UTF-8, after the byte-order mark it may start with. `agent/hosts/write_back.py` puts the
     mark back, and the file's own line endings, when it writes a file this read."""
     return data.decode("utf-8").removeprefix(MARK)
 

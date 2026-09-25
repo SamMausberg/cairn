@@ -11,9 +11,9 @@ import pytest
 from test_lsp import Client, applied, place
 
 from cairn.compiler.cairnc import compile_source
-from cairn.editor import members as members_module
-from cairn.editor.document import Document
-from cairn.editor.workspace import Refused, prepare_rename, references, rename, workspace
+from cairn.editor.lsp import members as members_module
+from cairn.editor.lsp.document import Document
+from cairn.editor.lsp.workspace import Refused, prepare_rename, references, rename, workspace
 from cairn.projects.build import build
 from cairn.projects.project import load_project
 

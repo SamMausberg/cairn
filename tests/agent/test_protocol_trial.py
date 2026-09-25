@@ -6,7 +6,7 @@ import shutil
 import pytest
 
 from ai import protocol_trial as trial
-from cairn.agent.agent_tools import HANDLES
+from cairn.agent.hosts.edits import HANDLES
 
 pytestmark = pytest.mark.skipif(shutil.which("clang++") is None, reason="the hidden check builds with clang++")
 

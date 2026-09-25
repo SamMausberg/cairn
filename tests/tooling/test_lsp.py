@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from cairn.editor.completion import completion, signature_help
-from cairn.editor.document import Document, symbols
-from cairn.editor.edits import prepare_rename, references, rename
-from cairn.editor.navigation import definition, hover
+from cairn.editor.lsp.completion import completion, signature_help
+from cairn.editor.lsp.document import Document, symbols
+from cairn.editor.lsp.edits import prepare_rename, references, rename
+from cairn.editor.lsp.navigation import definition, hover
 
 ROOT = Path(__file__).resolve().parents[2]
 EDITOR = ROOT / "editors" / "vscode"
@@ -247,7 +247,7 @@ def test_positions_use_utf16_code_units(client):
 
 
 def test_a_run_of_changes_to_one_file_is_analysed_once_at_its_last_text():
-    from cairn.editor.lsp import latest
+    from cairn.editor.lsp.server import latest
 
     def change(uri, text):
         return {"method": "textDocument/didChange",
@@ -262,7 +262,7 @@ def test_a_run_of_changes_to_one_file_is_analysed_once_at_its_last_text():
 
 def test_a_text_typed_again_is_not_checked_again(monkeypatch):
     from cairn.compiler import compilations
-    from cairn.editor import document
+    from cairn.editor.lsp import document
 
     ran, real = [], compilations.compile_program
     monkeypatch.setattr(compilations, "compile_program", lambda *a, **k: ran.append(a[0]) or real(*a, **k))

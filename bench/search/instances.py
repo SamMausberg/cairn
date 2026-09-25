@@ -35,7 +35,7 @@ from cairn.agent.history import History
 from cairn.cli import main
 from cairn.perf import measure
 from cairn.perf.calibrate import cpu_model
-from cairn.perf.plan_source import Placement
+from cairn.perf.tuning.plan_source import Placement
 from cairn.projects.project import load_project
 from cairn.projects.target import toolkit_record
 from cairn.projects.toolchain import resolve_arch

@@ -100,7 +100,7 @@ def compile_sources(project: Project, directory: Path, cxx: str, arch: str | Non
 
 def host_objects(project: Project, directory: Path, cxx: str, timeout: int = 300) -> list[str]:
     """The project's vendored C++ compiled into `directory` as a library's objects, for a program built outside
-    `build`, as validation builds one (verify/validation.py). A CUDA source is left out: such a program runs no
+    `build`, as validation builds one (verify/validation/validation.py). A CUDA source is left out: such a program runs no
     device code."""
     host = replace(project, foreign=tuple((path, symbols) for path, symbols in project.foreign if not cuda(path)))
     write_program(directory, "runtime.cpp", "")  # the runtime headers a vendored source may include

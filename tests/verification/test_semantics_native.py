@@ -9,9 +9,9 @@ import pytest
 
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.syntax.tree import CPP, VOID, is_view
-from cairn.verify.scalar_concrete import Concrete
-from cairn.verify.scalar_semantics import equivalent, prepared
-from cairn.verify.scalar_values import bounds, decoded, encoded, rounded
+from cairn.verify.scalar.concrete import Concrete
+from cairn.verify.scalar.semantics import equivalent, prepared
+from cairn.verify.scalar.values import bounds, decoded, encoded, rounded
 from emitted import SANITIZED, build
 
 # The model against the machine ----------------------------------------------------------------

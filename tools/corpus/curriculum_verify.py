@@ -18,7 +18,7 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
-from cairn.agent.agent_tools import digest, load_json_strict, stable_json
+from cairn.agent.hosts.edits import digest, load_json_strict, stable_json
 from cairn.compiler.cairnc import compile_source
 from cairn.verify.testing import FLAGS, validate_contract
 from support import environment, runtime_headers

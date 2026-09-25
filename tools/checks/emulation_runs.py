@@ -22,7 +22,7 @@ from cairn.projects.build import build
 from cairn.projects.project import load_project
 from cairn.projects.target import parse
 from cairn.projects.toolchain import version
-from cairn.verify.validation import validate
+from cairn.verify.validation.validation import validate
 
 EXAMPLES = [
     "examples/cooperative/gpu.toml",

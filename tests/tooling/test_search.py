@@ -11,12 +11,12 @@ from test_predict import MACHINE
 from cairn.agent.history import History
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_program
-from cairn.perf.plan_source import written
 from cairn.perf.profile import packaged
 from cairn.perf.regions import identified
-from cairn.perf.resources import Inspector
-from cairn.perf.search import Budget, Candidate, shaped, space
-from cairn.perf.tune import tune
+from cairn.perf.tuning.plan_source import written
+from cairn.perf.tuning.resources import Inspector
+from cairn.perf.tuning.search import Budget, Candidate, shaped, space
+from cairn.perf.tuning.tune import tune
 from cairn.projects.target import parse
 from emitted import code_of
 
@@ -72,7 +72,7 @@ def test_vector_beside_fuse_is_tried_and_the_checker_refuses_it():
 
 
 def test_a_spent_clock_leaves_the_rest_ungenerated_and_says_so(monkeypatch):
-    from cairn.perf import search
+    from cairn.perf.tuning import search
 
     calls = iter(range(10_000))
     monkeypatch.setattr(search.Spent, "out_of_time", lambda self, share=1.0: next(calls) >= 5)
@@ -174,7 +174,7 @@ PAIRS = """fn total_pairs(n:usize, xs:ro<u64>[n]) -> u64 implements total {
 
 @pytest.mark.skipif(not shutil.which("clang++"), reason="validating an implementation runs native builds")
 def test_an_implementation_is_searched_and_chosen_only_while_its_validation_holds(tmp_path):
-    from cairn.agent.implementations import PROTOCOL, ImplementationHost
+    from cairn.agent.hosts.implementations import PROTOCOL, ImplementationHost
 
     host = ImplementationHost(records=tmp_path)
     host.open(TOTAL, "total", {"tolerance": {"absolute": 0.0, "relative": 0.0}, "domain": {"largest_extent": 48}})
@@ -198,7 +198,7 @@ def test_an_implementation_is_searched_and_chosen_only_while_its_validation_hold
 
 @pytest.mark.skipif(not shutil.which("clang++"), reason="validating an implementation runs native builds")
 def test_the_command_writes_the_selection_of_the_validated_implementation_it_chose(tmp_path, capsys):
-    from cairn.agent.implementations import PROTOCOL, ImplementationHost
+    from cairn.agent.hosts.implementations import PROTOCOL, ImplementationHost
 
     total = TOTAL.replace("-> u64 {", "-> u64 effects(pure, par:host) {", 1)
     lanes = ("fn total_lanes(n:usize, xs:ro<u64>[n]) -> u64 implements total when n % 4 == 0 {\n"

@@ -18,7 +18,7 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools"), str(R / "tests")]  # tests/: the helpers the loaded tests import
-from cairn.agent.agent_tools import PROTOCOL, EditSession
+from cairn.agent.hosts.edits import PROTOCOL, EditSession
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.project import load_project
 from cairn.verify.linear_certificates import audit_collector

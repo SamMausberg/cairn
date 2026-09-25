@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from cairn.agent.agent_tools import HANDLES, EditHost, EditSession
 from cairn.agent.explain import PACKAGE, explain
+from cairn.agent.hosts.edits import HANDLES, EditHost, EditSession
 from cairn.cli import main
 
 clang = pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ reports the vectorizer's verdicts")

@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from cairn.agent.implementations import PROTOCOL, ImplementationHost
+from cairn.agent.hosts.implementations import PROTOCOL, ImplementationHost
 from cairn.compiler.cairnc import compile_source
 from emitted import code_of
 
@@ -119,7 +119,7 @@ def test_an_implementation_z3_refutes_is_refused_although_every_finite_case_pass
 
 
 def test_the_packet_pins_the_numerical_policy():
-    from cairn.verify import agreement
+    from cairn.verify.validation import agreement
 
     pinned = ImplementationHost().open(SOURCE, "total", POLICY)["pinned"]
     assert pinned["agreement_sha256"] == agreement.DIGEST and pinned["agreement"]["relative_to"] == "the reference"
@@ -196,8 +196,8 @@ def test_an_unknown_handle_or_protocol_is_refused(host):
 
 def test_every_submission_is_kept_in_the_candidate_history(tmp_path):
     from cairn.agent.history import History
-    from cairn.verify import agreement
-    from cairn.verify.validation import compiled_by
+    from cairn.verify.validation import agreement
+    from cairn.verify.validation.validation import compiled_by
 
     host = ImplementationHost(records=tmp_path / "history")
     host.open(SOURCE, "total", POLICY)

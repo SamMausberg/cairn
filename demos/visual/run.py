@@ -19,7 +19,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from cairn.agent.agent_tools import EditHost, stable_json  # noqa: E402
+from cairn.agent.hosts.edits import EditHost, stable_json  # noqa: E402
 from cairn.projects.project import load_project  # noqa: E402
 
 TASK = "The colour bar hides the right edge of the plate. Move it so that it does not."

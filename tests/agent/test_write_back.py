@@ -1,7 +1,7 @@
 """A write keeps each file's own form: its byte-order mark, and its line endings.
 
 `cairn tune --write`, plan sessions, edit sessions and implementation sessions all write through
-`agent/write_back.py`. A file with CRLF endings, a byte-order mark or both is read and written as faithfully as a
+`agent/hosts/write_back.py`. A file with CRLF endings, a byte-order mark or both is read and written as faithfully as a
 plain one: the mark stays, every line of a CRLF file stays CRLF, and in a file of mixed endings the lines a write
 leaves alone keep theirs while the lines it adds or changes take the ending most of the file's lines have.
 """
@@ -11,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from cairn.agent.mcp_tools import Tools
-from cairn.agent.write_back import faithful
+from cairn.agent.hosts.write_back import faithful
+from cairn.agent.mcp.tools import Tools
 from cairn.compiler.cairnc import compile_source
 from cairn.editor.formatting import format_source
-from cairn.perf.plan_source import write_plan
+from cairn.perf.tuning.plan_source import write_plan
 from cairn.projects.project import load_project
 from sources import cairn_sources
 

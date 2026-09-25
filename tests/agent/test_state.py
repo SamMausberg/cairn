@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from cairn.agent.agent_tools import HANDLES, EditHost
+from cairn.agent.hosts.edits import HANDLES, EditHost
 from cairn.agent.state import apply, delta, state
 from emitted import code_of as code
 

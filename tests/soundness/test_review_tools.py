@@ -16,9 +16,9 @@ import pytest
 from cairn.cli import main
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.compiler.lower.header import binding
-from cairn.editor.document import Document
-from cairn.editor.workspace import rename, workspace
-from cairn.perf.plan_source import write_plan
+from cairn.editor.lsp.document import Document
+from cairn.editor.lsp.workspace import rename, workspace
+from cairn.perf.tuning.plan_source import write_plan
 from cairn.projects.build import build
 from cairn.projects.new import create_project
 from cairn.projects.project import ProjectError, load_project

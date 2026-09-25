@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cairn.agent.agent_tools import PROTOCOL, EditSession
+from cairn.agent.hosts.edits import PROTOCOL, EditSession
 from cairn.agent.projection import canonical_source
 from cairn.agent.sketches import Sketch
 from cairn.cli import main
@@ -14,7 +14,7 @@ from cairn.editor.terminal import typed
 from cairn.projects.build import build
 from cairn.projects.new import create_project
 from cairn.projects.project import ProjectError, load_project
-from cairn.verify.scalar_semantics import equivalent
+from cairn.verify.scalar.semantics import equivalent
 from emitted import refused
 
 

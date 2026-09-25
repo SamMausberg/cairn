@@ -28,7 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from cairn.agent.agent_tools import HANDLES, PROTOCOL, EditHost, EditSession, explain, stable_json
+from cairn.agent.hosts.edits import HANDLES, PROTOCOL, EditHost, EditSession, explain, stable_json
 from cairn.agent.state import state
 from cairn.agent.teaching import CARDS
 from cairn.compiler.cairnc import Diagnostic

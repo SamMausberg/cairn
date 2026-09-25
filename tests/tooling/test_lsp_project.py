@@ -13,13 +13,13 @@ from test_lsp import Client, applied, place
 
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
-from cairn.editor import workspace as ws_module
-from cairn.editor.document import Document
-from cairn.editor.edits import document_highlights
-from cairn.editor.edits import references as one_document_references
-from cairn.editor.edits import rename as one_document_rename
-from cairn.editor.lenses import code_lenses
-from cairn.editor.workspace import Refused, prepare_rename, references, rename, workspace
+from cairn.editor.lsp import workspace as ws_module
+from cairn.editor.lsp.document import Document
+from cairn.editor.lsp.edits import document_highlights
+from cairn.editor.lsp.edits import references as one_document_references
+from cairn.editor.lsp.edits import rename as one_document_rename
+from cairn.editor.lsp.lenses import code_lenses
+from cairn.editor.lsp.workspace import Refused, prepare_rename, references, rename, workspace
 from cairn.projects.build import build
 from cairn.projects.project import load_project
 

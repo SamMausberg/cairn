@@ -18,8 +18,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from cairn.agent.explain import explain
 from cairn.perf import report
-from cairn.perf.search import Budget
-from cairn.perf.tune import tune
+from cairn.perf.tuning.search import Budget
+from cairn.perf.tuning.tune import tune
 from cairn.projects.project import load_project
 from cairn.projects.target import parse, toolkit_record
 

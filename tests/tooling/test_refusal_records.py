@@ -6,7 +6,7 @@ import json
 import pytest
 
 from cairn.agent.diagnostics import HINTS
-from cairn.agent.mcp_tools import Tools
+from cairn.agent.mcp.tools import Tools
 from cairn.cli import main
 
 PROGRAMS = {  # a refusal from each part of the language: (program, code, card, the fix or None)

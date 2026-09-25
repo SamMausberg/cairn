@@ -21,7 +21,7 @@ import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from cairn.verify.scalar_semantics import equivalent
+from cairn.verify.scalar.semantics import equivalent
 from emitted import contract, device_build, library, on_device, refused, run
 from oracles.float_formats import FORMATS, Format
 

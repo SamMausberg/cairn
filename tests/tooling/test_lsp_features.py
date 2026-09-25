@@ -7,11 +7,11 @@ Each feature is called directly on a `Document` for its detail and once over the
 import pytest
 from test_lsp import URI, Client, applied, place
 
-from cairn.editor.document import Document
-from cairn.editor.fixes import code_actions
-from cairn.editor.highlighting import KINDS, LEGEND, MODIFIERS, semantic_tokens
-from cairn.editor.hints import inlay_hints
-from cairn.editor.navigation import hover
+from cairn.editor.lsp.document import Document
+from cairn.editor.lsp.fixes import code_actions
+from cairn.editor.lsp.highlighting import KINDS, LEGEND, MODIFIERS, semantic_tokens
+from cairn.editor.lsp.hints import inlay_hints
+from cairn.editor.lsp.navigation import hover
 
 PROGRAM = """module geo;
 import std.vec as vec;

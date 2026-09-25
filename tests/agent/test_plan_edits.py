@@ -7,10 +7,10 @@ a body host. An admitted reply leaves every function's receipt as it was, apart 
 
 import pytest
 
-from cairn.agent.agent_tools import HANDLES, EditHost
-from cairn.agent.plans import PROTOCOL, PlanHost
+from cairn.agent.hosts.edits import HANDLES, EditHost
+from cairn.agent.hosts.plans import PROTOCOL, PlanHost
 from cairn.compiler.cairnc import compile_source
-from cairn.perf.plan_source import write_plan
+from cairn.perf.tuning.plan_source import write_plan
 from cairn.projects.project import load_project
 from emitted import code_of
 

@@ -4,7 +4,7 @@ import ctypes
 
 import pytest
 
-from cairn.agent.agent_tools import EditSession
+from cairn.agent.hosts.edits import EditSession
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from emitted import SANITIZED, WARNINGS, library, refused, run
@@ -195,7 +195,7 @@ def test_the_release_runs_at_the_drop(cxx, tmp_path):
 
 
 def test_semantics_models_scratch_storage_and_a_moved_owner():
-    from cairn.verify.scalar_semantics import equivalent
+    from cairn.verify.scalar.semantics import equivalent
 
     zeroed = equivalent("fn f()->u64=0;", "fn f()->u64 { buffer b:u64[4]=zeroed;return b[0]; }", "f")
     assert zeroed["status"] == "smt-equivalent"  # Zeroed scratch; a failed allocation is outside the model.
@@ -333,8 +333,8 @@ def test_a_field_extent_names_both_spellings_of_one_length():
 
 
 def test_a_record_with_a_declared_extent_is_still_outside_the_scalar_model():
-    """`scalar_semantics` refuses a Buf stored in a record; a declared extent does not make one modellable."""
-    from cairn.verify.scalar_semantics import equivalent
+    """`verify/scalar/semantics.py` refuses a Buf stored in a record; a declared extent does not make one modellable."""
+    from cairn.verify.scalar.semantics import equivalent
 
     source = EXTENTS + "fn one(c:ro<Chart>) -> f64 = declared(c);\n"
     assert equivalent(source, source, "one")["status"] == "unknown"

@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-from cairn.agent.agent_tools import HANDLES, EditHost, stable_json
+from cairn.agent.hosts.edits import HANDLES, EditHost, stable_json
 from cairn.compiler.cairnc import Parser, compile_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project

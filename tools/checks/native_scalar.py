@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.compiler.cairnc import Emitter, compile_program
 from cairn.compiler.lower.codegen import mangle
-from cairn.verify.scalar_semantics import prepared
+from cairn.verify.scalar.semantics import prepared
 from support import best_profile, profile_flags, runtime_headers, version
 
 CT = {

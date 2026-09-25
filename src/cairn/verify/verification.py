@@ -19,7 +19,7 @@ from typing import Any
 
 from ..compiler.cairnc import Diagnostic, compile_source
 from ..compiler.syntax.parser import Parser
-from .scalar_semantics import equivalent
+from .scalar.semantics import equivalent
 
 
 def verify_module(reference: str, candidate: str, timeout_ms: int = 3000,

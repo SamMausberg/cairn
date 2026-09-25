@@ -263,7 +263,7 @@ def test_the_host_timer_times_and_refuses_device_programs():
 
 
 def test_an_agent_asks_what_its_admitted_candidate_is_predicted_to_change():
-    from cairn.agent.agent_tools import HANDLES, EditHost
+    from cairn.agent.hosts.edits import HANDLES, EditHost
     from cairn.compiler.cairnc import Diagnostic
 
     source = "fn fill(n:usize, o:rw<u64>[n]) { for i in 0..n { o[i] = u64(i); } }\n"

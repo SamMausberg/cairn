@@ -3,9 +3,9 @@
 import pytest
 from test_semantics import check, fn
 
-from cairn.verify.scalar_concrete import Concrete
-from cairn.verify.scalar_semantics import equivalent, prepared
-from cairn.verify.smt_bridge import Solver
+from cairn.verify.scalar.concrete import Concrete
+from cairn.verify.scalar.semantics import equivalent, prepared
+from cairn.verify.scalar.smt import Solver
 
 
 def test_domain_totality_shortcircuit():

@@ -184,7 +184,7 @@ fn main() -> i32 {
 
 def test_a_packet_that_shows_a_lending_record_carries_its_card():
     """The card is chosen by what the packet shows: a record declaring `lends`, or the word itself."""
-    from cairn.agent.agent_tools import EditSession
+    from cairn.agent.hosts.edits import EditSession
 
     source = TEXT + HELPERS + "fn total(t:ro<Text>) -> u64 = sum(t);\nfn main() -> i32 { return 0; }\n"
     assert "lends" in EditSession(source, "total").packet()["rule_cards"]

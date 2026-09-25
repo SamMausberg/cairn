@@ -15,7 +15,7 @@ from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_program, compile_source
 from cairn.perf import model
 from cairn.perf.profile import packaged
-from cairn.perf.tune import tune
+from cairn.perf.tuning.tune import tune
 from cairn.perf.work import count
 from emitted import contract, device_build, on_device, refused
 

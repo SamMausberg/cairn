@@ -5,8 +5,8 @@ import os
 
 import pytest
 
-from cairn.agent.agent_tools import HANDLES, EditHost, EditSession
-from cairn.agent.migration import Migration
+from cairn.agent.hosts.edits import HANDLES, EditHost, EditSession
+from cairn.agent.hosts.migration import Migration
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.projects.project import load_project
 from emitted import code_of as code

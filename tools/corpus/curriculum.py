@@ -15,7 +15,7 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
-from cairn.agent.agent_tools import explain, stable_json
+from cairn.agent.hosts.edits import explain, stable_json
 from cairn.agent.projection import canonical_source
 from cairn.agent.teaching import CARDS, select_cards
 from cairn.compiler.cairnc import Diagnostic, compile_source

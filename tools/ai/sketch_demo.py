@@ -8,7 +8,7 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
-from cairn.agent.agent_tools import EditSession
+from cairn.agent.hosts.edits import EditSession
 from cairn.agent.sketches import ScalarContract, Sketch, solve_finite
 from cairn.verify.testing import evaluate
 
