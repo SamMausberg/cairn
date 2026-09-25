@@ -240,10 +240,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120 in the suite; sm_80, sm_89, sm_90a, sm_100a and sm_120a for the suite's kernels",
       "ran_on_cpu": "yes: emulated, and on a host stand-in for the CUDA runtime",
-      "ran_on_gpu": "partial: `parallel` regions and the `reduce` collector ran on an RTX 5070 Ti in bench/device, each result checked against CUDA or the exact sum; `scan` and `compact` have not run since v0.8.3",
+      "ran_on_gpu": "partial: `parallel` regions, the `reduce` collector, `reduce op out[k]` over device views and a device `scan` ran on an RTX 5070 Ti, each result checked against the host, CUDA or the exact sum; `compact` has not run since v0.8.3",
       "sanitizers": "partial: the host sanitizers on emulated builds; Compute Sanitizer has not run",
       "measured": "partial: regions and `reduce` against hand-written CUDA on an RTX 5070 Ti; `scan` and `compact` untimed",
-      "records": ["evidence/v0_8_3/gpu/benchmark.json", "evidence/v1_1/catalog/README.md", "evidence/v1_1/emulation/README.md", "evidence/v1_0/execution/README.md", "evidence/v1_1/device_perf/README.md"]
+      "records": ["evidence/v0_8_3/gpu/benchmark.json", "evidence/v1_1/catalog/README.md", "evidence/v1_1/emulation/README.md", "evidence/v1_0/execution/README.md", "evidence/v1_1/device_perf/README.md", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "Guards in device lanes",
@@ -264,10 +264,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120",
       "ran_on_cpu": "yes: on a host stand-in that counts every stream, allocation and wait, and emulated",
-      "ran_on_gpu": "partial: the execution context on a caller's stream, a held function's one wait and `cq_` entries with none, and a CUDA graph capture of them, on an RTX 5070 Ti; queued work has not run",
+      "ran_on_gpu": "yes: the execution context on a caller's stream, a held function's one wait, queued work ordered by tickets, and `cq_` entries called directly and replayed in a CUDA graph, on an RTX 5070 Ti",
       "sanitizers": "partial: thread and undefined on the host stand-in; Compute Sanitizer has not run",
       "measured": "partial: the host waits a call makes and what each costs on an RTX 5070 Ti under WSL2",
-      "records": ["evidence/v1_0/execution/README.md", "tests/runtime/test_execution.py", "evidence/v1_1/emulation/README.md", "evidence/v1_1/device_perf/README.md"]
+      "records": ["evidence/v1_0/execution/README.md", "tests/runtime/test_execution.py", "evidence/v1_1/emulation/README.md", "evidence/v1_1/device_perf/README.md", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "Device plans: `block`, `per_lane`, `unroll`, `vector` and `stage`",
@@ -276,10 +276,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120",
       "ran_on_cpu": "partial: a `vector 4` and a `stage 1` region on the host stand-in",
-      "ran_on_gpu": "no",
+      "ran_on_gpu": "yes: every device plan, `vector` plan and `stage` plan of the suite against the unplanned launch on an RTX 5070 Ti",
       "sanitizers": "partial: thread and undefined on the host stand-in; Compute Sanitizer has not run",
       "measured": "no: predicted only",
-      "records": ["tests/soundness/test_plans.py", "tests/soundness/test_staging.py", "evidence/v1_0/execution/README.md"]
+      "records": ["tests/soundness/test_plans.py", "tests/soundness/test_staging.py", "evidence/v1_0/execution/README.md", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "Wide loads and stores: `load_wide[K]`, `store_wide` and `Cache` hints",
@@ -288,10 +288,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120, to LDG.E.EF.128, STG.E.EF.128, LDG.E.128.CONSTANT, LDS.128 and STS.128",
       "ran_on_cpu": "yes: in host code, host lanes and host threads, and emulated, under both compilers",
-      "ran_on_gpu": "partial: `load_wide[4]` with `Cache.l2` in a cooperative region on an RTX 5070 Ti, its sum checked; `store_wide` has not run",
+      "ran_on_gpu": "yes: `load_wide[4]` and `store_wide` with cache hints in lanes and a cooperative region on an RTX 5070 Ti, checked against plain loops, and in the sums of bench/device",
       "sanitizers": "partial: address and undefined under clang++, thread on host threads; Compute Sanitizer has not run",
       "measured": "partial: that load in a two-pass sum against CUDA's `__ldcg` on an RTX 5070 Ti",
-      "records": ["tests/soundness/test_wide.py", "evidence/v1_1/device_perf/README.md"]
+      "records": ["tests/soundness/test_wide.py", "evidence/v1_1/device_perf/README.md", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "Atomic updates of one element in lanes and threads",
@@ -300,10 +300,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120, to RED, ATOMG and ATOMS",
       "ran_on_cpu": "yes: on host lanes and host threads under both compilers, and emulated",
-      "ran_on_gpu": "no",
+      "ran_on_gpu": "yes: the suite's atomic updates in lanes and cooperative threads on an RTX 5070 Ti, checked against plain loops",
       "sanitizers": "partial: thread, which reports an update made plain, and address and undefined under clang++; Compute Sanitizer has not run",
       "measured": "no",
-      "records": ["tests/soundness/test_atomics.py"]
+      "records": ["tests/soundness/test_atomics.py", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "Cooperative regions: shared arrays, barriers and warp operations",
@@ -312,10 +312,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_80, sm_89, sm_90a, sm_100a and sm_120a",
       "ran_on_cpu": "yes: each block's threads as host threads at a barrier, under both compilers",
-      "ran_on_gpu": "yes: layer norm, transpose, stencil and two-pass sums on an RTX 5070 Ti, each result checked against CUDA",
+      "ran_on_gpu": "yes: layer norm, transpose, stencil and two-pass sums on an RTX 5070 Ti, each result checked against CUDA, and warp votes checked against plain loops",
       "sanitizers": "partial: thread under both compilers, which reports a removed barrier; Compute Sanitizer has not run",
       "measured": "yes: against hand-written CUDA of the same algorithms on an RTX 5070 Ti",
-      "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "evidence/v1_0/predict_cooperative/README.md", "tests/soundness/test_cooperative.py", "tests/projects/test_reduction_example.py", "evidence/v1_1/kernels/README.md", "tests/soundness/test_votes.py", "evidence/v1_1/device_perf/README.md"]
+      "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "evidence/v1_0/predict_cooperative/README.md", "tests/soundness/test_cooperative.py", "tests/projects/test_reduction_example.py", "evidence/v1_1/kernels/README.md", "tests/soundness/test_votes.py", "evidence/v1_1/device_perf/README.md", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "A cooperative region's finish: `then threads t in T { }`",
@@ -324,10 +324,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120, one launch whose last block runs the finish",
       "ran_on_cpu": "yes: one more team of host threads after the blocks, grids of 0 to 70 blocks, under both compilers, and emulated",
-      "ran_on_gpu": "no",
+      "ran_on_gpu": "yes: the suite's finish, `examples/reduction`'s one-launch sums, and a finish's `cq_` entry replayed in a CUDA graph beside direct launches, on an RTX 5070 Ti",
       "sanitizers": "partial: thread, which reports a finish that does not wait for the blocks; Compute Sanitizer has not run",
       "measured": "no",
-      "records": ["tests/soundness/test_finish.py"]
+      "records": ["tests/soundness/test_finish.py", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "Shared arrays nobody zeroes",
@@ -336,10 +336,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120, zeroing none of them where a block starts",
       "ran_on_cpu": "yes: on host threads under both compilers, and emulated, each block starting them filled with a pattern",
-      "ran_on_gpu": "no",
+      "ran_on_gpu": "yes: the suite's unzeroed shared arrays on an RTX 5070 Ti, checked against plain loops",
       "sanitizers": "partial: thread, and address and undefined under clang++; Compute Sanitizer has not run",
       "measured": "no",
-      "records": ["tests/soundness/test_written.py"]
+      "records": ["tests/soundness/test_written.py", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "Pipeline stages",
@@ -360,10 +360,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_80, sm_89, sm_90a, sm_100a and sm_120a",
       "ran_on_cpu": "yes: two kernels on 16 shapes under both compilers, within the contract's bound",
-      "ran_on_gpu": "no",
+      "ran_on_gpu": "yes: the suite's tensor-core kernels and `examples/tensor`'s multiplies on an RTX 5070 Ti, within their numerical contract",
       "sanitizers": "partial: thread on host threads; Compute Sanitizer has not run",
       "measured": "no",
-      "records": ["evidence/v1_0/tensor/README.md", "evidence/v1_1/catalog/README.md", "tests/soundness/test_tensor_kernels.py"]
+      "records": ["evidence/v1_0/tensor/README.md", "evidence/v1_1/catalog/README.md", "tests/soundness/test_tensor_kernels.py", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "Layouts and spreads in code",
@@ -408,10 +408,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120 with every warning an error",
       "ran_on_cpu": "no: `--emulate` refuses vendored CUDA",
-      "ran_on_gpu": "no: its device validation tests are generated and built, and run only under make gpu",
+      "ran_on_gpu": "yes: a foreign CUDA implementation against its CAIRN reference on an RTX 5070 Ti",
       "sanitizers": "no: Compute Sanitizer runs only under make gpu",
       "measured": "no",
-      "records": ["evidence/v1_0/foreign/README.md", "tests/projects/test_foreign.py"]
+      "records": ["evidence/v1_0/foreign/README.md", "tests/projects/test_foreign.py", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "Device validation of an implementation",
@@ -420,10 +420,10 @@
       "implemented": "yes",
       "compiles": "yes: the generated device tests build for sm_120",
       "ran_on_cpu": "yes: with `--emulate`, as finite-tested-emulated",
-      "ran_on_gpu": "no",
+      "ran_on_gpu": "no: Compute Sanitizer cannot instrument the device under WSL2, so every tool is `unavailable` on the reference machine",
       "sanitizers": "no: each Compute Sanitizer tool runs only under make gpu",
       "measured": "n/a",
-      "records": ["evidence/v1_0/foreign/README.md", "evidence/v1_1/emulation/README.md", "tests/verification/test_device_validation.py"]
+      "records": ["evidence/v1_0/foreign/README.md", "evidence/v1_1/emulation/README.md", "tests/verification/test_device_validation.py", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "`cairn tune` on device candidates",
