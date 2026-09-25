@@ -33,7 +33,7 @@ from ...compiler.cairnc import Diagnostic
 from ...compiler.primitives.builtins import TABLE
 from ...compiler.syntax.parser import IDENT, RESERVED
 from ...projects.project import Project, ProjectError, contained_file, load_project
-from .document import Document, Item, binders, declarations, dotted, enclosing, flatten, line_starts, word_at
+from .document import Document, Item, binders, declarations, dotted, enclosing, flatten, word_at
 from .edits import occurrences as local_occurrences
 from .members import Members, bodies, declares
 from .names import TYPES, callee, declared, qualified
@@ -110,11 +110,9 @@ def files_of(project: Project) -> list[File]:
     """Every file of a loaded project, as the editor holds it, with where it starts in the combined source. Each text
     is the one the project read, from the editor or the disk, so an offset into the combined source is an offset into
     it: a file's carriage returns are kept and its byte-order mark is not part of it."""
-    starts, files = line_starts(project.source), []
-    for unit, text in zip(project.units, project.layout()[1], strict=True):
-        file = (project.root / unit.path).resolve()
-        files.append(File(file.as_uri(), text, starts[unit.first_line - 1], project.source))
-    return files
+    return [
+        File((project.root / u.path).resolve().as_uri(), text, at, project.source) for u, at, text in project.files()
+    ]
 
 
 def workspace_symbols(query: str, buffers: dict[str, str], roots: list[str]) -> list[dict]:

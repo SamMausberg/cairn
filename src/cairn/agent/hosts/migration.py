@@ -56,28 +56,6 @@ def inventory(program: Any) -> set[tuple[str, str]]:
     return named
 
 
-def spans(project: Project) -> dict[str, tuple[int, str]]:
-    """Each unit's first offset in the combined source and its text, for the units the root project wrote."""
-    lines = project.source.split("\n")
-    starts = [0]
-    for line in lines:
-        starts.append(starts[-1] + len(line) + 1)
-    out = {}
-    for u in project.units:
-        at = starts[u.first_line - 1]
-        out[u.path] = (at, "\n".join(lines[u.first_line - 1 : u.first_line - 1 + u.lines]))
-    return out
-
-
-def combined(project: Project, bodies: dict[str, str]) -> str:
-    """The combined source with some units' text replaced, laid out exactly as `load_project` lays it out: one
-    file alone is its own text, and a manifest's files each follow a `// source:` line."""
-    old = spans(project)
-    if len(project.units) == 1 and old[project.units[0].path][1] == project.source:
-        return bodies.get(project.units[0].path, project.source)
-    return "".join(f"// source: {u.path}\n{bodies.get(u.path, old[u.path][1])}\n" for u in project.units)
-
-
 class Migration:
     """One authorized interface change of a project, the packet an agent reads for it, and the checked apply."""
 
@@ -88,6 +66,7 @@ class Migration:
         self.effects = tuple(sorted(effects))
         if unknown := [e for e in self.effects if e not in EFFECTS and not e.startswith(EFFECT_FAMILIES)]:
             fail("E-MIGRATION", "The effects a migration allows are effect names.", effects=unknown)
+        self.files = {u.path: (at, text) for u, at, text in self.project.files()}  # where each file's text starts
         self.parsed = compilations.parsed(self.project.source)
         self.program, _, self.receipts = compilations.program(self.project.source)
         authored = {f.name: f for f in self.parsed.functions}
@@ -113,7 +92,7 @@ class Migration:
 
     def home(self, f: Any) -> tuple[str, int, int]:
         """(file, start, end) of a function's declaration in the file that holds it; a vendored one is refused."""
-        for path, (at, text) in spans(self.project).items():
+        for path, (at, text) in self.files.items():
             if at <= f.start and f.end <= at + len(text):
                 if path in self.project.vendored_units:
                     fail("E-MIGRATION", "A migration changes the project's own files, not a vendored one.",
@@ -132,7 +111,7 @@ class Migration:
         functions = {}
         for n in self.names:
             path, start, end = self.homes[n]
-            functions[n] = {"file": path, "source": spans(self.project)[path][1][start:end],
+            functions[n] = {"file": path, "source": self.files[path][1][start:end],
                             "role": "migrated" if n == self.symbol or n in self.also else "caller"}  # fmt: skip
         text = "\n".join(f["source"] for f in functions.values())
         return {
@@ -189,27 +168,24 @@ class Migration:
             edits.setdefault(path, []).append((start, end, text))
         bodies = {}
         for path, cuts in edits.items():
-            text = spans(self.project)[path][1]
+            text = self.files[path][1]
             for start, end, new in sorted(cuts, reverse=True):
                 text = text[:start] + new + text[end:]
             bodies[path] = text
-        candidate = combined(self.project, bodies)
-        self.recheck(candidate, bodies)
-        files = {
-            path: {"before": digest(spans(self.project)[path][1]), "after": digest(text)}
-            for path, text in bodies.items()
-        }
+        candidate = self.project.rewritten(bodies)
+        self.recheck(candidate)
+        files = {path: {"before": digest(self.files[path][1]), "after": digest(text)} for path, text in bodies.items()}
         if write:
             self.write(bodies)
         return {"protocol": PROTOCOL, "status": "applied" if write else "checked", "authorization": self.authorization,
                 "files": files, "functions": sorted(given), "whole_program_rechecked": True,
                 "native_build": "not-run", "behavioral_tests": "not-run", "formal_status": "not-verified"}  # fmt: skip
 
-    def recheck(self, candidate: str, bodies: dict[str, str]) -> None:
+    def recheck(self, candidate: Project) -> None:
         """The whole linked program with every replacement in place: signatures first, then types, declarations
         and rows. A refusal names the file and line of the new text, where the agent wrote it."""
         try:
-            whole = compilations.parsed(candidate)
+            whole = compilations.parsed(candidate.source)
             if inventory(whole) != inventory(self.parsed):  # a comment ending a replacement would hide the line's rest
                 fail("E-DECLARATION", "A migration adds or removes no declaration.")
             parsed = {f.name: f for f in whole.functions}
@@ -219,16 +195,9 @@ class Migration:
                     fail("E-DECLARATION", "A migration adds or removes no declaration.", symbol=f.name)
                 if signature(parsed[f.name]) != wanted:
                     fail("E-SIGNATURE", f"{f.name} must have the signature {wanted}.", parsed[f.name], symbol=f.name)
-            _, _, after = compilations.program(candidate)
+            _, _, after = compilations.program(candidate.source)
         except Diagnostic as e:
-            line, single = 1, len(self.project.units) == 1 and candidate == bodies.get(self.project.units[0].path)
-            for u in self.project.units:
-                text = bodies.get(u.path, spans(self.project)[u.path][1])
-                first = line if single else line + 1
-                if first <= e.data.get("line", 0) < first + text.count("\n") + 1:
-                    e.data.update(file=u.path, line=e.data["line"] - first + 1)
-                    break
-                line = first + text.count("\n") + 1
+            e.data.update(candidate.place(e.data))
             raise
         if set(after) != set(self.receipts):
             fail("E-DECLARATION", "A migration adds or removes no declaration.")
