@@ -74,8 +74,9 @@ def scope_items(doc: Document, module: str, offset: int) -> list[dict]:
         for table, word in TABLES:
             out += [entry(n, word, word) for n in visible(p, module, getattr(p, table))]
         out += [entry(a, "module", target) for owner, target, a in p.imports if owner == module]
+    # A test block is run, never called, so its name is written nowhere else.
     out += [entry(d["name"], d["detail"], d["detail"]) for d in declarations(doc.code, 0, len(doc.code))
-            if IDENT.fullmatch(d["name"])]  # fmt: skip
+            if IDENT.fullmatch(d["name"]) and d["detail"] != "test"]  # fmt: skip
     out += [entry(n, "fn", "builtin") for n in TABLE]
     out += [entry(n, "type", "type") for n in sorted(TYPES)]
     out += [entry(n, "word", "keyword") for n in sorted(RESERVED)]

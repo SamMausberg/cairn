@@ -22,7 +22,8 @@ MODIFIERS = ["declaration", "readonly", "defaultLibrary", "mutable"]
 LEGEND = {"tokenTypes": KINDS, "tokenModifiers": MODIFIERS}
 TABLES = (("records", "struct"), ("sums", "enum"), ("enums", "enum"), ("traits", "interface"),
           ("consts", "variable"), ("recipes", "macro"))  # fmt: skip
-DECLARED = {"fn": "function", "struct": "struct", "enum": "enum", "trait": "interface", "const": "variable"}
+DECLARED = {"fn": "function", "test": "function", "struct": "struct", "enum": "enum", "trait": "interface",
+            "const": "variable"}  # fmt: skip
 Binders = dict[str, tuple[str, bool]]  # name -> (kind, may be assigned)
 
 
@@ -93,7 +94,7 @@ def declared_names(cs: list[Item]) -> tuple[dict[int, tuple[str, set[str]]], lis
             kind = "method" if word == "fn" and member else DECLARED[word]
             marks[at] = (kind, {"declaration", "readonly"} if word == "const" else {"declaration"})
             bound, body = signature_binders(cs, at, hi)
-            scopes.append((lo, hi, bound | (body_binders(cs, body, hi) if word == "fn" else {})))
+            scopes.append((lo, hi, bound | (body_binders(cs, body, hi) if word in {"fn", "test"} else {})))
             for k in range(body, hi) if word in {"struct", "enum"} else ():
                 if IDENT.fullmatch(cs[k].s) and cs[k - 1].s in {"{", ";"}:
                     marks[k] = ("property" if word == "struct" else "enumMember", {"declaration"})
