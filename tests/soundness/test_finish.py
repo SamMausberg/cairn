@@ -13,7 +13,7 @@ import re
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import assembled, contract, emulated, refused, round_trips, sanitizers, watched
+from emitted import assembled, contract, ran_emulated, refused, round_trips, sanitizers, watched
 
 KERNELS = """// The sum of x in one region: each block adds a grid-stride share into partial[b], and the finish adds the partials.
 fn total(n:usize, x:ro<u64>[n], g:usize, partial:rw<u64>[g], out:rw<u64>[1]) {
@@ -173,7 +173,7 @@ def test_a_finish_run_before_the_blocks_it_waits_for_reads_what_is_not_there_yet
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, cxx):
-    emulated(tmp_path, compile_source(DEVICE)[0], cxx)
+    ran_emulated(tmp_path, compile_source(DEVICE)[0], cxx)
 
 
 def test_the_device_lowering_is_one_launch_whose_last_block_finishes(tmp_path):

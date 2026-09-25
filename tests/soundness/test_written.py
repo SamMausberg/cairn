@@ -14,7 +14,7 @@ import shutil
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import contract, device_build, emulated, refused, round_trips, sanitizers, watched
+from emitted import contract, device_build, ran_emulated, refused, round_trips, sanitizers, watched
 
 KERNELS = """// Block sums through a tree in shared memory that nobody zeroes: the first phase writes every element.
 fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
@@ -129,7 +129,7 @@ def test_a_read_before_any_write_reads_the_host_s_pattern(tmp_path):
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, cxx):
-    emulated(tmp_path, compile_source(DEVICE)[0], cxx)
+    ran_emulated(tmp_path, compile_source(DEVICE)[0], cxx)
 
 
 def test_the_device_kernel_zeroes_nothing_where_its_arrays_are_unzeroed(tmp_path):

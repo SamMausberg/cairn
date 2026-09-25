@@ -200,7 +200,7 @@ def device_build(tmp_path: Path, cpp: str, entry: str | None = None, ptx=False, 
     return Path(target)
 
 
-def emulated(tmp_path: Path, cpp: str, cxx: str, timeout=240):
+def ran_emulated(tmp_path: Path, cpp: str, cxx: str, timeout=240):
     """A device program built for the host by `contract`, its device work on host threads, and run; it must exit 0."""
     done = contract(tmp_path, cpp, cxx, emulate=True, timeout=timeout)
     assert done.returncode == 0, (done.returncode, done.stderr[-3000:])

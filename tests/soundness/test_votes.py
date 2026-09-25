@@ -11,7 +11,7 @@ import re
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import assembled, emulated, refused, round_trips, watched
+from emitted import assembled, ran_emulated, refused, round_trips, watched
 
 KERNEL = """// Every thread of each warp votes on its value, finds the lanes that share its value mod 4, and reads its lower
 // neighbour's value; out[i] packs what it learned.
@@ -93,7 +93,7 @@ def test_every_vote_agrees_with_a_plain_loop_over_the_warp_under_the_thread_sani
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_and_agrees(tmp_path, cxx):
-    emulated(tmp_path, compile_source(DEVICE)[0], cxx)
+    ran_emulated(tmp_path, compile_source(DEVICE)[0], cxx)
 
 
 def test_each_vote_compiles_for_sm_120_to_one_warp_instruction(tmp_path):

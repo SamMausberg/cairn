@@ -15,7 +15,7 @@ import pytest
 
 from cairn.agent.explain import explain
 from cairn.compiler.cairnc import compile_source
-from emitted import assembled, contract, emulated, refused, round_trips, sanitizers, watched
+from emitted import assembled, contract, ran_emulated, refused, round_trips, sanitizers, watched
 
 KERNELS = """// Each lane reverses and doubles four adjacent elements: one 16-byte load and one 16-byte store.
 fn quads(m:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
@@ -161,7 +161,7 @@ def test_each_guard_traps_before_the_access_reaches_memory(tmp_path, cxx, source
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, cxx):
-    emulated(tmp_path, compile_source(DEVICE)[0], cxx)
+    ran_emulated(tmp_path, compile_source(DEVICE)[0], cxx)
 
 
 def test_the_device_lowering_is_one_128_bit_instruction_an_access_and_no_local_memory(tmp_path):

@@ -13,7 +13,7 @@ import re
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import assembled, contract, emulated, refused, round_trips, sanitizers, watched
+from emitted import assembled, contract, ran_emulated, refused, round_trips, sanitizers, watched
 
 KERNELS = """// Each lane adds its value's low byte to one of 256 bins, and folds it into running totals, extremes and masks.
 fn tally(n:usize, x:ro<u32>[n], bins:rw<u32>[256], sum:rw<u64>[1], total:rw<f32>[1], ends:rw<i64>[2],
@@ -216,7 +216,7 @@ def test_an_unordered_float_sum_lands_within_its_stated_bound(tmp_path, cxx):
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, cxx):
-    emulated(tmp_path, compile_source(DEVICE)[0], cxx)
+    ran_emulated(tmp_path, compile_source(DEVICE)[0], cxx)
 
 
 def test_the_device_lowering_is_one_atomic_instruction_an_update(tmp_path):
