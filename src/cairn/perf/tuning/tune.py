@@ -263,7 +263,8 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     order = Order(given, (None, *alternatives) if alternatives else (), current[0])
     compiling = "device" in kinds and target is not None and spent.budget.compiles > 0 and available()
     timing = bool(measure) and ("device" not in kinds or device)
-    candidates = searched(placement, name, order, spent, goal, chosen, arch, 0.5 if compiling or timing else 1.0)
+    candidates = searched(placement, name, order, spent, goal, chosen, arch, 0.5 if compiling or timing else 1.0,
+                          target)  # fmt: skip
     recorder = None
     if history is not None:
         recorder = Recorder(

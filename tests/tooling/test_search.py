@@ -198,6 +198,34 @@ def test_an_implementation_is_searched_and_chosen_only_while_its_validation_hold
     assert isinstance(next(r for r in moved["candidates"] if r.get("use") == "total_by4")["validated"], str)
 
 
+BULK = """fn scale(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, a:f32) { parallel i in n { out[i] = a * x[i]; } }
+fn scale_bulk(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, a:f32) implements scale needs(tma) {
+  parallel i in n { out[i] = a * x[i]; }
+}
+"""
+
+
+def test_a_candidate_whose_implementation_needs_what_the_target_lacks_is_refused_as_its_build_is():
+    """`plan scale use scale_bulk;` needs tma. A build for sm_80, which lacks it, is E-IMPL-TARGET, so the search
+    refuses that candidate for sm_80 with the same judgment and prices it for sm_90a; `--compare` refuses it too."""
+    from cairn.compiler.cairnc import Diagnostic
+    from cairn.perf.profile import card, carrying, default
+    from cairn.perf.tuning.feedback import compare, parse_candidate
+
+    a100, h100 = (carrying(default(), card(name)) for name in ("a100", "h100-sxm5"))
+    sm_80 = tune(BULK, "scale", [{"n": 1e6}], a100, device_target=parse("sm_80"), budget=Budget(compiles=0))
+    [refused] = [r for r in sm_80["space"]["refused"] if r["code"] == "E-IMPL-TARGET"]
+    assert "needs tma, which sm_80 does not provide" in refused["message"] and refused["configurations"] == 1
+    assert {r.get("use") for r in sm_80["candidates"]} == {None}
+    sm_90a = tune(BULK, "scale", [{"n": 1e6}], h100, device_target=parse("sm_90a"), budget=Budget(compiles=0))
+    assert {r.get("use") for r in sm_90a["candidates"]} == {None, "scale_bulk"}
+    assert all(r["code"] != "E-IMPL-TARGET" for r in sm_90a["space"]["refused"])
+    with pytest.raises(Diagnostic) as error:
+        compare(BULK, "scale", parse_candidate("none"), parse_candidate("use scale_bulk"), [{"n": 1e6}], a100,
+                target=parse("sm_80"), compiles=0)  # fmt: skip
+    assert error.value.data["code"] == "E-IMPL-TARGET"
+
+
 @pytest.mark.skipif(not shutil.which("clang++"), reason="validating an implementation runs native builds")
 def test_the_command_writes_the_selection_of_the_validated_implementation_it_chose(tmp_path, capsys):
     from cairn.agent.hosts.implementations import PROTOCOL, ImplementationHost

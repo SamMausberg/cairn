@@ -86,6 +86,7 @@ def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]
     one resolved here. A candidate is a plan, or a plan and the implementation it selects (`parse_candidate`);
     without one, the reference runs."""
     from ...agent import history as kept
+    from ...compiler.plans.implementations import targeted as selected
     from ..report import targeted
     from .tune import keyed
 
@@ -97,6 +98,8 @@ def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]
     runs = {k: use or name for k, (_, use) in sides.items()}  # whose code runs where it applies
     programs = {k: placement.apply(plan, use.rsplit(".", 1)[-1] if use else None) for k, (plan, use) in sides.items()}
     checked = {k: compile_program(text) for k, text in programs.items()}  # a refused candidate raises its diagnostic
+    for _, _, receipts in checked.values() if target is not None else ():
+        selected(receipts, target)  # as a build for the target refuses an implementation that needs what it lacks
     costs = {k: count(p, checker, {runs[k]})[runs[k]] for k, (p, checker, _) in checked.items()}
     lines: list[dict[str, Any]] = []
     for s in sizes:

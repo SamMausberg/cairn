@@ -10,7 +10,9 @@
    as it is now and with no other: a plan's items schedule only the reference's own regions, which the model does
    not price where the implementation runs, so each other plan beside it is the same candidate to the model. This
    file does not decide which combinations are legal: each complete candidate is written into the source and
-   checked, and a refused one is kept with the checker's code and message.
+   checked, and a refused one is kept with the checker's code and message. A candidate whose selected
+   implementation needs a device feature the target lacks is refused as a build for that target refuses it
+   (E-IMPL-TARGET, `compiler/plans/implementations.targeted`).
 2. Each legal candidate is counted from its own checked program, priced by the model at every size and ranked by
    the objective over them (`perf/tuning/objective.py`). It is lowered as `cairn build` lowers it, and one whose function
    lowers to the same canonical code (`verify/emission.py`) as an earlier candidate is that candidate: it takes its
@@ -57,6 +59,8 @@ from typing import Any
 from ...compiler.cairnc import Diagnostic, compile_program, joined
 from ...compiler.check.concurrency import PLAN_ITEMS
 from ...compiler.lower.codegen import Emitter
+from ...compiler.plans.implementations import targeted
+from ...projects.target import DeviceTarget
 from ...verify.emission import canonical, definitions
 from .. import model
 from ..counts import Cost
@@ -267,10 +271,11 @@ def lowered(program: Any, checker: Any, name: str) -> tuple[str, str]:
 
 
 def searched(placement: Placement, name: str, order: Order, spent: Spent, goal: Objective, profile: Profile,
-             arch: str | None, share: float = 1.0) -> list[Candidate]:  # fmt: skip
-    """Each candidate `order` generates, written into the source, checked as a whole program, counted, priced at
-    every size and lowered, until `share` of the time is spent. A candidate that selects an implementation is
-    counted as that implementation, the code that runs where its condition holds."""
+             arch: str | None, share: float = 1.0, target: DeviceTarget | None = None) -> list[Candidate]:  # fmt: skip
+    """Each candidate `order` generates, written into the source, checked as a whole program and against the device
+    `target` when there is one, counted, priced at every size and lowered, until `share` of the time is spent. A
+    candidate that selects an implementation is counted as that implementation, the code that runs where its
+    condition holds."""
     out: list[Candidate] = []
     lowerings: dict[str, Candidate] = {}
     spent.skip("not generated: an implementation is tried with the reference's current plan alone", order.excluded)
@@ -288,7 +293,9 @@ def searched(placement: Placement, name: str, order: Order, spent: Spent, goal: 
         c = Candidate(plan, placement.apply(plan, written_as if use is not KEEP else KEEP), use=chosen)
         out.append(c)
         try:
-            c.program, c.checker, _ = compile_program(c.source)
+            c.program, c.checker, receipts = compile_program(c.source)
+            if target is not None:
+                targeted(receipts, target)
             c.cost = count(c.program, c.checker, {c.runs(name)})[c.runs(name)]
         except Diagnostic as error:
             c.refused = (error.data["code"], error.data["message"])
