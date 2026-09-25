@@ -23,7 +23,7 @@ Every tool here ships with the compiler and needs no Python package outside the 
 
 ## Output for people and for programs
 
-At a terminal, `cairn` prints for a person, as below, and `cairn run` hands the terminal to the program. Piped, every command prints the JSON record that scripts and agents read. `--format human|json` or the `CAIRN_FORMAT` variable chooses between them, and `NO_COLOR` turns colour off. The exit status and the record are the same either way.
+At a terminal, `cairn` prints for a person, as below, and `cairn run` hands the terminal to the program. Piped, every command prints the JSON record that scripts and agents read as one compact line, since an agent pays for every character it reads. `--format human|json` or the `CAIRN_FORMAT` variable chooses between them, a terminal that asks for the record gets it indented, and `NO_COLOR` turns colour off. The exit status and the record are the same either way.
 
 ```text
 error[E-LEASED]: data is lent to left until wait(left).
