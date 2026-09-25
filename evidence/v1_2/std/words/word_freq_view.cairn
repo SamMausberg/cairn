@@ -1,0 +1,42 @@
+// The probe's word_freq with a map keyed by Vec[u8] and looked up by a view (evidence/v1_2/std/README.md).
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.sort as sort;
+import std.map (Map);
+import std.vec (Vec);
+
+struct Entry { count:u64; slot:usize; }
+
+fn main() -> i32 {
+  let mut input = vec.new[u8]();
+  match io.read_stdin_to_end(input) { Ok(_) => {} Err(_) => return 1; }
+  let n = input.len;
+  let mut counts = map.new[Vec[u8], u64]();
+  let mut i:usize = 0;
+  while i < n {
+    if text.is_alpha(input.data[i]) {
+      let lo = i;
+      while i < n && text.is_alpha(input.data[i]) {
+        input.data[i] = text.to_lower(input.data[i]);
+        i += 1;
+      }
+      let at = map.entry_view(counts, input.data[lo..i], 0);
+      counts.vals[at] += 1;
+    } else {
+      i += 1;
+    }
+  }
+  let mut entries = vec.new[Entry]();
+  for s in 0..map.slots(counts) {
+    if map.live(counts, s) { vec.push(entries, Entry(counts.vals[s], s)); }
+  }
+  sort.sort_by(entries, |a:ro<Entry>, b:ro<Entry>| -> bool {
+    if a.count != b.count { return a.count > b.count; }
+    return less(counts.keys[a.slot], counts.keys[b.slot]);
+  });
+  for t in 0..min(entries.len, 10) {
+    println(counts.keys[entries.data[t].slot], ' ', entries.data[t].count);
+  }
+  return 0;
+}

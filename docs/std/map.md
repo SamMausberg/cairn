@@ -2,7 +2,31 @@
 
 # std.map
 
-An open-addressed hash table with linear probing and tombstones. The map owns its keys and values, so Map[u64, Vec[u8]] is ordinary. A borrow cannot be returned, so a lookup answers with a position rather than the value, in one of three forms. `find` gives the raw slot index, which the caller reads as m.vals[slot], good until the next insert or remove. `slot` gives a Slot that `resolve` checks again later: once its key is removed or the map rehashes, it resolves to None, never to another entry. `update` lends the value to a closure, which cannot reach the map while it holds it. `get` copies a copyable value out. Cost: expected O(1) per operation; insert reallocates and rehashes past three quarters full, so `alloc`, `free` and `zero_init` appear in every caller's row.
+An open-addressed hash table with linear probing and tombstones. The map owns its keys and values, so Map[u64, Vec[u8]] is ordinary. A borrow cannot be returned, so a lookup answers with a position rather than the value, in one of three forms. `find` gives the raw slot index, which the caller reads as m.vals[slot], good until the next insert or remove. `slot` gives a Slot that `resolve` checks again later: once its key is removed or the map rehashes, it resolves to None, never to another entry. `update` lends the value to a closure, which cannot reach the map while it holds it. `get` copies a copyable value out. A map keyed by Vecs is also looked up by a view of the elements (`find_view`, `entry_view`), and `sorted` walks the keys in order. Cost: expected O(1) per operation; insert reallocates and rehashes past three quarters full, so `alloc`, `free` and `zero_init` appear in every caller's row.
+
+```cairn
+// Counts the words of standard input: printf 'b a b' | cairn run count.cairn prints a 1, then b 2.
+import std.core (Result);
+import std.io as io;
+import std.map (Map);
+import std.text as text;
+import std.vec (Vec);
+
+fn main() -> i32 {
+  let mut input = vec.new[u8]();
+  match io.read_stdin_to_end(input) { Ok(_) => {} Err(_) => return 1; }
+  let mut counts = map.new[Vec[u8], u64]();
+  let mut w = text.cursor();
+  while text.next_word(input, w) {
+    let at = map.entry_view(counts, input.data[w.lo..w.hi], 0);   // copies a word the first time only
+    counts.vals[at] += 1;
+  }
+  let mut order = vec.new[usize]();
+  map.sorted(counts, order);                                        // the live slots, words ascending
+  for s in order { println(counts.keys[s], ' ', counts.vals[s]); }
+  return 0;
+}
+```
 
 ```cairn
 // state: 0 never used, 1 live, 2 erased. An erased slot still routes probes past it. A live slot's stamp is how many
@@ -24,6 +48,29 @@ pub fn insert[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:K, value:V)
 
 // effects: diverge, ffi_precondition, local_read, local_write, read:key, read:m, stack_storage, trap, zero_init
 pub fn find[K:Hash + Eq + affine, V:affine](m:ro<Map[K, V]>, key:ro<K>) -> Option[usize]
+
+// find for a map keyed by Vecs, by a view of the elements the key holds: a word looks itself up where it lies in the
+// input, and no Vec is made for it. Cost: one hash of the view and a comparison per key probed.
+// effects: diverge, ffi_precondition, local_read, local_write, read:key, read:m, stack_storage, trap, zero_init
+pub fn find_view[T:Hash + Eq + copy, V:affine](m:ro<Map[Vec[T], V]>, n:usize, key:ro<T>[n]@host) -> Option[usize]
+
+// The slot of `key`'s entry, inserting `key` with `value` first when there is none; a key or value not needed is
+// released. `let at = map.entry(m, key, 0); m.vals[at] += 1;` counts. Good until the next insert.
+// effects: alloc, diverge, ffi_precondition, free, local_read, local_write, read:m, stack_storage, trap, write:m,
+// zero_init
+pub fn entry[K:Hash + Eq + affine, V:affine](m:rw<Map[K, V]>, key:K, value:V) -> usize
+
+// entry for a map keyed by Vecs, by a view: the key is copied into a Vec of its own only when it is inserted, which is
+// the one allocation beside the map's own growth.
+// effects: alloc, diverge, ffi_precondition, free, local_read, local_write, read:key, read:m, stack_storage, trap,
+// write:m, zero_init
+pub fn entry_view[T:Hash + Eq + copy, V:affine](m:rw<Map[Vec[T], V]>, n:usize, key:ro<T>[n]@host, value:V) -> usize
+
+// Every live slot appended to `out`, in the order of the keys: the walk a report prints. Cost: one pass over the slots
+// and a heapsort of the live ones, O(k log k) comparisons of keys.
+// effects: alloc, diverge, ffi_precondition, free, indirect_call, local_read, local_write, read:m, read:out,
+// stack_storage, trap, write:out, zero_init
+pub fn sorted[K:Ord + affine, V:affine](m:ro<Map[K, V]>, out:rw<Vec[usize]>)
 
 // The entry holding `key` as a Slot, which stays checkable across inserts, removes and growth.
 // effects: diverge, ffi_precondition, local_read, local_write, read:key, read:m, stack_storage, trap, zero_init

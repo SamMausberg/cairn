@@ -29,6 +29,29 @@ def commented(lines: list[str]) -> list[str]:
     return [f"// {line}" for text in lines for line in textwrap.wrap(text, WIDTH - 3)]
 
 
+def introduction(text: str, offset: int) -> list[str]:
+    """A module's comment above `offset`: its prose as one paragraph, as `comment_above` gives a declaration's, and a
+    fenced example in it line by line as written, set off by blank lines."""
+    lines = text[:offset].rstrip().split("\n") if offset > 0 else []
+    found: list[str] = []
+    while lines and lines[-1].lstrip().startswith("//"):
+        found.insert(0, lines.pop().lstrip()[2:])
+    out: list[str] = []
+    prose: list[str] = []
+    fenced = False
+    for line in found:
+        if line.strip().startswith("```"):
+            out += [" ".join(prose), ""] if prose else []
+            out += [line.strip(), *([""] if fenced else [])]
+            prose, fenced = [], not fenced
+        elif fenced:
+            out.append(line.removeprefix(" "))
+        elif line.strip():
+            prose.append(line.strip())
+    out += [" ".join(prose)] if prose else []
+    return out[:-1] if out and not out[-1] else out
+
+
 NOTE = "A generic function's effects are what it may do for any arguments within its bounds, besides what their own"
 NOTE += " trait members do."
 
@@ -100,7 +123,8 @@ def sections(source: str, modules: list[str] | None = None) -> tuple[list[str], 
         for k, entry in enumerate(entries):
             apart = k > 0 and (len(entry) > 1 or len(entries[k - 1]) > 1)
             block += ("\n\n" if apart else "\n" if k else "") + "\n".join(entry)
-        told = above(rf"^module {re.escape(module)};")
+        at = re.search(rf"^module {re.escape(module)};", text, re.M)
+        told = introduction(text, at.start()) if at else []
         out = [f"# {module or 'root module'}", *(["", *told] if told else [])]
         chapters.append("\n".join(out + ([f"\n```cairn\n{block}\n```"] if entries else [])))
     return chapters, any(f.generics for f in c.fs.values())
