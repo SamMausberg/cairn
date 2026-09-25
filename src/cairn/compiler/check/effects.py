@@ -102,25 +102,28 @@ def conversion(e: Expr) -> bool:
 
 
 def spelled(e: Expr) -> str:
-    """An argument as source: a name, a literal, a field or a call of those, else `...`."""
+    """An argument as source: a name, a literal, or a field, element or call of those, else `...`."""
     if e.tag in {"name", "int", "bool"}:
         return e.val
     if e.tag == "field":
         return f"{spelled(e.args[0])}.{e.val}"
+    if e.tag == "index":
+        return f"{spelled(e.args[0])}[{spelled(e.args[1])}]"
     return f"{e.val}({', '.join(map(spelled, e.args))})" if e.tag == "call" else "..."
 
 
 def bind_first(call: Expr, row: set[str]) -> str:
-    """Why a call that writes or allocates may not sit beside another operand, and the statement that binds it."""
+    """Why a call that writes or allocates may not sit beside another operand, and the statement that binds it. A
+    declared callee's row names its own parameters, and a builtin's the caller's places."""
     params = [n for n, _ in call.ref.params] if isinstance(call.ref, Function) else []
-    written = [root(call.args[params.index(x[6:])]) for x in sorted(row) if x.startswith("write:") and x[6:] in params]
-    places = sorted({w.val for w in written if w.tag == "name"})
-    does = f"writes {', '.join(places)}" if places else "writes through a borrow" if written else "allocates"
+    written = [x[6:] for x in row if x.startswith("write:")]
+    places = sorted({root(call.args[params.index(w)]).val if w in params else w for w in written})
+    does = f"writes {', '.join(places)}" if places else "allocates"
     bound = call.ref.bindings.values() if isinstance(call.ref, Function) else ()
     typed = f"[{', '.join(t.display() if isinstance(t, Type) else str(t) for t in bound)}]" if bound else ""
     shown = ", ".join(spelled(a) for a in call.args)
-    return (f"{call.val} {does}, so an operand beside it could run before or after it: bind it first, "
-            f"let v = {call.val}{typed}({shown});, and use v here.")  # fmt: skip
+    return (f"{call.val} {does}, so an operand beside it could run before or after it: bind it to its own "
+            f"statement first (let v = {call.val}{typed}({shown});) and use v here.")  # fmt: skip
 
 
 def audit(c: Checker, effects: dict[str, set[str]], names: set[str] | None = None):

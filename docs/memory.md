@@ -459,7 +459,7 @@ fn main() -> i32 { let mut frame = Buf[u8](4); let done = fill(len(frame), frame
 ```
 
 ```text
-fill writes frame, so an operand beside it could run before or after it: bind it first, let v = fill(len(frame), frame, 1);, and use v here.
+fill writes frame, so an operand beside it could run before or after it: bind it to its own statement first (let v = fill(len(frame), frame, 1);) and use v here.
 ```
 
 The one operand of a conversion or a unary operator has nothing beside it, so it may be such a call. The call runs first, then the conversion checks its result.

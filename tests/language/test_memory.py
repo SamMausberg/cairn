@@ -125,8 +125,8 @@ def test_a_call_that_writes_may_be_the_one_operand_of_a_conversion_or_unary_oper
 def test_a_call_that_writes_beside_another_operand_is_refused_and_named(line):
     said = refused("E-EFFECT-ORDER", WRITES + f"fn main() -> i32 {{ let mut inp = Input(0); {line} return 0; }}\n")
     assert said["message"] == (
-        "next writes inp, so an operand beside it could run before or after it: bind it first, "
-        "let v = next(inp);, and use v here."
+        "next writes inp, so an operand beside it could run before or after it: bind it to its own statement first "
+        "(let v = next(inp);) and use v here."
     )
 
 
