@@ -121,12 +121,22 @@ def no_core() -> None:
     resource.setrlimit(resource.RLIMIT_CORE, (one, one))
 
 
+STACK = 8 << 20  # Linux's default, so the stack every thread reserves is the same on every machine
+
+
 def limited(seconds: int, memory_mib: int | None) -> None:
-    """A native child's limits: no core, `seconds` of CPU, and `memory_mib` of address space when given."""
+    """A native child's limits: no core, `seconds` of CPU, an 8 MiB stack for each thread, and `memory_mib` of data
+    when given: the heap, anonymous mappings and thread stacks. The cap is on data and not on address space because
+    glibc reserves 64 MiB of address space for each thread's malloc arena and uses little of it, so an address-space
+    cap of 1024 MiB stopped a correct program of sixteen tasks from starting its threads. The stack is fixed because
+    glibc gives a thread the stack limit's size, all of it counted as data: under a CI runner's 16 MiB limit, sixteen
+    threads were the whole of a 256 MiB cap."""
     no_core()
     resource.setrlimit(resource.RLIMIT_CPU, (seconds, seconds))
+    hard = resource.getrlimit(resource.RLIMIT_STACK)[1]
+    resource.setrlimit(resource.RLIMIT_STACK, (STACK if hard == resource.RLIM_INFINITY else min(STACK, hard), hard))
     if memory_mib:
-        resource.setrlimit(resource.RLIMIT_AS, (memory_mib << 20, memory_mib << 20))
+        resource.setrlimit(resource.RLIMIT_DATA, (memory_mib << 20, memory_mib << 20))
 
 
 def child(library, source, contract):

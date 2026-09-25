@@ -220,7 +220,7 @@ The jobs run at once, so a run takes about as long as its longest device job, 15
 
 ## Safety and trust
 
-CAIRN does not sandbox what it builds, and its toolchain is not verified, so run hostile programs, adapters or compilers under OS isolation. `cairn run` caps virtual address space at 1024 MiB by default (64 to 65536 MiB), lifted for device programs, and that limit protects no file, credential, syscall or network access.
+CAIRN does not sandbox what it builds, and its toolchain is not verified, so run hostile programs, adapters or compilers under OS isolation. `cairn run` caps a program's data (its heap and thread stacks, 8 MiB each) at 1024 MiB by default (64 to 65536 MiB), lifted for device programs, and that limit protects no file, credential, syscall or network access.
 
 Outside `unsafe` and `extern`, an accepted program cannot use a moved owner, leak or double-consume a linear value, alias a mutable borrow, keep a borrow past its call, race in a parallel region, touch a place a live task was lent, or index memory of the wrong placement. Arithmetic, bounds, tags, extents and array parts are guarded, and a failed guard aborts the process, on the device as on the host, without running cleanup. These rules are implemented in the Python checker and tested; they are not mechanized, so a checker bug is a soundness bug. [verification.md](verification.md) says which parts have a proved model.
 

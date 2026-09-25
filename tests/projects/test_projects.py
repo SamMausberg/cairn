@@ -550,3 +550,72 @@ def test_build_prints_a_short_record_and_keeps_every_function_s_receipt_in_its_f
     whole = json.loads(Path(printed.pop("receipt")).read_text())
     assert "frontend" not in printed and {k: v for k, v in whole.items() if k != "frontend"} == printed
     assert {"main", "sum"} <= set(whole["frontend"]["functions"])
+
+
+SIXTEEN_TASKS = """import std.vec (Vec);
+
+// Each task grows a Vec of its own, so the allocator may give each thread an arena of its own.
+fn busy(k:u64) -> u64 {
+  let mut v = vec.new[u64]();
+  for i in 0..1000 { vec.push(v, k + u64(i)); }
+  return v.data[999];
+}
+
+fn main() -> i32 {
+  let g = Group[u64](16);
+  for k in 0..16 { spawn busy(u64(k)) into g; }
+  let mut total:u64 = 0;
+  for _ in 0..16 { total += collect(g); }
+  wait(g);
+  println(total);
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_run_caps_what_a_program_uses_not_what_its_threads_reserve(tmp_path, cxx, capsys):
+    """Sixteen tasks under a 256 MiB cap: their stacks and heaps fit, though their reserved allocator arenas would
+    not fit an address-space cap, which is what a 1.1 evaluation subject's correct program hit."""
+    if not shutil.which(cxx):
+        pytest.skip(f"{cxx} is not installed")
+    path = tmp_path / "tasks.cairn"
+    path.write_text(SIXTEEN_TASKS)
+    for _ in range(3):
+        main(["run", str(path), "--memory-mib", "256", "--cxx", cxx, "--out", str(tmp_path), "--format", "json"])
+        record = json.loads(capsys.readouterr().out)
+        said = record["stderr"]
+        assert (record["exit_code"], record["stdout"], record["memory_limit_mib"]) == (0, "16104\n", 256), said
+
+
+def test_a_run_still_stops_a_program_that_allocates_past_its_cap(tmp_path, capsys):
+    """512 MiB, whose last byte is written out so no optimizer can drop the allocation, traps under a 256 MiB cap
+    and runs under 1024 MiB."""
+    path = tmp_path / "big.cairn"
+    path.write_text("fn main() -> i32 {\n  let n:usize = 536870912;\n  let mut b = Buf[u8](n);\n  b[n - 1] = 65;\n"
+                    "  print(b[n - 1..n]);\n  return 0;\n}\n")  # fmt: skip
+    ran = {}
+    for cap in ("256", "1024"):
+        main(["run", str(path), "--memory-mib", cap, "--out", str(tmp_path), "--format", "json"])
+        record = json.loads(capsys.readouterr().out)
+        ran[cap] = (record["exit_code"] == 0, record["stdout"])
+    assert ran == {"256": (False, ""), "1024": (True, "A")}
+
+
+def test_a_native_child_gets_an_eight_mib_stack_and_its_data_cap_whatever_it_inherits():
+    """The limits cairn run, cairn test and a contract's child share; a CI runner's 16 MiB stack limit gave each of
+    sixteen threads 16 MiB of counted data."""
+    import resource
+    import sys
+
+    from cairn.verify.testing import limited
+
+    read = (
+        "import resource; print([resource.getrlimit(getattr(resource, n))[0] for n in ('RLIMIT_STACK', 'RLIMIT_DATA')])"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", read], capture_output=True, text=True, preexec_fn=lambda: limited(5, 256)
+    )
+    hard = resource.getrlimit(resource.RLIMIT_STACK)[1]
+    stack = 8 << 20 if hard == resource.RLIM_INFINITY else min(8 << 20, hard)
+    assert done.stdout.strip() == str([stack, 256 << 20])
