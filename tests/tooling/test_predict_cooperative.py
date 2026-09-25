@@ -73,6 +73,8 @@ SPARSE = """fn every8(g:usize, n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@devi
   blocks b in g threads t in 256 { out[b * 256 + t] = x[(b * 256 + t) * 8]; }
 }
 """
+EVERY8 = "_ZN2cr4coop6blocksILj256ELm0ELm0EZ9ci_every8mmPfPKfEUlRNS0_6DeviceEmmE_EEvmT2_"  # its kernel, as ptxas 13.2 names it
+AT = "g=1e4,n=2.048e7"
 
 
 def costs(source: str, *names: str):
@@ -110,25 +112,85 @@ def test_a_region_is_priced_by_its_blocks_and_threads_not_as_one_thread():
     assert sums["warp_collectives"] == [{"at": "src/device_kernels.cairn:37", "operation": "reduce + warp"}]
 
 
-def test_spills_ptxas_reports_are_named_beside_the_time_and_not_priced():
-    """ptxas counts the bytes of spill instructions in a kernel's code, not how often they run or where their traffic
-    is served: the kernel is priced as it would be without them, and the prediction says what it leaves out."""
-    found = costs(SPARSE, "every8")
-    symbol = "_ZN2cr4coop6blocksILj256ELm0EZ9ci_every8mmPfPKfEUlRNS0_6DeviceEmmE_EEvmT1_"
-    log = (f"ptxas info    : Compiling entry function '{symbol}' for 'sm_120'\n"
-           f"ptxas info    : Function properties for {symbol}\n"
-           "    24 bytes stack frame, 16 bytes spill stores, 8 bytes spill loads\n"
+def every8(spilled: int, arch: str = "sm_120") -> dict:
+    """SPARSE's kernel as perf/device.py reads ptxas -v for `arch`, with `spilled` bytes of spill stores and loads."""
+    log = (f"ptxas info    : Compiling entry function '{EVERY8}' for '{arch}'\n"
+           f"ptxas info    : Function properties for {EVERY8}\n"
+           f"    24 bytes stack frame, {spilled // 2} bytes spill stores, {spilled - spilled // 2} bytes spill loads\n"
            "ptxas info    : Used 40 registers, used 1 barriers, 24 bytes cumulative stack size\n")  # fmt: skip
-    entry = {**resources(log)[symbol], "symbol": symbol, "instructions": 99}  # as perf/device.py reads ptxas -v
-    (said,) = cooperative_model.read(found, {"every8": [entry]})
+    return {**resources(log)[EVERY8], "symbol": EVERY8, "instructions": 99}
+
+
+def read_as(monkeypatch, spilled) -> None:
+    """`--inspect` without nvcc: a compile of SPARSE for a target reads `every8` spilling `spilled(source, target)`
+    bytes, or fails where that is None. Nothing is compiled."""
+
+    def kernels(source, target):
+        n = spilled(source, target.name)
+        return ({"status": "compile-failed", "stderr": "ptxas fatal"} if n is None else
+                {"status": "read", "arch": target.name, "kernels": {"every8": [every8(n, target.name)]}})  # fmt: skip
+
+    monkeypatch.setattr("cairn.perf.device.available", lambda: True)
+    monkeypatch.setattr("cairn.perf.device.kernels", kernels)
+
+
+def test_spills_ptxas_reports_are_named_beside_the_time_and_not_priced(tmp_path, capsys, monkeypatch):
+    """ptxas reports the bytes a kernel's spill stores and loads move as they appear in its code, not how often they
+    run or where their traffic is served: the kernel is priced as it would be without them, and the prediction says
+    what it leaves out."""
+    found = costs(SPARSE, "every8")
+    (said,) = cooperative_model.read(found, {"every8": [every8(24)]})
     assert said["status"] == "read" and said["spill_bytes"] == 24 and region(found["every8"]).spilled == 24
-    sizes = {"g": 1e4, "n": 2.56e6 * 8}
+    sizes = {"g": 1e4, "n": 2.048e7}
     spilled = model.predict(found["every8"], default(), sizes)
     assert part(spilled)["spill_bytes"] == 24
     assert any("24 bytes of spill stores and loads" in why and "not priced" in why for why in spilled["why"])
     region(found["every8"]).spilled = 0
     plain = model.predict(found["every8"], default(), sizes)
     assert plain["ns"] == spilled["ns"] and not any("spill" in why for why in plain["why"])
+    path = tmp_path / "every8.cairn"
+    path.write_text(SPARSE)
+    read_as(monkeypatch, lambda source, target: 24)
+    assert main(["predict", str(path), "--at", AT, "--device-target", "sm_120", "--inspect", "--format", "human"]) == 0
+    assert "because ptxas reports 24 bytes of spill stores and loads in the code of the kernel at line 2" in (
+        capsys.readouterr().out)  # fmt: skip
+
+
+def test_every_card_row_names_the_spills_its_own_target_s_kernel_reports(tmp_path, capsys, monkeypatch):
+    """`--card all --inspect` reads each target's kernels once. The rows priced for a target whose kernel spills name
+    the spilled bytes as not priced; a target read after it, here one whose compile failed, carries none of them."""
+    path = tmp_path / "every8.cairn"
+    path.write_text(SPARSE)
+    read_as(monkeypatch, lambda source, target: {"sm_90a": 24, "sm_89": None}.get(target, 0))
+    assert main(["predict", str(path), "--at", AT, "--card", "all", "--inspect", "--format", "json"]) == 0
+    found = json.loads(capsys.readouterr().out)
+    assert found["inspection"]["sm_90a"]["regions"][0]["spill_bytes"] == 24
+    assert found["inspection"]["sm_89"]["status"] == "compile-failed"
+    rows = found["functions"]["every8"]["predictions"][0]["cards"]
+    assert {r["card"]: (r.get("spill_bytes"), r.get("spills")) for r in rows if "spills" in r or "spill_bytes" in r} == {
+        "h100-sxm5": (24, "not priced"), "h200-sxm": (24, "not priced")}  # fmt: skip
+    shown = [line for line in report.lines_across(found).splitlines() if "spilled" in line]
+    assert [line.split()[0] for line in shown if line.endswith(" low  24 bytes spilled (not priced)")] == [
+        "h100-sxm5", "h200-sxm"] and len(shown) == 2  # fmt: skip
+
+
+def test_predict_against_names_a_change_in_spills_and_that_neither_time_covers_them(tmp_path, capsys, monkeypatch):
+    before, after = tmp_path / "before.cairn", tmp_path / "after.cairn"
+    before.write_text(SPARSE)
+    after.write_text(SPARSE.replace("* 8]", "* 4]"))
+    argv = ["predict", str(after), "--against", str(before), "--at", AT, "--device-target", "sm_120", "--inspect"]
+    read_as(monkeypatch, lambda source, target: 672 if "* 4]" in source else 0)
+    assert main([*argv, "--format", "json"]) == 0
+    (row,) = json.loads(capsys.readouterr().out)["functions"]["every8"]
+    (changed,) = row["cooperative"]
+    assert changed["spill_bytes"] == [0, 672] and row["spills"] == "not priced"
+    assert main([*argv, "--format", "human"]) == 0
+    shown = capsys.readouterr().out
+    assert "low, spills not priced" in shown and "spill_bytes 0 -> 672" in shown
+    read_as(monkeypatch, lambda source, target: 672)  # alike in both: no change to name, and still no price
+    assert main([*argv, "--format", "json"]) == 0
+    (row,) = json.loads(capsys.readouterr().out)["functions"]["every8"]
+    assert row["spills"] == "not priced" and not any("spill_bytes" in c for c in row.get("cooperative", []))
 
 
 def test_a_branch_costs_what_the_warps_that_enter_it_issue():

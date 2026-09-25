@@ -245,22 +245,10 @@ def tasks(c: Cost, host: Host, arch: str, sizes: dict[str, float], missing: set[
     return Piece(f"{len(c.tasks)} tasks", ns, bound, light(together, host, arch, sizes, reach), {"lanes": k})
 
 
-def unpriced(r: Region, piece: Piece) -> Piece:
-    """`piece` for a region whose kernel ptxas says spills, saying that its time leaves the spills out. ptxas counts
-    the bytes of spill instructions in the code, not how often they run, and not where the traffic they make is
-    served, so no price is put on them."""
-    if r.spilled:
-        piece.detail["spill_bytes"] = r.spilled
-        piece.guesses.append(f"ptxas counts {r.spilled} bytes of spill stores and loads in a thread's code for the "
-                             f"kernel at line {r.line}; the local-memory traffic they make is not priced, so the time "
-                             "leaves it out")  # fmt: skip
-    return piece
-
-
 def pieces(c: Cost, host: Host, arch: str, sizes: dict[str, float], missing: set[str],
            device: Device | None = None) -> list[Piece]:  # fmt: skip
     out = [sequential(c, host, arch, sizes, missing)]
-    out += [unpriced(r, region(r, host, arch, sizes, missing, device)) for r in c.regions]
+    out += [region(r, host, arch, sizes, missing, device) for r in c.regions]
     linked = device or (card().device if c.transfers else None)
     for way, moved in c.transfers.items():  # a transfer crosses the link, h2h copies on the host
         size = value(moved, sizes, missing)

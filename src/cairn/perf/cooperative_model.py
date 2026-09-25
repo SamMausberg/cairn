@@ -21,6 +21,10 @@ Time. A launch, then the largest of four rates over the whole grid, since a runn
 - tensor cores: every fragment step's multiply-adds at the published dense peak for f16 and bf16 inputs.
 
 Which rate is largest is the model's bound, a hypothesis about the kernel, never a measured bottleneck.
+
+Spills are not priced. ptxas reports the bytes a kernel's spill stores and loads move as they appear in its code, not
+how often they run or whether their traffic leaves the cache, so a region whose kernel spills carries `spill_bytes`
+and says that its time leaves them out.
 """
 
 from __future__ import annotations
@@ -34,7 +38,7 @@ from .counts import Cost, Region, Work
 from .model import Piece, footprint, price, value
 from .profile import Device, Host
 
-# cr::coop::blocks<THREADS, BYTES, the lambda>: its closure type numbered among the function's device regions
+# cr::coop::blocks<THREADS, BYTES, ZERO, the lambda>: its closure type numbered among the function's device regions
 KERNEL = re.compile(r"6blocksILj(\d+)ELm(\d+)E.*?UlRNS\d+_6DeviceEmmE(\d*)_")
 NOT_ISSUED = {"tensor", "shared_wavefront", "fill_bytes"}  # counted in operations, wavefronts or bytes, not issues
 
@@ -155,6 +159,11 @@ def priced(r: Region, card: Device, sizes: dict[str, float], missing: set[str]) 
         "device_bytes": round(moved),
     }
     guesses = []
+    if r.spilled:
+        detail["spill_bytes"] = r.spilled
+        guesses.append(f"ptxas reports {r.spilled} bytes of spill stores and loads in the code of the kernel at line "
+                       f"{r.line}, not how often they run: their local-memory traffic is not priced, so the time "
+                       "leaves it out")  # fmt: skip
     if flights and copied:
         detail["pipelines"] = flights
         detail["copy_gbps"] = round(rate, 1)
@@ -197,9 +206,9 @@ def on_host(r: Region, host: Host, arch: str, sizes: dict[str, float], missing: 
 
 
 def read(costs: dict[str, Cost], kernels: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
-    """Give each device cooperative region the registers and static shared memory ptxas reported for its kernel,
-    `cr::coop::blocks<THREADS, BYTES, ...>` of its function, told apart from the function's other regions by the
-    number its lambda's type carries. What was read, beside what the checker laid out, for the report."""
+    """Give each device cooperative region the registers, static shared memory and spilled bytes ptxas reported for
+    its kernel, `cr::coop::blocks<THREADS, BYTES, ...>` of its function, told apart from the function's other regions
+    by the number its lambda's type carries. What was read, beside what the checker laid out, for the report."""
     out: dict[tuple[str, int], dict[str, Any]] = {}
     for c in costs.values():
         for r in c.regions:
@@ -223,7 +232,8 @@ def read(costs: dict[str, Cost], kernels: dict[str, list[dict[str, Any]]]) -> li
 
 def changed(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """What differs between two predictions' cooperative regions, taken in order: shared memory, the blocks an SM
-    holds and why, registers, each pipeline's depth and what it keeps in flight, the copy rate and the bound."""
+    holds and why, registers and spilled bytes, each pipeline's depth and what it keeps in flight, the copy rate and
+    the bound."""
     pairs = zip(*([p for p in parts if "cooperative region" in p["what"]] for parts in (before, after)), strict=False)
     out = []
     for a, b in pairs:
@@ -232,7 +242,7 @@ def changed(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> list[d
             held = p.get("resident", {})
             found = {k: held.get(k) for k in ("shared_bytes_per_block", "blocks_per_sm", "limited_by",
                                                "registers_per_thread", "occupancy")}  # fmt: skip
-            found |= {k: p.get(k) for k in ("copy_gbps", "busy", "bound")}
+            found |= {k: p.get(k) for k in ("copy_gbps", "busy", "bound")} | {"spill_bytes": p.get("spill_bytes", 0)}
             for f in p.get("pipelines", []):
                 found |= {f"{f['name']}.{k}": f[k] for k in ("depth", "wait_group", "bytes_in_flight")}
             return found
@@ -242,6 +252,12 @@ def changed(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> list[d
         if diff:
             out.append({"line": int(b["what"].rsplit(" ", 1)[-1]), **dict(sorted(diff.items()))})
     return out
+
+
+def spilled(parts: list[dict[str, Any]]) -> int:
+    """The bytes of spill stores and loads ptxas reported in the kernels of a prediction's parts: what its time
+    leaves out."""
+    return sum(p.get("spill_bytes", 0) for p in parts)
 
 
 # For a person -----------------------------------------------------------------------------------------------------

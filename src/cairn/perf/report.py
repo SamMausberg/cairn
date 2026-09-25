@@ -151,7 +151,8 @@ def delta(before: str, after: str, sizes: list[dict[str, float]] | None = None, 
           profile: Profile | None = None, arch: str | None = None,
           device: DeviceTarget | None = None, inspect: bool = False) -> dict[str, Any]:  # fmt: skip
     """What changing `before` into `after` is predicted to do to every function both have, at each size, with what
-    changes in each cooperative region's resources beside the time."""
+    changes in each cooperative region's resources beside the time, and whether either version's kernels spill, which
+    neither time covers."""
     chosen = profile or default()
     old, new = costs(before, symbols), costs(after, symbols)
     target = targeted({**{f"old:{k}": v for k, v in old.items()}, **new}, chosen, device)
@@ -168,6 +169,8 @@ def delta(before: str, after: str, sizes: list[dict[str, float]] | None = None, 
                                                                                  key=["low", "medium", "high"].index)})  # fmt: skip
             if changed := cooperative_model.changed(a["parts"], b["parts"]):
                 rows[-1]["cooperative"] = changed
+            if cooperative_model.spilled(a["parts"]) or cooperative_model.spilled(b["parts"]):
+                rows[-1]["spills"] = "not priced"
         out[name] = rows
     return {"schema": "cairn.predict.delta/1", "predicted": "Neither version was built or run.",
             "profile": chosen.describe(), "arch": arch or model.measured(chosen), **target, "functions": out,
@@ -187,7 +190,8 @@ def across(source: str, sizes: list[dict[str, float]] | None = None, symbols: se
     `sizes`: a row per card with its bound, its time and its fraction of speed of light. Each card's device target is
     `flag` (--device-target), else `manifest`, else the card's own; a card that target's code does not run on, or a
     target a build of the program refuses, is listed with its refusal and not priced. With `inspect`, each target's code is compiled once and read by ptxas,
-    and its registers count on every card priced for that target. Host work is priced by `profile`, as always."""
+    and its registers count on every card priced for that target; a row whose kernels spill names the spilled bytes,
+    which no price covers. Host work is priced by `profile`, as always."""
     chosen = profile or default()
     listed: list[dict[str, Any]] = []
     groups: dict[DeviceTarget, list[tuple[str, Profile]]] = {}
@@ -227,6 +231,8 @@ def across(source: str, sizes: list[dict[str, float]] | None = None, symbols: se
                     p = model.predict(c, priced, row["sizes"], arch)
                     row["cards"].append({"card": key, "device_target": target.name, "ns": p["ns"], "bound": p["bound"],
                                          "speed_of_light": p["speed_of_light"], "confidence": p["confidence"]})  # fmt: skip
+                    if spilled := cooperative_model.spilled(p["parts"]):  # what this target's inspection read
+                        row["cards"][-1] |= {"spill_bytes": spilled, "spills": "not priced"}
     order = list(cards())
     for entry in functions.values():
         for row in entry["predictions"]:
@@ -269,8 +275,9 @@ def lines(result: dict[str, Any]) -> str:
             for row in entry:
                 sizes = ", ".join(f"{k}={v:g}" for k, v in row["sizes"].items())
                 ratio = f"x{row['ratio']}" if row["ratio"] is not None else ""
+                spills = f", spills {row['spills']}" if "spills" in row else ""
                 out.append(f"  {sizes:<12} {duration(row['before_ns']):>10} -> {duration(row['after_ns']):<10} {ratio}"
-                           f"  {row['bound'][1]}, {row['confidence']}")  # fmt: skip
+                           f"  {row['bound'][1]}, {row['confidence']}{spills}")  # fmt: skip
                 out += cooperative_model.said_changed(row.get("cooperative", []))
             continue
         out.append(f"{name}  {entry['formula']}")
@@ -296,8 +303,9 @@ def lines_across(result: dict[str, Any]) -> str:
             out.append(f"{name}  {sizes}")
             for c in row["cards"]:
                 light = f"{c['speed_of_light']:.0%} of speed of light" if c["speed_of_light"] else ""
+                spills = f"  {c['spill_bytes']} bytes spilled ({c['spills']})" if "spills" in c else ""
                 out.append(f"  {c['card']:<16} {c['device_target']:<8} {duration(c['ns']):>10}  {c['bound']:<20} "
-                           f"{light:<24} {c['confidence']}")  # fmt: skip
+                           f"{light:<24} {c['confidence']}{spills}")  # fmt: skip
     out += [f"refused {c['card']}: {c['refused']['code']} {c['refused']['message']}" for c in result["cards"]
             if "refused" in c]  # fmt: skip
     if result["host_only"]:

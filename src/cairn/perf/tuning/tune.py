@@ -191,7 +191,7 @@ def row(name: str, c: Candidate, regions: list[str], validated: dict[str, Any] |
                                                "dynamic_shared_bytes", "instructions") if k in r}
                             if r["status"] == "read" else {"status": r["status"]})  # fmt: skip
         out["resources"]["key"] = r["key"][:16]
-        if r.get("spill_bytes"):  # ptxas counts them in the code, not as they run: no price is put on them
+        if r.get("spill_bytes"):  # ptxas reports their bytes in the code, not as they run: no price is put on them
             out["resources"]["spills"] = "not priced"
         if "sass_sha256" in r:  # candidates whose code is the same share this
             out["resources"]["sass"] = r["sass_sha256"][:16]
