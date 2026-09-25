@@ -66,6 +66,13 @@ def test_the_packet_pins_the_reference_the_tolerance_the_tests_and_the_inputs(ho
     assert "implements total when CONDITION" in packet["reply"]["source"] and "implementations" in packet["rule_cards"]
 
 
+def test_a_rule_card_goes_to_one_conversation_once(host):
+    first = host.open(SOURCE, "total", POLICY)
+    again = host.open(SOURCE, "total", POLICY)
+    assert again["rule_cards"] == {} and again["sent_before"] == list(first["rule_cards"])
+    assert "sent_before" not in first and again["handle"] == "i2"
+
+
 def test_a_validated_implementation_advances_the_source_and_is_not_selected(host):
     host.open(SOURCE, "total", POLICY)
     answer = json.loads(json.dumps(host.reply(submit("i1", BY4))))

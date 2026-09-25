@@ -155,6 +155,14 @@ def card_of(code: object) -> str | None:
     return OWNER.get(code) if isinstance(code, str) else None
 
 
+def unsent(cards: dict[str, str], sent: set[str]) -> tuple[dict[str, str], list[str]]:
+    """The cards of `cards` a reader was not sent yet, and the names of those it was; `sent` then holds them all. A
+    host's reader keeps every card it read in its context, so a card goes to it once."""
+    earlier = [n for n in cards if n in sent]
+    sent |= set(cards)
+    return {n: text for n, text in cards.items() if n not in earlier}, earlier
+
+
 def select_cards(source: str, has_views: bool = False, has_records: bool = False, has_sums: bool = False,
                  lends: bool = False) -> dict[str, str]:  # fmt: skip
     # Actual tokens prevent comments/spacing from silently choosing the curriculum.

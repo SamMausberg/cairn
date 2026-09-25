@@ -110,6 +110,7 @@ TOOLS: list[dict[str, Any]] = [
 ]  # fmt: skip
 SCHEMAS = {t["name"]: t["inputSchema"] for t in TOOLS}
 ENVIRONMENT = (ProjectError, OSError, ValueError, RecursionError, subprocess.SubprocessError)
+SAID_ONCE = {"automatic_edit", "acceptance_boundary"}  # what `explain` says of every refusal of one check
 
 
 class Tools:
@@ -118,6 +119,7 @@ class Tools:
     def __init__(self, root: Path | None = None):
         self.root = root or Path.cwd()
         self.edits, self.plans, self.implementations = EditHost(), PlanHost(), ImplementationHost()
+        self.implementations.sent = self.edits.sent  # one reader: a card either host sent is not sent again
         self.files: dict[str, Files] = {}  # by edit handle, plan session digest and implementation handle
         self.states: dict[str, dict[str, Any]] = {}  # every state and investigation this server sent, by digest
         self.last: dict[tuple[str, ...], str] = {}  # the digest of the last one sent of each path, and symbol
@@ -321,12 +323,20 @@ def document(a: dict[str, Any], key: str) -> dict[str, Any]:
 
 def refusal(error: Diagnostic, source: str, files: Files | None, host: bool = True) -> dict[str, Any]:
     """A refused program as the command line reports it: the diagnostic with its card and fix, at its file and line, and
-    so each further refusal a check found; `host` false for `check`, where no host's contract applies."""
+    so each further refusal a check found, with its own line of source; `host` false for `check`, where no host's
+    contract applies. What `explain` says of every refusal, that nothing was applied and where acceptance stops, is
+    said once, by the first."""
     located = files.project.locate(error) if files else error.data
     further = error.data.get("further") or []
     known = declared(source) if not host and "E-CALLEE" in {d.get("code") for d in (error.data, *further)} else ()
-    record = {**explain(error, source, known, host), **located}
+    record = {**explain(error, source, known, host), **placed(located)}
     if further:
-        record["further"] = [{**explain(Diagnostic.of(d), source, known, host), **placed}
-                             for d, placed in zip(further, located["further"], strict=True)]  # fmt: skip
+        record["further"] = [{**{k: v for k, v in explain(Diagnostic.of(d), source, known, host).items()
+                                 if k not in SAID_ONCE}, **placed(at)}
+                             for d, at in zip(further, located["further"], strict=True)]  # fmt: skip
     return record
+
+
+def placed(located: dict[str, Any]) -> dict[str, Any]:
+    """Where a located refusal is: its file, and its line in that file."""
+    return {k: located[k] for k in ("file", "line") if k in located}
