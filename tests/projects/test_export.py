@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from cairn.cli import main
-from cairn.compiler.cairnc import RUNTIME_FILES
+from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic
 from cairn.projects import export as exported
 from cairn.projects.project import digest, load_project
 from emitted import NVCC_HOST, code_of
@@ -49,6 +49,17 @@ fn main() -> i32 {
   return 0;
 }
 """
+
+
+SELECTED = (
+    DEVICE
+    + """
+fn scale_tc(n:usize, y:rw<f32>[n]@device, x:ro<f32>[n]@device, a:f32) implements scale needs(tcgen05) {
+  parallel i in n { y[i] = a * x[i]; }
+}
+plan scale use scale_tc;
+"""
+)
 
 
 def project(tmp_path: Path, source: str = SOURCE, name: str = "summed") -> Path:
@@ -180,6 +191,16 @@ def test_the_command_line_exports_checks_builds_and_refuses(tmp_path, capsys):
     assert json.loads(capsys.readouterr().out)["code"] == "E-EXPORT-TAMPERED"
     assert main(["export", str(root), "--out", str(out), "--format", "json"]) == 2  # never over another export
     capsys.readouterr()
+
+
+def test_an_export_judges_its_device_target_as_a_build_does(tmp_path):
+    """A plan that selects an implementation sm_120 cannot run is E-IMPL-TARGET naming the plan, as `cairn build`
+    refuses it (tests/language/test_implementations.py), before anything is written."""
+    root = project(tmp_path, SELECTED, "selected")
+    with pytest.raises(Diagnostic) as refused:
+        exported.export(load_project(root), tmp_path / "out", device_target="sm_120")
+    assert refused.value.data["code"] == "E-IMPL-TARGET" and "plan scale use scale_tc;" in refused.value.data["message"]
+    assert not (tmp_path / "out").exists()
 
 
 @NVCC

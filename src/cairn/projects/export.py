@@ -33,11 +33,10 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import RUNTIME_FILES
-from ..compiler.primitives.machine import unbuildable
 from ..version import VERSION
 from .project import Project, ProjectError, digest
 from .target import parse, refuse, resolve, toolkit_record
-from .toolchain import KINDS, find, host_family, link_flags, linked
+from .toolchain import KINDS, find, link_flags, linked
 from .toolchain import command as native_command
 from .toolchain import version as compiler_version
 
@@ -96,7 +95,7 @@ def export(project: Project, out: Path, *, cxx: str = "clang++", arch: str | Non
            device_target: str | None = None, keep_guards: bool = False) -> dict[str, Any]:  # fmt: skip
     """Write the export of `project` into `out`, which must not exist yet, and return its record."""
     from ..verify.runner import label, written
-    from .build import emitted
+    from .build import emitted, judged
 
     if out.exists() or out.is_symlink():
         raise ProjectError(f"{out} exists; an export is written into a new directory, never over another.")
@@ -123,9 +122,7 @@ def export(project: Project, out: Path, *, cxx: str = "clang++", arch: str | Non
         f = measure.timed_function(project.source, symbol)
         generated += measure.driver(f, sizes, {}, 2e6, 9, on_device.MEMORY if cuda else None)
         harness = {"symbol": symbol, "sizes": sizes, "timer": "device" if cuda else "host", "blocks": 9}
-    device = resolve(device_target, project.device_target).require(receipt["device_features"]) if cuda else None
-    if why := unbuildable(receipt["requires"], host_family(), device.name if device else ""):
-        raise refuse("E-ASM-TARGET", why)  # assembly builds only for the machine it names, as in cairn build
+    device = judged(resolve(device_target, project.device_target) if cuda else None, receipt)
     name = re.sub(r"[^A-Za-z0-9_-]", "_", project.name)[:64] or "program"
     program = "program.cu" if cuda else "program.cpp"
     artifact = "lib" + name + ".so" if kind == "library" else name

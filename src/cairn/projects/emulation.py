@@ -20,12 +20,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from ..compiler.plans.implementations import targeted
-from ..compiler.primitives.machine import unbuildable
 from ..compiler.syntax.parser import Parser
 from ..compiler.syntax.tree import Diagnostic
 from .target import FEATURES, DeviceTarget
-from .toolchain import host_family
 
 # The device features runtime/cairn_emulate.hpp runs as the device would: lanes and the runtime's collectors, the two
 # fragment families and the whole-matrix multiply with their host lowerings, bf16 storage, and a pipeline's copies,
@@ -65,13 +62,12 @@ def check(source: str, receipt: dict[str, Any], foreign: Iterable[tuple[str, tup
 
 
 def judged(device: DeviceTarget, receipt: dict[str, Any], source: str) -> DeviceTarget:
-    """`device`, holding what the program asks of it, as a device build judges it (projects/build.py): a selected
+    """`device`, holding what the program asks of it, as a device build judges it (`build.judged`): a selected
     implementation's needs, the program's features and its PTX's architecture; then what emulation refuses. For a
     program built outside `build`, as validation builds one."""
-    targeted(receipt["functions"], device)
-    device = device.require(receipt["device_features"])
-    if why := unbuildable(receipt["requires"], host_family(), device.name):
-        raise Diagnostic("E-ASM-TARGET", why)
+    from . import build  # which imports this module
+
+    device = build.judged(device, receipt)
     check(source, receipt)
     return device
 
