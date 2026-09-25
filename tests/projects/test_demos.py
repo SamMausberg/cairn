@@ -96,7 +96,7 @@ def test_the_device_plate_compiles_for_sm_120_without_touching_it(tmp_path):
 
 def test_the_device_plate_has_the_host_bits(tmp_path):
     with on_device():  # runs only under `make gpu`
-        record = build(load_project(DEMOS / "numeric/gpu.toml"), output=tmp_path / "build", timeout=600)
+        record = build(load_project(DEMOS / "numeric/gpu.toml"), output=tmp_path / "build", timeout=300)
         assert record["status"] == "native-built", record.get("stderr", "")[:4000]
         done = subprocess.run([record["artifact"]], capture_output=True, text=True, timeout=600)
     out = ROOT / "results/demos/numeric"

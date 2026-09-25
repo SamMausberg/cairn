@@ -194,10 +194,19 @@ def agreed(a: str, b: str, ty: str, agree: str) -> str:
     return f"assert({a} == {b});"
 
 
+# What Compute Sanitizer prints when it cannot instrument the device at all, such as under WSL2 without the WDDM
+# debugger interface: a fact about the machine, not an error of the program.
+UNINSTRUMENTED = ("Error: Device not supported", "Error: Failed to initialize WDDM debugger interface")
+
+
 def verdict(runs: list[dict[str, Any]]) -> dict[str, Any]:
-    """One tool's result over its runs: clean only when some test ran and every run exited cleanly."""
+    """One tool's result over its runs: clean only when some test ran and every run exited cleanly, and unavailable,
+    never clean or reported, when the tool said it could not instrument the device."""
     if not runs:
         return {"status": "unknown", "reason": "no test ran under it", "runs": runs}
+    if cannot := next((line for r in runs for line in r.get("report", "").splitlines() if line.lstrip("= ").startswith(
+            UNINSTRUMENTED)), None):  # fmt: skip
+        return {"status": "unavailable", "reason": cannot.lstrip("= "), "runs": runs}
     return {"status": "clean" if all(r["exit_code"] == 0 for r in runs) else "reported", "runs": runs}
 
 

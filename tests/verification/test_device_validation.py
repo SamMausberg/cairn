@@ -141,6 +141,14 @@ def test_a_tool_that_ran_nothing_is_unknown_never_clean():
     assert verdict([])["status"] == "unknown"
     assert verdict([{"test": "t", "exit_code": 0}])["status"] == "clean"
     assert verdict([{"test": "t", "exit_code": 0}, {"test": "u", "exit_code": 97}])["status"] == "reported"
+    wsl = (  # what initcheck printed on the owner's RTX 5070 Ti under WSL2, where it cannot instrument the device
+        "========= COMPUTE-SANITIZER\n========= Error: Failed to initialize WDDM debugger interface. Please run "
+        "EnableDebuggerInterface.bat as an administrator\n=========\n========= Error: Device not supported. Please "
+        'refer to the "Supported Devices" section of the sanitizer documentation\n=========\n'
+        "========= ERROR SUMMARY: 2 errors\n"
+    )
+    unavailable = verdict([{"test": "t", "exit_code": 0, "report": ""}, {"test": "u", "exit_code": 97, "report": wsl}])
+    assert unavailable["status"] == "unavailable" and "WDDM debugger interface" in unavailable["reason"]
 
 
 def test_outside_make_gpu_nothing_runs(monkeypatch):
@@ -155,4 +163,7 @@ def test_each_sanitizer_tool_is_a_result_of_its_own_on_the_device():
     tests, names, _ = generated()
     result = sanitized(SOURCE + "\n" + tests, names)
     assert result["status"] == "run" and set(result["tools"]) == set(TOOLS)
-    assert all(result["tools"][tool]["status"] == "clean" for tool in TOOLS), result
+    statuses = {tool: result["tools"][tool]["status"] for tool in TOOLS}
+    assert set(statuses.values()) <= {"clean", "unavailable"}, result
+    if "clean" not in statuses.values():  # under WSL2 without the debugger interface no tool can instrument the device
+        pytest.skip("; ".join(sorted({result["tools"][tool]["reason"] for tool in TOOLS})))
