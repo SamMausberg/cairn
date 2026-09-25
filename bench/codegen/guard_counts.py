@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Count the guards the emitter writes, with and without the facts the checker established.
 
-Every program under examples/, the standard library and the preregistered bench kernels is compiled once;
+Every example project, each single-file example in examples/basics and each preregistered bench kernel is compiled;
 its C++ is emitted as it is, then again with every guard kept (`keep`), which is what the emitter of 0.8.3 wrote.
 It also counts the call sites that reach a callee's lean body and the entry checks each of them no longer runs.
 Nothing runs, so this measures emitted code only: how many guards a program pays at runtime is a separate
@@ -21,24 +21,11 @@ from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
+sys.path.insert(0, str(ROOT / "src"))
+from guards import GUARDS, corpus, counts
+
 from cairn.compiler.cairnc import Emitter, compile_program
 from cairn.projects.project import load_project
-from sources import cairn_sources
-
-GUARDS = {
-    "bounds": r"\bcr::at\(",
-    "overflow": r"\bcr::(?:add|sub|mul)<",
-    "conversion": r"\bcr::(?:convert|truncate)<",
-    "division": r"\bcr::(?:divide|remainder)<",
-    "part": r"\bcr::part\(",
-    "entry": r"\bcr::(?:view|disjoint)\(",
-}
-
-
-def counts(text: str) -> dict[str, int]:
-    return {kind: len(re.findall(pattern, text)) for kind, pattern in GUARDS.items()}
-
 
 ENTRY = re.compile(r"^[^\n]*\bcf_(\w+)\([^\n]*noexcept \{\n(.*?)^  return ci_\1\(", re.S | re.M)
 
@@ -63,18 +50,13 @@ def skipped(text: str) -> dict[str, int]:
 
 def sources() -> list[tuple[str, str]]:
     found = []
-    paths = [
-        *ROOT.glob("examples/**/cairn.toml"),
-        *cairn_sources(ROOT / "examples/basics"),
-        *ROOT.glob("bench/suite/kernels/*/kernel.cairn"),
-    ]
-    for path in sorted(paths):
+    for name, path in corpus(ROOT):
         try:
             text = load_project(path.parent).source if path.name == "cairn.toml" else path.read_text(encoding="utf-8")
             compile_program(text)
         except Exception:  # A project that does not build here (a device or freestanding one) is not counted.
             continue
-        found.append((str((path.parent if path.name == "cairn.toml" else path).relative_to(ROOT)), text))
+        found.append((name, text))
     return found
 
 
