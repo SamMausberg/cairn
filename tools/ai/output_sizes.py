@@ -15,7 +15,7 @@ The project's directory is written as HOME in every output, so a count does not 
 are UTF-8 bytes, and also tokens by tiktoken's `o200k_base` when it and its cached vocabulary are present
 (`/usr/bin/python3` here). Neither is Claude's tokenizer, and a smaller output is not evidence that a model does
 better. `output_budgets.json` holds a byte budget for each case: its size when last measured, with clang 21 on the
-path, plus a margin. `--check` exits 1 when an output is larger than its budget. clang 18 reports fewer loops to
+path, plus 5% or 16 bytes (`budget`). `--check` exits 1 when an output is larger than its budget. clang 18 reports fewer loops to
 `cairn explain` than clang 21 does.
 
     python3 tools/ai/output_sizes.py [--output FILE]    # the record
@@ -47,7 +47,6 @@ from support import tokenizer
 HOME = "/home/agent/task"  # where every output says the project is
 CAIRN = ROOT / "bin" / "cairn"  # the command measured; --compiler names another tree's
 BUDGETS = Path(__file__).with_name("output_budgets.json")
-MARGIN = 1.05  # a budget is the size last measured and five percent
 TASK = ROOT / "bench" / "ai" / "tasks" / "histogram"
 EXAMPLE = "6 4\n16 17 32 4096 255 31\n"  # the input of the task's SPEC.md
 TESTS = """
@@ -228,6 +227,11 @@ def measure() -> dict:
     return {"tokenizer": counted[0] if counted else None, "total": total, "surfaces": surfaces, "cases": cases}
 
 
+def budget(size: int) -> int:
+    """A case's budget: the size last measured and five percent, or 16 bytes when that is more."""
+    return size + max(size // 20, 16)
+
+
 def over(record: dict, budgets: dict[str, int]) -> list[str]:
     """A line for each case larger than its budget, or with none."""
     said = []
@@ -253,7 +257,7 @@ def main() -> int:
     if a.output:
         a.output.write_text(text, encoding="utf-8")
     if a.budget:
-        budgets = {name: int(case["bytes"] * MARGIN) + 1 for name, case in record["cases"].items()}
+        budgets = {name: budget(case["bytes"]) for name, case in record["cases"].items()}
         BUDGETS.write_text(json.dumps(budgets, indent=1) + "\n", encoding="utf-8")
     print(text, end="")
     if a.check and (said := over(record, json.loads(BUDGETS.read_text()))):
