@@ -41,7 +41,7 @@ def lift() -> None:
 def lsp(path: Path, edit: tuple[str, str]) -> dict:
     """An editor's view: open `path` in the language server, then change it once (`edit` replaces its first
     argument with its second), and time each refresh. Each refresh analyses the file within its project."""
-    from cairn.editor.lsp import Server
+    from cairn.editor.lsp.server import Server
 
     server = Server(io.BytesIO(), io.BytesIO())
     uri, text = path.resolve().as_uri(), path.read_text(encoding="utf-8")

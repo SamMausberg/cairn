@@ -18,7 +18,7 @@ from cairn.compiler.cairnc import compile_source
 from cairn.projects.build import build
 from cairn.projects.project import ProjectError, load_project
 from cairn.projects.toolchain import audit_effects
-from cairn.verify.scalar_semantics import equivalent
+from cairn.verify.scalar.semantics import equivalent
 from emitted import native, refused, watched
 from oracles.printed import printed
 

@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from cairn.agent import write_back
-from cairn.agent.mcp import PROTOCOLS, Server
-from cairn.agent.mcp_tools import TOOLS, Tools
+from cairn.agent.hosts import write_back
+from cairn.agent.mcp.server import PROTOCOLS, Server
+from cairn.agent.mcp.tools import TOOLS, Tools
 from cairn.compiler.cairnc import compile_source
 from cairn.editor.formatting import format_source
 from cairn.projects.project import ProjectError, load_project

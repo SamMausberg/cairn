@@ -23,12 +23,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ..agent.agent_tools import digest, explain, load_json_strict, stable_json
+from ..agent.hosts.edits import digest, explain, load_json_strict, stable_json
 from ..compiler.cairnc import Diagnostic, Parser, compile_source, write_program
 from ..compiler.lower.codegen import mangle
 from ..projects.toolchain import command as native_command
 from ..projects.toolchain import flags, link_flags, linked
-from .scalar_values import bounds
+from .scalar.values import bounds
 
 CTYPES: dict[str, Any] = {"bool": C.c_bool, "u8": C.c_uint8, "u16": C.c_uint16, "u32": C.c_uint32, "u64": C.c_uint64,
                           "usize": C.c_size_t, "i32": C.c_int32, "i64": C.c_int64, "f32": C.c_float,

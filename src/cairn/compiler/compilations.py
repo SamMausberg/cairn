@@ -43,10 +43,10 @@ Checked = tuple[Program, Checker, dict[str, Any]]
 
 @functools.cache
 def compiler() -> str:
-    """The compiler this process loaded, as one digest: `implementation_hash()` (verify/scalar_semantics.py) of every
+    """The compiler this process loaded, as one digest: `implementation_hash()` (verify/scalar/semantics.py) of every
     parser, checker and emitter file, the other files a compile reads, and the runtime headers. It is read once, since
     a file changed on disk after the process imported it is not the code that runs."""
-    from ..verify.scalar_semantics import implementation_hash
+    from ..verify.scalar.semantics import implementation_hash
 
     root = Path(__file__).parents[1]
     parts = [implementation_hash().encode(), RUNTIME.encode(), *((root / name).read_bytes() for name in READ)]

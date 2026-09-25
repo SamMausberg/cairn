@@ -10,11 +10,11 @@ import pytest
 from cairn.agent.history import as_written, digest, identity, record
 from cairn.agent.investigation import apply, delta, investigation
 from cairn.cli import main
-from cairn.perf.feedback import compare, parse_plan
-from cairn.perf.plan_source import contract
 from cairn.perf.profile import packaged
-from cairn.perf.resources import device_identity, host_target
-from cairn.perf.tune import tune
+from cairn.perf.tuning.feedback import compare, parse_plan
+from cairn.perf.tuning.plan_source import contract
+from cairn.perf.tuning.resources import device_identity, host_target
+from cairn.perf.tuning.tune import tune
 from cairn.projects.target import parse
 
 MIX = """fn mix(v:u64) -> u64 {

@@ -15,10 +15,10 @@ from cairn.cli import main
 from cairn.compiler.cairnc import compile_program, compile_source
 from cairn.perf import report
 from cairn.perf.device import available, kernels
-from cairn.perf.feedback import compare, parse_candidate
 from cairn.perf.profile import packaged
-from cairn.perf.search import Budget
-from cairn.perf.tune import tune
+from cairn.perf.tuning.feedback import compare, parse_candidate
+from cairn.perf.tuning.search import Budget
+from cairn.perf.tuning.tune import tune
 from cairn.perf.work import count
 from cairn.projects.project import load_project
 from cairn.projects.target import LIMITS, parse

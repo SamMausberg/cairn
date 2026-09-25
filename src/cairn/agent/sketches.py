@@ -16,10 +16,10 @@ from typing import Any
 
 from ..compiler.cairnc import IDENT, RESERVED, Diagnostic, Parser, fail
 from ..compiler.syntax.lexing import TOKEN
-from ..verify.scalar_concrete import Concrete
-from ..verify.scalar_semantics import equivalent, outcome_key, prepared
-from ..verify.scalar_values import Unsupported
-from .agent_tools import NO_TASK, PROTOCOL, EditSession, digest, explain, load_json_strict, stable_json
+from ..verify.scalar.concrete import Concrete
+from ..verify.scalar.semantics import equivalent, outcome_key, prepared
+from ..verify.scalar.values import Unsupported
+from .hosts.edits import NO_TASK, PROTOCOL, EditSession, digest, explain, load_json_strict, stable_json
 
 MAX_HOLES = 16
 MAX_CHOICES = 4096

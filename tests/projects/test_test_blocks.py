@@ -13,7 +13,7 @@ from cairn.agent.explain import explain
 from cairn.agent.projection import canonical_source
 from cairn.cli import main
 from cairn.compiler.cairnc import Parser, compile_source
-from cairn.editor.document import Document, symbols
+from cairn.editor.lsp.document import Document, symbols
 from cairn.projects.build import build, dispatcher
 from cairn.projects.project import load_project
 from cairn.verify.runner import run_tests

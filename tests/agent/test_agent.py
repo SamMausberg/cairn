@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from cairn.agent.agent_tools import PROTOCOL, EditSession, explain, load_json_strict
+from cairn.agent.hosts.edits import PROTOCOL, EditSession, explain, load_json_strict
 from cairn.agent.projection import canonical_source, semantic_ast
 from cairn.compiler.cairnc import Diagnostic, Parser, compile_source
 from emitted import code_of

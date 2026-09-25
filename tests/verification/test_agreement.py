@@ -8,9 +8,9 @@ import struct
 
 import pytest
 
-from cairn.verify import agreement
-from cairn.verify.boundaries import Case
-from cairn.verify.device_validation import cases_as_tests
+from cairn.verify.validation import agreement
+from cairn.verify.validation.boundaries import Case
+from cairn.verify.validation.device import cases_as_tests
 from emitted import native
 
 MAX = 1.7976931348623157e308

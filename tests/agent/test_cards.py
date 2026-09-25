@@ -2,7 +2,7 @@ import ast
 import pathlib
 import re
 
-from cairn.agent.agent_tools import EditSession
+from cairn.agent.hosts.edits import EditSession
 from cairn.agent.teaching import CARDS, CODES, TOOL_CARDS, card_of, every_card, select_cards
 from sources import cairn_sources
 

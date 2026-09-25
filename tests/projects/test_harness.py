@@ -17,9 +17,9 @@ import pytest
 
 from cairn.cli import main
 from cairn.compiler.syntax.tree import Diagnostic
-from cairn.projects import harness
-from cairn.projects.harness_import import create
-from cairn.projects.harness_sources import Library, binding
+from cairn.projects.harness import harness
+from cairn.projects.harness.importing import create
+from cairn.projects.harness.sources import Library, binding
 from cairn.projects.project import ProjectError, load_project
 
 NVCC = pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")

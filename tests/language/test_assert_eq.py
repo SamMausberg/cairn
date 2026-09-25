@@ -79,7 +79,7 @@ def test_an_assert_eq_in_a_device_lane_compiles_for_the_device(tmp_path):
 def test_the_value_model_answers_unknown_for_assert_eq():
     """A function that holds an assert_eq is outside the value fragment, as one that holds an assert is: unknown,
     never an equivalence that ignores the trap."""
-    from cairn.verify.scalar_semantics import equivalent
+    from cairn.verify.scalar.semantics import equivalent
 
     with_check = "fn f(x:u64) -> u64 { assert_eq(x, 3); return x; }"
     assert equivalent(with_check, "fn f(x:u64) -> u64 { return x; }", "f")["status"] == "unknown"

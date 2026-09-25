@@ -10,8 +10,8 @@ from test_predict import MACHINE
 
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_program
-from cairn.perf.plan_source import replanned, written
-from cairn.perf.tune import distinct, space, tune
+from cairn.perf.tuning.plan_source import replanned, written
+from cairn.perf.tuning.tune import distinct, space, tune
 
 MIX = """fn mix(v:u64) -> u64 {
   let mut w = v;

@@ -22,8 +22,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from cairn.perf.feedback import lines_for_people  # noqa: E402
-from cairn.perf.tune import lines as tune_lines  # noqa: E402
+from cairn.perf.tuning.feedback import lines_for_people  # noqa: E402
+from cairn.perf.tuning.tune import lines as tune_lines  # noqa: E402
 
 PROTOCOL = "cairn.implementation/1"
 AT = "n=65536"  # 512 KiB of f64

@@ -59,34 +59,34 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `projects/target.py` | the device target: its spelling, how it is resolved, the features and limits it has, and the results it refuses |
 | `projects/emulation.py` | a device program built for the host (`--emulate`): what the host cannot run as the device would, and what its records say |
 | `projects/export.py` | an export: the program a build compiles and the record pinning it, and the builds, runs, tests and comparisons that take it |
-| `projects/harness.py` | `cairn export --harness`: each benchmark format and the upstream commit it follows, the `cairn.harness/1` record, and the commands it prints and never runs |
-| `projects/harness_mapping.py` | `harness.toml`: which benchmark argument feeds which parameter, with its dtype and shape, checked against the signature |
-| `projects/harness_sources.py` | the PyTorch binding of a checked entry, and the submission file each benchmark reads around an export |
-| `projects/harness_import.py` | `cairn new --from-sol-execbench`: a project from a SOL-ExecBench problem's definition and workloads |
+| `projects/harness/harness.py` | `cairn export --harness`: each benchmark format and the upstream commit it follows, the `cairn.harness/1` record, and the commands it prints and never runs |
+| `projects/harness/mapping.py` | `harness.toml`: which benchmark argument feeds which parameter, with its dtype and shape, checked against the signature |
+| `projects/harness/sources.py` | the PyTorch binding of a checked entry, and the submission file each benchmark reads around an export |
+| `projects/harness/importing.py` | `cairn new --from-sol-execbench`: a project from a SOL-ExecBench problem's definition and workloads |
 | `projects/foreign.py` | vendored C++ and CUDA a manifest's `[foreign]` names: built by the project's command line, held to each extern's types, inspected |
 | `projects/revision.py` | a program as a path or a git revision holds it |
 | `projects/new.py` | what `cairn new` writes: the default project or a packaged template, and the AGENTS.md each gets |
 | `projects/graph.py` | `cairn graph`: which file declares into which module, imports, exports, and hashes of text and interface |
 | `cli.py`, `commands.py` | the command line: `main` runs each command; `commands.py` declares every command and option it parses |
 | `version.py` | the version, one of the places `tests/tooling/test_release.py` holds together |
-| `agent/agent_tools.py` | edit sessions, packets and the host that names them by handle |
+| `agent/hosts/edits.py` | edit sessions, packets and the host that names them by handle |
+| `agent/hosts/migration.py`, `agent/hosts/plans.py` | the two wider edit classes: interface migrations across files, and plan-only edits |
+| `agent/hosts/implementations.py` | implementation sessions: a pinned reference, tolerance, test policy and inputs, and new implementations admitted only when they validate |
+| `agent/hosts/write_back.py` | a change a host admitted written back to the files a session read, only while they hold what it was judged against |
+| `agent/mcp/server.py`, `agent/mcp/tools.py` | `cairn mcp`: the Model Context Protocol over stdio, and the tools it serves from the hosts |
 | `agent/evidence.py` | what a packet may say is established about a function |
 | `agent/history.py` | what was tried, failed, measured or hypothesized for each candidate, under its identity, and analyses kept by key |
 | `agent/investigation.py` | one function's investigation as a compact packet, from the history records that still hold |
-| `agent/migration.py`, `agent/plans.py` | the two wider edit classes: interface migrations across files, and plan-only edits |
-| `agent/implementations.py` | implementation sessions: a pinned reference, tolerance, test policy and inputs, and new implementations admitted only when they validate |
 | `agent/teaching.py` | the rule cards, selected from lexical tokens |
 | `agent/skill.py` | the agent skill under `skills/cairn/`, written from the cards, the fixes and the command line |
-| `agent/mcp.py`, `agent/mcp_tools.py` | `cairn mcp`: the Model Context Protocol over stdio, and the tools it serves from the hosts |
-| `agent/write_back.py` | a change a host admitted written back to the files a session read, only while they hold what it was judged against |
 | `agent/projection.py` | the canonical projection: source printed back from the tree, which reparses to itself and compiles to the same C++ |
 | `agent/state.py`, `agent/explain.py`, `agent/shot.py` | `cairn state`, `cairn explain` and `cairn shot`: a program's state for an agent, where it pays at run time, what it drew |
 | `agent/diagnostics.py`, `agent/sketches.py` | what a model reads back when a reply is refused, with the smallest fix; named expression sketches and their bounded search |
 | `editor/grammar.py` | the editor grammars, generated from the compiler's vocabulary |
 | `editor/terminal.py` | what a person at a terminal reads, beside the JSON record |
 | `editor/formatting.py`, `editor/docs.py`, `editor/shells.py`, `editor/changes.py` | `cairn fmt`, `cairn doc`, `cairn completions`, and how `cairn diff` reads at a terminal and in a pull request |
-| `editor/lsp.py`, `editor/document.py`, `editor/workspace.py` | `cairn lsp`: the server, one open buffer, and references and rename across a project |
-| `editor/completion.py`, `editor/navigation.py`, `editor/names.py`, `editor/members.py`, `editor/highlighting.py`, `editor/hints.py`, `editor/lenses.py`, `editor/fixes.py`, `editor/edits.py` | one language-server feature each: completion, hover and definition, names in scope, fields and variants, semantic tokens, inlay hints, code lenses, quick fixes, references and formatting edits |
+| `editor/lsp/server.py`, `editor/lsp/document.py`, `editor/lsp/workspace.py` | `cairn lsp`: the server, one open buffer, and references and rename across a project |
+| `editor/lsp/completion.py`, `editor/lsp/navigation.py`, `editor/lsp/names.py`, `editor/lsp/members.py`, `editor/lsp/highlighting.py`, `editor/lsp/hints.py`, `editor/lsp/lenses.py`, `editor/lsp/fixes.py`, `editor/lsp/edits.py` | one language-server feature each: completion, hover and definition, names in scope, fields and variants, semantic tokens, inlay hints, code lenses, quick fixes, references and formatting edits |
 | `perf/work.py` | what a function does each time it runs, counted from the typed tree, which a prediction prices |
 | `perf/counts.py` | what a count is: polynomials in a function's extents, and the work, region and cost records the counting fills |
 | `perf/cooperative_work.py`, `perf/cooperative_model.py` | what a cooperative region's threads do, counted as their warps run it from the phase rule's run of one block; and its price: the blocks an SM holds, a pipeline's copies in flight, a launch and four rates |
@@ -95,24 +95,25 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `perf/calibrate.py`, `perf/native.py`, `perf/device.py` | a host measured into a profile; a loop's cycles from llvm-mca; a kernel's resources from ptxas and cuobjdump, nothing launched |
 | `perf/on_device.py` | the only device timing, under the owner's make targets |
 | `perf/measure.py` | the only host timing: a function built with the build's flags beside a driver, its median block timed; never device code |
-| `perf/plan_source.py` | a function's plan as source text: the plans the checker resolves to it, and where a new one is written |
 | `perf/regions.py` | names for a function's parallel regions that survive edits which do not touch them |
-| `perf/search.py`, `perf/tune.py` | the bounded search over a function's plans: the space, what the checker accepts, the budgets, measurement |
-| `perf/objective.py` | what a search ranks candidates by when it prices them at several sizes |
-| `perf/resources.py` | what a compiled candidate uses on the device, for one target, kept by what was compiled |
-| `perf/feedback.py` | the difference report between two candidates, each line labelled by the kind of evidence it is |
+| `perf/tuning/search.py`, `perf/tuning/tune.py` | the bounded search over a function's plans: the space, what the checker accepts, the budgets, measurement |
+| `perf/tuning/objective.py` | what a search ranks candidates by when it prices them at several sizes |
+| `perf/tuning/resources.py` | what a compiled candidate uses on the device, for one target, kept by what was compiled |
+| `perf/tuning/feedback.py` | the difference report between two candidates, each line labelled by the kind of evidence it is |
+| `perf/tuning/plan_source.py` | a function's plan as source text: the plans the checker resolves to it, and where a new one is written |
 | `verify/elision.py` | the independent check of every guard lowering leaves out |
 | `verify/diff.py`, `verify/emission.py` | the class each function of two versions gets, and when two emissions are the same code |
 | `verify/foreign.py` | what a foreign implementation has: its declared contract, build, device inspection and validation |
 | `verify/runner.py` | test blocks, each run in a process of its own |
-| `verify/boundaries.py`, `verify/validation.py`, `verify/isolated_calls.py` | contract-driven validation: boundary inputs from an implementation's contract, each call in a process of its own against the reference, shrinking and kept regressions |
-| `verify/device_validation.py` | the device side of validation: generated device tests under each Compute Sanitizer tool, only in `make gpu` |
-| `verify/scalar_values.py` | the value model: leaves, what the guard admits, what a caller observes, reading a model back |
-| `verify/scalar_symbolic.py` | the SMT translator |
-| `verify/scalar_concrete.py` | the concrete replay |
-| `verify/scalar_semantics.py` | the query, the counterexample check and the receipt |
-| `verify/smt_bridge.py`, `verify/verification.py` | the optional Z3 C-API bridge; whole-module equivalence, which fails closed on any entry it cannot cover |
+| `verify/verification.py` | whole-module equivalence, which fails closed on any entry it cannot cover |
 | `verify/linear_certificates.py`, `verify/testing.py` | the checker of the collector's linear certificates; finite task contracts run in a child process |
+| `verify/validation/boundaries.py`, `verify/validation/validation.py`, `verify/validation/isolated_calls.py` | contract-driven validation: boundary inputs from an implementation's contract, each call in a process of its own against the reference, shrinking and kept regressions |
+| `verify/validation/device.py` | the device side of validation: generated device tests under each Compute Sanitizer tool, only in `make gpu` |
+| `verify/scalar/values.py` | the value model: leaves, what the guard admits, what a caller observes, reading a model back |
+| `verify/scalar/symbolic.py` | the SMT translator |
+| `verify/scalar/concrete.py` | the concrete replay |
+| `verify/scalar/semantics.py` | the query, the counterexample check and the receipt |
+| `verify/scalar/smt.py` | the optional Z3 C-API bridge |
 
 Project manifests are data, never build scripts. The formatter owns layout: `ruff format` at 120 columns, `cairn fmt` for `.cairn`. The smallest clear program wins, never by hiding a cost or deleting a check. No source file is longer than 800 lines; split by responsibility, under a name that says what the piece owns.
 
@@ -138,7 +139,7 @@ Count whole compiler dependencies in density measurements, not a facade alone.
 
 Work on a branch, one focused change at a time. Run the fast suite before and after you touch code, and both native compilers with the relevant sanitizers when you touch the runtime or the lowering. Never run code on the GPU outside `make gpu`, never set `CAIRN_GPU_TESTS` yourself, and never start `make gpu` while another agent may: repeated device runs have crashed the host. Several agents on one machine share its cores, so give pytest at most four workers each.
 
-Source belongs in `src/cairn`, tests in the `tests` folder of their subject, real programs in `examples` (each listed in `examples/README.md`), measurements in `bench` (a README in each folder says what runs and what it needs), checks and generators in `tools`, records in `evidence`, and generated results under `results/`, which is not tracked. Do not reimplement a compiler rule in a script. `implementation_hash()` in `src/cairn/verify/scalar_semantics.py` pins a semantic receipt to every `*.py` under `compiler/` and the SMT path, so a new compiler module is covered without being listed. Prefer removing repeated boilerplate to adding opaque punctuation, and do not shrink a source-token measurement by excluding semantics the program imports.
+Source belongs in `src/cairn`, tests in the `tests` folder of their subject, real programs in `examples` (each listed in `examples/README.md`), measurements in `bench` (a README in each folder says what runs and what it needs), checks and generators in `tools`, records in `evidence`, and generated results under `results/`, which is not tracked. Do not reimplement a compiler rule in a script. `implementation_hash()` in `src/cairn/verify/scalar/semantics.py` pins a semantic receipt to every `*.py` under `compiler/` and the SMT path, so a new compiler module is covered without being listed. Prefer removing repeated boilerplate to adding opaque punctuation, and do not shrink a source-token measurement by excluding semantics the program imports.
 
 Every change reaches `main` through a pull request. Put one focused change on its own branch, push it, open the pull request with `gh pr create`, and turn on auto-merge with `gh pr merge --auto --squash`. It merges when CI passes, with no human approval required, so an agent merges its own work; it lands as one commit whose subject is the pull request's title, so the title is one plain sentence saying what is now true. A red check blocks the merge: fix the branch, never the check. Keep a pull request small enough to review in one sitting, and split a larger change into several. Nothing is pushed to `main` directly.
 

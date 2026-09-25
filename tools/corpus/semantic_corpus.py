@@ -17,8 +17,8 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
-from cairn.verify.scalar_concrete import Concrete
-from cairn.verify.scalar_semantics import equivalent, outcome_key, prepared
+from cairn.verify.scalar.concrete import Concrete
+from cairn.verify.scalar.semantics import equivalent, outcome_key, prepared
 from checks.native_scalar import NativeScalar
 from support import check_generated
 

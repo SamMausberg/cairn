@@ -12,7 +12,7 @@ Every record is about one candidate of one function and carries the candidate's 
 
 A record is current while its source, contract and compiler are what they are now and its target is one the caller
 works on. Otherwise it is stale: it is returned apart, with the parts that moved, and never as a current fact. A
-validation is kept under the numerical policy it compared by (verify/agreement.py) in its contract, and where it ran
+validation is kept under the numerical policy it compared by (verify/validation/agreement.py) in its contract, and where it ran
 with the native compiler that built it in its target, and holds only under that policy and that compiler
 (`unheld`, `History.validations`).
 
@@ -68,7 +68,7 @@ def digest(value: Any) -> str:
 @functools.cache
 def compiler() -> str:
     """The checker and emitter (`implementation_hash`) with the runtime headers, read once per process."""
-    from ..verify.scalar_semantics import implementation_hash
+    from ..verify.scalar.semantics import implementation_hash
 
     runtime = Path(__file__).parents[1] / "runtime"
     headers = b"".join(p.name.encode() + b"\0" + p.read_bytes() for p in sorted(runtime.glob("*.hpp")))
@@ -103,7 +103,7 @@ def closed(lowered: tuple[Any, ...], symbol: str) -> str:
 def as_written(source: str, symbol: str) -> str:
     """`symbol` as written, without a plan or a selected implementation: the `closure` every candidate's source is
     made from."""
-    from ..perf.plan_source import Placement
+    from ..perf.tuning.plan_source import Placement
 
     return closure(Placement(source, symbol).apply((), use=None), symbol)
 
@@ -186,7 +186,7 @@ def record(where: str | Path, kind: str, function: str, candidate: str, identity
 
 def unheld(r: dict[str, Any], agreement: str, cxx: str | None) -> list[str]:
     """The parts of a validation record that keep it from answering now beyond its source: `contract` when it was
-    made under another numerical policy than `agreement` (verify/agreement.py's digest), `target` when it was built
+    made under another numerical policy than `agreement` (verify/validation/agreement.py's digest), `target` when it was built
     by another native compiler than `cxx` (its version line, when the caller names one). Empty when it holds."""
     detail = r["detail"]
     return ["contract"] * (detail.get("agreement") != agreement) + ["target"] * (

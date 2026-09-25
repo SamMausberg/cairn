@@ -31,7 +31,7 @@ The evidence class says how much of a callee's behaviour the agent may rely on w
 A check that does not pass leaves the class `declared` and names what it reached (`counterexample`, `unknown`, `failed-tests`), because unknown is never success. The comment above a declaration is always the author's claim.
 
 ```python
-from cairn.agent.agent_tools import EditSession
+from cairn.agent.hosts.edits import EditSession
 
 source = "fn step(x:u64)->u64 { return add_wrap(x, 1); }\nfn caller(x:u64)->u64 { return step(x); }\n"
 reference = "fn step(x:u64)->u64 { if x == 18446744073709551615 { return 0; } return x + 1; }"
@@ -124,7 +124,7 @@ It rechecks the whole program with every replacement in place, then writes each 
 
 ## Plan edits
 
-A plan edit (`cairn.plan/1`, `agent/plans.py`) lets the agent change only how one function's regions are scheduled. The packet lists the [plan items](concurrency.md#plans) its regions take, their ranges, the current plan and its predicted cost.
+A plan edit (`cairn.plan/1`, `agent/hosts/plans.py`) lets the agent change only how one function's regions are scheduled. The packet lists the [plan items](concurrency.md#plans) its regions take, their ranges, the current plan and its predicted cost.
 
 ```json
 {"protocol": "cairn.plan/1", "session": "<the packet's digest>", "items": {"grain": 1, "lanes": 8}}
@@ -178,12 +178,12 @@ A function's implementations are not part of its source. A candidate that select
 
 ## Implementation sessions
 
-An implementation session (`cairn.implementation/1`, `agent/implementations.py`) opens on one reference and admits new [implementations](abstractions.md#implementations) of it, each validated against the reference before the host keeps it, so a faster algorithm cannot change what the function means. [demos/implement](../demos/implement/README.md) runs one end to end through `cairn mcp`.
+An implementation session (`cairn.implementation/1`, `agent/hosts/implementations.py`) opens on one reference and admits new [implementations](abstractions.md#implementations) of it, each validated against the reference before the host keeps it, so a faster algorithm cannot change what the function means. [demos/implement](../demos/implement/README.md) runs one end to end through `cairn mcp`.
 
 ```python
 from pathlib import Path
 
-from cairn.agent.implementations import ImplementationHost
+from cairn.agent.hosts.implementations import ImplementationHost
 from cairn.projects.project import load_project
 
 project = load_project(Path("examples/implementations"))

@@ -13,7 +13,7 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(R / "src"))
-from cairn.verify.scalar_semantics import equivalent
+from cairn.verify.scalar.semantics import equivalent
 
 
 def main():

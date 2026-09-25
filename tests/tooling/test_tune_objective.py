@@ -12,10 +12,10 @@ from test_predict import MACHINE
 
 from cairn.agent.history import History
 from cairn.cli import main
-from cairn.perf.objective import Objective, shapes
 from cairn.perf.profile import card, carrying
-from cairn.perf.search import Budget
-from cairn.perf.tune import tune
+from cairn.perf.tuning.objective import Objective, shapes
+from cairn.perf.tuning.search import Budget
+from cairn.perf.tuning.tune import tune
 from cairn.projects.target import parse
 
 MIX = """fn mix(v:u64) -> u64 {
@@ -124,9 +124,9 @@ def test_the_command_takes_weighted_shapes_and_the_history_records_the_objective
 
 
 def test_a_measurement_the_history_holds_outranks_the_prediction(tmp_path):
-    from cairn.perf.plan_source import contract, written
-    from cairn.perf.resources import host_target
-    from cairn.perf.tune import PROCEDURE, Recorder
+    from cairn.perf.tuning.plan_source import contract, written
+    from cairn.perf.tuning.resources import host_target
+    from cairn.perf.tuning.tune import PROCEDURE, Recorder
 
     first = tune(MIX, "spread", SIZES, COSTLY, history=tmp_path)
     ahead, behind = first["candidates"][:2]

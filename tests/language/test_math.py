@@ -12,7 +12,7 @@ import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from cairn.verify.scalar_semantics import equivalent
+from cairn.verify.scalar.semantics import equivalent
 from emitted import SANITIZED, WARNINGS, refused, run, sanitized
 
 EXACT = """

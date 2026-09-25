@@ -10,8 +10,8 @@ A foreign implementation is an implementation (compiler/plans/implementations.py
 `report` puts together what it has, each claim apart and none standing in for another: the contract its externs
 declare, trusted and not checked; whether the program builds with the vendored sources under each compiler; what
 ptxas reports of each kernel of a CUDA source, compiled for the device target; and the finite tests validation runs
-against the reference (verify/validation.py), with the vendored objects linked. An implementation that runs device
-code has its device tests generated and built (verify/device_validation.py) and not run, since device code runs only
+against the reference (verify/validation/validation.py), with the vendored objects linked. An implementation that runs device
+code has its device tests generated and built (verify/validation/device.py) and not run, since device code runs only
 under `make gpu`.
 """
 
@@ -27,9 +27,9 @@ from ..projects import foreign
 from ..projects.build import build
 from ..projects.project import Project
 from ..projects.target import resolve
-from . import boundaries
-from .device_validation import cases_as_tests
-from .validation import validate
+from .validation import boundaries
+from .validation.device import cases_as_tests
+from .validation.validation import validate
 
 SCHEMA = "cairn.foreign/1"
 TRUST = "declared-not-checked"

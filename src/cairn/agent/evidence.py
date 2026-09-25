@@ -74,7 +74,7 @@ def establish(source: str, requested: dict[str, dict[str, Any]], cxx: str = "cla
     out: dict[str, dict[str, Any]] = {}
     for name, want in requested.items():
         if want.get("kind") == "smt":
-            from ..verify.scalar_semantics import equivalent
+            from ..verify.scalar.semantics import equivalent
 
             result = equivalent(want["reference"], source, name, assume=want.get("assume", "true"))
             status = result["status"]

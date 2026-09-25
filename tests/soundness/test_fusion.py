@@ -12,7 +12,7 @@ import shutil
 
 import pytest
 
-from cairn.agent.plans import PlanHost
+from cairn.agent.hosts.plans import PlanHost
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from cairn.perf.report import report
@@ -167,7 +167,7 @@ def test_the_model_prices_a_chain_as_one_region_without_its_scratch():
 
 
 def test_tune_tries_fuse_counting_each_plan_as_it_would_be_written():
-    from cairn.perf.tune import tune
+    from cairn.perf.tuning.tune import tune
 
     for source in (HEAD + PIPE + "}\n", planned(PIPE)):  # unplanned, and already fused: the same ranking either way
         found = tune(source, "f", [{"n": 1e8, "m": 1}])

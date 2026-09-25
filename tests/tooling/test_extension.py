@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler.cairnc import compile_program
-from cairn.editor.highlighting import KINDS, MODIFIERS
+from cairn.editor.lsp.highlighting import KINDS, MODIFIERS
 from cairn.version import __semver__
 
 ROOT = Path(__file__).resolve().parents[2]

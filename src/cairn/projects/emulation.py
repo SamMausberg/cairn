@@ -12,7 +12,7 @@ approximated: typed PTX, whose host pass traps; an extern kernel started with `l
 device feature the host machine does not model. Every record of an emulated build, run, test or validation carries
 `emulation` (`record`), which says the device work ran on the host and which target judged it, so no record can be
 taken for a device run. A validation it passes is `finite-tested-emulated` evidence, never `finite-tested` on the
-device (verify/validation.py).
+device (verify/validation/validation.py).
 """
 
 from __future__ import annotations

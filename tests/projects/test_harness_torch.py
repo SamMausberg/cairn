@@ -21,7 +21,7 @@ extension = pytest.importorskip("torch.utils.cpp_extension")
 
 from test_harness import AXPY, DEVICE, RELU, STAGED, project  # noqa: E402
 
-from cairn.projects import harness  # noqa: E402
+from cairn.projects.harness import harness  # noqa: E402
 from cairn.projects.project import load_project  # noqa: E402
 
 NVCC = pytest.mark.skipif(not shutil.which("nvcc"), reason="needs nvcc")

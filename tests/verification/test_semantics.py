@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler.syntax.tree import VOID
-from cairn.verify.scalar_concrete import Concrete
-from cairn.verify.scalar_semantics import equivalent, prepared
-from cairn.verify.scalar_values import identical
+from cairn.verify.scalar.concrete import Concrete
+from cairn.verify.scalar.semantics import equivalent, prepared
+from cairn.verify.scalar.values import identical
 
 
 def fn(body, params="x:u64", ret="u64"):
@@ -424,10 +424,10 @@ def test_the_receipt_is_pinned_to_every_file_that_decides_what_a_program_means()
     """A semantic receipt names the compiler that judged it: every file under compiler/, in every subpackage, is in
     the hash beside the SMT path, so a change to a builtin's rule changes every receipt's implementation_sha256 as
     surely as a change to the parser, and a new module is covered without anyone listing it."""
-    from cairn.verify import scalar_semantics
+    from cairn.verify.scalar import semantics
 
-    package = Path(scalar_semantics.__file__).parents[1]
-    pinned = [f.relative_to(package).as_posix() for f in scalar_semantics.implementation_files()]
+    package = Path(semantics.__file__).parents[2]
+    pinned = [f.relative_to(package).as_posix() for f in semantics.implementation_files()]
     compiler = {f.relative_to(package).as_posix() for f in (package / "compiler").rglob("*.py")}
     assert compiler <= set(pinned) and {"compiler/primitives/builtins.py", "compiler/syntax/parser.py"} <= compiler
-    assert set(scalar_semantics.SEMANTIC) <= set(pinned) and pinned == sorted(pinned)
+    assert set(semantics.SEMANTIC) <= set(pinned) and pinned == sorted(pinned)

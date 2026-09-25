@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from test_std_image import decode_png
 
-from cairn.agent.agent_tools import HANDLES, EditHost
+from cairn.agent.hosts.edits import HANDLES, EditHost
 from cairn.agent.shot import shot
 from cairn.cli import main
 from cairn.compiler.cairnc import Diagnostic, compile_source

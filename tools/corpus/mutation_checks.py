@@ -11,7 +11,7 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(R / "src"), str(R / "tools")]
-from cairn.agent.agent_tools import digest
+from cairn.agent.hosts.edits import digest
 from cairn.compiler.cairnc import compile_source
 from cairn.verify.testing import evaluate
 

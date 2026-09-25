@@ -348,7 +348,7 @@ def test_the_canonical_projection_of_each_program_lowers_to_the_same_code(name):
 
 
 def test_the_receipt_states_each_fragment_step_s_contract_and_the_value_model_answers_unknown():
-    from cairn.verify.scalar_semantics import equivalent
+    from cairn.verify.scalar.semantics import equivalent
 
     source = (TENSOR / "tile32.cairn").read_text()
     steps = [s for s in compile_source(source)[1]["functions"]["tile32"]["numerics"] if s["op"] == "mma"]

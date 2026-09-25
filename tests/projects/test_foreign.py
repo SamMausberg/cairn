@@ -17,10 +17,10 @@ from cairn.projects.build import build
 from cairn.projects.foreign import inspect
 from cairn.projects.project import ProjectError, load_project
 from cairn.projects.target import parse
-from cairn.verify import boundaries
-from cairn.verify.device_validation import cases_as_tests
 from cairn.verify.foreign import passed, report
 from cairn.verify.runner import run_tests
+from cairn.verify.validation import boundaries
+from cairn.verify.validation.device import cases_as_tests
 from emitted import NVCC_HOST, SANITIZED, WARNINGS, code_of, on_device, refused
 
 ROOT = Path(__file__).resolve().parents[2]

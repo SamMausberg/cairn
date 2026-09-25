@@ -171,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if a.command == "new":
             if a.from_sol_execbench:
-                from .projects.harness_import import create
+                from .projects.harness.importing import create
 
                 if a.template != "default":
                     raise ProjectError("--from-sol-execbench writes its own project; it takes no --template.")
@@ -191,11 +191,11 @@ def main(argv: list[str] | None = None) -> int:
             print(completion_script(p, a.shell), end="")
             return 0
         if a.command == "lsp":
-            from .editor.lsp import serve
+            from .editor.lsp.server import serve
 
             return serve()
         if a.command == "mcp":
-            from .agent.mcp import serve as serve_mcp
+            from .agent.mcp.server import serve as serve_mcp
 
             return serve_mcp()
         if a.command == "diff":
@@ -229,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
             report(result)
             return 0 if result["status"] == "smt-module-equivalent" else 2
         if a.command == "verify":
-            from .verify.scalar_semantics import equivalent
+            from .verify.scalar.semantics import equivalent
 
             if set(assumed) - {a.symbol}:
                 raise ProjectError(f"--assume names a function other than the selected --symbol {a.symbol}.")
@@ -310,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
             print(document(project.source, a.module), end="")
             return 0
         if a.command == "inspect":
-            from .agent.agent_tools import EditSession
+            from .agent.hosts.edits import EditSession
 
             session = EditSession(project.source, a.symbol, scope=a.scope)
             if a.expand:
@@ -318,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
             report({**session.packet(), **({"performance": session.explain()} if a.explain else {})})
             return 0
         if a.command == "migrate":  # A refusal names the file of the new text itself, so it is reported as it is.
-            from .agent.migration import Migration
+            from .agent.hosts.migration import Migration
 
             if bad := [x for x in a.also if not x.partition("=")[1]]:
                 raise ProjectError(f"Write --also NAME=SIGNATURE, not {bad[0]!r}.")
@@ -344,7 +344,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.command == "state" and a.symbol:  # one function's investigation, from its candidate history
             from .agent import investigation
             from .agent.history import vendored
-            from .perf.resources import device_identity, host_target
+            from .perf.tuning.resources import device_identity, host_target
 
             where = a.history or project.root / ".cairn" / "history"
             device = resolve_device(a.device_target, project.device_target, required=False)
@@ -402,11 +402,11 @@ def main(argv: list[str] | None = None) -> int:
         if a.command == "tune":
             from .agent.history import vendored
             from .perf import report as priced
-            from .perf.plan_source import KEEP, write_plan
             from .perf.profile import Profile
-            from .perf.tune import Budget, tune
-            from .perf.tune import delta as tune_delta
-            from .perf.tune import lines as tune_lines
+            from .perf.tuning.plan_source import KEEP, write_plan
+            from .perf.tuning.tune import Budget, tune
+            from .perf.tuning.tune import delta as tune_delta
+            from .perf.tuning.tune import lines as tune_lines
 
             supplied, card = carded(Profile.load(a.profile) if a.profile else None, a.card)
             arch = resolve_arch(a.arch or project.arch)
@@ -416,13 +416,13 @@ def main(argv: list[str] | None = None) -> int:
             sizes = priced.parse_sizes(a.at)
             weights = [1.0] * len(sizes)
             if a.shapes:  # after the --at sizes, each with its weight
-                from .agent.agent_tools import load_json_strict
-                from .perf.objective import shapes
+                from .agent.hosts.edits import load_json_strict
+                from .perf.tuning.objective import shapes
 
                 more, heavy = shapes(load_json_strict(read_text(a.shapes, 1_000_000)))
                 sizes, weights = sizes + more, weights + heavy
             if a.compare:  # a difference report between two plans, in place of a search
-                from .perf import feedback
+                from .perf.tuning import feedback
 
                 if len(a.compare) != 2:
                     raise ProjectError("--compare names two plans: the one to compare against, then the other.")
@@ -444,8 +444,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(tune_lines(answer)) if terminal.human(FORMAT) else report(answer)
             return 0
         if a.command == "validate":
-            from .agent.agent_tools import load_json_strict
-            from .verify.validation import validate_project
+            from .agent.hosts.edits import load_json_strict
+            from .verify.validation.validation import validate_project
 
             given = load_json_strict(read_text(a.policy, 200_000)) if a.policy else None
             device = resolve_device(a.device_target, project.device_target) if a.emulate else None
@@ -453,9 +453,9 @@ def main(argv: list[str] | None = None) -> int:
             report(record, brief=True)
             return 0 if record["status"] == "passed" else 1 if record["status"] in {"failed", "rejected"} else 2
         if a.command == "test":
-            from .agent.agent_tools import load_json_strict
+            from .agent.hosts.edits import load_json_strict
             from .verify.runner import run_tests
-            from .verify.validation import evaluate
+            from .verify.validation.validation import evaluate
 
             paths = (
                 [a.contract] if a.contract else [contained_file(project.root, x, ".json") for x in project.contracts]

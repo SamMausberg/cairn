@@ -10,8 +10,8 @@ import pytest
 import test_language as language
 from test_agent_language import PROGRAMS
 
-from cairn.agent.agent_tools import HANDLES, PROTOCOL, EditHost, EditSession
 from cairn.agent.evidence import TERMS
+from cairn.agent.hosts.edits import HANDLES, PROTOCOL, EditHost, EditSession
 from cairn.compiler.cairnc import Diagnostic
 from emitted import code_of as code
 

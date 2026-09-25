@@ -20,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..verify import agreement
+from ..verify.validation import agreement
 from . import history as kept
 from .state import sealed
 
@@ -59,9 +59,9 @@ def investigation(source: str, symbol: str, where: str | Path, targets: dict[str
     name (host, device) to what `agent/history.py` keeps as a target: a description or its digest. `vendored`
     (history.vendored) pins the project's foreign sources."""
     from ..compiler import compilations
-    from ..perf.plan_source import Placement, contract, shown, written
     from ..perf.regions import identified
-    from ..perf.tune import label
+    from ..perf.tuning.plan_source import Placement, contract, shown, written
+    from ..perf.tuning.tune import label
     from .projection import signature
 
     checked = compilations.program(source)

@@ -129,12 +129,12 @@ def test_a_different_compiler_or_library_is_a_different_compile(cache, monkeypat
     other.program()
     assert other.key != kept.key and not other.cached
 
-    from cairn.verify import scalar_semantics
+    from cairn.verify.scalar import semantics
 
     monkeypatch.undo()
     compilations.compiler.cache_clear()
     loaded = compilations.compiler()
-    monkeypatch.setattr(scalar_semantics, "implementation_hash", lambda: "1" * 64)
+    monkeypatch.setattr(semantics, "implementation_hash", lambda: "1" * 64)
     compilations.compiler.cache_clear()
     try:
         assert compilations.compiler() != loaded  # the compiler's own files are in its digest

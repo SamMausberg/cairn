@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from cairn.perf import on_device
-from cairn.perf.tune import tune
+from cairn.perf.tuning.tune import tune
 from cairn.projects.target import parse, toolkit
 from emitted import NVCC_HOST, emit
 from support import DEVICE_LOCK

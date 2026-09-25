@@ -18,7 +18,7 @@ from cairn.agent.projection import canonical_source
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.syntax.parser import Parser
-from cairn.verify.scalar_semantics import equivalent
+from cairn.verify.scalar.semantics import equivalent
 from emitted import contract, device_build, native, on_device, refused, watched
 
 VIEWS = "fn f(n:usize, out:rw<u64>[n], x:ro<u64>[n], s:ro<i32>[n], d:ro<f64>[n], w:rw<i32>[n], g:rw<f64>[n]) {\n  "

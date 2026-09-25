@@ -4,7 +4,7 @@ import ctypes
 
 import pytest
 
-from cairn.agent.agent_tools import EditSession
+from cairn.agent.hosts.edits import EditSession
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from emitted import library, refused
@@ -169,7 +169,7 @@ def test_native(cxx, tmp_path):
 
 
 def test_value_equivalence_covers_sums_and_moved_owners_but_not_an_owner_inside_a_value():
-    from cairn.verify.scalar_semantics import equivalent
+    from cairn.verify.scalar.semantics import equivalent
 
     assert equivalent(SOURCE, SOURCE, "use")["status"] == "smt-equivalent"
     assert equivalent(SOURCE, SOURCE, "decode")["status"] == "smt-equivalent"

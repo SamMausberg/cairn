@@ -15,7 +15,7 @@ from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
 from cairn.projects import export as exported
 from cairn.projects.project import load_project
-from cairn.verify.validation import replay, validate
+from cairn.verify.validation.validation import replay, validate
 from emitted import code_of, refused
 
 # --- Fixed: an export's record is data, and a build runs only what toolchain.py gives for it -----------------------

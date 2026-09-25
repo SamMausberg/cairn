@@ -11,15 +11,15 @@ import json
 from pathlib import Path
 
 from cairn.agent.history import History
-from cairn.agent.implementations import ImplementationHost
-from cairn.agent.mcp_tools import Tools
+from cairn.agent.hosts.implementations import ImplementationHost
+from cairn.agent.mcp.tools import Tools
 from cairn.cli import main
 from cairn.compiler.cairnc import Diagnostic
-from cairn.perf.search import Budget
-from cairn.perf.tune import tune
+from cairn.perf.tuning.search import Budget
+from cairn.perf.tuning.tune import tune
 from cairn.projects.project import load_project
 from cairn.projects.target import parse
-from cairn.verify.validation import replay, validate, validate_project
+from cairn.verify.validation.validation import replay, validate, validate_project
 
 # Its ceiling lets an implementation stage the input in a block's shared memory.
 SCALE = """fn scale(

@@ -10,7 +10,7 @@ import pytest
 
 from cairn.compiler.cairnc import Diagnostic, compile_program, compile_source
 from cairn.projects.target import parse
-from cairn.verify.validation import validate
+from cairn.verify.validation.validation import validate
 
 # --- Fixed: a check that reports every refusal judged a row an implementation had not yet joined -------------------
 
@@ -217,9 +217,9 @@ def test_tune_does_not_choose_an_implementation_validated_on_one_point_of_its_do
     equivalent there, and the history kept it as finite-tested; `cairn tune` then chose `plan total use total_zero;`
     for n = 1e6, and `--write` would write it. The history's contract digests the domain and the tolerance, but the
     search cites a validation under any contract."""
-    from cairn.perf.tune import tune
+    from cairn.perf.tuning.tune import tune
     from cairn.projects.project import load_project
-    from cairn.verify.validation import validate_project
+    from cairn.verify.validation.validation import validate_project
 
     (tmp_path / "src").mkdir()
     (tmp_path / "src/main.cairn").write_text(ZERO)

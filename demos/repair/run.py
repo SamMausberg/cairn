@@ -18,7 +18,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from cairn.agent.agent_tools import EditHost, stable_json  # noqa: E402
+from cairn.agent.hosts.edits import EditHost, stable_json  # noqa: E402
 from cairn.editor import changes  # noqa: E402
 from cairn.verify.testing import evaluate  # noqa: E402
 

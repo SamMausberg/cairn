@@ -13,10 +13,10 @@ from cairn.agent.history import History
 from cairn.agent.investigation import investigation
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_program
-from cairn.perf.feedback import compare, parse_candidate
-from cairn.perf.resources import host_target
-from cairn.perf.search import Budget
-from cairn.perf.tune import tune
+from cairn.perf.tuning.feedback import compare, parse_candidate
+from cairn.perf.tuning.resources import host_target
+from cairn.perf.tuning.search import Budget
+from cairn.perf.tuning.tune import tune
 from cairn.projects.target import parse
 
 TOTAL = """fn total(n:usize, xs:ro<u64>[n]) -> u64 effects(pure, par:host) {

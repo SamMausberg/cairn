@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from cairn.agent.agent_tools import PROTOCOL, EditHost, EditSession
+from cairn.agent.hosts.edits import PROTOCOL, EditHost, EditSession
 from emitted import code_of
 
 S = "fn gap(a:u32, b:u32) -> u32 { if a > b { return a - b; } return b - a; }\nfn use(a:u32) -> u32 = gap(a, 3);\n"

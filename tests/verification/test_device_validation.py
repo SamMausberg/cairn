@@ -11,10 +11,10 @@ import pytest
 
 from cairn.compiler.cairnc import Parser, compile_source
 from cairn.projects.project import load_project
-from cairn.verify import boundaries
-from cairn.verify.boundaries import Case
-from cairn.verify.device_validation import TOOLS, cases_as_tests, sanitized, verdict
 from cairn.verify.runner import run_tests
+from cairn.verify.validation import boundaries
+from cairn.verify.validation.boundaries import Case
+from cairn.verify.validation.device import TOOLS, cases_as_tests, sanitized, verdict
 from emitted import device_build
 from support import device_reason
 
