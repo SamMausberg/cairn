@@ -8,7 +8,7 @@ At a terminal every `cairn` command prints lines for a person. Piped, or given `
 
 ```cairn
 // Reads integers from standard input; prints how many, and how many are negative, counted on two tasks.
-import std.core (Option, Result);
+import std.core (Result);
 import std.io as io;
 import std.text as text;
 import std.vec (Vec);
@@ -21,26 +21,14 @@ fn negatives(n:usize, xs:ro<i64>[n]) -> usize {
 
 fn main() -> i32 {
   let mut input = vec.new[u8]();                    // a growable owner, freed at scope exit
-  stack chunk:u8[4096] = zeroed;
-  let mut more = true;
-  while more {
-    match io.read_stdin(4096, chunk) {
-      Ok(got) => { if got == 0 { more = false; } else { vec.extend_from(input, got, chunk[0..got]); } }
-      Err(_) => more = false;
-    }
-  }
+  match io.read_stdin_to_end(input) { Ok(_) => {} Err(_) => return 1; }
   let mut values = vec.new[i64]();
-  let mut lo:usize = 0;
-  while lo < input.len {
-    let mut hi = lo;
-    while hi < input.len && input.data[hi] > 32 { hi += 1; }
-    if hi > lo {
-      match text.parse_i64(hi - lo, input.data[lo..hi]) {   // a part is written where it is passed
-        Ok(v) => vec.push(values, v);
-        Err(_) => return 1;
-      }
+  let mut w = text.cursor();
+  while text.next_word(input, w) {                  // w.lo..w.hi: the next word, not copied
+    match text.parse_i64(input.data[w.lo..w.hi]) {  // a part is written where it is passed
+      Ok(v) => vec.push(values, v);
+      Err(_) => return 2;
     }
-    lo = hi + 1;
   }
   let n = values.len;
   let halves = Group[usize](2);
@@ -70,16 +58,18 @@ These are the refusals a first program meets most often, taken from the programs
 | `let x = if c { a } else { b };` | `let mut x = b; if c { x = a; }` | `E-NAME` |
 | `let s = xs[lo..hi];` | the part in the call itself: `f(xs[lo..hi])` | `E-VIEW-ALIAS` |
 | `len(v)` of a `Vec` | `v.len`, and `v.data[i]` for an element | `E-LEN` |
-| `x as u64`, `i64::MIN`, `(a, b)` | `u64(x)`, `-9223372036854775808`, a `struct` | `E-PARSE` |
-| `add_wrap(x, y)` on `i64` | wrapping is unsigned only; test first, `y > 0 && x > MAX - y` | `E-WRAP-TYPE` |
+| `x as u64`, `i64::MIN`, `(a, b)` | `u64(x)`, `I64_MIN` from `std.core` or `-9223372036854775808`, a `struct` | `E-PARSE` |
+| `add_wrap(x, y)` on `i64` | wrapping is unsigned only; test first, `y > 0 && x > I64_MAX - y` | `E-WRAP-TYPE` |
 
 These are the library calls a program like this uses. `cairn doc --std --module std.text` prints the signatures of one module:
 
 | need | call |
 |---|---|
-| read standard input | `io.read_stdin(n, into)`: bytes read, 0 at the end |
-| numbers from text | `text.parse_u64(n, s)`, `text.parse_i64(n, s)`: `Ok(v)` or `Err(ParseError)`; `text.find_byte(n, s, byte, from)` |
-| a growing list | `vec.new[T]()`, `vec.push(v, x)`, `vec.extend_from(v, n, part)`, `v.len`, `v.data[i]` |
+| read standard input | `io.read_stdin_to_end(input)`: all of it, appended to a `Vec[u8]` |
+| lines, words, fields | `let mut c = text.cursor();` then `while text.next_line(input, c) { ... }`, or `next_word`, or `next_field(input, ',', c)`: the piece is the part `input.data[c.lo..c.hi]` |
+| numbers from text | `text.parse_u64(n, s)`, `text.parse_i64(n, s)`, `text.parse_fixed(n, s, places)`: `Ok(v)` or `Err(ParseError)` |
+| a growing list | `vec.new[T]()`, `vec.push(v, x)`, `vec.from(part)`, `vec.extend_from(v, n, part)`, `v.len`, `v.data[i]` |
+| counts by word | `map.new[Vec[u8], u64]()`; `let at = map.entry_view(m, word, 0);` then `m.vals[at] += 1;`; `map.sorted(m, slots)` |
 | a fixed array | `Buf[T](n)`, `n` zeroed elements; `stack chunk:u8[4096] = zeroed;` |
 | output | `println(...)` and `print(...)`: integers, bools, `'c'`, strings and `u8` views; `eprintln` to standard error |
 | threads | `let t = spawn f(args);` and `wait(t)`; `Group[T](k)`, `spawn f(args) into g;`, `collect(g)`, `wait(g)` |
