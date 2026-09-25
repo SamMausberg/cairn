@@ -451,7 +451,7 @@ fill exceeds its declared effects.
 
 ## Operand order
 
-A call that writes through a borrow or allocates cannot be a nested operand (`E-EFFECT-ORDER`). Bind it to a name first, so the cost is a statement of its own.
+A call that writes through a borrow or allocates cannot sit beside another operand (`E-EFFECT-ORDER`), since C++ may evaluate that operand before or after it. Bind it to a name first, so the cost is a statement of its own. The refusal names the call and what it writes.
 
 ```cairn rejects E-EFFECT-ORDER
 fn fill(n:usize, out:rw<u8>[n], value:u8) -> usize { for i in 0..n { out[i] = value; } return n; }
@@ -459,7 +459,21 @@ fn main() -> i32 { let mut frame = Buf[u8](4); let done = fill(len(frame), frame
 ```
 
 ```text
-Bind a writing call to its own statement before using its result.
+fill writes frame, so an operand beside it could run before or after it: bind it first, let v = fill(len(frame), frame, 1);, and use v here.
+```
+
+The one operand of a conversion or a unary operator has nothing beside it, so it may be such a call. The call runs first, then the conversion checks its result.
+
+```cairn
+struct Input { at:u64; }
+fn next(inp:rw<Input>) -> u64 { inp.at += 1; return inp.at; }
+fn main() -> i32 {
+  let mut inp = Input(0);
+  let n = usize(next(inp));                       // a call that writes, as a conversion's operand
+  let m = -i64(next(inp));
+  if n != 1 || m != -2 { return 1; }
+  return 0;
+}
 ```
 
 C++ leaves the order of operands open, so a call the outside world can observe (I/O, the machine, atomics, locks, a function value) may not sit beside another call, or beside an operand that may abort. `&&`, `||` and a call's own arguments are sequenced and are not affected.

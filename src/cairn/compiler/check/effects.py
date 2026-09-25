@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..primitives.atomics import NAMES as ATOMICS
-from ..syntax.tree import Expr, Function, Stmt, fail, root
+from ..syntax.tree import NUMERIC, Expr, Function, Stmt, Type, fail, root
 
 if TYPE_CHECKING:
     from .checking import Checker
@@ -94,12 +94,43 @@ OBSERVABLE |= SYNCHRONIZATION
 OBSERVED = ("ffi:", "transfer:", "par:", "asm:")  # families whose every member the outside world can observe
 
 
+def conversion(e: Expr) -> bool:
+    """`usize(x)`: a numeric conversion, whose one operand is all it evaluates."""
+    return (
+        e.tag == "call" and e.val in NUMERIC and len(e.args) == 1 and isinstance(e.ref, tuple) and e.ref[0] == "builtin"
+    )
+
+
+def spelled(e: Expr) -> str:
+    """An argument as source: a name, a literal, a field or a call of those, else `...`."""
+    if e.tag in {"name", "int", "bool"}:
+        return e.val
+    if e.tag == "field":
+        return f"{spelled(e.args[0])}.{e.val}"
+    return f"{e.val}({', '.join(map(spelled, e.args))})" if e.tag == "call" else "..."
+
+
+def bind_first(call: Expr, row: set[str]) -> str:
+    """Why a call that writes or allocates may not sit beside another operand, and the statement that binds it."""
+    params = [n for n, _ in call.ref.params] if isinstance(call.ref, Function) else []
+    written = [root(call.args[params.index(x[6:])]) for x in sorted(row) if x.startswith("write:") and x[6:] in params]
+    places = sorted({w.val for w in written if w.tag == "name"})
+    does = f"writes {', '.join(places)}" if places else "writes through a borrow" if written else "allocates"
+    bound = call.ref.bindings.values() if isinstance(call.ref, Function) else ()
+    typed = f"[{', '.join(t.display() if isinstance(t, Type) else str(t) for t in bound)}]" if bound else ""
+    shown = ", ".join(spelled(a) for a in call.args)
+    return (f"{call.val} {does}, so an operand beside it could run before or after it: bind it first, "
+            f"let v = {call.val}{typed}({shown});, and use v here.")  # fmt: skip
+
+
 def audit(c: Checker, effects: dict[str, set[str]], names: set[str] | None = None):
     """Costs stay visible and operands cannot tell which ran first (C++ leaves their order open): a call that
-    writes through a borrow or allocates is never a nested operand; a nested call may not move, take or (as a
-    closure) write a place that another operand names; a call the outside world can observe (I/O, the machine,
-    shared state, a function value) may not sit beside another call; and a nested `try` may not sit beside an
-    operand that already owns something. `&&` and `||` are sequenced, and so are a call and its arguments.
+    writes through a borrow or allocates is never an operand beside another; a nested call may not move, take or
+    (as a closure) write a place that another operand names; a call the outside world can observe (I/O, the
+    machine, shared state, a function value) may not sit beside another call; and a nested `try` may not sit beside
+    an operand that already owns something. `&&` and `||` are sequenced, and so are a call and its arguments, so a
+    call that is the one operand of a conversion or a unary operator, `usize(next(inp))`, has nothing beside it and
+    is judged as the root it stands for.
 
     Acquiring storage is the order-sensitive half, so `alloc` is on that list and `free` is not: a release runs
     where a scope ends, which C++ sequences itself, and it writes no place another operand can name. A function
@@ -140,8 +171,8 @@ def audit(c: Checker, effects: dict[str, set[str]], names: set[str] | None = Non
             block(e.ref.body)
             return out
         out += [e] if e.tag == "call" and not at_root else []
-        for child in e.args:  # `try f()` and `spawn f()` add no operand order: f stays a root.
-            nested(child, at_root and e.tag in {"try", "spawn"}, out)
+        for child in e.args:  # `try f()`, `spawn f()`, `usize(f())` and `-f()` add no operand order: f stays a root.
+            nested(child, at_root and (e.tag in {"try", "spawn", "unary"} or conversion(e)), out)
         return out
 
     def tries(e: Expr, at_root: bool, out: list[Expr]) -> list[Expr]:
@@ -180,7 +211,7 @@ def audit(c: Checker, effects: dict[str, set[str]], names: set[str] | None = Non
         for call in calls:
             changed, row = footprint(call)
             if any(x.startswith("write:") or x == "alloc" for x in row):  # Syntactic on purpose.
-                fail("E-EFFECT-ORDER", "Bind a writing call to its own statement before using its result.", call)
+                fail("E-EFFECT-ORDER", bind_first(call, row), call)
             mine = {node for node, _ in mentioned(call, [])}
             if any(place in changed for node, place in everything if node not in mine):
                 fail("E-EFFECT-ORDER", "Bind this call first: another operand here could observe its writes.", call)

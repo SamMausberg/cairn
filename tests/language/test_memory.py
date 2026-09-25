@@ -86,6 +86,50 @@ def test_allocating_call_cannot_be_hidden_in_expression():
     refused("E-EFFECT-ORDER", "fn g()->u64 {buffer b:u64[0]=zeroed;return 0;} fn f()->u64 = g()+1;")
 
 
+WRITES = "struct Input { at:u64; }\nfn next(inp:rw<Input>) -> u64 { inp.at += 1; return inp.at; }\n"
+ONE_OPERAND = (
+    WRITES
+    + """fn flip(on:rw<bool>) -> bool { on = !on; return on; }
+fn main() -> i32 {
+  let mut inp = Input(0);
+  let n = usize(next(inp));                         // the one operand of a conversion
+  let mut xs = Buf[u32](2);
+  xs[1] = u32(next(inp));                           // of a conversion that is an assignment's value
+  let m = -i64(next(inp));                          // of a conversion under a unary operator
+  let mut on = false;
+  if !flip(on) { return 1; }                        // of a unary operator that is a condition
+  if n != 1 || xs[1] != 2 || m != -3 || inp.at != 3 { return 2; }
+  return 0;
+}
+"""
+)
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_call_that_writes_may_be_the_one_operand_of_a_conversion_or_unary_operator(tmp_path, cxx):
+    """Nothing sits beside such a call, so no operand can run before or after it: it runs, then the conversion."""
+    cpp = compile_source(ONE_OPERAND)[0]
+    assert compile_source(canonical_source(ONE_OPERAND))[0] == cpp
+    done = run(tmp_path, cpp, *SANITIZED, cxx=cxx)
+    assert done.returncode == 0, done.stderr[-2000:]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "let k = usize(next(inp)) + usize(next(inp));",  # two writers beside each other
+        "if usize(next(inp)) != 3 { return 1; }",  # a literal beside it is an operand all the same
+        "let k = usize(next(inp) + 1);",  # the conversion's operand is the sum, not the call
+    ],
+)
+def test_a_call_that_writes_beside_another_operand_is_refused_and_named(line):
+    said = refused("E-EFFECT-ORDER", WRITES + f"fn main() -> i32 {{ let mut inp = Input(0); {line} return 0; }}\n")
+    assert said["message"] == (
+        "next writes inp, so an operand beside it could run before or after it: bind it first, "
+        "let v = next(inp);, and use v here."
+    )
+
+
 def test_shape_identity_is_immutable():
     # Equal values with different names are deliberately not inferred equal.
     with pytest.raises(Diagnostic):
