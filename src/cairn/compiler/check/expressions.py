@@ -25,6 +25,7 @@ from ..syntax.tree import (
     Type,
     fail,
     is_view,
+    negated_literal,
     root,
 )
 from . import facts
@@ -49,12 +50,19 @@ def unrounded(e: Expr, expected: Type | None, written: str) -> None:
         fail("E-TYPE-MISMATCH", f"A literal is an f32 or an f64; write {expected.name}({written}) to round it.", e)
 
 
-def e_int(c: Checker, e: Expr, expected: Type | None) -> Type:
+def e_int(c: Checker, e: Expr, expected: Type | None, negated: bool = False) -> Type:
+    """An integer literal takes the type expected of it, else u64. Under a minus it is the magnitude of a negative
+    number, so a signed type holds one more of it (-128 is an i8), and with nothing expected it is an i64."""
     unrounded(e, expected, e.val + ".0")
-    ty = expected if expected and expected.mode == "value" and expected.name in NUMERIC else Type("u64")
+    ty = (
+        expected
+        if expected and expected.mode == "value" and expected.name in NUMERIC
+        else Type("i64" if negated else "u64")
+    )
     n = int(e.val)
     if ty.name in WIDTH:
-        if n >= 2 ** (WIDTH[ty.name] - (ty.name in SIGNED)):
+        signed = ty.name in SIGNED
+        if n >= 2 ** (WIDTH[ty.name] - signed) + (negated and signed):
             fail("E-LITERAL-RANGE", f"Literal is not representable in {ty.name}.", e)
     elif n > 2**53:
         fail("E-LITERAL-RANGE", "Large integer-to-float literals require a checked explicit conversion.", e)
@@ -207,7 +215,7 @@ def bare(c: Checker, name: str, expected: Type | None, e: Expr) -> Type | None:
 
 def adapts(c: Checker, e: Expr) -> bool:
     """A literal, or a bare name that can only be a variant: either takes its type from the operand beside it."""
-    if e.tag in {"int", "float"}:
+    if e.tag in {"int", "float"} or negated_literal(e):
         return True
     name = e.val if e.tag in {"name", "call"} and not e.ref else "."
     if "." in name or name in c.env or name in TABLE or any(c.qualify(name, t) for t in (c.p.consts, c.fs, c.types)):
@@ -315,6 +323,11 @@ def e_try(c: Checker, e: Expr, expected: Type | None) -> Type:
 
 
 def e_unary(c: Checker, e: Expr, expected: Type | None) -> Type:
+    if negated_literal(e):  # one constant: nothing to guard
+        ty = e.args[0].ty = e_int(c, e.args[0], expected, negated=True)
+        if ty.name in UNSIGNED:
+            fail("E-OPERATOR", "Negation requires a signed integer or floating value.", e)
+        return ty
     ty = c.expr(e.args[0], BOOL if e.val == "!" else expected)
     if ty.mode != "value":
         fail("E-OPERATOR", "Unary operator on a view.", e)

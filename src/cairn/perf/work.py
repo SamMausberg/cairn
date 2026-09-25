@@ -14,7 +14,7 @@ from typing import Any
 from ..compiler.plans import chunks, fusion
 from ..compiler.primitives import atomics, wide
 from ..compiler.primitives.builtins import WRAPPING
-from ..compiler.syntax.tree import FLOAT, INT, NUMERIC, Expr, Function, Stmt, Type, is_view
+from ..compiler.syntax.tree import FLOAT, INT, NUMERIC, Expr, Function, Stmt, Type, is_view, negated_literal
 from .cooperative_work import region
 from .counts import ONE, Cost, Frame, Poly, Region, Work, add, data_dependent, path, widen
 
@@ -329,7 +329,7 @@ class Counter:
             if kind == "int_checked" and self.size(e) is not None:
                 kind = "index_checked"  # arithmetic on sizes and binders: the vectorizer checks it once per block
             at.work.op(kind, at.times)
-        elif tag == "unary":
+        elif tag == "unary" and not negated_literal(e):  # a negated literal costs what a literal does: nothing
             self.expr(e.args[0], at)
             checked = e.val == "-" and e.ty is not None and e.ty.name in INT
             at.work.op("int_checked" if checked else e.ty.name if e.ty and e.ty.name in FLOAT else "int", at.times)

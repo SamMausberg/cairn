@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ..syntax.tree import BITS, SIGNED, UNSIGNED, USIZE, Expr, is_view
+from ..syntax.tree import BITS, SIGNED, UNSIGNED, USIZE, Expr, is_view, negated_literal
 
 CHECKED = {"+", "-", "*", "/", "%"}  # The binary operators lowering guards on integers.
 GUARDED_CALLS = {*BITS, "shr", "shl_wrap"}  # Conversions to an integer, and shifts.
@@ -312,7 +312,8 @@ def guarded(e: Expr) -> bool:
     """Whether lowering writes a guard anywhere in `e`, a bound of a part."""
     ty = e.ty.name if e.ty is not None else ""
     site = e.tag == "index" or (e.tag == "binary" and e.val in CHECKED and ty in BITS)
-    site = site or (e.tag == "unary" and e.val == "-" and ty in SIGNED) or (e.tag == "call" and e.val in GUARDED_CALLS)
+    site = site or (e.tag == "unary" and e.val == "-" and ty in SIGNED and not negated_literal(e))
+    site = site or (e.tag == "call" and e.val in GUARDED_CALLS)
     return (site and not e.established) or any(guarded(a) for a in e.args)
 
 

@@ -4,6 +4,7 @@ the machine would compute.
 
 import pytest
 
+from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from emitted import SANITIZED, refused, run
 
@@ -113,3 +114,47 @@ def test_constants_fold_exactly_and_name_static_extents(tmp_path):
     }
     for source, code in wrong.items():
         refused(code, source)
+
+
+MINIMA = """const I64_MIN:i64 = -9223372036854775808;
+const FOLDED:i64 = 0 - 9223372036854775807 - 1;
+const I8_MIN:i8 = -128;
+
+fn least() -> i64 effects() { return -1; }             // a negated literal is a constant: no guard, no trap
+fn below(x:i32) -> bool = -2147483648 < x;            // it adapts to the operand beside it, as a literal does
+
+fn main() -> i32 {
+  let small:i32 = -2147483648;
+  let d = -1;                                          // an i64 when nothing expects another type
+  if I64_MIN != FOLDED || I64_MIN + 9223372036854775807 != -1 { return 1; }
+  if i64(I8_MIN) != -128 || i64(small) != -2147483648 { return 2; }
+  if least() != d || !below(small + 1) || below(small) { return 3; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_negated_literal_is_one_constant_down_to_the_type_s_minimum(tmp_path, cxx):
+    cpp, receipt = compile_source(MINIMA)
+    assert compile_source(canonical_source(MINIMA))[0] == cpp
+    least = receipt["functions"]["least"]
+    assert least["effects"] == [] and least["syntactic_check_sites"] == {}
+    assert "static_cast<std::int64_t>((-9223372036854775807LL - 1))" in cpp
+    assert run(tmp_path, cpp, *SANITIZED, cxx=cxx).returncode == 0
+    negate = "fn neg(x:i64) -> i64 = -x;\nfn main() -> i32 { return i32(neg(-9223372036854775808)); }\n"
+    assert run(tmp_path, compile_source(negate)[0], *SANITIZED, cxx=cxx).returncode != 0  # a negated value is checked
+
+
+@pytest.mark.parametrize(
+    "source,code",
+    [
+        ("fn f() -> i64 { return -9223372036854775809; }", "E-LITERAL-RANGE"),
+        ("fn f() -> i8 { return -129; }", "E-LITERAL-RANGE"),
+        ("const C:i32 = -2147483648 - 1;", "E-LITERAL-RANGE"),  # the folded result must fit, as before
+        ("fn f() -> u64 { return -1; }", "E-OPERATOR"),  # an unsigned type has no negative literal
+        ("fn f(x:i64) -> i64 effects() { return -x; }", "E-EFFECT-CEILING"),  # negating a value may trap
+    ],
+)
+def test_a_negated_literal_still_fits_its_type(source, code):
+    refused(code, source)

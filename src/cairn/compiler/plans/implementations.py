@@ -62,6 +62,7 @@ from ..syntax.tree import (
     fail,
     is_view,
     local,
+    negated_literal,
     nested,
 )
 
@@ -252,7 +253,7 @@ def total(c: Checker, e: Expr, params: dict) -> None:
             ty is None and (isinstance(e.ref, Expr) or static(e) is not None)
         )
     elif e.tag == "unary":
-        ok = e.val in {"!", "~"} or (e.val == "-" and e.ty is not None and e.ty.name in FLOAT)
+        ok = e.val in {"!", "~"} or negated_literal(e) or (e.val == "-" and e.ty is not None and e.ty.name in FLOAT)
     elif e.tag == "binary":
         left = e.args[0].ty
         divisor = literal(e.args[1], params)

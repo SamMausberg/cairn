@@ -440,3 +440,10 @@ def test_a_writing_call_as_a_conversion_s_operand_is_the_call_bound_first():
     check(bound, head + "fn f(inp:rw<Input>) -> usize { return usize(next(inp)); }\n", allow_reference_traps=True)
     twice = head + "fn f(inp:rw<Input>) -> usize { let v = next(inp); return usize(next(inp)); }\n"
     check(bound, twice, "counterexample", allow_reference_traps=True)
+
+
+def test_a_negated_literal_is_its_value_and_cannot_trap():
+    """`-9223372036854775808` is the least i64, not the checked negation of a literal that does not fit."""
+    least = fn("return -9223372036854775808;", "", "i64")
+    check(least, fn("return 0 - 9223372036854775807 - 1;", "", "i64"))
+    check(least, fn("return -9223372036854775807;", "", "i64"), "counterexample")

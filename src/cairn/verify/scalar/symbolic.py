@@ -9,7 +9,7 @@ view of one storage shares that array, so a write through one part is seen throu
 from __future__ import annotations
 
 from ...compiler.cairnc import SIGNED, WIDTH, Expr, Function, Stmt, Type
-from ...compiler.syntax.tree import BOOL, FLOAT, NUMERIC, USIZE, VOID, is_view
+from ...compiler.syntax.tree import BOOL, FLOAT, NUMERIC, USIZE, VOID, is_view, negated_literal
 from .values import (
     FORMATS,
     MAX_PATHS,
@@ -168,8 +168,8 @@ class Symbolic:
             return self.expr(Expr("int", str(e.ref), ty=ty) if isinstance(e.ref, int) else e.ref, env, inner)
         if e.tag == "name":
             return env[e.val]
-        if e.tag == "int":  # An integer literal takes a float type from its peer or its expected type.
-            whole = int(e.val)
+        if e.tag == "int" or negated_literal(e):  # A literal takes a float type from its peer or its expected type.
+            whole = int(e.val) if e.tag == "int" else -int(e.args[0].val)  # -2**63 is one i64 constant
             return self.q.make(ty, (real(integral(whole, ty.name), ty.name) if ty.name in FLOAT else constant(whole, ty.name),))  # fmt: skip
         if e.tag == "float":
             return self.q.make(ty, (real(float(e.val), ty.name),))

@@ -16,7 +16,22 @@ from ..device import fragments, launches, layouts
 from ..plans import fusion, implementations
 from ..primitives import machine, rings
 from ..primitives.builtins import SHARED, TABLE
-from ..syntax.tree import CPP, FLOAT, STORAGE, VOID, Expr, Function, Program, Stmt, Type, fail, is_view, local, nested
+from ..syntax.tree import (
+    CPP,
+    FLOAT,
+    STORAGE,
+    VOID,
+    Expr,
+    Function,
+    Program,
+    Stmt,
+    Type,
+    fail,
+    is_view,
+    local,
+    negated_literal,
+    nested,
+)
 from . import execution, region_lowering
 
 RUNTIME_FILES = {
@@ -192,6 +207,8 @@ class Emitter:
     # Expressions -------------------------------------------------------------------------------
 
     def literal(self, n: int, ty: Type) -> str:
+        if n < 0:  # C++ has no literal of the least 64-bit value: it is one more than it, minus one
+            return f"static_cast<{self.type(ty)}>({f'{n}LL' if n > -(2**63) else f'({n + 1}LL - 1)'})"
         return f"static_cast<{self.type(ty)}>({n}{'ULL' if n < 2**64 else ''})"
 
     def extent(self, ty: Type, base: str = "") -> str:
@@ -339,6 +356,8 @@ class Emitter:
         return f"({{ auto {temp} = {self.expr(e.args[0])}; {failure} {value} }})"
 
     def e_unary(self, e: Expr) -> str:
+        if negated_literal(e):
+            return self.literal(-int(e.args[0].val), e.ty)
         a, ty = self.expr(e.args[0]), e.ty
         if e.val == "!":
             return f"(!{a})"
