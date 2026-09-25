@@ -21,11 +21,7 @@ By contributing you agree that your contribution is licensed under the same term
 
 ## Pull requests
 
-Every change reaches `main` through a pull request. Put one focused change on its own branch, open the pull request with `gh pr create`, and turn on auto-merge with `gh pr merge --auto --squash`. It merges when CI passes, with no approval needed, and lands as one commit whose subject is the pull request's title.
-
-So the title is one plain sentence saying what is now true, and so is every commit message: no emojis, no attribution trailer, a body only when a reviewer needs one. A red check blocks the merge; fix the branch, never the check. Split a change too large to review in one sitting.
-
-The description fills in every section of the template, each short and concrete, with `none` where a section does not apply. The summary says what is now true, and the motivation links the roadmap issue it closes or advances (`Closes #N`). The changes are listed by area with the file that owns each rule. Behaviour and compatibility say what a program, a command or a record now does differently, including new diagnostic codes and any change to emitted code for programs that already compile. Testing gives the commands and what they reported. Evidence and claims name what the change adds or withdraws as accepted, typed, native-built, finite-tested, sanitizer-clean, SMT-equivalent, Lean-checked or benchmarked, with the records under `evidence/`. Performance gives a measurement with its method and machine, or says it was not measured. Unknown is never success.
+Every change reaches `main` through a pull request that merges itself when CI passes. [AGENTS.md](AGENTS.md#development) says how to branch, title and land one, and every section of [the template](.github/PULL_REQUEST_TEMPLATE.md) says what its description holds.
 
 ## Issues and labels
 

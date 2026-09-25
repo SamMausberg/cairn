@@ -654,5 +654,3 @@ A C string is passed as a one-element view whose storage holds the NUL. `errno` 
 A linear value inside a record leaves by taking the record apart, `let Conn(f, sent) = c;`, because `take` cannot forge the zero a `File` would leave behind (`E-LINEAR-STORAGE`).
 
 One failure type per function: `try` requires the same failure payload, so everything fallible here is `Result[_, IoError]` (`E-TRY` otherwise).
-
-A call that allocates or writes through a borrow cannot be a nested operand. Bind it first (`E-EFFECT-ORDER`).
