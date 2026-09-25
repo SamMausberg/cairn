@@ -127,6 +127,7 @@ class Checker:
         self.refusals: list[tuple[str, bool, Diagnostic, tuple]] | None = [] if every else None
         self.unjudged: set[str] = set()  # functions a refusal left without a verdict
         self.abandoned: BaseException | None = None  # what ended such a check early, when it was not a refusal
+        self.stopped: str | None = None  # the code of the limit, or the class of the fault, that ended it early
         self.capture_sites = capture_sites
         self.sites: list[dict[str, Any]] = []
         self.fs = {f.name: f for f in program.functions}

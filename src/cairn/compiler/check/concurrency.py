@@ -85,10 +85,12 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
     touched = sorted({name for name, *_ in c.lanes.accesses} | set(updated))  # What a queued region holds.
     c.borrowed = [(name + "[]", "rw" if name in written else "ro") for name in touched]
     strides: dict[str, int] = {}
+    within = "k" if binder == "j" else "j"  # the offset in the block form, never the lane's own name
     for name, stride, _, node in c.lanes.accesses:  # Lanes' blocks of one stride are disjoint; of two, they meet.
         if name in written and (stride is None or strides.setdefault(name, stride) != stride):
             fail("E-PARALLEL-RACE", f"{name} is written by lanes, so every lane may touch only {name}[{binder}], "
-                 f"or only its own block {name}[{binder} * S + j] with j below one constant S.", node)  # fmt: skip
+                 f"or only its own block {name}[{binder} * S + {within}] with {within} below one constant S.",
+                 node)  # fmt: skip
     s.block = max((stride or 1 for _, stride, _, _ in c.lanes.accesses), default=1)  # A lane costs its block.
     s.touched = tuple((name, stride, write) for name, stride, write, _ in c.lanes.accesses)  # what fusion reads
     s.touched += tuple((name, None, True) for name in updated)  # an atomic update is no lane's own element
