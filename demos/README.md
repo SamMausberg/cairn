@@ -10,3 +10,5 @@ Each demo runs from a fresh checkout with one command and prints what happened, 
 | [implement](implement/README.md) | An agent writes faster implementations of a sum of squares through `cairn mcp`. The host refuses a looser tolerance, and validation refuses a candidate that drops the tail, shrunk to `n = 5`. The corrected one and a parameterized one validate, and `cairn tune` times them on this host, writes the fastest, and reports the difference with each line labelled. | `make demo-implement` |
 
 The agents in these demos are scripted: their replies are written down and replayed. Everything the host, the compiler, Z3, the timer and the programs say is computed on every run. `python3 demos/repair/run.py --live MODEL` sends the same packets to a real model through `claude -p`, and `demos/repair/live-sonnet-5.json` is one such run.
+
+`transcript.py` is what the four scripts share: `cairn` run from the repository root as a reader types it, a path as they type it, and the CPU a timing ran on.

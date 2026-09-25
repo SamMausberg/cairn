@@ -17,7 +17,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "src"))
+sys.path[:0] = [str(ROOT / "src"), str(HERE.parent)]
+from transcript import cairn, rel  # noqa: E402
+
 from cairn.agent.agent_tools import EditHost, stable_json  # noqa: E402
 from cairn.editor import changes  # noqa: E402
 from cairn.verify.testing import evaluate  # noqa: E402
@@ -29,15 +31,6 @@ SYSTEM = (
     "with what it admitted or why it refused."
 )
 ATTEMPTS = 4
-
-
-def cairn(*args: str) -> subprocess.CompletedProcess:
-    """The command line a reader would type, run from the repository root."""
-    return subprocess.run([sys.executable, str(ROOT / "bin/cairn"), *args], cwd=ROOT, capture_output=True, text=True)
-
-
-def rel(path: Path) -> str:
-    return str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
 
 
 def show_run(path: Path, out: Path) -> dict:
