@@ -93,6 +93,8 @@ def exact(c: Checker, e: Expr) -> Term | None:
         return extent(c, e.args[0]) if e.val == "len" else exact(c, e.args[0])
     if e.tag == "binary" and e.val == "*":  # A name times a positive constant is an atom of its own: `b*256`.
         (x, j), (y, k) = (exact(c, a) or (None, 0) for a in e.args)
+        if x == ZERO and y == ZERO:  # two constants: `2 * BINS`
+            return ZERO, j * k
         name, times = (x, k) if y == ZERO and x and not j else (y, j) if x == ZERO and y and not k else ("", 0)
         return (f"{name}*{times}", 0) if name and times > 0 else None
     if e.tag == "binary" and e.val in {"+", "-"}:

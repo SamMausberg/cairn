@@ -15,10 +15,11 @@ if TYPE_CHECKING:
 FORGED = "Zeroed storage cannot hold linear values: a zero would be a forged one."
 
 
-def path(e: Expr, stable=lambda name: False) -> str:
+def path(e: Expr, stable=lambda name: False, constant=lambda bound: None) -> str:
     """A syntactic place identity for alias checks: a.b, a[], a[lo..hi].
 
-    A part bound counts only when it cannot change: a literal, or a name `stable` vouches for.
+    A part bound counts only when it cannot change: a literal, a name `stable` vouches for, or an expression of
+    literals and constants, which counts as the literal `constant` folds it to: `d[BINS..2 * BINS]` is `d[256..512]`.
     """
     if e.tag == "field":
         return path(e.args[0], stable) + "." + e.val
@@ -28,7 +29,9 @@ def path(e: Expr, stable=lambda name: False) -> str:
         base = path(e.args[0], stable)
         if e.args[0].tag == "slice":  # A part of a part is somewhere inside the outer part: no visible bounds.
             return base.partition("[")[0] + "[?..?]"
-        bounds = (a.val if a.tag == "int" or (a.tag == "name" and stable(a.val)) else "?" for a in e.args[1:])
+        bounds = (
+            a.val if a.tag == "int" or (a.tag == "name" and stable(a.val)) else constant(a) or "?" for a in e.args[1:]
+        )
         return base + "[" + "..".join(bounds) + "]"
     return e.val
 
@@ -157,7 +160,13 @@ def stable(c: Checker, name: str) -> bool:
 
 
 def where(c: Checker, e: Expr) -> str:
-    return path(e, c.stable)
+    return path(e, c.stable, lambda bound: folded(c, bound))
+
+
+def folded(c: Checker, bound: Expr) -> str | None:
+    """The literal a part bound made of literals and constants is, which leases compare as they compare literals."""
+    term = facts.exact(c, bound)
+    return str(term[1]) if term is not None and term[0] == facts.ZERO and term[1] >= 0 else None
 
 
 def identity(c: Checker, e: Expr) -> str:
