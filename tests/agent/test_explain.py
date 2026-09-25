@@ -72,8 +72,10 @@ def test_guards_sit_on_the_line_they_guard(report):
     assert grow[f"p.cairn:{line('fn grow(v:rw<Vec[u64]>, k:u64) { vec.push(v, k + 1); }')}"] == {"overflow": 1}
 
 
-def test_a_library_function_is_placed_in_its_own_file(report):
-    push = report["functions"]["std.vec.push[u64]"]
+def test_a_library_function_is_explained_when_it_is_named_and_placed_in_its_own_file(report):
+    assert not any(name.startswith("std.") for name in report["functions"])  # what the imports bring in
+    assert {c["calls"] for c in report["functions"]["grow"]["costly_calls"]} == {"std.vec.push[u64]"}
+    push = explain(SOURCE, "p.cairn", {"std.vec.push[u64]"})["functions"]["std.vec.push[u64]"]
     assert push["at"].startswith("cairn/std/vec.cairn:")
     text = (PACKAGE / "std/vec.cairn").read_text().splitlines()
     for where, kinds in push["guards"]["by_line"].items():
@@ -135,6 +137,16 @@ def test_an_agent_asks_for_the_explanation_of_its_admitted_candidate():
     assert after["guards"]["discharged_by_line"] == {summed: {"bounds": 1}}
     session = EditSession(SOURCE, "total")
     assert session.explain()["functions"]["total"]["guards"] == before["functions"]["total"]["guards"]
+
+
+@clang
+def test_a_loop_of_the_runtime_names_the_packaged_header_wherever_the_command_runs(tmp_path, monkeypatch):
+    """clang writes a path relative to the directory it shares with where it compiled, here the temporary one."""
+    monkeypatch.chdir(tmp_path)
+    spread = "fn spread(n:usize, out:rw<u64>[n]) { parallel i in n { out[i] = u64(i); } }\nfn main() -> i32 = 0;\n"
+    loops = [loop["at"] for loop in explain(spread, "p.cairn")["functions"]["spread"]["loops"]]
+    assert any(at.startswith("cairn/runtime/cairn_parallel.hpp:") for at in loops), loops
+    assert all(at.startswith(("p.cairn:", "cairn/runtime/")) for at in loops), loops
 
 
 def test_inspect_attaches_the_explanation_on_request(tmp_path, capsys):
