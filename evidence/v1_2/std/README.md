@@ -28,7 +28,7 @@ Median seconds of seven runs, with the fastest and slowest, and the largest peak
 
 The ranges of the two arms do not overlap in any row. Growth was a loop of `swap(bigger[i], v.data[i])`, and each index of it was guarded against a `Buf` field that every store through a `u8` could have changed, so the compiled loop reloaded the field and checked both bounds for every byte. Now the elements move through two views of one extent, which need no guard, and the loop compiles to 16-byte loads and stores. A regular file is asked for what is left of it, so `read_to_end` makes one allocation of the file's size and the peak is the input itself.
 
-A pipe still peaks at about 2.5 times its input: the old array and the doubled, zero-filled new one are both held while the elements move.
+A pipe still peaked at about 2.5 times its input: the old array and the doubled, zero-filled new one are both held while the elements move. "The zero fill" below is what changed that.
 
 ## A copy instead of the exchange
 
@@ -45,6 +45,24 @@ The word-frequency probe keyed its map by a record wrapping a `Vec[u8]`, with it
 
 The difference is the whole program an agent writes, not the map alone: the probe's version also reads its input 4096 bytes at a time, and copies each word into its scratch key before every lookup.
 
-## What was not done
+## The zero fill
 
-The zero fill is the rest of the pipe's cost and most of its peak. Allocating a `Buf` of a trivially constructible type with `calloc`, whose large blocks come from pages the kernel already zeroed, was measured once by editing the runtime of one build by hand: `chunk_loop` from a file took 0.20 to 0.24 s and peaked at 131 MiB instead of 195 MiB. That is a change to `runtime/cairn_owners.hpp` for every program, not to `std`, and is not part of this record. g++ builds were not timed.
+A pipe peaked at 2.5 times its input because the doubled array was zero-filled by `new T[n]()`, which writes every byte and so makes every page resident, while the old array was still held. CAIRN cannot say otherwise: every `Buf` is zeroed by the language, so the choice is the runtime's. `runtime/cairn_owners.hpp` now takes a `Buf` of a type that is trivially constructible and destructible, and aligned no more than `max_align_t`, from `calloc`, whose large blocks come from pages the kernel has already zeroed, and releases it with `free`; every other `Buf` is made as before.
+
+```sh
+git archive 9ad4365 src bin | tar -x -C BEFORE
+python3 bench/host/std_input.py --before BEFORE --runs 7 --megabytes 77 --out evidence/v1_2/std/zeroed.json
+```
+
+`zeroed.json`, run the same way at load 3 to 32, the growth change above as the before arm:
+
+| Program | Input | Before, s | After, s | Before, MiB | After, MiB |
+|---|---|---|---|---|---|
+| `chunk_loop` | file | 0.24 (0.24 to 0.26) | 0.22 (0.21 to 0.26) | 195 | 131 |
+| `chunk_loop` | pipe | 0.27 (0.25 to 0.28) | 0.29 (0.27 to 0.32) | 195 | 131 |
+| `read_to_end` | file | 0.09 (0.08 to 0.10) | 0.07 (0.07 to 0.07) | 80 | 80 |
+| `read_to_end` | pipe | 0.28 (0.27 to 0.29) | 0.25 (0.22 to 0.27) | 195 | 131 |
+| `push_each` | file | 0.44 (0.42 to 0.46) | 0.41 (0.38 to 0.45) | 272 | 208 |
+| `push_each` | pipe | 0.60 (0.60 to 0.64) | 0.59 (0.50 to 0.63) | 323 | 208 |
+
+The peaks fall by a third, and a pipe now peaks at 1.7 times its input: the new array's pages become resident only as the elements are moved into them and the reads fill the rest. The times move by less than their ranges in every row but one, the file read, so this record claims memory, not speed. g++ builds were not timed.
