@@ -110,6 +110,9 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                                          "hash; gives up inlining across modules."}),
     ({"emit", "build", "run", "export"}, "--keep-guards", {"action": "store_true", "help": "Write every guard, also those the "
                                                  "checker showed cannot fail: the conservative build."}),
+    ({"build", "run"}, "--sanitize", {"choices": ["address", "thread"], "help": "Build for the host at -O1 checked by "
+                                     "this sanitizer (address also checks undefined behaviour and leaks) and run it "
+                                     "without the memory cap, which its shadow memory would exceed."}),
     ({"run", "test"}, "--memory-mib", {"type": int, "default": 1024,
                                        "help": "Native address-space cap, 64..65536 MiB; not a sandbox."}),
     ({"build", "export"}, "--kind", {"choices": ["library", "exe"]}),

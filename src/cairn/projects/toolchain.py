@@ -27,6 +27,15 @@ KINDS = {"library", "exe"}
 STRICT = ["-std=c++20", "-O3", "-ffp-contract=off", "-fno-fast-math", "-fno-exceptions", "-fno-rtti"]
 WARNINGS = ["-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-unused-variable"]
 WARNINGS += ["-Wno-unused-but-set-variable"]
+# `--sanitize`: a host build checked while it runs, as the 1.1 evaluation judged programs: -O1 with frame pointers so a
+# report has its stack, every report fatal, and no -Werror, since such a build is run, never shipped.
+SANITIZERS = {"address": ["-fsanitize=address,undefined", "-fno-sanitize-recover=all"], "thread": ["-fsanitize=thread"]}
+SANITIZED = ["-O1", "-g", "-fno-omit-frame-pointer"]
+# What each sanitizer reads from the environment of the program it checks: leaks count, and the first race ends it.
+SANITIZER_ENVIRONMENT = {
+    "address": {"ASAN_OPTIONS": "detect_leaks=1", "UBSAN_OPTIONS": "print_stacktrace=1"},
+    "thread": {"TSAN_OPTIONS": "halt_on_error=1"},
+}
 # What `cairn explain` adds to a host build to read clang's vectorizer verdicts, with the `.cairn` line of each loop.
 REMARKS = ["-gline-tables-only", "-fsave-optimization-record", "-foptimization-record-passes=loop-vectorize"]
 
@@ -149,6 +158,11 @@ def command(cxx: str, source: str, artifact: str, arch: str | None = None, kind:
         return [find(cxx), *flags(arch, kind), *(emulated(source) if cuda else []), source, "-o", artifact]
     chosen = supported(device or resolve())
     return [*device_prefix(cxx, arch, kind, chosen), source, "-o", artifact]
+
+
+def sanitized(command: list[str], sanitizer: str) -> list[str]:
+    """A host command line checked by `sanitizer`: its flags and -O1 in place of -O3, and no -Werror."""
+    return [command[0], *SANITIZED, *SANITIZERS[sanitizer], *(a for a in command[1:] if a not in {"-O3", "-Werror"})]
 
 
 def emulated(source: str) -> list[str]:

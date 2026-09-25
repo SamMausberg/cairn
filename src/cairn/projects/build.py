@@ -22,7 +22,18 @@ from ..compiler.syntax.tree import Diagnostic
 from . import emulation, foreign
 from .project import Project, ProjectError
 from .target import resolve
-from .toolchain import audit_effects, find, flags, host_family, link_flags, linked, precompiled, profile, unit_commands
+from .toolchain import (
+    audit_effects,
+    find,
+    flags,
+    host_family,
+    link_flags,
+    linked,
+    precompiled,
+    profile,
+    sanitized,
+    unit_commands,
+)
 from .toolchain import command as native_command
 from .toolchain import version as compiler_version
 
@@ -169,10 +180,12 @@ def emitted(project: Project, *, kind: str, tests: tuple[str, ...] = (), header:
 def build(project: Project, *, output: Path | None = None, cxx: str = "clang++", arch: str | None = None,
           kind: str | None = None, timeout: int = 60, target: str | None = None, debug: bool = False,
           incremental: bool = False, keep_guards: bool = False, tests: tuple[str, ...] = (),
-          header: bool = False, device_target: str | None = None, emulate: bool = False) -> dict:  # fmt: skip
+          header: bool = False, device_target: str | None = None, emulate: bool = False,
+          sanitizer: str | None = None) -> dict:  # fmt: skip
     """Build `project` into a fresh directory under `output` and return its receipt. A device program is built by nvcc
     for its device target, or with `emulate` by `cxx` for the host, judged against that target, its device work on
-    host threads (projects/emulation.py)."""
+    host threads (projects/emulation.py). With `sanitizer`, a host build of one unit is checked by that sanitizer
+    while it runs (projects/toolchain.py)."""
     kind = "exe" if tests else kind or project.kind  # A test build is an executable whose main runs one test.
     target = target or project.target
     bare = bool(profile(target))
@@ -185,6 +198,8 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         raise ProjectError(f"Tests run as host processes; target {target} has no host to run them on.")
     if header and (kind != "library" or bare or incremental):
         raise ProjectError("--header describes a hosted library built as one unit: use --kind library.")
+    if sanitizer and (bare or incremental):
+        raise ProjectError("--sanitize checks a hosted build of one unit: not an image, and not --incremental.")
     compiler = find(cxx)
     made = emitted(project, kind=kind, tests=tests, header=header, keep_guards=keep_guards, debug=debug, bare=bare)
     interface, bodies, receipt = made.interface, made.bodies, made.receipt
@@ -213,7 +228,10 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         emulation.check(project.source, receipt, project.foreign)
     if project.foreign and bare:
         raise ProjectError(f"Target {target} builds one image from CAIRN alone; it compiles no vendored source.")
+    if sanitizer and cuda and not emulated:
+        raise ProjectError("--sanitize checks host code: build device work with --emulate to check it on host threads.")
     command = native_command(cxx, str(cpp), str(artifact), arch or project.arch, kind, cuda, target, device, emulated)
+    command = sanitized(command, sanitizer) if sanitizer else command
     libraries = [] if bare else linked(project.libraries, receipt["modules"])  # an image refuses ffi effects above
     command += link_flags(libraries)
     if debug:  # Symbols plus #line directives: a debugger steps through the .cairn files.
@@ -230,6 +248,7 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         "target": target,
         **({"device_target": device.record()} if device else {}),
         **({"emulation": emulation.record(device)} if emulated and device else {}),
+        **({"sanitizer": sanitizer} if sanitizer else {}),
         **({"libraries": libraries} if libraries else {}),
         "command": command,
         "generated_sha256": hashlib.sha256(generated.encode()).hexdigest(),

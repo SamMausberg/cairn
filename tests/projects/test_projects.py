@@ -508,3 +508,45 @@ def test_the_guide_shows_the_project_new_creates(tmp_path):
     record = build(load_project(root), cxx="clang++", timeout=120)
     done = subprocess.run([record["artifact"]], capture_output=True, text=True, timeout=30)
     assert done.returncode == 0 and f"```text\n{done.stdout}```" in section
+
+
+TWO_TASKS = """fn sum(n:usize, xs:ro<u64>[n]) -> u64 { let mut t:u64 = 0; for x in xs { t += x; } return t; }
+
+fn main() -> i32 {
+  let mut xs = Buf[u64](100);
+  for i in 0..100 { xs[i] = u64(i); }
+  let g = Group[u64](2);
+  spawn sum(xs[0..50]) into g;
+  spawn sum(xs[50..100]) into g;
+  let a = collect(g);
+  let b = collect(g);
+  wait(g);
+  println(a + b);
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("sanitizer,runtime", [("address", b"__asan_init"), ("thread", b"__tsan_init")])
+def test_run_sanitize_builds_the_program_as_the_sanitizer_checks_it_and_runs_it(tmp_path, capsys, sanitizer, runtime):
+    """One command for what the 1.1 evaluation's subjects did by hand: find program.cpp, rebuild it, run it."""
+    path = tmp_path / "sum.cairn"
+    path.write_text(TWO_TASKS)
+    main(["run", str(path), "--sanitize", sanitizer, "--out", str(tmp_path), "--format", "json"])
+    record = json.loads(capsys.readouterr().out)
+    assert (record["exit_code"], record["stdout"], record["sanitizer"]) == (0, "4950\n", sanitizer)
+    assert record["memory_limit_mib"] is None  # shadow memory is many times the program's size
+    built = json.loads((Path(record["build_directory"]) / "receipt.json").read_text())
+    assert built["sanitizer"] == sanitizer and "-O1" in built["command"] and "-O3" not in built["command"]
+    assert runtime in Path(built["artifact"]).read_bytes()
+    assert main(["run", str(path), "--sanitize", sanitizer, "--incremental", "--format", "json"]) == 2
+
+
+def test_build_prints_a_short_record_and_keeps_every_function_s_receipt_in_its_file(tmp_path, capsys):
+    path = tmp_path / "sum.cairn"
+    path.write_text(TWO_TASKS)
+    assert main(["build", str(path), "--out", str(tmp_path), "--format", "json"]) == 0
+    printed = json.loads(capsys.readouterr().out)
+    whole = json.loads(Path(printed.pop("receipt")).read_text())
+    assert "frontend" not in printed and {k: v for k, v in whole.items() if k != "frontend"} == printed
+    assert {"main", "sum"} <= set(whole["frontend"]["functions"])
