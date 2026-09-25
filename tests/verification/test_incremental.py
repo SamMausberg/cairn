@@ -72,6 +72,15 @@ fn tasks(n:usize, out:rw<u64>[n]) {
   fill(n, out, 1);
 }
 
+fn pick[T:copy](a:T, b:T, first:bool) -> T {
+  if first { return a; }
+  return b;
+}
+
+fn chooser(x:u64) -> u64 { return pick(x, 1, x > 3); }
+
+fn later(x:u64) -> u64 { return pick(x, 2, x > 4); }
+
 fn main() -> i32 {
   let heard = noisy(3);
   let called = through(2);
@@ -92,7 +101,17 @@ TARGETED = {
     "recursion": ("middle", "{\n  if x > 100 { return middle(x - 1); }\n  return leaf(x);\n}"),
     "call through a function value": ("middle", "{\n  return apply(twice, x);\n}"),
     "refuse a correct program": ("leaf", "{ return true; }"),
+    "use again an instance it made first": ("chooser", "{ return pick(x, 5, x > 6); }"),
+    "no longer make an instance it made first": ("chooser", "{ return x; }"),
+    "make first an instance a later body made": ("leaf", "{ return pick(x, 1, true) + 1; }"),
     "a body no longer parses": ("leaf", "{ return x + ; }"),
+}
+# What a whole check, and no walk, answers: the parse error where a whole parse meets it; an instance a later body may
+# read that the edited body no longer makes; and an instance the edited body now makes that a later body made.
+WHOLE = {
+    "a body no longer parses",
+    "no longer make an instance it made first",
+    "make first an instance a later body made",
 }
 # Edits of a body's text that any example takes: a line more, a comment, an effect more, and a statement fewer.
 EDITS = {
@@ -217,8 +236,7 @@ def test_each_kind_of_edit_checks_as_a_whole_check_does(label):
     base = walked(PROGRAM)
     name, body = TARGETED[label]
     after = spliced(PROGRAM, base[1].spans[name], body)
-    ran = agrees(base, PROGRAM, after)
-    assert ran or label == "a body no longer parses"  # which a whole parse reports, where it is
+    assert agrees(base, PROGRAM, after) == (label not in WHOLE)
 
 
 def test_a_kept_walk_answers_an_edit_and_the_edit_keeps_one_for_the_next():
