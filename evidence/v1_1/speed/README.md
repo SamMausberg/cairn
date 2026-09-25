@@ -57,7 +57,9 @@ Every device example built for sm_120 by `tools/checks/device_examples.py --targ
 | `examples/tensor/tile64.cairn` | 15.9 | 11.8 |
 | all twelve | 139.8 | 77.6 |
 
-The four runs took 131 and 171 seconds on main and 82 and 92 with the change. The test modules the CI device jobs run (`make device-build`, at `-n 3`) took 757 seconds on main and 475 with the change, one right after the other, the load 18 when the first began and 29 when the second ended.
+The four runs took 131 and 171 seconds on main and 82 and 92 with the change. One build of a program with a single device region, in the two forms the tests use, alternating before and after at load 46 to 69: `-c` 11.6 and 11.7 seconds against 2.9 and 2.9, `-ptx` 4.1 and 4.7 against 1.0 and 0.9. Four of the test modules that compile the most device code (`test_plans.py`, `test_device_paths.py`, `test_tensor.py`, `test_staging.py`, 96 tests at `-n 3`), main just before the change against main with it, before, after, after, before, load 22 to 92: 92 and 95 seconds against 31 and 33.
+
+An earlier pair of whole runs of the CI device modules on this machine, 757 seconds against 475, ran one after the other while the load moved, so it is not counted here. On GitHub's runners the change is not visible yet: the step that runs those modules took between 518 and 802 seconds in five runs of the same modules without it, and 568 and 622 in the first two with it. That spread is the runners', and two runs cannot show a change inside it. This machine reads CUB's many small headers slowly under load, which a runner may not.
 
 Of the 2101 programs `tools/checks/emission_identity.py` takes, 2090 emit the same C++ as before. The other 11 are exactly the programs with a device collector, and each differs by one added line, `#include "cairn_cub.hpp"`.
 
@@ -75,6 +77,14 @@ Main at b14beb5 against the change, interleaved in fresh processes, load 9 to 10
 | `cairn predict examples/apps/analytics` | 0.54 | 0.56 | 2 |
 
 Each command printed the same output before and after, and the validation the same record. A program checked only once pays for keeping its check: 14 ms of 125 for analytics and 38 of 1750 for tile32, in-process, which the last row does not separate from no change.
+
+## Warp exchanges on host threads
+
+A cooperative region runs on the host as real threads at barriers, so the thread sanitizer can watch it. The emulated `examples/reduction/gpu.toml` took 41 seconds, 142 of them system time and 28 million context switches, because each shuffle met its warp's barrier twice and a warp `reduce` is five shuffles. Each warp now keeps two banks of slots and its exchanges use them in turn, so one barrier an exchange is enough, and a warp `reduce` publishes each value once and every thread works the butterfly out for all 32 lanes, in the device's order.
+
+The emulated reduction binary, built from the same program against each runtime and run alternately, old, new, new, old: 34.0 and 45.4 seconds before, 15.6 and 15.8 after, with system time 124 and 133 seconds before and 37 and 39 after. The host-thread tests of `test_reduction_example.py`, `test_finish.py`, `test_written.py`, `test_votes.py` and `test_finish_counter.py` (16 tests, `-n 3`), main at ccfe3d0 against the change, main, change, change, main, load 11 rising to 168: 115 and 105 seconds on main, 52.4 and 52.9 with the change.
+
+The same values come out: a new test holds a warp's f32 sum on host threads to the device's butterfly bit for bit, on values a left-to-right sum rounds differently, and a left-to-right fold in its place fails it.
 
 ## What did not run
 

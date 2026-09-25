@@ -445,6 +445,52 @@ def test_each_shuffle_moves_the_value_of_the_lane_it_names(tmp_path, cxx):
     assert ran.returncode == 0 and "ThreadSanitizer" not in ran.stderr, ran.stdout + ran.stderr[-3000:]
 
 
+BUTTERFLY = """fn warp_sums(x:ro<f32>[32], out:rw<f32>[32]) {
+  blocks b in 1 threads t in 32 {
+    let s = reduce + warp yield x[t];
+    out[t] = s;
+  }
+}
+
+// The device's order: five times, each lane adds its partner's value, the partner 16, 8, 4, 2 and 1 lanes away.
+fn butterfly(x:ro<f32>[32]) -> f32 {
+  buffer v:f32[32] = zeroed;
+  buffer w:f32[32] = zeroed;
+  for l in 0..32 { v[l] = x[l]; }
+  let mut m:usize = 16;
+  while m > 0 {
+    for l in 0..32 { w[l] = v[l] + v[l ^ m]; }
+    for l in 0..32 { v[l] = w[l]; }
+    m = m / 2;
+  }
+  return v[0];
+}
+
+fn main() -> i32 {
+  buffer x:f32[32] = zeroed;
+  buffer out:f32[32] = zeroed;
+  for k in 0..32 {
+    if k % 2 == 0 { x[k] = 30000000.0; } else { x[k] = 1.0 + f32(k) / 64.0; }
+  }
+  let mut plain:f32 = 0.0;
+  for k in 0..32 { plain = plain + x[k]; }
+  let want = butterfly(x);
+  if to_bits(plain) == to_bits(want) { return 2; } // these values give the order away, so the check below bites
+  warp_sums(x, out);
+  for k in 0..32 { if to_bits(out[k]) != to_bits(want) { return 1; } }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_warp_float_sum_on_host_threads_adds_in_the_device_s_order(tmp_path, cxx):
+    """A warp's `reduce +` over f32 on host threads gives every lane the bits the device's butterfly gives, on values
+    where a left-to-right sum rounds differently, under the thread sanitizer."""
+    ran = watched(tmp_path, compile_source(BUTTERFLY)[0], cxx, "thread")
+    assert ran.returncode == 0 and "ThreadSanitizer" not in ran.stderr, ran.stdout + ran.stderr[-3000:]
+
+
 def test_each_shuffle_is_one_warp_shuffle_on_the_device(tmp_path):
     device = SHUFFLES.split("fn main")[0].replace("[n])", "[n]@device)").replace("[n],", "[n]@device,")
     ptx = device_build(tmp_path, compile_source(device)[0], ptx=True).read_text()
