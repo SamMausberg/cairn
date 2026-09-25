@@ -117,6 +117,7 @@ def test_a_definition_of_other_types_does_not_build(tmp_path, cxx):
     record = build(load_project(root), cxx=cxx, kind="exe")
     assert record["status"] == "native-build-failed" and record["foreign"][0]["status"] == "native-build-failed"
     assert "with other types than histogram_cpp(n:usize" in record["stderr"]
+    assert "compiler_defect" not in record  # the vendored source is at fault, not the C++ CAIRN generated
 
 
 def test_a_cpp_symbol_is_found_by_its_c_name(tmp_path):

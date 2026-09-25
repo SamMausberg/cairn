@@ -9,8 +9,10 @@ import re
 import subprocess
 import tempfile
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import TypeVar
 
@@ -40,6 +42,10 @@ from .toolchain import version as compiler_version
 
 PRECOMPILE_AT = 16  # units to compile before a precompiled header repays its own build (evidence/v1_0/scale)
 Judged = TypeVar("Judged", DeviceTarget, None)  # a program's device target, or None for a host program
+# Where a compiler places what it refuses: clang++ and g++ write `file:line:column:` and nvcc `file(line):`, and nvcc
+# names the line that instantiated a template `at line N of file`. A #line directive names a `.cairn` line.
+PLACED = re.compile(r"([^\s:()]+)(?::(\d+):\d+:|\((\d+)\):)|at line (\d+) of (\S+)")
+DIRECTIVE = re.compile(r'\s*#line (\d+) "(.*)"$')
 
 
 def intact(target: Path, digest: Path) -> bool:
@@ -129,6 +135,45 @@ int main(int argc, char** argv) {{
   return 0;
 }}
 """
+
+
+def lowered_from(debug: str) -> list[tuple[str, int] | None]:
+    """For each line of a program as a build compiles it, the `.cairn` file and line it was lowered from: the #line
+    directive above it in the same program generated for a debugger, which differs from it by those lines alone."""
+    lines: list[tuple[str, int] | None] = []
+    at = None
+    for text in debug.splitlines():
+        if found := DIRECTIVE.match(text):
+            at = (found[2], int(found[1]))
+        else:
+            lines.append(at)
+    return lines
+
+
+def refusal(project: Project, stderr: str, directed: Callable[[], Emitted], compiler: str, directory: Path) -> dict:
+    """What a build adds when its compiler refuses the C++ CAIRN generated, which a program that checks should never
+    meet: the `.cairn` line the refused C++ came from, and that the fault is the CAIRN compiler's, to be reported.
+    Nothing when the refusal is elsewhere, in a vendored source or at the link. `directed` makes the same program with
+    its #line directives, called only when a line of program.cpp needs them."""
+    named = [(Path(m[1] or m[5]), int(m[2] or m[3] or m[4])) for m in PLACED.finditer(stderr)]
+    places = [(path, n) for path, n in named if path.name in {"program.cpp", *RUNTIME_FILES} or path.suffix == ".cairn"]
+    if not places:
+        return {}
+    lowered = lowered_from(directed().generated) if any(path.name == "program.cpp" for path, _ in places) else []
+
+    def source(path: Path, n: int) -> tuple[str, int] | None:  # a debug build's own directives name `.cairn` lines
+        if path.suffix == ".cairn":
+            return str(path), n
+        return lowered[n - 1] if path.name == "program.cpp" and 0 < n <= len(lowered) else None
+
+    found = next(filter(None, (source(path, n) for path, n in places)), None)  # the first a statement was lowered to
+    where = f"{os.path.relpath(found[0], project.root)}:{found[1]}" if found else ""
+    said = next((line.strip() for line in stderr.splitlines() if "error" in line), "")
+    said = said.replace(f"{directory}/", "").replace(f"{project.root}/", "")
+    message = (f"{compiler} refused the C++ generated {f'from {where}' if where else 'for this program'}. A program "
+               "that checks should always build, so this is a fault of the CAIRN compiler, never of the program: "
+               f"report it with the program. {compiler} said: {said}")  # fmt: skip
+    return {"message": message, "compiler_defect": True, **({"refused_at": where} if where else {})}
 
 
 def judged(device: Judged, receipt: dict) -> Judged:
@@ -301,6 +346,10 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
         )
         if cp.returncode == 0:
             record["artifact_sha256"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
+        elif not foreign.failure(foreign_built):  # a vendored source that does not build is at fault itself
+            directed = partial(emitted, project, kind=kind, tests=tests, header=header, keep_guards=keep_guards,
+                               debug=True, bare=bare)  # fmt: skip
+            record.update(refusal(project, cp.stderr, directed, Path(command[0]).name, directory))
     except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as error:
         record.update(status="unknown", message=str(error))
     record["elapsed_seconds"] = time.monotonic() - started
