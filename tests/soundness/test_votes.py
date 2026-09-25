@@ -7,14 +7,11 @@ emulated, and compiles for sm_120 to VOTE.ANY, VOTE.ALL, MATCH.ANY and SHFL.UP. 
 """
 
 import re
-import shutil
-import subprocess
 
 import pytest
 
-from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from emitted import contract, device_build, refused, watched
+from emitted import assembled, emulated, refused, round_trips, watched
 
 KERNEL = """// Every thread of each warp votes on its value, finds the lanes that share its value mod 4, and reads its lower
 // neighbour's value; out[i] packs what it learned.
@@ -96,18 +93,11 @@ def test_every_vote_agrees_with_a_plain_loop_over_the_warp_under_the_thread_sani
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_and_agrees(tmp_path, cxx):
-    done = contract(tmp_path, compile_source(DEVICE)[0], cxx, cuda=True, emulate=True)
-    assert done.returncode == 0, (done.returncode, done.stderr[-3000:])
+    emulated(tmp_path, compile_source(DEVICE)[0], cxx)
 
 
 def test_each_vote_compiles_for_sm_120_to_one_warp_instruction(tmp_path):
-    if not shutil.which("cuobjdump") or not shutil.which("ptxas"):
-        pytest.skip("needs ptxas and cuobjdump")
-    ptx = device_build(tmp_path, compile_source(KERNEL.replace("[n]", "[n]@device"))[0], ptx=True)
-    cubin = tmp_path / "p.cubin"
-    built = subprocess.run(["ptxas", "-arch=sm_120", str(ptx), "-o", str(cubin)], capture_output=True, text=True)
-    assert built.returncode == 0, built.stderr[-3000:]
-    sass = subprocess.run(["cuobjdump", "-sass", str(cubin)], capture_output=True, text=True, timeout=120).stdout
+    sass, _ = assembled(tmp_path, compile_source(KERNEL.replace("[n]", "[n]@device"))[0])
     for wanted in ("VOTE.ANY", "VOTE.ALL", "MATCH.ANY", "SHFL.UP"):
         assert wanted in sass, wanted
     assert not re.search(r"\b(LDL|STL)\b", sass)
@@ -122,9 +112,7 @@ def test_a_ballot_is_the_same_in_every_thread_of_its_warp_and_a_match_is_not():
 
 
 def test_the_canonical_projection_compiles_to_the_same_code():
-    canonical = canonical_source(HOST)
-    assert canonical_source(canonical) == canonical
-    assert compile_source(canonical)[0] == compile_source(HOST)[0]
+    round_trips(HOST)
 
 
 BLOCK = "fn f(g:usize) {\n  blocks b in g threads t in 64 {\n    BODY\n  }\n}\n"

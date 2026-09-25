@@ -13,7 +13,7 @@ from cairn.agent.projection import canonical_source
 from cairn.agent.sketches import Sketch
 from cairn.agent.teaching import CARDS, select_cards
 from cairn.compiler.cairnc import Diagnostic, compile_source
-from emitted import code_of
+from emitted import code_of, round_trips
 
 STD = Path(__file__).resolve().parents[2] / "src/cairn/std"
 PROGRAMS = {
@@ -36,10 +36,7 @@ fn hidden(v:u64) -> u64 pure = v;
 
 @pytest.mark.parametrize("name", PROGRAMS)
 def test_projection_keeps_native_code_and_is_idempotent(name):
-    source = PROGRAMS[name]
-    canonical = canonical_source(source)
-    assert compile_source(canonical)[0] == compile_source(source)[0]
-    assert canonical_source(canonical) == canonical
+    round_trips(PROGRAMS[name])
 
 
 def edit(session, body):

@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
 from cairn.compiler.lower.codegen import mangle
 from cairn.compiler.lower.header import header
@@ -29,6 +30,7 @@ from support import device_lock, device_reason
 # names. The CI device jobs run every test that compiles device code once under g++ and once under clang++.
 NVCC_HOST = os.environ.get("CAIRN_TEST_NVCC_HOST", "g++")
 SANITIZED = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
+ADDRESS_AND_UB = ["-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]  # what `contract` adds for them
 WARNINGS = ["-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-unused-variable"]
 STAND_INS = Path(__file__).resolve().parent / "runtime"  # gpu_host.hpp, and coop_host.hpp that adds cooperative regions
 
@@ -51,6 +53,21 @@ def code_of(call) -> str:
 def sanitized(cxx: str) -> list[str]:
     """`SANITIZED` under clang++; under g++ the same build without the sanitizers, run for its behaviour alone."""
     return SANITIZED if cxx == "clang++" else SANITIZED[:4]
+
+
+def sanitizers(cxx: str) -> list[str]:
+    """What `contract` adds under `cxx`: the address and undefined-behaviour sanitizers under clang++, and nothing under
+    g++, whose build runs for its behaviour alone."""
+    return ADDRESS_AND_UB if cxx == "clang++" else []
+
+
+def round_trips(source: str) -> str:
+    """Require that the canonical projection of `source` reparses to itself and compiles to the same C++; the
+    projection, for what else a test reads in it."""
+    canonical = canonical_source(source)
+    assert canonical_source(canonical) == canonical
+    assert compile_source(canonical)[0] == compile_source(source)[0]
+    return canonical
 
 
 def emit(tmp_path: Path, cpp: str, entry: str | None = "main", beside=None, stand_in=None) -> tuple[str, str]:
@@ -183,6 +200,27 @@ def device_build(tmp_path: Path, cpp: str, entry: str | None = None, ptx=False, 
     return Path(target)
 
 
+def emulated(tmp_path: Path, cpp: str, cxx: str, timeout=240):
+    """A device program built for the host by `contract`, its device work on host threads, and run; it must exit 0."""
+    done = contract(tmp_path, cpp, cxx, emulate=True, timeout=timeout)
+    assert done.returncode == 0, (done.returncode, done.stderr[-3000:])
+    return done
+
+
+def assembled(tmp_path: Path, cpp: str, timeout=600) -> tuple[str, str]:
+    """`cpp`'s device code compiled for sm_120 to PTX by `device_build`, assembled by ptxas and read back with
+    cuobjdump, nothing run; the SASS, and what ptxas -v reported of each kernel's registers, stack and spills. Skips
+    the test without ptxas and cuobjdump."""
+    if not shutil.which("cuobjdump") or not shutil.which("ptxas"):
+        pytest.skip("needs ptxas and cuobjdump")
+    ptx = device_build(tmp_path, cpp, ptx=True, timeout=timeout)
+    cubin = tmp_path / "p.cubin"
+    done = subprocess.run(["ptxas", "-arch=sm_120", "-v", str(ptx), "-o", str(cubin)], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr[-3000:]
+    sass = subprocess.run(["cuobjdump", "-sass", str(cubin)], capture_output=True, text=True, timeout=120).stdout
+    return sass, done.stderr
+
+
 def watched(tmp_path: Path, cpp: str, cxx: str, sanitizer: str, timeout=300, **options):
     """`contract` under `sanitizer`, with leak detection and ThreadSanitizer halting at its first report, run without
     address randomization, which ThreadSanitizer needs on newer kernels."""
@@ -201,3 +239,12 @@ def on_device():
         pytest.skip(reason)
     with device_lock():
         yield
+
+
+def ran_on_device(tmp_path: Path, cpp: str, timeout=240):
+    """A device program built by `contract` under g++ and run on the device, only under `make gpu` (`on_device`); it
+    must exit 0."""
+    with on_device():
+        done = contract(tmp_path, cpp, "g++", cuda=True, timeout=timeout)
+    assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    return done

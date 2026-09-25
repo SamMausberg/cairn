@@ -20,7 +20,7 @@ from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
 from cairn.compiler.lower.header import header
 from cairn.projects.build import build as build_project
 from cairn.projects.project import load_project
-from emitted import NVCC_HOST, build, contract, device_build, hosted_library, on_device, printed, sanitized
+from emitted import NVCC_HOST, build, device_build, hosted_library, printed, ran_on_device, sanitized
 
 PIPELINE = """
 fn pass(n:usize, x:rw<u32>[n]@device, sums:rw<u32>[n]@device, kept:rw<u32>[n]@device, round:u32) -> u64 {
@@ -230,9 +230,7 @@ def test_the_pipeline_keeps_its_results_on_the_device(tmp_path):
     """Twenty passes on the device, each held to the host's own loops over the same data: typed here, and run only
     under `make gpu`."""
     cpp = compile_source(PIPELINE + CHECKED)[0]
-    with on_device():
-        done = contract(tmp_path, cpp, "g++", cuda=True, timeout=600)
-    assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    ran_on_device(tmp_path, cpp, timeout=600)
 
 
 def test_runtime_files_include_the_execution_header():

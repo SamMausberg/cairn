@@ -8,15 +8,13 @@ under `make gpu`.
 """
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
 
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.project import load_project
-from emitted import contract, device_build, on_device, watched
+from emitted import assembled, contract, ran_on_device, watched
 from sources import cairn_sources
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -55,15 +53,8 @@ def test_the_one_pass_sum_compiles_for_sm_120_to_one_wide_streaming_load_a_step(
     """Compiled for sm_120 and read back with cuobjdump, nothing run: the sum's kernel loads x with LDG.E.EF.128, the
     evict-first 128-bit load `Cache.streaming` asks for, adds its warps' sums with shuffles, counts itself between two
     device-wide fences, and keeps nothing in local memory."""
-    if not shutil.which("cuobjdump") or not shutil.which("ptxas"):
-        pytest.skip("needs ptxas and cuobjdump")
-    kernels = (EXAMPLE / "src" / "device_sum.cairn").read_text()
-    ptx = device_build(tmp_path, compile_source(kernels)[0], ptx=True)
-    cubin = tmp_path / "p.cubin"
-    built = subprocess.run(["ptxas", "-arch=sm_120", "-v", str(ptx), "-o", str(cubin)], capture_output=True, text=True)
-    assert built.returncode == 0, built.stderr[-3000:]
-    assert "0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads" in built.stderr
-    sass = subprocess.run(["cuobjdump", "-sass", str(cubin)], capture_output=True, text=True, timeout=120).stdout
+    sass, report = assembled(tmp_path, compile_source((EXAMPLE / "src" / "device_sum.cairn").read_text())[0])
+    assert "0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads" in report
     one_pass = next(kernel for kernel in sass.split("Function :") if "blocks_then" in kernel.split("\n")[0])
     assert "LDG.E.EF.128" in one_pass and "SHFL.BFLY" in one_pass
     assert one_pass.count("MEMBAR.SC.GPU") == 2 and "ATOMG.E.ADD" in one_pass
@@ -72,6 +63,4 @@ def test_the_one_pass_sum_compiles_for_sm_120_to_one_wide_streaming_load_a_step(
 
 
 def test_the_device_configuration_agrees_with_its_plain_loop(tmp_path):
-    with on_device():  # runs only under `make gpu`
-        done = contract(tmp_path, compile_source(load_project(EXAMPLE / "gpu.toml").source)[0], "g++", cuda=True)
-        assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    ran_on_device(tmp_path, compile_source(load_project(EXAMPLE / "gpu.toml").source)[0])  # only under `make gpu`

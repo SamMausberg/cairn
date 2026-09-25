@@ -22,7 +22,7 @@ import pytest
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from cairn.verify.scalar.semantics import equivalent
-from emitted import contract, device_build, library, on_device, refused, run
+from emitted import device_build, library, ran_on_device, refused, run
 from oracles.float_formats import FORMATS, Format
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -247,6 +247,4 @@ def test_the_device_multiply_compiles_for_sm_120_and_never_waits_for_the_whole_d
 
 @pytest.mark.parametrize("name", FORMATS)
 def test_the_tensor_cores_agree_with_the_reference_within_the_contract(tmp_path, name):
-    with on_device():  # runs only under `make gpu`
-        done = contract(tmp_path, compile_source(ON_DEVICE.replace("T", name))[0], "g++", cuda=True)
-        assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    ran_on_device(tmp_path, compile_source(ON_DEVICE.replace("T", name))[0])  # only under `make gpu`

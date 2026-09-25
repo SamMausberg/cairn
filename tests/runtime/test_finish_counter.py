@@ -22,7 +22,7 @@ import pytest
 
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.lower.header import header
-from emitted import device_build, hosted_library, printed, sanitized
+from emitted import assembled, hosted_library, printed, sanitized
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / "src/cairn/runtime"
@@ -247,14 +247,8 @@ def test_a_function_with_a_finish_has_an_enqueued_entry():
 def test_the_counter_compiles_for_sm_120_to_a_claim_and_a_count_between_two_fences(tmp_path):
     """The library with its enqueued entry, built by nvcc for sm_120 and never run: the kernel claims its word with a
     64-bit compare-and-swap and counts with a 64-bit add, between the two device-wide fences, and nothing allocates."""
-    if not shutil.which("cuobjdump") or not shutil.which("ptxas"):
-        pytest.skip("needs ptxas and cuobjdump")
     cpp = compile_source(LIBRARY)[0] + "\n" + header(LIBRARY, "lib", device=True)[1]
-    ptx = device_build(tmp_path, cpp, ptx=True)
-    cubin = tmp_path / "p.cubin"
-    done = subprocess.run(["ptxas", "-arch=sm_120", str(ptx), "-o", str(cubin)], capture_output=True, text=True)
-    assert done.returncode == 0, done.stderr[-3000:]
-    sass = subprocess.run(["cuobjdump", "-sass", str(cubin)], capture_output=True, text=True, timeout=120).stdout
+    sass, _ = assembled(tmp_path, cpp)
     kernel = next(k for k in sass.split("Function :") if "blocks_then" in k.split("\n")[0])
     fences = [m.start() for m in re.finditer(r"MEMBAR\.SC\.GPU", kernel)]
     claim, count = kernel.find("ATOMG.E.CAS.64"), kernel.find("ATOMG.E.ADD.64")

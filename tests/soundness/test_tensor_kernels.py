@@ -14,16 +14,14 @@ sm_120 and its SASS read, never run; the comparison on the device is `make gpu`'
 import ctypes as C
 import random
 import re
-import shutil
 import struct
-import subprocess
 from fractions import Fraction
 from pathlib import Path
 
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import contract, device_build, library, on_device, refused, run, sanitized, watched
+from emitted import assembled, contract, library, ran_on_device, refused, run, sanitized, watched
 
 ROOT = Path(__file__).resolve().parents[2]
 TENSOR = ROOT / "examples/tensor"
@@ -125,27 +123,19 @@ def test_each_kernel_s_threads_never_race_under_the_thread_sanitizer(tmp_path, n
                                                        ("tile32", "HMMA.16816.F32.BF16", "LDSM.16.MT88.2")])  # fmt: skip
 def test_each_kernel_compiles_for_sm_120_to_tensor_core_instructions(tmp_path, name, family, loads):
     """The device build, compiled to a cubin and read back with cuobjdump; nothing runs on a device."""
-    if not shutil.which("cuobjdump"):
-        pytest.skip("needs cuobjdump")
     cpp, receipt = compile_source((TENSOR / f"{name}.cairn").read_text())
     wanted = {"tile64": {"wmma"}, "tile32": {"mma_sync", "bf16"}}[name]
     assert wanted <= set(receipt["device_features"])
     element = KERNELS[name][0]  # the `make gpu` harness below is checked here too, though only it runs
     compile_source((TENSOR / f"{name}.cairn").read_text() + DEVICE.replace("T", element).replace("NAME", name))
-    ptx = device_build(tmp_path, cpp, ptx=True, timeout=900)
-    cubin = tmp_path / "p.cubin"
-    assembled = subprocess.run(["ptxas", "-arch=sm_120", str(ptx), "-o", str(cubin)], capture_output=True, text=True)
-    assert assembled.returncode == 0, assembled.stderr[-3000:]
-    sass = subprocess.run(["cuobjdump", "-sass", str(cubin)], capture_output=True, text=True, timeout=120).stdout
+    sass, _ = assembled(tmp_path, cpp, timeout=900)
     assert re.search(rf"\b{re.escape(family)}\b", sass) and loads in sass
 
 
 @pytest.mark.parametrize("name", KERNELS)
 def test_each_kernel_keeps_the_contract_on_the_device(tmp_path, name):
-    with on_device():  # runs only under `make gpu`
-        source = (TENSOR / f"{name}.cairn").read_text() + DEVICE.replace("T", KERNELS[name][0]).replace("NAME", name)
-        done = contract(tmp_path, compile_source(source)[0], "g++", cuda=True)
-        assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    source = (TENSOR / f"{name}.cairn").read_text() + DEVICE.replace("T", KERNELS[name][0]).replace("NAME", name)
+    ran_on_device(tmp_path, compile_source(source)[0])  # only under `make gpu`
 
 
 DEVICE = """

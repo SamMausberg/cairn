@@ -9,9 +9,8 @@ in flight, which the sm_120 PTX shows; nothing here runs on a GPU.
 
 import pytest
 
-from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
-from emitted import device_build, refused, watched
+from emitted import device_build, refused, round_trips, watched
 
 ROWS = """fn row_sums[D:nat](rows:usize, cols:usize, n:usize, x:ro<u64>[n], out:rw<u64>[rows]) {
   let steps = (cols + 255) / 256;
@@ -127,8 +126,7 @@ def test_a_deeper_pipeline_leaves_more_transfers_in_flight_on_the_device(tmp_pat
 
 
 def test_the_canonical_projection_compiles_to_the_same_code():
-    canonical = canonical_source(ROWS)
-    assert canonical_source(canonical) == canonical and compile_source(canonical)[0] == compile_source(ROWS)[0]
+    round_trips(ROWS)
 
 
 HEAD = "fn f(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {\n  blocks b in g threads t in 256 {\n"

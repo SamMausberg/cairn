@@ -9,16 +9,11 @@ on a GPU.
 """
 
 import re
-import shutil
-import subprocess
 
 import pytest
 
-from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from emitted import contract, device_build, refused, watched
-
-SANITIZERS = {"clang++": ("-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"), "g++": ()}
+from emitted import assembled, contract, emulated, refused, round_trips, sanitizers, watched
 
 KERNELS = """// The sum of x in one region: each block adds a grid-stride share into partial[b], and the finish adds the partials.
 fn total(n:usize, x:ro<u64>[n], g:usize, partial:rw<u64>[g], out:rw<u64>[1]) {
@@ -146,7 +141,7 @@ HOST, DEVICE = program(False), program(True)
 def test_a_one_pass_reduction_agrees_with_a_plain_loop_for_every_grid(tmp_path, cxx):
     """Grids of 0 to 70 blocks over 0 to 100000 elements; with no block the finish still runs once, and writes the
     sum of nothing."""
-    done = contract(tmp_path, compile_source(HOST)[0], cxx, *SANITIZERS[cxx])
+    done = contract(tmp_path, compile_source(HOST)[0], cxx, *sanitizers(cxx))
     assert done.returncode == 0, (done.returncode, done.stderr[-3000:])
 
 
@@ -178,24 +173,17 @@ def test_a_finish_run_before_the_blocks_it_waits_for_reads_what_is_not_there_yet
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, cxx):
-    done = contract(tmp_path, compile_source(DEVICE)[0], cxx, cuda=True, emulate=True)
-    assert done.returncode == 0, (done.returncode, done.stderr[-3000:])
+    emulated(tmp_path, compile_source(DEVICE)[0], cxx)
 
 
 def test_the_device_lowering_is_one_launch_whose_last_block_finishes(tmp_path):
     """Compiled for sm_120 and read back with cuobjdump: one kernel for the region and its finish, a block counted by
     a compare-and-swap that claims its launch's word and an add, between two device-wide fences, each also
     invalidating L1 so the finish reads what other SMs wrote. Nothing is kept in local memory."""
-    if not shutil.which("cuobjdump") or not shutil.which("ptxas"):
-        pytest.skip("needs ptxas and cuobjdump")
     kernels = DEVICE.split("\nfn check(")[0]
     cpp = compile_source(kernels)[0]
     assert cpp.count("cr::coop::launch_then<64, 128>") == 1 and cpp.count("cr::coop::launch_then<32, 0>") == 1
-    ptx = device_build(tmp_path, cpp, ptx=True)
-    cubin = tmp_path / "p.cubin"
-    built = subprocess.run(["ptxas", "-arch=sm_120", str(ptx), "-o", str(cubin)], capture_output=True, text=True)
-    assert built.returncode == 0, built.stderr[-3000:]
-    sass = subprocess.run(["cuobjdump", "-sass", str(cubin)], capture_output=True, text=True, timeout=120).stdout
+    sass, _ = assembled(tmp_path, cpp)
     kernel = sass.split("blocks_then")[2]  # the first region's kernel
     assert kernel.count("MEMBAR.SC.GPU") == 2 and "CCTL.IVALL" in kernel
     assert "ATOMG.E.CAS.64" in kernel and "ATOMG.E.ADD.64" in kernel
@@ -211,10 +199,8 @@ def test_a_finish_is_one_region_in_the_receipt_and_its_arrays_its_own():
 
 
 def test_the_canonical_projection_compiles_to_the_same_code():
-    canonical = canonical_source(HOST)
+    canonical = round_trips(HOST)
     assert "} then threads t in 64 {" in canonical
-    assert canonical_source(canonical) == canonical
-    assert compile_source(canonical)[0] == compile_source(HOST)[0]
 
 
 REGION = "fn f(g:usize, n:usize, x:ro<u64>[n], partial:rw<u64>[g], out:rw<u64>[4]) {\n  blocks b in g threads t in 64 {\n    if t == 0 { partial[b] = 1; }\n  } then threads FINISH {\n    BODY\n  }\n}\n"

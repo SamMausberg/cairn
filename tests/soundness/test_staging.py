@@ -13,7 +13,7 @@ import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from emitted import build, contract, device_build, on_device, refused
+from emitted import build, device_build, ran_on_device, refused
 
 BLUR = """fn blur(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
   parallel i in n {
@@ -142,6 +142,4 @@ def test_every_stage_plan_compiles_for_the_device_without_touching_it(tmp_path, 
 
 @pytest.mark.parametrize("plan", ["", *STAGES])
 def test_every_stage_plan_computes_what_the_unplanned_region_computes(tmp_path, plan):
-    with on_device():  # runs only under `make gpu`
-        done = contract(tmp_path, compile_source(ON_DEVICE.replace("PLAN", plan))[0], "g++", cuda=True)
-        assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    ran_on_device(tmp_path, compile_source(ON_DEVICE.replace("PLAN", plan))[0])  # only under `make gpu`
