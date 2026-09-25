@@ -9,7 +9,7 @@ What ran, on which machine, and what it found, one directory per release. A reco
 | `v0_8_2/` | The gates, the Lean build, and `host_regions/`, where a host region starts to beat its loop. `RUN_NOTES.md` says what ran and what did not. |
 | `v0_8_3/` | The first record on x86-64 and a consumer GPU: the gates, the Lean build, the first run of the preregistered CPU suite in `bench/`, and the device benchmark in `gpu/`. `RUN_NOTES.md` has the machine and the verdicts. |
 | `v1_0/` | The 1.0.0 release: its gates and Lean build, and the records of the work after `v0.8.3`, taken as it landed; [v1_0/README.md](v1_0/README.md) lists them. |
-| `v1_1/` | Records of the work after `v1.0.0`, one folder a topic, each with a README that says what ran and what did not, taken as it lands. |
+| `v1_1/` | Records of the work after `v1.0.0`, one folder a topic, each with a README that says what ran and what did not, taken as it lands; [v1_1/README.md](v1_1/README.md) lists them. |
 
 The 0.5 and 0.6 checkpoints (unit, native and sanitizer runs, codegen comparisons, wheel builds) are the earliest records; they stay in `evidence/v0_5/` and `evidence/v0_6/` of the `v0.8.3` tag.
 
