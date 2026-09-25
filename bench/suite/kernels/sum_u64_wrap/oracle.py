@@ -12,7 +12,3 @@ MASK = (1 << 64) - 1
 
 def expected(n: int) -> int:
     return sum((i * 2654435761 + 1) & MASK for i in range(n)) & MASK
-
-
-def agrees(n: int, result) -> bool:
-    return result == expected(n)

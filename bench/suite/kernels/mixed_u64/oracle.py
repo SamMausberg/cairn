@@ -19,8 +19,3 @@ def mix(v: int) -> int:
 
 def expected(n: int) -> list[int]:
     return [mix((i * 2654435761 + 1) & MASK) for i in range(n)]
-
-
-def agrees(n: int, result) -> bool:
-    want = expected(n)
-    return len(result) == len(want) and all(a == b for a, b in zip(result, want, strict=True))

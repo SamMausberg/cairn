@@ -22,8 +22,3 @@ def blend3(left: float, centre: float, right: float) -> float:
 def expected(n: int) -> list[float]:
     x = [sample(i) for i in range(n)]
     return [blend3(x[i - 1], x[i], x[i + 1]) if 0 < i < n - 1 else x[i] for i in range(n)]
-
-
-def agrees(n: int, result) -> bool:
-    want = expected(n)
-    return len(result) == len(want) and all(a == b for a, b in zip(result, want, strict=True))
