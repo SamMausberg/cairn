@@ -5,6 +5,11 @@
 Numbers to bytes and back, the ASCII class of a byte, and the searching a line protocol needs. A substring cannot be returned (a borrow is second class), so every search answers with an index into the input and the caller passes the part `s[lo..hi]` onwards. Cost: one pass per call; the write_* forms touch only the caller's storage and return the number of bytes used, or 0 when the value does not fit. The push_* forms grow a Vec.
 
 ```cairn
+// A place in a view that next_line, next_word and next_field move forward. Each finds the next piece at or after `at`,
+// sets `lo..hi` to its bounds and moves `at` past it, so the piece is the part s[c.lo..c.hi] and nothing is copied:
+// `let mut w = text.cursor(); while text.next_word(input, w) { ... }`.
+pub struct Cursor { at:usize; lo:usize; hi:usize; }
+
 pub enum ParseError { Empty; Invalid(usize); Overflow(usize); }
 
 // One byte's ASCII class, as C's <ctype.h> answers it in the "C" locale: a byte above 127 is in none. Cost: a
@@ -32,6 +37,30 @@ pub fn parse_u64(n:usize, s:ro<u8>[n]@host) -> std.core.Result[u64, std.text.Par
 // offset names the byte at fault as parse_u64 does.
 // effects: ffi_precondition, read:s, trap
 pub fn parse_i64(n:usize, s:ro<u8>[n]@host) -> std.core.Result[i64, std.text.ParseError]
+
+pub fn cursor() -> std.text.Cursor  // effects: none
+
+// The next line, without its "\n" or "\r\n". A last line without "\n" counts, and an empty view has none. Cost: one
+// pass over the line.
+// effects: diverge, ffi_precondition, read:c, read:s, trap, write:c
+pub fn next_line(n:usize, s:ro<u8>[n]@host, c:rw<std.text.Cursor>) -> bool
+
+// The next word: a run of bytes that are not is_space, which separates words and is skipped. Cost: one pass over the
+// word and the space before it.
+// effects: diverge, ffi_precondition, read:c, read:s, trap, write:c
+pub fn next_word(n:usize, s:ro<u8>[n]@host, c:rw<std.text.Cursor>) -> bool
+
+// The next field of a view split at every `sep`, as a line of comma-separated values is: "a,,b" has three fields, the
+// second empty, and an empty view has one, which is empty. Cost: one pass over the field.
+// effects: diverge, ffi_precondition, read:c, read:s, trap, write:c
+pub fn next_field(n:usize, s:ro<u8>[n]@host, sep:u8, c:rw<std.text.Cursor>) -> bool
+
+// A decimal with at most `places` digits after an optional '.', as a count of units of 10^-places: with two places
+// "12.5" and "12.50" are 1250 and "12" is 1200. Digits only, as parse_u64 takes them, with one or more on each side of
+// a point; a digit past `places` is Invalid, and a value past U64_MAX is Overflow. Cost: one pass; `places` less the
+// digits written must be at most 19, or the scale traps.
+// effects: ffi_precondition, read:s, trap
+pub fn parse_fixed(n:usize, s:ro<u8>[n]@host, places:usize) -> std.core.Result[u64, std.text.ParseError]
 
 // Decimal, most significant digit first. The digits are produced backwards into fixed storage, so the caller's buffer
 // is written once and never partially.

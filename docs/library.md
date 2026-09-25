@@ -106,42 +106,38 @@ When a `Vec` runs out of room, its capacity doubles and its elements move with `
 
 ## std.text
 
-`std.text` turns numbers into bytes and back, and searches bytes the way a line protocol needs. A function cannot return a borrow, so a search returns an index, and you pass the part `s[lo..hi]` on yourself.
+`std.text` turns numbers into bytes and back, and walks and searches bytes the way a line protocol needs. A function cannot return a borrow, so a search returns an index, and a walk sets the bounds `lo..hi` of the next piece in a `Cursor`. You pass the part `s[lo..hi]` on yourself, and nothing is copied.
 
 ```cairn
-import std.core (Option, Result);
+import std.core (Result);
 import std.text as text;
-
-// The decimal field that starts at `from` and ends at the next comma or at the end of the line.
-fn field(n:usize, line:ro<u8>[n], from:usize) -> Result[u64, text.ParseError] {
-  match text.find_byte(n, line, 44, from) {
-    Some(at) => return text.parse_u64(at - from, line[from..at]);
-    None => return text.parse_u64(n - from, line[from..n]);
-  }
-}
 
 fn main() -> i32 {
   let line = "23,19,x9";
-  match field(line, 0) {
-    Ok(value) => { if value != 23 { return 1; } }
-    Err(_) => return 2;
-  }
-  match field(line, 6) {
-    Ok(_) => return 3;
-    Err(why) => {
-      match why {
-        Invalid(at) => { if at != 0 { return 4; } }   // offset of the byte at fault
-        Overflow(_) => return 5;
-        Empty => return 6;
+  let mut total:u64 = 0;
+  let mut f = text.cursor();
+  while text.next_field(line, ',', f) {                  // f.lo..f.hi: 23, then 19, then x9
+    match text.parse_u64(line[f.lo..f.hi]) {
+      Ok(value) => total += value;
+      Err(why) => {
+        match why {
+          Invalid(at) => { if f.lo + at != 6 { return 1; } }   // the byte at fault, counted in the part
+          Overflow(_) => return 2;
+          Empty => return 3;
+        }
       }
     }
   }
+  if total != 42 { return 4; }
+  match text.parse_fixed("12.5", 2) { Ok(cents) => { if cents != 1250 { return 5; } } Err(_) => return 6; }
   stack out:u8[4] = zeroed;
   let used = text.write_hex(out, 48879, 4);             // a call that writes gets its own statement
   if used != 4 || out[0] != 98 { return 7; }            // "beef"
   return 0;
 }
 ```
+
+`next_line` gives each line without its `\n` or `\r\n`, `next_word` each run of bytes that are not white space, and `next_field` each piece between separators, empty ones included. `parse_fixed(s, places)` reads a decimal such as `12.50` as a whole number of hundredths when `places` is 2.
 
 The `write_` functions write into storage you pass and return the number of bytes they used, or 0 when the value does not fit. The `push_` functions append to a `Vec[u8]`, so they allocate. A parser that fails reports the offset of the byte at fault, and `parse_u64` takes digits alone, with no sign and no spaces. `hash_bytes` is FNV-1a.
 
@@ -232,7 +228,7 @@ fn main() -> i32 {
 
 `close` returns nothing, because a function that consumes a linear value cannot return a status. If you need one, report it through a borrow.
 
-A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. `read_to_end` asks a regular file how much is left first, so the file arrives in one allocation, and a pipe's `Vec` doubles as it fills. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
+A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. `read_to_end` asks a regular file how much is left first, so the file arrives in one allocation, and a pipe's `Vec` doubles as it fills. `read_stdin_to_end(input)` reads standard input the same way and leaves it open. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
 
 ## std.fs
 

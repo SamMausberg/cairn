@@ -2,7 +2,7 @@
 
 # std.io
 
-Files and standard streams. A File is linear: the type system, not a convention, is what closes a descriptor, and `defer close(f)` is the one idiom that survives an early `try`. Errors are errno in an IoError, because CAIRN cannot express `int*` and the C library keeps its error behind one. Cost: one syscall per call except `write` and `read_full`, which loop until the kernel is done; nothing here buffers, so n bytes written is n bytes of syscall.
+Files and standard streams. A File is linear: the type system, not a convention, is what closes a descriptor, and `defer close(f)` is the one idiom that survives an early `try`. Errors are errno in an IoError, because CAIRN cannot express `int*` and the C library keeps its error behind one. Cost: one syscall per call except `write`, `read_full` and the `_to_end` reads, which loop until the kernel is done; nothing here buffers, so n bytes written is n bytes of syscall.
 
 ```cairn
 pub struct IoError { code:i32; }
@@ -80,6 +80,13 @@ pub fn print_u64(value:u64)
 
 // effects: diverge, ffi:write, ffi_precondition, io, local_read, local_write, stack_storage, trap, zero_init
 pub fn print_i64(value:i64)
+
+// All of standard input from where it stands, appended to `into` as read_to_end appends a file's; the count is what was
+// added, and standard input stays open. Cost: input redirected from a file arrives in one allocation, and a pipe's
+// `into` doubles as it fills.
+// effects: alloc, diverge, ffi:__errno_location, ffi:lseek, ffi:read, ffi_precondition, free, io, local_read,
+// local_write, mmio, read:into, trap, write:into, zero_init
+pub fn read_stdin_to_end(into:rw<std.vec.Vec[u8]>) -> std.core.Result[usize, std.io.IoError]
 
 // One read from standard input: 0 at end of input, as `read` answers for a file.
 // effects: ffi:__errno_location, ffi:read, ffi_precondition, io, mmio, trap, write:into
