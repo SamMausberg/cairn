@@ -89,7 +89,7 @@ One plugin subject (`split_sum`) spent 15 requests on a correct program that `ca
 
 ## Replaying the checks
 
-The CAIRN subjects checked 67 distinct programs, counting a check, build, run or test of an edited program once per text. Main at 3c4b9e3 refuses 31 of them, the refusals the subjects saw (`replay_main.json`). Each pull request of this track that changes a rule or a message runs the same replay and reports what it refuses and says. That measures the compiler on the programs the subjects wrote, not what a subject would do next.
+The CAIRN subjects checked 69 distinct programs, counting a check, build, run or test of an edited program once per text. Main at 3c4b9e3 refuses 30 of them, the refusals the subjects saw (`replay_main.json`). Each pull request of this track that changes a rule or a message runs the same replay and reports what it refuses and says. That measures the compiler on the programs the subjects wrote, not what a subject would do next.
 
 ## What this does not show
 
@@ -104,4 +104,4 @@ python3 tools/ai/friction.py costs --first-pass evidence/v1_1/friction/first_pas
 python3 tools/ai/friction.py replay --compiler . --output evidence/v1_1/friction/replay_main.json
 ```
 
-`judge` builds every version it judges under the sanitizers and took about half an hour at three jobs on a loaded machine; `costs` reads the kept transcripts in under a second, and `replay` checks 67 programs in about a minute. `subjects.json` holds each subject's requests, context, first edit and first pass, the tokens of each phase, the context carried from before the first edit, each documentation file's carried tokens, and every refusal with its line, cause and round trip, with the per-arm sums under `summary`.
+`judge` builds every version it judges under the sanitizers and took about half an hour at three jobs on a loaded machine; `costs` reads the kept transcripts in under a second, and `replay` checks 69 programs in about a minute. `subjects.json` holds each subject's requests, context, first edit and first pass, the tokens of each phase, the context carried from before the first edit, each documentation file's carried tokens, and every refusal with its line, cause and round trip, with the per-arm sums under `summary`.

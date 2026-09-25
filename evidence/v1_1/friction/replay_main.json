@@ -215,6 +215,10 @@
    "line": 133
   },
   {
+   "request": 18,
+   "status": "typed"
+  },
+  {
    "request": 31,
    "status": "rejected",
    "code": "E-TYPE-MISMATCH",
@@ -224,11 +228,7 @@
   },
   {
    "request": 33,
-   "status": "rejected",
-   "code": "E-EFFECT-ORDER",
-   "message": "Bind a writing call to its own statement before using its result.",
-   "repair_hint": null,
-   "line": 136
+   "status": "typed"
   }
  ],
  "r1_pool_plugin_set_aside": [
@@ -239,6 +239,10 @@
    "message": "Bind a writing call to its own statement before using its result.",
    "repair_hint": null,
    "line": 124
+  },
+  {
+   "request": 19,
+   "status": "typed"
   }
  ],
  "r1_pool_plugin": [
