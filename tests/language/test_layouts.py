@@ -377,11 +377,11 @@ fn main() -> i32 {
 
 def test_a_coordinate_outside_its_layout_traps_in_a_device_lane(tmp_path):
     """Lanes 4 to 7 name row 4 and past: the coordinate's guard ends the kernel and the process aborts. Compiled for
-    sm_120 here; the run is `make gpu`'s."""
+    sm_120 here; the run is `make gpu`'s, with CAIRN_GPU_TRAPS=1."""
     cpp = compile_source(LANE_DEATH)[0]
     (tmp_path / "build").mkdir()
     device_build(tmp_path / "build", cpp, entry="main", timeout=900)
-    with on_device():
+    with on_device(trap=True):
         done = contract(tmp_path, cpp, "g++", cuda=True)
         assert done.returncode == -signal.SIGABRT, (done.returncode, done.stderr[-2000:])
 

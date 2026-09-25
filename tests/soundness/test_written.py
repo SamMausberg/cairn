@@ -5,7 +5,7 @@ Every rule has a rejection naming E-COOP-UNWRITTEN. A block reduction and a tran
 unzeroed run on host threads under both compilers, held to plain loops, clean under the thread sanitizer. On the host
 an unzeroed array starts each block filled with a pattern, and the same program with one write taken out of the
 emitted C++ reads it and fails, so the oracle bites. The device lowering zeroes nothing, which the PTX shows; the
-device program runs emulated on host threads. Nothing runs on a GPU.
+device program runs emulated on host threads, and on the device under `make gpu` alone.
 """
 
 import re
@@ -14,7 +14,7 @@ import shutil
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import contract, device_build, ran_emulated, refused, round_trips, sanitizers, watched
+from emitted import contract, device_build, ran_emulated, ran_on_device, refused, round_trips, sanitizers, watched
 
 KERNELS = """// Block sums through a tree in shared memory that nobody zeroes: the first phase writes every element.
 fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
@@ -130,6 +130,10 @@ def test_a_read_before_any_write_reads_the_host_s_pattern(tmp_path):
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, cxx):
     ran_emulated(tmp_path, compile_source(DEVICE)[0], cxx)
+
+
+def test_the_device_program_agrees_on_the_device(tmp_path):
+    ran_on_device(tmp_path, compile_source(DEVICE)[0])
 
 
 def test_the_device_kernel_zeroes_nothing_where_its_arrays_are_unzeroed(tmp_path):

@@ -4,8 +4,8 @@ and device lanes, and cooperative threads, relaxed, each returning the element's
 Every rule has a rejection naming its code. The updates run on host lanes and host threads under both compilers,
 held to plain loops, with the address and undefined-behaviour sanitizers under clang++; under the thread sanitizer
 they are atomics, and the same program with one update made a plain read and write is reported, so the oracle bites.
-A float sum lands within its stated bound of the exact one. The device program runs emulated on host threads, and its
-lowering compiles for sm_120 to RED, ATOMG and ATOMS, read back with cuobjdump. Nothing runs on a GPU.
+A float sum lands within its stated bound of the exact one. The device program runs emulated on host threads and, under
+`make gpu` alone, on the device, and its lowering compiles for sm_120 to RED, ATOMG and ATOMS, read back with cuobjdump.
 """
 
 import re
@@ -13,7 +13,7 @@ import re
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import assembled, contract, ran_emulated, refused, round_trips, sanitizers, watched
+from emitted import assembled, contract, ran_emulated, ran_on_device, refused, round_trips, sanitizers, watched
 
 KERNELS = """// Each lane adds its value's low byte to one of 256 bins, and folds it into running totals, extremes and masks.
 fn tally(n:usize, x:ro<u32>[n], bins:rw<u32>[256], sum:rw<u64>[1], total:rw<f32>[1], ends:rw<i64>[2],
@@ -217,6 +217,10 @@ def test_an_unordered_float_sum_lands_within_its_stated_bound(tmp_path, cxx):
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, cxx):
     ran_emulated(tmp_path, compile_source(DEVICE)[0], cxx)
+
+
+def test_the_device_program_agrees_on_the_device(tmp_path):
+    ran_on_device(tmp_path, compile_source(DEVICE)[0])
 
 
 def test_the_device_lowering_is_one_atomic_instruction_an_update(tmp_path):

@@ -162,6 +162,8 @@ make gpu embedded  # CUDA runtime and lanes, and the QEMU board, where the hardw
 
 `make gpu`, `make tune-device` and `make calibrate-device` are the only commands that run code on a CUDA device, and only the owner runs them. Each sets `CAIRN_GPU_TESTS=1` and holds `/tmp/cairn-gpu.lock` around every device run (`tools/support.py`), `tests/tooling/test_on_device.py` holds the Makefile to those three, and everywhere else a device test compiles and skips the run. On the reference machine the GPU also drives the display, and repeated device test runs reset its driver and twice crashed the host.
 
+`make gpu` runs the modules `GPU_TESTS` in the Makefile names, one test at a time, and `tests/tooling/test_workflow.py` holds that list to every module that calls `on_device`, `device_reason` or `device_lock`. A test that traps on the device on purpose, such as a guard failing in a lane, runs only when the owner also sets `CAIRN_GPU_TRAPS=1` by hand (`CAIRN_GPU_TRAPS=1 make gpu`); otherwise it skips with that reason.
+
 `make proof` needs `lake` on `PATH` (elan puts it in `~/.elan/bin`), and allows no axiom but `propext` and `Quot.sound`.
 
 | `tests/` folder | What it establishes |

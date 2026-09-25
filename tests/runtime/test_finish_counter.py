@@ -9,7 +9,8 @@ blocks in it one after another: launches on one stream share a word, two streams
 words of its own, and the context's own lane has one. The registry gives up the word of the stream that claimed one
 longest ago only when none is free, never a captured stream's, and traps when every word is captured. The count itself,
 run by host threads under the thread sanitizer, lets exactly one block of each launch finish, after every other
-block's writes, and traps on a word another launch holds. The CUDA build compiles for sm_120 and is not run here.
+block's writes, and traps on a word another launch holds. The CUDA build compiles for sm_120, and `make gpu` alone
+runs the sums on a device, replayed in a graph on one stream while direct launches run on another.
 """
 
 import json
@@ -22,7 +23,7 @@ import pytest
 
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.lower.header import header
-from emitted import assembled, hosted_library, printed, sanitized
+from emitted import assembled, hosted_library, library_ran_on_device, printed, sanitized
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / "src/cairn/runtime"
@@ -101,6 +102,75 @@ int main() {
   call("checked", false, nullptr, 70);  // on the thread's own lane
   call("checked again", false, nullptr, 2);
   return 0;
+}
+"""
+
+# The same sums on a device: a graph of two enqueued calls replayed on stream a while direct calls run on stream b,
+# each stream with arrays of its own, then no blocks, the legacy default stream and the checked entry. Exit 0 passes.
+ON_DEVICE = r"""
+#include <cstdio>
+#include <cstdint>
+#include <vector>
+#include <cuda_runtime.h>
+#include "lib.h"
+
+#define OK(call) do { cudaError_t e = (call); if(e != cudaSuccess) { \
+  std::fprintf(stderr, "%s: %s\n", #call, cudaGetErrorString(e)); return 10; } } while(0)
+
+int main() {
+  const std::size_t n = 100000, most = 70;
+  std::vector<std::uint64_t> x(n);
+  std::uint64_t want = 0;
+  for(std::size_t i = 0; i < n; ++i) want += x[i] = i * 2654435761ull;
+  std::uint64_t *dx, *pa, *pb, *oa, *ob;
+  OK(cudaMalloc(&dx, n * sizeof(std::uint64_t)));
+  OK(cudaMalloc(&pa, most * sizeof(std::uint64_t)));
+  OK(cudaMalloc(&pb, most * sizeof(std::uint64_t)));
+  OK(cudaMalloc(&oa, sizeof(std::uint64_t)));
+  OK(cudaMalloc(&ob, sizeof(std::uint64_t)));
+  OK(cudaMemcpy(dx, x.data(), n * sizeof(std::uint64_t), cudaMemcpyHostToDevice));
+  cudaStream_t a, b;
+  OK(cudaStreamCreate(&a));
+  OK(cudaStreamCreate(&b));
+  int wrong = 0;
+  auto read = [](std::uint64_t* from) {
+    std::uint64_t v = 7;
+    return cudaMemcpy(&v, from, sizeof(v), cudaMemcpyDeviceToHost) == cudaSuccess ? v : 7;
+  };
+
+  cudaGraph_t graph;
+  cudaGraphExec_t replay;
+  OK(cudaStreamBeginCapture(a, cudaStreamCaptureModeGlobal));
+  cq_total(a, n, dx, most, pa, oa);
+  cq_total(a, n, dx, 3, pa, oa);
+  OK(cudaStreamEndCapture(a, &graph));
+  OK(cudaGraphInstantiate(&replay, graph, 0));
+  for(int k = 0; k < 4; ++k) {  // the replayed launches and the direct ones may overlap: they never share a word
+    OK(cudaGraphLaunch(replay, a));
+    cq_total(b, n, dx, 7, pb, ob);
+    cq_total(b, n, dx, 1, pb, ob);
+  }
+  OK(cudaStreamSynchronize(a));
+  OK(cudaStreamSynchronize(b));
+  wrong += (read(oa) != want) + (read(ob) != want);
+
+  OK(cudaMemcpy(oa, &most, sizeof(std::uint64_t), cudaMemcpyHostToDevice));
+  cq_total(a, n, dx, 0, pa, oa);  // no blocks: the finish runs once and adds nothing
+  OK(cudaStreamSynchronize(a));
+  wrong += read(oa) != 0;
+  cq_total(nullptr, n, dx, 5, pa, oa);  // the legacy default stream
+  OK(cudaStreamSynchronize(nullptr));
+  wrong += read(oa) != want;
+  cf_total(n, dx, most, pb, ob);  // the checked entry, on the thread's own lane
+  wrong += read(ob) != want;
+
+  OK(cudaGraphExecDestroy(replay));
+  OK(cudaGraphDestroy(graph));
+  OK(cudaStreamDestroy(a));
+  OK(cudaStreamDestroy(b));
+  for(void* p : {(void*)dx, (void*)pa, (void*)pb, (void*)oa, (void*)ob}) OK(cudaFree(p));
+  std::printf("{\"wrong\": %d}\n", wrong);
+  return wrong != 0;
 }
 """
 
@@ -234,6 +304,10 @@ def test_the_registry_gives_up_the_oldest_direct_word_and_the_count_finishes_onc
     for case, said in (("foreign", ""), ("captured", "belongs to a captured graph")):
         ended = subprocess.run(["setarch", "-R", str(exe), case], capture_output=True, text=True, timeout=300)
         assert ended.returncode not in (0, 1) and said in ended.stderr, (case, ended.returncode, ended.stderr[-2000:])
+
+
+def test_every_launch_finishes_once_on_a_device_replayed_and_direct_at_once(tmp_path):
+    library_ran_on_device(tmp_path, LIBRARY, ON_DEVICE)
 
 
 def test_a_function_with_a_finish_has_an_enqueued_entry():

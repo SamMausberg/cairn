@@ -183,7 +183,8 @@ def test_the_command_line_exports_checks_builds_and_refuses(tmp_path, capsys):
 
 
 @NVCC
-def test_a_device_export_separates_the_kernels_from_the_launch_wrappers_and_never_runs(tmp_path):
+def test_a_device_export_separates_the_kernels_from_the_launch_wrappers_and_never_runs(tmp_path, monkeypatch):
+    monkeypatch.delenv("CAIRN_GPU_TESTS", raising=False)  # never run, under `make gpu` too: its run holds no lock
     root = project(tmp_path, DEVICE, "scaled")
     exported.export(load_project(root), tmp_path / "dev", cxx=NVCC_HOST, device_target="sm_120")
     record = json.loads((tmp_path / "dev" / exported.RECORD).read_text())

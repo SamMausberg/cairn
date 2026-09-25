@@ -3,9 +3,9 @@ once, after every block of the region, and sees everything they wrote.
 
 Every rule has a rejection naming its code. A one-pass reduction runs on host threads under both compilers, for grids
 of no blocks to seventy, held to a plain loop, and is clean under the thread sanitizer; run with each finish before its
-blocks, it fails its own checks, so the oracle bites. The device program runs emulated on host threads, and
-its device lowering, one launch whose last block finishes, compiles for sm_120, read back with cuobjdump. Nothing runs
-on a GPU.
+blocks, it fails its own checks, so the oracle bites. The device program runs emulated on host threads and,
+under `make gpu` alone, on the device, and its device lowering, one launch whose last block finishes, compiles for
+sm_120, read back with cuobjdump.
 """
 
 import re
@@ -13,7 +13,7 @@ import re
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import assembled, contract, ran_emulated, refused, round_trips, sanitizers, watched
+from emitted import assembled, contract, ran_emulated, ran_on_device, refused, round_trips, sanitizers, watched
 
 KERNELS = """// The sum of x in one region: each block adds a grid-stride share into partial[b], and the finish adds the partials.
 fn total(n:usize, x:ro<u64>[n], g:usize, partial:rw<u64>[g], out:rw<u64>[1]) {
@@ -174,6 +174,10 @@ def test_a_finish_run_before_the_blocks_it_waits_for_reads_what_is_not_there_yet
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, cxx):
     ran_emulated(tmp_path, compile_source(DEVICE)[0], cxx)
+
+
+def test_the_device_program_agrees_on_the_device(tmp_path):
+    ran_on_device(tmp_path, compile_source(DEVICE)[0])
 
 
 def test_the_device_lowering_is_one_launch_whose_last_block_finishes(tmp_path):
