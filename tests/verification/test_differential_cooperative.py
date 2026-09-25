@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from support import find_lake
+
 ROOT = Path(__file__).resolve().parents[2]
 HARNESS = ROOT / "tools" / "checks" / "differential_cooperative.py"
 UNAVAILABLE = 3
@@ -37,7 +39,7 @@ def test_a_slip_in_the_rule_would_be_reported(monkeypatch):
     from cairn.compiler.cooperative import phases
     from checks import differential_cooperative as harness
 
-    lake = harness.find_lake()
+    lake = find_lake()
     if lake is None:
         pytest.skip("lake is not installed")
     original = phases.Phases.refuse

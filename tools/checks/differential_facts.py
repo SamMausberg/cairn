@@ -11,12 +11,8 @@ scope where is checked per site by `verify/elision.py` and tested in `tests/soun
 
 from __future__ import annotations
 
-import argparse
-import json
-import os
 import random
 import sys
-import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -25,7 +21,7 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.compiler.check import facts as F
 from cairn.compiler.check.scope import Binding
 from cairn.compiler.syntax.tree import USIZE, Expr, Type
-from support import find_lake, run_lean
+from support import lean_differential, run_lean
 
 ATOMS = 4  # x0..x3 are immutable usize values; m0 is one that can change.
 STRIDES = (2, 4, 8, 256)
@@ -157,19 +153,7 @@ def compare(count: int, seed: int, lake: str, target: Path, timeout: int) -> dic
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--count", type=int, default=int(os.environ.get("CAIRN_DIFFERENTIAL_N", "200")))
-    parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--timeout", type=int, default=1800)
-    options = parser.parse_args()
-    lake = find_lake()
-    if lake is None:
-        print(json.dumps({"status": "unavailable", "reason": "no lake on PATH and no ~/.elan/bin/lake"}, indent=2))
-        return 3
-    with tempfile.TemporaryDirectory(prefix="cairn-facts-") as scratch:
-        report = compare(options.count, options.seed, lake, Path(scratch) / "Facts.lean", options.timeout)
-    print(json.dumps(report, indent=2))
-    return 0 if report["status"] == "agreed" else 1
+    return lean_differential(compare, "Facts", 200, __doc__)
 
 
 if __name__ == "__main__":
