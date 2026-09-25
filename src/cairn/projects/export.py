@@ -96,7 +96,7 @@ def export(project: Project, out: Path, *, cxx: str = "clang++", arch: str | Non
            device_target: str | None = None, keep_guards: bool = False) -> dict[str, Any]:  # fmt: skip
     """Write the export of `project` into `out`, which must not exist yet, and return its record."""
     from ..verify.runner import label, written
-    from .build import emitted, judged
+    from .build import emitted, judged, stem
 
     if out.exists() or out.is_symlink():
         raise ProjectError(f"{out} exists; an export is written into a new directory, never over another.")
@@ -124,7 +124,7 @@ def export(project: Project, out: Path, *, cxx: str = "clang++", arch: str | Non
         generated += measure.driver(f, sizes, {}, 2e6, 9, on_device.MEMORY if cuda else None)
         harness = {"symbol": symbol, "sizes": sizes, "timer": "device" if cuda else "host", "blocks": 9}
     device = judged(resolve(device_target, project.device_target) if cuda else None, receipt)
-    name = re.sub(r"[^A-Za-z0-9_-]", "_", project.name)[:64] or "program"
+    name = stem(project)
     program = "program.cu" if cuda else "program.cpp"
     artifact = "lib" + name + ".so" if kind == "library" else name
     out.mkdir(parents=True)
@@ -278,6 +278,11 @@ def build(directory: Path, output: Path | None = None, timeout: int = 300) -> di
     return built
 
 
+def answer(kind: str, record: dict[str, Any], **fields: Any) -> dict[str, Any]:
+    """What `run` or `test` (`kind`) of an export answers: its schema, the export's identity, then `fields`."""
+    return {"schema": f"cairn.export.{kind}/1", "export": record["identity"], **fields}
+
+
 def runnable(record: dict[str, Any]) -> str:
     """Why this export's program may not run here, or "": device code runs only under the owner's make targets."""
     if record.get("device_target"):
@@ -296,17 +301,16 @@ def run(directory: Path, arguments: tuple[str, ...] = (), timeout: int = 60, mem
     if record["kind"] != "exe":
         raise ProjectError("A library export is built, not run; export the program that calls it.")
     if reason := runnable(record):
-        return {"schema": "cairn.export.run/1", "export": record["identity"], "status": "not-run", "reason": reason}
+        return answer("run", record, status="not-run", reason=reason)
     built = build(directory, output)
     if built["status"] != "native-built":
-        return {"schema": "cairn.export.run/1", "export": record["identity"], "status": built["status"], "build": built}
+        return answer("run", record, status=built["status"], build=built)
     memory = None if record.get("device_target") else memory_mib
     done = subprocess.run([built["artifact"], *arguments], capture_output=True, text=True, errors="backslashreplace",
                           timeout=timeout, stdin=subprocess.DEVNULL,
                           preexec_fn=functools.partial(limited, timeout, memory))  # fmt: skip
-    ran: dict[str, Any] = {"schema": "cairn.export.run/1", "export": record["identity"], "status": "program-exited",
-                           "exit_code": done.returncode, "stdout": done.stdout[:32000], "stderr": done.stderr[:8000],
-                           "artifact_sha256": built["artifact_sha256"]}  # fmt: skip
+    ran = answer("run", record, status="program-exited", exit_code=done.returncode, stdout=done.stdout[:32000],
+                 stderr=done.stderr[:8000], artifact_sha256=built["artifact_sha256"])  # fmt: skip
     if record.get("harness") and done.returncode == 0:
         from ..perf.measure import outcome
 
@@ -328,15 +332,10 @@ def test(directory: Path, jobs: int = 0, timeout: int = 60, memory_mib: int = 10
     if not record.get("tests"):
         raise ProjectError("This export holds no test blocks: export with --tests.")
     if why := runnable(record):
-        return {"schema": "cairn.export.test/1", "export": record["identity"], "status": "not-run", "reason": why}
+        return answer("test", record, status="not-run", reason=why)
     built = build(directory)
     if built["status"] != "native-built":
-        return {
-            "schema": "cairn.export.test/1",
-            "export": record["identity"],
-            "status": built["status"],
-            "build": built,
-        }
+        return answer("test", record, status=built["status"], build=built)
     limits = functools.partial(limited, timeout, None if record.get("device_target") else memory_mib)
 
     def one(index: int) -> dict[str, Any]:
@@ -353,10 +352,9 @@ def test(directory: Path, jobs: int = 0, timeout: int = 60, memory_mib: int = 10
     with ThreadPoolExecutor(max_workers=jobs or min(8, os.cpu_count() or 1)) as pool:
         results = list(pool.map(one, range(len(record["tests"]))))
     failed = sum(r["status"] != "passed" for r in results)
-    tested = {"schema": "cairn.export.test/1", "export": record["identity"],
-              "status": "test-blocks-failed" if failed else "passed-test-blocks", "tests": results,
-              "passed": len(results) - failed, "failed": failed, "artifact_sha256": built["artifact_sha256"],
-              "formal_status": "not-verified"}  # fmt: skip
+    tested = answer("test", record, status="test-blocks-failed" if failed else "passed-test-blocks", tests=results,
+                    passed=len(results) - failed, failed=failed, artifact_sha256=built["artifact_sha256"],
+                    formal_status="not-verified")  # fmt: skip
     (Path(built["directory"]) / "test.json").write_text(json.dumps(tested, indent=2) + "\n", encoding="utf-8")
     return tested
 
