@@ -124,6 +124,24 @@ def test_every_example_project_is_indexed_and_every_bench_folder_has_a_readme():
     assert not bare, f"give these bench folders a README.md: {bare}"
 
 
+def test_every_record_is_indexed_and_from_1_1_on_says_what_ran():
+    """evidence/README.md and a release's own README under it list each of its records, and from 1.1 on each record has
+    a README that says what ran and what did not."""
+    listed = subprocess.run(["git", "-C", str(ROOT), "ls-files", "evidence"], capture_output=True, text=True).stdout
+    names = set(listed.splitlines())
+    for release in sorted({n.split("/")[1] for n in names if n.count("/") >= 2}):
+        index = ROOT / "evidence" / release / "README.md"
+        if not index.is_file():
+            continue  # a release before 1.0 is indexed by evidence/README.md itself
+        text = index.read_text(encoding="utf-8")
+        records = {n.split("/")[2] for n in names if n.startswith(f"evidence/{release}/") and n.count("/") >= 3}
+        unlisted = sorted(r for r in records if f"`{r}/`" not in text)
+        assert not unlisted, f"list these in evidence/{release}/README.md: {unlisted}"
+        if tuple(map(int, release[1:].split("_"))) >= (1, 1):
+            bare = sorted(r for r in records if f"evidence/{release}/{r}/README.md" not in names)
+            assert not bare, f"give these records a README.md that says what ran: {bare}"
+
+
 def test_every_module_of_the_package_has_an_owner_line():
     """AGENTS.md's ownership table, or a table of docs/internals.md, names every module and runtime header."""
     rows = [line for doc in ("AGENTS.md", "docs/internals.md") for line in (ROOT / doc).read_text().splitlines()
