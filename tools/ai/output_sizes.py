@@ -15,8 +15,8 @@ The project's directory is written as HOME in every output, so a count does not 
 are UTF-8 bytes, and also tokens by tiktoken's `o200k_base` when it and its cached vocabulary are present
 (`/usr/bin/python3` here). Neither is Claude's tokenizer, and a smaller output is not evidence that a model does
 better. `output_budgets.json` holds a byte budget for each case: its size when last measured, with clang 21 on the
-path, plus 5% or 16 bytes (`budget`). `--check` exits 1 when an output is larger than its budget. clang 18 reports fewer loops to
-`cairn explain` than clang 21 does.
+path, plus 5% or 16 bytes (`budget`). `--check` exits 1 when an output is larger than its budget. clang 18 reports
+fewer loops to `cairn explain` than clang 21 does.
 
     python3 tools/ai/output_sizes.py [--output FILE]    # the record
     python3 tools/ai/output_sizes.py --check            # and exit 1 unless every case is within its budget
