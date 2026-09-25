@@ -82,17 +82,14 @@ int main() {
 """
 
 
+@pytest.mark.parametrize("writer", ["t == 0", "t == 31"])
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
-def test_a_block_reduction_and_a_tiled_transpose_race_nowhere(tmp_path, cxx):
-    """Real threads, real barriers, the thread sanitizer watching, and a plain reference to agree with."""
+def test_a_block_reduction_and_a_tiled_transpose_race_nowhere(tmp_path, cxx, writer):
+    """Real threads, real barriers, the thread sanitizer watching, and a plain reference to agree with. Every lane of
+    the warp holds the total, so the first lane or the last writes it."""
+    source = REDUCE.replace("if t == 0 {", f"if {writer} {{") + TRANSPOSE
     ran = watched(
-        tmp_path,
-        compile_source(REDUCE + TRANSPOSE)[0],
-        cxx,
-        "thread",
-        timeout=600,
-        entry=None,
-        beside={"main.cpp": MAIN},
+        tmp_path, compile_source(source)[0], cxx, "thread", timeout=600, entry=None, beside={"main.cpp": MAIN}
     )
     assert ran.returncode == 0 and "every block agrees" in ran.stdout, ran.stdout + ran.stderr[-4000:]
     assert "ThreadSanitizer" not in ran.stderr
@@ -287,6 +284,48 @@ def test_a_read_at_a_pinned_writer_s_index_is_not_the_reader_s_own():
     """out[b] is thread 0's element; thread 5 reading out[b] reads what thread 0 writes, in the same phase."""
     source = HEAD + "if t == 0 { out[b] = 1; }\nlet v = out[b];\n" + TAIL
     assert "at the element it writes" in refused("E-COOP-GLOBAL", source)["message"]
+
+
+PINNED = """const T:usize = 256;
+fn f(g:usize, n:usize, out:rw<u64>[g]) {
+  blocks b in g threads t in T {
+    let i = b * T + t;
+    for k in 0..4 {
+      if PIN { out[b] = 1; }
+    }
+  }
+}
+"""
+
+
+@pytest.mark.parametrize("pin", ["t == 0", "t == 255", "t == T - 1", "255 == t", "t > 254", "t == n"])
+def test_a_condition_that_pins_the_thread_to_one_value_is_one_writer_whatever_the_value(pin):
+    """out[b] leaves t out, so the conditions must leave t one value, the same in every thread. t == 0 bounds t from
+    above, which with t's least value 0 is enough; t == 255 needs its bound from below as well (#65)."""
+    compile_source(PINNED.replace("PIN", pin))
+
+
+@pytest.mark.parametrize(
+    "pin",
+    [
+        "t >= 254",  # threads 254 and 255
+        "t == 255 || t == 0",
+        "t == k",  # a value that moves from one iteration to the next: threads 0 to 3
+        "i == 255",  # a condition on a value that is not a thread name
+        "t % 256 == 255",
+    ],
+)
+def test_a_condition_two_threads_may_pass_is_not_a_pin(pin):
+    assert "does not depend on t" in refused("E-COOP-GLOBAL", PINNED.replace("PIN", pin))["message"]
+
+
+def test_every_name_of_a_two_dimensional_block_is_pinned_or_the_write_is_refused():
+    """Each name the index leaves out needs its own pin: the last thread of the block, the last block of the grid."""
+    plane = "fn f(g:usize, out:rw<u64>[g], last:rw<u64>[8]) {\n  blocks b in g threads tx, ty in 32, 8 {\n    WRITE\n  }\n}\n"
+    compile_source(plane.replace("WRITE", "if tx == 31 && ty == 7 { out[b] = 1; }"))
+    compile_source(plane.replace("WRITE", "if b == g - 1 && tx == 0 { last[ty] = 1; }"))
+    for write, name in [("if tx == 31 { out[b] = 1; }", "ty"), ("if b > 0 && tx == 0 { last[ty] = 1; }", "b")]:
+        assert f"does not depend on {name}," in refused("E-COOP-GLOBAL", plane.replace("WRITE", write))["message"]
 
 
 def test_a_block_s_warp_names_are_warp_wide():
