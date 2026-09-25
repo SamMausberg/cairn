@@ -63,6 +63,23 @@ def test_the_one_check_a_pull_request_needs_needs_every_job():
     assert 'test "$result" = success' in passed  # failed, cancelled and skipped all fail it
 
 
+def test_a_pull_request_skips_only_the_compatibility_jobs_which_main_runs():
+    """A pull request runs ten jobs and a push to main eighteen, and `ci-passed` accepts a skipped job on a pull
+    request alone, so a compatibility job cannot be skipped where it is the gate."""
+    listed = jobs(code(CI))
+    skipped = {
+        name
+        for name, text in listed.items()
+        if re.search(r"^    if: github.event_name != 'pull_request' *$", text, re.M)
+    }
+    assert skipped == {"compilers", "python", "arm"}
+    assert """'[\"13.2\"]' || '[\"12.9\", \"13.2\"]'""" in listed["device"]
+    assert (
+        'test "$result" = success || { test "$EVENT" = pull_request && test "$result" = skipped; }'
+        in listed["ci-passed"]
+    )
+
+
 # What a test module that needs nvcc says: a device build by the suite's helper, or a skip without nvcc. Every module
 # that ran nvcc in a full run of the suite says one of these.
 DEVICE_SIGNS = re.compile(r'device_build\(|which\("nvcc"\)|\bNVCC\b|needs_nvcc')

@@ -129,7 +129,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cuda: ["12.9", "13.2"]
+        # A pull request builds with CUDA 13.2 alone, still under both host compilers and for all four targets;
+        # CUDA 12.9 joins on main and weekly, with the other compatibility jobs.
+        cuda: ${{ fromJSON(github.event_name == 'pull_request' && '["13.2"]' || '["12.9", "13.2"]') }}
         host: [g++, clang++]
         # Each toolkit builds every example for all four targets, split between its two host-compiler jobs.
         include:
@@ -182,6 +184,7 @@ jobs:
         run: python tools/checks/device_examples.py --cxx ${{ matrix.host }} --targets ${{ matrix.targets }}
   compilers:
     name: native tests (${{ matrix.name }}, g++ ${{ matrix.gcc }} and clang++ ${{ matrix.clang }})
+    if: github.event_name != 'pull_request'  # compatibility, run on main and weekly; see ci-passed
     runs-on: ${{ matrix.image }}
     timeout-minutes: 30
     strategy:
@@ -255,6 +258,7 @@ jobs:
         run: ulimit -c 0 && python -m pytest -q tests/runtime tests/soundness tests/projects tests/language -n auto --durations=15
   python:
     name: Python ${{ matrix.python }}
+    if: github.event_name != 'pull_request'  # compatibility, run on main and weekly; see ci-passed
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -282,6 +286,7 @@ jobs:
         run: ulimit -c 0 && python -m pytest -q tests/language tests/agent tests/tooling tests/verification -n auto --durations=15
   arm:
     name: AArch64 host, and the freestanding image under QEMU
+    if: github.event_name != 'pull_request'  # compatibility, run on main and weekly; see ci-passed
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
@@ -370,7 +375,9 @@ jobs:
           print(hello["result"]["serverInfo"], len(listed["result"]["tools"]), "tools")
           EOF
   # The one check a pull request needs: it passes only when every job above passed, so a job added later is
-  # required the moment it is listed here.
+  # required the moment it is listed here. On a pull request the compatibility jobs (older and newer compilers, other
+  # Pythons, AArch64, CUDA 12.9) are skipped, which cuts a run from eighteen jobs to ten while several pull requests
+  # share the account's runners; they run on every push to main and every Monday, where a skipped job fails.
   ci-passed:
     name: ci-passed
     if: always()
@@ -381,6 +388,9 @@ jobs:
       - name: Every job this workflow runs passed
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
+          EVENT: ${{ github.event_name }}
         run: |
-          echo "$RESULTS"
-          for result in $RESULTS; do test "$result" = success; done
+          echo "$EVENT: $RESULTS"
+          for result in $RESULTS; do
+            test "$result" = success || { test "$EVENT" = pull_request && test "$result" = skipped; }
+          done
