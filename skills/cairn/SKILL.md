@@ -4,7 +4,7 @@ description: "Write, check, test and tune programs in CAIRN, a checked systems l
 license: MIT OR Apache-2.0
 compatibility: "Linux on x86-64 or AArch64 with Python 3.11+ and Clang or GCC with C++20. Needs the cairn command: bin/cairn of a CAIRN checkout, pip install of it, or the Claude Code plugin, which puts it on PATH. nvcc for device code."
 metadata:
-  version: "1.1.0.dev0"
+  version: "1.1.0"
   generated-by: "python -m cairn.agent.skill"
 ---
 

@@ -1,48 +1,69 @@
 # Changelog
 
-## 1.1.0.dev0
+## 1.1.0
 
-Work toward 1.1.0 on `main`, not released. Its records are under `evidence/v1_1/`, and what is left is the [roadmap](https://github.com/users/SamMausberg/projects/2) and the [v1.1 milestone](https://github.com/SamMausberg/cairn/milestone/1).
+The release after 1.0.0. Its records are under `evidence/v1_1/` ([index](evidence/v1_1/README.md)), the release gates and what did not run are in `evidence/v1_1/RUN_NOTES.md`, and what is left is the [roadmap](https://github.com/users/SamMausberg/projects/2).
+
+### Writing CAIRN
+
+- A call that writes or allocates may be the only operand of a conversion or unary operator: `let k = usize(next(inp));` is accepted, and a call beside another operand is still `E-EFFECT-ORDER`, whose message now names the call, what it writes and the `let` that binds it.
+- A minus on an integer literal is one constant, so a signed type's minimum is a literal (`-9223372036854775808`), and a negated literal carries no overflow guard. 56 programs emit fewer guards, among them `std.text`, `std.zlib` and `std.draw`; none emits more.
+- Parts whose bounds are literals and constants are leased as the numbers they fold to, so `p[0..BINS]` and `p[BINS..2 * BINS]` can go to two tasks.
+- The refusals first programs meet most often state the fix the compiler knows: the part `b[0..n]` of a `Buf`, the annotation of a `u64` literal, an import that hides `println`, `v.len` of a `Vec`, where a part goes, and what `if`, `match`, `as` and `::` are in CAIRN.
+- One check reports every independent refusal: the first exactly as before, the rest in `further`, and `not_judged` counts functions a refusal left without a verdict. A check that stops early on a limit or an internal fault says so in `further_stopped`.
+- Every refusal names the rule card that states its rule and, where the compiler can state it, the smallest fix; `cairn rules` prints a card offline.
+- `docs/guide.md` and the skill open with a complete program that reads input, a table of the refusals a first program meets and a table of the library calls it uses.
 
 ### Kernels
 
 - `load_wide[K](x, i)` and `store_wide` move up to 16 bytes of adjacent elements in one access, with a cache hint named from `Cache` (`E-WIDE`), in host code, lanes and cooperative threads.
-- Lanes and cooperative threads update an element atomically: `atomic_add_wrap`, `atomic_min`, `atomic_max`, `atomic_cas`, `atomic_and`, `atomic_or`, `atomic_xor` and `atomic_add_unordered`, never beside a plain access of the same array in one region (`E-ATOMIC-MIXED`).
-- A cooperative region may end with a finish that runs once, in one block, after every block, and stays one launch on the device. Its block counter is a word of a table in the module's global memory, so a function with a finish allocates nothing and has a `cq_NAME` entry.
+- Lanes and cooperative threads update an element atomically (`atomic_add_wrap`, `atomic_min`, `atomic_max`, `atomic_cas`, `atomic_and`, `atomic_or`, `atomic_xor`, `atomic_add_unordered`), never beside a plain access of the same array in one region (`E-ATOMIC-MIXED`).
+- A cooperative region may end with a finish that runs once, in one block, after every block, and stays one launch on the device; its block counter is a word of a table in the module's global memory, so it allocates nothing.
 - A shared array declared with no initializer is not zeroed, when every element a thread reads was written first (`E-COOP-UNWRITTEN`).
 - Warps vote with `warp_ballot`, `warp_any`, `warp_all` and `warp_match`, and `shuffle_up` joins the shuffles.
-- `examples/reduction` sums f32 in one launch with wide streaming loads, an unzeroed shared array and a finish, with nothing `unsafe`. `docs/devices.md` lists what fast CUDA kernels use and how CAIRN writes each one.
+- The one-writer rule for arrays from outside a cooperative region accepts a write whose conditions pin each block or thread name to one value, such as `if t == 255` or `if tx == 31 && ty == 7`, not only thread 0.
+- `reduce op out[k] for i in n yield e;` writes a reduction's total into one element; over `@device` views the total stays in device memory for the next region, with no copy and no wait of its own.
+- `examples/reduction` sums f32 in one launch with wide streaming loads, an unzeroed shared array and a finish, with nothing `unsafe`.
 
 ### Device execution and performance
 
 - A device function whose effects the host cannot observe waits once when it returns, and a library header adds `cq_NAME(stream, ...)`, which queues it on the caller's stream without waiting and can be captured in a CUDA graph (`E-ENQUEUE` names what keeps a function from it).
-- A checked multiply in a device lane tests the product's high half instead of dividing.
-- On an RTX 5070 Ti, a one-launch sum of 2^26 f32 written in safe CAIRN (`examples/reduction`, `sum_unordered`) ran through `cq_NAME` in 344 and 340 us of GPU time against 342 and 344 us for a hand-written one-pass CUDA kernel, where the owner's earlier CAIRN version took 656 to 679 us with a wait after each pass. Layer norm, a cooperative stencil and scalar-load reductions remain 11 to 26 percent slower (`evidence/v1_1/device_perf`).
-- Typed PTX written in a region's body launches; before, it failed on the device.
-- `--emulate` on `build`, `run`, `test` and `validate` judges a device program against its device target and runs its device work on host threads; what the host cannot run as a device would is `E-EMULATE`, and an emulated validation is `finite-tested-emulated`, which `cairn tune` uses only with `--accept-emulated`.
+- A run of device work waits once, before the next thing the host observes, instead of after each region; a copy to host memory, a release of device memory and a reduction's total wait for held work where they stand. I/O, foreign calls and `@unified` memory keep the earlier behaviour. On the counting host stand-in, a function that copies in, runs four regions around a total and copies back waits five times a call where it waited seven.
+- On an RTX 5070 Ti, a one-launch sum of 2^26 f32 written in safe CAIRN ran through `cq_NAME` in 344 and 340 us of GPU time against 342 and 344 us for a hand-written one-pass CUDA kernel, where the owner's earlier CAIRN version took 656 to 679 us. Layer norm, a cooperative stencil and scalar-load reductions remain 11 to 26 percent slower (`evidence/v1_1/device_perf`).
+- A device program includes CUB only when it has a device reduce, scan or compact; on the reference machine nvcc builds the others 2.5 to 4 times faster.
+- A checked multiply in a device lane tests the product's high half instead of dividing, and typed PTX written in a region's body launches.
+- `--emulate` on `build`, `run`, `test` and `validate` judges a device program against its device target and runs its device work on host threads; what the host cannot run as a device would is `E-EMULATE`, and an emulated validation is `finite-tested-emulated`, which `cairn tune` uses only with `--accept-emulated`. A cooperative region on host threads meets its warp's barrier once an exchange, so the emulated reduction runs in 16 s where it took 34 to 45 s.
 - `cairn predict` and `cairn tune` price device work on eight packaged cards (A100, H100, H200, B200, L40S, RTX 4090, RTX 5090, RTX 5070 Ti) from NVIDIA's published figures, with `--card NAME`, `--card all` and `cairn cards`. No card has been measured.
+- `make gpu` runs every test that runs device code, and a deliberate device trap only when `CAIRN_GPU_TRAPS=1` is also set.
+
+### Tools
+
+- An edit of one function's body in the edit hosts, `cairn mcp` and `cairn lsp` is checked from the walk the last check kept, with every whole-program rule run again; a differential test holds it to a whole check on every body of every example. An admitted edit lexes only the lines it touches and parses only the edited body. On a generated project of 185 modules such a check takes about a quarter of a whole check. `cairn check` stays whole, and emission is still whole.
+- `cairn check` of a cooperative kernel with tensor-core fragments takes less than half as long, `cairn validate` builds its two libraries at once, and `cairn predict --inspect` checks a program once.
+- `cairn run --sanitize address|thread` builds and runs the program under the sanitizer, and `cairn build --sanitize` builds it. `cairn build` prints a record of about 2 KB; the full record, with the checker's receipt of every function, stays in `receipt.json`, which the record names.
+- `cairn run` and `cairn test` cap a program's data rather than its address space, with an 8 MiB stack per thread, so a correct program of many threads is not stopped by its threads' reservations.
+- `cairn doc --std --module M` prints only the modules it names.
+- `cairn tune` chooses an implementation only on a validation at least as strict as the reference's pinned policy, and refuses a candidate whose implementation needs a device feature the target lacks (`E-IMPL-TARGET`), as `cairn export` now does too. Validation records written before 1.1.0 carry no policy, so `cairn tune` ignores them until the implementation is validated again.
 - `cairn tune` ranks candidates by one objective over several sizes, generates them lazily, compiles each distinct kernel once and holds its time budget.
-
-### Benchmarks and interop
-
 - `cairn export --harness sol-execbench|gpumode|kernelbench` writes a function as a submission for that benchmark, bound to PyTorch's current stream through `cq_NAME`, and `cairn new --from-sol-execbench` starts a project from a problem. Nothing is submitted or run on a GPU by these commands.
-
-### Agents
-
-- One check reports every independent refusal: the first exactly as before, the rest in `further`, and `not_judged` counts functions a refusal left without a verdict.
-- Every refusal names the rule card that states its rule and, where the compiler can state it, the smallest fix; `cairn rules` prints a card offline, and every diagnostic code belongs to one card. The skill costs 19.6 percent fewer tokens; no model has been run to show agents do better with it.
-- The hosts, `cairn state`, `cairn mcp` and the language server share one compile per distinct source.
-- `cairn tune --write` and every session write files with CRLF endings or a byte-order mark in their own form instead of refusing them.
+- The hosts, `cairn state`, `cairn mcp` and the language server share one compile per distinct source. The language server reads nested generic instances and colors and completes a document holding a test block.
+- `cairn tune --write` and every session write files with CRLF endings or a byte-order mark in their own form.
 
 ### Validation
 
 - Host validation, regression replay, the implementation session and the generated device tests compare floats under one versioned numerical policy, and a Z3 counterexample is replayed natively and fails the validation it breaks.
 
+### Agents
+
+- The 1.1 evaluation of CAIRN with the plugin, CAIRN with its documentation, C++ and Rust stopped early, at 54 of its 156 subjects: every subject solved its task, and per solved task the plugin arm used 5.5 times C++'s tokens and the documentation arm 8.2 times (`evidence/v1_1/ai_eval`, partial). `evidence/v1_1/friction` says where those tokens went: every CAIRN subject's first program that type-checked was correct, and most tokens went to reading the documentation before writing, to refusals and to finding the sanitized build. Replayed on the 69 programs those subjects checked, 1.1.0 refuses 16 where the starting commit refused 30, each naming the change it wants. No model has been run since, so nothing here shows that agents now spend less.
+
 ### Repository
 
-- CI compiles device code under CUDA 12.9 and 13.2 with both host compilers, tests the oldest and newest supported compilers (GCC 11, Clang 13 and later), every Python from 3.11, an AArch64 host with the freestanding image under QEMU and the installed package, and reports one `ci-passed` check.
-- Every change reaches `main` through a pull request that fills in the template and merges when CI passes. Issues are filed through forms, labels are data in `.github/labels.yml`, `CITATION.cff` cites the project, and `docs/verification.md` has a capability matrix generated from data.
-- An adversarial review of everything since 1.0.0 fixed eight defects (`evidence/v1_1/review`). One stays open and is pinned by a strict expected failure: `cairn tune` chooses implementations on validations made under any domain and tolerance.
+- The compiler's modules sit in eight subpackages (`syntax`, `derive`, `check`, `primitives`, `plans`, `cooperative`, `device`, `lower`), and `verify/scalar`, `verify/validation`, `projects/harness`, `editor/lsp`, `agent/hosts`, `agent/mcp` and `perf/tuning` are subpackages too. Emitted C++ is byte-identical for every program the emission-identity check covers. Semantic receipts pin every file under `compiler/` by glob, so each receipt's `implementation_sha256` changed once.
+- Test, tool and bench code that was repeated lives in one helper each. `make audit` reads any length of history, admits compressed JSON Lines transcripts under `evidence/` only as the text they decompress to, and fails the suite on any finding.
+- CI compiles device code under CUDA 12.9 and 13.2 with both host compilers, tests the oldest and newest supported compilers, every Python from 3.11, an AArch64 host with the freestanding image under QEMU and the installed package, and reports one `ci-passed` check. A pull request runs ten of those jobs; `main` and the weekly run run all eighteen.
+- Every change reaches `main` through a pull request that fills in the template and merges when CI passes. Issues are filed through forms, labels are data in `.github/labels.yml`, and `docs/verification.md` has a capability matrix generated from data.
+- An adversarial review of everything from 1.0.0 to the 1.1 development version fixed eight defects (`evidence/v1_1/review`); the items it left open are fixed.
 
 ## 1.0.0
 

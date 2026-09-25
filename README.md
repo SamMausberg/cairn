@@ -50,11 +50,12 @@ An agent writing CAIRN gets feedback it can act on without reading the manual:
 - Every function has an inferred effect row (`alloc`, `spawn`, `io`, `write:out`, `trap`, ...). `cairn doc` prints it, and a signature can cap it, so an edit that adds an allocation where none was allowed is refused.
 - A slow function stays as the reference, and a faster version is written beside it as an implementation: `fn g(...) implements f when n % 4 == 0 { ... }`. `cairn validate` tests it against the reference on generated edge cases, and `cairn tune` chooses among validated implementations and plans within compile and run budgets.
 - `cairn diff OLD NEW` classifies each function as compiling to identical code, shown equivalent by Z3 within the fragment it models, or changed, with an input that shows the difference.
-- The compiler's edit, plan and implementation sessions are available to agents without a shell through `cairn mcp`, and the repository is a Claude Code plugin that adds the skill, the command, the language server and those tools.
+- The compiler's edit, plan and implementation sessions are available to agents without a shell through `cairn mcp`, and the repository is a Claude Code plugin that adds the skill, the command, the language server and those tools. After an edit of one function's body, those sessions and the language server check again from the last check's walk, which a differential test holds to a whole check.
+- `cairn run --sanitize address` or `thread` runs the program under a sanitizer in one command.
 
 CAIRN is also built with agents. Most of its compiler, runtime, tests and documentation were written by AI agents (Claude Code) working to one maintainer's design, and the repository's rules for agents are in [AGENTS.md](AGENTS.md).
 
-Whether CAIRN makes agents cheaper or more successful than C++ or Rust is not yet established. The preregistered v1.0 benchmark, run before the plugin existed, gave `claude-sonnet-5` ten small tasks in each language: every subject solved its task, and CAIRN subjects used 11.6 times the tokens of C++ subjects, most of it reading documentation ([results](evidence/v1_0/ai_benchmark/RESULTS.md)). A larger evaluation with the plugin is in progress, and this README makes no cost claim until it reports.
+Whether CAIRN makes agents cheaper or more successful than C++ or Rust is not established, and on the evidence so far it costs them more. The preregistered v1.0 benchmark, run before the plugin existed, gave `claude-sonnet-5` ten small tasks in each language: every subject solved its task, and CAIRN subjects used 11.6 times the tokens of C++ subjects, most of it reading documentation ([results](evidence/v1_0/ai_benchmark/RESULTS.md)). The 1.1 evaluation with the plugin stopped early, at 54 of 156 subjects: again every subject solved its task, and per solved task the plugin arm used 5.5 times C++'s tokens and the documentation arm 8.2 times ([partial results](evidence/v1_1/ai_eval/RESULTS.md)). The two runs differ in design and are not a measured improvement. [Where those tokens went](evidence/v1_1/friction/README.md): every CAIRN subject's first program that type-checked was correct, and the cost was reading before writing, refusals, and finding the sanitized build. 1.1.0 removes the costliest causes; no model has been run on it yet.
 
 ## GPU work without a GPU
 
@@ -158,13 +159,13 @@ The demo agents are scripted. What the host, the compiler, Z3 and the programs r
 
 ## Limitations and what you trust
 
-CAIRN 1.0 was developed and measured on one machine, and a later major version may still change the language.
+CAIRN 1.1 was developed and measured on one machine, and a later major version may still change the language.
 
-The compiler is not proved correct. The checker and the C++ emitter are about 14,300 lines of Python (`src/cairn/compiler`), and the runtime is about 4,200 lines of C++ headers (`src/cairn/runtime`). The Lean proofs cover models written by hand beside that code. Differential tests compare those models with the checker on generated programs, which shows agreement on samples, not that the Python implements the model.
+The compiler is not proved correct. The checker and the C++ emitter are about 15,300 lines of Python (`src/cairn/compiler`), and the runtime is about 4,300 lines of C++ headers (`src/cairn/runtime`). The Lean proofs cover models written by hand beside that code. Differential tests compare those models with the checker on generated programs, which shows agreement on samples, not that the Python implements the model.
 
 | You trust | For | Checked by |
 |---|---|---|
-| The Python parser, checker and emitter | every program | about 5,700 tests, rejection tables from nine adversarial reviews, differential runs against the Lean models |
+| The Python parser, checker and emitter | every program | about 5,900 tests, rejection tables from nine adversarial reviews, differential runs against the Lean models |
 | The runtime headers | owners, threads, the lane pool, rings, device calls | native runs under Clang and GCC with the address, leak, undefined-behaviour and thread sanitizers |
 | Clang or GCC, and nvcc | native and device code | nothing in this repository |
 | `unsafe` blocks, `extern` declarations, typed `asm` and foreign implementations | the foreign boundary, MMIO, inline assembly, vendored C++ and CUDA | the effects and contracts they declare, taken as written; a foreign implementation is also tested against its reference |
@@ -194,6 +195,7 @@ What has not been validated:
 | A host `parallel` region runs level with OpenMP and oneTBB at equal guards and worker counts. | Benchmarked, one machine | `evidence/v1_0/bench` |
 | `cairn predict` ranks held-out host timings with a Kendall tau of 0.87 to 0.92, at a median error of 28 to 44 percent. | Benchmarked, one machine | `evidence/v1_0/perf_model` |
 | Every device example runs under `--emulate` with the same results as its host build or reference loop, under Clang and GCC, with the address, leak and thread sanitizers clean. | Finite-tested on the host | `evidence/v1_1/emulation` |
+| After an edit of one function's body, a check from the last check's walk gives exactly the whole check's answer, on every body of every example. | Finite-tested | `tests/verification/test_incremental.py` |
 
 [docs/verification.md](docs/verification.md) says what each proof, model and test covers and what it leaves out.
 

@@ -1,4 +1,4 @@
-module(name = "rules_cairn", version = "1.1.0-dev.0")
+module(name = "rules_cairn", version = "1.1.0")
 
 cairn = use_extension("//:extensions.bzl", "cairn")
 use_repo(cairn, "cairn_compiler")
