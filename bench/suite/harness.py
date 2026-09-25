@@ -454,7 +454,7 @@ class Harness:
         if done.returncode != 0:
             return {"status": "failed", "exit_code": done.returncode, "stderr": done.stderr[-2000:]}
         printed = json.loads(done.stdout)
-        row = {"status": "checked", "n": DUMP_SIZE, "agrees": bool(module.agrees(DUMP_SIZE, printed["result"]))}
+        row = {"status": "checked", "n": DUMP_SIZE, "agrees": agrees(module, DUMP_SIZE, printed["result"])}
         # A kernel whose claim is a semantic difference offers a second question its oracle answers
         # apart from the pass: whether this arm computed the function the CAIRN source names, bit for
         # bit. It is reported, never a failure, because being a different function is the finding.
@@ -462,6 +462,12 @@ class Harness:
             row["folds_in_order"] = bool(module.folds_in_order(DUMP_SIZE, printed["result"]))
         row["result"] = printed["result"] if not isinstance(printed["result"], list) else "an array"
         return row
+
+
+def agrees(oracle, n: int, result) -> bool:
+    """Whether an arm's dumped `result` at `n` is the oracle's: by its own `agrees` where it states one (a tolerance,
+    or a record with more than one part), otherwise exactly equal to its `expected(n)`."""
+    return bool(oracle.agrees(n, result)) if hasattr(oracle, "agrees") else result == oracle.expected(n)
 
 
 def main() -> int:

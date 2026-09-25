@@ -23,8 +23,3 @@ def expected(n: int) -> list[int]:
         for i in range(hi - lo):
             out[lo + i] = (((seed & MASK) + i) & MASK) * MIX & MASK
     return out
-
-
-def agrees(n: int, result) -> bool:
-    want = expected(n)
-    return len(result) == len(want) and all(a == b for a, b in zip(result, want, strict=True))

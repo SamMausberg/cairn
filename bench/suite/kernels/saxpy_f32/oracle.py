@@ -10,8 +10,3 @@ A = 2.5
 
 def expected(n: int) -> list[float]:
     return [A * (float(i % 1024) * 0.5) + float(i % 77) for i in range(n)]
-
-
-def agrees(n: int, result) -> bool:
-    want = expected(n)
-    return len(result) == len(want) and all(a == b for a, b in zip(result, want, strict=True))

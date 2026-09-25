@@ -8,10 +8,12 @@ PREREGISTRATION.md, that the harness refuses to write under `evidence/`, and tha
 suite preregisters as refused really is refused with the code it names.
 """
 
+import importlib.util
 import json
 import shutil
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -72,6 +74,19 @@ def test_a_preregistered_refusal_is_still_refused():
         )
         report = json.loads(done.stdout)
         assert report["status"] == "rejected" and report["code"] == code, report
+
+
+def test_an_oracle_is_compared_exactly_unless_it_states_its_own_comparison():
+    exact = types.SimpleNamespace(expected=lambda n: [n, 2 * n])
+    assert harness.agrees(exact, 3, [3, 6])
+    assert not harness.agrees(exact, 3, [3, 6, 0]) and not harness.agrees(exact, 3, [3, 7])
+    within = types.SimpleNamespace(expected=lambda n: 1.0, agrees=lambda n, result: abs(result - 1.0) < 0.5)
+    assert harness.agrees(within, 3, 1.25) and not harness.agrees(within, 3, 2.0)
+    for name in harness.KERNELS:
+        spec = importlib.util.spec_from_file_location(f"oracle_{name}", SUITE / "kernels" / name / "oracle.py")
+        oracle = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(oracle)
+        assert hasattr(oracle, "agrees") or callable(oracle.expected), f"{name}: the harness compares with one of them"
 
 
 def test_the_harness_never_writes_under_evidence(tmp_path):
