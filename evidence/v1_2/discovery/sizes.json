@@ -141,13 +141,13 @@
       "returns": "Buf[Rec]",
       "source": "struct Rec { key:u64; weight:i64; }\nfn main() -> i32 { return 0; }\n"
      },
-     "hits": 1,
+     "hits": 4,
      "more": 0,
      "first": [
       "Buf(usize)  pure + alloc, free  // an owner of n zeroed elements on the heap; Array[T, N]() is a fixed array held inline"
      ],
-     "mcp_tokens": 43,
-     "terminal_tokens": 34
+     "mcp_tokens": 189,
+     "terminal_tokens": 180
     }
    ]
   },
@@ -202,10 +202,10 @@
      "hits": 2,
      "more": 0,
      "first": [
-      "std.text.write_i64(n:usize, out:rw<u8>[n], value:i64) -> usize  pure + write:out  // A leading '-' and the magnitude, which is representable for every value, the minimum included."
+      "u64(x)  // x as that type, aborting when an integer does not fit; the minimum of a signed type is a literal, -9223372036854775808 for i64"
      ],
      "mcp_tokens": 100,
-     "terminal_tokens": 91
+     "terminal_tokens": 92
     }
    ]
   },
@@ -273,13 +273,13 @@
       ],
       "returns": "usize"
      },
-     "hits": 6,
+     "hits": 5,
      "more": 0,
      "first": [
-      "std.sort.search[T:Ord](n:usize, xs:ro<T>[n], key:ro<T>) -> Option[usize]  pure  // The index of a value equal to `key` in an already sorted view, if one is there."
+      "std.text.find(n:usize, s:ro<u8>[n], m:usize, needle:ro<u8>[m]) -> Option[usize]  pure  // The first index where `needle` starts."
      ],
-     "mcp_tokens": 401,
-     "terminal_tokens": 391
+     "mcp_tokens": 348,
+     "terminal_tokens": 338
     }
    ]
   },

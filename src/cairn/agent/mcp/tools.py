@@ -322,7 +322,7 @@ class Tools:
 
         source = self.program(a)[0] if "path" in a or "source" in a else None
         words, takes, limit = a.get("words", ""), a.get("takes", []), a.get("limit", LIMIT)
-        texts = [words, a.get("returns") or "", a.get("effects") or "", *(takes if isinstance(takes, list) else [0])]
+        texts = [words, a.get("returns", ""), a.get("effects", ""), *(takes if isinstance(takes, list) else [0])]
         if not all(isinstance(t, str) for t in texts) or type(limit) is not int:
             fail("E-REQUEST", 'words, returns and effects are strings, takes a list of types such as ["ro<u8>[n]"], '
                  "and limit an integer.")  # fmt: skip

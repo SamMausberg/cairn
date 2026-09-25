@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
+from .agent.find import LIMIT
 from .projects.new import templates
 from .projects.toolchain import ARCHS, TARGETS
 
@@ -236,7 +237,7 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--returns", metavar="TYPE", help="The type you want back; a Result or Option of it fits next.")
     q.add_argument("--effects", metavar="CEILING", help="Only functions whose rows fit this ceiling: pure, or "
                    "effects such as 'trap, alloc'.")  # fmt: skip
-    q.add_argument("--limit", type=int, default=10, help="Hits to list; the answer counts the rest.")
+    q.add_argument("--limit", type=int, default=LIMIT, help="Hits to list; the answer counts the rest.")
     q.add_argument("--in", dest="within", metavar="PATH", help="The program whose own functions are searched too; "
                    "default: the project here, when there is one.")  # fmt: skip
     f = sub.add_parser("fmt", help="Format CAIRN sources in place; refuses any change to the token stream.")

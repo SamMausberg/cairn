@@ -4,15 +4,19 @@ A query runs over the builtins, the packaged `std` modules and the program's own
 values an agent has, and perhaps the type it wants back, a function fits when a call of it with those values checks.
 Each candidate call is written out as a probe function in the program's root module: the values in any order, and
 each parameter they leave open as a further value of its declared type, a template's parameters at the types the
-values hold. One check judges every probe, reporting each refusal on its own (compiler/check/refusals.py), so what
-fits is what the compiler accepts and nothing here repeats a type rule. A probe refused only because it drops a
-linear value it was handed still fits: the call checked, and the drop is the probe's. A call that fills every
-parameter, besides the extents a call may leave out, fits before one that leaves some open, and a result that holds
-the wanted type, as an `Option` or a `Result` does, after one that is it.
+values and the wanted result hold. One check judges every probe, reporting each refusal on its own
+(compiler/check/refusals.py), so what fits is what the compiler accepts and nothing here repeats a type rule. A probe
+refused only because it drops a linear value it was handed still fits: the call checked, and the drop is the
+probe's. A call that fills every parameter, besides the extents a call may leave out, fits before one that leaves
+some open, and a result that holds the wanted type, as `Option[T]` or `Result[T, E]` holds `T`, after one that is
+it. The probes call from the root module, so a function private to another module of the program is no type query's
+hit. A query gives at most `MOST` values, since the probes grow as every order of them.
 
 Given words, a function matches when its name, its module or the first sentence of the comment above it holds
-them, or a word `ALIASES` takes for one of them. A builtin's rule is code (compiler/primitives/builtins.py), so
-`BUILTINS` says in one line what each does; a probe still judges every builtin a type query reaches.
+them, or a word `ALIASES` takes for one of them; two words that spell one it takes (`hash map`) are that word. Of
+the functions that match as well, one a word names, or the words joined name (`read stdin`), comes first. A
+builtin's rule is code (compiler/primitives/builtins.py), so `BUILTINS` says in one line what each does; a probe
+still judges every builtin a type query reaches.
 
 A hit is one line: the qualified name and signature, the effects of its row beyond what `pure` allows, and the first
 sentence of its comment. An effect ceiling keeps the functions whose rows, less their reads and writes of what they
@@ -42,6 +46,8 @@ from ..editor.docs import library_names
 from .projection import generics
 
 LIMIT = 10  # hits an answer lists; it counts the rest
+MOST = 4  # values a type query gives
+HOLDERS = {"std.core.Option", "std.core.Result"}  # a result that holds its first argument
 BUILTINS = {  # the names each line covers: how a call is written, and what it does
     "len": "len(xs) -> usize: the extent of an array view, a part, a Buf, an Array or a string; a Vec's is v.len",
     "print println eprint eprintln": "println(a, ...): integers, floats, bools, 'c', strings and u8 views, then a "
@@ -85,12 +91,12 @@ BUILTINS = {  # the names each line covers: how a call is written, and what it d
 # Words an agent brings from other languages, and the words of CAIRN's names and comments each stands for.
 ALIASES = {
     "integer": "i64 u64 usize decimal", "int": "i64 u64 usize", "number": "i64 u64 f64 decimal integer float",
-    "string": "text", "str": "text", "substring": "find needle", "search": "find", "index": "find", "lookup": "get find",
-    "array": "buf vec", "list": "vec", "vector": "vec", "append": "push extend", "add": "push insert add",
-    "remove": "remove pop", "delete": "remove", "dictionary": "map", "dict": "map", "hashmap": "map", "table": "map",
-    "stdin": "stdin input", "input": "stdin read", "stdout": "print println", "output": "print write",
-    "thread": "spawn task group", "concurrent": "spawn group", "parallel": "spawn group", "join": "wait",
-    "size": "len count", "length": "len", "minimum": "min", "maximum": "max", "cast": "u64 i64 usize",
+    "string": "text", "str": "text", "substring": "find needle", "search": "find", "index": "find",
+    "lookup": "get find", "array": "buf vec", "list": "vec", "vector": "vec", "append": "push extend",
+    "add": "push insert add", "remove": "remove pop", "delete": "remove", "dictionary": "map", "dict": "map",
+    "hashmap": "map", "table": "map", "stdin": "stdin input", "input": "stdin read", "stdout": "print println",
+    "output": "print write", "thread": "spawn task group", "concurrent": "spawn group", "parallel": "spawn group",
+    "join": "wait", "size": "len count", "length": "len", "minimum": "min", "maximum": "max", "cast": "u64 i64 usize",
     "convert": "u64 i64 usize", "overflow": "wrap", "square": "sqrt", "root": "sqrt",
 }  # fmt: skip
 STOP = set("a an and are as at be by for from how i in into is it its of on one or the this to what with".split())
@@ -216,12 +222,22 @@ def indexed_or_refused(source: str | None) -> tuple[Index, str | None]:
 # Words ----------------------------------------------------------------------------------------------------------
 
 
+def asked(words: str) -> list[str]:
+    """The words of a query, two that spell an alias together (`hash map`) taken as that one."""
+    out: list[str] = []
+    for w in (w for w in re.findall(r"[a-z][a-z0-9]*", words.lower()) if w not in STOP):
+        if out and out[-1] + w in ALIASES:
+            out[-1] += w
+        else:
+            out.append(w)
+    return out
+
+
 def worded(entries: list[Entry], words: str) -> dict[str, tuple[int, int]]:
     """By entry name, (how many of the words it matches, how much those matches weigh), for the entries that match
     the most words. A word matches a stem that it, or a word it stands for, is or begins, and each word takes the
     heaviest stem no earlier word took, so `find substring` finds `needle` in `text.find` and not `find` twice."""
-    asked = [w for w in re.findall(r"[a-z][a-z0-9]*", words.lower()) if w not in STOP]
-    wanted = [{stem(w), *map(stem, ALIASES.get(w, "").split())} for w in asked]
+    wanted = [{stem(w), *map(stem, ALIASES.get(w, "").split())} for w in asked(words)]
     scores = {}
     for entry in entries:
         taken: set[str] = set()
@@ -277,14 +293,15 @@ class Probes:
         self.moves = "".join(f"let mut x{i} = a{i}; " for i, t in enumerate(takes) if t.mode == "value")
         self.values = [f"x{i}" if t.mode == "value" else f"a{i}" for i, t in enumerate(takes)]
         self.text = [f"fn cairn_find({', '.join(self.params)}) {{ {self.moves}}}\n"]  # what a builtin's row adds to
-        pool = list(dict.fromkeys(x for t in takes for x in (t.value, *(a for a in t.args if isinstance(a, Type)))))
+        known = [*takes, *([returns] if returns else [])]
+        pool = list(dict.fromkeys(x for t in known for x in (t.value, *(a for a in t.args if isinstance(a, Type)))))
         for entry in index.entries:
             if entry.f is None:
                 for name in (n for n in entry.names if n in TABLE):
                     head = f"{name}({', '.join(short(t) for t in takes)})"
                     self.add(entry, [], f"{name}({', '.join(self.values)})", 0, None, head)
             else:
-                self.declared(entry, pool)
+                self.filled(entry, pool)
         self.source = index.imports + "".join(self.text) + index.program
 
     def add(self, entry: Entry, params: list[str], call: str, left: int, void: bool | None, head: str = "") -> None:
@@ -299,9 +316,10 @@ class Probes:
             result = f" -> {self.returns.display()}" if body[0] == "r" and self.returns else ""
             self.text.append(f"fn {name}({', '.join([*self.params, *params])}){result} {{ {self.moves}{body} }}\n")
 
-    def declared(self, entry: Entry, pool: list[Type]) -> None:
+    def filled(self, entry: Entry, pool: list[Type]) -> None:
         """Every way the values fill a function's parameters, with the extents a call may leave out and without
-        them, each parameter left open a further value, and a template's generics there at a type the values hold."""
+        them, each parameter left open a further value, and a template's generics there at a type the values or the
+        result wanted hold."""
         f = entry.f
         assert f is not None
         types, implied = dict(f.params), extents(f)
@@ -346,9 +364,9 @@ class Probes:
                 continue
             self.accepted.add(name)
             fit = probe.fit
-            if fit[0]:  # the call as a statement: its type must hold the one wanted
+            if fit[0]:  # the call as a statement: its type must be the one wanted, or an Option or a Result of it
                 ty = c.fs[name].body[-1].ty
-                if self.returns not in (ty.value, *(a for a in ty.args if isinstance(a, Type))):
+                if ty.value != self.returns and not (ty.name in HOLDERS and ty.args[0] == self.returns):
                     continue
                 fit = (int(ty.value != self.returns), fit[1])
             own = c.local_effects.get(name) if probe.head and name not in refused else None
@@ -385,18 +403,22 @@ def candidates(index: Index, given: list[Type] | None, wanted: Type | None):
 def find(source: str | None, words: str = "", takes: list[str] | tuple[str, ...] = (), returns: str | None = None,
          effects: str | None = None, limit: int = LIMIT) -> dict[str, Any]:  # fmt: skip
     """The answer to one query over the builtins, the library and `source`'s own functions (None: none). Best
-    first: the fit to the types, then the words matched, the program's own before the library and the library before
-    a builtin, a function of the module of a type given or wanted first, and fewer known effects before more."""
+    first: the fit to the types, then the words matched, a function the words name, the program's own before the
+    library and the library before a builtin, a function of the module of a type given or wanted first, and fewer
+    known effects before more."""
     typed = bool(takes) or returns is not None
     if not words.strip() and not typed:
         fail("E-REQUEST", "Ask with words, or with the types of the values you have and the type you want back.")
     if not 1 <= limit <= 200:
         fail("E-REQUEST", "A limit is 1..200 hits.")
+    if len(takes) > MOST:
+        fail("E-REQUEST", f"Give at most {MOST} values; the calls to judge grow as every order of them.")
     index, refusal = indexed_or_refused(source)
     given = [index.given(t) for t in takes] if typed else None
     wanted = index.given(returns) if returns is not None else None
     home = {index.c.p.modules.get(t.value.name) for t in [*(given or []), *([wanted] if wanted else [])]}
     scores = worded(index.entries, words) if words.strip() else None
+    named = {*asked(words), "_".join(asked(words))} if scores is not None else set()
     bound = ceiling(effects) if effects else None
     best: dict[str, tuple[tuple, str]] = {}
     for entry, fit, head, row in candidates(index, given, wanted):
@@ -407,7 +429,8 @@ def find(source: str | None, words: str = "", takes: list[str] | tuple[str, ...]
         cost = (row is None, len(beyond(row)))  # an unknown row after every known one
         called = head.partition("(")[0]  # a builtin the words name before the others its entry covers
         order = (called not in words.split(), entry.names.index(called)) if head else (False, 0)
-        key = (*fit, -matched, -weight, entry.rank, not near, cost, entry.name, order)
+        unnamed = not named & {entry.name.rsplit(".", 1)[-1], *entry.names}
+        key = (*fit, -matched, -weight, unnamed, entry.rank, not near, cost, entry.name, order)
         if entry.name not in best or key < best[entry.name][0]:
             best[entry.name] = (key, entry.line(head, row))
     hits = sorted(best.values())
