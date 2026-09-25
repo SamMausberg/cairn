@@ -39,7 +39,7 @@ COMPATIBILITY = (
 
 EXAMPLE = """\
 // Reads integers from standard input; prints how many, and how many are negative, counted on two tasks.
-import std.core (Option, Result);
+import std.core (Result);
 import std.io as io;
 import std.text as text;
 import std.vec (Vec);
@@ -52,26 +52,14 @@ fn negatives(n:usize, xs:ro<i64>[n]) -> usize {
 
 fn main() -> i32 {
   let mut input = vec.new[u8]();                    // a growable owner, freed at scope exit
-  stack chunk:u8[4096] = zeroed;
-  let mut more = true;
-  while more {
-    match io.read_stdin(4096, chunk) {
-      Ok(got) => { if got == 0 { more = false; } else { vec.extend_from(input, got, chunk[0..got]); } }
-      Err(_) => more = false;
-    }
-  }
+  match io.read_stdin_to_end(input) { Ok(_) => {} Err(_) => return 1; }
   let mut values = vec.new[i64]();
-  let mut lo:usize = 0;
-  while lo < input.len {
-    let mut hi = lo;
-    while hi < input.len && input.data[hi] > 32 { hi += 1; }
-    if hi > lo {
-      match text.parse_i64(hi - lo, input.data[lo..hi]) {   // a part is written where it is passed
-        Ok(v) => vec.push(values, v);
-        Err(_) => return 1;
-      }
+  let mut w = text.cursor();
+  while text.next_word(input, w) {                  // w.lo..w.hi: the next word, not copied
+    match text.parse_i64(input.data[w.lo..w.hi]) {  // a part is written where it is passed
+      Ok(v) => vec.push(values, v);
+      Err(_) => return 2;
     }
-    lo = hi + 1;
   }
   let n = values.len;
   let halves = Group[usize](2);
@@ -85,6 +73,13 @@ fn main() -> i32 {
 }
 """
 
+LIBRARY = """\
+- `std.io`: `read_stdin_to_end`, `read_file`.
+- `std.text`: `cursor`, `next_line`, `next_word`, `next_field`, `parse_u64`, `parse_i64`, `parse_fixed`, `is_digit`, `is_alpha`, `is_space`, `to_lower`.
+- `std.vec`: `new`, `push`, `from`, `extend_from`; a `Vec[u8]` compares, sorts and hashes as its bytes.
+- `std.map`: `let at = map.entry_view(m, word, 0); m.vals[at] += 1;` counts words; `find_view`, `sorted`.
+- `std.sort`: `sort`, `sort_by`; `std.core`: `Option`, `Result`, `U64_MAX` and the other integer limits."""
+
 LOOP = """\
 1. Write the program. One file with `fn main() -> i32` runs as is; `cairn new NAME` makes a project (a data-only `cairn.toml`, `src/`, a test).
 2. Run `cairn check PATH --format json` until it prints `"status": "typed"`. A refusal gives a `code`, a line and a column, the `card` that states its rule (`cairn rules CODE` prints it) and, when the compiler can state one, a `repair_hint`; `further` lists every other refusal the check could judge on its own, so fix them all before checking again. Change the code the rule is about. Never widen an effect ceiling, turn `ro` into `rw`, add `unsafe` or delete a check to get past a refusal.
@@ -95,9 +90,9 @@ LOOP = """\
 
 AVOID = """\
 - Habits from Rust or C++: no `&`/`&mut`, lifetimes, `::` paths, `as` casts (write `u64(x)`), tuples (a `struct`), tail-expression returns, or `if` and `match` as values (`let mut x = b; if c { x = a; }`). `impl` is only `impl Trait for T`; `value.f(args)` calls a plain `fn f(v, args)` from the type's module. Text is `ro<u8>[n]` or `Vec[u8]`, never a `String`.
-- An integer literal is a `u64` unless something expects another type: `let mut i:usize = 0;` for an index. A signed minimum is a literal, `-9223372036854775808`.
+- An integer literal is a `u64` unless something expects another type: `let mut i:usize = 0;` for an index. A signed minimum is a literal, `-9223372036854775808`, and `std.core` names every limit, `I64_MIN` to `U64_MAX`.
 - A `Buf[T](n)` is `len(b)` long, which the checker does not tie to `n`: pass `f(b)` and the call supplies `len(b)`, or pass the part `b[0..n]`. A part `xs[lo..hi]` is written only as a call's argument. A `Vec`'s length is `v.len` and its elements `v.data[i]`.
-- Invented libraries: only what a file declares, the builtins the cards name and the `std.*` modules exist; `cairn doc --std --module std.text` prints one module's signatures.
+- Invented libraries: only what a file declares, the builtins the cards name and the `std.*` modules exist.
 - Guessing a fix: each diagnostic code has one rule behind it, and its card says what that rule accepts."""
 
 
@@ -149,6 +144,8 @@ def skill_file() -> str:
         "## A program", "", "Standard input, integers, a Vec and two tasks; `printf '3 -1 4 -9' | cairn run .` prints "
         "`count 4 negative 2`.",
         "", "```cairn", EXAMPLE.rstrip(), "```", "",
+        "The modules a first program uses, and what to look for in `cairn doc --std --module NAME`, which prints a "
+        "module's signatures, effects and costs:", "", LIBRARY, "",
         "## Cards", "", "Each card, `cards/NAME.md`, states one part of the language and the codes of its rules. A host "
         "sends an agent the cards its program's words select, below, and `cairn rules FILE` names them.", "", *index,
         "", "A refusal from a host or the command line may name " + ", ".join(TOOL_CARDS) + ".", "",
