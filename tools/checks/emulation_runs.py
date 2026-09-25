@@ -1,11 +1,12 @@
 """Write evidence/v1_1/emulation/runs.json: every device example built with --emulate and run, under both compilers,
 and a seeded kernel bug validated with --emulate, as docs/devices.md#emulating-device-code-on-the-host describes.
 
-Nothing here runs on a GPU. Run from the repository root: python3 tools/checks/emulation_runs.py
+Nothing here runs on a GPU. Run from the repository root: python3 tools/checks/emulation_runs.py [--out FILE]
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import platform
 import shutil
@@ -78,6 +79,11 @@ def seeded() -> dict:
 
 
 def main() -> int:
+    ask = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ask.add_argument(
+        "--out", type=Path, default=ROOT / "evidence/v1_1/emulation/runs.json", help="where the record goes"
+    )
+    out = ask.parse_args().out
     with tempfile.TemporaryDirectory(prefix="cairn-emulation-") as tmp:
         record = {
             "schema": "cairn.evidence.emulation/1",
@@ -87,9 +93,8 @@ def main() -> int:
             "seeded_validation": seeded(),
             "gpu": "nothing ran on a GPU",
         }
-    target = ROOT / "evidence/v1_1/emulation/runs.json"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(record, indent=2))
     return 0
 
