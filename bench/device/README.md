@@ -7,7 +7,7 @@ Each pair is a CAIRN program and the hand-written CUDA of the same computation, 
 | `overheads` | a region of 256 elements, two in a row, a device `reduce` whose total returns | an empty launch, a launch and a wait, a 4-byte copy back, the same small kernel |
 | `reduce` | a sum of f32 in two passes (scalar loads; 16-byte loads through unsafe typed PTX; one element a thread), and the `reduce` collector | one pass with 16-byte `__ldcg` loads and a last-block finish, two passes with and without them, CUB (`reduce_base.cuh`) |
 | `reduce_wide` | the same two-pass sum with its 16-byte loads written with `load_wide[4]`, and in one launch with a finish; it needs a compiler that has both | the one-pass and two-pass designs with 16-byte loads |
-| `reduction` | `examples/reduction`'s one-launch sums (a finish, and an atomic add) and `reduce_wide.cairn`'s two-pass sum, compiled as one program | the one-pass design |
+| `reduction` | `examples/reduction`'s one-launch sums (a finish, through `cf_sum` and `cq_sum`, and an atomic add) and `reduce_wide.cairn`'s two-pass sum, compiled as one program | the one-pass design |
 | `saxpy` | `parallel i in n { out[i] = a * x[i] + y[i]; }`, once and twice in a row | one thread an element |
 | `layernorm` | a cooperative region, a block of 256 threads a row | the same algorithm |
 | `transpose` | `examples/cooperative`'s tile transpose | the classic padded 32 x 32 tile |

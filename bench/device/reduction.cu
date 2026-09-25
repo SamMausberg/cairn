@@ -36,6 +36,7 @@ int main(int argc, char** argv) {
     const std::vector<Variant> variants = {
         {"one_pass_v4_lastblock", "cuda", [&] { base::sum_one_pass(s, x, n, g, partial, out); }},
         {"one_pass_finish", "cairn", [&] { cf_sum(n, x, g, partial, out); }},
+        {"one_pass_finish_enqueued", "cairn", [&] { cq_sum(s, n, x, g, partial, out); }},
         {"one_pass_atomic_enqueued", "cairn", [&] { zero(); cq_sum_unordered(s, n, x, g, out); }},
         {"one_pass_atomic", "cairn", [&] { zero(); cf_sum_unordered(n, x, g, out); }},
         {"two_pass_load_wide_enqueued", "cairn", [&] { cq_sum_wide(s, n, x, g, partial, out); }},
