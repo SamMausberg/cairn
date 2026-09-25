@@ -221,15 +221,20 @@ def carrying(profile: Profile, chosen: Profile) -> Profile:
                     "card_origin": chosen.origin})  # fmt: skip
 
 
+# What one SM and one block hold, which the blocks an SM holds are counted from (`Device.resident`).
+HELD = ("threads_per_sm", "registers_per_sm", "shared_per_sm", "blocks_per_sm", "threads_per_block",
+        "registers_per_block", "registers_per_thread", "shared_per_block", "shared_reserved")  # fmt: skip
+
+
 def described(chosen: Profile) -> dict[str, Any]:
-    """A card as `cairn cards` lists it and a prediction names it: its key, device, capability and headline
-    figures, and where they came from."""
+    """A card as `cairn cards` lists it and a prediction names it: its key, device, capability, headline figures and
+    the limits an SM and a block hold, and where they came from."""
     d, said = chosen.device, chosen.source.get("source", {})
     assert d is not None
     return {"card": chosen.source.get("card") or chosen.name, "name": chosen.name, "device": d.name,
             "compute_capability": d.compute_capability, "origin": chosen.origin, "sms": d.sms, "ghz": d.ghz,
-            "dram_gbps": d.dram_gbps, "flops": d.flops, "threads_per_sm": d.threads_per_sm,
-            "shared_per_sm": d.shared_per_sm, "derived": said.get("derived", []), "assumed": said.get("assumed", []),
+            "dram_gbps": d.dram_gbps, "flops": d.flops, **{k: getattr(d, k) for k in HELD},
+            "derived": said.get("derived", []), "assumed": said.get("assumed", []),
             "documents": said.get("documents", {})}  # fmt: skip
 
 

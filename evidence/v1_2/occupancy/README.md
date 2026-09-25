@@ -14,7 +14,20 @@ For each question `Device.resident` must give the calculator's count by each of 
 
 Before this change the model bounded the blocks an SM holds by its threads, counted per thread rather than per warp, by its registers over the whole SM, and by its shared memory without the 128-byte allocation unit. It had no limit on resident blocks. Over the same grid, restricted to what CAIRN launches (whole warps, at most 1024 threads, at most 48 KiB of static shared memory), it disagreed with the calculator on 137 of 2640 questions on each 8.9 and 12.0 card, 201 on the A100 and 231 on each 9.0 and 10.0 card, and always by holding more blocks than the calculator. Most of those came from the register file: the calculator allocates each warp's registers from one of four parts of the register file, so 80 registers a thread leave 24 warps where 65536 / 2560 gave 25. The rest came from the missing block limit: 32 threads, 16 registers and no shared memory on the RTX 5070 Ti were 48 blocks, and the SM holds 24.
 
-No prediction changed in the 120 rows of `evidence/v1_1/catalog` (`bench/predict/cards.py` run before and after, times and bounds compared), and no test's expected time changed. The kernels there run 256 threads a block with at most 48 registers, where neither rule binds. For blocks of 32 threads the resident count halves (48 to 24 on 8.9 and 12.x, 64 to 32 on 8.0, 9.0 and 10.0), and with it the waves and a pipeline's bytes in flight. The time stays the same while half of an SM's warps are resident, since the cards assume half keeps memory busy (`occupancy_to_saturate`).
+For blocks of 32 threads the block limit now binds, and the resident count halves (48 to 24 on 8.9 and 12.x, 64 to 32 on 8.0, 9.0 and 10.0), and with it the waves and a pipeline's bytes in flight. What that does to a predicted time depends on what bounds the kernel.
+
+A kernel bound by the bandwidth keeps its time, since half of an SM's warps are still resident and the cards assume half keeps memory busy (`occupancy_to_saturate`). A pipeline whose copies are limited by the bytes in flight does not. The model runs its copies at the bytes in flight over the assumed 500 ns latency until the bandwidth caps them, so half the blocks copy at half the rate. `WARP_ROWS` in `tests/tooling/test_predict_cooperative.py` is such a kernel: a row a block of 32 threads, through `pipeline tiles:u32[S] depth 2`. At rows = 1e5 and cols = 4096, predicted before (main at 0af5987) and after:
+
+| Stage | Card | Before | After | Copies before | Copies after |
+|---|---|---|---|---|---|
+| 128 bytes (`S = 32`) | H100 | 596 us | 782 us (+31%) | 2849 GB/s, the bandwidth | 2163 GB/s |
+| 128 bytes | RTX 5070 Ti | 2.21 ms | 2.21 ms | 762 GB/s, the bandwidth | 762 GB/s, the bandwidth |
+| 64 bytes (`S = 16`) | H100 | 776 us | 1.54 ms (+98%) | 2163 GB/s | 1081 GB/s |
+| 64 bytes | RTX 5070 Ti | 2.19 ms | 3.86 ms (+76%) | 762 GB/s, the bandwidth | 430 GB/s |
+
+The new times follow from the count CUDA's calculator gives, but they rest on the same unmeasured 500 ns latency as before, so they are predictions, not measurements. The test pins the blocks, the bytes in flight and the copy rate under the block limit on both cards.
+
+No time changed in the 120 rows of `evidence/v1_1/catalog` (`bench/predict/cards.py` run before and after, times and bounds compared), and no test's expected time changed. One kernel there does hold fewer blocks: `row_totals` (`examples/cooperative/src/tuned.cairn`), a block of 32 threads, is held 32 blocks an SM on 8.0, 9.0 and 10.0 (64 before) and 24 on 8.9 and 12.0 (48 before), by the block limit. Its time did not move because the catalog prices it at 64 rows. Its 64 blocks run in one wave on every card either way, and the busy share, at most 4 percent, comes from the blocks launched, not from how many an SM could hold. The catalog's other kernels (`row_totals_tiled` at 128 and 256 threads, `transpose`, `block_sums`, `row_sums`, `tile32`, `tile64` and the suite's lane kernels, whose registers `--inspect` does not read) hold the same blocks as before.
 
 ## Where NVIDIA's documents disagree
 
@@ -27,6 +40,8 @@ No prediction changed in the 120 rows of `evidence/v1_1/catalog` (`bench/predict
 | 12.0 | 24 | 24 | Blackwell: 32 | 24 |
 
 For 12.0 the Blackwell Tuning Guide's section 1.4.1.1 says 32 blocks, and 128 KB of shared memory an SM, the capacity shared memory shares with L1. The cards for the RTX 5070 Ti and RTX 5090 take 24 blocks, on which the table and the calculator agree and which is the fewer, and 100 KB, the most the calculator lets shared memory take on 12.x. Each card's `source.occupancy` says so.
+
+The same table, with the resident block limit of every compute capability it lists, is `LIMITS` in `src/cairn/projects/target.py`, and `tests/tooling/test_target.py` holds each card to it. For 10.7, which no card is, CUDA 13.2's `cudaOccMaxBlocksPerMultiprocessor` falls to its default of 32 while Table 30 says 16; `LIMITS` keeps the table's 16, the fewer.
 
 ## What did not run
 

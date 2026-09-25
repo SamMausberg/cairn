@@ -1,12 +1,12 @@
 """Time a CAIRN function on the device: only under the owner's make target, one run at a time, holding the lock.
 
 Device runs on the reference machine have reset its display driver and crashed the host, so nothing here runs device
-code unless `CAIRN_GPU_TESTS=1`, which only `make gpu`, `make tune-device` and `make calibrate-device` set, and every
-run holds the machine-wide device lock (`/tmp/cairn-gpu.lock`, the one `tools/support.py` holds). `program` writes the
-timed program without building or running it, which is what the suite compiles to check it. Device views are filled on
-the host and copied across once before timing; each timed call is the function's own launch and the wait after it.
-Every timing is built for one device target (projects/target.py) and carries its record, and a measured profile
-names the target it was measured for.
+code unless `CAIRN_GPU_TESTS=1`, which only `make gpu`, `make tune-device`, `make calibrate-device` and `make
+device-limits` set, and every run holds the machine-wide device lock (`/tmp/cairn-gpu.lock`, the one `tools/support.py`
+holds). `program` writes the timed program without building or running it, which is what the suite compiles to check
+it. Device views are filled on the host and copied across once before timing; each timed call is the function's own
+launch and the wait after it. Every timing is built for one device target (projects/target.py) and carries its record,
+and a measured profile names the target it was measured for.
 """
 
 from __future__ import annotations

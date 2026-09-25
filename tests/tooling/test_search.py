@@ -112,7 +112,10 @@ def test_a_block_that_asks_more_than_a_block_may_have_is_named_as_unable_to_laun
     found = predict(cost, MACHINE, {"n": 1e7})
     part = next(x for x in found["parts"] if x["what"].startswith("device region"))
     assert part["resident"]["blocks_per_sm"] == 0 and part["resident"]["limited_by"] == ["registers"]
+    assert part["bound"] == found["bound"] == "cannot launch (registers)"  # never a bound its time was priced by
     assert any("the kernel cannot launch" in why for why in found["why"]) and found["confidence"] == "low"
+    region.registers = 32
+    assert predict(cost, MACHINE, {"n": 1e7})["ns"] < found["ns"]  # a search ranks it behind a block that launches
 
 
 @NVCC

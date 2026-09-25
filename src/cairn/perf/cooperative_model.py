@@ -157,8 +157,8 @@ def priced(r: Region, card: Device, sizes: dict[str, float], missing: set[str]) 
         guesses.append(f"a pipeline's copies are priced at the bytes in flight over an assumed memory latency of "
                        f"{card.memory_latency_ns:g} ns, which no run has measured")  # fmt: skip
     if not r.registers:
-        guesses.append("registers are not read until ptxas compiles the kernel (--inspect), so only threads and "
-                       "shared memory limit the blocks an SM holds")  # fmt: skip
+        guesses.append("registers are not read until ptxas compiles the kernel (--inspect), so only its threads, its "
+                       "shared memory and the resident block limit bound the blocks an SM holds")  # fmt: skip
     if multiplied:
         detail["tensor_peak_ops_per_ns"] = peak
     return Piece(f"device cooperative region at line {r.line}", ns * runs, bound, light * runs, detail, guesses)

@@ -7,7 +7,6 @@ for sm_90a without launching anything."""
 import dataclasses
 import json
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
@@ -75,17 +74,15 @@ def test_each_card_s_derived_figures_agree_with_its_published_ones(key):
         assert any(rate["tensor_f4"] == pytest.approx(rate["tensor_f8"] * times, rel=0.002) for times in (2, 4))
 
 
-# CUDA Programming Guide 13.4.2, Table 30: the most blocks an SM holds, by compute capability. For 12.x NVIDIA's
-# Blackwell Tuning Guide says 32; the table and CUDA's occupancy calculator say 24, which the cards take.
-BLOCKS_PER_SM = {"8.0": 32, "8.9": 24, "9.0": 32, "10.0": 32, "12.0": 24}
-
-
 @pytest.mark.parametrize("key", list(cards()))
-def test_each_card_holds_its_compute_capability_s_resident_block_limit(key):
+def test_each_card_names_where_its_resident_block_limit_comes_from(key):
+    """The count itself is held to the table of its compute capability in tests/tooling/test_target.py."""
     spec = cards()[key]
     d, said = spec.device, spec.source["source"]["occupancy"]
-    assert d.blocks_per_sm == BLOCKS_PER_SM[d.compute_capability] and f"{d.blocks_per_sm} blocks" in said
-    assert "blocks_per_sm" in spec.source["source"]["published"] and "No limit on resident blocks" not in said
+    assert f"{d.blocks_per_sm} blocks" in said and "blocks_per_sm" in spec.source["source"]["published"]
+    assert "No limit on resident blocks" not in said
+    if d.compute_capability == "12.0":  # NVIDIA's documents disagree for 12.0, and the card says which it takes
+        assert "Tuning Guide" in said and "32 blocks" in said
 
 
 def test_an_sm_holds_blocks_as_cuda_counts_them():
@@ -108,12 +105,11 @@ def test_the_resident_blocks_agree_with_cuda_s_occupancy_calculator():
     """Every card over a grid of block sizes, registers and shared bytes against cuda_occupancy.h, the calculator
     CUDA ships as a host header, built with g++: the same blocks by every limit, and the same limits binding.
     Nothing runs on a device."""
-    sys.path.insert(0, str(ROOT / "tools" / "checks"))
-    import occupancy
+    from checks import occupancy
 
-    if occupancy.header() is None:
-        pytest.skip("this CUDA toolkit has no cuda_occupancy.h")
     found = occupancy.compare()
+    if found["status"] == "skipped":
+        pytest.skip(found["reason"])
     assert found["differ"] == [] and found["status"] == "agree"
     assert set(found["cards"]) == set(cards()) and found["questions"] == 8 * 7728
 
@@ -207,6 +203,7 @@ def test_cards_lists_every_card_with_its_headline_figures(capsys):
     assert (h100["compute_capability"], h100["sms"], h100["dram_gbps"], h100["flops"]["tensor_f16"]) == (
         "9.0", 132, 3352.0, 989400.0)  # fmt: skip
     assert listed["b200-hgx"]["derived"] == ["ghz", "flops.i32"] and set(h100["assumed"]) == ASSUMED
+    assert (h100["blocks_per_sm"], h100["threads_per_block"], h100["shared_per_block"]) == (32, 1024, 227 * 1024)
     assert main(["cards", "--format", "human"]) == 0
     shown = capsys.readouterr().out
     assert "h100-sxm5" in shown and "no card was measured" in shown
@@ -237,9 +234,13 @@ def test_two_instances_are_compared_for_sm_90a_and_priced_on_the_h100(capsys):
 
 
 def test_residency_that_registers_change_is_priced_on_the_card():
-    """Two readings whose registers let a different share of an SM's threads stay resident on the H100: the hypothesis
-    cites the card's published limits."""
+    """Two readings whose registers let a different share of an SM's warps stay resident on the H100: the hypothesis
+    cites the card's published limits and names the limits that bind on each side. Blocks of 256 threads at 32
+    registers are held 8 an SM by their threads and their registers alike, and at 128 registers 2 by their registers."""
     read = {k: {"status": "read", "registers": regs, "shared_bytes": 0, "dynamic_shared_bytes": 0, "spill_bytes": 0,
                 "memory": {}} for k, regs in (("a", 32), ("b", 128))}  # fmt: skip
     said = feedback.reasoning([], read, True, {"a": [[]], "b": [[]]}, "f", priced=card("h100").device)
-    assert any("published limits of the H100 SXM5 80GB" in line["by"] for line in said if line["kind"] == "hypothesis")
+    (hypothesis,) = [line for line in said if line["kind"] == "hypothesis"]
+    assert "published limits of the H100 SXM5 80GB" in hypothesis["by"]
+    assert hypothesis["text"].startswith("at most 100% -> 25% of an SM's warps can be resident, limited by threads "
+                                         "and registers -> registers;")  # fmt: skip

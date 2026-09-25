@@ -14,8 +14,9 @@ from cairn.agent.explain import explain
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_program, compile_source
 from cairn.perf import report
+from cairn.perf.cooperative_model import priced
 from cairn.perf.device import available, kernels
-from cairn.perf.profile import packaged
+from cairn.perf.profile import card, packaged
 from cairn.perf.tuning.feedback import compare, parse_candidate
 from cairn.perf.tuning.search import Budget
 from cairn.perf.tuning.tune import tune
@@ -54,6 +55,26 @@ PIPELINED = """fn sums[D:nat](rows:usize, cols:usize, n:usize, x:ro<u64>[n]@devi
 }
 fn two(rows:usize, cols:usize, n:usize, x:ro<u64>[n]@device, m:usize, out:rw<u64>[m]@device) { sums[2](rows, cols, n, x, m, out); }
 fn three(rows:usize, cols:usize, n:usize, x:ro<u64>[n]@device, m:usize, out:rw<u64>[m]@device) { sums[3](rows, cols, n, x, m, out); }
+"""
+# A row a block of one warp, through a pipeline of two stages of S u32 (4 * S bytes each).
+WARP_ROWS = """fn sums[S:nat](rows:usize, cols:usize, n:usize, x:ro<u32>[n]@device, m:usize, out:rw<u32>[m]@device) {
+  blocks r in rows threads t in 32 {
+    pipeline tiles:u32[S] depth 2;
+    tiles.fill(x, r * cols, min(S, cols));
+    let mut sum:u32 = 0;
+    for k in 0..(cols + S - 1) / S {
+      let ahead = min((k + 1) * S, cols);
+      tiles.fill(x, r * cols + ahead, min(S, cols - ahead));
+      tiles.wait();
+      sum = add_wrap(sum, tiles[t * S / 32]);
+      tiles.release();
+      barrier;
+    }
+    out[r * 32 + t] = sum;
+  }
+}
+fn wide(rows:usize, cols:usize, n:usize, x:ro<u32>[n]@device, m:usize, out:rw<u32>[m]@device) { sums[32](rows, cols, n, x, m, out); }
+fn narrow(rows:usize, cols:usize, n:usize, x:ro<u32>[n]@device, m:usize, out:rw<u32>[m]@device) { sums[16](rows, cols, n, x, m, out); }
 """
 # The same 32 x 32 tile read down its columns, P elements a row: 32 rows of 32 put a column in one bank.
 COLUMNS = """fn columns[P:nat](g:usize, n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
@@ -145,6 +166,26 @@ def test_raising_a_pipeline_s_depth_changes_its_shared_memory_occupancy_and_copi
     assert three["predictions"][0]["ns"] < two["predictions"][0]["ns"]
     large = [part(x["predictions"][1]) for x in (two, three)]
     assert large[0]["copy_gbps"] == large[1]["copy_gbps"] == pytest.approx(896 * 0.85)  # the bandwidth caps both
+
+
+def test_a_pipeline_in_blocks_of_one_warp_keeps_copies_in_flight_in_the_blocks_an_sm_may_hold():
+    """An SM's threads would hold 64 such blocks on the H100 and 48 on the RTX 5070 Ti; its resident block limit holds
+    32 and 24. Only those blocks keep their two stages in flight, so the copies run at the bytes in flight over the
+    assumed latency, below the bandwidth, and a smaller stage copies slower (evidence/v1_2/occupancy)."""
+    found = costs(WARP_ROWS, "sums[32]", "sums[16]")
+    at = {(key, stage): priced(region(found[f"sums[{stage}]"]), card(key).device, {"rows": 1e5, "cols": 4096}, set())
+          for key in ("h100", "rtx-5070-ti") for stage in (32, 16)}  # fmt: skip
+    for (key, stage), piece in at.items():
+        d = card(key).device
+        held, (flight,) = piece.detail["resident"], piece.detail["pipelines"]
+        assert held["by_limit"]["threads"] == 2 * held["blocks_per_sm"] == 2 * d.blocks_per_sm
+        assert held["limited_by"] == ["blocks"] and held["occupancy"] == 0.5 and piece.bound == "device memory"
+        assert flight["bytes_in_flight"] == d.sms * d.blocks_per_sm * 2 * 4 * stage  # one wait leaves two in flight
+        copies = min(flight["bytes_in_flight"] / d.memory_latency_ns, d.dram_gbps * d.memory_efficiency)
+        assert piece.detail["copy_gbps"] == pytest.approx(copies, abs=0.05)
+    assert at["h100", 32].detail["copy_gbps"] < card("h100").device.dram_gbps * 0.85  # the pipeline bounds it
+    assert at["rtx-5070-ti", 32].detail["copy_gbps"] == pytest.approx(896 * 0.85)  # the bandwidth caps it
+    assert at["rtx-5070-ti", 16].ns > 1.7 * at["rtx-5070-ti", 32].ns  # half the bytes in flight
 
 
 def test_predict_against_names_what_the_depth_changed(tmp_path, capsys):

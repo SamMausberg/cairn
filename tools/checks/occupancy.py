@@ -11,6 +11,9 @@ opt in to up to the card's per-block limit, and the default split of the SM betw
 
     python3 tools/checks/occupancy.py [--out evidence/v1_2/occupancy/comparison.json]
 
+It exits 0 when every answer agrees, 1 when one differs, and 3 when there is no header to compare against: a skip,
+which is neither.
+
 `--device` asks the GPU itself for the same limits, `cudaDevAttrMaxBlocksPerMultiprocessor` among them, and compares
 them with the card of its compute capability. The query starts a CUDA context and launches nothing. It runs only
 under the owner's `make device-limits`, holding the device lock.
@@ -133,10 +136,11 @@ def ours(d: Device, block: int, registers: int, shared: int) -> list[int]:
 
 
 def compare(cxx: str = "g++") -> dict:
-    """Every card over the grid, beside the calculator: the questions asked, and each disagreement."""
+    """Every card over the grid, beside the calculator: the questions asked, and each disagreement; or a skip, without
+    the header."""
     include = header()
     if include is None:
-        raise SystemExit(json.dumps({"status": "skipped", "reason": "no cuda_occupancy.h beside an nvcc"}))
+        return {"schema": "cairn.occupancy/1", "status": "skipped", "reason": "no cuda_occupancy.h beside an nvcc"}
     asked = [(key, spec.device, b, r, s) for key, spec in cards().items() for b in BLOCKS for r in REGISTERS
              for s in SHARED]  # fmt: skip
     answers = calculator([question(d, b, r, s) for _, d, b, r, s in asked], include.parent, cxx)
@@ -195,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--device", action="store_true", help="ask the GPU (make device-limits only)")
     a = ap.parse_args(argv)
     found = device(a.cxx) if a.device else compare(a.cxx)
+    if found["status"] == "skipped":
+        print(json.dumps(found, indent=1))
+        return 3
     if a.out:
         a.out.parent.mkdir(parents=True, exist_ok=True)
         a.out.write_text(json.dumps(found, indent=1) + "\n", encoding="utf-8")
