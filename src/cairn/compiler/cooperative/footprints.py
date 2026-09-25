@@ -17,8 +17,8 @@ every extent is at least 1). A condition `a < b` the write sits under bounds `a`
 digits placed so far, all counting the same way, which is how a guarded transpose `if col < h { out[row * h + col] =
 v; }` is shown. A digit's range may not move with another digit (`for c in l..l + 2`), since then two threads' values
 of it lie in two different ranges. A loop counter is a digit the thread may repeat, so a thread may rewrite its own
-element; a block or thread name the index does not use is refused unless a condition pins it (`if t == 0 { out[b] =
-total; }`).
+element; a block or thread name the index does not use is refused unless conditions pin it to one value the same in
+every thread (`if t == 255 { out[b] = total; }`).
 
 A read of an array the region writes must name the element its own thread writes: a write's polynomial, its loop
 counters renamed to the read's over the same ranges, standing under every condition the write does (`own`). Another
@@ -485,11 +485,11 @@ def disjoint(writes: list[Site], digits: dict[str, Digit], least: dict[str, int]
     items: list[tuple[str, Poly, Poly, bool]] = []  # (digit, weight, the most it rises above its least, counts down)
     for name, digit in digits.items():
         weight = base.weight(name)
-        span = narrowed(name, digit, common, least, digits)
         if not weight.terms:
-            if digit.agent and (span is None or span.constant != 0):
+            if digit.agent and not pinned(name, digit, common, digits):
                 return f"the index does not depend on {name}, so every {name} writes the same element."
             continue
+        span = narrowed(name, digit, common, least, digits)
         down = all(k <= 0 for k in weight.terms.values())
         if down:
             weight = -weight  # counts down: the same digit, read from the other end
@@ -506,20 +506,39 @@ def disjoint(writes: list[Site], digits: dict[str, Digit], least: dict[str, int]
     return radix(items, common, digits, least)
 
 
+def bounds(name: str, digit: Digit, facts: list[tuple[Poly, Poly]],
+           digits: dict[str, Digit]) -> tuple[list[Poly], list[Poly]]:  # fmt: skip
+    """The values a digit stays at or below, and at or above: its range's ends, and each bound a condition puts on it
+    by values that are the same in every thread."""
+    highs = [digit.hi - Poly.of(1)] if digit.hi is not None else []
+    lows = [digit.lo] if digit.lo is not None else []
+    for lhs, bound in facts:  # lhs <= bound
+        above, below = (lhs - Poly.of(name)).constant, (bound - Poly.of(name)).constant
+        if above is not None and not bound.atoms() & set(digits):
+            highs.append(bound - Poly.of(above))
+        if below is not None and not lhs.atoms() & set(digits):
+            lows.append(lhs - Poly.of(below))
+    return highs, lows
+
+
 def narrowed(name: str, digit: Digit, facts: list[tuple[Poly, Poly]], least: dict[str, int],
              digits: dict[str, Digit]) -> Poly | None:  # fmt: skip
     """The most a digit rises above its least value: its range, or less where a condition bounds it by values that
     are the same in every thread."""
-    span = digit.hi - digit.lo - Poly.of(1) if digit.hi is not None and digit.lo is not None else None
-    for lhs, bound in facts:
-        rest = (lhs - Poly.of(name)).constant
-        if rest is not None and digit.lo is not None:
-            candidate = bound - Poly.of(rest) - digit.lo
-            if candidate.atoms() & set(digits):
-                continue
-            if span is None or positive(span - candidate + Poly.of(1), least):
-                span = candidate
+    if digit.lo is None:
+        return None
+    span = None
+    for high in bounds(name, digit, facts, digits)[0]:
+        if span is None or positive(span - (high - digit.lo) + Poly.of(1), least):
+            span = high - digit.lo
     return span
+
+
+def pinned(name: str, digit: Digit, facts: list[tuple[Poly, Poly]], digits: dict[str, Digit]) -> bool:
+    """Whether a digit has at most one value where the conditions hold: some bound above it is no more than some
+    bound below. `if t == 255` and `if t == n` pin t as `if t == 0` does."""
+    highs, lows = bounds(name, digit, facts, digits)
+    return any((high - low).constant is not None and (high - low).constant <= 0 for high in highs for low in lows)
 
 
 def radix(items: list[tuple[str, Poly, Poly, bool]], facts: list[tuple[Poly, Poly]], digits: dict[str, Digit],
