@@ -89,7 +89,9 @@ def test_repository_sources_still_compile_after_formatting():
         except Diagnostic:
             continue  # a fragment or a deliberate rejection; the token check already covers it
         checked += 1
-        assert compile_source(format_source(text))[1]["function_count"] == before["function_count"]
+        formatted = format_source(text)
+        after = before if formatted == text else compile_source(formatted)[1]  # the same text compiles as it did
+        assert after["function_count"] == before["function_count"]
     assert checked >= 5
 
 

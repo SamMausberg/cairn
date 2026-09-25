@@ -90,15 +90,15 @@ def main() -> int:
     p.add_argument("record", type=Path)
     p.add_argument("--normalize", action="append", default=[], choices=sorted(NORMALIZE))
     a = p.parse_args()
+    before = json.loads(a.record.read_text()) if a.command == "compare" else {}
+    if before and before["normalize"] != a.normalize:  # refused before a single program is compiled
+        p.error(f"the record was taken with --normalize {before['normalize']}; compare the same way")
     now, guards = snapshot(tuple(a.normalize))
     if a.command == "snapshot":
         taken = {"normalize": a.normalize, "programs": now, "guards": guards}
         a.record.write_text(json.dumps(taken, indent=1, sort_keys=True) + "\n")
         print(json.dumps({"programs": len(now), "record": str(a.record)}))
         return 0
-    before = json.loads(a.record.read_text())
-    if before["normalize"] != a.normalize:
-        p.error(f"the record was taken with --normalize {before['normalize']}; compare the same way")
     changed = sorted(n for n, v in before["programs"].items() if now.get(n) != v)
     added = sorted(set(now) - set(before["programs"]))
     counted = {n: (k, guards[n]) for n, k in before.get("guards", {}).items() if guards.get(n, k) != k}
