@@ -112,7 +112,8 @@ def e_name(c: Checker, e: Expr, expected: Type | None) -> Type:
 
 
 def e_slice(c: Checker, e: Expr, expected: Type | None) -> Type:
-    fail("E-VIEW-ALIAS", "A part xs[lo..hi] is a borrow: it exists only as a view argument of a call.", e)
+    fail("E-VIEW-ALIAS", "A part xs[lo..hi] is a borrow: it exists only as a view argument of a call. Keep lo and hi "
+         "in locals and write the part in each call that reads it.", e)  # fmt: skip
 
 
 def e_index(c: Checker, e: Expr, expected: Type | None, read: bool = True) -> Type:

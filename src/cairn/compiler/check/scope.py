@@ -81,6 +81,8 @@ class Binding:
     mutable: bool = False
     constant: int | None = None
     depth: int = 0  # Loop depth at declaration: an outer owner cannot be moved inside a loop.
+    # `let i = 0;`: the integer literal that gave this binding its default type, which a refusal quotes.
+    literal: str = ""
 
 
 SCOPED = frozenset(Scope.__dataclass_fields__)

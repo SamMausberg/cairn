@@ -162,3 +162,23 @@ def test_global_family_budget_before_copying():
         "E-EXPANSION-LIMIT",
         "fn f[K:nat]()->usize{return K;} family a=f[0..1024];family b=f[0..1024];family c=f[0..1024];",
     )
+
+
+@pytest.mark.parametrize(
+    "code,source,says",
+    [
+        ("E-PARSE", "fn f(x:u64) -> u32 { return x as u32; }", "CAIRN has no `as`: convert with a call, u64(x)"),
+        ("E-PARSE", "fn f() -> i64 { return i64::MIN; }", "an i64's minimum is the literal -9223372036854775808"),
+        ("E-NAME", "fn f(c:bool) -> u64 { let x = if c { 1 } else { 2 }; return x; }", "if is a statement, not an"),
+        ("E-NAME", "fn f(c:bool) -> u64 { let x = match c { }; return x; }", "match is a statement, not an"),
+        ("E-VIEW-ALIAS", "fn f() { let mut b = Buf[u8](4); let p = b[0..2]; }", "write the part in each call"),
+        (
+            "E-LEN",
+            "import std.vec (Vec);\nfn f() -> usize { let mut v = vec.new[u64](); vec.push(v, 1); return len(v); }",
+            "v is a Vec: its length is v.len.",
+        ),
+    ],
+)
+def test_a_refusal_for_another_language_s_habit_says_what_cairn_writes(code, source, says):
+    """The habits the 1.1 evaluation's subjects brought from Rust and C++ (evidence/v1_1/friction)."""
+    assert says in refused(code, source)["message"]

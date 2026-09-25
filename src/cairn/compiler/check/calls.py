@@ -10,7 +10,20 @@ from ..plans import implementations
 from ..primitives import rings
 from ..primitives.builtins import SOFT, TABLE, WRAPPING
 from ..syntax.parser import copied, lent_part
-from ..syntax.tree import INTRINSIC_TYPES, NUMERIC, USIZE, VISIBLE_AS, VOID, Expr, Function, Type, fail, is_view, root
+from ..syntax.tree import (
+    INTRINSIC_TYPES,
+    NUMERIC,
+    USIZE,
+    VISIBLE_AS,
+    VOID,
+    Diagnostic,
+    Expr,
+    Function,
+    Type,
+    fail,
+    is_view,
+    root,
+)
 from . import facts
 from .scope import Binding
 from .traits import infer, instantiate, trait_member, unbound, unify, vtable
@@ -105,7 +118,14 @@ def e_call(c: Checker, e: Expr, expected: Type | None) -> Type:
     if f is None:
         fail("E-CALLEE", "Qualified calls are declared tagged-sum constructors, not methods." if "." in n
              else f"Unknown callable {n}; arbitrary C++ names are not allowed.{c.unexpected(n)}", e)  # fmt: skip
-    return c.invoke(e, f, args, targs, expected)
+    if n not in TABLE or not name or c.p.modules.get(name, "") == c.module:
+        return c.invoke(e, f, args, targs, expected)
+    try:  # `import std.io (println);` puts the library's println where the builtin was: a refusal says so
+        return c.invoke(e, f, args, targs, expected)
+    except Diagnostic as refused:
+        refused.data.setdefault("hides_builtin", n)
+        refused.data.setdefault("callee", name)
+        raise
 
 
 def unwritten(e: Expr) -> Expr:

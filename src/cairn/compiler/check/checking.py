@@ -581,8 +581,14 @@ class Checker:
     def expect(self, got: Type, want: Type, e: Any, declared: Type | None = None):
         if got != want:
             want = declared or want
+            b = self.env.get(e.val) if isinstance(e, Expr) and e.tag == "name" else None
+            said = (
+                {"literal_binding": {"name": e.val, "literal": b.literal, "mutable": b.mutable}}
+                if b and b.literal
+                else {}
+            )
             fail("E-TYPE-MISMATCH", f"Expected {want.display()}, got {got.display()}.", e,
-                 expected_type=want.display(), actual_type=got.display())  # fmt: skip
+                 expected_type=want.display(), actual_type=got.display(), **said)  # fmt: skip
 
     def bind(self, name: str, binding: Binding, node: Any, message: str | None = None):
         if name in self.env:

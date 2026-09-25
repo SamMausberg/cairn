@@ -28,6 +28,7 @@ from ..syntax.tree import (
     Type,
     fail,
     is_view,
+    local,
     root,
 )
 from . import atomics, machine, printing, rings, wide
@@ -73,7 +74,13 @@ def check_len(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Typ
         fail("E-LEN", "len takes one direct borrowed view, local buffer or string literal.", e)
     ty = c.expr(args[0], consume=False)
     if not is_view(ty) and ty.name not in {"Buf", "Array"}:
-        fail("E-LEN", "len requires an array view.", e)
+        lent = c.p.lends.get(ty.name)  # a Vec lends data[0..len], so its length is the field that ends that part
+        told = (
+            f" {args[0].val} is a {local(ty.name)}: its length is {args[0].val}.{lent[2]}."
+            if lent and lent[1] == "0"
+            else ""
+        )
+        fail("E-LEN", "len requires an array view." + (told if args[0].tag == "name" else ""), e)
     if args[0].tag != "str":
         c.leased(c.where(args[0]), "ro", e, elements=False)  # Lent elements keep their count; a lent owner may not.
     return USIZE
