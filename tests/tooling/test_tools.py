@@ -210,11 +210,27 @@ def test_skill_tokens():
 
 @needs_clang
 def test_output_sizes():
-    """Every output of the corpus an agent reads is within its budget, so no change adds to it unnoticed."""
+    """Every output of the corpus an agent reads says what it is measured for and is within its budget."""
     record = parsed(tool("tools/ai/output_sizes.py", "--check", timeout=600))
     assert set(record["cases"]) == set(json.loads((ROOT / "tools/ai/output_budgets.json").read_text()))
     assert set(record["surfaces"]) == {"check", "build", "other", "mcp"}
-    assert record["cases"]["check, the 69 programs of the 1.1 replay"]["bytes"] > 69 * 50
+
+
+def test_output_sizes_names_a_case_that_no_longer_says_what_it_is_measured_for():
+    """A case that turned into a short error would pass its budget and read as a cut, so the corpus stops on it."""
+    from ai import output_sizes
+
+    stale = '{"status":"rejected","code":"E-REQUEST","message":"Unsupported edit protocol.","line":0,"column":0}'
+    said = output_sizes.unexpected({
+        "mcp edit_request, admitted": ("mcp", '{"status":"typed","symbol":"next_token"}'),
+        "mcp edit_request, refused": ("mcp", stale),
+        "check, three refusals, at a terminal": ("check", "error[E-FIELD]: Unknown field byts.\n"),
+        "mcp find": ("mcp", "{}"),
+    })  # fmt: skip
+    assert "mcp edit_request, refused: says 'E-REQUEST', not 'E-FIELD'" in said
+    assert "check, three refusals, at a terminal: says 'E-FIELD', not 'E-FIELD E-UNBOUND E-TYPE-MISMATCH'" in said
+    assert "mcp find: measured, but held to nothing in SAYS" in said and "run: in SAYS, but not measured" in said
+    assert not any(line.startswith("mcp edit_request, admitted") for line in said)
 
 
 def test_friction_costs():

@@ -4,19 +4,29 @@
 An agent's tokens are almost all context reads, and every tool result is read again at each later request
 (evidence/v1_1/friction), so an output's size is paid many times over. This runs the commands an agent runs the way
 its shell runs them: piped, in the project's directory, stdout and stderr together. Each case is one command on the
-1.1 evaluation's `histogram` task, its reference laid out as a subject's project was: with test blocks, with one that
-fails, and with one and with three of the mistakes the subjects made. A case whose name ends `at a terminal` sets
-`CAIRN_FORMAT=human`, as a person's terminal would. The replay case checks the 69 programs the 1.1 subjects checked
-(`friction.py`) and counts every record. The MCP cases drive `cairn mcp` over stdio: each tool's name, description and
-input schema as `tools/list` hands them to a client, and the text of a typical result of each tool, with the
-implementation session on examples/implementations.
+1.1 evaluation's `histogram` task, its reference laid out as a subject's project was: with a test block, with a second
+test block that fails, and with one and with three of the mistakes the subjects made. A case whose name ends `at a
+terminal` sets `CAIRN_FORMAT=human`, as a person's terminal would. The replay case checks the 69 programs the 1.1
+subjects checked (`friction.py`) and counts every record. The MCP cases drive `cairn mcp` over stdio: each tool's name,
+description and input schema as `tools/list` hands them to a client, and the text of a typical result of each tool,
+with the implementation session on examples/implementations. That session submits the example's repaired attempt
+(`candidates/prefix_blocks.cairn`) as an agent would, and Z3 does not decide it within the validation's 14 s limit,
+so the session runs beside the commands.
 
-The project's directory is written as HOME in every output, so a count does not depend on where the corpus ran. Sizes
-are UTF-8 bytes, and also tokens by tiktoken's `o200k_base` when it and its cached vocabulary are present
-(`/usr/bin/python3` here). Neither is Claude's tokenizer, and a smaller output is not evidence that a model does
-better. `output_budgets.json` holds a byte budget for each case: its size when last measured, with clang 21 on the
-path, plus 5% or 16 bytes (`budget`). `--check` exits 1 when an output is larger than its budget. clang 18 reports
+Each case must still say what its name promises (`SAYS`), or the corpus stops and names it: a case that turned into a
+short error would pass its budget and read as a cut.
+
+The project's directory is written as HOME in every output, so a count does not depend on the directory a project was
+made in. Sizes are UTF-8 bytes, and also tokens by tiktoken's `o200k_base` when it and its cached vocabulary are
+present (`/usr/bin/python3` here). Neither is Claude's tokenizer, and a smaller output is not evidence that a model
+does better. `output_budgets.json` holds a byte budget for each case: its size when last measured, with clang 21 on
+the path, plus 5% or 16 bytes (`budget`). `--check` exits 1 when an output is larger than its budget. clang 18 reports
 fewer loops to `cairn explain` than clang 21 does.
+
+`cairn explain` at 0af5987 also depends on where the compiler's tree is. clang names a file relative to the deepest
+directory it shares with the directory it compiled in, and that `cairn explain` resolves the name against its own
+directory, the project's. A tree that shares a directory with the temporary one, where the projects are, prints longer
+paths, so `--compiler` refuses one.
 
     python3 tools/ai/output_sizes.py [--output FILE]    # the record
     python3 tools/ai/output_sizes.py --check            # and exit 1 unless every case is within its budget
@@ -29,13 +39,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from functools import reduce
+from operator import itemgetter
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "tools"), str(ROOT / "bench" / "ai"), str(Path(__file__).parent)]
@@ -45,10 +59,10 @@ from checking import CAIRN_TOML
 from support import tokenizer
 
 HOME = "/home/agent/task"  # where every output says the project is
-CAIRN = ROOT / "bin" / "cairn"  # the command measured; --compiler names another tree's
 BUDGETS = Path(__file__).with_name("output_budgets.json")
 TASK = ROOT / "bench" / "ai" / "tasks" / "histogram"
 EXAMPLE = "6 4\n16 17 32 4096 255 31\n"  # the input of the task's SPEC.md
+ANSWER = "0 1\n1 3\n2 1\n15 1\n"  # and the histogram it asks for
 TESTS = """
 test four_values_in_three_bins {
   let mut values = Buf[u32](4);
@@ -89,6 +103,77 @@ COMMANDS = [
 REPLAY = "check, the 69 programs of the 1.1 replay"
 
 
+def read(text: str) -> dict:
+    """What an output holds, to read a case's outcome from: its record, the records of one that prints several, or its
+    text as the one field `text`, at a terminal and for a page."""
+    if not text.startswith("{"):
+        return {"text": text}
+    each = [json.loads(r) for r in re.split(r"\n(?=\{)", text.strip())]  # a record's own lines are indented
+    return each[0] if len(each) == 1 else {"records": each}
+
+
+def verdict(r: dict) -> str:
+    """`typed`, or the codes a check refused with in order; at a terminal, read from each refusal's heading."""
+    if "text" in r:
+        return " ".join(re.findall(r"^error\[([\w-]+)\]", r["text"], re.M)) or r["text"].split(":")[0]
+    return " ".join(d["code"] for d in (r, *r.get("further", ()))) if "code" in r else r["status"]
+
+
+def explained(r: dict) -> tuple[str, list[str]]:
+    """Whether clang's remarks were read, and which of the program's own functions an explanation covers."""
+    return r["vectorization"]["status"], sorted(f for f in r["functions"] if not f.startswith("std."))
+
+
+def blocks(r: dict) -> tuple[int, int]:
+    """How many test blocks passed, and how many failed."""
+    return r["blocks"]["passed"], r["blocks"]["failed"]
+
+
+def verdicts(r: dict) -> str:
+    """How many checks a replay printed, and how many of them are a verdict: typed, or refused with its codes."""
+    return f"{len(r['records'])} checks, {sum(c['status'] in ('typed', 'rejected') for c in r['records'])} verdicts"
+
+
+status, symbol = itemgetter("status"), itemgetter("symbol")
+THREE = "E-FIELD E-UNBOUND E-TYPE-MISMATCH"  # the three mistakes, in the order a check reports them
+OWN = ["count", "main", "next_token", "next_u64", "read_input"]  # the functions the reference declares
+# What each case says besides its size, and what it must say: a case that turned into a short error, a refusal of the
+# request itself or an empty run would pass its budget and read as a cut. A tool's definition is what the server lists.
+SAYS: dict[str, tuple[Callable[[dict], Any], Any]] = {
+    "check, accepted": (verdict, "typed"),
+    "check, accepted, at a terminal": (verdict, "typed"),
+    "check, one refusal": (verdict, "E-TYPE-MISMATCH"),
+    "check, one refusal, at a terminal": (verdict, "E-TYPE-MISMATCH"),
+    "check, three refusals": (verdict, THREE),
+    "check, three refusals, at a terminal": (verdict, THREE),
+    "build": (status, "native-built"),
+    "run": (lambda r: (r["exit_code"], r["stdout"]), (0, ANSWER)),
+    "run --sanitize address": (lambda r: (r["exit_code"], r["stdout"], r["sanitizer"]), (0, ANSWER, "address")),
+    "test, passing": (blocks, (1, 0)),
+    "test, failing": (blocks, (1, 1)),
+    "test, failing, at a terminal": (lambda r: r["text"].split("\n")[0], "tests-not-passed: 1 of 2 tests failed"),
+    "new": (status, "created"),
+    "rules E-EFFECT-ORDER": (lambda r: [card["name"] for card in r["cards"]], ["calls"]),
+    "doc --std --module std.io": (lambda r: re.findall(r"^# (\S+)", r["text"], re.M), ["std.io"]),
+    "explain": (explained, ("observed", OWN)),
+    "explain --symbol count": (explained, ("observed", ["count"])),
+    "state": (status, "typed"),
+    "inspect --symbol count": (symbol, "count"),
+    REPLAY: (verdicts, "69 checks, 69 verdicts"),
+    "mcp check, accepted": (verdict, "typed"),
+    "mcp check, three refusals": (verdict, THREE),
+    "mcp edit_open": (symbol, "next_token"),
+    "mcp edit_request, refused": (verdict, "E-FIELD"),
+    "mcp edit_request, admitted": (verdict, "typed"),
+    "mcp plan_open": (symbol, "count"),
+    "mcp plan_reply": (status, "admitted"),
+    "mcp implementation_open": (lambda r: r["reference"]["symbol"], "prefix"),
+    "mcp implementation_submit": (status, "validated"),
+    "mcp state": (status, "typed"),
+    "mcp state, again": (lambda r: r["protocol"], "cairn.state-delta/1"),
+}
+
+
 def programs() -> dict[str, str]:
     """The histogram task's reference with test blocks and then with a failing one, and with one and three mistakes."""
     reference = (TASK / "reference.cairn").read_text()
@@ -111,27 +196,27 @@ def environment(human: bool = False) -> dict[str, str]:
     return {**kept, "CUDA_VISIBLE_DEVICES": "", **({"CAIRN_FORMAT": "human"} if human else {})}
 
 
-def shell(argv: list[str], where: Path, stdin: str = "", human: bool = False) -> str:
+def shell(cairn: Path, argv: list[str], where: Path, stdin: str = "", human: bool = False) -> str:
     """What an agent's shell shows of `cairn ARGV` run in `where`: stdout, then stderr, with `where` said as HOME."""
-    done = subprocess.run([sys.executable, str(CAIRN), *argv], cwd=where, input=stdin, text=True,
+    done = subprocess.run([sys.executable, str(cairn), *argv], cwd=where, input=stdin, text=True,
                           capture_output=True, timeout=600, env=environment(human))  # fmt: skip
     return (done.stdout + done.stderr).replace(str(where), HOME)
 
 
-def command(case: tuple, sources: dict[str, str]) -> str:
+def command(cairn: Path, case: tuple, sources: dict[str, str]) -> str:
     name, _, program, argv, stdin = case
     with tempfile.TemporaryDirectory(prefix="cairn-outputs-") as tmp:
-        return shell(argv, project(Path(tmp), sources[program]), stdin, name.endswith("at a terminal"))
+        return shell(cairn, argv, project(Path(tmp), sources[program]), stdin, name.endswith("at a terminal"))
 
 
-def replay() -> str:
+def replay(cairn: Path) -> str:
     """Every record `cairn check` gives the 69 programs the 1.1 subjects checked, one after another."""
     sources = [src for s in friction.subjects() if s.language == "cairn"
                for _, src in friction.checked(s, friction.requests(s))]  # fmt: skip
 
     def checked(source: str) -> str:
         with tempfile.TemporaryDirectory(prefix="cairn-outputs-") as tmp:
-            return shell(["check", "."], project(Path(tmp), source))
+            return shell(cairn, ["check", "."], project(Path(tmp), source))
 
     with ThreadPoolExecutor(4) as pool:
         return "".join(pool.map(checked, sources))
@@ -140,9 +225,9 @@ def replay() -> str:
 class Client:
     """`cairn mcp` started in one directory, answering one request at a time."""
 
-    def __init__(self, where: Path):
+    def __init__(self, cairn: Path, where: Path):
         self.where = where
-        self.proc = subprocess.Popen([sys.executable, str(CAIRN), "mcp"], cwd=where, text=True,
+        self.proc = subprocess.Popen([sys.executable, str(cairn), "mcp"], cwd=where, text=True,
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                      env=environment())  # fmt: skip
         self.sent = 0
@@ -166,14 +251,15 @@ class Client:
         self.proc.wait(timeout=60)
 
 
-def mcp(sources: dict[str, str]) -> dict[str, str]:
+def mcp(cairn: Path, sources: dict[str, str]) -> dict[str, str]:
     """Each tool's definition, and a typical result of each tool: a check accepted and refused, an edit session with a
-    refused and an admitted body, a plan session, an implementation session, and the state asked for twice."""
+    refused and an admitted body, a plan session, an implementation session, and the state asked for twice. Each
+    request is the one its packet says to send."""
     out: dict[str, str] = {}
     with tempfile.TemporaryDirectory(prefix="cairn-outputs-") as tmp:
         project(Path(tmp) / "histogram", sources["accepted"])
         shutil.copytree(ROOT / "examples" / "implementations", Path(tmp) / "implementations")
-        client = Client(Path(tmp))
+        client = Client(cairn, Path(tmp))
         try:
             for tool in client.request("tools/list", {})["tools"]:
                 shown = {k: tool[k] for k in ("name", "description", "inputSchema")}
@@ -182,10 +268,10 @@ def mcp(sources: dict[str, str]) -> dict[str, str]:
             out["mcp check, three refusals"], _ = client.tool("check", source=sources["three"])
             out["mcp edit_open"], packet = client.tool("edit_open", path="histogram", symbol="next_token")
             body = sources["accepted"].split("-> Option[Span] ")[1].split("\n}\n")[0] + "\n}"
-            ask = {"protocol": "cairn.edit/2", "handle": packet["handle"], "kind": "body"}
-            wrong = {**ask, "replacement": body.replace("inp.bytes.len", "inp.byts.len")}
+            wrong = {**packet["draft_protocol"], "replacement": body.replace("inp.bytes.len", "inp.byts.len")}
             out["mcp edit_request, refused"], _ = client.tool("edit_request", request=wrong)
-            out["mcp edit_request, admitted"], _ = client.tool("edit_request", request={**ask, "replacement": body})
+            admitted = {**packet["draft_protocol"], "replacement": body}
+            out["mcp edit_request, admitted"], _ = client.tool("edit_request", request=admitted)
             out["mcp plan_open"], plan = client.tool("plan_open", path="histogram", symbol="count")
             out["mcp plan_reply"], _ = client.tool("plan_reply", reply={**plan["reply"], "items": {"grain": 1}})
             opened = client.tool("implementation_open", path="implementations", reference="prefix")
@@ -200,22 +286,44 @@ def mcp(sources: dict[str, str]) -> dict[str, str]:
     return out
 
 
-def outputs() -> dict[str, tuple[str, str]]:
-    """Every case of the corpus: its surface and the text an agent reads."""
+def outputs(cairn: Path) -> dict[str, tuple[str, str]]:
+    """Every case of the corpus: its surface and the text an agent reads. It stops, naming each case, when one does not
+    say what `SAYS` holds it to."""
     sources = programs()
-    with ThreadPoolExecutor(4) as pool:
-        printed = list(pool.map(lambda case: command(case, sources), COMMANDS))
-    cases = {case[0]: (case[1], text) for case, text in zip(COMMANDS, printed, strict=True)}
-    cases[REPLAY] = ("check", replay())
-    return cases | {name: ("mcp", text) for name, text in mcp(sources).items()}
+    with ThreadPoolExecutor(5) as pool:  # the MCP session, which waits on Z3, beside four commands at a time
+        served = pool.submit(mcp, cairn, sources)
+        printed = list(pool.map(lambda case: command(cairn, case, sources), COMMANDS))
+        cases = {case[0]: (case[1], text) for case, text in zip(COMMANDS, printed, strict=True)}
+        cases[REPLAY] = ("check", replay(cairn))
+        cases |= {name: ("mcp", text) for name, text in served.result().items()}
+    if wrong := unexpected(cases):
+        raise SystemExit("A case does not say what it is measured for:\n" + "\n".join(wrong))
+    return cases
 
 
-def measure() -> dict:
+def unexpected(cases: dict[str, tuple[str, str]]) -> list[str]:
+    """A line for each case that does not say what `SAYS` holds it to, and for each held to nothing."""
+    said = [f"{name}: measured, but held to nothing in SAYS" for name in cases
+            if name not in SAYS and not name.startswith("mcp tools/list ")]  # fmt: skip
+    said += [f"{name}: in SAYS, but not measured" for name in SAYS if name not in cases]
+    for name, (reader, wanted) in SAYS.items():
+        if name not in cases:
+            continue
+        try:
+            got = reader(read(cases[name][1]))
+        except (AttributeError, IndexError, KeyError, TypeError, ValueError):  # not the record it was
+            got = cases[name][1][:300]
+        if got != wanted:
+            said.append(f"{name}: says {got!r}, not {wanted!r}")
+    return said
+
+
+def measure(cairn: Path) -> dict:
     """Each case's size, and the sums by surface and in all."""
     counted = tokenizer()
     units = ["bytes", *(["tokens"] if counted else [])]
     cases = {}
-    for name, (surface, text) in outputs().items():
+    for name, (surface, text) in outputs(cairn).items():
         cases[name] = {
             "surface": surface,
             "bytes": len(text.encode()),
@@ -244,15 +352,18 @@ def over(record: dict, budgets: dict[str, int]) -> list[str]:
 
 
 def main() -> int:
-    global CAIRN
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--output", type=Path, help="also write the record here")
     parser.add_argument("--check", action="store_true", help="exit 1 unless every output is within its budget")
     parser.add_argument("--budget", action="store_true", help=f"rewrite {BUDGETS.name} from this measurement")
     parser.add_argument("--compiler", type=Path, help="a tree holding bin/cairn to measure, such as `git archive`'s")
     a = parser.parse_args()
-    CAIRN = (a.compiler or ROOT).resolve() / "bin" / "cairn"
-    record = measure()
+    tree, temporary = (a.compiler or ROOT).resolve(), Path(tempfile.gettempdir()).resolve()
+    shared = Path(os.path.commonpath([tree, temporary]))
+    if a.compiler and shared != Path(shared.anchor):
+        parser.error(f"{tree} shares {shared} with the temporary directory, where the projects are, so `cairn explain` "
+                     "at 0af5987 prints longer paths through it; unpack the tree elsewhere")  # fmt: skip
+    record = measure(tree / "bin" / "cairn")
     text = json.dumps(record, indent=1) + "\n"
     if a.output:
         a.output.write_text(text, encoding="utf-8")
