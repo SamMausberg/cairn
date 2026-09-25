@@ -22,7 +22,7 @@ from .editor import terminal
 from .projects.new import create_project
 from .projects.project import ProjectError, contained_file, load_project, read_text
 from .projects.target import resolve as resolve_device
-from .projects.toolchain import emulator, host_family, resolve_arch
+from .projects.toolchain import SANITIZER_ENVIRONMENT, emulator, host_family, resolve_arch
 
 FORMAT: str | None = None  # --format as given; None lets the stream decide (see editor/terminal.py)
 LINES = False  # a watched check's records, one per line (JSON Lines), so a reader can take each as it comes
@@ -34,6 +34,14 @@ def report(value: dict, brief: bool = False) -> None:
         terminal.summary(value)
         return
     print(json.dumps(value, allow_nan=False) if LINES else json.dumps(value, indent=2, allow_nan=False))
+
+
+def printed(built: dict) -> dict:
+    """What `cairn build` prints: its record without the checker's receipt of every function, which `receipt.json` in
+    the build directory keeps whole. That receipt was 54 KB for an 85-line program and buried the fields a caller
+    reads next, the status, the command and the artifact."""
+    kept = {k: v for k, v in built.items() if k != "frontend"}
+    return {**kept, "receipt": str(Path(built["directory"]) / "receipt.json")} if "directory" in built else kept
 
 
 def preconditions(items: list[str]) -> dict[str, str]:
@@ -489,9 +497,9 @@ def main(argv: list[str] | None = None) -> int:
         result = build(project, output=a.out, cxx=a.cxx, arch=a.arch, kind="exe" if a.command == "run" else a.kind,
                        timeout=a.timeout, target=a.target, debug=a.debug, incremental=a.incremental,
                        keep_guards=a.keep_guards, header=getattr(a, "header", False),
-                       device_target=a.device_target, emulate=a.emulate)  # fmt: skip
+                       device_target=a.device_target, emulate=a.emulate, sanitizer=a.sanitize)  # fmt: skip
         if a.command == "build" or result["status"] != "native-built":
-            report(result, brief=True)
+            report(printed(result), brief=True)
             return 0 if result["status"] == "native-built" else 2
         # Execution is explicit. Process timeout is not an OS security sandbox.
         from .verify.testing import limited
@@ -500,13 +508,17 @@ def main(argv: list[str] | None = None) -> int:
         machine = emulator(result["target"], result["artifact"])
         # Unified addressing reserves far more than it uses; an emulated program's device memory is host memory.
         cuda = "cuda" in result["frontend"]["requires"] and "emulation" not in result
-        limits = functools.partial(limited, a.timeout, None if cuda else a.memory_mib)
+        # A sanitizer maps shadow memory many times the program's size, so no memory cap holds it.
+        capped = not (cuda or a.sanitize)
+        limits = functools.partial(limited, a.timeout, a.memory_mib if capped else None)
         emulated = {"emulation": result["emulation"]} if "emulation" in result else {}
 
         if machine and a.arguments:
             raise ProjectError("A freestanding image is started by its board, with no arguments.")
         started = machine or [result["artifact"], *a.arguments]
         run: dict = {"stdin": subprocess.DEVNULL} if machine else {"preexec_fn": limits}
+        if a.sanitize:
+            run["env"] = {**os.environ, **SANITIZER_ENVIRONMENT[a.sanitize]}
         if terminal.human(FORMAT):  # A person sees the program itself: its streams are the terminal's.
             if emulated:
                 print(f"note: {result['emulation']['claim']}", file=sys.stderr, flush=True)
@@ -520,8 +532,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         report({"status": "program-exited", "exit_code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr,
                 "build_directory": result["directory"], "security_sandbox": False,
-                "memory_limit_mib": None if machine else a.memory_mib, "emulator": machine,
-                **emulated})  # fmt: skip
+                "memory_limit_mib": None if machine or not capped else a.memory_mib, "emulator": machine,
+                **({"sanitizer": a.sanitize} if a.sanitize else {}), **emulated})  # fmt: skip
         return 0 if cp.returncode == 0 else 1
     except Diagnostic as error:  # the refusal with its card and the fix the compiler can state, where it can
         codes = {d.get("code") for d in (error.data, *error.data.get("further", []))}

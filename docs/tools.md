@@ -6,7 +6,7 @@ Every tool here ships with the compiler, needs no Python package outside the sta
 |---|---|---|
 | `cairn doctor` | reports the local compilers and tools; downloads nothing | [guide.md](guide.md#install) |
 | `cairn new DIR --template T` | writes a project from a template: `default`, `cli`, `lib`, `service` or `parallel`; or, with `--from-sol-execbench`, from a benchmark problem | [guide.md](guide.md#a-project), [--from-sol-execbench](devices.md#benchmark-submissions) |
-| `cairn check`, `cairn build`, `cairn run` | accepts or refuses a program; builds it with a receipt; runs it under process limits | [guide.md](guide.md#check-run-test), [a watched check](#a-watched-check-and-shell-completions), [--incremental](#cairn-build---incremental), [--header](#cairn-build---header), [targets](#the-device-target) |
+| `cairn check`, `cairn build`, `cairn run` | accepts or refuses a program; builds it with a receipt; runs it under process limits | [guide.md](guide.md#check-run-test), [a watched check](#a-watched-check-and-shell-completions), [--sanitize](#cairn-run---sanitize), [--incremental](#cairn-build---incremental), [--header](#cairn-build---header), [targets](#the-device-target) |
 | `cairn emit`, `cairn expand` | prints the C++ the program lowers to; prints what every `derive` generated | [--ctypes](#cairn-build---header), [expand](#cairn-doc-and-cairn-expand) |
 | `cairn test` | runs test blocks, each in its own process, and task contracts | [cairn test](#cairn-test) |
 | `cairn shot` | runs headless and returns every frame `std.draw` captured | [examples.md](examples.md#examplesappspanel) |
@@ -446,6 +446,12 @@ An export is data, not a build script. The identity is a digest anyone can recom
 The record names each runtime header's role in a device export. The device implementation is `cairn_kernels.hpp` and the guards a lane calls, whose kernels launch on a stream the caller names, with no execution context. The launch wrappers are `cairn_gpu.hpp`, `cairn_exec.hpp` and `cairn_reuse.hpp`; an application can point them at its own stream (`NAME_device_stream`) or replace them with another machine, as the suite's host machine does.
 
 `cairn export DIR --compare OTHER` says whether two exports are the same code: each function's canonical emission, as `cairn diff` compares it, each runtime header, the command, the compilers and the target. It exits 1 when they differ, so a check can hold back a change to a known-fast implementation. Same code is not the same speed: compare timings only between exports built alike, with the same `--time` harness, on the same machine.
+
+## cairn run --sanitize
+
+`cairn run . --sanitize address < input.txt` builds the program for the host at `-O1` with frame pointers, checked by AddressSanitizer with leak detection and by UndefinedBehaviorSanitizer, and runs it. `--sanitize thread` checks it with ThreadSanitizer instead. Every report ends the run, and the record names the sanitizer that ran. A sanitizer maps shadow memory many times the program's size, so the run has no memory cap. `cairn build --sanitize` builds the same executable without running it, and a device program is checked on host threads with `--emulate`, never on a GPU.
+
+`cairn build` prints its record without the checker's receipt of every function, which `receipt.json` in the build directory keeps whole, and names that file as `receipt`.
 
 ## cairn build --incremental
 
