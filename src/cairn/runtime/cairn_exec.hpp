@@ -172,6 +172,16 @@ inline T scan_on(Context& ctx, R* out, std::size_t n, T identity, Op op, F value
   if(reuse::scan<Exclusive>(ctx, total, out, n, identity, op, value) != Scratch::ok) trap();
   return total;
 }
+// `reduce op out[k] for ...` and a `scan` whose total nobody reads, over device views: the result stays on the device
+// for the work after it, and nothing waits unless the host observes something next.
+template<class T, class R, class Op, class F>
+inline void reduce_into(Context& ctx, R* at, std::size_t n, T identity, Op op, F value) noexcept {
+  if(reuse::reduce_into(ctx, at, n, identity, op, value) != Scratch::ok) trap();
+}
+template<bool Exclusive, class T, class R, class Op, class F>
+inline void scan_into(Context& ctx, R* out, std::size_t n, T identity, Op op, F value) noexcept {
+  if(reuse::scan_into<Exclusive>(ctx, out, n, identity, op, value) != Scratch::ok) trap();
+}
 template<class T, class P, class F>
 inline std::size_t compact_on(Context& ctx, T* out, std::size_t n, P pred, F value) noexcept {
   std::size_t used = 0;

@@ -510,6 +510,20 @@ fn main() -> i32 {
 }
 ```
 
+A reduction may write its total into one element instead of binding it: `reduce op out[k] for i in n yield e;` is the fold, then `out[k] = total`, as one statement. `out` is an `rw` view or buffer of the yields' type (`E-REDUCE-TARGET`), `k` is evaluated once, before the lanes, and no yield may read `out` (`E-PARALLEL-RACE`). The operators and order rules are `reduce`'s, and the row is too, with `write:out` beside it. A loop of them fills a row of totals:
+
+```cairn
+fn row_sums(r:usize, c:usize, rc:usize, x:ro<u64>[rc], sums:rw<u64>[r]) {
+  for k in 0..r { reduce + sums[k] for j in c yield x[k * c + j]; }   // checked: traps if a row's total overflows
+}
+```
+
+```cairn rejects E-REDUCE-TARGET
+fn f(n:usize, x:ro<u64>[n]) { reduce + x[0] for i in n yield x[i]; }
+```
+
+Over `@device` views the total stays on the device, where the next region reads it ([devices.md](devices.md#results-that-stay-on-the-device)).
+
 `compact` writes the stable selected prefix into storage of capacity exactly `n`, evaluating the predicate once per input and the projection only when selected. It leaves the tail unchanged and allocates nothing on the host. Over a `@device` output it is stream compaction with device scratch (`gpu_alloc`, `gpu_free`). Its one unchecked store rests on seventeen certificates proved in Lean ([verification.md](verification.md)).
 
 ```cairn
@@ -553,7 +567,7 @@ fn main() -> i32 {
 }
 ```
 
-`parallel` in place of `for` runs the scan on the lane pool in two passes, with the in-order result on any number of lanes. Floats scan only in the written order (`E-SCAN-ORDER`). Over `@device` views the scan is CUB's; it compiles for the device and runs only under `make gpu`.
+`parallel` in place of `for` runs the scan on the lane pool in two passes, with the in-order result on any number of lanes. Floats scan only in the written order (`E-SCAN-ORDER`). Over `@device` views the scan is CUB's; it compiles for the device and runs only under `make gpu`. A device scan whose total nobody binds leaves its prefixes on the device and returns nothing to the host, so nothing waits for it until the host observes something ([devices.md](devices.md#results-that-stay-on-the-device)).
 
 ```cairn rejects E-SCAN-ORDER
 fn running(n:usize, out:rw<f64>[n], x:ro<f64>[n]) { scan + out parallel i in n yield x[i]; }

@@ -133,7 +133,7 @@ template<class T> struct Sum {
     const T s = static_cast<T>(a.v + b.v);
     return Sum(s, a.over || b.over || s < a.v);
   }
-  T checked() const noexcept { if(over) trap(); return v; }
+  CR_HD T checked() const noexcept { if(over) trap(); return v; }
 };
 template<class T> CR_HD inline T add_wrap(T a,T b) noexcept { return static_cast<T>(std::uint64_t(a)+std::uint64_t(b)); }
 template<class T> CR_HD inline T sub_wrap(T a,T b) noexcept { return static_cast<T>(std::uint64_t(a)-std::uint64_t(b)); }

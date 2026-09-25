@@ -93,7 +93,8 @@ GPU_TESTS = tests/language/test_assembly.py tests/language/test_layouts.py \
   tests/runtime/test_device_arithmetic.py tests/runtime/test_enqueue.py tests/runtime/test_execution.py \
   tests/runtime/test_finish_counter.py tests/runtime/test_native_runtime.py \
   tests/soundness/test_atomics.py tests/soundness/test_concurrency.py tests/soundness/test_device_paths.py \
-  tests/soundness/test_finish.py tests/soundness/test_plans.py tests/soundness/test_scan.py \
+  tests/soundness/test_finish.py tests/soundness/test_plans.py tests/soundness/test_reduce_into.py \
+  tests/soundness/test_scan.py \
   tests/soundness/test_staging.py tests/soundness/test_tensor.py tests/soundness/test_tensor_kernels.py \
   tests/soundness/test_votes.py tests/soundness/test_wide.py tests/soundness/test_written.py \
   tests/verification/test_device_validation.py
@@ -125,7 +126,7 @@ DEVICE_TESTS = tests/language/test_assembly.py tests/language/test_assert_eq.py 
   tests/soundness/test_cooperative.py tests/soundness/test_device_paths.py tests/soundness/test_fragments.py \
   tests/soundness/test_fusion.py tests/soundness/test_pipelines.py tests/soundness/test_plans.py \
   tests/soundness/test_scan.py tests/soundness/test_staging.py tests/soundness/test_tensor.py \
-  tests/soundness/test_tensor_kernels.py tests/soundness/test_wide.py tests/soundness/test_atomics.py tests/soundness/test_finish.py tests/soundness/test_written.py tests/projects/test_reduction_example.py tests/soundness/test_votes.py tests/runtime/test_finish_counter.py \
+  tests/soundness/test_tensor_kernels.py tests/soundness/test_wide.py tests/soundness/test_atomics.py tests/soundness/test_finish.py tests/soundness/test_reduce_into.py tests/soundness/test_written.py tests/projects/test_reduction_example.py tests/soundness/test_votes.py tests/runtime/test_finish_counter.py \
   tests/tooling/test_device_cards.py tests/tooling/test_feedback.py tests/tooling/test_on_device.py \
   tests/tooling/test_predict.py tests/tooling/test_predict_cooperative.py tests/tooling/test_search.py \
   tests/tooling/test_search_budget.py \

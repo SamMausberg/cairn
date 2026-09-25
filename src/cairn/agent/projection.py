@@ -134,7 +134,8 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
         elif s.tag == "compact":
             line = f"let {s.name} = compact {es[0]} for {s.binder} in {es[1]} where {es[2]} yield {es[3]};"
         elif s.tag == "reduce":
-            line = f"let {s.name}{typed} = reduce {s.op} {'parallel' if s.pooled else 'for'} {s.binder} in {es[0]} yield {es[1]};"
+            head = f"let {s.name}{typed} = reduce {s.op}" if s.name else f"reduce {s.op} {es[2]}"
+            line = f"{head} {'parallel' if s.pooled else 'for'} {s.binder} in {es[0]} yield {es[1]};"
         elif s.tag == "scan":
             head = f"let {s.name}{typed} = scan" if s.name else "scan"
             line = f"{head} {s.op}{' exclusive' * s.exclusive} {es[0]} {'parallel' if s.pooled else 'for'} {s.binder} in {es[1]} yield {es[2]};"

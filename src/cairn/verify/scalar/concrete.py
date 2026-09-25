@@ -358,6 +358,8 @@ class Concrete:
     def fold(self, s, env, stack):
         """`reduce` and `compact` as the host emits them: one in-order pass, within the same budget."""
         collect = s.tag == "compact"
+        if not collect and len(s.exprs) > 2:
+            raise Unsupported("A reduction into an element is not modeled.")
         count = self.expr(s.exprs[1] if collect else s.exprs[0], env, stack)
         if count > MAX_UNROLL:
             raise Unsupported("Concrete replay exceeded the loop unrolling budget.")
