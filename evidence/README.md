@@ -24,4 +24,6 @@ Records written before the release numbering had their version names and fields 
 
 `tools/release/collect_evidence.py` and `collect_lean_evidence.py` write a release's gates and Lean build, and [docs/internals.md](../docs/internals.md#releasing) says how a release is cut.
 
+A record may keep a long transcript as xz-compressed JSON Lines (`*.jsonl.xz`); `tools/release/audit_repository.py` admits one only when it decompresses to JSON Lines, and scans that text for credentials as it scans every other file.
+
 The scripts that write the other records live under `tools/` and `bench/`, not here. Two records keep the code that made them as part of the record: `v0_8_0/embedded/capture.py`, which no longer runs against this tree, and the two C++ programs of `v1_0/perf/`.

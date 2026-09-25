@@ -70,6 +70,32 @@ def test_the_audit_admits_a_demo_frame_and_no_other_binary(tmp_path):
     assert {f["path"] for f in audit(tmp_path)["findings"]} == {"b.png", "demos/v/c.png"}
 
 
+def test_a_compressed_json_lines_record_under_evidence_is_read_as_its_text(tmp_path):
+    import lzma
+    import subprocess
+
+    lines = b'{"role": "user", "text": "hello"}\n{"role": "assistant", "text": "hi"}\n'
+    token = b'{"said": "ghp_' + b"a" * 36 + b'"}\n'  # a credential pattern, which compression must not hide
+    files = {
+        "evidence/v9/transcript.jsonl.xz": lzma.compress(lines),  # admitted: xz of JSON Lines
+        "tools/transcript.jsonl.xz": lzma.compress(lines),  # the same bytes outside evidence/
+        "evidence/v9/bytes.jsonl.xz": lzma.compress(b"\0\1\2\3"),  # decompresses to something that is no text
+        "evidence/v9/prose.jsonl.xz": lzma.compress(b"not json\n"),  # text, and not JSON Lines
+        "evidence/v9/named.jsonl.xz": b"\0 not xz",  # named as one, and not xz
+        "evidence/v9/token.jsonl.xz": lzma.compress(token),
+    }
+    for name, data in files.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_bytes(data)
+    git = ["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+    for args in (["init", "-q"], ["add", "."], ["commit", "-qm", "records"]):
+        subprocess.run([*git, *args], check=True, capture_output=True)
+    binaries = {"tools/transcript.jsonl.xz", "evidence/v9/bytes.jsonl.xz", "evidence/v9/prose.jsonl.xz",
+                "evidence/v9/named.jsonl.xz"}  # fmt: skip
+    found = {(f["path"], f["rule"]) for f in audit(tmp_path)["findings"]}
+    assert found == {(name, "binary-file") for name in binaries} | {("evidence/v9/token.jsonl.xz", "github-token")}
+
+
 def test_a_text_record_under_evidence_may_reach_four_megabytes_and_nothing_else_may_pass_two(tmp_path):
     import subprocess
 
