@@ -180,7 +180,7 @@ Piped, the record carries what it printed:
 
 ```json
 {"status": "program-exited", "exit_code": 0, "stdout": "average(10, 20) = 15\n", "stderr": "",
- "build_directory": "/home/you/demo/build/demo-38_uge7b", "security_sandbox": false, "memory_limit_mib": 1024, "emulator": null}
+ "build_directory": "/home/you/demo/build/demo-38_uge7b", "security_sandbox": false, "memory_limit_mib": 1024}
 ```
 
 `security_sandbox` is `false` because the memory cap stops a runaway program and isolates nothing. `cairn run demo -- one two` passes `one` and `two` to the program, which reads them through `std.env`.
