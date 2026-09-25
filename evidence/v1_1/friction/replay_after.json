@@ -1,0 +1,418 @@
+{
+ "r1_basis_points_cairn": [
+  {
+   "request": 6,
+   "status": "typed"
+  }
+ ],
+ "r1_basis_points_plugin_set_aside": [
+  {
+   "request": 4,
+   "status": "typed"
+  }
+ ],
+ "r1_basis_points_plugin": [
+  {
+   "request": 5,
+   "status": "typed"
+  }
+ ],
+ "r1_block_scan_cairn": [
+  {
+   "request": 15,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected rw<u64>[n]@device, got rw<u64>[len(values)]@device.",
+   "repair_hint": "values is len(values) elements long, which the checker does not tie to n: pass the part values[0..n], whose bound is checked once at the call.",
+   "line": 110
+  },
+  {
+   "request": 17,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected rw<u64>[n]@device, got rw<u64>[len(values)]@device.",
+   "repair_hint": "values is len(values) elements long, which the checker does not tie to n: pass the part values[0..n], whose bound is checked once at the call.",
+   "line": 110
+  },
+  {
+   "request": 22,
+   "status": "typed"
+  },
+  {
+   "request": 24,
+   "status": "typed"
+  }
+ ],
+ "r1_block_scan_plugin_set_aside": [
+  {
+   "request": 32,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected rw<u64>[n]@device, got rw<u64>[len(host_x)]@device.",
+   "repair_hint": "host_x is len(host_x) elements long, which the checker does not tie to n: pass the part host_x[0..n], whose bound is checked once at the call.",
+   "line": 135
+  },
+  {
+   "request": 36,
+   "status": "typed"
+  },
+  {
+   "request": 38,
+   "status": "typed"
+  }
+ ],
+ "r1_chunk_sums_cairn": [
+  {
+   "request": 25,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "next_i64 writes inp, so an operand beside it could run before or after it: bind it to its own statement first (let v = next_i64(inp);) and use v here.",
+   "repair_hint": null,
+   "line": 92
+  },
+  {
+   "request": 28,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "next_i64 writes inp, so an operand beside it could run before or after it: bind it to its own statement first (let v = next_i64(inp);) and use v here.",
+   "repair_hint": null,
+   "line": 92
+  },
+  {
+   "request": 33,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "next_i64 writes inp, so an operand beside it could run before or after it: bind it to its own statement first (let v = next_i64(inp);) and use v here.",
+   "repair_hint": null,
+   "line": 92
+  },
+  {
+   "request": 37,
+   "status": "typed"
+  }
+ ],
+ "r1_chunk_sums_plugin_set_aside": [
+  {
+   "request": 38,
+   "status": "typed"
+  }
+ ],
+ "r1_chunk_sums_plugin": [
+  {
+   "request": 38,
+   "status": "typed"
+  },
+  {
+   "request": 41,
+   "status": "typed"
+  }
+ ],
+ "r1_csv_field_cairn": [
+  {
+   "request": 4,
+   "status": "typed"
+  }
+ ],
+ "r1_csv_field_plugin_set_aside": [
+  {
+   "request": 3,
+   "status": "typed"
+  }
+ ],
+ "r1_csv_field_plugin": [
+  {
+   "request": 3,
+   "status": "typed"
+  }
+ ],
+ "r1_dedupe_cairn": [
+  {
+   "request": 5,
+   "status": "typed"
+  }
+ ],
+ "r1_dedupe_plugin_set_aside": [
+  {
+   "request": 3,
+   "status": "rejected",
+   "code": "E-NAME",
+   "message": "if is a statement, not an expression: declare the value first, let mut x = ...;, and assign it in each branch.",
+   "repair_hint": null,
+   "line": 90
+  },
+  {
+   "request": 6,
+   "status": "typed"
+  }
+ ],
+ "r1_dedupe_plugin": [
+  {
+   "request": 4,
+   "status": "typed"
+  }
+ ],
+ "r1_histogram_cairn": [
+  {
+   "request": 23,
+   "status": "typed"
+  },
+  {
+   "request": 26,
+   "status": "typed"
+  }
+ ],
+ "r1_histogram_plugin_set_aside": [
+  {
+   "request": 28,
+   "status": "typed"
+  },
+  {
+   "request": 30,
+   "status": "typed"
+  }
+ ],
+ "r1_histogram_plugin": [
+  {
+   "request": 8,
+   "status": "typed"
+  },
+  {
+   "request": 11,
+   "status": "typed"
+  }
+ ],
+ "r1_pool_cairn": [
+  {
+   "request": 14,
+   "status": "typed"
+  },
+  {
+   "request": 18,
+   "status": "typed"
+  },
+  {
+   "request": 31,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected ro<u8>[size]@host, got ro<u8>[len(zeros)]@host.",
+   "repair_hint": "zeros is len(zeros) elements long, which the checker does not tie to size: pass the part zeros[0..size], whose bound is checked once at the call.",
+   "line": 71
+  },
+  {
+   "request": 33,
+   "status": "typed"
+  }
+ ],
+ "r1_pool_plugin_set_aside": [
+  {
+   "request": 16,
+   "status": "typed"
+  },
+  {
+   "request": 19,
+   "status": "typed"
+  }
+ ],
+ "r1_pool_plugin": [
+  {
+   "request": 26,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "vec.new allocates, so an operand beside it could run before or after it: bind it to its own statement first (let v = vec.new[Slot]();) and use v here.",
+   "repair_hint": null,
+   "line": 189
+  },
+  {
+   "request": 29,
+   "status": "typed"
+  },
+  {
+   "request": 34,
+   "status": "typed"
+  }
+ ],
+ "r1_records_cairn": [
+  {
+   "request": 15,
+   "status": "typed"
+  }
+ ],
+ "r1_records_plugin_set_aside": [
+  {
+   "request": 20,
+   "status": "typed"
+  }
+ ],
+ "r1_records_plugin": [
+  {
+   "request": 12,
+   "status": "typed"
+  }
+ ],
+ "r1_rle_cairn": [
+  {
+   "request": 11,
+   "status": "typed"
+  },
+  {
+   "request": 14,
+   "status": "typed"
+  }
+ ],
+ "r1_rle_plugin": [
+  {
+   "request": 15,
+   "status": "rejected",
+   "code": "E-VIEW-ALIAS",
+   "message": "A part xs[lo..hi] is a borrow: it exists only as a view argument of a call. Keep lo and hi in locals and write the part in each call that reads it.",
+   "repair_hint": null,
+   "line": 84
+  },
+  {
+   "request": 19,
+   "status": "typed"
+  }
+ ],
+ "r1_sieve_cairn": [
+  {
+   "request": 22,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected rw<u8>[size]@host, got rw<u8>[len(is_composite)]@host.",
+   "repair_hint": "is_composite is len(is_composite) elements long, which the checker does not tie to size: pass the part is_composite[0..size], whose bound is checked once at the call.",
+   "line": 151
+  },
+  {
+   "request": 24,
+   "status": "typed"
+  }
+ ],
+ "r1_sieve_plugin_set_aside": [
+  {
+   "request": 26,
+   "status": "typed"
+  },
+  {
+   "request": 29,
+   "status": "typed"
+  }
+ ],
+ "r1_sieve_plugin": [
+  {
+   "request": 23,
+   "status": "rejected",
+   "code": "E-LEN",
+   "message": "len requires an array view. primes is a Vec: its length is primes.len.",
+   "repair_hint": null,
+   "line": 105
+  },
+  {
+   "request": 25,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected usize, got ro<u8>[6]@host.",
+   "repair_hint": "println here is std.io.println, which the import by name put in place of the builtin println: take println out of the import's list, and call std.io.println through its module where you mean it.",
+   "line": 140
+  },
+  {
+   "request": 28,
+   "status": "typed"
+  },
+  {
+   "request": 31,
+   "status": "typed"
+  }
+ ],
+ "r1_split_sum_cairn": [
+  {
+   "request": 3,
+   "status": "typed"
+  }
+ ],
+ "r1_split_sum_plugin_set_aside": [
+  {
+   "request": 5,
+   "status": "rejected",
+   "code": "E-NAME",
+   "message": "if is a statement, not an expression: declare the value first, let mut x = ...;, and assign it in each branch.",
+   "repair_hint": null,
+   "line": 74
+  },
+  {
+   "request": 7,
+   "status": "typed"
+  }
+ ],
+ "r1_split_sum_plugin": [
+  {
+   "request": 6,
+   "status": "typed"
+  }
+ ],
+ "r1_tally_cairn": [
+  {
+   "request": 5,
+   "status": "typed"
+  }
+ ],
+ "r1_tally_plugin": [
+  {
+   "request": 9,
+   "status": "rejected",
+   "code": "E-LINEAR-LEAK",
+   "message": "workers is linear: consume it, or defer its consumer, on every path.",
+   "repair_hint": null,
+   "line": 92
+  },
+  {
+   "request": 11,
+   "status": "typed"
+  }
+ ],
+ "r1_varint_cairn": [
+  {
+   "request": 4,
+   "status": "typed"
+  }
+ ],
+ "r1_varint_plugin_set_aside": [
+  {
+   "request": 4,
+   "status": "typed"
+  }
+ ],
+ "r1_varint_plugin": [
+  {
+   "request": 3,
+   "status": "typed"
+  }
+ ],
+ "r2_histogram_cairn": [
+  {
+   "request": 15,
+   "status": "typed"
+  },
+  {
+   "request": 18,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected usize, got u64.",
+   "repair_hint": "p0 is a u64 because an integer literal is one when nothing expects another type: declare it let p0:usize = 0;",
+   "line": 101
+  },
+  {
+   "request": 22,
+   "status": "typed"
+  }
+ ],
+ "r2_histogram_plugin": [
+  {
+   "request": 9,
+   "status": "typed"
+  },
+  {
+   "request": 12,
+   "status": "typed"
+  }
+ ]
+}

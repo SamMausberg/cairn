@@ -91,6 +91,23 @@ One plugin subject (`split_sum`) spent 15 requests on a correct program that `ca
 
 The CAIRN subjects checked 69 distinct programs, counting a check, build, run or test of an edited program once per text. Main at 3c4b9e3 refuses 30 of them, the refusals the subjects saw (`replay_main.json`). Each pull request of this track that changes a rule or a message runs the same replay and reports what it refuses and says. That measures the compiler on the programs the subjects wrote, not what a subject would do next.
 
+## What changed
+
+Each cause above went to a pull request. The measurements below are of the compiler and the files, not of an agent.
+
+| cause | pull request | measured without a model |
+|---|---|---|
+| learning the language before writing | #112, #80 | The guide opens with a program that reads input, a table of the refusals a first program meets, and a table of the library calls it uses: 1,337 tokens by `o200k_base`. The guide grows from 5,733 to 6,825 tokens. `SKILL.md` names the same refusals and example at 2,835 tokens, 43 more than at 3c4b9e3. `cairn doc --std --module std.text` prints 1,123 tokens, where it printed the whole library, 13,916. |
+| a writing call as the one operand of a conversion | #86 | Accepted; beside another operand it is still `E-EFFECT-ORDER`, and the refusal names the call, what it writes and the `let` that binds it. |
+| the minimum of a signed type | #94 | `-9223372036854775808` and `-128` are literals; a negated literal carries no overflow guard. |
+| refusals that did not say what to change | #87 | Each states the change: the part `b[0..n]`, the annotation `let mut i:usize = 0;`, the import that hid `println`, `v.len`, where a part goes, and what `if`, `match`, `as` and `::` are in CAIRN. |
+| `cairn run`'s address-space cap | #78 | A 16-task program runs under a 256 MiB data cap, three runs under each compiler; each child's stack is 8 MiB. |
+| getting at the judged build | #90 | `cairn run --sanitize address` or `thread` is one command, and `cairn build` prints 2 KB where it printed 54 KB. |
+| disjoint parts with constant-expression bounds | #95 | `d[0..BINS]` and `d[BINS..2 * BINS]` go to two tasks. |
+| a `t == 255` guard in a cooperative region | #68 (FIXES) | Accepted. |
+
+Replayed on main at a9f9592, the 69 programs the CAIRN subjects checked meet 16 refusals, where main at 3c4b9e3 gave 30 (`replay_after.json` beside `replay_main.json`). `E-EFFECT-ORDER` falls from 15 to 4, and `E-LITERAL-RANGE`, `E-LEASED` and `E-COOP-GLOBAL` are gone. Every one of the 16 now names the change it wants in its message or its `repair_hint`. Four refusals remain because the rule still holds. One subject wrote `vec.push(values, next_i64(inp))` three times over, and `next_i64` writes `inp` beside the operand `values`. Another built one record from two allocating calls. The two remaining `E-NAME` refusals are `if` written as a value.
+
 ## What this does not show
 
 These are 27 subjects of one model family on small tasks, most seen once. The token split is an accounting of what each request read, not an experiment: removing a document would change what a subject does next, and nothing here reruns the evaluation. The topic of a search is read from its pattern and is approximate.
@@ -101,7 +118,7 @@ These are 27 subjects of one model family on small tasks, most seen once. The to
 git archive dd3f75e | tar -x -C /tmp/dd3f75e      # the evaluation's compiler
 python3 tools/ai/friction.py judge --compiler /tmp/dd3f75e --output evidence/v1_1/friction/first_pass.json
 python3 tools/ai/friction.py costs --first-pass evidence/v1_1/friction/first_pass.json --output evidence/v1_1/friction/subjects.json
-python3 tools/ai/friction.py replay --compiler . --output evidence/v1_1/friction/replay_main.json
+python3 tools/ai/friction.py replay --compiler . --output evidence/v1_1/friction/replay_main.json    # at 3c4b9e3; replay_after.json at a9f9592
 ```
 
 `judge` builds every version it judges under the sanitizers and took about half an hour at three jobs on a loaded machine; `costs` reads the kept transcripts in under a second, and `replay` checks 69 programs in about a minute. `subjects.json` holds each subject's requests, context, first edit and first pass, the tokens of each phase, the context carried from before the first edit, each documentation file's carried tokens, and every refusal with its line, cause and round trip, with the per-arm sums under `summary`.
