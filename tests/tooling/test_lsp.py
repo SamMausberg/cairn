@@ -277,7 +277,8 @@ def test_a_text_typed_again_is_not_checked_again(monkeypatch):
     first = Document(before)
     Document(after, first)
     undone = Document(before)  # an undo: the text of the first analysis again
-    assert ran == [before, after] and undone.sites == first.sites and undone.rows == first.rows
+    # One whole check: the edit is checked from the first text's kept walk, and the undo is the first text's check.
+    assert ran == [before] and undone.sites == first.sites and undone.rows == first.rows
     assert undone.program is not first.program  # its own copy: what one document does to it no other reads
 
 

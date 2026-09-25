@@ -12,6 +12,7 @@ bound as methods in the class, so each lives in the file that owns its subject.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import contextmanager
 from operator import attrgetter
 from typing import Any
@@ -420,15 +421,19 @@ class Checker:
 
     def bodies(self):
         for f in self.prepare():  # Generic instances are appended, and checked, at their first use.
-            with self.refusing(f.name):
-                try:
-                    self.function(f)
-                except Diagnostic as error:  # The position is the recipe's: say which derivation this copy came from.
-                    error.data.update({"derived": f.source_name} if f.source_name.startswith("derive ") else {})
-                    inner = self.s.f.module  # the innermost body checked, as an instance is checked inside its caller
-                    if inner in self.p.sources and "module" not in error.data:
-                        error.data["module"] = inner  # its line counts in that library module's own file
-                    raise
+            self.body(f)
+
+    def body(self, f: Function):
+        """One concrete function's body, as the walk over every body checks it."""
+        with self.refusing(f.name):
+            try:
+                self.function(f)
+            except Diagnostic as error:  # The position is the recipe's: say which derivation this copy came from.
+                error.data.update({"derived": f.source_name} if f.source_name.startswith("derive ") else {})
+                inner = self.s.f.module  # the innermost body checked, as an instance is checked inside its caller
+                if inner in self.p.sources and "module" not in error.data:
+                    error.data["module"] = inner  # its line counts in that library module's own file
+                raise
 
     def judge(self) -> dict[str, set[str]]:
         """The rules that need every row: ceilings, operand order, and what a lane may reach."""
@@ -469,9 +474,10 @@ class Checker:
                              f"{self.hostish.get(name) or views[0] + ' is a host view'}.", node)  # fmt: skip
         return effects
 
-    def check(self) -> dict[str, Any]:
+    def check(self, walk: Callable[[Checker], None] | None = None) -> dict[str, Any]:
+        """`walk`, when given, checks the bodies in place of `bodies` (compiler/check/incremental.py)."""
         try:
-            self.bodies()
+            (walk or Checker.bodies)(self)
             if self.refusals:
                 self.rest()
             else:

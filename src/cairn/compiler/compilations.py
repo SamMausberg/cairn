@@ -16,6 +16,12 @@ with and without `every`, since compiler/check/refusals.py changes nothing until
 serves both; a refusal answers only the setting it was made under. The emission of an accepted program depends on
 neither. A check a fault ended, and anything too deep to pickle, is answered and not kept.
 
+An accepted check also keeps its walk over the bodies: the checker pickled as that walk left it, before anything after
+it changed the checker, and where each function's body is. A source that differs from a kept one in one function's
+body is checked from that walk, which checks that body alone and runs every rule after the walk again
+(compiler/check/incremental.py), and answers what a whole check answers; an edit it does not take is checked whole.
+A walk that recorded sites answers a check with or without them, and one without answers only a check without.
+
 At most ENTRIES sources and BYTES bytes are kept, and the source used least recently goes first. The bytes counted are
 the bytes held: every pickle, the C++ text and every refusal record. Objects a caller holds are not counted.
 """
@@ -28,10 +34,13 @@ import hashlib
 import pickle
 import threading
 from collections import OrderedDict
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from .cairnc import Checker, Diagnostic, Parser, Program, compile_program, generate, joined
+from .check import incremental
+from .check.incremental import Walk
 from .lower.codegen import RUNTIME
 from .syntax.modules import STD
 
@@ -106,16 +115,33 @@ class Emitted:
         self.cpp, self.manifest, self.size = cpp, manifest, len(cpp.encode("utf-8")) + len(manifest)
 
 
+class Walked:
+    """An accepted check's walk over the bodies: the checker as the walk left it and the walk's record, pickled, and
+    where each body is, which says whether another source differs from this one in one body alone."""
+
+    def __init__(self, data: bytes, walk: Walk, sites: bool):
+        self.data, self.spans, self.sites, self.size = data, walk.spans, sites, len(data)
+
+    @classmethod
+    def of(cls, c: Checker, walk: Walk) -> Walked | None:
+        """What `compile_program` gives its `walked` argument, kept; nothing for a walk that met a refusal."""
+        data = None if c.refusals else dumps((c.p, c, walk))
+        return None if data is None else cls(data, walk, c.capture_sites)
+
+
 class Entry:
     """What the compiles of one source made."""
 
-    def __init__(self) -> None:
+    def __init__(self, source: str) -> None:
+        self.source = source
         self.parse: Pickled | Refused | None = None  # the parse tree, before linking
         self.checks: dict[tuple[bool, bool], Pickled | Refused] = {}  # by (sites, every)
+        self.walked: Walked | None = None
         self.emission: Emitted | Refused | None = None
 
     def size(self) -> int:
-        return sum(kept.size for kept in (self.parse, *self.checks.values(), self.emission) if kept is not None)
+        held = (self.parse, *self.checks.values(), self.walked, self.emission)
+        return sum(kept.size for kept in held if kept is not None)
 
 
 class Cache:
@@ -127,14 +153,19 @@ class Cache:
         self.sizes: dict[str, int] = {}
         self.lock = threading.Lock()
 
-    def entry(self, key: str) -> Entry:
+    def entry(self, key: str, source: str) -> Entry:
         """The kept entry of `key`, now the one used most recently, or a new one that `settle` keeps once it holds
         something."""
         with self.lock:
             if (found := self.held.get(key)) is None:
-                return Entry()
+                return Entry(source)
             self.held.move_to_end(key)
             return found
+
+    def walks(self) -> list[Entry]:
+        """The kept entries that hold a walk, the one used most recently first."""
+        with self.lock:
+            return [entry for entry in reversed(self.held.values()) if entry.walked is not None]
 
     def settle(self, key: str, entry: Entry) -> None:
         """Keep `entry` as the one used most recently and count what it holds, then drop the sources used least
@@ -170,8 +201,9 @@ class Compilation:
         self.cache = cache or CACHE
         text = hashlib.sha256(source.encode("utf-8")).hexdigest()
         self.key = hashlib.sha256(f"{compiler()}\0{library()}\0{text}".encode()).hexdigest()
-        self.held = self.cache.entry(self.key)  # this caller's, even once the cache drops it
+        self.held = self.cache.entry(self.key, source)  # this caller's, even once the cache drops it
         self.cached = True
+        self.edit = ""  # the function whose body was checked alone, when a kept walk answered the check
 
     def keep(self) -> None:
         self.cache.settle(self.key, self.held)
@@ -206,20 +238,25 @@ class Compilation:
         return next((kept for kept in accepted if isinstance(kept, Pickled)), None)
 
     def check(self) -> Checked:
-        """Run the check, keep it, and give its objects to this caller. A kept parse is used; otherwise the check parses
-        and keeps no parse, since only a caller that asks for one reads it."""
+        """Run the check, keep it and its walk, and give its objects to this caller. An edit of one body of a source
+        whose walk is kept is checked from that walk; otherwise a kept parse is used, or the check parses and keeps no
+        parse, since only a caller that asks for one reads it."""
         kept = self.held.parse
         if isinstance(kept, Refused):
             raise kept.raised()
-        tree = loads(kept.data) if kept is not None else None
-        self.cached = False
+        self.cached, walked = False, list[Walked | None]()
         try:
-            p, checker, receipts = compile_program(self.source, self.sites, parsed=tree, every=self.every)
+            answer = self.edited(walked.append)
+            if answer is None:
+                tree = loads(kept.data) if kept is not None else None
+                answer = compile_program(self.source, self.sites, parsed=tree, every=self.every,
+                                         walked=lambda c, walk: walked.append(Walked.of(c, walk)))  # fmt: skip
         except Diagnostic as error:
             if error.abandoned is None:  # a check a fault ended is not an answer
                 self.held.checks[self.sites, self.every] = Refused(error)
                 self.keep()
             raise
+        p, checker, receipts = answer
         listed, checker.sites = checker.sites, []
         try:
             data, sites = dumps((p, checker, receipts)), dumps(listed)
@@ -227,8 +264,32 @@ class Compilation:
             checker.sites = listed
         if data is not None and sites is not None:
             self.held.checks[self.sites, self.every] = Pickled(data, sites)
+            if walked and walked[-1] is not None and not (self.held.walked and self.held.walked.sites):
+                self.held.walked = walked[-1]  # one that recorded sites answers more
             self.keep()
         return p, checker, receipts
+
+    def edited(self, walked: Callable[[Walked | None], None]) -> Checked | None:
+        """The check from the kept walk of a source this one differs from in one body, if there is one and the edit is
+        one it takes; None, and the whole check runs, otherwise."""
+        for base in self.cache.walks():
+            found = base.walked
+            if found is None or (self.sites and not found.sites):
+                continue
+            if (edit := incremental.edited(base.source, self.source, found.spans)) is None:
+                continue
+            p, checker, walk = loads(found.data)
+            self.edit = edit.name  # a refusal raised below is this edit's too
+            try:
+                receipts = incremental.recheck(checker, walk, edit, self.source, self.sites, self.every,
+                                               lambda c, walk: walked(Walked.of(c, walk)))  # fmt: skip
+            except Diagnostic:
+                raise
+            except Exception:  # an edit the walk does not take (Fallback), or a fault of the walk's own: check whole
+                self.edit = ""
+                return None
+            return p, checker, receipts
+        return None
 
     def copied(self, kept: Pickled | Refused, sites: bool) -> Checked:
         """A copy of a kept check, as a check with these settings would have left it."""
