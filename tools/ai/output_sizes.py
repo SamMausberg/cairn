@@ -21,6 +21,7 @@ path, plus a margin. `--check` exits 1 when an output is larger than its budget.
     python3 tools/ai/output_sizes.py [--output FILE]    # the record
     python3 tools/ai/output_sizes.py --check            # and exit 1 unless every case is within its budget
     python3 tools/ai/output_sizes.py --budget           # rewrite output_budgets.json from this measurement
+    python3 tools/ai/output_sizes.py --compiler DIR     # the same corpus through another tree's bin/cairn
 """
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ from checking import CAIRN_TOML
 from support import tokenizer
 
 HOME = "/home/agent/task"  # where every output says the project is
+CAIRN = ROOT / "bin" / "cairn"  # the command measured; --compiler names another tree's
 BUDGETS = Path(__file__).with_name("output_budgets.json")
 MARGIN = 1.05  # a budget is the size last measured and five percent
 TASK = ROOT / "bench" / "ai" / "tasks" / "histogram"
@@ -112,7 +114,7 @@ def environment(human: bool = False) -> dict[str, str]:
 
 def shell(argv: list[str], where: Path, stdin: str = "", human: bool = False) -> str:
     """What an agent's shell shows of `cairn ARGV` run in `where`: stdout, then stderr, with `where` said as HOME."""
-    done = subprocess.run([sys.executable, str(ROOT / "bin" / "cairn"), *argv], cwd=where, input=stdin, text=True,
+    done = subprocess.run([sys.executable, str(CAIRN), *argv], cwd=where, input=stdin, text=True,
                           capture_output=True, timeout=600, env=environment(human))  # fmt: skip
     return (done.stdout + done.stderr).replace(str(where), HOME)
 
@@ -141,7 +143,7 @@ class Client:
 
     def __init__(self, where: Path):
         self.where = where
-        self.proc = subprocess.Popen([sys.executable, str(ROOT / "bin" / "cairn"), "mcp"], cwd=where, text=True,
+        self.proc = subprocess.Popen([sys.executable, str(CAIRN), "mcp"], cwd=where, text=True,
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                      env=environment())  # fmt: skip
         self.sent = 0
@@ -238,11 +240,14 @@ def over(record: dict, budgets: dict[str, int]) -> list[str]:
 
 
 def main() -> int:
+    global CAIRN
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--output", type=Path, help="also write the record here")
     parser.add_argument("--check", action="store_true", help="exit 1 unless every output is within its budget")
     parser.add_argument("--budget", action="store_true", help=f"rewrite {BUDGETS.name} from this measurement")
+    parser.add_argument("--compiler", type=Path, help="a tree holding bin/cairn to measure, such as `git archive`'s")
     a = parser.parse_args()
+    CAIRN = (a.compiler or ROOT).resolve() / "bin" / "cairn"
     record = measure()
     text = json.dumps(record, indent=1) + "\n"
     if a.output:

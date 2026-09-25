@@ -69,4 +69,5 @@ This measures the size of what the tools print, not what an agent does with it. 
 python3 tools/ai/output_sizes.py --output evidence/v1_2/terse/before.json   # about 25 seconds
 python3 tools/ai/output_sizes.py --check                                     # exit 1 when a case is over its budget
 python3 tools/ai/output_sizes.py --budget                                    # rewrite the budgets from a measurement
+python3 tools/ai/output_sizes.py --compiler DIR                              # the corpus through another tree's bin/cairn
 ```
