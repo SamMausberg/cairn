@@ -9,7 +9,7 @@ import pathlib
 import subprocess
 
 import pytest
-from test_lsp import Client, applied, place
+from test_lsp import Client, applied, lines, place
 
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
@@ -68,8 +68,14 @@ def opened(root, **held):
     return workspace(main.as_uri(), buffers or {main.as_uri(): MAIN}), main.as_uri()
 
 
-def lines(found):
-    return sorted((r["uri"].rsplit("/", 1)[1], r["range"]["start"]["line"]) for r in found)
+def forgetting_the_last(target):
+    """`workspace.target` with the last occurrence it finds left out, as a token search that missed one would."""
+
+    def forgetful(w, at):
+        kind, full, tokens = target(w, at)
+        return kind, full, tokens[:-1]
+
+    return forgetful
 
 
 def after(root, edits):
@@ -168,13 +174,7 @@ def test_a_library_or_foreign_declaration_is_not_renamed(project, tmp_path):
 def test_the_recheck_refuses_an_edit_set_the_name_rules_got_wrong(project, monkeypatch):
     """The transaction does not trust the token search: an occurrence missed, or one too many, fails it."""
     ws, uri = opened(project)
-    real = ws_module.target
-
-    def missing_one(w, at):
-        kind, full, tokens = real(w, at)
-        return kind, full, tokens[:-1]
-
-    monkeypatch.setattr(ws_module, "target", missing_one)
+    monkeypatch.setattr(ws_module, "target", forgetting_the_last(ws_module.target))
     with pytest.raises(Refused, match="would not compile"):
         rename(ws, uri, MAIN.index("geo.scale(p") + 5, "stretch")
 
@@ -191,13 +191,7 @@ def test_the_recheck_refuses_a_rename_that_compiles_but_changes_a_callee(tmp_pat
     (tmp_path / "src/main.cairn").write_text(entry)
     uri = (tmp_path / "src/main.cairn").resolve().as_uri()
     ws = workspace(uri, {uri: entry})
-    real = ws_module.target
-
-    def missing_the_call(w, at):
-        kind, full, tokens = real(w, at)
-        return kind, full, tokens[:-1]  # the declaration and the import list, not the call
-
-    monkeypatch.setattr(ws_module, "target", missing_the_call)
+    monkeypatch.setattr(ws_module, "target", forgetting_the_last(ws_module.target))  # misses the call
     with pytest.raises(Refused, match="change what the program does"):
         rename(ws, uri, entry.index("area(3)"), "size")
 
