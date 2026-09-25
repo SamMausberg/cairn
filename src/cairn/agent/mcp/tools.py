@@ -2,8 +2,9 @@
 
 `check` is `cairn check`. `edit_open` and `edit_request` drive the guarded edit host (`edits.EditHost`),
 `plan_open` and `plan_reply` the plan host (`plans.PlanHost`), `implementation_open` and `implementation_submit` the
-implementation host (`implementations.ImplementationHost`), and `state` is `cairn state`, with `symbol` one function's
-investigation from its candidate history. No rule is decided here: every refusal is the host's own diagnostic.
+implementation host (`implementations.ImplementationHost`), `state` is `cairn state`, with `symbol` one function's
+investigation from its candidate history, and `find` is `cairn find`. No rule is decided here: every refusal is the
+host's own diagnostic.
 
 A session opened on a path writes each change its host admits back to the files it came from (`write_back.py`),
 and only while they still hold what the host judged the change against; a session opened on source text writes
@@ -104,6 +105,19 @@ TOOLS: list[dict[str, Any]] = [
             **WHERE, "symbol": SYMBOL,
             "since": {"type": "string", "description": "The digest of a state this server returned."},
             "whole": {"type": "boolean", "description": "The whole state, even when this server sent one of that path."},
+        }},
+        "annotations": {"readOnlyHint": True},
+    },
+    {
+        "name": "find",
+        "description": "Functions to call, best first, from the builtins, std and the program: those that take "
+        "values of the given types, or whose names and comments hold the words.",
+        "inputSchema": {"type": "object", "properties": {
+            **WHERE, "words": {"type": "string"},
+            "takes": {"type": "array", "items": {"type": "string"}, "description": "As ro<u8>[n], Vec[i64]."},
+            "returns": {"type": "string"},
+            "effects": {"type": "string", "description": "A ceiling, as pure."},
+            "limit": {"type": "integer"},
         }},
         "annotations": {"readOnlyHint": True},
     },
@@ -302,6 +316,17 @@ class Tools:
         self.states[packet["digest"]] = packet
         self.last |= {where: packet["digest"]} if where else {}
         return (investigation.delta(earlier, packet) if earlier else packet), False
+
+    def find(self, a: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        from ..find import LIMIT, find
+
+        source = self.program(a)[0] if "path" in a or "source" in a else None
+        words, takes, limit = a.get("words", ""), a.get("takes", []), a.get("limit", LIMIT)
+        texts = [words, a.get("returns") or "", a.get("effects") or "", *(takes if isinstance(takes, list) else [0])]
+        if not all(isinstance(t, str) for t in texts) or type(limit) is not int:
+            fail("E-REQUEST", 'words, returns and effects are strings, takes a list of types such as ["ro<u8>[n]"], '
+                 "and limit an integer.")  # fmt: skip
+        return find(source, words, takes, a.get("returns"), a.get("effects"), limit), False
 
 
 def text(a: dict[str, Any], key: str) -> str:

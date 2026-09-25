@@ -37,9 +37,9 @@ claude plugin install cairn@cairn
 
 The plugin adds the skill, puts `bin/cairn` on the session's `PATH`, and runs `cairn lsp` on `.cairn` files, so each edit returns the compiler's diagnostics to the agent. It needs Python 3.11 or later and a C++20 compiler, and downloads nothing. Another agent that reads Agent Skills can load `skills/cairn/` directly, with `bin/cairn` of a checkout on its `PATH`.
 
-The plugin also starts [`cairn mcp`](tools.md#cairn-mcp), a Model Context Protocol server, so an agent without a shell reaches the same hosts: `check`, `state`, and the edit, plan and implementation sessions of this page, as eight tools that write an accepted change back to its files. Other MCP clients start the same server as `bin/cairn mcp`.
+The plugin also starts [`cairn mcp`](tools.md#cairn-mcp), a Model Context Protocol server, so an agent without a shell reaches the same hosts: `check`, `state`, `find`, and the edit, plan and implementation sessions of this page, as nine tools that write an accepted change back to its files. Other MCP clients start the same server as `bin/cairn mcp`.
 
-`claude plugin details` counts the skill's description, about 180 tokens, as the plugin's whole cost in every session, and does not count MCP tool schemas. The eight tools' list is 4,390 bytes of JSON. That is about a thousand tokens more for a client that loads tool schemas up front, and about 116 for Claude Code, which loads a schema only when a tool is searched for ([evidence/v1_0/skill](../evidence/v1_0/skill/README.md)).
+`claude plugin details` counts the skill's description, about 180 tokens, as the plugin's whole cost in every session, and does not count MCP tool schemas. The nine tools' list is 5,090 bytes of JSON, 700 of them `find`'s. The eight tools measured before `find` cost about a thousand tokens more for a client that loads tool schemas up front, and about 116 for Claude Code, which loads a schema only when a tool is searched for ([evidence/v1_0/skill](../evidence/v1_0/skill/README.md)).
 
 A smoke comparison of six runs gave three small tasks to one `claude-sonnet-5` session each, with and without the plugin, before the plugin had `cairn mcp`. Every session solved its task. The sessions with the plugin cost 0.51 times as much and took 40 turns instead of 70, because they read two cards instead of searching the checkout ([evidence/v1_0/skill](../evidence/v1_0/skill/README.md)). One run per cell is not a benchmark.
 
@@ -146,6 +146,28 @@ A `delta` request, or `--since`, gives only what changed, and applying it to the
 ```json
 {"protocol": "cairn.edit/2", "handle": "e1", "kind": "delta", "since": "<the digest of an earlier state>"}
 ```
+
+## Finding a function
+
+`cairn find` names the functions to call for what an agent has in hand, from the builtins, the packaged library and the program's own functions, best fit first. Give it words, or the types of the values you have and the type you want back:
+
+```sh
+cairn find parse integer
+cairn find --takes 'ro<u8>[n]' --returns i64
+cairn find --takes 'Vec[Rec]' --in src/main.cairn --limit 20
+```
+
+```text
+std.text.parse_i64(n:usize, s:ro<u8>[n]) -> Result[i64, ParseError]  pure  // Signed decimal: an optional leading '-', then digits.
+```
+
+Each hit is one line: the qualified name and signature, `pure` and whatever the function's effect row holds beyond what `pure` allows, and the first sentence of the comment above it. An answer lists ten hits unless `--limit` asks for 1 to 200, and says how many more matched. `--effects` keeps the functions whose rows fit a ceiling, such as `pure` or `effects(pure, alloc)`, judged as `E-EFFECT-CEILING` judges a row but for the reads and writes of what the call is given, which the modes of the given types already decide. The `cairn mcp` tool `find` takes the same query.
+
+The checker answers a type query itself. For each function, `cairn find` writes every call that passes the given values, in any order, with each parameter they leave open as a further value of its declared type, and one check judges them all. A function fits when one of its calls checks, so a hit accepts the given types by the rules a program that calls it meets: the extents a call may leave out stay out, a `Vec` goes where its elements' view is expected, and a template's parameters take the types the values hold. A call that fills every parameter comes before one that leaves some open, and a result of the wanted type comes before one that holds it, as `Result[i64, ParseError]` holds `i64`.
+
+A word query matches a function's name, its module and the first sentence of its comment, and a few words from other languages count as CAIRN's: `integer` finds `i64`, `string` finds `text` and `thread` finds `spawn`. Only the functions that match the most words are listed. A builtin's rule is code, so each has one line that says what it does, and its effect row belongs to a call: a type query gives it and a word query does not.
+
+Without `--in`, the program searched is the project in the current directory when it has a `cairn.toml`, and otherwise only the builtins and the library are. A program the checker refuses is left out, and the answer says so with the refusal's code. A type may leave out its module when one module declares it, so `Vec[i64]` is `std.vec.Vec[i64]`.
 
 ## Interface migrations
 

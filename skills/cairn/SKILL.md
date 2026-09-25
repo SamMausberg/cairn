@@ -135,7 +135,7 @@ A refusal from a host or the command line may name hosts, migrations, sketches, 
 - Habits from Rust or C++: no `&`/`&mut`, lifetimes, `::` paths, `as` casts (write `u64(x)`), tuples (a `struct`), tail-expression returns, or `if` and `match` as values (`let mut x = b; if c { x = a; }`). `impl` is only `impl Trait for T`; `value.f(args)` calls a plain `fn f(v, args)` from the type's module. Text is `ro<u8>[n]` or `Vec[u8]`, never a `String`.
 - An integer literal is a `u64` unless something expects another type: `let mut i:usize = 0;` for an index. A signed minimum is a literal, `-9223372036854775808`.
 - A `Buf[T](n)` is `len(b)` long, which the checker does not tie to `n`: pass `f(b)` and the call supplies `len(b)`, or pass the part `b[0..n]`. A part `xs[lo..hi]` is written only as a call's argument. A `Vec`'s length is `v.len` and its elements `v.data[i]`.
-- Invented libraries: only what a file declares, the builtins the cards name and the `std.*` modules exist; `cairn doc --std --module std.text` prints one module's signatures.
+- Invented libraries: only what a file declares, the builtins the cards name and the `std.*` modules exist; `cairn find parse integer` or `cairn find --takes 'ro<u8>[n]' --returns i64` names the function to call, and `cairn doc --std --module std.text` prints one module.
 - Guessing a fix: each diagnostic code has one rule behind it, and its card says what that rule accepts.
 
 ## More

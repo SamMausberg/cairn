@@ -1,0 +1,1502 @@
+{
+ "unit": "tiktoken/o200k_base",
+ "questions": [
+  {
+   "question": "read standard input",
+   "pattern": "stdin|read_all|read_line|std/io\\.md|\\bio\\.read",
+   "lookups": 12,
+   "subjects": 10,
+   "read_tokens": 17560,
+   "median_per_subject": 1910.0,
+   "largest": {
+    "subject": "r1_block_scan_cairn",
+    "arm": "cairn",
+    "request": 7,
+    "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/block_scan/cairn/docs/std/io.md",
+    "tokens": 1910
+   },
+   "answers": [
+    {
+     "query": {
+      "words": "read stdin"
+     },
+     "hits": 1,
+     "more": 0,
+     "first": [
+      "std.io.read_stdin(n:usize, into:rw<u8>[n]) -> Result[usize, IoError]  pure + ffi:__errno_location, ffi:read, io, mmio, write:into  // One read from standard input: 0 at end of input, as `read` answers for a file."
+     ],
+     "mcp_tokens": 78,
+     "terminal_tokens": 70
+    }
+   ]
+  },
+  {
+   "question": "parse an integer from text",
+   "pattern": "parse|ParseError|trim|whitespace|std/text\\.md",
+   "lookups": 14,
+   "subjects": 11,
+   "read_tokens": 14645,
+   "median_per_subject": 1259,
+   "largest": {
+    "subject": "r1_records_plugin",
+    "arm": "plugin",
+    "request": 8,
+    "looked_up": "DOCS=/home/sam/cairn-aieval/plugins/counted/r1/records/plugin/skills/cairn/../../docs; cat $DOCS/std/vec.md; echo ===TEXT===; cat $DOCS/std/text.md",
+    "tokens": 1984
+   },
+   "answers": [
+    {
+     "query": {
+      "words": "parse integer"
+     },
+     "hits": 2,
+     "more": 0,
+     "first": [
+      "std.text.parse_i64(n:usize, s:ro<u8>[n]) -> Result[i64, ParseError]  pure  // Signed decimal: an optional leading '-', then digits."
+     ],
+     "mcp_tokens": 75,
+     "terminal_tokens": 66
+    },
+    {
+     "query": {
+      "takes": [
+       "ro<u8>[n]"
+      ],
+      "returns": "i64"
+     },
+     "hits": 1,
+     "more": 0,
+     "first": [
+      "std.text.parse_i64(n:usize, s:ro<u8>[n]) -> Result[i64, ParseError]  pure  // Signed decimal: an optional leading '-', then digits."
+     ],
+     "mcp_tokens": 47,
+     "terminal_tokens": 39
+    }
+   ]
+  },
+  {
+   "question": "a Vec of records",
+   "pattern": "Vec\\[|vec\\.|std/vec\\.md|\\bpush\\b",
+   "lookups": 11,
+   "subjects": 11,
+   "read_tokens": 11401,
+   "median_per_subject": 951,
+   "largest": {
+    "subject": "r1_records_plugin",
+    "arm": "plugin",
+    "request": 8,
+    "looked_up": "DOCS=/home/sam/cairn-aieval/plugins/counted/r1/records/plugin/skills/cairn/../../docs; cat $DOCS/std/vec.md; echo ===TEXT===; cat $DOCS/std/text.md",
+    "tokens": 1984
+   },
+   "answers": [
+    {
+     "query": {
+      "words": "vec push"
+     },
+     "hits": 2,
+     "more": 0,
+     "first": [
+      "std.vec.push[T:affine](v:rw<Vec[T]>, item:T)  pure + alloc, free, write:v"
+     ],
+     "mcp_tokens": 85,
+     "terminal_tokens": 77
+    },
+    {
+     "query": {
+      "takes": [
+       "Vec[Rec]"
+      ],
+      "source": "struct Rec { key:u64; weight:i64; }\nfn main() -> i32 { return 0; }\n"
+     },
+     "hits": 10,
+     "more": 7,
+     "first": [
+      "std.vec.capacity[T:affine](v:ro<Vec[T]>) -> usize  pure"
+     ],
+     "mcp_tokens": 344,
+     "terminal_tokens": 344
+    }
+   ]
+  },
+  {
+   "question": "a Buf of records",
+   "pattern": "\\bBuf\\b|buffer|lends",
+   "lookups": 6,
+   "subjects": 4,
+   "read_tokens": 5844,
+   "median_per_subject": 1354.0,
+   "largest": {
+    "subject": "r1_dedupe_cairn",
+    "arm": "cairn",
+    "request": 2,
+    "looked_up": "grep -rn \"Buf\" /home/sam/cairn-aieval/runs/counted/r1/dedupe/cairn/docs/*.md | head -50",
+    "tokens": 2663
+   },
+   "answers": [
+    {
+     "query": {
+      "takes": [
+       "usize"
+      ],
+      "returns": "Buf[Rec]",
+      "source": "struct Rec { key:u64; weight:i64; }\nfn main() -> i32 { return 0; }\n"
+     },
+     "hits": 1,
+     "more": 0,
+     "first": [
+      "Buf(usize)  pure + alloc, free  // an owner of n zeroed elements on the heap; Array[T, N]() is a fixed array held inline"
+     ],
+     "mcp_tokens": 43,
+     "terminal_tokens": 34
+    }
+   ]
+  },
+  {
+   "question": "tasks and groups",
+   "pattern": "spawn|Group|collect\\(|concurrency\\.md",
+   "lookups": 9,
+   "subjects": 8,
+   "read_tokens": 49914,
+   "median_per_subject": 8340.0,
+   "largest": {
+    "subject": "r1_block_scan_cairn",
+    "arm": "cairn",
+    "request": 3,
+    "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/block_scan/cairn/docs/concurrency.md",
+    "tokens": 8340
+   },
+   "answers": [
+    {
+     "query": {
+      "words": "spawn task group"
+     },
+     "hits": 2,
+     "more": 0,
+     "first": [
+      "Group[T](k)  // up to k tasks, each started by spawn f(args) into g; collect(g) is the next result to finish"
+     ],
+     "mcp_tokens": 69,
+     "terminal_tokens": 60
+    }
+   ]
+  },
+  {
+   "question": "the limits of i64",
+   "pattern": "MAX|MIN\\b|min_value|max_value|9223372036854775|i64::|minimum of a signed|roadmap\\.md",
+   "lookups": 5,
+   "subjects": 1,
+   "read_tokens": 1725,
+   "median_per_subject": 1725,
+   "largest": {
+    "subject": "r1_chunk_sums_plugin",
+    "arm": "plugin",
+    "request": 18,
+    "looked_up": "grep -rn -B3 -A15 \"Writing the minimum of a signed type\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/roadmap.md",
+    "tokens": 726
+   },
+   "answers": [
+    {
+     "query": {
+      "words": "i64 minimum"
+     },
+     "hits": 2,
+     "more": 0,
+     "first": [
+      "std.text.write_i64(n:usize, out:rw<u8>[n], value:i64) -> usize  pure + write:out  // A leading '-' and the magnitude, which is representable for every value, the minimum included."
+     ],
+     "mcp_tokens": 100,
+     "terminal_tokens": 91
+    }
+   ]
+  },
+  {
+   "question": "signed overflow",
+   "pattern": "wrap|overflow",
+   "lookups": 7,
+   "subjects": 2,
+   "read_tokens": 2431,
+   "median_per_subject": 1215.5,
+   "largest": {
+    "subject": "r1_chunk_sums_plugin",
+    "arm": "plugin",
+    "request": 8,
+    "looked_up": "grep -rn \"add_wrap\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/",
+    "tokens": 1724
+   },
+   "answers": [
+    {
+     "query": {
+      "words": "signed overflow"
+     },
+     "hits": 1,
+     "more": 0,
+     "first": [
+      "add_wrap(a, b)  // modular arithmetic of two unsigned integers; checked + - * abort on overflow, signed or unsigned"
+     ],
+     "mcp_tokens": 35,
+     "terminal_tokens": 26
+    }
+   ]
+  },
+  {
+   "question": "search text",
+   "pattern": "find_byte|text\\.find|\\bsearch\\b|substring|starts_with|std/text\\.md",
+   "lookups": 12,
+   "subjects": 11,
+   "read_tokens": 14631,
+   "median_per_subject": 1259,
+   "largest": {
+    "subject": "r1_records_plugin",
+    "arm": "plugin",
+    "request": 8,
+    "looked_up": "DOCS=/home/sam/cairn-aieval/plugins/counted/r1/records/plugin/skills/cairn/../../docs; cat $DOCS/std/vec.md; echo ===TEXT===; cat $DOCS/std/text.md",
+    "tokens": 1984
+   },
+   "answers": [
+    {
+     "query": {
+      "words": "find substring"
+     },
+     "hits": 1,
+     "more": 0,
+     "first": [
+      "std.text.find(n:usize, s:ro<u8>[n], m:usize, needle:ro<u8>[m]) -> Option[usize]  pure  // The first index where `needle` starts."
+     ],
+     "mcp_tokens": 53,
+     "terminal_tokens": 45
+    },
+    {
+     "query": {
+      "takes": [
+       "ro<u8>[n]",
+       "ro<u8>[n]"
+      ],
+      "returns": "usize"
+     },
+     "hits": 6,
+     "more": 0,
+     "first": [
+      "std.sort.search[T:Ord](n:usize, xs:ro<T>[n], key:ro<T>) -> Option[usize]  pure  // The index of a value equal to `key` in an already sorted view, if one is there."
+     ],
+     "mcp_tokens": 401,
+     "terminal_tokens": 391
+    }
+   ]
+  },
+  {
+   "question": "the library, whole",
+   "pattern": "library\\.md|std_api\\.md|cairn doc --std",
+   "lookups": 33,
+   "subjects": 10,
+   "read_tokens": 55570,
+   "median_per_subject": 6834.0,
+   "largest": {
+    "subject": "r1_pool_cairn",
+    "arm": "cairn",
+    "request": 5,
+    "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/library.md",
+    "tokens": 8623
+   },
+   "answers": []
+  }
+ ],
+ "lookups": [
+  {
+   "subject": "r1_basis_points_cairn",
+   "arm": "cairn",
+   "request": 1,
+   "looked_up": "ls -la /home/sam/cairn-aieval/runs/counted/r1/basis_points/cairn/ && ls /home/sam/cairn-aieval/runs/counted/r1/basis_points/cairn/src 2>/dev/null && ls /home/sam/cairn-aieval/runs/counted/r1/basis_points/cairn/docs 2>/dev/null",
+   "tokens": 179
+  },
+  {
+   "subject": "r1_basis_points_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "%|mod\\b /home/sam/cairn-aieval/runs/counted/r1/basis_points/cairn/docs/language.md",
+   "tokens": 212
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "arm": "cairn",
+   "request": 1,
+   "looked_up": "ls -la /home/sam/cairn-aieval/runs/counted/r1/block_scan/cairn && echo --- && ls docs && echo --- && ls docs/std 2>/dev/null",
+   "tokens": 237
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "arm": "cairn",
+   "request": 2,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/block_scan/cairn/docs/guide.md",
+   "tokens": 6495
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/block_scan/cairn/docs/concurrency.md",
+   "tokens": 8340
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/block_scan/cairn/docs/devices.md",
+   "tokens": 8067
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "grep -n \"shl\\|shr\\b\" -r docs/std/*.md docs/language.md docs/numerics.md | head -50",
+   "tokens": 176
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "arm": "cairn",
+   "request": 5,
+   "looked_up": "grep -n \"shl_wrap\\|shr(\" docs/language.md docs/std/*.md | head -30",
+   "tokens": 176
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "arm": "cairn",
+   "request": 5,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/block_scan/cairn/docs/language.md",
+   "tokens": 2490
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "arm": "cairn",
+   "request": 7,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/block_scan/cairn/docs/std/io.md",
+   "tokens": 1910
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "arm": "cairn",
+   "request": 7,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/block_scan/cairn/docs/std/vec.md",
+   "tokens": 951
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "arm": "cairn",
+   "request": 8,
+   "looked_up": "grep -n \"buffer \\|^## \\|Buf\\[\" docs/memory.md | head -60",
+   "tokens": 671
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "arm": "cairn",
+   "request": 9,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/block_scan/cairn/docs/memory.md",
+   "tokens": 1232
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "arm": "cairn",
+   "request": 10,
+   "looked_up": "grep -n \"lends\" docs/*.md docs/std/*.md",
+   "tokens": 1026
+  },
+  {
+   "subject": "r1_chunk_sums_cairn",
+   "arm": "cairn",
+   "request": 1,
+   "looked_up": "ls -la /home/sam/cairn-aieval/runs/counted/r1/chunk_sums/cairn && echo --- && ls docs && echo --- && ls docs/std 2>/dev/null",
+   "tokens": 237
+  },
+  {
+   "subject": "r1_chunk_sums_cairn",
+   "arm": "cairn",
+   "request": 2,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/chunk_sums/cairn/docs/guide.md",
+   "tokens": 6495
+  },
+  {
+   "subject": "r1_chunk_sums_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/chunk_sums/cairn/docs/numerics.md",
+   "tokens": 5182
+  },
+  {
+   "subject": "r1_chunk_sums_cairn",
+   "arm": "cairn",
+   "request": 9,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/chunk_sums/cairn/docs/concurrency.md",
+   "tokens": 8340
+  },
+  {
+   "subject": "r1_chunk_sums_cairn",
+   "arm": "cairn",
+   "request": 10,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/chunk_sums/cairn/docs/std/text.md",
+   "tokens": 1259
+  },
+  {
+   "subject": "r1_chunk_sums_cairn",
+   "arm": "cairn",
+   "request": 10,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/chunk_sums/cairn/docs/std/io.md",
+   "tokens": 1910
+  },
+  {
+   "subject": "r1_chunk_sums_cairn",
+   "arm": "cairn",
+   "request": 11,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/chunk_sums/cairn/docs/std/vec.md",
+   "tokens": 951
+  },
+  {
+   "subject": "r1_chunk_sums_cairn",
+   "arm": "cairn",
+   "request": 11,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/chunk_sums/cairn/docs/std/core.md",
+   "tokens": 385
+  },
+  {
+   "subject": "r1_chunk_sums_cairn",
+   "arm": "cairn",
+   "request": 12,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/chunk_sums/cairn/docs/language.md",
+   "tokens": 7047
+  },
+  {
+   "subject": "r1_chunk_sums_cairn",
+   "arm": "cairn",
+   "request": 29,
+   "looked_up": "cairn rules E-LITERAL-RANGE 2>&1 | head -60",
+   "tokens": 318
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 3,
+   "looked_up": "grep -n -i \"wrap\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/skills/cairn/../../docs/numerics.md | head -60",
+   "tokens": 7
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 3,
+   "looked_up": "grep -n -i \"wrap\\|overflow\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/skills/cairn/../../docs/library.md | head -60",
+   "tokens": 110
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 4,
+   "looked_up": "find /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin -iname \"*.md\" -path \"*docs*\" 2>/dev/null",
+   "tokens": 837
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 5,
+   "looked_up": "grep -n -i \"wrap\\|overflow\\|min_value\\|max_value\\|MAX\\|MIN\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/numerics.md",
+   "tokens": 207
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 6,
+   "looked_up": "grep -n -i \"wrap\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/language.md",
+   "tokens": 200
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 7,
+   "looked_up": "grep -n -i \"add_wrap\\|sub_wrap\\|mul_wrap\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/std_api.md /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/std/core.md /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/library.md",
+   "tokens": 7
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 8,
+   "looked_up": "grep -rn \"add_wrap\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/",
+   "tokens": 1724
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 9,
+   "looked_up": "grep -n -i \"convert\\|cast\\|narrow\\|widen\\|u64(x)\\|i64(x)\\|bit\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/numerics.md | head -80",
+   "tokens": 1175
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 10,
+   "looked_up": "grep -n -i \"E-CAST\\|conversion\\|u64(x)\\|narrow\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/language.md",
+   "tokens": 218
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 11,
+   "looked_up": "grep -n \"i64(\\|u64(\\|i32(\\|u32(\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/guide.md | head -40",
+   "tokens": 343
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 14,
+   "looked_up": "grep -n \"Group\\|spawn\\|collect(\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/concurrency.md | head -80",
+   "tokens": 709
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 15,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/concurrency.md",
+   "tokens": 2159
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 16,
+   "looked_up": "grep -rn \"MAX\\|MIN\\b\\|::MAX\\|i64::\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/std/core.md /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/language.md /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/std_api.md 2>/dev/null | head -30",
+   "tokens": 7
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 17,
+   "looked_up": "grep -rn \"9223372036854775\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/*.md",
+   "tokens": 82
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 18,
+   "looked_up": "grep -rn -B3 -A15 \"Writing the minimum of a signed type\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/roadmap.md",
+   "tokens": 726
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 19,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/roadmap.md",
+   "tokens": 703
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 21,
+   "looked_up": "sed -n '1,150p' /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/std/io.md",
+   "tokens": 1718
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 22,
+   "looked_up": "grep -n \"parse\\|Parse\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/std/text.md /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/std/fmt.md /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/std_api.md 2>/dev/null",
+   "tokens": 193
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 23,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/std/text.md",
+   "tokens": 1259
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 23,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/std/vec.md",
+   "tokens": 951
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 26,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/library.md",
+   "tokens": 1795
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 28,
+   "looked_up": "grep -n -i \"tuple\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/*.md",
+   "tokens": 7
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 29,
+   "looked_up": "sed -n '1,80p' /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/std/core.md",
+   "tokens": 343
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "arm": "plugin",
+   "request": 31,
+   "looked_up": "grep -rn \"usize(\" /home/sam/cairn-aieval/plugins/counted/r1/chunk_sums/plugin/docs/*.md | head -20",
+   "tokens": 582
+  },
+  {
+   "subject": "r1_csv_field_cairn",
+   "arm": "cairn",
+   "request": 1,
+   "looked_up": "find . -maxdepth 3 -not -path './docs/*' | sort",
+   "tokens": 24
+  },
+  {
+   "subject": "r1_dedupe_cairn",
+   "arm": "cairn",
+   "request": 2,
+   "looked_up": "grep -rn \"Buf\" /home/sam/cairn-aieval/runs/counted/r1/dedupe/cairn/docs/*.md | head -50",
+   "tokens": 2663
+  },
+  {
+   "subject": "r1_dedupe_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "grep -n \"extent\\|E-EXTENT\" /home/sam/cairn-aieval/runs/counted/r1/dedupe/cairn/docs/language.md | head -30",
+   "tokens": 539
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 1,
+   "looked_up": "ls /home/sam/cairn-aieval/runs/counted/r1/histogram/cairn; echo ---; ls /home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs; echo ---; ls /home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/std 2>/dev/null",
+   "tokens": 112
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 2,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/guide.md",
+   "tokens": 6495
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/concurrency.md",
+   "tokens": 8340
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/std/io.md",
+   "tokens": 1910
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 5,
+   "looked_up": "grep -rn \"stdin\" /home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs",
+   "tokens": 159
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 6,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/std/text.md",
+   "tokens": 1259
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 7,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/std/vec.md",
+   "tokens": 951
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 8,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/std/fmt.md",
+   "tokens": 921
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 9,
+   "looked_up": "grep -rn \"io.print\\|io\\.println\\|fmt\\.\\|Vec\\[u8\\]\" /home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/library.md | head -80",
+   "tokens": 244
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 10,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/library.md",
+   "tokens": 590
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 11,
+   "looked_up": "grep -n \"print-and-format\\|^### Print\\|^## Print\" -A 40 /home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/language.md | head -100",
+   "tokens": 7
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 12,
+   "looked_up": "print|println /home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/language.md",
+   "tokens": 457
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 13,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/language.md",
+   "tokens": 611
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 14,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/language.md",
+   "tokens": 6125
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 15,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/memory.md",
+   "tokens": 8894
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 17,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/library.md",
+   "tokens": 581
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 20,
+   "looked_up": "grep -n \"^import\\|module .*;$\\|^## Modules\\|import brings\\|pub fn\\|## import\" /home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/abstractions.md | head -50",
+   "tokens": 443
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "arm": "cairn",
+   "request": 21,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/histogram/cairn/docs/abstractions.md",
+   "tokens": 411
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 1,
+   "looked_up": "ls -la /home/sam/cairn-aieval/runs/counted/r1/pool/cairn && echo --- && ls docs && echo --- && ls docs/std 2>/dev/null",
+   "tokens": 237
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 2,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/guide.md",
+   "tokens": 6495
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/std/io.md",
+   "tokens": 1910
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/std/vec.md",
+   "tokens": 951
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/std/text.md",
+   "tokens": 1259
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/std/fmt.md",
+   "tokens": 921
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/std/core.md",
+   "tokens": 385
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 5,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/std/mem.md",
+   "tokens": 339
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 5,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/library.md",
+   "tokens": 8623
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 6,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/std/arena.md",
+   "tokens": 582
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 7,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/language.md",
+   "tokens": 7047
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 9,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/memory.md",
+   "tokens": 8894
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "arm": "cairn",
+   "request": 11,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/pool/cairn/docs/std/sort.md",
+   "tokens": 544
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 5,
+   "looked_up": "ls /home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/ ; find /home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs -maxdepth 1 2>/dev/null; find / -maxdepth 6 -iname \"library.md\" 2>/dev/null",
+   "tokens": 545
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 6,
+   "looked_up": "grep -n \"^## \\|^### \" /home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/library.md | head -100",
+   "tokens": 130
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 7,
+   "looked_up": "/home/sam/cairn-aieval/toolchain/docs/library.md",
+   "tokens": 63
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 8,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/library.md",
+   "tokens": 1813
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 9,
+   "looked_up": "Vec\\[.*struct|Vec\\[Slot\\]|\\.data\\[i\\]\\.|struct.*\\n.*Vec\\[\"  /home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs",
+   "tokens": 3
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 10,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/memory.md",
+   "tokens": 8894
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 11,
+   "looked_up": "grep -n \"Buf\\[.*\\]\\[\" /home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/*.md | head -30\necho ---\ngrep -n \"struct\" /home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/examples.md | head -50",
+   "tokens": 513
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 14,
+   "looked_up": "grep -n \"Buf\\[\" /home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/language.md | head -40",
+   "tokens": 498
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 16,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/library.md",
+   "tokens": 1302
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 17,
+   "looked_up": "grep -n \"arena\" /home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/library.md | head; echo ---; sed -n '538,570p' /home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/library.md",
+   "tokens": 566
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 18,
+   "looked_up": "grep -n -A 30 '\"std.arena\"\\|std\\.arena\\|module.*arena\\|^## arena\\|arena\\.' /home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/std_api.md | head -150",
+   "tokens": 626
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 19,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/std/arena.md",
+   "tokens": 582
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 20,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/std/vec.md",
+   "tokens": 951
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 22,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/std/mem.md",
+   "tokens": 339
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 22,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/std/text.md",
+   "tokens": 1259
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 23,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/numerics.md",
+   "tokens": 2135
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "arm": "plugin",
+   "request": 24,
+   "looked_up": "grep -n \"usize(\\|u8(\\|i32(\\|u32(\" /home/sam/cairn-aieval/plugins/counted/r1/pool/plugin/skills/cairn/../../docs/language.md | head -30",
+   "tokens": 366
+  },
+  {
+   "subject": "r1_records_cairn",
+   "arm": "cairn",
+   "request": 1,
+   "looked_up": "ls /home/sam/cairn-aieval/runs/counted/r1/records/cairn/ && echo --- && ls /home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/ && echo --- && ls /home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/std/",
+   "tokens": 112
+  },
+  {
+   "subject": "r1_records_cairn",
+   "arm": "cairn",
+   "request": 2,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/guide.md",
+   "tokens": 6495
+  },
+  {
+   "subject": "r1_records_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/std/io.md",
+   "tokens": 1910
+  },
+  {
+   "subject": "r1_records_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/std/text.md",
+   "tokens": 1259
+  },
+  {
+   "subject": "r1_records_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/std/vec.md",
+   "tokens": 951
+  },
+  {
+   "subject": "r1_records_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/std/core.md",
+   "tokens": 385
+  },
+  {
+   "subject": "r1_records_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/std/fmt.md",
+   "tokens": 921
+  },
+  {
+   "subject": "r1_records_cairn",
+   "arm": "cairn",
+   "request": 5,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/language.md",
+   "tokens": 7047
+  },
+  {
+   "subject": "r1_records_cairn",
+   "arm": "cairn",
+   "request": 7,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/library.md",
+   "tokens": 1156
+  },
+  {
+   "subject": "r1_records_cairn",
+   "arm": "cairn",
+   "request": 10,
+   "looked_up": "grep -n \"^import\\|module \\|import std\" /home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/language.md /home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/abstractions.md /home/sam/cairn-aieval/runs/counted/r1/records/cairn/docs/guide.md 2>/dev/null | head -50",
+   "tokens": 2222
+  },
+  {
+   "subject": "r1_records_plugin",
+   "arm": "plugin",
+   "request": 5,
+   "looked_up": "ls /home/sam/cairn-aieval/plugins/counted/r1/records/plugin/skills/cairn/../../docs/ 2>/dev/null || find / -maxdepth 6 -iname \"docs\" -path \"*cairn*\" 2>/dev/null",
+   "tokens": 58
+  },
+  {
+   "subject": "r1_records_plugin",
+   "arm": "plugin",
+   "request": 6,
+   "looked_up": "DOCS=/home/sam/cairn-aieval/plugins/counted/r1/records/plugin/skills/cairn/../../docs; grep -n \"vec\\.\" $DOCS/library.md | head -60",
+   "tokens": 184
+  },
+  {
+   "subject": "r1_records_plugin",
+   "arm": "plugin",
+   "request": 7,
+   "looked_up": "DOCS=/home/sam/cairn-aieval/plugins/counted/r1/records/plugin/skills/cairn/../../docs; sed -n '1,50p' $DOCS/std_api.md | head -100; echo ---; grep -n \"^fn\\|^module\\|vec\\b\" $DOCS/std/*.cairn 2>/dev/null | grep -i vec | head -50",
+   "tokens": 691
+  },
+  {
+   "subject": "r1_records_plugin",
+   "arm": "plugin",
+   "request": 8,
+   "looked_up": "DOCS=/home/sam/cairn-aieval/plugins/counted/r1/records/plugin/skills/cairn/../../docs; cat $DOCS/std/vec.md; echo ===TEXT===; cat $DOCS/std/text.md",
+   "tokens": 1984
+  },
+  {
+   "subject": "r1_records_plugin",
+   "arm": "plugin",
+   "request": 10,
+   "looked_up": "DOCS=/home/sam/cairn-aieval/plugins/counted/r1/records/plugin/skills/cairn/../../docs; grep -n '\"' $DOCS/language.md | head -40",
+   "tokens": 622
+  },
+  {
+   "subject": "r1_rle_cairn",
+   "arm": "cairn",
+   "request": 1,
+   "looked_up": "ls -la /home/sam/cairn-aieval/runs/counted/r1/rle/cairn; echo ---; ls docs; echo ---; ls src 2>/dev/null",
+   "tokens": 181
+  },
+  {
+   "subject": "r1_rle_cairn",
+   "arm": "cairn",
+   "request": 2,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/rle/cairn/docs/guide.md",
+   "tokens": 6495
+  },
+  {
+   "subject": "r1_rle_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/rle/cairn/docs/library.md",
+   "tokens": 8623
+  },
+  {
+   "subject": "r1_rle_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "ls /home/sam/cairn-aieval/runs/counted/r1/rle/cairn/docs/std",
+   "tokens": 60
+  },
+  {
+   "subject": "r1_rle_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/rle/cairn/docs/std/text.md",
+   "tokens": 1259
+  },
+  {
+   "subject": "r1_rle_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/rle/cairn/docs/std/vec.md",
+   "tokens": 951
+  },
+  {
+   "subject": "r1_rle_cairn",
+   "arm": "cairn",
+   "request": 5,
+   "looked_up": "grep -n \"print\" /home/sam/cairn-aieval/runs/counted/r1/rle/cairn/docs/language.md | head -60",
+   "tokens": 596
+  },
+  {
+   "subject": "r1_rle_cairn",
+   "arm": "cairn",
+   "request": 6,
+   "looked_up": "grep -n \"^## \\|^### \" /home/sam/cairn-aieval/runs/counted/r1/rle/cairn/docs/language.md",
+   "tokens": 57
+  },
+  {
+   "subject": "r1_rle_cairn",
+   "arm": "cairn",
+   "request": 7,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/rle/cairn/docs/language.md",
+   "tokens": 3938
+  },
+  {
+   "subject": "r1_rle_cairn",
+   "arm": "cairn",
+   "request": 8,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/rle/cairn/docs/language.md",
+   "tokens": 544
+  },
+  {
+   "subject": "r1_rle_cairn",
+   "arm": "cairn",
+   "request": 9,
+   "looked_up": "grep -rn \"usize(\" /home/sam/cairn-aieval/runs/counted/r1/rle/cairn/docs | head -20",
+   "tokens": 275
+  },
+  {
+   "subject": "r1_rle_plugin",
+   "arm": "plugin",
+   "request": 2,
+   "looked_up": "ls /home/sam/cairn-aieval/runs/counted/r1/rle/plugin; echo ---; ls /home/sam/cairn-aieval/runs/counted/r1/rle/plugin/skills/cairn/../../docs/ 2>/dev/null || find / -name \"library.md\" -path \"*cairn*\" 2>/dev/null",
+   "tokens": 112
+  },
+  {
+   "subject": "r1_rle_plugin",
+   "arm": "plugin",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/rle/plugin/docs/library.md",
+   "tokens": 8623
+  },
+  {
+   "subject": "r1_rle_plugin",
+   "arm": "plugin",
+   "request": 6,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r1/rle/plugin/docs/std/io.md",
+   "tokens": 1910
+  },
+  {
+   "subject": "r1_rle_plugin",
+   "arm": "plugin",
+   "request": 7,
+   "looked_up": "sed -n '1,200p' /home/sam/cairn-aieval/plugins/counted/r1/rle/plugin/docs/std/text.md",
+   "tokens": 1123
+  },
+  {
+   "subject": "r1_rle_plugin",
+   "arm": "plugin",
+   "request": 8,
+   "looked_up": "sed -n '1,200p' /home/sam/cairn-aieval/plugins/counted/r1/rle/plugin/docs/std/vec.md",
+   "tokens": 858
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "arm": "cairn",
+   "request": 1,
+   "looked_up": "ls -la /home/sam/cairn-aieval/runs/counted/r1/sieve/cairn && echo --- && ls /home/sam/cairn-aieval/runs/counted/r1/sieve/cairn/docs && echo --- && ls /home/sam/cairn-aieval/runs/counted/r1/sieve/cairn/docs/std 2>/dev/null",
+   "tokens": 237
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "arm": "cairn",
+   "request": 2,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/sieve/cairn/docs/guide.md",
+   "tokens": 6495
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/sieve/cairn/docs/concurrency.md",
+   "tokens": 8340
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/sieve/cairn/docs/std/io.md",
+   "tokens": 1910
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "arm": "cairn",
+   "request": 5,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/sieve/cairn/docs/std/text.md",
+   "tokens": 1259
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "arm": "cairn",
+   "request": 7,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/sieve/cairn/docs/library.md",
+   "tokens": 8623
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "arm": "cairn",
+   "request": 8,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/sieve/cairn/docs/memory.md",
+   "tokens": 8894
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "arm": "cairn",
+   "request": 14,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r1/sieve/cairn/docs/language.md",
+   "tokens": 7047
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "arm": "cairn",
+   "request": 15,
+   "looked_up": "grep -n \"parallel \" docs/*.md docs/std/*.md | head -60",
+   "tokens": 2499
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "arm": "cairn",
+   "request": 16,
+   "looked_up": "grep -n -A 20 \"pub fn parse_u64\" docs/std_api.md | head -60",
+   "tokens": 7
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "arm": "cairn",
+   "request": 17,
+   "looked_up": "grep -n \"parse_u64\\|ParseError\\|trim\\|whitespace\" docs/std_api.md | head -40",
+   "tokens": 7
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "arm": "cairn",
+   "request": 18,
+   "looked_up": "wc -l docs/std_api.md && head -50 docs/std_api.md",
+   "tokens": 696
+  },
+  {
+   "subject": "r1_sieve_plugin",
+   "arm": "plugin",
+   "request": 3,
+   "looked_up": "cairn doc --std 2>&1 | head -150",
+   "tokens": 2699
+  },
+  {
+   "subject": "r1_sieve_plugin",
+   "arm": "plugin",
+   "request": 4,
+   "looked_up": "cairn doc --std 2>&1 | grep -n -i -A3 \"^pub fn sqrt\\|^# std.math\\|^# std.io\\|read_line\\|read_all\\|stdin\"",
+   "tokens": 304
+  },
+  {
+   "subject": "r1_sieve_plugin",
+   "arm": "plugin",
+   "request": 5,
+   "looked_up": "cairn doc --std 2>&1 | sed -n '300,460p'",
+   "tokens": 3089
+  },
+  {
+   "subject": "r1_sieve_plugin",
+   "arm": "plugin",
+   "request": 6,
+   "looked_up": "cairn doc --std 2>&1 | grep -n \"^# std\\.\" ",
+   "tokens": 104
+  },
+  {
+   "subject": "r1_sieve_plugin",
+   "arm": "plugin",
+   "request": 7,
+   "looked_up": "cairn doc --std 2>&1 | sed -n '174,253p'",
+   "tokens": 1573
+  },
+  {
+   "subject": "r1_sieve_plugin",
+   "arm": "plugin",
+   "request": 8,
+   "looked_up": "cairn doc --std 2>&1 | sed -n '612,676p'",
+   "tokens": 1074
+  },
+  {
+   "subject": "r1_sieve_plugin",
+   "arm": "plugin",
+   "request": 11,
+   "looked_up": "ls /home/sam/cairn-aieval/plugins/counted/r1/sieve/plugin/skills/cairn/../../docs/ 2>/dev/null; ls /home/sam/cairn-aieval/runs/counted/r1/sieve/plugin",
+   "tokens": 69
+  },
+  {
+   "subject": "r1_sieve_plugin",
+   "arm": "plugin",
+   "request": 15,
+   "looked_up": "cd /home/sam/cairn-aieval/plugins/counted/r1/sieve/plugin && cairn doc --std 2>&1 | sed -n '701,749p'",
+   "tokens": 810
+  },
+  {
+   "subject": "r1_split_sum_plugin",
+   "arm": "plugin",
+   "request": 3,
+   "looked_up": "if .* else|ternary|cond ?\\? /home/sam/cairn-aieval/plugins/counted/r1/split_sum/plugin/skills/cairn/../../docs",
+   "tokens": 230
+  },
+  {
+   "subject": "r1_tally_cairn",
+   "arm": "cairn",
+   "request": 2,
+   "looked_up": "sed -n '1,400p' docs/concurrency.md",
+   "tokens": 5340
+  },
+  {
+   "subject": "r1_tally_plugin",
+   "arm": "plugin",
+   "request": 6,
+   "looked_up": "cd /home/sam/cairn-aieval/plugins/counted/r1/tally && find docs -iname \"*.md\" 2>/dev/null; echo \"---\"; grep -n \"collect(\" docs/*.md 2>/dev/null",
+   "tokens": 6
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 1,
+   "looked_up": "ls -la && ls docs && ls docs/std 2>/dev/null",
+   "tokens": 235
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 2,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs/guide.md",
+   "tokens": 6495
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs/concurrency.md",
+   "tokens": 8340
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 3,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs/std/io.md",
+   "tokens": 1910
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs/std/fmt.md",
+   "tokens": 921
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 4,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs/std/vec.md",
+   "tokens": 951
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 5,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs/std/text.md",
+   "tokens": 1259
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 5,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs/std/core.md",
+   "tokens": 385
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 6,
+   "looked_up": "STDIN|stdin /home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs",
+   "tokens": 99
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 7,
+   "looked_up": "shr\\(|shl\\(|fn shr|fn shl /home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs",
+   "tokens": 300
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 8,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs/language.md",
+   "tokens": 1422
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 8,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs/numerics.md",
+   "tokens": 5182
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 9,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs/memory.md",
+   "tokens": 8894
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 11,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs/language.md",
+   "tokens": 2187
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "arm": "cairn",
+   "request": 12,
+   "looked_up": "/home/sam/cairn-aieval/runs/counted/r2/histogram/cairn/docs/language.md",
+   "tokens": 1391
+  },
+  {
+   "subject": "r2_histogram_plugin",
+   "arm": "plugin",
+   "request": 5,
+   "looked_up": "fn println|fn print\\b|newline /home/sam/cairn-aieval/plugins/counted/r2/histogram/plugin/skills/cairn/../../docs",
+   "tokens": 205
+  },
+  {
+   "subject": "r2_histogram_plugin",
+   "arm": "plugin",
+   "request": 6,
+   "looked_up": "/home/sam/cairn-aieval/plugins/counted/r2/histogram/plugin/skills/cairn/../../docs/language.md",
+   "tokens": 787
+  },
+  {
+   "subject": "r2_histogram_plugin",
+   "arm": "plugin",
+   "request": 7,
+   "looked_up": "Buf\\[|import.*Buf|module.*owners /home/sam/cairn-aieval/plugins/counted/r2/histogram/plugin/docs/memory.md",
+   "tokens": 473
+  }
+ ]
+}

@@ -110,7 +110,7 @@ def test_the_handshake_negotiates_a_version_and_lists_a_few_one_sentence_tools(c
     client.send(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}))  # no answer is owed
     assert client.request("ping")["result"] == {}
     tools = client.request("tools/list")["result"]["tools"]
-    assert [t["name"] for t in tools] == [t["name"] for t in TOOLS] and len(tools) <= 8
+    assert [t["name"] for t in tools] == [t["name"] for t in TOOLS] and len(tools) <= 9
     for t in tools:  # one sentence each, and a schema any client can read
         assert t["description"].count(". ") == 0 and t["description"].endswith(".")
         assert t["inputSchema"]["type"] == "object"
@@ -280,6 +280,16 @@ def test_state_after_the_first_answers_only_what_changed_unless_the_whole_is_ask
 
 
 # The same rules without a process: the version table, and the split of a combined source into files.
+
+
+def test_find_names_the_program_s_own_functions_before_the_library_s(client, project):
+    record, failed = client.tool("find", path=".", takes=["u64"], returns="u64")
+    assert not failed and record["hits"][0].startswith("lib.bump(x:u64) -> u64  pure")
+    assert not any(line.startswith("lib.mix") for line in record["hits"])  # private to lib: no call from outside
+    record, failed = client.tool("find", words="parse integer", limit=1)
+    assert not failed and record["hits"][0].startswith("std.text.parse_i64(") and record["more"] == 1
+    record, failed = client.tool("find", takes="u64")
+    assert failed and record["code"] == "E-REQUEST"
 
 
 def test_every_version_it_speaks_is_answered_as_asked():
