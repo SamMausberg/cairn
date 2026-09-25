@@ -22,10 +22,10 @@ import pytest
 
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.lower.header import header
-from emitted import device_build, sanitized
+from emitted import device_build, hosted_library, printed, sanitized
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNTIME, HOST = ROOT / "src/cairn/runtime", ROOT / "tests/runtime"
+RUNTIME = ROOT / "src/cairn/runtime"
 
 LIBRARY = """
 // The sum of x in one launch: each block adds a grid-stride share into partial[b], and the block that ends last adds
@@ -184,31 +184,14 @@ int main(int argc, char** argv) {
 """
 
 
-def built(tmp_path: Path, cxx: str) -> Path:
-    if not shutil.which(cxx):
-        pytest.skip(f"{cxx} unavailable")
-    declared, checks = header(LIBRARY, "lib", device=True)
-    cpp = compile_source(LIBRARY)[0] + "\n" + checks
-    (tmp_path / "lib.cpp").write_text(cpp.replace('#include "cairn_gpu.hpp"', '#include "coop_host.hpp"'))
-    (tmp_path / "lib.h").write_text(declared)
-    (tmp_path / "main.cpp").write_text(CALLER)
-    exe = tmp_path / "caller"
-    line = [cxx, *sanitized(cxx), "-pthread", f"-I{RUNTIME}", f"-I{HOST}", f"-I{tmp_path}", str(tmp_path / "lib.cpp"),
-            str(tmp_path / "main.cpp"), "-o", str(exe)]  # fmt: skip
-    done = subprocess.run(line, capture_output=True, text=True, timeout=300)
-    assert done.returncode == 0, done.stderr[-4000:]
-    return exe
-
-
-def steps(exe: Path) -> list[dict]:
-    done = subprocess.run([str(exe)], capture_output=True, text=True, timeout=300)
-    assert done.returncode == 0, done.stdout[-3000:] + done.stderr[-3000:]
-    return [json.loads(line) for line in done.stdout.splitlines()]
+def steps(tmp_path: Path, cxx: str) -> list[dict]:
+    """The library and its caller built with the sanitizers on the host stand-in and run; each step's counts."""
+    return printed(hosted_library(tmp_path, LIBRARY, CALLER, cxx, *sanitized(cxx), "-pthread"))
 
 
 @pytest.mark.parametrize("cxx", ["g++", "clang++"])
 def test_an_enqueued_call_with_a_finish_makes_nothing_and_waits_for_nothing(tmp_path, cxx):
-    rows = steps(built(tmp_path, cxx))
+    rows = steps(tmp_path, cxx)
     assert all(r["right"] for r in rows), rows
     made = ("streams", "events", "allocations", "scratch", "frees", "stream_waits", "event_waits", "refused")
     enqueued = [r for r in rows if "checked" not in r["what"]]
@@ -220,7 +203,7 @@ def test_an_enqueued_call_with_a_finish_makes_nothing_and_waits_for_nothing(tmp_
 
 @pytest.mark.parametrize("cxx", ["g++", "clang++"])
 def test_launches_that_may_overlap_never_share_a_word(tmp_path, cxx):
-    rows = {r["what"]: r for r in steps(built(tmp_path, cxx))}
+    rows = {r["what"]: r for r in steps(tmp_path, cxx)}
     slot = {what: r["slot"] for what, r in rows.items()}
     assert slot["captured on a"] == slot["captured on a again"]  # one after another in the graph
     captured = {slot["captured on a"], slot["second capture on a"], slot["second capture on b"]}

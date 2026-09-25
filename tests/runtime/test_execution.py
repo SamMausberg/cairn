@@ -18,12 +18,9 @@ import pytest
 
 from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
 from cairn.compiler.lower.header import header
-from cairn.projects.build import build
+from cairn.projects.build import build as build_project
 from cairn.projects.project import load_project
-from emitted import NVCC_HOST, contract, device_build, on_device, sanitized
-
-ROOT = Path(__file__).resolve().parents[2]
-RUNTIME, HOST = ROOT / "src/cairn/runtime", ROOT / "tests/runtime"
+from emitted import NVCC_HOST, build, contract, device_build, hosted_library, on_device, printed, sanitized
 
 PIPELINE = """
 fn pass(n:usize, x:rw<u32>[n]@device, sums:rw<u32>[n]@device, kept:rw<u32>[n]@device, round:u32) -> u64 {
@@ -128,30 +125,16 @@ int main() {
 """
 
 
-def host_build(tmp_path: Path, cxx: str, *flags: str, passes: int = 20) -> Path:
+def host_build(tmp_path: Path, cxx: str, *flags: str, passes: int = 20) -> str:
     """The pipeline's generated C++ against the host machine, with the harness; the executable."""
-    if not shutil.which(cxx):
-        pytest.skip(f"{cxx} unavailable")
-    cpp = compile_source(PIPELINE)[0].replace('#include "cairn_gpu.hpp"', '#include "gpu_host.hpp"')
-    (tmp_path / "pipeline.cpp").write_text(cpp)
-    (tmp_path / "harness.cpp").write_text('#include "gpu_host.hpp"\n' + HARNESS.replace("PASSES", str(passes)))
-    exe = tmp_path / "pipeline"
-    line = [cxx, *flags, "-ffp-contract=off", f"-I{RUNTIME}", f"-I{HOST}", str(tmp_path / "pipeline.cpp"),
-            str(tmp_path / "harness.cpp"), "-o", str(exe)]  # fmt: skip
-    done = subprocess.run(line, capture_output=True, text=True, timeout=300)
-    assert done.returncode == 0, done.stderr[-4000:]
-    return exe
-
-
-def rows(exe: Path) -> list[dict]:
-    done = subprocess.run([str(exe)], capture_output=True, text=True, timeout=300)
-    assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-4000:]
-    return [json.loads(line) for line in done.stdout.splitlines()]
+    harness = '#include "gpu_host.hpp"\n' + HARNESS.replace("PASSES", str(passes))
+    return build(tmp_path, compile_source(PIPELINE)[0], *flags, "-ffp-contract=off", cxx=cxx, entry=None, timeout=300,
+                 beside={"harness.cpp": harness}, stand_in="gpu_host.hpp")  # fmt: skip
 
 
 @pytest.mark.parametrize("cxx", ["g++", "clang++"])
 def test_a_repeated_pipeline_makes_and_allocates_nothing_after_its_first_pass(tmp_path, cxx):
-    found = rows(host_build(tmp_path, cxx, *sanitized(cxx)))
+    found = printed(host_build(tmp_path, cxx, *sanitized(cxx)))
     assert found[-1] == {"wrong": 0}
     passes = [r for r in found if r.get("what") == "pass"]
     first, later = passes[0], passes[1:]
@@ -296,17 +279,12 @@ int main() {
 def test_each_thread_has_its_own_context_and_no_race(tmp_path):
     """Two tasks run device work at once, each on its own thread's context: ThreadSanitizer sees no race in the
     contexts or the lanes, and no thread makes more than the one stream its synchronous work runs on."""
-    if not shutil.which("clang++") or not shutil.which("setarch"):
-        pytest.skip("needs clang++ and setarch")
-    cpp = compile_source(FAN)[0].replace('#include "cairn_gpu.hpp"', '#include "gpu_host.hpp"')
-    (tmp_path / "fan.cpp").write_text(cpp)
-    (tmp_path / "main.cpp").write_text('#include "gpu_host.hpp"\n' + FANNED)
-    exe = tmp_path / "fan"
-    line = ["clang++", "-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=thread", "-pthread",
-            f"-I{RUNTIME}", f"-I{HOST}", str(tmp_path / "fan.cpp"), str(tmp_path / "main.cpp"), "-o", str(exe)]  # fmt: skip
-    built = subprocess.run(line, capture_output=True, text=True, timeout=300)
-    assert built.returncode == 0, built.stderr[-4000:]
-    done = subprocess.run(["setarch", "-R", str(exe)], capture_output=True, text=True, timeout=300)
+    if not shutil.which("setarch"):
+        pytest.skip("needs setarch")
+    exe = build(tmp_path, compile_source(FAN)[0], "-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=thread",
+                "-pthread", entry=None, timeout=300, beside={"main.cpp": '#include "gpu_host.hpp"\n' + FANNED},
+                stand_in="gpu_host.hpp")  # fmt: skip
+    done = subprocess.run(["setarch", "-R", exe], capture_output=True, text=True, timeout=300)
     assert done.returncode == 0 and "ThreadSanitizer" not in done.stderr, done.stdout + done.stderr[-4000:]
     found = json.loads(done.stdout.splitlines()[-1])
     assert found["wrong"] == 0 and found["most_by_one_thread"] == 1 and found["streams"] >= 2
@@ -343,27 +321,17 @@ def test_a_c_host_hands_over_its_own_stream(tmp_path):
     """`cairn build --header` of a device library declares NAME_device_stream and the library defines it, and the C
     caller's stream then carries the thread's device work: run on the host machine here, and built for sm_120 by
     `cairn build` itself where nvcc is present, never run."""
-    if not shutil.which("clang++"):
-        pytest.skip("clang++ unavailable")
-    declared, checks = header(LIBRARY, "devlib", device=True)
-    assert "void cairn_devlib_device_stream(void *stream);" in declared
+    assert "void cairn_devlib_device_stream(void *stream);" in header(LIBRARY, "devlib", device=True)[0]
     assert "cairn_devlib_device_stream" not in header(LIBRARY.replace("@device", ""), "devlib")[0]
-    cpp = compile_source(LIBRARY)[0] + "\n" + checks
-    (tmp_path / "lib.cpp").write_text(cpp.replace('#include "cairn_gpu.hpp"', '#include "gpu_host.hpp"'))
-    (tmp_path / "devlib.h").write_text(declared)
-    (tmp_path / "main.cpp").write_text(CALLER)
-    exe = tmp_path / "caller"
-    line = ["clang++", *sanitized("clang++"), f"-I{RUNTIME}", f"-I{HOST}", f"-I{tmp_path}", str(tmp_path / "lib.cpp"),
-            str(tmp_path / "main.cpp"), "-o", str(exe)]  # fmt: skip
-    built = subprocess.run(line, capture_output=True, text=True, timeout=300)
-    assert built.returncode == 0, built.stderr[-4000:]
-    done = subprocess.run([str(exe)], capture_output=True, text=True, timeout=120)
+    exe = hosted_library(tmp_path, LIBRARY, CALLER, "clang++", *sanitized("clang++"), name="devlib",
+                         stand_in="gpu_host.hpp")  # fmt: skip
+    done = subprocess.run([exe], capture_output=True, text=True, timeout=120)
     assert done.returncode == 0 and done.stdout == "wrong 0\n", done.stdout + done.stderr[-3000:]
     if shutil.which("nvcc") and shutil.which(NVCC_HOST):
         (tmp_path / "project/src").mkdir(parents=True)
         (tmp_path / "project/src/lib.cairn").write_text(LIBRARY)
         (tmp_path / "project/cairn.toml").write_text('[project]\nname = "devlib"\nsources = ["src/lib.cairn"]\n')
-        record = build(load_project(tmp_path / "project"), output=tmp_path / "build", cxx=NVCC_HOST, header=True,
+        record = build_project(load_project(tmp_path / "project"), output=tmp_path / "build", cxx=NVCC_HOST, header=True,
                        device_target="sm_120", timeout=300)  # fmt: skip
         assert record["status"] == "native-built", record.get("stderr", "")[-3000:]
         assert "cairn_devlib_device_stream" in Path(record["header"]).read_text()

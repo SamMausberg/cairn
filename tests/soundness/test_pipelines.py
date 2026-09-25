@@ -7,19 +7,11 @@ the race the checker refuses. Depth changes the shared memory a block holds and 
 in flight, which the sm_120 PTX shows; nothing here runs on a GPU.
 """
 
-import os
-import shutil
-import subprocess
-from pathlib import Path
-
 import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
-from cairn.projects.toolchain import command
-from emitted import device_build, refused
-
-ROOT = Path(__file__).resolve().parents[2]
+from emitted import device_build, refused, watched
 
 ROWS = """fn row_sums[D:nat](rows:usize, cols:usize, n:usize, x:ro<u64>[n], out:rw<u64>[rows]) {
   let steps = (cols + 255) / 256;
@@ -80,29 +72,9 @@ int main() {
 """
 
 
-def build_and_run(tmp_path: Path, cpp: str, cxx: str, stand_in: bool = False):
-    if not shutil.which(cxx) or not shutil.which("setarch"):
-        pytest.skip(f"needs {cxx} and setarch")
-    if stand_in:
-        cpp = cpp.replace('#include "cairn_gpu.hpp"', '#include "coop_host.hpp"')
-    (tmp_path / "kernels.cpp").write_text(cpp)
-    (tmp_path / "main.cpp").write_text(MAIN)
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    for stand_in in ("coop_host.hpp", "gpu_host.hpp"):
-        (tmp_path / stand_in).write_text((ROOT / "tests/runtime" / stand_in).read_text())
-    line = command(cxx, str(tmp_path / "kernels.cpp"), str(tmp_path / "t"), kind="exe")
-    at = line.index(str(tmp_path / "kernels.cpp"))
-    line[at : at + 1] = [str(tmp_path / "kernels.cpp"), str(tmp_path / "main.cpp")]
-    built = subprocess.run([*line, "-g", "-fsanitize=thread"], capture_output=True, text=True, timeout=600)
-    assert built.returncode == 0, built.stderr[-3000:]
-    env = {**os.environ, "TSAN_OPTIONS": "halt_on_error=1"}
-    return subprocess.run(["setarch", "-R", str(tmp_path / "t")], capture_output=True, text=True, timeout=600, env=env)
-
-
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_a_double_and_a_triple_buffered_row_sum_agree_with_a_plain_loop(tmp_path, cxx):
-    ran = build_and_run(tmp_path, compile_source(ROWS)[0], cxx)
+    ran = watched(tmp_path, compile_source(ROWS)[0], cxx, "thread", timeout=600, entry=None, beside={"main.cpp": MAIN})
     assert ran.returncode == 0 and "both depths agree" in ran.stdout, ran.stdout + ran.stderr[-4000:]
     assert "ThreadSanitizer" not in ran.stderr
 
@@ -113,25 +85,23 @@ def test_the_sanitizer_reports_a_read_of_a_stage_still_being_filled(tmp_path):
     cpp = compile_source(ROWS)[0].replace("block.sync();", "")
     runtime = RUNTIME_FILES["cairn_coop.hpp"]
     assert "block.sync();" in runtime  # the wait's barrier is in the runtime, so take it out there
-    patched = dict(RUNTIME_FILES)
-    patched["cairn_coop.hpp"] = runtime.replace("    block.sync();\n", "", 1)
-    if not shutil.which("clang++") or not shutil.which("setarch"):
-        pytest.skip("needs clang++ and setarch")
-    (tmp_path / "kernels.cpp").write_text(cpp)
-    (tmp_path / "main.cpp").write_text(MAIN)
-    for name, text in patched.items():
-        (tmp_path / name).write_text(text)
-    line = command("clang++", str(tmp_path / "kernels.cpp"), str(tmp_path / "t"), kind="exe")
-    at = line.index(str(tmp_path / "kernels.cpp"))
-    line[at : at + 1] = [str(tmp_path / "kernels.cpp"), str(tmp_path / "main.cpp")]
-    subprocess.run([*line, "-g", "-fsanitize=thread"], check=True, capture_output=True, timeout=600)
-    ran = subprocess.run(["setarch", "-R", str(tmp_path / "t")], capture_output=True, text=True, timeout=600)
+    patched = runtime.replace("    block.sync();\n", "", 1)
+    ran = watched(
+        tmp_path,
+        cpp,
+        "clang++",
+        "thread",
+        timeout=600,
+        entry=None,
+        beside={"main.cpp": MAIN, "cairn_coop.hpp": patched},
+    )
     assert "ThreadSanitizer: data race" in ran.stderr, ran.stderr[-3000:]
 
 
 def test_the_device_body_of_both_depths_runs_on_host_threads(tmp_path):
     device = ROWS.replace("[n]", "[n]@device").replace("[rows]", "[rows]@device")
-    ran = build_and_run(tmp_path, compile_source(device)[0], "clang++", stand_in=True)
+    ran = watched(tmp_path, compile_source(device)[0], "clang++", "thread", timeout=600, entry=None, beside={"main.cpp": MAIN},
+                  stand_in="coop_host.hpp")  # fmt: skip
     assert ran.returncode == 0 and "both depths agree" in ran.stdout, ran.stdout + ran.stderr[-4000:]
 
 

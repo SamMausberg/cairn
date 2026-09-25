@@ -7,17 +7,14 @@ sm_120 here and never run: the runs that compare a staged region with the unplan
 """
 
 import re
-import shutil
 import subprocess
-from pathlib import Path
 
 import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from emitted import contract, device_build, on_device, refused
+from emitted import build, contract, device_build, on_device, refused
 
-ROOT = Path(__file__).resolve().parents[2]
 BLUR = """fn blur(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
   parallel i in n {
     if i >= 2 && i + 2 < n { out[i] = x[i - 2] + x[i - 1] * 2.0 + x[i] * 3.0 + x[i + 1] + x[i + 2]; }
@@ -88,18 +85,12 @@ int main() {
 def test_every_tile_a_staged_region_loads_holds_what_its_lanes_read(tmp_path, cxx, plan):
     """The lambdas the compiler writes, run on the host: every block's loads before its bodies, the tile filled with
     a pattern first, under the sanitizers, against the unplanned region at sizes around the block's edges."""
-    if not shutil.which(cxx):
-        pytest.skip(f"{cxx} unavailable")
     planned, plain = compile_source(BLUR + plan)[0], compile_source(BLUR.replace("blur", "plain"))[0]
-    for cpp, name in ((planned, "planned.cpp"), (plain, "plain.cpp")):
-        (tmp_path / name).write_text(cpp.replace('#include "cairn_gpu.hpp"', '#include "gpu_host.hpp"'))
-    (tmp_path / "main.cpp").write_text(MAIN)
-    line = [cxx, "-std=c++20", "-O1", "-g", "-ffp-contract=off", "-fno-fast-math", "-fsanitize=address,undefined",
-            "-fno-sanitize-recover=all", f"-I{ROOT / 'src/cairn/runtime'}", f"-I{ROOT / 'tests/runtime'}",
-            *(str(tmp_path / f) for f in ("planned.cpp", "plain.cpp", "main.cpp")), "-o", str(tmp_path / "t")]  # fmt: skip
-    built = subprocess.run(line, capture_output=True, text=True, timeout=300)
-    assert built.returncode == 0, built.stderr[-3000:]
-    done = subprocess.run([str(tmp_path / "t")], capture_output=True, text=True, timeout=120)
+    flags = ("-std=c++20", "-O1", "-g", "-ffp-contract=off", "-fno-fast-math", "-fsanitize=address,undefined",
+             "-fno-sanitize-recover=all")  # fmt: skip
+    exe = build(tmp_path, planned, *flags, cxx=cxx, entry=None, timeout=300,
+                beside={"plain.cpp": plain, "main.cpp": MAIN}, stand_in="gpu_host.hpp")  # fmt: skip
+    done = subprocess.run([exe], capture_output=True, text=True, timeout=120)
     assert done.returncode == 0 and "every tile agrees" in done.stdout, done.stdout + done.stderr[-3000:]
 
 

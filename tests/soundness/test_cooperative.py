@@ -7,20 +7,12 @@ The device lowering compiles for sm_120 and is inspected, never run here; its la
 tests/runtime/coop_host.hpp.
 """
 
-import os
-import shutil
-import subprocess
-from pathlib import Path
-
 import pytest
 
 from cairn.agent.projection import canonical_source
-from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
+from cairn.compiler.cairnc import compile_source
 from cairn.compiler.cooperative.cooperative import participation
-from cairn.projects.toolchain import command
 from emitted import device_build, refused, watched
-
-ROOT = Path(__file__).resolve().parents[2]
 
 REDUCE = """fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
   blocks b in g threads t in 256 {
@@ -90,33 +82,18 @@ int main() {
 """
 
 
-def build_and_run(tmp_path: Path, cpp: str, cxx: str, sanitizer: str, stand_in: bool = False):
-    """The emitted C++ beside a C++ main holding the plain references, built by the project's own command line under
-    `sanitizer`, and run with address randomization off, which ThreadSanitizer needs on newer kernels."""
-    if not shutil.which(cxx) or not shutil.which("setarch"):
-        pytest.skip(f"needs {cxx} and setarch")
-    if stand_in:
-        cpp = cpp.replace('#include "cairn_gpu.hpp"', '#include "coop_host.hpp"')
-    (tmp_path / "kernels.cpp").write_text(cpp)
-    (tmp_path / "main.cpp").write_text(MAIN)
-    for name, text in RUNTIME_FILES.items():
-        (tmp_path / name).write_text(text)
-    for stand_in in ("coop_host.hpp", "gpu_host.hpp"):
-        (tmp_path / stand_in).write_text((ROOT / "tests/runtime" / stand_in).read_text())
-    line = command(cxx, str(tmp_path / "kernels.cpp"), str(tmp_path / "t"), kind="exe")
-    line[line.index(str(tmp_path / "kernels.cpp")) : line.index(str(tmp_path / "kernels.cpp")) + 1] = [
-        str(tmp_path / "kernels.cpp"), str(tmp_path / "main.cpp")]  # fmt: skip
-    built = subprocess.run([*line, "-g", f"-fsanitize={sanitizer}", "-fno-sanitize-recover=all"],
-                           capture_output=True, text=True, timeout=600)  # fmt: skip
-    assert built.returncode == 0, built.stderr[-3000:]
-    env = {**os.environ, "TSAN_OPTIONS": "halt_on_error=1"}
-    return subprocess.run(["setarch", "-R", str(tmp_path / "t")], capture_output=True, text=True, timeout=600, env=env)
-
-
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_a_block_reduction_and_a_tiled_transpose_race_nowhere(tmp_path, cxx):
     """Real threads, real barriers, the thread sanitizer watching, and a plain reference to agree with."""
-    ran = build_and_run(tmp_path, compile_source(REDUCE + TRANSPOSE)[0], cxx, "thread")
+    ran = watched(
+        tmp_path,
+        compile_source(REDUCE + TRANSPOSE)[0],
+        cxx,
+        "thread",
+        timeout=600,
+        entry=None,
+        beside={"main.cpp": MAIN},
+    )
     assert ran.returncode == 0 and "every block agrees" in ran.stdout, ran.stdout + ran.stderr[-4000:]
     assert "ThreadSanitizer" not in ran.stderr
 
@@ -126,7 +103,15 @@ def test_the_sanitizer_reports_the_race_a_missing_barrier_makes(tmp_path, cxx):
     """The oracle bites: with the first barrier taken out of the emitted C++, which the checker would have refused,
     the sanitizer reports the race on the shared array."""
     cpp = compile_source(REDUCE + TRANSPOSE)[0]
-    ran = build_and_run(tmp_path, cpp.replace("cr_blk.sync();", "", 1), cxx, "thread")
+    ran = watched(
+        tmp_path,
+        cpp.replace("cr_blk.sync();", "", 1),
+        cxx,
+        "thread",
+        timeout=600,
+        entry=None,
+        beside={"main.cpp": MAIN},
+    )
     assert ran.returncode != 0 and "ThreadSanitizer: data race" in ran.stderr, ran.stderr[-3000:]
 
 
@@ -135,7 +120,9 @@ def test_the_device_body_runs_on_host_threads_too(tmp_path):
     device = (REDUCE + TRANSPOSE).replace("[n]", "[n]@device").replace("[g]", "[g]@device")
     cpp = compile_source(device)[0]
     assert "cr::coop::launch<256, 2048>" in cpp and "[=] CR_DEVICE(cr::coop::Device& cr_blk" in cpp
-    ran = build_and_run(tmp_path, cpp, "clang++", "thread", stand_in=True)
+    ran = watched(
+        tmp_path, cpp, "clang++", "thread", timeout=600, entry=None, beside={"main.cpp": MAIN}, stand_in="coop_host.hpp"
+    )
     assert ran.returncode == 0 and "every block agrees" in ran.stdout, ran.stdout + ran.stderr[-4000:]
     assert "ThreadSanitizer" not in ran.stderr
 
