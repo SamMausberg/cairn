@@ -7,7 +7,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | File | Owns |
 |---|---|
 | `compiler/cairnc.py` | the facade: parse through judge (`compile_program`), then the certificates and the emitter (`generate`) |
-| `compiler/compilations.py` | one compile per distinct source in a process: what the hosts, `cairn state`, `cairn mcp` and `cairn lsp` read, the key it is kept under, the copy each caller gets, and the bound on what is kept |
+| `compiler/compilations.py` | one compile per distinct source in a process: what the hosts, `cairn state`, `cairn mcp` and `cairn lsp` read, the key it is kept under, the copy each caller gets, the kept walk an edit is checked from, and the bound on what is kept |
 | `compiler/syntax/lexing.py` | tokens and reserved words |
 | `compiler/syntax/tree.py` | the syntax tree, the scalar vocabulary, `Diagnostic` |
 | `compiler/syntax/parser.py` | the parser's declarations and entry point, and source ranges |
@@ -24,6 +24,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/check/concurrency.py` | tasks and tickets, lanes and regions, atomics and mutexes, placement |
 | `compiler/check/effects.py` | the effect vocabulary, the fixed point, the operand-order audit |
 | `compiler/check/refusals.py` | every independent refusal of one check: what a failed check takes back, what can still be judged after a refusal, and the record that carries them |
+| `compiler/check/incremental.py` | a body edit checked from the walk a kept check recorded: which body an edit changed, where everything below it moves, and the walk that puts back every other body's check and checks the edited one |
 | `compiler/check/traits.py` | who implements what, what a bound promises, the one place an instance is made |
 | `compiler/check/constants.py` | constant folding |
 | `compiler/check/facts.py` | what the checker established about `usize` values, which lowering uses to drop a guard |

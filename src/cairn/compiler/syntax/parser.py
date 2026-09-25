@@ -27,8 +27,8 @@ from .tree import VOID, Function, Impl, Implements, Program, Recipe, Shape, Stmt
 
 
 class Parser(StatementParser):
-    def __init__(self, source: str):
-        super().__init__(source)
+    def __init__(self, source: str, span: tuple[int, int] | None = None):
+        super().__init__(source, span)
         self.source = source  # what an implementation's identity digests
         self.tuned: list[tuple[int, int]] = []  # each `tune ...` clause: its values are not the identity's
 
@@ -102,19 +102,23 @@ class Parser(StatementParser):
         body: list[Stmt] = []
         if bodiless:
             self.need(";")
-        elif self.eat("="):
-            if ret == VOID:
-                fail("E-EXPRESSION-BODY", "An expression body needs an explicit nonvoid return type.", t)
-            value = self.expr()
-            self.need(";")
-            body = [Stmt("return", exprs=[value], line=value.line, col=value.col)]
         else:
-            body = self.block()
+            body = self.body(ret, t)
         end = self.ts[self.i - 1].end
         return Function(
             n, ps, ret, body, generics, source_name=n, line=t.line, col=t.col, start=t.start,
             body_start=body_start, end=end, module=self.module, effects=effects, implements=implements, **flags,
         )  # fmt: skip
+
+    def body(self, ret: Type, t: Token) -> list[Stmt]:
+        """A function's body after its signature: a block, or `= expr;` for a result."""
+        if not self.eat("="):
+            return self.block()
+        if ret == VOID:
+            fail("E-EXPRESSION-BODY", "An expression body needs an explicit nonvoid return type.", t)
+        value = self.expr()
+        self.need(";")
+        return [Stmt("return", exprs=[value], line=value.line, col=value.col)]
 
     def implements(self) -> Implements:
         """`implements total when n % K == 0 tune K in [4, 8] needs(cp_async)`, words only here

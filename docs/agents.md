@@ -66,7 +66,7 @@ The layout record is what the program says it drew where, so "the detail panel d
 
 ## What the host admits
 
-The host splices a reply into the pinned original and rechecks the whole linked module, whatever the packet showed. Every token outside the authorized range must lex as it did, so a reply ending in a comment that would hide the rest of the line is refused. The host refuses:
+The host splices a reply into the pinned original and rechecks the whole linked module, whatever the packet showed. A reply that changes one body is checked from the walk the last check of the module kept, which checks that body alone and every rule after the walk again, and answers exactly what checking every body again would ([internals.md](internals.md#compiler-architecture)). Every token outside the authorized range must lex as it did, so a reply ending in a comment that would hide the rest of the line is refused. The host refuses:
 
 | Code | Why |
 |---|---|

@@ -6,12 +6,14 @@ import argparse
 import hashlib
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from ..verify.linear_certificates import audit_collector
 from ..version import VERSION
 from .check.checking import Binding, Checker
+from .check.incremental import Walk, recorded
 from .check.traits import certify
 from .derive.expansion import derive, specialize
 from .device import layouts
@@ -35,8 +37,8 @@ def write_program(directory: Path, name: str, cpp: str) -> Path:
     return directory / name
 
 
-def compile_program(source: str, capture_sites: bool = False, parsed: Program | None = None,
-                    every: bool = False) -> tuple[Program, Checker, dict[str, Any]]:  # fmt: skip
+def compile_program(source: str, capture_sites: bool = False, parsed: Program | None = None, every: bool = False,
+                    walked: Callable[[Checker, Walk], None] | None = None) -> tuple[Program, Checker, dict[str, Any]]:  # fmt: skip
     """`parsed`, when given, is `Parser(source).parse()` already made by the caller, and is linked in place.
 
     With `every`, the checker goes on after a refusal wherever the rest can still be judged: the Diagnostic raised is
@@ -44,10 +46,13 @@ def compile_program(source: str, capture_sites: bool = False, parsed: Program | 
     explains, in source order, at most twenty of them (`further_omitted` counts the rest), and `not_judged`, how many
     of the program's functions got no verdict because of a refusal. `further_stopped` names what ended the check
     after the first refusal, when a limit or an internal fault did: the limit's code, or the fault's class. A parse
-    error is reported alone."""
+    error is reported alone.
+
+    `walked`, when given, is called with the checker and a record of the walk over the bodies right after that walk,
+    before anything after it changes the checker (compiler/check/incremental.py)."""
     p = specialize(derive(link(parsed or Parser(source).parse())))
     checker = Checker(p, capture_sites, every)
-    receipts = checker.check()
+    receipts = checker.check((lambda c: walked(c, recorded(c))) if walked else None)
     layouts.settle(checker)  # a layout no function uses is still held to its rules
     return p, checker, receipts
 

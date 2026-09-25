@@ -35,8 +35,8 @@ def lent_part(a: Expr, lends: tuple[str, str, str]) -> Expr:
 
 
 class ExpressionParser:
-    def __init__(self, source: str):
-        self.ts = lex(source)
+    def __init__(self, source: str, span: tuple[int, int] | None = None):
+        self.ts = lex(source, *span) if span else lex(source)  # a span is parsed with its places in the whole source
         self.i = self.depth = 0
         self.module = ""
         self.recipe = False  # Inside a recipe: `$` splices, each, where, require and fold are syntax.

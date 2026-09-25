@@ -34,16 +34,18 @@ RESERVED = set(  # One readable paragraph of words beats a wall of quoted string
 ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "0": "\0", "\\": "\\", '"': '"', "'": "'"}
 
 
-def lex(text: str) -> list[Token]:
+def lex(text: str, begin: int = 0, end: int | None = None) -> list[Token]:
+    """The tokens of `text`, or of `text[begin:end]` with the positions they have in the whole text."""
     if len(text.encode()) > MAX_SOURCE:
         fail("E-SOURCE-LIMIT", f"Source exceeds the {MAX_SOURCE}-byte limit.")
     # Only a run of whitespace holds a newline: a comment, a string and a character literal all stop before one. So
     # only whitespace moves the line, and a token's column is its distance from where its line starts.
     out: list[Token] = []
     append, match = out.append, TOKEN.match
-    p, end, line, start = 0, len(text), 1, 0
+    end = len(text) if end is None else end
+    p, line, start = begin, text.count("\n", 0, begin) + 1, text.rfind("\n", 0, begin) + 1
     while p < end:
-        m = match(text, p)
+        m = match(text, p, end)
         if not m:
             fail("E-LEX", f"Unexpected character {text[p]!r}.", Token("", line, p - start + 1))
         e = m.end()
