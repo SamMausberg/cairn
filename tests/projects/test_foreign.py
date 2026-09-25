@@ -12,7 +12,7 @@ import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_program, compile_source
-from cairn.compiler.codegen import mangle
+from cairn.compiler.lower.codegen import mangle
 from cairn.projects.build import build
 from cairn.projects.foreign import inspect
 from cairn.projects.project import ProjectError, load_project

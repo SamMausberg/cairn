@@ -148,7 +148,7 @@ def test_inspect_attaches_the_explanation_on_request(tmp_path, capsys):
 def test_a_compiler_symbol_is_read_back_to_the_function_it_belongs_to():
     """explain, predict's loop reader and the device reader share one rule: a checked entry, a lean body, a lambda
     nested in one, and a function whose own name starts as a lean body's symbol does."""
-    from cairn.compiler.codegen import demangled
+    from cairn.compiler.lower.codegen import demangled
 
     names = {"sum", "m_dot", "ci_x"}
     assert demangled("cf_sum", names) == demangled("ci_sum", names) == "sum"

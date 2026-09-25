@@ -9,7 +9,7 @@ view of one storage shares that array, so a write through one part is seen throu
 from __future__ import annotations
 
 from ..compiler.cairnc import SIGNED, WIDTH, Expr, Function, Stmt, Type
-from ..compiler.tree import BOOL, FLOAT, NUMERIC, USIZE, VOID, is_view
+from ..compiler.syntax.tree import BOOL, FLOAT, NUMERIC, USIZE, VOID, is_view
 from .scalar_values import (
     FORMATS,
     MAX_PATHS,

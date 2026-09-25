@@ -177,7 +177,7 @@ def cards() -> dict[str, Profile]:
 def card(name: str = DEFAULT_CARD) -> Profile:
     """The packaged card `name`: its key, or the start of exactly one key before a hyphen, so `h100` is
     `h100-sxm5`. Any other name is E-DEVICE-CARD, with the keys there are. This is how anything reads a card."""
-    from ..compiler.tree import Diagnostic
+    from ..compiler.syntax.tree import Diagnostic
 
     known = cards()
     found = [name] if name in known else [key for key in known if key.startswith(f"{name}-")]

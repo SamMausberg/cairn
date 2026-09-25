@@ -1,5 +1,5 @@
-// Wide loads and stores (compiler/wide.py), K adjacent elements of an array moved by one access, and atomic updates of
-// one element (compiler/atomics.py), on the host and in a device lane or cooperative thread alike.
+// Wide loads and stores (compiler/primitives/wide.py), K adjacent elements of an array moved by one access, and atomic updates of
+// one element (compiler/primitives/atomics.py), on the host and in a device lane or cooperative thread alike.
 //
 // K * sizeof(T) is a power of two up to 16 bytes, the widest a thread moves at once (LDG.E.128, STG.E.128, LDS.128).
 // An access has two guards, and either failing traps: the K elements lie inside the array's n, and the first sits on
@@ -82,7 +82,7 @@ CR_HD inline void store(T* p, std::size_t i, std::size_t n, const std::array<T, 
 }
 }  // namespace cr::wide
 
-// Atomic updates of one element (compiler/atomics.py): the index's guard, then one indivisible read-modify-write that
+// Atomic updates of one element (compiler/primitives/atomics.py): the index's guard, then one indivisible read-modify-write that
 // returns the element's old value. Each is relaxed, so it orders nothing but the element's own updates. On the device
 // it is one atomic instruction (RED where the result goes unused); on the host a std::atomic_ref operation, so the
 // thread sanitizer sees an atomic where there is one. An integer add wraps, min and max compare as the element's type

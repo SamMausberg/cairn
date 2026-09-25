@@ -11,7 +11,7 @@ import pytest
 from cairn.agent.projection import canonical_source
 from cairn.agent.teaching import select_cards
 from cairn.compiler.cairnc import compile_source
-from cairn.compiler.machine import host, satisfies
+from cairn.compiler.primitives.machine import host, satisfies
 from cairn.projects.build import build as build_project
 from cairn.projects.project import load_project
 from emitted import code_of, contract, device_build, on_device, refused, watched

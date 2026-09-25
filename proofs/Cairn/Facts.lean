@@ -1,5 +1,5 @@
 /-
-The guard-elision rule of `src/cairn/compiler/facts.py`: when lowering may leave out an index,
+The guard-elision rule of `src/cairn/compiler/check/facts.py`: when lowering may leave out an index,
 `+`, `-`, shift or narrowing guard because the checker showed it cannot fail.
 
 A fact is an edge `x - y ≤ k` between two atoms.  An atom is zero, an immutable usize value (a

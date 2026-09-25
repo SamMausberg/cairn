@@ -1,4 +1,4 @@
-"""`plan f { fuse K; }` runs up to K adjacent regions of f as one traversal (compiler/fusion.py).
+"""`plan f { fuse K; }` runs up to K adjacent regions of f as one traversal (compiler/plans/fusion.py).
 
 Fusing moves a later body's work for index i next to the earlier body's work for the same index. That keeps every
 result when the bodies share arrays only at their own index, and when neither can trap: a failed guard aborts the

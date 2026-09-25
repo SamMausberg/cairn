@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
-from cairn.compiler.header import header
+from cairn.compiler.lower.header import header
 from cairn.projects.build import build
 from cairn.projects.project import load_project
 from emitted import NVCC_HOST, contract, device_build, on_device, sanitized

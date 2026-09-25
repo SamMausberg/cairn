@@ -1,4 +1,4 @@
-"""`compiler/layout_algebra.py` and `proofs/Cairn/Layout.lean` must judge the same layouts alike.
+"""`compiler/device/layout_algebra.py` and `proofs/Cairn/Layout.lean` must judge the same layouts alike.
 
 The Lean side proves that a spread that passes gives every element of its tile one holder, and that with a storage
 layout that passes no two holders write one offset. This comparison is what ties that proof to the Python the

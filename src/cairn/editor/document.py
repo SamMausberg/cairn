@@ -17,8 +17,8 @@ from ..agent.agent_tools import explain
 from ..agent.skill import card_link
 from ..compiler import compilations
 from ..compiler.cairnc import Diagnostic
-from ..compiler.modules import library_path
-from ..compiler.syntax import IDENT, RESERVED, Program
+from ..compiler.syntax.modules import library_path
+from ..compiler.syntax.parser import IDENT, RESERVED, Program
 from .formatting import CLOSERS, OPENERS, Item, roles, scan
 
 DECLARATIONS = {"fn": 12, "test": 12, "struct": 23, "enum": 10, "trait": 11, "const": 14, "impl": 5}

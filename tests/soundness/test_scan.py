@@ -17,7 +17,7 @@ import pytest
 from cairn.agent.projection import canonical_source
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
-from cairn.compiler.syntax import Parser
+from cairn.compiler.syntax.parser import Parser
 from cairn.verify.scalar_semantics import equivalent
 from emitted import contract, device_build, native, on_device, refused, watched
 

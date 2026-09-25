@@ -100,7 +100,7 @@ def kernels(source: str, target: DeviceTarget | None = None, timeout: float = 60
         return {"status": "not-run", "reason": "nvcc and cuobjdump are needed to read a kernel; neither was found."}
     chosen = supported(target or resolve())
     from ..compiler.cairnc import compile_program
-    from ..compiler.codegen import demangled, mangle
+    from ..compiler.lower.codegen import demangled, mangle
 
     cpp, receipt = compile_source(source)
     if "cuda" not in receipt["requires"]:

@@ -31,7 +31,7 @@ TOUR = re.compile(r"^### (\d+\. [^\n]+)\n.*?```cairn\n(.*?)```", re.S | re.M)
 def measure(root: Path) -> dict:
     sys.path.insert(0, str(root / "src"))  # the tree measured selects its own cards
     from cairn.agent.teaching import CARDS, select_cards
-    from cairn.compiler.lexing import lex
+    from cairn.compiler.syntax.lexing import lex
 
     unit, count = tokenizer() or ("utf8_bytes", lambda text: len(text.encode("utf-8")))
     skill = root / "skills" / "cairn"

@@ -148,7 +148,7 @@ def emulated(project: Path, problem: Path, largest: int = 256) -> dict:
     region runs a block's 256 threads as host threads, too slowly for the rest."""
     import ctypes
 
-    from cairn.compiler.header import binding
+    from cairn.compiler.lower.header import binding
     from cairn.projects.build import build
 
     loaded = load_project(project)

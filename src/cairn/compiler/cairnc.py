@@ -11,16 +11,16 @@ from typing import Any
 
 from ..verify.linear_certificates import audit_collector
 from ..version import VERSION
-from . import layouts
-from .checking import Binding, Checker
-from .codegen import RUNTIME, RUNTIME_FILES, Emitter
-from .expansion import derive, specialize
-from .lexing import IDENT, RESERVED
-from .machine import records
-from .modules import link
-from .syntax import Parser
-from .traits import certify
-from .tree import INT, SIGNED, WIDTH, Diagnostic, Expr, Function, Program, Stmt, Type, fail
+from .check.checking import Binding, Checker
+from .check.traits import certify
+from .derive.expansion import derive, specialize
+from .device import layouts
+from .lower.codegen import RUNTIME, RUNTIME_FILES, Emitter
+from .primitives.machine import records
+from .syntax.lexing import IDENT, RESERVED
+from .syntax.modules import link
+from .syntax.parser import Parser
+from .syntax.tree import INT, SIGNED, WIDTH, Diagnostic, Expr, Function, Program, Stmt, Type, fail
 
 __all__ = ["IDENT", "INT", "RESERVED", "RUNTIME", "RUNTIME_FILES", "SIGNED", "VERSION", "WIDTH", "Binding", "Checker",
            "Diagnostic", "Emitter", "Expr", "Function", "Parser", "Program", "Stmt", "Type", "certify_templates",

@@ -127,12 +127,12 @@ def split(source: str) -> dict:
     """The least of twenty runs of one whole check of `source`, and of the part of it before the checker reads a
     plan: parsing, linking, every body and every implementation instance, with no selection made. The least is the
     run the loaded machine disturbed least."""
-    from cairn.compiler import implementations
     from cairn.compiler.cairnc import compile_program
-    from cairn.compiler.checking import Checker
-    from cairn.compiler.expansion import derive, specialize
-    from cairn.compiler.modules import link
-    from cairn.compiler.syntax import Parser
+    from cairn.compiler.check.checking import Checker
+    from cairn.compiler.derive.expansion import derive, specialize
+    from cairn.compiler.plans import implementations
+    from cairn.compiler.syntax.modules import link
+    from cairn.compiler.syntax.parser import Parser
 
     whole, before = [], []
     for _ in range(20):

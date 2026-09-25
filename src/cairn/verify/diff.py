@@ -32,10 +32,10 @@ from itertools import pairwise
 from typing import Any
 
 from ..compiler.cairnc import VERSION, Diagnostic
-from ..compiler.codegen import mangle
-from ..compiler.lexing import lex
-from ..compiler.syntax import Parser
-from ..compiler.tree import Arm, Expr, Function, Program, Stmt
+from ..compiler.lower.codegen import mangle
+from ..compiler.syntax.lexing import lex
+from ..compiler.syntax.parser import Parser
+from ..compiler.syntax.tree import Arm, Expr, Function, Program, Stmt
 from .emission import CALLED, canonical, emitted, guard_count, unguarded
 from .scalar_semantics import equivalent
 from .scalar_values import MAX_SOURCE_BYTES, MAX_UNROLL

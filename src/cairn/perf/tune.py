@@ -24,7 +24,7 @@ from typing import Any
 
 from ..agent import history as kept
 from ..compiler.cairnc import compile_program
-from ..compiler.tree import local
+from ..compiler.syntax.tree import local
 from ..projects.emulation import EVIDENCE as EMULATED
 from ..projects.target import DeviceTarget, resolve
 from . import model
@@ -565,7 +565,7 @@ def distinct(ranked: list[Any], keep: int) -> list[Any]:
 
 def regions(p: Any, name: str) -> int:
     """How many parallel statements `name` has, fused or not: what a fuse could join."""
-    from ..compiler.concurrency import walk
+    from ..compiler.check.concurrency import walk
 
     return sum(s.tag == "parallel" for f in p.functions if name in (f.name, f.source_name) for s in walk(f.body))
 

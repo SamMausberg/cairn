@@ -9,14 +9,27 @@ A project becomes a native artifact in nine stages, and nothing but the emitter 
 | Stage | Module | Entry point | What it produces |
 |---|---|---|---|
 | Load | `projects/project.py` | `load_project` | one combined source from the manifest's listed inputs, a sha256 per file, a line-to-file map |
-| Parse | `compiler/lexing.py`, `compiler/syntax.py` (with `syntax_expressions.py`, `syntax_statements.py`) | `Parser.parse` | tokens, spans, a tree (`compiler/tree.py`) that resolves nothing |
-| Link modules | `compiler/modules.py` | `link` | the imported `std.*` modules, merged in; nothing else is importable and nothing is fetched |
-| Derive recipes | `compiler/expansion.py`, `compiler/gradients.py` | `derive`, `differentiate` | each `derive`'s declarations, as ordinary code of the deriving module; `derive grad` writes a function's adjoint |
-| Specialize families | `compiler/expansion.py` | `specialize` | one function per variant of a family's natural range |
-| Check | `compiler/checking.py` and its rule modules | `Checker.bodies` | one typed tree, annotated in place (`Expr.ty`, `Expr.ref`) |
-| Judge | `compiler/checking.py` | `Checker.judge` | every effect row, and the rules that need all of them |
-| Emit | `compiler/codegen.py`, `compiler/region_lowering.py` | `Emitter.units` | readable C++20: one shared header, one unit per module |
+| Parse | `compiler/syntax/lexing.py`, `compiler/syntax/parser.py` (with `compiler/syntax/expressions.py`, `compiler/syntax/statements.py`) | `Parser.parse` | tokens, spans, a tree (`compiler/syntax/tree.py`) that resolves nothing |
+| Link modules | `compiler/syntax/modules.py` | `link` | the imported `std.*` modules, merged in; nothing else is importable and nothing is fetched |
+| Derive recipes | `compiler/derive/expansion.py`, `compiler/derive/gradients.py` | `derive`, `differentiate` | each `derive`'s declarations, as ordinary code of the deriving module; `derive grad` writes a function's adjoint |
+| Specialize families | `compiler/derive/expansion.py` | `specialize` | one function per variant of a family's natural range |
+| Check | `compiler/check/checking.py` and its rule modules | `Checker.bodies` | one typed tree, annotated in place (`Expr.ty`, `Expr.ref`) |
+| Judge | `compiler/check/checking.py` | `Checker.judge` | every effect row, and the rules that need all of them |
+| Emit | `compiler/lower/codegen.py`, `compiler/lower/region_lowering.py` | `Emitter.units` | readable C++20: one shared header, one unit per module |
 | Build | `projects/build.py` | `build` | a fresh directory, a hashed native artifact, a `cairn.build/1` receipt |
+
+The compiler's modules sit in one package per stage or subject, and only the facade and the compile cache are at the top of `compiler/`.
+
+| Package | Holds |
+|---|---|
+| `compiler/syntax/` | tokens, the parser, the tree it builds, and linking `std` |
+| `compiler/derive/` | what `derive` writes before checking: recipes, static families, gradients |
+| `compiler/check/` | the checker, and the rules of statements, expressions, calls, places, concurrency, effects, traits, constants and facts |
+| `compiler/primitives/` | the builtin table and the families beside it: printing, wide accesses, atomic updates, the machine, I/O rings |
+| `compiler/plans/` | what a plan chooses: an implementation, fused regions, vector chunks, staged tiles |
+| `compiler/cooperative/` | cooperative regions, their phase and one-writer rules, pipelines |
+| `compiler/device/` | layouts, tensor-core fragments and the multiply, foreign kernel launches |
+| `compiler/lower/` | the emitter, region lowering, device execution, the C header of a library |
 
 `compiler/cairnc.py` is the facade. `compile_program` runs parse through judge. `generate` checks the collector's seventeen certificates before it emits a line, and the `Emitter` asks the independent audit (`verify/elision.py`) to accept every discharged guard, writing the guard of each one it refuses.
 
@@ -26,39 +39,39 @@ Checking is one pass per function over one typed tree, and each generic instance
 
 | Rule | File | Functions |
 |---|---|---|
-| Names, types, generic instances, signatures | `compiler/checking.py` | `resolve`, `define`, `signature`, `function`, `judge` |
-| Per-function and per-region state | `compiler/scope.py` | `Scope`, `Lanes` |
-| Statements | `compiler/statements.py` | `s_let`, `s_assign`, `s_if`, `s_match`, `s_for`, `s_defer`, `s_compact`, `branches` |
-| Expressions | `compiler/expressions.py` | `e_name`, `e_index`, `e_field`, `e_lambda`, `e_try`, `e_binary` |
-| Calls, construction and declared extents | `compiler/calls.py` | `e_call`, `invoke`, `view_argument`, `construct`, `establish` |
-| Places, second-class borrows, moves, leases, aliasing | `compiler/places.py` | `path`, `place`, `overlaps`, `leased`, `lend`, `consume`, `disjoint` |
-| Tasks and tickets, lanes and regions, atomics, placement | `compiler/concurrency.py` | `e_spawn`, `region`, `s_parallel`, `s_reduce`, `s_scan`, `judge_lane_callbacks`, `host_only` |
-| Effect vocabulary, fixed point, operand order | `compiler/effects.py` | `fixed_point`, `audit` |
-| Every independent refusal of one check: what is kept, what a failed check takes back, what is judged after one | `compiler/refusals.py` | `refusing`, `rollback`, `rest`, `verdict` |
-| Traits, bounds, overlap, dynamic tables | `compiler/traits.py` | `implemented`, `dispatch`, `vtable`, `certify` |
-| Constant folding | `compiler/constants.py` | `constant`, `fold` |
-| I/O rings and their lowering | `compiler/rings.py` | `check_ring`, `method`, `waited`, `lower` |
-| Alternative implementations and their dispatch | `compiler/implementations.py` | `declared`, `condition`, `select`, `joined`, `called`, `lower` |
-| Facts about `usize` values that let lowering drop a guard | `compiler/facts.py` | `binder`, `defined`, `assume`, `index`, `arithmetic`, `conversion` |
+| Names, types, generic instances, signatures | `compiler/check/checking.py` | `resolve`, `define`, `signature`, `function`, `judge` |
+| Per-function and per-region state | `compiler/check/scope.py` | `Scope`, `Lanes` |
+| Statements | `compiler/check/statements.py` | `s_let`, `s_assign`, `s_if`, `s_match`, `s_for`, `s_defer`, `s_compact`, `branches` |
+| Expressions | `compiler/check/expressions.py` | `e_name`, `e_index`, `e_field`, `e_lambda`, `e_try`, `e_binary` |
+| Calls, construction and declared extents | `compiler/check/calls.py` | `e_call`, `invoke`, `view_argument`, `construct`, `establish` |
+| Places, second-class borrows, moves, leases, aliasing | `compiler/check/places.py` | `path`, `place`, `overlaps`, `leased`, `lend`, `consume`, `disjoint` |
+| Tasks and tickets, lanes and regions, atomics, placement | `compiler/check/concurrency.py` | `e_spawn`, `region`, `s_parallel`, `s_reduce`, `s_scan`, `judge_lane_callbacks`, `host_only` |
+| Effect vocabulary, fixed point, operand order | `compiler/check/effects.py` | `fixed_point`, `audit` |
+| Every independent refusal of one check: what is kept, what a failed check takes back, what is judged after one | `compiler/check/refusals.py` | `refusing`, `rollback`, `rest`, `verdict` |
+| Traits, bounds, overlap, dynamic tables | `compiler/check/traits.py` | `implemented`, `dispatch`, `vtable`, `certify` |
+| Constant folding | `compiler/check/constants.py` | `constant`, `fold` |
+| I/O rings and their lowering | `compiler/primitives/rings.py` | `check_ring`, `method`, `waited`, `lower` |
+| Alternative implementations and their dispatch | `compiler/plans/implementations.py` | `declared`, `condition`, `select`, `joined`, `called`, `lower` |
+| Facts about `usize` values that let lowering drop a guard | `compiler/check/facts.py` | `binder`, `defined`, `assume`, `index`, `arithmetic`, `conversion` |
 | The independent check of each guard lowering leaves out | `verify/elision.py` | `audit`, `decide`, `part` |
-| A plan's `fuse`: which regions join, and their scratch | `compiler/fusion.py` | `chains`, `quiet`, `compatible`, `scratch` |
-| A plan's `vector` and its lowering | `compiler/chunks.py` | `chunkable`, `vectored`, `lower` |
-| A plan's `stage` and its lowering | `compiler/staging.py` | `stageable`, `staged`, `lower` |
-| Cooperative regions, who reaches a statement, and their lowering | `compiler/cooperative.py` | `s_blocks`, `Reach`, `participation`, `collective`, `lower_blocks` |
-| The phase rule: no two threads of a block at one shared element between barriers | `compiler/phases.py` | `Phases`, `check`, `check_array` |
-| A cooperative body run for every thread of one block together, phase by phase | `compiler/block_run.py` | `BlockRun`, `arith`, `holds_barrier` |
-| One writer for every element of an array from outside a cooperative region | `compiler/footprints.py` | `Poly`, `Globals`, `disjoint`, `radix` |
-| Pipeline stages and their lowering | `compiler/pipelines.py` | `s_pipeline`, `method`, `Stages`, `lower` |
-| The tensor-core multiply, its numerical contract and its lowering | `compiler/tensor.py` | `check_mma`, `lower_mma` |
-| Tensor-core fragments and their lowering | `compiler/fragments.py` | `valid`, `tile`, `consumer`, `check_mma`, `lower_load` |
-| `layout` declarations, their receipt, `L.at(...)` and its lowering | `compiler/layouts.py` | `value`, `evaluate`, `explained`, `method`, `apply`, `lower` |
-| Layouts as values: coverage, owners, runs, bank conflicts, conversions | `compiler/layout_algebra.py` | `Layout`, `Spread`, `cover`, `exactly_once`, `runs`, `conflicts`, `conversion` |
-| Each primitive's type and cost, beside its lowering | `compiler/builtins.py` | `check_*` and `lower_*` |
-| The runtime operation each piece of device work lowers to | `compiler/execution.py` | `call`, `unrolled` |
-| `mmio_read`, `mmio_write`, `asm` and typed assembly, beside their lowering | `compiler/machine.py` | `check_machine`, `s_asm`, `lower_asm`, `unbuildable` |
-| An `extern` CUDA kernel's `launch(threads, block)` and its launch | `compiler/launches.py` | `check_launch`, `lower_launch` |
-| `print`, `println`, `eprint`, `eprintln`, `format` and their lowering | `compiler/printing.py` | `check_print`, `target`, `piece`, `lower_print` |
-| The C header of a library | `compiler/header.py` | `Header.render`, `shape`, `refusal` |
+| A plan's `fuse`: which regions join, and their scratch | `compiler/plans/fusion.py` | `chains`, `quiet`, `compatible`, `scratch` |
+| A plan's `vector` and its lowering | `compiler/plans/chunks.py` | `chunkable`, `vectored`, `lower` |
+| A plan's `stage` and its lowering | `compiler/plans/staging.py` | `stageable`, `staged`, `lower` |
+| Cooperative regions, who reaches a statement, and their lowering | `compiler/cooperative/cooperative.py` | `s_blocks`, `Reach`, `participation`, `collective`, `lower_blocks` |
+| The phase rule: no two threads of a block at one shared element between barriers | `compiler/cooperative/phases.py` | `Phases`, `check`, `check_array` |
+| A cooperative body run for every thread of one block together, phase by phase | `compiler/cooperative/block_run.py` | `BlockRun`, `arith`, `holds_barrier` |
+| One writer for every element of an array from outside a cooperative region | `compiler/cooperative/footprints.py` | `Poly`, `Globals`, `disjoint`, `radix` |
+| Pipeline stages and their lowering | `compiler/cooperative/pipelines.py` | `s_pipeline`, `method`, `Stages`, `lower` |
+| The tensor-core multiply, its numerical contract and its lowering | `compiler/device/tensor.py` | `check_mma`, `lower_mma` |
+| Tensor-core fragments and their lowering | `compiler/device/fragments.py` | `valid`, `tile`, `consumer`, `check_mma`, `lower_load` |
+| `layout` declarations, their receipt, `L.at(...)` and its lowering | `compiler/device/layouts.py` | `value`, `evaluate`, `explained`, `method`, `apply`, `lower` |
+| Layouts as values: coverage, owners, runs, bank conflicts, conversions | `compiler/device/layout_algebra.py` | `Layout`, `Spread`, `cover`, `exactly_once`, `runs`, `conflicts`, `conversion` |
+| Each primitive's type and cost, beside its lowering | `compiler/primitives/builtins.py` | `check_*` and `lower_*` |
+| The runtime operation each piece of device work lowers to | `compiler/lower/execution.py` | `call`, `unrolled` |
+| `mmio_read`, `mmio_write`, `asm` and typed assembly, beside their lowering | `compiler/primitives/machine.py` | `check_machine`, `s_asm`, `lower_asm`, `unbuildable` |
+| An `extern` CUDA kernel's `launch(threads, block)` and its launch | `compiler/device/launches.py` | `check_launch`, `lower_launch` |
+| `print`, `println`, `eprint`, `eprintln`, `format` and their lowering | `compiler/primitives/printing.py` | `check_print`, `target`, `piece`, `lower_print` |
+| The C header of a library | `compiler/lower/header.py` | `Header.render`, `shape`, `refusal` |
 | Manifests, vendored dependencies | `projects/project.py` | `read_manifest`, `contained_file`, `claim`, `dependencies` |
 | Vendored C++ and CUDA, compiled by the program's command line and held to their externs' types | `projects/foreign.py` | `compile_sources`, `binding`, `inspect` |
 | What a foreign implementation has: its contract, build, device inspection and validation | `verify/foreign.py` | `identify`, `report`, `device_tests` |
@@ -117,7 +130,7 @@ What each operation takes when it runs, and gives back when it ends:
 | device `compact` | flags, offsets and CUB's storage in the arena, two launches, two one-element copies to the host, one stream wait | nothing |
 | a `@device`, `@pinned` or `@unified` buffer | one CUDA allocation, zeroed on the context's stream, which is waited for | freed at scope exit |
 
-Device work runs on the calling thread's execution context, `cr::gpu::here()`, which `compiler/execution.py` names at every call. Its bookkeeping is tested against a mock device (`tests/runtime/reuse_runtime.cpp`), and generated programs against a host machine that counts every stream, allocation and wait (`tests/runtime/gpu_host.hpp`); [devices.md](devices.md#device-execution) says what that shows and what no device run has checked.
+Device work runs on the calling thread's execution context, `cr::gpu::here()`, which `compiler/lower/execution.py` names at every call. Its bookkeeping is tested against a mock device (`tests/runtime/reuse_runtime.cpp`), and generated programs against a host machine that counts every stream, allocation and wait (`tests/runtime/gpu_host.hpp`); [devices.md](devices.md#device-execution) says what that shows and what no device run has checked.
 
 The rest of the package is in the ownership table of [AGENTS.md](../AGENTS.md). In `perf/` only `measure.py`, on the host, and `on_device.py`, under the owner's targets, run a program. No agent, test generator or solver may rewrite the authority it is checked against, and native libraries never import the agent tooling or Z3.
 
@@ -165,7 +178,7 @@ A rejection table maps a sentence naming a rule to a diagnostic code and a progr
 | `tools/checks/emission_identity.py` | whether a source change left the C++ and effect rows of every example, `std`, test program and docs block as they were, optionally up to two named C++ identities, and with `--normalize guards` whether it only discharged guards |
 | `tools/checks/refusal_differential.py` | every refused example, test program and docs block checked again reporting every refusal: the first refusal identical, each further one a whole diagnostic in source order, and no check ended early on a fault |
 | `tools/checks/differential_ownership.py` | generated programs of a shared fragment, as CAIRN source and Lean `Program` literals, classified alike by the checker and the Lean `accepts` |
-| `tools/checks/differential_cooperative.py` | generated cooperative regions of a shared fragment, as CAIRN source and `Cooperative.lean` terms, decided alike by `compiler/phases.py` and the model's `program` |
+| `tools/checks/differential_cooperative.py` | generated cooperative regions of a shared fragment, as CAIRN source and `Cooperative.lean` terms, decided alike by `compiler/cooperative/phases.py` and the model's `program` |
 | `tools/checks/differential_guards.py` | generated programs built as emitted and with every guard and checked entry kept, under both compilers and the sanitizers, returning the same value or trap on every input; a mismatch is minimized into a program to keep |
 | `bench/suite/harness.py`, `report.py` | the eight kernels of [bench/suite/PREREGISTRATION.md](../bench/suite/PREREGISTRATION.md) under both compilers with the project's flags, each baseline guarded and unguarded, safety boundaries counted against the receipt, no result written when a case disagrees with its oracle; losses printed beside wins |
 

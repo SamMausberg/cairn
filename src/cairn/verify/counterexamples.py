@@ -27,7 +27,7 @@ def smt(base: str, reference: str, implementation: str, impl: Function, policy: 
     """What Z3 says of the implementation against the reference where its condition holds, apart from any test:
     the reference's body replaced by the implementation's, compared in the modeled fragment."""
     from ..agent.projection import format_expr
-    from ..compiler.implementations import fixed
+    from ..compiler.plans.implementations import fixed
     from .diff import isolated
     from .scalar_semantics import equivalent
     from .scalar_values import MAX_UNROLL

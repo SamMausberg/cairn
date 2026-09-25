@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..compiler.cairnc import compile_program, compile_source
-from ..compiler.tree import Diagnostic
+from ..compiler.syntax.tree import Diagnostic
 from ..projects.target import DeviceTarget, resolve
 from . import cooperative_model, model
 from .counts import Cost, Work
@@ -91,7 +91,7 @@ def demands(receipt: dict[str, Any], device: DeviceTarget) -> None:
     """Refuse `device` as a device build of the program whose front-end receipt is `receipt` refuses it
     (projects/build.py): a selected implementation's needs (E-IMPL-TARGET), then the program's own features
     (E-TARGET-FEATURE). A prediction for code that cannot be built for a target is no prediction."""
-    from ..compiler.implementations import targeted as selected
+    from ..compiler.plans.implementations import targeted as selected
 
     if "cuda" in receipt["requires"]:
         selected(receipt["functions"], device)

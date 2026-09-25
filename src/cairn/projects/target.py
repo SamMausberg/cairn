@@ -23,7 +23,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..compiler.tree import Diagnostic
+from ..compiler.syntax.tree import Diagnostic
 
 SPELLING = re.compile(r"sm_([1-9]\d{1,2})([af]?)")  # the major version, then one digit of minor version
 LEVELS = ("", "f", "a")  # what a target adds, in order: portable, family, arch-specific

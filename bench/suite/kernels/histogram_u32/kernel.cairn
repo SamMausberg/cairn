@@ -2,7 +2,7 @@
 // measurement.
 //
 // CAIRN's lane rule is that whatever any lane writes may be touched only at that lane's own index.
-// src/cairn/compiler/checking.py around line 865 raises E-PARALLEL-RACE for every other subscript
+// src/cairn/compiler/check/checking.py around line 865 raises E-PARALLEL-RACE for every other subscript
 // on an array lanes write, and a shared bin histogram writes out[b] from every lane, so the
 // parallel shape does not compile at all. The message the compiler prints for it is "out is written
 // by lanes, so every lane may touch only out[i]."

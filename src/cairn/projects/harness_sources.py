@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from ..compiler.tree import CPP, Type, is_view
+from ..compiler.syntax.tree import CPP, Type, is_view
 from ..version import VERSION
 from .harness_mapping import DTYPES, Mapping, Tensor, names, shown
 

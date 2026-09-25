@@ -1,7 +1,7 @@
 // The safety boundary a baseline must carry to be compared with CAIRN at all.
 //
 // Boundaries 1 to 4 of bench/suite/PREREGISTRATION.md are written here once and included by every
-// baseline arm. Each macro forwards to the very function src/cairn/compiler/codegen.py emits at
+// baseline arm. Each macro forwards to the very function src/cairn/compiler/lower/codegen.py emits at
 // that site, so a guarded baseline does not imitate a CAIRN guard, it calls it. Build with
 // -DBENCH_GUARDED=1 for the guarded arm and -DBENCH_GUARDED=0 for the unguarded one; nothing else
 // about the two builds differs, so the pair prices the boundary and nothing else.

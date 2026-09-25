@@ -17,8 +17,8 @@ import re
 from typing import Any
 
 from ..compiler.cairnc import compile_program
-from ..compiler.codegen import Emitter, mangle
-from ..compiler.tree import Program
+from ..compiler.lower.codegen import Emitter, mangle
+from ..compiler.syntax.tree import Program
 
 LITERAL = re.compile(r'^\s*const std::uint8_t\* const (v_\w+) = (reinterpret_cast<const std::uint8_t\*>\("(?:[^"\\]|\\.)*"\));\n', re.M)  # fmt: skip
 ZERO = re.compile(r"\((v_\w+|static_cast<std::size_t>\(\d+ULL\)) - static_cast<std::size_t>\(0ULL\)\)")

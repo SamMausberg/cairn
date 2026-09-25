@@ -1,5 +1,5 @@
 /-
-The phase rule of a cooperative region, `src/cairn/compiler/phases.py`: between two barriers, no two threads of one
+The phase rule of a cooperative region, `src/cairn/compiler/cooperative/phases.py`: between two barriers, no two threads of one
 block touch one element of a shared array where either of them writes it.
 
 A block runs `n` threads.  Every thread runs the same phases, a barrier between each two, and within a phase the

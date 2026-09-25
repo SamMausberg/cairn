@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import re
 
-from ..compiler.calls import extents
-from ..compiler.syntax import IDENT, RESERVED
+from ..compiler.check.calls import extents
+from ..compiler.syntax.parser import IDENT, RESERVED
 from .document import Document, Item, declarations, dotted, flatten
 from .names import callee, template
 

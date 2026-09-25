@@ -11,9 +11,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..compiler import atomics, chunks, fusion, wide
-from ..compiler.builtins import WRAPPING
-from ..compiler.tree import FLOAT, INT, NUMERIC, Expr, Function, Stmt, Type, is_view
+from ..compiler.plans import chunks, fusion
+from ..compiler.primitives import atomics, wide
+from ..compiler.primitives.builtins import WRAPPING
+from ..compiler.syntax.tree import FLOAT, INT, NUMERIC, Expr, Function, Stmt, Type, is_view
 from .cooperative_work import region
 from .counts import ONE, Cost, Frame, Poly, Region, Work, add, data_dependent, path, widen
 
@@ -382,7 +383,7 @@ class Counter:
         widen(at.work.footprint, key, reach)
 
     def wide(self, e: Expr, access: wide.Wide, at: Frame) -> None:
-        """A wide load or store (compiler/wide.py): one access of K adjacent elements and its guard, a stream of K
+        """A wide load or store (compiler/primitives/wide.py): one access of K adjacent elements and its guard, a stream of K
         elements a pass where its index moves with a binder, as K accesses at [i] would be."""
         write = e.val == "store_wide"
         at.work.op("bounds_guard", at.times)
@@ -430,7 +431,7 @@ class Counter:
                 self.cost.allocated = self.cost.allocated + n * element * at.times
             elif name == "transfer":
                 self.transfer(e, at)
-            elif name == "mma_unordered" and len(e.args) == 3:  # a warp's fragment step (compiler/fragments.py)
+            elif name == "mma_unordered" and len(e.args) == 3:  # a warp's fragment step (compiler/device/fragments.py)
                 why = f"line {e.line}: a tensor-core fragment step is not priced"
                 if why not in self.cost.unknown:
                     self.cost.unknown.append(why)

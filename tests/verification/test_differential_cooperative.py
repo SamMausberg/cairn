@@ -1,4 +1,4 @@
-"""`compiler/phases.py` and `proofs/Cairn/Cooperative.lean` must decide the same generated cooperative regions alike.
+"""`compiler/cooperative/phases.py` and `proofs/Cairn/Cooperative.lean` must decide the same generated cooperative regions alike.
 
 The Lean side proves that a phase its rule accepts has no clashing steps in any interleaving and one result whatever
 order the threads take. This comparison is what ties that proof to the Python the checker runs. A small run is part
@@ -34,7 +34,7 @@ def test_the_phase_rule_and_its_lean_model_decide_alike():
 
 
 def test_a_slip_in_the_rule_would_be_reported(monkeypatch):
-    from cairn.compiler import phases
+    from cairn.compiler.cooperative import phases
     from checks import differential_cooperative as harness
 
     lake = harness.find_lake()

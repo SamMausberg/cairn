@@ -12,7 +12,7 @@ import sys
 from collections.abc import Callable
 from typing import TextIO
 
-from ..compiler.lexing import TOKEN
+from ..compiler.syntax.lexing import TOKEN
 
 SHOWN = {"protocol", "status", "code", "message", "line", "column", "trust", "file", "module"}  # in the header
 TALLIED = {"further", "further_omitted", "not_judged"}  # said once, after every refusal of a check (`tally`)

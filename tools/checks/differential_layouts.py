@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Differential check: `compiler/layout_algebra.py` and `proofs/Cairn/Layout.lean` judge the same generated layouts alike.
+"""Differential check: `compiler/device/layout_algebra.py` and `proofs/Cairn/Layout.lean` judge the same generated layouts alike.
 
 A declared spread must give every element of its tile exactly one holder, and a declared storage layout every element
 its own offset. `Layout.lean` writes both rules as their definitions and proves what a layout that passes promises;
@@ -22,8 +22,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
-from cairn.compiler import layout_algebra as L
-from cairn.compiler.tree import Diagnostic
+from cairn.compiler.device import layout_algebra as L
+from cairn.compiler.syntax.tree import Diagnostic
 from support import find_lake, run_lean
 
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..compiler.syntax import IDENT
+from ..compiler.syntax.parser import IDENT
 from .document import Document, Item, dotted
 from .names import named, qualified
 

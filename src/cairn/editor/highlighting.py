@@ -9,9 +9,9 @@ still colored; what a name elsewhere means comes from the last analysis that com
 from __future__ import annotations
 
 from ..agent.projection import local
-from ..compiler.builtins import TABLE
-from ..compiler.effects import EFFECTS
-from ..compiler.syntax import IDENT, RESERVED, Program
+from ..compiler.check.effects import EFFECTS
+from ..compiler.primitives.builtins import TABLE
+from ..compiler.syntax.parser import IDENT, RESERVED, Program
 from .document import Document, Item, _units, bound, declarations, dotted, statement
 from .grammar import FAMILIES
 from .names import TYPES, declared, qualified, visible

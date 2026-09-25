@@ -12,10 +12,10 @@ from functools import lru_cache
 from itertools import islice, takewhile
 from pathlib import Path, PurePosixPath
 
-from ..compiler.lexing import lex
-from ..compiler.modules import library_path
-from ..compiler.syntax import Parser
-from ..compiler.tree import MAX_SOURCE, Diagnostic
+from ..compiler.syntax.lexing import lex
+from ..compiler.syntax.modules import library_path
+from ..compiler.syntax.parser import Parser
+from ..compiler.syntax.tree import MAX_SOURCE, Diagnostic
 from .target import parse
 from .toolchain import ARCHS, KINDS, LIBRARIES, TARGETS, ProjectError
 

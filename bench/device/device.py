@@ -43,7 +43,7 @@ def load(src: Path):
     """The compiler under `src`, imported ahead of any other."""
     sys.path.insert(0, str(src))
     from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
-    from cairn.compiler.header import header
+    from cairn.compiler.lower.header import header
     from cairn.projects.target import parse
     from cairn.projects.toolchain import device_prefix
 

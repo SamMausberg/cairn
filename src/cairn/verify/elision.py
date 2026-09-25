@@ -1,6 +1,6 @@
 """The independent check of every guard lowering leaves out.
 
-`compiler/facts.py` proposes. It marks a site whose guard it showed cannot fail (`Expr.established`) and keeps the
+`compiler/check/facts.py` proposes. It marks a site whose guard it showed cannot fail (`Expr.established`) and keeps the
 proof its decision used (`Expr.proof`): the facts, each naming the statement or expression that made it true, or a
 part whose own guard covers the site. Nothing here calls into facts.py or trusts its reasoning.
 
@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..compiler.tree import BITS, SIGNED, UNSIGNED, USIZE, Expr, Function, Program, Stmt, is_view
+from ..compiler.syntax.tree import BITS, SIGNED, UNSIGNED, USIZE, Expr, Function, Program, Stmt, is_view
 
 ZERO = ""
 MAX = 2**64 - 1

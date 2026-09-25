@@ -10,7 +10,7 @@ import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import Diagnostic, compile_source
-from cairn.compiler.implementations import targeted
+from cairn.compiler.plans.implementations import targeted
 from cairn.editor.formatting import format_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project

@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ..compiler.tree import FLOAT
+from ..compiler.syntax.tree import FLOAT
 from .boundaries import Param
 
 PR_SET_DUMPABLE = 4  # prctl(2): a process that is not dumpable writes no core and wakes no crash handler

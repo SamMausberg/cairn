@@ -34,9 +34,9 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import Diagnostic, Function, Parser, compile_program, compile_source, write_program
-from ..compiler.codegen import mangle
-from ..compiler.lexing import IDENT, lex
-from ..compiler.tree import FLOAT
+from ..compiler.lower.codegen import mangle
+from ..compiler.syntax.lexing import IDENT, lex
+from ..compiler.syntax.tree import FLOAT
 from ..projects import emulation
 from ..projects.target import DeviceTarget
 from ..projects.toolchain import command as native_command
@@ -175,7 +175,7 @@ def fresh(p: Any, stem: str) -> str:
 def condition(impl: Function) -> str | None:
     """The checked implementation's condition as source, an instance's naturals written as their values."""
     from ..agent.projection import format_expr
-    from ..compiler.implementations import fixed
+    from ..compiler.plans.implementations import fixed
 
     when = impl.implements.when if impl.implements is not None else None
     return format_expr(fixed(when)) if when is not None else None
@@ -505,7 +505,7 @@ def replay(source: str, record: dict[str, Any], cxx: str = "clang++", libraries:
 
 def local(name: str | None) -> str | None:
     """A function's name without its module; an instance keeps its values."""
-    from ..compiler.tree import local as named
+    from ..compiler.syntax.tree import local as named
 
     return named(name) if name else None
 

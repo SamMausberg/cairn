@@ -1,6 +1,6 @@
 """A guard is left out of the emitted C++ only where the checker established that it cannot fail.
 
-`compiler/facts.py` records what a loop, a lane, a `let`, a condition or an early exit says about usize values, and
+`compiler/check/facts.py` records what a loop, a lane, a `let`, a condition or an early exit says about usize values, and
 lowering drops an index, `+`, `-` or conversion guard whose condition follows. These tests hold both halves: the
 guard goes where its condition holds, and it stays on every counterexample. The last test checks the emitted code
 against an evaluator written here, over generated programs, under AddressSanitizer: a guard dropped wrongly shows

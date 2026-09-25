@@ -32,7 +32,7 @@ from cairn.agent.agent_tools import HANDLES, PROTOCOL, EditHost, EditSession, ex
 from cairn.agent.state import state
 from cairn.agent.teaching import CARDS
 from cairn.compiler.cairnc import Diagnostic
-from cairn.compiler.syntax import Parser
+from cairn.compiler.syntax.parser import Parser
 from cairn.projects.project import load_project
 
 sys.path.insert(0, str(ROOT / "tools"))

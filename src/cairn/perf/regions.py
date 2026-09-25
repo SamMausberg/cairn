@@ -18,7 +18,7 @@ import json
 from typing import Any
 
 from ..compiler.cairnc import Parser, compile_program
-from ..compiler.tree import Arm, Expr, Stmt, Type
+from ..compiler.syntax.tree import Arm, Expr, Stmt, Type
 
 SYNTAX = ("tag", "name", "op", "binder", "pooled", "exclusive")  # what a Stmt says as written, positions aside
 
@@ -75,7 +75,7 @@ def applied(source: str, function: str, checked: tuple[Any, Any] | None = None,
     vector chunks and its stage tiles. A fuse is named on every region of the chain it heads or joins. `checked` is
     the program and checker of `source`, and `names` its regions' names in order, when the caller has them: a plan
     changes neither, so a search names the regions once for all its candidates."""
-    from ..compiler import fusion
+    from ..compiler.plans import fusion
 
     p, checker = checked or compile_program(source)[:2]
     f = next(f for f in p.functions if f.name == function and not f.bindings)

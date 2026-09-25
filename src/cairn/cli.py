@@ -17,7 +17,7 @@ from . import __version__
 from .agent.diagnostics import declared, taught
 from .commands import parser
 from .compiler.cairnc import Diagnostic, certify_templates, compile_source
-from .compiler.modules import library_source
+from .compiler.syntax.modules import library_source
 from .editor import terminal
 from .projects.new import create_project
 from .projects.project import ProjectError, contained_file, load_project, read_text
@@ -272,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
             return exit_status
         project = load_project(a.path)
         if a.command == "emit" and (a.header or a.ctypes):  # What a C, C++ or Python program uses to call it.
-            from .compiler.header import binding, header
+            from .compiler.lower.header import binding, header
 
             mine = lambda f: project.wrote(f.line)  # noqa: E731
             cuda = "cuda" in compile_source(project.source)[1]["requires"]

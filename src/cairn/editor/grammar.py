@@ -15,14 +15,14 @@ import json
 import sys
 from pathlib import Path
 
-from ..compiler.builtins import TABLE
-from ..compiler.concurrency import PLAN_ITEMS
-from ..compiler.effects import EFFECT_FAMILIES, EFFECTS
-from ..compiler.lexing import RESERVED
-from ..compiler.modules import STD
-from ..compiler.syntax import Parser
-from ..compiler.traits import CLASSES, KINDS
-from ..compiler.tree import INTRINSIC_TYPES, PLACES, SCALAR, STORAGE
+from ..compiler.check.concurrency import PLAN_ITEMS
+from ..compiler.check.effects import EFFECT_FAMILIES, EFFECTS
+from ..compiler.check.traits import CLASSES, KINDS
+from ..compiler.primitives.builtins import TABLE
+from ..compiler.syntax.lexing import RESERVED
+from ..compiler.syntax.modules import STD
+from ..compiler.syntax.parser import Parser
+from ..compiler.syntax.tree import INTRINSIC_TYPES, PLACES, SCALAR, STORAGE
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -30,7 +30,8 @@ ROOT = Path(__file__).resolve().parents[3]
 CONTEXTUAL = {"after", "align", "exclusive", "fold", "into", "lends", "packed", "plan", "recipe", "require", "scan"}
 CONTEXTUAL |= {"test", "layout", "implements", "when", "needs", "use", "tune", *PLAN_ITEMS}
 CONTEXTUAL |= {"blocks", "threads", "then", "shared", "barrier", "warp", "pipeline", "depth"}  # a cooperative region
-CONTEXTUAL |= {"volatile", "out", "clobbers", "launch"}  # typed assembly and launched kernels (compiler/machine.py)
+# typed assembly and launched kernels (compiler/primitives/machine.py)
+CONTEXTUAL |= {"volatile", "out", "clobbers", "launch"}
 
 # class -> (TextMate scope, Vim group, words). Every reserved word is in exactly one class.
 WORDS: dict[str, tuple[str, str, set[str]]] = {

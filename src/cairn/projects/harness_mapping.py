@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..compiler.tree import BITS, STORAGE, Function, Type, is_view
+from ..compiler.syntax.tree import BITS, STORAGE, Function, Type, is_view
 from .target import refuse
 
 # The element types a tensor may carry into CAIRN: the torch dtype, and at::ScalarType's name for it.

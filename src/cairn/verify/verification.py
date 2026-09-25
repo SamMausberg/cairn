@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import Diagnostic, compile_source
-from ..compiler.syntax import Parser
+from ..compiler.syntax.parser import Parser
 from .scalar_semantics import equivalent
 
 

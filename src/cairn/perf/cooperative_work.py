@@ -1,7 +1,7 @@
 """What a cooperative region does, counted from the checked tree: how many blocks it runs, the shape and shared
 memory of each, and what every thread does between its barriers.
 
-`blocks b in G threads t in T { body }` runs G blocks of T threads (compiler/cooperative.py). The region's `count` is
+`blocks b in G threads t in T { body }` runs G blocks of T threads (compiler/cooperative/cooperative.py). The region's `count` is
 its number of blocks, a polynomial in the function's extents, and its body is what one thread does, counted as
 `work.py` counts a lane. Four things a thread does are counted apart from a lane's:
 
@@ -15,7 +15,7 @@ its number of blocks, a polynomial in the function's extents, and its body is wh
 - a branch costs what the warps that enter it issue.
 
 Which lanes of a warp take part in each access and each branch, and which bank or sector each reaches, comes from the
-census: the body run for every thread of one block by the phase rule's own evaluator (compiler/block_run.py), with the
+census: the body run for every thread of one block by the phase rule's own evaluator (compiler/cooperative/block_run.py), with the
 block names and everything from outside as symbols. Where the census cannot place the lanes, as for an index read
 from data or lanes whose offsets differ by a symbol, an access is priced a sector a lane, or conflict free in shared
 memory, and the region names its line. Nothing here is timed.
@@ -26,10 +26,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..compiler import block_run, fragments
-from ..compiler.cooperative import SHUFFLES, VOTES, WARP_SIZE
-from ..compiler.footprints import Poly as Symbolic
-from ..compiler.tree import FLOAT, USIZE, Expr, Stmt, Type, nested, root
+from ..compiler.cooperative import block_run
+from ..compiler.cooperative.cooperative import SHUFFLES, VOTES, WARP_SIZE
+from ..compiler.cooperative.footprints import Poly as Symbolic
+from ..compiler.device import fragments
+from ..compiler.syntax.tree import FLOAT, USIZE, Expr, Stmt, Type, nested, root
 from .counts import ONE, Frame, Poly, Region, Work, add, data_dependent, path, widen
 from .regions import walked
 
@@ -89,7 +90,7 @@ class Site:
 
 def wavefronts(offsets: list[tuple[int, int]], size: int) -> int:
     """The wavefronts one warp's access takes: its lanes in groups that move 128 bytes, each group as many as the
-    busiest bank has distinct words to serve (compiler/layout_algebra.py `conflicts` counts the same for a spread)."""
+    busiest bank has distinct words to serve (compiler/device/layout_algebra.py `conflicts` counts the same for a spread)."""
     per = max(1, min(WARP_SIZE, PHASE_BYTES // size))
     groups: dict[int, dict[int, set[int]]] = {}
     for lane, o in offsets:
@@ -420,5 +421,5 @@ def region(k: Any, s: Stmt, at: Frame) -> None:
         k.note(f"line {line}: the lanes of this access differ by a symbol or by data, so it is priced a sector a "
                "lane, or without bank conflicts in shared memory")  # fmt: skip
     k.cost.regions.append(Region("cooperative", s.line, blocks, at.times, body, coop=shape))
-    for done in s.other:  # the region's finish: one more block, as a region of one (compiler/finish.py)
+    for done in s.other:  # the region's finish: one more block, as a region of one (compiler/cooperative/finish.py)
         region(k, done.ref, at)

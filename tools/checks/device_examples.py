@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from cairn.compiler.cairnc import compile_source
-from cairn.compiler.tree import Diagnostic
+from cairn.compiler.syntax.tree import Diagnostic
 from cairn.projects.build import build
 from cairn.projects.foreign import cuda
 from cairn.projects.project import load_project

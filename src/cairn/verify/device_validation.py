@@ -24,8 +24,8 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from ..compiler.cairnc import Parser
-from ..compiler.codegen import mangle
-from ..compiler.tree import BITS, FLOAT, SIGNED, is_view
+from ..compiler.lower.codegen import mangle
+from ..compiler.syntax.tree import BITS, FLOAT, SIGNED, is_view
 from . import agreement
 from .boundaries import Case, limits
 

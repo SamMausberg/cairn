@@ -7,7 +7,7 @@ import hashlib
 from typing import Any
 
 from ..compiler.cairnc import compile_program, interfaces
-from ..compiler.syntax import Parser
+from ..compiler.syntax.parser import Parser
 from ..version import VERSION
 from .project import Project, opened
 

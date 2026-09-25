@@ -16,8 +16,8 @@ from typing import Any
 
 from ..compiler import compilations
 from ..compiler.cairnc import VERSION, Diagnostic, Function, Parser, fail
-from ..compiler.effects import EFFECT_FAMILIES, EFFECTS
-from ..compiler.lexing import comment_above, lex
+from ..compiler.check.effects import EFFECT_FAMILIES, EFFECTS
+from ..compiler.syntax.lexing import comment_above, lex
 from .diagnostics import explain, located
 from .evidence import MAX_EXPAND, MAX_REPLACEMENT, TERMS, classes, establish
 from .projection import declarations, derivation, function_source, local, related, signature, type_declarations

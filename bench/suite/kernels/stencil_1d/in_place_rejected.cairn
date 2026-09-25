@@ -3,7 +3,7 @@
 // It establishes one half of the asymmetry kernel.cairn reports. The out of place stencil beside it
 // is accepted in a parallel region, because a lane writes only out[i] and reads a ro view; this
 // function writes x[i] and reads x[i-1] and x[i+1] in the same region, so a lane touches a written
-// array away from its own index and src/cairn/compiler/checking.py rejects it with E-PARALLEL-RACE,
+// array away from its own index and src/cairn/compiler/check/checking.py rejects it with E-PARALLEL-RACE,
 // saying "x is written by lanes, so every lane may touch only x[i]." The same program written in
 // C++ with an OpenMP parallel for compiles without a word under -Wall -Wextra -Werror and runs as a
 // data race whose answer depends on the schedule.

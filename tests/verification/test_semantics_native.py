@@ -8,7 +8,7 @@ import subprocess
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from cairn.compiler.tree import CPP, VOID, is_view
+from cairn.compiler.syntax.tree import CPP, VOID, is_view
 from cairn.verify.scalar_concrete import Concrete
 from cairn.verify.scalar_semantics import equivalent, prepared
 from cairn.verify.scalar_values import bounds, decoded, encoded, rounded

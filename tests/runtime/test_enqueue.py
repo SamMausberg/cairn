@@ -1,6 +1,6 @@
 """Device work held to one wait, and enqueued on a caller's stream with none, run on the host.
 
-A function whose row shows nothing that lets the host observe device memory (compiler/execution.py) runs its body
+A function whose row shows nothing that lets the host observe device memory (compiler/lower/execution.py) runs its body
 held when it queues device work more than once: its checked entry waits once, when it returns, instead of after each
 operation. A device library's C header gives each such function an enqueued entry, cq_NAME(stream, ...), which queues
 the same work on the caller's stream and returns without waiting, allocating, or making a stream or an event, so a
@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from cairn.compiler.header import binding, header
+from cairn.compiler.lower.header import binding, header
 from emitted import device_build, sanitized
 
 ROOT = Path(__file__).resolve().parents[2]

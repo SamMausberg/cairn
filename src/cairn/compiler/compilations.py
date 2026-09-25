@@ -12,7 +12,7 @@ emitted C++ with its manifest. Every caller unpickles its own copy, so a change 
 another. A caller whose request ran a stage takes the objects that stage made, which nobody else has seen.
 
 A check that captures sites answers one that does not, with the sites left out. An accepted program checks the same
-with and without `every`, since compiler/refusals.py changes nothing until it keeps a refusal, so an accepted check
+with and without `every`, since compiler/check/refusals.py changes nothing until it keeps a refusal, so an accepted check
 serves both; a refusal answers only the setting it was made under. The emission of an accepted program depends on
 neither. A check a fault ended, and anything too deep to pickle, is answered and not kept.
 
@@ -32,8 +32,8 @@ from pathlib import Path
 from typing import Any
 
 from .cairnc import Checker, Diagnostic, Parser, Program, compile_program, generate, joined
-from .codegen import RUNTIME
-from .modules import STD
+from .lower.codegen import RUNTIME
+from .syntax.modules import STD
 
 ENTRIES = 16  # sources
 BYTES = 256 << 20  # what their stages hold, in bytes

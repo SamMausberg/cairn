@@ -28,7 +28,7 @@ import math
 import struct
 from typing import Any
 
-from ..compiler.tree import FLOAT, STORAGE
+from ..compiler.syntax.tree import FLOAT, STORAGE
 
 VERSION = "cairn.agreement/1"
 # Each rule: its condition, then its verdict, in CAIRN over r and c widened to f64, the tolerance's `absolute` and

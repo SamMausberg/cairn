@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from cairn.compiler import cooperative, pipelines
 from cairn.compiler.cairnc import compile_source
+from cairn.compiler.cooperative import cooperative, pipelines
 from cairn.projects.toolchain import command
 from emitted import emit, refused
 

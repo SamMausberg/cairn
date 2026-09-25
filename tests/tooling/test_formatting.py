@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 from cairn.cli import main
-from cairn.compiler.lexing import TOKEN, lex
-from cairn.compiler.tree import Diagnostic
+from cairn.compiler.syntax.lexing import TOKEN, lex
+from cairn.compiler.syntax.tree import Diagnostic
 from cairn.editor.formatting import comments, format_report, format_source
 
 ROOT = Path(__file__).resolve().parents[2]

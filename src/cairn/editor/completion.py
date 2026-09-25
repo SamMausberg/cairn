@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from ..agent.projection import local, signature
-from ..compiler.builtins import TABLE
-from ..compiler.calls import extents
-from ..compiler.syntax import IDENT, RESERVED
-from ..compiler.traits import CLASSES, KINDS
+from ..compiler.check.calls import extents
+from ..compiler.check.traits import CLASSES, KINDS
+from ..compiler.primitives.builtins import TABLE
+from ..compiler.syntax.parser import IDENT, RESERVED
 from .document import Document, before, call_at, declarations, dotted, promising, statement
 from .formatting import CLOSERS, OPENERS
 from .names import (

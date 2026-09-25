@@ -5,7 +5,7 @@ import json
 import pytest
 
 from cairn.cli import main
-from cairn.compiler import modules
+from cairn.compiler.syntax import modules
 from cairn.editor.terminal import ended
 
 RACY = """fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
