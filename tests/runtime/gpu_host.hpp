@@ -8,8 +8,11 @@
 // allocation, launch, copy and wait is counted in cr::gpu::counted, which a test reads between calls. The machine has
 // no whole-device wait to count: no operation of cairn_exec.hpp can ask for one. While `capturing` is set, as a
 // CUDA graph capture would be, every call a capture refuses (a wait, a stream, an event, an allocation or a release)
-// is counted again as `refused`.
+// is counted again as `refused`. Each thread also keeps, for every stream it queued on, how much of that work a wait
+// has covered, and `early` counts each time the host reads or writes memory across a copy, or releases device memory,
+// while another stream still holds work nobody waited for.
 #pragma once
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
@@ -30,6 +33,7 @@ struct Counts {  // atomic, since every host thread has an execution context of 
   std::atomic<bool> capturing{false};
   std::atomic<unsigned long long> capture{0};  // the capture sequence's id while capturing
   std::atomic<std::size_t> refused{0};  // calls made while capturing that a stream capture would refuse
+  std::atomic<std::size_t> early{0};    // host observations made while another stream held unwaited work
 };
 inline Counts counted;
 inline thread_local std::size_t made_here = 0;
@@ -39,7 +43,30 @@ struct HostStream {
 };
 struct HostEvent {
   std::size_t id;
+  const HostStream* on = nullptr;  // the stream it was last recorded on, and how much of that stream's work it marks
+  std::size_t mark = 0;
 };
+struct Pending {
+  const HostStream* stream = nullptr;  // by address, never dereferenced: a caller's stream may be gone
+  std::size_t queued = 0, waited = 0;  // operations queued on it, and how many of them a wait has covered
+};
+// This thread's streams, in plain storage with no destructor, so the context a thread's exit destroys still reaches it.
+inline thread_local Pending pending[64];
+inline thread_local std::size_t pending_streams = 0;
+inline Pending& pending_on(const HostStream* s) noexcept {
+  for(std::size_t k = 0; k < pending_streams; ++k)
+    if(pending[k].stream == s) return pending[k];
+  if(pending_streams == 64) trap();
+  pending[pending_streams] = Pending{s, 0, 0};
+  return pending[pending_streams++];
+}
+
+// Work queued on any stream of this thread that no wait has covered yet.
+inline std::size_t unwaited() noexcept {
+  std::size_t n = 0;
+  for(std::size_t k = 0; k < pending_streams; ++k) n += pending[k].queued - pending[k].waited;
+  return n;
+}
 
 inline void capture_refuses() noexcept {
   if(counted.capturing) ++counted.refused;
@@ -57,6 +84,8 @@ struct Host {
   }
   void destroy_stream(Stream s) noexcept {
     ++counted.streams_destroyed;
+    Pending& gone = pending_on(s);
+    gone = pending[--pending_streams];  // its address may be a new stream's next
     delete s;
   }
   Event make_event() noexcept {
@@ -67,7 +96,11 @@ struct Host {
     ++counted.events_destroyed;
     delete e;
   }
-  void record(Event, Stream) noexcept { ++counted.records; }
+  void record(Event e, Stream s) noexcept {
+    ++counted.records;
+    e->on = s;
+    e->mark = pending_on(s).queued;
+  }
   void wait_event(Stream, Event) noexcept {}
   // A stream's name, and whether a capture is on: queries a capture allows, so neither is refused.
   unsigned long long stream_id(Stream s) noexcept { return reinterpret_cast<std::uintptr_t>(s); }
@@ -75,13 +108,23 @@ struct Host {
     *id = counted.capture;
     return counted.capturing;
   }
-  void sync_stream(Stream) noexcept {
+  void sync_stream(Stream s) noexcept {
     capture_refuses();
     ++counted.stream_waits;
+    pending_on(s).waited = pending_on(s).queued;
   }
-  void sync_event(Event) noexcept {
+  void sync_event(Event e) noexcept {
     capture_refuses();
     ++counted.event_waits;
+    if(e->on) pending_on(e->on).waited = std::max(pending_on(e->on).waited, e->mark);
+  }
+  // The host is about to see memory through work on `s`: every other stream's work must have been waited for.
+  static void observes(Stream s) noexcept {
+    for(std::size_t k = 0; k < pending_streams; ++k)
+      if(pending[k].stream != s && pending[k].queued != pending[k].waited) {
+        ++counted.early;
+        return;
+      }
   }
   static void* storage(std::size_t b) noexcept {
     void* p = std::aligned_alloc(reuse::ALIGN, reuse::aligned(b ? b : 1));
@@ -107,6 +150,7 @@ struct Host {
   }
   void release(Where, void* p) noexcept {
     capture_refuses();
+    observes(nullptr);
     ++counted.frees;
     std::free(p);
   }
@@ -114,12 +158,16 @@ struct Host {
     queued(s);
     std::memset(p, 0, b);
   }
-  void copy(void* dst, const void* src, std::size_t b, Dir, Stream s) noexcept {
+  void copy(void* dst, const void* src, std::size_t b, Dir d, Stream s) noexcept {
+    if(d == Dir::h2d || d == Dir::d2h) observes(s);
     queued(s);
     ++counted.copies;
     std::memmove(dst, src, b);
   }
-  static void queued(Stream s) noexcept { counted.last_stream = s; }
+  static void queued(Stream s) noexcept {
+    counted.last_stream = s;
+    ++pending_on(s).queued;
+  }
   static std::size_t threads(std::size_t n, std::size_t each, unsigned block) noexcept {
     const std::size_t g = (n + each - 1) / each;
     return (g < reuse::MAX_GRID ? g : reuse::MAX_GRID) * block;

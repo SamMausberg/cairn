@@ -152,9 +152,9 @@ public:
     binding_ = false;
   }
 
-  // A held run: synchronous work queues on one lane and nothing waits until the outermost run settles, once. Only
-  // work nothing on the host reads before the run ends may be held (compiler/lower/execution.py); an operation whose
-  // result the host reads calls observed() first, which waits for the run so far.
+  // A held run: synchronous work queues on one lane and nothing waits until the outermost run settles, once, or until
+  // an operation whose result the host reads, or which waits on the host, calls observed() first, which waits for the
+  // run so far. Only work the host can observe through nothing else may be held (compiler/lower/execution.py).
   void hold() noexcept { ++holding_; }
   void settle() noexcept {
     if(!holding_) trap();

@@ -40,10 +40,11 @@ inline void use_stream(void* stream) noexcept {
   else here().unbind();
 }
 
-// A run of synchronous device work that waits once, when the outermost run ends, instead of after each operation.
-// The lowering holds a function's body in one when its row shows that nothing in it reads device memory on the
-// host, waits on the host or allocates (compiler/lower/execution.py): by the time the run ends the host sees every
-// result, and a guard that fired in a lane has aborted the process, as when each operation waited.
+// A run of synchronous device work that waits once, when the outermost run ends or when the host is about to observe
+// something, instead of after each operation. The lowering holds a function's body in one when everything in it
+// through which the host could observe device memory calls observed() first, which waits for the run so far
+// (compiler/lower/execution.py): before the host observes anything the host sees every result, and a guard that fired
+// in a lane has aborted the process, as when each operation waited.
 class Held final {
 public:
   Held() noexcept { here().hold(); }
