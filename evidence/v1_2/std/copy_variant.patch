@@ -1,0 +1,15 @@
+--- a/src/cairn/std/vec.cairn
++++ b/src/cairn/std/vec.cairn
+@@ -89,7 +89,11 @@
+ // Cost: amortized one pass over `src`, one guard for the part it lands in.
+ pub fn extend_from[T:copy](v:rw<Vec[T]>, n:usize, src:ro<T>[n]) {
+   let wanted = v.len + n;
+-  reserve(v, wanted);
++  if wanted > len(v.data) { // a second growth path: copy what is held instead of exchanging it
++    let mut bigger = Buf[T](max(wanted, max(4, len(v.data) * 2)));
++    mem.copy(v.len, bigger[0..v.len], v.data[0..v.len]);
++    v.data = bigger;
++  }
+   mem.copy(n, v.data[v.len..wanted], src);
+   v.len = wanted;
+ }
