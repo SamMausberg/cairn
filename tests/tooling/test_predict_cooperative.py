@@ -184,8 +184,9 @@ def test_the_device_card_holds_the_target_s_published_limits():
     assert card.registers_per_sm == limits.registers_per_sm and card.threads_per_sm == limits.warps_per_sm * 32
     assert card.shared_per_sm == limits.shared_per_sm
     assert card.shared_reserved == limits.shared_per_sm - limits.shared_per_block_optin == 1024
-    assert card.resident(44, 256, 6144) == {"threads": 6, "registers": 5, "shared memory": 14}  # 44 is 48 a warp
-    assert card.resident(0, 128, 36864) == {"threads": 12, "shared memory": 2}
+    held = {"threads": 6, "registers": 5, "shared memory": 14, "blocks": 24}
+    assert card.resident(44, 256, 6144) == held  # 44 registers a thread are allocated as 48
+    assert card.resident(0, 128, 36864) == {"threads": 12, "shared memory": 2, "blocks": 24}
 
 
 def test_explain_shows_each_region_s_barriers_waits_and_collectives_at_their_lines():

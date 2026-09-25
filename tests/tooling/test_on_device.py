@@ -96,7 +96,7 @@ def test_a_timed_run_builds_beside_the_runtime_headers_and_runs_under_the_lock(m
 def test_only_the_owner_s_make_targets_set_the_gate():
     makefile = (ROOT / "Makefile").read_text()
     targets = {m.group(1) for m in re.finditer(r"^([\w-]+):\n(?:\t.*\n)*?\t[^\n]*CAIRN_GPU_TESTS=1", makefile, re.M)}
-    assert targets == {"gpu", "tune-device", "calibrate-device"}
+    assert targets == {"gpu", "tune-device", "calibrate-device", "device-limits"}
 
 
 def test_device_plans_are_priced_but_not_timed_without_the_target(monkeypatch):

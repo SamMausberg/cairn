@@ -7,6 +7,7 @@ for sm_90a without launching anything."""
 import dataclasses
 import json
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -72,6 +73,49 @@ def test_each_card_s_derived_figures_agree_with_its_published_ones(key):
         assert rate["tensor_f8"] == pytest.approx(rate["tensor_f16"] * 2, rel=0.02)
     if "tensor_f4" in rate:  # four times FP8 where FP8 with an f32 accumulator runs at half rate
         assert any(rate["tensor_f4"] == pytest.approx(rate["tensor_f8"] * times, rel=0.002) for times in (2, 4))
+
+
+# CUDA Programming Guide 13.4.2, Table 30: the most blocks an SM holds, by compute capability. For 12.x NVIDIA's
+# Blackwell Tuning Guide says 32; the table and CUDA's occupancy calculator say 24, which the cards take.
+BLOCKS_PER_SM = {"8.0": 32, "8.9": 24, "9.0": 32, "10.0": 32, "12.0": 24}
+
+
+@pytest.mark.parametrize("key", list(cards()))
+def test_each_card_holds_its_compute_capability_s_resident_block_limit(key):
+    spec = cards()[key]
+    d, said = spec.device, spec.source["source"]["occupancy"]
+    assert d.blocks_per_sm == BLOCKS_PER_SM[d.compute_capability] and f"{d.blocks_per_sm} blocks" in said
+    assert "blocks_per_sm" in spec.source["source"]["published"] and "No limit on resident blocks" not in said
+
+
+def test_an_sm_holds_blocks_as_cuda_counts_them():
+    """The review's case: 32 threads, 16 registers and no shared memory on the 5070 Ti were 48 blocks by threads
+    alone; the SM holds 24. A block of 48 threads takes two whole warps, and a block that asks for more than a block
+    may have is held by no SM."""
+    d = card("rtx-5070-ti").device
+    assert d.resident(16, 32) == {"threads": 48, "registers": 128, "shared memory": 100, "blocks": 24}
+    assert d.held(16, 32)["limited_by"] == ["blocks"] and d.held(16, 32)["occupancy"] == 0.5
+    assert d.resident(0, 48)["threads"] == 24 and d.occupancy(0, 48) == 1.0  # 24 blocks of two warps: all 48
+    assert d.resident(80, 32)["registers"] == 24  # each of 4 parts holds 6 warps of 2560 registers, not 25 in all
+    assert d.resident(0, 1056)["threads"] == 0 and d.resident(72, 1024)["registers"] == 0
+    assert d.resident(0, 256, 99 * 1024)["shared memory"] == 1  # the most one block may have
+    assert d.resident(0, 256, 99 * 1024 + 1)["shared memory"] == 0
+    assert d.resident(0, 256, 1)["shared memory"] == 102400 // 1152  # a byte takes a 128-byte unit beside the 1 KB
+
+
+@NVCC
+def test_the_resident_blocks_agree_with_cuda_s_occupancy_calculator():
+    """Every card over a grid of block sizes, registers and shared bytes against cuda_occupancy.h, the calculator
+    CUDA ships as a host header, built with g++: the same blocks by every limit, and the same limits binding.
+    Nothing runs on a device."""
+    sys.path.insert(0, str(ROOT / "tools" / "checks"))
+    import occupancy
+
+    if occupancy.header() is None:
+        pytest.skip("this CUDA toolkit has no cuda_occupancy.h")
+    found = occupancy.compare()
+    assert found["differ"] == [] and found["status"] == "agree"
+    assert set(found["cards"]) == set(cards()) and found["questions"] == 8 * 7728
 
 
 def test_a_card_is_named_by_its_key_or_the_start_of_one():

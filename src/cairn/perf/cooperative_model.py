@@ -5,8 +5,9 @@ names; none is a measurement until the owner's `make calibrate-device` replaces 
 Resources. A block holds its threads, the shared memory the checker laid out (every array and stage from a 128-byte
 boundary: what ptxas reports as the kernel's static shared memory) and its registers, which only the compiler knows:
 they count once something compiled the kernel, `cairn predict --inspect` or `cairn tune`. An SM holds as many blocks as
-the tightest of its limits allows (`profile.Device.resident`): its threads, its registers and its shared memory, with
-the 1 KB the system keeps beside each block.
+the tightest of its limits allows (`profile.Device.resident`, as CUDA's occupancy calculator counts): its threads in
+whole warps, its registers, its shared memory, with the 1 KB the system keeps beside each block, and the blocks it
+holds at all.
 
 Time. A launch, then the largest of four rates over the whole grid, since a running kernel overlaps them:
 
@@ -43,13 +44,8 @@ def resident(r: Region, card: Device) -> dict[str, Any]:
     """How many of this region's blocks one SM holds, by each limit, and which limit binds."""
     shape = r.coop
     shared = r.shared or shape.shared_bytes
-    by = card.resident(r.registers, shape.threads, shared)
-    blocks = min(by.values())
     return {
-        "blocks_per_sm": blocks,
-        "by_limit": by,
-        "limited_by": [k for k, n in by.items() if n == blocks],
-        "occupancy": round(blocks * shape.threads / card.threads_per_sm, 3),
+        **card.held(r.registers, shape.threads, shared),
         "shared_bytes_per_block": shared,
         "reserved_bytes_per_block": card.shared_reserved,
         "registers_per_thread": r.registers or None,
@@ -280,7 +276,7 @@ def said(region: dict[str, Any]) -> list[str]:
         r = d["resident"]
         by = ", ".join(f"{k} {n}" for k, n in r["by_limit"].items())
         out.append(f"    [specification limits] an SM holds {r['blocks_per_sm']} blocks, {r['occupancy']:.0%} of its "
-                   f"threads: by {by}, with {r['reserved_bytes_per_block']} bytes reserved a block")  # fmt: skip
+                   f"warps: by {by}, with {r['reserved_bytes_per_block']} bytes reserved a block")  # fmt: skip
     if d.get("census"):
         out.append(f"    [not counted] the census did not run: {d['census']}")
     return out

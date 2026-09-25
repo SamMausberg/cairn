@@ -125,6 +125,9 @@ def test_the_limits_agree_with_each_packaged_device_card(key):
     assert limits is not None, f"{key}: no LIMITS row for compute capability {card.compute_capability}"
     assert (limits.registers_per_sm, limits.warps_per_sm * 32, limits.shared_per_sm) == (
         card.registers_per_sm, card.threads_per_sm, card.shared_per_sm)  # fmt: skip
+    assert (limits.registers_per_thread, limits.threads_per_block, limits.shared_per_block_optin) == (
+        card.registers_per_thread, card.threads_per_block, card.shared_per_block)  # fmt: skip
+    assert card.shared_reserved == limits.shared_per_sm - limits.shared_per_block_optin == 1024
 
 
 def test_a_capability_without_a_published_row_has_unknown_limits():

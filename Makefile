@@ -3,7 +3,7 @@ PYTHON ?= python3
 JOBS ?= auto
 CAIRN = $(PYTHON) bin/cairn
 
-.PHONY: help docs site editors all check lint format test native systems proof lean gpu tune-device calibrate-device device-build embedded context wheel audit demo demo-repair demo-numeric demo-visual demo-implement bench scale
+.PHONY: help docs site editors all check lint format test native systems proof lean gpu tune-device calibrate-device device-limits device-build embedded context wheel audit demo demo-repair demo-numeric demo-visual demo-implement bench scale
 all: lint test proof
 
 help:
@@ -19,6 +19,7 @@ help:
 	@echo 'gpu       runs device code: CUDA runtime, lanes, device plans, apps, the device benchmark'
 	@echo 'tune-device      times device plans: FILE=... SYMBOL=... AT=n=1e7 (runs device code)'
 	@echo 'calibrate-device measures the device into results/perf_model/device.json (runs device code)'
+	@echo 'device-limits    asks the device for the limits its card takes from NVIDIA (starts CUDA, launches nothing)'
 	@echo 'device-build  every test that compiles device code, where nvcc is installed; nothing runs on a device'
 	@echo 'embedded  the freestanding image under QEMU (needs an AArch64 host)'
 	@echo 'bench     the preregistered CPU baseline suite (hours)'
@@ -110,6 +111,11 @@ tune-device:
 
 calibrate-device:
 	CAIRN_GPU_TESTS=1 PYTHONPATH=src $(PYTHON) -m cairn.perf.on_device --out results/perf_model/device.json
+
+# The limits the occupancy counts, the resident blocks an SM holds among them, as the device reports them beside the
+# card of its compute capability. It starts a CUDA context and launches no kernel; only the owner runs it.
+device-limits:
+	CAIRN_GPU_TESTS=1 $(PYTHON) tools/checks/occupancy.py --device --out results/perf_model/device_limits.json
 
 # Every test that needs nvcc, run where nvcc is installed; CAIRN_GPU_TESTS stays unset, so each device run skips and
 # each device build happens. NVCC_HOST is nvcc's host compiler for the builds a test does not name one for
