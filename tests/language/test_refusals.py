@@ -197,6 +197,38 @@ def test_a_cycle_of_constants_is_one_refusal():
     assert record["code"] == "E-CONST" and "further" not in record
 
 
+def test_a_check_that_stops_after_the_first_refusal_says_what_stopped_it(monkeypatch, tmp_path, capsys):
+    """A fault, or a limit, met after the first refusal ends the check. The record keeps the first refusal and the
+    exit status, and names what ended it, so a reader knows the functions after that point were not judged."""
+    from cairn.compiler.check import refusals
+
+    source = THREE + "\nfn fourth() -> u64 = 4;\n"  # a source of its own, so no cached check answers for it
+    first = where(alone(source))
+
+    def fault(*_):
+        raise KeyError("a row the fixed point read")
+
+    def limit(*_):
+        raise Diagnostic("E-EFFECT-LIMIT", "The effect fixed point did not settle.")
+
+    monkeypatch.setattr(refusals, "fixed_point", fault)
+    with pytest.raises(Diagnostic) as error:
+        compile_program(source, every=True)
+    assert where(error.value.data) == first and error.value.data["further_stopped"] == "KeyError"
+    assert isinstance(error.value.abandoned, KeyError)
+    path = tmp_path / "stopped.cairn"
+    path.write_text(source)
+    assert main(["check", str(path), "--format", "json"]) == 1
+    assert json.loads(capsys.readouterr().out)["further_stopped"] == "KeyError"
+    assert main(["check", str(path), "--format", "human"]) == 1
+    assert "; the check stopped early on KeyError, so later functions were not judged" in capsys.readouterr().err
+    monkeypatch.setattr(refusals, "fixed_point", limit)
+    with pytest.raises(Diagnostic) as error:
+        compile_program(source, every=True)
+    assert where(error.value.data) == first and error.value.data["further_stopped"] == "E-EFFECT-LIMIT"
+    assert error.value.abandoned is None
+
+
 def test_a_parse_error_is_reported_alone():
     record = every("fn a( -> u64 = 1;\nfn b() -> u64 = ;\n")
     assert record == alone("fn a( -> u64 = 1;\nfn b() -> u64 = ;\n")

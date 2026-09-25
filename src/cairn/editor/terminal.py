@@ -15,7 +15,7 @@ from typing import TextIO
 from ..compiler.syntax.lexing import TOKEN
 
 SHOWN = {"protocol", "status", "code", "message", "line", "column", "trust", "file", "module"}  # in the header
-TALLIED = {"further", "further_omitted", "not_judged"}  # said once, after every refusal of a check (`tally`)
+TALLIED = {"further", "further_omitted", "not_judged", "further_stopped"}  # said once, after a check's refusals
 TAUGHT = {"repair_hint", "card", "source_line", "available_names", "available_variants", "available_fields"}  # below
 
 
@@ -77,15 +77,17 @@ def refusals(located: dict, raw: dict, source: Callable[[dict], str], stream: Te
 
 
 def tally(data: dict, stream: TextIO | None = None) -> None:
-    """After the refusals of one check: how many there were, and how many functions they left without a verdict."""
+    """After the refusals of one check: how many there were, how many functions they left without a verdict, and what
+    ended the check early."""
     stream = stream or sys.stderr
     s = paint(stream)
-    omitted, lost = data.get("further_omitted", 0), data.get("not_judged", 0)
+    omitted, lost, stopped = data.get("further_omitted", 0), data.get("not_judged", 0), data.get("further_stopped")
     count = 1 + len(data.get("further", [])) + omitted
-    if count == 1 and not lost:
+    if count == 1 and not lost and not stopped:
         return
     said = f"{count} refusal{'s' * (count > 1)}" + (f", {omitted} not shown" if omitted else "")
     said += f"; {lost} function{'s' * (lost > 1)} not judged because of {'them' if count > 1 else 'it'}" if lost else ""
+    said += f"; the check stopped early on {stopped}, so later functions were not judged" if stopped else ""
     print(s("error", "1;31") + s(f": {said}", "1"), file=stream)
 
 

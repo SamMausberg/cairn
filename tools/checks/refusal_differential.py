@@ -4,7 +4,7 @@
 It takes every program `emission_identity.py` takes: each example, one program importing every std module, every
 CAIRN program written into a test and every `cairn` block of the docs, including each `cairn rejects E-CODE` one. A
 program the checker refuses is checked again with `every`, and its record must be the same record with at most
-`further`, `further_omitted` and `not_judged` added. Each further refusal is a whole diagnostic, in source order,
+`further`, `further_omitted`, `not_judged` and `further_stopped` (a limit that ended the check) added. Each further refusal is a whole diagnostic, in source order,
 never the first again; no check ends early on a fault; and an accepted program is accepted either way. It prints the
 counts as JSON, names every program that breaks one of these, and exits 1 when there is one.
 """
@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 from cairn.compiler.cairnc import Diagnostic, compile_program
 from checks.emission_identity import programs
 
-ADDED = ("further", "further_omitted", "not_judged")
+ADDED = ("further", "further_omitted", "not_judged", "further_stopped")
 WHERE = ("code", "message", "line", "column")
 
 

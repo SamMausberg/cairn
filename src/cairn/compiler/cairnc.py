@@ -42,7 +42,9 @@ def compile_program(source: str, capture_sites: bool = False, parsed: Program | 
     With `every`, the checker goes on after a refusal wherever the rest can still be judged: the Diagnostic raised is
     the first refusal as it is without `every`, and its record adds `further`, every other refusal no earlier one
     explains, in source order, at most twenty of them (`further_omitted` counts the rest), and `not_judged`, how many
-    of the program's functions got no verdict because of a refusal. A parse error is reported alone."""
+    of the program's functions got no verdict because of a refusal. `further_stopped` names what ended the check
+    after the first refusal, when a limit or an internal fault did: the limit's code, or the fault's class. A parse
+    error is reported alone."""
     p = specialize(derive(link(parsed or Parser(source).parse())))
     checker = Checker(p, capture_sites, every)
     receipts = checker.check()

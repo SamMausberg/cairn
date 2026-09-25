@@ -7,7 +7,8 @@ instance, a layout, an implementation it began) is taken back, and the next decl
 refusal is the one a check that stops meets. A later one is reported only when no other refusal can explain it: a
 rule that reads the rows of what a function calls is judged only where no refused body is reached, nor a reference
 whose row its implementations have not yet joined, and a refusal met
-again through what two checks share is said once. Nothing here is mechanically proved.
+again through what two checks share is said once. A limit or an internal fault met after the first refusal ends the
+check there, and the record names it under `further_stopped`. Nothing here is mechanically proved.
 """
 
 from __future__ import annotations
@@ -69,9 +70,11 @@ def kept(c: Checker, about: str, rows: bool):
 
 
 def stop(c: Checker, error: Exception) -> Stopped:
-    """What ends the check after a refusal: a limit, or a fault that `abandoned` keeps for whoever tests the check."""
+    """What ends the check after a refusal: a limit, or a fault that `abandoned` keeps for whoever tests the check.
+    `stopped` names it for the record: the limit's code, or the fault's class."""
     fault = not isinstance(error, Diagnostic) or error.data["code"] == "E-INTERNAL"
     c.abandoned = error if fault else None
+    c.stopped = error.data["code"] if isinstance(error, Diagnostic) else type(error).__name__
     return Stopped()
 
 
@@ -172,7 +175,8 @@ def order(d: dict) -> tuple:
 
 def verdict(c: Checker) -> Diagnostic:
     """The first refusal exactly as the check met it, carrying in source order every further refusal no other refusal
-    can explain, what the cap left out, and how many functions of the program got no verdict."""
+    can explain, what the cap left out, how many functions of the program got no verdict, and what ended the check
+    early, when something did."""
     assert c.refusals
     refused = {about for about, *_ in c.refusals}
     (about, _, first, key), further = c.refusals[0], []
@@ -190,5 +194,6 @@ def verdict(c: Checker) -> Diagnostic:
     first.data.update({"further": further[:FURTHER]} if further else {})
     first.data.update({"further_omitted": len(further) - FURTHER} if len(further) > FURTHER else {})
     first.data.update({"not_judged": len(lost)} if lost else {})
+    first.data.update({"further_stopped": c.stopped} if c.stopped else {})
     first.abandoned = c.abandoned
     return first

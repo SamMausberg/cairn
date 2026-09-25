@@ -68,6 +68,17 @@ def test_an_access_outside_the_block_is_a_race(name):
     refused("E-PARALLEL-RACE", region(REFUSED[name]))
 
 
+@pytest.mark.parametrize(("lane", "form"), [("b", "out[b * S + j] with j below"), ("j", "out[j * S + k] with k below")])
+def test_the_race_names_the_block_form_with_an_offset_apart_from_the_lane(lane, form):
+    """The block form names the lane and an offset within its block, and the offset is never the lane's own name:
+    with `parallel j`, `out[j * S + j]` would name one element per lane, not a block."""
+    source = (
+        "fn f(k:usize, n:usize, out:rw<u64>[n]) {\n  parallel LANE in k { out[LANE] = 1; out[LANE * 2 + 1] = 2; }\n}\n"
+    )
+    said = refused("E-PARALLEL-RACE", source.replace("LANE", lane))["message"]
+    assert f"may touch only out[{lane}], or only its own block {form} one constant S." in said
+
+
 # Per-block histograms, then a sequential merge: the shape the lane rule used to force into one thread.
 HISTOGRAM = """
 const BLOCK:usize = 4096;
