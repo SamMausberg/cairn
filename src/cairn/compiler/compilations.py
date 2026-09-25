@@ -1,5 +1,6 @@
 """One compile per distinct source in a process, shared by every tool that reads one: the edit, plan and
-implementation hosts, `cairn state`, `cairn mcp` and `cairn lsp`.
+implementation hosts, `cairn state`, `cairn mcp`, `cairn lsp`, and `cairn predict` with the device inspection it
+reads.
 
 A compile is keyed by everything it reads: the source text, the compiler this process loaded (`compiler`), the
 packaged `std` modules as they are on disk now (`library`, since each link reads them again), whether the checker
