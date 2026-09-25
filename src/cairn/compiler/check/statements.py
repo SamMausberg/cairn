@@ -69,11 +69,12 @@ def s_let(c: Checker, s: Stmt):
     if s.name in c.env:
         fail("E-SHADOW", f"{s.name} is already bound; shadowing is forbidden in this subset.", s)
     c.spawning = s.name if s.exprs[0].tag == "spawn" else ""
+    literal = s.exprs[0].val if s.ty is None and s.exprs[0].tag == "int" and not s.exprs[0].char else ""
     ty = c.expr(s.exprs[0], c.resolve(s.ty, s) if s.ty else None)
     if ty == VOID or (ty.mode != "value" and s.exprs[0].tag != "str"):
         fail("E-VIEW-ALIAS", "Local view aliases and void values are outside this subset.", s)
     s.ty = ty
-    c.bind(s.name, Binding(ty, s.tag == "reg"), s)
+    c.bind(s.name, Binding(ty, s.tag == "reg", literal=literal), s)
     if s.tag == "let":
         facts.defined(c, s.name, s.exprs[0], origin=("let", s))
 

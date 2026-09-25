@@ -13,6 +13,11 @@ PREC = {"||": 1, "&&": 2, "|": 3, "^": 4, "&": 5, "==": 6, "!=": 6, "<": 7, "<="
 PREC |= {"+": 8, "-": 8, "*": 9, "/": 9, "%": 9}
 REDUCERS = {"+", "*", "&", "|", "^", "add_wrap", "mul_wrap", "min", "max"}
 ARM_STATEMENTS = {"return", "break", "continue", "assign", "expr"}  # what an arm may be without braces
+HABITS = {  # what another language's spelling is in CAIRN, said where the parser meets it
+    "as": " CAIRN has no `as`: convert with a call, u64(x), which checks the range.",
+    "::": " CAIRN has no `::`: a module's name is followed by `.`, as in vec.push, and an i64's minimum is the "
+    "literal -9223372036854775808.",
+}
 
 
 def copied(e: Expr) -> Expr:
@@ -57,7 +62,8 @@ class ExpressionParser:
     def need(self, *expected: str):
         for s in expected:
             if not self.eat(s):
-                fail("E-PARSE", f"Expected {s!r}, found {self.t.s!r}.", self.t)
+                habit = HABITS.get(self.t.s + (self.ahead(1) if self.t.s == ":" else ""), "")
+                fail("E-PARSE", f"Expected {s!r}, found {self.t.s!r}.{habit}", self.t)
 
     def ident(self) -> str:
         t = self.t
@@ -207,6 +213,9 @@ class ExpressionParser:
             if t.s[0] == "'" and len(text.encode("latin-1", "replace")) != 1:
                 fail("E-LEX", "A character literal is exactly one byte.", t)
             e = Expr("str", text, [], *at) if t.s[0] == '"' else Expr("int", str(ord(text)), [], *at, char=True)
+        elif t.s in {"if", "match"}:  # Neither yields a value, as it does in Rust.
+            fail("E-NAME", f"{t.s} is a statement, not an expression: declare the value first, let mut x = ...;, "
+                 "and assign it in each branch.", t)  # fmt: skip
         else:
             e = Expr("name", self.ident(), [], *at)
         e.start, e.end = self.ts[start].start, self.ts[self.i - 1].end

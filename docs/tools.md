@@ -33,7 +33,7 @@ error[E-LEASED]: data is lent to left until wait(left).
   = note: the tasks card states this rule: cairn rules E-LEASED
 ```
 
-Every refusal names the rule card that owns its code, and [`cairn rules`](#cairn-rules) prints that card. Where the compiler can state the smallest fix without guessing, the refusal carries it as `= help`: a close name for a misspelled one (`did you mean total?`), the conversion between two numeric types, or the change a rule asks for. A code whose message already says the fix gets none, so nothing is said twice. The JSON record keeps every field it had and adds the two as `card` and `repair_hint`, from `check`, `build`, `run`, `test`, `validate` and every other command. A program stopped by a failed guard is reported as stopped by `SIGABRT`.
+Every refusal names the rule card that owns its code, and [`cairn rules`](#cairn-rules) prints that card. Where the compiler can state the smallest fix without guessing, the refusal carries it as `= help`: a close name for a misspelled one (`did you mean total?`), the conversion between two numeric types, the part `b[0..n]` of an owner passed where `n` elements are expected, the annotation an integer literal's binding needs, the library function an import by name put in place of a builtin, or the change a rule asks for. A code whose message already says the fix gets none, so nothing is said twice. The JSON record keeps every field it had and adds the two as `card` and `repair_hint`, from `check`, `build`, `run`, `test`, `validate` and every other command. A program stopped by a failed guard is reported as stopped by `SIGABRT`.
 
 ## Every refusal in one check
 

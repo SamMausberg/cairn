@@ -105,3 +105,40 @@ def test_outside_a_host_a_fix_never_speaks_of_one():
         "code": "E-MINE",
         "message": "A recipe chose this code.",
     }
+
+
+# The refusals of the 1.1 evaluation whose message did not say what to change (evidence/v1_1/friction), each with the
+# fix the compiler knows.
+EXTENT = "fn total(n:usize, xs:ro<u64>[n]) -> u64 { return xs[0]; }\n"
+STATED = {
+    "a Buf where [n] is expected: the part": (
+        EXTENT + "fn main() -> i32 { let n:usize = 4; let mut v = Buf[u64](n); return i32(total(n, v)); }\n",
+        "v is len(v) elements long, which the checker does not tie to n: pass the part v[0..n], whose bound is "
+        "checked once at the call.",
+    ),
+    "an unannotated literal's u64: the annotation": (
+        "fn main() -> i32 { let mut xs = Buf[u64](4); let mut i = 0; xs[i] = 1; return 0; }\n",
+        "i is a u64 because an integer literal is one when nothing expects another type: declare it "
+        "let mut i:usize = 0;",
+    ),
+    "an import by name that hides a builtin: its name": (
+        'import std.io (println);\nfn main() -> i32 { let count:u64 = 3; println("count ", count); return 0; }\n',
+        "println here is std.io.println, which the import by name put in place of the builtin println: take "
+        "println out of the import's list, and call std.io.println through its module where you mean it.",
+    ),
+}
+
+
+@pytest.mark.parametrize("case", STATED)
+def test_a_refusal_states_the_fix_the_compiler_knows(case):
+    from emitted import refused
+
+    source, hint = STATED[case]
+    assert taught(refused("E-TYPE-MISMATCH", source))["repair_hint"] == hint
+
+
+def test_a_literal_binding_where_no_number_is_expected_gets_that_type_s_hint():
+    from emitted import refused
+
+    said = refused("E-TYPE-MISMATCH", "fn f(b:bool) -> bool = b;\nfn main() -> i32 { let x = 0; f(x); return 0; }\n")
+    assert said["literal_binding"]["literal"] == "0" and fix(said) == "Compare to make a bool: x != 0."

@@ -11,6 +11,7 @@ it sits in the reply the model wrote (`located`).
 from __future__ import annotations
 
 import difflib
+import re
 from typing import Any
 
 from ..compiler.cairnc import Diagnostic, Parser
@@ -119,6 +120,10 @@ def fix(d: dict[str, Any], known: tuple[str, ...] = (), host: bool = True) -> st
         return f"Ask first: an expand request naming {', '.join(d['symbols'])}."
     if code == "E-TYPE-MISMATCH" and {"expected_type", "actual_type"} <= set(d):
         want, got = d["expected_type"], d["actual_type"]
+        if d.get("literal_binding") and want in NUMERIC:
+            name, literal, mutable = (d["literal_binding"][k] for k in ("name", "literal", "mutable"))
+            return (f"{name} is a {got} because an integer literal is one when nothing expects another type: "
+                    f"declare it let {'mut ' if mutable else ''}{name}:{want} = {literal};")  # fmt: skip
         if want in {"f32", "f64"} and got in NUMERIC:  # only an integer target is range checked
             return (
                 f"Convert explicitly, {want}(x), which rounds to the nearest {want} and is not range checked, "
@@ -128,7 +133,28 @@ def fix(d: dict[str, Any], known: tuple[str, ...] = (), host: bool = True) -> st
             return f"Convert explicitly, {want}(x), which traps outside {want}'s range, or compute in {want}."
         if want == "bool" and got in NUMERIC:
             return "Compare to make a bool: x != 0."
+        if part := owner_part(want, got):
+            return part
+    if code in {"E-TYPE-MISMATCH", "E-ARITY"} and d.get("hides_builtin"):
+        name, callee = d["hides_builtin"], d.get("callee", "")
+        return (f"{name} here is {callee}, which the import by name put in place of the builtin {name}: take {name} "
+                f"out of the import's list, and call {callee} through its module where you mean it.")  # fmt: skip
     return HINTS.get(code)
+
+
+VIEW = re.compile(r"(ro|rw)<(.+)>\[(.+)\](@\w+)?$")
+
+
+def owner_part(want: str, got: str) -> str | None:
+    """A Buf handed where a view of a named extent is expected: `Buf[u64](n)` is `len(b)` elements long, which the
+    checker does not tie to `n`, so the fix is the part `b[0..n]`, whose bound is checked once at the call."""
+    expected, actual = VIEW.match(want), VIEW.match(got)
+    owner = re.fullmatch(r"len\((.+)\)", actual.group(3)) if actual else None
+    if not expected or not owner or expected.group(2) != actual.group(2) or expected.group(3).startswith("len("):
+        return None
+    name, n = owner.group(1), expected.group(3)
+    return (f"{name} is len({name}) elements long, which the checker does not tie to {n}: pass the part "
+            f"{name}[0..{n}], whose bound is checked once at the call.")  # fmt: skip
 
 
 NUMERIC = {"u8", "u16", "u32", "u64", "usize", "i8", "i16", "i32", "i64", "f32", "f64"}
