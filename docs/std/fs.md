@@ -10,8 +10,8 @@ Files by path. A path here is its bytes alone, without the NUL a C call needs: e
 pub fn open(n:usize, path:ro<u8>[n]@host, flags:i32) -> std.core.Result[std.io.File, std.io.IoError]
 
 // The whole file, read until the kernel says it ended: a pipe or a /proc file whose size is 0 reads whole.
-// effects: alloc, diverge, ffi:__errno_location, ffi:close, ffi:open, ffi:read, ffi_precondition, free, io, local_read,
-// local_write, mmio, read:path, stack_storage, trap, zero_init
+// effects: alloc, diverge, ffi:__errno_location, ffi:close, ffi:lseek, ffi:open, ffi:read, ffi_precondition, free, io,
+// local_read, local_write, mmio, read:path, stack_storage, trap, zero_init
 pub fn read(n:usize, path:ro<u8>[n]@host) -> std.core.Result[std.vec.Vec[u8], std.io.IoError]
 
 // Create the file or cut it to nothing, then write all of `data`.

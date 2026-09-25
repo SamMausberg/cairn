@@ -100,7 +100,7 @@ fn main() -> i32 {
 }
 ```
 
-When a `Vec` runs out of room, its capacity doubles and its elements move with `swap`, so an owner is never copied and `push` costs amortized O(1). `pop` and `remove` move an element out as an `Option[T]`. `get` takes only copyable elements, and `set` takes any. Both trap on an index at or past `len`.
+When a `Vec` runs out of room, its capacity doubles and its elements move with `swap`, so an owner is never copied and `push` costs amortized O(1). The move is one pass over two views of the same extent, so no index in it is guarded, and `extend_from` copies a view into one part. `pop` and `remove` move an element out as an `Option[T]`. `get` takes only copyable elements, and `set` takes any. Both trap on an index at or past `len`.
 
 ## std.text
 
@@ -228,7 +228,7 @@ fn main() -> i32 {
 
 `close` returns nothing, because a function that consumes a linear value cannot return a status. If you need one, report it through a borrow.
 
-A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
+A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. `read_to_end` asks a regular file how much is left first, so the file arrives in one allocation, and a pipe's `Vec` doubles as it fills. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
 
 ## std.fs
 

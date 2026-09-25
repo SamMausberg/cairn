@@ -1,0 +1,202 @@
+{
+  "schema": "cairn.bench.std_input/1",
+  "compiler": "clang version 21.1.8 (https://github.com/llvm/llvm-project 2078da43e25a4623cab2d0d60decddf709aaea28)",
+  "machine": {
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "cpus": 16
+  },
+  "load_average": {
+    "before": [
+      15.94,
+      45.02,
+      54.33
+    ],
+    "after": [
+      15.4,
+      41.72,
+      52.88
+    ]
+  },
+  "input_bytes": 80740352,
+  "note": "before is this branch with extend_from growing by a copy (mem.copy into the bigger Buf) instead of reserve's exchange; after is this branch; both built from scratch trees; four other agents shared the machine",
+  "arms": {
+    "after": {
+      "tree": "c12/std-ergonomics-vec-growth",
+      "programs": {
+        "chunk_loop": {
+          "file": {
+            "median_s": 0.3017,
+            "min_s": 0.2745,
+            "max_s": 0.3545,
+            "max_rss_kb": 199944,
+            "runs": [
+              0.3545,
+              0.3524,
+              0.2745,
+              0.2784,
+              0.3017
+            ]
+          },
+          "pipe": {
+            "median_s": 0.3465,
+            "min_s": 0.3206,
+            "max_s": 0.441,
+            "max_rss_kb": 199968,
+            "runs": [
+              0.441,
+              0.3822,
+              0.3418,
+              0.3465,
+              0.3206
+            ]
+          }
+        },
+        "read_to_end": {
+          "file": {
+            "median_s": 0.1048,
+            "min_s": 0.0905,
+            "max_s": 0.1244,
+            "max_rss_kb": 82104,
+            "runs": [
+              0.1244,
+              0.0905,
+              0.1102,
+              0.1048,
+              0.0918
+            ]
+          },
+          "pipe": {
+            "median_s": 0.3495,
+            "min_s": 0.3194,
+            "max_s": 0.3916,
+            "max_rss_kb": 200072,
+            "runs": [
+              0.3916,
+              0.3495,
+              0.3465,
+              0.3855,
+              0.3194
+            ]
+          }
+        },
+        "push_each": {
+          "file": {
+            "median_s": 0.5422,
+            "min_s": 0.5025,
+            "max_s": 0.6206,
+            "max_rss_kb": 278888,
+            "runs": [
+              0.6206,
+              0.5422,
+              0.5507,
+              0.5025,
+              0.527
+            ]
+          },
+          "pipe": {
+            "median_s": 0.7461,
+            "min_s": 0.7061,
+            "max_s": 0.9058,
+            "max_rss_kb": 331160,
+            "runs": [
+              0.9058,
+              0.7461,
+              0.7536,
+              0.7381,
+              0.7061
+            ]
+          }
+        }
+      }
+    },
+    "before": {
+      "tree": "scratch copy of the branch with the copy variant (see README)",
+      "programs": {
+        "chunk_loop": {
+          "file": {
+            "median_s": 0.2667,
+            "min_s": 0.2188,
+            "max_s": 0.296,
+            "max_rss_kb": 200072,
+            "runs": [
+              0.296,
+              0.2891,
+              0.265,
+              0.2667,
+              0.2188
+            ]
+          },
+          "pipe": {
+            "median_s": 0.3441,
+            "min_s": 0.2502,
+            "max_s": 0.3814,
+            "max_rss_kb": 200044,
+            "runs": [
+              0.3814,
+              0.346,
+              0.282,
+              0.3441,
+              0.2502
+            ]
+          }
+        },
+        "read_to_end": {
+          "file": {
+            "median_s": 0.0941,
+            "min_s": 0.0775,
+            "max_s": 0.1483,
+            "max_rss_kb": 82108,
+            "runs": [
+              0.1218,
+              0.0941,
+              0.0788,
+              0.1483,
+              0.0775
+            ]
+          },
+          "pipe": {
+            "median_s": 0.3533,
+            "min_s": 0.3043,
+            "max_s": 0.4106,
+            "max_rss_kb": 200040,
+            "runs": [
+              0.3966,
+              0.4106,
+              0.3533,
+              0.3497,
+              0.3043
+            ]
+          }
+        },
+        "push_each": {
+          "file": {
+            "median_s": 0.538,
+            "min_s": 0.5106,
+            "max_s": 0.61,
+            "max_rss_kb": 278936,
+            "runs": [
+              0.61,
+              0.6063,
+              0.5106,
+              0.5171,
+              0.538
+            ]
+          },
+          "pipe": {
+            "median_s": 0.7103,
+            "min_s": 0.6669,
+            "max_s": 0.871,
+            "max_rss_kb": 331156,
+            "runs": [
+              0.871,
+              0.7925,
+              0.7103,
+              0.6669,
+              0.6956
+            ]
+          }
+        }
+      }
+    }
+  }
+}
