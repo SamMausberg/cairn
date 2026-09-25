@@ -181,6 +181,27 @@ def test_inlay_hints_stay_in_the_requested_range(doc):
     assert [h["label"] for h in inlay_hints(doc, span)] == [":Op"]
 
 
+def test_an_instance_whose_type_arguments_nest_is_read_as_its_function():
+    """`twice[Box[u64]]` is an instance of `twice`: its row is the hint after twice's signature and the effects its
+    hover names, and its locals have their types."""
+    text = """struct Box[T] { v:T; }
+fn twice[T:copy](x:T, n:u64) -> Box[T] {
+  let m = n * 2;
+  return Box[T](x);
+}
+fn main() -> i32 {
+  let b = twice[Box[u64]](Box[u64](3), 4);
+  return i32(b.v.v);
+}
+"""
+    doc = Document(text)
+    assert doc.diagnostics == [] and doc.rows["twice[Box[u64]]"] == ["trap"]
+    rows = [h for h in inlay_hints(doc, None) if h["label"] == "effects: trap"]
+    assert [text.split("\n")[h["position"]["line"]][:9] for h in rows] == ["fn twice[", "fn main()"]
+    assert ":u64" in labels(doc, "let m")
+    assert hover(doc, text.index("twice[Box") + 1)["contents"]["value"].endswith("Effects: `trap`.")
+
+
 def fixed(text, needle, offset=0):
     """The one quick fix at `needle`, applied, and the diagnostic of the result (None when it compiles)."""
     doc = Document(text)
