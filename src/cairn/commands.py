@@ -114,7 +114,7 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                                      "this sanitizer (address also checks undefined behaviour and leaks) and run it "
                                      "without the memory cap, which its shadow memory would exceed."}),
     ({"run", "test"}, "--memory-mib", {"type": int, "default": 1024,
-                                       "help": "Native address-space cap, 64..65536 MiB; not a sandbox."}),
+                                       "help": "Native memory cap on data (heap and thread stacks, 8 MiB each), 64..65536 MiB; not a sandbox."}),
     ({"build", "export"}, "--kind", {"choices": ["library", "exe"]}),
     ({"emit", "build", "export"}, "--header", {"action": "store_true", "help": "The C header of a library: emit prints it, "
                                      "build writes NAME.h beside the library and holds the library to its layouts."}),

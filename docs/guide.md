@@ -84,7 +84,7 @@ typed: 3 functions
 cairn run demo
 ```
 
-`run` builds a native executable in a fresh directory under `build/` and runs it with its address space capped. At a terminal the program writes to the terminal, and `cairn` exits with the program's status:
+`run` builds a native executable in a fresh directory under `build/` and runs it with its memory capped. At a terminal the program writes to the terminal, and `cairn` exits with the program's status:
 
 ```text
 average(10, 20) = 15
