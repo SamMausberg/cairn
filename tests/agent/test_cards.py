@@ -4,6 +4,7 @@ import re
 
 from cairn.agent.agent_tools import EditSession
 from cairn.agent.teaching import CARDS, CODES, TOOL_CARDS, card_of, every_card, select_cards
+from sources import cairn_sources
 
 
 def test_spacing_does_not_hide_memory():
@@ -49,7 +50,7 @@ def emitted() -> dict[str, str]:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Constant) and isinstance(node.value, str) and CODE.fullmatch(node.value):
                 found.setdefault(node.value, path.relative_to(SOURCE).as_posix())
-    for path in sorted(SOURCE.rglob("*.cairn")):
+    for path in cairn_sources(SOURCE):
         for code in re.findall(r'"(E-[A-Z0-9-]+): ', path.read_text(encoding="utf-8")):
             found.setdefault(code, path.relative_to(SOURCE).as_posix())
     return {code: where for code, where in found.items() if code not in NOT_EMITTED}

@@ -19,6 +19,7 @@ from cairn.compiler.effects import EFFECTS
 from cairn.compiler.lexing import RESERVED
 from cairn.compiler.tree import PLACES
 from cairn.editor import grammar
+from sources import cairn_sources
 
 ROOT = Path(__file__).resolve().parents[2]
 GRAMMAR = ROOT / "editors" / "vscode" / "syntaxes" / "cairn.tmLanguage.json"
@@ -243,7 +244,7 @@ def test_the_real_engine_agrees_on_every_cairn_file():
     modules = textmate_modules()
     if shutil.which("node") is None or modules is None:
         pytest.skip("needs node and an installed vscode-textmate (set CAIRN_TEXTMATE_MODULES)")
-    files = sorted(p for p in ROOT.rglob("*.cairn") if not {".claude", "results"} & set(p.relative_to(ROOT).parts))
+    files = cairn_sources(ROOT)
     script = Path(__file__).with_name("textmate.js")
     run = subprocess.run(["node", str(script), str(modules), str(GRAMMAR), *map(str, files)], capture_output=True,
                          text=True, timeout=300, check=True)  # fmt: skip

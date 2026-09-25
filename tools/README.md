@@ -9,5 +9,6 @@ Scripts that check the compiler, generate fixtures, write records and cut releas
 | `ai/` | the agent loop, its scripted demos, the context measurement and the model trials, which run a model only when given one |
 | `release/` | the release gates' collectors, the repository audit, the opt-in private publisher, the label sync with the strict reader of the YAML under `.github/`, and the capability matrix `make docs` writes into `docs/verification.md` |
 | `support.py` | what the scripts share: compiler flags and profiles from `cairn.projects.toolchain`, the device lock, fixture drift, and where `lake` is |
+| `sources.py` | the `.cairn` files under a folder, never the `.cairn` directory `cairn tune` keeps beside a program; it imports nothing from the package |
 
 [docs/internals.md](../docs/internals.md#testing) says what each check establishes, and [docs/internals.md](../docs/internals.md#releasing) how the release scripts are used.

@@ -13,6 +13,7 @@ import pytest
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.project import load_project
 from emitted import contract, device_build, on_device, refused, watched
+from sources import cairn_sources
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE = ROOT / "examples" / "cooperative"
@@ -44,7 +45,7 @@ def test_the_device_configuration_agrees_with_its_plain_loops(tmp_path):
         assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
 
 
-@pytest.mark.parametrize("path", sorted((EXAMPLE / "refused").glob("*.cairn")), ids=lambda p: p.stem)
+@pytest.mark.parametrize("path", cairn_sources(EXAMPLE / "refused"), ids=lambda p: p.stem)
 def test_each_refused_program_is_refused_with_the_code_it_names(path):
     source = path.read_text()
     code = re.match(r"// Refused with (E-[A-Z-]+)", source).group(1)

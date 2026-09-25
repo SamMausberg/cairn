@@ -11,6 +11,7 @@ from cairn.compiler import cairnc, compilations, modules
 from cairn.compiler.cairnc import Diagnostic, compile_program, compile_source
 from cairn.compiler.compilations import Cache, Compilation
 from cairn.projects.project import load_project
+from sources import cairn_sources
 
 ROOT = Path(__file__).resolve().parents[2]
 S = (
@@ -21,7 +22,7 @@ S = (
 BROKEN = S.replace("return step(x);", "return step(true);") + "fn other() -> u64 { return false; }\n"
 # Project manifests only: a harness mapping under examples/ is a .toml too.
 MANIFESTS = [p for p in (ROOT / "examples").rglob("*.toml") if "project" in tomllib.loads(p.read_text())]
-EXAMPLES = sorted([*MANIFESTS, *(ROOT / "examples/basics").glob("*.cairn")])
+EXAMPLES = sorted([*MANIFESTS, *cairn_sources(ROOT / "examples/basics")])
 
 
 @pytest.fixture
