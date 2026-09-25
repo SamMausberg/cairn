@@ -38,47 +38,66 @@ COMPATIBILITY = (
 )
 
 EXAMPLE = """\
-// Two tasks fill the two halves of an array, then main adds it up.
-fn fill(n:usize, out:rw<u64>[n], start:u64) {
-  for i in 0..n { out[i] = start + u64(i); }     // checked: an overflow traps
-}
+// Reads integers from standard input; prints how many, and how many are negative, counted on two tasks.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
 
-fn halves(n:usize, data:rw<u64>[n]) {
-  let mid = n / 2;
-  let left = spawn fill(data[0..mid], 0);        // left holds data[0..mid] until wait
-  let right = spawn fill(data[mid..n], u64(mid));
-  wait(left);
-  wait(right);
-}
-
-test halves_count_up {
-  let mut data = Buf[u64](10);
-  halves(data);                                  // n is len(data)
-  assert_eq(data[9], 9);
+fn negatives(n:usize, xs:ro<i64>[n]) -> usize {
+  let mut k:usize = 0;                              // an unannotated 0 would be a u64
+  for x in xs { if x < 0 { k += 1; } }
+  return k;
 }
 
 fn main() -> i32 {
-  let mut data = Buf[u64](1000);                 // an owner, released at scope exit
-  halves(data);
-  let total = reduce + for i in len(data) yield data[i];
-  println("total = ", total);
+  let mut input = vec.new[u8]();                    // a growable owner, freed at scope exit
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => { if got == 0 { more = false; } else { vec.extend_from(input, got, chunk[0..got]); } }
+      Err(_) => more = false;
+    }
+  }
+  let mut values = vec.new[i64]();
+  let mut lo:usize = 0;
+  while lo < input.len {
+    let mut hi = lo;
+    while hi < input.len && input.data[hi] > 32 { hi += 1; }
+    if hi > lo {
+      match text.parse_i64(hi - lo, input.data[lo..hi]) {   // a part is written where it is passed
+        Ok(v) => vec.push(values, v);
+        Err(_) => return 1;
+      }
+    }
+    lo = hi + 1;
+  }
+  let n = values.len;
+  let halves = Group[usize](2);
+  spawn negatives(values.data[0..n / 2]) into halves;   // each task reads its own part; n is len of it
+  spawn negatives(values.data[n / 2..n]) into halves;
+  let first = collect(halves);                      // a call that joins or writes is its own statement
+  let second = collect(halves);
+  wait(halves);
+  println("count ", n, " negative ", first + second);
   return 0;
 }
 """
 
 LOOP = """\
 1. Write the program. One file with `fn main() -> i32` runs as is; `cairn new NAME` makes a project (a data-only `cairn.toml`, `src/`, a test).
-2. Run `cairn check PATH --format json` until it prints `"status": "typed"`. A refusal gives a `code`, a line and a column, the `card` that states its rule (`cairn rules CODE` prints it) and, when the compiler can state one, a `repair_hint`; `further` lists every other refusal the check could judge on its own, each the same way, so fix them all before checking again. Change the code the rule is about. Never widen an effect ceiling, turn `ro` into `rw`, add `unsafe` or delete a check to get past a refusal.
-3. `cairn test PATH` runs every `test` block in a process of its own; `cairn run PATH` builds and runs, with arguments after `--`.
-4. Read the costs instead of guessing: `cairn doc PATH` prints each signature with its effect row, `cairn explain PATH` the guards, allocations and waits left at run time, `cairn predict PATH` a time per function from a machine profile, without running anything.
-5. To make a function faster, leave it as the reference and write an implementation beside it: `fn g(...) implements f when COND { }`, with natural parameters to search if useful. `cairn validate PATH --symbol g` tests it against the reference on generated boundary inputs, `cairn tune PATH --symbol f` searches plans and validated implementations within its budgets and `--write` selects the winner (`plan f use g;`). Never edit the reference, a tolerance or a test to make an implementation pass. When CAIRN cannot say the design you want, keep the design: write that function in CUDA or C++ as a foreign implementation, `fn g(...) implements f` calling vendored code ([foreign](cards/foreign.md)), which `cairn foreign` inspects and `cairn validate` holds to the reference, never a slower or narrower workaround.
-6. An agent without a shell gets the same through `cairn mcp`: `check`, `state`, and the edit, plan and implementation sessions, which write an admitted change back to its files.
+2. Run `cairn check PATH --format json` until it prints `"status": "typed"`. A refusal gives a `code`, a line and a column, the `card` that states its rule (`cairn rules CODE` prints it) and, when the compiler can state one, a `repair_hint`; `further` lists every other refusal the check could judge on its own, so fix them all before checking again. Change the code the rule is about. Never widen an effect ceiling, turn `ro` into `rw`, add `unsafe` or delete a check to get past a refusal.
+3. `cairn run PATH < input` builds and runs, with arguments after `--`; `--sanitize address` or `--sanitize thread` runs the build a sanitizer checks. `cairn test PATH` runs every `test` block in a process of its own.
+4. For speed, read costs instead of guessing (`cairn explain PATH`, `cairn predict PATH`), then leave the function as the reference and write an implementation beside it, `fn g(...) implements f when COND { }`, which `cairn validate` holds to the reference and `cairn tune` selects ([implementations](cards/implementations.md)); a design CAIRN cannot say is a foreign implementation ([foreign](cards/foreign.md)), never a slower or narrower workaround. `cairn mcp` serves the same to an agent without a shell.
 
 `cairn --help` lists every command, and a command that reports prints JSON when piped."""
 
 AVOID = """\
-- Habits from Rust or C++: there are no `&`/`&mut` references, lifetimes, `::` paths, `as` casts (write `u64(x)`) or tail-expression returns. `impl` is only `impl Trait for T`; `value.f(args)` calls a plain `fn f(v, args)` from the type's module. Text is `ro<u8>[n]` or `Vec[u8]`; there is no `String`.
-- Invented libraries: only what a file declares, the builtins the cards name and the `std.*` modules exist; `cairn doc --std --module std.text` prints one module's signatures with their effect rows, and `cairn doc --std` every module's.
+- Habits from Rust or C++: no `&`/`&mut`, lifetimes, `::` paths, `as` casts (write `u64(x)`), tuples (a `struct`), tail-expression returns, or `if` and `match` as values (`let mut x = b; if c { x = a; }`). `impl` is only `impl Trait for T`; `value.f(args)` calls a plain `fn f(v, args)` from the type's module. Text is `ro<u8>[n]` or `Vec[u8]`, never a `String`.
+- An integer literal is a `u64` unless something expects another type: `let mut i:usize = 0;` for an index. A signed minimum is a literal, `-9223372036854775808`.
+- A `Buf[T](n)` is `len(b)` long, which the checker does not tie to `n`: pass `f(b)` and the call supplies `len(b)`, or pass the part `b[0..n]`. A part `xs[lo..hi]` is written only as a call's argument. A `Vec`'s length is `v.len` and its elements `v.data[i]`.
+- Invented libraries: only what a file declares, the builtins the cards name and the `std.*` modules exist; `cairn doc --std --module std.text` prints one module's signatures.
 - Guessing a fix: each diagnostic code has one rule behind it, and its card says what that rule accepts."""
 
 
@@ -110,7 +129,7 @@ def card_file(name: str, words: str) -> str:
 
 def skill_file() -> str:
     found = triggers()
-    index = [f"- [{n}](cards/{n}.md): {selected_by(n, found)}" for n in CARDS if n not in CORE]
+    index = [f"- {n}: {selected_by(n, found)}" for n in CARDS if n not in CORE]
     core = "\n\n".join(paragraphs(CARDS[name]) for name in CORE)
     core += "\n\nTheir codes: " + "; ".join(f"{n} " + " ".join(sorted(CODES[n].split())) for n in CORE) + "."
     front = "\n".join([
@@ -127,12 +146,12 @@ def skill_file() -> str:
         "NAME` prints it.", "",
         "## Loop", "", LOOP, "",
         "## Core rules", "", core, "",
-        "## A program", "", "Tasks, leases, a test block and a checked reduction; `cairn run` prints `total = 499500`.",
+        "## A program", "", "Standard input, integers, a Vec and two tasks; `printf '3 -1 4 -9' | cairn run .` prints "
+        "`count 4 negative 2`.",
         "", "```cairn", EXAMPLE.rstrip(), "```", "",
-        "## Cards", "", "Each card states one part of the language and the codes of its rules. A host sends an agent "
-        "the cards its program's words select, below, and `cairn rules FILE` names them.", "", *index, "",
-        "A refusal from a host or the command line may name " + ", ".join(f"[{n}](cards/{n}.md)" for n in TOOL_CARDS)
-        + ".", "",
+        "## Cards", "", "Each card, `cards/NAME.md`, states one part of the language and the codes of its rules. A host "
+        "sends an agent the cards its program's words select, below, and `cairn rules FILE` names them.", "", *index,
+        "", "A refusal from a host or the command line may name " + ", ".join(TOOL_CARDS) + ".", "",
         "## Mistakes that cost the most", "", AVOID, "",
         "## More", "",
         "The reference is `docs/` of the CAIRN repository, `${CLAUDE_SKILL_DIR}/../../docs/` from a checkout or the "

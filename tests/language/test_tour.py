@@ -2,11 +2,12 @@
 
 import pathlib
 import re
+import subprocess
 
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import SANITIZED, run
+from emitted import SANITIZED, build, run
 
 GUIDE = (pathlib.Path(__file__).resolve().parents[2] / "docs/guide.md").read_text(encoding="utf-8")
 TOUR = GUIDE.split("\n## The tour in twelve programs\n")[1].split("\n## Where to go next\n")[0]
@@ -23,3 +24,15 @@ def test_a_tour_program_runs(tmp_path, title):
     entry = "app.main" if "module app;" in source else "main"
     done = run(tmp_path, compile_source(source, roots=(entry,))[0], *SANITIZED, "-pthread", entry=entry)
     assert done.returncode == 0, done.stderr[-4000:]
+
+
+FIRST = GUIDE.split("\n## Write a program\n")[1].split("\n## Install\n")[0]
+
+
+def test_the_first_program_reads_its_input_and_counts_on_two_tasks(tmp_path):
+    """The program the guide opens with, built under the address and undefined-behaviour sanitizers, as its
+    commands say it runs."""
+    [source] = re.findall(r"```cairn\n(.*?)```", FIRST, flags=re.S)
+    done = subprocess.run([build(tmp_path, compile_source(source)[0], *SANITIZED, "-pthread")], input="3 -1 4",
+                          capture_output=True, text=True, timeout=60)  # fmt: skip
+    assert (done.returncode, done.stdout) == (0, "count 3 negative 1\n") and "# count 3 negative 1" in FIRST
