@@ -161,8 +161,7 @@ typed: 3 functions
 ```
 
 ```json
-{"status": "typed", "functions": 3, "library_functions": 0, "formal_status": "not-verified",
- "project": {"name": "demo", "manifest_sha256": "e029...", "sources": [...], ...}}
+{"status": "typed", "functions": 3, "library_functions": 0, "formal_status": "not-verified"}
 ```
 
 `typed` means the program passed every rule the compiler checks before it runs: syntax, types, ownership, leases, lanes, placement and effects. The three functions are the program's own, counting the test. When a program imports library modules, the library functions it reaches are checked with it and counted in `library_functions`. `formal_status` is always `not-verified`, because acceptance is not a proof.
