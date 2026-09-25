@@ -61,6 +61,21 @@ The four runs took 131 and 171 seconds on main and 82 and 92 with the change. Th
 
 Of the 2101 programs `tools/checks/emission_identity.py` takes, 2090 emit the same C++ as before. The other 11 are exactly the programs with a device collector, and each differs by one added line, `#include "cairn_cub.hpp"`.
 
+## What `cairn validate` and `cairn predict` did twice
+
+`cairn validate` built the base and the selected library one after the other, though neither needs the other; it now starts both builds at once. `cairn predict --device-target sm_120 --inspect` checked its program four times, once to count its work, once for the target's demands and twice to read its kernels; it now checks it once, through the per-process cache `compiler/compilations.py` keeps for the other tools, and each part reads its own copy. `cairn predict --card all` checked it twice, and now once.
+
+Main at b14beb5 against the change, interleaved in fresh processes, load 9 to 10:
+
+| Command | Main, s | Change, s | Runs |
+|---|---|---|---|
+| `cairn validate examples/implementations --symbol prefix_by4` | 4.09 | 3.29 | 6 |
+| `cairn predict examples/tensor/tile64.cairn --device-target sm_120 --inspect` | 16.16 | 9.10 | 2 |
+| `cairn predict examples/tensor/tile64.cairn --card all` | 6.83 | 4.66 | 2 |
+| `cairn predict examples/apps/analytics` | 0.54 | 0.56 | 2 |
+
+Each command printed the same output before and after, and the validation the same record. A program checked only once pays for keeping its check: 14 ms of 125 for analytics and 38 of 1750 for tile32, in-process, which the last row does not separate from no change.
+
 ## What did not run
 
 Nothing here ran on a GPU. The suite's device builds compile for sm_120 and stop there, as everywhere outside `make gpu`. Only CUDA 13.2 is installed on this machine; the CI device jobs build the same modules under CUDA 12.9 as well.

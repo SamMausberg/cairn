@@ -17,7 +17,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from ..compiler.cairnc import compile_source, write_program
+from ..compiler import compilations
+from ..compiler.cairnc import write_program
 from ..projects.target import DeviceTarget, resolve, supported
 from ..projects.toolchain import bounded, find, until
 
@@ -99,14 +100,13 @@ def kernels(source: str, target: DeviceTarget | None = None, timeout: float = 60
     if not available():
         return {"status": "not-run", "reason": "nvcc and cuobjdump are needed to read a kernel; neither was found."}
     chosen = supported(target or resolve())
-    from ..compiler.cairnc import compile_program
     from ..compiler.lower.codegen import demangled, mangle
 
-    cpp, receipt = compile_source(source)
+    cpp, receipt = compilations.emitted(source)  # one check of the source in this process, whoever asks for it
     if "cuda" not in receipt["requires"]:
         return {"status": "no-device-code", "kernels": {}, "device_target": chosen.record()}
     chosen = chosen.require(receipt["device_features"])
-    p, _, _ = compile_program(source)
+    p, _, _ = compilations.program(source)
     names = {mangle(f.name): f.name for f in p.functions}
     with tempfile.TemporaryDirectory(prefix="cairn-cubin-") as scratch:
         directory = Path(scratch)

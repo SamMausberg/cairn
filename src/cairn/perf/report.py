@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..compiler.cairnc import compile_program, compile_source
+from ..compiler import compilations
 from ..compiler.syntax.tree import Diagnostic
 from ..projects.target import DeviceTarget, resolve
 from . import cooperative_model, model
@@ -57,7 +57,7 @@ def ladder(c: Cost, sizes: list[dict[str, float]]) -> list[dict[str, float]]:
 
 
 def costs(source: str, symbols: set[str] | None) -> dict[str, Cost]:
-    p, checker, _ = compile_program(source)
+    p, checker, _ = compilations.program(source)  # a copy of the one check a prediction and its inspection share
     found = count(p, checker, symbols)
     if symbols and symbols - set(found):
         raise ValueError(f"No function {sorted(symbols - set(found))[0]} to predict.")
@@ -124,7 +124,7 @@ def report(source: str, sizes: list[dict[str, float]] | None = None, symbols: se
     found = costs(source, symbols)
     target = targeted(found, chosen, device)
     if target and device is not None:
-        demands(compile_source(source)[1], device)
+        demands(compilations.emitted(source)[1], device)
     if inspect:
         target["inspection"] = inspected(source, found, device)
     for name, c in found.items():
@@ -191,7 +191,7 @@ def across(source: str, sizes: list[dict[str, float]] | None = None, symbols: se
     chosen = profile or default()
     listed: list[dict[str, Any]] = []
     groups: dict[DeviceTarget, list[tuple[str, Profile]]] = {}
-    receipt = compile_source(source)[1]
+    receipt = compilations.emitted(source)[1]
     for key, spec in cards().items():
         d = spec.device
         assert d is not None

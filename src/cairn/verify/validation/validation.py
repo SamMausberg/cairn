@@ -247,7 +247,7 @@ def subject(source: str, reference: str, implementation: str, cxx: str, director
         predicate = f"\nfn {applies}({ps}) -> bool = {when};\n"
     with_predicate = base[: impl.end] + predicate + base[impl.end :]
     selected = base[: impl.end] + f"\nplan {local(reference)} use {local(implementation)};\n" + base[impl.end :]
-    built, emulated, artifacts = {}, None, {}
+    built, emulated, artifacts, lines = {}, None, {}, {}
     for name, text in (("base", with_predicate), ("selected", selected)):
         cpp, receipt = compile_source(text)
         cuda = "cuda" in receipt["requires"]
@@ -261,18 +261,37 @@ def subject(source: str, reference: str, implementation: str, cxx: str, director
         line = native_command(cxx, str(where / "program.cpp"), str(where / "program.so"), cuda=cuda, device=emulated,
                               emulate=cuda)  # fmt: skip
         line[line.index("-o") : line.index("-o")] = objects
-        line += link_flags(linked(libraries, receipt["modules"]))
-        done = subprocess.run(line, capture_output=True, text=True, timeout=300)
+        lines[name] = [*line, *link_flags(linked(libraries, receipt["modules"]))]
+        artifacts[name] = {"cpp_sha256": hashlib.sha256(cpp.encode()).hexdigest()}
+    for name, done in compiled(lines).items():
         if done.returncode:
             raise RuntimeError(f"the {name} library did not build: {done.stderr[-2000:]}")
-        built[name] = str(where / "program.so")
-        artifacts[name] = {"cpp_sha256": hashlib.sha256(cpp.encode()).hexdigest(),
-                           "library_sha256": hashlib.sha256((where / "program.so").read_bytes()).hexdigest()}  # fmt: skip
+        built[name] = str(directory / name / "program.so")
+        artifacts[name]["library_sha256"] = hashlib.sha256(Path(built[name]).read_bytes()).hexdigest()
     module = ref.module + "." if ref.module else ""
     symbol = {"reference": "cf_" + mangle(reference), "implementation": "cf_" + mangle(implementation),
               "applies": "cf_" + mangle(module + applies) if applies else None}  # fmt: skip
     return Subject(reference, built["base"], built["selected"], symbol["reference"], symbol["implementation"],
                    symbol["applies"], params, ref.ret.name, emulated, artifacts), base  # fmt: skip
+
+
+def compiled(lines: dict[str, list[str]]) -> dict[str, subprocess.CompletedProcess]:
+    """Each library's build, all at once since none needs another, each within the 300 seconds `subprocess.run` gave
+    it one at a time. A build still running when another fails to start or runs out of time is killed."""
+    running: dict[str, subprocess.Popen] = {}
+    try:
+        for name, line in lines.items():
+            running[name] = subprocess.Popen(line, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        finished = {}
+        for name, process in running.items():
+            out, err = process.communicate(timeout=300)
+            finished[name] = subprocess.CompletedProcess(process.args, process.returncode, out, err)
+        return finished
+    finally:
+        for process in running.values():
+            if process.poll() is None:
+                process.kill()
+                process.communicate()
 
 
 def shrink(subject: Subject, calls: Calls, case: Case, policy: Policy) -> tuple[Case, dict[str, Any], int]:
