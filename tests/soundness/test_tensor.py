@@ -12,7 +12,6 @@ import ctypes as C
 import random
 import shutil
 import signal
-import struct
 import subprocess
 from fractions import Fraction
 from pathlib import Path
@@ -23,7 +22,7 @@ from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from cairn.verify.scalar.semantics import equivalent
 from emitted import device_build, library, ran_on_device, refused, run
-from oracles.float_formats import FORMATS, Format
+from oracles.float_formats import FORMATS, Format, f32, f32_bits
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / "src/cairn/runtime"
@@ -44,14 +43,6 @@ fn mma_{name}(m:usize, n:usize, k:usize, cn:usize, c:rw<f32>[cn]{at}, an:usize, 
 def lib(request, tmp_path_factory):
     directory = tmp_path_factory.mktemp(request.param.replace("+", "p"))
     return library(directory, compile_source("".join(map(entry, FORMATS)))[0], request.param)
-
-
-def f32(x: float) -> float:
-    return struct.unpack("f", struct.pack("f", x))[0]
-
-
-def bits(x: float) -> int:
-    return struct.unpack("I", struct.pack("f", x))[0]
 
 
 def finite_patterns(fmt: Format, rng: random.Random, count: int, limit: float) -> list[int]:
@@ -90,7 +81,7 @@ def test_the_host_multiply_is_its_reference_bit_for_bit_and_within_the_contract(
                     acc = f32(acc + f32(x * y))  # the order the host writes: old value, then p upward
                     exact += Fraction(x) * Fraction(y)
                     magnitude += abs(Fraction(x) * Fraction(y))
-                assert bits(got[i * n + j]) == bits(acc), (name, m, n, k, i, j)
+                assert f32_bits(got[i * n + j]) == f32_bits(acc), (name, m, n, k, i, j)
                 assert abs(Fraction(got[i * n + j]) - exact) <= (k + 1) * Fraction(1, 2**22) * magnitude
 
 

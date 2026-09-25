@@ -16,6 +16,7 @@ from cairn.verify.validation import boundaries
 from cairn.verify.validation.boundaries import Case
 from cairn.verify.validation.device import TOOLS, cases_as_tests, sanitized, verdict
 from emitted import device_build
+from oracles.float_formats import double_bits, f32_bits
 from support import device_reason
 
 SOURCE = """fn scale(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, a:f32) {
@@ -103,16 +104,10 @@ def checksum(args: dict) -> int:
     def mix(h: int, v: int) -> int:
         return ((h ^ v) * 1099511628211) % 2**64
 
-    def f64(x: float) -> int:
-        return struct.unpack("<Q", struct.pack("<d", x))[0]
-
-    def f32(x: float) -> int:
-        return struct.unpack("<I", struct.pack("<f", x))[0]
-
     h = 1469598103934665603
     for x, y, b, k, u in zip(args["xs"], args["ys"], args["bs"], args["ks"], args["us"], strict=True):
-        h = mix(mix(mix(mix(mix(h, f64(x)), f32(y)), 1 if b else 2), k + 2**31), u)
-    h = mix(mix(mix(h, f64(args["a"])), f32(args["b"])), 1 if args["flag"] else 2)
+        h = mix(mix(mix(mix(mix(h, double_bits(x)), f32_bits(y)), 1 if b else 2), k + 2**31), u)
+    h = mix(mix(mix(h, double_bits(args["a"])), f32_bits(args["b"])), 1 if args["flag"] else 2)
     h = mix(mix(h, -(args["k"] + 1)), 3) if args["k"] < 0 else mix(h, args["k"])
     return mix(h, args["m"] + 128)
 

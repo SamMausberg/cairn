@@ -22,6 +22,7 @@ import pytest
 
 from cairn.compiler.cairnc import compile_source
 from emitted import assembled, contract, library, ran_on_device, refused, run, sanitized, watched
+from oracles.float_formats import f32
 
 ROOT = Path(__file__).resolve().parents[2]
 TENSOR = ROOT / "examples/tensor"
@@ -44,10 +45,6 @@ def pattern(element: str, x: float) -> int:
     if element == "f16":
         return struct.unpack("H", struct.pack("e", x))[0]
     return struct.unpack("I", struct.pack("f", x))[0] >> 16
-
-
-def f32(x: float) -> float:
-    return struct.unpack("f", struct.pack("f", x))[0]
 
 
 def shapes(seed: str) -> list[tuple[int, int, int]]:
