@@ -22,7 +22,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..compiler.syntax.tree import BITS, SIGNED, UNSIGNED, USIZE, Expr, Function, Program, Stmt, is_view
+from ..compiler.syntax.tree import (
+    BITS,
+    SIGNED,
+    UNSIGNED,
+    USIZE,
+    Expr,
+    Function,
+    Program,
+    Stmt,
+    is_view,
+    negated_literal,
+)
 
 ZERO = ""
 MAX = 2**64 - 1
@@ -562,7 +573,7 @@ def guards(e: Expr) -> bool:
     """Whether lowering still writes a guard anywhere in `e`."""
     ty = e.ty.name if e.ty is not None else ""
     here = e.tag == "index" or (e.tag == "binary" and e.val in CHECKED and ty in BITS)
-    here = here or (e.tag == "unary" and e.val == "-" and ty in SIGNED)
+    here = here or (e.tag == "unary" and e.val == "-" and ty in SIGNED and not negated_literal(e))
     here = here or (e.tag == "call" and (e.val in BITS or e.val in {"shr", "shl_wrap"}))
     return (here and not e.established) or any(guards(a) for a in e.args)
 

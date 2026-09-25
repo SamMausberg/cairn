@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..syntax.tree import FLOAT, INT, SIGNED, STORAGE, Expr, Function, Stmt, nested
+from ..syntax.tree import FLOAT, INT, SIGNED, STORAGE, Expr, Function, Stmt, negated_literal, nested
 
 # What a function a fused body calls may do: read and write what it was lent, and work on its own storage. Its row
 # may also say trap and ffi_precondition, for guards the checker discharged and for views an entry would check;
@@ -69,7 +69,7 @@ def quiet(e: Any, rows: dict[str, set[str]], open_: frozenset[str] = frozenset()
     if e.tag == "index":
         return below and bool(e.established)
     if e.tag == "unary":
-        return below and (e.val in {"!", "~"} or (e.ty is not None and e.ty.name in FLOAT))
+        return below and (e.val in {"!", "~"} or negated_literal(e) or (e.ty is not None and e.ty.name in FLOAT))
     if e.tag == "binary":
         if e.val in {"==", "!=", "<", "<=", ">", ">=", "&&", "||", "&", "|", "^"}:
             return below

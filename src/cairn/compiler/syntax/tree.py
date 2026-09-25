@@ -323,6 +323,12 @@ def local(name: str) -> str:
     return base.rsplit(".", 1)[-1] + bracket + rest
 
 
+def negated_literal(e: Expr) -> bool:
+    """`-128`: a minus written on an integer literal makes one constant, so it can be its type's minimum and holds
+    no guard."""
+    return e.tag == "unary" and e.val == "-" and e.args[0].tag == "int" and not e.args[0].char
+
+
 def root(e: Expr) -> Expr:
     while e.tag in {"field", "index", "slice"}:
         e = e.args[0]
