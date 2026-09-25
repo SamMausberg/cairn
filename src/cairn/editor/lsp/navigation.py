@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ...agent.projection import local, signature
 from ...compiler.syntax.modules import library_path
-from .document import Document, declarations, dotted, flatten, word_at
+from .document import Document, dotted, word_at
 from .names import callee, declared, qualified, template
 
 
@@ -30,7 +30,7 @@ def packaged(doc: Document, module: str, path: str) -> tuple[Document, dict, str
     if not name or source is None or file is None:
         return None
     library = Document(source, analyse=False)
-    found = (d for d in flatten(declarations(library.code, 0, len(library.code))) if d["name"] == local(name))
+    found = (d for d in library.declarations if d["name"] == local(name))
     return next(((library, d, file.as_uri()) for d in found), None)
 
 
@@ -45,7 +45,7 @@ def declaration(doc: Document, offset: int, own: bool = True) -> tuple[Document,
     elsewhere = packaged(doc, doc.module_at(word.start), path)
     if elsewhere and "." in path:  # `vec.push` is that module's, whatever this document declares.
         return elsewhere
-    for d in flatten(declarations(doc.code, 0, len(doc.code))):
+    for d in doc.declarations:
         if d["name"] == word.s and (own or d["mark"][0] != word.start):
             return doc, d, ""
     return elsewhere

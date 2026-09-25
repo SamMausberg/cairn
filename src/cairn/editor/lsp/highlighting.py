@@ -13,7 +13,7 @@ from ...compiler.check.effects import EFFECTS
 from ...compiler.primitives.builtins import TABLE
 from ...compiler.syntax.parser import IDENT, RESERVED, Program
 from ..grammar import FAMILIES
-from .document import Document, Item, _units, bound, declarations, dotted, statement
+from .document import Document, Item, _units, bound, dotted, statement
 from .names import TYPES, declared, qualified, visible
 
 KINDS = ["namespace", "type", "struct", "enum", "interface", "typeParameter", "parameter", "variable", "property"]
@@ -77,8 +77,9 @@ def body_binders(cs: list[Item], lo: int, hi: int) -> Binders:
     return {cs[j].s: (kind, mutable) for j, kind, mutable in bound(cs, lo, hi) if kind != "element"}
 
 
-def declared_names(cs: list[Item]) -> tuple[dict[int, tuple[str, set[str]]], list[tuple[int, int, Binders]]]:
+def declared_names(doc: Document) -> tuple[dict[int, tuple[str, set[str]]], list[tuple[int, int, Binders]]]:
     """What the current tokens declare: the kind of each declaring token, and each declaration's binders."""
+    cs = doc.code
     index = {t.start: k for k, t in enumerate(cs)}
     marks: dict[int, tuple[str, set[str]]] = {}
     scopes: list[tuple[int, int, Binders]] = []
@@ -99,14 +100,14 @@ def declared_names(cs: list[Item]) -> tuple[dict[int, tuple[str, set[str]]], lis
                 if IDENT.fullmatch(cs[k].s) and cs[k - 1].s in {"{", ";"}:
                     marks[k] = ("property" if word == "struct" else "enumMember", {"declaration"})
 
-    walk(declarations(cs, 0, len(cs)), False)
+    walk(doc.outline, False)
     return marks, sorted(scopes, key=lambda s: s[1] - s[0])
 
 
 def classify(doc: Document) -> list[tuple[Item, str, set[str]]]:
     """Every name token the document writes, with its kind and modifiers, in order."""
     cs, p = doc.code, doc.good.program if doc.good else None
-    marks, scopes = declared_names(cs)
+    marks, scopes = declared_names(doc)
     modules: dict[str, dict[str, str]] = {}
     paths = set(p.modules.values()) if p else set()
     out: list[tuple[Item, str, set[str]]] = []

@@ -33,7 +33,7 @@ from ...compiler.cairnc import Diagnostic
 from ...compiler.primitives.builtins import TABLE
 from ...compiler.syntax.parser import IDENT, RESERVED
 from ...projects.project import Project, ProjectError, contained_file, load_project
-from .document import Document, Item, binders, declarations, dotted, enclosing, flatten, word_at
+from .document import Document, Item, binders, dotted, enclosing, word_at
 from .edits import occurrences as local_occurrences
 from .members import Members, bodies, declares
 from .names import TYPES, callee, declared, qualified
@@ -131,7 +131,7 @@ def workspace_symbols(query: str, buffers: dict[str, str], roots: list[str]) -> 
     out = []
     for f in files.values():
         doc = Document(f.text, analyse=False, within=(f.whole, f.start, None) if f.whole else None)
-        for d in flatten(declarations(doc.code, 0, len(doc.code))):
+        for d in doc.declarations:
             if query.lower() in d["name"].lower():
                 where = {"uri": f.uri, "range": doc.span(*d["mark"])}
                 out.append({"name": d["name"], "kind": d["kind"], "location": where,
@@ -195,7 +195,7 @@ def target(ws: Workspace, offset: int) -> tuple[str, str, list[Item]] | None:
         elif kind == "fn" and j and cs[j - 1].s == "." and j + 1 < len(cs) and cs[j + 1].s in {"(", "["}:
             f = callee(doc, modules[j], dotted(cs, j), t.start)[0]  # `x.name(...)`: a method call can reach it
             tokens += [t] if f is not None and f.name == full else []
-    declaring = [d for d in flatten(declarations(cs, 0, len(cs))) if d["name"] == bare]
+    declaring = [d for d in doc.declarations if d["name"] == bare]
     if not any(t.start == d["mark"][0] for t in tokens for d in declaring):
         raise Refused(f"{full} has no declaration in the project's files to rename: a recipe may have written it.")
     return kind, full, tokens
@@ -229,12 +229,12 @@ def definition(ws: Workspace, uri: str, offset: int) -> dict | None:
         return None
     if named is None:
         return None
-    bare, cs = local(named[1]), ws.whole.code
+    bare = local(named[1])
     if named[0] in MEMBERS:  # a field or a variant: where its record or sum declares it
         owner, name = named[1].rsplit(".", 1)
         marks = {t.start for t in [Members(ws.whole).declaration(named[0], owner, name)] if t is not None}
     else:
-        marks = {d["mark"][0] for d in flatten(declarations(cs, 0, len(cs))) if d["name"] == bare}
+        marks = {d["mark"][0] for d in ws.whole.declarations if d["name"] == bare}
     declaring = [t for t in named[2] if t.start in marks and not t.start <= at < t.end]
     return ws.location(declaring[0]) if declaring else None
 

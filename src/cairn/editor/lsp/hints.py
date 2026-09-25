@@ -11,8 +11,8 @@ import re
 
 from ...compiler.check.calls import extents
 from ...compiler.syntax.parser import IDENT, RESERVED
-from .document import Document, Item, declarations, dotted, flatten
-from .names import callee, template
+from .document import Document, Item, dotted, enclosing
+from .names import callee, instance_of, template
 
 QUALIFIER = re.compile(r"\b(?:[a-z_]\w*\.)+(?=[A-Za-z_])")  # `std.vec.Vec[u64]` reads as `Vec[u64]`
 PART = re.compile(r"(?s)(.*)\[(.*)\.\.(.*)\]")
@@ -41,15 +41,12 @@ def rows(doc: Document, lo: int, hi: int) -> list[dict]:
         return []
     cs, out = doc.code, []
     index = {t.start: k for k, t in enumerate(cs)}
-    top = declarations(cs, 0, len(cs))
-    for d in flatten(top):
+    for d in doc.declarations:
         at = index.get(d["mark"][0], -1)
         if d["detail"] != "fn" or at < 0 or not lo <= cs[at].start <= hi:
             continue
-        module = doc.module_at(d["head"])
-        prefix, member = module + "." if module else "", all(d is not t for t in top)
-        found = [xs for n, xs in doc.good.rows.items() if (base := template(n)) == prefix + d["name"]
-                 or (member and base.startswith(prefix) and base.endswith("." + d["name"]))]  # fmt: skip
+        module, member = doc.module_at(d["head"]), all(d is not t for t in doc.outline)
+        found = [xs for n, xs in doc.good.rows.items() if instance_of(n, module, d["name"], member)]
         body = body_start(cs, at)
         if found and body < len(cs) and cs[body].s != ";":
             effects = sorted({x for xs in found for x in xs})
@@ -109,14 +106,12 @@ def let_types(doc: Document, lo: int, hi: int) -> list[dict]:
     for s in doc.good.sites:
         for n, b in s["bindings"].items():
             types.setdefault(template(s["symbol"]), {}).setdefault(n, b["type"])
-    decls, modules = flatten(declarations(cs, 0, len(cs))), doc.modules()
+    modules = doc.modules()
     for i, t in enumerate(cs):
         j = i + 1 + (i + 1 < len(cs) and cs[i + 1].s == "mut")
         if t.s not in {"let", "reg"} or not lo <= t.start <= hi or j + 1 >= len(cs) or cs[j + 1].s != "=":
             continue
-        d = min(
-            (d for d in decls if d["head"] <= t.start <= d["tail"]), key=lambda d: d["tail"] - d["head"], default=None
-        )
+        d = enclosing(doc, t.start)[0]
         prefix = modules[i] + "." if modules[i] else ""
         mine = {} if d is None else types.get(prefix + d["name"]) or next(
             (v for k, v in types.items() if k.startswith(prefix) and k.endswith("." + d["name"])), {})  # fmt: skip

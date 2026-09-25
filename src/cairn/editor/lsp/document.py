@@ -10,6 +10,7 @@ Positions are UTF-16 code units, as the protocol requires.
 from __future__ import annotations
 
 import bisect
+import functools
 import re
 from typing import Any
 
@@ -74,6 +75,16 @@ class Document:
 
     def span(self, start: int, end: int) -> dict:
         return {"start": self.position(start), "end": self.position(end)}
+
+    @functools.cached_property
+    def outline(self) -> list[dict]:
+        """The top-level declarations of the current tokens, each trait's and impl's members as its children."""
+        return top_level(self.code, 0, len(self.code))
+
+    @functools.cached_property
+    def declarations(self) -> list[dict]:
+        """Every declaration of the outline, members included, in the order the tokens write them."""
+        return flatten(self.outline)
 
     def scopes(self) -> list[tuple[int, str]]:
         """Where each module this text sits in begins, as (offset in this text, module), the first at -1: the
@@ -189,7 +200,7 @@ def problem(where: dict, code: str, message: str) -> dict:
 # Declarations ------------------------------------------------------------------------------------
 
 
-def declarations(cs: list[Item], lo: int, hi: int) -> list[dict]:
+def top_level(cs: list[Item], lo: int, hi: int) -> list[dict]:
     """Top-level declarations in `cs[lo:hi]`, with trait and impl members as children."""
     out: list[dict] = []
     i = head = lo
@@ -215,7 +226,7 @@ def declarations(cs: list[Item], lo: int, hi: int) -> list[dict]:
                 "head": cs[head].start,
                 "tail": cs[end].end,
                 "mark": (named.start, named.end) if cs[i].s != "impl" else (cs[i].start, cs[i].end),
-                "children": declarations(cs, body + 1, end) if body >= 0 and cs[i].s in {"trait", "impl"} else [],
+                "children": top_level(cs, body + 1, end) if body >= 0 and cs[i].s in {"trait", "impl"} else [],
             }
         )
         i = head = end + 1
@@ -233,7 +244,7 @@ def symbols(doc: Document) -> list[dict]:
             "children": [shape(c) for c in d["children"]],
         }
 
-    return [shape(d) for d in declarations(doc.code, 0, len(doc.code))]
+    return [shape(d) for d in doc.outline]
 
 
 def flatten(ds: list[dict]) -> list[dict]:
@@ -338,7 +349,7 @@ def binders(cs: list[Item], lo: int, hi: int) -> list[int]:
 
 def enclosing(doc: Document, offset: int) -> tuple[dict | None, bool]:
     """The innermost declaration covering `offset`, and whether it is a trait or impl member."""
-    over = [d for d in flatten(declarations(doc.code, 0, len(doc.code))) if d["head"] <= offset <= d["tail"]]
+    over = [d for d in doc.declarations if d["head"] <= offset <= d["tail"]]
     return min(over, key=lambda d: d["tail"] - d["head"], default=None), len(over) > 1
 
 
