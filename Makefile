@@ -1,4 +1,6 @@
 PYTHON ?= python3
+# pytest workers for `make test`; an agent sharing the machine passes JOBS=4
+JOBS ?= auto
 CAIRN = $(PYTHON) bin/cairn
 
 .PHONY: help docs editors all check lint format test native systems proof lean gpu tune-device calibrate-device device-build embedded context wheel audit demo demo-repair demo-numeric demo-visual demo-implement bench scale
@@ -9,7 +11,7 @@ help:
 	@echo 'check     cairn check examples/hello, the quickest sign the checkout works'
 	@echo 'lint      ruff format --check, ruff check, mypy, cairn fmt --check'
 	@echo 'format    rewrite Python and CAIRN sources in place'
-	@echo 'test      the whole suite in parallel; tool-dependent parts skip with a reason'
+	@echo 'test      the whole suite on JOBS workers (default auto); tool-dependent parts skip with a reason'
 	@echo 'native    both compilers with sanitizers, and the codegen comparison'
 	@echo 'systems   the systems examples against independent oracles'
 	@echo 'proof     certificates, the Lean build, the differential run, scalar module equivalence'
@@ -46,7 +48,7 @@ format:
 	$(CAIRN) fmt examples demos src/cairn/std src/cairn/templates
 
 test:
-	$(PYTHON) -m pytest -q tests -n auto
+	$(PYTHON) -m pytest -q tests -n $(JOBS)
 
 native:
 	$(PYTHON) tools/checks/verify.py --gcc --sanitize
