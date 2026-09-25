@@ -9,6 +9,7 @@ compilers accept and this CPU actually executes, and callers record which one ra
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import fcntl
 import functools
@@ -282,6 +283,26 @@ def lean_environment() -> dict[str, str]:
     if ELAN_BIN.is_dir():
         environment["PATH"] = str(ELAN_BIN) + os.pathsep + environment.get("PATH", "")
     return environment
+
+
+def lean_differential(compare, model: str, count: int, description: str) -> int:
+    """The command line a differential check against the Lean model `model` runs: `--count` generated inputs
+    (`CAIRN_DIFFERENTIAL_N`, else `count`), `--seed` and `--timeout`. `compare(count, seed, lake, target, timeout)`
+    writes and runs `target`, a scratch `model.lean`, and returns the report, printed as JSON. The exit status is 0
+    when the two sides agreed, 1 when they did not, and 3 when no `lake` can run the model: unknown is never success."""
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument("--count", type=int, default=int(os.environ.get("CAIRN_DIFFERENTIAL_N", str(count))))
+    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--timeout", type=int, default=1800)
+    options = parser.parse_args()
+    lake = find_lake()
+    if lake is None:
+        print(json.dumps({"status": "unavailable", "reason": "no lake on PATH and no ~/.elan/bin/lake"}, indent=2))
+        return 3
+    with tempfile.TemporaryDirectory(prefix=f"cairn-{model.lower()}-") as scratch:
+        report = compare(options.count, options.seed, lake, Path(scratch) / f"{model}.lean", options.timeout)
+    print(json.dumps(report, indent=2))
+    return 0 if report["status"] == "agreed" else 1
 
 
 def run_lean(text: str, lake: str, target: Path, timeout: int) -> str:

@@ -12,19 +12,15 @@ the first two elements that share an offset.
 
 from __future__ import annotations
 
-import argparse
-import json
-import os
 import random
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.compiler.device import layout_algebra as L
 from cairn.compiler.syntax.tree import Diagnostic
-from support import find_lake, run_lean
+from support import lean_differential, run_lean
 
 
 def storage(rng: random.Random, rank: int) -> L.Layout:
@@ -164,19 +160,7 @@ def compare(count: int, seed: int, lake: str, target: Path, timeout: int) -> dic
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--count", type=int, default=int(os.environ.get("CAIRN_DIFFERENTIAL_N", "300")))
-    parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--timeout", type=int, default=1800)
-    options = parser.parse_args()
-    lake = find_lake()
-    if lake is None:
-        print(json.dumps({"status": "unavailable", "reason": "no lake on PATH and no ~/.elan/bin/lake"}, indent=2))
-        return 3
-    with tempfile.TemporaryDirectory(prefix="cairn-layouts-") as scratch:
-        report = compare(options.count, options.seed, lake, Path(scratch) / "Layouts.lean", options.timeout)
-    print(json.dumps(report, indent=2))
-    return 0 if report["status"] == "agreed" else 1
+    return lean_differential(compare, "Layouts", 300, __doc__)
 
 
 if __name__ == "__main__":

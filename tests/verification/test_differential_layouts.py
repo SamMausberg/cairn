@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from support import find_lake
+
 ROOT = Path(__file__).resolve().parents[2]
 HARNESS = ROOT / "tools" / "checks" / "differential_layouts.py"
 UNAVAILABLE = 3
@@ -37,7 +39,7 @@ def test_the_rule_and_its_lean_model_judge_alike():
 def test_a_slip_in_the_rule_would_be_reported(monkeypatch):
     from checks import differential_layouts as harness
 
-    lake = harness.find_lake()
+    lake = find_lake()
     if lake is None:
         pytest.skip("lake is not installed")
     real = harness.L.Cover.overlap
