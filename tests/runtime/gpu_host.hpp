@@ -1,16 +1,16 @@
-// A host machine for cairn_exec.hpp, so generated device programs build with g++ or clang++ and run without a device:
-// a test writes `#include "gpu_host.hpp"` where the program says `#include "cairn_gpu.hpp"`. Everything the lowering
+// A host machine for cairn_exec.hpp, so generated device programs build with g++ or clang++ and run without a device: a
+// test writes `#include "gpu_host.hpp"` where the program says `#include "cairn_gpu.hpp"`. Everything the lowering
 // calls is then cairn_exec.hpp's own code over this machine, and a call the lowering made to anything else would not
 // compile. Streams and events are records. A launch runs its lanes at once, in the order a grid of `block` threads
 // striding over n visits them, a staged block loads its whole tile before any thread's body (the tile is its own
-// exactly sized allocation, filled with a pattern first, so a read outside what the block loaded reads the pattern
-// and one past the tile is an AddressSanitizer error), and a copy is a memcpy. Every stream and event made, every
+// exactly sized allocation, filled with a pattern first, so a read outside what the block loaded reads the pattern and
+// one past the tile is an AddressSanitizer error), and a copy is a memcpy. Every stream and event made, every
 // allocation, launch, copy and wait is counted in cr::gpu::counted, which a test reads between calls. The machine has
-// no whole-device wait to count: no operation of cairn_exec.hpp can ask for one. While `capturing` is set, as a
-// CUDA graph capture would be, every call a capture refuses (a wait, a stream, an event, an allocation or a release)
-// is counted again as `refused`. Each thread also keeps, for every stream it queued on, how much of that work a wait
-// has covered, and `early` counts each time the host reads or writes memory across a copy, or releases device memory,
-// while another stream still holds work nobody waited for.
+// no whole-device wait to count: no operation of cairn_exec.hpp can ask for one. While `capturing` is set, as a CUDA
+// graph capture would be, every call a capture refuses (a wait, a stream, an event, an allocation, a release or a
+// stream's id) is counted again as `refused`. Each thread also keeps, for every stream it queued on, how much of that
+// work a wait has covered, and `early` counts each time the host reads or writes memory across a copy, or releases
+// device memory, while another stream still holds work nobody waited for.
 #pragma once
 #include <algorithm>
 #include <atomic>
@@ -102,8 +102,13 @@ struct Host {
     e->mark = pending_on(s).queued;
   }
   void wait_event(Stream, Event) noexcept {}
-  // A stream's name, and whether a capture is on: queries a capture allows, so neither is refused.
-  unsigned long long stream_id(Stream s) noexcept { return reinterpret_cast<std::uintptr_t>(s); }
+  // A stream's id for the process, which a capture refuses as CUDA does; its handle, and whether a capture is on,
+  // which a capture allows.
+  unsigned long long handle(Stream s) noexcept { return reinterpret_cast<std::uintptr_t>(s); }
+  unsigned long long stream_id(Stream s) noexcept {
+    capture_refuses();
+    return reinterpret_cast<std::uintptr_t>(s);
+  }
   bool capturing(Stream, unsigned long long* id) noexcept {
     *id = counted.capture;
     return counted.capturing;

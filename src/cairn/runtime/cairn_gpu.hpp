@@ -60,8 +60,11 @@ struct Cuda {
   void destroy_event(Event e) noexcept { released(cudaEventDestroy(e)); }
   void record(Event e, Stream s) noexcept { check(cudaEventRecord(e, s)); }
   void wait_event(Stream s, Event e) noexcept { check(cudaStreamWaitEvent(s, e, 0)); }
-  // What names a stream for the life of the process, and whether it is capturing into a graph, with the capture
-  // sequence's id: two queries a capture allows, which make and wait for nothing.
+  // What names a stream for the life of the process, which a stream capture refuses to answer (cudaStreamGetId fails
+  // during a global capture and ends it, on the RTX 5070 Ti under CUDA 13.2); what names it among the streams alive
+  // now, which asks CUDA nothing; and whether it is capturing into a graph, with the capture sequence's id, which a
+  // capture allows.
+  unsigned long long handle(Stream s) noexcept { return reinterpret_cast<std::uintptr_t>(s); }
   unsigned long long stream_id(Stream s) noexcept {
     unsigned long long id = 0;
     check(cudaStreamGetId(s, &id));

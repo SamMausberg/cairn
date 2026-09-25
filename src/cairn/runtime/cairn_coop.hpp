@@ -162,7 +162,9 @@ inline Finishes<SLOTS>& finishes() noexcept {
 template<class Api> inline Claim claim(Api& api, typename Api::Stream stream) noexcept {
   unsigned long long capture = 0;
   const bool captured = api.capturing(stream, &capture);
-  return finishes().claim(api.stream_id(stream), captured, capture);
+  // A capture refuses the stream's id, so a captured launch names its stream by its handle: no two streams alive in
+  // one capture sequence share one, and the key holds the sequence too.
+  return finishes().claim(captured ? api.handle(stream) : api.stream_id(stream), captured, capture);
 }
 // A launch with a finish, queued as synchronous work of the execution context `ctx` (cairn_reuse.hpp, found by
 // argument lookup): `fire(stream, claim)` launches it on the lane's stream with the word claimed there. The device
