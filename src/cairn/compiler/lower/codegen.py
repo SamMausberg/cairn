@@ -96,6 +96,7 @@ class Emitter:
         self.staged: dict[str, tuple[str, int]] = {}  # a staged array -> its block's tile, and the tile's reach
         self.fused: dict[str, list[dict[str, Any]]] = {}  # function -> the chains it runs as one region
         self.features: dict[str, None] = {}  # what the device target must provide, in first-use order
+        self.waiting = False  # in a held body's host code, where the host observes only after a wait (execution.py)
 
     def put(self, s: str = ""):
         self.lines.append("  " * self.ind + s)
@@ -115,10 +116,10 @@ class Emitter:
     def inner(self, head, body) -> str:
         """`head() {`, what `body` puts one level in, and the closing brace, as the text of one expression. The
         head is written after the body, so a header either needs is included where the code first needs it."""
-        start = len(self.lines)
-        self.ind += 1
+        start, waiting = len(self.lines), self.waiting
+        self.ind, self.waiting = self.ind + 1, False  # a lane's or a closure's body waits for nothing
         body()
-        self.ind -= 1
+        self.ind, self.waiting = self.ind - 1, waiting
         text, self.lines = self.lines[start:], self.lines[:start]
         return "\n".join([head() + " {", *text, "  " * self.ind + "}"])
 
@@ -514,10 +515,12 @@ class Emitter:
                 tag = f"static_cast<std::uint32_t>(v_{n})" if t.name in self.p.enums else f"v_{n}.tag"
                 self.put(f"if({tag} >= {len(self.c.layouts[t])}) cr::trap();")
         implementations.lower(self, f)  # a plan's implementation, where its condition holds
-        if execution.held(self.c, f, self.lean):  # one wait for all its device work, when it returns (execution.py)
+        self.waiting = execution.held(self.c, f, self.lean)  # a wait only before what the host observes (execution.py)
+        if self.waiting:
             self.need("cairn_gpu.hpp")
             self.put(execution.HELD)
         self.block(f.body)
+        self.waiting = False
 
     def block(self, ss: list[Stmt]):
         # Chains a plan asked to fuse, decided after the elision audit, so a body is quiet as it will be emitted. The
@@ -535,6 +538,8 @@ class Emitter:
                 self.put(f"// {s.name} lives in each lane of the fused regions below, never in memory")
                 continue
             es = [self.expr(e) for e in s.exprs] if s.tag not in {"compact", "scan"} else []
+            if self.waiting and s.tag != "while" and execution.by_hand(self.c, s):  # a while waits in its condition
+                self.put(execution.WAIT)
             if id(s) in chains:
                 self.chain(chains[id(s)], es, {x.name: x.ty for x in ss if x.name in kept and x.tag != "parallel"})
                 continue
@@ -672,7 +677,9 @@ class Emitter:
             self.put(f"cr_break_{index}: ;")
 
     def s_while(self, s: Stmt, es: list[str]):
-        self.loop(f"while ({bare(es[0])}) {{", s, self.fresh("")[1])
+        waits = self.waiting and execution.by_hand(self.c, s)  # before each evaluation of the condition
+        condition = f"({execution.WAIT[:-1]}, {es[0]})" if waits else bare(es[0])
+        self.loop(f"while ({condition}) {{", s, self.fresh("")[1])
 
     def s_if(self, s: Stmt, es: list[str]):
         self.nest(f"if ({bare(es[0])}) {{", lambda: self.block(s.body), None if s.other else "}")

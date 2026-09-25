@@ -241,6 +241,87 @@ def test_a_run_of_device_work_waits_once_before_what_the_host_observes_next(tmp_
     assert counted["each"] == {"wrong": 0, "waits": 7, "unwaited": 0, "early": 0, "caught": 1}, counted
 
 
+# Runs of device work between a foreign call, each evaluation of a loop condition that makes one, and I/O: the host
+# waits for each run by hand before it observes anything through them.
+PROBED = """
+extern fn probe(k:u64) -> u64 effects(io);
+fn more(k:u64) -> bool {
+  let mut seen:u64 = 0;
+  unsafe { seen = probe(k); }
+  return seen < 3;
+}
+fn steps(n:usize, x:rw<f32>[n]@device, y:rw<f32>[n]@device) -> u64 {
+  let mut seen:u64 = 0;
+  parallel i in n { y[i] = x[i] + 1.0; }
+  parallel i in n { x[i] = y[i] * 2.0; }
+  unsafe { seen += probe(10); }
+  let mut k:u64 = 0;
+  while more(k) {
+    parallel i in n { y[i] = x[i] - 1.0; }
+    parallel i in n { x[i] = y[i] * 0.5; }
+    k += 1;
+  }
+  println(k);
+  return seen + k;
+}
+"""
+
+PROBES = r"""
+#include <cstdio>
+#include <cstdint>
+static std::size_t probes = 0, early = 0;
+// The foreign function the program calls: it counts each call made while device work was queued and unwaited.
+extern "C" std::uint64_t probe(std::uint64_t k) noexcept {
+  ++probes;
+  early += cr::gpu::unwaited() != 0;
+  return k;
+}
+extern "C" std::uint64_t cf_steps(std::size_t, float*, float*) noexcept;
+int main() {
+  const std::size_t n = 1000;
+  int wrong = 0;
+  cr::gpu::Buffer<float> x(n), y(n);
+  for(std::size_t i = 0; i < n; ++i) x.data()[i] = float(i % 17);
+  const std::size_t before = cr::gpu::counted.stream_waits.load();
+  wrong += cf_steps(n, x.data(), y.data()) != 13;
+  const std::size_t waits = cr::gpu::counted.stream_waits.load() - before;
+  for(std::size_t i = 0; i < n; ++i) {
+    float v = (float(i % 17) + 1.0f) * 2.0f;
+    for(int k = 0; k < 3; ++k) v = (v - 1.0f) * 0.5f;
+    wrong += x.data()[i] != v;
+  }
+  std::fprintf(stderr, "{\"wrong\": %d, \"waits\": %zu, \"probes\": %zu, \"early\": %zu}\n", wrong, waits, probes, early);
+  return wrong;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["g++", "clang++"])
+def test_a_foreign_call_a_loop_condition_and_io_wait_for_the_run_before_them(tmp_path, cxx):
+    """steps as emitted, held with a wait before its foreign call, in its loop condition and before its print; as
+    emitted before, a wait after each region; and held with those waits taken out, which the probe catches at each of
+    its five calls. Held, it waits four times where it waited eight, and makes no foreign call while a region is
+    unwaited."""
+    held = compile_source(PROBED)[0]
+    assert held.count(execution.WAIT[:-1]) == 3  # before the call of probe, in the condition, before println
+    emissions = {
+        "held": held,
+        "each": held.replace(execution.HELD, "").replace(execution.WAIT[:-1] + ", ", "").replace(execution.WAIT, ""),
+        "unwaited": held.replace(execution.WAIT[:-1] + ", ", "").replace(execution.WAIT, ""),
+    }
+    found = {}
+    for name, cpp in emissions.items():
+        (tmp_path / name).mkdir()
+        exe = build(tmp_path / name, cpp, *sanitized(cxx), "-ffp-contract=off", cxx=cxx, entry=None, timeout=300,
+                    beside={"main.cpp": '#include "gpu_host.hpp"\n' + PROBES}, stand_in="gpu_host.hpp")  # fmt: skip
+        done = subprocess.run([exe], capture_output=True, text=True, timeout=120)
+        assert done.returncode == 0 and done.stdout == "3\n", (name, done.stdout, done.stderr[-2000:])
+        found[name] = json.loads(done.stderr.splitlines()[-1])
+    assert found["held"] == {"wrong": 0, "waits": 4, "probes": 5, "early": 0}, found
+    assert found["each"] == {"wrong": 0, "waits": 8, "probes": 5, "early": 0}, found
+    assert found["unwaited"]["wrong"] == 0 and found["unwaited"]["early"] == 5, found  # every call saw work queued
+
+
 def test_the_pipeline_lowers_to_the_execution_context_only():
     cpp = compile_source(PIPELINE)[0]
     for entry in ("run(", "run_vector<", "run_staged<", "reduce_on<", "scan_on<", "compact_on(", "copy_on(", "queue(",

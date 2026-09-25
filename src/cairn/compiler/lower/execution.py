@@ -72,6 +72,11 @@ HELD = "const cr::gpu::Held cr_held;"  # the run a function's body is held in (r
 # call observed() first (runtime/cairn_exec.hpp), which waits for everything a held run has queued. A held body may
 # hold these, and each only ends a run of device work; the rest of OBSERVES keeps a body from being held at all.
 ROUTED = {"transfer:h2d", "transfer:d2h", "gpu_alloc", "gpu_free", "spawn", "join"}
+# What lets the host observe device memory or progress where the runtime cannot wait first, but through a statement the
+# lowering can see: I/O, a foreign call (`ffi:`), the machine, a lock, an atomic update of host memory. A held body
+# waits by hand (WAIT) before each statement that does one, and before each evaluation of a loop condition that does.
+BY_HAND = {"io", "mmio", "asm", "asm:x86_64", "asm:aarch64", "lock", "atomic"}
+WAIT = "cr::gpu::here().observed();"
 REGIONS = {"parallel", "reduce", "scan", "compact"}
 
 
@@ -85,23 +90,64 @@ def unwaited(c: Checker, f: Function, routed: set[str] | frozenset[str] = frozen
             continue
         if effect in OBSERVES:
             return OBSERVES[effect]
-        if effect.startswith("ffi:"):
+        if effect.startswith("ffi:") and "ffi:" not in routed:
             return "it makes a foreign call, which may observe device memory"
     unified = next((n for n, t in f.params if is_view(t) and t.place == "unified"), "")
     return f"{unified} is a @unified view, which the host may read while device work is queued" if unified else ""
 
 
 def unheld(c: Checker, f: Function) -> str:
-    """Why `f`'s body may not be held even with each ROUTED operation waiting where it stands, or "": something in its
-    row lets the host observe device memory without such a wait, it starts a host task, which may observe what the
-    run has queued, or it declares a @unified buffer, which host code reads without one."""
-    if why := unwaited(c, f, ROUTED):
+    """Why `f`'s body may not be held even with a wait before each thing its host code observes, or "": it calls
+    something whose work it cannot see (a function value, a dyn table), a closure or a callee that may observe what
+    its own device work left queued, a host task, which may observe what the run has queued, or @unified memory,
+    which host code reads without a wait."""
+    if why := unwaited(c, f, ROUTED | BY_HAND | {"ffi:"}):
         return why
+    if "dispatch" in c.rows.get(f.name, set()):
+        return "it calls through a dyn table, whose targets may queue device work and observe it"
     if reaches(c, ran(c, f), set(), lambda e: e.tag == "spawn" and e.val != "queue"):
         return "it starts a host task, which may observe device memory while the run's work is queued"
     if reaches(c, ran(c, f), set(), stmt=lambda s: s.tag == "buffer" and s.ref == "unified"):
         return "it declares a @unified buffer, which the host may read while device work is queued"
+    for e in (e for s in ran(c, f) for e in expressions(s) if e.tag == "lambda" and isinstance(e.ref, Function)):
+        effects, callees = e.ref.row
+        if observes(c, set(effects).union(*(c.rows.get(g, set()) for g in callees)), e.ref.body):
+            return "a closure it makes may observe device memory where no wait can come first"
+    for g in {e.ref.name: e.ref for s in ran(c, f) for e in expressions(s) if called(e)}.values():
+        if c.rows.get(g.name, set()) & DEVICE_WORK and observes(c, c.rows.get(g.name, set()), ran(c, g)):
+            return f"{g.name} queues device work and may observe it where only its own waits could come first"
     return ""
+
+
+def observes(c: Checker, effects: set[str] | frozenset[str], ss: list[Stmt]) -> bool:
+    """Whether a row, of the statements `ss`, holds something BY_HAND: an atomic update only outside device regions."""
+    found = {e for e in effects if e in BY_HAND or e.startswith("ffi:")}
+    return bool(found - {"atomic"}) or ("atomic" in found and host_atomics(c, ss, set()))
+
+
+def by_hand(c: Checker, s: Stmt) -> bool:
+    """Whether the host observes something BY_HAND through `s`: through its header, for a statement with a body of
+    host statements, each of which answers for itself; through all of it otherwise, a region's lanes included. A held
+    body waits before each such statement (WAIT), and a `while` before each evaluation of its condition."""
+    compound = bool(nested(s)) and s.tag not in {"parallel", "blocks"}
+    part = Stmt("expr", exprs=s.exprs) if compound else s
+    effects = set(s.header if compound else s.row)
+    callees = {e.ref.name for e in expressions(part, compound) if called(e)}
+    return observes(c, effects.union(*(c.rows.get(g, set()) for g in callees)), [part])
+
+
+def expressions(s: Stmt, header: bool = False) -> list[Expr]:
+    """Every expression of `s`, nested statements' too unless `header`, each with the expressions inside it."""
+
+    def walk(e: Expr) -> list[Expr]:
+        return [e, *(x for a in e.args for x in walk(a))]
+
+    return [x for e in s.exprs for x in walk(e)] + ([] if header else [x for n in nested(s) for x in expressions(n)])
+
+
+def called(e: Expr) -> bool:
+    """Whether `e` calls a declared function directly."""
+    return e.tag == "call" and isinstance(e.ref, Function)
 
 
 def held(c: Checker, f: Function, fused: bool = True) -> bool:
@@ -173,6 +219,7 @@ def runs(c: Checker, ss: list[Stmt], open_: int, fusing: Function | None = None)
         elif s.tag == "buffer" and s.ref != "host":
             open_, owners = 0, True
         else:
+            open_ = 0 if by_hand(c, s) else open_  # it waits first
             for e in s.exprs:
                 waits, count = queued(c, e)
                 open_ = 0 if waits else open_ + count

@@ -161,6 +161,8 @@ class Checker:
         self.unchecked: list[str] = []
         self.lane_calls: list[tuple[str, bool, Expr, str]] = []  # (callee, on the device, the call, its caller)
         self.judging = ""  # The function a whole-program rule is looking at: whom a failure there is about.
+        # The statement whose header is being checked, and the set its own effects gather in (stmt, block).
+        self.heading: tuple[Stmt, set[str]] | None = None
         # (argument, caller's parameters, callee, formal, caller) for every fn argument.
         self.fn_sites: list[tuple[Expr, set[str], str, str, str]] = []
         self.impls: dict[tuple[str, Type], dict[str, Function] | None] = {}
@@ -616,6 +618,9 @@ class Checker:
             self.effect("free")
 
     def block(self, ss: list[Stmt]) -> Any:
+        if self.heading is not None and self.heading[1] is self.effects:  # the header's effects, before its body's
+            s, self.heading = self.heading[0], None
+            s.header = frozenset(self.effects) | s.header
         saved, deferred, returned, known = dict(self.env), set(self.deferred), False, len(self.facts)
         for s in ss:
             if returned:
@@ -631,11 +636,22 @@ class Checker:
         return returned
 
     def stmt(self, s: Stmt) -> Any:
-        """False when control falls through, True after a return, "jump" after break or continue."""
+        """False when control falls through, True after a return, "jump" after break or continue. The effects checking
+        `s` adds are kept on it (`s.row`), and for a statement with a body those its header adds before the body
+        (`s.header`): the lowering reads which statement lets the host observe what (compiler/lower/execution.py).
+        They gather apart and join the enclosing set in place, since a closure's row is the set it began with."""
         handler = getattr(self, "s_" + s.tag, None)
         if handler is None:
             fail("E-INTERNAL", f"Unknown statement {s.tag}.", s)
-        return handler(s) or False
+        effects, heading = self.effects, self.heading
+        self.effects = set()
+        self.heading = (s, self.effects)
+        try:
+            return handler(s) or False
+        finally:
+            s.row = frozenset(self.effects) | s.row  # every check of it, as a generic body is checked more than once
+            effects |= self.effects
+            self.effects, self.heading = effects, heading
 
     def expr(self, e: Expr, expected: Type | None = None, consume: bool = True) -> Type:
         if id(e) in self.early:

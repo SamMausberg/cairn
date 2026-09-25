@@ -287,20 +287,38 @@ fn unified(n:usize, x:rw<f32>[n]@device) {
   parallel i in n { x[i] = x[i] + 1.0; }
   parallel i in n { x[i] = x[i] * 2.0; }
 }
+fn step_then_print(n:usize, x:rw<f32>[n]@device) {
+  parallel i in n { x[i] = x[i] + 1.0; }
+  println(n);
+}
+fn calls_a_printing_step(n:usize, x:rw<f32>[n]@device) {
+  parallel i in n { x[i] = x[i] * 2.0; }
+  step_then_print(n, x);                                 // its print would see its own region unwaited
+}
+fn apply_all(n:usize, f:ro<fn(u64) -> u64>) -> u64 { let mut t:u64 = 0; for i in 0..n { t += f(u64(i)); } return t; }
+fn with_a_closure(n:usize, x:rw<f32>[n]@device) {
+  parallel i in n { x[i] = x[i] + 1.0; }
+  parallel i in n { x[i] = x[i] * 2.0; }
+  let t = apply_all(4, |k:u64| -> u64 { println(k); return k; });
+}
 """
 
 
 def test_a_body_is_held_where_a_run_of_device_work_meets_only_observations_that_wait():
-    """A copy to or from host memory and an owner's allocation and release wait for a held run where they stand, so
-    they only end a run; I/O, a host task and @unified memory would see it unwaited, so they keep a body from being
-    held; a body with no run of two operations between observations gains nothing and is not held."""
+    """A copy to or from host memory and an owner's allocation and release wait for a held run where they stand, and
+    I/O waits by hand, so each only ends a run. A host task, @unified memory, a function value and a callee that queues
+    device work and then observes it would see the run unwaited, so they keep a body from being held; a body with no
+    run of two operations between observations gains nothing and is not held."""
     program, checker, _ = compile_program(RUNS)
     held = {f.name for f in program.functions if execution.held(checker, f)}
-    assert held == {"between_copies", "with_an_owner"}
+    assert held == {"between_copies", "with_an_owner", "printed"}
     why = {f.name: execution.unheld(checker, f) for f in program.functions}
-    assert why["between_copies"] == why["with_an_owner"] == why["one_at_a_time"] == ""
-    assert why["printed"] == "it makes a foreign call, which may observe device memory"  # println calls write(2)
+    assert why["between_copies"] == why["with_an_owner"] == why["one_at_a_time"] == why["printed"] == ""
     assert why["tasked"].startswith("it starts a host task") and why["unified"].startswith("it declares a @unified")
+    assert why["calls_a_printing_step"].startswith("step_then_print queues device work")
+    assert why["with_a_closure"].startswith("it calls a function value")
+    body = compile_source(RUNS)[0].split("void ci_printed(")[2].split("\n}\n")[0]
+    assert body.index(execution.HELD) < body.index(execution.WAIT) < body.index("cr::out::write(")
     declared = header(RUNS, "lib", device=True)[0]
     assert "cq_between_copies" not in declared and "between_copies: it transfers to host memory" in declared
 

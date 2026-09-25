@@ -165,6 +165,8 @@ class Stmt:
     staged: tuple = ()  # The arrays a staged region reads from its block's tiles: (name, element, view).
     touched: tuple = ()  # A region's (outer name, block stride or None, written) accesses, as its lanes made them.
     assembly: Assembly | None = None  # What a typed `asm` statement declares (compiler/primitives/machine.py).
+    row: frozenset[str] = frozenset()  # the effects checking it added, before its callees' rows join (checking.stmt)
+    header: frozenset[str] = frozenset()  # of a statement with a body, those its header added before the body
 
 
 @dataclass
