@@ -143,6 +143,12 @@ def judged(device: Judged, receipt: dict) -> Judged:
     return device
 
 
+def stem(project: Project) -> str:
+    """The name a build gives its artifact and its C header: the project's, as a file name of 1..64 plain
+    characters. A manifest's name is one already; a single file's stem may not be."""
+    return re.sub(r"[^A-Za-z0-9_-]", "_", project.name)[:64] or "program"
+
+
 @dataclass
 class Emitted:
     """What a build compiles, before any compiler runs: the one C++ file, its receipt, the C header, the entry."""
@@ -223,7 +229,7 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
     if out.is_symlink():
         raise ProjectError("Build output must not be a symbolic link.")
     out.mkdir(parents=True, exist_ok=True)
-    name = re.sub(r"[^A-Za-z0-9_-]", "_", project.name)[:64] or "program"
+    name = stem(project)
     directory = Path(tempfile.mkdtemp(prefix=name + "-", dir=out.resolve()))
     cpp = write_program(directory, "program.cpp", generated)
     if declared:
