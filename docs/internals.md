@@ -190,7 +190,7 @@ These harnesses write under `results/`, which is not tracked, one subdirectory p
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every pull request, every push to `main` and every Monday. A pull request needs one check, `ci-passed`, which passes only when every other job passed, so a job added later is required once it is in that job's `needs`; `tests/tooling/test_workflow.py` fails until it is. Every action is pinned by commit, the workflow reads the repository and writes nothing, and no job sets `CAIRN_GPU_TESTS`, so device code is compiled on runners without a GPU and never run.
+`.github/workflows/ci.yml` runs on every pull request, every push to `main` and every Monday. A pull request runs ten of its eighteen jobs: the compatibility jobs (`compilers`, `python`, `arm` and CUDA 12.9's two `device` jobs) run on `main` and on Monday, since several pull requests at once share the account's runners and a run of eighteen jobs held each one for most of an hour. A pull request needs one check, `ci-passed`, which passes only when every other job passed, so a job added later is required once it is in that job's `needs`; `tests/tooling/test_workflow.py` fails until it is. Every action is pinned by commit, the workflow reads the repository and writes nothing, and no job sets `CAIRN_GPU_TESTS`, so device code is compiled on runners without a GPU and never run.
 
 | Job | What it catches | Runner | Time |
 |---|---|---|---|
@@ -202,7 +202,7 @@ These harnesses write under `results/`, which is not tracked, one subdirectory p
 | `python`, three | the compiler, the agent layer, the tools and the verifiers under Python 3.11, 3.13 and 3.14 | ubuntu-24.04 | 6 to 8 min |
 | `arm` | an AArch64 host: the runtime, soundness and project tests, and the freestanding image under `qemu-system-aarch64`, which must run rather than skip | ubuntu-24.04-arm | 6 min |
 | `package` | a file the sdist or the wheel leaves out: `cairn` installed from the wheel built from the sdist and run away from the checkout, and the Claude Code plugin from a clean copy of the repository | ubuntu-24.04 | 1 min |
-| `ci-passed` | any job above that failed, was cancelled or was skipped | ubuntu-24.04 | seconds |
+| `ci-passed` | any job above that failed or was cancelled, or was skipped outside a pull request | ubuntu-24.04 | seconds |
 
 The jobs run at once, so a run takes about as long as its longest device job, 15 minutes in the runs of September 2026 ([what they found](../evidence/v1_1/ci/README.md)), and a push to `main` queues behind the run before it rather than cancelling it. The device job's tests are `make device-build` where nvcc is installed. A test's own device builds give nvcc g++ unless `CAIRN_TEST_NVCC_HOST` names another host compiler, as `make device-build NVCC_HOST=clang++` does; `cairn build` gives it clang++. NVIDIA's and LLVM's packages, elan with the pinned Lean toolchain, and pip's downloads are cached between runs, and the proofs job tries a failed toolchain download four times before it fails.
 
