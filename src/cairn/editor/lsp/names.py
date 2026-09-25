@@ -36,8 +36,16 @@ def declared(p: Program) -> dict[str, Function]:
 
 
 def template(symbol: str) -> str:
-    """A generic instance's symbol without its arguments: `m.f[u64]` was written `m.f`."""
-    return symbol[: symbol.rindex("[")] if symbol.endswith("]") and "[" in symbol else symbol
+    """A generic instance's symbol without its arguments: `m.f[u64]` and `m.f[Box[u64]]` were written `m.f`, and a
+    member `Show.Box[T].show[u64]` was written `Show.Box[T].show`."""
+    if not symbol.endswith("]"):
+        return symbol
+    depth = 0
+    for at in range(len(symbol) - 1, -1, -1):
+        depth += (symbol[at] == "]") - (symbol[at] == "[")
+        if depth == 0:
+            return symbol[:at]
+    return symbol
 
 
 def qualified(p: Program, module: str, name: str, table: Any) -> str:
