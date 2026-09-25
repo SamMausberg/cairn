@@ -6,7 +6,8 @@ operation. A device library's C header gives each such function an enqueued entr
 the same work on the caller's stream and returns without waiting, allocating, or making a stream or an event, so a
 caller may capture it in a CUDA graph. A function that must wait on the host has no enqueued entry, and the header
 says why (E-ENQUEUE). The generated library runs here against tests/runtime/gpu_host.hpp, which counts every CUDA
-call and every call a stream capture refuses; the CUDA build compiles for sm_120 and is not run here.
+call and every call a stream capture refuses; the CUDA build compiles for sm_120, and `make gpu` alone runs the same
+calls on a device, captured into a graph and replayed too.
 """
 
 import shutil
@@ -17,7 +18,7 @@ import pytest
 
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.lower.header import binding, header
-from emitted import device_build, hosted_library, printed, sanitized
+from emitted import device_build, hosted_library, library_ran_on_device, printed, sanitized
 
 LIBRARY = """
 // Two regions and a copy between device views: nothing the host reads before it returns.
@@ -110,6 +111,81 @@ int main() {
 """
 
 
+# The same calls on a device: the enqueued entries on a stream the caller owns, directly and captured into a graph it
+# replays, then the checked entries and a bound stream; every result read back once its stream is done. Exit 0 passes.
+ON_DEVICE = r"""
+#include <cstdio>
+#include <cstdint>
+#include <vector>
+#include <cuda_runtime.h>
+#include "lib.h"
+
+#define OK(call) do { cudaError_t e = (call); if(e != cudaSuccess) { \
+  std::fprintf(stderr, "%s: %s\n", #call, cudaGetErrorString(e)); return 10; } } while(0)
+
+static int wrong_rows(const char* what, const std::vector<float>& got, float scale, float plus) {
+  int wrong = 0;
+  for(std::size_t i = 0; i < got.size(); ++i) wrong += got[i] != scale * float(i) + plus;
+  if(wrong) std::fprintf(stderr, "%s: %d elements wrong\n", what, wrong);
+  return wrong;
+}
+
+int main() {
+  const std::size_t n = 1000, g = 3;
+  std::vector<float> host(n), back(n), kept(n);
+  std::vector<std::uint32_t> sums(g);
+  for(std::size_t i = 0; i < n; ++i) host[i] = float(i);
+  float *x, *out, *scratch;
+  std::uint32_t* dsums;
+  OK(cudaMalloc(&x, n * sizeof(float)));
+  OK(cudaMalloc(&out, n * sizeof(float)));
+  OK(cudaMalloc(&scratch, n * sizeof(float)));
+  OK(cudaMalloc(&dsums, g * sizeof(std::uint32_t)));
+  OK(cudaMemcpy(x, host.data(), n * sizeof(float), cudaMemcpyHostToDevice));
+  cudaStream_t mine;
+  OK(cudaStreamCreate(&mine));
+  int wrong = 0;
+
+  cq_blocked(mine, g, dsums, n, out, x, scratch);  // out = 2i + 1, scratch = out, sums[b] = b
+  cq_repeat(mine, n, out, 5);                      // out = 2i + 6
+  cudaGraph_t graph;
+  cudaGraphExec_t replay;
+  OK(cudaStreamBeginCapture(mine, cudaStreamCaptureModeGlobal));  // any call a capture refuses ends it with an error
+  cq_repeat(mine, n, out, 1);
+  OK(cudaStreamEndCapture(mine, &graph));
+  OK(cudaGraphInstantiate(&replay, graph, 0));
+  for(int k = 0; k < 3; ++k) OK(cudaGraphLaunch(replay, mine));  // out = 2i + 9
+  OK(cudaStreamSynchronize(mine));
+  OK(cudaMemcpy(back.data(), out, n * sizeof(float), cudaMemcpyDeviceToHost));
+  OK(cudaMemcpy(kept.data(), scratch, n * sizeof(float), cudaMemcpyDeviceToHost));
+  OK(cudaMemcpy(sums.data(), dsums, g * sizeof(std::uint32_t), cudaMemcpyDeviceToHost));
+  wrong += wrong_rows("enqueued and replayed", back, 2.0f, 9.0f) + wrong_rows("scratch", kept, 2.0f, 1.0f);
+  for(std::size_t b = 0; b < g; ++b) wrong += sums[b] != b;
+
+  cf_blocked(g, dsums, n, out, x, scratch);  // the checked entries, on the thread's own stream
+  cf_repeat(n, out, 5);
+  OK(cudaMemcpy(back.data(), out, n * sizeof(float), cudaMemcpyDeviceToHost));
+  wrong += wrong_rows("checked", back, 2.0f, 6.0f);
+  cf_once(n, out);
+  wrong += cf_total(n, x) != float(n * (n - 1) / 2);
+
+  cairn_lib_device_stream(mine);  // bound: the checked entries run on the caller's stream
+  cf_smooth(n, out, x, scratch);
+  cq_once(mine, n, out);
+  cf_fetch(n, back.data(), out);
+  cairn_lib_device_stream(nullptr);
+  wrong += wrong_rows("bound", back, 0.0f, 3.0f);
+
+  OK(cudaGraphExecDestroy(replay));
+  OK(cudaGraphDestroy(graph));
+  OK(cudaStreamDestroy(mine));
+  for(void* p : {(void*)x, (void*)out, (void*)scratch, (void*)dsums}) OK(cudaFree(p));
+  std::printf("{\"wrong\": %d}\n", wrong);
+  return wrong != 0;
+}
+"""
+
+
 def steps(tmp_path: Path, cxx: str) -> dict[str, dict]:
     """The library and its caller built with the sanitizers on the host stand-in and run; each step's counts."""
     rows = printed(hosted_library(tmp_path, LIBRARY, CALLER, cxx, *sanitized(cxx), "-pthread"))
@@ -147,6 +223,10 @@ def test_a_held_body_waits_once_and_the_rest_wait_as_before(tmp_path, cxx):
     assert bound["stream_waits"] == 1 and rows["bound smooth"]["on_mine"], bound
     fetched = moved(rows, "bound smooth", "bound fetch after enqueued once")
     assert fetched["stream_waits"] == 1 and rows["bound fetch after enqueued once"]["on_mine"], fetched
+
+
+def test_the_enqueued_entries_run_on_a_device_directly_and_replayed_in_a_graph(tmp_path):
+    library_ran_on_device(tmp_path, LIBRARY, ON_DEVICE)
 
 
 def test_only_functions_that_never_wait_on_the_host_have_an_enqueued_entry():

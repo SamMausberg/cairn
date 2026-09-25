@@ -10,6 +10,7 @@ import contextlib
 import ctypes
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -231,11 +232,17 @@ def watched(tmp_path: Path, cpp: str, cxx: str, sanitizer: str, timeout=300, **o
                     under=("setarch", "-R"), **options)  # fmt: skip
 
 
+# What a test that runs device code calls, in its own body or in a fixture it takes: `on_device` or a helper of it,
+# or the gate and the lock of tools/support.py. `make gpu` collects only such tests (conftest.py, --device-runs), and
+# tests/tooling/test_workflow.py holds its module list to those that call one.
+DEVICE_RUNS = re.compile(r"on_device\(|device_reason\(|device_lock\(")
+
+
 @contextlib.contextmanager
-def on_device():
-    """Skip the rest of a test unless device code may run here (`support.device_reason`); otherwise hold the
-    machine-wide device lock while it runs."""
-    if reason := device_reason():
+def on_device(trap: bool = False):
+    """Skip the rest of a test unless device code may run here (`support.device_reason`), or with `trap`, code that
+    traps on the device on purpose; otherwise hold the machine-wide device lock while it runs."""
+    if reason := device_reason(trap):
         pytest.skip(reason)
     with device_lock():
         yield
@@ -247,4 +254,17 @@ def ran_on_device(tmp_path: Path, cpp: str, timeout=240):
     with on_device():
         done = contract(tmp_path, cpp, "g++", cuda=True, timeout=timeout)
     assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    return done
+
+
+def library_ran_on_device(tmp_path: Path, source: str, caller: str, name="lib", timeout=600):
+    """A device library's C++ with its C header `NAME.h` and a CUDA `caller` of it, built by `contract` under g++ and
+    run on the device, only under `make gpu` (`on_device`), where the caller must exit 0; `hosted_library` is the same
+    build against a host stand-in. Nothing is compiled where the test skips."""
+    with on_device():
+        declared, checks = header(source, name, device=True)
+        beside = {f"{name}.h": declared, "main.cpp": caller}
+        cpp = compile_source(source)[0] + "\n" + checks
+        done = contract(tmp_path, cpp, "g++", cuda=True, timeout=timeout, entry=None, beside=beside)
+    assert done.returncode == 0, (done.returncode, done.stdout[-2000:], done.stderr[-2000:])
     return done

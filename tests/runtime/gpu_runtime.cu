@@ -241,11 +241,17 @@ static int death(const char* name) {
 }
 
 int main(int argc, char** argv) {
-  static const char* cases[] = {"device_bounds",  "device_overflow",   "device_divide_zero",
-                                "device_narrow",  "reduce_overflow",   "async_bounds",
-                                "ticket_dropped", "allocation_failed"};
+  // --traps lists the cases whose guard traps on the device, which `make gpu` runs only with CAIRN_GPU_TRAPS=1
+  // (tools/support.py); --list the ones the host ends by itself.
+  static const char* traps[] = {"device_bounds", "device_overflow",  "device_divide_zero",
+                                "device_narrow", "reduce_overflow",  "async_bounds"};
+  static const char* cases[] = {"ticket_dropped", "allocation_failed"};
   if(argc > 1 && !std::strcmp(argv[1], "--list")) {
     for(const char* c : cases) std::printf("%s\n", c);
+    return 0;
+  }
+  if(argc > 1 && !std::strcmp(argv[1], "--traps")) {
+    for(const char* c : traps) std::printf("%s\n", c);
     return 0;
   }
   if(argc > 1) return death(argv[1]);

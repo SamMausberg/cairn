@@ -4,9 +4,9 @@ access, with a cache hint the device reads and the host ignores.
 Every rule has a rejection naming its code. The accesses run natively in host code, in a host `parallel` region and
 in a host cooperative region under both compilers, against plain loops, with the address and undefined-behaviour
 sanitizers, and the cooperative region under the thread sanitizer. Both guards are shown to trap before the access
-reaches memory: past the end, and off the access's width. The device program runs emulated on host threads, and its
-device lowering compiles for sm_120 to one 128-bit instruction an access, read back with cuobjdump. Nothing runs on a
-GPU.
+reaches memory: past the end, and off the access's width. The device program runs emulated on host threads and, under
+`make gpu` alone, on the device, and its device lowering compiles for sm_120 to one 128-bit instruction an access, read
+back with cuobjdump.
 """
 
 import re
@@ -15,7 +15,7 @@ import pytest
 
 from cairn.agent.explain import explain
 from cairn.compiler.cairnc import compile_source
-from emitted import assembled, contract, ran_emulated, refused, round_trips, sanitizers, watched
+from emitted import assembled, contract, ran_emulated, ran_on_device, refused, round_trips, sanitizers, watched
 
 KERNELS = """// Each lane reverses and doubles four adjacent elements: one 16-byte load and one 16-byte store.
 fn quads(m:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
@@ -162,6 +162,10 @@ def test_each_guard_traps_before_the_access_reaches_memory(tmp_path, cxx, source
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, cxx):
     ran_emulated(tmp_path, compile_source(DEVICE)[0], cxx)
+
+
+def test_the_device_program_agrees_on_the_device(tmp_path):
+    ran_on_device(tmp_path, compile_source(DEVICE)[0])
 
 
 def test_the_device_lowering_is_one_128_bit_instruction_an_access_and_no_local_memory(tmp_path):

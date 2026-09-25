@@ -2,8 +2,9 @@
 
 The executables beside this file are self checking: exit 0 is a pass. Each also runs one
 named death case per invocation, which must abort the process, so those are driven here as
-subprocesses. Device work runs only under `make gpu`, one run at a time (`support.device_reason`);
-everywhere else a device test is compiled for a named architecture and never run.
+subprocesses. Device work runs only under `make gpu`, one run at a time (`support.device_reason`), and a death case
+that traps on the device only with CAIRN_GPU_TRAPS=1 as well; everywhere else a device test is compiled for a named
+architecture and never run.
 
 The parallel test is run at several lane counts (CAIRN_LANES), under ThreadSanitizer and under
 AddressSanitizer with UBSan, because the lane pool is shared, long lived and joined at exit.
@@ -52,9 +53,9 @@ def drop_core_limit() -> None:
     no_core()
 
 
-def run_cases(exe: Path) -> None:
-    """Every death case must abort: a guard failure ends the process, it does not return."""
-    listed = subprocess.run([str(exe), "--list"], capture_output=True, text=True)
+def run_cases(exe: Path, listing: str = "--list") -> None:
+    """Every death case `listing` names must abort: a guard failure ends the process, it does not return."""
+    listed = subprocess.run([str(exe), listing], capture_output=True, text=True)
     assert listed.returncode == 0
     cases = listed.stdout.split()
     assert cases, "no death cases were declared"
@@ -212,6 +213,14 @@ def test_gpu_runtime(gpu_exe: Path) -> None:
 def test_gpu_runtime_deaths(gpu_exe: Path) -> None:
     with device_lock():
         run_cases(gpu_exe)
+
+
+def test_gpu_runtime_device_traps(gpu_exe: Path) -> None:
+    """A guard in a lane or a reduction traps on the device, and the process aborts."""
+    if reason := device_reason(trap=True):
+        pytest.skip(reason)
+    with device_lock():
+        run_cases(gpu_exe, "--traps")
 
 
 def device_line(source: str, out: Path, device: DeviceTarget | None = None) -> list[str]:
