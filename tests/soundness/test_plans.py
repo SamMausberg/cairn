@@ -13,7 +13,7 @@ import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from emitted import contract, device_build, on_device, refused, watched
+from emitted import contract, device_build, ran_on_device, refused, round_trips, watched
 
 SCALE = "fn scale(n:usize, out:rw<u64>[n], x:ro<u64>[n]) { parallel i in n { out[i] = x[i] * 3; } }\n"
 DEVICE = "fn dev(n:usize, out:rw<f32>[n]@device) { parallel i in n { out[i] = 1.0; } }\n"
@@ -56,9 +56,8 @@ def test_a_plan_changes_how_a_region_is_claimed_and_nothing_the_checker_says():
 
 def test_a_plan_is_its_own_item_in_the_canonical_projection():
     source = SCALE + "plan scale { lanes 3; }\n"
-    canonical = canonical_source(source)
+    canonical = round_trips(source)
     assert "plan scale { lanes 3; }" in canonical
-    assert compile_source(canonical)[0] == compile_source(source)[0] and canonical_source(canonical) == canonical
     device = DEVICE + "plan dev { unroll 2; block 64; }\n"  # printed in the checker's order of items
     assert "plan dev { block 64; unroll 2; }" in canonical_source(device)
     assert compile_source(canonical_source(device))[0] == compile_source(device)[0]
@@ -105,9 +104,7 @@ def test_every_device_plan_compiles_for_the_device_without_touching_it(tmp_path,
 
 @pytest.mark.parametrize("plan", DEVICE_PLANS)
 def test_every_device_plan_computes_what_the_unplanned_launch_computes(tmp_path, plan):
-    with on_device():  # runs only under `make gpu`
-        done = contract(tmp_path, compile_source(ON_DEVICE.replace("PLAN", plan))[0], "g++", cuda=True)
-        assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    ran_on_device(tmp_path, compile_source(ON_DEVICE.replace("PLAN", plan))[0])  # only under `make gpu`
 
 
 # Sixty-four heavy lanes: the pool would leave a region this short to one thread, and a plan spreads it.

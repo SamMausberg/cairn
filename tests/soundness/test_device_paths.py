@@ -11,13 +11,12 @@ import re
 
 import pytest
 
-from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_program, compile_source
 from cairn.perf import model
 from cairn.perf.profile import packaged
 from cairn.perf.tuning.tune import tune
 from cairn.perf.work import count
-from emitted import contract, device_build, on_device, refused
+from emitted import device_build, ran_on_device, refused, round_trips
 
 SAXPY = """fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@device, a:f32) {
   parallel i in n { out[i] = a * x[i] + y[i]; }
@@ -81,9 +80,8 @@ plan mixed { vector 4; }
 
 def test_a_vector_plan_is_its_own_item_in_the_canonical_projection():
     source = SAXPY + "plan saxpy { vector 4; }\n"
-    canonical = canonical_source(source)
+    canonical = round_trips(source)
     assert "plan saxpy { vector 4; }" in canonical
-    assert compile_source(canonical)[0] == compile_source(source)[0] and canonical_source(canonical) == canonical
 
 
 def test_a_vectored_lane_moves_its_chunks_in_single_wide_accesses_on_the_device(tmp_path):
@@ -148,6 +146,4 @@ def test_every_vector_plan_compiles_for_the_device_without_touching_it(tmp_path,
 
 @pytest.mark.parametrize("plan", ["", *VECTORS])
 def test_every_vector_plan_computes_what_the_scalar_lanes_compute(tmp_path, plan):
-    with on_device():  # runs only under `make gpu`
-        done = contract(tmp_path, compile_source(ON_DEVICE.replace("PLAN", plan))[0], "g++", cuda=True)
-        assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    ran_on_device(tmp_path, compile_source(ON_DEVICE.replace("PLAN", plan))[0])  # only under `make gpu`

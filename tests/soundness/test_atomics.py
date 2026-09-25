@@ -9,16 +9,11 @@ lowering compiles for sm_120 to RED, ATOMG and ATOMS, read back with cuobjdump. 
 """
 
 import re
-import shutil
-import subprocess
 
 import pytest
 
-from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from emitted import contract, device_build, refused, watched
-
-SANITIZERS = {"clang++": ("-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"), "g++": ()}
+from emitted import assembled, contract, ran_emulated, refused, round_trips, sanitizers, watched
 
 KERNELS = """// Each lane adds its value's low byte to one of 256 bins, and folds it into running totals, extremes and masks.
 fn tally(n:usize, x:ro<u32>[n], bins:rw<u32>[256], sum:rw<u64>[1], total:rw<f32>[1], ends:rw<i64>[2],
@@ -151,7 +146,7 @@ DEVICE = (
 def test_atomic_updates_agree_with_plain_loops_on_host_lanes_and_threads(tmp_path, cxx):
     """A hundred thousand lanes on the lane pool and 400 blocks of real threads; the float sum is of whole numbers
     below 2^24, which every order adds exactly."""
-    done = contract(tmp_path, compile_source(HOST)[0], cxx, *SANITIZERS[cxx])
+    done = contract(tmp_path, compile_source(HOST)[0], cxx, *sanitizers(cxx))
     assert done.returncode == 0, (done.returncode, done.stderr[-3000:])
 
 
@@ -215,27 +210,19 @@ def test_an_unordered_float_sum_lands_within_its_stated_bound(tmp_path, cxx):
     """Two hundred thousand fractions added by lanes in whatever order they arrive, each sum held to the plain loop's:
     the f32 one within the contract's k * 2^-23 of the sum of magnitudes, and the f64 one within twice k * 2^-53, since
     the plain loop rounds too."""
-    done = contract(tmp_path, compile_source(FLOATS)[0], cxx, *SANITIZERS[cxx])
+    done = contract(tmp_path, compile_source(FLOATS)[0], cxx, *sanitizers(cxx))
     assert done.returncode == 0, (done.returncode, done.stderr[-3000:])
 
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, cxx):
-    done = contract(tmp_path, compile_source(DEVICE)[0], cxx, cuda=True, emulate=True)
-    assert done.returncode == 0, (done.returncode, done.stderr[-3000:])
+    ran_emulated(tmp_path, compile_source(DEVICE)[0], cxx)
 
 
 def test_the_device_lowering_is_one_atomic_instruction_an_update(tmp_path):
     """Compiled for sm_120 and read back with cuobjdump: RED where the old value goes unused, ATOMG where it is used,
     ATOMS on shared memory, and REDG.E.ADD.F32.FTZ for the f32 add, whose flush the contract states."""
-    if not shutil.which("cuobjdump") or not shutil.which("ptxas"):
-        pytest.skip("needs ptxas and cuobjdump")
-    source = DEVICE.split("\nfn check(")[0]
-    ptx = device_build(tmp_path, compile_source(source)[0], ptx=True)
-    cubin = tmp_path / "p.cubin"
-    built = subprocess.run(["ptxas", "-arch=sm_120", str(ptx), "-o", str(cubin)], capture_output=True, text=True)
-    assert built.returncode == 0, built.stderr[-3000:]
-    sass = subprocess.run(["cuobjdump", "-sass", str(cubin)], capture_output=True, text=True, timeout=120).stdout
+    sass, _ = assembled(tmp_path, compile_source(DEVICE.split("\nfn check(")[0])[0])
     for wanted in ("REDG.E.ADD.F32.FTZ.RN", "REDG.E.MIN.S64", "REDG.E.MAX.S64", "ATOMG.E.CAS.64", "ATOMS."):
         assert wanted in sass, wanted
     assert not re.search(r"\b(LDL|STL)\b", sass)
@@ -250,9 +237,7 @@ def test_the_row_and_the_receipt_say_what_an_atomic_costs_and_rounds():
 
 
 def test_the_canonical_projection_compiles_to_the_same_code():
-    canonical = canonical_source(HOST)
-    assert canonical_source(canonical) == canonical
-    assert compile_source(canonical)[0] == compile_source(HOST)[0]
+    round_trips(HOST)
 
 
 LANE = "fn f(n:usize, x:ro<u32>[n]@device, out:rw<u32>[n]@device) {\n  parallel i in n {\n    BODY\n  }\n}\n"

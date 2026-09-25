@@ -10,10 +10,9 @@ computes on its own. The canonical projection keeps the native code.
 
 import pytest
 
-from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from cairn.editor.formatting import format_source
-from emitted import contract, refused
+from emitted import contract, refused, round_trips
 
 TOTAL = """fn total(n:usize, xs:ro<u64>[n]) -> u64 {
   let mut s:u64 = 0;
@@ -121,10 +120,9 @@ def test_a_test_block_calls_a_listed_instance_by_name():
 
 def test_the_projection_keeps_the_native_code_and_the_formatter_keeps_the_tokens():
     source = summing("plan total use total_by[4];\n")
-    canonical = canonical_source(source)
+    canonical = round_trips(source)
     assert "implements total when ((n % K) == 0) tune K in [2, 4, 8]" in canonical
     assert "plan total use total_by[4];" in canonical
-    assert compile_source(canonical)[0] == compile_source(source)[0] and canonical_source(canonical) == canonical
     shaped = format_source(source)
     assert "implements total when n % K == 0 tune K in [2, 4, 8] {" in shaped and format_source(shaped) == shaped
     assert compile_source(shaped)[0] == compile_source(source)[0]

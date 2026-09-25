@@ -8,7 +8,6 @@ run is checked for what training should achieve and what quantization should cos
 
 import math
 import shutil
-import struct
 import subprocess
 from pathlib import Path
 
@@ -18,14 +17,10 @@ from cairn.compiler.cairnc import compile_source
 from cairn.projects.build import build
 from cairn.projects.project import load_project
 from emitted import SANITIZED, run
-from oracles.float_formats import Format, quantize_integer
+from oracles.float_formats import Format, f32, quantize_integer
 
 APP = Path(__file__).resolve().parents[2] / "examples" / "apps" / "classifier"
 HIDDEN = 8
-
-
-def single(x: float) -> float:
-    return struct.unpack("<f", struct.pack("<f", x))[0]
 
 
 def points(draw, n):
@@ -93,8 +88,8 @@ def accuracy(net, data):
 
 def through(values, top, rounding):
     largest = max(abs(x) for x in values)
-    scale = 1.0 if largest == 0.0 else single(largest / top)
-    return [single(rounding(single(x), scale) * scale) for x in values]
+    scale = 1.0 if largest == 0.0 else f32(largest / top)
+    return [f32(rounding(f32(x), scale) * scale) for x in values]
 
 
 def quantized(net, eight):

@@ -178,6 +178,11 @@ def labels(doc, text, needle, offset=0):
     return {item["label"] for item in completion(doc, text.index(needle) + offset)}
 
 
+def lines(found):
+    """Each reference or edit location as (file name, line), sorted."""
+    return sorted((r["uri"].rsplit("/", 1)[1], r["range"]["start"]["line"]) for r in found)
+
+
 def applied(doc, edits):
     """The document with a WorkspaceEdit's changes in it, latest position first."""
     text = doc.text

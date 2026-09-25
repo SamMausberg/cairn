@@ -12,9 +12,8 @@ import signal
 
 import pytest
 
-from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import Diagnostic, compile_source
-from emitted import contract, watched
+from emitted import contract, round_trips, watched
 
 VIEWS = "fn f(n:usize, x:ro<u64>[n], s:ro<i32>[n], d:ro<f32>[n]@device) -> u64 {\n  "
 
@@ -56,9 +55,8 @@ def test_a_pooled_fold_says_it_runs_on_the_lane_pool_and_a_plain_one_does_not():
 
 def test_the_canonical_projection_keeps_the_form():
     source = "fn f(n:usize, x:ro<u64>[n]) -> u64 { let t = reduce max parallel i in n yield x[i]; return t; }\n"
-    canonical = canonical_source(source)
+    canonical = round_trips(source)
     assert "reduce max parallel i in n yield" in canonical
-    assert compile_source(canonical)[0] == compile_source(source)[0] and canonical_source(canonical) == canonical
 
 
 # Every operator on the pool against the same operator folded in order, on a count that no block size divides,

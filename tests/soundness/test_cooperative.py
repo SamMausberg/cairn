@@ -9,10 +9,9 @@ tests/runtime/coop_host.hpp.
 
 import pytest
 
-from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.cooperative.cooperative import participation
-from emitted import device_build, refused, watched
+from emitted import device_build, refused, round_trips, watched
 
 REDUCE = """fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
   blocks b in g threads t in 256 {
@@ -146,9 +145,7 @@ def test_a_region_reports_what_it_costs():
 
 def test_the_canonical_projection_compiles_to_the_same_code():
     for source in (REDUCE, TRANSPOSE):
-        canonical = canonical_source(source)
-        assert canonical_source(canonical) == canonical
-        assert compile_source(canonical)[0] == compile_source(source)[0]
+        round_trips(source)
 
 
 def test_a_rule_learns_who_reaches_a_statement_together():

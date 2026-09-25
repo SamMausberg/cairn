@@ -10,17 +10,12 @@ GPU.
 """
 
 import re
-import shutil
-import subprocess
 
 import pytest
 
 from cairn.agent.explain import explain
-from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from emitted import contract, device_build, refused, watched
-
-SANITIZERS = {"clang++": ("-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"), "g++": ()}
+from emitted import assembled, contract, ran_emulated, refused, round_trips, sanitizers, watched
 
 KERNELS = """// Each lane reverses and doubles four adjacent elements: one 16-byte load and one 16-byte store.
 fn quads(m:usize, n:usize, out:rw<f32>[n], x:ro<f32>[n]) {
@@ -117,7 +112,7 @@ DEVICE = (
 def test_wide_accesses_agree_with_plain_loops_everywhere_they_run(tmp_path, cxx):
     """Host code, a host region's lanes and a host block's threads, each held to plain loops; under clang++ with the
     address and undefined-behaviour sanitizers, under g++ for its behaviour alone."""
-    done = contract(tmp_path, compile_source(HOST)[0], cxx, *SANITIZERS[cxx])
+    done = contract(tmp_path, compile_source(HOST)[0], cxx, *sanitizers(cxx))
     assert done.returncode == 0, (done.returncode, done.stderr[-3000:])
 
 
@@ -159,28 +154,21 @@ fn main() -> i32 {
 def test_each_guard_traps_before_the_access_reaches_memory(tmp_path, cxx, source):
     """A heap buffer sits on 8 bytes at least, so x[1] sits 4 or 12 bytes past 16. The address sanitizer watches, and
     stays silent: the guard aborts first."""
-    done = contract(tmp_path, compile_source(source)[0], cxx, *SANITIZERS[cxx])
+    done = contract(tmp_path, compile_source(source)[0], cxx, *sanitizers(cxx))
     assert done.returncode in {-6, 134}, (done.returncode, done.stderr[-2000:])
     assert "AddressSanitizer" not in done.stderr and "runtime error" not in done.stderr
 
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, cxx):
-    done = contract(tmp_path, compile_source(DEVICE)[0], cxx, cuda=True, emulate=True)
-    assert done.returncode == 0, (done.returncode, done.stderr[-3000:])
+    ran_emulated(tmp_path, compile_source(DEVICE)[0], cxx)
 
 
 def test_the_device_lowering_is_one_128_bit_instruction_an_access_and_no_local_memory(tmp_path):
     """Compiled for sm_120 and read back with cuobjdump: .cs is the evict-first operator (EF), .cg a load that skips
     L1, the shared array's accesses LDS.128 and STS.128. Nothing is spilled or kept in local memory."""
-    if not shutil.which("cuobjdump") or not shutil.which("ptxas"):
-        pytest.skip("needs ptxas and cuobjdump")
     source = KERNELS.replace("[n]", "[n]@device") + READ_ONLY
-    ptx = device_build(tmp_path, compile_source(source)[0], ptx=True)
-    cubin = tmp_path / "p.cubin"
-    built = subprocess.run(["ptxas", "-arch=sm_120", str(ptx), "-o", str(cubin)], capture_output=True, text=True)
-    assert built.returncode == 0, built.stderr[-3000:]
-    sass = subprocess.run(["cuobjdump", "-sass", str(cubin)], capture_output=True, text=True, timeout=120).stdout
+    sass, _ = assembled(tmp_path, compile_source(source)[0])
     for wanted in ("LDG.E.EF.128", "STG.E.EF.128", "LDS.128", "STS.128", "LDG.E.128.CONSTANT"):
         assert wanted in sass, wanted
     assert not re.search(r"\b(LDL|STL)\b", sass)
@@ -218,9 +206,7 @@ def test_cairn_explain_names_each_access_s_width_and_cache_operator():
 
 
 def test_the_canonical_projection_compiles_to_the_same_code():
-    canonical = canonical_source(HOST)
-    assert canonical_source(canonical) == canonical
-    assert compile_source(canonical)[0] == compile_source(HOST)[0]
+    round_trips(HOST)
 
 
 LANE = "fn f(n:usize, x:ro<f32>[n]@device, out:rw<f32>[n]@device) {\n  parallel i in n / 4 {\n    BODY\n  }\n}\n"

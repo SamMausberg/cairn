@@ -6,7 +6,6 @@ showed it, and the attacks that were correctly refused or held, kept so that a l
 
 import importlib.util
 import shutil
-import struct
 import subprocess
 import tempfile
 from fractions import Fraction
@@ -25,6 +24,7 @@ from cairn.projects.project import ProjectError, load_project
 from cairn.projects.revision import read
 from cairn.verify.diff import single
 from emitted import watched
+from oracles.float_formats import f32
 
 
 def git(repo, *args, data=None):
@@ -388,10 +388,6 @@ def rational_quantize(x: float, scale: float, lo: int, hi: int) -> int:
     rest = q - whole
     rounded = whole + 1 if rest > Fraction(1, 2) or (rest == Fraction(1, 2) and whole % 2) else whole
     return max(lo, min(hi, rounded))
-
-
-def f32(v: float) -> float:
-    return struct.unpack("f", struct.pack("f", v))[0]
 
 
 QUANTIZED = [  # (type, x, scale): ties at both ends, saturation, an overflowing quotient, subnormals, signed zero

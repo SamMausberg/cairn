@@ -150,3 +150,13 @@ def double_bits(x: float) -> int:
 
 def from_double_bits(u: int) -> float:
     return struct.unpack("<d", struct.pack("<Q", u))[0]
+
+
+def f32(x: float) -> float:
+    """`x` rounded to the nearest f32, as a C++ float stores it; it raises past the largest finite f32."""
+    return struct.unpack("<f", struct.pack("<f", x))[0]
+
+
+def f32_bits(x: float) -> int:
+    """The bits of `x` rounded to f32."""
+    return struct.unpack("<I", struct.pack("<f", x))[0]

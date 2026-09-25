@@ -12,7 +12,6 @@ import ctypes as C
 import random
 import shutil
 import signal
-import struct
 import subprocess
 from fractions import Fraction
 from pathlib import Path
@@ -22,8 +21,8 @@ import pytest
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
 from cairn.verify.scalar.semantics import equivalent
-from emitted import contract, device_build, library, on_device, refused, run
-from oracles.float_formats import FORMATS, Format
+from emitted import device_build, library, ran_on_device, refused, run
+from oracles.float_formats import FORMATS, Format, f32, f32_bits
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / "src/cairn/runtime"
@@ -44,14 +43,6 @@ fn mma_{name}(m:usize, n:usize, k:usize, cn:usize, c:rw<f32>[cn]{at}, an:usize, 
 def lib(request, tmp_path_factory):
     directory = tmp_path_factory.mktemp(request.param.replace("+", "p"))
     return library(directory, compile_source("".join(map(entry, FORMATS)))[0], request.param)
-
-
-def f32(x: float) -> float:
-    return struct.unpack("f", struct.pack("f", x))[0]
-
-
-def bits(x: float) -> int:
-    return struct.unpack("I", struct.pack("f", x))[0]
 
 
 def finite_patterns(fmt: Format, rng: random.Random, count: int, limit: float) -> list[int]:
@@ -90,7 +81,7 @@ def test_the_host_multiply_is_its_reference_bit_for_bit_and_within_the_contract(
                     acc = f32(acc + f32(x * y))  # the order the host writes: old value, then p upward
                     exact += Fraction(x) * Fraction(y)
                     magnitude += abs(Fraction(x) * Fraction(y))
-                assert bits(got[i * n + j]) == bits(acc), (name, m, n, k, i, j)
+                assert f32_bits(got[i * n + j]) == f32_bits(acc), (name, m, n, k, i, j)
                 assert abs(Fraction(got[i * n + j]) - exact) <= (k + 1) * Fraction(1, 2**22) * magnitude
 
 
@@ -247,6 +238,4 @@ def test_the_device_multiply_compiles_for_sm_120_and_never_waits_for_the_whole_d
 
 @pytest.mark.parametrize("name", FORMATS)
 def test_the_tensor_cores_agree_with_the_reference_within_the_contract(tmp_path, name):
-    with on_device():  # runs only under `make gpu`
-        done = contract(tmp_path, compile_source(ON_DEVICE.replace("T", name))[0], "g++", cuda=True)
-        assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    ran_on_device(tmp_path, compile_source(ON_DEVICE.replace("T", name))[0])  # only under `make gpu`

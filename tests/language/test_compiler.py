@@ -68,6 +68,30 @@ BAD = [
     ),
     ("E-LEX", "fn f() { $; }"),
     ("E-MINMAX", "fn f(x:f64)->f64{return min(x,x);}"),
+    (
+        "E-COLLECT-CAPACITY",
+        "fn f(n:usize,m:usize,o:rw<u64>[n]@host,x:ro<u64>[m]@host)->usize{let k=compact o for i in m where true yield x[i];return k;}",
+    ),
+    (
+        "E-COLLECT-SELF-READ",
+        "fn f(n:usize,o:rw<u64>[n]@host)->usize{let k=compact o for i in n where true yield o[i];return k;}",
+    ),
+    (
+        "E-WRITE-LEASE",
+        "fn f(n:usize,o:ro<u64>[n]@host)->usize{let k=compact o for i in n where true yield 0;return k;}",
+    ),
+    (
+        "E-COLLECT-BINDING",
+        "fn f(n:usize,o:rw<u64>[n]@host)->usize{reg k=compact o for i in n where true yield 0;return k;}",
+    ),
+    (
+        "E-EFFECT-ORDER",
+        "fn w(n:usize,x:rw<u64>[n]@host)->u64{x[0]=1;return 0;} fn f(n:usize,o:rw<u64>[n]@host,x:rw<u64>[n]@host)->usize{let k=compact o for i in n where true yield w(n,x);return k;}",
+    ),
+    ("E-SHADOW", "fn f(n:usize,o:rw<u64>[n]@host)->usize{let k=compact o for k in n where true yield 0;return k;}"),
+    ("E-DERIVE-FIELD", "struct P{x:f32;} derive wire for P;"),
+    ("E-DERIVE-TYPE", "derive wire for P;"),
+    ("E-DERIVE-COLLISION", "struct P{x:u32;} fn encode_P(){} derive wire for P;"),
 ]
 
 
@@ -105,39 +129,6 @@ def test_whole_expression_effect_call():
     compile_source(
         "fn f(n:usize,a:rw<u64>[n]@host)->u64{a[0]=1;return 0;} fn g(n:usize,a:rw<u64>[n]@host)->u64{let q=f(n,a); return q;}"
     )
-
-
-MORE_BAD = [
-    (
-        "E-COLLECT-CAPACITY",
-        "fn f(n:usize,m:usize,o:rw<u64>[n]@host,x:ro<u64>[m]@host)->usize{let k=compact o for i in m where true yield x[i];return k;}",
-    ),
-    (
-        "E-COLLECT-SELF-READ",
-        "fn f(n:usize,o:rw<u64>[n]@host)->usize{let k=compact o for i in n where true yield o[i];return k;}",
-    ),
-    (
-        "E-WRITE-LEASE",
-        "fn f(n:usize,o:ro<u64>[n]@host)->usize{let k=compact o for i in n where true yield 0;return k;}",
-    ),
-    (
-        "E-COLLECT-BINDING",
-        "fn f(n:usize,o:rw<u64>[n]@host)->usize{reg k=compact o for i in n where true yield 0;return k;}",
-    ),
-    (
-        "E-EFFECT-ORDER",
-        "fn w(n:usize,x:rw<u64>[n]@host)->u64{x[0]=1;return 0;} fn f(n:usize,o:rw<u64>[n]@host,x:rw<u64>[n]@host)->usize{let k=compact o for i in n where true yield w(n,x);return k;}",
-    ),
-    ("E-SHADOW", "fn f(n:usize,o:rw<u64>[n]@host)->usize{let k=compact o for k in n where true yield 0;return k;}"),
-    ("E-DERIVE-FIELD", "struct P{x:f32;} derive wire for P;"),
-    ("E-DERIVE-TYPE", "derive wire for P;"),
-    ("E-DERIVE-COLLISION", "struct P{x:u32;} fn encode_P(){} derive wire for P;"),
-]
-
-
-@pytest.mark.parametrize("code,source", MORE_BAD)
-def test_new_rejections(code, source):
-    refused(code, source)
 
 
 def test_wire_derivation():

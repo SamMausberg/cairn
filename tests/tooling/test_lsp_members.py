@@ -8,7 +8,7 @@ and a variant in its declaration, `Sum.Variant`, a bare constructor and a match 
 import subprocess
 
 import pytest
-from test_lsp import Client, applied, place
+from test_lsp import Client, applied, lines, place
 
 from cairn.compiler.cairnc import compile_source
 from cairn.editor.lsp import members as members_module
@@ -75,10 +75,6 @@ def project(tmp_path):
 def held(root):
     main = (root / "src/main.cairn").resolve()
     return workspace(main.as_uri(), {main.as_uri(): MAIN}), main.as_uri()
-
-
-def lines(found):
-    return sorted((r["uri"].rsplit("/", 1)[1], r["range"]["start"]["line"]) for r in found)
 
 
 def at(needle, offset=0, text=MAIN):

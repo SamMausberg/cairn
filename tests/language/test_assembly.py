@@ -8,13 +8,12 @@ import subprocess
 
 import pytest
 
-from cairn.agent.projection import canonical_source
 from cairn.agent.teaching import select_cards
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.primitives.machine import host, satisfies
 from cairn.projects.build import build as build_project
 from cairn.projects.project import load_project
-from emitted import code_of, contract, device_build, on_device, refused, watched
+from emitted import code_of, device_build, ran_on_device, refused, round_trips, watched
 
 HOST = host()
 OTHER = "aarch64" if HOST == "x86_64" else "x86_64"
@@ -319,9 +318,7 @@ def test_an_architecture_satisfies_what_ptx_needs(target, capability, runs):
 
 @pytest.mark.parametrize("source", [X86, PTX])
 def test_the_canonical_projection_keeps_typed_assembly(source):
-    canonical = canonical_source(source)
-    assert canonical_source(canonical) == canonical
-    assert compile_source(canonical)[0] == compile_source(source)[0]
+    round_trips(source)
 
 
 def test_the_assembly_card_is_chosen_by_the_asm_token():
@@ -429,6 +426,4 @@ fn main() -> i32 {
 def test_typed_ptx_in_a_lane_and_a_cooperative_region_runs_on_the_device(tmp_path):
     """Run only under `make gpu`: a 16-byte load in a lane, a bit reversal in a lane and in a cooperative region."""
     cpp = compile_source(RUNS)[0]
-    with on_device():
-        done = contract(tmp_path, cpp, "g++", cuda=True, timeout=600)
-    assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    ran_on_device(tmp_path, cpp, timeout=600)

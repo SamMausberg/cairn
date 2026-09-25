@@ -13,11 +13,8 @@ import shutil
 
 import pytest
 
-from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import compile_source
-from emitted import contract, device_build, refused, watched
-
-SANITIZERS = {"clang++": ("-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"), "g++": ()}
+from emitted import contract, device_build, ran_emulated, refused, round_trips, sanitizers, watched
 
 KERNELS = """// Block sums through a tree in shared memory that nobody zeroes: the first phase writes every element.
 fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
@@ -110,7 +107,7 @@ DEVICE = KERNELS.replace(
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_unzeroed_arrays_give_the_plain_loops_answers(tmp_path, cxx):
-    done = contract(tmp_path, compile_source(HOST)[0], cxx, *SANITIZERS[cxx])
+    done = contract(tmp_path, compile_source(HOST)[0], cxx, *sanitizers(cxx))
     assert done.returncode == 0, (done.returncode, done.stderr[-3000:])
 
 
@@ -132,8 +129,7 @@ def test_a_read_before_any_write_reads_the_host_s_pattern(tmp_path):
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])
 def test_the_device_program_runs_emulated_on_host_threads_and_agrees(tmp_path, cxx):
-    done = contract(tmp_path, compile_source(DEVICE)[0], cxx, cuda=True, emulate=True)
-    assert done.returncode == 0, (done.returncode, done.stderr[-3000:])
+    ran_emulated(tmp_path, compile_source(DEVICE)[0], cxx)
 
 
 def test_the_device_kernel_zeroes_nothing_where_its_arrays_are_unzeroed(tmp_path):
@@ -171,10 +167,8 @@ def test_a_zeroed_array_is_laid_out_before_the_unzeroed_ones_whatever_their_orde
 
 
 def test_the_canonical_projection_compiles_to_the_same_code():
-    canonical = canonical_source(HOST)
+    canonical = round_trips(HOST)
     assert "shared partial:u64[256];" in canonical
-    assert canonical_source(canonical) == canonical
-    assert compile_source(canonical)[0] == compile_source(HOST)[0]
 
 
 HEAD = "fn f(g:usize, n:usize, x:ro<f32>[n], out:rw<f32>[g]) {\n  blocks b in g threads t in 256 {\n"

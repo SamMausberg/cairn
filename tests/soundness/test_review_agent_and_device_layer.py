@@ -11,6 +11,7 @@ import pytest
 from cairn.compiler.cairnc import Diagnostic, compile_program, compile_source
 from cairn.projects.target import parse
 from cairn.verify.validation.validation import validate
+from emitted import sanitizers
 
 # --- Fixed: a check that reports every refusal judged a row an implementation had not yet joined -------------------
 
@@ -271,7 +272,7 @@ def test_a_shared_table_written_whole_before_a_barrier_may_be_read_at_any_index(
     from emitted import contract
 
     cpp = compile_source(LOOKUP)[0]
-    flags = ("-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all") if cxx == "clang++" else ()
+    flags = sanitizers(cxx)
     done = contract(tmp_path, cpp, cxx, *flags)
     assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
 

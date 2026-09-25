@@ -19,7 +19,7 @@ from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.syntax.parser import Parser
 from cairn.verify.scalar.semantics import equivalent
-from emitted import contract, device_build, native, on_device, refused, watched
+from emitted import contract, device_build, native, ran_on_device, refused, round_trips, sanitizers, watched
 
 VIEWS = "fn f(n:usize, out:rw<u64>[n], x:ro<u64>[n], s:ro<i32>[n], d:ro<f64>[n], w:rw<i32>[n], g:rw<f64>[n]) {\n  "
 
@@ -90,9 +90,8 @@ def test_rows_say_where_a_scan_runs_and_what_it_writes():
 )
 def test_the_canonical_projection_keeps_the_form(line):
     source = f"fn f(n:usize, out:rw<u64>[n], x:ro<u64>[n]) {{ {line} }}\n"
-    canonical = canonical_source(source)
+    canonical = round_trips(source)
     assert line in canonical
-    assert compile_source(canonical)[0] == compile_source(source)[0] and canonical_source(canonical) == canonical
 
 
 # Every operator, inclusive and exclusive, pooled and in order, against an independent prefix computed in the
@@ -306,7 +305,7 @@ def test_the_radix_sort_agrees_with_pythons_sorted(tmp_path, cxx, key, bits, cou
     seed = 0x2545F4914F6CDD1D + count
     program = SORTED.replace("COUNT", str(count)).replace("KEY", key).replace("SEED", str(seed))
     cpp = compile_source(program.replace("DROP", str(64 - bits)))[0]
-    extra = ["-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"] if cxx == "clang++" else []
+    extra = sanitizers(cxx)
     done = contract(tmp_path, cpp, cxx, *extra)
     assert done.returncode == 0, done.stderr[-2000:]
     assert [int(line) for line in done.stdout.split()] == sorted(xorshift(seed, count, bits))
@@ -391,6 +390,4 @@ def test_a_device_scan_compiles_for_the_device_without_touching_it(tmp_path):
 
 
 def test_a_device_scan_is_the_host_prefix(tmp_path):
-    with on_device():  # runs only under `make gpu`
-        done = contract(tmp_path, compile_source(DEVICE)[0], "g++", cuda=True)
-        assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    ran_on_device(tmp_path, compile_source(DEVICE)[0])  # only under `make gpu`
