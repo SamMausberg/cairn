@@ -55,11 +55,18 @@ def since(a: Any) -> Any:
     return json.loads(read_text(a.since, 16_000_000)) if a.since else None
 
 
+# What `receipt.json` in the build directory keeps and `cairn build` does not print: the checker's receipt of every
+# function, the project's hashes, the compiler's version, the hashes of the C++ and the artifact, and the time.
+RECEIPT_ONLY = {"frontend", "project", "generated_sha256", "compiler_version", "artifact_sha256", "elapsed_seconds"}
+
+
 def printed(built: dict) -> dict:
-    """What `cairn build` prints: its record without the checker's receipt of every function, which `receipt.json` in
-    the build directory keeps whole. That receipt was 54 KB for an 85-line program and buried the fields a caller
-    reads next, the status, the command and the artifact."""
-    kept = {k: v for k, v in built.items() if k != "frontend"}
+    """What `cairn build` prints: the status, the command, the artifact and the directory, and what went wrong when
+    something did; an empty stream and a zero exit status say nothing. `receipt.json` keeps the whole record, which
+    was 54 KB for an 85-line program and buried the fields a caller reads next."""
+    kept = {k: v for k, v in built.items() if k not in RECEIPT_ONLY and v not in ("", [], None)}
+    if kept.get("exit_code") == 0:
+        del kept["exit_code"]
     return {**kept, "receipt": str(Path(built["directory"]) / "receipt.json")} if "directory" in built else kept
 
 
@@ -574,8 +581,9 @@ def cairn_build(a: Any, project: Project) -> int:
     cp = subprocess.run(started, capture_output=True, text=True, errors="backslashreplace", timeout=a.timeout, **run)
     report({"status": "program-exited", "exit_code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr,
             "build_directory": result["directory"], "security_sandbox": False,
-            "memory_limit_mib": None if machine or not capped else a.memory_mib, "emulator": machine,
-            **({"sanitizer": a.sanitize} if a.sanitize else {}), **emulated})  # fmt: skip
+            "memory_limit_mib": None if machine or not capped else a.memory_mib,
+            **({"emulator": machine} if machine else {}), **({"sanitizer": a.sanitize} if a.sanitize else {}),
+            **emulated})  # fmt: skip
     return 0 if cp.returncode == 0 else 1
 
 

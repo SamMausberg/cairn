@@ -151,6 +151,9 @@ def test_each_test_runs_alone_and_fails_alone(tmp_path, cxx):
     assert by["overflow"]["reason"] == "stopped by SIGABRT: a guard failed"
     assert (by["wrong"]["file"], by["wrong"]["line"]) == ("src/main.cairn", 13)
     assert record["status"] == "test-blocks-failed" and (record["passed"], record["failed"]) == (2, 2)
+    assert set(by["average"]) == {"name", "file", "line", "status", "elapsed_seconds"}  # it printed nothing
+    assert by["wrong"]["exit_code"] == -6 and "stderr" not in by["wrong"]  # its reason is the assert's whole line
+    assert set(record["build"]) == {"status", "artifact", "directory"}
 
 
 @pytest.mark.parametrize("cxx", ["g++", "clang++"])
