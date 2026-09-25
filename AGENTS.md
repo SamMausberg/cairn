@@ -56,6 +56,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `compiler/lower/header.py` | the C header of a library build: its declarations, the layouts it states, what cannot cross |
 | `runtime/*.hpp` | guards, owners, threads, rings, storage floats, wide accesses and atomic updates, the tensor-core multiply, device calls, execution contexts, the emulated device machine |
 | `projects/project.py` | manifests, vendored dependencies, the line-to-file map |
+| `projects/build.py` | a native build into a fresh directory: the device target it judges, the artifact's name, the sanitizer it builds under, and the `cairn.build/1` receipt |
 | `projects/toolchain.py` | every native flag, and the closed table of system libraries |
 | `projects/target.py` | the device target: its spelling, how it is resolved, the features and limits it has, and the results it refuses |
 | `projects/emulation.py` | a device program built for the host (`--emulate`): what the host cannot run as the device would, and what its records say |

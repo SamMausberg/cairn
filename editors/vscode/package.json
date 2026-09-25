@@ -2,7 +2,7 @@
   "name": "cairn",
   "displayName": "CAIRN",
   "description": "CAIRN highlighting, snippets and the cairn lsp client: diagnostics, semantic colors, effect rows, quick fixes.",
-  "version": "1.1.0-dev.0",
+  "version": "1.1.0",
   "publisher": "cairn-language",
   "license": "(MIT OR Apache-2.0)",
   "repository": { "type": "git", "url": "https://github.com/SamMausberg/cairn.git", "directory": "editors/vscode" },

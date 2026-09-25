@@ -1,7 +1,7 @@
 {
   "name": "cairn",
   "displayName": "CAIRN",
-  "version": "1.1.0-dev.0",
+  "version": "1.1.0",
   "description": "Write, check, test and tune CAIRN programs: the language skill, the cairn command on PATH, the language server, so every edit to a .cairn file comes back with the compiler's diagnostics, and an MCP server with the compiler's guarded edit, plan and implementation hosts.",
   "author": {"name": "SamMausberg", "url": "https://github.com/SamMausberg"},
   "homepage": "https://github.com/SamMausberg/cairn",
