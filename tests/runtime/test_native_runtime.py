@@ -76,11 +76,15 @@ def parallel_exe(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return exe
 
 
-@pytest.fixture(scope="session", params=HOSTS)
-def io_exe(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """The ring's own test, under each host compiler with the contract flags, and once more under ASan and UBSan."""
-    exe = tmp_path_factory.mktemp("native") / f"io_runtime_{request.param}"
-    build([request.param, *STRICT, *HOST, f"-I{RUNTIME}", str(NATIVE / "io_runtime.cpp"), "-o", str(exe)])
+@pytest.fixture(
+    scope="session", params=[(test, cc) for test in ("io_runtime", "reuse_runtime") for cc in HOSTS], ids="-".join
+)
+def contract_exe(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The ring's own test, and the execution context's bookkeeping against a mock device, each under each host
+    compiler with the contract flags; `test_the_runtime_is_clean_under_address_leak_and_ub` builds them once more."""
+    test, compiler = request.param
+    exe = tmp_path_factory.mktemp("native") / f"{test}_{compiler}"
+    build([compiler, *STRICT, *HOST, f"-I{RUNTIME}", str(NATIVE / f"{test}.cpp"), "-o", str(exe)])
     return exe
 
 
@@ -157,21 +161,23 @@ def test_parallel_runtime_is_clean_under_address_and_ub(sanitized_parallel: dict
     assert "Sanitizer" not in done.stderr, done.stderr[-4000:]
 
 
-def test_io_runtime(io_exe: Path) -> None:
-    done = subprocess.run([str(io_exe)], capture_output=True, text=True, timeout=120)
+def test_the_io_and_reuse_runtimes(contract_exe: Path) -> None:
+    done = subprocess.run([str(contract_exe)], capture_output=True, text=True, timeout=120)
     assert done.returncode == 0, done.stdout + done.stderr
     assert "ok after" in done.stdout
 
 
-def test_io_runtime_deaths(io_exe: Path) -> None:
-    run_cases(io_exe)
+def test_the_io_and_reuse_runtime_deaths(contract_exe: Path) -> None:
+    run_cases(contract_exe)
 
 
-def test_io_runtime_is_clean_under_address_and_ub(tmp_path: Path) -> None:
-    """The kernel writes into storage the ring owns; a Buf released before its operation finished would show here."""
-    exe = tmp_path / "io_asan"
+# io_runtime: the kernel writes into storage the ring owns, so a Buf released before its operation finished shows here.
+# reuse_runtime: every stream, event and arena a context made is gone when it ends, so a leak or a late free shows here.
+@pytest.mark.parametrize("test", ["io_runtime", "reuse_runtime"])
+def test_the_runtime_is_clean_under_address_leak_and_ub(test: str, tmp_path: Path) -> None:
+    exe = tmp_path / f"{test}_asan"
     line = [HOSTS[-1], "-std=c++20", "-O1", "-g", *HOST, "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
-    build([*line, f"-I{RUNTIME}", str(NATIVE / "io_runtime.cpp"), "-o", str(exe)])
+    build([*line, f"-I{RUNTIME}", str(NATIVE / f"{test}.cpp"), "-o", str(exe)])
     done = subprocess.run(
         [str(exe)], capture_output=True, text=True, timeout=120, env={**os.environ, "ASAN_OPTIONS": "detect_leaks=1"}
     )
@@ -206,35 +212,6 @@ def test_gpu_runtime(gpu_exe: Path) -> None:
 def test_gpu_runtime_deaths(gpu_exe: Path) -> None:
     with device_lock():
         run_cases(gpu_exe)
-
-
-@pytest.fixture(scope="session", params=HOSTS)
-def reuse_exe(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """The execution context's bookkeeping against a mock device, under each host compiler with the contract flags."""
-    exe = tmp_path_factory.mktemp("native") / f"reuse_runtime_{request.param}"
-    build([request.param, *STRICT, *HOST, f"-I{RUNTIME}", str(NATIVE / "reuse_runtime.cpp"), "-o", str(exe)])
-    return exe
-
-
-def test_reuse_runtime(reuse_exe: Path) -> None:
-    done = subprocess.run([str(reuse_exe)], capture_output=True, text=True, timeout=120)
-    assert done.returncode == 0, done.stdout + done.stderr
-    assert "ok after" in done.stdout
-
-
-def test_reuse_runtime_deaths(reuse_exe: Path) -> None:
-    run_cases(reuse_exe)
-
-
-def test_reuse_runtime_is_clean_under_address_leak_and_ub(tmp_path: Path) -> None:
-    """Every stream, event and arena a context made is gone when it ends; a leak or a late free shows here."""
-    exe = tmp_path / "reuse_asan"
-    line = [HOSTS[-1], "-std=c++20", "-O1", "-g", *HOST, "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
-    build([*line, f"-I{RUNTIME}", str(NATIVE / "reuse_runtime.cpp"), "-o", str(exe)])
-    done = subprocess.run(
-        [str(exe)], capture_output=True, text=True, timeout=120, env={**os.environ, "ASAN_OPTIONS": "detect_leaks=1"}
-    )
-    assert done.returncode == 0 and "Sanitizer" not in done.stderr, done.stdout + done.stderr[-4000:]
 
 
 def device_line(source: str, out: Path, device: DeviceTarget | None = None) -> list[str]:
