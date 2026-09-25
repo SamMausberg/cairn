@@ -548,8 +548,11 @@ def test_build_prints_a_short_record_and_keeps_every_function_s_receipt_in_its_f
     assert main(["build", str(path), "--out", str(tmp_path), "--format", "json"]) == 0
     printed = json.loads(capsys.readouterr().out)
     whole = json.loads(Path(printed.pop("receipt")).read_text())
-    assert "frontend" not in printed and {k: v for k, v in whole.items() if k != "frontend"} == printed
+    assert {k: whole[k] for k in printed} == printed and whole["exit_code"] == 0 and not whole["stderr"]
+    assert set(whole) - set(printed) == {"frontend", "project", "generated_sha256", "compiler_version", "artifact_sha256",
+                                         "elapsed_seconds", "units", "exit_code", "stdout", "stderr"}  # fmt: skip
     assert {"main", "sum"} <= set(whole["frontend"]["functions"])
+    assert {"status", "command", "artifact", "directory"} <= set(printed)  # what a caller reads next
 
 
 SIXTEEN_TASKS = """import std.vec (Vec);

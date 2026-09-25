@@ -145,6 +145,13 @@ def remarks(record: str, names: dict[str, str]) -> list[dict[str, Any]]:
     return out
 
 
+def compiled(directory: Path, file: str) -> Path:
+    """The file a remark names. clang writes a path relative to the deepest directory it shares with the directory it
+    compiled in, so a relative one is under the nearest directory above `directory` that holds it."""
+    near = (d / file for d in (directory, *directory.parents) if not Path(file).is_absolute())
+    return next((f for f in near if f.is_file()), Path(file))
+
+
 def function_of(symbol: str, names: dict[str, str]) -> str:
     """The CAIRN function a C++ symbol belongs to, or the runtime's."""
     found = demangled(symbol, names)
@@ -232,7 +239,9 @@ def plain(tally: dict[str, Counter]) -> dict[str, dict[str, int]]:
 
 def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None = None, cxx: str = "clang++",
             arch: str | None = None, root: Path | None = None, timeout: int = 120) -> dict[str, Any]:  # fmt: skip
-    """The static cost picture of every function of `source`, or of `symbols` alone.
+    """The static cost picture of the program's own functions, or of `symbols` alone, which may name library
+    functions. What a library function costs its caller is under the caller's `costly_calls`; each one's own picture
+    is asked for by name, since a program that imports a module reaches dozens of them.
 
     `origin` names the file, or maps a line of `source` to (file, line), as a `--debug` build does. Remarks need
     clang; under another compiler the rest is still reported and `vectorization` says why it is absent.
@@ -298,7 +307,7 @@ def explain(source: str, origin: Any = "program.cairn", symbols: set[str] | None
 
     written = [f for f in p.functions if not f.extern and not f.test]  # a test is emitted only where it runs
     functions = {f.name: costs(f, lines) for f, (_, lines) in zip(written, bodies, strict=True)
-                 if symbols is None or f.name in symbols}  # fmt: skip
+                 if (f.name in symbols if symbols is not None else not f.name.startswith("std."))}  # fmt: skip
     cpp = "\n".join([*interface, *(line for _, lines in bodies for line in lines)]) + "\n"
     return {
         "schema": "cairn.explain/1",
@@ -322,13 +331,13 @@ def vectorize(cpp: str, names, cxx: str, arch, timeout: int, functions: dict, sh
         record = directory / "program.yaml"
         command = [find(cxx), *native, "-c", str(directory / "program.cpp"), "-o", str(directory / "program.o"),
                    f"-foptimization-record-file={record}"]  # fmt: skip
-        done = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+        done = subprocess.run(command, capture_output=True, text=True, timeout=timeout, cwd=directory)
         if done.returncode:
             return {"status": "compile-failed", "stderr": done.stderr[:4000]}
         entries = remarks(record.read_text(encoding="utf-8"), names)
-    for r in entries:  # A runtime header was copied beside the program: name the packaged one instead.
-        if Path(r["file"]).parent.resolve() == directory:
-            r["file"] = str(PACKAGE / "runtime" / Path(r["file"]).name)
+        for r in entries:  # A runtime header was copied beside the program: name the packaged one instead.
+            found = compiled(directory, r["file"])
+            r["file"] = str(PACKAGE / "runtime" / found.name if found.parent == directory else found)
     for name, entry in functions.items():
         entry["loops"] = verdicts([r for r in entries if r["function"] == name], show)
     version = compiler_version(find(cxx))

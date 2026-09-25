@@ -1,0 +1,222 @@
+{
+ "tokenizer": "tiktoken/o200k_base",
+ "total": {
+  "bytes": 67335,
+  "tokens": 18736
+ },
+ "surfaces": {
+  "check": {
+   "bytes": 13360,
+   "tokens": 3584
+  },
+  "build": {
+   "bytes": 2270,
+   "tokens": 708
+  },
+  "other": {
+   "bytes": 28107,
+   "tokens": 7909
+  },
+  "mcp": {
+   "bytes": 23598,
+   "tokens": 6535
+  }
+ },
+ "cases": {
+  "check, accepted": {
+   "surface": "check",
+   "bytes": 88,
+   "tokens": 21
+  },
+  "check, accepted, at a terminal": {
+   "surface": "check",
+   "bytes": 44,
+   "tokens": 13
+  },
+  "check, one refusal": {
+   "surface": "check",
+   "bytes": 377,
+   "tokens": 103
+  },
+  "check, one refusal, at a terminal": {
+   "surface": "check",
+   "bytes": 349,
+   "tokens": 101
+  },
+  "check, three refusals": {
+   "surface": "check",
+   "bytes": 890,
+   "tokens": 249
+  },
+  "check, three refusals, at a terminal": {
+   "surface": "check",
+   "bytes": 878,
+   "tokens": 269
+  },
+  "build": {
+   "surface": "build",
+   "bytes": 660,
+   "tokens": 217
+  },
+  "run": {
+   "surface": "build",
+   "bytes": 197,
+   "tokens": 68
+  },
+  "run --sanitize address": {
+   "surface": "build",
+   "bytes": 219,
+   "tokens": 69
+  },
+  "test, passing": {
+   "surface": "build",
+   "bytes": 425,
+   "tokens": 118
+  },
+  "test, failing": {
+   "surface": "build",
+   "bytes": 629,
+   "tokens": 186
+  },
+  "test, failing, at a terminal": {
+   "surface": "build",
+   "bytes": 140,
+   "tokens": 50
+  },
+  "new": {
+   "surface": "other",
+   "bytes": 78,
+   "tokens": 19
+  },
+  "rules E-EFFECT-ORDER": {
+   "surface": "other",
+   "bytes": 779,
+   "tokens": 188
+  },
+  "doc --std --module std.io": {
+   "surface": "other",
+   "bytes": 5742,
+   "tokens": 1691
+  },
+  "explain": {
+   "surface": "other",
+   "bytes": 7047,
+   "tokens": 2073
+  },
+  "explain --symbol count": {
+   "surface": "other",
+   "bytes": 2992,
+   "tokens": 867
+  },
+  "state": {
+   "surface": "other",
+   "bytes": 1363,
+   "tokens": 438
+  },
+  "inspect --symbol count": {
+   "surface": "other",
+   "bytes": 10106,
+   "tokens": 2633
+  },
+  "check, the 69 programs of the 1.1 replay": {
+   "surface": "check",
+   "bytes": 10734,
+   "tokens": 2828
+  },
+  "mcp tools/list check": {
+   "surface": "mcp",
+   "bytes": 360,
+   "tokens": 84
+  },
+  "mcp tools/list edit_open": {
+   "surface": "mcp",
+   "bytes": 769,
+   "tokens": 175
+  },
+  "mcp tools/list edit_request": {
+   "surface": "mcp",
+   "bytes": 308,
+   "tokens": 72
+  },
+  "mcp tools/list plan_open": {
+   "surface": "mcp",
+   "bytes": 595,
+   "tokens": 141
+  },
+  "mcp tools/list plan_reply": {
+   "surface": "mcp",
+   "bytes": 272,
+   "tokens": 61
+  },
+  "mcp tools/list implementation_open": {
+   "surface": "mcp",
+   "bytes": 850,
+   "tokens": 185
+  },
+  "mcp tools/list implementation_submit": {
+   "surface": "mcp",
+   "bytes": 304,
+   "tokens": 59
+  },
+  "mcp tools/list state": {
+   "surface": "mcp",
+   "bytes": 743,
+   "tokens": 161
+  },
+  "mcp check, accepted": {
+   "surface": "mcp",
+   "bytes": 102,
+   "tokens": 25
+  },
+  "mcp check, three refusals": {
+   "surface": "mcp",
+   "bytes": 1068,
+   "tokens": 298
+  },
+  "mcp edit_open": {
+   "surface": "mcp",
+   "bytes": 7545,
+   "tokens": 1964
+  },
+  "mcp edit_request, refused": {
+   "surface": "mcp",
+   "bytes": 197,
+   "tokens": 57
+  },
+  "mcp edit_request, admitted": {
+   "surface": "mcp",
+   "bytes": 145,
+   "tokens": 40
+  },
+  "mcp plan_open": {
+   "surface": "mcp",
+   "bytes": 896,
+   "tokens": 288
+  },
+  "mcp plan_reply": {
+   "surface": "mcp",
+   "bytes": 420,
+   "tokens": 165
+  },
+  "mcp implementation_open": {
+   "surface": "mcp",
+   "bytes": 6200,
+   "tokens": 1847
+  },
+  "mcp implementation_submit": {
+   "surface": "mcp",
+   "bytes": 1264,
+   "tokens": 384
+  },
+  "mcp state": {
+   "surface": "mcp",
+   "bytes": 1362,
+   "tokens": 437
+  },
+  "mcp state, again": {
+   "surface": "mcp",
+   "bytes": 198,
+   "tokens": 92
+  }
+ }
+}

@@ -23,7 +23,7 @@ Every tool here ships with the compiler and needs no Python package outside the 
 
 ## Output for people and for programs
 
-At a terminal, `cairn` prints for a person, as below, and `cairn run` hands the terminal to the program. Piped, every command prints the JSON record that scripts and agents read. `--format human|json` or the `CAIRN_FORMAT` variable chooses between them, and `NO_COLOR` turns colour off. The exit status and the record are the same either way.
+At a terminal, `cairn` prints for a person, as below, and `cairn run` hands the terminal to the program. Piped, every command prints the JSON record that scripts and agents read as one compact line, since an agent pays for every character it reads. `--format human|json` or the `CAIRN_FORMAT` variable chooses between them, a terminal that asks for the record gets it indented, and `NO_COLOR` turns colour off. The exit status and the record are the same either way.
 
 ```text
 error[E-LEASED]: data is lent to left until wait(left).
@@ -151,7 +151,7 @@ Test blocks run only as host processes, so a freestanding project's test blocks 
 
 ## Building and running
 
-`cairn build` compiles a program into a fresh directory and prints a record of the build. The record leaves out the checker's receipt, its account of every function. The file `receipt.json` in the build directory keeps that receipt whole, and the record's `receipt` field names the file. `cairn run` builds the same way, then runs the program under process limits (`--timeout`, and `--memory-mib` for heap and thread stacks), or under the target's emulator for a [freestanding image](#the-freestanding-target). Arguments after `--` go to the program. `--keep-guards` writes every guard, including those the checker showed cannot fail, and `--debug` adds debug symbols that point at the CAIRN source.
+`cairn build` compiles a program into a fresh directory and prints a record of the build: its status, the command, the artifact and its directory, and the compiler's exit status and output when the build failed. The file `receipt.json` in the build directory keeps the whole record, with the checker's receipt of every function, the project's hashes, the compiler's version and the artifact's hash, and the record's `receipt` field names the file. `cairn run` builds the same way, then runs the program under process limits (`--timeout`, and `--memory-mib` for heap and thread stacks), or under the target's emulator for a [freestanding image](#the-freestanding-target). Arguments after `--` go to the program. `--keep-guards` writes every guard, including those the checker showed cannot fail, and `--debug` adds debug symbols that point at the CAIRN source.
 
 ### cairn run --sanitize
 
@@ -239,7 +239,7 @@ fn encode_Header(out:rw<u8>[16]@host, value:Header) {
 `--generics` also checks each generic function once against its bounds, as [abstractions.md](abstractions.md#certifying-a-template) describes:
 
 ```json
-{"status": "typed", "functions": 172, "library_functions": 84, "formal_status": "not-verified", ...,
+{"status": "typed", "functions": 172, "library_functions": 84, "formal_status": "not-verified",
  "generics": {"analytics.agg.run_static": "ok", "analytics.agg.bins_new": "ok", ...,
               "analytics.query.map_par": "ok", "analytics.query.map_loop": "ok"}}
 ```
@@ -361,7 +361,7 @@ An implementation session on a project keeps failing cases in `regressions/<refe
 
 ## cairn explain
 
-`cairn explain [path] [--symbol f]` shows where each function pays at run time, at the `.cairn` line of each cost: the guards the C++ still checks, the owners it allocates, the calls that allocate, spawn, join, lock or do I/O, the points where it waits, and clang's verdict on every loop. It reads the emitted C++ and clang's optimization record, and runs nothing.
+`cairn explain [path] [--symbol f]` shows where each of the program's own functions pays at run time, at the `.cairn` line of each cost: the guards the C++ still checks, the owners it allocates, the calls that allocate, spawn, join, lock or do I/O, the points where it waits, and clang's verdict on every loop. It reads the emitted C++ and clang's optimization record, and runs nothing. A library function the program reaches is explained when `--symbol` names it, as `--symbol std.vec.push[u64]`, and the calls that cost its callers are listed under theirs.
 
 ```text
 $ cairn explain examples/apps/analytics --symbol analytics.query.above_loop
